@@ -1,0 +1,237 @@
+#! /bin/sh
+#------------------------------------------------------------------------------
+##
+##
+#------------------------------------------------------------------------------
+### BEGIN INIT INFO
+# Provides:          yadifad
+# Required-Start:    $local_fs $network
+# Required-Stop:
+# Should-Start:      udev module-init-tools
+# Should-Stop:		 $named
+# Default-Start:     2 3 4 5
+# Default-Stop:
+# Short-Description: Starts the YADIFAD name server
+# Description:		Starts the YADIFAD name server 
+### END INIT INFO
+
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+PREFIX="/usr/local"
+NAME="yadifad"
+
+NAMED_USERNAME="nobody"
+
+DAEMON="/sbin/${NAME}"
+
+VAR="$PREFIX/var"
+CONF="$PREFIX/etc/yadifad.conf"
+
+PIDFILE="${PREFIX}/var/run/yadifa.pid"
+SCRIPTNAME="/etc/init.d/${NAME}"
+
+if [ "$MAX_STOP_WAIT" = "" ]
+then
+	MAX_STOP_WAIT=60
+fi
+
+if [ "$DEBUG" = "" ]
+then
+	DEBUG=0
+fi
+
+if [ "$DUMPS_CORE" = "" ]
+then
+	DUMPS_CORE=0
+fi
+
+# not yet:
+#
+# CHECK="/sbin/yadifa-checkconf"
+
+
+log()
+{
+	echo $*
+	logger -t $NAME-init-script -- $*
+}
+
+debug()
+{
+	if [ $DEBUG -ne 0 ]
+	then
+		echo $*
+		logger -t $NAME-init-script -- $*
+	fi
+}
+
+# $? : supposed to be set
+# 1  : message
+# 2  : optional override code
+# 3  : what to do in case of error (command)
+
+die_on_error()
+{
+        ERR="$?"
+        
+        if [ ! "" = "$2" ]
+        then
+        	ERR="$2"
+        fi
+        
+        
+        if [ 0 -ne ${ERR} ]
+        then
+        	if [ ! "" = "$3" ]
+	        then
+        		$3
+	        fi
+	        
+                log "Error: '$1' ($ERR)"
+                exit $err
+        fi
+}
+
+#
+# Function that starts the daemon/service
+#
+do_start()
+{
+	log "Starting $NAME"
+
+	debug "starting if no valid PIDFILE ${PIDFILE}"
+
+	if [ -f ${PIDFILE} ]
+	then
+		kill -0 $(cat ${PIDFILE})
+		
+		if [ $? -eq 0 ]
+		then
+			echo "${NAME} seems to be already running."
+			echo "reason: ${PIDFILE} exists"
+			exit 1
+		fi
+
+		rm ${PIDFILE}
+	fi
+	
+	debug cd ${PREFIX}${JAIL}
+	cd ${PREFIX}${JAIL}
+
+	debug prefix = ${PREFIX}
+	debug daemon = ${DAEMON}
+
+	if [ $DUMPS_CORE -ne 0 ]
+	then
+		ulimit -c unlimited
+
+		mkdir -p /tmp/cores
+		chmod 0777 /tmp/cores
+		chmod +t /tmp/cores
+		echo "/tmp/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
+		echo 0x7 > /proc/self/coredump_filter
+		echo -n 1 > /proc/sys/kernel/core_uses_pid
+		echo -n 1 > /proc/sys/fs/suid_dumpable
+	fi
+
+	CMD="${PREFIX}${DAEMON} -c ${CONF}"
+
+	debug $CMD
+
+	$CMD
+
+	die_on_error "${DAEMON} returned $?"
+
+	exit 0
+}
+
+#
+# Function that checks if yadifa is running
+#
+
+do_status()
+{
+	log "checking for valid PIDFILE ${PIDFILE}"
+
+	if [ -f ${PIDFILE} ]
+	then
+		kill -0 $(cat ${PIDFILE})
+		
+		if [ $? -eq 0 ]
+		then
+			log "${NAME} seems to be already running."
+			debug "reason: ${PIDFILE} exists and a process with its pid is running"
+			exit 0
+		fi
+
+		debug "cleaning old pid file ${PIDFILE}"
+
+		rm ${PIDFILE}
+	fi
+
+	log "${NAME} does not seem to be running."
+	debug "reason: ${PIDFILE} does not exists"
+
+	exit 1
+}
+
+#
+# Function that stops the daemon/service
+#
+do_stop()
+{
+	log "Stopping $NAME"
+
+	debug "stopping if valid PIDFILE ${PIDFILE}"
+
+	if [ -f ${PIDFILE} ]
+	then
+		PID=$(cat ${PIDFILE})
+		kill ${PID} 
+				
+		die_on_error "Unable to kill process with PID ${PID}" $? "rm -f ${PIDFILE}"
+	else
+		log "${NAME} does not seem to be running ..."
+		debug "reason: ${PIDFILE} not found"
+	fi
+}
+
+do_waitstop()
+{
+	for count in $(seq 0 $MAX_STOP_WAIT)
+	do
+		if [ ! -f ${PIDFILE} ]
+		then
+			break
+		fi
+
+		log "Waiting for the process to stop (waited $count seconds)";
+		sleep 1
+	done
+}
+
+debug called with $1
+
+case "$1" in
+  start)
+	do_start
+	;;
+  stop)
+	do_stop
+	do_waitstop
+	;;
+  restart)
+	do_stop
+	do_waitstop
+	do_start
+	;;
+  status)
+  	do_status
+	;;
+  *)
+	log "Usage: $SCRIPTNAME {start|stop|restart|status}" >&2
+	exit 3
+	;;
+esac
+
+:

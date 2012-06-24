@@ -1,0 +1,13 @@
+$TTL    86400                     ; 24 hours
+$ORIGIN localhost.
+
+localhost.  86400   IN  SOA localhost. root.localhost. (
+                         20120201 ; serial
+                         3Ha      ; refresh
+                         15       ; retry
+                         1w       ; expire
+                         3h       ; minimum
+                        )
+
+            86400   IN  NS      localhost.
+            86400   IN  A       127.0.0.1

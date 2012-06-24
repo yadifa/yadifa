@@ -1,0 +1,13 @@
+$TTL    86400                        ; 24 hours
+$ORIGIN localhost6.
+
+localhost6. 86400   IN  SOA localhost6. root.localhost6. (
+                            20120201 ; serial
+                            3H       ; refresh
+                            15       ; retry
+                            1w       ; expire
+                            3h       ; minimum
+                           )
+
+            86400   IN  NS      localhost6.
+            86400   IN  AAAA    ::1

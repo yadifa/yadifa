@@ -1,0 +1,7 @@
+<zone>
+	domain		somedomain.eu
+	file		slaves/somedomain.eu.zone
+	type		slave
+	master		192.2.0.1
+</zone>
+

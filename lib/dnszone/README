@@ -1,0 +1,194 @@
+20120625:
+	YADIFA 1.0.0
+		_ LTO support can be enabled with --enable-lto but this is not working with clang. LTO does not increase
+		  the performance significally
+		_ parallel processing of listening addresses can now be enabled.
+		  It can be set using thread-count-by-address in the <main> section.
+		  By default YADIFA will not use parallel processing as this feature has not been
+		  as thoroughly tested as the single-thread processing model
+		_ default parameters tuning
+		_ fixes
+
+	 Known issue:
+		_ on 32 bits architectures, the sig-validity-* fields are not properly copied from <main> to <zone>
+		  as a workaround, set the sig-validity fields in each <zone> container in 32 bits architectures
+
+		  ie:
+			  sig-validity-interval 7
+ 			  sig-validity-regeneration 168
+			  sig-validity-jitter 3600
+		
+20120530:
+	YADIFA 1.0.0RC3
+		_ the configuration parser now ignores undefined logger names and
+		  report them with a warning
+		_ syslog messages are now put in the name of "yadifad" instead of  the name used for the "syslog" channel
+		_ syslog messages do not print the time from YADIFA anymore
+		_ improved the steps involved in loading a locally cached slave zone
+		_ zones are now loaded in background 
+		_ man page yadifad-conf.man5 renamed into yadifad.conf.man5
+
+	Fixes:
+		_ AXFR/IXFR answers with the RA bit set are nolonger rejected as invalid
+		_ YADIFA now answers to SIGINT again (shutdown)
+		_ fixed an issue where obsolete AXFR files were not always being deleted
+		_ fixed an issue occuring when both IPv4 and IPv6 were available to handle a notify
+		_ fixed journal replay issue where some RRSIGs records were not properly removed
+		_ fixed an issue occuring with IPv6 queries
+		_ fixed an issue in the generation of a specific NSEC3 error answer
+		_ fixed named query style layout
+
+	Known issue:
+		_ if the serial of a zone is changed in a way that it goes beyond a value sur as
+		  the journal serial start is bigger than the journal serial end, issues are expected
+		  for IXFR answers.
+		_ notify is ignored on TCP
+		
+20120328:
+	YADIFA 1.0.0RC2
+		_ fixed logging issue on work file creation error
+		_ fixed an issue where IXFR queries could be rejected as being wrongly formatted
+		_ fixed an issue in the query logging text
+		_ enabled command line options ( -u uid -g gid -d )
+	
+20120319:
+	YADIFA 1.0.0RC1
+
+	Is a full functional authoritative name server:
+
+		- works as primary or secondary name server
+		- AXFR
+		- IXFR
+		- NOTIFY
+		- NSUPDATE
+		- TSIG
+		- CLASSES:
+			- IN
+			- CH (just for version)
+		- TYPES:
+			- AAAA
+			- CNAME
+			- DNSKEY
+			- DS
+			- HINFO
+			- MX
+			- NAPTR
+			- NS
+			- NSEC3
+			- NSEC3PARAM
+			- NSEC
+			- PTR
+			- RRSIG
+			- SOA
+			- SRV
+			- SSHFP
+			- TXT
+		- Automatic resigning
+		- DNSSEC algorithms:
+			- 5 (RSASHA1)
+			- 7 (RSASHA1-NSEC3
+		- ACL's
+	
+
+	KNOWN ISSUES:
+
+		NSEC3:	_ cannot work with multiple NSEC3PARAM chains with mixed OPT-IN/OUT settings
+
+			_ adding a new NSEC3 chain expects that the master sends the NSEC3PARAM first (it does not seems to be always the case)
+				  We have a case where a master starts with 2 thousands NSEC3 opt-out records then adds 6 millions NSEC3 opt-in records but does not give the NSEC3PARAM record
+				  first. The slave server rejects them all because it's unable to link them to a chain.  (This one has high priority)
+
+		DNSSEC:	_ it is not allowed to change the zone security mode (unsecure, NSEC, or NSEC3).  Once the zone is loaded it keeps its security mode.
+
+			_ dynamic updates of NSEC as well as NSEC3 records are refused
+
+		QUIT:	the server will shutdown on the following conditions:
+
+			_ detection of an impossible situation or an internal integrity issue (ie: for any reason the SOA has vanished from a zone)
+
+			_ memory limit reached which prevents any more work
+
+			_ ipc issue which prevent internal services communication
+
+		ACL:	_ since the access control is set by zone and CHAOS class is not implemented as a configurable zone, it is not possible (yet) to specifically block CHAOS queries.
+
+20111121:
+	YADIFA 0.5.5
+		-	many fixes 
+
+	KNOWN ISSUE: NSEC3 slave zone replay fails.
+
+20110706:
+	YADIFA 0.5.0
+		-	slave mode, AXFR/IXFR (no TSIG yet for the slave-side transfer)
+		-	answers to a notify from the master
+		-	polls the (first) master on the masters list
+		-	maintains the .axfr & .ix files (deletes the obsoletes ones)
+		-	TSIG queries are checked
+		-	Replays the zone journal on startup after the zone load (journaling)
+		-	Answers IXFR queries (journaling)
+
+20110601:
+	YADIFA 0.4.0
+		Operational:
+		-	It works as a no dnssec name server
+		-	No notifies to slave name servers
+		-	daemon
+		-	Answers AXFR queries with TSIG
+		- 	nsupdate functionality (journaling)
+		-	TSIG on client server side will be transmitted, but not checked
+		-	ACL works
+		- 	The zone has SOA, NS A resource records.
+
+20110524:
+	YADIFA 0.3.0
+		First release internally of yadifad 20110524115500 GMT+1.
+
+		Operational:
+		-	It works as a no dnssec name server
+		-	No notifies to slave name servers
+		-	daemon
+		-	Answers AXFR queries
+		- 	The zone has SOA, NS A resource records.
+		
+
+20091224:
+	YADIFA 0.2.0
+		_	Answers AXFR queries
+		_	ACL based on IP and TSIG (not all query types are ACL'ed yet)
+
+20091104:
+	YADIFA 0.1.0
+
+		YADIFA is a work in progress. The main goal is to have an alternative for BIND or NSD.
+
+		Version 0.1.0 is an authoritative server only. 
+
+		It has no:
+		-	AXFR/IXFR functionality
+		-	dynupdate
+		- 	support for NSEC
+		- 	support for NSEC3
+		-	caching mechanism
+		- 	additional tools (eg.dig, dnssectools, drill,...)
+
+		It has:
+		-	a very fast way to give authoritative answer
+		-	a very fast method for loading the database and checking the zone files
+
+		This first release is to have a feeling how it works in an operational environment.
+	
+	TODO
+
+		Everything what is not implemented, has to be implemented. Most of the code is there, but is not activated.
+
+		No comformity tests has been done. (This of course is on the todo list)
+
+
+
+Bug Reports and Mailing Lists
+
+        Bugs reports should be sent to
+
+                bugreport@yadifa.eu
+

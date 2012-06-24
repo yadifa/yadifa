@@ -1,0 +1,209 @@
+'\" t
+.\" Manual page created with latex2man on Thu Jun 21 08:32:00 CEST 2012
+.\" NOTE: This file is generated, DO NOT EDIT.
+.de Vb
+.ft CW
+.nf
+..
+.de Ve
+.ft R
+
+.fi
+..
+.TH "YADIFAD" "1" "2012\-06\-25" "YADIFA " "YADIFA "
+.SH NAME
+
+.PP
+YADIFAD
+is an authoritative name server. 
+.PP
+.SH SYNOPSIS
+
+.PP
+yadifad
+[\fB\-\-config|\-c\fP\fI configfile\fP]
+[\fB\-\-daemon|\-d\fP]
+[\fB\-V\fP]
+[\fB\-u\fP\fI uid\fP]
+[\fB\-g\fP\fI gid\fP]
+[\fB\-h\fP]
+.PP
+.SH DESCRIPTION
+
+yadifad
+reads the zone files from yadifad.conf, and starts up an authoritative name server. 
+It listens to UDP and TCP DNS queries, and returns answers from its own database. 
+.PP
+yadifad
+knows the main dns protocols: 
+.TP
+.B *
+AXFR 
+.TP
+.B *
+IXFR 
+.TP
+.B *
+NSEC 
+.TP
+.B *
+NSEC3 
+.TP
+.B *
+DNS Update 
+.TP
+.B *
+NOTIFY 
+.PP
+yadifad
+works only with 1 CLASS:
+.PP
+.TP
+1.
+IN (Internet class)
+.PP
+yadifad
+supports following TYPES:
+.PP
+.TP
+1.
+A 
+.TP
+2.
+AAAA 
+.TP
+3.
+CNAME 
+.TP
+4.
+DNSKEY 
+.TP
+5.
+DS 
+.TP
+6.
+HINFO 
+.TP
+7.
+MX 
+.TP
+8.
+NAPTR 
+.TP
+9.
+NS 
+.TP
+10.
+NSEC 
+.TP
+11.
+NSEC3 
+.TP
+12.
+NSEC3PARAM 
+.TP
+13.
+PTR 
+.TP
+14.
+RRSIG 
+.TP
+15.
+SOA 
+.TP
+16.
+SRV 
+.TP
+17.
+SSHFP 
+.TP
+18.
+TXT. 
+.PP
+.SH OPTIONS
+
+.TP
+[\fB\-\-config|\-c\fP\fI configfile\fP]
+ Another config file will be used. 
+.TP
+[\fB\-\-daemon|\-d\fP]
+ Starts the name server in daemon mode (default) 
+.TP
+[\fB\-\-uid|\-u\fP\fI uid\fP]
+ Starts the name server with the given uid. 
+.TP
+[\fB\-\-gid|\-g\fP\fI gid\fP]
+ Starts the name server with the given gid. 
+.PP
+.TP
+[\fB\-V\fP]
+ Show version information. 
+.TP
+[\fB\-\-help|\-h\fP]
+ Show a help text 
+.PP
+.SH FILES
+
+.PP
+.TP
+yadifad.conf
+ The YADIFA
+configuration file. 
+.TP
+yadifad
+ The name server binary. 
+.TP
+yadifad.1
+ This man page. 
+.TP
+yadifad.conf.5
+ Configuration man page for YADIFA. 
+.PP
+.SH SEE ALSO
+
+.PP
+\fIyadifad.conf\fP(5)
+.PP
+.SH REQUIREMENTS
+
+.PP
+.TP
+OpenSSL 
+yadifad
+requires OpenSSL version 0.9.8 or later. 
+.PP
+.SH CHANGES
+
+Please check the ChangeLog
+file from the sources code. 
+.PP
+.SH VERSION
+
+.PP
+Version: 1.0.0 of 2012-06-25\&.
+.PP
+.SH LICENSE AND COPYRIGHT
+
+.PP
+.TP
+Copyright 
+(C)2012, EURid
+.br
+B\-1831 Diegem, Belgium
+.br
+\fBinfo@yadifa.eu\fP
+.PP
+.SH AUTHORS
+
+.PP
+Gery Van Emelen 
+.br
+Email: \fBGery.VanEmelen@EURid.eu\fP
+.br
+Eric Diaz Fernandez 
+.br
+Email: \fBEric.DiazFernandez@EURid.eu\fP
+.PP
+WWW: \fBhttp://www.EURid.eu\fP
+.PP
+.\" NOTE: This file is generated, DO NOT EDIT.

@@ -1,0 +1,12 @@
+;; Example domain
+$TTL    86400   ; 24 hours
+$ORIGIN somedomain.eu.
+
+somedomain.eu.      86400   IN  SOA ns1.somedomain.eu.  info.somedomain.eu. 1 3600 1800 3600000 600
+
+                    86400   IN  MX  10 mail.somedomain.eu.
+                    86400   IN  NS  ns1.somedomain.eu.
+
+ns1.somedomain.eu.  86400   IN  A   192.0.2.2
+mail.somedomain.eu. 86400   IN  A   192.0.2.3
+www.somedomain.eu.  86400   IN  A   192.0.2.4
