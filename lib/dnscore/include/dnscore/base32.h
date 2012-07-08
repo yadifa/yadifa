@@ -32,8 +32,8 @@
 *
 * DOCUMENTATION */
 /**
- *  @defgroup dnscore
- *  @ingroup base 32
+ *  @defgroup base Base conversion functions
+ *  @ingroup dnscore
  *  @brief Base 32 codec
  * 
  * @{

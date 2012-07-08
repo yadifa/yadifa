@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup dnscoretools Generic Tools
+ *  @ingroup dnscore
  *  @brief
  *
  * @{
@@ -72,6 +72,16 @@ ssize_t writefully_limited(int fd, const void *buf, size_t count, double minimum
 ssize_t readfully_limited(int fd, void *buf, size_t count, double minimum_rate);
 
 int unlink_ex(const char *folder, const char *filename);
+
+/**
+ * Handles EINTR.
+ * At return the file will be closed or not closable.
+ * 
+ * @param fd
+ * @return 
+ */
+
+ya_result close_ex(int fd);
 
 #ifdef	__cplusplus
 }

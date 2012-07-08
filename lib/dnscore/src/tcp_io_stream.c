@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup streaming Streams
+ *  @ingroup dnscore
  *  @brief
  *
  * @{
@@ -45,6 +45,7 @@
 #include <arpa/inet.h>
 
 #include "dnscore/tcp_io_stream.h"
+#include "dnscore/fdtools.h"
 
 /*
  * AF_INET
@@ -144,7 +145,7 @@ tcp_input_output_stream_connect_sockaddr(struct sockaddr *sa, input_stream *istr
 
             if(err != EINTR)
             {
-                close(fd); /* could clear errno */
+                close_ex(fd); /* could clear errno */
 
                 return MAKE_ERRNO_ERROR(err);
             }
@@ -165,7 +166,7 @@ tcp_input_output_stream_connect_sockaddr(struct sockaddr *sa, input_stream *istr
         
         if(err != EINTR)
         {
-            close(fd);
+            close_ex(fd);
             
             // Linux quirk
             

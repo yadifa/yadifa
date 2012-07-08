@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup zone Routines for zone_data struct
- *  @ingroup zone
+/** @defgroup zoneaxfr AXFR file loader module
+ *  @ingroup dnszone
  *  @brief zone functions
  *
  *  @todo move this into dnsdb (it's a db file format)
@@ -72,7 +72,7 @@ extern logger_handle *g_zone_logger;
 typedef struct zone_axfr_reader zone_axfr_reader;
 struct zone_axfr_reader
 {
-    /** @todo The zone data is a persistent information along with loading context information. Maybe it should be splitted.
+    /** @todo The zone data is a persistent information along with loading context information. Maybe it should be split.
      */
 
     input_stream is;                    /* LOAD */

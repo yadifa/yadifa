@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup error Database error handling
- *  @ingroup database
+ *  @ingroup dnsdb
  *  @brief Database error handling
  *
  * @{
@@ -61,7 +61,7 @@ zdb_register_errors()
 
     zdb_register_errors_done = TRUE;
 
-    error_register(ZDB_ERROR_BASE, "An error occured in the database.");
+    error_register(ZDB_ERROR_BASE, "An error occurred in the database.");
 
     error_register(ZDB_ERROR_KEY_NOTFOUND, "No match has been found for the current operation");
     error_register(ZDB_ERROR_DELETEFROMEMPTY, "Delete from an empty collection.");

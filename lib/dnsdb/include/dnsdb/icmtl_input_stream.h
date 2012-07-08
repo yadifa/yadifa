@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup ### #######
- *  @ingroup ###
+ *  @ingroup dnsdb
  *  @brief 
  *
  *   Incremental-fileS-to-ICMTL input stream.

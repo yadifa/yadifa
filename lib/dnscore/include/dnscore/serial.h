@@ -31,11 +31,9 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
- *  @brief 
- *
- *  
+/** @defgroup dnscore
+ *  @ingroup dnscore
+ *  @brief serial arithmetic
  *
  * @{
  *
@@ -56,10 +54,49 @@ extern "C" {
     /*
      * Returns TRUE if a >,<,>=,<= b
      */
+    
+    /**
+     * 
+     * Returns TRUE iff a > b in serial arithmetic, else FALSE
+     * 
+     * @param a
+     * @param b
+     * @return a > b
+     */
 
     bool serial_gt(u32 a, u32 b);
+    
+    /**
+     * 
+     * Returns TRUE iff a < b in serial arithmetic, else FALSE
+     * 
+     * @param a
+     * @param b
+     * @return a < b
+     */
+    
     bool serial_lt(u32 a, u32 b);
+    
+    /**
+     * 
+     * Returns TRUE iff a >= b in serial arithmetic, else FALSE
+     * 
+     * @param a
+     * @param b
+     * @return a >= b
+     */
+    
     bool serial_ge(u32 a, u32 b);
+    
+    /**
+     * 
+     * Returns TRUE iff a <= b in serial arithmetic, else FALSE
+     * 
+     * @param a
+     * @param b
+     * @return a <= b
+     */
+    
     bool serial_le(u32 a, u32 b);
 
 

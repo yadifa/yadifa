@@ -28,24 +28,12 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
-#
-#	YADIFA server Makefile.am script
-#
-#      	Makefile.am script
-#
-#	$URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/sbin/yadifad/Makefile.am $
-#
-#       $Date: 2012-06-18 15:51:47 +0200 (Mon, 18 Jun 2012) $
-#
-#       $Revision: 2049 $
-#
-#	$Author: ericdf $
-#
-##############################################################################
 
 ACLOCAL_AMFLAGS = -I m4
 
 LOCALFLAGS = -DPREFIX='"$(prefix)"'
+
+dist_noinst_DATA = VERSION
 
 sbin_PROGRAMS = yadifad
 yadifad_SOURCES = axfr.c check.c confs.c database.c ixfr.c notify.c parser.c list.c main.c process_command_line.c server.c server-st.c server-mt.c server_context.c log_statistics.c log_query.c poll-util.c signals.c wrappers.c zone.c confs_channels.c confs_control.c confs_main.c confs_zone.c scheduler_xfr.c process_class_ch.c process_class_ctrl.c scheduler_database_load_zone.c

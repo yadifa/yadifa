@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup logger Logging functions
+ *  @ingroup dnscore
  *  @brief 
  *
  *  
@@ -46,22 +46,48 @@
 #include <stdarg.h>
 
 #include <dnscore/sys_types.h>
+#include <dnscore/ptr_vector.h>
 
 #ifdef	__cplusplus
 extern "C"
 {
 #endif
+    
+struct logger_handle;
+    
+typedef struct logger_message logger_message;
 
+struct logger_message
+{
+    struct logger_handle* handle;   // 0
+    u8* text;                       // 8
+    
+    u32 text_length;            // 12/4
+    pthread_t thread_id;        // 16/8
+    
+    struct timeval tv;          // 24/8
+    
+    pid_t pid;                  // 32/8
+    u16 level;                  // 36/4
+    u16 flags;                  // 38/2
+    
+    const u8* prefix;           // 40/8
+    u16 prefix_length;          // 48
+    s16 rc;                     // 50   reference count for the repeats
+                                // 52
+};
+    
 struct logger_channel_vtbl;
-
-typedef struct logger_channel logger_channel;
-
 
 struct logger_channel
 {
-    void* data;
-    struct logger_channel_vtbl* vtbl;
+    void *data;
+    struct logger_channel_vtbl *vtbl;
+    logger_message *last_message;
+    u32 last_message_count;
 };
+
+typedef struct logger_channel logger_channel;
 
 typedef ya_result logger_channel_constmsg_method(logger_channel* chan, int level, char* text, u32 text_len, u32 date_offset);
 typedef ya_result logger_channel_msg_method(logger_channel* chan, int level, char* text, ...);

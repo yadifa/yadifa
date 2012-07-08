@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup format C-string formatting
+ *  @ingroup dnscore
  *  @brief 
  *
  *  

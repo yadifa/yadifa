@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup system Definition of types in order to ensure architecture-independence
- *  @ingroup database
+/** @defgroup systemtypes Definition of types in order to ensure architecture-independence
+ *  @ingroup dnscore
  *  @brief Definition of types in order to ensure architecture-independence
  *
  * @{

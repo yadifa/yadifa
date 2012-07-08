@@ -31,12 +31,21 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup name Functions used to manipulate dns formatted names and labels
- *  @ingroup database
+/** @defgroup dnscore
+ *  @ingroup dnscore
  *  @brief Functions used to manipulate dns formatted names and labels
  *
+ * DNS names are stored in many ways:
+ * _ C string : ASCII with a '\0' sentinel
+ * _ DNS wire : label_length_byte + label_bytes) ending with a label_length_byte with a value of 0
+ * _ simple array of pointers to labels
+ * _ simple stack of pointers to labels (so the same as above, but with the order reversed)
+ * _ sized array of pointers to labels
+ * _ sized stack of pointers to labels (so the same as above, but with the order reversed)
+ * 
  * @{
  */
+
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -65,12 +74,14 @@
 /* TWO uses */
 
 /*
- *
+ * This table contains TRUE for both expected name terminators
  */
-static bool cstr_to_dnsname_terminators[256] = {
-    TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
+
+static bool cstr_to_dnsname_terminators[256] =
+{
+    TRUE,  FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, /* '\0' */
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
-    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, /* '.' */
+    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE,  FALSE, /* '.' */
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
@@ -86,15 +97,20 @@ static bool cstr_to_dnsname_terminators[256] = {
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
 };
 
-static bool cstr_to_dnsname_charspace[256] = {
+/*
+ * This table contains TRUE for each character in the DNS charset
+ */
+
+static bool cstr_to_dnsname_charspace[256] =
+{
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, /* 00 */
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, /* 10 */
-    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, /* 20 */
-    TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, /* 30 */
-    FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, /* 40 */
-    TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, /* 50 */
-    FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, /* 60 */
-    TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, /* 70 */
+    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE,  FALSE, FALSE, /* 20 */
+    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, /* 30 */
+    FALSE, TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  /* 40 */
+    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  FALSE, FALSE, FALSE, FALSE, FALSE, /* 50 */
+    FALSE, TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  /* 60 */
+    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  FALSE, FALSE, FALSE, FALSE, FALSE, /* 70 */
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
@@ -171,7 +187,9 @@ static s8 cstr_to_dnsname_map_nostar[256] =
  *   zero -> out of space
  *
  */
-static s8 cstr_to_dnsrname_map[256] = {
+
+static s8 cstr_to_dnsrname_map[256] =
+{
    -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 00 (HEX) */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 10 */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,-1, 0, /* 20 */
@@ -190,11 +208,27 @@ static s8 cstr_to_dnsrname_map[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 };
 
+/**
+ * char DNS charset test
+ * 
+ * @param c
+ * @return TRUE iff c in in the DNS charset
+ * 
+ */
+
 bool
 dnsname_is_charspace(u8 c)
 {
     return cstr_to_dnsname_map[c] == 1;
 }
+
+/**
+ * label DNS charset test
+ * 
+ * @param label
+ * @return TRUE iff each char in the label in in the DNS charset
+ * 
+ */
 
 bool
 dnslabel_verify_charspace(u8 *label)
@@ -220,6 +254,14 @@ dnslabel_verify_charspace(u8 *label)
 
     return TRUE;
 }
+
+/**
+ * label DNS charset test and set to lower case
+ * 
+ * @param label
+ * @return TRUE iff each char in the label in in the DNS charset
+ * 
+ */
 
 bool
 dnslabel_locase_verify_charspace(u8 *label)
@@ -248,14 +290,24 @@ dnslabel_locase_verify_charspace(u8 *label)
     return TRUE;
 }
 
+/**
+ * dns name DNS charset test and set to lower case
+ * 
+ * LOCASE is done using |32
+ * 
+ * @param name_wire
+ * @return TRUE iff each char in the name in in the DNS charset
+ * 
+ */
+
 bool
-dnsname_locase_verify_charspace(u8 *label)
+dnsname_locase_verify_charspace(u8 *name_wire)
 {
     u8 n;
     
     for(;;)
     {
-        n = *label;
+        n = *name_wire;
         
         if(n == 0)
         {
@@ -267,30 +319,40 @@ dnsname_locase_verify_charspace(u8 *label)
             return FALSE;
         }
 
-        u8 *limit = &label[n];
+        u8 *limit = &name_wire[n];
 
-        while(++label <= limit)
+        while(++name_wire <= limit)
         {
-            u8 c = *label;
+            u8 c = *name_wire;
 
             if(cstr_to_dnsname_map[c] != 1)
             {
                 return FALSE;
             }
 
-            *label = LOCASE(c);
+            *name_wire = LOCASE(c);
         }
     }
 }
 
+/**
+ * dns name DNS charset test and set to lower case
+ * 
+ * LOCASE is done using tolower(c)
+ * 
+ * @param name_wire
+ * @return TRUE iff each char in the name in in the DNS charset
+ * 
+ */
+
 bool
-dnsname_locase_verify_extended_charspace(u8 *label)
+dnsname_locase_verify_extended_charspace(u8 *name_wire)
 {
     u8 n;
     
     for(;;)
     {
-        n = *label;
+        n = *name_wire;
         
         if(n == 0)
         {
@@ -302,21 +364,32 @@ dnsname_locase_verify_extended_charspace(u8 *label)
             return FALSE;
         }
 
-        u8 *limit = &label[n];
+        u8 *limit = &name_wire[n];
 
-        while(++label <= limit)
+        while(++name_wire <= limit)
         {
-            u8 c = *label;
+            u8 c = *name_wire;
 
             if(cstr_to_dnsname_map[c] != 1)
             {
                 return FALSE;
             }
 
-            *label = tolower(c);
+            *name_wire = tolower(c);
         }
     }
 }
+
+/**
+ *  @brief Converts a C string to a dns name.
+ *
+ *  Converts a C string to a dns name.
+ *
+ *  @param[in] name_parm a pointer to a buffer that will get the full dns name
+ *  @param[in] str a pointer to the source c-string
+ *
+ *  @return Returns the length of the string up to the last '\0'
+ */
 
 ya_result
 cstr_to_dnsname(u8* name_parm, const char* str)
@@ -370,6 +443,17 @@ cstr_to_dnsname(u8* name_parm, const char* str)
     return s - name_parm;
 }
 
+/**
+ *  @brief Converts a C string to a dns name and checks for validity
+ *
+ *  Converts a C string to a dns name.
+ *
+ *  @param[in] name_parm a pointer to a buffer that will get the full dns name
+ *  @param[in] str a pointer to the source c-string
+ *
+ *  @return Returns the length of the string up to the last '\0'
+ */
+
 ya_result
 cstr_to_dnsname_with_check(u8* name_parm, const char* str)
 {
@@ -418,12 +502,12 @@ cstr_to_dnsname_with_check(u8* name_parm, const char* str)
 
     for(c = *str++;; c = *str++)
     { /* test if a switch/case is better (break mix issues for this switch in this particular loop)
-	 *
-	 * in theory this is test/jb/jz
-	 * a switch would be jmp [v]
-	 * mmhh ...
-	 *
-	 */
+	   *
+	   * in theory this is test/jb/jz
+	   * a switch would be jmp [v]
+	   *
+	   */
+        
         if(cstr_to_dnsname_map_nostar[c] >= 0 /*(c != '.') && (c != '\0')*/)
         {
             if(cstr_to_dnsname_map_nostar[c] == 0)
@@ -474,6 +558,17 @@ cstr_to_dnsname_with_check(u8* name_parm, const char* str)
 
     return s - name_parm;
 }
+
+/**
+ *  @brief Converts a C string to a dns rname and checks for validity
+ *
+ *  Converts a C string to a dns rname.
+ *
+ *  @param[in] name_parm a pointer to a buffer that will get the full dns name
+ *  @param[in] str a pointer to the source c-string
+ *
+ *  @return the length of the string up to the last '\0'
+ */
 
 ya_result
 cstr_to_dnsrname_with_check(u8* name_parm, const char* str)

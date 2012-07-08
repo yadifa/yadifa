@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup dnsdbscheduler Scheduled tasks of the database
+ *  @ingroup dnsdb
  *  @brief
  *
  *
@@ -59,6 +59,7 @@
 #include <dnscore/rfc.h>
 #include <dnscore/serial.h>
 #include <dnscore/xfr_copy.h>
+#include <dnscore/fdtools.h>
 
 #include "dnsdb/zdb_zone.h"
 #include "dnsdb/zdb_types.h"
@@ -271,7 +272,7 @@ scheduler_queue_zone_write_axfr_thread(void* data_)
  
         scheduler_schedule_task(scheduler_queue_zone_write_axfr_callback, data); /** @todo: Check I must release the lock */
 
-        close(mesg->sockfd);
+        close_ex(mesg->sockfd);
        
         free(mesg);
 
@@ -288,7 +289,7 @@ scheduler_queue_zone_write_axfr_thread(void* data_)
 
         scheduler_schedule_task(scheduler_queue_zone_write_axfr_callback, data); /** @todo: Check I must release the lock */
 
-        close(mesg->sockfd);
+        close_ex(mesg->sockfd);
        
         free(mesg);
 
@@ -303,7 +304,7 @@ scheduler_queue_zone_write_axfr_thread(void* data_)
 
         scheduler_schedule_task(scheduler_queue_zone_write_axfr_callback, data); /** @todo: Check I must release the lock */
 
-        close(mesg->sockfd);       
+        close_ex(mesg->sockfd);       
         free(mesg);
 
         return NULL;
@@ -321,7 +322,7 @@ scheduler_queue_zone_write_axfr_thread(void* data_)
 
         /* WARNING: From this point forward, 'data' cannot be used anymore */
 
-        close(mesg->sockfd);
+        close_ex(mesg->sockfd);
         free(mesg);
         return NULL;
     }
@@ -340,7 +341,7 @@ scheduler_queue_zone_write_axfr_thread(void* data_)
 
             /* WARNING: From this point forward, 'data' cannot be used anymore */
 
-            close(mesg->sockfd);
+            close_ex(mesg->sockfd);
             free(mesg);
             return NULL;
         }
@@ -367,7 +368,7 @@ scheduler_queue_zone_write_axfr_thread(void* data_)
 
             /* WARNING: From this point forward, 'data' cannot be used anymore */
 
-            close(mesg->sockfd);
+            close_ex(mesg->sockfd);
             free(mesg);
             return NULL;
         }
@@ -401,7 +402,7 @@ scheduler_queue_zone_write_axfr_thread(void* data_)
 
             /* WARNING: From this point forward, 'data' cannot be used anymore */
 
-            close(mesg->sockfd);
+            close_ex(mesg->sockfd);
             free(mesg);
             
             return NULL;
@@ -418,7 +419,7 @@ scheduler_queue_zone_write_axfr_thread(void* data_)
 
             /* WARNING: From this point forward, 'data' cannot be used anymore */
 
-            close(mesg->sockfd);
+            close_ex(mesg->sockfd);
             free(mesg);
             return NULL;
         }
@@ -463,7 +464,7 @@ scheduler_queue_zone_write_axfr_thread(void* data_)
     {
         /** @todo cannot open error : SERVFAIL */
 
-        close(tcpfd);
+        close_ex(tcpfd);
 
         log_err("zone write axfr: error opening '%s': %r", path, ret);
 

@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup nsec3 NSEC3 functions
+ *  @ingroup dnsdbdnssec
  *  @brief 
  *
  *  This is the collection that holds the NSEC3 chain for one NSEC3PARAM

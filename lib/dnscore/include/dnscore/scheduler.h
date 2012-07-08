@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup scheduler Scheduler
+ *  @ingroup dnscore
  *  @brief 
  *
  *  

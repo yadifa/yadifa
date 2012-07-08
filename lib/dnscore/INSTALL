@@ -1,22 +1,25 @@
 Quick installation
 ******************
-You will need the most up-to-date  aclocal, autoheader, automake, autoconf, make and a C compiler installed (clang, icc or gcc >= 4.6)
-By default gcc is used but you can specify your compiler adding CC=x in ./configure. ie: ./configure CC=clang
-Note that gcc < 4.6 will be build with -O0 and > 4.6 with -O3
-Also note that on OSX you may need to add the parameter: CFLAGS="-std=c99 -I./include" to the make command (make CFLAGS="...)
+You will need the most up-to-date  aclocal, autoheader, libtoolize, automaken autoconf, make and gcc installed
+dnscore relies on openssl for TSIG
+
+rm -f config.sub config.guess ltmain.sh
+
+aclocal
+autoheader
+libtoolize
+automake --add-missing
+autoconf
 
 ./configure
 make
 sudo make install
 
-cd /usr/local
-sudo mkdir -p var/run var/log var/zones/keys var/zones/masters var/zones/slaves var/zones/xfr
-
 Installation Instructions
 *************************
 
-Copyright (C) 1994-1996, 1999-2002, 2004-2011 Free Software Foundation,
-Inc.
+Copyright (C) 1994, 1995, 1996, 1999, 2000, 2001, 2002, 2004, 2005,
+2006, 2007, 2008, 2009 Free Software Foundation, Inc.
 
    Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright
@@ -240,11 +243,6 @@ order to use an ANSI C compiler:
 
 and if that doesn't work, install pre-built binaries of GCC for HP-UX.
 
-   HP-UX `make' updates targets which have the same time stamps as
-their prerequisites, which makes it generally unusable when shipped
-generated files such as `configure' are involved.  Use GNU `make'
-instead.
-
    On OSF/1 a.k.a. Tru64, some versions of the default C compiler cannot
 parse its `<wchar.h>' header file.  The option `-nodtk' can be used as
 a workaround.  If GNU CC is not installed, it is therefore recommended
@@ -380,26 +378,10 @@ operates.
      files.
 
 `--with-openssl=DIR'
-     Use the openssl from directory DIR (where DIR is the PREFIX of openssl)
+	 Use the openssl from directory DIR
 
-`--enable-tiny-footprint'
-     This will change the behaviour of the memory allocation of the database.
-     It will take the smallest increase in memory required to fulfill an allocation
-     instead of getting a bunch at once.  Disabled by default.
-
-`--enable-messages'
-     Will use recvmsg/sendmsg instead of recvfrom/sendto.  This is only usefull if
-     * any interface the server listens from has aliased IPs. (ie: eth0 & eth0:1)
-       AND
-     * the server is configured to listen to 0.0.0.0 (it's its default)
-
-     Having aliased addresses on interfaces can also be handled without using messages
-     but enumerating the listen addresses in yadifad.conf instead.
-     ie: listen 192.0.2.1, 192.0.2.2
-
-`--enable-lto'
-     Will use the Link Time Optimisations of gcc (or ipo for ICC)
-     The gain of speed is very marginal so it is not recommended
+`--disable-tsig'
+	 Disable TSIG support. (Not recommended)
 
 `configure' also accepts some other, not widely useful, options.  Run
 `configure --help' for more details.

@@ -106,7 +106,7 @@ case "${CPU_UNKNOWN}" in
 esac
 
 dnl Forced 32/64 bits architecture
-
+echo -n "checking if force 32 bits is enabled ... "
 AM_CONDITIONAL([FORCE32BITS], [false])
 AC_ARG_ENABLE(force32bits, AS_HELP_STRING([--enable-force32bits], [Forces a 32 bits binary compilation]), [enable_force32bits=yes], [enable_force32bits=no])
 AC_MSG_RESULT($enable_force32bits)
@@ -119,6 +119,7 @@ case "$enable_force32bits" in
         ;;
 esac
 
+echo -n "checking if force 64 bits is enabled ... "
 AM_CONDITIONAL([FORCE64BITS], [false])
 AC_ARG_ENABLE(force64bits, AS_HELP_STRING([--enable-force64bits], [Forces a 64 bits binary compilation]), [enable_force64bits=yes], [enable_force64bits=no])
 AC_MSG_RESULT($enable_force64bits)
@@ -126,12 +127,17 @@ case "$enable_force64bits" in
     yes)
         CFLAGS3264=-m64
         AM_CONDITIONAL([FORCE64BITS], [test $enable_force64bits = yes])
+
+	if [[ "$enable_force32" = "yes" ]]
+	then
+		echo "cannot do both --enable-force32bits and --enable-force64bits at the same time"
+		exit 1
+	fi
+
         ;;
     *)
         ;;
 esac
-
-CPPFLAGS="$CFLAGS3264 $CPPFLAGS"
 
 ])
 
@@ -141,23 +147,35 @@ AC_DEFUN([AC_COMPILER_CHECK], [
 
 CFLAGS=
 
-if [[ ! "$CC" = "clang" ]]
+CCVER=$($CC --version|head -1|sed 's/.* \([[0-9]]*\)\.\([[0-9]]*\).*/\1.\2/')
+if [[ "$CCVER" = "" ]]
 then
-CCNAME=$($CC --version|head -1|sed 's/(.*)//'|awk '{ print @S|@1;}'|cut -c 1-3)
-CCVER=$($CC --version|head -1|sed 's/(.*)//'|awk '{ print @S|@2;}')
-else
-CCNAME=clang
-CCVER=$($CC --version|head -1|sed -e 's/.*version //' -e 's/-.*//')
+	CCVER='0.0'
+fi
+
+CCNAME=$($CC --version|head -1|sed 's/.*\(clang\|gcc\|icc\).*/\1/'|tr A-Z a-z)
+
+if [[ "$CCNAME" = "" ]]
+then
+	CCNAME="unknown"
+fi
+
+CCMAJOR=$(echo $CCVER | sed 's/\./ /g' | awk '{ print @S|@1}')
+CCMINOR=$(echo $CCVER | sed 's/\./ /g' | awk '{ print @S|@2}')
+
+if [[ "$CCMAJOR" = "" ]]
+then
+	CCMAJOR=0
+fi
+
+if [[ "$CCMINOR" = "" ]]
+then
+	CCMINOR=0
 fi
 
 if [[ "$CCNAME" = "gcc" ]]
 then
-	CCMAJOR=$(echo $CCVER | sed 's/\./ /g' | awk '{ print @S|@1}')
-	CCMINOR=$(echo $CCVER | sed 's/\./ /g' | awk '{ print @S|@2}')
-
 	CCOPTIMISATIONFLAGS=-O3
-
-	echo "GCC version $CCMAJOR $CCMINOR"
 
 	if [[ $CCMAJOR -lt 4 ]]
 	then
@@ -210,7 +228,9 @@ then
         AM_CONDITIONAL([USES_GCC], [false])
         AM_CONDITIONAL([USES_CLANG], [true])
 else
-	echo "UNKNOWN COMPILER"
+	echo "unsupported compiler"
+
+	CCNAME=$CC
 
 	CCOPTIMISATIONFLAGS=-O2
 	
@@ -218,6 +238,8 @@ else
         AM_CONDITIONAL([USES_GCC], [false])
         AM_CONDITIONAL([USES_CLANG], [false])	
 fi
+
+echo "detected compiler is $CCNAME $CCMAJOR $CCMINOR"
 
 AC_SUBST(CCOPTIMISATIONFLAGS, $CCOPTIMISATIONFLAGS)
 
@@ -278,15 +300,17 @@ int main(int argc, char** argv)
         return 0;
 }
 _ACEOF
+has_faddress_sanitizer=0
 ${CC} -faddress-sanitizer address_sanitizer_test.c -o address_sanitizer_test > /dev/null 2>&1
 if [[ $? -eq 0 ]]; then
-	has_faddress_sanitizer=1;
+	has_faddress_sanitizer=1
 	echo yes
+	AM_CONDITIONAL([HAS_FADDRESS_SANITIZER], [true])
 else
 	echo no
+	AM_CONDITIONAL([HAS_FADDRESS_SANITIZER], [false])
 fi
 rm -f address_sanitizer_test.c address_sanitizer_test
-AM_CONDITIONAL([HAS_FADDRESS_SANITIZER], [test $has_faddress_sanitizer=1])
 ])
 
 dnl clang -fno-omit-frame-pointer support
@@ -302,15 +326,17 @@ int main(int argc, char** argv)
         return 0;
 }
 _ACEOF
+has_fno_omit_frame_pointer=0
 ${CC} -fno-omit-frame-pointer fno-omit-frame-pointer_test.c -o fno-omit-frame-pointer_test > /dev/null 2>&1
 if [[ $? -eq 0 ]]; then
-        has_fno_omit_frame_pointer=1;
+        has_fno_omit_frame_pointer=1
         echo yes
+	AM_CONDITIONAL([HAS_FNO_OMIT_FRAME_POINTER], [true])
 else
         echo no
+	AM_CONDITIONAL([HAS_FNO_OMIT_FRAME_POINTER], [false])
 fi
 rm -f fno-omit-frame-pointer_test.c fno-omit-frame-pointer_test
-AM_CONDITIONAL([HAS_FNO_OMIT_FRAME_POINTER], [test $has_fno_omit_frame_pointer=1])
 ])
 
 dnl pthread spinlock support

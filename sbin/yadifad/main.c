@@ -31,9 +31,9 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
- *  @brief
+/** @defgroup yadifad Yet Another DNS Implementation for all
+ * 
+ *  @brief Yet Another DNS Implementation for all
  *
  * @{
  */
@@ -99,7 +99,7 @@ server_register_errors()
 {
     error_register(CFG_ERROR_BASE,"CFG_ERROR_BASE");
 
-    /* Config errorcodes */
+    /* Config error codes */
     error_register(NO_DATAPATH_FOUND,"No data path is empty");
     error_register(NO_VARIABLE_FOUND,"No variable param found in config file");
     error_register(NO_VALUE_FOUND,"No value param found in config file");
@@ -142,9 +142,9 @@ server_register_errors()
     //error_register(NO_LABEL_FOUND,"No labels found empty domain name");
     error_register(INCORRECT_PREFERENCE,"INCORRECT_PREFERENCE");
 
-    /* Zone errorcondes */
+    /* Zone error codes */
     error_register(SOA_PARSING_ERR,"Error parsing SOA RR");
-    error_register(NO_SOA_FOUND_ERR,"No SOA RR at the begining");
+    error_register(NO_SOA_FOUND_ERR,"No SOA RR at the beginning");
     error_register(BRACKET_OPEN_ERR,"No closing bracket in for RR");
     error_register(PARSING_RR_ERR,"Error parsing RR");
     error_register(QNAME_LEN_ERR,"Qname is too long or does not exist");
@@ -156,7 +156,7 @@ server_register_errors()
 
     error_register(YDF_ERROR_BASE,"YDF_ERROR_BASE");
 
-    /* Main errorcodes */
+    /* Main error codes */
     error_register(YDF_ERROR_CONFIGURATION,"Error in configuration");
 
     error_register(YDF_ERROR_CHOWN,"Can change owner of file");
@@ -318,9 +318,9 @@ daemonize()
 
     /* Attach file descriptors 0, 1, and 2 to /dev/null */
 
-    close(0); /* about to be reopened */
-    close(1); /* about to be reopened */
-    close(2); /* about to be reopened */
+    Close(0); /* about to be reopened */
+    Close(1); /* about to be reopened */
+    Close(2); /* about to be reopened */
 
     if((fd0 = open(output_file, O_RDWR|O_CREAT, 0666)) < 0)
     {
@@ -461,7 +461,7 @@ read_pid_file()
         exit(EXIT_FAILURE);
     }
 
-    Close(fd);
+    Close(fd);      /* close the pid file */
 
     if(!received)   /* received == 0 => error */
     {
@@ -529,6 +529,20 @@ change_identity(config_data *config)
     Setuid(config->uid);
 }
 
+/**
+ * dummy thread used to pre-load libgcc_s.so.1 (if the architecture needs this)
+ * 
+ * @param config
+ */
+
+static void *
+change_chroot_dummy_thread(void *parm)
+{    
+    pthread_exit(parm);
+    
+    return parm;
+}
+
 /** \brief Change uid and gid of the program
  *
  *  @param[in] config is a config_data structure
@@ -541,6 +555,21 @@ change_root(config_data *config)
 {
     if(config->server_flags & SERVER_FL_CHROOT)
     {
+        pthread_t t;
+        
+        log_debug("launching dummy thread");
+            
+        if(pthread_create(&t, NULL, change_chroot_dummy_thread, NULL) == 0)
+        {
+            log_debug("thread loaded before chroot");
+            
+            pthread_join(t, NULL);
+        }
+        else
+        {
+            log_err("unable to start dummy thread");
+        }
+                    
         log_info("going to jail");
 
         Chdir("."); // config->chroot_path will be prepend automatically
@@ -655,7 +684,13 @@ main(int argc, char *argv[])
      * At this point the configuration information is ready
      */
 
-    config_update(g_config);
+    if(FAIL(return_code = config_update(g_config)))
+    {
+        osformatln(termerr, "error: setup: %r", return_code);
+        flusherr();
+        
+        return return_code;
+    }
     
     /*
      * flushes whatever is in the buffers
@@ -674,7 +709,7 @@ main(int argc, char *argv[])
      * From here we have the loggers ready (if any was set)
      */
 
-    /* Dependig on the run mode ... */
+    /* Depending on the run mode ... */
     switch(g_config->run_mode & RUNMODE_FLAG) /* Remove switch flags */
     {
         case RUNMODE_EXIT_CLEAN:
@@ -706,8 +741,8 @@ main(int argc, char *argv[])
 
             server_do_clean_exit = TRUE;
 
-            /* Initialize signals used for inter proces communication and
-             * quiting the program
+            /* Initialize signals used for inter process communication and
+             * quitting the program
              */
 
             if(g_config->server_flags & SERVER_FL_DAEMON)

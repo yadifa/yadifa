@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup dnscoretools Generic Tools
+ *  @ingroup dnscore
  *  @brief 
  *
  *  

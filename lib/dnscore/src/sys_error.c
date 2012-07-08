@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup dnscoreerror Error
+ *  @ingroup dnscore
  *  @brief
  *
  *

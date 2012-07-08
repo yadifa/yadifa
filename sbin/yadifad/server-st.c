@@ -33,8 +33,8 @@
 * DOCUMENTATION */
 
 /**
- *  @defgroup yadifad
- *  @ingroup server
+ *  @defgroup server Server
+ *  @ingroup yadifad
  *  @brief Single threaded server. This one has the best performance on all of our setups with kernels <= 2.6.32
  *
  *  This is the default and best server available for Yadifa.
@@ -48,6 +48,9 @@
  * @{
  */
 /*----------------------------------------------------------------------------*/
+
+#include <sys/types.h>
+#include <sys/socket.h>
 
 #define SERVER_ST_C_
 
@@ -77,8 +80,6 @@
 
 #include "signals.h"
 
-#include "axfr.h"
-#include "ixfr.h"
 #include "notify.h"
 #include "process_class_ch.h"
 #include "process_class_ctrl.h"
@@ -92,7 +93,7 @@
 #define POLLFDBF_TAG 0x464244464c4c4f50
 #define TPROCPRM_TAG 0x4d5250434f525054
 #define MESGDATA_TAG 0x415441444753454d
-#define MSGHDR_TAG 0x52444847534d
+#define MSGHDR_TAG   0x52444847534d
 
 #if defined(HAS_MIRROR_SUPPORT)
 #define DUMB_MIRROR 1
@@ -143,8 +144,6 @@ u_char data[DSTADDR_DATASIZE];
 
 static message_data *udp_mesg = NULL;
 
-static log_query_function* log_query = log_query_yadifa;
-
 #if UDP_USE_MESSAGES != 0
 
 static struct iovec    udp_iovec;
@@ -153,412 +152,6 @@ static struct msghdr   udp_msghdr;
 
 #endif
 
-/*******************************************************************************************************************
- *
- * TCP protocol
- *
- ******************************************************************************************************************/
-
-/** \brief Does the tcp processing
- *
- *  When pselect has an TCP request, this function reads the tcp packet,
- *  processes dns packet and send reply
- *
- *  @param[in,out] mesg
- *
- *  @retval OK
- *  @return status of message is written in mesg->status
- */
-
-static int
-server_st_process_tcp_task(database_t *database, message_data *mesg, u16 svr_sockfd)
-{
-    ya_result                                   return_code = SUCCESS;
-
-    u16                                                 dns_query_len;
-    ssize_t                                                  received;
-
-#ifndef NDEBUG
-    log_info("tcp: processing socket %i (%{sockaddr})", mesg->sockfd, &mesg->other.sa);
-#endif
-    
-    tcp_set_recvtimeout(mesg->sockfd, 1, 0);
-    
-    /** @note do a full read, not one that can be interrupted or deliver only a part of what we need (readfully) */
-    while((received = readfully_limited(mesg->sockfd, &dns_query_len, 2, g_config->tcp_query_min_rate_us)) == 2)
-    {
-        u16 native_dns_query_len = ntohs(dns_query_len);
-
-        if(native_dns_query_len == 0)
-        {
-            log_err("tcp: message size is 0");
-
-            /** @todo no linger, check the best place to do it */
-
-            return_code = UNPROCESSABLE_MESSAGE;
-
-            break;
-        }
-
-        /** @todo test: timeout
-         *  NOTE: A TIMEOUT IS NOT ENOUGH, THERE HAS TO BE A RATE !!!
-         */
-
-        if((mesg->received = readfully_limited(mesg->sockfd, mesg->buffer, native_dns_query_len, g_config->tcp_query_min_rate_us)) != native_dns_query_len)
-        {
-            log_err("tcp: message read (received %i bytes, err=%r)", mesg->received, ERRNO_ERROR);
-
-            tcp_set_abortive_close(mesg->sockfd);
-
-            return_code = UNPROCESSABLE_MESSAGE;
-
-            break;
-        }
-
-        mesg->protocol = IPPROTO_TCP; /** @note never used ! */
-
-        if(ISOK(return_code = message_process(mesg)))
-        {
-            mesg->size_limit = DNSPACKET_MAX_LENGTH;
-
-            switch(mesg->qclass)
-            {
-                case CLASS_IN:
-                {
-                    switch(MESSAGE_OP(mesg->buffer))
-                    {
-                        case OPCODE_QUERY:
-                        {
-                            log_query(svr_sockfd, mesg);                                                        
-                            
-                            if(mesg->qtype == TYPE_AXFR)
-                            {
-                                /*
-                                 * Start an AXFR "writer" thread
-                                 * Give it the tcp fd
-                                 * It will store the current AXFR on the disk if it does not exist yet (writers blocked)
-                                 * It will then open the stored file and stream it back to the tcp fd (writers freed)
-                                 * ACL/TSIG is not taken in account yet.
-                                 */
-
-                                TCPSTATS(tcp_axfr_count++);
-                                
-                                return_code = axfr_process(mesg);
-
-#ifndef NDEBUG
-                                log_debug("server_st_process_tcp scheduled : %r", return_code);
-#endif
-
-                                return return_code; /* AXFR PROCESSING: process then closes: all in background */
-                            }
-
-                            if(mesg->qtype == TYPE_IXFR)
-                            {
-                                /*
-                                 * Start an IXFR "writer" thread
-                                 * Give it the tcp fd
-                                 * It will either send the incremental changes (stored on the disk), either answer with an AXFR
-                                 * ACL/TSIG is not taken in account yet.
-                                 */
-
-                                TCPSTATS(tcp_ixfr_count++);
-                                return_code = ixfr_process(mesg);
-
-#ifndef NDEBUG
-                                log_debug("server_st_process_tcp scheduled : %r", return_code);
-#endif
-
-                                return return_code; /* IXFR PROCESSING: process then closes: all in background */
-                            }
-
-#ifndef NDEBUG
-                            log_debug("server_st_process_tcp query");
-#endif
-
-                            TCPSTATS(tcp_queries_count++);
-
-							/*
-							 * This has to be a lockable query
-							 */
-                            
-                            database_query(database, mesg);
-
-#ifndef NDEBUG
-                            log_debug("server_st_process_tcp write");
-#endif
-
-                            tcp_send_message_data(mesg);
-
-                            break;
-                        }
-                        case OPCODE_NOTIFY:
-                        {
-                            TCPSTATS(tcp_notify_input_count++);
-                            /**
-                             * @todo notify on tcp
-                             */
-                            break;
-                        }
-                        case OPCODE_UPDATE:
-                        {
-                            /*
-                             * _ Post an update on the scheduler
-                             * _ wait for the end of the update
-                             * _ proceed
-                             */
-
-                            /**
-                             * @note It's the responsibility of the called function (or one of its callees) to ensure
-                             *       this does not take much time and thus to trigger a background task with the
-                             *       scheduler if needed.
-                             */
-
-                            TCPSTATS(tcp_updates_count++);
-
-                            log_query_i("update (%04hx) %{dnsname} %{dnstype} (%{sockaddr})",
-                                    ntohs(MESSAGE_ID(mesg->buffer)),
-                                    mesg->qname,
-                                    &mesg->qtype,
-                                    &mesg->other.sa);
-
-                            if(ISOK(database_schedule_update(database, mesg)))
-                            {
-                                tcp_send_message_data(mesg);
-                            }
-
-                            break;
-                        }
-                        default:
-                        {
-                            TCPSTATS(tcp_undefined_count++);
-                            /* Maybe we should only log this with a high verbose level. */
-
-                            log_warn("query (%04hx) Unhandled opcode %i (%{sockaddrip})", ntohs(MESSAGE_ID(mesg->buffer)), (MESSAGE_OP(mesg->buffer) & OPCODE_BITS) >> 3, &mesg->other.sa);
-
-                            /**
-                             * Build a notimp answer
-                             *
-                             */
-
-                            message_make_error(mesg, FP_NOT_SUPP_OPC);
-                            break;
-                        }
-                    }   /* switch opcode */
-
-                    break;
-                }
-                case CLASS_CH:
-                {
-                    if(MESSAGE_OP(mesg->buffer) == OPCODE_QUERY)
-                    {
-                        log_query(svr_sockfd, mesg);
-                        
-                        process_class_ch(mesg);
-                    }
-                    else
-                    {
-                        log_warn("query [%04hx] %{dnsname} %{dnstype} CH (%{sockaddrip}) : unsupported operation %x",
-                                    ntohs(MESSAGE_ID(mesg->buffer)),
-                                    mesg->qname, &mesg->qtype,
-                                    &mesg->other.sa, MESSAGE_OP(mesg->buffer));
-                        /*
-                         * Somebody tried to do something wrong on the CH class
-                         */
-
-                        message_make_error(mesg, FP_NOT_SUPP_OPC);
-                    }
-
-                    tcp_send_message_data(mesg);
-
-                    break;
-                }
-                default:
-                {
-                    /**
-                     * @todo Handle unknown classes better
-                     */
-                    log_warn("query [%04hx] %{dnsname} %{dnstype} %{dnsclass} (%{sockaddrip}) : unsupported class",
-                                    ntohs(MESSAGE_ID(mesg->buffer)),
-                                    mesg->qname, &mesg->qtype, &mesg->qclass,
-                                    &mesg->other.sa);
-                    
-                    mesg->status = FP_CLASS_NOTFOUND;
-                    message_transform_to_error(mesg);
-                    
-                    break;
-                }
-            } /* switch class */
-        }
-        else
-        {
-            log_warn("query [%04hx] error %i : %r", ntohs(MESSAGE_ID(mesg->buffer)), mesg->status, return_code);
-
-            if( (return_code != INVALID_MESSAGE) && (((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0) || mesg->status != RCODE_FORMERR) && (MESSAGE_QR(mesg->buffer) == 0) )
-            {
-                message_transform_to_error(mesg);
-                
-                tcp_send_message_data(mesg);
-            }
-        }
-    }
-
-    if(received != 0)
-    {
-        log_info("tcp: received = %x", received);
-
-        tcp_set_abortive_close(mesg->sockfd);
-    }
-
-#ifndef NDEBUG
-	log_info("tcp: closing socket %i", mesg->sockfd);
-#endif
-
-    close(mesg->sockfd);
-
-    return return_code;
-}
-
-typedef struct server_st_process_tcp_thread_parm server_st_process_tcp_thread_parm;
-
-struct server_st_process_tcp_thread_parm
-{
-    database_t *database;
-    socketaddress sa;
-    socklen_t addr_len;
-    int sockfd;
-    int svr_sockfd;
-};
-
-static void*
-server_st_process_tcp_thread(void* parm)
-{
-#ifndef NDEBUG
-    log_debug("tcp: begin");
-#endif
-
-    server_st_process_tcp_thread_parm* tcp_parm = (server_st_process_tcp_thread_parm*)parm;
-    message_data mesg;
-
-#ifndef NDEBUG
-    memset(&mesg, 0xff, sizeof(message_data));
-#endif
-
-    mesg.sockfd = tcp_parm->sockfd;
-
-    mesg.process_flags = ~0; /** @todo FIX ME */
-
-    memcpy(&mesg.other, &tcp_parm->sa, tcp_parm->addr_len);
-    mesg.addr_len = tcp_parm->addr_len;
-
-    server_st_process_tcp_task(tcp_parm->database, &mesg, tcp_parm->svr_sockfd);
-
-    free(parm);
-
-#ifndef NDEBUG
-    log_debug("tcp: end");
-#endif
-
-    return NULL;
-}
-
-static void
-server_st_process_tcp(database_t *database, tcp *tcp_itf)
-{
-    server_st_process_tcp_thread_parm* parm;
-
-    /*
-     * AFAIK there are two relevant fields in mesg at this point: addr & sockfd
-     * After the accept only the sockfd is relevant
-     */
-
-    /* I know I'm already in an #if with the same condition but I want to mark
-     * the code I've c&p from the original do_tcp_process
-     */
-
-#ifndef NDEBUG
-    log_debug("server_st_process_tcp_thread_start begin");
-#endif
-
-    int current_tcp = poll_update();
-
-    /**
-     * @note we MAY want to accept & close before rejecting.  But in case of a DOS we lose.
-     *       here we will just ignore until it's possible to do something about it (or it's cancelled)
-     *
-     */
-
-    if(current_tcp >= g_config->max_tcp_queries)
-    {
-        log_info("tcp: rejecting: already %d/%d handled", current_tcp, g_config->max_tcp_queries);
-
-        return;
-    }
-
-    TCPSTATS(tcp_input_count++);
-
-    MALLOC_OR_DIE(server_st_process_tcp_thread_parm*, parm, sizeof(server_st_process_tcp_thread_parm), TPROCPRM_TAG);
-    parm->database = database;
-
-    socketaddress addr;
-    socklen_t addr_len = sizeof(addr);
-
-    /** @todo test: timeout */
-
-    /* don't test -1, test < 0 instead (test + js instead of add + stall + jz */
-    while((parm->sockfd = accept(tcp_itf->sockfd, &addr.sa, &addr_len)) < 0)
-    {
-		int err = errno;
-
-        if(err != EINTR)
-        {
-			log_err("tcp: accept returned %r\n", MAKE_ERRNO_ERROR(err));
-
-            free(parm);
-
-            return;
-        }
-    }
-
-    if(addr_len > MAX(sizeof(struct sockaddr_in),sizeof(struct sockaddr_in6)))
-    {
-        log_err("tcp: addr_len = %i, max allowed is %i", addr_len, MAX(sizeof(struct sockaddr_in),sizeof(struct sockaddr_in6)));
-
-        close(parm->sockfd);
-        
-        free(parm);
-
-        return;
-    }
-
-    memcpy(&parm->sa, &addr, addr_len);
-    parm->addr_len = addr_len;
-    parm->svr_sockfd = tcp_itf->sockfd;
-    
-    poll_add(parm->sockfd);
-
-    log_info("tcp: using slot %d/%d", current_tcp + 1 , g_config->max_tcp_queries);
-
-    /*
-     * And here is the AXFR change: if it's an AXFR, then we need to ensure that
-     * _ we are allowed (TSIG, time limit between two AXFR "milestones", ...)
-     * _ we have the AXFR file ready and if not, fork to generate it
-     *
-     * The thread is launched anyway and waits for the file with the right serial to be generated.
-     * When the file is finally available, it is sent to the caller.
-     *
-     * If it's not an AXFR, then we do as ever.
-     */
-
-#ifndef NDEBUG
-    log_debug("server_st_process_tcp_thread_start scheduling job");
-#endif
-
-    thread_pool_schedule_job(server_st_process_tcp_thread, parm, NULL, "server_st_process_tcp_thread_start");
-
-#ifndef NDEBUG
-    log_debug("server_st_process_tcp_thread_start end");
-#endif
-}
 
 /*******************************************************************************************************************
  *
@@ -592,15 +185,6 @@ server_st_process_udp(database_t *database, udp *udp_itf)
     /*    ------------------------------------------------------------    */
 
     mesg->sockfd = fd;
-
-    /*
-     * It used to be :
-     *
-     * mesg->received = Recvfrom(fd, mesg->buffer, NETWORK_BUFFER_SIZE, 0, (struct sockaddr*)&mesg->other.sa, &mesg->addr_len);
-     *
-     * But this is called a LOT.  So the 3 cycles or so lost soley for the call are not something we want to afford.
-     *
-     */
 
     ssize_t n;
 
@@ -690,6 +274,15 @@ server_st_process_udp(database_t *database, udp *udp_itf)
                         {
                             default:
                                 database_query(database, mesg);
+#if 0                                
+                                if(mesg->is_delegation)
+                                {
+#ifdef DEBUG
+                                    log_debug("query [%04hx] %{dnsname} %{dnstype} %{dnsclass} : is a referral", ntohs(MESSAGE_ID(mesg->buffer)), mesg->qname, &mesg->qtype, &mesg->qclass);
+#endif
+                                    server_statistics.udp_referrals_count++;
+                                }
+#endif                                
                                 server_statistics.udp_fp[mesg->status]++;
                                 break;
                             case TYPE_IXFR:
@@ -806,7 +399,10 @@ server_st_process_udp(database_t *database, udp *udp_itf)
             {
                 if(MESSAGE_OP(mesg->buffer) == OPCODE_QUERY)
                 {
+                    log_query(fd, mesg);
+                    
                     process_class_ch(mesg);
+                    
                     server_statistics.udp_fp[mesg->status]++;
                 }
                 else
@@ -846,7 +442,7 @@ server_st_process_udp(database_t *database, udp *udp_itf)
 
 #endif
     }
-    else /* An error occured : no query to be done at all */
+    else /* An error occurred : no query to be done at all */
     {
         log_warn("query (%04hx) [%02x|%02x] error %i (%r) (%{sockaddrip})",
                  ntohs(MESSAGE_ID(mesg->buffer)),
@@ -878,8 +474,8 @@ server_st_process_udp(database_t *database, udp *udp_itf)
     }
 #endif
     /** @todo still needs to verify RCODE */
-
-	ssize_t sent;
+    
+    ssize_t sent;
 
 #ifndef NDEBUG
     if(mesg->send_length <= 12)
@@ -1029,7 +625,7 @@ server_st_query_loop()
 
     ZEROMEMORY(udp_mesg, sizeof (message_data));
     udp_mesg->addr_len      = sizeof(udp_mesg->other);
-    udp_mesg->protocol      = IPPROTO_UDP;                  /** @note never used ! */
+    udp_mesg->protocol      = IPPROTO_UDP;
     udp_mesg->size_limit    = UDPPACKET_MAX_LENGTH;
     udp_mesg->process_flags = ~0; /** @todo FIX ME */
 
@@ -1181,7 +777,7 @@ server_st_query_loop()
                 if(FD_ISSET(sockfd, &read_set))
                 {
                     /* Jumps to the correct processing function */
-                    server_st_process_tcp(g_config->database, &intf->tcp);
+                    server_process_tcp(g_config->database, &intf->tcp);
 
                     /* DEBUG static counts */
 
@@ -1277,8 +873,7 @@ server_st_query_loop()
 #ifndef NDEBUG
                 scheduler_print_queue();
 #endif
-            	previous_tick = tick;
-
+                previous_tick = tick;
             }
         }
     }

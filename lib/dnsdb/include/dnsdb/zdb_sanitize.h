@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup zone Functions used to manipulate a zone
- *  @ingroup database
+ *  @ingroup dnsdb
  *  @brief Functions used to manipulate a zone
  *
  *  Functions used to manipulate a zone

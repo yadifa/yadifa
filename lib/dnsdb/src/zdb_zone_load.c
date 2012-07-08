@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup zone Functions used to manipulate a zone
- *  @ingroup database
+/** @defgroup dnsdbzone Zone related functions
+ *  @ingroup dnsdb
  *  @brief Functions used to manipulate a zone
  *
  *  Functions used to manipulate a zone
@@ -123,7 +123,7 @@ resource_record_resetcontent(resource_record* entry)
  *
  * @param[in] db a pointer to the database
  * @param[in] zone_data a pointer to an opened zone_reader
- * @param[out] zone_pointer_out will contains a pointer to the loaded zone if the call is successfull
+ * @param[out] zone_pointer_out will contains a pointer to the loaded zone if the call is successful
  *
  * @return an error code.
  *
@@ -988,7 +988,7 @@ zdb_zone_load_exit:
  *
  * @param[in] db a pointer to the database
  * @param[in] zone_data a pointer to an opened zone_reader at its start
- * @param[out] zone_pointer_out will contains a pointer to the loaded zone if the call is successfull
+ * @param[out] zone_pointer_out will contains a pointer to the loaded zone if the call is successful
  *
  * @return an error code.
  *
@@ -1036,7 +1036,7 @@ zdb_zone_get_soa(zone_reader *zone_data, u16 *rdata_size, u8 *rdata)
  *
  * @param[in] db a pointer to the database
  * @param[in] zone_data a pointer to an opened zone_reader at its start
- * @param[out] zone_pointer_out will contains a pointer to the loaded zone if the call is successfull
+ * @param[out] zone_pointer_out will contains a pointer to the loaded zone if the call is successful
  *
  * @return an error code.
  *

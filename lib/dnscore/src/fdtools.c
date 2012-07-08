@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup dnscoretools Generic Tools
+ *  @ingroup dnscore
  *  @brief
  *
  * @{
@@ -314,6 +314,25 @@ int unlink_ex(const char *folder, const char *filename)
     {
         return -1;
     }
+}
+
+ya_result
+close_ex(int fd)
+{
+    ya_result return_value = SUCCESS;
+    
+    while(close(fd) < 0)
+    {
+        int err = errno;
+
+        if(err != EINTR)
+        {
+            return_value = MAKE_ERRNO_ERROR(err);
+            break;
+        }
+    }
+    
+    return return_value;
 }
 
 /** @} */

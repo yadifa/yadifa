@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup ### #######
- *  @ingroup ###
+ *  @ingroup yadifad
  *  @brief
  *
  * @{
@@ -61,21 +61,19 @@
  *
  *      PROTOTYPES
  */
-void Bind(int fd, const struct sockaddr *, socklen_t);
+ya_result Bind(int fd, const struct sockaddr *, socklen_t);
 void Chdir(const char *);
 void Chroot(const char *);
 void Close(int);
-void
-Socketpair(int domain, int type, int sv[2]);
-void Connect(int, const struct sockaddr *, socklen_t);
-pid_t Fork(void);
-void Listen(int, int);
-
-int Open(const char *, int, mode_t);
-ssize_t Recvfrom(int, void *, size_t, int, struct sockaddr *, socklen_t *);
+void Socketpair(int domain, int type, int sv[2]);                               /* 0 uses */
+void Connect(int, const struct sockaddr *, socklen_t);                          /* 0 uses */
+pid_t Fork(void);                                                               /* 0 uses */
+ya_result Listen(int, int);                                                     /* 1 use */
+int Open(const char *, int, mode_t);                                            /* 1 use */
+ssize_t Recvfrom(int, void *, size_t, int, struct sockaddr *, socklen_t *);     /* 0 uses */
 
 int Select(int, fd_set *, fd_set *, fd_set *, struct timeval *);
-void Setsockopt(int, int, int, const void *, socklen_t);
+ya_result Setsockopt(int, int, int, const void *, socklen_t);
 void Setgid(gid_t);
 void Setuid(uid_t);
 int Socket(int, int, int);

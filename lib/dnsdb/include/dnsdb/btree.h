@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup btree Balanced Tree structures and functions for the database
- *  @ingroup database
+/** @defgroup dnsdbcollection Collections used by the database
+ *  @ingroup dnsdb
  *  @brief Balanced Tree structures and functions for the database
  *
  *  Definitions of the Balanced Tree structures and functions for the database.

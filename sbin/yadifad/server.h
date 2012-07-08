@@ -32,8 +32,8 @@
 *
 * DOCUMENTATION */
 /**
- *  @defgroup yadifad
- *  @ingroup server
+ *  @defgroup server Server
+ *  @ingroup yadifad
  *  @brief Server initialisation and launch
  *
  * @{
@@ -76,6 +76,8 @@ typedef struct server_statistics_t server_statistics_t;
  * volatile is only needed for variables changed by another thread
  */
 
+#define SERVER_STATISTICS_ERROR_CODES_COUNT 32
+
 struct server_statistics_t
 {
     mutex_t mtx;
@@ -85,30 +87,37 @@ struct server_statistics_t
 
     volatile u64 loop_rate_counter;
     volatile u64 loop_rate_elapsed;
-
+    
     /* udp */
 
-    volatile u64 udp_output_size_total;
-
     volatile u64 udp_input_count;
-    volatile u64 udp_dropped_count;
     volatile u64 udp_queries_count;
     volatile u64 udp_notify_input_count;
     volatile u64 udp_updates_count;
-
+    volatile u64 udp_dropped_count;
+    volatile u64 udp_output_size_total;
     volatile u64 udp_undefined_count;
+#if 0
+    volatile u64 udp_referrals_count;
+#endif
+    
+    /* REFERRALS : !AA + NOERROR */
 
     /* tcp */
 
-    volatile u64 tcp_input_count;
+    volatile u64 tcp_input_count;    
     volatile u64 tcp_queries_count;
     volatile u64 tcp_notify_input_count;
-    volatile u64 tcp_notify_output_count;
     volatile u64 tcp_updates_count;
+    volatile u64 tcp_dropped_count;
+    volatile u64 tcp_output_size_total;
+    volatile u64 tcp_undefined_count;
+#if 0
+    volatile u64 tcp_referrals_count;
+#endif
     volatile u64 tcp_axfr_count;
     volatile u64 tcp_ixfr_count;
-
-    volatile u64 tcp_undefined_count;
+    volatile u64 tcp_overflow_count;    
 
     /* scheduler  */
 
@@ -116,9 +125,9 @@ struct server_statistics_t
     
     /* answers */
     
-    volatile u64 udp_fp[32];
+    volatile u64 udp_fp[SERVER_STATISTICS_ERROR_CODES_COUNT];
     
-    volatile u64 tcp_fp[32];
+    volatile u64 tcp_fp[SERVER_STATISTICS_ERROR_CODES_COUNT];
 };
 
 #define TCPSTATS(__field__) mutex_lock(&server_statistics.mtx);server_statistics. __field__ ;mutex_unlock(&server_statistics.mtx)
@@ -133,6 +142,8 @@ void server_run();
 /** @todo : maybe move this outside ? */
 void udp_send_message_data(message_data* mesg);
 void tcp_send_message_data(message_data* mesg);
+
+void server_process_tcp(database_t *database, tcp *tcp_itf);
 
 /*    ------------------------------------------------------------    */
 

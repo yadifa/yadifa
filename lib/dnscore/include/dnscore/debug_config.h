@@ -31,15 +31,12 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
- *  @brief 
- *
- *  
+/** @defgroup debug Debug functions
+ *  @ingroup dnscore
+ *  @brief Debug functions settings
  *
  * @{
- *
- *----------------------------------------------------------------------------*/
+ */
 #ifndef _DEBUG_CONFIG_H
 #define	_DEBUG_CONFIG_H
 

@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup streaming Streams
+ *  @ingroup dnscore
  *  @brief
  *
  *
@@ -46,6 +46,7 @@
 #include <unistd.h>
 
 #include "dnscore/file_input_stream.h"
+#include "dnscore/fdtools.h"
 
 typedef struct file_input_stream file_input_stream;
 
@@ -116,8 +117,8 @@ file_close(input_stream* stream_)
     
     assert((stream->data.fd < 0)||(stream->data.fd >2));
     
-    close(stream->data.fd);
-
+    close_ex(stream->data.fd);
+    
     input_stream_set_void(stream_);
 }
 

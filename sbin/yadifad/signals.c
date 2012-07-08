@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup ### #######
- *  @ingroup ###
+ *  @ingroup yadifad
  *  @brief
  *
  * @{
@@ -122,7 +122,7 @@ signal_task_logger_handle_reopen_all()
             
             pthread_t t;
 
-            if(pthread_create(&t, NULL, signal_logger_handle_reopen_all_thread, NULL) != 0)
+            if(pthread_create(&t, NULL, signal_logger_handle_reopen_all_thread, NULL) == 0)
             {
             }
             else
@@ -171,13 +171,13 @@ signal_task_database_save_all_zones_to_disk()
         
             calling_pthread_create = TRUE;
             
-            if(pthread_create(&t, NULL, signal_task_database_save_all_zones_to_disk_thread, NULL) != 0)
+            if(pthread_create(&t, NULL, signal_task_database_save_all_zones_to_disk_thread, NULL) == 0)
             {
-                signal_task_database_save_all_zones_to_disk_active = FALSE;
+                pthread_detach(t);
             }
             else
             {
-                pthread_detach(t);
+                signal_task_database_save_all_zones_to_disk_active = FALSE;
             }
             
             calling_pthread_create = FALSE;
@@ -232,7 +232,7 @@ signal_task_shutdown()
             
             calling_pthread_create = TRUE;
             
-            if(pthread_create(&t, NULL, signal_task_shutdown_thread, NULL) != 0)
+            if(pthread_create(&t, NULL, signal_task_shutdown_thread, NULL) == 0)
             {
                 signal_task_shutdown_thread_active = FALSE;
             }

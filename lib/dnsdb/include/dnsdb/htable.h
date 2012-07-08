@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup htable Hash-Table structure and functions.
- *  @ingroup htbt
+/** @defgroup dnsdbcollection Collections used by the database
+ *  @ingroup dnsdb
  *  @brief Hash-Table structure and functions.
  *
  *  Implementation of the Hash-Table structure and functions.
@@ -65,7 +65,7 @@ typedef struct
  *
  *  Allocates an hash table of the pre-defined size
  *
- *  @return A pointer to the htable or NULL if an error occured
+ *  @return A pointer to the htable or NULL if an error occurred
  */
 
 htable_entry* htable_alloc();

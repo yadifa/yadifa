@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup logging Server logging
+ *  @ingroup yadifad
  *  @brief 
  *
  *  
@@ -55,6 +55,7 @@
 #define LOG_QUERY_C_
 
 logger_handle* g_queries_logger = NULL;
+log_query_function* log_query = log_query_yadifa;
 
 static u8
 log_query_add_du16(char *dest, u16 v)

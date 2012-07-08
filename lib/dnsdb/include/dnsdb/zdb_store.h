@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup dnsdb
- *  @ingroup experimental
+ *  @ingroup dnsdb
  *  @brief Internal functions for the database: storage of the db.
  *
  *  Storage of the DB.

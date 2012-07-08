@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup dnsdbupdate Dynamic update functions
+ *  @ingroup dnsdb
  *  @brief Generates "IXFR" (ICMTL) streams by registering as a listener to the changes in the database
  *
  *  Generates "IXFR" (ICMTL) streams by registering as a listener to the changes in the database

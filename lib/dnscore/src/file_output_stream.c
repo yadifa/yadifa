@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup streaming Streams
+ *  @ingroup dnscore
  *  @brief
  *
  *
@@ -48,6 +48,7 @@
 #include <unistd.h>
 
 #include "dnscore/file_output_stream.h"
+#include "dnscore/fdtools.h"
 
 /*
  * This structure is supposed to match the output_stream one
@@ -119,7 +120,7 @@ file_close(output_stream* stream_)
     
     /* don't, it's only for a test that I did this assert((stream->data.fd < 0)||(stream->data.fd >2)); */
     
-    close(stream->data.fd);
+    close_ex(stream->data.fd);
 
     output_stream_set_void(stream_);
 }

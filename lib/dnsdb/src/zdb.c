@@ -31,9 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup database The Zone DataBase.
- *  @ingroup database
- *  @brief The Zone DataBase
+/** @defgroup dnsdb Zone database
+ *  @brief The zone dataBase
  *
  * @{
  */
@@ -229,7 +228,7 @@ zdb_init()
     
     if(FAIL(return_value))
     {
-        log_crit("unable to initialise the thread pool to %d threads: %r", count, return_value);
+        log_crit("unable to initialise the thread pool to %d threads: %r", count, return_value); /* will ultimately lead to the end of the program */
         exit(-1);
     }
     

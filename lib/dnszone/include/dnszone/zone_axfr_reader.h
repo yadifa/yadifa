@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup zoneaxfr AXFR file loader module
+ *  @ingroup dnszone
  *  @brief
  *
  * @{
@@ -61,7 +61,7 @@
  *
  *  @return     A result code
  *  @retval     OK   : the file has been opened successfully
- *  @retval     else : an error occured
+ *  @retval     else : an error occurred
  */
 
 ya_result zone_axfr_reader_open(const char* filepath, zone_reader *dst);

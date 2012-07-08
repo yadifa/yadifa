@@ -31,10 +31,18 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup name Functions used to manipulate dns formatted names and labels
- *  @ingroup database
+/** @defgroup dnscore
+ *  @ingroup dnscore
  *  @brief Functions used to manipulate dns formatted names and labels
  *
+ * DNS names are stored in many ways:
+ * _ C string : ASCII with a '\0' sentinel
+ * _ DNS wire : label_length_byte + label_bytes) ending with a label_length_byte with a value of 0
+ * _ simple array of pointers to labels
+ * _ simple stack of pointers to labels (so the same as above, but with the order reversed)
+ * _ sized array of pointers to labels
+ * _ sized stack of pointers to labels (so the same as above, but with the order reversed)
+ * 
  * @{
  */
 #ifndef _DNSNAME_H
@@ -134,7 +142,7 @@ struct dnsname_vector
  *
  *  Converts a C string to a dns name.
  *
- *  @param[in] name a pointer to a buffer that will get the full dns name
+ *  @param[in] name_parm a pointer to a buffer that will get the full dns name
  *  @param[in] str a pointer to the source c-string
  *
  *  @return Returns the length of the string up to the last '\0'
@@ -144,7 +152,29 @@ struct dnsname_vector
 
 ya_result cstr_to_dnsname(u8* name_parm, const char* str);
 
+/**
+ *  @brief Converts a C string to a dns name and checks for validity
+ *
+ *  Converts a C string to a dns name.
+ *
+ *  @param[in] name_parm a pointer to a buffer that will get the full dns name
+ *  @param[in] str a pointer to the source c-string
+ *
+ *  @return Returns the length of the string up to the last '\0'
+ */
+
 ya_result cstr_to_dnsname_with_check(u8* name_parm, const char* str);
+
+/**
+ *  @brief Converts a C string to a dns rname and checks for validity
+ *
+ *  Converts a C string to a dns rname.
+ *
+ *  @param[in] name_parm a pointer to a buffer that will get the full dns name
+ *  @param[in] str a pointer to the source c-string
+ *
+ *  @return Returns the length of the string up to the last '\0'
+ */
 
 ya_result cstr_to_dnsrname_with_check(u8* name_parm, const char* str);
 
@@ -267,15 +297,60 @@ u8* dnsname_dup(const u8* src);
 
 u32 dnsname_canonize(const u8* src, u8* dst);
 
+/**
+ * char DNS charset test
+ * 
+ * @param c
+ * @return TRUE iff c in in the DNS charset
+ * 
+ */
+
 bool dnsname_is_charspace(u8 c);
+
+/**
+ * label DNS charset test
+ * 
+ * @param label
+ * @return TRUE iff each char in the label in in the DNS charset
+ * 
+ */
 
 bool dnslabel_verify_charspace(u8 *label);
 
+/**
+ * label DNS charset test and set to lower case
+ * 
+ * @param label
+ * @return TRUE iff each char in the label in in the DNS charset
+ * 
+ */
+
 bool dnslabel_locase_verify_charspace(u8 *label);
 
-bool dnsname_locase_verify_charspace(u8 *name);
 
-bool dnsname_locase_verify_extended_charspace(u8 *label);
+/**
+ * dns name DNS charset test and set to lower case
+ * 
+ * LOCASE is done using |32
+ * 
+ * @param name_wire
+ * @return TRUE iff each char in the name in in the DNS charset
+ * 
+ */
+
+bool dnsname_locase_verify_charspace(u8 *name_wire);
+
+/**
+ * dns name DNS charset test and set to lower case
+ * 
+ * LOCASE is done using tolower(c)
+ * 
+ * @param name_wire
+ * @return TRUE iff each char in the name in in the DNS charset
+ * 
+ */
+
+bool dnsname_locase_verify_extended_charspace(u8 *name_wire);
 
 /*****************************************************************************
  *

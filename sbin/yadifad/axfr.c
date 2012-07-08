@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup ### #######
- *  @ingroup ###
+ *  @ingroup yadifad
  *  @brief
  *
  * @{
@@ -144,7 +144,7 @@ axfr_process(message_data *mesg)
 
     assert((mesg->sockfd < 0)||(mesg->sockfd >2));
     
-    close(mesg->sockfd);
+    Close(mesg->sockfd);
 
     return SUCCESS;
 }

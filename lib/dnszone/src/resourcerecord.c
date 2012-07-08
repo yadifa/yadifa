@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup res_rec Routines for resource_records struct
- *  @ingroup res_rec
+/** @defgroup zonefile Zone file loader module
+ *  @ingroup dnszone
  *  @brief resource record functions
  *
  *  Implementation of routines for the resource_record struct

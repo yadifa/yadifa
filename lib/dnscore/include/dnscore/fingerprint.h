@@ -31,11 +31,9 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
- *  @brief 
- *
- *  
+/** @defgroup dnscore
+ *  @ingroup dnscore
+ *  @brief fingerprints, mapping between answer code and dns code
  *
  * @{
  *

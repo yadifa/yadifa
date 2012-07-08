@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup config Configuration handling
+ *  @ingroup yadifad
  *  @brief
  *
  * @{

@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup 
- *  @ingroup 
+ *  @ingroup dnscore
  *  @brief 
  *
  *  
@@ -119,6 +119,21 @@ static inline void smp_int_set(smp_int *v, int i)
 {
     mutex_lock(&v->mutex);
     v->value = i;
+    mutex_unlock(&v->mutex);
+}
+
+
+static inline void smp_int_inc(smp_int *v)
+{
+    mutex_lock(&v->mutex);
+    v->value++;
+    mutex_unlock(&v->mutex);
+}
+
+static inline void smp_int_dec(smp_int *v)
+{
+    mutex_lock(&v->mutex);
+    v->value--;
     mutex_unlock(&v->mutex);
 }
 

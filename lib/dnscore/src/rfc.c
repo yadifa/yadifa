@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup
- *  @ingroup
+ *  @ingroup dnscore
  *  @brief
  *
  *

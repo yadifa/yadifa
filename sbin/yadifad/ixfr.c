@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup ### #######
- *  @ingroup ###
+ *  @ingroup yadifad
  *  @brief
  *
  * @{
@@ -51,6 +51,7 @@
 #include <dnscore/buffer_output_stream.h>
 #include <dnscore/xfr_copy.h>
 #include <dnscore/serial.h>
+#include <dnscore/fdtools.h>
 
 #include "server.h"
 #include "ixfr.h"
@@ -180,8 +181,8 @@ ixfr_process(message_data *mesg)
     tcp_send_message_data(mesg);
     
     assert((mesg->sockfd < 0)||(mesg->sockfd >2));
-
-    close(mesg->sockfd);
+    
+    close_ex(mesg->sockfd);
 
     return return_value;
 }

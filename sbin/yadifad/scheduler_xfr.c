@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup ### #######
- *  @ingroup ###
+ *  @ingroup yadifad
  *  @brief
  *
  * @{
@@ -229,7 +229,7 @@ xfr_query_axfr_load_thread(void *data)
     log_info("slave: zone %{dnsname} transferred", aqalp->origin);
     
     /**
-     * Behavior change : loading an zone file (axfr file) into memory will now drop (invalidate) the zone before
+     * Behaviour change : loading an zone file (axfr file) into memory will now drop (invalidate) the zone before
      * loading it.  Else loading a zone like .com would lead to potentially twice the amount of memory made readily
      * available to yadifa when most of it will remain untouched.
      * 

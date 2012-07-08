@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup dnsdbscheduler Scheduled tasks of the database
+ *  @ingroup dnsdb
  *  @brief
  *
  *

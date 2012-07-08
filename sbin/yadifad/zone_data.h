@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup ### #######
- *  @ingroup ###
+ *  @ingroup yadifad
  *  @brief
  *
  * @{
@@ -136,7 +136,7 @@ struct zone_data
      *          longer authoritative.
      */
 
-    /* last successfull refresh time */
+    /* last successful refresh time */
     u32         refreshed_time;
     /* last time we retried */
     u32         retried_time;

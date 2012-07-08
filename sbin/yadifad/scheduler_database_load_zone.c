@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup database Routines for database manipulations
- *  @ingroup database
+ *  @ingroup yadifad
  *  @brief database functions
  *
  *  Implementation of routines for the database
@@ -301,7 +301,7 @@ scheduler_database_load_zone_master(zdb *db, zone_data *zone_desc, zdb_zone **zo
     
     if(zone_desc->file_name == NULL)
     {
-        log_crit("zone load: no file defined for master zone section (not loaded)");
+        log_crit("zone load: no file defined for master zone section (not loaded)"); /* will ultimately lead to the end of the program */
         
         zone_unlock(zone_desc, ZONE_LOCK_LOAD);
 
@@ -789,7 +789,7 @@ scheduler_database_load_zone_slave(zdb *db, zone_data *zone_desc, zdb_zone **zon
                 }
                 default:
                 {
-                    log_err("zone load: an error occured while loading the zone or journal for %{dnsname}: %r", zone_desc->origin, return_value);
+                    log_err("zone load: an error occurred while loading the zone or journal for %{dnsname}: %r", zone_desc->origin, return_value);
 
                     axfr_file_available = zone_file_available = FALSE;
                     break;
@@ -1064,5 +1064,4 @@ database_load_zone_unload(const u8 *origin)
 /**
  * @}
  */
-
 

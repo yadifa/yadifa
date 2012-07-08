@@ -31,9 +31,9 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup zone Routines for zone_data struct
- *  @ingroup zone
- *  @brief zone functions
+/** @defgroup zonefile Zone file loader module
+ *  @ingroup dnszone
+ *  @brief Zone file loader module
  *
  *  Implementation of routines for the zone_data struct
  *   - add
@@ -165,7 +165,7 @@ struct zone_file_reader
  *
  *  @return     A result code
  *  @retval     OK : a record has been read successfully
- *  @retval     else : an error occured
+ *  @retval     else : an error occurred
  */
 static ya_result
 zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
@@ -413,7 +413,7 @@ static zone_reader_vtbl zone_file_reader_vtbl =
  *
  *  @return     A result code
  *  @retval     OK   : the file has been opened successfully
- *  @retval     else : an error occured
+ *  @retval     else : an error occurred
  */
 ya_result
 zone_file_reader_open(const char* fullpath, zone_reader *dst)

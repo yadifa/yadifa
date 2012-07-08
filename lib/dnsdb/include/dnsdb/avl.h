@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup avl AVL Balanced Trees used in the database.
- *  @ingroup btree
+/** @defgroup dnsdbcollection Collections used by the database
+ *  @ingroup dnsdb
  *  @brief AVL structure and functions
  *
  *  AVL structure and functions

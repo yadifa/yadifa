@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup dnsdb
- *  @ingroup db
+ *  @ingroup dnsdb
  *  @brief journal file & incremental changes
  *
  * @{

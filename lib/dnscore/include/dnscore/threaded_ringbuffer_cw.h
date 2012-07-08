@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup threading Threading, pools, queues, ...
+ *  @ingroup dnscore
  *  @brief 
  *
  *  This version of the ring buffer uses the condition-wait mechanism instead of the 3-mutex one.

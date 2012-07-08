@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup dnsdbzone Zone related functions
+ *  @ingroup dnsdb
  *  @brief
  *
  *

@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup 
- *  @ingroup 
+ *  @ingroup dnscore
  *  @brief 
  *
  *  
@@ -42,7 +42,7 @@
  *----------------------------------------------------------------------------*/
  /* It's a suggestion for a common interface for stored files.
  * I'd add an "add" and "remove" status on a record in order to
- * accomodate dynupdate features.
+ * accommodate dynupdate features.
  *
  */
 

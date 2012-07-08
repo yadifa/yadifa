@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup zone Routines for zone_data struct
- *  @ingroup zone
+ *  @ingroup yadifad
  *  @brief zone functions
  *
  *  Implementation of routines for the zone_data struct
@@ -686,12 +686,12 @@ void zone_setdefaults(zone_data *zone)
      * The newly generated signatures will be valid for that amount of days
      */
 
-    if(zone->sig_validity_interval == MAX_U32)
+    if(zone->sig_validity_interval == MAX_S32)
     {
         zone->sig_validity_interval = MIN(g_config->sig_validity_interval, SIGNATURE_VALIDITY_INTERVAL_MAX);  /* days */
     }
 
-    if(zone->sig_validity_regeneration == MAX_U32)
+    if(zone->sig_validity_regeneration == MAX_S32)
     {
         zone->sig_validity_regeneration = MIN(g_config->sig_validity_regeneration, SIGNATURE_VALIDITY_REGENERATION_MAX);
     }
@@ -700,7 +700,7 @@ void zone_setdefaults(zone_data *zone)
      * The validity of newly generated signature will be off by at most this
      */
 
-    if(zone->sig_validity_jitter == MAX_U32)
+    if(zone->sig_validity_jitter == MAX_S32)
     {
         zone->sig_validity_jitter = MIN(g_config->sig_validity_jitter, SIGNATURE_VALIDITY_JITTER_MAX);
     }
@@ -710,7 +710,7 @@ void zone_setdefaults(zone_data *zone)
      */
     
 
-    zone->scheduled_sig_invalid_first = MAX_U32;
+    zone->scheduled_sig_invalid_first = MAX_S32;
 #endif
 
     host_set_default_port_value(zone->masters, ntohs(port));

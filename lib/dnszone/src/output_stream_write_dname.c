@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup zonefile Zone file loader module
+ *  @ingroup dnszone
  *  @brief 
  *
  *  Implementation of routines for ...

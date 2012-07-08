@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup logger Logging functions
+ *  @ingroup dnscore
  *  @brief 
  *
  *  
@@ -44,8 +44,6 @@
 #define	_LOGGER_HANDLE_H
 
 #include <dnscore/logger.h>
-#include <dnscore/logger_channel.h>
-
 #include <dnscore/ptr_vector.h>
 
 #ifdef	__cplusplus
@@ -55,6 +53,7 @@ extern "C"
 
 typedef ptr_vector logger_channel_array;
 
+struct logger_channel;
 
 typedef struct logger_handle logger_handle;
 
@@ -65,31 +64,32 @@ struct logger_handle
     const char *formatted_name;
     u8 formatted_name_len;
 };
-
+    
 #define LOGGER_MESSAGE_STD      0
 #define LOGGER_MESSAGE_TIMEMS   1
 #define LOGGER_MESSAGE_PREFIX   2
 
 void logger_handle_msg(logger_handle* handle, u32 level, const char* fmt, ...);
 
-void logger_handle_msg_text(logger_handle* handle, u32 level, const char* text, u32 text_len);
-void logger_handle_msg_text_ext(logger_handle* handle, u32 level, const char* text, u32 text_len, const char* prefix, u32 prefix_len, u16 flags);
+void logger_handle_msg_text(logger_handle *handle, u32 level, const char* text, u32 text_len);
+void logger_handle_msg_text_ext(logger_handle *handle, u32 level, const char* text, u32 text_len, const char* prefix, u32 prefix_len, u16 flags);
 
-logger_handle* logger_handle_add(const char* name);
-logger_handle* logger_handle_get(const char* name);
+logger_handle* logger_handle_add(const char *name);
+logger_handle* logger_handle_get(const char *name);
 
 void logger_handle_exit_level(u32 level);
-
-void logger_handle_add_channel(logger_handle* handle, int level, logger_channel* chan);
 
 void logger_handle_finalize();
 
 void log_memdump_ex(logger_handle* hndl, u32 level, const void* data_pointer_, size_t size_, size_t line_size, bool hex, bool text, bool address);
 void log_memdump(logger_handle* hndl, u32 level, const void* data_pointer_, size_t size_, size_t line_size, bool hex, bool text);
 
+void logger_handle_add_channel(logger_handle *handle, int level, struct logger_channel *chan);
+
 #ifdef	__cplusplus
 }
 #endif
+
 
 #endif	/* _LOGGER_HANDLE_H */
 /** @} */

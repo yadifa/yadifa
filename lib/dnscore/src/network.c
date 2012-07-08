@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup core network
- *  @ingroup core
+/** @defgroup network Network functions
+ *  @ingroup dnscore
  *  @brief core network
  *
  * @{

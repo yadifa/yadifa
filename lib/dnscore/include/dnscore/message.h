@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup dnspacket DNS Messages
+ *  @ingroup dnscore
  *  @brief
  *
  * @{
@@ -182,6 +182,7 @@ struct message_data
     u16 qclass;
 
     char protocol;
+    /* bool is_delegation; for quick referral : later */
 
 #if HAS_TSIG_SUPPORT
     message_tsig tsig;

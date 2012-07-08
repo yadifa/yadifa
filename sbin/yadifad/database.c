@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup database Routines for database manipulations
- *  @ingroup database
+/** @defgroup server
+ *  @ingroup yadifad
  *  @brief database functions
  *
  *  Implementation of routines for the database
@@ -236,7 +236,7 @@ database_load(database_t **database, zone_data_set *dset)
 
         if(zone_desc->origin == NULL)
         {
-            log_crit("zone load: no domain defined for zone section");
+            log_crit("zone load: no domain defined for zone section");  /* will ultimately lead to the end of the program */
             
             return ERROR;
         }
@@ -296,6 +296,7 @@ database_query(database_t *database, message_data *mesg)
 
     mesg->status = query_fp;    
     mesg->send_length = zdb_query_message_update(mesg, &ans_auth_add);
+    /* mesg->is_delegation = ans_auth_add.is_delegation; later */
 
     zdb_query_ex_answer_destroy(&ans_auth_add);
 

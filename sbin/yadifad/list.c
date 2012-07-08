@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup list Routines for list_data struct
- *  @ingroup list
+ *  @ingroup yadifad
  *  @brief list functions
  *
  *  Implementation of routines for the list_data struct

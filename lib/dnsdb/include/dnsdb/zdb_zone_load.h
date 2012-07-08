@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup zone Functions used to manipulate a zone
- *  @ingroup database
+/** @defgroup dnsdbzone Zone related functions
+ *  @ingroup dnsdb
  *  @brief Functions used to manipulate a zone
  *
  *  Functions used to manipulate a zone
@@ -59,7 +59,7 @@ extern "C"
  *
  * @param[in] db a pointer to the database
  * @param[in] filename a pointer to the filename of the zone
- * @param[out] zone_pointer_out will contains a pointer to the loaded zone if the call is successfull
+ * @param[out] zone_pointer_out will contains a pointer to the loaded zone if the call is successful
  *
  * @return an error code.
  *

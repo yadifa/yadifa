@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup logging Server logging
+ *  @ingroup yadifad
  *  @brief 
  *
  *  
@@ -62,7 +62,11 @@ extern logger_handle* g_queries_logger;
 #define log_query_w(...) logger_handle_msg(g_queries_logger,MSG_WARNING,__VA_ARGS__)
 #define log_query_e(...) logger_handle_msg(g_queries_logger,MSG_ERR,__VA_ARGS__)
 
+#ifndef LOG_QUERY_C_
 typedef void log_query_function(int, message_data*);
+#endif
+
+extern log_query_function* log_query;
 
 void log_query_bind(int socket_fd, message_data *mesg);
 

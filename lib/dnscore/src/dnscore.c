@@ -31,15 +31,10 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
- *  @brief
+/** @defgroup dnscore System core functions
+ *  @brief System core functions
  *
- *
- *
- * @{
- *
- *----------------------------------------------------------------------------*/
+ * @{ */
 #define __DNSCORE_C__
 
 #include <time.h>
@@ -86,7 +81,7 @@ static void
 dnscore_arch_checkup()
 {
     /* Test the archi=tecture */
-#pragma message("Dont worry about the possible warnings here")
+#pragma message("Don't worry about the possible warnings here")
     ARCH_CHECK_SIZE(__SIZEOF_POINTER__, sizeof (void*));
     ARCH_CHECK_SIZE(sizeof (u8), 1);
     ARCH_CHECK_SIZE(sizeof (s8), 1);
@@ -392,11 +387,13 @@ dnscore_finalize()
     logger_flush();
 
     thread_pool_destroy();
-#ifndef NDEBUG    
+    
+#ifdef DEBUG
     log_debug("exit: bye (pid=%hd)", getpid());
     
     logger_flush();
 #endif
+    
     scheduler_finalize();
 
     logger_flush();

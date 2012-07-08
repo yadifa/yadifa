@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup nsec3 NSEC3 functions
+ *  @ingroup dnsdbdnssec
  *  @brief 
  *
  *  
@@ -465,7 +465,7 @@ nsec3_update_label(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_referenc
 
         if(type_bit_maps_merge(&type_context, nsec3_item->type_bit_maps, nsec3_item->type_bit_maps_size, type_bit_maps, type_bit_maps_size))
         {
-            /* TRUE : a merge occured : the bitmap has to be changed, the signature remade */
+            /* TRUE : a merge occurred : the bitmap has to be changed, the signature remade */
 
             /*
              * Try to re-use one of the buffers
@@ -715,7 +715,7 @@ nsec3_add_label(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_reference l
 
             if(type_bit_maps_merge(&type_context, self->type_bit_maps, self->type_bit_maps_size, tmp_type_bit_maps, type_bit_maps_size))
             {
-                /* TRUE : a merge occured */
+                /* TRUE : a merge occurred */
 
                 /**
                  * @todo: nsec3_update has got this operation added:

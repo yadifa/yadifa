@@ -1,6 +1,5 @@
 20120625:
 	YADIFA 1.0.0
-		First release of the sources
 
 20110601:
 	YADIFA 0.4.0
@@ -21,11 +20,8 @@
 
 	It runs on Linux Centos 5.5, FreeBSD 8.1 and MacOS X 10.6.
 
-20100126;
-	YADIFA 0.2.0
-		AXFR server
-		ACL
-
-20091105:
-	YADIFA 0.1.0
-		Authoritative name server queries only
+release 0.2.0
+	AXFR server
+	ACL
+release 0.1.0
+	Authoritative name server queries only

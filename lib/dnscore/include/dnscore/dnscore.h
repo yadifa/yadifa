@@ -31,15 +31,10 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
- *  @brief 
+/** @defgroup dnscore System core functions
+ *  @brief System core functions
  *
- *  
- *
- * @{
- *
- *----------------------------------------------------------------------------*/
+ * @{ */
 #ifndef _DNSCORE_H
 #define	_DNSCORE_H
 

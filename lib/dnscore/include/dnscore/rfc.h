@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup 
- *  @ingroup 
+ *  @ingroup dnscore
  *  @brief 
  *
  *  
@@ -679,16 +679,30 @@ extern const class_table qclass[];
 
 extern const type_table qtype[];
 
+/**
+ * Static asciiz representation of a dns class
+ * 
+ * @param c
+ * @return the c-string
+ */
+
 const char*
 get_name_from_class(u16 c);
+
+/**
+ * Static asciiz representation of a dns type
+ * 
+ * @param c
+ * @return the c-string
+ */
 
 const char*
 get_name_from_type(u16 t);
 
-/** \brief Check in search table of class for the value
+/** \brief Get the numeric value of a class (network order) from its name
  *
- *  @param[in]  src data to be found in table
- *  @param[out] dst value found in table
+ *  @param[in]  src the name of the class
+ *  @param[out] dst value of the class, network order
  *
  *  @retval OK
  *  @retval NOK
@@ -696,13 +710,22 @@ get_name_from_type(u16 t);
 int
 get_class_from_name(const char *src, u16 *dst);
 
+/** \brief Get the numeric value of a class (network order) from its name
+ *  Case insensitive
+ *
+ *  @param[in]  src the name of the class (case insensitive)
+ *  @param[out] dst value of the class, network order
+ *
+ *  @retval OK
+ *  @retval NOK
+ */
 int
 get_class_from_case_name(const char *src, u16 *dst);
 
-/** \brief Check in global table qtype for the value
+/** \brief Get the numeric value of a type (network order) from its name
  *
- *  @param[in]  src data to be found in table
- *  @param[out] dst value found in table
+ *  @param[in]  src the name of the type
+ *  @param[out] dst value of the type, network order
  *
  *  @retval OK
  *  @retval NOK
@@ -710,13 +733,27 @@ get_class_from_case_name(const char *src, u16 *dst);
 int
 get_type_from_name(const char *src, u16 *dst);
 
+/** \brief Get the numeric value of a type (network order) from its name
+ *  Case insensitive
+ *
+ *  @param[in]  src the name of the type (case insensitive)
+ *  @param[out] dst value of the type, network order
+ *
+ *  @retval OK
+ *  @retval NOK
+ */
 int
 get_type_from_case_name(const char *src, u16 *dst);
 
 /**
- * Case-insensitive search for the name in the table, returns the value
+ * @brief Case-insensitive search for the name in the table, returns the value
+ * 
+ * @param table the name->value table
+ * @param name the name to look for
+ * @param out_value a pointer to an u32 that will hold the value in case of a match
+ * 
+ * @return SUCCESS iff the name was matched
  */
-
 ya_result
 get_value_from_casename(value_name_table *table, const char *name, u32 *out_value);
 

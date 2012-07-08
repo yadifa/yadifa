@@ -31,11 +31,9 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
- *  @brief
- *
- *
+/** @defgroup dnscore
+ *  @ingroup dnscore
+ *  @brief serial arithmetic
  *
  * @{
  *
@@ -46,11 +44,30 @@
  * SERIAL
  */
 
+/**
+ * 
+ * Returns TRUE iff a > b in serial arithmetic, else FALSE
+ * 
+ * @param a
+ * @param b
+ * @return a > b
+ */
+
 bool
 serial_gt(u32 a, u32 b)
 {
     return ( (a < b) && ((b - a) > 0x7fffffff)) || ((a > b) && ((a - b) < 0x7fffffff));
 }
+
+/**
+ * 
+ * Returns TRUE iff a < b in serial arithmetic, else FALSE
+ * 
+ * @param a
+ * @param b
+ * @return a < b
+ */
+
 
 bool
 serial_lt(u32 a, u32 b)
@@ -58,11 +75,29 @@ serial_lt(u32 a, u32 b)
     return ( (a < b) && ((b - a) < 0x7fffffff)) || ((a > b) && ((a - b) > 0x7fffffff));
 }
 
+/**
+ * 
+ * Returns TRUE iff a >= b in serial arithmetic, else FALSE
+ * 
+ * @param a
+ * @param b
+ * @return a >= b
+ */
+
 bool
 serial_ge(u32 a, u32 b)
 {
     return (a == b) || ((a < b) && ((b - a) > 0x7fffffff)) || ((a > b) && ((a - b) < 0x7fffffff));
 }
+
+/**
+ * 
+ * Returns TRUE iff a <= b in serial arithmetic, else FALSE
+ * 
+ * @param a
+ * @param b
+ * @return a <= b
+ */
 
 bool
 serial_le(u32 a, u32 b)

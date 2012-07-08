@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup config Configuration handling
+ *  @ingroup yadifad
  *  @brief
  *
  * @{
@@ -304,11 +304,22 @@ static ya_result config_main_section_assign(config_data *config)
     if(FAIL(parse_u32_check_range(config->server_port, &port, 1, MAX_U16, 10)))
     {
         port = DNS_DEFAULT_PORT;
-        osformatln(termerr, "config: zone: wrong dns port set in main '%s', defaulted to %d", config->server_port, port);
+        osformatln(termerr, "config: main: wrong dns port set in main '%s', defaulted to %d", config->server_port, port);
     }
     
     host_set_default_port_value(config->listen, ntohs(port));
 
+    if(config->server_flags & SERVER_FL_CHROOT)
+    {
+        uid_t euid = geteuid();
+        
+        if(euid != 0)
+        {
+            osformatln(termerr, "config: main: chroot has been enabled but euid is not root (%i != 0)", (int)euid);
+            return ERROR;
+        }
+    }
+    
     if(!config_check_bounds_s32(SIGNATURE_VALIDITY_INTERVAL_MIN, SIGNATURE_VALIDITY_INTERVAL_MAX, config->sig_validity_interval, "sig-validity-interval"))
     {
         return ERROR;

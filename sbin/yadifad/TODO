@@ -1,9 +1,0 @@
-Known issue:
-                _ on 32 bits architectures, the sig-validity-* fields are not properly copied from <main> to <zone>
-                  as a workaround, set the sig-validity fields in each <zone> container in 32 bits architectures
-
-                  ie:
-                          sig-validity-interval 7
-                          sig-validity-regeneration 168
-                          sig-validity-jitter 3600
-

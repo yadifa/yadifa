@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup
- *  @ingroup
+ *  @ingroup dnsdb
  *  @brief
  *
  * ICMTL is actually INCREMENTAL.
@@ -1050,9 +1050,7 @@ zdb_icmtl_replay(zdb_zone *zone, const char* directory)
             switch(tctr.qtype)
             {
                 case TYPE_NSEC3PARAM:
-                {
-                    //log_quit("journal: nsec3param changes is not supported yet"); /** @todo implement this */
-                    
+                {                    
                     /*
                      * The "change" could be the NSEC3PARAM flag changing ?
                      */
@@ -1881,7 +1879,7 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
                 }
 
                 /*
-                 * If no error occured, we can remove the source.
+                 * If no error occurred, we can remove the source.
                  */
 
                 if(ISOK(n))

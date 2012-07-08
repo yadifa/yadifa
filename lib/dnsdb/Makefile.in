@@ -45,20 +45,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ##############################################################################
-#
-#	YADIFA dnsdb Makefile.am script
-#
-#      	Makefile.am script
-#
-#	$URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/lib/dnsdb/Makefile.am $
-#
-#       $Date: 2012-06-18 14:50:18 +0200 (Mon, 18 Jun 2012) $
-#
-#       $Revision: 2047 $
-#
-#	$Author: ericdf $
-#
-##############################################################################
 
 ################################################################################
 #
@@ -90,6 +76,18 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Settings common to all makefiles
+#
+################################################################################
 
 ################################################################################
 #
@@ -119,6 +117,18 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Labels common to all makefiles
 #
 ################################################################################
 
@@ -516,15 +526,12 @@ libdnsdb_la_SOURCES = src/avl.c src/dictionary_btree.c \
 	src/scheduler_queue_zone_unfreeze.c src/zdb_sanitize.c \
 	$(am__append_1) $(am__append_2) $(am__append_3)
 
-# because of OSX
-
 #
 #
 #
 AM_CFLAGS = $(am__append_4) $(am__append_6) $(am__append_8) \
 	$(am__append_10) $(am__append_12) $(am__append_13) \
-	$(am__append_14) $(am__append_16) -I./include $(LOCALFLAGS) \
-	$(YCFLAGS)
+	$(am__append_14) $(am__append_16) $(LOCALFLAGS) $(YCFLAGS)
 AM_LDFLAGS = $(am__append_5) $(am__append_9) $(am__append_15) \
 	$(YLDFLAGS)
 DEBUGFLAGS = $(am__append_7) $(am__append_11) $(am__append_17) \

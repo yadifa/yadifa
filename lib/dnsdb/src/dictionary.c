@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup dictionary Hash-based collection designed to change it's structure to improve speed.
- *  @ingroup database
+/** @defgroup dnsdbcollection Collections used by the database
+ *  @ingroup dnsdb
  *  @brief Hash-based collection designed to change it's structure to improve speed.
  *
  *  Hash-based collection designed to change it's structure to improve speed.

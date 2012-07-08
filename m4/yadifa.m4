@@ -29,10 +29,14 @@ dnl CONTRACT, STRICT LIABILITY,OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
+dnl ############################################################################
 
 dnl CTRL class
 
-AM_CONDITIONAL([HAS_CTRL], [false])
+AC_DEFUN([AC_CHECK_ENABLE_CTRL], [
+
+
+])
 
 dnl SSL DNSCORE DNSDB DNSZONE (all defaulted to FALSE)
 
@@ -234,7 +238,7 @@ AM_CONDITIONAL([HAS_CTRL], [false])
 dnl Less memory usage (Z-alloc uses smaller chunks when he gets new buffers, of course it's slower)
 
 AM_CONDITIONAL([HAS_TINY_FOOTPRINT], [false])
-AC_MSG_CHECKING(--enable-tiny-footprint)
+AC_MSG_CHECKING(if tiny footprint has been required )
 AC_ARG_ENABLE(tiny_footprint, AS_HELP_STRING([--enable-tiny-footprint], [Uses less memory at once]), [enable_tiny_footprint=yes], [enable_tiny_footprint=no])
 AC_MSG_RESULT($enable_tiny_footprint)
 case "$enable_tiny_footprint" in
@@ -323,6 +327,9 @@ case "$enable_nsec" in
 		;;
 esac
 AM_CONDITIONAL([HAS_NSEC_SUPPORT], [test $enable_nsec = yes])
+
+dnl Checking for TCL and shell feature
+dnl Print "Checking ....."
 
 AM_CONDITIONAL([TCLCOMMANDS], [false])
 

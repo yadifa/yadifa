@@ -28,6 +28,18 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Settings common to all makefiles
+#
+################################################################################
 
 
 AM_CFLAGS = 
@@ -119,9 +131,6 @@ if HAS_FNO_OMIT_FRAME_POINTER
 DEBUGFLAGS+=-fno-omit-frame-pointer
 endif
 
-# because of OSX
-
-AM_CFLAGS += -I./include
 
 #
 #

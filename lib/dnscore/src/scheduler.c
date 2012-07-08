@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup scheduler Scheduler
+ *  @ingroup dnscore
  *  @brief
  *
  *
@@ -53,6 +53,7 @@
 
 #include "dnscore/dnscore.h"
 #include "dnscore/scheduler.h"
+#include "dnscore/fdtools.h"
 
 #define SCHDPAKT_TAG 0x544b415044484353
 #define SCHDTHRD_TAG 0x4452485444484353
@@ -208,8 +209,9 @@ scheduler_finalize()
     assert((g_write_fd < 0)||(g_write_fd >2));
     assert((g_read_fd < 0)||(g_read_fd >2));
     
-    close(g_write_fd);
-    close(g_read_fd);
+    close_ex(g_write_fd);
+    close_ex(g_read_fd);
+        
     g_write_fd = CLEARED_SOCKET;
     g_read_fd = CLEARED_SOCKET;
 }
@@ -321,7 +323,7 @@ scheduler_do_next_job()
     switch(return_code = callback(args))
     {
         default:
-            /* An error occured */
+            /* An error occurred */
 
             log_err("scheduler: unexpected callback return code %r", return_code);
 

@@ -31,15 +31,12 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
- *  @brief 
- *
- *  
+/** @defgroup alarm
+ *  @ingroup dnscore
+ *  @brief Alarm functions
  *
  * @{
- *
- *----------------------------------------------------------------------------*/
+ */
 #ifndef _ALARM_H
 #define	_ALARM_H
 

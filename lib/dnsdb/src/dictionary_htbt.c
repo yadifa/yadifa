@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup dictionary_htbt Dictionary module based on an htbt
- *  @ingroup dictionary
+/** @defgroup dnsdbcollection Collections used by the database
+ *  @ingroup dnsdb
  *  @brief Dictionary module based on an hash table of binary trees
  *
  *  Dictionary module based on an hash table of binary trees

@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup hashvalues Hash table used to hash the dns names.
- *  @ingroup hash
+/** @defgroup dnsdbcollection Collections used by the database
+ *  @ingroup dnsdb
  *  @brief Hash table used to hash the dns names.
  *
  *  Hash table used to hash the dns names.

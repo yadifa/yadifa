@@ -31,9 +31,9 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
- *  @brief
+/** @defgroup zonefile Zone file loader module
+ *  @ingroup dnszone
+ *  @brief Zone file loader module
  *
  * @{
  */
@@ -94,7 +94,7 @@
  *
  *  @return     A result code
  *  @retval     OK   : the file has been opened successfully
- *  @retval     else : an error occured
+ *  @retval     else : an error occurred
  */
 
 ya_result zone_file_reader_open(const char* fullpath, zone_reader *dst);

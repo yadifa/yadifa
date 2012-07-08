@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup ### #######
- *  @ingroup ###
+ *  @ingroup yadifad
  *  @brief
  *
  * @{
@@ -264,7 +264,7 @@ process_command_line(int argc, char **argv, config_data *config)
 #endif
 
             default:
-            case '?': /* unkown parameter */
+            case '?': /* unknown parameter */
     	    case 'h':
             {
                 /* Incorrect arguments given show the usage page */

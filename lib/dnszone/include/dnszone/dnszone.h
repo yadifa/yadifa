@@ -31,9 +31,9 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
- *  @brief
+/** @defgroup dnszone Zone loader modules
+ * 
+ *  @brief Zone loader modules
  *
  * @{
  */

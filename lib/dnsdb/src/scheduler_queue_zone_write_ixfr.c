@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup dnsdbscheduler Scheduled tasks of the database
+ *  @ingroup dnsdb
  *  @brief
  *
  *
@@ -303,8 +303,16 @@ scheduler_queue_zone_write_ixfr_thread(void* data_)
         /**
          * @note This does an exit with error.
          */
+        
+        free(mesg);
+        data->mesg = NULL;
+        data->return_code = ZDB_ERROR_NOSOAATAPEX;
 
-        log_crit("zone write ixfr: startup: no SOA");
+        scheduler_schedule_task(scheduler_queue_zone_write_ixfr_callback, data);
+
+        log_crit("zone write ixfr: startup: no SOA"); /* will ultimately lead to the end of the program */
+        
+        return NULL;        
     }
 
     current_soa_rdata_size = soa->rdata_size;

@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup dnspacket DNS Messages
+ *  @ingroup dnscore
  *  @brief
  *
  * @{
@@ -1511,7 +1511,7 @@ message_query_tcp(message_data *mesg, host_address *server)
                 }
             }
             
-            close(s); 
+            close_ex(s);
         }
         else
         {
@@ -1569,7 +1569,7 @@ message_query_udp(message_data *mesg, host_address *server)
                 /* timeout */
             }
             
-            close(s); 
+            close_ex(s);
         }
         else
         {

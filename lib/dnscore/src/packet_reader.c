@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup dnspacket DNS Messages
+ *  @ingroup dnscore
  *  @brief
  *
  *

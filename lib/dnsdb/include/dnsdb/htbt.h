@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup htbt Hash-Table of Balanced trees structure and functions.
- *  @ingroup database
+/** @defgroup dnsdbcollection Collections used by the database
+ *  @ingroup dnsdb
  *  @brief Hash-Table of Balanced trees structure and functions.
  *
  *  Implementation of the Hash-Table of Balanced trees structure and functions.

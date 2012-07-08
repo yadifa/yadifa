@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup config Configuration handling
+ *  @ingroup yadifad
  *  @brief
  *
  * @{
@@ -809,7 +809,8 @@ config_file_read(const char *config_container, config_reader_context *ctx)
 
 /*    ------------------------------------------------------------    */
 
-void config_update(config_data* config)
+ya_result
+config_update(config_data* config)
 {
     if(config->cpu_count_override > 0)
     {
@@ -866,7 +867,7 @@ void config_update(config_data* config)
         config->thread_count_by_address = t;
     }
     
-    config_update_network(config);
+    return config_update_network(config);
 }
 
 static void

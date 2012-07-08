@@ -31,13 +31,12 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
- *  @brief
+/** @defgroup alarm
+ *  @ingroup dnscore
+ *  @brief Alarm functions
  *
  * @{
- *
- *----------------------------------------------------------------------------*/
+ */
 
 #include "dnscore/ptr_vector.h"
 #include "dnscore/logger.h"

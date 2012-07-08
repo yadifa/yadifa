@@ -32,8 +32,8 @@
 *
 * DOCUMENTATION */
 /**
- *  @defgroup yadifad
- *  @ingroup server
+ *  @defgroup server Server
+ *  @ingroup yadifad
  *  @brief Single threaded server. This one has the best performance on all of our setups with kernels <= 2.6.32
  *
  * @{

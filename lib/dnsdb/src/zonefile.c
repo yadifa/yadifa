@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup zonefile Functions used to read the zone-file
- *  @ingroup database
+ *  @ingroup dnsdb
  *  @brief Functions used to read the zone-file
  *
  *  Functions used to read the zone-file
@@ -75,7 +75,7 @@ extern "C"
  *
  *  @return A result code
  *  @retval OK : the file has been opened successfully
- *  @retval else : an error occured
+ *  @retval else : an error occurred
  */
 
 ya_result
@@ -139,7 +139,7 @@ zonefile_open(const char* filename, zone_file* output)
  *
  *  @return A result code
  *  @retval OK : a record has been read successfully
- *  @retval else : an error occured
+ *  @retval else : an error occurred
  */
 
 ya_result

@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup dnsdbdnssec DNSSEC functions
+ *  @ingroup dnsdb
  *  @brief 
  *
  *  

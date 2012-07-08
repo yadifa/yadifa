@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup logger Logging functions
+ *  @ingroup dnscore
  *  @brief
  *
  *
@@ -45,6 +45,7 @@
 #include <pthread.h>
 
 #include "dnscore/logger_channel_stream.h"
+#include "dnscore/logger_channel.h"
 
 #include "dnscore/output_stream.h"
 #include "dnscore/format.h"

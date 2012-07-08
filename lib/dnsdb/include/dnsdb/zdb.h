@@ -31,9 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup database Main database functions
- *  @ingroup database
- *  @brief Main database functions
+/** @defgroup dnsdb Zone database
+ *  @brief The zone database
  *
  *  Implementation of structures and functions for the database
  *

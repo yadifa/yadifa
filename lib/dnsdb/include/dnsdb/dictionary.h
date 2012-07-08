@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup dictionary Hash-based collection designed to change it's structure to improve speed.
- *  @ingroup database
+/** @defgroup dnsdbcollection Collections used by the database
+ *  @ingroup dnsdb
  *  @brief Hash-based collection designed to change it's structure to improve speed.
  *
  *  Hash-based collection designed to change it's structure to improve speed.
@@ -145,7 +145,7 @@ typedef void dictionary_bucket_record_function(void* bucket_data, hashcode key, 
  * @return COLLECTION_PROCESS_NEXT        if the next node must be proccessed.
  * @return COLLECTION_PROCESS_STOP        if the process MUST be stopped immediately.
  * @return COLLECTION_PROCESS_DELETENODE  if the node has been deleted and the process MUST be stopped immediately.
- * @return COLLECTION_PROCESS_RETURNERROR if an error occured and the process MUST be stopped immediately.
+ * @return COLLECTION_PROCESS_RETURNERROR if an error occurred and the process MUST be stopped immediately.
  */
 
 typedef ya_result dictionary_process_record_function(void* data, dictionary_node* node);
@@ -243,7 +243,7 @@ typedef void dictionary_destroy_ex_method(dictionary* dico, dictionary_destroy_e
  * @param[in] compare pointer to a function called to check for duplicates (same hashcode)
  * @param[in] create pointer to a function called to create the new record
  *
- * @return Returns a pointer to the newly created record, or NULL if an error occured.
+ * @return Returns a pointer to the newly created record, or NULL if an error occurred.
  *
  */
 
@@ -309,7 +309,7 @@ typedef dictionary_node* dictionary_remove_method(dictionary* dico, hashcode key
  *
  * @return COLLECTION_PROCESS_STOP        if the process succeeded
  * @return COLLECTION_PROCESS_DELETENODE  if the process succeeded and the node has been deleted
- * @return COLLECTION_PROCESS_RETURNERROR if an error occured
+ * @return COLLECTION_PROCESS_RETURNERROR if an error occurred
  *
  */
 

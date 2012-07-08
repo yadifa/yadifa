@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup types The types used in the database
- *  @ingroup database
+ *  @ingroup dnsdb
  *  @brief The types used in the database
  *
  * The types used in the database
@@ -384,13 +384,13 @@ union nsec_label_union
 #define ZDB_RR_LABEL_DELEGATION     0x0020
 
 /*
- * Explicitely mark a label as owner of a (single) CNAME
+ * Explicitly mark a label as owner of a (single) CNAME
  */
 
 #define ZDB_RR_LABEL_HASCNAME       0x0100
 
 /*
- * Explicitely mark a label as owner of a something that is not a CNAME nor RRSIG nor NSEC
+ * Explicitly mark a label as owner of a something that is not a CNAME nor RRSIG nor NSEC
  */
 
 #define ZDB_RR_LABEL_DROPCNAME      0x0200
@@ -585,8 +585,8 @@ struct zdb_query_ex_answer
     zdb_resourcerecord *answer;
     zdb_resourcerecord *authority;
     zdb_resourcerecord *additional;
-    u16 authority_answer;
     u8 depth;       // CNAME
+    /* bool is_delegation; later */
 };
 
 /**

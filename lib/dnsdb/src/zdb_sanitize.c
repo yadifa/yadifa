@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup zone Functions used to sanitize a zone
- *  @ingroup database
+ *  @ingroup dnsdb
  *  @brief Functions used to sanitize a zone
  *
  *  Functions used to sanitize a zone

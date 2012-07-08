@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup streaming Streams
+ *  @ingroup dnscore
  *  @brief
  *
  *  Implementation of routines for the resource_record struct

@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup debug Debug functions
- *  @ingroup database
+ *  @ingroup dnscore
  *  @brief Debug functions.
  *
  *  Definitions of debug functions/hooks, mainly memory related.
@@ -57,6 +57,14 @@
 #include <assert.h>
 /** @note : DO NOT INCLUDE THIS HERE WITHOUT SOME KIND OF PROTECTION #include <format.h> */
 
+#if 0
+
+/*
+ * This is supposed to tell if an address is outside the mapped memory.
+ * I've seen it give false errors (on a CentOS 5.6 xen client) so I disable it until further investigation.
+ * 
+ */
+
 #ifndef NDEBUG
 #if _BSD_SOURCE || _SVID_SOURCE
 #define DEBUG_VALID_ADDRESS
@@ -64,6 +72,8 @@ bool debug_is_valid_address(void* ptr, size_t len);
 #endif
 #else
 #undef DEBUG_VALID_ADDRESS
+#endif
+
 #endif
 
 #include <dnscore/debug_config.h>

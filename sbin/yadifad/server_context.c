@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup server Server
+ *  @ingroup yadifad
  *  @brief
  *
  * @{
@@ -50,6 +50,8 @@
 #include <dnscore/ptr_vector.h>
 
 #include <dnscore/scheduler.h>
+
+#include <dnscore/fdtools.h>
 
 #include "server_context.h"
 
@@ -206,8 +208,8 @@ server_context_clear(config_data *config)
     /* Close all TCP & UDP connections */
     for(intf = config->interfaces; intf < config->interfaces_limit; intf++)
     {
-        close(intf->udp.sockfd);
-        close(intf->tcp.sockfd);
+        close_ex(intf->udp.sockfd);
+        close_ex(intf->tcp.sockfd);
 
 #if ZDB_DEBUG_MALLOC == 0               // cannot free the memory this way with debug_malloc on (freeaddrinfo needs a hook)
         freeaddrinfo(intf->udp.addr);
@@ -328,6 +330,7 @@ server_context_clear(config_data *config)
 int
 config_update_network(config_data *config)
 {
+    ya_result return_value = SUCCESS;
     const int                                                        on = 1;
     host_address                                         *tmp_listen = NULL;
     interface                                                         *intf;
@@ -351,7 +354,7 @@ config_update_network(config_data *config)
 
         tmp_listen   = tmp_listen->next;
 
-        /* The host_address list has an IPv4/IPv6 adress and a port */
+        /* The host_address list has an IPv4/IPv6 address and a port */
 
         /*****************************************************************/
         /* Create UDP interfaces and initialize server_context structure */
@@ -369,20 +372,28 @@ config_update_network(config_data *config)
         
         if(intf->udp.addr->ai_family == AF_INET6)
         {
-            Setsockopt(intf->udp.sockfd, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&on, sizeof(on));
+            if(FAIL(return_value = Setsockopt(intf->udp.sockfd, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&on, sizeof(on))))
+            {
+                return return_value;
+            }
         }
 
-        Setsockopt(intf->udp.sockfd,
-                SOL_SOCKET, SO_REUSEADDR, (void *) &on,
-                sizeof (on));
+        if(FAIL(return_value = Setsockopt(intf->udp.sockfd,SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on))))
+        {
+            return return_value;
+        }
 
         log_info("binding %{sockaddr}", intf->udp.addr->ai_addr);
         
         server_context_set_socket_name(intf->udp.sockfd, (struct sockaddr*)intf->udp.addr->ai_addr);
         
-        Bind(intf->udp.sockfd,
+        if(FAIL(return_value = Bind(intf->udp.sockfd,
                 (struct sockaddr*)intf->udp.addr->ai_addr,
-                intf->udp.addr->ai_addrlen);
+                intf->udp.addr->ai_addrlen)))
+        {
+            return return_value;
+        }
+                
 
         /*****************************************************************/
         /* Create TCP interfaces and initialize server_context structure */
@@ -390,10 +401,11 @@ config_update_network(config_data *config)
 
         intf->tcp.sockfd = Socket(intf->tcp.addr->ai_family, SOCK_STREAM, 0);
 
-        Setsockopt(intf->tcp.sockfd,
-                SOL_SOCKET, SO_REUSEADDR,
-                (void *) &on,
-                sizeof (on));
+        if(FAIL(return_value = Setsockopt(intf->tcp.sockfd, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on))))
+        {
+            return return_value;
+        }
+                
         
         /**
          * This is distribution/system dependent. With this we ensure that IPv6 will only listen on IPv6 addresses.
@@ -401,19 +413,26 @@ config_update_network(config_data *config)
         
         if(intf->tcp.addr->ai_family == AF_INET6)
         {
-            Setsockopt(intf->tcp.sockfd, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&on, sizeof(on));
+            if(FAIL(return_value = Setsockopt(intf->tcp.sockfd, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&on, sizeof(on))))
+            {
+                return return_value;
+            }
         }
         
         server_context_set_socket_name(intf->tcp.sockfd, (struct sockaddr*)intf->tcp.addr->ai_addr);
         
-        Bind(intf->tcp.sockfd,
-                (struct sockaddr*)intf->tcp.addr->ai_addr,
-                intf->tcp.addr->ai_addrlen);
+        if(FAIL(return_value = Bind(intf->tcp.sockfd, (struct sockaddr*)intf->tcp.addr->ai_addr, intf->tcp.addr->ai_addrlen)))
+        {
+            return return_value;
+        }
         
         fcntl(intf->tcp.sockfd, F_SETFL, Fcntl(intf->tcp.sockfd, F_GETFL, 0) | O_NONBLOCK);
 
         /* For TCP only, listen to it... */
-        Listen(intf->tcp.sockfd, TCP_LISTENQ);
+        if(FAIL(return_value = Listen(intf->tcp.sockfd, TCP_LISTENQ)))
+        {
+            return return_value;
+        }
     }
 
     sched_fd = scheduler_init();

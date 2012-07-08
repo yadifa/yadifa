@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup hash Functions used to hash a dns formatted string
- *  @ingroup database
+/** @defgroup dnsdbcollection Collections used by the database
+ *  @ingroup dnsdb
  *  @brief Functions used to hash a dns formatted string
  *
  *  Implements the functions used to hash a dns formatted string.
@@ -149,7 +149,7 @@ hash_pascalname(const u8* pascal_name)
     /* I could initialize it to a hiher value (ie: 255) and
      * decrease it instead of the current behaviour.
      * This would allow to put a cpu-cheap limit on the
-     * amount of chars taken in account in the hash calulation.
+     * amount of chars taken in account in the hash computation.
      */
     u32 len = *pascal_name++;
 
@@ -183,7 +183,7 @@ hash_asciizname(const char* asciiz_name)
     /* I could initialize it to a hiher value (ie: 255) and
      * decrease it instead of the current behaviour.
      * This would allow to put a cpu-cheap limit on the
-     * amount of chars taken in account in the hash calulation.
+     * amount of chars taken in account in the hash computation.
      */
     u32 len = (u32)strlen(asciiz_name);
 

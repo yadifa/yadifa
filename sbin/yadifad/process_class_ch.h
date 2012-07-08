@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup server
- *  @ingroup server
+ *  @ingroup yadifad
  *  @brief server
  *
  *  Handles queries made in the CH class (ie: version.*)

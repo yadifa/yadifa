@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup zone_label_iterator Functions used to iterate through the labels of a zone
- *  @ingroup database
+/** @defgroup dnsdbzone Zone related functions
+ *  @ingroup dnsdb
  *  @brief Functions used to iterate through the labels of a zone
  *
  * @{

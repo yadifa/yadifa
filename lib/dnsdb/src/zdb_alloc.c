@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup zmalloc The database specialized allocation function
- *  @ingroup database
+ *  @ingroup dnsdb
  *  @brief The database specialized allocation function
  *
  * @{

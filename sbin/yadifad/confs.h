@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup config Configuration handling
+ *  @ingroup yadifad
  *  @brief
  *
  * @{
@@ -83,7 +83,7 @@ extern "C" {
 
 #define     PROGRAM_NAME                PACKAGE
 #define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASEDATE                 "2012-06-25"
+#define     RELEASEDATE                 "2012-07-09"
 #define     COMPILEDATE                 __DATE__
 
     /* List of default values for the different configuration parameters */
@@ -167,7 +167,7 @@ extern "C" {
 #define     S_EDNS0_MAX_SIZE            "4096"
 #define     S_RECURSION                 "1"
 
-#define     S_U32_VALUE_NOT_SET         "4294967295"
+#define     S_S32_VALUE_NOT_SET         "2147483647"
 #define     S_SIG_VALIDITY_INTERVAL     "30"            /* 30 days in days           */
 #define     S_SIG_VALIDITY_REGENERATION "168"           /*  7 days in hours  24->168 */
 #define     S_SIG_VALIDITY_JITTER       "3600"          /*  1 hour in seconds        */
@@ -501,7 +501,7 @@ extern "C" {
 
     ya_result   config_get_file(int argc, char **argv);
 
-    void        config_update();
+    ya_result   config_update();
     void        config_free();
 
     /*    ------------------------------------------------------------    */

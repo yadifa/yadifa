@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup zone Functions used to manipulate a zone
- *  @ingroup database
+/** @defgroup dnsdbzone Zone related functions
+ *  @ingroup dnsdb
  *  @brief Functions used to manipulate a zone
  *
  *  Functions used to manipulate a zone

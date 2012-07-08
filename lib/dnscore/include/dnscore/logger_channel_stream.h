@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup logger Logging functions
+ *  @ingroup dnscore
  *  @brief 
  *
  *  
@@ -43,15 +43,16 @@
 #ifndef _LOGGER_CHANNEL_STREAM_H
 #define	_LOGGER_CHANNEL_STREAM_H
 
-#include <dnscore/logger_channel.h>
 #include <dnscore/output_stream.h>
 
 #ifdef	__cplusplus
 extern "C"
 {
 #endif
-
-void logger_channel_stream_open(output_stream* os, bool forceflush,logger_channel* chan);
+    
+struct logger_channel;
+    
+void logger_channel_stream_open(output_stream* os, bool forceflush, struct logger_channel *chan);
 
 #ifdef	__cplusplus
 }

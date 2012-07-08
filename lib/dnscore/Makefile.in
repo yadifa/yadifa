@@ -45,20 +45,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ##############################################################################
-#
-#	YADIFA dnscore Makefile.am script
-#
-#      	Makefile.am script
-#
-#	$URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/lib/dnscore/Makefile.am $
-#
-#       $Date: 2012-05-23 12:36:24 +0200 (Wed, 23 May 2012) $
-#
-#       $Revision: 2006 $
-#
-#	$Author: ericdf $
-#
-##############################################################################
 
 ################################################################################
 #
@@ -90,6 +76,18 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Settings common to all makefiles
+#
+################################################################################
 
 ################################################################################
 #
@@ -119,6 +117,18 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Labels common to all makefiles
 #
 ################################################################################
 
@@ -538,15 +548,12 @@ pkginclude_HEADERS = include/dnscore/base16.h include/dnscore/base32.h \
 	include/dnscore/alarm.h include/dnscore/ctrl-rfc.h \
 	$(am__append_2)
 
-# because of OSX
-
 #
 #
 #
 AM_CFLAGS = $(am__append_3) $(am__append_5) $(am__append_7) \
 	$(am__append_9) $(am__append_11) $(am__append_12) \
-	$(am__append_13) $(am__append_15) -I./include $(LOCALFLAGS) \
-	$(YCFLAGS)
+	$(am__append_13) $(am__append_15) $(LOCALFLAGS) $(YCFLAGS)
 AM_LDFLAGS = $(am__append_4) $(am__append_8) $(am__append_14) \
 	$(YLDFLAGS)
 DEBUGFLAGS = $(am__append_6) $(am__append_10) $(am__append_16) \

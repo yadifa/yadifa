@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup logger Logging functions
+ *  @ingroup dnscore
  *  @brief
  *
  *
@@ -55,6 +55,18 @@ logger_channel_alloc()
 
     chan->data = NULL;
     chan->vtbl = NULL;
+    
+    /* dummy to avoid a NULL test */
+    logger_message* last_message;
+    MALLOC_OR_DIE(logger_message*,last_message,sizeof(logger_message), LOGRMSG_TAG);
+    MALLOC_OR_DIE(u8*, last_message->text, 1, LOGRTEXT_TAG);
+    *last_message->text = '\0';
+    last_message->text_length = 0;
+    last_message->flags = 0;
+    last_message->rc = 1;
+    
+    chan->last_message = last_message;
+    chan->last_message_count = 0;
 
     return chan;
 }

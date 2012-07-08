@@ -45,20 +45,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
-#
-#	YADIFA server Makefile.am script
-#
-#      	Makefile.am script
-#
-#	$URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/sbin/yadifad/Makefile.am $
-#
-#       $Date: 2012-06-18 15:51:47 +0200 (Mon, 18 Jun 2012) $
-#
-#       $Revision: 2049 $
-#
-#	$Author: ericdf $
-#
-##############################################################################
 
 ################################################################################
 #
@@ -90,6 +76,18 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Settings common to all makefiles
+#
+################################################################################
 
 ################################################################################
 #
@@ -121,6 +119,19 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Labels common to all makefiles
+#
+################################################################################
+
 
 
 VPATH = @srcdir@
@@ -148,12 +159,12 @@ sbin_PROGRAMS = yadifad$(EXEEXT)
 @HAS_TSIG_SUPPORT_TRUE@am__append_3 = confs_key.c
 @HAS_ACL_SUPPORT_TRUE@am__append_4 = acl.h
 DIST_COMMON = README $(am__configure_deps) $(am__noinst_HEADERS_DIST) \
-	$(srcdir)/../../mk/common-labels.mk \
+	$(dist_noinst_DATA) $(srcdir)/../../mk/common-labels.mk \
 	$(srcdir)/../../mk/common-settings.mk $(srcdir)/Makefile.am \
 	$(srcdir)/Makefile.in $(srcdir)/server-config.h.in \
 	$(top_srcdir)/configure AUTHORS COPYING ChangeLog INSTALL NEWS \
-	TODO compile config.guess config.sub depcomp install-sh \
-	ltmain.sh missing
+	compile config.guess config.sub depcomp install-sh ltmain.sh \
+	missing
 
 #ACLOCAL_AMFLAGS = -I m4
 
@@ -252,6 +263,7 @@ LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	$(LDFLAGS) -o $@
 SOURCES = $(yadifad_SOURCES)
 DIST_SOURCES = $(am__yadifad_SOURCES_DIST)
+DATA = $(dist_noinst_DATA)
 am__noinst_HEADERS_DIST = axfr.h check.h config_error.h config.h \
 	confs.h database.h ixfr.h notify.h list.h parser.h \
 	server_context.h server_error.h server.h server-st.h \
@@ -397,6 +409,7 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I m4
 LOCALFLAGS = -DPREFIX='"$(prefix)"'
+dist_noinst_DATA = VERSION
 yadifad_SOURCES = axfr.c check.c confs.c database.c ixfr.c notify.c \
 	parser.c list.c main.c process_command_line.c server.c \
 	server-st.c server-mt.c server_context.c log_statistics.c \
@@ -413,15 +426,12 @@ noinst_HEADERS = axfr.h check.h config_error.h config.h confs.h \
 	process_class_ctrl.h scheduler_database_load_zone.h \
 	$(am__append_4)
 
-# because of OSX
-
 #
 #
 #
 AM_CFLAGS = $(am__append_5) $(am__append_7) $(am__append_9) \
 	$(am__append_11) $(am__append_13) $(am__append_14) \
-	$(am__append_15) $(am__append_17) -I./include $(LOCALFLAGS) \
-	$(YCFLAGS)
+	$(am__append_15) $(am__append_17) $(LOCALFLAGS) $(YCFLAGS)
 AM_LDFLAGS = $(am__append_6) $(am__append_10) $(am__append_16) \
 	$(YLDFLAGS)
 DEBUGFLAGS = $(am__append_8) $(am__append_12) $(am__append_18) \
@@ -830,7 +840,7 @@ distcleancheck: distclean
 	       exit 1; } >&2
 check-am: all-am
 check: check-am
-all-am: Makefile $(PROGRAMS) $(HEADERS) server-config.h
+all-am: Makefile $(PROGRAMS) $(DATA) $(HEADERS) server-config.h
 installdirs:
 	for dir in "$(DESTDIR)$(sbindir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \

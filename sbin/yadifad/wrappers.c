@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup ### #######
- *  @ingroup ###
+ *  @ingroup yadifad
  *  @brief
  *
  * @{
@@ -61,13 +61,19 @@
  *
  *  @return NONE
  */
-void
+ya_result
 Bind(int fd, const struct sockaddr *sa, socklen_t salen)
 {
+    ya_result return_value = SUCCESS;
+    
     if(bind(fd, sa, salen) == -1)
     {
-        log_quit("bind error for socket %{sockaddr} %s", sa, strerror(errno));
+        return_value = ERRNO_ERROR;
+        
+        log_err("bind: %r", return_value);
     }
+    
+    return return_value;
 }
 
 /** \brief Change current working directory
@@ -114,7 +120,25 @@ Chroot(const char *path)
 {
     if(chroot(path) < 0)
     {
-    	log_err("unable to chroot to: '%s' : %r", path, ERRNO_ERROR);
+        
+        log_err("unable to chroot to: '%s': %r", path, ERRNO_ERROR);
+        
+        if(*path != '/')
+        {
+            char cwd[PATH_MAX];
+            
+            cwd[0] = '\0';
+            
+            if(getcwd(cwd,sizeof(cwd)) == NULL)
+            {
+                log_err("getcwd: %r", ERRNO_ERROR);
+            }
+            else
+            {            
+                log_err("current directory: '%s'", cwd);
+            }
+        }
+        
         exit(EXIT_FAILURE);
     }
     
@@ -132,9 +156,15 @@ Chroot(const char *path)
 void
 Close(int fd)
 {
-    if(close(fd) < 0)
+    while(close(fd) < 0)
     {
-        log_err("close error fd=%d: %r", fd, ERRNO_ERROR);
+        int err = errno;
+        
+        if(err != EINTR)
+        {
+            log_err("close error fd=%d: %r", fd, ERRNO_ERROR);
+            break;
+        }
     }
 }
 
@@ -227,15 +257,21 @@ Fork(void)
  *
  *  @return NONE
  */
-void
+ya_result
 Listen(int socket, int backlog)
 {
+    ya_result return_value = SUCCESS;
+    
     /** @note Listen needs some extra development */
 
     if(listen(socket, backlog) < 0)
     {
-        log_quit("listen error (%s)", strerror(errno));
+        return_value = ERRNO_ERROR;
+        
+        log_err("listen: %r", return_value);
     }
+    
+    return return_value;
 }
 
 /** \brief Open a file for reading
@@ -286,6 +322,8 @@ Open(const char *path_name, int oflag, mode_t mode)
  *  @param[in] salenptr
  *
  *  retval n size of received message
+ * 
+ * 0 uses
  */
 ssize_t
 Recvfrom(int fd, void *ptr, size_t nbytes, int flags,
@@ -317,13 +355,19 @@ Recvfrom(int fd, void *ptr, size_t nbytes, int flags,
  *
  *  @return NONE
  */
-void
+ya_result
 Setsockopt(int fd, int level, int optname, const void *optval, socklen_t optlen)
 {
+    ya_result return_value = SUCCESS;
+    
     if(setsockopt(fd, level, optname, optval, optlen) < 0)
     {
-        log_quit("setsockopt error (%s)", strerror(errno));
+        return_value = ERRNO_ERROR;
+        
+        log_err("setsockopt: %r", return_value);
     }
+    
+    return return_value;
 }
 
 /** \brief Set group ID

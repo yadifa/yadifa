@@ -1,9 +1,37 @@
-Known issue:
-                _ on 32 bits architectures, the sig-validity-* fields are not properly copied from <main> to <zone>
-                  as a workaround, set the sig-validity fields in each <zone> container in 32 bits architectures
+release 1.0.1
 
-                  ie:
-                          sig-validity-interval 7
-                          sig-validity-regeneration 168
-                          sig-validity-jitter 3600
+release 1.0.0
+
+release 1.0.0RC3
+
+release 1.0.0RC2
+	* fix the file loggers path
+	* fix the access rights issue (sigsegv ?)
+	* tighten the security (yadifa user, ...)
+
+release 0.7.0
+	* Handle the infinite spoofed 127.0.0.1:53 <-> 127.0.0.53 issue.
+	  (It can occur with any interface)
+	  (check the handling of the Q bit and of the error code)
+	* do not accept records next to a CNAME (except RRSIG & NSEC)
+	* check the NSEC3 chain
+	* check NSEC3 incremental changes as a slave, make it more lenient
+
+release 0.5.0	
+
+release 0.4.1
+	* add @ sign in zone file
+	* check TSIG client side 
+	* check IXFR
+	* command line argument [-P/--port] can also be an item from /etc/services	
+	* notify receiving 
+	
+release 0.3.1
+	* add @ sign in zone file
+	* check TSIG
+	* command line argument [-P/--port] can also be an item from /etc/services	
+
+
+release 0.1.0
+	* command line argument [-P/--port] can also be an item from /etc/services
 

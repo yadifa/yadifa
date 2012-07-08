@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup ### #######
- *  @ingroup ###
+ *  @ingroup dnsdb
  *  @brief
  *
  * @{
@@ -188,7 +188,7 @@ zdb_icmtl_input_stream_fillbuffer(zdb_icmtl_input_stream_data* data)
         {
             err = zdb_icmtl_input_stream_next_record(&data->icmtlr_bis, data);
 
-            /* 0 => found a record type or an error occured */
+            /* 0 => found a record type or an error occurred */
 
             if(err != 0)
             {
@@ -212,7 +212,7 @@ zdb_icmtl_input_stream_fillbuffer(zdb_icmtl_input_stream_data* data)
         {
             err = zdb_icmtl_input_stream_next_record(&data->icmtla_bis, data);
 
-            /* 0 => found a record type or an error occured */
+            /* 0 => found a record type or an error occurred */
 
             if(err != 0)
             {

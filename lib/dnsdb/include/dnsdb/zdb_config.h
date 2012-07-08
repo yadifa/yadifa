@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup config Database configuration
- *  @ingroup database
+ *  @ingroup dnsdb
  *  @brief Database configuration
  *
  *  Database configuration #defines

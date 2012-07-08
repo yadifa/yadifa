@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup acl Access Control List
+ *  @ingroup yadifad
  *  @brief
  *
  * @{
@@ -1623,7 +1623,7 @@ acl_check_access_filter(message_data *mesg, address_match_set *ams)
     }
     
     /*
-     * At this point, none of the IPs have been explicitely rejected.
+     * At this point, none of the IPs have been explicitly rejected.
      * If they are accepted
      */
         

@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup logger Logging functions
+ *  @ingroup dnscore
  *  @brief 
  *
  *  

@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup nsec3 NSEC3 functions
+ *  @ingroup dnsdbdnssec
  *  @brief 
  *
  *  
@@ -108,7 +108,7 @@ extern "C"
      * @param labels
      * @param labels_top
      * 
-     * @return TRUE if a change occured, FALSE otherwise
+     * @return TRUE if a change occurred, FALSE otherwise
      */
 
     bool nsec3_update_label(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_reference labels, s32 labels_top);

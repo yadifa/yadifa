@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup collections Generic collections functions
+ *  @ingroup dnscore
  *  @brief 
  *
  *  A collection of strings based on the AVL

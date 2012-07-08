@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup hash Functions used to hash a dns formatted string
- *  @ingroup database
+/** @defgroup dnsdbcollection Collections used by the database
+ *  @ingroup dnsdb
  *  @brief Functions used to hash a dns formatted string
  *
  *  Implements the functions used to hash a dns formatted string.

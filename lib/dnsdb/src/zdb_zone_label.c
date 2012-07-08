@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup zones_labels Internal functions for the database: zone records label.
- *  @ingroup database
+/** @defgroup dnsdbzone Zone related functions
+ *  @ingroup dnsdb
  *  @brief Internal functions for the database: zoned resource records label.
  *
  *  Internal functions for the database: zoned resource records label.

@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup error Database error handling
- *  @ingroup database
+ *  @ingroup dnsdb
  *  @brief Database error handling
  *
  * @{

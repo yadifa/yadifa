@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup dnscore
- *  @ingroup base16
+/** @defgroup base Base conversion functions
+ *  @ingroup dnscore
  *  @brief Base 16 codec
  *
  * @{

@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup logging Server logging
+ *  @ingroup yadifad
  *  @brief 
  *
  *  
@@ -45,6 +45,8 @@
 
 #include "log_statistics.h"
 
+#define SHOW_REFERRAL 0
+
 logger_handle* g_statistics_logger;
 
 void
@@ -52,19 +54,25 @@ log_statistics_legend()
 {
     logger_handle_msg(g_statistics_logger,
             MSG_INFO,
-            "statistics legend:\n"
+            "statistics legend: \n"
             "\n"
-            "input:\n"
+            "input: \n"
             "\n"
             "\tin : input count \n"
             "\tqr : query count \n"
-            "\tno : notify count \n"
-            "\tup : updates count \n"
+            "\tni : notify count \n"
+            "\tup : update count \n"
+            
             "\tdr : dropped count \n"
-            "\tst : total bytes sent \n"
+            "\tst : total bytes sent (simple queries only) \n"
             "\tun : undefined opcode count \n"
+#if SHOW_REFERRAL
+            "\trf : referral count\n"
+#endif
+            
             "\tax : axfr query count \n"
             "\tix : ixfr query count \n"
+            "\tov : (tcp) connection overflow \n"
             "\n"
             "output:\n"
             "\n"
@@ -96,17 +104,37 @@ log_statistics(server_statistics_t *server_statistics)
 {
     logger_handle_msg(g_statistics_logger,
             MSG_INFO,
-#ifndef NDEBUG
+#if 0
             "loops=%llu (%llu/s) "
             "timeout=%llu "
             "sched=%llu "
 #endif
-	    "udp (in=%llu qr=%llu ni=%llu up=%llu dr=%llu st=%llu un=%llu) "
-            "tcp (in=%llu qr=%llu ni=%llu no=%llu up=%llu ax=%llu ix=%llu un=%llu) "
-            "udpa (OK=%llu FE=%llu SF=%llu NE=%llu NI=%llu RE=%llu XD=%llu XR=%llu NR=%llu NA=%llu NZ=%llu BV=%llu BS=%llu BK=%llu BT=%llu BM=%llu BN=%llu BA=%llu TR=%llu) "
-            "tcpa (OK=%llu FE=%llu SF=%llu NE=%llu NI=%llu RE=%llu XD=%llu XR=%llu NR=%llu NA=%llu NZ=%llu BV=%llu BS=%llu BK=%llu BT=%llu BM=%llu BN=%llu BA=%llu TR=%llu) "
+             "udp (in=%llu qr=%llu ni=%llu up=%llu "
+                  "dr=%llu st=%llu un=%llu "
+#if SHOW_REFERRAL
+                  "rf=%llu) "
+#endif
+            
+             "tcp (in=%llu qr=%llu ni=%llu up=%llu "
+                  "dr=%llu st=%llu un=%llu """
+#if SHOW_REFERRAL
+                  "rf=%llu "
+#endif
+                  "ax=%llu ix=%llu ov=%llu) "
+            
+            "udpa (OK=%llu FE=%llu SF=%llu NE=%llu "
+                  "NI=%llu RE=%llu XD=%llu XR=%llu "
+                  "NR=%llu NA=%llu NZ=%llu BV=%llu "
+                  "BS=%llu BK=%llu BT=%llu BM=%llu "
+                  "BN=%llu BA=%llu TR=%llu) "
+            
+            "tcpa (OK=%llu FE=%llu SF=%llu NE=%llu "
+                  "NI=%llu RE=%llu XD=%llu XR=%llu "
+                  "NR=%llu NA=%llu NZ=%llu BV=%llu "
+                  "BS=%llu BK=%llu BT=%llu BM=%llu "
+                  "BN=%llu BA=%llu TR=%llu)"
             ,
-#ifndef NDEBUG
+#if 0
             server_statistics->input_loop_count,
             1000LL * server_statistics->loop_rate_counter / server_statistics->loop_rate_elapsed,
             server_statistics->input_timeout_count,
@@ -116,24 +144,33 @@ log_statistics(server_statistics_t *server_statistics)
             
             server_statistics->udp_input_count,
             server_statistics->udp_queries_count,
-            server_statistics->udp_notify_input_count,
-            
+            server_statistics->udp_notify_input_count,            
             server_statistics->udp_updates_count,
-            server_statistics->udp_dropped_count,
             
+            server_statistics->udp_dropped_count,
             server_statistics->udp_output_size_total,
             server_statistics->udp_undefined_count,
+#if SHOW_REFERRAL
+            server_statistics->udp_referrals_count,
+#endif
 
             // tcp
 
             server_statistics->tcp_input_count,
             server_statistics->tcp_queries_count,
-            server_statistics->tcp_notify_input_count,
-            server_statistics->tcp_notify_output_count,
+            server_statistics->tcp_notify_input_count,            
             server_statistics->tcp_updates_count,
-            server_statistics->tcp_axfr_count,
-            server_statistics->tcp_ixfr_count,
+            
+            server_statistics->tcp_dropped_count,
+            server_statistics->tcp_output_size_total,
             server_statistics->tcp_undefined_count,
+#if SHOW_REFERRAL
+            server_statistics->tcp_referrals_count,
+#endif
+            
+            server_statistics->tcp_axfr_count,            
+            server_statistics->tcp_ixfr_count,
+            server_statistics->tcp_overflow_count,
             
             // udp fp
                         
@@ -148,7 +185,6 @@ log_statistics(server_statistics_t *server_statistics)
             server_statistics->udp_fp[RCODE_NXRRSET],
             server_statistics->udp_fp[RCODE_NOTAUTH],
             server_statistics->udp_fp[RCODE_NOTZONE],
-            
             server_statistics->udp_fp[RCODE_BADVERS],
             server_statistics->udp_fp[RCODE_BADSIG],
             server_statistics->udp_fp[RCODE_BADKEY],
@@ -171,7 +207,6 @@ log_statistics(server_statistics_t *server_statistics)
             server_statistics->tcp_fp[RCODE_NXRRSET],
             server_statistics->tcp_fp[RCODE_NOTAUTH],
             server_statistics->tcp_fp[RCODE_NOTZONE],
-            
             server_statistics->tcp_fp[RCODE_BADVERS],
             server_statistics->tcp_fp[RCODE_BADSIG],
             server_statistics->tcp_fp[RCODE_BADKEY],

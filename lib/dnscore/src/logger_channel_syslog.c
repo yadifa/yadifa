@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup logger Logging functions
+ *  @ingroup dnscore
  *  @brief
  *
  *
@@ -77,7 +77,7 @@ struct syslog_data
 static ya_result
 logger_channel_syslog_constmsg(logger_channel* chan, int level, char* text, u32 text_len, u32 date_offset)
 {
-    syslog(level, &text[date_offset]); /* don't worry about not being a string litteral */
+    syslog(level, "%s", &text[date_offset]); /* don't worry about not being a string literal */
 
     return SUCCESS;
 }
@@ -101,7 +101,7 @@ logger_channel_syslog_msg(logger_channel* chan, int level, char* text, ...)
     /*
      *  In order to avoid syslog % issues : replace all '%' by something else: ie: '°'
      */
-
+/*
     s32 i;
     for(i = 0; i < return_code; i++)
     {
@@ -110,8 +110,8 @@ logger_channel_syslog_msg(logger_channel* chan, int level, char* text, ...)
             tmp[i] = '~';
         }
     }
-
-    syslog(level, tmp, NULL);
+*/
+    syslog(level, "%s", tmp);
 
     va_end(args);
 

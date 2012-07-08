@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup cpu CPU
+ *  @ingroup dnscore
  *  @brief 
  *
  *  

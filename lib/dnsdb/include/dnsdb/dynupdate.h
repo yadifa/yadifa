@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup dnsdbupdate Dynamic update functions
+ *  @ingroup dnsdb
  *  @brief 
  *
  * @{

@@ -1,3 +1,25 @@
+20120709:
+	YADIFA 1.0.1
+		_ logging repeat compression is now by channel instead of global
+
+	Fixes:
+                _ fixed an issue where glibc whould assert if libgcc_s.so (libgcc_s.so.1) and libc.so (libc.so.6) where not
+		  available inside the chrooted directory of YADIFA
+		_ fixed an issue in the syslog module
+
+	Known issues:
+		_ on 32 bits architectures, the sig-validity-* fields are not properly copied from <main> to <zone>
+		  as a workaround, set the sig-validity fields in each <zone> container in 32 bits architectures
+
+		  ie:
+			  sig-validity-interval 7
+ 			  sig-validity-regeneration 168
+			  sig-validity-jitter 3600
+		_ if the serial of a zone is changed in a way that it goes beyond a value such as
+		  the journal serial start is bigger than the journal serial end, issues are expected
+		  for IXFR answers.
+		_ notify is ignored on TCP
+
 20120625:
 	YADIFA 1.0.0
 		_ LTO support can be enabled with --enable-lto but this is not working with clang. LTO does not increase
@@ -39,7 +61,7 @@
 		_ fixed named query style layout
 
 	Known issue:
-		_ if the serial of a zone is changed in a way that it goes beyond a value sur as
+		_ if the serial of a zone is changed in a way that it goes beyond a value such as
 		  the journal serial start is bigger than the journal serial end, issues are expected
 		  for IXFR answers.
 		_ notify is ignored on TCP

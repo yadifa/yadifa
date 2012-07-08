@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup 
- *  @ingroup 
+/** @defgroup logging Server logging
+ *  @ingroup yadifad
  *  @brief 
  *
  *  

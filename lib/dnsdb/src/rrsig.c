@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup rrsig RRSIG functions
+ *  @ingroup dnsdbdnssec
  *  @brief
  *
  *
@@ -1374,7 +1374,7 @@ rrsig_update_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata*
          * When deleting a record of a given type from a label,
          * the associated RRSIG MUST be removed first.
          *
-         * In order to accomodate an structure error, the caller could check
+         * In order to accommodate an structure error, the caller could check
          * if the label is still relevant, and do a cleanup if required.
          */
 

@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup format C-string formatting
+ *  @ingroup dnscore
  *  @brief
  *
  *
@@ -529,7 +529,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
              *
              *	      It does not closes the fitlered stream on "close"
              *        It does not flushes the filtered stream on "close" either.
-             *        It only flushes the filtered stream when explicitely asked with "flush"
+             *        It only flushes the filtered stream when explicitly asked with "flush"
              *
              *        It is thus useless to call close here (we just loose the time for the call)
              *

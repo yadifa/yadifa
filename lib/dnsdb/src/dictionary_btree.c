@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup dictionary_btree Dictionary module based on a btree
- *  @ingroup dictionary
+/** @defgroup dnsdbcollection Collections used by the database
+ *  @ingroup dnsdb
  *  @brief Dictionary module based on a btree
  *
  *  Dictionary module based on a btree

@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup acl Access Control List
+ *  @ingroup yadifad
  *  @brief
  *
  * @{

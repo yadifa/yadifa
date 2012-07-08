@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup logger Logging functions
+ *  @ingroup dnscore
  *  @brief
  *
  *
@@ -51,10 +51,10 @@
 
 #include <pthread.h>
 
-#include "dnscore/logger_handle.h"
-#include "dnscore/logger_channel.h"
 #include "dnscore/logger_channel_stream.h"
+#include "dnscore/logger_channel.h"
 
+#include "dnscore/mutex.h"
 #include "dnscore/ptr_vector.h"
 
 #include "dnscore/file_output_stream.h"
@@ -73,6 +73,9 @@
 
 #define USE_DEFAULT_HANDLER 0
 
+#define DEBUG_LOG_HANDLER 0
+#define DEBUG_LOG_MESSAGES 0
+
 #define COLUMN_SEPARATOR " | "
 #define COLUMN_SEPARATOR_SIZE 3
 
@@ -89,33 +92,19 @@ static pthread_mutex_t logger_mutex;
 static struct logger_handle default_handle;
 #endif
 
-typedef struct logger_message logger_message;
-
-struct logger_message
-{
-    logger_handle* handle;      // 0
-    u8* text;                   // 8
-    
-    u32 text_length;            // 12/4
-    pthread_t thread_id;        // 16/8
-    
-    struct timeval tv;          // 24/8
-    
-    pid_t pid;                  // 32/8
-    u16 level;                  // 36/4
-    u16 flags;                  // 38/2
-    
-    const u8* prefix;           // 40/8
-    u16 prefix_length;          // 48/8 => -12 = 36
-};
-
 static threaded_queue logger_commit_queue = THREADED_QUEUE_NULL;
-static logger_message* last_message;
 static pthread_t logger_thread_id = 0;
-static u32 last_message_text_repeat = 0;
 static u32 exit_level = MSG_CRIT;
 static bool logger_started = FALSE;
 static bool logger_initialised = FALSE;
+
+#if DEBUG_LOG_MESSAGES == 1
+static smp_int allocated_messages_count = SMP_INT_INITIALIZER;
+static time_t allocated_messages_count_stats_time = 0;
+#endif
+
+//static logger_message* last_message;        /** @todo by channels */
+//static u32 last_message_text_repeat = 0;
 
 static void logger_handle_trigger_shutdown()
 {
@@ -166,8 +155,12 @@ static void
 logger_handle_free_channel(void* ptr)
 {
     logger_channel* channel = (logger_channel*)ptr;
-
+    
     logger_channel_close(channel);
+    if(--channel->last_message->rc == 0)
+    {
+        free(channel->last_message);
+    }
     free(channel);
 }
 
@@ -203,7 +196,7 @@ logger_handle_add(const char* name)
         
         int len = strlen(name);
         handle->formatted_name_len = LOGGER_HANDLE_FORMATTED_LENGTH;
-        
+                
         MALLOC_OR_DIE(char*, handle->formatted_name, handle->formatted_name_len, LOGGER_HANDLE_TAG);
         memset((char*)handle->formatted_name, ' ', LOGGER_HANDLE_FORMATTED_LENGTH);
         memcpy((char*)handle->formatted_name, name,  MIN(len , LOGGER_HANDLE_FORMATTED_LENGTH));
@@ -321,12 +314,6 @@ logger_handle_reopen_all()
 static void
 logger_handle_init()
 {
-    /* dummy to avoid a NULL test */
-    MALLOC_OR_DIE(logger_message*,last_message,sizeof(logger_message), LOGRMSG_TAG);
-    MALLOC_OR_DIE(u8*, last_message->text, 1, LOGRTEXT_TAG);
-    last_message->text_length = -1;
-    last_message->flags = 0;
-
     ptr_vector_init(&logger_handles);
     ptr_vector_init(&logger_channels);
 
@@ -408,6 +395,17 @@ logger_handle_exit_level(u32 level)
 
 static const char acewnid[16 + 1] = "!ACEWNIDd234567";
 
+static inline void
+logger_message_free(logger_message *msg)
+{
+    free(msg->text);
+    free(msg);
+    
+#if DEBUG_LOG_MESSAGES == 1
+    smp_int_dec(&allocated_messages_count);
+#endif
+}
+
 void*
 logger_dispatcher_thread(void* context)
 {
@@ -420,35 +418,31 @@ logger_dispatcher_thread(void* context)
      * (Actually it would be even better to use the static method)
      */
     output_stream_write_method *baos_write = baos.vtbl->write;
+    
+    char repeat_text[128];
 
     for(;;)
     {
         logger_message* message = (logger_message*)threaded_queue_dequeue(&logger_commit_queue);
 
         if(message != NULL)
-        {            
+        {
+#if DEBUG_LOG_MESSAGES == 1
+            {
+                time_t now = time(NULL);
+                if(now - allocated_messages_count_stats_time > 10)
+                {
+                    allocated_messages_count_stats_time = now;
+                    int val = smp_int_get(&allocated_messages_count);
+                    
+                    osformatln(termerr, "messages allocated count = %d", val);
+                    flusherr();
+                }
+            }
+#endif
+            
             if(message->pid != 0)
             {
-                /*
-                 * Compare with the previous message, count repeats
-                 */
-
-                /* first a quick-check */
-
-                if(message->text_length == last_message->text_length)   /** @todo This should be "per channel" */
-                {
-                    /* then the thorough one */
-
-                    if(memcmp(message->text, last_message->text, last_message->text_length) == 0)
-                    {
-                        last_message_text_repeat++;
-
-                        free(message->text);
-                        free(message);
-                        continue;
-                    }
-                }
-
                 logger_handle *handle = message->handle;
                 u32 level = message->level;
 
@@ -456,50 +450,10 @@ logger_dispatcher_thread(void* context)
 
                 if(channel_count < 0)
                 {
-                    free(message->text);
-                    free(message);
+                    logger_message_free(message);
                     continue;
                 }
 
-                if(last_message_text_repeat > 0)
-                {
-                    logger_handle *handle = message->handle;
-                    u32 level = message->level;
-
-                    s32 channel_count = handle->channels[level].offset;
-                    logger_channel** channel = (logger_channel**)handle->channels[level].data;
-
-                    do
-                    {
-                        /* If the same line is outputted twice : filter it to say 'repeated' instead of sending everything */
-#ifndef NDEBUG
-                        if(FAIL(logger_channel_msgf(*channel, level, "----/--/-- --:--:--.------" COLUMN_SEPARATOR 
-                                "-" COLUMN_SEPARATOR
-                                "-" COLUMN_SEPARATOR
-                                "-" COLUMN_SEPARATOR
-                                "-" COLUMN_SEPARATOR
-                                "Last message repeated %d times", last_message_text_repeat)))
-#else
-                        if(FAIL(logger_channel_msgf(*channel, level, "----/--/-- --:--:--.------" COLUMN_SEPARATOR 
-                                "-" COLUMN_SEPARATOR
-                                "-" COLUMN_SEPARATOR
-                                "Last message repeated %d times", last_message_text_repeat)))
-#endif
-                        {
-                            osformatln(termerr, "message write failed on channel ...");
-                            flusherr();
-                        }
-
-                        channel++;
-                    }
-                    while(--channel_count >= 0);
-
-                    last_message_text_repeat = 0;
-                }
-
-                free(last_message->text);
-                free(last_message);
-                
                 u32 date_header_len;
                 
                 if(message->flags == 0)
@@ -547,34 +501,120 @@ logger_dispatcher_thread(void* context)
                 size_t size = bytearray_output_stream_size(&baos) - 1;
                 char* buffer = (char*)bytearray_output_stream_buffer(&baos);
 
-                logger_channel** channel = (logger_channel**)handle->channels[level].data;
+                logger_channel** channelp = (logger_channel**)handle->channels[level].data;
 
                 do
                 {
-                    ya_result return_code;
+                    logger_channel* channel = *channelp;
                     
-                    if(FAIL(return_code = logger_channel_msg(*channel, level, buffer, size, date_header_len)))
+                    ya_result return_code;
+                                        
+                    if((channel->last_message->text_length == message->text_length) && (memcmp(channel->last_message->text, message->text, message->text_length) == 0))
                     {
-                        osformatln(termerr, "message write failed on channel: %r", return_code);
-                        flusherr();
+                        /* match, it's a repeat */
+                        channel->last_message_count++;
+                    }
+                    else
+                    {
+                        /* no match */
+                        
+                        if(channel->last_message_count > 0)
+                        {
+                            /* log the repeat count */
+                            
+                            ya_result return_value;
+                            
+                            /* If the same line is outputted twice : filter it to say 'repeated' instead of sending everything */
+                            
+                            return_value = snformat(repeat_text, sizeof(repeat_text), "----/--/-- --:--:--.------" COLUMN_SEPARATOR 
+                                                        
+#ifndef NDEBUG
+                                    "%d" COLUMN_SEPARATOR
+                                    "%08x" COLUMN_SEPARATOR
+#endif
+                                    "--------" COLUMN_SEPARATOR
+                                    "-" COLUMN_SEPARATOR
+                                    "last message repeated %d times",
+#ifndef NDEBUG
+                                    channel->last_message->pid,
+                                    channel->last_message->thread_id,
+#endif
+                                    channel->last_message_count);
+
+                            if(ISOK(return_value))
+                            {
+                                if(FAIL(return_code = logger_channel_msg(channel, level, repeat_text, return_value, 29)))
+                                {
+                                    osformatln(termerr, "message write failed on channel: %r", return_code);
+                                    flusherr();
+                                }
+                            }
+                            else
+                            {
+                                osformatln(termerr, "message formatting failed on channel: %r", return_code);
+                                flusherr();
+                            }
+                        }
+                        
+                        /* cleanup */
+                        if(--channel->last_message->rc == 0)
+                        {
+                            /* free the message */
+                            
+#if DEBUG_LOG_HANDLER != 0
+                            osformatln(termout, "message rc is 0 (%s)", channel->last_message->text);
+                            flushout();
+#endif
+                            
+                            logger_message_free(channel->last_message);
+                        }
+#if DEBUG_LOG_HANDLER != 0
+                        else
+                        {
+                            osformatln(termout, "message rc decreased to %d (%s)", channel->last_message->rc, channel->last_message->text);
+                            flushout();
+                        }
+#endif
+
+                        channel->last_message = message;
+                        channel->last_message_count = 0;
+                        message->rc++;
+                        
+#if DEBUG_LOG_HANDLER != 0
+                        osformatln(termout, "message rc is %d (%s)", channel->last_message->rc, channel->last_message->text);
+                        flushout();
+#endif
+                        
+                        if(FAIL(return_code = logger_channel_msg(channel, level, buffer, size, date_header_len)))
+                        {
+                            osformatln(termerr, "message write failed on channel: %r", return_code);
+                            flusherr();
+                        }
                     }
 
-                    channel++;
+                    channelp++;
                 }
                 while(--channel_count >= 0);
+                
+                if(message->rc == 0)
+                {
+#if DEBUG_LOG_HANDLER != 0
+                    osformatln(termout, "message has not been used (full dup): '%s'", message->text);
+                    flushout();
+#endif
+                    logger_message_free(message);
+                }
 
                 bytearray_output_stream_reset(&baos);
-
-                last_message = message;
             }
             else
             {
-#if defined(DEBUG)
-                assert(message->text == NULL);
-#endif
-                
                 u16 level = message->level;
                 free(message);
+                
+#if DEBUG_LOG_MESSAGES == 1
+                smp_int_dec(&allocated_messages_count);
+#endif
                 
                 switch(level)
                 {
@@ -606,12 +646,19 @@ logger_dispatcher_thread(void* context)
 #if defined(DEBUG)
                         assert(message->text != NULL);
 #endif
-                        osformatln(termerr, "logger: warning: message sent after shutdown order'%s'", message->text);
+                        osformatln(termerr, "logger: warning: message sent after shutdown order '%s'", message->text);
                         
                         free(message->text);
+                        message->text = NULL;
                     }
+                    
+                    assert(message->text == NULL);
 
                     free(message);
+                        
+#if DEBUG_LOG_MESSAGES == 1
+                    smp_int_dec(&allocated_messages_count);
+#endif
                 }
                 else
                 {
@@ -772,6 +819,10 @@ logger_flush()
         MALLOC_OR_DIE(logger_message*, message, sizeof (logger_message), LOGRMSG_TAG);
         ZEROMEMORY(message, sizeof (logger_message));
 
+#if DEBUG_LOG_MESSAGES == 1
+        smp_int_inc(&allocated_messages_count);
+#endif
+        
         /*
          * pid   = 0 => special
          * level = 0 => flush all
@@ -790,6 +841,10 @@ logger_reopen()
         MALLOC_OR_DIE(logger_message*, message, sizeof (logger_message), LOGRMSG_TAG);
         ZEROMEMORY(message, sizeof (logger_message));
 
+#if DEBUG_LOG_MESSAGES == 1
+        smp_int_inc(&allocated_messages_count);
+#endif
+        
         /*
          * pid   = 0 => special
          * level = 1 => reopen all
@@ -877,10 +932,15 @@ logger_handle_msg(logger_handle* handle, u32 level, const char* fmt, ...)
     message->text_length = bytearray_output_stream_size(&baos) - 1;
     message->level = level;
     message->thread_id = pthread_self();
-    message->flags = 0;
+    message->flags = 0;    
     gettimeofday(&message->tv, NULL);
     
     message->pid = getpid();
+    message->rc = 0;
+    
+#if DEBUG_LOG_MESSAGES == 1
+    smp_int_inc(&allocated_messages_count);
+#endif
 
     threaded_queue_enqueue(&logger_commit_queue, message);
 
@@ -944,6 +1004,11 @@ logger_handle_msg_text(logger_handle* handle, u32 level, const char* text, u32 t
     message->pid = getpid();
     
     message->flags = 0;
+    message->rc = 0;
+    
+#if DEBUG_LOG_MESSAGES == 1
+    smp_int_inc(&allocated_messages_count);
+#endif
     
     threaded_queue_enqueue(&logger_commit_queue, message);
 
@@ -1007,6 +1072,12 @@ logger_handle_msg_text_ext(logger_handle* handle, u32 level, const char* text, u
     message->prefix = (const u8*)prefix;
     message->prefix_length = prefix_len;
     
+    message->rc = 0;
+    
+#if DEBUG_LOG_MESSAGES == 1
+    smp_int_inc(&allocated_messages_count);
+#endif
+    
     threaded_queue_enqueue(&logger_commit_queue, message);
 
     if(level <= exit_level)
@@ -1014,7 +1085,6 @@ logger_handle_msg_text_ext(logger_handle* handle, u32 level, const char* text, u
         logger_handle_trigger_shutdown();
     }
 }
-
 
 /** @} */
 

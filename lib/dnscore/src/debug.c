@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup debug Debug functions
- *  @ingroup database
+ *  @ingroup dnscore
  *  @brief Debug functions.
  *
  *  Definitions of debug functions/hooks, mainly memory related.

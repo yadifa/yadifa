@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup rrsig RRSIG functions
+ *  @ingroup dnsdbdnssec
  *  @brief
  *
  *

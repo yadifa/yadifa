@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ptr_vector A dynamic-sized array of pointers
- *  @ingroup database
+/** @defgroup collections Generic collections functions
+ *  @ingroup dnscore
  *  @brief A dynamic-sized array of pointers
  *
  *  A dynamic-sized array of pointers
@@ -104,7 +104,7 @@ void  ptr_vector_empties(ptr_vector* v);
 void  ptr_vector_resize(ptr_vector*v, s32 newsize);
 
 /**
- * Ensures the vector has enough capacity to accomodate a
+ * Ensures the vector has enough capacity to accommodate a
  * specified number of items
  * 
  * @param v a pointer to the ptr_vector structure

@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup zone Routines for zone_data struct
- *  @ingroup zone
+/** @defgroup dnscoretools Generic Tools
+ *  @ingroup dnscore
  *  @brief host address (list) functions
  *
  * @{

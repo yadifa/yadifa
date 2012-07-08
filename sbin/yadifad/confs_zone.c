@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup ### #######
- *  @ingroup ###
+/** @defgroup config Configuration handling
+ *  @ingroup yadifad
  *  @brief
  *
  * @{
@@ -104,9 +104,9 @@ CONFS_ACL(allow_control, NULL)
 #endif
 
 #if HAS_DNSSEC_SUPPORT != 0
-CONFS_U32(sig_validity_interval, S_U32_VALUE_NOT_SET)
-CONFS_U32(sig_validity_regeneration, S_U32_VALUE_NOT_SET)
-CONFS_U32(sig_validity_jitter, S_U32_VALUE_NOT_SET)
+CONFS_U32(sig_validity_interval, S_S32_VALUE_NOT_SET)
+CONFS_U32(sig_validity_regeneration, S_S32_VALUE_NOT_SET)
+CONFS_U32(sig_validity_jitter, S_S32_VALUE_NOT_SET)
 
 CONFS_ENUM(dnssec_mode, S_ZONE_DNSSEC_DNSSEC, dnssec_enum)
 
@@ -119,7 +119,7 @@ CONFS_U32(notify_retry_period_increase, S_NOTIFY_RETRY_PERIOD_INCREASE)
 
 #if HAS_CTRL
 CONFS_U8(ctrl_flags, "0")  // SHOULD ONLY BE IN THE DYNAMIC CONTEXT
-#endif
+#endif // HAS_CTRL
 
 /* alias , aliased-real-name */
 CONFS_ALIAS(master,masters)
@@ -215,7 +215,7 @@ config_zone_section_assign(config_data *config)
         zone_data *zone = (zone_data *)zone_node->data;            
         
         zone_setdefaults(zone);
-        
+
         if(!config_check_bounds_s32(SIGNATURE_VALIDITY_INTERVAL_MIN, SIGNATURE_VALIDITY_INTERVAL_MAX, zone->sig_validity_interval, "sig-validity-interval"))
         {
             return ERROR;
@@ -230,7 +230,7 @@ config_zone_section_assign(config_data *config)
         {
             return ERROR;
         }
-        
+
         if(!config_check_bounds_s32(NOTIFY_RETRY_COUNT_MIN, NOTIFY_RETRY_COUNT_MAX, zone->notify_retry_count, "notify-retry-count"))
         {
             return ERROR;

@@ -31,8 +31,8 @@
 *------------------------------------------------------------------------------
 *
 * DOCUMENTATION */
-/** @defgroup
- *  @ingroup
+/** @defgroup nsec3 NSEC3 functions
+ *  @ingroup dnsdbdnssec
  *  @brief
  *
  *
@@ -662,8 +662,8 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
                 if(type_bit_maps_merge(type_context, node->type_bit_maps, node->type_bit_maps_size, tmp_type_bit_maps, type_bit_maps_size))
                 {
                     /**
-                        * TRUE : a merge occured
-                        * NOTE : this case never occured while testing.  It has
+                        * TRUE : a merge occurred
+                        * NOTE : this case never occurred while testing.  It has
                         * to be triggered with a dynupdate or a wrong zone file.
                         * @todo : factorize with "nsec3_add_label" (if possible ?)
                         */

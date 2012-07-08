@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup records_labels Internal functions for the database: zoned resource records label.
- *  @ingroup database
+ *  @ingroup dnsdb
  *  @brief Internal functions for the database: zoned resource records label.
  *
  *  Internal functions for the database: zoned resource records label.

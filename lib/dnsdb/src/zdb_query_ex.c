@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup query_ex Database top-level query function
- *  @ingroup database
+ *  @ingroup dnsdb
  *  @brief Database top-level query function
  *
  *  Database top-level query function
@@ -1421,6 +1421,9 @@ zdb_query_ex_record_not_found(const zdb_zone *zone,
                     zdb_query_ex_answer_append_type_rrsigs(authority, auth_name, TYPE_DS,
                                                            PASS_ZCLASS_PARAMETER
                                                            label_ds->ttl, &ans_auth_add->authority, pool);
+                    
+                    /* ans_auth_add->is_delegation = TRUE; later */
+                    
                     return FP_BASIC_RECORD_NOTFOUND;
                 }
             }
@@ -1502,6 +1505,8 @@ zdb_query_ex_record_not_found(const zdb_zone *zone,
                 append_additionals_dname_set(zone,
                                              PASS_ZCLASS_PARAMETER
                                              additionals_dname_set, &ans_auth_add->additional, pool, FALSE);
+                
+                /* ans_auth_add->is_delegation = TRUE; later */
             }
             else
             {
@@ -1983,6 +1988,7 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
                             if((rr_label->flags & ZDB_RR_LABEL_DELEGATION) != 0)
                             {
                                 section = &ans_auth_add->authority;
+                                /* ans_auth_add->is_delegation = TRUE; later */
                             }
                             else
                             {
@@ -2483,6 +2489,8 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
 #ifndef NDEBUG
                         log_debug("zdb_query_ex: FP_BASIC_LABEL_NOTFOUND (done)");
 #endif
+                        /* ans_auth_add->is_delegation = TRUE; later */
+                        
                         return FP_BASIC_LABEL_DELEGATION;
                     }
                 }
@@ -2683,7 +2691,7 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
             return FP_NSEC3_LABEL_NOTFOUND;
         }
 
-        else /* Follwing will be either the NSEC answer or just the SOA added in the authority */
+        else /* Following will be either the NSEC answer or just the SOA added in the authority */
 #endif /* ZDB_NSEC3_SUPPORT != 0 */
 
             /* NSEC, if possible */

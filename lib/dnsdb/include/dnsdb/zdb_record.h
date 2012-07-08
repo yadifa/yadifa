@@ -32,7 +32,7 @@
 *
 * DOCUMENTATION */
 /** @defgroup records Internal functions for the database: resource records.
- *  @ingroup database
+ *  @ingroup dnsdb
  *  @brief Internal functions for the database: resource records.
  *
  *  Internal functions for the database: resource records.
