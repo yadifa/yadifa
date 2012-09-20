@@ -707,7 +707,6 @@ alarm_run_tick(u32 epoch)
 #ifndef NDEBUG
                 alarm_mutex_locked = TRUE;
 #endif
-                
             }
             else
             {
@@ -716,7 +715,6 @@ alarm_run_tick(u32 epoch)
 #ifndef NDEBUG
                 alarm_mutex_locked = TRUE;
 #endif
-
                 alarm_event_free(event);
             }
         }

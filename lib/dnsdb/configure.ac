@@ -30,9 +30,31 @@ dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
 dnl ##############################################################################
+dnl
+dnl      SVN Program:
+dnl              $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/lib/dnsdb/configure.ac $
+dnl
+dnl      Creation Date:
+dnl              2010-01-14
+dnl
+dnl      Last Update:
+dnl              $Date: 2012-09-19 10:46:55 +0200 (Wed, 19 Sep 2012) $
+dnl              $Revision: 2237 $
+dnl
+dnl      Author:
+dnl             G. Van Emelen (Gery@VanEmelen.net)
+dnl				Eric Diaz Fernandez
+dnl
+dnl      Purpose:
+dnl              DNS Database & Database tools 
+dnl
+dnl      Last Change:
+dnl              $Author: geryve $
+dnl
+dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 1997 $])
+AC_REVISION([$Revision: 2237 $])
 AC_INIT([dnsdb],m4_esyscmd([echo $(cat VERSION)-$(grep \$Revision: * | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[bugreport@yadifa.eu])
 
 m4_include([../../m4/eurid.m4])
@@ -44,17 +66,20 @@ AC_CONFIG_HEADER([include/dnsdb/dnsdb-config.h])
 
 AC_CONFIG_MACRO_DIR([m4])
 
-AC_DARWIN_LIBTOOL
-
-AC_PROG_LIBTOOL
 
 AC_DEFUN([SYSCONF], [/$prefix/PACKAGE/PACKAGE.conf])
 
 AC_CANONICAL_BUILD
 
-# Checks for programs.
+dnl Checks for programs.
+AM_PROG_AR
 AC_PROG_CC
 AM_PROG_CC_C_O
+
+LT_INIT([disable-shared])
+
+AC_DARWIN_LIBTOOL
+AC_PROG_LIBTOOL
 
 dnl Checks for libraries.
 AC_CHECK_LIB([c], [printf])
@@ -63,11 +88,11 @@ AC_CHECK_LIB([pthread], [pthread_mutex_init])
 dnl Checks for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdlib.h string.h sys/time.h syslog.h unistd.h])
-# Check for Darwin or Linux
+dnl Check for Darwin or Linux
 AC_CHECK_HEADERS([linux/limits.h i386/limits.h ppc/limits.h])
-# Check for Darwin or Linux
+dnl Check for Darwin or Linux
 AC_CHECK_HEADERS([sys/types.h i386/types.h])
-#
+dnl
 AC_CHECK_HEADERS([sys/socket.h])
 
 dnl Checks for typedefs, structures, and compiler characteristics.
@@ -82,6 +107,8 @@ AC_CHECK_TYPES(uint64_t)
 AC_CHECK_TYPES(int64_t) 
 AC_CHECK_TYPES(long long)
 AC_CHECK_TYPES(u_char)
+
+AC_SYS_LARGEFILE
 
 AC_CPU_CHECK
 AC_COMPILER_CHECK

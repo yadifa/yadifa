@@ -1178,6 +1178,10 @@ confs_filter_char(char c)
     {
         return '-';
     }
+    if(c == '.')
+    {
+        return '-';
+    }
 
     c = tolower(c);
 

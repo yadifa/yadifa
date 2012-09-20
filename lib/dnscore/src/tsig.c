@@ -507,7 +507,7 @@ tsig_digest_answer(message_data *mesg)
 
     u16 mac_size_network = htons(mesg->tsig.mac_size);
     HMAC_Update(&ctx, (u8*) & mac_size_network, 2);
-    HMAC_Update(&ctx, mesg->tsig.mac, mesg->tsig.tsig->mac_size);
+    HMAC_Update(&ctx, mesg->tsig.mac, mesg->tsig.mac_size);
 
     /* DNS message */
 

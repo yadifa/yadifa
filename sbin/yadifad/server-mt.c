@@ -106,30 +106,30 @@
 
 static server_statistics_t server_statistics_sum;
 
+#define SYNCED_THREAD_STATUS_TERMINATED 1
+#define PAUSE_ALL_ON_TASK 0
+
 /**
  * @note This flag enables the alternative send/rcvd for udp (from 'to' to 'msg')
  * 
  * The syncs are slow, but it does not matter.
  */
 
-#define SYNCED_THREAD_STATUS_TERMINATED 1
-
 struct synced_thread_t
 {
     interface *intf;
     pthread_t id;
     u16 idx;
+#if PAUSE_ALL_ON_TASK != 0
     volatile u32 paused;
+#endif
     volatile u8  status;
     
     message_data *udp_mesg;
     
 #if UDP_USE_MESSAGES != 0
-
     struct iovec    udp_iovec;
-    struct cmsghdr *udp_cmsghdr /*= (struct cmsghdr*)&udp_cmsghdr_dstaddr*/;
     struct msghdr   udp_msghdr;
-
 #endif
     
     server_statistics_t statistics;
@@ -142,7 +142,9 @@ struct synced_threads_t
     synced_thread_t* threads;    
     mutex_t mtx;
     u32 thread_count;
+#if PAUSE_ALL_ON_TASK != 0
     volatile u32 pause;
+#endif
     volatile bool terminate;
 };
 
@@ -162,10 +164,12 @@ synced_init(u32 count)
     for(u32 t = 0; t < count; t++)
     {
         synced_threads.threads[t].id = 0;
+#if PAUSE_ALL_ON_TASK != 0
         synced_threads.threads[t].paused = 0;
+#endif
         synced_threads.threads[t].idx = t;
         ZEROMEMORY(&synced_threads.threads[t].statistics, sizeof(server_statistics_t));
-        MALLOC_OR_DIE(message_data*, synced_threads.threads[t].udp_mesg, sizeof (message_data), MESGDATA_TAG);
+        MALLOC_OR_DIE(message_data*, synced_threads.threads[t].udp_mesg, sizeof(message_data), MESGDATA_TAG);
         ZEROMEMORY(synced_threads.threads[t].udp_mesg, sizeof(message_data));
     }
     
@@ -187,7 +191,11 @@ synced_finalize()
 static bool
 synced_shouldpause()
 {
+#if PAUSE_ALL_ON_TASK != 0
     return (synced_threads.pause & 1) != 0;
+#else
+    return FALSE;
+#endif
 }
 
 static bool
@@ -199,6 +207,7 @@ synced_shouldterminate()
 static void
 synced_wait(synced_thread_t *st)
 {
+#if PAUSE_ALL_ON_TASK != 0
 #ifdef DEBUG
     log_debug("synced_wait: st %d/%d: waiting ... (%x)", st->idx+1, synced_threads.thread_count, st->paused);
 #endif
@@ -211,6 +220,7 @@ synced_wait(synced_thread_t *st)
 #ifdef DEBUG
     log_debug("synced_wait: st %d/%d: resuming ... (%x)", st->idx+1, synced_threads.thread_count, st->paused);
 #endif
+#endif
 }
 
 static void
@@ -222,6 +232,7 @@ synced_set_terminated(synced_thread_t *st)
 static void
 synced_pause()
 {
+#if PAUSE_ALL_ON_TASK != 0
     assert((synced_threads.pause & 1) == 0);
     
     synced_threads.pause++;
@@ -267,6 +278,7 @@ synced_pause()
     }
     
     // paused
+#endif
 }
 
 static void
@@ -329,6 +341,7 @@ synced_stop()
 static void
 synced_resume()
 {
+#if PAUSE_ALL_ON_TASK != 0
     assert((synced_threads.pause & 1) != 0);
     
 #ifdef DEBUG
@@ -336,6 +349,7 @@ synced_resume()
 #endif
     
     synced_threads.pause++;
+#endif
 }
 
 #if defined(HAS_MESSAGES_SUPPORT)
@@ -379,6 +393,166 @@ u_char data[DSTADDR_DATASIZE];
  * UDP protocol
  *
  ******************************************************************************************************************/
+
+/**
+ * 
+ * Update MUST be delegated to the main thread (not an issue on the st model)
+ * BUT the delegation requires all udp threads to stop
+ * So it means that we cannot delegate from inside (else we get a deadlock)
+ * So a thread must be started to handle the remainder of the processing
+ * Said thread will delegate and send answer back to the client
+ * 
+ * This implies I have to copy the message so the original structure can be used
+ * for the next query.
+ */
+
+struct server_mt_process_udp_update_args
+{
+    database_t *database;
+    message_data *mesg;
+#if UDP_USE_MESSAGES != 0
+    struct iovec    udp_iovec;
+    struct msghdr   udp_msghdr;
+#endif
+};
+
+static void*
+server_mt_process_udp_update_thread(void *parms_)
+{
+    struct server_mt_process_udp_update_args *parms = (struct server_mt_process_udp_update_args*)parms_;
+    database_t *database = parms->database;
+    message_data *mesg = parms->mesg;
+    
+    /* clone the message */
+    /* use the same scheduling mechanism as for TCP */
+    
+    log_info("update (%04hx) %{dnsname} %{dnstype} (%{sockaddr})",
+                                ntohs(MESSAGE_ID(mesg->buffer)),
+                                mesg->qname,
+                                &mesg->qtype,
+                                &mesg->other.sa);
+        
+    finger_print return_code = database_delegate_update(database, mesg);
+    
+    if(FAIL(return_code))
+    {
+        log_err("update (%04hx) %{dnsname} %{dnstype} failed: %r",
+                ntohs(MESSAGE_ID(mesg->buffer)),
+                mesg->qname,
+                &mesg->qtype,
+                return_code);
+    }
+
+    //local_statistics->udp_fp[mesg->status]++;
+    
+#if !defined(HAS_DROPALL_SUPPORT)
+
+    s32 sent;
+    
+#if UDP_USE_MESSAGES == 0
+    
+#ifdef DEBUG
+    log_debug("udp_send_message_data: sendto(%d, %p, %d, %d, %{sockaddr}, %d)", mesg->sockfd, mesg->buffer, mesg->send_length, 0, (struct sockaddr*)&mesg->other.sa, mesg->addr_len);
+#endif
+    while((sent = sendto(mesg->sockfd, mesg->buffer, mesg->send_length, 0, (struct sockaddr*)&mesg->other.sa, mesg->addr_len)) < 0)
+    {
+        int error_code = errno;
+
+        if(error_code != EINTR)
+        {
+            /** @warning server_st_process_udp needs to be modified */
+            //log_err("sendto: %r", MAKE_ERRNO_ERROR(error_code));
+
+            free(parms);
+            free(mesg);
+            
+            return NULL/*ERROR*/;
+        }
+    }
+#else
+
+    parms->udp_iovec.iov_len = mesg->send_length;
+    
+#ifdef DEBUG
+    log_debug("sendmsg(%d, %p, %d", mesg->sockfd, &parms->udp_msghdr, 0);
+#endif
+    while( (sent = sendmsg(mesg->sockfd, &parms->udp_msghdr, 0)) < 0)
+    {
+        int error_code = errno;
+
+        if(error_code != EINTR)
+        {
+            /** @warning server_st_process_udp needs to be modified */
+            log_err("sendmsg: %r", MAKE_ERRNO_ERROR(error_code));
+
+            free(parms);
+            free(mesg);
+            
+            return NULL/*ERROR*/;
+        }
+    }
+#endif
+
+    //local_statistics->udp_output_size_total += sent;
+
+    if(sent != mesg->send_length)
+    {
+        /** @warning server_st_process_udp needs to be modified */
+        log_err("short byte count sent (%i instead of %i)", sent, mesg->send_length);
+
+        /*return ERROR*/;
+    }
+#else
+    log_debug("udp_send_message_data: drop all");
+#endif
+    
+#if UDP_USE_MESSAGES != 0
+    free(parms->udp_msghdr.msg_control);
+#endif
+    free(parms);
+    free(mesg);
+    
+    return NULL;
+}
+
+static void
+server_mt_process_udp_update(database_t *database, synced_thread_t *st)
+{
+    message_data *mesg_clone;
+    MALLOC_OR_DIE(message_data*, mesg_clone, sizeof(message_data), MESGDATA_TAG);
+    memcpy(mesg_clone, st->udp_mesg, sizeof(message_data));
+    st->udp_mesg->tsig.tsig = NULL;
+    st->udp_mesg->received = 0;
+    st->udp_mesg->send_length = 0;
+    
+    struct server_mt_process_udp_update_args *parms;
+    MALLOC_OR_DIE(struct server_mt_process_udp_update_args *, parms, sizeof(struct server_mt_process_udp_update_args), GENERIC_TAG);
+    parms->database = database;
+    parms->mesg = mesg_clone;
+    
+#if UDP_USE_MESSAGES != 0
+    
+    /*
+     * Clone the message parameters.
+     * the iovec points into the buffer
+     * the header uses the cloned iovec, a cloned anciliary buffer and the cloned sender (other) address from the message
+     */
+    
+    parms->udp_iovec.iov_base = &mesg_clone->buffer[0];
+    parms->udp_iovec.iov_len = sizeof(mesg_clone->buffer);
+    memcpy(&parms->udp_msghdr, &st->udp_msghdr, sizeof(struct msghdr));
+    MALLOC_OR_DIE(struct msghdr*, parms->udp_msghdr.msg_control, ANCILIARY_BUFFER_SIZE, MSGHDR_TAG);
+    memcpy(parms->udp_msghdr.msg_control, st->udp_msghdr.msg_control, ANCILIARY_BUFFER_SIZE);
+    parms->udp_msghdr.msg_name = &mesg_clone->other.sa;
+    parms->udp_msghdr.msg_iov = &parms->udp_iovec;
+#endif
+    
+    if(FAIL(thread_pool_schedule_job(server_mt_process_udp_update_thread, parms, NULL, "server_mt_process_udp_update_thread")))
+    {
+        free(parms);
+        free(mesg_clone);
+    }
+}
 
 /** \brief Does the udp processing
  *
@@ -515,7 +689,8 @@ server_mt_process_udp(database_t *database, synced_thread_t *st)
                         {
                             default:
                                 database_query(database, mesg);  // not thread-safe
-                                                                
+                                 
+                                local_statistics->udp_referrals_count += mesg->referral;
                                 local_statistics->udp_fp[mesg->status]++;
                                 break;
                             case TYPE_IXFR:
@@ -581,28 +756,11 @@ server_mt_process_udp(database_t *database, synced_thread_t *st)
                          *       scheduler if needed.
                          */
 
-                        ya_result return_value;
-
                         local_statistics->udp_updates_count++;
 
-                        log_info("update (%04hx) %{dnsname} %{dnstype} (%{sockaddr})",
-                                ntohs(MESSAGE_ID(mesg->buffer)),
-                                mesg->qname,
-                                &mesg->qtype,
-                                &mesg->other.sa);
-
-                        if(FAIL(return_value = database_update(database, mesg))) // not thread-safe
-                        {
-                            log_err("update (%04hx) %{dnsname} %{dnstype} failed: %r",
-                                    ntohs(MESSAGE_ID(mesg->buffer)),
-                                    mesg->qname,
-                                    &mesg->qtype,
-                                    return_value);
-                        }
+                        server_mt_process_udp_update(database, st);
                         
-                        local_statistics->udp_fp[mesg->status]++;
-
-                        break;
+                        return; // break;
                     }
                     default:
                     {
@@ -936,9 +1094,9 @@ server_mt_query_loop()
     
     s32 cpu_count = sys_get_cpu_count();
     
-    if(reader_by_fd >= sys_get_cpu_count())
+    if(reader_by_fd >= cpu_count)
     {
-        log_warn("server-mt: using too many threads per address is counter-productive on highly loaded systems (%d >= %d)", reader_by_fd, sys_get_cpu_count());
+        log_warn("server-mt: using too many threads per address is counter-productive on highly loaded systems (%d >= %d)", reader_by_fd, cpu_count);
     }
             
     u32 itf_count = g_config->interfaces_limit - &g_config->interfaces[0];

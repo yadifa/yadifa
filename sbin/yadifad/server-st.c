@@ -147,7 +147,7 @@ static message_data *udp_mesg = NULL;
 #if UDP_USE_MESSAGES != 0
 
 static struct iovec    udp_iovec;
-static struct cmsghdr *udp_cmsghdr /*= (struct cmsghdr*)&udp_cmsghdr_dstaddr*/;
+//static struct cmsghdr *udp_cmsghdr /*= (struct cmsghdr*)&udp_cmsghdr_dstaddr*/;
 static struct msghdr   udp_msghdr;
 
 #endif
@@ -250,7 +250,6 @@ server_st_process_udp(database_t *database, udp *udp_itf)
     {
 
 #if defined(DUMB_MIRROR) && (DUMB_MIRROR == 2)
-
         mesg->send_length = mesg->received;
 #else
         switch(mesg->qclass)
@@ -282,7 +281,8 @@ server_st_process_udp(database_t *database, udp *udp_itf)
 #endif
                                     server_statistics.udp_referrals_count++;
                                 }
-#endif                                
+#endif  
+                                server_statistics.udp_referrals_count += mesg->referral;
                                 server_statistics.udp_fp[mesg->status]++;
                                 break;
                             case TYPE_IXFR:

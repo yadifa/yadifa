@@ -30,11 +30,24 @@ dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
 dnl ############################################################################
+dnl
+dnl       SVN Program:
+dnl               $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/bin/yadifa/configure.ac $
+dnl
+dnl       Last Update:
+dnl               $Date: 2012-03-27 16:56:49 +0200 (Tue, 27 Mar 2012) $
+dnl               $Revision: 1868 $
+dnl
+dnl       Purpose:
+dnl              common yadifa m4 macros
+dnl
+dnl ############################################################################
 
 dnl CTRL class
 
 AC_DEFUN([AC_CHECK_ENABLE_CTRL], [
 
+AM_CONDITIONAL([HAS_CTRL], [false])
 
 ])
 
@@ -254,49 +267,19 @@ AM_CONDITIONAL([HAS_TINY_FOOTPRINT], [test $enable_tiny_footprint = yes])
 dnl ACL
 
 AM_CONDITIONAL(HAS_ACL_SUPPORT, [true])
-AC_MSG_CHECKING(if ACL has been disabled)
-AC_ARG_ENABLE(acl, AS_HELP_STRING([--disable-acl], [Disable ACL support (devs only)]), [disable_acl=yes], [disable_acl=no])
-AC_MSG_RESULT($disable_acl)
-case "$disable_acl" in
-	yes)
-		AC_DEFINE_UNQUOTED([HAS_ACL_SUPPORT], [0], [Do not support ACL (devs only)])
-		AM_CONDITIONAL([HAS_ACL_SUPPORT], [false])
-		;;
-	no|*)
-		AC_DEFINE_UNQUOTED([HAS_ACL_SUPPORT], [1], [Enable ACL support])
-        AM_CONDITIONAL([HAS_ACL_SUPPORT], [true])
-		AC_YADIFA_ENABLE_SSL
-        ;;
-esac
-AM_CONDITIONAL([HAS_ACL_SUPPORT], [test $disable_acl = no])
+AC_DEFINE_UNQUOTED([HAS_ACL_SUPPORT], [1], [Enable ACL support])
 
 dnl TSIG
 
 AM_CONDITIONAL(HAS_TSIG_SUPPORT, [true])
-AC_MSG_CHECKING(if TSIG has been disabled)
-AC_ARG_ENABLE(tsig, AS_HELP_STRING([--disable-tsig], [Disable TSIG support (devs only)]), [disable_tsig=yes], [disable_tsig=no])
-AC_MSG_RESULT($disable_tsig)
-case "$disable_tsig" in
-	yes)
-		AC_DEFINE_UNQUOTED([HAS_TSIG_SUPPORT], [0], [Do not support TSIG (devs only)])
-		AM_CONDITIONAL([HAS_TSIG_SUPPORT], [false])
-		;;
-	no|*)
-		AC_DEFINE_UNQUOTED([HAS_TSIG_SUPPORT], [1], [Enable TSIG support])
-        AM_CONDITIONAL([HAS_TSIG_SUPPORT], [true])
-		AC_YADIFA_ENABLE_SSL
-        ;;
-esac
-AM_CONDITIONAL([HAS_TSIG_SUPPORT], [test $disable_tsig = no])
+AC_DEFINE_UNQUOTED([HAS_TSIG_SUPPORT], [1], [Enable TSIG support])
 
 dnl NSEC3
 
 AM_CONDITIONAL([HAS_DNSSEC_SUPPORT], [false])
 
 AC_MSG_CHECKING(if NSEC3 has been disabled)
-AC_ARG_ENABLE(nsec3, AS_HELP_STRING([--disable-nsec3], [Disable NSEC3 support (devs only)]),
-		[enable_nsec3=no], [enable_nsec3=yes])
-AC_MSG_RESULT($enable_nsec3)
+enable_nsec3=yes
 
 case "$enable_nsec3" in
 	yes)
@@ -313,9 +296,7 @@ AM_CONDITIONAL([HAS_NSEC3_SUPPORT], [test $enable_nsec3 = yes])
 dnl NSEC
 
 AC_MSG_CHECKING(if NSEC has been disabled)
-AC_ARG_ENABLE(nsec, AS_HELP_STRING([--disable-nsec], [Disable NSEC support (devs only)]),
-		[enable_nsec=no], [enable_nsec=yes])
-AC_MSG_RESULT($enable_nsec)
+enable_nsec=yes
 case "$enable_nsec" in
 	yes)
 		AC_DEFINE_UNQUOTED([HAS_NSEC_SUPPORT], [1], [Set this to 1 to enable NSEC support])
@@ -328,40 +309,15 @@ case "$enable_nsec" in
 esac
 AM_CONDITIONAL([HAS_NSEC_SUPPORT], [test $enable_nsec = yes])
 
-dnl Checking for TCL and shell feature
-dnl Print "Checking ....."
-
 AM_CONDITIONAL([TCLCOMMANDS], [false])
 
 dnl MIRROR debug 
 
-AC_MSG_CHECKING(if MIRROR has been enabled)
-AC_ARG_ENABLE(mirror, AS_HELP_STRING([--enable-mirror], [Enable MIRROR mode (devs only)]),
-		[], [enable_mirror=no])
-AC_MSG_RESULT($enable_mirror)
-case "$enable_mirror" in
-	yes)
-		AC_DEFINE_UNQUOTED([HAS_MIRROR_SUPPORT], [1], [MIRROR mode will only reply what has been read (debug/bench)])
-		;;
-	no|*)
-		;;
-esac
-AM_CONDITIONAL([HAS_MIRROR_SUPPORT], [test $enable_mirror = yes])
+AM_CONDITIONAL([HAS_MIRROR_SUPPORT], [false])
 
 dnl DROPALL debug 
 
-AC_MSG_CHECKING(if DROPALL has been enabled)
-AC_ARG_ENABLE(dropall, AS_HELP_STRING([--enable-dropall], [Enable DROPALL mode (devs only)]),
-		[], [enable_dropall=no])
-AC_MSG_RESULT($enable_dropall)
-case "$enable_dropall" in
-	yes)
-		AC_DEFINE_UNQUOTED([HAS_DROPALL_SUPPORT], [1], [DROPALL mode will not actually send back the answer (debug/bench)])
-		;;
-	no|*)
-		;;
-esac
-AM_CONDITIONAL([HAS_DROPALL_SUPPORT], [test $enable_dropall = yes])
+AM_CONDITIONAL([HAS_DROPALL_SUPPORT], [false])
 
 dnl send messages instead of sendto
 
@@ -401,9 +357,12 @@ echo LDFLAGS ........... : $LDFLAGS
 echo LIBS .............. : $LIBS
 echo
 echo ACL ............... : $enable_acl
+echo CTRL .............. : $enable_ctrl
 echo NSEC .............. : $enable_nsec
 echo NSEC3 ............. : $enable_nsec3
 echo TSIG .............. : $enable_tsig
+echo
+echo TCL ............... : $enable_tcl
 echo
 
 ])

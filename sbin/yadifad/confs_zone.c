@@ -113,9 +113,9 @@ CONFS_ENUM(dnssec_mode, S_ZONE_DNSSEC_DNSSEC, dnssec_enum)
 CONFS_ALIAS(sig_jitter, sig_validity_jitter)
 #endif
 
-CONFS_U32(notify_retry_count, S_NOTIFY_RETRY_COUNT)
-CONFS_U32(notify_retry_period, S_NOTIFY_RETRY_PERIOD)
-CONFS_U32(notify_retry_period_increase, S_NOTIFY_RETRY_PERIOD_INCREASE)
+CONFS_U32(notify.retry_count, S_NOTIFY_RETRY_COUNT)
+CONFS_U32(notify.retry_period, S_NOTIFY_RETRY_PERIOD)
+CONFS_U32(notify.retry_period_increase, S_NOTIFY_RETRY_PERIOD_INCREASE)
 
 #if HAS_CTRL
 CONFS_U8(ctrl_flags, "0")  // SHOULD ONLY BE IN THE DYNAMIC CONTEXT
@@ -231,17 +231,17 @@ config_zone_section_assign(config_data *config)
             return ERROR;
         }
 
-        if(!config_check_bounds_s32(NOTIFY_RETRY_COUNT_MIN, NOTIFY_RETRY_COUNT_MAX, zone->notify_retry_count, "notify-retry-count"))
+        if(!config_check_bounds_s32(NOTIFY_RETRY_COUNT_MIN, NOTIFY_RETRY_COUNT_MAX, zone->notify.retry_count, "notify-retry-count"))
         {
             return ERROR;
         }
         
-        if(!config_check_bounds_s32(NOTIFY_RETRY_PERIOD_MIN, NOTIFY_RETRY_PERIOD_MAX, zone->notify_retry_period, "notify-period-count"))
+        if(!config_check_bounds_s32(NOTIFY_RETRY_PERIOD_MIN, NOTIFY_RETRY_PERIOD_MAX, zone->notify.retry_period, "notify-period-count"))
         {
             return ERROR;
         }
         
-        if(!config_check_bounds_s32(NOTIFY_RETRY_PERIOD_INCREASE_MIN, NOTIFY_RETRY_PERIOD_INCREASE_MAX, zone->notify_retry_period_increase, "notify-period-increase"))
+        if(!config_check_bounds_s32(NOTIFY_RETRY_PERIOD_INCREASE_MIN, NOTIFY_RETRY_PERIOD_INCREASE_MAX, zone->notify.retry_period_increase, "notify-period-increase"))
         {
             return ERROR;
         }

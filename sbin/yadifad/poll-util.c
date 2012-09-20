@@ -152,15 +152,19 @@ poll_update()
         }
 
         tcp_fds_idx -= n;
+        
+        return tcp_fds_idx;
     }
     else
     {
         if(n < 0)
         {
             log_info("tcp: poll failed: %r", ERRNO_ERROR);
+            
+            n = 0;
         }
+        
+        return n;
     }
-
-    return tcp_fds_idx;
 }
 

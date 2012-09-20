@@ -49,11 +49,11 @@ extern "C"
 
     /*    ------------------------------------------------------------    */
 
-#include	<sys/socket.h>
-#include	<arpa/inet.h>
-#include	<ctype.h>
-#include	<netinet/in.h>
-#include	<pthread.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <ctype.h>
+#include <netinet/in.h>
+#include <pthread.h>
 
 #include <dnscore/rfc.h>
 #include <dnscore/fingerprint.h>
@@ -66,12 +66,12 @@ extern "C"
     /*    ------------------------------------------------------------    */
 
     /* Processing flags */
-#define		PROCESS_FL_ADDITIONAL_AUTH      0x01
-#define		PROCESS_FL_AUTHORITY_AUTH       0x02
-#define		PROCESS_FL_ADDITIONAL_CACHE     0x04
-#define		PROCESS_FL_AUTHORITY_CACHE      0x08
-#define		PROCESS_FL_RECURSION            0x20
-#define		PROCESS_FL_TCP                  0x80
+#define PROCESS_FL_ADDITIONAL_AUTH      0x01
+#define PROCESS_FL_AUTHORITY_AUTH       0x02
+#define PROCESS_FL_ADDITIONAL_CACHE     0x04
+#define PROCESS_FL_AUTHORITY_CACHE      0x08
+#define PROCESS_FL_RECURSION            0x20
+#define PROCESS_FL_TCP                  0x80
     
         /**
      * @note buffer MUST be aligned on 16 bits
@@ -182,6 +182,7 @@ struct message_data
     u16 qclass;
 
     char protocol;
+    u8 referral;
     /* bool is_delegation; for quick referral : later */
 
 #if HAS_TSIG_SUPPORT
@@ -197,7 +198,7 @@ struct message_data
     u8  buffer_tcp_len[2];           /* DON'T SEPARATE THESE TWO (FIRST)  */
     u8  buffer[NETWORK_BUFFER_SIZE]; /* DON'T SEPARATE THESE TWO (SECOND) */
     u64 __reserved_force_align__4;
-    u8  pool_buffer[65536]; /* A memory pool for the lookup's benefit @TODO: maybe this should be increased in size */
+    u8  pool_buffer[0x20000]; /* A memory pool for the lookup's benefit @TODO: maybe this should be increased in size */
 };
 
 /*    ------------------------------------------------------------    */

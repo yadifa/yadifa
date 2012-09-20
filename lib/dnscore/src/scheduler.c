@@ -225,11 +225,16 @@ scheduler_process()
 {
     scheduler_packet *packet;
 
+    if(g_read_fd < 0)
+    {
+        return;
+    }
+    
     MALLOC_OR_DIE(scheduler_packet*, packet, sizeof (scheduler_packet), SCHDPAKT_TAG);
 
     int len = SCHEDULER_PACKET_LEN;
     u8* p = (u8*)packet;
-
+    
     do
     {
         int n = read(g_read_fd, p, len);
@@ -244,6 +249,10 @@ scheduler_process()
             }
 
             log_quit("scheduler: read error: %r", ERRNO_ERROR);
+            
+            free(packet);
+            
+            return;
         }
 
         len -= n;
@@ -410,9 +419,14 @@ scheduler_schedule_task(scheduler_task_callback* function, void* args)
 #ifndef NDEBUG
     log_debug("scheduler: scheduler_schedule_task(%P,%p)'", function, args);
 #endif
-  */  
+  */
     packet.task = function;
     packet.args = args;
+    
+    if(g_write_fd < 0)
+    {
+        return;
+    }
 
     do
     {
@@ -428,6 +442,8 @@ scheduler_schedule_task(scheduler_task_callback* function, void* args)
             }
 
             log_quit("scheduler: write error: %r", err, ERRNO_ERROR);
+            
+            break;
         }
 
         len -= n;

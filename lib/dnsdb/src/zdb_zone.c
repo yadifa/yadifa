@@ -73,6 +73,8 @@
 #include "dnsdb/nsec3.h"
 #endif
 
+#define ZONE_MUTEX_LOG 1
+
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
@@ -385,6 +387,13 @@ zdb_default_query_access_filter(message_data *mesg, void *extension)
 zdb_zone*
 zdb_zone_create(const u8* origin, u16 zclass)
 {
+#if ZDB_RECORDS_MAX_CLASS == 1
+    if(zclass != CLASS_IN)
+    {
+        return NULL; // ZDB_ERROR_NOSUCHCLASS
+    }
+#endif
+    
     zdb_zone* zone;
     ZALLOC_OR_DIE(zdb_zone*, zone, zdb_zone, ZDB_ZONETAG)
 
@@ -394,8 +403,6 @@ zdb_zone_create(const u8* origin, u16 zclass)
 
 #if ZDB_RECORDS_MAX_CLASS != 1
     zone->zclass = zclass;
-#else
-    assert(zclass == CLASS_IN);
 #endif
 
 #if ZDB_DNSSEC_SUPPORT != 0
@@ -497,26 +504,29 @@ zdb_zone_destroy(zdb_zone* zone)
         
         alarm_close(zone->alarm_handle);
         zone->alarm_handle = ALARM_HANDLE_INVALID;
-
-        if(zone->apex != NULL)
+        
+        if(!dnscore_shuttingdown())
         {
+            if(zone->apex != NULL)
+            {
 
 #if ZDB_NSEC_SUPPORT != 0
-            if(zdb_zone_is_nsec(zone))
-            {
-                nsec_destroy_zone(zone);
-            }
+                if(zdb_zone_is_nsec(zone))
+                {
+                    nsec_destroy_zone(zone);
+                }
 #endif
 
 #if ZDB_NSEC3_SUPPORT != 0
-            if(zdb_zone_is_nsec3(zone))
-            {
-                nsec3_destroy_zone(zone);
-            }
+                if(zdb_zone_is_nsec3(zone))
+                {
+                    nsec3_destroy_zone(zone);
+                }
 
 #endif
-            zdb_rr_label_destroy(zone, &zone->apex);
-            zone->apex = NULL;
+                zdb_rr_label_destroy(zone, &zone->apex);
+                zone->apex = NULL;
+            }
         }
 
         ZFREE_STRING(zone->origin);
@@ -619,8 +629,8 @@ zdb_zone_get_dnskey_rrset(zdb_zone *zone)
 void
 zdb_zone_lock(zdb_zone *zone, u8 owner)
 {
-#ifndef NDEBUG
-    log_debug("acquiring lock for zone %{dnsname} for %x", zone->origin, owner);
+#if ZONE_MUTEX_LOG
+    log_notice("acquiring lock for zone %{dnsname} for %x", zone->origin, owner);
 #endif
 
     for(;;)
@@ -628,12 +638,9 @@ zdb_zone_lock(zdb_zone *zone, u8 owner)
         mutex_lock(&zone->mutex);
 
 		/*
-			I'm pretty happy with that one.
 			An simple way to ensure that a lock can be shared
 			by similar entities or not.
 			Sharable entities have their msb off.
-			Right now, only the signers will be like that.
-			No other one is sharable.
 		*/
 
         u8 co = zone->mutex_owner & 0x7f;
@@ -642,12 +649,15 @@ zdb_zone_lock(zdb_zone *zone, u8 owner)
         {
             zassert(zone->mutex_count != 255);
 
-#ifndef NDEBUG
-            log_debug("acquired lock for zone %{dnsname} for %x", zone->origin, owner);
+#if ZONE_MUTEX_LOG
+            log_notice("acquired lock for zone %{dnsname} for %x", zone->origin, owner);
 #endif
             
             zone->mutex_owner = owner & 0x7f;
             zone->mutex_count++;
+            
+            mutex_unlock(&zone->mutex);
+            
             break;
         }
 
@@ -658,19 +668,19 @@ zdb_zone_lock(zdb_zone *zone, u8 owner)
          * A lock basically slows down a task to 100000Hz
          * Waiting close to 0.00001 seconds is counterproductive.
          * Given that we are using locks for slow tasks, waiting 1ms seems reasonable.
+         * 
+         * todo: use broadcasts
          */
 
         usleep(1000);
     }
-
-    mutex_unlock(&zone->mutex);
 }
 
 bool
 zdb_zone_trylock(zdb_zone *zone, u8 owner)
 {
-#ifndef NDEBUG
-    log_debug("trying to acquire lock for zone %{dnsname} for %x", zone->origin, owner);
+#if ZONE_MUTEX_LOG
+    log_notice("trying to acquire lock for zone %{dnsname} for %x", zone->origin, owner);
 #endif
 
     mutex_lock(&zone->mutex);
@@ -684,8 +694,8 @@ zdb_zone_trylock(zdb_zone *zone, u8 owner)
         zone->mutex_owner = owner & 0x7f;
         zone->mutex_count++;
 
-#ifndef NDEBUG
-        log_debug("acquired lock for zone %{dnsname} for %x", zone->origin, owner);
+#if ZONE_MUTEX_LOG
+        log_notice("acquired lock for zone %{dnsname} for %x", zone->origin, owner);
 #endif
 
         mutex_unlock(&zone->mutex);
@@ -695,8 +705,8 @@ zdb_zone_trylock(zdb_zone *zone, u8 owner)
 
     mutex_unlock(&zone->mutex);
 
-#ifndef NDEBUG
-    log_debug("failed to acquire lock for zone %{dnsname} for %x", zone->origin, owner);
+#if ZONE_MUTEX_LOG
+    log_notice("failed to acquire lock for zone %{dnsname} for %x", zone->origin, owner);
 #endif
 
     return FALSE;
@@ -705,8 +715,8 @@ zdb_zone_trylock(zdb_zone *zone, u8 owner)
 void
 zdb_zone_unlock(zdb_zone *zone, u8 owner)
 {
-#ifndef NDEBUG
-    log_debug("releasing lock for zone %{dnsname} by %x", zone->origin, owner);
+#if ZONE_MUTEX_LOG
+    log_notice("releasing lock for zone %{dnsname} by %x", zone->origin, owner);
 #endif
 
     mutex_lock(&zone->mutex);
@@ -727,8 +737,8 @@ zdb_zone_unlock(zdb_zone *zone, u8 owner)
 bool
 zdb_zone_transferlock(zdb_zone *zone, u8 owner, u8 newowner)
 {
-#ifndef NDEBUG
-    log_debug("trying to transfer lock for zone %{dnsname} from %x to %x", zone->origin, owner, newowner);
+#if ZONE_MUTEX_LOG
+    log_notice("trying to transfer lock for zone %{dnsname} from %x to %x", zone->origin, owner, newowner);
 #endif
     
     bool r;
@@ -744,8 +754,11 @@ zdb_zone_transferlock(zdb_zone *zone, u8 owner, u8 newowner)
 
     mutex_unlock(&zone->mutex);
 
-#ifndef NDEBUG
-    log_debug("failed to transfer lock for zone %{dnsname} from %x to %x", zone->origin, owner, newowner);
+#if ZONE_MUTEX_LOG
+    if(!r)
+    {
+        log_notice("failed to transfer lock for zone %{dnsname} from %x to %x", zone->origin, owner, newowner);
+    }
 #endif
 
     return r;
@@ -768,8 +781,17 @@ zdb_zone_xchg_with_invalid(zdb *db, const u8 *origin, u16 zclass, u16 or_flags)
     if(!((old != NULL) && (old->apex->flags & ZDB_RR_LABEL_INVALID_ZONE)))
     {
         zdb_zone *zone = zdb_zone_create(origin, zclass);
-        zone->apex->flags |= ZDB_RR_LABEL_INVALID_ZONE;                
+        
+        if(zone != NULL)
+        {
+            zone->apex->flags |= ZDB_RR_LABEL_INVALID_ZONE;
+        
+            zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+        }
+        
         zone_label->zone = zone;
+        
+        
     }
     
     return old;

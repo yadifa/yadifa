@@ -80,16 +80,23 @@ extern "C" {
 #define     ZONE_CTRL_FLAG_SAVED_TO_DIFF   16   /* has been saved to the configuration updates file */
 #define     ZONE_CTRL_FLAG_DYNAMIC         32
 
-#define     ZONE_STATUS_IDLE                  0 /* nothing happening */
-#define     ZONE_STATUS_MODIFIED              1 /* has been updated */
-#define     ZONE_STATUS_LOADING               2 /* in the process of loading */
-#define     ZONE_STATUS_SAVETO_ZONE_FILE      4 /* dumping to ... required */
-#define     ZONE_STATUS_SAVETO_AXFR_FILE      8
-#define     ZONE_STATUS_SAVING_ZONE_FILE     16 /* dumping to ... */
-#define     ZONE_STATUS_SAVING_AXFR_FILE     32
-#define     ZONE_STATUS_UPDATING_SIGNATURES  64 /* updating signatures */
-#define     ZONE_STATUS_STARTING_UP         128 /* before we even tried to load it */
+#define     ZONE_STATUS_IDLE                   0 /* nothing happening */
+#define     ZONE_STATUS_MODIFIED               1 /* has been updated since last write on/load from disk */
+#define     ZONE_STATUS_LOADING                2 /* in the process of loading the zone */
+
+#define     ZONE_STATUS_SAVETO_ZONE_FILE       4 /* dumping to ... required */
+#define     ZONE_STATUS_SAVETO_AXFR_FILE       8
+#define     ZONE_STATUS_SAVING_ZONE_FILE      16 /* dumping to ... */
+#define     ZONE_STATUS_SAVING_AXFR_FILE      32
+
+#define     ZONE_STATUS_STARTING_UP          128 /* before we even tried to load it */
     
+#define     ZONE_STATUS_SIGNATURES_UPDATE    256 /* needs to update the signatures (?) */
+#define     ZONE_STATUS_SIGNATURES_UPDATING  512 /* updating signatures */
+    
+#define     ZONE_STATUS_DYNAMIC_UPDATE      1024 /* needs to update the database (?) */
+#define     ZONE_STATUS_DYNAMIC_UPDATING    2048 /* updating the database */
+
 #define     ZONE_LOCK_NOBODY                0
 #define     ZONE_LOCK_LOAD                  1
 #define     ZONE_LOCK_UNLOAD                2
@@ -108,6 +115,41 @@ enum zone_type
 };
 typedef enum zone_type zone_type;
 
+    /**
+     *
+     * About slave refresh:
+     *
+     * REFRESH  A 32 bit time interval before the zone should be
+     *          refreshed.
+     * RETRY    A 32 bit time interval that should elapse before a
+     *          failed refresh should be retried.
+     * EXPIRE   A 32 bit time value that specifies the upper limit on
+     *          the time interval that can elapse before the zone is no
+     *          longer authoritative.
+     */
+
+typedef struct zone_data_refresh zone_data_refresh;
+struct zone_data_refresh
+{
+    /* last successful refresh time */
+    u32 refreshed_time;
+    /* last time we retried */
+    u32 retried_time;
+    /* for the sole use of retry.c (updated and used by it) */
+    u32 zone_update_next_time;
+};
+
+typedef struct zone_data_notify zone_data_notify;
+struct zone_data_notify
+{
+    /* retry count */
+    u32 retry_count;        
+    /* period in minutes */
+    u32 retry_period;
+    /* increase of the period (in minutes) after each retry */
+    u32 retry_period_increase;
+};
+
 typedef struct zone_data zone_data;
 struct zone_data
 {
@@ -123,26 +165,6 @@ struct zone_data
     /* The list of the masters (for a slave) */
     host_address *masters;
 
-    /**
-     *
-     * About slave refresh:
-     *
-     * REFRESH  A 32 bit time interval before the zone should be
-     *          refreshed.
-     * RETRY    A 32 bit time interval that should elapse before a
-     *          failed refresh should be retried.
-     * EXPIRE   A 32 bit time value that specifies the upper limit on
-     *          the time interval that can elapse before the zone is no
-     *          longer authoritative.
-     */
-
-    /* last successful refresh time */
-    u32         refreshed_time;
-    /* last time we retried */
-    u32         retried_time;
-    /* for the sole use of retry.c (updated and used by it) */
-    u32         zone_update_next_time;
-
     /* If master which are the servers to notify for updates
         * IXFR or AXFR
         */
@@ -151,6 +173,10 @@ struct zone_data
     /* Restrited list of ip address allowed to query */
 
     access_control ac;
+    
+    zone_data_refresh refresh;
+    
+    zone_data_notify notify;
 
 #if HAS_DNSSEC_SUPPORT != 0
     /*
@@ -172,12 +198,6 @@ struct zone_data
 
 #endif
 
-    /* retry count */
-    u32                                                notify_retry_count;        
-    /* period in minutes */
-    u32                                               notify_retry_period;
-    /* increase of the period (in minutes) after each retry */
-    u32                                      notify_retry_period_increase;
 
 #if HAS_DNSSEC_SUPPORT != 0
     u32                                                       dnssec_mode;  /* needs to be u32 */

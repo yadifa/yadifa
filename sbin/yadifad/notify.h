@@ -47,7 +47,8 @@
 #include "database.h"
 #include <dnscore/host_address.h>
 
-/** @brief Handle a notify from the master (or another slave)
+/**
+ *  @brief Handle a notify from the master (or another slave)
  *
  *  @param database : the database
  *  @param mesg     : the input message
@@ -58,6 +59,12 @@
 
 ya_result notify_process(database_t *database, message_data *msg);
 
+/**
+ * Sends a notify to all the slave for a given domain name
+ * 
+ * @param origin
+ */
+
 void notify_slaves(u8 *origin);
 
 /**
@@ -67,7 +74,16 @@ void notify_slaves(u8 *origin);
  */
 // void notify_clear(u8 *origin);
 
+/**
+ * Starts the notify service thread
+ */
+
 void notify_startup();
+
+/**
+ * Stops the notify service thread
+ */
+
 void notify_shutdown();
 
 #endif /* _NOTIFY_H */

@@ -232,8 +232,20 @@ axfr_query(host_address *servers, u8 *origin, u32* loaded_serial)
             
             xfr_delete_ix(origin, g_config->xfr_path);
             
-			if(ISOK(return_value = xfr_copy(&is, XFR_ALLOW_AXFR, origin, g_config->xfr_path, 0, loaded_serial, &axfr_query)))
+            xfr_copy_args xfr;
+            xfr.is = &is;
+            xfr.origin = origin;
+            xfr.base_data_path = g_config->xfr_path;
+            xfr.message = &axfr_query;
+            xfr.current_serial = 0;
+            xfr.flags = XFR_ALLOW_AXFR;
+            
+			if(ISOK(return_value = xfr_copy(&xfr)))
 			{
+                if(loaded_serial != NULL)
+                {
+                    *loaded_serial = xfr.out_loaded_serial;
+                }
 			}
             else
             {

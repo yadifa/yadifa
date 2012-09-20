@@ -45,7 +45,7 @@
 
 #include "log_statistics.h"
 
-#define SHOW_REFERRAL 0
+#define SHOW_REFERRAL 1
 
 logger_handle* g_statistics_logger;
 

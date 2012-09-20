@@ -114,8 +114,7 @@ extern "C" {
 #define log_debug2(...) logger_handle_msg(MODULE_MSG_HANDLE,MSG_DEBUG2,__VA_ARGS__)
 #define log_debug1(...) logger_handle_msg(MODULE_MSG_HANDLE,MSG_DEBUG1,__VA_ARGS__)
 #define log_debug(...)  logger_handle_msg(MODULE_MSG_HANDLE,MSG_DEBUG,__VA_ARGS__)
-/* Obsolete */
-#define log_info(...)    logger_handle_msg(MODULE_MSG_HANDLE,MSG_INFO,__VA_ARGS__)
+#define log_notice(...) logger_handle_msg(MODULE_MSG_HANDLE,MSG_NOTICE,__VA_ARGS__)
 #define log_info(...)   logger_handle_msg(MODULE_MSG_HANDLE,MSG_INFO,__VA_ARGS__)
 #define log_warn(...)   logger_handle_msg(MODULE_MSG_HANDLE,MSG_WARNING,__VA_ARGS__)
 #define log_err(...)    logger_handle_msg(MODULE_MSG_HANDLE,MSG_ERR,__VA_ARGS__)

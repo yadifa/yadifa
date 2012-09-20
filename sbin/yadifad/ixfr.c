@@ -203,7 +203,7 @@ ixfr_process(message_data *mesg)
  */
 
 ya_result
-ixfr_start_query(host_address *servers, const u8 *origin, u32 ttl, const u8 *rdata, u16 rdata_size, input_stream *is, output_stream *os, message_data *ixfr_queryp)
+ixfr_start_query(host_address *servers, const u8 *origin, u32 ttl, const u8 *soa_rdata, u16 soa_rdata_size, input_stream *is, output_stream *os, message_data *ixfr_queryp)
 {
     /**
      * Create the IXFR query packet
@@ -213,7 +213,7 @@ ixfr_start_query(host_address *servers, const u8 *origin, u32 ttl, const u8 *rda
     
     u16 id = (u16)random_next(rndctx);
 
-    message_make_ixfr_query(ixfr_queryp, id, origin, ttl, rdata_size, rdata);
+    message_make_ixfr_query(ixfr_queryp, id, origin, ttl, soa_rdata_size, soa_rdata);
     
     if(servers->tsig != NULL)
     {
@@ -271,13 +271,14 @@ ixfr_start_query(host_address *servers, const u8 *origin, u32 ttl, const u8 *rda
  *
  * @TODO: Set the IXFR storage path
  */
+
 ya_result
-ixfr_query(host_address *servers, zdb_zone *zone, u32* loaded_serial)
+ixfr_query(host_address *servers, zdb_zone *zone, u32* loaded_serial, u64* journal_offset)
 {
     /*
      * Background:
      *
-     * Build an axfr query message
+     * Build an ixfr query message
      * Send it to the master
      * Wait for the answer
      * Copy the answer in a file
@@ -330,17 +331,43 @@ ixfr_query(host_address *servers, zdb_zone *zone, u32* loaded_serial)
     {
         /** @todo: disables updates/ixfr for the zone */ 
 
-        if(ISOK(return_value = xfr_copy(&is, XFR_ALLOW_BOTH, zone->origin, g_config->xfr_path, current_serial, loaded_serial, &mesg)))
+        xfr_copy_args xfr;
+        xfr.is = &is;
+        xfr.origin = zone->origin;
+        xfr.base_data_path = g_config->xfr_path;
+        xfr.message = &mesg;
+        xfr.current_serial = current_serial;
+        xfr.flags = XFR_ALLOW_BOTH;
+        
+        if(ISOK(return_value = xfr_copy(&xfr)))
         {
+            if(loaded_serial != NULL)
+            {
+                *loaded_serial = xfr.out_loaded_serial;
+            }
+            
+            if(journal_offset != NULL)
+            {
+                *journal_offset = xfr.out_journal_file_append_offset;
+            }
+            
             if(return_value == TYPE_AXFR)
             {
                 /* delete ix files */
 
                 xfr_delete_ix(zone->origin, g_config->xfr_path);
             }
+            else
+            {
+                /*
+                 * at this point we know where the added journal page(s) do start, their size and last serial
+                 * using them will increase performance
+                 */
+            }
         }
         else
         {
+            log_info("ixfr: transfer from master failed for zone %{dnsname}: %r", zone->origin, return_value);
         }
 
         input_stream_close(&is);

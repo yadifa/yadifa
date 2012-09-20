@@ -700,13 +700,6 @@ message_process(message_data *mesg)
     {
         case OPCODE_QUERY:
         {
-            MESSAGE_LOFLAGS(buffer) &= ~(Z_BITS|AD_BITS|CD_BITS|RCODE_BITS);
-            
-            /*
-               rdtsc_init(&mpb);
-               */
-            /*    ------------------------------------------------------------    */
-
             /** CHECK DNS HEADER */
             /** Drop dns packet if query is answer or does not have correct header length */
 
@@ -822,6 +815,7 @@ message_process(message_data *mesg)
             /* At this point the TSIG has been computed and removed */
             /* Clear zome bits */
             MESSAGE_FLAGS_AND(mesg->buffer, ~(QR_BITS|TC_BITS|AA_BITS), ~(Z_BITS|RA_BITS|RCODE_BITS));
+            //MESSAGE_LOFLAGS(buffer) &= ~(Z_BITS|AD_BITS|CD_BITS|RCODE_BITS);
 
             mesg->status = FP_MESG_OK;
 

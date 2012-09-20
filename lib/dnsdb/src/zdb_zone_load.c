@@ -241,6 +241,14 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
     zdb_zone* zone;
 
     zone = zdb_zone_create(entry.name, zclass);
+    
+    if(zone == NULL)
+    {
+        log_err("zone load: unable to load zone %{dnsname} %{dnsclass}", entry.name, &zclass);
+        
+        return ZDB_ERROR_NOSUCHCLASS;
+    }
+    
     zone->min_ttl = soa_min_ttl;
 
     dnsname_to_dnsname_vector(zone->origin, &name);
@@ -612,7 +620,7 @@ zdb_zone_load_exit:
         {
             /* @TODO what do I do ? */
             
-            log_err("zone load: zone %{dnsname} is NSEC3 but there are no NSEC3 keys available, zone->origin");
+            log_err("zone load: zone %{dnsname} is NSEC3 but there are no NSEC3 keys available", zone->origin);
             
         }
         if(has_nsec && !nsec_keys)
@@ -799,8 +807,7 @@ zdb_zone_load_exit:
 #ifndef NDEBUG
         log_debug("zone load: replaying changes from journal");
 #endif
-
-        if(FAIL(return_code = zdb_icmtl_replay(zone, data_path)))
+        if(FAIL(return_code = zdb_icmtl_replay(zone, data_path, 0, 0, 0)))
         {
             log_err("zone load: journal replay returned %r", return_code);
         }

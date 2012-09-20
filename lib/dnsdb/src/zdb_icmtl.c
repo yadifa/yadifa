@@ -98,6 +98,8 @@ extern logger_handle* g_database_logger;
 
 static u32 icmtl_index_base = 0;
 
+static const u8 SOA_IN[4] = {0,6,0,1};
+
 
 /*
  * With this, I can ensure (in DEBUG builds) that there are no conflicting calls to the (badly named, mea culpa)
@@ -708,16 +710,15 @@ zdb_icmtl_read_fqdn(input_stream *is, u8 *dst256bytes)
  * Replay the incremental stream
  */
 
-static int bug_counter = 0;
-
 ya_result
-zdb_icmtl_replay(zdb_zone *zone, const char* directory)
+zdb_icmtl_replay(zdb_zone *zone, const char* directory, u64 serial_offset, u32 until_serial, u8 flags)
 {
     ya_result return_code;
     u32 serial;
     s32 changes = 0;
     zdb_ttlrdata ttlrdata;
     dnslabel_vector labels;
+    bool use_serial_limit = (flags & ZDB_ICMTL_REPLAY_SERIAL_LIMIT) != 0;
     u8 tmprdata[RDATA_MAX_LENGTH + 1];
 
     if(FAIL(return_code = zdb_zone_getserial(zone, &serial)))
@@ -739,9 +740,23 @@ zdb_icmtl_replay(zdb_zone *zone, const char* directory)
     }
     
     directory = data_path;
-
-    log_info("journal: %{dnsname}: trying to replay from serial %u (%s)",zone->origin, serial, directory);
-       
+    
+    if(use_serial_limit)
+    {
+        log_info("journal: %{dnsname}: trying to replay from serial %u to serial %u (%s)",zone->origin, serial, until_serial, directory);
+        
+        if(serial == until_serial)
+        {
+            log_err("journal %{dnsname}: no operation needed", zone->origin);
+            
+            return SUCCESS; /* nothing to do */
+        }
+    }
+    else
+    {
+        log_info("journal: %{dnsname}: trying to replay from serial %u (%s)",zone->origin, serial, directory);
+    }
+           
     if(FAIL(return_code = zdb_icmtl_open_ix(zone->origin, directory, serial , &is, NULL, NULL)))
     {
         /*
@@ -765,13 +780,20 @@ zdb_icmtl_replay(zdb_zone *zone, const char* directory)
 
         return return_code;
     }
+    
+    if((flags & ZDB_ICMTL_REPLAY_SERIAL_OFFSET) != 0)
+    {
+        if(is_fd_input_stream(&is))
+        {
+            fd_input_stream_seek(&is, serial_offset);
+        }
+    }
 
     buffer_input_stream_init(&is, &is, 4096);
 
     /* Reads until a DEL SOA record has the SAME serial */
 
     log_debug("journal: %{dnsname}: skipping past records", zone->origin);
-
 
     if(FAIL(return_code = zdb_icmtl_skip_until(&is, zone)))
     {
@@ -805,23 +827,8 @@ zdb_icmtl_replay(zdb_zone *zone, const char* directory)
      * At this point : the next record, if it exists AND is not an SOA , has to be deleted
      * 
      */
-
-    log_info("journal: %{dnsname}: removing obsolete SOA", zone->origin);
-
-    if(FAIL(return_code = zdb_record_delete(&zone->apex->resource_record_set, TYPE_SOA)))
-    {
-        /**
-         * complain
-         */
-
-        log_err("journal: removing current SOA gave an error: %r", return_code);
-
-        /* That's VERY bad ... */
-
-        input_stream_close(&is);
-
-        return return_code;
-    }
+    
+    bool did_remove_soa = FALSE;
 
     log_info("journal: %{dnsname}: applying changes", zone->origin);
 
@@ -853,6 +860,8 @@ zdb_icmtl_replay(zdb_zone *zone, const char* directory)
 
     u16 shutdown_test_countdown = 1000;
     
+    u32 current_serial = serial;
+    
     for(;;)
     {
         struct type_class_ttl_rdlen tctr;
@@ -874,6 +883,9 @@ zdb_icmtl_replay(zdb_zone *zone, const char* directory)
         if(return_code <= 0)
         {
             /* last record ... */
+            
+            log_info("journal: reached the end of the journal file");
+            
             break;
         }
 
@@ -888,6 +900,15 @@ zdb_icmtl_replay(zdb_zone *zone, const char* directory)
 
         if(tctr.qtype == TYPE_SOA)
         {
+            if(use_serial_limit && (until_serial == current_serial))
+            {
+                /* the last added SOA had the serial we expected stop here */
+                
+                log_info("journal: reached the expected serial");
+                
+                break;
+            }
+            
             mode ^= 1;
 
             //zdb_icmtl_skip_rdata(&is, tctr.rdlen);
@@ -919,6 +940,28 @@ zdb_icmtl_replay(zdb_zone *zone, const char* directory)
                     nsec_icmtl_replay_execute(&nsecreplay);
                 }
             }
+        }
+        
+        if(!did_remove_soa)
+        {
+            log_info("journal: %{dnsname}: removing obsolete SOA", zone->origin);
+
+            if(FAIL(return_code = zdb_record_delete(&zone->apex->resource_record_set, TYPE_SOA)))
+            {
+                /**
+                * complain
+                */
+
+                log_err("journal: removing current SOA gave an error: %r", return_code);
+
+                /* That's VERY bad ... */
+
+                changes = return_code;
+
+                break;
+            }
+            
+            did_remove_soa = TRUE;
         }
 
         s32 top = dnsname_to_dnslabel_vector(fqdn, labels);
@@ -992,6 +1035,9 @@ zdb_icmtl_replay(zdb_zone *zone, const char* directory)
                     ttlrdata.ttl = tctr.ttl;
                     ttlrdata.rdata_size = tctr.rdlen;
                     
+                    rdata_desc rdata = {TYPE_SOA, ttlrdata.rdata_size, ttlrdata.rdata_pointer};
+                    log_info("journal: SOA: del %{dnsname} %{typerdatadesc}", fqdn, &rdata);
+                    
                     s32 m1 = (top - zone->origin_vector.size) - 1;
                     
                     if(m1 == -1)
@@ -1050,7 +1096,7 @@ zdb_icmtl_replay(zdb_zone *zone, const char* directory)
             switch(tctr.qtype)
             {
                 case TYPE_NSEC3PARAM:
-                {                    
+                {
                     /*
                      * The "change" could be the NSEC3PARAM flag changing ?
                      */
@@ -1170,13 +1216,28 @@ zdb_icmtl_replay(zdb_zone *zone, const char* directory)
 #endif
                     if(is_nsec3)
                     {
-                        u8 *rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(packed_ttlrdata);
-                        if(RRSIG_RDATA_TO_TYPE_COVERED(*rdata) == TYPE_NSEC3)
+                        /*
+                         * If it's a signature AND if we are on an nsec3 zone AND the type covered is NSEC3 THEN it should be put on hold.
+                         */
+                        
+                        if(tctr.qtype == TYPE_RRSIG)
                         {
-                            nsec3_icmtl_replay_nsec3_rrsig_add(&nsec3replay, fqdn, packed_ttlrdata);
+                            u8 *rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(packed_ttlrdata);
 
-                            break;
+                            if(RRSIG_RDATA_TO_TYPE_COVERED(*rdata) == TYPE_NSEC3)
+                            {
+                                nsec3_icmtl_replay_nsec3_rrsig_add(&nsec3replay, fqdn, packed_ttlrdata);
+
+                                break;
+                            }
                         }
+                    }
+                    
+                    if(tctr.qtype == TYPE_SOA)
+                    {
+                        rr_soa_get_serial(ZDB_PACKEDRECORD_PTR_RDATAPTR(packed_ttlrdata), ZDB_PACKEDRECORD_PTR_RDATASIZE(packed_ttlrdata), &current_serial);
+                        rdata_desc rdata = {TYPE_SOA, ZDB_PACKEDRECORD_PTR_RDATASIZE(packed_ttlrdata), ZDB_PACKEDRECORD_PTR_RDATAPTR(packed_ttlrdata)};
+                        log_info("journal: SOA: add %{dnsname} %{typerdatadesc}", fqdn, &rdata);
                     }
 
                     s32 rr_label_top = top - zone->origin_vector.size;
@@ -1187,10 +1248,15 @@ zdb_icmtl_replay(zdb_zone *zone, const char* directory)
                         nsec3_icmtl_replay_label_add(&nsec3replay, fqdn, labels, rr_label_top - 1);
                     }
                 }
-            }
-        }
+            }            
+        } // end if ADD
 
         changes++;
+    }
+    
+    if(use_serial_limit && (until_serial != current_serial))
+    {
+        log_err("journal: expected to read the journal up to serial %d, got to %d.  This is BAD.", until_serial, current_serial);
     }
     
     /*
@@ -1280,7 +1346,39 @@ zdb_icmtl_get_last_serial_from(u32 serial, u8 *origin, const char* directory, u3
     return return_code;
 }
 
-static const u8 SOA_IN[4] = {0,6,0,1};
+static ya_result
+zdb_icmtl_unlink_remove(zdb_icmtl* icmtl, const char* folder)
+{
+    char tmp_name[1024];
+    
+    ya_result return_code;
+    
+    if(FAIL(return_code = snformat(tmp_name, sizeof (tmp_name), ICMTL_REMOVE_TMP_FILE_FORMAT, folder, icmtl->zone->origin, icmtl->patch_index)))
+    {
+        log_err("incremental: error making 'remove' tmp file name: %r", return_code);
+    }
+
+    unlink(tmp_name);
+    
+    return return_code;
+}
+
+static ya_result
+zdb_icmtl_unlink_add(zdb_icmtl* icmtl, const char* folder)
+{
+    char tmp_name[1024];
+    
+    ya_result return_code;
+    
+    if(FAIL(return_code = snformat(tmp_name, sizeof (tmp_name), ICMTL_ADD_TMP_FILE_FORMAT, folder, icmtl->zone->origin, icmtl->patch_index)))
+    {
+        log_err("incremental: error making 'remove' tmp file name: %r", return_code);
+    }
+
+    unlink(tmp_name);
+    
+    return return_code;
+}
 
 ya_result
 zdb_icmtl_get_last_soa_from(u32 serial, u8 *origin, const char* directory, u32 *last_serial, u32 *ttl, u16 *rdata_size, u8 *rdata)
@@ -1409,7 +1507,6 @@ zdb_icmtl_get_last_soa_from(u32 serial, u8 *origin, const char* directory, u32 *
     return return_code;
 }
 
-
 ya_result
 zdb_icmtl_begin(zdb_zone* zone, zdb_icmtl* icmtl, const char* folder)
 {
@@ -1417,7 +1514,8 @@ zdb_icmtl_begin(zdb_zone* zone, zdb_icmtl* icmtl, const char* folder)
 
     UNICITY_ACQUIRE(icmtl);
 
-    char tmp_name[1024];
+    char remove_name[1024];
+    char add_name[1024];
     
     char data_path[1024];
     
@@ -1435,16 +1533,16 @@ zdb_icmtl_begin(zdb_zone* zone, zdb_icmtl* icmtl, const char* folder)
 
     icmtl->patch_index = icmtl_index_base++;
 
-    if(ISOK(return_code = snformat(tmp_name, sizeof (tmp_name), ICMTL_REMOVE_TMP_FILE_FORMAT, folder, zone->origin, icmtl->patch_index)))
+    if(ISOK(return_code = snformat(remove_name, sizeof(remove_name), ICMTL_REMOVE_TMP_FILE_FORMAT, folder, zone->origin, icmtl->patch_index)))
     {
-        if(ISOK(return_code = file_output_stream_create(tmp_name, ICMTL_FILE_MODE, &icmtl->os_remove_)))
+        if(ISOK(return_code = file_output_stream_create(remove_name, ICMTL_FILE_MODE, &icmtl->os_remove_)))
         {
             buffer_output_stream_init(&icmtl->os_remove_, &icmtl->os_remove_, ICMTL_BUFFER_SIZE);
             counter_output_stream_init(&icmtl->os_remove_, &icmtl->os_remove, &icmtl->os_remove_stats);
 
-            if(ISOK(return_code = snformat(tmp_name, sizeof (tmp_name), ICMTL_ADD_TMP_FILE_FORMAT, folder, zone->origin, icmtl->patch_index)))
+            if(ISOK(return_code = snformat(add_name, sizeof(add_name), ICMTL_ADD_TMP_FILE_FORMAT, folder, zone->origin, icmtl->patch_index)))
             {
-                if(ISOK(return_code = file_output_stream_create(tmp_name, ICMTL_FILE_MODE, &icmtl->os_add_)))
+                if(ISOK(return_code = file_output_stream_create(add_name, ICMTL_FILE_MODE, &icmtl->os_add_)))
                 {
                     buffer_output_stream_init(&icmtl->os_add_, &icmtl->os_add_, ICMTL_BUFFER_SIZE);
                     counter_output_stream_init(&icmtl->os_add_, &icmtl->os_add, &icmtl->os_add_stats);
@@ -1457,13 +1555,29 @@ zdb_icmtl_begin(zdb_zone* zone, zdb_icmtl* icmtl, const char* folder)
                     
                     zdb_packed_ttlrdata* soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);    
                     
-                    icmtl->soa_ttl = soa->ttl;                    
-                    icmtl->soa_rdata_size  = ZDB_PACKEDRECORD_PTR_RDATASIZE(soa);
-                    memcpy(icmtl->soa_rdata, ZDB_PACKEDRECORD_PTR_RDATAPTR(soa), ZDB_PACKEDRECORD_PTR_RDATASIZE(soa));
+                    if(soa != NULL)
+                    {
+                        icmtl->soa_ttl = soa->ttl;                    
+                        icmtl->soa_rdata_size  = ZDB_PACKEDRECORD_PTR_RDATASIZE(soa);
+                        memcpy(icmtl->soa_rdata, ZDB_PACKEDRECORD_PTR_RDATAPTR(soa), ZDB_PACKEDRECORD_PTR_RDATASIZE(soa));
+                    }
+                    else
+                    {
+                        output_stream_close(&icmtl->os_remove);
+                        output_stream_close(&icmtl->os_add);
+                        
+                        unlink(remove_name);
+                        unlink(add_name);
+                        
+                        log_err("journal: no soa found at %{dnsname}", zone->origin);
+                        
+                        return_code = ZDB_ERROR_NOSOAATAPEX;
+                    }
                 }
                 else
                 {
                     output_stream_close(&icmtl->os_remove);
+                    unlink(remove_name);
                 }
             }
         }
@@ -1488,6 +1602,34 @@ output_stream_write_packed_ttlrdata(output_stream* os, u8* origin, u16 type, zdb
     output_stream_write(os, &record->rdata_start[0], record->rdata_size);
 }
 
+static ya_result
+zdb_icmtl_close(zdb_icmtl* icmtl, const char* folder)
+{
+    ya_result return_code;
+    char data_path[1024];
+    
+    dynupdate_icmtlhook_disable();
+    
+    output_stream_close(&icmtl->os_remove);
+    output_stream_close(&icmtl->os_remove_);
+    output_stream_close(&icmtl->os_add);
+    output_stream_close(&icmtl->os_add_);
+    
+    if(FAIL(return_code = xfr_copy_get_data_path(folder, icmtl->zone->origin, data_path, sizeof(data_path))))
+    {
+        return return_code;
+    }
+
+    folder = data_path;
+    
+    zdb_icmtl_unlink_remove(icmtl, folder);
+    zdb_icmtl_unlink_add(icmtl, folder);
+
+    UNICITY_RELEASE(icmtl);
+    
+    return SUCCESS;
+}
+
 ya_result
 zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
 {
@@ -1495,8 +1637,12 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
 
     ya_result return_code;
 
-    char tmp_name[1024];
-    char new_name[1024];
+    char remove_tmp_name[1024];
+    char add_tmp_name[1024];
+    char summary_tmp_name[1024];
+    char wire_name[1024];
+    char buffer[1024];
+    char data_path[1024];
     
     icmtl->file_size_before_append = 0;
     icmtl->file_size_after_append = 0;
@@ -1508,15 +1654,24 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
     {
         /** @todo: files are useless: remove the icmtlr & icmtla files that have just been closed */
         
-        dynupdate_icmtlhook_disable();
-
-        output_stream_close(&icmtl->os_remove);
-        output_stream_close(&icmtl->os_add);
-
-        UNICITY_RELEASE(icmtl);
+        zdb_icmtl_close(icmtl, folder);
 
         return ZDB_ERROR_NOSOAATAPEX;
     }
+    
+    if(FAIL(return_code = xfr_copy_get_data_path(folder, icmtl->zone->origin, data_path, sizeof(data_path))))
+    {
+        dynupdate_icmtlhook_disable();
+    
+        output_stream_close(&icmtl->os_remove);
+        output_stream_close(&icmtl->os_remove_);
+        output_stream_close(&icmtl->os_add);
+        output_stream_close(&icmtl->os_add_);
+    
+        return return_code;
+    }
+    
+    folder = data_path;
     
     bool soa_changed = FALSE;
     
@@ -1526,27 +1681,10 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
     {
         soa_changed = TRUE;
     }
-    
-    //zdb_packed_ttlrdata* old_soa = soa;    
-    //ZDB_RECORD_ZALLOC(old_soa, soa->ttl, ZDB_PACKEDRECORD_PTR_RDATASIZE(soa), ZDB_PACKEDRECORD_PTR_RDATAPTR(soa));
-    /*
-    icmtl->soa_ttl = soa->ttl;                    
-    icmtl->soa_rdata_size  = ZDB_PACKEDRECORD_PTR_RDATASIZE(soa);
-    memcpy(icmtl->soa_rdata, ZDB_PACKEDRECORD_PTR_RDATAPTR(soa), ZDB_PACKEDRECORD_PTR_RDATASIZE(soa));
-   */ 
-    
+
     output_stream_flush(&icmtl->os_remove);
     output_stream_flush(&icmtl->os_add);
     
-    char data_path[1024];
-    
-    if(FAIL(return_code = xfr_copy_get_data_path(folder, icmtl->zone->origin, data_path, sizeof(data_path))))
-    {
-        return return_code;
-    }
-
-    folder = data_path;
-        
     /* Increment the SOA's serial number ? */
     
     // soa changed => no
@@ -1564,26 +1702,7 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
     {
         if(written == 0)
         {
-            dynupdate_icmtlhook_disable();
-
-            output_stream_close(&icmtl->os_remove);
-            output_stream_close(&icmtl->os_add);
-            
-            if(FAIL(return_code = snformat(tmp_name, sizeof (tmp_name), ICMTL_REMOVE_TMP_FILE_FORMAT, folder, icmtl->zone->origin, icmtl->patch_index)))
-            {
-                log_err("incremental: error making 'remove' tmp file name: %r", return_code);
-            }
-            
-            unlink(tmp_name);
-            
-            if(FAIL(return_code = snformat(tmp_name, sizeof (tmp_name), ICMTL_ADD_TMP_FILE_FORMAT, folder, icmtl->zone->origin, icmtl->patch_index)))
-            {
-                log_err("incremental: error making 'add' tmp file name: %r", return_code);
-            }
-            
-            unlink(tmp_name);
-            
-            UNICITY_RELEASE(icmtl);
+            zdb_icmtl_close(icmtl, folder);
 
             return return_code;
         }
@@ -1605,75 +1724,80 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
 
         u32 sign_from = time(NULL);
 
-        rrsig_initialize_context(icmtl->zone, &context, DEFAULT_ENGINE_NAME, sign_from);
-
-        rrsig_update_context_push_label(&context, icmtl->zone->apex);
-        rrsig_update_label_type(&context, icmtl->zone->apex, TYPE_SOA, FALSE);
-
-        /*
-         * Retrieve the old signatures (to be deleted)
-         * Retrieve the new signatures (to be added)
-         *
-         * This has to be injected as an answer query.
-         */
-        
-#if RRSIG_UPDATE_SCHEDULED == 0
-        dnsname_stack namestack;
-        dnsname_to_dnsname_stack(icmtl->zone->origin, &namestack);
-#else
-        dnsname_stack* namestackp;
-        MALLOC_OR_DIE(dnsname_stack*,namestackp,sizeof(dnsname_stack), ICMTLNSA_TAG);
-        dnsname_to_dnsname_stack(icmtl->zone->origin, namestackp);
-#endif
-
-        /* Store the signatures */
-
-        zdb_packed_ttlrdata* rrsig_sll;
-
-        rrsig_sll = context.removed_rrsig_sll;
-
-        while(rrsig_sll != NULL)
+        if(ISOK(return_code = rrsig_initialize_context(icmtl->zone, &context, DEFAULT_ENGINE_NAME, sign_from)))
         {
-            if(RRSIG_TYPE_COVERED(rrsig_sll) == TYPE_SOA)
-            {
-                output_stream_write_packed_ttlrdata(&icmtl->os_remove, icmtl->zone->origin, TYPE_RRSIG, rrsig_sll);
-            }
+            rrsig_update_context_push_label(&context, icmtl->zone->apex);
+            rrsig_update_label_type(&context, icmtl->zone->apex, TYPE_SOA, FALSE);
 
-            rrsig_sll = rrsig_sll->next;
-        }
-
-        rrsig_sll = context.added_rrsig_sll;
-
-        while(rrsig_sll != NULL)
-        {
-            if(RRSIG_TYPE_COVERED(rrsig_sll) == TYPE_SOA)
-            {
-                output_stream_write_packed_ttlrdata(&icmtl->os_add, icmtl->zone->origin, TYPE_RRSIG, rrsig_sll);
-            }
-
-            rrsig_sll = rrsig_sll->next;
-        }
+           /*
+            * Retrieve the old signatures (to be deleted)
+            * Retrieve the new signatures (to be added)
+            *
+            * This has to be injected as an answer query.
+            */
 
 #if RRSIG_UPDATE_SCHEDULED == 0
-        rrsig_update_commit(context.removed_rrsig_sll, context.added_rrsig_sll, icmtl->zone->apex, &namestack);
+            dnsname_stack namestack;
+            dnsname_to_dnsname_stack(icmtl->zone->origin, &namestack);
 #else
-        /**
-         *  The last parameter is a pointer to a context to destroy (optional but actually always used)
-         */
-        scheduler_task_rrsig_update_commit(context.removed_rrsig_sll, context.added_rrsig_sll, icmtl->zone->apex, icmtl->zone, namestackp, namestackp);
+            dnsname_stack* namestackp;
+            MALLOC_OR_DIE(dnsname_stack*,namestackp,sizeof(dnsname_stack), ICMTLNSA_TAG);
+            dnsname_to_dnsname_stack(icmtl->zone->origin, namestackp);
 #endif
 
-        rrsig_update_context_pop_label(&context);
+            /* Store the signatures */
 
-        rrsig_destroy_context(&context);
+            zdb_packed_ttlrdata* rrsig_sll;
+
+            rrsig_sll = context.removed_rrsig_sll;
+
+            while(rrsig_sll != NULL)
+            {
+                if(RRSIG_TYPE_COVERED(rrsig_sll) == TYPE_SOA)
+                {
+                    output_stream_write_packed_ttlrdata(&icmtl->os_remove, icmtl->zone->origin, TYPE_RRSIG, rrsig_sll);
+                }
+
+                rrsig_sll = rrsig_sll->next;
+            }
+
+            rrsig_sll = context.added_rrsig_sll;
+
+            while(rrsig_sll != NULL)
+            {
+                if(RRSIG_TYPE_COVERED(rrsig_sll) == TYPE_SOA)
+                {
+                    output_stream_write_packed_ttlrdata(&icmtl->os_add, icmtl->zone->origin, TYPE_RRSIG, rrsig_sll);
+                }
+
+                rrsig_sll = rrsig_sll->next;
+            }
+
+#if RRSIG_UPDATE_SCHEDULED == 0
+            rrsig_update_commit(context.removed_rrsig_sll, context.added_rrsig_sll, icmtl->zone->apex, &namestack);
+#else
+           /**
+            *  The last parameter is a pointer to a context to destroy (optional but actually always used)
+            */
+            scheduler_task_rrsig_update_commit(context.removed_rrsig_sll, context.added_rrsig_sll, icmtl->zone->apex, icmtl->zone, namestackp, namestackp);
+#endif
+            rrsig_update_context_pop_label(&context);
+
+            rrsig_destroy_context(&context);
+        }
+        else
+        {
+            log_err("incremental: rrsig of the soa failed: %r", return_code);
+        }
     }
-
 #endif
     
     dynupdate_icmtlhook_disable();
 
     output_stream_close(&icmtl->os_remove);
+    output_stream_close(&icmtl->os_remove_);
     output_stream_close(&icmtl->os_add);
+    output_stream_close(&icmtl->os_add_);
 
     /*
      * The main work is done.
@@ -1685,7 +1809,7 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
      * This last storage part has to be done in the file called "tmp_name"
      */
     
-    if(FAIL(return_code = snformat(tmp_name, sizeof (tmp_name), ICMTL_REMOVE_TMP_FILE_FORMAT, folder, icmtl->zone->origin, icmtl->patch_index)))
+    if(FAIL(return_code = snformat(remove_tmp_name, sizeof(remove_tmp_name), ICMTL_REMOVE_TMP_FILE_FORMAT, folder, icmtl->zone->origin, icmtl->patch_index)))
     {
         log_err("incremental: error making 'remove' tmp file name: %r", return_code);
 
@@ -1693,8 +1817,20 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
 
         return return_code;
     }
+    
+    struct stat file_stat;
+    if(stat(remove_tmp_name, &file_stat) < 0)
+    {
+        log_err("incremental: unable to stat '%s': %r", remove_tmp_name, return_code);
 
-    if(FAIL(return_code = snformat(new_name, sizeof (new_name), ICMTL_ADD_TMP_FILE_FORMAT, folder, icmtl->zone->origin, icmtl->patch_index)))
+        UNICITY_RELEASE(icmtl);
+
+        return ERRNO_ERROR;
+    }
+
+    /**/
+    
+    if(FAIL(return_code = snformat(add_tmp_name, sizeof(add_tmp_name), ICMTL_ADD_TMP_FILE_FORMAT, folder, icmtl->zone->origin, icmtl->patch_index)))
     {
         log_err("incremental: error making 'add' tmp file name: %r", return_code);
 
@@ -1703,21 +1839,11 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
         return return_code;
     }
 
-    struct stat file_stat;
-    if(stat(tmp_name, &file_stat) < 0)
-    {
-        log_err("incremental: unable to stat '%s': %r", tmp_name, return_code);
-
-        UNICITY_RELEASE(icmtl);
-
-        return ERRNO_ERROR;
-    }
-
     off_t total_size = file_stat.st_size;
 
-    if(stat(new_name, &file_stat) < 0)
+    if(stat(add_tmp_name, &file_stat) < 0)
     {
-        log_err("incremental: unable to stat '%s': %r", new_name, return_code);
+        log_err("incremental: unable to stat '%s': %r", add_tmp_name, return_code);
 
         UNICITY_RELEASE(icmtl);
 
@@ -1730,15 +1856,15 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
     {
         log_info("incremental: no change registered.");
 
-        zdb_icmtl_unlink_file(tmp_name);
-        zdb_icmtl_unlink_file(new_name);
+        zdb_icmtl_unlink_file(remove_tmp_name);
+        zdb_icmtl_unlink_file(add_tmp_name);
 
         UNICITY_RELEASE(icmtl);
 
         return SUCCESS;
     }
 
-    if(FAIL(return_code = snformat(tmp_name, sizeof (tmp_name), ICMTL_SUMMARY_TMP_FILE_FORMAT, folder, icmtl->zone->origin, icmtl->patch_index)))
+    if(FAIL(return_code = snformat(summary_tmp_name, sizeof(summary_tmp_name), ICMTL_SUMMARY_TMP_FILE_FORMAT, folder, icmtl->zone->origin, icmtl->patch_index)))
     {
         log_err("incremental: error making summary file name: %r", return_code);
 
@@ -1747,9 +1873,9 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
         return return_code;
     }
 
-    if(FAIL(return_code = file_output_stream_create(tmp_name, ICMTL_FILE_MODE, &icmtl_out)))
+    if(FAIL(return_code = file_output_stream_create(summary_tmp_name, ICMTL_FILE_MODE, &icmtl_out)))
     {
-        log_err("incremental: error creating file '%s': %r", tmp_name, return_code);
+        log_err("incremental: error creating file '%s': %r", summary_tmp_name, return_code);
         
         UNICITY_RELEASE(icmtl);
 
@@ -1759,7 +1885,7 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
     if(FAIL(return_code = buffer_output_stream_init(&icmtl_out, &icmtl_out, ICMTL_BUFFER_SIZE)))
     {
         output_stream_close(&icmtl_out);
-
+        unlink(summary_tmp_name);
         UNICITY_RELEASE(icmtl);
 
         return return_code;
@@ -1796,7 +1922,7 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
      *
      */
 
-    if(ISOK(return_code = zdb_icmtl_rename_file(icmtl, ICMTL_REMOVE_TMP_FILE_FORMAT , ICMTL_REMOVE_FILE_FORMAT, folder, old_serial, new_serial)))
+    if(ISOK(return_code = zdb_icmtl_rename_file(icmtl, ICMTL_REMOVE_TMP_FILE_FORMAT  , ICMTL_REMOVE_FILE_FORMAT, folder, old_serial, new_serial)))
     {
         if(ISOK(return_code = zdb_icmtl_rename_file(icmtl, ICMTL_ADD_TMP_FILE_FORMAT , ICMTL_ADD_FILE_FORMAT, folder, old_serial, new_serial)))
         {
@@ -1810,10 +1936,10 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
          * convert into a standard I(xfr) file
          */
 
-        snformat(new_name, sizeof (new_name), ICMTL_WIRE_FILE_FORMAT, folder, icmtl->zone->origin, old_serial, new_serial);
+        snformat(wire_name, sizeof(wire_name), ICMTL_WIRE_FILE_FORMAT, folder, icmtl->zone->origin, old_serial, new_serial);
 
 #ifndef NDEBUG
-        log_debug("incremental: building wire: '%s'", new_name);
+        log_debug("incremental: building wire: '%s'", wire_name);
 #endif
 
         /*
@@ -1850,7 +1976,7 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
 
                 append_ix = FALSE;
 
-                return_code = file_output_stream_create(new_name, ICMTL_FILE_MODE, &wire_os);
+                return_code = file_output_stream_create(wire_name, ICMTL_FILE_MODE, &wire_os);
             }
             
             if(ISOK(return_code))
@@ -1868,9 +1994,9 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
                 
                 ya_result n;
 
-                while((n = input_stream_read(&icmtl_is, (u8*)tmp_name, sizeof(tmp_name))) > 0)
+                while((n = input_stream_read(&icmtl_is, (u8*)buffer, sizeof(buffer))) > 0)
                 {
-                    if(FAIL(n = output_stream_write(&wire_os, (u8*)tmp_name,n)))
+                    if(FAIL(n = output_stream_write(&wire_os, (u8*)buffer,n)))
                     {
                         break;
                     }
@@ -1899,7 +2025,7 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
         if(FAIL(return_code))
         {
             log_err("incremental: building wire: '%s' %s failed: %r",
-                    new_name,
+                    wire_name,
                     (append_ix)?"(append)":"",
                     return_code);
             
@@ -1927,7 +2053,7 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
             }
             else
             {
-                zdb_icmtl_unlink_file(new_name);
+                zdb_icmtl_unlink_file(wire_name);
             }
         }
     }

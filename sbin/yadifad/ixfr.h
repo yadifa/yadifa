@@ -60,7 +60,7 @@ ya_result ixfr_process(message_data *mesg);
  * @TODO: Set the IXFR storage path
  */
 
-ya_result ixfr_query(host_address *servers, zdb_zone *zone, u32* loaded_serial);
+ya_result ixfr_query(host_address *servers, zdb_zone *zone, u32* loaded_serial, u64* journal_offset);
 
 /**
  * Connects to the server and sends an IXFR query with the given parameters.

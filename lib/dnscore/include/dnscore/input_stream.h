@@ -77,12 +77,12 @@ extern "C" {
         input_stream_vtbl* vtbl;
     };
 
-    #define input_stream_class(is) ((is)->vtbl)
-    #define input_stream_class_name(is) ((is)->vtbl->__class__)
-    #define input_stream_read(is,buffer,len) (is)->vtbl->read(is,buffer,len)
-    #define input_stream_close(is) (is)->vtbl->close(is)
-    #define input_stream_skip(is,len) (is)->vtbl->skip(is,len)
-    #define input_stream_valid(is) ((is)->vtbl != NULL)
+    #define input_stream_class(is_) ((is_)->vtbl)
+    #define input_stream_class_name(is_) ((is_)->vtbl->__class__)
+    #define input_stream_read(is_,buffer_,len_) (is_)->vtbl->read(is_,buffer_,len_)
+    #define input_stream_close(is_) (is_)->vtbl->close(is_)
+    #define input_stream_skip(is_,len_) (is_)->vtbl->skip(is_,len_)
+    #define input_stream_valid(is_) ((is_)->vtbl != NULL)
 
     ya_result input_stream_read_fully(input_stream* stream, u8* buffer, u32 len);
     ya_result input_stream_skip_fully(input_stream* stream, u32 len_start);

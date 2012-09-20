@@ -30,6 +30,18 @@ dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
 dnl ############################################################################
+dnl
+dnl       SVN Program:
+dnl               $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/bin/yadifa/configure.ac $
+dnl
+dnl       Last Update:
+dnl               $Date: 2012-03-27 16:56:49 +0200 (Tue, 27 Mar 2012) $
+dnl               $Revision: 1868 $
+dnl
+dnl       Purpose:
+dnl              common generic m4 macros
+dnl
+dnl ############################################################################
 
 dnl Assume it is true
 
@@ -40,21 +52,42 @@ dnl handles Darwin libtoolize -> glibtoolize
 
 AC_DEFUN([AC_DARWIN_LIBTOOL], [
 
-if [[ "$(uname -s)" = "Darwin" ]]
-then
+case "$(uname -s)" in
+    Darwin)
         echo "OSX libtool workaroung"
 
         alias libtoolize="glibtoolize"
         alias libtool="glibtool"
 
+        is_darwin_os=1
+        is_bsd_family=1
+        ;;
+    FreeBSD)
+        is_darwin_os=0
+        is_bsd_family=1
+        ;;
+    *)
+        is_darwin_os=0
+        is_bsd_family=0
+        ;;
+esac
+
+if [[ $is_darwin_os -ne 0 ]]
+then
     AM_CONDITIONAL([IS_DARWIN_OS], [true])
 else
     AM_CONDITIONAL([IS_DARWIN_OS], [false])
 fi
 
+if [[ $is_bsd_family -ne 0 ]]
+then
+    AM_CONDITIONAL([IS_BSD_FAMILY], [true])
+else
+    AM_CONDITIONAL([IS_BSD_FAMILY], [false])
+fi
+
 ])
 
-LT_INIT([disable-shared])
 
 dnl Architecture
 

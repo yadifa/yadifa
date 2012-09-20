@@ -28,6 +28,18 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#       SVN Program:
+#               $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/Makefile.am $
+#
+#       Last Update:
+#               $Date: 2012-06-18 09:50:45 +0200 (Mon, 18 Jun 2012) $
+#               $Revision: 2044 $
+#
+#       Purpose:
+#               YADIFA main Makefile.am script
+#
+################################################################################
 
 srcdir =        @srcdir@
 top_srcdir =    @top_srcdir@

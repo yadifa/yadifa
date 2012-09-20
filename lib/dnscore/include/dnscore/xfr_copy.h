@@ -87,14 +87,48 @@ ya_result xfr_copy_get_data_path(const char *base_data_path, const u8 *origin, c
 
 ya_result xfr_copy_make_data_path(const char *base_data_path, const u8 *origin, char *data_path, u32 data_path_size);
 
-ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const char* data_path, u32 current_serial, u32 *loaded_serial, message_data *message);
-
 ya_result xfr_delete_axfr(const u8 *origin, const char* folder);
+
 ya_result xfr_delete_ix(const u8 *origin, const char* folder);
 
 ya_result xfr_opendir(const char* filepath);
 
 ya_result xfr_unlink(const char* filepath);
+
+/**
+ * 
+ * Downloads an AXFR/IXFR stream and builds (or updates) a journal on disk
+ * 
+ * @param is the input stream with the AXFR or IXFR, wire format
+ * @param flags mostly XFR_ALLOW_AXFR or XFR_ALLOW_IXFR
+ * @param origin the domain of the zone
+ * @param base_data_path the folder where to put the journal (or journal hash directories and journal)
+ * @param current_serial the serial currently available
+ * @param loaded_serial a pointer to get the serial available after loading
+ * @param message the message that led to this download
+ * 
+ * @return an error code, TYPE_AXFR, TYPE_IXFR, TYPE_NONE
+ */
+
+typedef struct xfr_copy_args xfr_copy_args;
+
+struct xfr_copy_args
+{
+    input_stream            *is;
+    u8                      *origin;
+    const char              *base_data_path;
+    message_data            *message;
+    
+    u32                     current_serial;
+    u32                     out_loaded_serial;
+    
+    u64                     out_journal_file_append_offset;    
+    u64                     out_journal_file_append_size;    
+    xfr_copy_flags          flags;    
+};
+
+ya_result xfr_copy(xfr_copy_args* args);
+
 
 #ifdef	__cplusplus
 }

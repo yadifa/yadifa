@@ -110,9 +110,12 @@ static inline void dnsname_set_init(dnsname_set* set)
     set->head = NULL;
 }
 
-static inline void dnsname_set_insert(dnsname_set* set, const u8 *name)
+static inline bool dnsname_set_insert(dnsname_set* set, const u8 *name)
 {
-    zassert(set->next_free < &set->pool[DNSNAME_SET_MEMORY_POOL_SIZE]);
+    if(set->next_free >= &set->pool[DNSNAME_SET_MEMORY_POOL_SIZE])
+    {
+        return false;
+    }
     
     dnsname_node** nodep;
     dnsname_node* node;
@@ -126,7 +129,7 @@ static inline void dnsname_set_insert(dnsname_set* set, const u8 *name)
         
         if(cmp == 0)
         {
-            return;
+            return true;
         }
 
         nodep = &node->children.child[(cmp > 0) & 1];
@@ -139,6 +142,8 @@ static inline void dnsname_set_insert(dnsname_set* set, const u8 *name)
     node->children.lr.left = NULL;
     node->children.lr.right = NULL;
     node->key = (u8*)name;
+    
+    return true;
 }
 
 static inline void dnsname_set_iterator_init(dnsname_set* set, dnsname_set_iterator* iter)

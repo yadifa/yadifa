@@ -386,8 +386,30 @@ xfr_copy_make_data_path(const char *base_data_path, const u8 *origin, char *data
     return return_value;
 }
 
-ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const char* base_data_path, u32 current_serial, u32 *loaded_serial, message_data *message)
+/**
+ * 
+ * Downloads an AXFR/IXFR stream and builds (or updates) a journal on disk
+ * 
+ * @param is the input stream with the AXFR or IXFR, wire format
+ * @param flags mostly XFR_ALLOW_AXFR or XFR_ALLOW_IXFR
+ * @param origin the domain of the zone
+ * @param base_data_path the folder where to put the journal (or journal hash directories and journal)
+ * @param current_serial the serial currently available
+ * @param loaded_serial a pointer to get the serial available after loading
+ * @param message the message that led to this download
+ * 
+ * @return an error code, TYPE_AXFR, TYPE_IXFR, TYPE_NONE
+ */
+
+ya_result
+xfr_copy(xfr_copy_args* args)
 {
+    // input_stream *is, xfr_copy_flags flags, u8 *origin, const char* base_data_path, u32 current_serial, u32 *loaded_serial, message_data *message
+    
+    input_stream *is = args->is;
+    u8 *origin = args->origin;
+    message_data *message = args->message;
+    
     output_stream xfrs;
     packet_unpack_reader_data reader;
     u8 *buffer;
@@ -416,7 +438,11 @@ ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const cha
     char data_path[1024];
     char file_path[1024];
     
-    if(FAIL(return_value = xfr_copy_get_data_path(base_data_path, origin, data_path, sizeof(data_path))))
+    args->out_loaded_serial = 0;
+    args->out_journal_file_append_offset = 0;
+    args->out_journal_file_append_size = 0;
+    
+    if(FAIL(return_value = xfr_copy_get_data_path(args->base_data_path, origin, data_path, sizeof(data_path))))
     {
         return return_value;
     }
@@ -425,11 +451,20 @@ ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const cha
      * Start by reading the first packet, and determine if it's an AXFR or an IXFR (for the name)
      * note: it's read and converted to the host endianness
      */
+    
+    /* TCP length */
 
     if(FAIL(return_value = input_stream_read_nu16(is, &tcplen)))
     {
         return return_value;
     }
+    
+    if(return_value != 2)
+    {
+        return UNEXPECTED_EOF;
+    }
+    
+    /* if the length is not enough, return the most appropriate error code */
 
     origin_len = dnsname_len(origin);
 
@@ -439,8 +474,6 @@ ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const cha
         
         if(tcplen >= DNS_HEADER_LENGTH)
         {
-            // readfully_limited(int fd, void *buf, size_t count, double minimum_rate);
-
             if(ISOK(return_value = input_stream_read_fully(is, (u8*)file_path, DNS_HEADER_LENGTH)))
             {
                 return_value = MAKE_DNSMSG_ERROR(MESSAGE_RCODE(file_path));
@@ -450,19 +483,21 @@ ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const cha
         /* TODO: retry ? */
         return return_value;
     }
+    
+    /* read the whole message */
 
     buffer = &message->buffer[0];
 
-    /*MALLOC_OR_DIE(u8*, buffer, DNSPACKET_MAX_LENGTH + 1 + RDATA_MAX_LENGTH + 1, GENERIC_TAG);*/
     record = &buffer[DNSPACKET_MAX_LENGTH + 1];
 
     if(FAIL(return_value = input_stream_read_fully(is, buffer, tcplen)))
     {
         return return_value;
     }
-
+    
     message->received = return_value;
-    message_header *header = (message_header*)buffer;
+    
+    /* check the message makes sense */
 
     u64 *h64 = (u64*)buffer;
     u64 m64 = AXFR_MESSAGE_HEADER_MASK;
@@ -501,12 +536,22 @@ ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const cha
     {
         return return_value;
     }
+    
+    if(return_value != 2)
+    {
+        return UNEXPECTED_EOF;
+    }
 
+    /* 
+     * check that we are allowed to process this particular kind of transfer
+     * note : this does not determine what is REALLY begin transferred
+     */
+    
     switch(qtype)
     {
         case TYPE_AXFR:
         {
-            if((flags & XFR_ALLOW_AXFR) == 0)
+            if((args->flags & XFR_ALLOW_AXFR) == 0)
             {
                 return INVALID_PROTOCOL;
             }
@@ -514,7 +559,7 @@ ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const cha
         }
         case TYPE_IXFR:
         {
-            if((flags & XFR_ALLOW_IXFR) == 0)
+            if((args->flags & XFR_ALLOW_IXFR) == 0)
             {
                 return INVALID_PROTOCOL;
             }
@@ -536,6 +581,8 @@ ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const cha
         /** wrong answer */
         return INVALID_PROTOCOL;
     }
+    
+    /* check for TSIG and verify */
 
     ancount = ntohs(MESSAGE_AN(buffer));
     
@@ -613,14 +660,51 @@ ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const cha
         return INVALID_PROTOCOL;
     }
 
-    ptr += 2 + 2 + 4 + 2;
-    ptr += dnsname_len(ptr);
-    ptr += dnsname_len(ptr);
+    ptr += 8; /* type class ttl */
+    
+    u16 rdata_size = ntohs(GET_U16_AT(*ptr));    
+    if(rdata_size < 22)
+    {
+        return INVALID_PROTOCOL;
+    }
+    else
+    {
+        rdata_size -= 16;
+
+        ptr += 2; /* rdata size */
+
+        s32 len = dnsname_len(ptr);
+        
+        if(len >= rdata_size)
+        {
+            return INVALID_PROTOCOL;
+        }
+        rdata_size -= len;
+        ptr += len;
+
+        len = dnsname_len(ptr);
+        if(len >= rdata_size)
+        {
+            return INVALID_PROTOCOL;
+        }
+        rdata_size -= len;
+        
+        if(rdata_size != 4)
+        {
+            return INVALID_PROTOCOL;
+        }
+        
+        ptr += len;
+    }
 
     last_serial = ntohl(GET_U32_AT(*ptr));
 
-    if(last_serial == current_serial)
+    if(last_serial == args->current_serial)
     {
+        args->out_loaded_serial = args->current_serial;
+        args->out_journal_file_append_offset = 0;
+        args->out_journal_file_append_size = 0;
+                
         return SUCCESS;
     }
 
@@ -628,7 +712,6 @@ ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const cha
      * We have got the first SOA
      * Next time we find this SOA (second next time for IXFR) the stream, it will be the end of the stream
      */
-
 
     /*
      * The stream can be AXFR or IXFR.
@@ -639,7 +722,7 @@ ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const cha
 
     ixfr_mark = FALSE;
     
-    if(FAIL(return_value = xfr_copy_create_file(&xfrs, file_path, sizeof(file_path), xfr_mode, data_path, origin, current_serial, last_serial)))
+    if(FAIL(return_value = xfr_copy_create_file(&xfrs, file_path, sizeof(file_path), xfr_mode, data_path, origin, args->current_serial, last_serial)))
     {
         return return_value;
     }
@@ -730,7 +813,7 @@ ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const cha
                         xfr_mode = TYPE_AXFR;
                     }
 
-                    xfr_copy_rename_file(file_path, sizeof(file_path), xfr_mode, data_path, origin, current_serial, last_serial, TRUE);
+                    xfr_copy_rename_file(file_path, sizeof(file_path), xfr_mode, data_path, origin, args->current_serial, last_serial, TRUE);
 
                     /*
                      * Now we can use buffering.
@@ -894,6 +977,8 @@ ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const cha
             }
         }
 
+        message_header *header = (message_header*)buffer;
+        
         ancount = ntohs(header->ancount);
 
         packet_reader_init(buffer, message->received, &reader);
@@ -944,6 +1029,8 @@ ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const cha
     }
     else
     {
+        args->out_loaded_serial = last_serial;
+        
         if(xfr_mode == TYPE_IXFR)
         {
             /** @TODO : merge IXFR files */
@@ -957,17 +1044,21 @@ ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const cha
              *       if it exists: append the current file to it.
              *       if not: rename the file
              */
-#if 1
+
             output_stream os;
-            if(ISOK(xfr_copy_open_previous(origin, data_path, current_serial, last_serial, &os)))
+            if(ISOK(xfr_copy_open_previous(origin, data_path, args->current_serial, last_serial, &os)))
             {
                 ya_result return_value;
                 char tmp[1024];
-
                 
                 /**
                  * open for reading & stream
                  */
+                
+                args->out_journal_file_append_offset = fd_input_stream_get_size(&os);
+                args->out_journal_file_append_size = 0;
+                
+                /* os is a file stream */
 
                 input_stream is;
 
@@ -975,6 +1066,8 @@ ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const cha
                 {
                     while((return_value = input_stream_read(&is, (u8*)tmp, sizeof(tmp))) > 0)
                     {
+                        args->out_journal_file_append_size += return_value;
+                        
                         output_stream_write(&os, (u8*)tmp, return_value);
                     }
 
@@ -986,25 +1079,19 @@ ya_result xfr_copy(input_stream *is, xfr_copy_flags flags, u8 *origin, const cha
                 output_stream_close(&os);
             }
             else
-#endif
             {
-                xfr_copy_rename_file(file_path, sizeof(file_path), xfr_mode, data_path, origin, current_serial, last_serial, FALSE);
-
-                if(loaded_serial != NULL)
-                {
-                    *loaded_serial = last_serial;
-                }
+                args->out_journal_file_append_offset = 0;
+                args->out_journal_file_append_size = filesize(file_path);
+            
+                xfr_copy_rename_file(file_path, sizeof(file_path), xfr_mode, data_path, origin, args->current_serial, last_serial, FALSE);
             }
         }
         else /* AXFR */
         {
-
-            xfr_copy_rename_file(file_path, sizeof(file_path), xfr_mode, data_path, origin, current_serial, last_serial, FALSE);
-
-            if(loaded_serial != NULL)
-            {
-                *loaded_serial = last_serial;
-            }
+            args->out_journal_file_append_offset = 0;
+            args->out_journal_file_append_size = filesize(file_path);
+            
+            xfr_copy_rename_file(file_path, sizeof(file_path), xfr_mode, data_path, origin, args->current_serial, last_serial, FALSE);
         }
 
         return_value = (u32)xfr_mode;

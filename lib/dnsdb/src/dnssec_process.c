@@ -293,26 +293,28 @@ dnssec_process_task(zdb_zone* zone, dnssec_task* task, dnssec_process_task_callb
 
     u32 valid_from = time(NULL);
 
-    int i;
-    for(i = 0; i < processor_threads_count; i++)
+    int processor;
+    
+    for(processor = 0; processor < processor_threads_count; processor++)
     {
-        if(FAIL(ret = rrsig_initialize_context(zone, &context[i].sig_context, DEFAULT_ENGINE_NAME, valid_from))) /* zone */
+        if(FAIL(ret = rrsig_initialize_context(zone, &context[processor].sig_context, DEFAULT_ENGINE_NAME, valid_from))) /* zone */
         {
-            log_quit("dnssec_process_zone: rrsig_initialize_context : %r", ret);
+            log_err("dnssec_process_zone: rrsig_initialize_context : %r", ret);
+            break;
         }
 
-        context[i].id = i;
-        context[i].job_count = 0;
-        context[i].query_queue = &dnssec_task_query_queue;
-        context[i].answer_queue = &dnssec_answer_query_queue;
+        context[processor].id = processor;
+        context[processor].job_count = 0;
+        context[processor].query_queue = &dnssec_task_query_queue;
+        context[processor].answer_queue = &dnssec_answer_query_queue;
 
 #if ZDB_USE_THREADPOOL!=0
-        if(FAIL(ret = thread_pool_schedule_job(task->query_thread, &context[i], NULL, task->descriptor_name)))
+        if(FAIL(ret = thread_pool_schedule_job(task->query_thread, &context[processor], NULL, task->descriptor_name)))
         {
             log_quit("dnssec_process_zone: thread_pool_schedule_job: %r", ret);
         }
 #else
-        if((ret = pthread_create(&dnssec_task_threads[i], NULL, task->query_thread, &context[i])) != 0)
+        if((ret = pthread_create(&dnssec_task_threads[processor], NULL, task->query_thread, &context[processor])) != 0)
         {
             OSDEBUG(termout, "dnssec_process_zone: pthread_create : Oops: (%i) %s\n", ret, strerror(ret));
             DIE(DNSSEC_ERROR_CANTCREATETHREAD);
@@ -331,7 +333,10 @@ dnssec_process_task(zdb_zone* zone, dnssec_task* task, dnssec_process_task_callb
      * @TODO handle possible error code
      */
 
-    callback(zone, task, whatyouwant);
+    if(ISOK(ret))
+    {
+        callback(zone, task, whatyouwant);
+    }
 
     /*
      * End of the core of the function
@@ -352,7 +357,7 @@ dnssec_process_task(zdb_zone* zone, dnssec_task* task, dnssec_process_task_callb
     log_debug("dnssec_process_zone: posting %d NULL queries", processor_threads_count);
 #endif
 
-    for(i = 0; i < processor_threads_count; i++)
+    for(int i = 0; i < processor; i++)
     {
         threaded_queue_enqueue(&dnssec_task_query_queue, NULL);
     }
@@ -405,7 +410,7 @@ dnssec_process_task(zdb_zone* zone, dnssec_task* task, dnssec_process_task_callb
     u32 expired_signatures = 0;
     u32 wrong_signatures = 0;
 
-    for(i = 0; i < processor_threads_count; i++)
+    for(int i = 0; i < processor; i++)
     {
         good_signatures += context[i].sig_context.good_signatures;
         expired_signatures += context[i].sig_context.expired_signatures;
@@ -456,7 +461,7 @@ dnssec_process_task(zdb_zone* zone, dnssec_task* task, dnssec_process_task_callb
      *
      */
 
-    ret = SUCCESS;
+    //ret = SUCCESS;
 
 #if DNSSEC_DEBUGLEVEL>1
     log_debug("dnssec_process_zone: end");

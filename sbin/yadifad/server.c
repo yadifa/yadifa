@@ -105,6 +105,8 @@ tcp_send_message_data(message_data* mesg)
 
     //zassert(((mesg->status < 15) && ((MESSAGE_LOFLAGS(mesg->buffer) & RCODE_BITS) == mesg->status)) || (mesg->status >= 15) );
 
+    log_debug("tcp: answering %d bytes @%p to socket %d", mesg->send_length + 2, mesg->buffer_tcp_len, mesg->sockfd);
+    
     /**
      * SAME AS READ : THERE HAS TO BE A RATE !
      */
@@ -139,6 +141,7 @@ server_process_tcp_task(database_t *database, message_data *mesg, u16 svr_sockfd
 
 #ifndef NDEBUG
     log_info("tcp: processing socket %i (%{sockaddr})", mesg->sockfd, &mesg->other.sa);
+    int loop_count = 0;
 #endif
     
     tcp_set_recvtimeout(mesg->sockfd, 1, 0);
@@ -146,6 +149,10 @@ server_process_tcp_task(database_t *database, message_data *mesg, u16 svr_sockfd
     /** @note do a full read, not one that can be interrupted or deliver only a part of what we need (readfully) */
     while((received = readfully_limited(mesg->sockfd, &dns_query_len, 2, g_config->tcp_query_min_rate_us)) == 2)
     {
+#ifndef NDEBUG
+        log_debug("tcp: loop count = %d", ++loop_count);
+#endif
+        
         u16 native_dns_query_len = ntohs(dns_query_len);
 
         if(native_dns_query_len == 0)
@@ -237,10 +244,15 @@ server_process_tcp_task(database_t *database, message_data *mesg, u16 svr_sockfd
                             TCPSTATS(tcp_queries_count++);
 
 							/*
-							 * This has to be a lockable query
+							 * This query must go through the task channel.
 							 */
                             
+#if 0
+                            database_delegate_query(database, mesg); /* waits for answer */
+#else                       
                             database_query(database, mesg);
+#endif
+                            
 #if 0
                             if(mesg->is_delegation)
                             {
@@ -250,12 +262,13 @@ server_process_tcp_task(database_t *database, message_data *mesg, u16 svr_sockfd
                                 TCPSTATS(tcp_referrals_count++);
                             }
 #endif
-                            
 #ifndef NDEBUG
                             log_debug("server_process_tcp write");
 #endif
 
                             tcp_send_message_data(mesg);
+                            
+                            TCPSTATS(tcp_referrals_count += mesg->referral);
                             TCPSTATS(tcp_fp[mesg->status]++);
                             TCPSTATS(tcp_output_size_total += mesg->send_length);
 
@@ -291,7 +304,7 @@ server_process_tcp_task(database_t *database, message_data *mesg, u16 svr_sockfd
                                     &mesg->qtype,
                                     &mesg->other.sa);
 
-                            if(ISOK(database_schedule_update(database, mesg)))
+                            if(ISOK(database_delegate_update(database, mesg)))
                             {
                                 tcp_send_message_data(mesg);
                                 TCPSTATS(tcp_fp[mesg->status]++);
@@ -394,10 +407,12 @@ server_process_tcp_task(database_t *database, message_data *mesg, u16 svr_sockfd
     }
 
 #ifndef NDEBUG
-	log_info("tcp: closing socket %i", mesg->sockfd);
+	log_info("tcp: closing socket %i, loop count = %d", mesg->sockfd, loop_count);
 #endif
 
     close_ex(mesg->sockfd);
+    
+    mesg->sockfd = -1;
 
     return return_code;
 }

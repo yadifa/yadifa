@@ -62,6 +62,8 @@ ya_result fd_output_stream_attach(int fd, output_stream* stream);
 
 ya_result fd_output_stream_get_filedescriptor(output_stream* stream);
 
+s64 fd_input_stream_get_size(output_stream* stream);
+
 bool is_fd_output_stream(output_stream* stream);
 
 #ifdef	__cplusplus

@@ -40,6 +40,15 @@
  * @{
  *
  *----------------------------------------------------------------------------*/
+
+#if _FILE_OFFSET_BITS != 64
+#define _LARGEFILE64_SOURCE
+#pragma message("64")
+#else
+#pragma message("BSD")
+#endif
+
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -178,6 +187,34 @@ ya_result fd_input_stream_get_filedescriptor(input_stream* stream_)
     file_input_stream* stream = (file_input_stream*)stream_;
 
     return stream->data.fd ;
+}
+
+ya_result fd_input_stream_seek(input_stream* stream_, u64 offset)
+{
+    if(is_fd_input_stream(stream_))
+    {
+        file_input_stream* stream = (file_input_stream*)stream_;
+
+        int ret;
+#if _FILE_OFFSET_BITS == 64
+        ret = lseek(stream->data.fd, offset, SEEK_SET);
+#else
+        ret = lseek64(stream->data.fd, offset, SEEK_SET);
+#endif
+
+        if(ret >= 0)
+        {
+            return SUCCESS;
+        }
+        else
+        {
+            return ERRNO_ERROR;
+        }
+    }
+    else
+    {
+        return INCORRECT_RDATA;
+    }
 }
 
 bool

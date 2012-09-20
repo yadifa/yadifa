@@ -52,11 +52,13 @@ extern "C" {
     ya_result file_input_stream_open(const char *filename, input_stream *stream);
     
     ya_result file_input_stream_open_ex(const char *filename, int flags, input_stream *stream);
-
+    
     /* Create an input stream and assigns the fd to it. */
     ya_result fd_input_stream_attach(int fd, input_stream *stream);
 
     ya_result fd_input_stream_get_filedescriptor(input_stream* stream);
+    
+    ya_result fd_input_stream_seek(input_stream* stream, u64 offset);
 
     bool is_fd_input_stream(input_stream* stream);
 

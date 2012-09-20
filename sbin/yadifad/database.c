@@ -263,6 +263,7 @@ database_load(database_t **database, zone_data_set *dset)
     return SUCCESS;
 }
 
+/****************************************************************************/
 
 /** \brief Get dns answer from database
  *
@@ -296,7 +297,7 @@ database_query(database_t *database, message_data *mesg)
 
     mesg->status = query_fp;    
     mesg->send_length = zdb_query_message_update(mesg, &ans_auth_add);
-    /* mesg->is_delegation = ans_auth_add.is_delegation; later */
+    mesg->referral = ans_auth_add.delegation;
 
     zdb_query_ex_answer_destroy(&ans_auth_add);
 
@@ -308,16 +309,58 @@ database_query(database_t *database, message_data *mesg)
 #endif
 }
 
-static inline ya_result
-database_dynupdate_readsection(packet_unpack_reader_data *reader, u16 count, u8* buffer_base, s32 buffer_size, s32 *buffer_offsetp)
+/****************************************************************************/
+
+/**
+ * A task is a function called in the main thread loop
+ * A delegate is a task we are waiting for
+ */
+
+struct database_delegate_query_task_args
 {
-    u8* buffer = buffer_base;
+    database_t *database;
+    message_data *mesg;
+    threaded_ringbuffer* sync;
+};
+
+static ya_result
+database_delegate_query_task(void* parms_)
+{
+    struct database_delegate_query_task_args *parms = (struct database_delegate_query_task_args*)parms_;
+    database_query(parms->database, parms->mesg);
+    threaded_ringbuffer_enqueue(parms->sync, NULL);
+    return SCHEDULER_TASK_FINISHED;
+}
+
+void
+database_delegate_query(database_t *database, message_data *mesg)
+{
+    struct database_delegate_query_task_args parms;
+    threaded_ringbuffer sync;
+    parms.database = database;
+    parms.mesg = mesg;
+    parms.sync = &sync;
+    
+    threaded_ringbuffer_init(&sync, 1);
+    scheduler_schedule_task(database_delegate_query_task, &parms);
+    threaded_ringbuffer_dequeue(&sync);
+    log_debug("database: query delegated");
+    threaded_ringbuffer_finalize(&sync);
+}
+
+/****************************************************************************/
+
+static inline ya_result
+database_dynupdate_readsection(packet_unpack_reader_data *reader, u16 count)
+{
     ya_result return_code = SUCCESS;
     u16 i;
+    s32 total = 0;
+    u8 wire[MAX_DOMAIN_LENGTH + 10 + 65536];
 
     for(i = 0; i < count; i++)
     {
-        if(FAIL(return_code = packet_reader_read_record(reader, buffer, buffer_size)))
+        if(FAIL(return_code = packet_reader_read_record(reader, wire, sizeof(wire))))
         {
             if(return_code == UNSUPPORTED_TYPE)
             {
@@ -328,14 +371,11 @@ database_dynupdate_readsection(packet_unpack_reader_data *reader, u16 count, u8*
 
             return return_code;
         }
-
-        buffer += return_code;
-        buffer_size -= return_code;
+        
+        total += return_code;
     }
 
-    *buffer_offsetp = buffer - buffer_base;
-
-    return return_code;
+    return total;
 }
 
 /** @todo  icmtl, checks, fp, soa, ...
@@ -350,14 +390,13 @@ database_update(database_t *database, message_data *mesg)
 {
     ya_result return_code;
 
-    u8 buffer[65536];
     u16 count;
     /*    u16    qdcount; */
     packet_unpack_reader_data reader;
     dnsname_vector name;
     zdb_zone *zone;
-
-    s32 buffer_size;
+    
+    u8 wire[MAX_DOMAIN_LENGTH + 10 + 65535];
 
     return_code = FP_NOZONE_FOUND;
 
@@ -385,8 +424,16 @@ database_update(database_t *database, message_data *mesg)
 
                 zone = zdb_zone_find((zdb *)database, &name, mesg->qclass);
 
-                if(zone != NULL)
+                if(zone != NULL && !ZDB_ZONE_INVALID(zone))
                 {
+                    /*
+                     * If the zone is marked as:
+                     * _ frozen
+                     * _ updating
+                     * _ signing
+                     * _ dumping
+                     * => don't do it
+                     */
                     if((zone->apex->flags & ZDB_RR_APEX_LABEL_FROZEN) == 0)
                     {
 #if HAS_ACL_SUPPORT == 1
@@ -411,6 +458,8 @@ database_update(database_t *database, message_data *mesg)
                             /*
                              * Fetch all private keys
                              */
+                            
+                            log_debug("database: update: checking DNSKEY availability");
                             
                             const zdb_packed_ttlrdata *dnskey = zdb_zone_get_dnskey_rrset(zone);
                                                         
@@ -438,11 +487,19 @@ database_update(database_t *database, message_data *mesg)
                                 }
                                 while(dnskey != NULL);
                             }
+                            else
+                            {
+                                log_err("database: update: there are no private keys in the zone %{dnsname}", zone->origin);
+                                
+                                return_code = DNSSEC_ERROR_RRSIG_NOZONEKEYS;
+                            }
                         }
 
                         if(ISOK(return_code))   // 
-                        {                        
-                            if(ISOK(return_code = packet_reader_read_zone_record(&reader, buffer, sizeof (buffer))))
+                        {
+                            /* The reader is positioned after the header : read the QR section */
+                            
+                            if(ISOK(return_code = packet_reader_read_zone_record(&reader, wire, sizeof(wire))))
                             {
                                 /*
                                 * The zone is known with the previous record.
@@ -450,103 +507,125 @@ database_update(database_t *database, message_data *mesg)
                                 */
 
                                 count = ntohs(MESSAGE_PR(mesg->buffer));
+                                
+                                /* The reader is positioned after the QR section, read AN section */
 
-                                if(ISOK(return_code = database_dynupdate_readsection(&reader, count, buffer, sizeof (buffer), &buffer_size)))
+                                zdb_zone_lock(zone, ZDB_ZONE_MUTEX_DYNUPDATE);
+                                
+                                log_debug("database: update: processing %d prerequisites", count);
+
+                                if(ISOK(return_code = dynupdate_check_prerequisites(zone, &reader, count)))
                                 {
-                                    zdb_zone_lock(zone, ZDB_ZONE_MUTEX_DYNUPDATE);
+                                    count = ntohs(MESSAGE_UP(mesg->buffer));
 
-                                    if(ISOK(return_code = dynupdate_check_prerequisites(zone, buffer, buffer_size, count)))
+                                    u32 reader_up_offset = reader.offset;
+                                    /*
+                                     * Dry run the update for the section
+                                     * (so the DB will not be broken if the query is bogus)
+                                     */
+                                    
+                                    log_debug("database: update: dryrun of %d updates", count);
+                                    
+                                    if(ISOK(return_code = dynupdate_update(zone, &reader, count, DYNUPDATE_UPDATE_DRYRUN)))
                                     {
-                                        count = ntohs(MESSAGE_UP(mesg->buffer));
+                                        /*
+                                         * Really run the update for the section
+                                         */
 
-                                        if(ISOK(return_code = database_dynupdate_readsection(&reader, count, buffer, sizeof (buffer), &buffer_size)))
+                                        reader.offset = reader_up_offset;
+
+                                        /**
+                                         * @todo At this point it should not fail anymore.
+                                         */
+
+                                        log_debug("database: update: opening journal page");
+                                        
+                                        zdb_icmtl icmtl;
+                                        
+                                        if(ISOK(return_code = zdb_icmtl_begin(zone, &icmtl, g_config->xfr_path)))
                                         {
-                                            /*
-                                            * Dry run the update for the section
-                                            * (so the DB will not be broken if the query is bogus)
-                                            */
-                                            if(ISOK(return_code = dynupdate_update(zone, buffer, buffer_size, count, 0, DYNUPDATE_UPDATE_DRYRUN)))
+                                            log_debug("database: update: run of %d updates", count);
+                                            
+                                            ya_result len = dynupdate_update(zone, &reader, count, DYNUPDATE_UPDATE_RUN);
+
+                                            if(ISOK(len))
                                             {
-                                                /*
-                                                * Really run the update for the section
-                                                */
+                                                mesg->send_length = mesg->received;
 
-                                                /**
-                                                * @todo At this point it should not fail anymore.
-                                                */
-
-                                                zdb_icmtl icmtl;
-                                                if(ISOK(return_code = zdb_icmtl_begin(zone, &icmtl, g_config->xfr_path)))
-                                                {
-                                                    ya_result len = dynupdate_update(zone, buffer, buffer_size, count, 0, DYNUPDATE_UPDATE_RUN);
-
-                                                    if(ISOK(len))
-                                                    {
-                                                        mesg->send_length = mesg->received;
-
-                                                        /* @TODO I have to be able to cancel the icmtl if it failed */
-                                                    }
-                                                    else
-                                                    {
-                                                        log_err("database: update: update of zone '%{dnsname}' failed even if the dryrun succeeded: %r", zone->origin, len);
-                                                    }
-
-                                                    zdb_icmtl_end(&icmtl, g_config->xfr_path);
-                                                    
-                                                    /**
-                                                     * 
-                                                     * @todo postponed after 1.0.0
-                                                     * 
-                                                     * The journal file may exceed limits ...
-                                                     * 
-                                                     * In that case the server will want to:
-                                                     * 
-                                                     * _ disable dynamic updates
-                                                     * _ update the zone file on disk to the current version
-                                                     * _ cut the journal up to the last few serials
-                                                     * _ enable dynamic updates
-                                                     * 
-                                                     * How to define limits:
-                                                     * 
-                                                     * _ size on disk (easy)
-                                                     * _ number of records (hard to keep track in the current journal format so : no)
-                                                     * _ relative size on disk (proportional to the size of zone axfr/text) (easy too)
-                                                     * _ serial range of the incremental file is too big; too big being at most 2^30 but
-                                                     *   practically 2^17 increments of serial is very expensive already.
-                                                     * 
-                                                     * These limits must be made available to the server so it can take measures to
-                                                     * fix them.
-                                                     * 
-                                                     */
-
-                                                    mesg->status = FP_MESG_OK; /* @TODO handle error codes too */
-
-                                                    notify_slaves(zone->origin);
-                                                }
+                                                /* @TODO I have to be able to cancel the icmtl if it failed */
                                             }
                                             else
                                             {
-                                                /*
-                                                 * ZONE CANNOT BE UPDATED (internal error or rejected)
-                                                 */
-
-                                                mesg->status = (finger_print)return_code;
-                                                mesg->send_length = mesg->received;
+                                                log_err("database: update: update of zone '%{dnsname}' failed even if the dryrun succeeded: %r", zone->origin, len);
                                             }
+
+                                            zdb_icmtl_end(&icmtl, g_config->xfr_path);
+                                            
+                                            log_debug("database: update: closed journal page");
+
+                                            /**
+                                                * 
+                                                * @todo postponed after 1.0.0
+                                                * 
+                                                * The journal file may exceed limits ...
+                                                * 
+                                                * In that case the server will want to:
+                                                * 
+                                                * _ disable dynamic updates
+                                                * _ update the zone file on disk to the current version
+                                                * _ cut the journal up to the last few serials
+                                                * _ enable dynamic updates
+                                                * 
+                                                * How to define limits:
+                                                * 
+                                                * _ size on disk (easy)
+                                                * _ number of records (hard to keep track in the current journal format so : no)
+                                                * _ relative size on disk (proportional to the size of zone axfr/text) (easy too)
+                                                * _ serial range of the incremental file is too big; too big being at most 2^30 but
+                                                *   practically 2^17 increments of serial is very expensive already.
+                                                * 
+                                                * These limits must be made available to the server so it can take measures to
+                                                * fix them.
+                                                * 
+                                                */
+
+                                            mesg->status = FP_MESG_OK; /* @TODO handle error codes too */
+
+                                            notify_slaves(zone->origin);
+                                        }
+                                        else
+                                        {
+                                            mesg->status = (finger_print)RCODE_SERVFAIL;
+                                            mesg->send_length = mesg->received;
                                         }
                                     }
                                     else
                                     {
                                         /*
-                                         * ZONE CANNOT BE UPDATED (prerequisites not met)
+                                         * ZONE CANNOT BE UPDATED (internal error or rejected)
                                          */
 
-                                        mesg->status = (finger_print)return_code;
+                                        mesg->status = (finger_print)RCODE_SERVFAIL;
                                         mesg->send_length = mesg->received;
                                     }
 
-                                    zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_DYNUPDATE);
                                 }
+                                else
+                                {
+                                    /*
+                                     * ZONE CANNOT BE UPDATED (prerequisites not met)
+                                     */
+
+                                    mesg->status = (finger_print)RCODE_SERVFAIL;
+                                    mesg->send_length = mesg->received;
+                                }
+
+                                zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_DYNUPDATE);
+                            }
+                            else
+                            {
+                                mesg->status = (finger_print)RCODE_FORMERR;
+                                mesg->send_length = mesg->received;
                             }
                         }
                         else
@@ -581,7 +660,14 @@ database_update(database_t *database, message_data *mesg)
                      *
                      */
 
-                    mesg->status = FP_UPDATE_UNKNOWN_ZONE;
+                    if(zone == NULL)
+                    {
+                        mesg->status = FP_UPDATE_UNKNOWN_ZONE;
+                    }
+                    else
+                    {
+                        mesg->status = FP_INVALID_ZONE;
+                    }
                 }
                 
                 break;
@@ -592,6 +678,8 @@ database_update(database_t *database, message_data *mesg)
             case ZT_SLAVE:
             {
                 /*
+                 * UPDATE FORWARDING
+                 * 
                  * TCP -> TCP
                  * UDP -> TCP or UDP
                  * 
@@ -660,6 +748,8 @@ database_update(database_t *database, message_data *mesg)
 #if HAS_TSIG_SUPPORT
     if(TSIG_ENABLED(mesg))
     {
+        log_debug("database: update: signing reply");
+        
         tsig_sign_answer(mesg);
     }
 #endif
@@ -667,77 +757,50 @@ database_update(database_t *database, message_data *mesg)
     return (finger_print)return_code;
 }
 
-struct database_schedule_update_param
+struct database_delegate_update_args
 {
     database_t *database;
     message_data *mesg;
     threaded_ringbuffer *sync;
-    finger_print fp;
+    finger_print return_value;
 };
 
 typedef struct database_schedule_update_param database_schedule_update_param;
 
 static ya_result
-database_schedule_update_task(void* parms_)
+database_delegate_update_task(void* parms_)
 {
-    database_schedule_update_param *parms = (database_schedule_update_param*)parms_;
-
-    log_info("database: update task %{dnsname}", parms->mesg->qname);
-
-    finger_print fp = database_update(parms->database, parms->mesg);
-
-    log_info("database: update task done %{dnsname}", parms->mesg->qname);
-
+    struct database_delegate_update_args *parms = (struct database_delegate_update_args*)parms_;
+    parms->return_value = database_update(parms->database, parms->mesg);
     threaded_ringbuffer_enqueue(parms->sync, NULL);
-
-    parms->fp = fp;
-
+   
     return SCHEDULER_TASK_FINISHED; /* Mark the end of the writer job */
 }
 
 finger_print
-database_schedule_update(database_t *database, message_data *mesg)
+database_delegate_update(database_t *database, message_data *mesg)
 {
-    log_info("database: update schedule %{dnsname}", mesg->qname);
-
-    database_schedule_update_param* dsup;
-    threaded_ringbuffer sync;
-
-    MALLOC_OR_DIE(database_schedule_update_param*, dsup, sizeof (database_schedule_update_param), DBSCHEDP_TAG);
-
-    dsup->database = database;
-    dsup->mesg = mesg;
-    dsup->sync = &sync;
-
-    threaded_ringbuffer_init(&sync, 1);
-    scheduler_schedule_task(database_schedule_update_task, dsup);
-    log_info("database: update schedule wait %{dnsname}", mesg->qname);
-
-    /** @todo Handle the possibility that the application could shut down (use the try version and a flag) */
-
-    threaded_ringbuffer_dequeue(&sync);
-    log_info("database: update schedule resume %{dnsname}", mesg->qname);
-    threaded_ringbuffer_finalize(&sync);
-
-    finger_print fp = dsup->fp;
-
-    free(dsup);
-
-    MESSAGE_FLAGS_OR(mesg->buffer, QR_BITS, fp);
-
     /**
-     * Answer with a minimal packet.
-     * It may need to be signed.
+     * @todo check that the server can be updated right now, else send servfail
+     * 
+     * The task "database_schedule_update_task" will be started on the main thread
+     * with exclusive access.
+     * The queue is used to know when the result is available.
      */
-
-#if HAS_TSIG_SUPPORT
-    if(TSIG_ENABLED(mesg))  /* NOTE: the TSIG information is in mseg */
-    {
-        tsig_sign_answer(mesg);
-    }
-#endif
-
-    return fp;
+    
+    struct database_delegate_update_args parms;
+    threaded_ringbuffer sync;
+    parms.database = database;
+    parms.mesg = mesg;
+    parms.sync = &sync;
+    
+    threaded_ringbuffer_init(&sync, 1);
+    scheduler_schedule_task(database_delegate_update_task, &parms);
+    threaded_ringbuffer_dequeue(&sync);
+    log_debug("database: update delegated");
+    threaded_ringbuffer_finalize(&sync);
+    
+    return parms.return_value;
 }
 
 /** @brief Close the database
@@ -752,8 +815,8 @@ database_schedule_update(database_t *database, message_data *mesg)
 ya_result
 database_unload(database_t *database)
 {
-    
-#ifndef NDEBUG
+
+#if 0 // #ifndef NDEBUG
     zdb_destroy((zdb*)database);
     free(database);
 #endif
@@ -964,9 +1027,9 @@ database_zone_refresh_alarm(void *args)
                 return ERROR;
             }
 
-            if(zone->refreshed_time >= zone->retried_time)
+            if(zone->refresh.refreshed_time >= zone->refresh.retried_time)
             {
-                if(now >= zone->refreshed_time + soa.refresh)
+                if(now >= zone->refresh.refreshed_time + soa.refresh)
                 {
                     /*
                      * Do a refresh
@@ -974,7 +1037,7 @@ database_zone_refresh_alarm(void *args)
 
                     log_info("database: refresh: zone %{dnsname}: refresh", origin);
 
-                    zone->retried_time = zone->refreshed_time + 1;
+                    zone->refresh.retried_time = zone->refresh.refreshed_time + 1;
 
                     scheduler_ixfr_query((database_t *)db, zone->masters, zone->origin);
 
@@ -983,9 +1046,9 @@ database_zone_refresh_alarm(void *args)
             }
             else
             {
-                if(now < zone->refreshed_time + soa.expire)
+                if(now < zone->refresh.refreshed_time + soa.expire)
                 {
-                    if(now >= zone->retried_time + soa.retry)
+                    if(now >= zone->refresh.retried_time + soa.retry)
                     {
                         /*
                         * Do a retry
@@ -993,7 +1056,7 @@ database_zone_refresh_alarm(void *args)
 
                         log_info("database: refresh: zone %{dnsname}: retry", origin);
 
-                        zone->retried_time = now;
+                        zone->refresh.retried_time = now;
 
                         scheduler_ixfr_query((database_t *)db, zone->masters, zone->origin);
 
@@ -1051,7 +1114,7 @@ database_zone_refresh_maintenance_internal(database_t *db, zdb_zone* zone)
          * If we failed too much, check if we still are authoritative
          */
 
-        zdb_zone_lock(zone, ZDB_ZONE_MUTEX_REFRESH);
+        zdb_zone_lock(zone, ZDB_ZONE_MUTEX_REFRESH); /* here ! */
 
         u32 now = time(NULL);
 
@@ -1063,6 +1126,8 @@ database_zone_refresh_maintenance_internal(database_t *db, zdb_zone* zone)
             /*
              * No SOA ? It's critical
              */
+            
+            zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_REFRESH); /* here ! */
 
             log_err("database_zone_refresh_maintenance: get soa: %r", return_value);
             exit(EXIT_FAILURE);

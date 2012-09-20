@@ -415,10 +415,13 @@ struct type_class_ttl_rdlen /* @TODO define at a more appropriate place */
 
 #endif
 
+#ifndef _FILE_OFFSET_BITS
+#define _FILE_OFFSET_BITS 64
+#endif
+
 #ifdef	__cplusplus
 }
 #endif
-
 
 
 #endif	/* _DBTYPES_H */

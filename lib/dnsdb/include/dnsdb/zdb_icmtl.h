@@ -171,7 +171,21 @@ ya_result zdb_icmtl_end(zdb_icmtl* icmtl, const char *folder);
  * Replays incremental changes for the zone, looking in the directory for the files (.ix)
  */
 
-ya_result zdb_icmtl_replay(zdb_zone *zone, const char *directory);
+#define ZDB_ICMTL_REPLAY_SERIAL_OFFSET 1 // avoids scanning
+#define ZDB_ICMTL_REPLAY_SERIAL_LIMIT  2 // don't try to go beyond the set serial
+
+/*
+struct zdb_icmtl_replay_args
+{
+    zdb_zone *zone;
+    const char* directory;
+    u64 serial_offset;
+    u32 serial_limit;
+    u8 flags;
+};
+*/
+
+ya_result zdb_icmtl_replay(zdb_zone *zone, const char *directory, u64 serial_offset, u32 until_serial, u8 flags);
 
 /**
  * Quick-check for the last available serial for an origin and return it. (It's based on file names)

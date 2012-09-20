@@ -51,8 +51,6 @@
 ya_result
 packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8* output_buffer, u32 len_)
 {
-    assert(len_ >= MAX_DOMAIN_LENGTH);
-
     const u8* p_limit = &reader->packet[reader->packet_size];
 
     u8* buffer = output_buffer;
@@ -309,6 +307,11 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
 
             buffer += err;
             len -= err;
+            
+            if(len == 0 || len > MAX_DOMAIN_LENGTH)
+            {
+                return INVALID_RECORD;      /* wrong size */
+            }
 
             if(FAIL(err = packet_reader_read_fqdn(reader, buffer, len)))
             {
@@ -331,9 +334,9 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
         {
             /* ONE NAME record */
             
-            if(size > 256)
+            if(size == 0 || size > MAX_DOMAIN_LENGTH)
             {
-                return UNSUPPORTED_RECORD;    /* too big */
+                return INVALID_RECORD;      /* wrong size */
             }
 
             if(FAIL(err = packet_reader_read_fqdn(reader, buffer, len)))

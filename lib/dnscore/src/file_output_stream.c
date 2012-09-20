@@ -191,6 +191,23 @@ is_fd_output_stream(output_stream* stream_)
     return (stream != NULL) && (stream->vtbl == &file_output_stream_vtbl);
 }
 
+s64 fd_input_stream_get_size(output_stream* stream_)
+{
+    file_output_stream* stream = (file_output_stream*)stream_;
+    
+    struct stat s;
+    
+    if(fstat(stream->data.fd, &s) >= 0)
+    {
+        if(S_ISREG(s.st_mode))
+        {
+            return s.st_size;
+        }
+    }
+    
+    return (s64)ERRNO_ERROR;
+}
+
 /** @} */
 
 /*----------------------------------------------------------------------------*/

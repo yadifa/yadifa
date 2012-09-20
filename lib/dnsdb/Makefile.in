@@ -45,6 +45,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ##############################################################################
+#
+#	YADIFA dnsdb Makefile.am script
+#
+#      	Makefile.am script
+#
+#	$URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/lib/dnsdb/Makefile.am $
+#
+#       $Date: 2012-06-18 14:50:18 +0200 (Mon, 18 Jun 2012) $
+#
+#       $Revision: 2047 $
+#
+#	$Author: ericdf $
+#
+##############################################################################
 
 ################################################################################
 #
@@ -172,8 +186,8 @@ DIST_COMMON = README $(am__configure_deps) $(dist_noinst_DATA) \
 	$(srcdir)/../../mk/common-settings.mk $(srcdir)/Makefile.am \
 	$(srcdir)/Makefile.in $(top_srcdir)/configure \
 	$(top_srcdir)/include/dnsdb/dnsdb-config.h.in AUTHORS COPYING \
-	ChangeLog INSTALL NEWS compile config.guess config.sub depcomp \
-	install-sh ltmain.sh missing
+	ChangeLog INSTALL NEWS ar-lib compile config.guess config.sub \
+	depcomp install-sh ltmain.sh missing
 
 #ACLOCAL_AMFLAGS = -I m4
 
@@ -213,6 +227,11 @@ DIST_COMMON = README $(am__configure_deps) $(dist_noinst_DATA) \
 @USES_GCC_TRUE@am__append_17 = -g3 -gdwarf-2 -O0 -DMODE_DEBUG_GCC -rdynamic
 @HAS_FADDRESS_SANITIZER_TRUE@am__append_18 = -faddress-sanitizer
 @HAS_FNO_OMIT_FRAME_POINTER_TRUE@am__append_19 = -fno-omit-frame-pointer
+
+#
+# Some BSD-based OSes need this
+#
+@IS_BSD_FAMILY_TRUE@am__append_20 = -std=c99 -I./include
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
@@ -529,9 +548,10 @@ libdnsdb_la_SOURCES = src/avl.c src/dictionary_btree.c \
 #
 #
 #
-AM_CFLAGS = $(am__append_4) $(am__append_6) $(am__append_8) \
-	$(am__append_10) $(am__append_12) $(am__append_13) \
-	$(am__append_14) $(am__append_16) $(LOCALFLAGS) $(YCFLAGS)
+AM_CFLAGS = -D_FILE_OFFSET_BITS=64 $(am__append_4) $(am__append_6) \
+	$(am__append_8) $(am__append_10) $(am__append_12) \
+	$(am__append_13) $(am__append_14) $(am__append_16) \
+	$(am__append_20) $(LOCALFLAGS) $(YCFLAGS)
 AM_LDFLAGS = $(am__append_5) $(am__append_9) $(am__append_15) \
 	$(YLDFLAGS)
 DEBUGFLAGS = $(am__append_7) $(am__append_11) $(am__append_17) \

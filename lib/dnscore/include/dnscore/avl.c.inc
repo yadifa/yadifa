@@ -30,6 +30,22 @@
  *
  *------------------------------------------------------------------------------
  *
+ *
+ *      SVN Program:
+ *              $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/lib/dnscore/include/dnscore/avl.c.inc $
+ *
+ *      Creation Date:
+ *              2009-01-07
+ *
+ *      Last Update:
+ *              $Date: 2012-07-04 13:32:58 +0200 (Wed, 04 Jul 2012) $
+ *              $Revision: 2100 $
+ *
+ *      Last Change:
+ *              $Author: ericdf $
+ *
+ *------------------------------------------------------------------------------
+ *
  * DOCUMENTATION */
 /** @defgroup collections Generic collections functions
  *  @ingroup dnscore

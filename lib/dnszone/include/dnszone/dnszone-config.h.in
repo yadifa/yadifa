@@ -18,18 +18,12 @@
 /* MUST be enabled if either NSEC3 or NSEC are enabled */
 #undef HAS_DNSSEC_SUPPORT
 
-/* DROPALL mode will not actually send back the answer (debug/bench) */
-#undef HAS_DROPALL_SUPPORT
-
 /* Define this to enable slow but safe memory accesses */
 #undef HAS_MEMALIGN_ISSUES
 
 /* Use messages instead of send. Needed if you have many IPs aliased on the
    same interface. */
 #undef HAS_MESSAGES_SUPPORT
-
-/* MIRROR mode will only reply what has been read (debug/bench) */
-#undef HAS_MIRROR_SUPPORT
 
 /* Set this to 1 to enable NSEC3 support */
 #undef HAS_NSEC3_SUPPORT
@@ -243,6 +237,12 @@
 #  undef WORDS_BIGENDIAN
 # endif
 #endif
+
+/* Number of bits in a file offset, on hosts where this is settable. */
+#undef _FILE_OFFSET_BITS
+
+/* Define for large files, on AIX-style hosts. */
+#undef _LARGE_FILES
 
 /* Define to empty if `const' does not conform to ANSI C. */
 #undef const

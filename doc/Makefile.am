@@ -28,6 +28,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#	YADIFA doc Makefile.am script
+#
+#      	Makefile.am script
+#
+#	$URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/doc/Makefile.am $
+#
+#       $Date: 2012-05-29 13:31:18 +0200 (Tue, 29 May 2012) $
+#
+#       $Revision: 2011 $
+#
+#	$Author: geryve $
+#
+##############################################################################
 
 dist_man1_MANS = yadifad.man
 dist_man5_MANS = yadifad.conf.man

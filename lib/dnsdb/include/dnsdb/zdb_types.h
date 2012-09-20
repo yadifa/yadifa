@@ -480,7 +480,7 @@ struct zdb_rr_label
 #define ZDB_ZONE_MUTEX_SIMPLEREADER     0x01 /* non-conflicting */
 #define ZDB_ZONE_MUTEX_RRSIG_UPDATER    0x02 /* non-conflicting as far as the global task has not been launched more than ONCE */
 #define ZDB_ZONE_MUTEX_NSEC3_UPDATER    0x02 /* non-conflicting as far as ... */
-#define ZDB_ZONE_MUTEX_XFR              0x84 /* conflicting, can by nature be launched more than once in parallel.  new ones have to be discarded */
+#define ZDB_ZONE_MUTEX_XFR              0x84 /* conflicting, cannot by nature be launched more than once in parallel.  new ones have to be discarded */
 #define ZDB_ZONE_MUTEX_REFRESH          0x85 /* conflicting, can never be launched more than once.  new ones have to be discarded */
 #define ZDB_ZONE_MUTEX_DYNUPDATE        0x86 /* conflicting */
 #define ZDB_ZONE_MUTEX_UNFREEZE         0x87 /* conflicting, needs to be sure nobody else (ie: the freeze) is acting at the same time */
@@ -526,8 +526,8 @@ struct zdb_zone
 #endif
     
     alarm_t alarm_handle;
-    u8  mutex_owner;
-    u8  mutex_count;
+    volatile u8  mutex_owner;
+    volatile u8  mutex_count;
 
 #if ZDB_RECORDS_MAX_CLASS != 1
     u16 zclass;
@@ -585,8 +585,8 @@ struct zdb_query_ex_answer
     zdb_resourcerecord *answer;
     zdb_resourcerecord *authority;
     zdb_resourcerecord *additional;
-    u8 depth;       // CNAME
-    /* bool is_delegation; later */
+    u8 depth;           // CNAME
+    u8 delegation;      // set as an integer to avoid testing for it
 };
 
 /**

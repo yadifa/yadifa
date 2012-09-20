@@ -173,9 +173,10 @@ scheduler_database_replace_zone_init(void *data_)
 
     u32 now = time(NULL);
 
-    zone_desc->refreshed_time = now;
-    zone_desc->retried_time = now;
+    zone_desc->refresh.refreshed_time = now;
+    zone_desc->refresh.retried_time = now;
 
+    zdb_zone_unlock(placeholder_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
     zdb_zone_destroy(placeholder_zone);
     
     return SCHEDULER_TASK_FINISHED;
@@ -250,6 +251,7 @@ scheduler_database_invalidate_zone_thread(void *data_)
     
     if(args->old_zone != NULL)
     {
+        zdb_zone_unlock(args->old_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
         zdb_zone_destroy(args->old_zone);
         args->old_zone = NULL;
     }
@@ -364,8 +366,8 @@ scheduler_database_load_zone_master(zdb *db, zone_data *zone_desc, zdb_zone **zo
 #endif
             u32 now = time(NULL);
 
-            zone_desc->refreshed_time = now;
-            zone_desc->retried_time = now;
+            zone_desc->refresh.refreshed_time = now;
+            zone_desc->refresh.retried_time = now;
             
             // switch back with the invalid (schedule that ST)
             
@@ -390,6 +392,239 @@ scheduler_database_load_zone_master(zdb *db, zone_data *zone_desc, zdb_zone **zo
     }
     
     zone_unlock(zone_desc, ZONE_LOCK_LOAD);
+    
+    return return_value;
+}
+
+static ya_result
+scheduler_database_get_ixfr_answer_type(zone_data *zone_desc, u32 ttl, u16 soa_rdata_size, const u8* soa_rdata)
+{
+   /*
+    * Start an IXFR query
+    */
+
+    input_stream is;
+    output_stream os;
+    
+    ya_result return_value;
+    
+    message_data ixfr_query;
+
+#ifdef DEBUG
+    memset(&ixfr_query,0xff,sizeof(ixfr_query));
+#endif
+
+    log_debug("zone load: incremental change query to the master of %{dnsname}", zone_desc->origin);
+    
+    u16 answer_type[2];
+    u32 answer_serial[2];
+    u32 answer_idx = 0;
+    u32 current_serial;
+    
+    if(FAIL(return_value = rr_soa_get_serial(soa_rdata, soa_rdata_size, &current_serial)))
+    {
+        return return_value;
+    }
+
+    if(ISOK(return_value = ixfr_start_query(zone_desc->masters, zone_desc->origin, ttl, soa_rdata, soa_rdata_size, &is, &os, &ixfr_query)))
+    {       
+        u8 record_wire[1024];
+        
+        /*
+        * Read the answer (first message anyway)
+        * Look for the answer type in it.
+        */
+
+        u16 query_id = MESSAGE_ID(ixfr_query.buffer);
+
+        int fd = fd_input_stream_get_filedescriptor(&is);
+
+        tcp_set_recvtimeout(fd, 3, 0);  /* 3 seconds read timeout */
+
+        do
+        {
+            if(FAIL(return_value = readfully_limited(fd, &ixfr_query.buffer_tcp_len[0], 2, 1.0)))
+            {
+                break;
+            }
+            
+            if(return_value != 2)
+            {
+                return_value = ANSWER_UNEXPECTED_EOF;
+                
+                break;
+            }
+            
+            if(FAIL(return_value = readfully_limited(fd, &ixfr_query.buffer[0], message_get_tcp_length(&ixfr_query), 512.0)))
+            {
+                break;
+            }
+
+            if(return_value < DNS_HEADER_LENGTH + 1 + 4)
+            {
+                return_value = ANSWER_NOT_ACCEPTABLE;
+                
+                break;
+            }
+            
+            return_value = ANSWER_NOT_ACCEPTABLE;
+                        
+            /**
+             * check the ID, check the error code
+             * 
+             */
+
+            u16 answer_id = MESSAGE_ID(ixfr_query.buffer);
+
+            if(query_id != answer_id)
+            {
+                log_err("zone load: master answer ID does not match query ID (q:%hd != a:%hd)", query_id, answer_id);
+                
+                break;
+            }
+
+            u16 answer_count = ntohs(MESSAGE_AN(ixfr_query.buffer));
+
+            if(answer_count == 0)
+            {
+                break;
+            }
+                        
+            u8 error_code = MESSAGE_RCODE(ixfr_query.buffer);
+            
+            if(error_code != RCODE_OK)
+            {
+                return_value = MAKE_DNSMSG_ERROR(error_code);
+                
+                log_err("zone load: master answered with error code: %r", return_value);
+                
+                break;
+            }
+
+            /* read the query record */
+
+            packet_unpack_reader_data reader;
+
+            packet_reader_init(&ixfr_query.buffer[0], return_value, &reader);
+            reader.offset = DNS_HEADER_LENGTH;
+
+            u16 query_count = ntohs(MESSAGE_QD(ixfr_query.buffer));
+            
+            if((query_count < 0) || (query_count > 1))
+            {
+                return_value = ANSWER_NOT_ACCEPTABLE;
+                break;
+            }
+            else if(query_count == 1) /* a good compiler will combine the > 1 and the == 1 using 1 cmp and 2 jumps */
+            {
+                if(FAIL(return_value = packet_reader_read_zone_record(&reader, record_wire, sizeof(record_wire))))
+                {
+                    break;
+                }
+            }
+
+            /** @todo add checks */
+
+            /* read the next answer */
+
+            for(;(answer_count > 0) && (answer_idx < 2); answer_count--)
+            {                            
+                if(FAIL(return_value = packet_reader_read_record(&reader, record_wire, sizeof(record_wire))))
+                {
+                    break;
+                }
+
+                u8 *p = record_wire + dnsname_len(record_wire);
+                u16 rtype = GET_U16_AT(*p);
+                answer_type[answer_idx] = rtype;
+
+                if(rtype != TYPE_SOA)
+                {
+                    break;
+                }
+
+                p += 8;
+                u16 rdata_size = ntohs(GET_U16_AT(*p));
+                p += 2;
+                
+                u32 serial;
+                
+                if(FAIL(return_value = rr_soa_get_serial(p, rdata_size, &serial)))
+                {
+                    return return_value;
+                }
+                
+                answer_serial[answer_idx] = serial;
+                
+                p += rdata_size;
+                
+                answer_idx++;
+            }
+            
+            if((answer_idx == 1) && (answer_serial[0] == current_serial))
+            {
+                break;
+            }
+        }
+        while(answer_idx < 2);
+        
+        input_stream_close(&is);
+        output_stream_close(&os);
+    }
+    
+    if(FAIL(return_value))
+    {
+        answer_idx = 0;
+    }
+    
+    switch(answer_idx)
+    {
+        case 0:
+        {
+            /* no SOA returned */
+            
+            log_info("zone load: query to the master failed: %r", return_value);
+            
+            break;
+        }
+        case 1:
+        {
+            /* one AXFR returned */
+            
+            if(serial_gt(answer_serial[0], current_serial))
+            {
+                log_info("zone load: master offers full zone transfer with serial %u", answer_serial[0]);
+                
+                return_value = TYPE_AXFR;
+            }
+            else
+            {
+                log_info("zone load: master has the same serial %u", answer_serial[0]);
+                
+                return_value = SUCCESS;
+                return_value = TYPE_IXFR; /** @todo remove: this is wrong and this is to test xfr_copy */
+            }
+            
+            break;
+        }
+        case 2:
+        {
+            if(answer_serial[0] != answer_serial[0])
+            {
+                log_info("zone load: master offers an empty zone with serial %u", answer_serial[0]);
+                
+                return_value = TYPE_AXFR;
+            }
+            else
+            {
+                log_info("zone load: master offers incremental changes from serial %u to serial %u", answer_serial[1], answer_serial[0]);
+                
+                return_value = TYPE_IXFR;
+            }
+            
+            break;
+        }
+    }
     
     return return_value;
 }
@@ -475,7 +710,7 @@ scheduler_database_load_zone_slave(zdb *db, zone_data *zone_desc, zdb_zone **zon
                 axfr_file_available = TRUE;
                 zone_serial = axfr_serial;
                 
-                log_debug("zone load: serial in AXFR image is %u", file_name, axfr_serial);
+                log_debug("zone load: serial in AXFR image is %u", axfr_serial);
             }
         }
 
@@ -547,129 +782,25 @@ scheduler_database_load_zone_slave(zdb *db, zone_data *zone_desc, zdb_zone **zon
             
             if(ISOK(return_value) && (zone_journal_serial != master_serial))
             {
-                /*
-                 * Start an IXFR query
-                 */
-                
-                input_stream is;
-                output_stream os;
+                return_value = scheduler_database_get_ixfr_answer_type(zone_desc, ttl, rdata_size, rdata);
 
-                message_data ixfr_query;
-                
-#ifdef DEBUG
-                memset(&ixfr_query,0xff,sizeof(ixfr_query));
-#endif
-                
-                log_debug("zone load: incremental change query to the master of %{dnsname}", zone_desc->origin);
-
-                if(ISOK(return_value = ixfr_start_query(zone_desc->masters, zone_desc->origin, ttl, rdata, rdata_size, &is, &os, &ixfr_query)))
+                if((return_value != TYPE_IXFR) && (return_value != SUCCESS))
                 {
-                    /*
-                    * Read the answer (first message anyway)
-                    * Look for the answer type in it.
-                    */
+                    /* axfr or error */
 
-                    u16 query_id = MESSAGE_ID(ixfr_query.buffer);
-
-                    int fd = fd_input_stream_get_filedescriptor(&is);
-                    
-                    tcp_set_recvtimeout(fd, 3, 0);  /* 3 seconds read timeout */
-
-                    if(ISOK(return_value = readfully_limited(fd, &ixfr_query.buffer_tcp_len[0], 2, 1.0)))
-                    {
-                        if(ISOK(return_value = readfully_limited(fd, &ixfr_query.buffer[0], message_get_tcp_length(&ixfr_query), 512.0)))
-                        {
-                            /**
-                            * check the ID, check the error code
-                            * 
-                            */
-
-                            u16 answer_id = MESSAGE_ID(ixfr_query.buffer);
-
-                            if(query_id == answer_id)
-                            {
-                                u8 error_code = MESSAGE_RCODE(ixfr_query.buffer);
-
-                                if(error_code == 0)
-                                {
-                                    u8 record_wire[1024];
-
-                                    packet_unpack_reader_data reader;
-
-                                    packet_reader_init(&ixfr_query.buffer[0], return_value, &reader);
-                                    reader.offset = DNS_HEADER_LENGTH;
-
-                                    u16 answer_type = 0;
-
-                                    if(ISOK(packet_reader_read_zone_record(&reader, record_wire, sizeof(record_wire))))
-                                    {
-                                        if(ISOK(packet_reader_read_record(&reader, record_wire, sizeof(record_wire))))
-                                        {
-                                            u8 *p = record_wire + dnsname_len(record_wire);
-
-                                            u16 type0 = GET_U16_AT(*p);
-
-                                            if(type0 == TYPE_SOA)
-                                            {
-                                                if(ISOK(packet_reader_read_record(&reader, record_wire, sizeof(record_wire))))
-                                                {
-                                                    p = record_wire + dnsname_len(record_wire);
-
-                                                    u16 type1 = GET_U16_AT(*p);
-
-                                                    if(type1 == TYPE_SOA)
-                                                    {
-                                                        answer_type = TYPE_IXFR;
-
-                                                        log_info("zone load: master offers incremental changes");
-
-                                                        /* proceed with the local data first */
-                                                    }
-                                                    else
-                                                    {
-                                                        answer_type = TYPE_AXFR;
-
-                                                        log_info("zone load: master offers full zone transfer");
-
-                                                        /* delete the local data first */
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    if(answer_type != TYPE_IXFR)
-                                    {
-
-                                        if(answer_type != TYPE_AXFR)
-                                        {                                            
-                                            log_err("zone load: unexpected answer from the master (will query for a full zone transfer)");
-                                        }
-
-                                        char data_path[PATH_MAX]; 
-
-                                        xfr_copy_get_data_path(g_config->xfr_path, zone_desc->origin, data_path, sizeof(data_path));
-
-                                        xfr_delete_axfr(zone_desc->origin, data_path);
-                                        xfr_delete_ix(zone_desc->origin, data_path);
-
-                                        axfr_file_available = zone_file_available = FALSE;
-                                    }
-                                }
-                                else
-                                {
-                                    log_err("zone load: master answered with error code: %r", MAKE_DNSMSG_ERROR(error_code));
-                                }
-                            }
-                            else
-                            {
-                                log_err("zone load: master answer ID does not match query ID (q:%hd != a:%hd)", query_id, answer_id);
-                            }
-                        }
+                    if(return_value != TYPE_AXFR)
+                    {                                            
+                        log_err("zone load: unexpected answer from the master (will query for a full zone transfer)");
                     }
 
-                    input_stream_close(&is);
-                    output_stream_close(&os);
+                    char data_path[PATH_MAX]; 
+
+                    xfr_copy_get_data_path(g_config->xfr_path, zone_desc->origin, data_path, sizeof(data_path));
+
+                    xfr_delete_axfr(zone_desc->origin, data_path);
+                    xfr_delete_ix(zone_desc->origin, data_path);
+
+                    axfr_file_available = zone_file_available = FALSE;
                 }
             }
         }
@@ -730,25 +861,25 @@ scheduler_database_load_zone_slave(zdb *db, zone_data *zone_desc, zdb_zone **zon
 
         u32 now = time(NULL);
 
-        zone_desc->refreshed_time = now;
-        zone_desc->retried_time = now;
+        zone_desc->refresh.refreshed_time = now;
+        zone_desc->refresh.retried_time = now;
 
         /* If the zone load failed for any reason but "loaded already" ... */
 
         if(ISOK(return_value))
         {
             
-    #if HAS_ACL_SUPPORT != 0
+#if HAS_ACL_SUPPORT != 0
 
-        /*
+           /*
             * Setup the ACL filter function & configuration
             */
 
             zone_pointer_out->extension = &zone_desc->ac; /* The extension points to the ACL */
             zone_pointer_out->query_access_filter = acl_get_query_access_filter(&zone_desc->ac.allow_query);
-    #endif
+#endif
 
-    #if HAS_DNSSEC_SUPPORT != 0
+#if HAS_DNSSEC_SUPPORT != 0
 
            /*
             * Setup the validity period and the jitter
@@ -756,7 +887,7 @@ scheduler_database_load_zone_slave(zdb *db, zone_data *zone_desc, zdb_zone **zon
 
             zone_pointer_out->sig_validity_interval_seconds = MAX_S32;/*zone->sig_validity_interval * SIGNATURE_VALIDITY_INTERVAL_S */;
             zone_pointer_out->sig_validity_jitter_seconds = 0;/*zone->sig_validity_jitter * SIGNATURE_VALIDITY_JITTER_S */;
-    #endif
+#endif
             *zone = zone_pointer_out;
             
             scheduler_database_replace_zone((zdb*)g_config->database, zone_desc, zone_pointer_out);
@@ -989,6 +1120,8 @@ database_load_thread(void *args_)
         
         database_load_message_free(message);
     }
+    
+    log_info("zone load: service stopped");
     
     return NULL;
 }

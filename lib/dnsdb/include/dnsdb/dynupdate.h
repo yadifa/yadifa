@@ -45,6 +45,7 @@
  * USE INCLUDES */
 #include <dnsdb/zdb_types.h>
 #include <dnscore/output_stream.h>
+#include <dnscore/packet_reader.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -72,7 +73,7 @@ extern "C"
  *
  */
 
-ya_result dynupdate_check_prerequisites(zdb_zone* zone, u8* buffer,s32 buffer_size, u16 count);
+ya_result dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count);
 
 /*
  * At the run, each added/removed field should trigger the schedule a NSEC/NSEC3 update.
@@ -81,7 +82,7 @@ ya_result dynupdate_check_prerequisites(zdb_zone* zone, u8* buffer,s32 buffer_si
  *
  */
 
-ya_result dynupdate_update(zdb_zone* zone, u8* buffer, s32 buffer_size, u16 count, u32 nextserial, bool dryrun);
+ya_result dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, bool dryrun);
 
 /*
  * Call this before an update.

@@ -42,7 +42,7 @@
 ################################################################################
 
 
-AM_CFLAGS = 
+AM_CFLAGS = -D_FILE_OFFSET_BITS=64
 AM_LDFLAGS =
 DEBUGFLAGS =
 
@@ -131,6 +131,13 @@ if HAS_FNO_OMIT_FRAME_POINTER
 DEBUGFLAGS+=-fno-omit-frame-pointer
 endif
 
+#
+# Some BSD-based OSes need this
+#
+
+if IS_BSD_FAMILY
+AM_CFLAGS += -std=c99 -I./include
+endif
 
 #
 #

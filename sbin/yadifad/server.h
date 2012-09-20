@@ -97,7 +97,7 @@ struct server_statistics_t
     volatile u64 udp_dropped_count;
     volatile u64 udp_output_size_total;
     volatile u64 udp_undefined_count;
-#if 0
+#if 1
     volatile u64 udp_referrals_count;
 #endif
     
@@ -112,7 +112,7 @@ struct server_statistics_t
     volatile u64 tcp_dropped_count;
     volatile u64 tcp_output_size_total;
     volatile u64 tcp_undefined_count;
-#if 0
+#if 1
     volatile u64 tcp_referrals_count;
 #endif
     volatile u64 tcp_axfr_count;

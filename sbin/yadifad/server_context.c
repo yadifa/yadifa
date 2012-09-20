@@ -257,12 +257,14 @@ server_context_clear(config_data *config)
         }
         else if(return_code < 0)
         {
+            return_code = errno;
+            
 #ifndef NDEBUG
-            log_debug("scheduler: got a error: %r", ERRNO_ERROR);
+            log_debug("scheduler: got a error: %r", MAKE_ERRNO_ERROR(return_code));
             logger_flush();
 #endif
             
-            if((return_code = errno) != EINTR)
+            if(return_code!= EINTR)
             {
                 log_err("error emptying the scheduler queue: %r", MAKE_ERRNO_ERROR(return_code));
                 logger_flush();

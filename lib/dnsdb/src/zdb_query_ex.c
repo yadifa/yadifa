@@ -74,6 +74,14 @@
 #include "dnsdb/rrsig.h"
 #endif
 
+#if ZDB_EXPLICIT_READER_ZONE_LOCK == 1
+#define LOCK(a_)    zdb_zone_lock((a_), ZDB_ZONE_MUTEX_SIMPLEREADER)
+#define UNLOCK(a_)  zdb_zone_unlock((a_), ZDB_ZONE_MUTEX_SIMPLEREADER)
+#else
+#define LOCK(a_)   
+#define UNLOCK(a_) 
+#endif
+
 /**
  * In order to optimise-out the class parameter that is not required if ZDB_RECORDS_MAX_CLASS == 1 ...
  */
@@ -244,7 +252,7 @@ zdb_query_ex_answer_appendrndlist(const zdb_packed_ttlrdata* source, const u8* l
             rnd >>= 1;
 
             /**
-             *  @note: After 32 entries it will not be so randomized anymore ...
+             *  @note: After 32 entries it will not be so randomized at all ...
              */
 
             source = source->next;
@@ -788,7 +796,10 @@ update_additionals_dname_set(const zdb_packed_ttlrdata* source,
                 const u8 *dns_name = ZDB_PACKEDRECORD_PTR_RDATAPTR(source);
                 dns_name += offset;
 
-                dnsname_set_insert(set, dns_name);
+                if(!dnsname_set_insert(set, dns_name))
+                {
+                    break;
+                }
 
                 source = source->next;
             }
@@ -1343,7 +1354,7 @@ zdb_destroy_resourcerecord_list(zdb_resourcerecord *rr)
 }
 
 /**
- * @brief Handles what to do when a record has not been found
+ * @brief Handles what to do when a record has not been found (NXRRSET)
  * 
  * @param zone the zone
  * @param rr_label_info details about the labels on the path of the query
@@ -1374,6 +1385,8 @@ zdb_query_ex_record_not_found(const zdb_zone *zone,
                               dnsname_set *additionals_dname_set)
 {
     zdb_rr_label *rr_label = rr_label_info->answer;
+    
+    // NXRRSET
     
 #if ZDB_NSEC3_SUPPORT != 0
     if(dnssec && ZONE_NSEC3_AVAILABLE(zone))
@@ -1754,6 +1767,13 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
             zdb_zone *zone = zone_label->zone;
 
             /*
+             * lock
+             */
+            
+            
+            LOCK(zone);
+            
+            /*
              * We know the zone, and its extension here ...
              */
 
@@ -1768,6 +1788,9 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
 #ifndef NDEBUG
                     log_debug("zdb_query_ex: FP_ACCESS_REJECTED");
 #endif
+                    
+                    UNLOCK(zone);
+                    
                     return FP_ACCESS_REJECTED;
                 }
             }
@@ -1787,6 +1810,8 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
 #ifndef NDEBUG
                 log_debug("zdb_query_ex: FP_ZONE_EXPIRED");
 #endif
+                
+                UNLOCK(zone);
                 
                 return FP_INVALID_ZONE;
             }
@@ -1837,6 +1862,8 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
 
                         MESSAGE_HIFLAGS(mesg->buffer) |= AA_BITS;
 
+                        UNLOCK(zone);
+                        
                         // stop there
                         return FP_CNAME_MAXIMUM_DEPTH;
                     }
@@ -1891,6 +1918,8 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
 
                         finger_print fp = zdb_query_ex(db, mesg, ans_auth_add, pool_buffer);
 
+                        UNLOCK(zone);
+                        
                         return fp;
                     }
                     else
@@ -1900,6 +1929,8 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
                         * This is NOT supposed to happen.
                         * 
                         */
+                        
+                        UNLOCK(zone);
 
                         return FP_CNAME_BROKEN;
                     }
@@ -1914,7 +1945,12 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
                     /*
                      * we are AT or UNDER a delegation
                      * We can only find (show) NS, DS, RRSIG, NSEC records from the query
-                     */                    
+                     * 
+                     * The answer WILL be a referral ...
+                     */
+                    
+                    ans_auth_add->delegation = 1;
+                    
                     switch(type)
                     {
                         /* for these ones : give the rrset for the type and clear AA */
@@ -2188,6 +2224,8 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
 #ifndef NDEBUG
                         log_debug("zdb_query_ex: FP_BASIC_RECORD_FOUND");
 #endif
+                        UNLOCK(zone);
+                        
                         return FP_BASIC_RECORD_FOUND;
                     } /* if found the record of the requested type */
                     else
@@ -2215,6 +2253,9 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
 #ifndef NDEBUG
                         log_debug("zdb_query_ex: FP_BASIC_RECORD_NOTFOUND (done)");
 #endif
+                        
+                        UNLOCK(zone);
+                        
                         return (finger_print)return_value;
                     }
                 }
@@ -2377,13 +2418,15 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
 #ifndef NDEBUG
                             log_debug("zdb_query_ex: FP_BASIC_RECORD_FOUND (any)");
 #endif
+                            UNLOCK(zone);
+                            
                             return FP_BASIC_RECORD_FOUND;
                         }
                         else
                         {
                             /* no records found ... */
                             
-                            return (finger_print)zdb_query_ex_record_not_found(zone,
+                            finger_print fp = (finger_print)zdb_query_ex_record_not_found(zone,
                                                                                     &rr_label_info,
                                                                                     qname,
                                                                                     &name,
@@ -2395,6 +2438,10 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
                                                                                     dnssec,
                                                                                     ans_auth_add,
                                                                                     &additionals_dname_set);
+                            
+                            UNLOCK(zone);
+                            
+                            return fp;
                         }
                     }
                     else
@@ -2413,6 +2460,8 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
                               ans_auth_add,
                               &additionals_dname_set);
                         
+                        UNLOCK(zone);
+                        
                         return FP_BASIC_RECORD_FOUND;
                     }
                 }
@@ -2429,6 +2478,7 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
 
                     if(authority != NULL)
                     {
+                        
                         const u8 * authority_qname = zdb_rr_label_info_get_authority_qname(qname, &rr_label_info);
                         
                         zdb_query_ex_answer_appendrndlist(authority, authority_qname,
@@ -2486,10 +2536,14 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
                                 }
                             }
                         }
+                        
+                        ans_auth_add->delegation = 1;
 #ifndef NDEBUG
                         log_debug("zdb_query_ex: FP_BASIC_LABEL_NOTFOUND (done)");
 #endif
                         /* ans_auth_add->is_delegation = TRUE; later */
+                        
+                        UNLOCK(zone);
                         
                         return FP_BASIC_LABEL_DELEGATION;
                     }
@@ -2501,6 +2555,8 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
             }
 
             /* LABEL NOT FOUND: We stop the processing and falltrough NSEC(3) or the basic case. */
+            
+            UNLOCK(zone);
 
             /* Stop looking, skip cache */
             break;
@@ -2577,6 +2633,8 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
         return FP_NOZONE_FOUND;
     }
     
+    LOCK(zone);
+    
     if(ZDB_ZONE_INVALID(zone))
     {
         /**
@@ -2586,7 +2644,9 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
 #ifndef NDEBUG
         log_debug("zdb_query_ex: FP_ZONE_EXPIRED (2)");
 #endif
-
+        
+        UNLOCK(zone);
+ 
         return FP_INVALID_ZONE;
     }
     
@@ -2687,6 +2747,7 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
 #ifndef NDEBUG
             log_debug("zdb_query_ex: FP_NSEC3_LABEL_NOTFOUND (done)");
 #endif
+            UNLOCK(zone);
             
             return FP_NSEC3_LABEL_NOTFOUND;
         }
@@ -2773,6 +2834,8 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
 #ifndef NDEBUG
             log_debug("zdb_query_ex: FP_NSEC_LABEL_NOTFOUND (done)");
 #endif            
+            UNLOCK(zone);
+
             return FP_NSEC_LABEL_NOTFOUND;
         }
     }
@@ -2784,6 +2847,8 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
 #ifndef NDEBUG
     log_debug("zdb_query_ex: FP_BASIC_LABEL_NOTFOUND (done)");
 #endif
+    
+    UNLOCK(zone);
     
     return FP_BASIC_LABEL_NOTFOUND;
 

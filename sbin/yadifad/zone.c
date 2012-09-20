@@ -553,7 +553,6 @@ zone_mustsaveaxfr(zone_data *zone_desc)
     return ((zone_desc->status_flag & ZONE_STATUS_SAVETO_AXFR_FILE) != 0);
 }
 
-
 bool
 zone_issavingfile(zone_data *zone_desc)
 {
@@ -570,6 +569,18 @@ bool
 zone_isstartingup(zone_data *zone_desc)
 {
     return ((zone_desc->status_flag & ZONE_STATUS_STARTING_UP) != 0);
+}
+
+bool
+zone_isdynamicupdating(zone_data *zone_desc)
+{
+    return ((zone_desc->status_flag & ZONE_STATUS_DYNAMIC_UPDATING) != 0);
+}
+ 
+bool
+zone_canbeedited(zone_data *zone_desc)
+{
+    return ((zone_desc->status_flag & (ZONE_STATUS_STARTING_UP|ZONE_STATUS_DYNAMIC_UPDATING|ZONE_STATUS_SAVING_AXFR_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_LOADING)) == 0);
 }
 
 ya_result

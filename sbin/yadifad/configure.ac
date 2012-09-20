@@ -30,9 +30,32 @@ dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
 dnl ##############################################################################
+dnl
+dnl      SVN Program:
+dnl              $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/sbin/yadifad/configure.ac $
+dnl
+dnl      Creation Date:
+dnl              2008-03-12
+dnl
+dnl      Last Update:
+dnl              $Date: 2012-09-19 10:46:55 +0200 (Wed, 19 Sep 2012) $
+dnl              $Revision: 2237 $
+dnl
+dnl      Author:
+dnl             G. Van Emelen (Gery@VanEmelen.net)
+dnl				Eric Diaz Fernandez
+dnl
+dnl      Purpose:
+dnl      		 Yadifa
+dnl				 Domain Name Server        
+dnl
+dnl      Last Change:
+dnl              $Author: geryve $
+dnl
+dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 2116 $])
+AC_REVISION([$Revision: 2237 $])
 # 1
 # svn log 2> /dev/null|head -2|grep ^r|sed 's/.\([1-9]*\).*/\1/'
 
@@ -56,10 +79,6 @@ AC_CONFIG_HEADER([server-config.h])
 
 AC_CONFIG_MACRO_DIR([m4])
 
-AC_DARWIN_LIBTOOL
-
-AC_PROG_LIBTOOL
-
 AC_DEFUN([SYSCONF], [/$prefix/PACKAGE/PACKAGE.conf])
 
 AC_CANONICAL_BUILD
@@ -67,6 +86,11 @@ AC_CANONICAL_BUILD
 # Checks for programs.
 AC_PROG_CC
 AM_PROG_CC_C_O
+
+LT_INIT([disable-shared])
+
+AC_DARWIN_LIBTOOL
+AC_PROG_LIBTOOL
 
 dnl Checks for libraries.
 AC_CHECK_LIB([c], [printf])
@@ -109,6 +133,8 @@ AH_BOTTOM([
 #define DPRINTF(p) /* nothing */
 #endif /* DEBUG */
 ])
+
+AC_SYS_LARGEFILE
 
 AC_CPU_CHECK
 AC_COMPILER_CHECK

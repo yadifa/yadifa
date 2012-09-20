@@ -873,13 +873,18 @@ static void label_update_status_destroy(treeset_tree* lus_setp)
 }
 
 ya_result
-dynupdate_update(zdb_zone* zone, u8* buffer_, s32 buffer_size, u16 count, u32 nextserial, bool dryrun)
+dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, bool dryrun)
 {
+    if(ZDB_ZONE_INVALID(zone))
+    {
+        return ERROR; /* todo: use a specific code */
+    }
+     
     if(count == 0)
     {
         return SUCCESS;
     }
-
+     
     dnsname_vector origin_path;
     dnsname_vector name_path;
 
@@ -892,20 +897,17 @@ dynupdate_update(zdb_zone* zone, u8* buffer_, s32 buffer_size, u16 count, u32 ne
     
     ptr_vector nsec3param_rrset;
 
-    u8* buffer = buffer_;
     u8* rname;
     u8* rdata;
-
     u32 rname_size;
     u32 rttl;
     u16 rtype;
     u16 rclass;
-    u16 rdata_size;
-    u32 changes = 0;
+    u16 rdata_size;    
     bool soa_changed = false;
+    u8 wire[MAX_DOMAIN_LENGTH + 10 + 65535];
     
 #ifndef NDEBUG
-    rname = (u8*)~0;
     rdata = (u8*)~0;
     rname_size = ~0;
     rttl = ~0;
@@ -917,6 +919,51 @@ dynupdate_update(zdb_zone* zone, u8* buffer_, s32 buffer_size, u16 count, u32 ne
     bool dnssec_zone = (zone->apex->nsec.dnssec != NULL);
 
     ya_result edit_status;
+    
+    if(dnssec_zone)
+    {
+        ya_result return_code = SUCCESS;
+        
+        /* ensure all the private keys are available or servfail */
+        
+        const zdb_packed_ttlrdata *dnskey = zdb_zone_get_dnskey_rrset(zone);
+                                                        
+        if(dnskey != NULL)
+        {
+            char origin[MAX_DOMAIN_LENGTH];
+
+            dnsname_to_cstr(origin, zone->origin);
+
+            do
+            {
+                u16 flags = DNSKEY_FLAGS(*dnskey);
+                u8  protocol = DNSKEY_PROTOCOL(*dnskey);
+                u8  algorithm = DNSKEY_ALGORITHM(*dnskey);
+                u16 tag = DNSKEY_TAG(*dnskey);                  // note: expensive
+                dnssec_key *key = NULL;
+
+                if(FAIL(return_code = dnssec_key_load_private(algorithm, tag, flags, origin, &key)))
+                {
+                    log_err("update: unable to load private key 'K%{dnsname}+%03d+%05d': %r", zone->origin, algorithm, tag, return_code);
+                    break;
+                }
+
+                dnskey = dnskey->next;
+            }
+            while(dnskey != NULL);
+        }
+        else
+        {
+            log_err("update: there are no private keys in the zone %{dnsname}", zone->origin);
+
+            return_code = DNSSEC_ERROR_RRSIG_NOZONEKEYS;
+        }
+        
+        if(FAIL(return_code))
+        {
+            return return_code;
+        }
+    }
 
     treeset_tree lus_set = TREESET_EMPTY;
     treeset_avl_iterator lus_iter;
@@ -937,51 +984,47 @@ dynupdate_update(zdb_zone* zone, u8* buffer_, s32 buffer_size, u16 count, u32 ne
     }
 
     dnsname_to_dnsname_vector(zone->origin, &origin_path);
-
-    while(count-- > 0)
+    
+    do
     {
-        rname = buffer;
-
-        do
+        ya_result return_value;
+        
+        if(FAIL(return_value = packet_reader_read_record(reader, wire, sizeof(wire))))
         {
-            if((buffer_size -= *buffer + 1) <= 0)
+            /* if the return code says that the record was invalid, then the buffer has been filled up and including rdata_size */
+            
+            switch(return_value)
             {
-                label_update_status_destroy(&lus_set);
+                case INVALID_RECORD:
+                case INCORRECT_IPADDRESS:
+                case UNSUPPORTED_RECORD:
+                {
+                    rname = wire;
+                    rname_size = dnsname_len(wire);
+                    rtype = ntohs(GET_U16_AT(wire[rname_size]));
 
-                return SERVER_ERROR_CODE(RCODE_FORMERR);
+                    log_err("update: %{dnsname} bogus %{dnstype} record: %r", rname, &rtype, return_value);
+                    break;
+                }
+                default:
+                {
+                    log_err("update: reading update for zone %{dnsname}: %r", zone->origin, return_value);
+                    break;
+                }
             }
-
-            buffer += *buffer + 1;
-        }
-        while(*buffer != 0);
-
-        rname_size = ++buffer - rname;
-
-        if((buffer_size -= 10) <= 0)
-        {
+            
             label_update_status_destroy(&lus_set);
 
             return SERVER_ERROR_CODE(RCODE_FORMERR);
-        }
+        }        
 
-        rtype = GET_U16_AT(*buffer); /** @note : NATIVETYPE */
-        buffer += 2;
-        rclass = GET_U16_AT(*buffer); /** @note : NATIVECLASS */
-        buffer += 2;
-        rttl = ntohl(GET_U32_AT(*buffer));
-        buffer += 4;
-        rdata_size = ntohs(GET_U16_AT(*buffer));
-
-        if((buffer_size -= rdata_size) <= 0)    /* Buffer overrun check */
-        {
-            label_update_status_destroy(&lus_set);
-
-            return SERVER_ERROR_CODE(RCODE_FORMERR);
-        }
-
-        buffer += 2;
-        rdata = buffer;
-        buffer += rdata_size;
+        rname = wire;
+        rname_size = dnsname_len(wire);
+        rtype = GET_U16_AT(wire[rname_size]);
+        rclass = GET_U16_AT(wire[rname_size + 2]);
+        rttl = ntohl(GET_U32_AT(wire[rname_size + 4]));
+        rdata_size = ntohs(GET_U16_AT(wire[rname_size + 8]));        
+        rdata = &wire[rname_size + 10];
 
         /*
          * Simple consistency test:
@@ -990,79 +1033,8 @@ dynupdate_update(zdb_zone* zone, u8* buffer_, s32 buffer_size, u16 count, u32 ne
         if((rdata_size == 0) && (rclass != CLASS_ANY))
         {
             label_update_status_destroy(&lus_set);
+            
             return SERVER_ERROR_CODE(RCODE_FORMERR);
-        }
-        else
-        {
-            if(rdata_size > 0)
-            {
-                switch(rtype)
-                {
-                    case TYPE_MX:
-                    {
-                        if(rdata_size < 3 || rdata_size > 2 + MAX_DOMAIN_LENGTH)
-                        {
-                            log_err("update: %{dnsname} bogus %{dnstype} record", rname, &rtype);
-                            
-                            label_update_status_destroy(&lus_set);
-
-                            return SERVER_ERROR_CODE(RCODE_FORMERR);
-                        }
-
-                        break;
-                    }
-
-                    case TYPE_NS:
-                    case TYPE_CNAME:
-                    case TYPE_DNAME:
-                    case TYPE_PTR:
-                    case TYPE_MB:
-                    case TYPE_MD:
-                    case TYPE_MF:
-                    case TYPE_MG:
-                    case TYPE_MR:
-                    {
-                        if(rdata_size < 1 || rdata_size > MAX_DOMAIN_LENGTH)
-                        {
-                            log_err("update: %{dnsname} bogus %{dnstype} record", rname, &rtype);
-                            
-                            label_update_status_destroy(&lus_set);
-
-                            return SERVER_ERROR_CODE(RCODE_FORMERR);
-                        }
-
-                        break;
-                    }
-
-                    case TYPE_A:
-                    {
-                        if(rdata_size != 4)
-                        {
-                            log_err("update: %{dnsname} bogus %{dnstype} record", rname, &rtype);
-                            
-                            label_update_status_destroy(&lus_set);
-
-                            return SERVER_ERROR_CODE(RCODE_FORMERR);
-                        }
-
-                        break;
-                    }
-
-                    case TYPE_AAAA:
-                    {
-                        if(rdata_size != 16)
-                        {
-                            log_err("update: %{dnsname} bogus %{dnstype} record", rname, &rtype);
-                            
-                            label_update_status_destroy(&lus_set);
-
-                            return SERVER_ERROR_CODE(RCODE_FORMERR);
-                        }
-
-                        break;
-                    }
-                }
-            }
         }
 
         dnsname_to_dnsname_vector(rname, &name_path);
@@ -1478,6 +1450,7 @@ dynupdate_update(zdb_zone* zone, u8* buffer_, s32 buffer_size, u16 count, u32 ne
             }
         }
     }
+    while(--count > 0);
 
     if(!dryrun)
     {
@@ -1515,9 +1488,11 @@ dynupdate_update(zdb_zone* zone, u8* buffer_, s32 buffer_size, u16 count, u32 ne
             }
         }
     }
+    
+    ya_result return_value = SUCCESS;
 
 #if ZDB_DNSSEC_SUPPORT != 0
-
+    
     if( !dryrun && (zone->apex->nsec.dnssec != NULL) )
     {
         /*
@@ -1559,12 +1534,12 @@ dynupdate_update(zdb_zone* zone, u8* buffer_, s32 buffer_size, u16 count, u32 ne
 
         dnssec_process_initialize(&task, main_task);
         zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_DYNUPDATE); /** @todo : "give" the mutex instead of this */
-        dnssec_process_task(zone, &task, dynupdate_update_rrsig_body, &lus_set);
+        return_value = dnssec_process_task(zone, &task, dynupdate_update_rrsig_body, &lus_set);
         zdb_zone_lock(zone, ZDB_ZONE_MUTEX_DYNUPDATE); /** @todo : "give" the mutex instead of this */
         dnssec_process_finalize(&task);
 
 #if ZDB_NSEC3_SUPPORT != 0
-        if((zone->apex->flags & ZDB_RR_LABEL_NSEC3) != 0)
+        if(ISOK(return_value) && ((zone->apex->flags & ZDB_RR_LABEL_NSEC3) != 0))
         {
             treeset_avl_iterator_init(&lus_set, &lus_iter);
             while(treeset_avl_iterator_hasnext(&lus_iter))
@@ -1579,7 +1554,7 @@ dynupdate_update(zdb_zone* zone, u8* buffer_, s32 buffer_size, u16 count, u32 ne
 
             dnssec_process_initialize(&task, dnssec_task);
             zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_DYNUPDATE); /** @todo : "give" the mutex instead of this */
-            dnssec_process_task(zone, &task, dynupdate_update_nsec3_body, &lus_set);
+            return_value = dnssec_process_task(zone, &task, dynupdate_update_nsec3_body, &lus_set);
             zdb_zone_lock(zone, ZDB_ZONE_MUTEX_DYNUPDATE); /** @todo : "give" the mutex instead of this */
             dnssec_process_finalize(&task);
         }
@@ -1591,7 +1566,7 @@ dynupdate_update(zdb_zone* zone, u8* buffer_, s32 buffer_size, u16 count, u32 ne
 
     label_update_status_destroy(&lus_set);
 
-    return SUCCESS;
+    return return_value;
 }
 
 /*    ------------------------------------------------------------    */

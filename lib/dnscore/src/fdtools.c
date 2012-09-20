@@ -38,6 +38,8 @@
  * @{
  */
 
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include "dnscore/fdtools.h"
 #include "dnscore/timems.h"
@@ -333,6 +335,21 @@ close_ex(int fd)
     }
     
     return return_value;
+}
+
+s64
+filesize(const char *name)
+{
+    struct stat s;
+    if(stat(name, &s) >= 0)
+    {
+        if(S_ISREG(s.st_mode))
+        {
+            return s.st_size;
+        }
+    }
+    
+    return (s64)ERRNO_ERROR;
 }
 
 /** @} */

@@ -28,6 +28,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#	YADIFA data Makefile.am script
+#
+#      	Makefile.am script
+#
+#	$URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/var/Makefile.am $
+#
+#       $Date: 2012-05-16 08:07:10 +0200 (Wed, 16 May 2012) $
+#
+#       $Revision: 2001 $
+#
+#	$Author: ericdf $
+#
+##############################################################################
 
 ACLOCAL_AMFLAGS = -I m4
 

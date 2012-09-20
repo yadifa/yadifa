@@ -49,7 +49,30 @@
 
 #include "database.h"
 
+/**
+ * 
+ * Schedule for an incremental update of a zone
+ * 
+ * @param db the database
+ * @param address_list the address of the master(s)
+ * @param origin the zone domain
+ * 
+ * @return an error code
+ */
+
 ya_result scheduler_ixfr_query(database_t *db, host_address *address_list, u8 *origin);
+
+/**
+ * 
+ * Schedule for the full download of a zone
+ * 
+ * @param db the database
+ * @param address_list the address of the master(s)
+ * @param origin the zone domain
+ * 
+ * @return an error code
+ */
+
 ya_result scheduler_axfr_query(database_t *db, host_address *address_list, u8 *origin);
 
 #endif	/* SCHEDULER_XFR_H */

@@ -113,30 +113,31 @@ free_rrsets(ptr_vector* rrsetsp)
  */
 
 ya_result
-dynupdate_check_prerequisites(zdb_zone* zone, u8* buffer_, s32 buffer_size, u16 count)
+dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count)
 {
+    if(ZDB_ZONE_INVALID(zone))
+    {
+        return ERROR; /* todo: use a specific code */
+    }
+    
     if(count == 0)
     {
         return SUCCESS;
     }
-
+    
     dnsname_vector origin_path;
     dnsname_vector name_path;
 
     ptr_vector rrsets;
 
-    buffer_size &= 0xffff;
-    
-    u8* buffer = buffer_;
-    u8* limit = &buffer[buffer_size];
     u8* rname;
     u8* rdata;
-
     u32 rname_size;
     u32 rttl;
     u16 rtype;
     u16 rclass;
     u16 rdata_size;
+    u8 wire[MAX_DOMAIN_LENGTH + 10 + 65536];
 
     ptr_vector_init(&rrsets);
 
@@ -144,53 +145,21 @@ dynupdate_check_prerequisites(zdb_zone* zone, u8* buffer_, s32 buffer_size, u16 
 
     while(count-- > 0)
     {
-        rname = buffer;
-
-        while((buffer < limit) && (*buffer != 0))
-        {
-            buffer += *buffer + 1;
-        }
+        ya_result return_value;
         
-        buffer++;
-        
-        if(buffer >= limit)
-        {
-            free_rrsets(&rrsets);
-            return SERVER_ERROR_CODE(RCODE_FORMERR);
-        }
-
-        rname_size = buffer - rname;
-        
-        if(&buffer[10] > limit)
-        {
-            free_rrsets(&rrsets);
-            return SERVER_ERROR_CODE(RCODE_FORMERR);
-        }
-
-        rtype = GET_U16_AT(*buffer); /** @note : NATIVETYPE */
-        buffer += 2;
-        rclass = GET_U16_AT(*buffer); /** @note : NATIVECLASS */
-        buffer += 2;
-        rttl = ntohl(GET_U32_AT(*buffer));
-        
-        if(rttl != 0)
+        if(FAIL(return_value = packet_reader_read_zone_record(reader, wire, sizeof(wire))))
         {
             free_rrsets(&rrsets);
             return SERVER_ERROR_CODE(RCODE_FORMERR);
         }
         
-        buffer += 4;
-        rdata_size = ntohs(GET_U16_AT(*buffer));
-        buffer += 2;
-
-        if(&buffer[rdata_size] > limit)
-        {
-            free_rrsets(&rrsets);
-            return SERVER_ERROR_CODE(RCODE_FORMERR);
-        }
-        
-        rdata = buffer;
-        buffer += rdata_size;
+        rname = wire;
+        rname_size = dnsname_len(wire);
+        rtype = GET_U16_AT(wire[rname_size]);
+        rclass = GET_U16_AT(wire[rname_size + 2]);
+        rttl = ntohl(GET_U32_AT(wire[rname_size + 4]));
+        rdata_size = ntohs(GET_U16_AT(wire[rname_size + 8]));        
+        rdata = &wire[rname_size + 10];
 
         dnsname_to_dnsname_vector(rname, &name_path);
 
@@ -413,7 +382,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, u8* buffer_, s32 buffer_size, u16 
 
     free_rrsets(&rrsets);
 
-    return buffer - buffer_;
+    return reader->offset;
 }
 
 /*    ------------------------------------------------------------    */

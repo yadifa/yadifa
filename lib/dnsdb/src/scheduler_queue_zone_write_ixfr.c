@@ -721,14 +721,14 @@ scheduler_queue_zone_send_ixfr(zdb_zone* zone, const char* directory, u32 packet
         
     log_info("zone write ixfr: queueing %{dnsname}", zone->origin);
     
-    MALLOC_OR_DIE(scheduler_queue_zone_write_ixfr_args*, args, sizeof (scheduler_queue_zone_write_ixfr_args), GENERIC_TAG);
+    MALLOC_OR_DIE(scheduler_queue_zone_write_ixfr_args*, args, sizeof(scheduler_queue_zone_write_ixfr_args), GENERIC_TAG);
     args->zone = zone;
     args->directory = strdup(directory);
 
     message_data *mesg_clone;
 
-    MALLOC_OR_DIE(message_data*, mesg_clone, sizeof (message_data), GENERIC_TAG);
-    memcpy(mesg_clone, mesg, sizeof (message_data));
+    MALLOC_OR_DIE(message_data*, mesg_clone, sizeof(message_data), GENERIC_TAG);
+    memcpy(mesg_clone, mesg, sizeof(message_data));
 
     args->mesg = mesg_clone;
     args->packet_size_limit = packet_size_limit;

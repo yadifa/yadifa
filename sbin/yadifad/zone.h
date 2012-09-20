@@ -182,6 +182,7 @@ void zone_setmustsaveaxfr(zone_data *zone_desc, bool v);
 void zone_setsavingfile(zone_data *zone_desc, bool v);
 void zone_setsavingaxfr(zone_data *zone_desc, bool v);
 void zone_setstartingup(zone_data *zone_desc, bool v);
+void zone_setdynamicupdating(zone_data *zone_desc, bool v);
 
 bool zone_isidle(zone_data *zone_desc);
 bool zone_ismodified(zone_data *zone_desc);
@@ -190,6 +191,8 @@ bool zone_mustsavefile(zone_data *zone_desc);
 bool zone_mustsaveaxfr(zone_data *zone_desc);
 bool zone_issavingfile(zone_data *zone_desc);
 bool zone_issavingaxfr(zone_data *zone_desc);
+bool zone_isdynamicupdating(zone_data *zone_desc);
+bool zone_canbeedited(zone_data *zone_desc);
 /*
  * This will mark a zone as being obsolete.
  * It means that we are about to delete it.

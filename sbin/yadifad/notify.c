@@ -132,8 +132,14 @@ static threaded_queue notify_message_queue;
 /*------------------------------------------------------------------------------
  * FUNCTIONS */
 
-/*
+/**
+ * 
  * Queue a message telling a slave has answered to a notify
+ * 
+ * @param origin the domain of the zone
+ * @param sa the address of the source
+ * @param rcode rcode part of the query
+ * @param aa aa flag value in the query
  */
 
 static void
@@ -210,6 +216,8 @@ notify_masterquery_thread(void *args_)
     
     zone_data *zone = zone_getbydnsname(args->origin);
     
+    /* get the zone descriptor for that domain */
+    
     ya_result return_value;
     
     if(zone == NULL)
@@ -221,6 +229,8 @@ notify_masterquery_thread(void *args_)
         return NULL;
     }
     
+    /* do an SOA query to the master to retrieve the serial (wait) */
+    
     if(!args->serial_set)
     {
         if(ISOK(return_value = message_query_serial(args->origin, zone->masters, &args->serial)))
@@ -228,101 +238,93 @@ notify_masterquery_thread(void *args_)
             args->serial_set = TRUE;
         }
         else
-        {        
+        {
+            /* we didn't got the serial */
+            
             log_debug("notify: slave: %{dnsname} SOA query to the master failed: %r", args->origin, return_value);
         }
     }
     
+    
     u32 current_serial;
-                
-    bool use_ixfr = FALSE;
+
+    /* get the zone of the domain */
 
     zdb_zone *dbzone = zdb_zone_find_from_dnsname((zdb*)g_config->database, args->origin, CLASS_IN);
 
     if(dbzone != NULL)
     {
+        /* lock it for the XFR (no writer allowed) */
+        
         if(zdb_zone_trylock(dbzone, ZDB_ZONE_MUTEX_XFR))
         {
+            /* get the current serial of the zone */
+            
             if(ISOK(zdb_zone_getserial(dbzone, &current_serial)))
             {
-                use_ixfr = TRUE;
+               /*
+                * Ok, just to avoid weird stuff : if the serial on the "master" is lower,
+                * nothing has to be done except a note on the log.
+                * 
+                * If we didn't got the serial of course, we can only ask to the master.
+                */
+
+                if(args->serial_set)
+                {
+                    if(serial_lt(args->serial, current_serial))
+                    {
+                        /* do nothing at all */
+                        
+                        log_warn("notify: slave: serial number on this slave is higher (%u) than on the notifier (%u)", current_serial, args->serial);
+                    }
+                    else if(serial_gt(args->serial, current_serial))
+                    {
+                        /* download (and apply) the incremental change  */
+
+                        log_info("notify: slave: scheduling an IXFR for %{dnsname}", zone->origin);
+
+                        zone_setloading(zone, TRUE);
+                        scheduler_ixfr_query(g_config->database, zone->masters, zone->origin);
+                    }
+                    else
+                    {
+                        /* nothing to do but mark the zone as being refreshed */
+
+                        log_info("notify: slave: already the last version");
+
+                        dbzone->apex->flags &= ~ZDB_RR_LABEL_INVALID_ZONE;
+                        zone->refresh.refreshed_time = zone->refresh.retried_time = time(NULL);
+
+                        database_zone_refresh_maintenance(g_config->database, zone->origin);
+                    }
+                }
+                else
+                {
+                    log_warn("notify: slave: the serial of the master has not been obtained");
+
+                    zone_setloading(zone, TRUE);
+                    scheduler_ixfr_query(g_config->database, zone->masters, zone->origin);
+                }
             }
 
             zdb_zone_unlock(dbzone, ZDB_ZONE_MUTEX_XFR);
         }
         else
         {
-            /*
-            * The zone has been locked already ? do not touch it
+           /*
+            * The zone has been locked already ? give up ...
             */
 
             log_info("notify: slave: zone %{dnsname} has been locked (%x)", args->origin, dbzone->mutex_owner);
 
             database_zone_refresh_maintenance(g_config->database, args->origin);
-            
-            free(args);
-
-            return NULL;
         }
     }
-   
-    if(use_ixfr)
-    {
-        /*
-        * Ok, just to avoid weird stuff : I assume that if the serial on the "master" is lower,
-        * nothing has to be done except a note on the log.
-        */
-
-        if(args->serial_set)
-        {
-            if(serial_lt(args->serial, current_serial))
-            {
-                log_warn("notify: slave: serial number on this slave is higher (%u) than on the notifier (%u)", current_serial, args->serial);
-            }
-            else if(serial_gt(args->serial, current_serial))
-            {
-                /* load the diff */
-
-                log_info("notify: slave: scheduling an IXFR for %{dnsname}", zone->origin);
-
-                zone_setloading(zone, TRUE);
-                scheduler_ixfr_query(g_config->database,zone->masters, zone->origin);
-            }
-            else
-            {
-                /* nothing to do */
-
-                log_info("notify: slave: already the last version");
-                
-                zdb_zone_lock(dbzone, ZDB_ZONE_MUTEX_XFR);
-                dbzone->apex->flags &= ~ZDB_RR_LABEL_INVALID_ZONE;
-                zone->refreshed_time = zone->retried_time = time(NULL);
-                zdb_zone_unlock(dbzone, ZDB_ZONE_MUTEX_XFR);
-                
-                database_zone_refresh_maintenance(g_config->database, zone->origin);
-            }
-        }
-        else
-        {
-            log_warn("notify: slave: the serial of the master has not been obtained");
-            
-            zdb_zone_lock(dbzone, ZDB_ZONE_MUTEX_XFR);
-            zone_setloading(zone, TRUE);
-            zdb_zone_unlock(dbzone, ZDB_ZONE_MUTEX_XFR);
-            
-            scheduler_ixfr_query(g_config->database,zone->masters, zone->origin);
-        }
-
-    }   /* IXFR */
     else
     {
-        /**
-        * The following can be scheduled
-        */
-
         /*
-        * Ask for an AXFR for this serial
-        */
+         * Ask for an AXFR of the zone
+         */
 
         log_info("notify: slave: scheduling an AXFR for %{dnsname}", zone->origin);
 
@@ -335,9 +337,19 @@ notify_masterquery_thread(void *args_)
     return NULL;
 }
 
-/*
+/**
+ * 
+ * Uses a thread to handle the notify from the master (notify_masterquery_thread)
+ * 
  * The message is a NOTIFY SOA IN
  * The reader points into the buffer of the message and is exactly after the Q section.
+ * 
+ * 
+ * @param database the database
+ * @param mesg the message
+ * @param reader packet reader into the above message, positioned right after the Q section
+ * 
+ * @return an error code
  */
 
 static ya_result
@@ -769,7 +781,9 @@ notify_process_thread(void *list_)
                 socketaddress sa;
                 
                 u16 id = random_next(rnd);
-                message_make_notify(msgdata, id, message->origin);
+                
+                message_make_notify(msgdata, id, message->origin); /** @todo check if adding the SOA helps bind to update faster */
+                
                 if(ha->tsig != NULL)
                 {
                     ya_result return_code;
@@ -877,9 +891,15 @@ notify_process_thread(void *list_)
             notify_message_free(msg);
         }
 
-        sleep(7);
+        sleep(1);
     }
 }
+
+/**
+ * Sends a notify to all the slave for a given domain name
+ * 
+ * @param origin
+ */
 
 void
 notify_slaves(u8 *origin)
@@ -1005,13 +1025,17 @@ notify_slaves(u8 *origin)
         message->origin = dnsname_dup(origin);
         message->payload.type = NOTIFY_MESSAGE_TYPE_NOTIFY;
         message->payload.notify.hosts_list = list.next;
-        message->payload.notify.repeat_countdown = zone_desc->notify_retry_count; /* 10 times */
-        message->payload.notify.repeat_period = zone_desc->notify_retry_period; /* 1 minute */
-        message->payload.notify.repeat_period_increase = zone_desc->notify_retry_period_increase; /* 1 minute */
+        message->payload.notify.repeat_countdown = zone_desc->notify.retry_count; /* 10 times */
+        message->payload.notify.repeat_period = zone_desc->notify.retry_period; /* 1 minute */
+        message->payload.notify.repeat_period_increase = zone_desc->notify.retry_period_increase; /* 1 minute */
 
         threaded_queue_enqueue(&notify_message_queue, message);
     }
 }
+
+/**
+ * Starts the notify service thread
+ */
 
 void
 notify_startup()
@@ -1028,6 +1052,10 @@ notify_startup()
         }
     }
 }
+
+/**
+ * Stops the notify service thread
+ */
 
 void
 notify_shutdown()

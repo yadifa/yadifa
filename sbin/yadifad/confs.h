@@ -83,7 +83,7 @@ extern "C" {
 
 #define     PROGRAM_NAME                PACKAGE
 #define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASEDATE                 "2012-07-09"
+#define     RELEASEDATE                 "2012-09-21"
 #define     COMPILEDATE                 __DATE__
 
     /* List of default values for the different configuration parameters */

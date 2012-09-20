@@ -28,6 +28,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#	YADIFA dnszone Makefile.am script
+#
+#      	Makefile.am script
+#
+#	$URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/lib/dnszone/Makefile.am $
+#
+#       $Date: 2012-06-15 12:50:45 +0200 (Fri, 15 Jun 2012) $
+#
+#       $Revision: 2040 $
+#
+#	$Author: ericdf $
+#
+##############################################################################
 
 srcdir =        @srcdir@
 libdir =	@libdir@

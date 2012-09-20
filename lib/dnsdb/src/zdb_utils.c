@@ -67,11 +67,11 @@
  */
 
 ya_result
-rr_soa_get_serial(u8* rdata, u16 rdata_size, u32* serial)
+rr_soa_get_serial(const u8* rdata, u16 rdata_size, u32* serial)
 {
     s32 soa_size = rdata_size;
 
-    u8* soa_start = rdata;
+    const u8* soa_start = rdata;
 
     u32 len = dnsname_len(soa_start);
 
@@ -133,11 +133,11 @@ rr_soa_increase_serial(u8* rdata, u16 rdata_size, u32 increment)
 }
 
 ya_result
-rr_soa_get_minimumttl(u8* rdata, u16 rdata_size, u32* minimum_ttl)
+rr_soa_get_minimumttl(const u8* rdata, u16 rdata_size, u32* minimum_ttl)
 {
     s32 soa_size = rdata_size;
 
-    u8* soa_start = rdata;
+    const u8* soa_start = rdata;
 
     u32 len = dnsname_len(soa_start);
 

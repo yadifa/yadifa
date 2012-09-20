@@ -83,6 +83,8 @@ int unlink_ex(const char *folder, const char *filename);
 
 ya_result close_ex(int fd);
 
+s64 filesize(const char *name);
+
 #ifdef	__cplusplus
 }
 #endif

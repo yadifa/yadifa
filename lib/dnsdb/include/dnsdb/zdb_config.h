@@ -78,7 +78,7 @@ extern "C"
  * Version of the database.
  */
 
-#define ZDB_VERSION "0.8"
+#define ZDB_VERSION "1.0"
 
 /**
  * Inlines the find operation of the AVLs/BTREEs
@@ -152,7 +152,6 @@ extern "C"
       #undef ZDB_OPENSSL_SUPPORT
       #define ZDB_OPENSSL_SUPPORT 0
 #endif
-
 
 /**
  *
@@ -232,7 +231,22 @@ extern "C"
  */
 
 #define ZDB_RECORDS_MAX_CLASS   1
-       
+
+/**
+ * Previously, readers had to be "stopped" before any write was done into the database.  It's a reasonably fast mechanism.
+ * With the drastic improve of the MT model on kernels > 3.x, the zone can now be explicitely locked by readers.
+ * The first experiments tends to show that the price is minimal.
+ * The lock can still be drastically improved.
+ * 
+ * == 0: no lock
+ * != 0: lock
+ * 
+ * The locking mechanism itself can be vastly improved
+ */
+    
+
+#define ZDB_EXPLICIT_READER_ZONE_LOCK 1
+    
 /**
  *
  * DEBUG: Enables (1) or disable (0) stdout statistics output while loading a zone.

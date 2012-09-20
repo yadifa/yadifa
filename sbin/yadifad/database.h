@@ -77,9 +77,16 @@ extern "C" {
      *  @return status of message is written in mesg->status
      */
     void            database_query(database_t *database, message_data *mesg);
+    
+    /**
+     * A task is a function called in the main thread loop
+     * A delegate is a task we are waiting for
+     */
+    void            database_delegate_query(database_t *database, message_data *mesg);
+    
     finger_print    database_update(database_t *database, message_data *mesg);
-
-    finger_print    database_schedule_update(database_t *database, message_data *mesg);
+    
+    finger_print    database_delegate_update(database_t *database, message_data *mesg);
 
     ya_result       database_print_zones(zone_data *, char *);
     ya_result       database_unload(database_t *);

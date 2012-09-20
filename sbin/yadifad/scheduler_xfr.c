@@ -69,6 +69,7 @@ struct xfr_query_schedule_param
     database_t *db;
     host_address *servers;
     u8 *origin;
+    u64 serial_start_offset;
     u32 loaded_serial;
     u16 type;
     ya_result return_value;
@@ -87,8 +88,7 @@ struct axfr_query_axfr_load_param
 	u8 *origin;
 };
 
-static ya_result
-scheduler_axfr_query_alarm(void* xqspp);
+static ya_result scheduler_axfr_query_alarm(void* xqspp);
 
 /*
  * Called after the load of a zone (AXFR/IXFR)
@@ -112,11 +112,11 @@ xfr_query_mark_zone_loaded(zdb* db, const u8 *origin, u32 refreshed_time, u32 re
         
         if(refreshed_time != 0)
         {
-            zone->refreshed_time = refreshed_time;
+            zone->refresh.refreshed_time = refreshed_time;
         }
         if(retried_time != 0)
         {
-            zone->retried_time = retried_time;
+            zone->refresh.retried_time = retried_time;
         }
         
         zdb_zone *dbzone = zdb_zone_find_from_dnsname(db, origin, CLASS_IN);
@@ -130,7 +130,7 @@ xfr_query_mark_zone_loaded(zdb* db, const u8 *origin, u32 refreshed_time, u32 re
             if(ISOK(zdb_zone_getsoa(dbzone, &soa)))
             {
                 u32 now = time(NULL);
-                if(zone->refreshed_time >= now + soa.expire)
+                if(zone->refresh.refreshed_time >= now + soa.expire)
                 {
                     log_info("slave: zone %{dnsname} has expired", origin);
                     
@@ -191,9 +191,10 @@ xfr_query_final_callback(void* data)
 
             u32 now = time(NULL);
 
-            zone_desc->refreshed_time = now;
-            zone_desc->retried_time = now;
+            zone_desc->refresh.refreshed_time = now;
+            zone_desc->refresh.retried_time = now;
             
+            zdb_zone_unlock(placeholder_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
             zdb_zone_destroy(placeholder_zone);
         }
         
@@ -270,7 +271,7 @@ xfr_query_axfr_load_thread(void *data)
 }
 
 /*
- * Slave : the xfr file is on disk ... or not.
+ * slave : the xfr file is on disk ... or not.
  */
 
 static ya_result
@@ -281,7 +282,15 @@ xfr_query_callback(void* data)
 	ya_result scheduler_status;
     u32 refreshed_time = 0;
     u32 retried_time = time(NULL);
+    
+    /*
+     * Zone refresh will be enabled (again) here.
+     * 
+     * xfr_query_mark_zone_loaded
+     * 
+     */
 
+    
     if(ISOK(xqsp->return_value))
     {
         /* success but type == 0 => transfer done */
@@ -298,7 +307,6 @@ xfr_query_callback(void* data)
         /*
          * Here (?) put the invalid zone placeholder if it is not there yet
          */
-        
     }
 
     switch(xqsp->type)
@@ -345,8 +353,8 @@ xfr_query_callback(void* data)
                     }                    
 
                     /**
-                    * schedule the axfr load
-                    */
+                     * schedule the axfr load
+                     */
 
                     aqalp->old_zone = NULL; /* old zone */
                     aqalp->new_zone = NULL;
@@ -401,7 +409,7 @@ xfr_query_callback(void* data)
         {
             /**
              * Load the ixfr (single thread, zone locked)
-             */           
+             */
 
 			scheduler_status = SCHEDULER_TASK_FINISHED;
 
@@ -419,7 +427,7 @@ xfr_query_callback(void* data)
 
                 zdb_zone_lock(dbzone, ZDB_ZONE_MUTEX_XFR);
                 
-                if(ISOK(return_value = zdb_icmtl_replay(dbzone, g_config->xfr_path)))
+                if(ISOK(return_value = zdb_icmtl_replay(dbzone, g_config->xfr_path, xqsp->serial_start_offset, xqsp->loaded_serial, ZDB_ICMTL_REPLAY_SERIAL_OFFSET|ZDB_ICMTL_REPLAY_SERIAL_LIMIT)))
                 {
                     log_info("slave: replayed %d records changes", return_value);
                     
@@ -458,7 +466,7 @@ xfr_query_callback(void* data)
             break;
         }
     }   /* switch return_value */
-
+    
     free(xqsp->origin);
     free(xqsp);
 
@@ -489,7 +497,7 @@ xfr_query_thread(void *data)
 
             random_ctx rndctx = thread_pool_get_random_ctx();
 
-            if(ISOK(return_value = ixfr_query(xqsp->servers, zone, &xqsp->loaded_serial)))
+            if(ISOK(return_value = ixfr_query(xqsp->servers, zone, &xqsp->loaded_serial, &xqsp->serial_start_offset)))
             {
                 u16 type = (u16)return_value;
                 xqsp->type = type;
@@ -543,6 +551,17 @@ xfr_query_thread(void *data)
     return NULL;
 }
 
+/**
+ * 
+ * Schedule for an incremental update of a zone
+ * 
+ * @param db the database
+ * @param address_list the address of the master(s)
+ * @param origin the zone domain
+ * 
+ * @return an error code
+ */
+
 ya_result
 scheduler_ixfr_query(database_t *db, host_address *address_list, u8 *origin)
 {
@@ -564,13 +583,17 @@ scheduler_ixfr_query(database_t *db, host_address *address_list, u8 *origin)
     xqsp->type = TYPE_IXFR;
     xqsp->callback = NULL;
     xqsp->callback_args = NULL;
+    
+    /*
+     * Disable refresh
+     */
 
     scheduler_schedule_thread(NULL, xfr_query_thread, xqsp, "scheduler_ixfr_query");
 
     return SUCCESS;
 }
 
-ya_result
+static ya_result
 scheduler_axfr_query_init(void* xqsp_)
 {
     xfr_query_schedule_param* xqsp = (xfr_query_schedule_param*)xqsp_;
@@ -584,6 +607,17 @@ scheduler_axfr_query_init(void* xqsp_)
     
     return SCHEDULER_TASK_PROGRESS;
 }
+
+/**
+ * 
+ * Schedule for the full download of a zone
+ * 
+ * @param db the database
+ * @param address_list the address of the master(s)
+ * @param origin the zone domain
+ * 
+ * @return an error code
+ */
 
 ya_result
 scheduler_axfr_query(database_t *db, host_address *address_list, u8 *origin)
@@ -613,6 +647,10 @@ scheduler_axfr_query(database_t *db, host_address *address_list, u8 *origin)
     xqsp->type = TYPE_AXFR;
     xqsp->callback = NULL;
     xqsp->callback_args = NULL;
+    
+    /*
+     * Disable refresh
+     */
 
     scheduler_schedule_thread(NULL, xfr_query_thread, xqsp, "scheduler_axfr_query");
 
@@ -620,11 +658,15 @@ scheduler_axfr_query(database_t *db, host_address *address_list, u8 *origin)
 }
 
 static ya_result
-scheduler_axfr_query_alarm(void* xqspp)
+scheduler_axfr_query_alarm(void *xqspp)
 {
-    xfr_query_schedule_param* xqsp = (xfr_query_schedule_param*)xqspp;
+    xfr_query_schedule_param *xqsp = (xfr_query_schedule_param*)xqspp;
     
     log_debug("slave: setting alarm for %{dnsname} AXFR query", xqsp->origin);
+    
+    /*
+     * Disable refresh
+     */
 
     scheduler_schedule_thread(NULL, xfr_query_thread, xqsp, "scheduler_axfr_query_alarm");
     
