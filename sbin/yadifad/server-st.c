@@ -559,7 +559,7 @@ server_st_process_udp(database_t *database, udp *udp_itf)
  *  @retval OK
  */
 static u64 server_run_loop_rate_tick         = 0;
-static u64 server_run_loop_rate_count        = 0;
+//static u64 server_run_loop_rate_count        = 0;
 static s32 server_run_loop_timeout_countdown = 0;
 
 ya_result

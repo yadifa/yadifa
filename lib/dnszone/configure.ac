@@ -30,30 +30,9 @@ dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
 dnl ##############################################################################
-dnl
-dnl      SVN Program:
-dnl              $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/lib/dnszone/configure.ac $
-dnl
-dnl      Creation Date:
-dnl              2010-01-14
-dnl
-dnl      Last Update:
-dnl              $Date: 2012-09-19 10:46:55 +0200 (Wed, 19 Sep 2012) $
-dnl              $Revision: 2237 $
-dnl      Author:
-dnl             G. Van Emelen (Gery@VanEmelen.net)
-dnl				Eric Diaz Fernandez
-dnl
-dnl      Purpose:
-dnl              Zone File loader
-dnl
-dnl      Last Change:
-dnl              $Author: geryve $
-dnl
-dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 2237 $])
+AC_REVISION([$Revision: 2880 $])
 AC_INIT([dnszone],m4_esyscmd([echo $(cat VERSION)-$(grep \$Revision: * | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[bugreport@yadifa.eu])
 
 m4_include([../../m4/eurid.m4])

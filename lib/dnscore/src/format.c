@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-* DOCUMENTATION */
+ *
+ * Copyright (c) 2011, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ * DOCUMENTATION */
 /** @defgroup format C-string formatting
  *  @ingroup dnscore
  *  @brief
@@ -47,6 +47,8 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "dnscore/ctrl-rfc.h"
+
 #define HAS_DLADDR_SUPPORT 0
 
 #ifdef __linux__
@@ -59,7 +61,7 @@
 #include <dlfcn.h>
 
 #undef HAS_DLADDR_SUPPORT
-#define HAS_DLADDR_SUPPORT 1
+#define HAS_DLADDR_SUPPORT 0
 
 #endif
 #endif
@@ -95,7 +97,7 @@
 #define CHR0 '\0'
 
 static const u8* STREOL = (const u8*)"\n";
-static const u8* STRCHR0 = (const u8*)"\0";
+//static const u8* STRCHR0 = (const u8*)"\0";
 static const u8* STRMINUS = (const u8*)"-";
 
 /*
@@ -104,7 +106,7 @@ static const u8* STRMINUS = (const u8*)"-";
 
 static ptr_vector format_handler_descriptor_table = {NULL, -1, -1};
 
-static bool g_format_usable = FALSE;
+//static bool g_format_usable = FALSE;
 
 static int
 format_handler_compare(const char* str1, s32 str1_len, const char* str2, s32 str2_len)
@@ -408,7 +410,7 @@ format_double_make_format(char* p, s32 padding, s32 float_padding, char pad_char
 {
     *p++ = '%';
 
-    if(left_justified)
+    if(!left_justified)
     {
         *p++ = '-';
     }
@@ -423,7 +425,7 @@ format_double_make_format(char* p, s32 padding, s32 float_padding, char pad_char
     if(float_padding >= 0)
     {
         *p++ = '.';
-        p += sprintf(p, "%i", padding);
+        p += sprintf(p, "%i", float_padding);
     }
     if(long_double)
     {
@@ -624,7 +626,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
 
                 char* p = padding_string;
                 int n = 9;
-
+                c = *next++;
                 do
                 {
                     *p++ = c;
@@ -756,9 +758,8 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                 {
                     ya_result val = va_arg(args, ya_result);
 
-                    const char* text = error_gettext(val);
-                    output_stream_write(&os, (const u8*)text, strlen(text));
-
+                    error_writetext(&os, val);
+                    
                     break;
                 }
 
@@ -886,8 +887,6 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                 }
                 case 'f':
                 {
-                    size_t len;
-
                     if(type_size == sizeof (long double))
                     {
                         long double val = va_arg(args, long double);
@@ -1136,7 +1135,7 @@ int
 osprint_base64(output_stream* os, const u8* rdata_pointer, u32 rdata_size)
 {
     char buffer[65];
-    int total;
+    int total = 0;
     u32 n;
 
     while(rdata_size > 48)
@@ -1161,7 +1160,7 @@ int
 osprint_base16(output_stream* os, const u8* rdata_pointer, u32 rdata_size)
 {
     char buffer[65];
-    int total;
+    int total = 0;
     u32 n;
 
     while(rdata_size > 32)
@@ -1262,6 +1261,13 @@ print_hex_ascii_line(output_stream* os, const u_char *payload, int len, int offs
     osformat(os, "\n");
 }
 
+void
+print_payload_with_header(output_stream *os, const u_char *payload, int size_payload, const char *text)
+{
+    osformat(os, text);
+    print_payload(os, payload, size_payload);
+}
+
 /** \brief  Print packet payload data (avoid printing binary data)
  *
  * @param[in] os the output stream
@@ -1273,22 +1279,24 @@ print_hex_ascii_line(output_stream* os, const u_char *payload, int len, int offs
 
 
 void
-print_payload(output_stream* os, const u_char * payload, int size_payload)
+print_payload(output_stream *os, const u_char *payload, int size_payload)
 {
-    int len_rem = size_payload;
+    int                                              len_rem = size_payload;
+
     /* Number of bytes per line */
-    int line_width = 16;
-    int line_len;
+    int                                                     line_width = 16;
+    int                                                            line_len;
+
     /* Zero-based offset counter */
-    int offset = 0;
-    const u_char *ch = payload;
+    int                                                          offset = 0;
+    const                                              u_char *ch = payload;
 
     /*    ------------------------------------------------------------    */
 
     if(size_payload > 0)
     {
-        osformat(os, "Address Hex dump                                            Readable\n");
-        osformat(os, "----------------------------------------------------------------------------\n");
+        osformat(os, ";; Address Hex dump                                         Readable\n");
+        osformat(os, ";; -------------------------------------------------------------------------\n");
 
         if(size_payload <= 0)
             return;
@@ -1322,7 +1330,7 @@ print_payload(output_stream* os, const u_char * payload, int size_payload)
                 break;
             }
         }
-        osformat(os, "Data payload (%d bytes):\n\n", size_payload);
+        osformat(os, ";; Data payload (bytes): %d\n\n", size_payload);
         osformat(os, "\n\n");
     }
 }
@@ -1677,8 +1685,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
             if(type == TYPE_NSEC3)
             {
-                char tmp[8];
-
                 osprint(os, " ");
 
                 len = *rdata_pointer++;
@@ -1701,6 +1707,27 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             }
 
             return SUCCESS;
+        }
+        case TYPE_TLSA:
+        {
+            osformat(os, "%hhd %hhd %hhd ", rdata_pointer[0], rdata_pointer[1], rdata_pointer[2]);
+            
+            return osprint_base16(os, &rdata_pointer[3], rdata_size - 3);
+        }
+        case TYPE_SSHFP:
+        {
+            osformat(os, "%hhd %hhd ", rdata_pointer[0], rdata_pointer[1]);
+            
+            return osprint_base16(os, &rdata_pointer[2], rdata_size - 2);
+        }
+        case TYPE_SRV:
+        {
+            u16 priority = GET_U16_AT(rdata_pointer[0]);
+            u16 weight = GET_U16_AT(rdata_pointer[2]);
+            u16 port = GET_U16_AT(rdata_pointer[4]);
+            const u8 *fqdn = (const u8*)&rdata_pointer[6];
+            
+            return osformat(os, "%hd %hd %hd %{dnsname}", priority, weight, port, fqdn);
         }
         case TYPE_TXT:
         {
@@ -1727,7 +1754,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         }
         case TYPE_A6:
         case TYPE_ASFDB:
-        case TYPE_SRV:
         case TYPE_TSIG:
         case TYPE_IXFR:
         case TYPE_AXFR:

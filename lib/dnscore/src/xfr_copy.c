@@ -129,7 +129,7 @@ xfr_copy_open_previous(const u8 *origin, const char* folder, u32 end_at_serial, 
 
     /* returns the number of bytes = strlen(x) + 1 */
 
-    s32 fqdn_len = dnsname_to_cstr(fqdn, origin) - 1 ;
+    s32 fqdn_len = dnsname_to_cstr(fqdn, origin) ;
 
     DIR* dir = opendir(folder);
     if(dir != NULL)
@@ -1112,7 +1112,7 @@ xfr_delete_axfr(const u8 *origin, const char *folder)
 
     /* returns the number of bytes = strlen(x) + 1 */
 
-    s32 fqdn_len = dnsname_to_cstr(fqdn, origin) - 1 ;
+    s32 fqdn_len = dnsname_to_cstr(fqdn, origin) ;
 
     DIR* dir = opendir(folder);
     
@@ -1182,7 +1182,7 @@ xfr_delete_ix(const u8 *origin, const char *folder)
 
     /* returns the number of bytes = strlen(x) + 1 */
 
-    s32 fqdn_len = dnsname_to_cstr(fqdn, origin) - 1 ;
+    s32 fqdn_len = dnsname_to_cstr(fqdn, origin);
 
     DIR* dir = opendir(folder);
     if(dir != NULL)

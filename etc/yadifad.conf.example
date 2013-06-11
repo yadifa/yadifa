@@ -10,22 +10,22 @@
         chroot                      off
 
         # The path where all the log files will be written
-        logpath                     "/usr/local-dev/var/log"
+        logpath                     "/usr/local/var/log"
 
         # The path where the pid file will be written
-        pidpath                     "/usr/local-dev/var/run"    
+        pidpath                     "/usr/local/var/run"    
 
         # The path where all zone files will be written
-        datapath                    "/usr/local-dev/var/zones"
+        datapath                    "/usr/local/var/zones"
 
         # The path where the DNSSEC keys are found
-        keyspath                    "/usr/local-dev/var/zones/keys"
+        keyspath                    "/usr/local/var/zones/keys"
 
         # The path where the transfer and journaling files will be written (AXFR & IXFR)
-        xfrpath                     "/usr/local-dev/var/zones/xfr"
+        xfrpath                     "/usr/local/var/zones/xfr"
 
         # The version returned by a query to version.yadifa. CH TXT
-        version                     "1.0.0rc2"
+        version                     "1.0.3"
 
         # Enable EDNS0 support (?)
         edns0                       on
@@ -115,9 +115,6 @@
 # name          is predefined
 # debuglevel    uses the same names as syslog or * or all to filter the input
 # channels      is a comma-separated list of channels
-
-        version         103.2
-</main>
 
 # In production, use EMERG,ALERT,CRIT,ERR,WARNING,NOTICE,INFO instead of *
 

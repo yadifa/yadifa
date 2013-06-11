@@ -41,19 +41,7 @@
 #ifndef _SYSTYPES_H
 #define	_SYSTYPES_H
 
-#include <dnscore/dnscore-config.h>
-
-#ifndef DNSCORE_BUILD
-
-#undef VERSION
-#undef PACKAGE
-#undef PACKAGE_BUGREPORT
-#undef PACKAGE_NAME
-#undef PACKAGE_TARNAME
-#undef PACKAGE_STRING
-#undef PACKAGE_VERSION
-
-#endif
+#define HAS_TSIG_SUPPORT 1
 
 #define HAS_ATOMIC_FEATURES 1
 
@@ -110,12 +98,22 @@ typedef unsigned short u16;
 typedef short s16;
 typedef unsigned int u32;
 typedef int s32;
+
 #if defined(HAVE_UINT64_T) && defined(HAVE_INT64_T)
 typedef uint64_t u64;
 typedef int64_t s64;
 #elif defined(HAVE_LONG_LONG)
-typedef unsigned long long u64
-typedef signed long long s64
+typedef unsigned long long u64;
+typedef signed long long s64;
+#elif defined(_LONGLONG)  && ( _LONGLONG == 1 ) // FreeBSD 9.1 gcc 4.2.1
+typedef unsigned long long u64;
+typedef signed long long s64;
+#elif defined(__SIZEOF_LONG_LONG__) && (__SIZEOF_LONG_LONG__ == 8)
+typedef unsigned long long u64;
+typedef signed long long s64;
+#elif defined(__LONG_LONG_MAX__) && (__LONG_LONG_MAX__ == 9223372036854775807LL)
+typedef unsigned long long u64;
+typedef signed long long s64;
 #else
 #error NO UNSIGNED 64 BITS TYPE KNOWN ON THIS 64 BITS ARCHITECTURE (u64 + s64)
 #endif
@@ -138,12 +136,18 @@ NT: _M_IA64
 #endif
 #endif
 
-#if __SIZEOF_POINTER__==4
+#if __SIZEOF_POINTER__ == 4
 typedef unsigned int intptr;
-#elif __SIZEOF_POINTER__==8
+#elif __SIZEOF_POINTER__ == 8
 #if defined(HAVE_UINT64_T)
 typedef uint64_t intptr;
 #elif defined(HAVE_LONG_LONG)
+typedef unsigned long long intptr;
+#elif defined(__LONG_LONG_MAX__) && (__LONG_LONG_MAX__ == 9223372036854775807LL)
+typedef unsigned long long intptr;
+#elif defined(__SIZEOF_LONG_LONG__) && (__SIZEOF_LONG_LONG__ == 8)
+typedef unsigned long long intptr;
+#elif defined(_LONGLONG)  && ( _LONGLONG == 1 ) // FreeBSD 9.1 gcc 4.2.1
 typedef unsigned long long intptr;
 #else
 #error NO UNSIGNED 64 BITS TYPE KNOWN ON THIS 64 BITS ARCHITECTURE (intptr)
@@ -364,6 +368,8 @@ static inline void SET_U64_AT_P(void* p, u64 v)
 #define MIN_S32 ((s32)0xffffffffL)
 #define MIN_S64 ((s64)0xffffffffffffffffLL)
 
+#define CLEARED_SOCKET (-1)
+
 /**/
 
 typedef u32 process_flags_t;
@@ -373,7 +379,7 @@ typedef u32 process_flags_t;
 #define NU32(value)     ((u32)(value))
 #else
 #define NU16(value)     (u16)(((((u16)(value))>>8)&0xff)|(((u16)(value))<<8))
-#define NU32(value)     (u32)(((((u32)(value))>>24)&0xff)|((((u32)(value))>>8)&0xff00)|((((u32)(value))<<8)&0xff00000)|(((u32)(value))<<24))
+#define NU32(value)     (u32)(( (((u32)(value)) >> 24) & 0xff) | ((((u32)(value)) >> 8) & 0xff00) | ((((u32)(value)) << 8) & 0xff0000) | (((u32)(value)) << 24))
 #endif
 
 #define NETWORK_ONE_16  NU16(0x0001)

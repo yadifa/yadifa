@@ -39,13 +39,6 @@
  */
 /*----------------------------------------------------------------------------*/
 
-/* 
- * File:   zone_axfr_reader.h
- * Author: ericdf
- *
- * Created on June 16, 2011, 12:03 PM
- */
-
 #ifndef ZONE_AXFR_READER_H
 #define	ZONE_AXFR_READER_H
 

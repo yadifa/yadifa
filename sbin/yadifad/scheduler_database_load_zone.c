@@ -137,7 +137,7 @@ scheduler_database_replace_zone_finalize(void *data_)
     }
     
     free(args);
-    
+
     return SCHEDULER_TASK_FINISHED;
 }
 
@@ -239,7 +239,7 @@ scheduler_database_invalidate_zone_init(void *data_)
     
     args->old_zone = zdb_zone_xchg_with_invalid((zdb*)g_config->database, args->zone_desc->origin, args->zone_desc->qclass, 0);
     
-    return SUCCESS;
+    return SCHEDULER_TASK_PROGRESS;
 }
 
 static void*
@@ -416,7 +416,6 @@ scheduler_database_get_ixfr_answer_type(zone_data *zone_desc, u32 ttl, u16 soa_r
 
     log_debug("zone load: incremental change query to the master of %{dnsname}", zone_desc->origin);
     
-    u16 answer_type[2];
     u32 answer_serial[2];
     u32 answer_idx = 0;
     u32 current_serial;
@@ -510,7 +509,7 @@ scheduler_database_get_ixfr_answer_type(zone_data *zone_desc, u32 ttl, u16 soa_r
 
             u16 query_count = ntohs(MESSAGE_QD(ixfr_query.buffer));
             
-            if((query_count < 0) || (query_count > 1))
+            if(query_count > 1)
             {
                 return_value = ANSWER_NOT_ACCEPTABLE;
                 break;
@@ -536,7 +535,6 @@ scheduler_database_get_ixfr_answer_type(zone_data *zone_desc, u32 ttl, u16 soa_r
 
                 u8 *p = record_wire + dnsname_len(record_wire);
                 u16 rtype = GET_U16_AT(*p);
-                answer_type[answer_idx] = rtype;
 
                 if(rtype != TYPE_SOA)
                 {
@@ -657,11 +655,10 @@ scheduler_database_load_zone_slave(zdb *db, zone_data *zone_desc, zdb_zone **zon
     
     zone_reader zr;
     
-    u32 ttl;
-    u16 rdata_size;
+    u32 ttl = 0;
+    u16 rdata_size = 0;
     
-    u8  rdata[1024];
-    
+    u8  rdata[1024];    
     char file_name[1024];
 
     /*
@@ -759,7 +756,7 @@ scheduler_database_load_zone_slave(zdb *db, zone_data *zone_desc, zdb_zone **zon
         
         log_debug("zone load: parsing journal for last serial");
 
-        if(FAIL(return_value = zdb_icmtl_get_last_soa_from(zone_serial, zone_desc->origin, g_config->xfr_path, &zone_journal_serial, &ttl, &rdata_size, rdata)))
+        if(FAIL(return_value = zdb_icmtl_get_last_soa_from(zone_serial, zone_desc->origin, g_config->xfr_path, &zone_journal_serial, &ttl, &rdata_size, rdata))) // false positive: zone_serial IS initialised. It's the only way to enter here.
         {
             if(return_value == ZDB_ERROR_ICMTL_NOTFOUND)
             {
@@ -1147,8 +1144,6 @@ database_load_startup()
 void
 database_load_shutdown()
 {
-    database_message *message;
-
     if(database_load_thread_id != 0)
     {
         log_info("zone load: service stop");

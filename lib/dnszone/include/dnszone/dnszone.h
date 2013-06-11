@@ -42,18 +42,6 @@
 #ifndef __DNSZONE_H__
 #define __DNSZONE_H__
 
-#include<dnszone/dnszone-config.h>
-
-#ifndef DNSZONE_BUILD
-#undef VERSION
-#undef PACKAGE
-#undef PACKAGE_BUGREPORT
-#undef PACKAGE_NAME
-#undef PACKAGE_TARNAME
-#undef PACKAGE_STRING
-#undef PACKAGE_VERSION
-#endif
-
 #include <dnscore/sys_types.h>
 #include <dnscore/dnscore.h>
 #include <dnszone/resourcerecord.h>

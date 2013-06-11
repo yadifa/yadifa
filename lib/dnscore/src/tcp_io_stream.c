@@ -56,8 +56,6 @@
 ya_result
 gethostaddr(const char* host, u16 port, struct sockaddr *sa, int familly)
 {
-    int s;
-
     /*    ------------------------------------------------------------    */
 
     /* Create a network address structure

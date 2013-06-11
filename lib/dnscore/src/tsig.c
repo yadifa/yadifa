@@ -47,6 +47,8 @@
 #include "dnscore/tsig.h"
 #include "dnscore/packet_reader.h"
 
+#if HAS_TSIG_SUPPORT == 1
+
 #define TSIGNODE_TAG 0x45444f4e47495354
 #define TSIGPAYL_TAG 0x4c59415047495354
 #define TSIGMAC_TAG 0x43414d47495354
@@ -74,7 +76,7 @@
  * Worst case : N is enough for sum[n = 0,N](Fn) where F is Fibonacci
  * Best case : N is enough for (2^(N+1))-1
  */
-#define AVL_MAX_DEPTH   10	/* 2047 TSIG keys max */
+#define AVL_MAX_DEPTH   16	/* 2047 TSIG keys max */
 
 /*
  * The previx that will be put in front of each function name
@@ -105,6 +107,8 @@
  * The type used for comparing the nodes.
  */
 #define AVL_REFERENCE_TYPE const u8*
+
+#define AVL_REFERENCE_IS_CONST TRUE
 
 /*
  * The node has got a pointer to its parent
@@ -142,6 +146,9 @@
  * The type used for comparing the nodes.
  */
 #define AVL_REFERENCE_TYPE const u8*
+
+#define AVL_REFERENCE_IS_CONST TRUE
+
 /*
  *
  */
@@ -556,7 +563,7 @@ tsig_digest_answer(message_data *mesg)
  * @return 
  */
 
-static ya_result
+ya_result
 tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offset, const tsig_item *tsig, struct type_class_ttl_rdlen *tctr)
 {
     u16 ar_count = MESSAGE_AR(mesg->buffer);
@@ -1624,6 +1631,8 @@ tsig_message_extract(struct message_data *mesg)
 
     return 1;   /* got 1 signature */
 }
+
+#endif
 
 /** @} */
 

@@ -28,18 +28,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
-#
-#       SVN Program:
-#               $URL: $
-#
-#       Last Update:
-#               $Date:$
-#               $Revision: 1717 $
-#
-#       Purpose:
-#               Labels common to all makefiles
-#
-################################################################################
 
 YCFLAGS=$(YSCFLAGS)
 

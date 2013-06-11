@@ -119,14 +119,7 @@ static const char            *short_options = "c:dD:mp:hil:L:P:rsvVz:u:g:t:";
 static struct option long_options[] =
     {
         { "config",      1,          0, /*O_CONFIG*/      'c'},
-        { "daemon",      0,          0, /*O_DAEMON*/      'd'},
-        { "listen",      1,          0, /*O_LISTEN*/      'L'},
-        { "port",        1,          0, /*O_PORT*/        'P'},
-        { "print",       0,          0, /*O_PRINT*/       'p'},
         { "version",     0,          0, /*O_VERSION*/     'V'},
-        { "uid",         1,          0, /*O_UID*/         'u'},
-        { "gid",         1,          0, /*O_GID*/         'g'},
-        { "chroot",      1,          0, /*O_CHROOTPATH*/  't'},
         { "help",        0,          0,                   'h'},
         { 0,             0,          0,                    0 }
     };
@@ -162,7 +155,6 @@ process_command_line(int argc, char **argv, config_data *config)
 {
     extern char                                                     *optarg;
 
-    int                                                           num_value;
     /*
     int                                                      new_config = 0;
     */
@@ -173,15 +165,12 @@ process_command_line(int argc, char **argv, config_data *config)
     bool                                                   printing = FALSE;
     bool                                                     doexit = FALSE;
     
-    char                                                      print_arg[10];
-    size_t                                                    print_arg_len;
     /* There was a 'Z' but it's not used nor defined in the man page */
     
 
     /* Reinitialize optind, because we are getting thru the command line 
      * options for the second time
      */
-
     command_line_reset();
 
     /*    ------------------------------------------------------------    */

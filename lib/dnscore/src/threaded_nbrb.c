@@ -359,7 +359,7 @@ threaded_nbrb_wait_empty(threaded_nbrb *queue)
 {
    const u32 zero = 0;
 
-   u32 m = queue->size_mask;
+   //u32 m = queue->size_mask;
 
    int t = BASE_WAIT;
 

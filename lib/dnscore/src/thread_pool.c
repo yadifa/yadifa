@@ -165,7 +165,7 @@ thread_pool_thread(void* args)
 
     thread_descriptor* desc = (thread_descriptor*)args;
 
-    pthread_t id = desc->id;
+//    pthread_t id = desc->id;
 
 #if VERBOSE_THREAD_LOG > 2
     log_debug("thread: %x started", desc->id);

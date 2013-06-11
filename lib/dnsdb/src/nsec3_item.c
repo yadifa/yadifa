@@ -531,7 +531,7 @@ ya_result nsec3_zone_item_update_bitmap(nsec3_zone_item* nsec3_item, const u8 *r
      * If it does not match, replace.
      */
 
-    if((nsec3_item->type_bit_maps_size != type_bit_maps_size) || (memcmp(nsec3_item->type_bit_maps, bitmap, type_bit_maps_size)==0))
+    if((nsec3_item->type_bit_maps_size != type_bit_maps_size) || (memcmp(nsec3_item->type_bit_maps, bitmap, type_bit_maps_size) != 0))
     {
         /* If the size differs : free and alloc */
 

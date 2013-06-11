@@ -144,7 +144,7 @@ zdb_zone_write_text(const zdb_zone* zone, output_stream* fos, bool force_label)
         }
         else
         {
-            label_len = dnsname_to_cstr(label_cstr, zone->origin) - 1;
+            label_len = dnsname_to_cstr(label_cstr, zone->origin);
         }
 
         zdb_rr_label* label = zdb_zone_label_iterator_next(&iter);

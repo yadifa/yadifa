@@ -52,8 +52,7 @@ extern "C" {
 
 #include <dnscore/message.h>
 #include <dnscore/fingerprint.h>
-    
-#include <dnsdb/treeset.h>
+#include <dnscore/treeset.h>
 
 #include    "zone.h"
 

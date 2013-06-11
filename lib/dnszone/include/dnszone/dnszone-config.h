@@ -1,230 +1,234 @@
-/* include/dnsdb/dnsdb-config.h.in.  Generated from configure.ac by autoheader.  */
+/* include/dnszone/dnszone-config.h.  Generated from dnszone-config.h.in by configure.  */
+/* include/dnszone/dnszone-config.h.in.  Generated from configure.ac by autoheader.  */
 
 /* Define if building universal (internal helper macro) */
-#undef AC_APPLE_UNIVERSAL_BUILD
+/* #undef AC_APPLE_UNIVERSAL_BUILD */
 
 /* number of harware core if the auto-detect fails */
-#undef DEFAULT_ASSUMED_CPU_COUNT
+#define DEFAULT_ASSUMED_CPU_COUNT 2
 
 /* Enable ACL support */
-#undef HAS_ACL_SUPPORT
+#define HAS_ACL_SUPPORT 1
 
 /* i386, Athlon, Opteron, Core2, i3, i5, i7, ... */
-#undef HAS_CPU_AMDINTEL
+#define HAS_CPU_AMDINTEL 1
 
 /* T1000 has a Niagara cpu */
-#undef HAS_CPU_NIAGARA
+/* #undef HAS_CPU_NIAGARA */
 
 /* MUST be enabled if either NSEC3 or NSEC are enabled */
-#undef HAS_DNSSEC_SUPPORT
+#define HAS_DNSSEC_SUPPORT 1
 
 /* Define this to enable slow but safe memory accesses */
-#undef HAS_MEMALIGN_ISSUES
+#define HAS_MEMALIGN_ISSUES 0
 
 /* Use messages instead of send. Needed if you have many IPs aliased on the
    same interface. */
-#undef HAS_MESSAGES_SUPPORT
+/* #undef HAS_MESSAGES_SUPPORT */
 
 /* Set this to 1 to enable NSEC3 support */
-#undef HAS_NSEC3_SUPPORT
+#define HAS_NSEC3_SUPPORT 1
 
 /* Set this to 1 to enable NSEC support */
-#undef HAS_NSEC_SUPPORT
+#define HAS_NSEC_SUPPORT 1
 
 /* The system supports spinlocks */
-#undef HAS_PTHREAD_SPINLOCK
+#define HAS_PTHREAD_SPINLOCK 1
 
 /* The sockaddr struct has an sa_len field */
-#undef HAS_SOCKADDR_SA_LEN
+#define HAS_SOCKADDR_SA_LEN 0
 
 /* Define this to use less memory */
-#undef HAS_TINY_FOOTPRINT
+/* #undef HAS_TINY_FOOTPRINT */
 
 /* Enable TSIG support */
-#undef HAS_TSIG_SUPPORT
+#define HAS_TSIG_SUPPORT 1
 
 /* Define to 1 if you have the <arpa/inet.h> header file. */
-#undef HAVE_ARPA_INET_H
+#define HAVE_ARPA_INET_H 1
 
 /* Define to 1 if you have the `bzero' function. */
-#undef HAVE_BZERO
+/* #undef HAVE_BZERO */
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
-#undef HAVE_DLFCN_H
+#define HAVE_DLFCN_H 1
 
 /* Define to 1 if you have the <fcntl.h> header file. */
-#undef HAVE_FCNTL_H
+#define HAVE_FCNTL_H 1
 
 /* Define to 1 if you have the `fork' function. */
-#undef HAVE_FORK
+/* #undef HAVE_FORK */
 
 /* Define to 1 if you have the <i386/limits.h> header file. */
-#undef HAVE_I386_LIMITS_H
+/* #undef HAVE_I386_LIMITS_H */
 
 /* Define to 1 if you have the <i386/types.h> header file. */
-#undef HAVE_I386_TYPES_H
+/* #undef HAVE_I386_TYPES_H */
 
 /* Define to 1 if the system has the type `int64_t'. */
-#undef HAVE_INT64_T
+#define HAVE_INT64_T 1
 
 /* Define to 1 if you have the <inttypes.h> header file. */
-#undef HAVE_INTTYPES_H
+#define HAVE_INTTYPES_H 1
 
 /* Define to 1 if you have the `c' library (-lc). */
-#undef HAVE_LIBC
+#define HAVE_LIBC 1
 
 /* Define to 1 if you have the `crypto' library (-lcrypto). */
-#undef HAVE_LIBCRYPTO
+#define HAVE_LIBCRYPTO 1
 
 /* Define to 1 if you have the `dnscore' library (-ldnscore). */
-#undef HAVE_LIBDNSCORE
+/* #undef HAVE_LIBDNSCORE */
 
 /* Define to 1 if you have the `dnsdb' library (-ldnsdb). */
-#undef HAVE_LIBDNSDB
+/* #undef HAVE_LIBDNSDB */
 
 /* Define to 1 if you have the `dnszone' library (-ldnszone). */
-#undef HAVE_LIBDNSZONE
+/* #undef HAVE_LIBDNSZONE */
 
 /* Define to 1 if you have the `pthread' library (-lpthread). */
-#undef HAVE_LIBPTHREAD
+#define HAVE_LIBPTHREAD 1
 
 /* Define to 1 if you have the `socket' library (-lsocket). */
-#undef HAVE_LIBSOCKET
+/* #undef HAVE_LIBSOCKET */
 
 /* Define to 1 if you have the `ssl' library (-lssl). */
-#undef HAVE_LIBSSL
+#define HAVE_LIBSSL 1
 
 /* Define to 1 if you have the <linux/limits.h> header file. */
-#undef HAVE_LINUX_LIMITS_H
+#define HAVE_LINUX_LIMITS_H 1
 
 /* Define to 1 if the system has the type `long long'. */
-#undef HAVE_LONG_LONG
+#define HAVE_LONG_LONG 1
 
 /* Define to 1 if you have the <memory.h> header file. */
-#undef HAVE_MEMORY_H
+#define HAVE_MEMORY_H 1
 
 /* Define to 1 if you have the `memset' function. */
-#undef HAVE_MEMSET
+/* #undef HAVE_MEMSET */
 
 /* Define to 1 if you have the <netinet/in.h> header file. */
-#undef HAVE_NETINET_IN_H
+#define HAVE_NETINET_IN_H 1
 
 /* Define to 1 if you have the <ppc/limits.h> header file. */
-#undef HAVE_PPC_LIMITS_H
+/* #undef HAVE_PPC_LIMITS_H */
 
 /* Define to 1 if you have the `select' function. */
-#undef HAVE_SELECT
+/* #undef HAVE_SELECT */
 
 /* Define to 1 if you have the `socket' function. */
-#undef HAVE_SOCKET
+/* #undef HAVE_SOCKET */
 
 /* Define to 1 if `stat' has the bug that it succeeds when given the
    zero-length file name argument. */
-#undef HAVE_STAT_EMPTY_STRING_BUG
+#define HAVE_STAT_EMPTY_STRING_BUG 1
 
 /* Define to 1 if you have the <stdint.h> header file. */
-#undef HAVE_STDINT_H
+#define HAVE_STDINT_H 1
 
 /* Define to 1 if you have the <stdlib.h> header file. */
-#undef HAVE_STDLIB_H
+#define HAVE_STDLIB_H 1
 
 /* Define to 1 if you have the <strings.h> header file. */
-#undef HAVE_STRINGS_H
+#define HAVE_STRINGS_H 1
 
 /* Define to 1 if you have the <string.h> header file. */
-#undef HAVE_STRING_H
+#define HAVE_STRING_H 1
 
 /* Define to 1 if you have the <syslog.h> header file. */
-#undef HAVE_SYSLOG_H
+#define HAVE_SYSLOG_H 1
 
 /* Define to 1 if you have the <sys/select.h> header file. */
-#undef HAVE_SYS_SELECT_H
+#define HAVE_SYS_SELECT_H 1
 
 /* Define to 1 if you have the <sys/socket.h> header file. */
-#undef HAVE_SYS_SOCKET_H
+#define HAVE_SYS_SOCKET_H 1
 
 /* Define to 1 if you have the <sys/stat.h> header file. */
-#undef HAVE_SYS_STAT_H
+#define HAVE_SYS_STAT_H 1
+
+/* Define to 1 if you have the <sys/syslimits.h> header file. */
+/* #undef HAVE_SYS_SYSLIMITS_H */
 
 /* Define to 1 if you have the <sys/time.h> header file. */
-#undef HAVE_SYS_TIME_H
+#define HAVE_SYS_TIME_H 1
 
 /* Define to 1 if you have the <sys/types.h> header file. */
-#undef HAVE_SYS_TYPES_H
+#define HAVE_SYS_TYPES_H 1
 
 /* Define to 1 if the system has the type `uint64_t'. */
-#undef HAVE_UINT64_T
+#define HAVE_UINT64_T 1
 
 /* Define to 1 if you have the <unistd.h> header file. */
-#undef HAVE_UNISTD_H
+#define HAVE_UNISTD_H 1
 
 /* Define to 1 if the system has the type `u_char'. */
-#undef HAVE_U_CHAR
+#define HAVE_U_CHAR 1
 
 /* Define to 1 if you have the `vfork' function. */
-#undef HAVE_VFORK
+/* #undef HAVE_VFORK */
 
 /* Define to 1 if you have the <vfork.h> header file. */
-#undef HAVE_VFORK_H
+/* #undef HAVE_VFORK_H */
 
 /* Define to 1 if `fork' works. */
-#undef HAVE_WORKING_FORK
+/* #undef HAVE_WORKING_FORK */
 
 /* Define to 1 if `vfork' works. */
-#undef HAVE_WORKING_VFORK
+/* #undef HAVE_WORKING_VFORK */
 
 /* Define to 1 if `lstat' dereferences a symlink specified with a trailing
    slash. */
-#undef LSTAT_FOLLOWS_SLASHED_SYMLINK
+/* #undef LSTAT_FOLLOWS_SLASHED_SYMLINK */
 
 /* Define to the sub-directory in which libtool stores uninstalled libraries.
    */
-#undef LT_OBJDIR
+#define LT_OBJDIR ".libs/"
 
 /* Define to 1 if your C compiler doesn't accept -c and -o together. */
-#undef NO_MINUS_C_MINUS_O
+/* #undef NO_MINUS_C_MINUS_O */
 
 /* Name of package */
-#undef PACKAGE
+#define PACKAGE "dnszone"
 
 /* Define to the address where bug reports for this package should be sent. */
-#undef PACKAGE_BUGREPORT
+#define PACKAGE_BUGREPORT "bugreport@yadifa.eu"
 
 /* Define to the full name of this package. */
-#undef PACKAGE_NAME
+#define PACKAGE_NAME "dnszone"
 
 /* Define to the full name and version of this package. */
-#undef PACKAGE_STRING
+#define PACKAGE_STRING "dnszone 1.0.3-2880"
 
 /* Define to the one symbol short name of this package. */
-#undef PACKAGE_TARNAME
+#define PACKAGE_TARNAME "dnszone"
 
 /* Define to the home page for this package. */
-#undef PACKAGE_URL
+#define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#undef PACKAGE_VERSION
+#define PACKAGE_VERSION "1.0.3-2880"
 
 /* Define as the return type of signal handlers (`int' or `void'). */
-#undef RETSIGTYPE
+#define RETSIGTYPE void
 
 /* Define to the type of arg 1 for `select'. */
-#undef SELECT_TYPE_ARG1
+#define SELECT_TYPE_ARG1 int
 
 /* Define to the type of args 2, 3 and 4 for `select'. */
-#undef SELECT_TYPE_ARG234
+#define SELECT_TYPE_ARG234 (fd_set *)
 
 /* Define to the type of arg 5 for `select'. */
-#undef SELECT_TYPE_ARG5
+#define SELECT_TYPE_ARG5 (struct timeval *)
 
 /* Define to 1 if you have the ANSI C header files. */
-#undef STDC_HEADERS
+#define STDC_HEADERS 1
 
 /* Define to 1 if your <sys/time.h> declares `struct tm'. */
-#undef TM_IN_SYS_TIME
+/* #undef TM_IN_SYS_TIME */
 
 /* Version number of package */
-#undef VERSION
+#define VERSION "1.0.3-2880"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */
@@ -234,7 +238,7 @@
 # endif
 #else
 # ifndef WORDS_BIGENDIAN
-#  undef WORDS_BIGENDIAN
+/* #  undef WORDS_BIGENDIAN */
 # endif
 #endif
 
@@ -244,22 +248,30 @@
 #endif
 
 /* Number of bits in a file offset, on hosts where this is settable. */
-#undef _FILE_OFFSET_BITS
+/* #undef _FILE_OFFSET_BITS */
 
 /* Define for large files, on AIX-style hosts. */
-#undef _LARGE_FILES
+/* #undef _LARGE_FILES */
 
 /* Define to empty if `const' does not conform to ANSI C. */
-#undef const
+/* #undef const */
 
 /* Define to `int' if <sys/types.h> does not define. */
-#undef mode_t
+/* #undef mode_t */
 
 /* Define to `int' if <sys/types.h> does not define. */
-#undef pid_t
+/* #undef pid_t */
 
 /* Define to `unsigned int' if <sys/types.h> does not define. */
-#undef size_t
+/* #undef size_t */
 
 /* Define as `fork' if `vfork' does not work. */
-#undef vfork
+#define vfork fork
+
+
+#ifdef  DEBUG
+#define DPRINTF(p) printf p 
+#else
+#define DPRINTF(p) /* nothing */
+#endif /* DEBUG */
+

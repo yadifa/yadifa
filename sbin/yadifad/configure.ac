@@ -30,32 +30,9 @@ dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
 dnl ##############################################################################
-dnl
-dnl      SVN Program:
-dnl              $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/sbin/yadifad/configure.ac $
-dnl
-dnl      Creation Date:
-dnl              2008-03-12
-dnl
-dnl      Last Update:
-dnl              $Date: 2012-09-19 10:46:55 +0200 (Wed, 19 Sep 2012) $
-dnl              $Revision: 2237 $
-dnl
-dnl      Author:
-dnl             G. Van Emelen (Gery@VanEmelen.net)
-dnl				Eric Diaz Fernandez
-dnl
-dnl      Purpose:
-dnl      		 Yadifa
-dnl				 Domain Name Server        
-dnl
-dnl      Last Change:
-dnl              $Author: geryve $
-dnl
-dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 2237 $])
+AC_REVISION([$Revision: 2880 $])
 # 1
 # svn log 2> /dev/null|head -2|grep ^r|sed 's/.\([1-9]*\).*/\1/'
 
@@ -123,7 +100,6 @@ dnl Add some defines.
 
 AC_DEFINE_UNQUOTED([TCP_LISTENQ], [1024],[TCP queue])
 AC_DEFINE_UNQUOTED([MAX_INTERFACES], [5],[max nic interfaces])
-AC_DEFINE_UNQUOTED([CLEARED_SOCKET], [-1],[cleared socket])
 
 dnl Add some macros
 AH_BOTTOM([

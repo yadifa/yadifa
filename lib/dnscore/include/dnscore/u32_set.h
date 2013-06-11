@@ -41,8 +41,8 @@
  *
  *----------------------------------------------------------------------------*/
 
-#ifndef _STRING_SET_H
-#define	_STRING_SET_H
+#ifndef _U32_SET_H
+#define	_U32_SET_H
 
 #ifdef	__cplusplus
 extern "C"
@@ -57,25 +57,25 @@ extern "C"
  * A structure to hold both children with direct access
  */
 
-typedef struct string_node string_node;
+typedef struct u32_node u32_node;
 
 
-struct string_children
+struct u32_children
 {
-    struct string_node* left;
-    struct string_node* right;
+    struct u32_node* left;
+    struct u32_node* right;
 };
 
 /*
  * An union to have access to the children with direct or indexed access
  */
 
-typedef union string_children_union string_children_union;
+typedef union u32_children_union u32_children_union;
 
-union string_children_union
+union u32_children_union
 {
-    struct string_children lr;
-    struct string_node * child[2];
+    struct u32_children lr;
+    struct u32_node * child[2];
 };
 
 
@@ -84,13 +84,13 @@ union string_children_union
  * This means that the digest size is a constant in the whole tree
  */
 
-struct string_node
+struct u32_node
 {
-    union string_children_union children;   /* 2 ptrs */
-    const char* key;                        /* 1 ptr  */
-    u16 value;                              /* 2 b */
+    union u32_children_union children;      /* 2 ptrs */
+    void* value;                            /* 1 ptr */
+    u32 key;                                /* 4 b */
     s8 balance;                             /* 1 b */
-};                                          /* 27 OR 15 bytes (64/32) */
+};                                          /* 29 OR 17 bytes (64/32) */
 
 /*
  * AVL definition part begins here
@@ -105,24 +105,24 @@ struct string_node
  * Worst case : N is enough for sum[n = 0,N](Fn) where F is Fibonacci
  * Best case : N is enough for (2^(N+1))-1
  */
-#define AVL_MAX_DEPTH   20 /* 64 */
+#define AVL_MAX_DEPTH   24 /* 64 */
 
 /*
  * The previx that will be put in front of each function name
  */
-#define AVL_PREFIX	    string_set_
-
-typedef string_node* string_set;
+#define AVL_PREFIX	    u32_set_
 
 /*
  * The type that hold the node
  */
-#define AVL_NODE_TYPE   string_node
+#define AVL_NODE_TYPE   u32_node
 
 /*
  * The type that hold the tree (should be AVL_NODE_TYPE*)
  */
 #define AVL_TREE_TYPE   AVL_NODE_TYPE*
+
+typedef AVL_TREE_TYPE u32_set;
 
 /*
  * The type that hold the tree (should be AVL_NODE_TYPE*)
@@ -135,11 +135,15 @@ typedef string_node* string_set;
 #define AVL_TREE_ROOT(__tree__) (*(__tree__))
 
 /*
+ * Self explanatory
+ */
+
+#define AVL_REFERENCE_ISPOINTER FALSE
+
+/*
  * The type used for comparing the nodes.
  */
-#define AVL_REFERENCE_TYPE const char*
-
-#define AVL_REFERENCE_IS_CONST TRUE
+#define AVL_REFERENCE_TYPE u32
 
 /*
  * The node has got a pointer to its parent
@@ -167,7 +171,7 @@ extern "C"
  *
  */
 
-#ifndef _STRING_SET_C
+#ifndef _U32_SET_C
 
 #undef AVL_MAX_DEPTH
 #undef AVL_PREFIX
@@ -180,13 +184,13 @@ extern "C"
 
 #undef _AVL_H_INC
 
-#endif	/* _STRING_SET_C */
+#endif	/* _U32_SET_C */
 
 #ifdef	__cplusplus
 }
 #endif
 
-#endif	/* _STRING_SET_H */
+#endif	/* _U32_SET_H */
 /** @} */
 
 /*----------------------------------------------------------------------------*/

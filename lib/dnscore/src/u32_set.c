@@ -43,24 +43,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define _STRING_SET_C
+#define _U32_SET_C
 
 #define DEBUG_LEVEL 0
 
 #include "dnscore/dnscore.h"
-#include "dnscore/string_set.h"
+#include "dnscore/u32_set.h"
 
-#define STRNGSET_TAG 0x544553474e525453
+#define U32SET_TAG 0x544553323355
 
 /*
  * The following macros are defining relevant fields in the node
  */
-
-static int
-strcompare(const char *a, const char *b)
-{
-    return strcmp(a, b);
-}
 
 /*
  * Access to the field that points to the left child
@@ -78,28 +72,32 @@ strcompare(const char *a, const char *b)
  * Access to the field that keeps the balance (a signed byte)
  */
 #define AVL_BALANCE(node) ((node)->balance)
+
+/*
+ * Self explanatory
+ */
+
+#define AVL_REFERENCE_ISPOINTER FALSE
+
 /*
  * The type used for comparing the nodes.
  */
-#define AVL_REFERENCE_TYPE const char*
-
-#define AVL_REFERENCE_IS_CONST TRUE
-
+#define AVL_REFERENCE_TYPE u32
 /*
  *
  */
 
-#define AVL_REFERENCE_FORMAT_STRING '%s'
+#define AVL_REFERENCE_FORMAT_STRING '%08x'
 #define AVL_REFERENCE_FORMAT(reference) reference
 
 /*
  * A macro to initialize a node and setting the reference
  */
-#define AVL_INIT_NODE(node,reference) node->key = reference
+#define AVL_INIT_NODE(node,reference) node->key = reference;node->value=NULL
 /*
  * A macro to allocate a new node
  */
-#define AVL_ALLOC_NODE(node,reference) MALLOC_OR_DIE(AVL_NODE_TYPE*,node,sizeof(AVL_NODE_TYPE), STRNGSET_TAG);
+#define AVL_ALLOC_NODE(node,reference) MALLOC_OR_DIE(AVL_NODE_TYPE*,node,sizeof(AVL_NODE_TYPE), U32SET_TAG);
 /*
  * A macro to free a node allocated by ALLOC_NODE
  */
@@ -118,12 +116,12 @@ strcompare(const char *a, const char *b)
  * A macro to compare two references
  * Returns TRUE if and only if the references are equal.
  */
-#define AVL_ISEQUAL(reference_a,reference_b) (strcompare(reference_a,reference_b)==0)
+#define AVL_ISEQUAL(reference_a,reference_b) ((u32)(reference_a) == (u32)(reference_b))
 /*
  * A macro to compare two references
  * Returns TRUE if and only if the first one is bigger than the second one.
  */
-#define AVL_ISBIGGER(reference_a,reference_b) (strcompare(reference_a,reference_b)>0)
+#define AVL_ISBIGGER(reference_a,reference_b) ((u32)(reference_a) > (u32)(reference_b))
 /*
  * Copies the payload of a node
  * It MUST NOT copy the "proprietary" node fields : children, parent, balance

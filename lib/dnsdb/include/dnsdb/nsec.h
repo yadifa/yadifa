@@ -49,8 +49,8 @@
 #error "Please do not include nsec.h if ZDB_NSEC_SUPPORT is 0"
 #endif
 
+#include <dnscore/treeset.h>
 #include <dnsdb/nsec_collection.h>
-#include <dnsdb/treeset.h>
 
 #ifdef	__cplusplus
 extern "C"

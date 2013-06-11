@@ -85,9 +85,6 @@ extern logger_handle* g_zone_logger;
         ptr++;                                                   \
     }
 
-
-static void rr_remove(resource_record **);
-
 /*------------------------------------------------------------------------------
  *
  * FUNCTIONS */
@@ -173,13 +170,10 @@ rr_check_qname(char **src, u8 *dst, const u8 *origin, u8 *label)
         {
             return ZRE_INCORRECT_DOMAIN_LEN;
         }
-
         return_code = dnsname_copy(origin_dst, origin);
     }
 
     dnsname_copy(label, dst);
-    
-    
 
     return return_code;
 }
@@ -193,14 +187,10 @@ rr_check_rdata(char *src, resource_record *rr, const u16 qtype, const u8 *origin
     /*    ------------------------------------------------------------    */
 
     SKIP_WHSPACE(src);
-
     needle = src;
-
-//    format("NEEDLE: %s : %u\n", needle, strlen(needle));
 
     if (strlen(needle) == 0)
     {
-//        format("ZRE_NO_RDATA_FOUND\n");
         return ZRE_NO_RDATA_FOUND;
     }
 
@@ -215,7 +205,7 @@ rr_check_rdata(char *src, resource_record *rr, const u16 qtype, const u8 *origin
         {
             if(strlen(rr->rdata)  == 0)
             {
-		/* src cannot be null, no need for a wrapper */
+                /* src cannot be null, no need for a wrapper */
                 strcpy(rr->rdata, src);
             }
             else
@@ -226,7 +216,6 @@ rr_check_rdata(char *src, resource_record *rr, const u16 qtype, const u8 *origin
 
             if(*bracket_status == BRACKET_CLOSED)
             {
-//                format("rr_check_rdata : %u, %s\n", qtype, rr->rdata);
                 return_code = output_stream_write_rdata(&rr->os_rdata, rr->rdata, qtype, origin);
             }
 
@@ -279,7 +268,7 @@ rr_check_rdata(char *src, resource_record *rr, const u16 qtype, const u8 *origin
  *  @retval NOK
  */
 ya_result
-rr_parse_line(char *src, const u8 *origin, u8 *label, u32 *ttl, resource_record *rr, int *bracket_status)
+rr_parse_line(char *src, const u8 *origin, u8 *label, u32 ttl, resource_record *rr, int *bracket_status)
 {
     ya_result                                              return_code = OK;
     char                                                   *needle = NULL;
@@ -289,7 +278,7 @@ rr_parse_line(char *src, const u8 *origin, u8 *label, u32 *ttl, resource_record 
     if(*bracket_status == BRACKET_CLOSED)
     {
         bool no_ttl = TRUE;
-	
+
         if(FAIL(return_code = rr_check_qname(&src, rr->name, origin, label)))
         {
             return return_code;
@@ -306,11 +295,11 @@ rr_parse_line(char *src, const u8 *origin, u8 *label, u32 *ttl, resource_record 
             /* Search for word and cut */
             CUT_WORD(needle);
 
-            if(FAIL(return_code =  parse_u32_check_range(src, &rr->ttl, 0, MAX_U32, /*BASE_*/10)))
+            if(FAIL(return_code =  parse_u32_check_range(src, &rr->ttl, 0, MAX_S32, /*BASE_*/10))) /* rfc 2181 */
             {
-                if(FAIL(return_code = get_class_from_name(src, &rr->class)))
+                if(FAIL(return_code = get_class_from_case_name(src, &rr->class)))
                 {
-                    if(FAIL(return_code = get_type_from_name(src, &rr->type)))
+                    if(FAIL(return_code = get_type_from_case_name(src, &rr->type)))
                     {
                         return ZRE_NO_TYPE_FOUND;
                     }
@@ -321,25 +310,18 @@ rr_parse_line(char *src, const u8 *origin, u8 *label, u32 *ttl, resource_record 
                 no_ttl = FALSE;
             }
 
-//            format("rr_parse_line 1: %s\n", src);
             src = needle;
-//            format("rr_parse_line 2: %s\n", src);
             SKIP_WHSPACE(src);
-//            format("rr_parse_line 3: %s\n", src);
         }
 
-        if(no_ttl) /* if no TTL has been found, then use the last valid one */
+        if(no_ttl) /* if no TTL has been found, then use the default one (rfc 2308) */
         {
-            rr->ttl = *ttl;
-        }
-        else	/* else the found TTL is the new default one (RFC1035) */
-        {
-            *ttl = rr->ttl;
+            rr->ttl = ttl;
         }
     }
 
-//    format("rr_parse_line 4: %s\n", src);
     return_code = rr_check_rdata(src, rr, rr->type, origin, bracket_status);
+
     OSLDEBUG(termerr, 2, "TYPE: %d: %r \n", rr->type, return_code);
 
     return return_code;
@@ -441,27 +423,6 @@ rr_print(output_stream* os, resource_record *src, const char *text, u8 flag)
     }
 }
 
-/** @brief  Remove resource records
- *
- *  removes element in linked list
- *
- *  @param[in] src linked list
- *
- *  @return NONE
- */
-static void
-rr_remove(resource_record **src)
-{
-    if(*src != NULL)
-    {
-        resource_record *tmp = *src;
-        *src                 = (*src)->next;
-
-	/* Free variables (if any) and memory */
-
-        free(tmp);
-    }
-}
 
 ya_result
 rr_get_origin(const char *src, u8 **dst)
@@ -531,12 +492,12 @@ rr_get_ttl(const char *src, u32 *dst)
                     break;
             }
 
-            if(ttl64 > MAX_U32)
+            if(ttl64 > MAX_S32)
             {
-                ttl64 = MAX_U32;
+                ttl64 = MAX_S32;
             }
 
-            ttl = ttl64;
+            ttl = (u32)ttl64;
         }
 
         *dst = ttl;

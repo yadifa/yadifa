@@ -97,7 +97,7 @@ zdb_zone_write_unbound(const zdb_zone* zone, const char* output_file)
 
     osformat(&bos, "local-zone: \"%{dnsname}\" static\n", zone->origin);
 
-    zdb_packed_ttlrdata* soa_ttlrdata;
+    zdb_packed_ttlrdata* soa_ttlrdata = NULL;
 
     zdb_zone_label_iterator iter;
     btree_iterator records_iter;
@@ -158,6 +158,11 @@ zdb_zone_write_unbound(const zdb_zone* zone, const char* output_file)
                 ttlrdata_sll = ttlrdata_sll->next;
             }
         }
+    }
+
+    if(soa_ttlrdata == NULL)
+    {
+        return ZDB_ERROR_NOSOAATAPEX;
     }
 
 #if ZDB_NSEC3_SUPPORT != 0

@@ -265,8 +265,8 @@ scheduler_queue_zone_write_ixfr_thread(void* data_)
      */
 
     u32 last_valid_serial;
-    u32 last_valid_offset;
-    u16 last_valid_count;
+    u32 last_valid_offset = DNS_HEADER_LENGTH;
+    u16 last_valid_count = 0;
 
     /*
      * relevant data for when data is not usable anymore
@@ -285,6 +285,8 @@ scheduler_queue_zone_write_ixfr_thread(void* data_)
     if(data->mesg->sockfd < 0)
     {
         log_err("zone write ixfr: no tcp: %{dnsname} %d", data->zone->origin, serial);
+
+        data->return_code = ERROR;
 
         free(mesg);
         return NULL;
@@ -673,7 +675,14 @@ scheduler_queue_zone_write_ixfr_thread(void* data_)
         }
     }
     
-    log_info("zone write ixfr: %{dnsname} journal sent", origin);
+    if(ISOK(return_code))
+    {
+        log_info("zone write ixfr: %{dnsname} ixfr stream sent", origin);
+    }
+    else
+    {
+        log_err("zone write ixfr: %{dnsname} ixfr stream not sent", origin);
+    }
 
     output_stream_close(&tcpos);
 

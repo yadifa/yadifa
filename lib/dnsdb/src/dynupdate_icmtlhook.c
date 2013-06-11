@@ -177,11 +177,10 @@ icmtl_on_add_record_callback(zdb_listener* base_listener, dnslabel_vector_refere
 {
     icmtl_zdb_listener* listener = (icmtl_zdb_listener*)base_listener;
 
-    u8 label[MAX_DOMAIN_LENGTH + 1];
-    rdata_desc rdatadesc = {type, record->rdata_size, record->rdata_pointer};
-    dnslabel_vector_to_dnsname(labels, top, label);
-    
 #ifndef NDEBUG
+    rdata_desc rdatadesc = {type, record->rdata_size, record->rdata_pointer};
+    u8 label[MAX_DOMAIN_LENGTH + 1];
+    dnslabel_vector_to_dnsname(labels, top, label);
     log_debug("incremental: add %{dnsname} %d IN %{typerdatadesc}", label, record->ttl, &rdatadesc);
 #endif
     
@@ -196,11 +195,8 @@ icmtl_on_remove_record_callback(zdb_listener* base_listener, const u8* dnsname, 
 {
     icmtl_zdb_listener* listener = (icmtl_zdb_listener*)base_listener;
 
-    u8 label[MAX_DOMAIN_LENGTH + 1];
-    
-    rdata_desc rdatadesc = {type, record->rdata_size, record->rdata_pointer};
-    
 #ifndef NDEBUG
+    rdata_desc rdatadesc = {type, record->rdata_size, record->rdata_pointer};
     log_debug("incremental: del %{dnsname} %d IN %{typerdatadesc}", dnsname, record->ttl, &rdatadesc);
 #endif
     
@@ -224,9 +220,9 @@ output_stream_write_rrsig_wire(output_stream* os, u8* label, u32 label_len, u8* 
         output_stream_write_nu16(os, sig_sll->rdata_size);
         output_stream_write(os, &sig_sll->rdata_start[0], sig_sll->rdata_size);
 
+#ifndef NDEBUG
         rdata_desc rdatadesc = {TYPE_RRSIG, sig_sll->rdata_size, &sig_sll->rdata_start[0]};
 
-#ifndef NDEBUG
         if(origin != NULL)
         {
             log_debug("incremental: %{dnslabel}%{dnsname} %d IN %{typerdatadesc}", label, origin, sig_sll->ttl, &rdatadesc);
@@ -336,8 +332,8 @@ static struct icmtl_dnssec_listener icmtl_listener ={
     icmtl_on_update_rrsig_callback,
 #endif
     NULL,
-    0,
-    0,
+    {NULL,NULL},
+    {NULL,NULL},
     NULL,
     0
 };

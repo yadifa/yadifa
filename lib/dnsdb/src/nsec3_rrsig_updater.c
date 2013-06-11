@@ -242,8 +242,10 @@ nsec3_rrsig_updater_result_process(threaded_queue* dnssec_answer_query_queue, bo
     log_debug("nsec3_rrsig_updater_result_process(): start");
 #endif
 
+#if DNSSEC_DUMPSIGNCOUNT!=0
     u64 sign_start = timems();
-
+#endif
+    
     u32 count;
 
     for(count = 1;; count++)

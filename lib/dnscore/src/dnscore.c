@@ -275,8 +275,8 @@ dnscore_init()
         u32 r1 = random_next(rnd);
         u32 r2 = random_next(rnd);
         u32 r3 = random_next(rnd);
-        
-        if( (r0 == 0) && (r1 == 0) && (r2 == 0) && (r3 == 0) && (r0 == r1 == r2 == r3))
+       
+        if( ((r0 == 0) && (r1 == 0) && (r2 == 0) && (r3 == 0)) || ((r0 == r1) && (r1 == r2) && (r2 == r3)) ) 
         {
             printf("panic: random generation fails. (%08x,%08x,%08x,%08x)\n", r0, r1, r2, r3);
             exit(-1);

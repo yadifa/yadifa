@@ -91,9 +91,8 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
 
     //zassert(ar_count != 0 && ar_count == MESSAGE_AR(mesg->buffer));
 
-    ya_result return_code;
-
     u8 *buffer = mesg->buffer;
+    ya_result return_code;
 
     ar_count = ntohs(MESSAGE_AR(buffer));
 
@@ -262,12 +261,24 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
                     }
                     else
                     {
+#if 0
                         u8 old_mac[64];
+#endif                   
+                        tsig_item *key = tsig_get(tsigname);
                         
-                        if(mesg->tsig.tsig != NULL)
+                        if(key != NULL)
                         {
-                            if(dnsname_equals(tsigname, mesg->tsig.tsig->name))
-                            {                        
+                            if(FAIL(return_code = tsig_process(mesg, &purd, record_offset, key, &tctr)))
+                            {
+                                log_err("%r answer error from %{sockaddr}", return_code, &mesg->other.sa);
+
+                                mesg->status = FP_TSIG_ERROR; /** @todo NOTAUTH / FORMERR */
+
+                                return UNPROCESSABLE_MESSAGE;
+                            }
+#if 0
+                            if(dnsname_equals(tsigname, mesg->tsig.tsig->name)) /* NOP */
+                            {
                                 u16 old_mac_size = mesg->tsig.mac_size;
                                 memcpy(old_mac, mesg->tsig.mac, old_mac_size);
 
@@ -280,14 +291,15 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
                                     return UNPROCESSABLE_MESSAGE;
                                 }
                             }
+#endif
                         }
                         else
                         {
-                            log_err("%r answer error from %{sockaddr} TSIG when none expected", return_code, &mesg->other.sa);
+                            log_err("answer error from %{sockaddr}: TSIG when none expected", &mesg->other.sa);
 
                             mesg->status = FP_TSIG_ERROR; /** @todo NOTAUTH / FORMERR */
 
-                            return UNPROCESSABLE_MESSAGE;
+                            return INVALID_MESSAGE;
                         }
                     }
 
@@ -510,7 +522,7 @@ message_process_answer_additionals(message_data *mesg, u8* s, u16 ar_count)
                             return UNPROCESSABLE_MESSAGE;
                         }
                     }
-                    else
+                    else // not a query (an answer)
                     {
                         u8 old_mac[64];
                         
@@ -531,9 +543,9 @@ message_process_answer_additionals(message_data *mesg, u8* s, u16 ar_count)
                                 }
                             }
                         }
-                        else
+                        else // no tsig
                         {
-                            log_err("%r answer error from %{sockaddr} TSIG when none expected", return_code, &mesg->other.sa);
+                            log_err("answer error from %{sockaddr}: TSIG when none expected", &mesg->other.sa);
 
                             mesg->status = FP_TSIG_ERROR; /** @todo NOTAUTH / FORMERR */
 
@@ -562,7 +574,9 @@ message_process_answer_additionals(message_data *mesg, u8* s, u16 ar_count)
                 /* Unhandled AR TYPE */
 
                 log_debug("skipping AR type %{dnstype}", &tctr.qtype);
-                
+
+                purd.offset += ntohs(tctr.rdlen);
+
                 query_end = purd.offset;
             }
         }
@@ -571,13 +585,6 @@ message_process_answer_additionals(message_data *mesg, u8* s, u16 ar_count)
     mesg->received = query_end;
 
     return SUCCESS;
-}
-
-static u64
-AND(u64 a, u64 b)
-{
-    a&=b;
-    return a;
 }
 
 /** \brief Processing DNS packet
@@ -612,8 +619,6 @@ AND(u64 a, u64 b)
 #define NOTIFY_MESSAGE_HEADER_MASK     (( (u64) 0LL )             |  \
         ( ((u64) ( TC_BITS )) << 16 )                             |  \
         ( ((u64) 1LL) << 40 ))
-
-//( ((u64) ( /*RA_BITS | RCODE_BITS*/ )) << 24 )            |  \
 
 #define NOTIFY_MESSAGE_HEADER_RESULT   ( ((u64) 1LL) << 40 )
 
@@ -1047,23 +1052,35 @@ message_process(message_data *mesg)
         }
         default:
         {
-            MESSAGE_LOFLAGS(buffer) &= ~(Z_BITS|AD_BITS|CD_BITS|RCODE_BITS);
-            
-            MESSAGE_FLAGS_AND(buffer, OPCODE_BITS, 0);
-            
-            mesg->size_limit = UDPPACKET_MAX_LENGTH;
-            mesg->ar_start   = NULL;
-            mesg->tsig.tsig  = NULL;
-            mesg->edns       = FALSE;
-            mesg->rcode_ext  = 0;
-            mesg->status = FP_NOT_SUPP_OPC;
-            mesg->received = DNS_HEADER_LENGTH;
-            SET_U32_AT(mesg->buffer[4],0);    /* aligned to 32 bits, so two 32 bits instead of one 64 */
-            SET_U32_AT(mesg->buffer[8],0);
-            
-            /* reserved for future use */
+            u8 hf = MESSAGE_HIFLAGS(buffer);
+            if((hf & QR_BITS) == 0)
+            {
+                MESSAGE_LOFLAGS(buffer) &= ~(Z_BITS|AD_BITS|CD_BITS|RCODE_BITS);
+                MESSAGE_FLAGS_AND(buffer, OPCODE_BITS, 0);
 
-            return UNPROCESSABLE_MESSAGE;
+                mesg->size_limit = UDPPACKET_MAX_LENGTH;
+                mesg->ar_start   = NULL;
+#if HAS_TSIG_SUPPORT==1
+                mesg->tsig.tsig  = NULL;
+#endif
+                mesg->edns       = FALSE;
+                mesg->rcode_ext  = 0;
+
+                mesg->status = FP_NOT_SUPP_OPC;
+                mesg->received = DNS_HEADER_LENGTH;
+                SET_U32_AT(mesg->buffer[4],0);    /* aligned to 32 bits, so two 32 bits instead of one 64 */
+                SET_U32_AT(mesg->buffer[8],0);
+
+                /* reserved for future use */
+                
+                return UNPROCESSABLE_MESSAGE;
+            }
+            else
+            {
+                mesg->status = FP_PACKET_DROPPED;
+                
+                return INVALID_MESSAGE;
+            }
         }
     }
 }
@@ -1118,8 +1135,6 @@ message_process_lenient(message_data *mesg)
 #else
     /* cut the trash here */
 
-    mesg->tsig.tsig  = NULL;
-    
     mesg->received = s - buffer;
 #endif
 
@@ -1219,12 +1234,11 @@ message_transform_to_error(message_data *mesg)
         buffer[ 3] = edns0_maxsize>>8;
         buffer[ 4] = edns0_maxsize;
         buffer[ 5] = (mesg->status >> 4);
-        buffer[ 6] = mesg->rcode_ext >> 24;
-        buffer[ 7] = mesg->rcode_ext >> 16;
-        buffer[ 8] = mesg->rcode_ext >> 8;
-        buffer[ 9] = mesg->rcode_ext;
+        buffer[ 6] = mesg->rcode_ext >> 16;
+        buffer[ 7] = mesg->rcode_ext >> 8;
+        buffer[ 8] = mesg->rcode_ext;
+        buffer[ 9] = 0;
         buffer[10] = 0;
-        buffer[11] = 0;
         
         mesg->send_length += 11;
     }
@@ -1254,6 +1268,7 @@ message_make_query(message_data *mesg, u16 id, const u8 *qname, u16 qtype, u16 q
     mesg->size_limit = UDPPACKET_MAX_LENGTH;
     mesg->send_length = tc - &mesg->buffer[0];
     mesg->status = FP_MESG_OK;
+    mesg->rcode_ext = 0;
 }
 
 
@@ -1834,8 +1849,6 @@ message_print_buffer(output_stream *os_, const u8 *buffer, u16 length)
                 return return_value;
             }
             
-            u8 *limit = &record_wire[return_value];
-
             u8 *rname  = record_wire;
             u8 *rdata  = rname + dnsname_len(rname);
             u16 rtype  = GET_U16_AT(rdata[0]);

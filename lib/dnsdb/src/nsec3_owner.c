@@ -154,22 +154,6 @@ nsec3_label_extension_set_star(nsec3_label_extension* n3ext, nsec3_zone_item* it
 }
 
 /*
- * Initializes the "owner" array entry with the first owner.
- *
- */
-
-static void
-nsec3_set_owner(nsec3_zone_item* item, zdb_rr_label* owner)
-{
-#if NSEC3_OWNER_DEBUG != 0
-    log_debug("nsec3_set_owner: %{digest32h} @ %p, %p '%{dnslabel}'", ITEM_DIGEST(item), item, owner, OWNER_NAME(owner));
-#endif
-
-    item->label.owner = owner;
-    item->rc = 1;
-}
-
-/*
  * Adds an entry to the "owner" array (of an item)
  */
 

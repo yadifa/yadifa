@@ -261,7 +261,7 @@ zone_axfr_reader_open_last(const char* axfrpath, u8 *origin, zone_reader *dst)
     {
         return_code = ZRE_AXFR_FILE_NOT_FOUND;
         
-        s32 fqdn_len = dnsname_to_cstr(fqdn, origin) - 1 ;
+        s32 fqdn_len = dnsname_to_cstr(fqdn, origin);
 
         for(;;)
         {
@@ -281,20 +281,22 @@ zone_axfr_reader_open_last(const char* axfrpath, u8 *origin, zone_reader *dst)
                 {
                     u32 tmp;
                     int converted = sscanf(serial_txt, "%08x.axfr", &tmp);
-
+                        
                     if(converted == 1)
                     {
                         /*
                          * our first one, or a better one that the previous one
+                         * 
+                         * got_one = FALSE on first iteration, so serial is initialised for the next iteration. (false positive from GCC)
                          */
-
-                        if( (got_one && serial_gt(tmp, serial)) || !got_one)
+                        
+                        if( !got_one || (got_one && serial_gt(tmp, serial)))
                         {
                             if(got_one)
                             {
                                 /* the previous one is obsolete */
 
-                                zone_axfr_delete(axfrpath, origin, serial);
+                                zone_axfr_delete(axfrpath, origin, serial); // false positive. set serial=> got_one true => can go through here
                             }
 
                             serial = tmp;
@@ -355,7 +357,7 @@ zone_axfr_reader_open_with_serial(const char* xfr_path, u8 *origin, u32 loaded_s
         char fqdn[MAX_DOMAIN_LENGTH + 1];
         return_code = ERROR;
         
-        s32 fqdn_len = dnsname_to_cstr(fqdn, origin) - 1 ;
+        s32 fqdn_len = dnsname_to_cstr(fqdn, origin);
 
         for(;;)
         {

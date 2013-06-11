@@ -70,35 +70,35 @@
 
 /**
  *
- * dig -p 8053 @172.20.1.69 eu AXFR +time=3600 > eu.axfr
+ * dig -p 8053 @191.0.2.53 eu AXFR +time=3600 > eu.axfr
  *
  * Max dns packet size / Max number of records in each packet / RDATA Compression enabled
  *
  * 65535 1 1
  *
  * ;; Query time: 150452 msec
- * ;; SERVER: 172.20.1.69#8053(172.20.1.69)
+ * ;; SERVER: 191.0.2.53#8053(191.0.2.53)
  * ;; WHEN: Thu Dec 24 09:17:57 2009
  * ;; XFR size: 6657358 records (messages 6657358, bytes 417268730)
  *
  * 65535 65535 0
  *
  * ;; Query time: 82347 msec
- * ;; SERVER: 172.20.1.69#8053(172.20.1.69)
+ * ;; SERVER: 191.0.2.53#8053(191.0.2.53)
  * ;; WHEN: Wed Dec 23 15:31:23 2009
  * ;; XFR size: 6657358 records (messages 4141, bytes 271280613)
  *
  * 4096 65535 1
  *
  * ;; Query time: 78042 msec
- * ;; SERVER: 172.20.1.69#8053(172.20.1.69)
+ * ;; SERVER: 191.0.2.53#8053(191.0.2.53)
  * ;; WHEN: Thu Dec 24 09:04:54 2009
  * ;; XFR size: 6657358 records (messages 44940, bytes 182745973)
  *
  * 65535 65535 1
  *
  * ;; Query time: 88954 msec
- * ;; SERVER: 172.20.1.69#8053(172.20.1.69)
+ * ;; SERVER: 191.0.2.53#8053(191.0.2.53)
  * ;; WHEN: Thu Dec 24 09:08:47 2009
  * ;; XFR size: 6657358 records (messages 3133, bytes 205197880)
  *
@@ -111,7 +111,7 @@
  *  With buffering enabled this increases to:
  *
  * ;; Query time: 20130 msec
- * ;; SERVER: 172.20.1.69#8053(172.20.1.69)
+ * ;; SERVER: 191.0.2.53#8053(191.0.2.53)
  * ;; WHEN: Thu Dec 24 09:48:39 2009
  * ;; XFR size: 6657358 records (messages 44940, bytes 182745973)
  *
@@ -150,7 +150,7 @@ scheduler_queue_zone_write_axfr_clean_older(const char *directory, const u8 *ori
     char fqdn[MAX_DOMAIN_LENGTH + 1];
     char path[1024];
 
-    s32 fqdn_len = dnsname_to_cstr(fqdn, origin) - 1 ;
+    s32 fqdn_len = dnsname_to_cstr(fqdn, origin) ;
 
     struct dirent entry;
     struct dirent *result;

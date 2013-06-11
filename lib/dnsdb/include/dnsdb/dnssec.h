@@ -93,6 +93,9 @@ ya_result zdb_update_zone_signatures_alarm(void* zone);     /* zdb_zone* */
 ya_result zdb_update_zone_signatures(zdb_zone* zone, bool scheduled);
 ya_result zdb_update_signatures(zdb* db, bool scheduled);
 
+/// @note MUST BE SET
+
+void dnssec_set_xfr_path(const char* xfr_path);
 
 #ifdef	__cplusplus
 }

@@ -691,7 +691,6 @@ rrsig_update_records(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrdat
     /* Look into rrsig records for one that covers the current type */
 
     zdb_packed_ttlrdata* rrsig = context->rrsig_sll;
-    zdb_packed_ttlrdata* rrsig_prev = NULL; /* I could need to detach the node from the list */
 
     /**
      * While I've got signatures records
@@ -761,7 +760,6 @@ rrsig_update_records(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrdat
             }
         }
 
-        rrsig_prev = rrsig;
         rrsig = rrsig->next;
     }
 
@@ -1000,7 +998,6 @@ rrsig_update_label(rrsig_context* context, zdb_rr_label* label, bool delegation)
     }
     
     u8 nsec_flags = context->nsec_flags;
-    bool at_apex = (label->name[0] == 0);
 
     /* Get all the signatures on this label (NULL if there are no signatures) */
 

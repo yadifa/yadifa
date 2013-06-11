@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man on Fri Sep 21 11:54:40 CEST 2012
+.\" Manual page created with latex2man on Mon Jun 24 13:54:10 CEST 2013
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFAD\-CONF" "5" "2012\-09\-21" "YADIFA " "YADIFA "
+.TH "YADIFAD\-CONF" "5" "2013\-06\-24" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -95,7 +95,7 @@ Config with includes
 .PP
 .Vb
 # start yadifad.conf <main> container
-        include /usr/local\-dev/etc/yadifad\-main.conf
+        include /usr/local/etc/yadifad\-main.conf
 # end yadifad.conf <main> container
 .Ve
 .PP
@@ -448,7 +448,7 @@ from the sources
 .SH VERSION
 
 .PP
-Version: 1.0.2 of 2012-09-21\&.
+Version: 1.0.3 of 2013-06-24\&.
 .PP
 .SH LICENSE AND COPYRIGHT
 

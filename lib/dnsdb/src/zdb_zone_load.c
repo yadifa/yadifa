@@ -135,31 +135,29 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
     size_t rdata_len;
     ya_result return_code;
     resource_record entry;
+    u32 soa_min_ttl = 0;
+    u32 soa_serial = 0;
     bool dynupdate_forbidden;
-    bool has_dnskey;
+
+    u32 has_optout;
+    u32 has_optin;
     bool nsec3_keys;
     bool nsec_keys;
     bool has_nsec3;
     bool has_nsec;
     bool has_nsec3param;
+    bool has_dnskey;
     bool has_rrsig;
-    u32 has_optout;
-    u32 has_optin;
-    char origin_ascii[MAX_DOMAIN_TEXT_LENGTH + 1];
 
-    /*    ------------------------------------------------------------    */
 
 #if ZDB_NSEC3_SUPPORT != 0
     nsec3_load_context nsec3_context;
 #endif
 
-    /* Take full name of a zone file */
-/* to break on .eu
-    if(expected_origin[0] == 2)
-    {
-        puts("");
-    }
-*/
+    char origin_ascii[MAX_DOMAIN_TEXT_LENGTH + 1];
+
+    /*    ------------------------------------------------------------    */
+
     resource_record_init(&entry);
 
     if(FAIL(return_code = zone_reader_read_record(zone_data, &entry)))
@@ -220,9 +218,8 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
         return ZDB_READER_ALREADY_LOADED;
     }
     
-    u32 soa_min_ttl = 0;
-
     rr_soa_get_minimumttl(bytearray_output_stream_buffer(&entry.os_rdata), bytearray_output_stream_size(&entry.os_rdata), &soa_min_ttl);
+    rr_soa_get_serial(bytearray_output_stream_buffer(&entry.os_rdata), bytearray_output_stream_size(&entry.os_rdata), &soa_serial);
     
     dnsname_to_cstr(origin_ascii, entry.name);
 
@@ -317,7 +314,7 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
         }
 
         rdata_len = bytearray_output_stream_size(&entry.os_rdata);
-        rdata = bytearray_output_stream_buffer(&entry.os_rdata);       
+        rdata = bytearray_output_stream_buffer(&entry.os_rdata);
         
 #if ZDB_NSEC3_SUPPORT != 0
 
@@ -390,7 +387,7 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
                      */
 
                     u16 tag = dnskey_getkeytag(rdata, rdata_len);
-                    u16 flags = ntohs(GET_U16_AT(rdata[0]));
+                    u16 key_flags = ntohs(GET_U16_AT(rdata[0]));
                     u8 algorithm = rdata[3];
 
                     switch(algorithm)
@@ -414,21 +411,32 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
                         }
                     }
 
-                    dnssec_key *key;
+                    dnssec_key *key = NULL;
                     
-                    /* @TODO use defines */
-                    if(ISOK(return_code = dnssec_key_load_private(algorithm, tag, flags, origin_ascii, &key)))
+                    if((flags & ZDB_ZONE_IS_SLAVE) == 0)
                     {
-                        log_info("zone load: loaded private key K%{dnsname}+%03d+%05hd", zone->origin, algorithm, tag);
-                        
-                        has_dnskey = TRUE;
-                    }
-                    else
-                    {
-                        log_warn("zone load: unable to load private key K%{dnsname}+%03d+%05hd: %r", zone->origin, algorithm, tag, return_code);
+                        /* @TODO use defines */
+                        if(ISOK(return_code = dnssec_key_load_private(algorithm, tag, key_flags, origin_ascii, &key)))
+                        {
+                            log_info("zone load: loaded private key K%{dnsname}+%03d+%05hd", zone->origin, algorithm, tag);
 
+                            has_dnskey = TRUE;
+                        }
+                        else
+                        {
+                            log_warn("zone load: unable to load private key K%{dnsname}+%03d+%05hd: %r", zone->origin, algorithm, tag, return_code);
+                        }
+                    }
+
+                    if(key == NULL)
+                    {
                         /*
-                         * The private key is not available.  Get the public key for signature verifications.
+                         * Either:
+                         * 
+                         * _ The private key is not available (error)
+                         * _ The private key should not be loaded (slave)
+                         * 
+                         * Get the public key for signature verifications.
                          */
 
                         if(ISOK(return_code = dnskey_load_public(rdata, rdata_len, origin_ascii, &key)))
@@ -472,13 +480,13 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
                         u32 valid_until = ntohl(GET_U32_AT(rdata[8]));  /* offset the the "valid until" 32 bits field */
                         zone->sig_invalid_first = MIN(valid_until, zone->sig_invalid_first);
                     }
+                    
+                    has_rrsig = TRUE;
 #endif
-                    if((GET_U16_AT(*rdata)) == TYPE_NSEC3PARAM)
+                    if((GET_U16_AT(*rdata)) == TYPE_NSEC3PARAM) // RRSIG covered type
                     {
                         entry.ttl = 0;
                     }
-                    
-                    has_rrsig = TRUE;
                     
                     /* falltrough */
                 }
@@ -550,16 +558,16 @@ zdb_zone_load_loop:
         if(!dnsname_locase_verify_charspace(entry.name))
         {
             /** @todo handle this issue*/
+            log_warn("zone load: DNS character space error on '%{dnsname}'", entry.name);
         }
-
     }
-
-#if ZDB_DEBUG_ZONEFILE_BESTEFFORT==0
-zdb_zone_load_exit:
-#endif
 
     resource_record_freecontent(&entry); /* destroys, not "next" */
 
+#if ZDB_DNSSEC_SUPPORT != 0
+    log_debug("zone load: has_rrsig=%i has_dnskey=%i", has_rrsig, has_dnskey);
+#endif
+    
     zone->apex->flags &= ~ZDB_RR_APEX_LABEL_LOADING;
 
     if(dynupdate_forbidden)
@@ -877,7 +885,7 @@ zdb_zone_load_exit:
 
                 while(zdb_zone_label_iterator_hasnext(&iter))
                 {
-                    s32 fqdn_len = zdb_zone_label_iterator_nextname(&iter, fqdn);
+                    zdb_zone_label_iterator_nextname(&iter, fqdn);
 
                     label = zdb_zone_label_iterator_next(&iter);
                     
@@ -1049,7 +1057,7 @@ zdb_zone_get_soa(zone_reader *zone_data, u16 *rdata_size, u8 *rdata)
  *
  */
 ya_result
-zdb_zone_get_serial(zdb *db, zone_reader *zone_data, const char *data_path, u32 *serial, bool withjournal)
+zdb_zone_get_serial(zdb *db, zone_reader *zone_data, const char *data_path, u32 *serialp, bool withjournal)
 {
     ya_result return_value;
     resource_record entry;
@@ -1089,7 +1097,7 @@ zdb_zone_get_serial(zdb *db, zone_reader *zone_data, const char *data_path, u32 
 
             if(rdata_len == 20)
             {
-                *serial = ntohl(GET_U32_AT(rdata[0]));
+                *serialp = ntohl(GET_U32_AT(rdata[0]));
                 
                 /*
                  * we got a serial
@@ -1103,8 +1111,7 @@ zdb_zone_get_serial(zdb *db, zone_reader *zone_data, const char *data_path, u32 
 #ifndef NDEBUG
                     log_debug("zone load: getting last serial for zone using journal");
 #endif
-                
-                    if(ISOK(return_value = zdb_icmtl_get_last_serial_from(*serial, entry.name, data_path, serial)))
+                    if(ISOK(return_value = zdb_icmtl_get_last_serial_from(*serialp, entry.name, data_path, serialp)))
                     {
 #ifndef NDEBUG
                         log_debug("zone load: got serial");

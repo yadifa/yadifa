@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-* DOCUMENTATION */
+ *
+ * Copyright (c) 2011, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ * DOCUMENTATION */
 /** @defgroup 
  *  @ingroup dnscore
  *  @brief 
@@ -147,6 +147,9 @@
 /* EDNS0 */
 
 #define     RCODE_EXT_DNSSEC                0x00800000 /* Network-order, DNSSEC requested */
+
+#define     TYPE_NONE                           0
+
 /*
     1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -465,6 +468,7 @@
 #define     TYPE_DHCID                      NU16(49)      /* DHCID                              rfc 4701 */
 #define     TYPE_NSEC3                      NU16(50)      /*                                    rfc 5155 */
 #define     TYPE_NSEC3PARAM                 NU16(51)      /*                                    rfc 5155 */
+#define     TYPE_TLSA                       NU16(52)      /*                                    rfc 6698 */
 
 #define     TYPE_HIP                        NU16(55)      /*                                    rfc 5205 */
 #define     TYPE_NINFO                      NU16(56)  /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
@@ -533,6 +537,11 @@
 #define     DNSKEY_ALGORITHM_RSASHA1        5
 #define     DNSKEY_ALGORITHM_DSASHA1_NSEC3  6
 #define     DNSKEY_ALGORITHM_RSASHA1_NSEC3  7
+#define     DNSKEY_ALGORITHM_RSASHA256_NSEC3  8         /* RFC 5702 */
+#define     DNSKEY_ALGORITHM_RSASHA512_NSEC3  10        /* RFC 5702 */
+
+#define     DS_DIGEST_SHA1                  1
+#define     DS_DIGEST_SHA256                2
 
 #define     NSEC3_FLAGS_OPTOUT              1           /*  */
 
@@ -651,6 +660,7 @@ extern const class_table qclass[];
 #define     TYPE_DHCID_NAME                 "DHCID"
 #define     TYPE_NSEC3_NAME                 "NSEC3"
 #define     TYPE_NSEC3PARAM_NAME            "NSEC3PARAM"
+#define     TYPE_TLSA_NAME                  "TLSA"
 #define     TYPE_HIP_NAME                   "HIP"
 #define     TYPE_NINFO_NAME                 "NINFO"     /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
 #define     TYPE_RKEY_NAME                  "RKEY"      /* @note undocumented see draft-lewis-dns-undocumented-types-01 */

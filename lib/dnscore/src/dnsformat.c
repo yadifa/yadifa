@@ -888,7 +888,7 @@ recordwire_format_handler_method(void * restrict val, output_stream *stream, s32
 
     u16    *typeptr = (u16 *)&domain[domain_len];
     u16   *classptr = (u16 *)&domain[domain_len + 2];
-    u32         ttl = ntohl(GET_U32_AT(domain[domain_len + 4]));
+    //u32         ttl = ntohl(GET_U32_AT(domain[domain_len + 4]));
     u16   rdata_len = ntohs(GET_U16_AT(domain[domain_len + 8]));
     u8       *rdata = &domain[domain_len + 10];
 

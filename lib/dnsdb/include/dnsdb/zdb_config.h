@@ -45,35 +45,18 @@
 
 #include <dnscore/sys_types.h>
 
-#ifdef PACKAGE
-#undef VERSION
-#undef PACKAGE
-#undef PACKAGE_BUGREPORT
-#undef PACKAGE_NAME
-#undef PACKAGE_TARNAME
-#undef PACKAGE_STRING
-#undef PACKAGE_VERSION
-#endif
-
-#include <dnsdb/dnsdb-config.h>
-
-#ifndef DNSDB_BUILD
-
-#undef VERSION
-#undef PACKAGE
-#undef PACKAGE_BUGREPORT
-#undef PACKAGE_NAME
-#undef PACKAGE_TARNAME
-#undef PACKAGE_STRING
-#undef PACKAGE_VERSION
-
-#endif
-
 #ifdef	__cplusplus
 extern "C"
 {
 #endif
 
+#define HAS_DNSSEC_SUPPORT 1
+#define HAS_NSEC_SUPPORT 1
+#define HAS_NSEC3_SUPPORT 1
+#define HAS_ACL_SUPPORT 1
+#define DEFAULT_ASSUMED_CPU_COUNT 2
+#define HAS_RRCACHE_ENABLED 1
+    
 /**
  * Version of the database.
  */
@@ -272,7 +255,7 @@ extern "C"
  */
     
 #define ZDB_CNAME_LOOP_MAX  20
-    
+
 #ifdef	__cplusplus
 }
 #endif

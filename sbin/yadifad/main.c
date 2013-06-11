@@ -191,6 +191,7 @@ server_register_errors()
     error_register(ACL_REJECTED_BY_IPV4,"ACL_REJECTED_BY_IPV4");
     error_register(ACL_REJECTED_BY_IPV6,"ACL_REJECTED_BY_IPV6");
     error_register(ACL_REJECTED_BY_TSIG,"ACL_REJECTED_BY_TSIG");
+    error_register(ACL_UNDEFINED_TOKEN,"ACL_UNDEFINED_TOKEN");
     
     error_register(CONFIG_WRONG_SIG_TYPE, "CONFIG_WRONG_SIG_TYPE");
     error_register(CONFIG_WRONG_SIG_VALIDITY, "CONFIG_WRONG_SIG_VALIDITY");
@@ -230,22 +231,19 @@ server_register_errors()
 static void
 daemonize()
 {
-#ifdef NDEBUG
-    int                                                                   i;
-#endif /* DEBUG */
     int                                                       fd0, fd1, fd2;
     mode_t                                                         mask = 0;
     pid_t                                                               pid;
 
-    struct rlimit                                                        rl;
     struct sigaction                                                     sa;
 
     /*    ------------------------------------------------------------    */
 
     log_info("daemonizing");
 
-    logger_flush();
+    dnscore_stop_timer();
     
+    logger_flush();
     logger_stop();
 
     /* Clear file creation mask */
@@ -304,6 +302,7 @@ daemonize()
 #endif
     
     logger_start();
+    dnscore_reset_timer();
 
     /* Change the current working directory to the root so
      * we won't prevent file systems from being unmounted.
@@ -318,9 +317,9 @@ daemonize()
 
     /* Attach file descriptors 0, 1, and 2 to /dev/null */
 
-    Close(0); /* about to be reopened */
-    Close(1); /* about to be reopened */
-    Close(2); /* about to be reopened */
+    close_ex(0); /* about to be reopened */
+    close_ex(1); /* about to be reopened */
+    close_ex(2); /* about to be reopened */
 
     if((fd0 = open(output_file, O_RDWR|O_CREAT, 0666)) < 0)
     {
@@ -373,8 +372,8 @@ static void
 create_pid_file(config_data *config)
 {
     int                                                                  fd;
-    char                                                         buffer[16];
     mode_t                                               permissions = 0644;
+    char                                                         buffer[16];
 
     /*    ------------------------------------------------------------    */
 
@@ -391,6 +390,8 @@ create_pid_file(config_data *config)
     {
         if(chown(config->pid_file, config->uid, config->gid) >= 0)
         {
+            close_ex(fd);
+            
             return;
         }
         else
@@ -461,7 +462,7 @@ read_pid_file()
         exit(EXIT_FAILURE);
     }
 
-    Close(fd);      /* close the pid file */
+    close_ex(fd);      /* close the pid file */
 
     if(!received)   /* received == 0 => error */
     {
@@ -523,10 +524,18 @@ check_running_program()
 static void
 change_identity(config_data *config)
 {
-    log_info("changing identity to %d:%d", config->uid, config->gid);
+    uid_t uid = getuid();
+    gid_t gid = getgid();
+    log_info("changing identity to %d:%d (current: %d:%d)", config->uid, config->gid, uid, gid);
     
-    Setgid(config->gid);
-    Setuid(config->uid);
+    if(gid != config->gid)
+    {    
+        Setgid(config->gid);
+    }
+    if(uid != config->uid)
+    {
+        Setuid(config->uid);
+    }
 }
 
 /**
@@ -605,6 +614,10 @@ main(int argc, char *argv[])
      * _ registers an exit function
      * _ resets and start the alarm/timer function
      */
+    
+#if defined(HAS_TINY_FOOTPRINT)
+    logger_set_queue_size(4096);
+#endif
     
     dnscore_init();
     

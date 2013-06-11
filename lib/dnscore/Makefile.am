@@ -28,20 +28,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ##############################################################################
-#
-#	YADIFA dnscore Makefile.am script
-#
-#      	Makefile.am script
-#
-#	$URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/lib/dnscore/Makefile.am $
-#
-#       $Date: 2012-05-23 12:36:24 +0200 (Wed, 23 May 2012) $
-#
-#       $Revision: 2006 $
-#
-#	$Author: ericdf $
-#
-##############################################################################
 
 srcdir =        @srcdir@
 libdir =	@libdir@
@@ -72,6 +58,7 @@ libdnscore_la_SOURCES = src/sys_error.c src/sys_get_cpu_count.c src/timems.c \
 			src/base64.c src/base32hex.c src/base32.c src/base16.c src/parsing.c \
 			src/ptr_vector.c \
 			src/string_set.c \
+            src/u32_set.c \
 			src/threaded_ringlist.c src/threaded_ringbuffer.c src/threaded_ringbuffer_cw.c \
 			src/threaded_nbrb.c src/threaded_nb_mm.c \
 			src/thread_pool.c \
@@ -81,7 +68,7 @@ libdnscore_la_SOURCES = src/sys_error.c src/sys_get_cpu_count.c src/timems.c \
 			src/debug.c src/rdtsc.c \
 			src/dnscore.c src/rfc.c src/serial.c \
 			src/xfr_copy.c \
-			src/alarm.c
+			src/alarm.c src/treeset.c
 if HAS_TSIG_SUPPORT
 libdnscore_la_SOURCES+= src/tsig.c src/tsig_algorithms.c
 endif		
@@ -91,7 +78,7 @@ pkginclude_HEADERS =include/dnscore/base16.h include/dnscore/base32.h include/dn
 					include/dnscore/buffer_input_stream.h include/dnscore/buffer_output_stream.h include/dnscore/bytearray_output_stream.h include/dnscore/mt_output_stream.h include/dnscore/clone_input_output_stream.h \
 					include/dnscore/host_address.h include/dnscore/network.h \
 					include/dnscore/counter_output_stream.h \
-					include/dnscore/debug_config.h include/dnscore/debug.h include/dnscore/dnscore.h include/dnscore/dnsformat.h include/dnscore/dnsname.h include/dnscore/dnsname_set.h \
+					include/dnscore/debug_config.h include/dnscore/debug.h include/dnscore/dnscore.h include/dnscore/dnsformat.h include/dnscore/dnsname.h include/dnscore/dnsname_set.h include/dnscore/u32_set.h include/dnscore/treeset.h \
 					include/dnscore/file_input_stream.h include/dnscore/file_output_stream.h include/dnscore/filter_input_stream.h include/dnscore/fingerprint.h include/dnscore/format.h \
 					include/dnscore/input_stream.h include/dnscore/logger_channel.h include/dnscore/logger_channel_stream.h \
 					include/dnscore/logger_channel_syslog.h include/dnscore/logger.h include/dnscore/logger_handle.h include/dnscore/logger_channel_file.h \

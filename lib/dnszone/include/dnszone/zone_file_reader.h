@@ -97,7 +97,10 @@
  *  @retval     else : an error occurred
  */
 
+ya_result zone_file_reader_parse_stream(input_stream *ins, zone_reader *dst);
 ya_result zone_file_reader_open(const char* fullpath, zone_reader *dst);
+
+void zone_file_reader_ignore_missing_soa(zone_reader *dst);
 
 #endif
 

@@ -30,10 +30,6 @@
  *
  *------------------------------------------------------------------------------
  *
- * File:   avl.h.inc
- * Author: ericdf
- *
- * Created on June 5, 2009, 12:07 PM
  */
 
 #ifndef _AVL_H_INC
@@ -63,6 +59,12 @@ extern "C"
     #error Expected define: AVL_CONST_TREE_TYPE type
 #endif
 
+/*
+ * Self explanatory but not mandatory, defaulted to TRUE
+ */
+
+// #define AVL_REFERENCE_ISPOINTER TRUE
+
 #ifndef AVL_REFERENCE_TYPE
     #error Expected define: AVL_REFERENCE_TYPE type
 #endif
@@ -76,6 +78,14 @@ extern "C"
     // #define AVL_TREE_ROOT(x) (*x)
 #endif
 
+#ifdef AVL_REFERENCE_IS_CONST
+#undef AVL_REFERENCE_MODIFIER
+#undef AVL_REFERENCE_CONST
+#define AVL_REFERENCE_MODIFIER
+#define AVL_REFERENCE_CONST
+#else
+#define AVL_REFERENCE_CONST const
+#endif
 /*
  * Macros to set the prefix to the function name
  * And no : AFAIK there are no other way to do this using only one parameter in
@@ -116,9 +126,7 @@ void AVL_PREFIXED(avl_init)(AVL_TREE_TYPE* tree);
  *  @return A pointer to the node or NULL if there is no such node.
  */
 
-AVL_NODE_TYPE* AVL_PREFIXED(avl_find)(AVL_CONST_TREE_TYPE* tree,const AVL_REFERENCE_TYPE obj_hash);
-
-AVL_NODE_TYPE* AVL_PREFIXED(avl_find_debug)(AVL_CONST_TREE_TYPE* tree,const AVL_REFERENCE_TYPE obj_hash);
+AVL_NODE_TYPE* AVL_PREFIXED(avl_find)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash);
 
 /** @brief Insert a node into the tree.
  *
@@ -127,7 +135,7 @@ AVL_NODE_TYPE* AVL_PREFIXED(avl_find_debug)(AVL_CONST_TREE_TYPE* tree,const AVL_
  *  (another tree, a list, ...)
  *
  *  NOTE:
- *  If the node associated to the hash already exists, it is returned unaltered,
+ *  If the node associated to the hazdb_icmtl_replaysh already exists, it is returned unaltered,
  *  the caller will be responsible to manipulate the node's data.
  *  Else a new node is created, pointing to the data.
  *
@@ -163,7 +171,7 @@ void AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE *tree,AVL_REFERENCE_TYPE obj_hash);
 
 void AVL_PREFIXED(avl_destroy)(AVL_TREE_TYPE *tree);
 
-static inline bool AVL_PREFIXED(avl_isempty)(const AVL_TREE_TYPE *tree)
+static inline bool AVL_PREFIXED(avl_isempty)(AVL_CONST_TREE_TYPE *tree)
 {
     return AVL_TREE_ROOT(tree) == NULL;
 }

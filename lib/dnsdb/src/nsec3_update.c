@@ -212,7 +212,6 @@ bool nsec3_is_label_covered(zdb_rr_label *label, bool opt_out)
     bool opt_in = !opt_out;
     bool skip_children = FALSE;    
     bool nsec3_covered = FALSE;
-    bool force_rrsig = FALSE;
     
     if(!ZDB_LABEL_ISAPEX(label)) /* Not the origin (The apex of a zone has got a '.' label */
     {
@@ -223,7 +222,6 @@ bool nsec3_is_label_covered(zdb_rr_label *label, bool opt_out)
             bool has_ds = zdb_record_find(&label->resource_record_set, TYPE_DS) != NULL;
             
             nsec3_covered = opt_in|has_ds;
-            force_rrsig = has_ds;            
 
             /*
              * After processing this node, the brother will be processed.
@@ -235,7 +233,6 @@ bool nsec3_is_label_covered(zdb_rr_label *label, bool opt_out)
             
             nsec3_covered = false;
             skip_children = true;
-            force_rrsig = false;
         }
         else
         {
@@ -244,8 +241,6 @@ bool nsec3_is_label_covered(zdb_rr_label *label, bool opt_out)
             bool notempty = !zdb_record_isempty(&label->resource_record_set);
             
             nsec3_covered = notempty;
-            
-            force_rrsig = notempty;
         }
     }
     else

@@ -78,14 +78,6 @@ struct nsec3_context_record
     u16 rdata_size;
 };
 
-static int
-nsec3_context_record_sort_callback(const void* a, const void* b)
-{
-    nsec3_context_record* item_a = *((nsec3_context_record**)a);
-    nsec3_context_record* item_b = *((nsec3_context_record**)b);
-
-    return memcmp(&item_a->digest, item_b->digest, item_a->digest[0] + 1);
-}
 
 /*
  * Converts the label of an NSEC3 or an RRSIG(NSEC3) record to a digest.

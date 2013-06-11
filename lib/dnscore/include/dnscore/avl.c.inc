@@ -30,22 +30,6 @@
  *
  *------------------------------------------------------------------------------
  *
- *
- *      SVN Program:
- *              $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/lib/dnscore/include/dnscore/avl.c.inc $
- *
- *      Creation Date:
- *              2009-01-07
- *
- *      Last Update:
- *              $Date: 2012-07-04 13:32:58 +0200 (Wed, 04 Jul 2012) $
- *              $Revision: 2100 $
- *
- *      Last Change:
- *              $Author: ericdf $
- *
- *------------------------------------------------------------------------------
- *
  * DOCUMENTATION */
 /** @defgroup collections Generic collections functions
  *  @ingroup dnscore
@@ -90,6 +74,32 @@
 #ifdef AVL_PARENT
 #error AVL_HAS_PARENT_POINTER disabled but parent defined
 #endif
+#endif
+
+#ifndef AVL_REFERENCE_ISPOINTER
+#define AVL_REFERENCE_ISPOINTER TRUE
+#endif
+
+#ifndef AVL_REFERENCE_IS_CONST
+#define AVL_REFERENCE_IS_CONST FALSE
+#endif
+
+#if AVL_REFERENCE_ISPOINTER
+#undef AVL_REFERENCE_MODIFIER
+#define AVL_REFERENCE_MODIFIER const
+#else
+#undef AVL_REFERENCE_MODIFIER
+#define AVL_REFERENCE_MODIFIER
+#endif
+
+#if AVL_REFERENCE_IS_CONST
+#undef AVL_REFERENCE_MODIFIER
+#define AVL_REFERENCE_MODIFIER
+#undef AVL_REFERENCE_CONST
+#define AVL_REFERENCE_CONST
+#else
+#undef AVL_REFERENCE_CONST
+#define AVL_REFERENCE_CONST const
 #endif
 
 #define TOOLEFT    -2
@@ -363,12 +373,12 @@ AVL_PREFIXED(avl_init)(AVL_TREE_TYPE* tree)
  */
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_find)(AVL_CONST_TREE_TYPE* tree, const AVL_REFERENCE_TYPE obj_hash)
+AVL_PREFIXED(avl_find)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
 {
     assert(tree != NULL);
 
     const AVL_NODE_TYPE* node = AVL_TREE_ROOT(tree);
-    const AVL_REFERENCE_TYPE h;
+    AVL_REFERENCE_MODIFIER AVL_REFERENCE_TYPE h;
 
     /* This is one of the parts I could try to optimize
      * I've checked the assembly, and it sucks ...
@@ -380,7 +390,8 @@ AVL_PREFIXED(avl_find)(AVL_CONST_TREE_TYPE* tree, const AVL_REFERENCE_TYPE obj_h
 
     while(node != NULL)
     {
-        if(AVL_ISEQUAL(h = AVL_REFERENCE(node), obj_hash))
+        h = AVL_REFERENCE(node);
+        if(AVL_ISEQUAL(h, obj_hash))
         {
             return (AVL_NODE_TYPE*)node;
         }
@@ -865,6 +876,8 @@ AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
          *  Overwrite node successor into victim,
          *  then delete successor, since its content is safe
          *
+         *  This special case does not work if the node is linked by a third party
+         *  so I disabled it to avoid misuses.
          */
 
         AVL_COPY_PAYLOAD(victim, successor);
@@ -1616,6 +1629,7 @@ AVL_PREFIXED(avl_check)(AVL_TREE_TYPE* tree)
 static void
 AVL_PREFIXED(avl_dump_node)(AVL_NODE_TYPE *node, int level, char c)
 {
+#if defined(DEBUG_DUMP)
     char b;
 
     switch(AVL_BALANCE(node))
@@ -1646,6 +1660,8 @@ AVL_PREFIXED(avl_dump_node)(AVL_NODE_TYPE *node, int level, char c)
     DUMP("[%2i]%T %c@%p='" AVL_REFERENCE_FORMAT_STRING"' %c (%p,%p)", level, level, c, node, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)), b, AVL_LEFT_CHILD(node), AVL_RIGHT_CHILD(node));
 #endif
 
+#endif
+    
     if(AVL_LEFT_CHILD(node) != NULL)
     {
         AVL_PREFIXED(avl_dump_node)(AVL_LEFT_CHILD(node), level +1, 'l');

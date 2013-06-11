@@ -28,20 +28,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ##############################################################################
-#
-#	YADIFA dnsdb Makefile.am script
-#
-#      	Makefile.am script
-#
-#	$URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/lib/dnsdb/Makefile.am $
-#
-#       $Date: 2012-06-18 14:50:18 +0200 (Mon, 18 Jun 2012) $
-#
-#       $Revision: 2047 $
-#
-#	$Author: ericdf $
-#
-##############################################################################
 
 srcdir = @srcdir@
 libdir = @libdir@
@@ -54,10 +40,10 @@ dist_noinst_DATA = VERSION
 
 lib_LTLIBRARIES = libdnsdb.la
 
-pkginclude_HEADERS = include/dnsdb/dnsdb-config.h include/dnsdb/avl.h include/dnsdb/btree.h include/dnsdb/dictionary.h include/dnsdb/dnskey.h include/dnsdb/dnsrdata.h include/dnsdb/dnssec_config.h include/dnsdb/dnssec_dsa.h include/dnsdb/dnssec.h include/dnsdb/dnssec_keystore.h include/dnsdb/dnssec_rsa.h include/dnsdb/dnssec_scheduler.h include/dnsdb/dnssec_task.h include/dnsdb/dynupdate.h include/dnsdb/hash.h include/dnsdb/htable.h include/dnsdb/htbt.h include/dnsdb/icmtl_input_stream.h include/dnsdb/nsec3_collection.h include/dnsdb/nsec3.h include/dnsdb/nsec3_hash.h include/dnsdb/nsec3_item.h include/dnsdb/nsec3_icmtl.h include/dnsdb/nsec3_load.h include/dnsdb/nsec3_name_error.h include/dnsdb/nsec3_nodata_error.h include/dnsdb/nsec3_owner.h include/dnsdb/nsec3_types.h include/dnsdb/nsec3_update.h include/dnsdb/nsec3_zone.h include/dnsdb/nsec_common.h include/dnsdb/nsec.h include/dnsdb/nsec_collection.h include/dnsdb/rrsig.h include/dnsdb/treeset.h include/dnsdb/zdb_alloc.h include/dnsdb/zdb_config.h include/dnsdb/zdb_dnsname.h include/dnsdb/zdb_error.h include/dnsdb/zdb.h include/dnsdb/zdb_icmtl.h include/dnsdb/zdb_listener.h include/dnsdb/zdb_record.h include/dnsdb/zdb_rr_label.h include/dnsdb/zdb_store.h include/dnsdb/zdb_types.h include/dnsdb/zdb_utils.h include/dnsdb/zdb_zone.h include/dnsdb/zdb_zone_label.h include/dnsdb/zdb_zone_label_iterator.h include/dnsdb/zdb_zone_write.h include/dnsdb/zonefile.h include/dnsdb/zdb_sanitize.h include/dnsdb/zdb_zone_load.h include/dnsdb/zdb_zone_load_interface.h
+pkginclude_HEADERS = include/dnsdb/dnsdb-config.h include/dnsdb/avl.h include/dnsdb/btree.h include/dnsdb/dictionary.h include/dnsdb/dnskey.h include/dnsdb/dnsrdata.h include/dnsdb/dnssec_config.h include/dnsdb/dnssec_dsa.h include/dnsdb/dnssec.h include/dnsdb/dnssec_keystore.h include/dnsdb/dnssec_rsa.h include/dnsdb/dnssec_scheduler.h include/dnsdb/dnssec_task.h include/dnsdb/dynupdate.h include/dnsdb/hash.h include/dnsdb/htable.h include/dnsdb/htbt.h include/dnsdb/icmtl_input_stream.h include/dnsdb/nsec3_collection.h include/dnsdb/nsec3.h include/dnsdb/nsec3_hash.h include/dnsdb/nsec3_item.h include/dnsdb/nsec3_icmtl.h include/dnsdb/nsec3_load.h include/dnsdb/nsec3_name_error.h include/dnsdb/nsec3_nodata_error.h include/dnsdb/nsec3_owner.h include/dnsdb/nsec3_types.h include/dnsdb/nsec3_update.h include/dnsdb/nsec3_zone.h include/dnsdb/nsec_common.h include/dnsdb/nsec.h include/dnsdb/nsec_collection.h include/dnsdb/rrsig.h include/dnsdb/zdb_alloc.h include/dnsdb/zdb_config.h include/dnsdb/zdb_dnsname.h include/dnsdb/zdb_error.h include/dnsdb/zdb.h include/dnsdb/zdb_icmtl.h include/dnsdb/zdb_listener.h include/dnsdb/zdb_record.h include/dnsdb/zdb_rr_label.h include/dnsdb/zdb_store.h include/dnsdb/zdb_types.h include/dnsdb/zdb_utils.h include/dnsdb/zdb_zone.h include/dnsdb/zdb_zone_label.h include/dnsdb/zdb_zone_label_iterator.h include/dnsdb/zdb_zone_write.h include/dnsdb/zonefile.h include/dnsdb/zdb_sanitize.h include/dnsdb/zdb_zone_load.h include/dnsdb/zdb_zone_load_interface.h
 
 libdnsdb_la_SOURCES = src/avl.c src/dictionary_btree.c src/dictionary.c src/dictionary_htbt.c src/zdb_dnsname.c \
-			src/hash.c src/hash_table_values.c src/htable.c src/htbt.c src/treeset.c \
+			src/hash.c src/hash_table_values.c src/htable.c src/htbt.c \
 			src/zdb_alloc.c src/zdb.c src/zdb_error.c src/zdb_query_ex.c src/zdb_query_ex_wire.c \
 			src/zdb_record.c src/zdb_rr_label.c \
 			src/zdb_utils.c \

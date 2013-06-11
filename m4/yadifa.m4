@@ -30,18 +30,6 @@ dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
 dnl ############################################################################
-dnl
-dnl       SVN Program:
-dnl               $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/bin/yadifa/configure.ac $
-dnl
-dnl       Last Update:
-dnl               $Date: 2012-03-27 16:56:49 +0200 (Tue, 27 Mar 2012) $
-dnl               $Revision: 1868 $
-dnl
-dnl       Purpose:
-dnl              common yadifa m4 macros
-dnl
-dnl ############################################################################
 
 dnl CTRL class
 
@@ -111,7 +99,7 @@ then
 
 			OPENSSL="${withval}"
 			CPPFLAGS="-I$with_openssl/include $CPPFLAGS $CFLAGS3264"
-			LDFLAGS="-L$with_openssl/lib $LDFLAGS"
+			LDFLAGS="-L$with_openssl/lib $SSLDEPS $LDFLAGS"
 			echo "CPPFLAGS=${CPPFLAGS}"
 			echo "LDFLAGS=${LDFLAGS}"
 
@@ -122,6 +110,7 @@ then
 		[
 			echo "no"
 			CPPFLAGS="$CPPFLAGS $CFLAGS3264"
+            LDFLAGS="$SSLDEPS $LDFLAGS"
 			echo "CPPFLAGS=${CPPFLAGS}"
 			echo "LDFLAGS=${LDFLAGS}"
 
@@ -151,24 +140,14 @@ AC_ARG_WITH(dnszone, AS_HELP_STRING([--with-dnszone=DIR], [Use the dnszone from 
     ],
     [
 		
-		if [[ -d ../../lib/dnszone ]]
+		if [[ ! -d ${srcdir}/../../lib/dnszone ]]
 		then
-			echo "embedded"
-
-			CPPFLAGS="-I../../lib/dnszone/include $CPPFLAGS"
-			LDFLAGS="-L../../lib/dnszone/.libs $LDFLAGS"
-
-			LDFLAGS="$LDFLAGS $LDSTAT -ldnszone $LDDYN"
-		elif [[ -d ../dnszone ]]
-		then
-			echo "embedded"
-
-            CPPFLAGS="-I../lib/dnszone/include $CPPFLAGS"
-            LDFLAGS="-L../lib/dnszone/.libs $LDFLAGS"
+        	AC_CHECK_LIB([dnszone], [dnszone_init],,[exit],[$LDSTAT -ldnsdb -ldnscore $LDDYN -lssl])
+        else
+            CPPFLAGS="-I${srcdir}/../../lib/dnszone/include $CPPFLAGS"
+            LDFLAGS="-L../../lib/dnszone/.libs $LDFLAGS"
 
             LDFLAGS="$LDFLAGS $LDSTAT -ldnszone $LDDYN"	
-		else
-        	AC_CHECK_LIB([dnszone], [dnszone_init],,[exit],[$LDSTAT -ldnsdb -ldnscore $LDDYN -lssl])
 		fi
     ])
 AC_SUBST(DNSZONE)
@@ -189,13 +168,13 @@ AC_ARG_WITH(dnsdb, AS_HELP_STRING([--with-dnsdb=DIR], [Use the dnsdb from direct
 	],
 	[
 
-		if [[ ! -d ../../lib/dnsdb ]]
+		if [[ ! -d ${srcdir}/../../lib/dnsdb ]]
 		then
 			AC_CHECK_LIB([dnsdb], [zdb_init],,[exit],[$LDSTAT -ldnscore $LDDYN -lssl])
 		else
 			echo "embedded"
 
-			CPPFLAGS="-I../../lib/dnsdb/include $CPPFLAGS"
+			CPPFLAGS="-I${srcdir}/../../lib/dnsdb/include $CPPFLAGS"
 			LDFLAGS="-L../../lib/dnsdb/.libs $LDFLAGS"
 
 			LDFLAGS="$LDFLAGS $LDSTAT -ldnsdb $LDDYN"
@@ -209,7 +188,6 @@ dnl DNSCORE
 
 if [[ $requires_dnscore -eq 1 ]]
 then
-
 AC_MSG_CHECKING(for the DNS Core library)
 AC_ARG_WITH(dnscore, AS_HELP_STRING([--with-dnscore=DIR], [Use the dnscore from directory DIR/lib (devs only)]),
 	[
@@ -219,13 +197,11 @@ AC_ARG_WITH(dnscore, AS_HELP_STRING([--with-dnscore=DIR], [Use the dnscore from 
 	],
 	[
 
-		if [[ ! -d ../../lib/dnscore ]]
+		if [[ ! -d ${srcdir}/../../lib/dnscore ]]
 		then
 			AC_CHECK_LIB([dnscore], [dnscore_init],,[exit],[$LDSTAT -ldnscore $LDDYN -lssl])
 		else
-			echo "embedded"
-
-			CPPFLAGS="-I../../lib/dnscore/include $CPPFLAGS"
+			CPPFLAGS="-I${srcdir}/../../lib/dnscore/include $CPPFLAGS"
 			LDFLAGS="-L../../lib/dnscore/.libs $LDFLAGS"
 
 			LDFLAGS="$LDFLAGS $LDSTAT -ldnscore $LDDYN"
@@ -278,7 +254,7 @@ dnl NSEC3
 
 AM_CONDITIONAL([HAS_DNSSEC_SUPPORT], [false])
 
-AC_MSG_CHECKING(if NSEC3 has been disabled)
+dnl AC_MSG_CHECKING(if NSEC3 has been disabled)
 enable_nsec3=yes
 
 case "$enable_nsec3" in
@@ -295,7 +271,7 @@ AM_CONDITIONAL([HAS_NSEC3_SUPPORT], [test $enable_nsec3 = yes])
 
 dnl NSEC
 
-AC_MSG_CHECKING(if NSEC has been disabled)
+dnl AC_MSG_CHECKING(if NSEC has been disabled)
 enable_nsec=yes
 case "$enable_nsec" in
 	yes)
@@ -334,6 +310,7 @@ case "$enable_messages" in
 esac
 AM_CONDITIONAL([HAS_MESSAGES_SUPPORT], [test $enable_messages = yes])
 
+AC_SOCKADDR_SA_LEN_CHECK
 AC_FADDRESS_SANITIZER_CHECK
 AC_FNO_OMIT_FRAME_POINTER_CHECK
 

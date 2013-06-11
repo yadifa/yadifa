@@ -30,18 +30,6 @@ dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
 dnl ############################################################################
-dnl
-dnl       SVN Program:
-dnl               $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/bin/yadifa/configure.ac $
-dnl
-dnl       Last Update:
-dnl               $Date: 2012-03-27 16:56:49 +0200 (Tue, 27 Mar 2012) $
-dnl               $Revision: 1868 $
-dnl
-dnl       Purpose:
-dnl              common generic m4 macros
-dnl
-dnl ############################################################################
 
 dnl Assume it is true
 
@@ -104,7 +92,7 @@ echo -n "checking for the cpu options ... "
 CPU_UNKNOWN=1
 
 CFLAGS3264=
-case "$(uname -i)" in
+case "$(uname -i 2>/dev/null)" in
 	SUNW,SPARC-Enterprise-T1000)
 		AC_DEFINE_UNQUOTED([HAS_CPU_NIAGARA], [1], [T1000 has a Niagara cpu])
 		AM_CONDITIONAL([HAS_CPU_NIAGARA], [true])
@@ -186,7 +174,7 @@ then
 	CCVER='0.0'
 fi
 
-CCNAME=$($CC --version|head -1|sed 's/.*\(clang\|gcc\|icc\).*/\1/'|tr A-Z a-z)
+CCNAME=$($CC --version|head -1|sed -e 's/.*clang.*/clang/' -e 's/.*gcc.*/gcc/' -e 's/.*icc.*/icc/'|tr A-Z a-z)
 
 if [[ "$CCNAME" = "" ]]
 then
@@ -238,6 +226,7 @@ then
         AM_CONDITIONAL([USES_ICC], [false])
         AM_CONDITIONAL([USES_GCC], [true])
         AM_CONDITIONAL([USES_CLANG], [false])
+        AM_CONDITIONAL([USES_UNKNOWN], [false])
 
 elif [[ "$CCNAME" = "icc" ]]
 then
@@ -248,6 +237,7 @@ then
         AM_CONDITIONAL([USES_ICC], [true])
         AM_CONDITIONAL([USES_GCC], [false])
         AM_CONDITIONAL([USES_CLANG], [false])
+        AM_CONDITIONAL([USES_UNKNOWN], [false])
 
 	AR=xiar
 
@@ -260,6 +250,7 @@ then
         AM_CONDITIONAL([USES_ICC], [false])
         AM_CONDITIONAL([USES_GCC], [false])
         AM_CONDITIONAL([USES_CLANG], [true])
+        AM_CONDITIONAL([USES_UNKNOWN], [false])
 else
 	echo "unsupported compiler"
 
@@ -270,6 +261,7 @@ else
 	AM_CONDITIONAL([USES_ICC], [false])
         AM_CONDITIONAL([USES_GCC], [false])
         AM_CONDITIONAL([USES_CLANG], [false])	
+        AM_CONDITIONAL([USES_UNKNOWN], [true])
 fi
 
 echo "detected compiler is $CCNAME $CCMAJOR $CCMINOR"
@@ -423,6 +415,32 @@ case "$enable_lto" in
         ;;
 esac
 
+])
+
+AC_DEFUN([AC_SOCKADDR_SA_LEN_CHECK],
+[
+dnl Check for sa_len field
+echo -n "checking if sockaddr has a sa_len field ... "
+cat > sockaddr_sa_len.c <<_ACEOF
+#include<sys/types.h>
+#include<sys/socket.h>
+int main(int argc, char* argv[])
+{
+    struct sockaddr sa;
+    sa.sa_len = 4;
+}
+_ACEOF
+has_sockaddr_sa_len=0
+${CC} ${CFLAGS} sockaddr_sa_len.c > /dev/null 2>&1
+if [[ $? -eq 0 ]]; then
+    has_sockaddr_sa_len=1;
+    echo "yes"
+else
+    echo "no"
+fi
+rm -f sockaddr_sa_len.c sockaddr_sa_len
+AM_CONDITIONAL([HAS_SOCKADDR_SA_LEN], [test $has_sockaddr_sa_len = yes])
+AC_DEFINE_UNQUOTED([HAS_SOCKADDR_SA_LEN], [$has_sockaddr_sa_len], [The sockaddr struct has an sa_len field])
 ])
 
 AC_DEFUN([AC_EURID_SUMMARY], [

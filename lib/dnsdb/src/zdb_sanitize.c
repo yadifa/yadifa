@@ -577,7 +577,6 @@ zdb_sanitize_rr_label_with_parent(zdb_zone *zone, zdb_rr_label *label, dnsname_s
     
     if(!ZDB_LABEL_ISAPEX(label))
     {
-        int index = zone->origin_vector.size + 1;
         zdb_rr_label* label_stack[128];
         
 #ifndef NDEBUG

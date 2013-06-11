@@ -72,7 +72,7 @@ extern "C" {
 #define ZFREE(label,object) free(label)
 
 #define ZALLOC_ARRAY_OR_DIE(cast,label,size,tag) MALLOC_OR_DIE(cast,label,size,tag)
-#define ZFREE_ARRAY(ptr,size_) free(ptr)
+#define ZFREE_ARRAY(ptr,size_) free(ptr);(void)(size_)
 
 /* not aligned, max size 256 */
 #define ZALLOC_STRING_OR_DIE(cast,label,size,tag) MALLOC_OR_DIE(cast,label,size,tag)
@@ -334,32 +334,31 @@ void zdb_mfree_unaligned(void* ptr);
 
 #define ZALLOC_ARRAY_RESIZE_TAG 0x44455a49534552 /* RESIZED */
 
-#define ZALLOC_ARRAY_RESIZE(type_,array_,count_,newcount_)			\
-{										\
-    int zalloc_new_count = (newcount_);						\
-    if((count_) != zalloc_new_count)						\
-    {										\
-	if( ZDB_MALLOC_SIZE_TO_PAGE(sizeof(type_)*(count_)) !=                  \
-	    ZDB_MALLOC_SIZE_TO_PAGE(sizeof(type_)*zalloc_new_count))		\
-	{									\
-	    type_* __tmp__;							\
-										\
-	    if(zalloc_new_count > 0)						\
-	    {									\
-		ZALLOC_ARRAY_OR_DIE(type_*,__tmp__,sizeof(type_)*zalloc_new_count, \
-				    ZALLOC_ARRAY_RESIZE_TAG);			\
-		MEMCOPY(__tmp__,(array_),sizeof(type_)*MIN((count_),zalloc_new_count));	\
-	    }									\
-	    else								\
-	    {									\
-		__tmp__ = NULL;							\
-	    }									\
-										\
-	    ZFREE_ARRAY((array_),sizeof(type_)*(count_));			\
-	    array_ = __tmp__;							\
-	    count_ = newcount_;							\
-	}									\
-    }										\
+#define ZALLOC_ARRAY_RESIZE(type_,array_,count_,newcount_)			                                            \
+{										                                                                        \
+    u32 zalloc_new_count = (newcount_);						                                                    \
+    if((count_) != zalloc_new_count)						                                                    \
+    {										                                                                    \
+    	if( ZDB_MALLOC_SIZE_TO_PAGE(sizeof(type_)*(count_)) !=                                                  \
+	        ZDB_MALLOC_SIZE_TO_PAGE(sizeof(type_)*zalloc_new_count))		                                    \
+    	{									                                                                    \
+	        type_* __tmp__;							                                                            \
+										                                                                        \
+    	    if(zalloc_new_count > 0)						                                                    \
+	        {									                                                                \
+        		ZALLOC_ARRAY_OR_DIE(type_*,__tmp__,sizeof(type_)*zalloc_new_count, ZALLOC_ARRAY_RESIZE_TAG);    \
+		        MEMCOPY(__tmp__,(array_),sizeof(type_)*MIN((count_),zalloc_new_count));	                        \
+    	    }									                                                                \
+	        else								                                                                \
+	        {									                                                                \
+    		    __tmp__ = NULL;							                                                        \
+	        }									                                                                \
+    										                                                                    \
+	        ZFREE_ARRAY((array_),sizeof(type_)*(count_));			                                            \
+	        array_ = __tmp__;							                                                        \
+    	    count_ = newcount_;							                                                        \
+    	}									                                                                    \
+    }										                                                                    \
 }
 
 #endif

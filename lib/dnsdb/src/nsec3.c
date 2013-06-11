@@ -139,6 +139,8 @@ nsec3_update_label_update_record(zdb_zone* zone, zdb_rr_label* label, u16 type)
             {
                 /* This handles the HIGHLY unlikely case of digest collisions */
 
+                enabled = FALSE;
+                
                 for(u16 idx = 0; idx < self->rc; idx++)
                 {
                     enabled |= (zdb_record_find(&self->label.owners[idx]->resource_record_set, type) != NULL);

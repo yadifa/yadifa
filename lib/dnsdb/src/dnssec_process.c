@@ -80,12 +80,20 @@ static int processor_threads_count = -1; /*SIGNER_THREAD_COUNT;*/
 
 /*****************************************************************************/
 
-#define ZDB_THREAD_TAG		    0x444145524854	/* THREAD */
-#define ZDB_THREAD_CONTEXT_TAG	    0x545854435450	/* PTCTXT */
-#define THREADED_QUEUE_NODE_TAG	    0x444E455545555154	/* TQUEUEND */
+#define ZDB_THREAD_TAG		    0x444145524854	    /* THREAD   */
+#define ZDB_THREAD_CONTEXT_TAG  0x545854435450	    /* PTCTXT   */
+#define THREADED_QUEUE_NODE_TAG 0x444E455545555154	/* TQUEUEND */
 #define ZDB_RRSIGUPQ_TAG	    0x5150554749535252	/* RRSIGUPQ */
 
 static int dnssec_process_threadcount = -1;
+
+static const char *dnssec_xfr_path = NULL;
+
+void
+dnssec_set_xfr_path(const char* xfr_path)
+{
+    dnssec_xfr_path = xfr_path;
+}
 
 int
 dnssec_process_getthreadcount()
@@ -289,7 +297,7 @@ dnssec_process_task(zdb_zone* zone, dnssec_task* task, dnssec_process_task_callb
 
     /* The array of contextes for each thread */
     processor_thread_context* context;
-    MALLOC_OR_DIE(processor_thread_context*, context, sizeof (processor_thread_context) * processor_threads_count, ZDB_THREAD_CONTEXT_TAG);
+    MALLOC_OR_DIE(processor_thread_context*, context, sizeof(processor_thread_context) * processor_threads_count, ZDB_THREAD_CONTEXT_TAG);
 
     u32 valid_from = time(NULL);
 
@@ -311,7 +319,10 @@ dnssec_process_task(zdb_zone* zone, dnssec_task* task, dnssec_process_task_callb
 #if ZDB_USE_THREADPOOL!=0
         if(FAIL(ret = thread_pool_schedule_job(task->query_thread, &context[processor], NULL, task->descriptor_name)))
         {
+            log_err("dnssec_process_zone: thread_pool_schedule_job, critical fail: %r", ret);
+            logger_flush();
             log_quit("dnssec_process_zone: thread_pool_schedule_job: %r", ret);
+            break;
         }
 #else
         if((ret = pthread_create(&dnssec_task_threads[processor], NULL, task->query_thread, &context[processor])) != 0)
@@ -525,7 +536,7 @@ dnssec_process_zone_label(zdb_zone_label* zone_label, dnssec_task* task)
  */
 
 void
-dnssec_process_database(zdb* db, dnssec_task* task)
+dnssec_process_database(zdb *db, dnssec_task* task) // dnssec checked
 {
 #if DNSSEC_DEBUGLEVEL>1
     log_debug("dnssec_process_database: begin");
@@ -535,7 +546,7 @@ dnssec_process_database(zdb* db, dnssec_task* task)
 
     for(zclass = HOST_CLASS_IN - 1; zclass < ZDB_RECORDS_MAX_CLASS; zclass++)
     {
-        zdb_zone_label* zone_label = db->root[zclass];
+        zdb_zone_label* zone_label = db->root[zclass]; /* native order */
 
         dnssec_process_zone_label(zone_label, task);
 
@@ -615,9 +626,12 @@ dnssec_process_zone(zdb_zone* zone, dnssec_task* task)
      *
      ************************************************************************************************/
 
-    const char* data_path = "/usr/local-dev/var/zones/masters";
-
     ya_result return_code;
+    
+    if(dnssec_xfr_path == NULL)
+    {
+        return ERROR;
+    }
 
     /* @todo use a dynamic (server configuration-set) time period (LATER) */
 
@@ -638,13 +652,13 @@ dnssec_process_zone(zdb_zone* zone, dnssec_task* task)
 
     zdb_icmtl icmtl;
 
-    if(ISOK(return_code = zdb_icmtl_begin(zone, &icmtl, data_path)))
+    if(ISOK(return_code = zdb_icmtl_begin(zone, &icmtl, dnssec_xfr_path)))
     {
         if(ISOK(return_code = dnssec_process_task(zone, task, &dnssec_process_zone_body, NULL)))
         {
             if(!dnscore_shuttingdown())
             {
-                zdb_icmtl_end(&icmtl, data_path);
+                zdb_icmtl_end(&icmtl, dnssec_xfr_path);
             }
             else
             {
@@ -665,7 +679,6 @@ dnssec_process_zone(zdb_zone* zone, dnssec_task* task)
 static ya_result
 dnssec_process_zone_nsec3_body(zdb_zone* zone, dnssec_task* task, void *whatyouwant)
 {
-    /*dnsname_to_dnsname_vector(zone->origin,&task->path);*/
     dnsname_to_dnsname_stack(zone->origin, &task->path);
 
     nsec3_zone* n3 = zone->nsec.nsec3;

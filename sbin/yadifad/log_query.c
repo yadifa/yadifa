@@ -140,7 +140,7 @@ log_query_bind(int socket_fd, message_data *mesg)
     memcpy(buffer, ": query: ", 9);
     buffer += 9;
     
-    buffer += dnsname_to_cstr(buffer, mesg->qname) - 1;
+    buffer += dnsname_to_cstr(buffer, mesg->qname);
     
     *buffer++ = ' ';
     
@@ -244,7 +244,7 @@ log_query_yadifa(int socket_fd, message_data *mesg)
     *buffer++ = '}';
     *buffer++ = ' ';
     
-    buffer += dnsname_to_cstr(buffer, mesg->qname) - 1;
+    buffer += dnsname_to_cstr(buffer, mesg->qname);
     
     *buffer++ = ' ';
     

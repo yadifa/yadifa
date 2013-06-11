@@ -81,8 +81,6 @@ counter_flush(output_stream* stream)
 static void
 counter_close(output_stream* stream)
 {
-    counter_output_stream_data* data = (counter_output_stream_data*)stream->data;
-    
     output_stream_set_void(stream);
 }
 

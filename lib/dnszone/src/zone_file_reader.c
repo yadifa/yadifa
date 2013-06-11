@@ -57,6 +57,7 @@
 #include <dnscore/logger.h>
 #include <dnscore/buffer_input_stream.h>
 #include <dnscore/file_input_stream.h>
+#include <dnscore/bytearray_output_stream.h>
 
 #include "dnszone/zone_file_reader.h"
 
@@ -179,6 +180,8 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
     char                                                     *needle = NULL;
     
     ya_result                                              return_code = OK;
+    u32                                                     soa_min_ttl = 0;
+    bool                                            default_ttl_set = FALSE;
     char                                                line[MAX_LINE_SIZE];
     char                                                      line_bak[160];
 
@@ -189,7 +192,7 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
     entry->type     = 0;
 
     entry->rdata[0] = '\0';
-
+    
     //while(NULL != fgets(line, MAX_LINE_SIZE, zone->file_handle))
     
     while(buffer_input_stream_read_line(&zone->ins, line, sizeof(line)) > 0)
@@ -197,7 +200,7 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
         zone->line_number++;
 	
         /* If comment at the beginning of the line, skip the line completely */
-        if((line[0] == '#') | (line[0] == ';'))
+        if((line[0] == '#') || (line[0] == ';'))
         {
             continue;
         }
@@ -238,13 +241,38 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
             else if((needle = strstr(line, "$TTL")) != 0) /* Check for $TTL directive */
             {
                 SKIP_WORD(needle);
+                
+                u32 default_ttl = 0;
 
-                if(FAIL(return_code = rr_get_ttl(needle, &zone->default_ttl)))
+                if(FAIL(return_code = rr_get_ttl(needle, &default_ttl)))
                 {
-                    log_err("zone file: parse: ttl error at line %i: '%s': %r", zone->line_number, line_bak, return_code);
+                    log_err("zone file: parse: $TTL error at line %i: '%s': %r", zone->line_number, line_bak, return_code);
 
                     return return_code;
                 }
+                
+                // this should never be triggered because rr_get_ttl did some filtering already
+                
+                if(default_ttl > MAX_S32) // ensures [0; 2^31 - 1]
+                {
+                    /* rfc 2181
+                     * Implementations should treat TTL values received with the most
+                     * significant bit set as if the entire value received was zero.
+                     */
+                    
+                    log_warn("zone file: parse: $TTL=%u out of range at line %i (setting to 0)", default_ttl, zone->line_number);
+                    default_ttl = 0;
+                }
+                
+                if(default_ttl <= soa_min_ttl)
+                {
+                    log_warn("zone file: parse: $TTL=%d less or equal to negative-caching/minimum TTL at line %i, consider changing it", default_ttl, soa_min_ttl, zone->line_number);
+                }
+                
+                zone->default_ttl = default_ttl;
+                
+                default_ttl_set = TRUE;
+                
                 continue;
             }
             else if((needle = strstr(line, "$INCLUDE")) != 0)
@@ -275,7 +303,7 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
         /* Must be a resource record so parse it */
         if(FAIL(return_code = rr_parse_line(line, zone->origin,
                         zone->label,
-                        &zone->default_ttl, entry,
+                        zone->default_ttl, entry,
                         &zone->bracket_status)))
         {
             log_err("zone file: parse: error at line %i: '%s': %r", zone->line_number, line_bak, return_code);
@@ -324,7 +352,39 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
 
                     return ZRE_WRONG_APEX;
                 }
+                
                 zone->soa_found = TRUE;
+                
+                /*
+                 * ensure $TTL is not SOA min-ttl/negative-caching ttl
+                 */
+                
+                const u8 *p = (const u8*)bytearray_output_stream_buffer(&entry->os_rdata);
+                const u8 *limit = p + bytearray_output_stream_size(&entry->os_rdata);
+                
+                p += dnsname_len(p);
+                p += dnsname_len(p);
+                if(&p[20] == limit)
+                {
+                    u32 min_ttl = ntohl(GET_U32_AT(p[16]));
+
+                    if(default_ttl_set && (zone->default_ttl <= min_ttl))
+                    {
+                        log_warn("zone file: parse: default TTL of %d equals the negative-caching/minimum TTL found in the SOA", zone->default_ttl);
+                    }
+                    else
+                    {
+                        // silently change the default_ttl
+
+                        zone->default_ttl = MIN(min_ttl + 1, MAX_S32);
+                    }
+                }
+                else
+                {
+                    log_err("zone file: parse: error parsing SOA record at line %i", zone->line_number);
+                    
+                    return PARSESTRING_ERROR;
+                }
             }
             else
             {
@@ -393,6 +453,35 @@ static zone_reader_vtbl zone_file_reader_vtbl =
     "zone_file_reader"
 };
 
+
+ya_result
+zone_file_reader_parse_stream(input_stream *ins, zone_reader *dst)
+{
+    zone_file_reader *zone;
+    
+    /*    ------------------------------------------------------------    */
+    
+    MALLOC_OR_DIE(zone_file_reader*, zone, sizeof (zone_file_reader), ZFREADER_TAG);
+
+    ZEROMEMORY(zone, sizeof (zone_file_reader));
+
+    buffer_input_stream_init(ins,&zone->ins, 4096);
+    
+    zone->origin    = NULL;
+    zone->rr        = NULL;
+    zone->line_number = 0;
+    /*zone->type        = 1;*/
+    zone->qclass      = 0;
+    zone->default_ttl = 86400;      // should be at least one day and different than min-ttl
+    zone->bracket_status = 0;
+    zone->soa_found   = FALSE;
+
+    dst->data = zone;
+    dst->vtbl = &zone_file_reader_vtbl;
+
+    return OK;
+}
+
 /** @brief Initializing zone_data variable
  *
  *  The function not only initialize a new zone_data struct, but if needed
@@ -418,10 +507,9 @@ static zone_reader_vtbl zone_file_reader_vtbl =
 ya_result
 zone_file_reader_open(const char* fullpath, zone_reader *dst)
 {
-    zone_file_reader *zone;
-    
     input_stream ins;
     ya_result return_value;
+    
     if(FAIL(return_value = file_input_stream_open(fullpath, &ins)))
     {
             log_debug("zone file: cannot open: '%s': %r", fullpath, return_value);
@@ -433,28 +521,17 @@ zone_file_reader_open(const char* fullpath, zone_reader *dst)
     posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
 #endif
     
-    /*    ------------------------------------------------------------    */
+    return_value = zone_file_reader_parse_stream(&ins, dst);
     
-    MALLOC_OR_DIE(zone_file_reader*, zone, sizeof (zone_file_reader), ZFREADER_TAG);
-
-    ZEROMEMORY(zone, sizeof (zone_file_reader));
-
-    buffer_input_stream_init(&ins,&zone->ins, 4096);
-    
-    zone->origin    = NULL;
-    zone->rr        = NULL;
-    zone->line_number = 0;
-    /*zone->type        = 1;*/
-    zone->qclass      = 0;
-    zone->bracket_status = 0;
-    zone->soa_found   = FALSE;
-
-    dst->data = zone;
-    dst->vtbl = &zone_file_reader_vtbl;
-
-    return OK;
+    return return_value;
 }
 
+void
+zone_file_reader_ignore_missing_soa(zone_reader *zr)
+{
+    zone_file_reader *zone = (zone_file_reader*)zr->data;
+    zone->soa_found = TRUE;
+}
 
 /** @} */
 

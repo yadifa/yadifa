@@ -172,8 +172,6 @@ nsec3_remove_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec
 
                 if(item != NULL)
                 {
-                    int depth;
-
                     log_debug("nsec3_remove_nsec3_by_name: destroying %{digest32h}", item->digest);
 
 					/*
@@ -230,8 +228,6 @@ nsec3_remove_nsec3_by_digest(zdb_zone* zone, const u8 *nsec3_digest, const u8* n
 
             if(item != NULL)
             {
-                int depth;
-
                 log_debug("nsec3_remove_nsec3_by_name: destroying %{digest32h}", item->digest);
 
                 /*

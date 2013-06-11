@@ -28,26 +28,10 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
-#
-#       SVN Program:
-#               $URL: $
-#
-#       Last Update:
-#               $Date:$
-#               $Revision: 1717 $
-#
-#       Purpose:
-#               Settings common to all makefiles
-#
-################################################################################
 
-
-AM_CFLAGS = -D_FILE_OFFSET_BITS=64
+AM_CFLAGS = -Wall -D_FILE_OFFSET_BITS=64
 AM_LDFLAGS =
 DEBUGFLAGS =
-
-#ACLOCAL_AMFLAGS = -I m4
-
 
 #
 # Intel C Compiler
@@ -59,12 +43,12 @@ if USES_ICC
 #IPO= -ipo (need to use the intel xiar instead of ar)
 
 if HAS_LTO_SUPPORT
-AM_CFLAGS += -ipo
+AM_CFLAGS += -DLTO -ipo
 AM_LDFLAGS += -ipo
 AM_AR = xiar
 endif
 
-AM_CFLAGS += -ansi-alias -std=c99 -U__STRICT_ANSI__ -I$(abs_builddir) -I$(abs_srcdir)/include
+AM_CFLAGS += -DUSES_ICC -ansi-alias -std=c99 -U__STRICT_ANSI__ -I$(abs_builddir) -I$(abs_srcdir)/include
 AM_LD = ld
 
 DEBUGFLAGS += -O0 -g -DMODE_DEBUG_ICC
@@ -80,15 +64,17 @@ if USES_CLANG
 # CLANG
 
 if HAS_LTO_SUPPORT
-AM_CFLAGS += -flto
+AM_CFLAGS += -DLTO -flto
 AM_LDFLAGS += -use-gold-plugin
-endif
-
-AM_CFLAGS += -mtune=native
-AM_CFLAGS += -fcatch-undefined-behavior -I$(abs_builddir) -I$(abs_srcdir)/include
-
 AM_AR = llvm-ar
 AM_LD = ld.gold
+else
+AM_AR = ar
+AM_LD = ld
+endif
+
+AM_CFLAGS += -mtune=native -DUSES_LLVM
+AM_CFLAGS += -I$(abs_builddir) -I$(abs_srcdir)/include
 
 DEBUGFLAGS += -O0 -g -DMODE_DEBUG_CLANG
 
@@ -110,7 +96,7 @@ AM_CFLAGS += -mtune=native
 endif
 
 if HAS_LTO_SUPPORT
-AM_CFLAGS += -flto
+AM_CFLAGS += -DLTO -flto
 AM_LDFLAGS += -flto
 endif
 
@@ -119,16 +105,27 @@ AM_CFLAGS += -fno-ident -ansi -pedantic -std=gnu99 -I$(abs_builddir) -I$(abs_src
 AM_AR = ar
 AM_LD = ld
 
+if !IS_BSD_FAMILY
+
 DEBUGFLAGS+=-g3 -gdwarf-2 -O0 -DMODE_DEBUG_GCC -rdynamic
 
-endif
-
 if HAS_FADDRESS_SANITIZER
-DEBUGFLAGS+=-faddress-sanitizer
+# one of these: address,thread,undefined
+DEBUGFLAGS += -fsanitize=address
 endif
 
-if HAS_FNO_OMIT_FRAME_POINTER
-DEBUGFLAGS+=-fno-omit-frame-pointer
+else
+
+DEBUGFLAGS+=-g -O0 -DMODE_DEBUG_GCC -rdynamic
+
+endif # IS_BSD_FAMILY
+
+endif # USES_GCC
+
+if USES_UNKNOWN
+# if an unknown compiler is used, it should have its own section
+AM_CFLAGS += -DUSES_UNKNOWN_COMPILER -I$(abs_builddir) -I$(abs_srcdir)/include
+DEBUGFLAGS += -g -O0
 endif
 
 #

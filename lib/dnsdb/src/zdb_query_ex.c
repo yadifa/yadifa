@@ -926,7 +926,6 @@ zdb_query_ex_append_nsec3_nodata(const zdb_zone *zone, const zdb_rr_label *rr_la
                                  DECLARE_ZCLASS_PARAMETER
                                  zdb_resourcerecord** headp, u8 * restrict * pool)
 {
-    nsec3_zone* n3 = zone->nsec.nsec3;
 
     u8 *nsec3_owner = *pool;
     *pool += ALIGN16(MAX_DOMAIN_LENGTH);
@@ -942,7 +941,7 @@ zdb_query_ex_append_nsec3_nodata(const zdb_zone *zone, const zdb_rr_label *rr_la
     u32 min_ttl;
     zdb_zone_getminttl(zone, &min_ttl);
 
-    zdb_packed_ttlrdata* nsec3;
+    zdb_packed_ttlrdata* nsec3 = NULL;
     zdb_packed_ttlrdata* nsec3_rrsig;
     zdb_packed_ttlrdata* closest_nsec3;
     zdb_packed_ttlrdata* closest_nsec3_rrsig;
@@ -983,7 +982,7 @@ zdb_query_ex_append_nsec3_nodata(const zdb_zone *zone, const zdb_rr_label *rr_la
                 zdb_packed_ttlrdata* wild_closest_nsec3_rrsig;
 
 #ifndef NDEBUG
-                memset(wild_closest_nsec3_owner, 0xff, sizeof (nsec3_owner));
+                memset(wild_closest_nsec3_owner, 0xff, ALIGN16(MAX_DOMAIN_LENGTH));
 #endif
                 /* closest encloser proof */
                 nsec3_wild_nodata_error(zone, rr_label, name, apex_index, nsec3_owner, &nsec3, &nsec3_rrsig, closest_nsec3_owner, &closest_nsec3, &closest_nsec3_rrsig, wild_closest_nsec3_owner, &wild_closest_nsec3, &wild_closest_nsec3_rrsig);
@@ -1029,7 +1028,7 @@ zdb_query_ex_append_nsec3_nodata(const zdb_zone *zone, const zdb_rr_label *rr_la
         zdb_packed_ttlrdata* wild_closest_nsec3_rrsig;
         
 #ifndef NDEBUG
-        memset(wild_closest_nsec3_owner, 0xff, sizeof (nsec3_owner));
+        memset(wild_closest_nsec3_owner, 0xff, ALIGN16(MAX_DOMAIN_LENGTH));
 #endif
 
         nsec3_wild_nodata_error(zone, rr_label, name, apex_index, nsec3_owner, &nsec3, &nsec3_rrsig, closest_nsec3_owner, &closest_nsec3, &closest_nsec3_rrsig, wild_closest_nsec3_owner, &wild_closest_nsec3, &wild_closest_nsec3_rrsig);
@@ -1097,7 +1096,7 @@ zdb_query_ex_append_wild_nsec3_data(const zdb_zone *zone, const zdb_rr_label *rr
 {
     zassert(IS_WILD_LABEL(rr_label->name));
     
-    nsec3_zone* n3 = zone->nsec.nsec3;
+    //nsec3_zone* n3 = zone->nsec.nsec3;
 
     u8 *nsec3_owner = *pool;
     *pool += ALIGN16(MAX_DOMAIN_LENGTH);
@@ -2659,8 +2658,6 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
     {
         if(ZONE_NSEC3_AVAILABLE(zone))
         {
-            nsec3_zone* n3 = zone->nsec.nsec3;
-
             u8 *next_closer_owner = *pool;
             *pool += ALIGN16(MAX_DOMAIN_LENGTH);
             zdb_packed_ttlrdata* next_closer;
@@ -2788,7 +2785,7 @@ zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_ad
              */
 
             
-            zdb_rr_label *apex_label = zone->apex;
+            //zdb_rr_label *apex_label = zone->apex;
             zdb_query_ex_answer_append_soa_rrsig_nttl(zone, &ans_auth_add->authority, pool);
             
             u8 *encloser_nsec_name = *pool;            

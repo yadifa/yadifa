@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-* DOCUMENTATION */
+ *
+ * Copyright (c) 2011, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ * DOCUMENTATION */
 /** @defgroup dnscore
  *  @ingroup dnscore
  *  @brief Functions used to manipulate dns formatted names and labels
@@ -58,10 +58,62 @@
  *
  */
 
+#define SRV_UNDERSCORE_SUPPORT 1
+
 #define DNSNAME_MAX_SECTIONS ((MAX_DOMAIN_LENGTH+1) / 2)
 
+// dns equal chars comparison should give 0x00 or 0x20
+// the '_' breaks this so there is a slightly different (slightly slower) way to handle it
+
+// IMPORTANT NOTE 1 : MACROS ARE WRITTEN TO USE THEIR PARAMETERS EXACTLY ONCE
+
+// IMPORTANT NOTE 2 : LOCASEEQUAL only works on the DNS chars AND with the first parameter being a lo-case string (like in the database)
+
+#if SRV_UNDERSCORE_SUPPORT == 0
 #define LOCASE(c__) ((char)(c__)|(char)0x20)
-#define LOCASEEQUALS(ca__,cb__) ((((char)(ca__)-(char)(cb__))&0xdf) == 0)
+
+static inline bool LOCASEEQUALS(char ca__,char cb__)
+{
+    return ((((char)(ca__)-(char)(cb__))&0xdf) == 0);
+}
+
+static inline bool LOCASEEQUALSBY2(const u8* name_a, const u8* name_b)
+{
+    return (((GET_U16_AT(name_a[0]) - GET_U16_AT(name_b[0])) & ((u16)0xdfdf)) == 0);
+}
+
+static inline bool LOCASEEQUALSBY3(const u8* name_a, const u8* name_b)
+{
+    return LOCASEEQUALSBY2(name_a, name_b) && LOCASEEQUALS(name_a[2], name_b[2]);
+}
+
+static inline bool LOCASEEQUALSBY4(const u8* name_a, const u8* name_b)
+{
+    return (((GET_U32_AT(name_a[0]) - GET_U32_AT(name_b[0])) & ((u16)0xdfdfdfdf)) == 0);
+}
+#else // slightly modified to take that stupid '_' into account
+#define LOCASE(c__) (((((char)(c__)+(char)0x01)|(char)0x20))-(char)0x01)
+
+static inline bool LOCASEEQUALS(u8 a, u8 b)
+{
+    return ((((u8)(a+0x01)-(u8)(b+0x01))&0xdf) == 0);
+}
+
+static inline bool LOCASEEQUALSBY2(const u8* name_a, const u8* name_b)
+{
+    return (( ( (GET_U16_AT(name_a[0]) + 0x0101) - (GET_U16_AT(name_b[0]) + 0x0101)) & ((u16)0xdfdf)) == 0);
+}
+
+static inline bool LOCASEEQUALSBY3(const u8* name_a, const u8* name_b)
+{
+    return LOCASEEQUALSBY2(name_a, name_b) && LOCASEEQUALS(name_a[2], name_b[2]);
+}
+
+static inline bool LOCASEEQUALSBY4(const u8* name_a, const u8* name_b)
+{
+    return (( ( (GET_U32_AT(name_a[0]) + 0x01010101) - (GET_U32_AT(name_b[0]) + 0x01010101)) & ((u32)0xdfdfdfdf)) == 0);
+}
+#endif
 
 #define ZDB_NAME_TAG  0x454d414e42445a       /* "ZDBNAME" */
 #define ZDB_LABEL_TAG 0x4c424c42445a         /* "ZDBLBL" */

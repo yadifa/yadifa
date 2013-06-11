@@ -163,7 +163,6 @@ static pthread_mutex_t scheduler_delayed_queue_mutex = PTHREAD_MUTEX_INITIALIZER
 
 static int g_write_fd = CLEARED_SOCKET;
 static int g_read_fd = CLEARED_SOCKET;
-static bool g_writer = FALSE;
 
 /**
  * THREAD-UNSAFE
@@ -183,9 +182,9 @@ scheduler_init()
 
     if(socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == -1)
     {
-        int err = errno;
-        log_quit("scheduler: socketpair error %r", ERRNO_ERROR);
-        return -1;
+        int err = ERRNO_ERROR;
+        log_quit("scheduler: socketpair error %r", err);
+        return err;
     }
 
     g_read_fd = sv[0];

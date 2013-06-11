@@ -495,7 +495,7 @@ xfr_query_thread(void *data)
                 break;
             }
 
-            random_ctx rndctx = thread_pool_get_random_ctx();
+            //random_ctx rndctx = thread_pool_get_random_ctx();
 
             if(ISOK(return_value = ixfr_query(xqsp->servers, zone, &xqsp->loaded_serial, &xqsp->serial_start_offset)))
             {
@@ -535,6 +535,7 @@ xfr_query_thread(void *data)
         }
         default:
         {
+            return_value = xqsp->return_value;
             log_err("slave: query error %{dnstype} for domain %{dnsname} from master at %{hostaddr}: %r", &xqsp->type, xqsp->origin, xqsp->servers, return_value);
             break;
         }
@@ -593,20 +594,6 @@ scheduler_ixfr_query(database_t *db, host_address *address_list, u8 *origin)
     return SUCCESS;
 }
 
-static ya_result
-scheduler_axfr_query_init(void* xqsp_)
-{
-    xfr_query_schedule_param* xqsp = (xfr_query_schedule_param*)xqsp_;
-    
-    zdb_zone *zone = zdb_zone_find_from_dnsname((zdb*)xqsp->db, xqsp->origin, CLASS_IN);
-    
-    if(zone != NULL)
-    {
-        zdb_zone_truncate_invalidate(zone);
-    }
-    
-    return SCHEDULER_TASK_PROGRESS;
-}
 
 /**
  * 

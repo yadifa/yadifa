@@ -46,19 +46,19 @@
 
 #include <dnscore/sys_types.h>
 
-#if HAS_TSIG_SUPPORT==1
-
 #include <openssl/hmac.h>
 
 #include <dnscore/packet_reader.h>
 
-#define HMAC_UNKNOWN	0
-#define HMAC_MD5	157
-#define HMAC_SHA1	161
-#define HMAC_SHA224	162
-#define HMAC_SHA256	163
-#define HMAC_SHA384	164
-#define HMAC_SHA512	165
+#define HMAC_UNKNOWN	  0
+#define HMAC_MD5        157
+#define HMAC_SHA1       161
+#define HMAC_SHA224     162
+#define HMAC_SHA256     163
+#define HMAC_SHA384     164
+#define HMAC_SHA512     165
+
+#if HAS_TSIG_SUPPORT==1
 
 #ifdef	__cplusplus
 extern "C"
@@ -214,6 +214,9 @@ const u8* tsig_get_algorithm_name(u8 algorithm);
  * tsigname the dname of the TSIG
  * tctr the TYPE-CLASS-TTL-RDATALEN of the TSIG
  */
+
+// no verification whatsoever, use with care
+ya_result tsig_process(struct message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offset, const tsig_item *tsig, struct type_class_ttl_rdlen *tctr);
 
 ya_result tsig_process_query(struct message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offset, u8 tsigname[MAX_DOMAIN_LENGTH], struct type_class_ttl_rdlen *tctr);
 

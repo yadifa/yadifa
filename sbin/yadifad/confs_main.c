@@ -43,7 +43,7 @@
 
 #include <dnscore/format.h>
 #include <dnscore/sys_get_cpu_count.h>
-
+#include <dnsdb/dnssec.h>
 
 #include "confs.h"
 #include "config_error.h"
@@ -408,6 +408,8 @@ static ya_result config_main_section_assign(config_data *config)
     {
         return ERROR;
     }
+    
+    dnssec_set_xfr_path(config->xfr_path);
 
     return SUCCESS;
 }

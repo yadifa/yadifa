@@ -95,8 +95,9 @@ static struct logger_handle default_handle;
 static threaded_queue logger_commit_queue = THREADED_QUEUE_NULL;
 static pthread_t logger_thread_id = 0;
 static u32 exit_level = MSG_CRIT;
-static bool logger_started = FALSE;
-static bool logger_initialised = FALSE;
+static volatile bool logger_started = FALSE;
+static volatile bool logger_initialised = FALSE;
+static volatile bool logger_queue_initialised = FALSE;
 
 #if DEBUG_LOG_MESSAGES == 1
 static smp_int allocated_messages_count = SMP_INT_INITIALIZER;
@@ -393,7 +394,7 @@ logger_handle_exit_level(u32 level)
     exit_level = level;
 }
 
-static const char acewnid[16 + 1] = "!ACEWNIDd234567";
+static const char acewnid[16 + 1] = "!ACEWNID1234567";
 
 static inline void
 logger_message_free(logger_message *msg)
@@ -521,15 +522,13 @@ logger_dispatcher_thread(void* context)
                         if(channel->last_message_count > 0)
                         {
                             /* log the repeat count */
-                            
-                            ya_result return_value;
-                            
+
                             /* If the same line is outputted twice : filter it to say 'repeated' instead of sending everything */
                             
-                            return_value = snformat(repeat_text, sizeof(repeat_text), "----/--/-- --:--:--.------" COLUMN_SEPARATOR 
+                            return_code = snformat(repeat_text, sizeof(repeat_text), "----/--/-- --:--:--.------" COLUMN_SEPARATOR 
                                                         
 #ifndef NDEBUG
-                                    "%d" COLUMN_SEPARATOR
+                                    "%5d" COLUMN_SEPARATOR
                                     "%08x" COLUMN_SEPARATOR
 #endif
                                     "--------" COLUMN_SEPARATOR
@@ -541,9 +540,9 @@ logger_dispatcher_thread(void* context)
 #endif
                                     channel->last_message_count);
 
-                            if(ISOK(return_value))
+                            if(ISOK(return_code))
                             {
-                                if(FAIL(return_code = logger_channel_msg(channel, level, repeat_text, return_value, 29)))
+                                if(FAIL(return_code = logger_channel_msg(channel, level, repeat_text, return_code, 29)))
                                 {
                                     osformatln(termerr, "message write failed on channel: %r", return_code);
                                     flusherr();
@@ -677,12 +676,39 @@ logger_dispatcher_thread(void* context)
     return NULL;
 }
 
+static u32 logger_queue_size = LOG_QUEUE_DEFAULT_SIZE;
+
+u32 
+logger_set_queue_size(u32 n)
+{
+    if(n < LOG_QUEUE_MIN_SIZE)
+    {
+        n = LOG_QUEUE_MIN_SIZE;
+    }
+    else if(n > LOG_QUEUE_MAX_SIZE)
+    {
+        n = LOG_QUEUE_MAX_SIZE;
+    }
+    
+    if(logger_queue_initialised && (logger_queue_size != n))
+    {
+        logger_queue_size = n;
+        logger_queue_size = threaded_queue_set_maxsize(&logger_commit_queue, logger_queue_size);
+    }
+    
+    return logger_queue_size;
+}
+
 void
 logger_init()
 {
     if(!logger_initialised)
     {
-        threaded_queue_init(&logger_commit_queue, LOG_QUEUE_MAX_SIZE);
+        if(!logger_queue_initialised)
+        {
+            threaded_queue_init(&logger_commit_queue, logger_queue_size);
+            logger_queue_initialised = TRUE;
+        }
 
         logger_handle_init();
 
@@ -741,7 +767,7 @@ logger_stop()
         {
             ya_result return_code;
 
-            threaded_queue_enqueue(&logger_commit_queue, NULL);
+            threaded_queue_enqueue(&logger_commit_queue, NULL); // FLUSH
             //threaded_queue_wait_empty(&logger_commit_queue);
             
 #ifndef NDEBUG
@@ -794,16 +820,12 @@ logger_finalize()
         /*
          * Ensure there is nothing left at all in the queue
          */
-
+        
         while(threaded_queue_size(&logger_commit_queue) > 0)
         {
             void* data = threaded_queue_dequeue(&logger_commit_queue);
             free(data);
         }
-
-        threaded_queue_finalize(&logger_commit_queue);
-        ZEROMEMORY(&logger_commit_queue, sizeof (logger_commit_queue));
-
         logger_handle_finalize();
 
         logger_initialised = FALSE;
@@ -913,6 +935,7 @@ logger_handle_msg(logger_handle* handle, u32 level, const char* fmt, ...)
 
     if(FAIL(vosformat(&baos, fmt, args)))
     {
+        output_stream_close(&baos);
         OSDEBUG(termerr, "message formatting failed");
         return;
     }

@@ -227,7 +227,7 @@ struct zdb_packed_ttlrdata
 #define ZDB_RECORD_MALLOC_EMPTY(record_,ttl_,len_)                      \
     {                                                                   \
         u32 size=sizeof(zdb_packed_ttlrdata)-1+len_;                    \
-	MALLOC_OR_DIE(zdb_packed_ttlrdata*,(record_),sizeof(zdb_packed_ttlrdata)-1+len_,ZDB_RECORD_TAG); /* ZALLOC IMPOSSIBLE */ \
+        MALLOC_OR_DIE(zdb_packed_ttlrdata*,(record_),size,ZDB_RECORD_TAG); /* ZALLOC IMPOSSIBLE */ \
                                                                         \
         (record_)->ttl=ttl_;                                            \
         (record_)->rdata_size=len_;                                     \

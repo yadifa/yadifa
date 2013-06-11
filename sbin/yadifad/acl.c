@@ -1,36 +1,36 @@
-/*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-* DOCUMENTATION */
+/*-----------------------------------------------------------------------------
+ *
+ * Copyright (c) 2011, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ * DOCUMENTATION */
 /** @defgroup acl Access Control List
  *  @ingroup yadifad
  *  @brief
@@ -59,10 +59,19 @@ extern logger_handle *g_server_logger;
 #define ADRMITEM_TAG 0x4d4554494d524441
 #define ACLENTRY_TAG 0x5952544e454c4341
 
+#define ACL_DEBUG_FULL 0
+
+#ifndef DEBUG
+#undef ACL_DEBUG_FULL
+#define ACL_DEBUG_FULL 0
+#endif
+
 /*
  * 2011/10/18 : EDF: disabling the debug because it makes the legitimate error output unreadable.
  */
 
+
+#if ACL_DEBUG_FULL == 0
 #undef DEBUGLNF
 #undef DEBUGF
 #undef OSDEBUG
@@ -73,6 +82,7 @@ extern logger_handle *g_server_logger;
 #define OSDEBUG(...)
 #define LDEBUG(...)
 #define OSLDEBUG(...)
+#endif
 
 #define STR(x) ((x)!=NULL)?(x):"NULL"
 
@@ -84,6 +94,7 @@ extern logger_handle *g_server_logger;
 
 #ifndef NDEBUG
 
+#if ACL_DEBUG_FULL != 0
 static const char* query_access_filter_type_name[18]=
 {
  "RRI",  "ARI",  "4RI", 
@@ -93,43 +104,47 @@ static const char* query_access_filter_type_name[18]=
  "RAT",  "AAT",  "4AT", 
  "R6T",  "A6T",  "46T"
 };
+#endif
 
 static void
 amim_ipv4_print(ptr_vector *ipv4v)
 {
+#if ACL_DEBUG_FULL != 0
     address_match_item **itemp = (address_match_item **)ipv4v->data;
     s32 idx = 0;
 
-    OSDEBUG(termerr, "\tipv4@%p\n", (void*)itemp);
+    osformat(termerr, "\tipv4@%p\n", (void*)itemp);
 
     while(idx <= ipv4v->offset)
     {
         u8* ip = itemp[idx]->parameters.ipv4.address.bytes;
         u8* mask = itemp[idx]->parameters.ipv4.mask.bytes;
 
-        OSDEBUG(termerr, "\t\t[%hhu.%hhu.%hhu.%hhu/%hhu.%hhu.%hhu.%hhu (%hu) %c]\n",
+        osformat(termerr, "\t\t[%hhu.%hhu.%hhu.%hhu/%hhu.%hhu.%hhu.%hhu (%hu) %c]\n",
                 ip[0], ip[1], ip[2], ip[3],
                 mask[0], mask[1], mask[2], mask[3],
                 itemp[idx]->parameters.ipv4.maskbits,
                 (itemp[idx]->parameters.ipv4.rejects == 0) ? 'a' : 'r');
         idx++;
     }
+#endif
 }
 
 static void
 amim_ipv6_print(ptr_vector *ipv6v)
 {
+#if ACL_DEBUG_FULL != 0
     address_match_item **itemp = (address_match_item **)ipv6v->data;
     s32 idx = 0;
 
-    OSDEBUG(termerr, "\tipv6@%p\n", (void*)itemp);
+    osformat(termerr, "\tipv6@%p\n", (void*)itemp);
 
     while(idx <= ipv6v->offset)
     {
         u8* ip = itemp[idx]->parameters.ipv6.address.bytes;
         u8* mask = itemp[idx]->parameters.ipv6.mask.bytes;
 
-        OSDEBUG(termerr, "\t\t[%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx/%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx (%hi) %c]\n",
+        osformat(termerr, "\t\t[%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx/%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx (%hi) %c]\n",
                 ip[0], ip[1], ip[2], ip[3], ip[4], ip[5], ip[6], ip[7], ip[8], ip[9], ip[10], ip[11], ip[12], ip[13], ip[14], ip[15],
                 mask[0], mask[1], mask[2], mask[3], mask[4], mask[5], mask[6], mask[7], mask[8], mask[9], mask[10], mask[11], mask[12], mask[13], mask[14], mask[15],
                 itemp[idx]->parameters.ipv6.maskbits,
@@ -137,22 +152,25 @@ amim_ipv6_print(ptr_vector *ipv6v)
 
         idx++;
     }
+#endif
 }
 
 static void
 amim_tsig_print(ptr_vector *tsigv)
 {
+#if ACL_DEBUG_FULL != 0
     address_match_item **itemp = (address_match_item **)tsigv->data;
     s32 idx = 0;
 
-    OSDEBUG(termerr, "\ttsig@%p\n", (void*)itemp);
+    osformat(termerr, "\ttsig@%p\n", (void*)itemp);
 
     while(idx <= tsigv->offset)
     {
         u8* name = itemp[idx]->parameters.tsig.name;
-        OSDEBUG(termerr, "\t\t%{dnsname}\n", name);
+        osformat(termerr, "\t\t%{dnsname}\n", name);
         idx++;
     }
+#endif
 }
 
 #endif
@@ -412,7 +430,7 @@ alloc_address_match_item()
 {
     address_match_item* item;
     
-    MALLOC_OR_DIE(address_match_item*, item, sizeof (address_match_item), ADRMITEM_TAG);
+    MALLOC_OR_DIE(address_match_item*, item, sizeof(address_match_item), ADRMITEM_TAG);
     ZEROMEMORY(item, sizeof (address_match_item));
 
     return item;
@@ -421,6 +439,8 @@ alloc_address_match_item()
 static ya_result
 acl_expand_address_match_reference(ptr_vector *amlv, const char* word, ptr_vector *acls)
 {
+    ya_result return_value = 0;
+    
     OSDEBUG(termerr,  "acl_expand_address_match_reference(%p, %s, %p)\n", (void*)amlv, word, (void*)acls);
 
     s32 index = 0;
@@ -445,7 +465,24 @@ acl_expand_address_match_reference(ptr_vector *amlv, const char* word, ptr_vecto
                     {
                         item->parameters.ref.mark = TRUE;
 
-                        acl_expand_address_match_reference(amlv, item->parameters.ref.name, acls);
+                        ya_result expand = acl_expand_address_match_reference(amlv, item->parameters.ref.name, acls);
+
+                        if(expand > 0)
+                        {
+                            return_value += expand;
+                        }
+                        else
+                        {
+                            if(expand == 0)
+                            {
+                                log_err("acl: expanding '%s': '%s' is undefined", word, item->parameters.ref.name);
+                            }
+                            else
+                            {
+                                log_err("acl: expanding '%s': '%s' cannot be expanded", word, item->parameters.ref.name);
+                            }
+                            return_value = MIN_S32; // forces an error
+                        }
 
                         item->parameters.ref.mark = FALSE;
                     }
@@ -453,6 +490,8 @@ acl_expand_address_match_reference(ptr_vector *amlv, const char* word, ptr_vecto
                 else
                 {
                     ptr_vector_append(amlv, *itemp);
+                    
+                    return_value++;
                 }
 
                 itemp++;
@@ -462,7 +501,7 @@ acl_expand_address_match_reference(ptr_vector *amlv, const char* word, ptr_vecto
         }
     }
 
-    return SUCCESS;
+    return return_value;
 }
 
 static inline u32
@@ -553,7 +592,6 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, p
         {
             separator++;
         }
-        
 
         if(description[0] == '\0')
         {
@@ -613,7 +651,7 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, p
         }
 
         address_match_item *ami = NULL;
-        address_match_item *not_ami = NULL;
+        //address_match_item *not_ami = NULL;
 
         if(strcasecmp(word, "key") == 0)
         {
@@ -747,7 +785,23 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, p
 
                 if(acls != NULL)
                 {
-                    acl_expand_address_match_reference(&list, word, acls);
+                    ya_result expand;
+
+                    if((expand = acl_expand_address_match_reference(&list, word, acls)) <= 0)
+                    {
+                        ptr_vector_destroy(&list);
+
+                        if(expand == 0)
+                        {
+                            log_err("acl: '%s' is undefined", word);
+                        }
+                        else
+                        {
+                            log_err("acl: '%s' cannot be expanded", word);
+                        }
+                        
+                        return ACL_UNDEFINED_TOKEN;
+                    }
                 }
                 else /* just store the name */
                 {
@@ -1056,12 +1110,51 @@ acl_empties_access_control(access_control *ac)
     acl_empties_address_match_set(&ac->allow_control);
 }
 
-void acl_copy_address_match_set(address_match_set *target, address_match_set *ams)
+
+void
+acl_copy_address_match_list(address_match_list *target, address_match_list* aml)
 {
+    int n = aml->limit - aml->items;
+    
+    if(n > 0)
+    {
+        MALLOC_OR_DIE(address_match_item**, target->items, n * sizeof(address_match_item*), GENERIC_TYPE);
+        target->limit = &target->items[n];
+        
+        for(int i = 0; i < n; i++)
+        {
+            target->items[i] = alloc_address_match_item();
+            memcpy(target->items[i], aml->items[i], sizeof(address_match_item));
+            if(target->items[i]->match == amim_reference)
+            {
+                target->items[i]->parameters.ref.name = strdup(target->items[i]->parameters.ref.name);
+            }
+        }
+    }
+    else
+    {
+        target->items = NULL;
+        target->limit = NULL;
+    }
 }
 
-void acl_copy_access_control(access_control *target, access_control *ac)
+void
+acl_copy_address_match_set(address_match_set *target, address_match_set *ams)
 {
+    acl_copy_address_match_list(&target->ipv4, &ams->ipv4);
+    acl_copy_address_match_list(&target->ipv6, &ams->ipv6);
+    acl_copy_address_match_list(&target->tsig, &ams->tsig);
+}
+
+void
+acl_copy_access_control(access_control *target, access_control *ac)
+{
+    acl_copy_address_match_set(&target->allow_query, &ac->allow_query);
+    acl_copy_address_match_set(&target->allow_update, &ac->allow_update);
+    acl_copy_address_match_set(&target->allow_update_forwarding, &ac->allow_update_forwarding);
+    acl_copy_address_match_set(&target->allow_transfer, &ac->allow_transfer);
+    acl_copy_address_match_set(&target->allow_notify, &ac->allow_notify);
+    acl_copy_address_match_set(&target->allow_control, &ac->allow_control);
 }
 
 ya_result
@@ -1196,9 +1289,11 @@ acl_build_access_control_item(address_match_set *ams, const char* allow_whatever
     acl_emtpies_address_match_list(&ami);
     
 #ifdef DEBUG
+#if ACL_DEBUG_FULL != 0
     u32 t =  address_match_set_get_type(ams);
     OSDEBUG(termerr, "=> AMS type: %s (%2d)\n", query_access_filter_type_name[t], t);
     flusherr();
+#endif
 #endif
 
     return return_code;
@@ -1593,7 +1688,7 @@ acl_check_access_filter_46T(message_data *mesg, address_match_set *ams)
 ya_result
 acl_check_access_filter(message_data *mesg, address_match_set *ams)
 {
-    ya_result return_code;
+    ya_result return_code = AMIM_SKIP;
     
     /*
      * If there the client is on IPvX and IPvX has rules, the default is set to REJECT
@@ -1621,6 +1716,14 @@ acl_check_access_filter(message_data *mesg, address_match_set *ams)
             }
         }
     }
+#ifdef DEBUG
+    else
+    {
+        log_err("acl: unsupported address family %d", mesg->other.sa.sa_family);
+
+        return AMIM_REJECT;
+    }
+#endif
     
     /*
      * At this point, none of the IPs have been explicitly rejected.
@@ -1784,7 +1887,7 @@ acl_address_match_item_to_stream(output_stream *os, address_match_item *ami)
     else if(IS_IPV4_ITEM(ami))
     {
         s8 b = ami->parameters.ipv4.maskbits;
-        s8 r = ami->parameters.ipv4.rejects;
+        //s8 r = ami->parameters.ipv4.rejects;
         
         struct sockaddr_in ipv4;
         ipv4.sin_addr.s_addr = ami->parameters.ipv4.address.value;
@@ -1802,7 +1905,7 @@ acl_address_match_item_to_stream(output_stream *os, address_match_item *ami)
     else if(IS_IPV6_ITEM(ami))
     {
         s16 b = ami->parameters.ipv6.maskbits;
-        s8 r = ami->parameters.ipv6.rejects;
+        //s8 r = ami->parameters.ipv6.rejects;
         
         struct sockaddr_in6 ipv6;
         memcpy((u8*)&ipv6.sin6_addr, ami->parameters.ipv6.address.bytes, 16);
@@ -1960,7 +2063,7 @@ acl_address_match_item_to_string(address_match_item *ami, char *out_txt, u32 *ou
     else if(IS_IPV4_ITEM(ami))
     {
         s8 b = ami->parameters.ipv4.maskbits;
-        s8 r = ami->parameters.ipv4.rejects;
+        //s8 r = ami->parameters.ipv4.rejects;
         
         struct sockaddr_in ipv4;
         ipv4.sin_addr.s_addr = ami->parameters.ipv4.address.value;
@@ -1978,7 +2081,7 @@ acl_address_match_item_to_string(address_match_item *ami, char *out_txt, u32 *ou
     else if(IS_IPV6_ITEM(ami))
     {
         s16 b = ami->parameters.ipv6.maskbits;
-        s8 r = ami->parameters.ipv6.rejects;
+        //s8 r = ami->parameters.ipv6.rejects;
         
         struct sockaddr_in6 ipv6;
         memcpy((u8*)&ipv6.sin6_addr, ami->parameters.ipv6.address.bytes, 16);

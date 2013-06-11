@@ -40,12 +40,6 @@
  *
  * @{
  */
-/*
- * File:   zonefile.c
- * Author: ericdf
- *
- * Created on January 6, 2009, 3:48 PM
- */
 
 
 #ifndef _ZONEFILE_C

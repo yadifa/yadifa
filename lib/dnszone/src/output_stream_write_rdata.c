@@ -223,7 +223,7 @@ type_bit_maps_initialize(type_bit_maps_context* context, char *src)
 
         DEBUGF("BM: %s\n", tmp_char);
 
-        if(FAIL(get_type_from_name(tmp_char, &type)))
+        if(FAIL(get_type_from_case_name(tmp_char, &type)))
         {
             return 0;
         }
@@ -256,7 +256,6 @@ type_bit_maps_initialize(type_bit_maps_context* context, char *src)
 static ya_result
 parse_soa_values(char *src, u32 *soa_values)
 {
-    char                                                                 ch;
     u8                                                            count = 0;
 
     /*    ------------------------------------------------------------    */
@@ -298,96 +297,17 @@ parse_soa_values(char *src, u32 *soa_values)
     return OK;
 }
 
-/*
- * copies src into dst
- * if src does not ends with '.', appends the origin (it cannot be NULL in this
- * case)
- * 
- * the resulting string is txt and will be written to an output stream
- * I think that if dst was an output stream instead we could lighten the process
- * a bit further.
- * 
- * I'd say: build the dnsname in an internal buffer, then write to the output
- * stream.
- */
-
-static ya_result
-add_origin(char *dst, const char *src, const u8 *origin)
-{
-    size_t                                                          src_len;
-    size_t                                                       origin_len;
-    size_t                                                        dot_extra;
-
-    /*    ------------------------------------------------------------    */
-
-    if(src == NULL)
-    {
-        return NO_LABEL_FOUND;
-    }
-
-    src_len = strlen((const char *)src);
-
-    if(src[src_len - 1] == '.')
-    {
-        if(src_len > MAX_DOMAIN_TEXT_LENGTH)
-        {
-            return DOMAIN_TOO_LONG;
-        }
-
-        MEMCOPY(dst, src, src_len + 1);    /* strcpy((char*)*dst,(char*) src); */
-    }
-    else
-    {
-        if(origin == NULL)
-        {
-            return NO_ORIGIN_FOUND;
-        }
-        if(0 == (origin_len = dnsname_len(origin)))
-        {
-            return NO_ORIGIN_FOUND;
-        }
-
-        if(!(*origin == '.' && origin_len == 1)) /* if origin is not "." */
-        {
-            dot_extra = 1;
-        }
-
-        if((src_len + dot_extra + origin_len) <= MAX_DOMAIN_TEXT_LENGTH)
-        {
-            /* NOTE : not + 1 because we will cat anyway ... */
-            MEMCOPY(dst, src, src_len );    /* strcpy((char*)*dst,(char*) src); */
-            dst += src_len;
-        }
-        else
-        {
-            return DOMAIN_TOO_LONG;
-        }
-	/*
-	 *  note: this could be done with if(GET_U16_AT(*origin) != 0x002e / 0x2e00  for little / big endian)
-	 *        Except I have to check odd/even addresses ... so no.
-	 */
-        if(!((*origin == '.') && (origin_len == 1)))		/* if origin != "." ... */
-        {
-            *dst++ = '.';		    /* strcat((char*)dst, (const char *)"."); */
-        }
-
-        MEMCOPY((char*)dst, origin, origin_len + 1); /* strcat((char*)dst, (const char *)origin); */
-    }
-
-    return OK;
-}
-
 static size_t strlenskipspaces(const char* str)
 {
     size_t n = 0;
     
     while(*str != '\0')
     {
-	if(!isspace(*str))
-	{
-	    n++;
-	}
-	str++;
+        if(!isspace(*str))
+        {
+            n++;
+        }
+        str++;
     }
 
     return n;
@@ -430,6 +350,13 @@ output_stream_write_rdata(output_stream *os, char *src, const u16 src_type, cons
      */
 
     limit = src + strlen(src);
+    
+    while((limit > src) && (isspace(limit[-1])))
+    {
+        --limit;
+        *limit = '\0';
+    }
+
     OSDEBUG(termout, "SOURCE LEN     : %d", strlen(src));
 
     /*
@@ -440,6 +367,8 @@ output_stream_write_rdata(output_stream *os, char *src, const u16 src_type, cons
 
     if(!(src[0] == '\\' && src[1] == '#'))  /* check we are not on the special rfc 3597 case */
     {
+        return_code = SUCCESS;
+        
         switch(src_type)
         {
             case TYPE_A:
@@ -482,7 +411,7 @@ output_stream_write_rdata(output_stream *os, char *src, const u16 src_type, cons
             case TYPE_WKS:   
             {
                 needle = src;
-               CUT_WORD(needle);
+                CUT_WORD(needle);
 
 #ifdef DEBUG    // limit can be outside memory and needle should be equal to limit
                if(needle < limit) OSDEBUG(termout, "needle NS: %s", needle);
@@ -492,7 +421,7 @@ output_stream_write_rdata(output_stream *os, char *src, const u16 src_type, cons
                
                 return_code = output_stream_write_dname(os, src, origin_fqdn);
 
-               src = needle;
+                src = needle;
                
 #ifdef DEBUG    // limit can be outside memory and needle should be equal to limit
                if(src < limit) OSDEBUG(termout, "src2   NS: %s", src);
@@ -504,7 +433,7 @@ output_stream_write_rdata(output_stream *os, char *src, const u16 src_type, cons
     // OSDEBUG(termout, "SOURCE LEN DUF: %d", src); this prints a pointer as an integer ?
                    
                 break;
-             }
+            }
             case TYPE_SOA:
             {
                 /* 1: Do MNAME */
@@ -964,7 +893,7 @@ output_stream_write_rdata(output_stream *os, char *src, const u16 src_type, cons
                 needle = src;
                 CUT_WORD(needle);
 
-                get_type_from_name(src, &tmp_uint16);	    /* returns the type in network order */
+                get_type_from_case_name(src, &tmp_uint16);	    /* returns the type in network order */
                 output_stream_write_u16(os, tmp_uint16);	    /** @note NATIVETYPE */
 
                 src = needle;
@@ -1094,6 +1023,7 @@ output_stream_write_rdata(output_stream *os, char *src, const u16 src_type, cons
 
                 /* Get SALT */
                 SKIP_WHSPACE(needle);
+                src = needle;
                 CUT_WORD(needle);
 
                 /* Take not decoded string length */
@@ -1133,8 +1063,8 @@ output_stream_write_rdata(output_stream *os, char *src, const u16 src_type, cons
                     }
                 }
 
-                src = needle;
                 SKIP_WHSPACE(needle);
+                src = needle;
                 CUT_WORD(needle);
 
                 /* Take not decoded string length */
@@ -1265,13 +1195,8 @@ output_stream_write_rdata(output_stream *os, char *src, const u16 src_type, cons
                 /* Get the fingerprint */
                 SKIP_WHSPACE(src);
                 CUT_WORD(needle);
-
+                
                 tmp_uint32 = strlen((const char *)src);
-
-                if(((tmp_uint32 & 1) != 0) || (tmp_uint32 == 0))
-                {
-                    return PARSEB16_ERROR;
-                }
 
                 return_code = output_stream_decode_base16(os, (char*)src, tmp_uint32);
 
@@ -1279,6 +1204,27 @@ output_stream_write_rdata(output_stream *os, char *src, const u16 src_type, cons
 
                 src = limit;
 
+                break;
+            }
+            case TYPE_TLSA:
+            {
+                GET_VALUE(tmp_uint32, src, MAX_U8);
+                output_stream_write_u8(os, tmp_uint32);
+                                
+                GET_VALUE(tmp_uint32, src, MAX_U8);
+                output_stream_write_u8(os, tmp_uint32);
+                
+                GET_VALUE(tmp_uint32, src, MAX_U8);
+                output_stream_write_u8(os, tmp_uint32);
+                
+                tmp_uint32 = strlen((const char *)src);
+
+                return_code = output_stream_decode_base16(os, (char*)src, tmp_uint32);
+                
+                /* note that the crap is handled by the base16 decoder */
+                
+                src = limit;
+                
                 break;
             }
             case TYPE_TXT:
@@ -1307,154 +1253,6 @@ output_stream_write_rdata(output_stream *os, char *src, const u16 src_type, cons
                 break;
             }
             
-            /*
-             * CONTROL TYPES
-             */
-
-            case TYPE_ZONE_TYPE:
-            {
-                SKIP_WHSPACE(src);
-                needle = src;
-                CUT_WORD(needle);
-
-                for(char *p = src; p < needle; p++)
-                {
-                    *p = toupper(*p);
-                }
-                
-                string_node *node = string_set_avl_find(&zone_types_set, (const char *)src);
-                
-                if(node == NULL)
-                {
-                    return_code = PARSEWORD_NOMATCH_ERROR;
-                    break;
-                }
-                
-                output_stream_write_u8(os, node->value);
-
-                src = needle;
-                
-                break;
-            }
-            
-            case TYPE_ZONE_FILE:
-            {
-                SKIP_WHSPACE(src);
-                needle = src;
-                CUT_WORD(needle);
-                
-                if(src == needle)
-                {
-                    return_code = PARSESTRING_ERROR;
-                    break;
-                }
-                
-                output_stream_write(os, (const u8*)src, needle-src);
-                
-                src = needle;
-                
-                break;
-            }
-            
-            case TYPE_ZONE_ALSO_NOTIFY:
-            case TYPE_ZONE_MASTER:
-            {                
-                s32 iplen;
-                u32 port;
-                u8 flags = 0;
-                u8 tmpip[16];
-                
-                SKIP_WHSPACE(src);
-                needle = src;
-                CUT_WORD(needle);
-                char *portp = src;
-                
-                while((portp < needle) && (*portp != '#'))
-                {
-                    portp++;
-                }
-                                                
-                if(FAIL(iplen = parse_ip_address(src, portp-src, tmpip, sizeof(tmpip))))
-                {
-                    return_code = iplen;
-                    break;
-                }
-                
-                /* assuming only IPv4 and IPv6 */
-                
-                flags |= (iplen == 4)?4:6;
-                
-                if(portp < needle)
-                {
-                    portp++;
-                    
-                    if(FAIL(return_code = parse_u32_check_range(portp, &port, 1, MAX_U16, 10)))
-                    {
-                        break;
-                    }
-                    
-                    if(port != 53)
-                    {
-                        flags |= REMOTE_SERVER_FLAGS_PORT_MASK;
-                    }
-                }
-                
-                src = needle;
-                
-                SKIP_WHSPACE(src);
-                needle = src;
-                CUT_WORD(needle);
-                
-                if(src < needle)
-                {
-                    flags |= REMOTE_SERVER_FLAGS_KEY_MASK;
-                }
-                
-                output_stream_write_u8(os, flags);
-                output_stream_write(os, tmpip, iplen);
-                
-                if((flags & REMOTE_SERVER_FLAGS_PORT_MASK) != 0)
-                {
-                    output_stream_write_u16(os, port);
-                }                    
-                
-                if((flags & REMOTE_SERVER_FLAGS_KEY_MASK) != 0)
-                {
-                    return_code = output_stream_write_dname(os, src, origin_fqdn);
-                }
-                
-                src = needle;
-                
-                break;
-            }
-            
-            case TYPE_ZONE_DNSSEC:
-            {
-                SKIP_WHSPACE(src);
-                needle = src;
-                CUT_WORD(needle);
-
-                for(char *p = src; p < needle; p++)
-                {
-                    *p++ = toupper(*p);
-                }
-                
-                string_node *node = string_set_avl_find(&zone_dnssec_set, (const char *)src);
-                if(node == NULL)
-                {
-                    return_code = PARSEWORD_NOMATCH_ERROR;
-                    break;
-                }
-                
-                output_stream_write_u8(os, node->value);
-
-                src = needle;
-                break;
-            }
-            
-            /*
-             * CONTROL TYPES
-             */
             
             default:
             {

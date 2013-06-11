@@ -176,62 +176,6 @@ config_get_entry_index(const char *name, const config_table *table, const char *
     return CONFIG_UNKNOWN_SETTING_ERR; /* not found */
 }
 
-static char*
-strcatdupskipspaces(const char* s1, const char* s2)
-{
-    size_t n = 0;
-    char *str;
-    char *t;
-    const char *p;
-
-    p = s1;
-    while(*p != 0)
-    {
-        if(!isspace(*p))
-        {
-            n++;
-        }
-        p++;
-    }
-
-    p = s2;
-    while(*p != 0)
-    {
-        if(!isspace(*p))
-        {
-            n++;
-        }
-        p++;
-    }
-    n++;
-    
-    MALLOC_OR_DIE(char*, str, n, CONFSDSP_TAG);
-    t = str;
-
-    p = s1;
-    while(*p != 0)
-    {
-        if(!isspace(*p))
-        {
-            *t++ = *p;
-        }
-        p++;
-    }
-
-    p = s2;
-    while(*p != 0)
-    {
-        if(!isspace(*p))
-        {
-            *t++ = *p;
-        }
-        p++;
-    }
-
-    *t = '\0';
-
-    return str;
-}
 
 /**
  * @brief Tool function printing all the known names in a table.
@@ -331,7 +275,7 @@ config_parse_line(char *src, char **data, int *data_size, int *bracket_status)
             
             if(needle > start)
             {
-                while(isblank(needle[-1]))
+                while((needle > start) && isspace(needle[-1]))
                 {
                     needle--;
                 }
@@ -501,7 +445,7 @@ config_file_read(const char *config_container, config_reader_context *ctx)
      * arguments after the blank after the value.
      */
 
-    bool                                                         has_params;
+    bool                                                 has_params = FALSE;
     
     u32                       line_numbers[CONFIG_READER_CONTEXT_MAX_DEPTH];
 
@@ -543,8 +487,14 @@ config_file_read(const char *config_container, config_reader_context *ctx)
             section_init = sectiond->function_init;
             section_assign = sectiond->function_assign;
             has_params = sectiond->has_params;
+            
             break;
         }
+    }
+
+    if(*sectiondp == NULL)
+    {
+        return SUCCESS; // unknown section
     }
     
     size_t config_container_len = strlen(config_container);
@@ -675,7 +625,12 @@ config_file_read(const char *config_container, config_reader_context *ctx)
                     {
                         start_end = TRUE;
                         
-                        section_init(g_config);
+                        if(FAIL(return_code = section_init(g_config)))
+                        {
+                            osformatln(termerr, "%s: error initialising the container '%s': %r",config_error_prefix , needle, return_code);
+                            
+                            break;
+                        }
                     }
                     else
                     {
@@ -870,16 +825,6 @@ config_update(config_data* config)
     return config_update_network(config);
 }
 
-static void
-config_free_inverse(const config_section_descriptor **sectiondp)
-{
-    if(*sectiondp != NULL)
-    {
-        config_free_inverse(sectiondp + 1);
-
-        (*sectiondp)->function_free(g_config);
-    }
-}
 
 void
 config_free()
@@ -1246,11 +1191,25 @@ confs_print(const config_table_desc *table, void *configbase)
 ya_result
 confs_write(output_stream *os, const config_table_desc *table, void *configbase)
 {
-    char tmp[1024];
     char *value;
+    char tmpname[128];
+    char tmp[1024];
 
     while(table->name != NULL)
     {
+        size_t name_len = strlen(table->name)+1;
+        bool already = FALSE;
+        
+        for(size_t i = 0; i < name_len; i++)
+        {
+            char c = table->name[i];
+            if((c=='_')||(c=='.'))
+            {
+                c = '-';
+            }
+            tmpname[i] = c;
+        }
+        
         /* table->setter is NULL for aliases */
         if(table->setter != NULL)
         {
@@ -1260,7 +1219,7 @@ confs_write(output_stream *os, const config_table_desc *table, void *configbase)
 
             if(table->setter == (confs_set_field_function*)confs_set_bool)
             {
-                bool *b = (bool*)ptr;
+                bool b = *(bool*)ptr;
                 value=(b)?"yes":"no";
             }
             else if(table->setter == (confs_set_field_function*)confs_set_flag8)
@@ -1320,20 +1279,28 @@ confs_write(output_stream *os, const config_table_desc *table, void *configbase)
             else if((table->setter == (confs_set_field_function*)confs_set_string) || (table->setter == (confs_set_field_function*)confs_set_path))
             {
                 value = *((char**)ptr);
+                if(strlen(value) == 0)
+                {
+                    value = "\"\"";
+                }
+                
+                /*
                 if(value == NULL)
                 {
                     value = "NULL";
                 }
+                */
             }
             else if(table->setter == (confs_set_field_function*)confs_set_acl_item)
             {
                 address_match_set* ams = (address_match_set*)ptr;
                 if(ams != NULL)
                 {
-                    osformat(os, "%24s", table->name);
+                    osformat(os, "%24s", tmpname);
                     acl_address_match_set_to_stream(os, ams);                    
                     osprintln(os,"");
                 }
+                already = TRUE;
                 value = NULL;
             }
             else if(table->setter == (confs_set_field_function*)confs_set_host_list)
@@ -1342,13 +1309,23 @@ confs_write(output_stream *os, const config_table_desc *table, void *configbase)
                 
                 if(v != NULL)
                 {
-                    osformat(os, "%24s ", table->name);
+                    osformat(os, "%24s", tmpname);
                     
                     char sep = ' ';
                     
                     do
                     {
-                        osformat(os, "%c%{hostaddr}", sep, v);
+                        socketaddress sa;
+                        host_address2sockaddr(&sa, v);
+                        osformat(os, "%c%{sockaddrip}", sep, &sa);
+                        if(v->port != DNS_DEFAULT_PORT)
+                        {
+                            osformat(os, " port %hd", ntohs(v->port));
+                        }
+                        if(v->tsig != NULL)
+                        {
+                            osformat(os, " key %{dnsname}", v->tsig->name);
+                        }
                         sep = ',';
                         
                         v = v->next;
@@ -1358,6 +1335,7 @@ confs_write(output_stream *os, const config_table_desc *table, void *configbase)
                     osprintln(os,"");
                 }
                 
+                already = TRUE;
                 value = NULL;
             }
             else if(table->setter == (confs_set_field_function*)confs_set_enum_value)
@@ -1381,13 +1359,22 @@ confs_write(output_stream *os, const config_table_desc *table, void *configbase)
             }
             else
             {
-                osformatln(os, "# unable to dump parameter '%s'", table->name);
+                osformatln(os, "# unable to dump parameter '%s'", tmpname);
                 value = NULL;
             }
 
-            if(value != NULL)
+            if(!already)
             {
-                osformatln(os, "%24s %s", table->name, value);
+                if(value != NULL)
+                {
+                    osformatln(os, "%24s %s", tmpname, value);
+                }
+#if DEBUG
+                else
+                {
+                    osformatln(os, "# %24s is not set", tmpname);
+                }
+#endif
             }
         }
         table++;

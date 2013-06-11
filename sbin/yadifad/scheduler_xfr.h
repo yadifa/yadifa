@@ -37,12 +37,6 @@
  *
  * @{
  */
-/* 
- * File:   scheduler_xfr.h
- * Author: ericdf
- *
- * Created on June 23, 2011, 2:01 PM
- */
 
 #ifndef SCHEDULER_XFR_H
 #define	SCHEDULER_XFR_H

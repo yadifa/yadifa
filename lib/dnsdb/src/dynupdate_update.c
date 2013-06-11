@@ -46,6 +46,7 @@
 
 #include <dnscore/rfc.h>
 #include <dnscore/ptr_vector.h>
+#include <dnscore/treeset.h>
 
 #include "dnsdb/zdb_types.h"
 #include "dnsdb/dynupdate.h"
@@ -53,7 +54,6 @@
 #include "dnsdb/zdb_record.h"
 #include "dnsdb/zdb_sanitize.h"
 
-#include "dnsdb/treeset.h"
 
 #include <dnscore/logger_handle.h>
 
@@ -904,7 +904,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
     u16 rtype;
     u16 rclass;
     u16 rdata_size;    
-    bool soa_changed = false;
+    //bool soa_changed = false;
     u8 wire[MAX_DOMAIN_LENGTH + 10 + 65535];
     
 #ifndef NDEBUG
@@ -916,10 +916,12 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
     rdata_size = ~0;
 #endif
 
-    bool dnssec_zone = (zone->apex->nsec.dnssec != NULL);
 
     ya_result edit_status;
+
     
+    bool dnssec_zone = (zone->apex->nsec.dnssec != NULL);
+
     if(dnssec_zone)
     {
         ya_result return_code = SUCCESS;
@@ -937,7 +939,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
             do
             {
                 u16 flags = DNSKEY_FLAGS(*dnskey);
-                u8  protocol = DNSKEY_PROTOCOL(*dnskey);
+                //u8  protocol = DNSKEY_PROTOCOL(*dnskey);
                 u8  algorithm = DNSKEY_ALGORITHM(*dnskey);
                 u16 tag = DNSKEY_TAG(*dnskey);                  // note: expensive
                 dnssec_key *key = NULL;
@@ -1014,6 +1016,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
             }
             
             label_update_status_destroy(&lus_set);
+            ptr_vector_destroy(&nsec3param_rrset);
 
             return SERVER_ERROR_CODE(RCODE_FORMERR);
         }        
@@ -1033,6 +1036,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
         if((rdata_size == 0) && (rclass != CLASS_ANY))
         {
             label_update_status_destroy(&lus_set);
+            ptr_vector_destroy(&nsec3param_rrset);
             
             return SERVER_ERROR_CODE(RCODE_FORMERR);
         }
@@ -1048,6 +1052,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                 log_err("update: %{dnsname} manual add/del of %{dnstype} records refused", rname, &rtype);
                 
                 label_update_status_destroy(&lus_set);
+                ptr_vector_destroy(&nsec3param_rrset);
 
                 return SERVER_ERROR_CODE(RCODE_NOTZONE);
             }
@@ -1060,6 +1065,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
             log_err("update: %{dnsname} manual add/del of %{dnstype} records refused", rname, &rtype);
             
             label_update_status_destroy(&lus_set);
+            ptr_vector_destroy(&nsec3param_rrset);
 
             return SERVER_ERROR_CODE(RCODE_REFUSED);
         }
@@ -1074,6 +1080,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                 log_err("update: %{dnsname} NSEC3PARAM add/del refused on an non-dnssec3 zone", rname);
                 
                 label_update_status_destroy(&lus_set);
+                ptr_vector_destroy(&nsec3param_rrset);
 
                 return SERVER_ERROR_CODE(RCODE_REFUSED);
             }
@@ -1086,6 +1093,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                     log_err("update: %{dnsname} NSEC3PARAM with unsupported digest algorithm", rname);
                     
                     label_update_status_destroy(&lus_set);
+                    ptr_vector_destroy(&nsec3param_rrset);
 
                     return SERVER_ERROR_CODE(RCODE_REFUSED);
                 }
@@ -1097,6 +1105,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                     log_err("update: %{dnsname} cannot remove all NSEC3PARAM of an NSEC3 zone", rname);
                     
                     label_update_status_destroy(&lus_set);
+                    ptr_vector_destroy(&nsec3param_rrset);
 
                     return SERVER_ERROR_CODE(RCODE_REFUSED);
                 }
@@ -1124,6 +1133,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                         log_err("update: %{dnsname} cannot remove the last NSEC3PARAM of an NSEC3 zone", rname);
                     
                         label_update_status_destroy(&lus_set);
+                        ptr_vector_destroy(&nsec3param_rrset);
 
                         return SERVER_ERROR_CODE(RCODE_REFUSED);
                     }
@@ -1138,6 +1148,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
             if(rttl != 0)
             {
                 label_update_status_destroy(&lus_set);
+                ptr_vector_destroy(&nsec3param_rrset);
 
                 return SERVER_ERROR_CODE(RCODE_FORMERR);
             }
@@ -1228,6 +1239,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
             if((rttl != 0) || (rdata_size != 0))
             {
                 label_update_status_destroy(&lus_set);
+                ptr_vector_destroy(&nsec3param_rrset);
 
                 return SERVER_ERROR_CODE(RCODE_FORMERR);
             }
@@ -1365,7 +1377,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                                 /*
                                  * Ensure there are no other SOA
                                  */
-                                soa_changed = TRUE;
+                                //soa_changed = TRUE;
 
                                 zdb_record_delete(&label->resource_record_set, TYPE_SOA);
                                 
@@ -1375,6 +1387,8 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                         break;
                     }
                 }
+
+                label->flags |= flag_mask;
 
                 if(record_accepted)
                 {
@@ -1565,6 +1579,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
 #endif
 
     label_update_status_destroy(&lus_set);
+    ptr_vector_destroy(&nsec3param_rrset);
 
     return return_value;
 }

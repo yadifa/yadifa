@@ -91,7 +91,7 @@ zdb_store_file_test_prefix_suffix(const char* filename, const char* prefix, u32 
                 /** @todo: > 2GB files will happen sooner or later */
                 if((err = fseek(f, -((s32)prefix_len), SEEK_END)) >= 0)
                 {
-                    long offs = ftell(f);
+                    //long offs = ftell(f);
 
                     if(fread(tmp, suffix_len, 1, f) == 1)
                     {

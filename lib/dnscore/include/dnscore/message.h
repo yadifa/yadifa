@@ -73,13 +73,15 @@ extern "C"
 #define PROCESS_FL_RECURSION            0x20
 #define PROCESS_FL_TCP                  0x80
     
-        /**
+#define NETWORK_BUFFER_SIZE 65536
+    
+    /**
      * @note buffer MUST be aligned on 16 bits
      */
 #define MESSAGE_ID(buffer)	(*((u16*)&(buffer)[ 0]))
 
-#define MESSAGE_HIFLAGS(buffer) ((buffer)[ 2])
-#define MESSAGE_LOFLAGS(buffer) ((buffer)[ 3])
+#define MESSAGE_HIFLAGS(buffer_) ((buffer_)[ 2])
+#define MESSAGE_LOFLAGS(buffer_) ((buffer_)[ 3])
 
 /* Only use constants with this */
 #ifdef WORDS_BIGENDIAN
@@ -153,6 +155,14 @@ struct message_tsig
 
 #endif
 
+/* A memory pool for the lookup's benefit @TODO: maybe this should be increased in size */
+
+#define MESSAGE_POOL_SIZE 0x20000
+
+// flags for MESSAGE_MAKE_QUERY_EX
+#define MESSAGE_EDNS0_SIZE      0x4000 // any bit that is not set in EDNS0
+#define MESSAGE_EDNS0_DNSSEC    0x8000
+
 typedef struct message_data message_data;
 
 struct message_data
@@ -198,7 +208,7 @@ struct message_data
     u8  buffer_tcp_len[2];           /* DON'T SEPARATE THESE TWO (FIRST)  */
     u8  buffer[NETWORK_BUFFER_SIZE]; /* DON'T SEPARATE THESE TWO (SECOND) */
     u64 __reserved_force_align__4;
-    u8  pool_buffer[0x20000]; /* A memory pool for the lookup's benefit @TODO: maybe this should be increased in size */
+    u8  pool_buffer[MESSAGE_POOL_SIZE]; /* A memory pool for the lookup's benefit @TODO: maybe this should be increased in size */
 };
 
 /*    ------------------------------------------------------------    */

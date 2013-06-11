@@ -97,8 +97,12 @@ static bool cstr_to_dnsname_terminators[256] =
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
 };
 
+#if 0
 /*
  * This table contains TRUE for each character in the DNS charset
+ * 
+ * Not used anymore ?
+ * 
  */
 
 static bool cstr_to_dnsname_charspace[256] =
@@ -120,7 +124,7 @@ static bool cstr_to_dnsname_charspace[256] =
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
 };
-
+#endif
 /**
  *  0: out of space
  *  1: in space
@@ -292,8 +296,6 @@ dnslabel_locase_verify_charspace(u8 *label)
 
 /**
  * dns name DNS charset test and set to lower case
- * 
- * LOCASE is done using |32
  * 
  * @param name_wire
  * @return TRUE iff each char in the name in in the DNS charset
@@ -760,7 +762,7 @@ dnsname_to_cstr(char* dest_cstr, const u8* name)
         *dest_cstr++ = '.';
     }
 
-    *dest_cstr++ = '\0';
+    *dest_cstr = '\0';
 
     return (u32)(dest_cstr - start);
 }
@@ -795,18 +797,14 @@ dnslabel_equals(const u8* name_a, const u8* name_b)
 
     const u32* name_a_32 = (const u32*)name_a;
     const u32* name_b_32 = (const u32*)name_b;
-
-    while(len >= 4)
+    int idx;
+    int len4 = len & ~3;
+    for(idx = 0; idx < len4; idx += 4)
     {
-        if(*name_a_32 != *name_b_32)
+        if(GET_U32_AT(name_a[idx]) != GET_U32_AT(name_b[idx]))
         {
             return FALSE;
         }
-        
-        name_a_32++;
-        name_b_32++;
-
-        len -= 4;
     }
 
     /* Hopefully the compiler just does register renaming */
@@ -814,16 +812,16 @@ dnslabel_equals(const u8* name_a, const u8* name_b)
     name_a = (const u8*)name_a_32;
     name_b = (const u8*)name_b_32;
 
-    switch(len)
+    switch(len & 3)
     {
         case 0:
             return TRUE;
         case 1:
-            return *name_a == *name_b;
+            return name_a[idx] == name_b[idx];
         case 2:
-            return GET_U16_AT(*name_a) == GET_U16_AT(*name_b);
+            return GET_U16_AT(name_a[idx]) == GET_U16_AT(name_b[idx]);
         case 3:
-            return (GET_U16_AT(*name_a) == GET_U16_AT(*name_b)) && (name_a[2] == name_b[2]);
+            return (GET_U16_AT(name_a[idx]) == GET_U16_AT(name_b[idx])) && (name_a[idx+2] == name_b[idx+2]);
     }
 
     // icc complains here but is wrong.
@@ -875,40 +873,32 @@ dnslabel_equals_ignorecase_left(const u8* name_a, const u8* name_b)
 
     len++;
 
-    /* Hopefully the compiler just does register renaming */
-
-    const u32* name_a_32 = (const u32*)name_a;
-    const u32* name_b_32 = (const u32*)name_b;
-
     /*
      * Label size must match
      */
 
-    while(len >= 4)
+    int idx;
+    int len4 = len & ~3;
+    for(idx = 0; idx < len4; idx += 4) 
     {
-        if(((*name_a_32++ - *name_b_32++) & 0xdfdfdfdf) != 0)   /* ignore case */
+        if(!LOCASEEQUALSBY4(&name_a[idx], &name_b[idx])) /* can be used because left is locase */
         {
             return FALSE;
         }
-
-        len -= 4;
     }
 
     /* Hopefully the compiler just does register renaming */
 
-    name_a = (const u8*)name_a_32;
-    name_b = (const u8*)name_b_32;
-
-    switch(len)
+    switch(len & 3)
     {
         case 0:
             return TRUE;
         case 1:
-            return LOCASEEQUALS(*name_a, *name_b);
+            return LOCASEEQUALS(name_a[idx], name_b[idx]); /* can be used because left is locase */
         case 2:
-            return (((GET_U16_AT(*name_a) - GET_U16_AT(*name_b)) & ((u16)0xdfdf)) == 0);
+            return LOCASEEQUALSBY2(&name_a[idx], &name_b[idx]); /* can be used because left is locase */
         case 3:
-            return (((GET_U16_AT(*name_a) - GET_U16_AT(*name_b)) & ((u16)0xdfdf)) == 0) && LOCASEEQUALS(name_a[2], name_b[2]);
+            return LOCASEEQUALSBY3(&name_a[idx], &name_b[idx]); /* can be used because left is locase */
     }
 
     assert(FALSE); /* NOT zassert */
@@ -1005,88 +995,11 @@ dnsname_compare(const u8* name_a, const u8* name_b)
     }
 }
 
-int
-dnsname_compare_broken(const u8* name_a, const u8* name_b)
-{
-    const u8* start;
-    const u8* name;
-
-    u8 c;
-
-    int da = 0;
-    int db = 0;
-
-    start = name_a;
-    name = name_a;
-
-    while((c = *name++) > 0)
-    {
-        name += c;
-        da++;
-    }
-
-    int la = name - start;
-
-    start = name_b;
-    name = name_b;
-
-    while((c = *name++) > 0)
-    {
-        name += c;
-        db++;
-    }
-
-    int lb = name - start;
-
-    if(da != db)
-    {
-        /* the one with less labels comes first */  /** @wtf ??? */
-
-        return da - db;
-    }
-
-    while(da > 0)
-    {
-        u8 na = *name_a++;
-        u8 nb = *name_b++;
-
-        s32 diff;
-
-        if(na != nb)
-        {
-            u8 n = MIN(na, nb);
-
-            diff = memcmp(name_a, name_b, n);
-
-            if(diff == 0)
-            {
-                diff = ((s8)na - (s8)nb);
-            }
-
-            return diff;
-        }
-        else
-        {
-            if((diff = memcmp(name_a, name_b, na)) != 0)
-            {
-                return diff;
-            }
-
-            name_a += na;
-            name_b += na;
-        }
-        
-        da--;
-    }
-
-    return 0;
-}
-
 /** @brief Tests if two DNS names are (ignore case) equals
  *
  *  Tests if two DNS labels are (ignore case) equals
  *
- *  @param[in] name_a a pointer to a dnsname to compare
+ *  @param[in] name_a a pointer to a LO-CASE dnsname to compare
  *  @param[in] name_b a pointer to a dnsname to compare
  *
  *  @return Returns TRUE if names are equal, else FALSE.
@@ -1113,7 +1026,15 @@ dnsname_equals_ignorecase(const u8* name_a, const u8* name_b)
             return TRUE;
         }
 
-        while(len > 0 && (LOCASE(*name_a++) == LOCASE(*name_b++))) len--;
+        while(len > 4 && (LOCASEEQUALSBY4(name_a++,name_b++)))
+        {
+            len--;
+        }
+        
+        while(len > 0 && (LOCASEEQUALS(*name_a++,*name_b++)))
+        {
+            len--;
+        }
     }
     while(len == 0);
 
@@ -1136,7 +1057,7 @@ dnsname_len(const u8 *name)
 {
     zassert(name != NULL);
     
-    const u8* start = name;
+    const u8 *start = name;
 
     u8 c;
 

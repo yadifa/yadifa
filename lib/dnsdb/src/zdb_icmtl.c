@@ -69,13 +69,14 @@
 
 #include <dnscore/clone_input_output_stream.h>
 
+#include <dnscore/treeset.h>
+
 #include "dnsdb/icmtl_input_stream.h"
 
 #include "dnsdb/dynupdate.h"
 
 #include "dnsdb/nsec.h"
 
-#include "dnsdb/treeset.h"
 
 #include <dnscore/scheduler.h>
 
@@ -121,13 +122,6 @@ static ya_result
 zdb_icmtl_read_rdata(input_stream *is, u8 *buffer, u32 len)
 {
     return input_stream_read_fully(is, buffer, len);
-}
-
-
-static ya_result
-zdb_icmtl_skip_rdata(input_stream *is, u32 len)
-{
-    return input_stream_skip_fully(is, len);
 }
 
 static ya_result
@@ -199,7 +193,7 @@ zdb_icmtl_find_ix(zdb_icmtl* icmtl, const char* folder, u32 end_at_serial, u32 n
 
     /* returns the number of bytes = strlen(x) + 1 */
 
-    s32 fqdn_len = dnsname_to_cstr(fqdn, icmtl->zone->origin) - 1 ;
+    s32 fqdn_len = dnsname_to_cstr(fqdn, icmtl->zone->origin);
     
     DIR* dir = opendir(folder);
     if(dir != NULL)
@@ -296,7 +290,7 @@ zdb_icmtl_open_ix(const u8 *origin, const char *folder, u32 serial, input_stream
     
     if(dir != NULL)
     {
-        fqdn_len = dnsname_to_cstr(name, origin) - 1;
+        fqdn_len = dnsname_to_cstr(name, origin);
 
         for(;;)
         {
@@ -1702,6 +1696,9 @@ zdb_icmtl_end(zdb_icmtl* icmtl, const char* folder)
     {
         if(written == 0)
         {
+            // remove .tmp files
+            zdb_icmtl_unlink_add(icmtl, folder);
+            zdb_icmtl_unlink_remove(icmtl, folder);
             zdb_icmtl_close(icmtl, folder);
 
             return return_code;

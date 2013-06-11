@@ -98,8 +98,6 @@ struct database_zone_refresh_alarm_args
 /*------------------------------------------------------------------------------
  * FUNCTIONS */
 
-static volatile bool zdb_init_done = FALSE;
-
 static dnslib_fingerprint server_getfingerprint()
 {
     dnslib_fingerprint ret = (dnslib_fingerprint)(0
@@ -134,7 +132,7 @@ database_init()
         exit(EXIT_FAILURE);
     }
 
-    if(FAIL(return_code = thread_pool_init(g_config->thread_count)))
+    if(FAIL(return_code = thread_pool_init(g_config->thread_count + 4)))
     {
         log_err("thread pool initialisation: %r", return_code);
         exit(EXIT_FAILURE);
@@ -194,7 +192,7 @@ database_clear_zones(database_t *database, zone_data_set *dset)
  *  @param[out] database descriptor
  *  @param[in]  data_path path to the zone file
  *  @param[in]  database_type type of database to be used
- *
+ 7*
  *  @retval OK
  *  @retval NOK
  */
@@ -243,7 +241,7 @@ database_load(database_t **database, zone_data_set *dset)
         
         log_debug("zone load: invalidating domain '%s'", zone_desc->domain);
         
-        zdb_zone *old_zone = zdb_zone_xchg_with_invalid((zdb*)g_config->database, zone_desc->origin, zone_desc->qclass, ZDB_RR_APEX_LABEL_FROZEN);
+        zdb_zone_xchg_with_invalid((zdb*)g_config->database, zone_desc->origin, zone_desc->qclass, ZDB_RR_APEX_LABEL_FROZEN);
     }
     
     treeset_avl_iterator_init(&dset->set, &iter);
@@ -295,14 +293,14 @@ database_query(database_t *database, message_data *mesg)
      * @todo : do it when it's true only
      */
 
-    mesg->status = query_fp;    
+    mesg->status = query_fp;
     mesg->send_length = zdb_query_message_update(mesg, &ans_auth_add);
     mesg->referral = ans_auth_add.delegation;
 
     zdb_query_ex_answer_destroy(&ans_auth_add);
 
 #if HAS_TSIG_SUPPORT
-    if(TSIG_ENABLED(mesg))  /* NOTE: the TSIG information is in mseg */
+    if(TSIG_ENABLED(mesg))  /* NOTE: the TSIG information is in mesg */
     {
         tsig_sign_answer(mesg);
     }
@@ -399,6 +397,8 @@ database_update(database_t *database, message_data *mesg)
     u8 wire[MAX_DOMAIN_LENGTH + 10 + 65535];
 
     return_code = FP_NOZONE_FOUND;
+    
+    mesg->send_length = mesg->received;
 
     zone_data *zone_config = zone_getbydnsname(mesg->qname);
 
@@ -442,7 +442,9 @@ database_update(database_t *database, message_data *mesg)
                             /* notauth */
 
                             log_info("database: update: not authorised");
-
+                            
+                            mesg->status = FP_ACCESS_REJECTED;
+                            
                             return (finger_print)ACL_UPDATE_REJECTED;
                         }
 #endif
@@ -472,7 +474,7 @@ database_update(database_t *database, message_data *mesg)
                                 do
                                 {
                                     u16 flags = DNSKEY_FLAGS(*dnskey);
-                                    u8  protocol = DNSKEY_PROTOCOL(*dnskey);
+                                    //u8  protocol = DNSKEY_PROTOCOL(*dnskey);
                                     u8  algorithm = DNSKEY_ALGORITHM(*dnskey);
                                     u16 tag = DNSKEY_TAG(*dnskey);                  // note: expensive
                                     dnssec_key *key = NULL;
@@ -1158,7 +1160,14 @@ database_zone_refresh_maintenance_internal(database_t *db, zdb_zone* zone)
          * The zone has not been loaded (yet)
          */
         
-        log_debug("database_zone_refresh_maintenance: called on an invalid zone: %{dnsname}", zone->origin);
+        if(zone != NULL)
+        {
+            log_debug("database_zone_refresh_maintenance: called on an invalid zone: %{dnsname}", zone->origin);
+        }
+        else
+        {
+            log_debug("database_zone_refresh_maintenance: called on a NULL zone");
+        }
     }
     
     return SUCCESS;
@@ -1178,8 +1187,6 @@ ya_result
 database_initialise_refresh_maintenance(database_t *database)
 {
     ya_result return_value = SUCCESS;
-    
-    zdb *db = (zdb*)database;
     
     zone_set_lock(&g_config->zones);
 
@@ -1314,6 +1321,11 @@ database_save_all_zones_to_disk()
     
     ya_result batch_return_value = 0;
     
+    if(g_config->database == NULL)
+    {
+        return ERROR;
+    }
+    
     zone_set_lock(&g_config->zones);
     
     treeset_avl_iterator iter;
@@ -1321,8 +1333,6 @@ database_save_all_zones_to_disk()
 
     while(treeset_avl_iterator_hasnext(&iter))
     {
-        ya_result return_value;
-        
         treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
         
         zone_data *zone_desc = (zone_data*)zone_node->data;
@@ -1354,8 +1364,6 @@ database_are_all_zones_saved_to_disk()
 
     while(treeset_avl_iterator_hasnext(&iter))
     {
-        ya_result return_value;
-
         treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
 
         zone_data *zone_desc = (zone_data*)zone_node->data;

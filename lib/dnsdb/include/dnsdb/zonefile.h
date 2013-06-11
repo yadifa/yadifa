@@ -44,12 +44,6 @@
  *
  * @{
  */
-/*
- * File:   zonefile.h
- * Author: ericdf
- *
- * Created on January 6, 2009, 3:48 PM
- */
 
 #ifndef _ZONEFILE_H
 #define	_ZONEFILE_H

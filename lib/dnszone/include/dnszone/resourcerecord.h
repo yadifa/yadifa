@@ -76,10 +76,10 @@ ya_result   rr_convert_rdata(output_stream *os, u_char *, const u16, const u_cha
 ya_result   rr_get_origin(const char *, u8 **);     /* parse */
 ya_result   rr_get_ttl(const char *, u32 *);        /* parse */
 
-ya_result   rr_parse_line(char *, const u8 *, u8 *, u32 *, resource_record *, int *);
+ya_result   rr_parse_line(char *textline, const u8 *origin, u8 *label, u32 default_ttl, resource_record *rr, int *bracket_status);
 
 void        rr_print(output_stream*, resource_record *, const char *, u8);
-    void    rr_print_all(output_stream*, resource_record *, const char *, u8);
+void        rr_print_all(output_stream*, resource_record *, const char *, u8);
 
     /*    ------------------------------------------------------------    */
 

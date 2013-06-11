@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-* DOCUMENTATION */
+ *
+ * Copyright (c) 2011, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ * DOCUMENTATION */
 /** @defgroup dnscoreerror Error
  *  @ingroup dnscore
  *  @brief
@@ -44,6 +44,9 @@
 #include "dnscore/sys_types.h"
 #include "dnscore/sys_error.h"
 #include "dnscore/rfc.h"
+#include "dnscore/u32_set.h"
+#include "dnscore/output_stream.h"
+#include "dnscore/format.h"
 
 #define ERRORTBL_TAG 0x4c4254524f525245
 
@@ -66,30 +69,29 @@ dief(ya_result error_code, const char* format, ...)
     exit(EXIT_FAILURE);
 }
 
+/*
 #define ERROR_TABLE_SIZE_INCREMENT 32
-
 static value_name_table* error_table = NULL;
 static u32 error_table_count = 0;
 static u32 error_table_size = 0;
+*/
+
+static u32_node *error_set = NULL;
 
 void
 error_unregister_all()
 {
-    value_name_table* table = error_table;
-    value_name_table* entry = error_table;
-    value_name_table* limit = &error_table[error_table_count];
-
-    error_table = NULL;
-    error_table_count = 0;
-    error_table_size = 0;
-
-    while(entry < limit)
+    u32_set_avl_iterator iter;
+    
+    u32_set_avl_iterator_init(&error_set, &iter);
+    while(u32_set_avl_iterator_hasnext(&iter))
     {
-        free(entry->data);
-        entry++;
+        u32_node *error_node = u32_set_avl_iterator_next_node(&iter);
+        free(error_node->value);
+        error_node->value = NULL;
     }
-
-    free(table);
+    
+    u32_set_avl_destroy(&error_set);
 }
 
 void
@@ -106,20 +108,24 @@ error_register(ya_result code, const char* text)
         fflush(stderr);
         exit(EXIT_FAILURE);
     }
-
-    if(error_table_count == error_table_size)
+    
+    u32_node *error_node = u32_set_avl_insert(&error_set, code);
+    
+    if(error_node->value == 0)
     {
-        error_table_size += ERROR_TABLE_SIZE_INCREMENT;
-        REALLOC_OR_DIE(value_name_table*, error_table, error_table_size * sizeof (value_name_table), ERRORTBL_TAG);
+        error_node->value = strdup(text);
     }
-
-    error_table[error_table_count].id = code;
-    error_table[error_table_count].data = strdup(text);
-
-    error_table_count++;
 }
 
 static char error_gettext_tmp[64];
+
+/**
+ * 
+ * DEPRECATED
+ * 
+ * @param code
+ * @return 
+ */
 
 const char*
 error_gettext(ya_result code)
@@ -128,7 +134,7 @@ error_gettext(ya_result code)
 
     if(code > 0)
     {
-        snprintf(error_gettext_tmp, sizeof (error_gettext_tmp), "Success (%08x)", code);
+        snprintf(error_gettext_tmp, sizeof (error_gettext_tmp), "success (%08x)", code);
         return error_gettext_tmp;
     }
 
@@ -138,28 +144,74 @@ error_gettext(ya_result code)
     }
 
     /**/
-
-    for(u32 idx = 0; idx < error_table_count; idx++)
+    
+    u32_node *error_node;
+    
+    error_node = u32_set_avl_find(&error_set, code);
+    if(error_node != NULL)
     {
-        if(error_table[idx].id == code)
-        {
-            return error_table[idx].data;
-        }
+        return (const char*)error_node->value;
     }
-
+    
     u32 error_base = code & 0xffff0000;
 
-    for(u32 idx = 0; idx < error_table_count; idx++)
+    error_node = u32_set_avl_find(&error_set, error_base);
+    if(error_node != NULL)
     {
-        if(error_table[idx].id == error_base)
-        {
-            return error_table[idx].data;
-        }
+        return (const char*)error_node->value;
     }
 
-    snprintf(error_gettext_tmp, sizeof (error_gettext_tmp), "Undefined error code %08x", code);
+    snprintf(error_gettext_tmp, sizeof (error_gettext_tmp), "undefined error code %08x", code);
 
     return error_gettext_tmp;
+}
+
+/**
+ * 
+ * Text representation of the error code
+ * 
+ * @param os
+ * @param code
+ */
+
+void
+error_writetext(output_stream *os, ya_result code)
+{
+    /* errno handling */
+
+    if(code > 0)
+    {
+        osformat(os, "success (%08x)", code);
+        return;
+    }
+
+    if((code & 0xffff0000) == ERRNO_ERROR_BASE)
+    {
+        osprint(os, strerror(code & 0xffff));
+        return;
+    }
+
+    /**/
+    
+    u32_node *error_node;
+    
+    error_node = u32_set_avl_find(&error_set, code);
+    if(error_node != NULL)
+    {
+        osprint(os, (const char*)error_node->value);
+        return;
+    }
+    
+    u32 error_base = code & 0xffff0000;
+
+    error_node = u32_set_avl_find(&error_set, error_base);
+    if(error_node != NULL)
+    {
+        osformatln(os, "%s(%08x)", (const char*)error_node->value, code);
+        return;
+    }
+
+    osformat(os, "undefined error code %08x", code);
 }
 
 static bool dnscore_register_errors_done = FALSE;
@@ -205,6 +257,11 @@ dnscore_register_errors()
 
     error_register(THREAD_CREATION_ERROR, "THREAD_CREATION_ERROR");
     error_register(THREAD_DOUBLEDESTRUCTION_ERROR, "THREAD_DOUBLEDESTRUCTION_ERROR");
+    error_register(SERVICE_ID_ERROR, "SERVICE_ID_ERROR");
+    error_register(SERVICE_WITHOUT_ENTRY_POINT, "SERVICE_WITHOUT_ENTRY_POINT");
+    error_register(SERVICE_ALREADY_INITIALISED, "SERVICE_ALREADY_INITIALISED");
+    error_register(SERVICE_ALREADY_RUNNING, "SERVICE_ALREADY_RUNNING");
+    error_register(SERVICE_NOT_RUNNING, "SERVICE_NOT_RUNNING");
 
     error_register(TSIG_DUPLICATE_REGISTRATION, "TSIG_DUPLICATE_REGISTRATION");
     error_register(TSIG_UNABLE_TO_SIGN, "TSIG_UNABLE_TO_SIGN");
@@ -228,8 +285,7 @@ dnscore_register_errors()
     error_register(HASH_BASE32DECODE_WRONGSIZE, "HASH_BASE32DECODE_WRONGSIZE");
     error_register(ZONEFILE_UNSUPPORTED_TYPE, "ZONEFILE_UNSUPPORTED_TYPE");
     error_register(LABEL_TOO_LONG, "LABEL_TOO_LONG");
-    error_register(INVALID_CHARSET, "INVALID_CHARSET");
-   
+    error_register(INVALID_CHARSET, "INVALID_CHARSET");    
     error_register(NO_LABEL_FOUND, "NO_LABEL_FOUND");
     error_register(NO_ORIGIN_FOUND, "NO_ORIGIN_FOUND");
     error_register(DOMAINNAME_INVALID, "DOMAINNAME_INVALID");
@@ -239,8 +295,11 @@ dnscore_register_errors()
     error_register(TSIG_FORMERR, "TSIG_FORMERR");
     error_register(TSIG_SIZE_LIMIT_ERROR, "TSIG_SIZE_LIMIT_ERROR");
     error_register(UNPROCESSABLE_MESSAGE, "UNPROCESSABLE_MESSAGE");
-
+    error_register(MESSAGE_ALREADY_PROCESSED, "MESSAGE_ALREADY_PROCESSED");
     error_register(INVALID_PROTOCOL, "INVALID_PROTOCOL");
+    error_register(INVALID_RECORD, "INVALID_RECORD");
+    error_register(UNSUPPORTED_RECORD, "UNSUPPORTED_RECORD");
+    error_register(ZONE_ALREADY_UP_TO_DATE, "ZONE_ALREADY_UP_TO_DATE");
     error_register(INVALID_MESSAGE, "INVALID_MESSAGE");
     error_register(MESSAGE_HAS_WRONG_ID, "MESSAGE_HAS_WRONG_ID");
     error_register(MESSAGE_IS_NOT_AN_ANSWER, "MESSAGE_IS_NOT_AN_ANSWER");

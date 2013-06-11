@@ -133,7 +133,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
     u8* rname;
     u8* rdata;
     u32 rname_size;
-    u32 rttl;
+    //u32 rttl;
     u16 rtype;
     u16 rclass;
     u16 rdata_size;
@@ -157,7 +157,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
         rname_size = dnsname_len(wire);
         rtype = GET_U16_AT(wire[rname_size]);
         rclass = GET_U16_AT(wire[rname_size + 2]);
-        rttl = ntohl(GET_U32_AT(wire[rname_size + 4]));
+        //rttl = ntohl(GET_U32_AT(wire[rname_size + 4]));
         rdata_size = ntohs(GET_U16_AT(wire[rname_size + 8]));        
         rdata = &wire[rname_size + 10];
 
@@ -268,10 +268,10 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
 
     if(rrsets.offset >= 0)
     {
-        zdb_rr_label* label;
-        zdb_packed_ttlrdata* rr_sll;
+        zdb_rr_label* label = NULL;
+        zdb_packed_ttlrdata* rr_sll = NULL;
 
-        u8* last_name = (u8*)"";
+        u8* last_name = (u8*)"\0377";
         u16 last_type = 0;
         s32 required_matches = 0;
 
@@ -301,7 +301,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
 
                 label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path.size) - 1);
 
-                last_type = 0;
+                last_type = 0; // forces the next test
             }
 
             if(last_type != item->rtype)

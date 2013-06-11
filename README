@@ -1,3 +1,18 @@
+20130610:
+    YADIFA 1.0.3
+        Fixes only
+
+    Fixes:
+        _ fixed an issue preventing YADIFA from being build from another directory
+        _ fixed an issue with sed replacements on OSX systems
+        _ fixed an issue with the '_' character not being properly handled
+        _ fixed an issue where reading MX record from a zone file would incorrecly be rejected as invalid
+        _ fixed an issue where the OPT record would not be properly written
+        _ fixed an issue where an undefined ACL reference would be silently ignored
+        _ fixed missing code tags for several error codes.  From now on unregistered codes are dumped in hexadicimal.
+        _ fixed portability issues with BSD and OSX
+        _ fixed several minor issues
+
 20120921:
     YADIFA 1.0.2
         Fixes only

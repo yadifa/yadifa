@@ -198,11 +198,6 @@ synced_shouldpause()
 #endif
 }
 
-static bool
-synced_shouldterminate()
-{
-    return synced_threads.terminate;
-}
 
 static void
 synced_wait(synced_thread_t *st)
@@ -606,9 +601,17 @@ server_mt_process_udp(database_t *database, synced_thread_t *st)
 
         if(err != EINTR)
         {
+            /*
+             * EAGAIN
+             * Resource temporarily unavailable (may be the same value as EWOULDBLOCK) (POSIX.1)
+             */
+            
+            if(err != EAGAIN)
+            {
 #ifdef DEBUG
-            log_debug("server_mt_process_udp: recvfrom error: %r", MAKE_ERRNO_ERROR(err)); /* most likely: timeout/resource temporarily unavailable */
+                log_debug("server_mt_process_udp: recvfrom error: %r", MAKE_ERRNO_ERROR(err)); /* most likely: timeout/resource temporarily unavailable */
 #endif
+            }
             return;
         }
 #else
@@ -630,9 +633,17 @@ server_mt_process_udp(database_t *database, synced_thread_t *st)
 
         if(err != EINTR)
         {
+            /*
+             * EAGAIN
+             * Resource temporarily unavailable (may be the same value as EWOULDBLOCK) (POSIX.1)
+             */
+            
+            if(err != EAGAIN)
+            {
 #ifdef DEBUG
-            log_err("server_mt_process_udp: recvmsg error: %r", MAKE_ERRNO_ERROR(err));
+                log_err("server_mt_process_udp: recvmsg error: %r", MAKE_ERRNO_ERROR(err));
 #endif
+            }
             return;
         }
 #endif
@@ -720,7 +731,8 @@ server_mt_process_udp(database_t *database, synced_thread_t *st)
                                 mesg->qname,
                                 &mesg->other.sa);
 
-                        bool answer = MESSAGE_QR(mesg->buffer);                        
+                        bool answer = MESSAGE_QR(mesg->buffer);
+                        
                         return_value = notify_process(database, mesg); // thread-safe
                         
                         local_statistics->udp_fp[mesg->status]++;
@@ -947,7 +959,7 @@ server_mt_process_udp(database_t *database, synced_thread_t *st)
  *  @retval OK
  */
 static u64 server_run_loop_rate_tick         = 0;
-static u64 server_run_loop_rate_count        = 0;
+//static u64 server_run_loop_rate_count        = 0;
 static s32 server_run_loop_timeout_countdown = 0;
 
 void*
@@ -1017,6 +1029,11 @@ server_mt_query_loop()
 #if ZDB_USES_ZALLOC != 0
     zdb_set_zowner(pthread_self());
 #endif
+    
+    if(g_config->total_interfaces == 0)
+    {
+        return ERROR;
+    }
     
     /**
      * @todo only do this if we are master for at least one zone
@@ -1346,6 +1363,8 @@ server_mt_query_loop()
      */
 
     log_info("shutting down");
+    
+    synced_finalize();
 
     /**
      * @todo READ THIS

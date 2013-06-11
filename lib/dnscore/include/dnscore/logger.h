@@ -81,7 +81,9 @@
  */
 #define DEFAULT_MAX_LINE_SIZE	128
 
-#define LOG_QUEUE_MAX_SIZE 0x100000
+#define LOG_QUEUE_MIN_SIZE 0x400
+#define LOG_QUEUE_MAX_SIZE 0x1000000
+#define LOG_QUEUE_DEFAULT_SIZE 0x100000
 
 #include <dnscore/logger_handle.h>
 
@@ -171,6 +173,12 @@ void logger_flush();
  */
 
 void logger_reopen();
+
+/**
+ * Sets the logger queue size
+ */
+
+u32  logger_set_queue_size(u32 n);
 
 #ifdef	__cplusplus
 }

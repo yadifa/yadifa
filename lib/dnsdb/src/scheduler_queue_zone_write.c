@@ -82,20 +82,6 @@ struct zone_write_param
     void *callback_args;
 };
 
-static ya_result
-scheduler_queue_zone_write_start_callback(void* data_)
-{
-    zone_write_param *zwp = (zone_write_param*)data_;
-
-    log_info("zone %{dnsname} write start", zwp->zone->origin);
-
-    if(zwp->callback != NULL)
-    {
-        zwp->callback(zwp->callback_args);
-    }
-
-    return SCHEDULER_TASK_PROGRESS;
-}
 
 static ya_result
 scheduler_queue_zone_write_callback(void* data_)

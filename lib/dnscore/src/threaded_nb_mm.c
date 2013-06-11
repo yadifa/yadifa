@@ -58,6 +58,11 @@ void threaded_nb_mm_init(threaded_nb_mm *mm, u32 count, u32 size)
     MALLOC_OR_DIE(u8*,mm->items, n, THRDNBMM_TAG);
     mm->item_count = count;
     mm->item_size = size;
+    
+    if(n == 0)
+    {
+        return;
+    }
 
     u8* limit = &mm->items[n];
 
@@ -67,7 +72,7 @@ void threaded_nb_mm_init(threaded_nb_mm *mm, u32 count, u32 size)
         pp = (u8**)p;
         *pp = &p[size];
     }
-    *pp = NULL;
+    *pp = NULL; // false "maybe-uninitialized" positive : the loop always runs AT LEAST once
 
     mm->item_head = (volatile void**)&mm->items[0];
 }

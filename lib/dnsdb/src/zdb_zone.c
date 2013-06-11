@@ -73,7 +73,12 @@
 #include "dnsdb/nsec3.h"
 #endif
 
-#define ZONE_MUTEX_LOG 1
+#define ZONE_MUTEX_LOG 0
+
+#ifndef DEBUG
+#undef ZONE_MUTEX_LOG 0
+#define ZONE_MUTEX_LOG 0
+#endif
 
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
@@ -630,7 +635,7 @@ void
 zdb_zone_lock(zdb_zone *zone, u8 owner)
 {
 #if ZONE_MUTEX_LOG
-    log_notice("acquiring lock for zone %{dnsname} for %x", zone->origin, owner);
+    log_debug7("acquiring lock for zone %{dnsname} for %x", zone->origin, owner);
 #endif
 
     for(;;)
@@ -650,7 +655,7 @@ zdb_zone_lock(zdb_zone *zone, u8 owner)
             zassert(zone->mutex_count != 255);
 
 #if ZONE_MUTEX_LOG
-            log_notice("acquired lock for zone %{dnsname} for %x", zone->origin, owner);
+            log_debug7("acquired lock for zone %{dnsname} for %x", zone->origin, owner);
 #endif
             
             zone->mutex_owner = owner & 0x7f;
@@ -680,7 +685,7 @@ bool
 zdb_zone_trylock(zdb_zone *zone, u8 owner)
 {
 #if ZONE_MUTEX_LOG
-    log_notice("trying to acquire lock for zone %{dnsname} for %x", zone->origin, owner);
+    log_debug7("trying to acquire lock for zone %{dnsname} for %x", zone->origin, owner);
 #endif
 
     mutex_lock(&zone->mutex);
@@ -695,7 +700,7 @@ zdb_zone_trylock(zdb_zone *zone, u8 owner)
         zone->mutex_count++;
 
 #if ZONE_MUTEX_LOG
-        log_notice("acquired lock for zone %{dnsname} for %x", zone->origin, owner);
+        log_debug7("acquired lock for zone %{dnsname} for %x", zone->origin, owner);
 #endif
 
         mutex_unlock(&zone->mutex);
@@ -706,7 +711,7 @@ zdb_zone_trylock(zdb_zone *zone, u8 owner)
     mutex_unlock(&zone->mutex);
 
 #if ZONE_MUTEX_LOG
-    log_notice("failed to acquire lock for zone %{dnsname} for %x", zone->origin, owner);
+    log_debug7("failed to acquire lock for zone %{dnsname} for %x", zone->origin, owner);
 #endif
 
     return FALSE;
@@ -716,7 +721,7 @@ void
 zdb_zone_unlock(zdb_zone *zone, u8 owner)
 {
 #if ZONE_MUTEX_LOG
-    log_notice("releasing lock for zone %{dnsname} by %x", zone->origin, owner);
+    log_debug7("releasing lock for zone %{dnsname} by %x", zone->origin, owner);
 #endif
 
     mutex_lock(&zone->mutex);
@@ -738,7 +743,7 @@ bool
 zdb_zone_transferlock(zdb_zone *zone, u8 owner, u8 newowner)
 {
 #if ZONE_MUTEX_LOG
-    log_notice("trying to transfer lock for zone %{dnsname} from %x to %x", zone->origin, owner, newowner);
+    log_debug7("trying to transfer lock for zone %{dnsname} from %x to %x", zone->origin, owner, newowner);
 #endif
     
     bool r;
@@ -757,7 +762,7 @@ zdb_zone_transferlock(zdb_zone *zone, u8 owner, u8 newowner)
 #if ZONE_MUTEX_LOG
     if(!r)
     {
-        log_notice("failed to transfer lock for zone %{dnsname} from %x to %x", zone->origin, owner, newowner);
+        log_debug7("failed to transfer lock for zone %{dnsname} from %x to %x", zone->origin, owner, newowner);
     }
 #endif
 

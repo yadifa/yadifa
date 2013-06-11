@@ -287,12 +287,6 @@ rr_canonize_nop(zdb_packed_ttlrdata* rr, ptr_vector* v)
     }
 }
 
-static void
-rr_canonize_notsupported(zdb_packed_ttlrdata* rr, ptr_vector* v, u16 type)
-{
-    formatln("Unsupported record %i has been passed for rr canonization", type);
-    DIE(DNSSEC_ERROR_RRSIG_UNSUPPORTEDRECORD);
-}
 
 void
 rr_canonize(u16 type, zdb_packed_ttlrdata* rr_sll, ptr_vector* rrsp)

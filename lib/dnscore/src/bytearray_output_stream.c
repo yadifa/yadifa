@@ -73,9 +73,6 @@ bytearray_write(output_stream* stream, const u8* buffer, u32 len)
     }
 
     bytearray_output_stream_data* data = (bytearray_output_stream_data*)stream->data;
-    u8* src = data->buffer;
-
-    ya_result ret;
 
     u32 remaining = data->buffer_size - data->buffer_offset;
 

@@ -307,8 +307,9 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
 
             buffer += err;
             len -= err;
+            size -= err;
             
-            if(len == 0 || len > MAX_DOMAIN_LENGTH)
+            if(len == 0 || size > MAX_DOMAIN_LENGTH)
             {
                 return INVALID_RECORD;      /* wrong size */
             }

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-* DOCUMENTATION */
+ *
+ * Copyright (c) 2011, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ * DOCUMENTATION */
 /** @defgroup dnscoreerror Error
  *  @ingroup dnscore
  *  @brief 
@@ -48,32 +48,18 @@
  *      INCLUDES
  */
 
-#include <dnscore/dnscore-config.h>
-
-#ifndef DNSCORE_BUILD
-
-#undef VERSION
-#undef PACKAGE
-#undef PACKAGE_BUGREPORT
-#undef PACKAGE_NAME
-#undef PACKAGE_TARNAME
-#undef PACKAGE_STRING
-#undef PACKAGE_VERSION
-
-#endif
-
 /*
  * Please only include "native" stuff.  sys_error.h should NOT depend
  * on anything else (beside sys_types but sys_types.h already includes
  * sys_error.h)
  */
 
-#include	<errno.h>
-#include	<stdarg.h>
-#include	<stdio.h>
-#include	<stdlib.h>
-#include	<string.h>
-#include	<syslog.h>
+#include <errno.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <syslog.h>
 
 #if !defined(_SYSTYPES_H)
 #error Included from a disallowed place.
@@ -87,7 +73,7 @@
 /* In the source, "return ERROR;" should be replaced by something more specific */
 
 #define ERROR                           -1
-#define NOK				-1
+#define NOK				                -1
 
 /* Two macros to easily check an error status */
 
@@ -150,11 +136,20 @@ typedef int32_t ya_result;
 
 #define THREAD_CREATION_ERROR                   CORE_ERROR_CODE(0x2001)
 #define THREAD_DOUBLEDESTRUCTION_ERROR          CORE_ERROR_CODE(0x2002)
+#define SERVICE_ID_ERROR                        CORE_ERROR_CODE(0x2003)
+#define SERVICE_WITHOUT_ENTRY_POINT             CORE_ERROR_CODE(0x2004)
+#define SERVICE_ALREADY_INITIALISED             CORE_ERROR_CODE(0x2005)
+#define SERVICE_ALREADY_RUNNING                 CORE_ERROR_CODE(0x2006)
+#define SERVICE_NOT_RUNNING                     CORE_ERROR_CODE(0x2007)
 
 #define TSIG_DUPLICATE_REGISTRATION             CORE_ERROR_CODE(0x3001)
 #define TSIG_UNABLE_TO_SIGN                     CORE_ERROR_CODE(0x3002)
 
 #define NET_UNABLE_TO_RESOLVE_HOST              CORE_ERROR_CODE(0x4001)
+
+#define CHARON_ERROR_FILE_LOCKED                CORE_ERROR_CODE(0x5001)
+#define CHARON_ERROR_NOT_AUTHORISED             CORE_ERROR_CODE(0x5002)
+#define CHARON_ERROR_UNKNOWN_ID                 CORE_ERROR_CODE(0x5003)
 
 #define ALARM_REARM                             CORE_ERROR_CODE(0xff00)
 
@@ -186,6 +181,7 @@ typedef int32_t ya_result;
 #define INVALID_PROTOCOL                        DNS_ERROR_CODE(24)
 #define INVALID_RECORD                          DNS_ERROR_CODE(25)
 #define UNSUPPORTED_RECORD                      DNS_ERROR_CODE(26)
+#define ZONE_ALREADY_UP_TO_DATE                 DNS_ERROR_CODE(27)
 
 #define INVALID_MESSAGE                         DNS_ERROR_CODE(30)
 
@@ -244,6 +240,10 @@ void error_register(ya_result code, const char *text);
 
 
 const char* error_gettext(ya_result code);
+
+struct output_stream;
+
+void error_writetext(struct output_stream *os, ya_result code);
 
 void dnscore_register_errors();
 

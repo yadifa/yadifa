@@ -108,8 +108,6 @@ threaded_ringbuffer_init(threaded_ringbuffer *queue, int max_size)
 void
 threaded_ringbuffer_finalize(threaded_ringbuffer *queue)
 {
-    threaded_ringbuffer_node* node;
-
     /**
      * If the queue is not empty : too bad !
      *

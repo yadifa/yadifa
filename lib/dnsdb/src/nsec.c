@@ -49,8 +49,7 @@
 #include <dnscore/dnsname.h>
 #include <dnscore/logger.h>
 #include <dnscore/format.h>
-
-#include "dnsdb/treeset.h"
+#include <dnscore/treeset.h>
 
 #include "dnsdb/zdb_rr_label.h"
 #include "dnsdb/zdb_zone_label_iterator.h"
@@ -196,7 +195,7 @@ nsec_update_zone(zdb_zone *zone)
 
     while(zdb_zone_label_iterator_hasnext(&label_iterator))
     {
-        u32 name_len = zdb_zone_label_iterator_nextname(&label_iterator, name);
+        zdb_zone_label_iterator_nextname(&label_iterator, name);
         zdb_rr_label* label = zdb_zone_label_iterator_next(&label_iterator);
 
         if(zdb_rr_label_is_glue(label) || (label->resource_record_set == NULL))
@@ -871,21 +870,13 @@ nsec_name_error(const zdb_zone* zone, const dnsname_vector *name, s32 closest_in
 {
     u8 dname_inverted[MAX_DOMAIN_LENGTH + 2];
     
-    s32 len = dnslabel_stack_to_dnsname(name->labels, name->size, dname_inverted);
+    dnslabel_stack_to_dnsname(name->labels, name->size, dname_inverted);
     
     nsec_node *node = nsec_avl_find_interval_start(&zone->nsec.nsec, dname_inverted);
     
     nsec_inverse_name(out_encloser_nsec_name, node->inverse_relative_name);
     
-    /*
-    dname_inverted[len-1] = (u8)1;
-    dname_inverted[len+0] = (u8)'*';
-    dname_inverted[len+1] = (u8)0;
-    */
-    
-    //if(name->size == closest_index)
-    
-    len = dnslabel_stack_to_dnsname(&name->labels[closest_index], name->size - closest_index, dname_inverted);
+    dnslabel_stack_to_dnsname(&name->labels[closest_index], name->size - closest_index, dname_inverted);
     
     nsec_node *wild_node = nsec_avl_find_interval_start(&zone->nsec.nsec, dname_inverted);
     

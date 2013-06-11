@@ -210,7 +210,6 @@ rsa_genkey(u32 size)
 {
     zassert(size >= DNSSEC_MINIMUM_KEY_SIZE && size <= DNSSEC_MAXIMUM_KEY_SIZE);
 
-    int err;
     BN_CTX *ctx;
     BIGNUM *e;
     RSA* rsa;
@@ -228,7 +227,13 @@ rsa_genkey(u32 size)
 
     zassert(rsa != NULL);
 
-    err = RSA_generate_key_ex(rsa, size, e, NULL); /* no callback */
+    int err = RSA_generate_key_ex(rsa, size, e, NULL); /* no callback */
+
+    if(err == 0)
+    {
+        RSA_free(rsa);
+        rsa = NULL;
+    }
 
     BN_free(e);
     BN_CTX_free(ctx);
@@ -271,7 +276,7 @@ rsa_verifydigest(dnssec_key* key, u8* digest, u32 digest_len, u8* signature, u32
             char buffer[128];
             ERR_error_string_n(ssl_err, buffer, sizeof (buffer));
 
-            log_err("digest verification returned an ssl error %08x %s", ssl_err, buffer);
+            log_debug("digest verification returned an ssl error %08x %s", ssl_err, buffer);
         }
 
         ERR_clear_error();

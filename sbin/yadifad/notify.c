@@ -63,7 +63,7 @@
 #include <dnszone/dnszone.h>
 #include <dnszone/zone_axfr_reader.h>
 
-#include <dnsdb/treeset.h>
+#include <dnscore/treeset.h>
 
 #include "notify.h"
 
@@ -214,9 +214,9 @@ notify_masterquery_thread(void *args_)
 {
     notify_masterquery_thread_args *args = (notify_masterquery_thread_args*)args_;
     
-    zone_data *zone = zone_getbydnsname(args->origin);
-    
     /* get the zone descriptor for that domain */
+    
+    zone_data *zone = zone_getbydnsname(args->origin);
     
     ya_result return_value;
     
@@ -245,7 +245,6 @@ notify_masterquery_thread(void *args_)
         }
     }
     
-    
     u32 current_serial;
 
     /* get the zone of the domain */
@@ -254,7 +253,7 @@ notify_masterquery_thread(void *args_)
 
     if(dbzone != NULL)
     {
-        /* lock it for the XFR (no writer allowed) */
+        /* lock it for the XFR (it's a writer, so no other writer allowed) */
         
         if(zdb_zone_trylock(dbzone, ZDB_ZONE_MUTEX_XFR))
         {
@@ -294,8 +293,12 @@ notify_masterquery_thread(void *args_)
 
                         dbzone->apex->flags &= ~ZDB_RR_LABEL_INVALID_ZONE;
                         zone->refresh.refreshed_time = zone->refresh.retried_time = time(NULL);
-
-                        database_zone_refresh_maintenance(g_config->database, zone->origin);
+                        
+                        zdb_zone_unlock(dbzone, ZDB_ZONE_MUTEX_XFR);                         /* MUST be unlocked here because ... */
+                        database_zone_refresh_maintenance(g_config->database, zone->origin); /* ... this will try to lock */
+                        
+                        free(args);                        
+                        return NULL;
                     }
                 }
                 else
@@ -315,7 +318,7 @@ notify_masterquery_thread(void *args_)
             * The zone has been locked already ? give up ...
             */
 
-            log_info("notify: slave: zone %{dnsname} has been locked (%x)", args->origin, dbzone->mutex_owner);
+            log_info("notify: slave: zone %{dnsname} is locked already (%x)", args->origin, dbzone->mutex_owner);
 
             database_zone_refresh_maintenance(g_config->database, args->origin);
         }
@@ -357,7 +360,7 @@ notify_masterquery(database_t *database, message_data *mesg, packet_unpack_reade
 {
     ya_result return_value;
         
-    u32 serial;
+    u32 serial = 0; // to silence gcc : this was not a bug
     bool serial_set = FALSE;
     
     if(MESSAGE_AN(mesg->buffer) != 0)
@@ -542,8 +545,6 @@ notify_process_dnsname_compare(const void *node_a, const void *node_b)
 static void*
 notify_process_thread(void *list_)
 {
-    host_address *list = (host_address*)list_;
-
     /*
      * Resolve the names and replace them by their IP
      *

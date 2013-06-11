@@ -55,7 +55,7 @@ extern "C" {
 
 
 #include <dnscore/rfc.h>
-#include <dnsdb/treeset.h>
+#include <dnscore/treeset.h>
 
 #include "zone.h"
 #include "database.h"
@@ -83,7 +83,7 @@ extern "C" {
 
 #define     PROGRAM_NAME                PACKAGE
 #define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASEDATE                 "2012-09-21"
+#define     RELEASEDATE                 "2013-06-10"
 #define     COMPILEDATE                 __DATE__
 
     /* List of default values for the different configuration parameters */
@@ -128,7 +128,7 @@ extern "C" {
 #define     S_LISTEN                    "0.0.0.0"
 #define     S_TOTALINTERFACES           1
 #define     S_MAX_TCP_QUERIES           "5"     /* max 512 */
-#define     S_TCP_QUERY_MIN_RATE        "4096"  /* bytes per second minimum rate */
+#define     S_TCP_QUERY_MIN_RATE        "512"   /* bytes per second minimum rate */
 
 #define     S_MAX_AXFR                  "10"
 
@@ -565,28 +565,28 @@ extern "C" {
 
 #undef CONFS_TYPE /* please_define_me */
     
-#define CONFS_BOOL(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_bool, defaultvalue_,0},
-#define CONFS_FLAG8(fieldname_,defaultvalue_, realfieldname_, mask_) {#fieldname_,offsetof(CONFS_TYPE, realfieldname_), (confs_set_field_function*)confs_set_flag8, defaultvalue_,(u8)mask_},
-#define CONFS_FLAG16(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFS_TYPE, realfieldname_), (confs_set_field_function*)confs_set_flag16, defaultvalue_,(u16)mask_},
-#define CONFS_FLAG32(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFS_TYPE, realfieldname_), (confs_set_field_function*)confs_set_flag32, defaultvalue_,(u32)mask_},
-#define CONFS_FLAG64(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFS_TYPE, realfieldname_), (confs_set_field_function*)confs_set_flag64, defaultvalue_,(u64)mask_},
-#define CONFS_U32(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_u32, defaultvalue_,0},
-#define CONFS_U16(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_u16, defaultvalue_,0},
-#define CONFS_U8(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_u8, defaultvalue_,0},
-#define CONFS_STRING(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_string, defaultvalue_,0},
-#define CONFS_PATH(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_path, defaultvalue_,0},
-#define CONFS_UID(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_uid_t, defaultvalue_,0},
-#define CONFS_GID(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_gid_t, defaultvalue_,0},
-#define CONFS_ACL(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, ac) + offsetof(access_control,fieldname_), (confs_set_field_function*)confs_set_acl_item, defaultvalue_,0},
-#define CONFS_LIST_ITEM(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_add_list_item, defaultvalue_,0},
-#define CONFS_ENUM(fieldname_,defaultvalue_,enumtable_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_enum_value, defaultvalue_, (intptr)enumtable_},
-#define CONFS_HOST_LIST(fieldname_,defaultvalue_) {#fieldname_, offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_host_list, defaultvalue_,0},
-//#define CONFS_DNSSEC(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_dnssec, defaultvalue_,0},
+#define CONFS_BOOL(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_bool, defaultvalue_,{._intptr=0}},
+#define CONFS_FLAG8(fieldname_,defaultvalue_, realfieldname_, mask_) {#fieldname_,offsetof(CONFS_TYPE, realfieldname_), (confs_set_field_function*)confs_set_flag8, defaultvalue_,{(u8)mask_}},
+#define CONFS_FLAG16(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFS_TYPE, realfieldname_), (confs_set_field_function*)confs_set_flag16, defaultvalue_,{(u16)mask_}},
+#define CONFS_FLAG32(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFS_TYPE, realfieldname_), (confs_set_field_function*)confs_set_flag32, defaultvalue_,{(u32)mask_}},
+#define CONFS_FLAG64(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFS_TYPE, realfieldname_), (confs_set_field_function*)confs_set_flag64, defaultvalue_,{(u64)mask_}},
+#define CONFS_U32(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_u32, defaultvalue_,{._intptr=0}},
+#define CONFS_U16(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_u16, defaultvalue_,{._intptr=0}},
+#define CONFS_U8(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_u8, defaultvalue_,{._intptr=0}},
+#define CONFS_STRING(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_string, defaultvalue_,{._intptr=0}},
+#define CONFS_PATH(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_path, defaultvalue_,{._intptr=0}},
+#define CONFS_UID(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_uid_t, defaultvalue_,{._intptr=0}},
+#define CONFS_GID(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_gid_t, defaultvalue_,{._intptr=0}},
+#define CONFS_ACL(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, ac) + offsetof(access_control,fieldname_), (confs_set_field_function*)confs_set_acl_item, defaultvalue_,{._intptr=0}},
+#define CONFS_LIST_ITEM(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_add_list_item, defaultvalue_,{._intptr=0}},
+#define CONFS_ENUM(fieldname_,defaultvalue_,enumtable_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_enum_value, defaultvalue_, {(intptr)enumtable_}},
+#define CONFS_HOST_LIST(fieldname_,defaultvalue_) {#fieldname_, offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_host_list, defaultvalue_,{._intptr=0}},
+//#define CONFS_DNSSEC(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFS_TYPE, fieldname_), (confs_set_field_function*)confs_set_dnssec, defaultvalue_,{._intptr=0}},
     
-#define CONFS_ALIAS(fieldname_, aliasname_) {#fieldname_, 0, NULL, #aliasname_, 0},
+#define CONFS_ALIAS(fieldname_, aliasname_) {#fieldname_, 0, NULL, #aliasname_, {._intptr=0}},
     /*#define CONFS_CATEGORY(fieldname_, category_) {#fieldname_, 0, NULL, NULL, #category},*/
 
-#define CONFS_END(name_) {NULL,0,NULL,NULL,0} }; // name_
+#define CONFS_END(name_) {NULL,0,NULL,NULL, {._intptr=0}} }; // name_
     
 ya_result confs_zone_write(output_stream *os, zone_data *zone_desc);
 

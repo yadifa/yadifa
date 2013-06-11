@@ -49,7 +49,7 @@
 #include <dnscore/dnsname.h>
 #include <dnscore/rfc.h>
 #include <dnscore/mutex.h>
-#include <dnsdb/treeset.h>
+#include <dnscore/treeset.h>
 
 typedef struct zone_data_set zone_data_set;
 
