@@ -242,13 +242,16 @@ amim_tsig(struct address_match_item *item, void *data)
 
     const tsig_item *tsig = mesg->tsig.tsig;
 
-    if(item->parameters.tsig.mac_algorithm == tsig->mac_algorithm)
+    if(tsig != NULL)
     {
-        if(item->parameters.tsig.name_size == tsig->name_len)
+        if(item->parameters.tsig.mac_algorithm == tsig->mac_algorithm)
         {
-            if(dnsname_equals(item->parameters.tsig.name, tsig->name))
+            if(item->parameters.tsig.name_size == tsig->name_len)
             {
-                return AMIM_ACCEPT;
+                if(dnsname_equals(item->parameters.tsig.name, tsig->name))
+                {
+                    return AMIM_ACCEPT;
+                }
             }
         }
     }

@@ -32,7 +32,7 @@ dnl
 dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 2880 $])
+AC_REVISION([$Revision: 3981 $])
 # 1
 # svn log 2> /dev/null|head -2|grep ^r|sed 's/.\([1-9]*\).*/\1/'
 
@@ -51,7 +51,7 @@ m4_include([../../m4/eurid.m4])
 m4_include([../../m4/yadifa.m4])
 
 AC_CONFIG_AUX_DIR([.])
-AM_INIT_AUTOMAKE([-Wall -Werror tar-pax])
+AM_INIT_AUTOMAKE([subdir-objects -Wall -Werror tar-pax])
 AC_CONFIG_HEADER([server-config.h])
 
 AC_CONFIG_MACRO_DIR([m4])

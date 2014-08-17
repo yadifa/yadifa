@@ -25,7 +25,7 @@
         xfrpath                     "/usr/local/var/zones/xfr"
 
         # The version returned by a query to version.yadifa. CH TXT
-        version                     "1.0.3"
+        version                     "1.0.4"
 
         # Enable EDNS0 support (?)
         edns0                       on

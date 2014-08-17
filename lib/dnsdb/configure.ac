@@ -32,14 +32,14 @@ dnl
 dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 2880 $])
+AC_REVISION([$Revision: 3981 $])
 AC_INIT([dnsdb],m4_esyscmd([echo $(cat VERSION)-$(grep \$Revision: * | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[bugreport@yadifa.eu])
 
 m4_include([../../m4/eurid.m4])
 m4_include([../../m4/yadifa.m4])
 
 AC_CONFIG_AUX_DIR([.])
-AM_INIT_AUTOMAKE([-Wall -Werror tar-pax])
+AM_INIT_AUTOMAKE([subdir-objects -Wall -Werror tar-pax])
 AC_CONFIG_HEADER([include/dnsdb/dnsdb-config.h])
 
 AC_CONFIG_MACRO_DIR([m4])
