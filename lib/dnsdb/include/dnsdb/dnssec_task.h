@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbdnssec DNSSEC functions
  *  @ingroup dnsdb
  *  @brief 
@@ -43,63 +43,79 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
-#include <openssl/rsa.h>
-#include <openssl/dsa.h>
+
+#include <dnscore/thread_pool.h>
 
 #include <dnsdb/zdb_types.h>
-
 #include <dnsdb/dnssec_keystore.h>
+#include <dnsdb/nsec3_item.h>
 
 #ifdef	__cplusplus
 extern "C" {
 #endif
 
-#define DNSSEC_TASK_ZONE_KEY_NOP            0
-#define DNSSEC_TASK_ZONE_KEY_ADD            1
-#define DNSSEC_TASK_ZONE_KEY_LOAD           2
-#define DNSSEC_TASK_ZONE_KEY_MASK        0x03
+typedef struct dnssec_task_s dnssec_task_s;
 
-typedef struct dnssec_task dnssec_task;
+#define DNSSEC_THREAD_TASK_FILTER_IGNORE 0
+#define DNSSEC_THREAD_TASK_FILTER_ACCEPT 1
 
+typedef ya_result dnssec_thread_task_init_method(dnssec_task_s*);
+typedef ya_result dnssec_thread_task_create_context_method(dnssec_task_s*, s32 processor, void**);
+typedef void dnssec_thread_task_destroy_context_method(dnssec_task_s*, s32 processor, void*);
+typedef ya_result dnssec_thread_task_filter_label_method(dnssec_task_s*, zdb_rr_label *rr_label);
+typedef ya_result dnssec_thread_task_filter_nsec3_item_method(dnssec_task_s*, nsec3_zone_item *item, nsec3_zone_item *next);
+typedef ya_result dnssec_thread_task_finalise_method(dnssec_task_s*);
 
-typedef void* dnssec_thread_function(void*);
-typedef ya_result dnssec_task_initializer(dnssec_task*);
-typedef ya_result dnssec_task_finalizer(dnssec_task*);
+typedef struct dnssec_task_vtbl dnssec_task_vtbl;
 
-struct dnssec_task
+struct dnssec_task_vtbl
 {
-    threaded_queue* query;
-    dnssec_thread_function* query_thread;
-    dnssec_thread_function* answer_thread;
-    
-    u32 task_flags;
-    
-#if __SIZEOF_POINTER__ >= 8
-    u32 reserved;
-#endif
-
-    const char* descriptor_name;
-
-    /*
-     * STACK !
-     */
-    
-    dnsname_stack path;
-};
-
-typedef struct dnssec_task_descriptor dnssec_task_descriptor;
-
-
-struct dnssec_task_descriptor
-{
-    dnssec_task_initializer* initialize_task;
-    dnssec_task_finalizer* finalize_task;
-    dnssec_thread_function* query_thread;
-    dnssec_thread_function* answer_thread;
+    dnssec_thread_task_init_method *init;
+    dnssec_thread_task_create_context_method *create_context;
+    dnssec_thread_task_destroy_context_method *destroy_context;
+    dnssec_thread_task_filter_label_method *filter_label;
+    dnssec_thread_task_filter_nsec3_item_method *filter_nsec3_item;
+    thread_pool_function *process;
+    thread_pool_function *result;
+    dnssec_thread_task_finalise_method *finalise;
     const char* name;
 };
 
-ya_result   dnssec_process_initialize(dnssec_task* task,dnssec_task_descriptor* desc);
+struct processor_thread_context;
+struct dnssec_task_s
+{
+    const dnssec_task_vtbl *vtbl;       // the specific set of functions for this task (rrsig/rrsig nsec3)
+    zdb_zone *zone;                     // the zone being worked on
+    void *args;                         // the specific parameters for the set of functions ?
+    void **contexts;                    // one for each thread
+    struct thread_pool_s *pool;         // thread pool for the parallel processing
+    
+    volatile ya_result error_code;      // an error code
+    volatile bool stop_task;            // stop
+    
+    /** The do task query queue */
+    threaded_queue dnssec_task_query_queue;     //
+    /** The do answer query queue */
+    threaded_queue dnssec_answer_query_queue;   //
+    
+    s32 processor_threads_count;        // the number of threads used in the thread pool
+};
+
+ya_result dnssec_process_set_default_pool(struct thread_pool_s *pool);
+
+/**
+ * Initialises a task with two threads (given by the descriptor)
+ * Sets the start time of the task.
+ * 
+ * @param task task to initialise
+ * @param desc structure pointing to the two threads an a friendly name
+ */
+
+void dnssec_process_initialize(dnssec_task_s *task, dnssec_task_vtbl *vtbl, struct thread_pool_s *pool, zdb_zone *zone);
+ya_result dnssec_process_begin(dnssec_task_s *task);
+void dnssec_process_end(dnssec_task_s *task);
+void dnssec_process_finalize(dnssec_task_s *task);
+
 
 /**
  *
@@ -110,35 +126,41 @@ ya_result   dnssec_process_initialize(dnssec_task* task,dnssec_task_descriptor* 
  * @return
  */
 
-ya_result   dnssec_process_zone(zdb_zone* db, dnssec_task* task);
+ya_result dnssec_process_zone(dnssec_task_s *task);
 
-#if ZDB_NSEC3_SUPPORT != 0
-ya_result dnssec_process_zone_nsec3(zdb_zone* zone, dnssec_task* task);
+#if ZDB_HAS_NSEC3_SUPPORT != 0
+ya_result dnssec_process_zone_nsec3(dnssec_task_s* task);
 #endif
 
 /**
- *
- * Processes all the labels of all the zones using dnssec_process_zone
- *
- * @param db
+ * Clears the threads and name of a task.
+ * Sets the stop time of the task.
+ * 
  * @param task
  */
 
-void dnssec_process_database(zdb* db, dnssec_task* task);
-void dnssec_process_finalize(dnssec_task* task);
-
-typedef ya_result dnssec_process_task_callback(zdb_zone* zone, dnssec_task* task, void* whatyouwant);
+typedef ya_result dnssec_process_task_callback(dnssec_task_s* task, void* whatyouwant);
 
 /**
- *
- * @param zone
- * @param task
- * @param callback
- * @param whatyouwant
- * @return
+ * Using the parameters in task,
+ * creates a task and an answer MT queues
+ * queues task and answer threads to a thread pool
+ * then calls the callback to work on the task/zone.
+ * 
+ * When the callback returns,
+ * waits for the end of the threads,
+ * releases resoures,
+ * exits with the callback return code.
+ * 
+ * @param task the task structure
+ * @param callback the callback to call
+ * @param whatyouwant a pointer passer to the callback
+ * 
+ * @return an error code
+ * 
  */
 
-ya_result dnssec_process_task(zdb_zone* zone, dnssec_task* task, dnssec_process_task_callback *callback, void *whatyouwant);
+ya_result dnssec_process_task(dnssec_task_s *task, dnssec_process_task_callback *callback, void *whatyouwant);
 
 #ifdef	__cplusplus
 }

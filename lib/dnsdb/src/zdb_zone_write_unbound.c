@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief
@@ -60,7 +60,7 @@
 #include "dnsdb/zdb_zone.h"
 
 
-#if ZDB_NSEC3_SUPPORT!=0
+#if ZDB_HAS_NSEC3_SUPPORT!=0
 #include "dnsdb/nsec3.h"
 #include "dnsdb/dnsrdata.h"
 #endif
@@ -165,7 +165,7 @@ zdb_zone_write_unbound(const zdb_zone* zone, const char* output_file)
         return ZDB_ERROR_NOSOAATAPEX;
     }
 
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
 
     /*
      * If the zone is NSEC3, print the nsec3 data
@@ -220,9 +220,9 @@ zdb_zone_write_unbound(const zdb_zone* zone, const char* output_file)
                     rdata_size += item->type_bit_maps_size;
 
                     osprint(&bos, "local-data: \"");
-                    if(FAIL(output_stream_write_base32hex(&bos, NSEC3_NODE_DIGEST_PTR(item), digest_len)))
+                    if(FAIL(ret = output_stream_write_base32hex(&bos, NSEC3_NODE_DIGEST_PTR(item), digest_len)))
                     {
-                        return ERROR;
+                        return ret;
                     }
 
                     osformat(&bos, ".%{dnsname} %u NSEC3 ", zone->origin, soa.minimum);

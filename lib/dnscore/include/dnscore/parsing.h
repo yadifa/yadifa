@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnscoretools Generic Tools
  *  @ingroup dnscore
  *  @brief
@@ -41,6 +41,7 @@
 #ifndef _PARSING_H
 #define	_PARSING_H
 
+#include <ctype.h>
 #include <dnscore/sys_types.h>
 
 #ifdef	__cplusplus
@@ -67,6 +68,10 @@ extern "C"
 ya_result
 parse_u32_check_range(const char *src, u32 *dst, u32 min, u32 max, u8 base);
 
+ya_result parse_u32_check_range_len_base10(const char *src, u32 src_len, u32 *dst, u32 min, u32 max);
+
+ya_result parse_s32_check_range_len_base10(const char *src, u32 src_len, s32 *dst, s32 min, s32 max);
+
 /** \brief Converts a chain of pascal strings to a string
  *
  *  Converts a chain of pascal strings to a string
@@ -90,8 +95,10 @@ parse_pstring(char **srcp_in_out, size_t src_len, u8 *dst, size_t dst_len);
  *  @retval OK
  *  @retval NOK, if no digits found, or number not in the range
  */
-ya_result
-parse_yyyymmddhhmmss_check_range(const char *src, u32 *dst);
+
+ya_result parse_yyyymmddhhmmss_check_range_len(const char *src, u32 src_len, u32 *dst);
+
+ya_result parse_yyyymmddhhmmss_check_range(const char *src, u32 *dst);
 
 /** \brief Copies and trim a string
  *
@@ -108,8 +115,8 @@ parse_yyyymmddhhmmss_check_range(const char *src, u32 *dst);
  *  @retval ERROR, dst_len was too small
  */
 
-ya_result
-parse_copy_trim_spaces(const char *src, u32 src_len, char *dst, u32 dst_len);
+ya_result parse_copy_trim_spaces(const char *src, u32 src_len, char *dst, u32 dst_len);
+ya_result parse_remove_spaces(char *inout_txt);
 
 /** \brief Skips a specific keyword from a string, case insensitive
  *
@@ -125,8 +132,10 @@ parse_copy_trim_spaces(const char *src, u32 src_len, char *dst, u32 dst_len);
  *  @retval ERROR, dst_len was too small
  */
 
-ya_result
-parse_skip_word_specific(const char *src, u32 src_len, const char **words, u32 word_count, s32 *matched_word);
+ya_result parse_skip_word_specific(const char *src, u32 src_len, const char **words, u32 word_count, s32 *matched_word);
+
+const char * parse_skip_until_chars(const char *src, const char *chars, u32 chars_len);
+
 
 /** \brief Skips a specific keyword from a string, case insensitive
  *
@@ -143,6 +152,101 @@ parse_skip_word_specific(const char *src, u32 src_len, const char **words, u32 w
 
 ya_result
 parse_ip_address(const char *src, u32 src_len, u8 *dst, u32 dst_len);
+
+/**
+ * Returns a pointer to the first non-blank character on an ASCIIZ string
+ * blank = space-char & tab
+ * space = space-char & tab & form feed & cr & lf
+ * 
+ * @param txt
+ * @return 
+ */
+
+static inline const char *parse_skip_spaces(const char *txt)
+{
+    while(isspace(*txt) && (*txt != '\0'))
+    {
+    	txt++;
+    }
+    
+    return txt;
+}
+
+/**
+ * Returns a pointer to the first blank character on an ASCIIZ string
+ * blank = space-char & tab
+ * space = space-char & tab & form feed & cr & lf 
+ * 
+ * @param txt
+ * @return 
+ */
+
+static inline const char *parse_next_blank(const char *txt)
+{
+    while(!isblank(*txt) && (*txt != '\0'))
+    {
+    	txt++;
+    }
+    
+    return txt;
+}
+
+/**
+ * Returns a pointer to the first space character on an ASCIIZ string
+ * blank = space-char & tab
+ * space = space-char & tab & form feed & cr & lf
+ * 
+ * @param txt
+ * @return 
+ */
+
+static inline const char *parse_next_space(const char *txt)
+{
+    while(!isspace(*txt) && (*txt != '\0'))
+    {
+    	txt++;
+    }
+    
+    return txt;
+}
+
+/**
+ * Copies the next word into dst
+ * 
+ * @param txt
+ * @return strlen(dst)
+ */
+
+static inline s32 parse_copy_word(char *dst, size_t dst_size, const char *txt)
+{
+    char *base = dst;
+    
+    const char * const limit = &txt[MIN(strlen(txt), dst_size)];
+    
+    while(!isspace(*txt) && (txt < limit))
+    {
+    	*dst++ = *txt++;
+    }
+    
+    *dst = '\0';
+    
+    return dst - base;
+}
+
+static inline s32 parse_copy_next_word(char *dst, size_t dst_size, const char *txt)
+{
+    const char *non_blank_txt = parse_skip_spaces(txt);
+    s32 n = parse_copy_word(dst, dst_size, non_blank_txt);
+    
+    if(n >= 0)
+    {
+        n += non_blank_txt - txt;
+    }
+    
+    return n;
+}
+
+s32 parse_next_token(char *dest, size_t dest_size, const char *from, const char *delim);
 
 #ifdef	__cplusplus
 }

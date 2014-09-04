@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup server Server
  *  @ingroup yadifad
  *  @brief
@@ -49,15 +49,50 @@
 
 #include "confs.h"
 
+#if defined(HAS_MESSAGES_SUPPORT)
+#define UDP_USE_MESSAGES 1
+#else
+#define UDP_USE_MESSAGES 0
+#endif
+
 #ifdef	__cplusplus
 extern "C"
 {
 #endif
     
-    u32 server_context_append_socket_name(char *buffer, u16 s);
+/** \brief  Initialize sockets and copy the config parameters into server_context_t
+ *
+ *  @param[in] config
+ *  @param[out] server_context
+ *
+ *  @retval OK
+ *  @return otherwise log_quit will stop the program
+ */
 
-    void server_context_clear(config_data *);
-    int config_update_network(config_data *);
+int config_update_network(config_data *);
+
+/**
+ * Appends the name of the socket s to the buffer.
+ * The buffer has to be big enough, no size test is performed.
+ * 
+ * @param buffer
+ * @param s
+ * 
+ * @return the length of the name
+ */
+    
+u32 server_context_append_socket_name(char *buffer, u16 s);
+
+/** \brief Closes all sockets and remove pid file
+ *
+ *  @param[in] config
+ *  @param[in] server_context
+ *
+ *  @retval OK
+ *  @return otherwise log_quit will stop the program
+ */
+
+void server_context_clear(config_data *);
 
 #ifdef	__cplusplus
 }

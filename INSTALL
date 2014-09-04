@@ -2,7 +2,9 @@ Quick installation
 ******************
 You will need the most up-to-date  aclocal, autoheader, automake, autoconf, make and a C compiler installed (clang, icc or gcc >= 4.6)
 By default gcc is used but you can specify your compiler adding CC=x in ./configure. ie: ./configure CC=clang
+openssl has to be build with shared
 Note that gcc < 4.6 will be build with -O0 and > 4.6 with -O3
+
 
 ./configure
 make
@@ -10,6 +12,7 @@ sudo make install
 
 cd /usr/local
 sudo mkdir -p var/run var/log var/zones/keys var/zones/masters var/zones/slaves var/zones/xfr
+
 
 Installation Instructions
 *************************

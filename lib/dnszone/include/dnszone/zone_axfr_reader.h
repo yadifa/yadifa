@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup zoneaxfr AXFR file loader module
  *  @ingroup dnszone
  *  @brief

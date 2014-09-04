@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -88,7 +88,7 @@ nsec3_label_extension_set_self(nsec3_label_extension* n3ext, nsec3_zone_item* it
     {
         if(n3ext->self == item)
         {
-            zassert((value != NULL) || (n3ext->self != NULL));
+            yassert((value != NULL) || (n3ext->self != NULL));
             
             n3ext->self = value; /* Official way to change the "self" */
             return;
@@ -152,6 +152,8 @@ nsec3_label_extension_set_star(nsec3_label_extension* n3ext, nsec3_zone_item* it
 
     exit(-1);
 }
+
+
 
 /*
  * Adds an entry to the "owner" array (of an item)
@@ -221,7 +223,7 @@ nsec3_label_add(nsec3_label_pointer_array* ownersp, u16* countp, const zdb_rr_la
 static void
 nsec3_label_remove(nsec3_label_pointer_array* ownersp, u16* countp, zdb_rr_label* owner)
 {
-    zassert(*countp > 0);
+    yassert(*countp > 0);
 
     if(*countp == 1)
     {
@@ -234,7 +236,7 @@ nsec3_label_remove(nsec3_label_pointer_array* ownersp, u16* countp, zdb_rr_label
          * free the owner->nsec.nsec3
          */
 
-        zassert((*ownersp).owner == owner);
+        yassert((*ownersp).owner == owner);
 
         (*ownersp).owner = NULL;
         *countp = 0;
@@ -503,8 +505,9 @@ nsec3_remove_star(nsec3_zone_item* item, zdb_rr_label* owner)
     log_debug("nsec3_remove_star: %{digest32h}@ @ %p '%{dnslabel}'", ITEM_DIGEST(item), item, owner->name);
 #endif
 
-    assert_mallocated(item);
-    assert_mallocated(owner);
+    /// @note : this is Z-allocated not M-allocated
+    //assert_mallocated(item);
+    //assert_mallocated(owner);
 
     nsec3_label_remove(&item->star_label, &item->sc, owner);
 }
@@ -679,7 +682,7 @@ nsec3_move_all_star(nsec3_zone_item* src, nsec3_zone_item* dst)
             ZFREE_ARRAY(src->star_label.owners, len);
         }
 
-        dst->star_label.owner = owners.owner;
+        dst->star_label.owner = owners.owner; // owner when 1 item, owners when multiple. False positives from static analysers.
         dst->sc = total;
     }
 

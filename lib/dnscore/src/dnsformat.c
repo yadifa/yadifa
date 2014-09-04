@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup format C-string formatting
  *  @ingroup dnscore
  *  @brief
@@ -48,6 +48,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include "dnscore-config.h"
 #include "dnscore/rfc.h"
 #include "dnscore/ctrl-rfc.h"
 #include "dnscore/format.h"
@@ -55,9 +56,13 @@
 #include "dnscore/base32hex.h"
 #include "dnscore/dnsformat.h"
 #include "dnscore/host_address.h"
+#include "dnscore/dns_resource_record.h"
 
 #define NULL_STRING_SUBSTITUTE (u8*)"(NULL)"
 #define NULL_STRING_SUBSTITUTE_LEN 6 /*(sizeof(NULL_STRING_SUBSTITUTE)-1)*/
+#define PORT_SEPARATOR '#'
+#define PORT_SEPARATOR_V4 PORT_SEPARATOR
+#define PORT_SEPARATOR_V6 PORT_SEPARATOR
 
 /** digest32h
  *
@@ -65,7 +70,7 @@
  */
 
 static void
-digest32h_format_handler_method(void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
+digest32h_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
 {
     u8 *digest = (u8 *)val;
 
@@ -79,7 +84,7 @@ digest32h_format_handler_method(void *restrict val, output_stream *stream, s32 p
     }
 }
 
-static format_handler_descriptor digest32h_format_handler_descriptor ={
+static const format_handler_descriptor digest32h_format_handler_descriptor ={
     "digest32h",
     9,
     digest32h_format_handler_method
@@ -88,7 +93,7 @@ static format_handler_descriptor digest32h_format_handler_descriptor ={
 /* dnsname */
 
 static void
-dnsname_format_handler_method(void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
+dnsname_format_handler_method(const void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
 {
     const u8 dot = (u8)'.';
     u8 *label    = (u8*)val;
@@ -131,7 +136,7 @@ dnsname_format_handler_method(void *val, output_stream *stream, s32 padding, cha
     }
 }
 
-static format_handler_descriptor dnsname_format_handler_descriptor ={
+static const format_handler_descriptor dnsname_format_handler_descriptor ={
     "dnsname",
     7,
     dnsname_format_handler_method
@@ -140,7 +145,7 @@ static format_handler_descriptor dnsname_format_handler_descriptor ={
 /*  */
 
 static void
-dnsnamevector_format_handler_method(void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
+dnsnamevector_format_handler_method(const void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
 {
     u8 dot                     = '.';
     dnsname_vector* namevector = (dnsname_vector *)val;
@@ -180,7 +185,7 @@ dnsnamevector_format_handler_method(void *val, output_stream *stream, s32 paddin
     }
 }
 
-static format_handler_descriptor dnsnamevector_format_handler_descriptor ={
+static const format_handler_descriptor dnsnamevector_format_handler_descriptor ={
     "dnsnamevector",
     13,
     dnsnamevector_format_handler_method
@@ -189,7 +194,7 @@ static format_handler_descriptor dnsnamevector_format_handler_descriptor ={
 /* dnsnamestack */
 
 static void
-dnsnamestack_format_handler_method(void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
+dnsnamestack_format_handler_method(const void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
 {
     u8 dot                   = '.';
     dnsname_stack *namestack = (dnsname_stack *)val;
@@ -220,7 +225,7 @@ dnsnamestack_format_handler_method(void *val, output_stream *stream, s32 padding
     }
 }
 
-static format_handler_descriptor dnsnamestack_format_handler_descriptor ={
+static const format_handler_descriptor dnsnamestack_format_handler_descriptor ={
     "dnsnamestack",
     12,
     dnsnamestack_format_handler_method
@@ -229,7 +234,7 @@ static format_handler_descriptor dnsnamestack_format_handler_descriptor ={
 /* dnslabel */
 
 static void
-dnslabel_format_handler_method(void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
+dnslabel_format_handler_method(const void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
 {
     u8 *label = (u8 *)val;
 
@@ -244,7 +249,7 @@ dnslabel_format_handler_method(void *val, output_stream *stream, s32 padding, ch
     }
 }
 
-static format_handler_descriptor dnslabel_format_handler_descriptor ={
+static const format_handler_descriptor dnslabel_format_handler_descriptor ={
     "dnslabel",
     8,
     dnslabel_format_handler_method
@@ -253,7 +258,7 @@ static format_handler_descriptor dnslabel_format_handler_descriptor ={
 /* class */
 
 static void
-dnsclass_format_handler_method(void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
+dnsclass_format_handler_method(const void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
 {
     u16 *classp = (u16 *)val;
 
@@ -299,7 +304,7 @@ dnsclass_format_handler_method(void *val, output_stream *stream, s32 padding, ch
     }
 }
 
-static format_handler_descriptor dnsclass_format_handler_descriptor ={
+static const format_handler_descriptor dnsclass_format_handler_descriptor ={
     "dnsclass",
     8,
     dnsclass_format_handler_method
@@ -308,7 +313,7 @@ static format_handler_descriptor dnsclass_format_handler_descriptor ={
 /* type */
 
 static void
-dnstype_format_handler_method(void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
+dnstype_format_handler_method(const void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
 {
     u16 *typep = (u16 *)val;
 
@@ -523,6 +528,10 @@ dnstype_format_handler_method(void *val, output_stream *stream, s32 padding, cha
                 len = 10;
                 txt = TYPE_NSEC3PARAM_NAME;
                 break;
+            case TYPE_TLSA:
+                len = 4;
+                txt = TYPE_TLSA_NAME;
+                break;
             case TYPE_HIP:
                 len = 3;
                 txt = TYPE_HIP_NAME;
@@ -603,6 +612,7 @@ dnstype_format_handler_method(void *val, output_stream *stream, s32 padding, cha
                 len = 3;
                 txt = TYPE_DLV_NAME;
                 break;
+#if HAS_DYNAMIC_PROVISIONING
             case TYPE_ZONE_TYPE:
                 len = 8;
                 txt = TYPE_ZONE_TYPE_NAME;
@@ -611,9 +621,9 @@ dnstype_format_handler_method(void *val, output_stream *stream, s32 padding, cha
                 len = 8;
                 txt = TYPE_ZONE_FILE_NAME;
                 break;
-            case TYPE_ZONE_ALSO_NOTIFY:
+            case TYPE_ZONE_NOTIFY:
                 len = 9;
-                txt = TYPE_ZONE_ALSO_NOTIFY_NAME;
+                txt = TYPE_ZONE_NOTIFY_NAME;
                 break;
             case TYPE_ZONE_MASTER:
                 len = 6;
@@ -623,38 +633,41 @@ dnstype_format_handler_method(void *val, output_stream *stream, s32 padding, cha
                 len = 6;
                 txt = TYPE_ZONE_DNSSEC_NAME;
                 break;
-            case TYPE_CTRL_SHUTDOWN:
-                len = 8;
-                txt = TYPE_CTRL_SHUTDOWN_NAME;
-                break;
-            case TYPE_CTRL_ZONEFREEZE:
+            case TYPE_ZONE_SLAVES:
                 len = 6;
-                txt = TYPE_CTRL_ZONEFREEZE_NAME;
+                txt = TYPE_ZONE_SLAVES_NAME;
                 break;
-            case TYPE_CTRL_ZONEUNFREEZE:
-                len = 8;
-                txt = TYPE_CTRL_ZONEUNFREEZE_NAME;
+            case TYPE_SIGINTV:
+                len = 7;
+                txt = TYPE_SIGINTV_NAME;
                 break;
-            case TYPE_CTRL_ZONERELOAD:
+            case TYPE_SIGREGN:
+                len = 7;
+                txt = TYPE_SIGREGN_NAME;
+                break;
+            case TYPE_SIGJITR:
+                len = 7;
+                txt = TYPE_SIGJITR_NAME;
+                break;
+            case TYPE_NTFRC:
+                len = 5;
+                txt = TYPE_NTFRC_NAME;
+                break;
+            case TYPE_NTFRP:
+                len = 5;
+                txt = TYPE_NTFRP_NAME;
+                break;
+            case TYPE_NTFRPI:
                 len = 6;
-                txt = TYPE_CTRL_ZONERELOAD_NAME;
+                txt = TYPE_NTFRPI_NAME;
                 break;
-            case TYPE_CTRL_LOGREOPEN:
-                len = 9;
-                txt = TYPE_CTRL_LOGREOPEN_NAME;
-                break;
-            case TYPE_CTRL_CFGMERGE:
-                len = 8;
-                txt = TYPE_CTRL_CFGMERGE_NAME;
-                break;
-            case TYPE_CTRL_CFGSAVE:
+            case TYPE_NTFAUTO:
                 len = 7;
-                txt = TYPE_CTRL_CFGSAVE_NAME;
+                txt = TYPE_NTFAUTO_NAME;
                 break;
-            case TYPE_CTRL_CFGLOAD:
-                len = 7;
-                txt = TYPE_CTRL_CFGLOAD_NAME;
-                break;
+#endif
+                
+
             default:
                 output_stream_write(stream, (u8 *)"TYPE", 4); /* rfc 3597 */
                 format_dec_u64((u64) ntohs(*typep), stream, 0, ' ', TRUE);
@@ -669,14 +682,14 @@ dnstype_format_handler_method(void *val, output_stream *stream, s32 padding, cha
     }
 }
 
-static format_handler_descriptor dnstype_format_handler_descriptor ={
+static const format_handler_descriptor dnstype_format_handler_descriptor ={
     "dnstype",
     7,
     dnstype_format_handler_method
 };
 
 static void
-sockaddr_format_handler_method(void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
+sockaddr_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
 {
     char buffer[INET6_ADDRSTRLEN + 1 + 5 + 1];
     char *src           = buffer;
@@ -692,7 +705,7 @@ sockaddr_format_handler_method(void *restrict val, output_stream *stream, s32 pa
             if(inet_ntop(ipv4->sin_family, &ipv4->sin_addr, buffer, sizeof (buffer)) != NULL)
             {
                 int n       = strlen(buffer);
-                buffer[n++] = ':';
+                buffer[n++] = PORT_SEPARATOR_V4;
                 snprintf(&buffer[n],6, "%i", ntohs(ipv4->sin_port));
             }
             else
@@ -708,7 +721,7 @@ sockaddr_format_handler_method(void *restrict val, output_stream *stream, s32 pa
             if(inet_ntop(ipv6->sin6_family, &ipv6->sin6_addr, buffer, sizeof (buffer)) != NULL)
             {
                 int n       = strlen(buffer);
-                buffer[n++] = ':';
+                buffer[n++] = PORT_SEPARATOR_V6;
                 snprintf(&buffer[n],6, "%i", ntohs(ipv6->sin6_port));
             }
             else
@@ -727,16 +740,16 @@ sockaddr_format_handler_method(void *restrict val, output_stream *stream, s32 pa
     format_asciiz(src, stream, padding, pad_char, left_justified);
 }
 
-static format_handler_descriptor sockaddr_format_handler_descriptor ={
+static const format_handler_descriptor sockaddr_format_handler_descriptor ={
     "sockaddr",
     8,
     sockaddr_format_handler_method
 };
 
 static void
-hostaddr_format_handler_method(void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
+hostaddr_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
 {
-    char buffer[INET6_ADDRSTRLEN + 1 + 5 + 1];
+    char buffer[MAX_DOMAIN_LENGTH + 1 + 5 + 1];
     char *src = buffer;
 
     if(val != NULL)
@@ -750,7 +763,7 @@ hostaddr_format_handler_method(void *restrict val, output_stream *stream, s32 pa
                 if(inet_ntop(AF_INET, ha->ip.v4.bytes, buffer, sizeof (buffer)) != NULL)
                 {
                     int n       = strlen(buffer);
-                    buffer[n++] = ':';
+                    buffer[n++] = PORT_SEPARATOR_V4;
                     snprintf(&buffer[n],6, "%i", ntohs(ha->port));
                 }
                 else
@@ -764,7 +777,7 @@ hostaddr_format_handler_method(void *restrict val, output_stream *stream, s32 pa
                 if(inet_ntop(AF_INET6, ha->ip.v6.bytes, buffer, sizeof (buffer)) != NULL)
                 {
                     int n       = strlen(buffer);
-                    buffer[n++] = ':';
+                    buffer[n++] = PORT_SEPARATOR_V6;
                     snprintf(&buffer[n],6, "%i", ntohs(ha->port));
                 }
                 else
@@ -777,6 +790,7 @@ hostaddr_format_handler_method(void *restrict val, output_stream *stream, s32 pa
             {
                 buffer[0] = '\0';
                 dnsname_to_cstr(buffer, ha->ip.dname.dname);
+                break;
             }
             default:
             {
@@ -793,14 +807,128 @@ hostaddr_format_handler_method(void *restrict val, output_stream *stream, s32 pa
     format_asciiz(src, stream, padding, pad_char, left_justified);
 }
 
-static format_handler_descriptor hostaddr_format_handler_descriptor ={
+static const format_handler_descriptor hostaddr_format_handler_descriptor ={
     "hostaddr",
     8,
     hostaddr_format_handler_method
 };
 
 static void
-sockaddrip_format_handler_method(void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
+hostaddrlist_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
+{
+    char *src;
+    char *p;
+    char *limit;
+    int len;
+    bool allocated = FALSE;
+    char buffer_tmp[1024];
+    src = buffer_tmp;
+    p = buffer_tmp;    
+    len = sizeof(buffer_tmp);
+    limit = &buffer_tmp[len];
+    
+
+    if(val != NULL)
+    {
+        host_address *ha = (struct host_address*)val;
+
+        for(;;)
+        {
+            switch(ha->version)
+            {
+                case HOST_ADDRESS_IPV4:
+                {
+                    if(inet_ntop(AF_INET, ha->ip.v4.bytes, p, limit - p) != NULL)
+                    {
+                        p += strlen(p);
+                        if(ha->port != 0)
+                        {
+                            p += snprintf(p, 12, " port %i", ntohs(ha->port));
+                        }
+                    }
+                    else
+                    {
+                        strcpy(src, strerror(errno));
+                    }
+                    break;
+                }
+                case HOST_ADDRESS_IPV6:
+                {
+                    if(inet_ntop(AF_INET6, ha->ip.v6.bytes, p, limit - p) != NULL)
+                    {
+                        p += strlen(p);
+                        if(ha->port != 0)
+                        {                        
+                            p += snprintf(p, 12, " port %i", ntohs(ha->port));
+                        }
+                    }
+                    else
+                    {
+                        strcpy(src, strerror(errno));
+                    }
+                    break;
+                }
+                case HOST_ADDRESS_DNAME:
+                {
+                    *p = '\0';
+                    p += dnsname_to_cstr(p, ha->ip.dname.dname);
+                    break;
+                }
+                default:
+                {
+                    memcpy(p, "INVALID", 8);
+                    p += 8;
+                    break;
+                }
+            }
+                        
+            ha = ha->next;
+            
+            if(ha == NULL)
+            {
+                break;
+            }
+            
+            *p++ = ',';
+            
+            if(limit - p < MAX_DOMAIN_LENGTH + 12 + 1)
+            {
+                char *tmp;
+                len <<= 1;
+                MALLOC_OR_DIE(char*, tmp, len, GENERIC_TAG);
+                memcpy(tmp, src, p - src);
+                if(allocated)
+                {
+                    free(src);
+                }
+                allocated = TRUE;
+                p = &tmp[p - src];
+                src = tmp;
+                limit = &tmp[len];
+            }
+        }
+    }
+    else
+    {
+        memcpy(src, "NULL", 5);
+    }
+
+    format_asciiz(src, stream, padding, pad_char, left_justified);
+    
+    if(allocated)
+    {
+        free(src);
+    }
+}
+
+static const format_handler_descriptor hostaddrlist_format_handler_descriptor ={
+    "hostaddrlist",
+    12,
+    hostaddrlist_format_handler_method
+};
+
+static void
+sockaddrip_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
 {
     char buffer[INET6_ADDRSTRLEN + 1 + 5 + 1];
     char *src           = buffer;
@@ -845,27 +973,27 @@ sockaddrip_format_handler_method(void *restrict val, output_stream *stream, s32 
     format_asciiz(src, stream, padding, pad_char, left_justified);
 }
 
-static format_handler_descriptor sockaddrip_format_handler_descriptor ={
-    "sockaddrip",
+static const format_handler_descriptor sockaddrip_format_handler_descriptor ={
+    "sockaddrip", /* only the IP */
     10,
     sockaddrip_format_handler_method
 };
 
 static void
-rdatadesc_format_handler_method(void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
+rdatadesc_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
 {
     rdata_desc *desc = (rdata_desc *)val;
     osprint_rdata(stream, desc->type, desc->rdata, desc->len);
 }
 
-static format_handler_descriptor rdatadesc_format_handler_descriptor ={
+static const format_handler_descriptor rdatadesc_format_handler_descriptor ={
     "rdatadesc",
     9,
     rdatadesc_format_handler_method
 };
 
 static void
-typerdatadesc_format_handler_method(void * restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
+typerdatadesc_format_handler_method(const void * restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
 {
     rdata_desc *desc = (rdata_desc*)val;
     dnstype_format_handler_method(&desc->type, stream, padding, pad_char, left_justified, reserved_for_method_parameters);
@@ -873,15 +1001,14 @@ typerdatadesc_format_handler_method(void * restrict val, output_stream *stream, 
     osprint_rdata(stream, desc->type, desc->rdata, desc->len);
 }
 
-static format_handler_descriptor typerdatadesc_format_handler_descriptor = {
+static const format_handler_descriptor typerdatadesc_format_handler_descriptor = {
     "typerdatadesc",
     13,
     typerdatadesc_format_handler_method
 };
 
-
 static void
-recordwire_format_handler_method(void * restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
+recordwire_format_handler_method(const void * restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
 {
     u8      *domain = (u8 *)val;
     u32 domain_len  = dnsname_len(domain);
@@ -904,10 +1031,48 @@ recordwire_format_handler_method(void * restrict val, output_stream *stream, s32
     osprint_rdata(stream, *typeptr, rdata, rdata_len);
 }
 
-static format_handler_descriptor recordwire_format_handler_descriptor = {
+static const format_handler_descriptor recordwire_format_handler_descriptor = {
     "recordwire",
     10,
     recordwire_format_handler_method
+};
+
+static void
+dnsrr_format_handler_method(const void * restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
+{
+    dns_resource_record *rr = (dns_resource_record*)val;
+    
+    if(rr == NULL)
+    {
+        output_stream_write(stream,(const u8*)"*** NULL RESOURCE RECORD ***", 28);
+        return;
+    }
+    
+    if(rr->name != NULL)
+    {
+        dnsname_format_handler_method(rr->name, stream, padding, pad_char, left_justified, reserved_for_method_parameters);
+    }
+    else
+    {
+        output_stream_write(stream,(const u8*)"*** NULL NAME ***", 17);
+    }
+    output_stream_write_u8(stream, (u8)pad_char);
+    dnstype_format_handler_method(&rr->tctr.qtype, stream, padding, pad_char, left_justified, reserved_for_method_parameters);
+    output_stream_write_u8(stream, (u8)pad_char);
+    if(rr->rdata != NULL)
+    {
+        osprint_rdata(stream, rr->tctr.qtype, rr->rdata, rr->rdata_size);
+    }
+    else
+    {
+        output_stream_write(stream, (const u8*)"*** NULL RDATA ***", 18);
+    }
+}
+
+static const format_handler_descriptor dnsrr_format_handler_descriptor = {
+    "dnsrr",
+    5,
+    dnsrr_format_handler_method
 };
 
 static bool dnsformat_class_init_done = FALSE;
@@ -934,9 +1099,11 @@ dnsformat_class_init()
     format_registerclass(&sockaddr_format_handler_descriptor);
     format_registerclass(&sockaddrip_format_handler_descriptor);
     format_registerclass(&hostaddr_format_handler_descriptor);
+    format_registerclass(&hostaddrlist_format_handler_descriptor);
     format_registerclass(&rdatadesc_format_handler_descriptor);
     format_registerclass(&typerdatadesc_format_handler_descriptor);
     format_registerclass(&recordwire_format_handler_descriptor);
+    format_registerclass(&dnsrr_format_handler_descriptor);
 }
 
 /** @} */

@@ -32,8 +32,8 @@ dnl
 dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 3981 $])
-AC_INIT([dnscore],m4_esyscmd([echo $(cat VERSION)-$(grep \$Revision: * | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[bugreport@yadifa.eu])
+AC_REVISION([$Revision: 4183 $])
+AC_INIT([dnscore],m4_esyscmd([svn info 2> /dev/null |  sed -e 's/^/$/' -e 's/$/ $/' > revision.txt;echo $(cat VERSION)-$(grep \$Revision: * | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[bugreport@yadifa.eu])
 
 m4_include([../../m4/eurid.m4])
 m4_include([../../m4/yadifa.m4])
@@ -49,7 +49,9 @@ AC_DEFUN([SYSCONF], [/$prefix/PACKAGE/PACKAGE.conf])
 AC_CANONICAL_BUILD
 
 # Checks for programs.
+dnl m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
 AM_PROG_AR
+
 AC_PROG_CC
 AM_PROG_CC_C_O
 
@@ -86,11 +88,6 @@ AC_CHECK_TYPES(int64_t)
 AC_CHECK_TYPES(long long)
 AC_CHECK_TYPES(u_char)
 
-dnl Add sone defines.
-
-AC_DEFINE_UNQUOTED([NETWORK_BUFFER_SIZE], [65536], [Network buffer size])
-AC_DEFINE_UNQUOTED([CLEARED_SOCKET], [-1],[cleared socket])
-
 dnl include strdup
 
 AC_MSG_CHECKING(if has strdup)
@@ -122,6 +119,7 @@ AC_CPU_CHECK
 AC_COMPILER_CHECK
 AC_MEMALIGN_CHECK
 AC_PTHREAD_SPINLOCK_CHECK
+AC_PTHREAD_SETNAME_NP_CHECK
 
 AC_YADIFA_FEATURES
 
@@ -153,6 +151,7 @@ AC_CONFIG_FILES([Makefile])
 AC_YADIFA_SUMMARY
 
 AC_OUTPUT
+
 echo
 echo "Features used:"
 echo "--------------"
@@ -164,4 +163,6 @@ fi
 echo "Install prefix ...................... : $prefix"
 echo "Install sysconf ..................... : $sysconfdir"
 echo
+
+AC_MAKE_BUILDINFO
 

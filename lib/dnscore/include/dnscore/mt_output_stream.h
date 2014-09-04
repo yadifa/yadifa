@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief 
@@ -54,8 +54,11 @@ extern "C" {
  * Can only fail if in_filtered has not been set
  */
 
-ya_result mt_output_stream_init(output_stream* in_filtered,
-	output_stream* out_stream);
+ya_result mt_output_stream_init(output_stream *in_filtered, output_stream *out_stream);
+
+output_stream *mt_output_stream_get_filtered(output_stream *bos);
+
+bool is_mt_output_stream(output_stream *bos);
 
 #ifdef	__cplusplus
 }

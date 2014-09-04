@@ -29,7 +29,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  *------------------------------------------------------------------------------
- *
  */
 
 #ifndef _AVL_H_INC
@@ -157,7 +156,7 @@ AVL_NODE_TYPE* AVL_PREFIXED(avl_insert)(AVL_TREE_TYPE *tree,AVL_REFERENCE_TYPE o
  *  @return The node associated to the hash, NULL if it did not exist.
  */
 
-void AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE *tree,AVL_REFERENCE_TYPE obj_hash);
+void AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE *tree,AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash);
 
 /** @brief Releases all the nodes of a tree
  *
@@ -200,15 +199,17 @@ AVL_NODE_TYPE* AVL_PREFIXED(avl_iterator_next_node)(AVL_PREFIXED(avl_iterator*) 
 
 void AVL_PREFIXED(avl_callback_and_destroy)(AVL_TREE_TYPE *tree,callback_function callback);
 
+AVL_NODE_TYPE *AVL_PREFIXED(avl_get_first)(AVL_CONST_TREE_TYPE* tree);
+
 #if AVL_HAS_PARENT_POINTER != 0
 
-AVL_NODE_TYPE* AVL_PREFIXED(avl_node_next)(AVL_NODE_TYPE* node);
+AVL_NODE_TYPE* AVL_PREFIXED(avl_node_next)(const AVL_NODE_TYPE* node);
 
-AVL_NODE_TYPE* AVL_PREFIXED(avl_node_prev)(AVL_NODE_TYPE* node);
+AVL_NODE_TYPE* AVL_PREFIXED(avl_node_prev)(const AVL_NODE_TYPE* node);
 
-AVL_NODE_TYPE* AVL_PREFIXED(avl_node_mod_next)(AVL_NODE_TYPE* node);
+AVL_NODE_TYPE* AVL_PREFIXED(avl_node_mod_next)(const AVL_NODE_TYPE* node);
 
-AVL_NODE_TYPE* AVL_PREFIXED(avl_node_mod_prev)(AVL_NODE_TYPE* node);
+AVL_NODE_TYPE* AVL_PREFIXED(avl_node_mod_prev)(const AVL_NODE_TYPE* node);
 
 #endif
 

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup
  *  @ingroup dnsdb
  *  @brief
@@ -120,7 +120,7 @@ zdb_listener_notify_remove_record(const u8 *dnsname, u16 type, zdb_ttlrdata* rec
     }
 }
 
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
 
 void
 zdb_listener_notify_add_nsec3(nsec3_zone_item* nsec3_item, nsec3_zone* n3, u32 ttl)
@@ -160,7 +160,7 @@ zdb_listener_notify_update_nsec3rrsig(zdb_packed_ttlrdata* removed_rrsig_sll, zd
 
 #endif
 
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
 
 void
 zdb_listener_notify_update_rrsig(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata* added_rrsig_sll, zdb_rr_label* label, dnsname_stack* name)

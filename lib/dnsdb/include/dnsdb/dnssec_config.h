@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbdnssec DNSSEC functions
  *  @ingroup dnsdb
  *  @brief 
@@ -44,18 +44,13 @@
 #ifndef _DNSSEC_CONFIG_H
 #define	_DNSSEC_CONFIG_H
 
-#if ZDB_DNSSEC_SUPPORT == 0
-#error "Please do not include dnssec_config.h if ZDB_DNSSEC_SUPPORT is 0 (Not NSEC3 nor NSEC)"
+#if ZDB_HAS_DNSSEC_SUPPORT == 0
+#error "Please do not include dnssec_config.h if ZDB_HAS_DNSSEC_SUPPORT is 0 (Not NSEC3 nor NSEC)"
 #endif
 
 #ifdef	__cplusplus
 extern "C" {
 #endif
-
-#define DNSSEC_MINIMUM_KEY_SIZE     512
-#define DNSSEC_MAXIMUM_KEY_SIZE     4096
-
-#define DNSSEC_DEFAULT_KEYSTORE_PATH    "."
 
 #ifdef	__cplusplus
 }

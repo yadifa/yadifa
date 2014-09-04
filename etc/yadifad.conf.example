@@ -10,25 +10,22 @@
         chroot                      off
 
         # The path where all the log files will be written
-        logpath                     "/usr/local/var/log"
+        logpath                     "/registry/yadifa-2.0.0/var/log"
 
         # The path where the pid file will be written
-        pidpath                     "/usr/local/var/run"    
+        pidpath                     "/registry/yadifa-2.0.0/var/run"    
 
         # The path where all zone files will be written
-        datapath                    "/usr/local/var/zones"
+        datapath                    "/registry/yadifa-2.0.0/var/zones"
 
         # The path where the DNSSEC keys are found
-        keyspath                    "/usr/local/var/zones/keys"
+        keyspath                    "/registry/yadifa-2.0.0/var/zones/keys"
 
         # The path where the transfer and journaling files will be written (AXFR & IXFR)
-        xfrpath                     "/usr/local/var/zones/xfr"
+        xfrpath                     "/registry/yadifa-2.0.0/var/zones/xfr"
 
         # The version returned by a query to version.yadifa. CH TXT
-        version                     "1.0.4"
-
-        # Enable EDNS0 support (?)
-        edns0                       on
+        version                     "2.0.0"
 
         # Set the maximum UDP packet size.  Cannot be less than 512.  Cannot be more than 65535.  Typical choice is 4096.
         edns0-max-size              4096
@@ -78,6 +75,9 @@
 
         # notify of a change in the master
         allow-notify                none
+
+	# version announced by CH version.yadifa
+        version         103.2
 </main>
 
 #

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup logger Logging functions
  *  @ingroup dnscore
  *  @brief 

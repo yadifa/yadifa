@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup cpu CPU
  *  @ingroup dnscore
  *  @brief 
@@ -43,7 +43,7 @@
 #ifndef _SYS_GET_CPU_COUNT_H
 #define	_SYS_GET_CPU_COUNT_H
 
-#include "sys_types.h"
+#include <dnscore/sys_types.h>
 
 #ifdef	__cplusplus
 extern "C" {

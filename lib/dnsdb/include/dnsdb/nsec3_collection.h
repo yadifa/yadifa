@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -59,7 +59,6 @@ extern "C"
  */
 
 typedef struct nsec3_node nsec3_node;
-
 
 struct nsec3_children
 {

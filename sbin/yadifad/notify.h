@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup 
  *  @ingroup yadifad
  *  @brief 
@@ -42,6 +42,12 @@
  *----------------------------------------------------------------------------*/
 #ifndef _NOTIFY_H
 #define _NOTIFY_H
+
+#include "server-config.h"
+
+#if HAS_CTRL
+#include "ctrl.h"
+#endif
 
 #include <dnscore/message.h>
 #include "database.h"
@@ -57,7 +63,7 @@
  *  @retval NOK
  */
 
-ya_result notify_process(database_t *database, message_data *msg);
+ya_result notify_process(zdb *database, message_data *msg);
 
 /**
  * Sends a notify to all the slave for a given domain name
@@ -68,23 +74,47 @@ ya_result notify_process(database_t *database, message_data *msg);
 void notify_slaves(u8 *origin);
 
 /**
+ * Stops all notification for zone with origin
+ * 
+ * @param origin
+ */
+
+void notify_clear(u8 *origin);
+
+/**
+ * Sends a notify to all the slave in the list for the specified zone and class
+ * 
+ * @param zone_desc the zone descriptor
+ * @param hosts the host list that will be destroyed by the callee
+ * @param zclass the class for the query
+ */
+
+void notify_host_list(zone_desc_s *zone_desc, host_address *hosts, u16 zclass);
+
+
+
+/**
  * @todo Before a zone is being unloaded, call this.
  *
  * @param origin
  */
 // void notify_clear(u8 *origin);
 
+ya_result notify_service_init();
+
 /**
  * Starts the notify service thread
  */
 
-void notify_startup();
+ya_result notify_service_start();
 
 /**
  * Stops the notify service thread
  */
 
-void notify_shutdown();
+ya_result notify_service_stop();
+
+ya_result notify_service_finalise();
 
 #endif /* _NOTIFY_H */
 

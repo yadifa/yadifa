@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief Hash-Table of Balanced trees structure and functions.
@@ -55,9 +55,9 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
-#include "hash.h"
-#include "htable.h"
-#include "btree.h"
+#include <dnsdb/hash.h>
+#include <dnsdb/htable.h>
+#include <dnsdb/btree.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -178,6 +178,7 @@ typedef struct htbt_iterator
 } htbt_iterator;
 
 void htbt_iterator_init(htbt tree, htbt_iterator* iter);
+void htbt_iterator_init_from(htbt collection, htbt_iterator* iter, hashcode obj_hash);
 
 #if ZDB_INLINES_HTBT_FIND == 0
 bool htbt_iterator_hasnext(htbt_iterator* iter);

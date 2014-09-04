@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnscoretools Generic Tools
  *  @ingroup dnscore
  *  @brief
@@ -40,7 +40,9 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
+
 #include "dnscore/fdtools.h"
 #include "dnscore/timems.h"
 #include "dnscore/logger.h"
@@ -147,7 +149,6 @@ readfully(int fd, void *buf, size_t count)
 
     return current - start;
 }
-
 
 /**
  * Writes fully the buffer to the fd
@@ -274,7 +275,7 @@ readfully_limited(int fd, void *buf, size_t count, double minimum_rate)
                 
                 if(b < expected_rate)  /* b/t < minimum_rate */
                 {
-                    log_debug("readfully_limited: rate of %f < %f", b, expected_rate);
+                    log_debug("readfully_limited: rate of %f < %f (%fµs)", b, expected_rate, t);
 
                     return TCP_RATE_TOO_SLOW;
                 }
@@ -297,7 +298,73 @@ readfully_limited(int fd, void *buf, size_t count, double minimum_rate)
     return current - start;
 }
 
-int unlink_ex(const char *folder, const char *filename)
+/**
+ * Reads an ASCII text line from fd, stops at EOF or '\n'
+ */
+
+ssize_t
+readtextline(int fd, char *start, size_t count)
+{
+    char *current = start;
+    const char * const limit = &start[count];
+
+    while(current < limit)
+    {
+        ssize_t n;
+        
+        if((n = read(fd, current, 1)) > 0)
+        {
+            u8 c = *current;
+            
+            current++;
+            count --;
+            
+            if(c == '\n')
+            {
+                break;
+            }
+        }
+        else
+        {
+            if(n == 0)
+            {
+                break;
+            }
+
+            int err = errno;
+
+            if(err == EINTR)
+            {
+                continue;
+            }
+
+            if(err == EAGAIN)
+            {
+                continue;
+            }
+
+            if(current - start > 0)
+            {
+                break;
+            }
+
+            return -1;
+        }
+    }
+    
+    return current - start;
+}
+
+/**
+ * Deletes a file (see man 2 unlink).
+ * Handles EINTR and other retry errors.
+ * 
+ * @param fd
+ * @return 
+ */
+
+int
+unlink_ex(const char *folder, const char *filename)
 {
     char fullpath[PATH_MAX];
     
@@ -318,11 +385,113 @@ int unlink_ex(const char *folder, const char *filename)
     }
 }
 
+#if DEBUG_BENCH_FD
+static debug_bench_s debug_open;
+static debug_bench_s debug_open_create;
+static debug_bench_s debug_close;
+static bool fdtools_debug_bench_register_done = FALSE;
+
+static inline void fdtools_debug_bench_register()
+{
+    if(!fdtools_debug_bench_register_done)
+    {
+        fdtools_debug_bench_register_done = TRUE;
+        debug_bench_register(&debug_open, "open");
+        debug_bench_register(&debug_open_create, "open_create");
+        debug_bench_register(&debug_close, "close");
+    }
+}
+#endif
+
+/**
+ * Opens a file. (see man 2 open)
+ * Handles EINTR and other retry errors.
+ * 
+ * @param fd
+ * @return 
+ */
+
+ya_result
+open_ex(const char *pathname, int flags)
+{
+    int fd;
+    
+#if DEBUG_BENCH_FD
+    fdtools_debug_bench_register();
+    u64 bench = debug_bench_start(&debug_open);
+#endif
+    
+    while((fd = open(pathname, flags)) < 0)
+    {
+        int err = errno;
+
+        if(err != EINTR)
+        {
+            //fd = MAKE_ERRNO_ERROR(err);
+            break;
+        }
+    }
+    
+#if DEBUG_BENCH_FD
+    debug_bench_stop(&debug_open, bench);
+#endif
+    
+    return fd;
+}
+
+/**
+ * Opens a file, create if it does not exist. (see man 2 open with O_CREAT)
+ * Handles EINTR and other retry errors.
+ * 
+ * @param fd
+ * @return 
+ */
+
+ya_result
+open_create_ex(const char *pathname, int flags, mode_t mode)
+{
+    int fd;
+    
+#if DEBUG_BENCH_FD
+    fdtools_debug_bench_register();
+    u64 bench = debug_bench_start(&debug_open_create);
+#endif
+    
+    while((fd = open(pathname, flags, mode)) < 0)
+    {
+        int err = errno;
+
+        if(err != EINTR)
+        {
+            //fd = MAKE_ERRNO_ERROR(err);
+            break;
+        }
+    }
+    
+#if DEBUG_BENCH_FD
+    debug_bench_stop(&debug_open_create, bench);
+#endif
+    
+    return fd;
+}
+
+/**
+ * Closes a file descriptor (see man 2 close)
+ * Handles EINTR and other retry errors.
+ * At return the file will be closed or not closable.
+ * 
+ * @param fd
+ * @return 
+ */
+
 ya_result
 close_ex(int fd)
 {
     ya_result return_value = SUCCESS;
-    
+#if DEBUG_BENCH_FD
+    fdtools_debug_bench_register();
+    u64 bench = debug_bench_start(&debug_close);    
+#endif
     while(close(fd) < 0)
     {
         int err = errno;
@@ -333,6 +502,9 @@ close_ex(int fd)
             break;
         }
     }
+#if DEBUG_BENCH_FD
+    debug_bench_stop(&debug_close, bench);
+#endif
     
     return return_value;
 }

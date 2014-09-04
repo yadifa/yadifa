@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup server Server
  *  @ingroup yadifad
  *  @brief
@@ -40,8 +40,13 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
+
+#include "config.h"
+
 #include <netdb.h>
 #include <netinet/in.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include <dnscore/sys_types.h>
 #include <dnscore/rfc.h>
@@ -49,9 +54,9 @@
 #include <dnscore/format.h>
 #include <dnscore/ptr_vector.h>
 
-#include <dnscore/scheduler.h>
-
 #include <dnscore/fdtools.h>
+
+#include <dnsdb/journal.h>
 
 #include "server_context.h"
 
@@ -69,16 +74,26 @@ struct itf_name
 };
 
 static ptr_vector server_context_socket_name = EMPTY_PTR_VECTOR;
+static bool config_update_network_done = FALSE;
+
+static void
+server_context_socket_name_free_cb(void *p)
+{
+    struct itf_name* itf = (struct itf_name*)p;
+    if(itf != NULL)
+    {
+        free(itf->name);
+        free(itf);
+    }
+}
 
 static void
 server_context_socket_name_ensure(u16 s)
 {
-    s32 old_size = server_context_socket_name.size;
-    
     ptr_vector_ensures(&server_context_socket_name, s + 1);
-    server_context_socket_name.offset = s;
     
-    for(s32 i = old_size; i < server_context_socket_name.size; i++)
+
+    for(s32 i = ptr_vector_size(&server_context_socket_name); i < ptr_vector_capacity(&server_context_socket_name); i++)
     {
         struct itf_name *tmp;
 
@@ -87,8 +102,10 @@ server_context_socket_name_ensure(u16 s)
         tmp->name = NULL;
         tmp->name_len = 0;
 
-        server_context_socket_name.data[i] = tmp;
+        ptr_vector_set(&server_context_socket_name, i, tmp);
     }
+    
+    server_context_socket_name.offset = MAX(s, server_context_socket_name.offset);
 }
 
 static void
@@ -115,7 +132,7 @@ server_context_set_socket_name(u16 s, struct sockaddr *sa)
 {
     char buffer[64];
     
-      switch(sa->sa_family)
+    switch(sa->sa_family)
     {
         case AF_INET:
         {
@@ -147,7 +164,18 @@ server_context_set_socket_name(u16 s, struct sockaddr *sa)
       server_context_set_socket_name_to(s, buffer);
 }
 
-u32 server_context_append_socket_name(char *buffer, u16 s)
+/**
+ * Appends the name of the socket s to the buffer.
+ * The buffer has to be big enough, no size test is performed.
+ * 
+ * @param buffer
+ * @param s
+ * 
+ * @return the length of the name
+ */
+
+u32
+server_context_append_socket_name(char *buffer, u16 s)
 {
     if(s < server_context_socket_name.size)
     {
@@ -164,7 +192,7 @@ u32 server_context_append_socket_name(char *buffer, u16 s)
 
 /*----------------------------------------------------------------------------*/
 
-/** \brief  Close all sockets and remove pid file
+/** \brief Closes all sockets and remove pid file
  *
  *  @param[in] config
  *  @param[in] server_context
@@ -172,6 +200,7 @@ u32 server_context_append_socket_name(char *buffer, u16 s)
  *  @retval OK
  *  @return otherwise log_quit will stop the program
  */
+
 void
 server_context_clear(config_data *config)
 {
@@ -216,107 +245,23 @@ server_context_clear(config_data *config)
         freeaddrinfo(intf->tcp.addr);
 #endif
     }
-
+    
     config->interfaces_limit = config->interfaces;
+    
+    ptr_vector_free_empties(&server_context_socket_name, server_context_socket_name_free_cb);
 
     /* Let the scheduler-bound tasks finish to communicate (else they will block trying) */
 
-#ifndef NDEBUG
-    log_debug("scheduler: doing a proper shutdown");
+#ifdef NEBUG
+    log_debug("cleaning up");
     logger_flush();
 #endif
     
-    struct timespec timeout;
-    timeout.tv_sec = 1;
-    timeout.tv_nsec = 0;
-    int scheduled_timeout = 0;
-
-    do
-    {
-        fd_set scheduler_set;
-        FD_ZERO(&scheduler_set);
-        FD_SET(g_config->scheduler.sockfd, &scheduler_set);
-        int return_code = pselect(g_config->scheduler.sockfd,&scheduler_set,NULL,NULL,&timeout,0);
-
-        if(return_code > 0) /* Are any bit sets by pselect ? */
-        {
-#ifndef NDEBUG
-            log_debug("scheduler: got something");
-            logger_flush();
-#endif
-            
-            if(FD_ISSET(g_config->scheduler.sockfd, &scheduler_set))
-            {          
-#ifndef NDEBUG
-                log_debug("scheduler: got a process");
-                logger_flush();
-#endif
-                scheduler_process();
-                scheduled_timeout = 0;
-            }
-        }
-        else if(return_code < 0)
-        {
-            return_code = errno;
-            
-#ifndef NDEBUG
-            log_debug("scheduler: got a error: %r", MAKE_ERRNO_ERROR(return_code));
-            logger_flush();
-#endif
-            
-            if(return_code!= EINTR)
-            {
-                log_err("error emptying the scheduler queue: %r", MAKE_ERRNO_ERROR(return_code));
-                logger_flush();
-                
-                scheduled_timeout++;
-            }
-        }
-        else
-        {
-            scheduled_timeout++;
-        }
-    }
-    while(scheduled_timeout <= 5);
-    
-#ifndef NDEBUG
-    log_debug("scheduler: finalising");
-    logger_flush();
-#endif
-
-    scheduler_finalize();
-    
-    thread_pool_destroy();
-    
-    database_unload(g_config->database);
-    
-    database_finalize();  
-
-    config->database = NULL;
-    
-    log_info("releasing pid file lock");
-    
-    logger_flush();
-
-    logger_stop();
-        
     /* 
      * Remove the pid file
      */
-    
-    unlink(config->pid_file); /** @note: server_context_clear Unlink should be in another function */
-    
-#ifndef NDEBUG
-
-    /* No need to free listen & server_port will be done with config_remove */
-
-    config_free();
-
-#endif
-
-    // don't, it will be done automatically at exit
-    
-    //logger_finalize();  /* no logging allowed after this */
+        
+    /// @note DO NOT: logger_finalize() don't, it will be done automatically at exit
 
     /** @note: server_context_clear has to free server_context struct */
 }
@@ -329,6 +274,7 @@ server_context_clear(config_data *config)
  *  @retval OK
  *  @return otherwise log_quit will stop the program
  */
+
 int
 config_update_network(config_data *config)
 {
@@ -336,11 +282,17 @@ config_update_network(config_data *config)
     const int                                                        on = 1;
     host_address                                         *tmp_listen = NULL;
     interface                                                         *intf;
+    
+    if(config_update_network_done)
+    {
+        return SUCCESS;
+    }
 
-    int                                                            sched_fd;
+    config_update_network_done = TRUE;
+    
+    log_info("setting network up");
 
     /*    ------------------------------------------------------------    */
-
 
     /* Copy stuff from the config file and command line options */
 
@@ -359,11 +311,17 @@ config_update_network(config_data *config)
         /* The host_address list has an IPv4/IPv6 address and a port */
 
         /*****************************************************************/
-        /* Create UDP interfaces and initialize server_context structure */
+        /* Create UDP interfaces and initialise server_context structure */
         /*****************************************************************/
-
-        intf->udp.sockfd = Socket(intf->udp.addr->ai_family, SOCK_DGRAM, 0);
         
+        if(FAIL(intf->udp.sockfd = socket(intf->udp.addr->ai_family, SOCK_DGRAM, 0)))
+        {
+            return_value = ERRNO_ERROR;
+            ttylog_err("failed to create socket %{sockaddr}: %r", intf->udp.addr->ai_addr, return_value);
+            
+            return return_value;
+        }
+
         /**
          * Associate the name of the interface to the socket
          */
@@ -374,73 +332,93 @@ config_update_network(config_data *config)
         
         if(intf->udp.addr->ai_family == AF_INET6)
         {
-            if(FAIL(return_value = Setsockopt(intf->udp.sockfd, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&on, sizeof(on))))
+            if(FAIL(setsockopt(intf->udp.sockfd, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&on, sizeof(on))))
             {
+                return_value = ERRNO_ERROR;
+                ttylog_err("failed to force IPv6 on %{sockaddr}: %r", intf->udp.addr->ai_addr, return_value);
                 return return_value;
             }
         }
 
-        if(FAIL(return_value = Setsockopt(intf->udp.sockfd,SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on))))
+        if(FAIL(setsockopt(intf->udp.sockfd,SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on))))
         {
+            return_value = ERRNO_ERROR;
+            ttylog_err("failed to reuse address %{sockaddr}: %r", intf->udp.addr->ai_addr, return_value);
             return return_value;
         }
 
-        log_info("binding %{sockaddr}", intf->udp.addr->ai_addr);
-        
         server_context_set_socket_name(intf->udp.sockfd, (struct sockaddr*)intf->udp.addr->ai_addr);
         
-        if(FAIL(return_value = Bind(intf->udp.sockfd,
-                (struct sockaddr*)intf->udp.addr->ai_addr,
-                intf->udp.addr->ai_addrlen)))
+        if(FAIL(bind(intf->udp.sockfd,
+                     (struct sockaddr*)intf->udp.addr->ai_addr,
+                     intf->udp.addr->ai_addrlen)))
         {
+            return_value = ERRNO_ERROR;
+            ttylog_err("failed to bind address %{sockaddr}: %r", intf->udp.addr->ai_addr, return_value);
             return return_value;
         }
-                
+        
+        log_info("bound to UDP interface: %{sockaddr}", intf->udp.addr->ai_addr);
 
         /*****************************************************************/
         /* Create TCP interfaces and initialize server_context structure */
         /*****************************************************************/
 
-        intf->tcp.sockfd = Socket(intf->tcp.addr->ai_family, SOCK_STREAM, 0);
-
-        if(FAIL(return_value = Setsockopt(intf->tcp.sockfd, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on))))
+        if(FAIL(intf->tcp.sockfd = socket(intf->tcp.addr->ai_family, SOCK_STREAM, 0)))
         {
+            return_value = ERRNO_ERROR;
+            ttylog_err("failed to create socket %{sockaddr}: %r", intf->tcp.addr->ai_addr, return_value);
             return return_value;
         }
-                
-        
+
+        if(FAIL(setsockopt(intf->tcp.sockfd, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on))))
+        {
+            return_value = ERRNO_ERROR;
+            ttylog_err("failed to reuse address %{sockaddr}: %r", intf->tcp.addr->ai_addr, return_value);
+            return return_value;
+        }
+
         /**
          * This is distribution/system dependent. With this we ensure that IPv6 will only listen on IPv6 addresses.
          */
         
         if(intf->tcp.addr->ai_family == AF_INET6)
         {
-            if(FAIL(return_value = Setsockopt(intf->tcp.sockfd, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&on, sizeof(on))))
+            if(FAIL(setsockopt(intf->tcp.sockfd, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&on, sizeof(on))))
             {
+                return_value = ERRNO_ERROR;
+                ttylog_err("failed to force IPv6 on %{sockaddr}:%r", intf->tcp.addr->ai_addr, return_value);
                 return return_value;
             }
         }
         
         server_context_set_socket_name(intf->tcp.sockfd, (struct sockaddr*)intf->tcp.addr->ai_addr);
         
-        if(FAIL(return_value = Bind(intf->tcp.sockfd, (struct sockaddr*)intf->tcp.addr->ai_addr, intf->tcp.addr->ai_addrlen)))
+        if(FAIL(bind(intf->tcp.sockfd, (struct sockaddr*)intf->tcp.addr->ai_addr, intf->tcp.addr->ai_addrlen)))
         {
+            return_value = ERRNO_ERROR;
+            ttylog_err("failed to bind address %{sockaddr}:%r", intf->tcp.addr->ai_addr, return_value);
             return return_value;
         }
         
-        fcntl(intf->tcp.sockfd, F_SETFL, Fcntl(intf->tcp.sockfd, F_GETFL, 0) | O_NONBLOCK);
-
-        /* For TCP only, listen to it... */
-        if(FAIL(return_value = Listen(intf->tcp.sockfd, TCP_LISTENQ)))
+        if(FAIL(return_value = fcntl(intf->tcp.sockfd, F_GETFL, 0)))
         {
+            return_value = ERRNO_ERROR;
             return return_value;
         }
-    }
+        
+        fcntl(intf->tcp.sockfd, F_SETFL, return_value | O_NONBLOCK);
 
-    sched_fd = scheduler_init();
-    config->scheduler.sockfd = sched_fd;
-    
-    server_context_set_socket_name_to(intf->udp.sockfd, "scheduler");
+        /* For TCP only, listen to it... */
+        if(FAIL(listen(intf->tcp.sockfd, TCP_LISTENQ)))
+        {
+            return_value = ERRNO_ERROR;
+            ttylog_err("failed to listen to address %{sockaddr}: %r", intf->tcp.addr->ai_addr, return_value);
+            return return_value;
+        }
+        
+        log_info("listening to TCP interface: %{sockaddr}", intf->tcp.addr->ai_addr);
+    }
 
     return OK;
 }

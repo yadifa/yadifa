@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup network Network functions
  *  @ingroup dnscore
  *  @brief
@@ -46,6 +46,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
 
 #include <dnscore/sys_types.h>
 
@@ -65,6 +66,34 @@ union socketaddress
     struct sockaddr_in6     sa6;
     struct sockaddr_storage ss;
 };
+
+static inline bool sockaddr_equals(struct sockaddr *a, struct sockaddr *b)
+{
+    if(a->sa_family == b->sa_family)
+    {
+        switch (a->sa_family)
+        {
+            case AF_INET:
+            {
+                struct sockaddr_in *sa4 = (struct sockaddr_in *)a;
+                struct sockaddr_in *sb4 = (struct sockaddr_in *)b;
+
+                return memcmp(&sa4->sin_addr.s_addr, &sb4->sin_addr.s_addr, 4) == 0;
+            }
+            case  AF_INET6:
+            {
+
+                struct sockaddr_in6 *sa6 = (struct sockaddr_in6 *)a;
+                struct sockaddr_in6 *sb6 = (struct sockaddr_in6 *)b;
+
+                return memcmp(&sa6->sin6_addr, &sb6->sin6_addr, 16) == 0;
+            }
+        }
+    }
+
+    return FALSE;
+} 
+
 
 #endif /* HOST_ADDRESS_H */
 

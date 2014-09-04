@@ -75,6 +75,18 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Settings common to all makefiles
+#
+################################################################################
 
 ################################################################################
 #
@@ -104,6 +116,18 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Labels common to all makefiles
 #
 ################################################################################
 
@@ -197,10 +221,26 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 
 # CLANG
 @HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_5 = -DLTO -flto
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_6 = -use-gold-plugin
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_6 = -flto
 @USES_CLANG_TRUE@am__append_7 = -mtune=native -DUSES_LLVM \
 @USES_CLANG_TRUE@	-I$(abs_builddir) -I$(abs_srcdir)/include
 @USES_CLANG_TRUE@am__append_8 = -O0 -g -DMODE_DEBUG_CLANG
+
+# THIS WILL BREAK THE CONFIGURE ON EXTERNAL USERS OF THE LIBS IF INSTALLED AS DEBUG
+# FUTURE SOLUTION: ADD A _d SUFFIX TO LIBS WHEN BUILD IN DEBUG ?
+#
+#if HAS_FADDRESS_SANITIZER
+#DEBUGFLAGS+=-fsanitize=address
+#endif
+#
+#
+#if HAS_FNO_OMIT_FRAME_POINTER
+#DEBUGFLAGS+=-fno-omit-frame-pointer
+#endif
+#
+#if HAS_CATCH_UNDEFINED_BEHAVIOR
+#DEBUGFLAGS+=-fcatch_undefined_behavior
+#endif
 
 #
 # Gnu C
@@ -209,8 +249,8 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 #GCC
 @HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_9 = -mcpu=niagara
 @HAS_CPU_AMDINTEL_TRUE@@USES_GCC_TRUE@am__append_10 = -mtune=native
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_11 = -DLTO -flto
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_12 = -flto
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_11 = -DLTO -flto -fwhole-program -ffat-lto-objects
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_12 = -flto -fwhole-program -ffat-lto-objects
 @USES_GCC_TRUE@am__append_13 = -fno-ident -ansi -pedantic -std=gnu99 -I$(abs_builddir) -I$(abs_srcdir)/include
 @IS_BSD_FAMILY_FALSE@@USES_GCC_TRUE@am__append_14 = -g3 -gdwarf-2 -O0 -DMODE_DEBUG_GCC -rdynamic
 
@@ -228,10 +268,7 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 @IS_BSD_FAMILY_TRUE@am__append_19 = -std=c99 -I./include
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
-	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
-	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
-	$(top_srcdir)/../../m4/eurid.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/../../m4/eurid.m4 \
 	$(top_srcdir)/../../m4/yadifa.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
@@ -272,15 +309,16 @@ am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(pkgincludedir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
 libdnszone_la_LIBADD =
 am__dirstamp = $(am__leading_dot)dirstamp
-am_libdnszone_la_OBJECTS = src/output_stream_write_dname.lo \
-	src/dnszone.lo src/output_stream_write_rdata.lo \
-	src/zone_axfr_reader.lo src/zone_file_reader.lo \
-	src/resourcerecord.lo
+am_libdnszone_la_OBJECTS = src/dnszone.lo src/zone_axfr_reader.lo \
+	src/zone_file_reader.lo src/hints_file_reader.lo
 libdnszone_la_OBJECTS = $(am_libdnszone_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
+libdnszone_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
+	$(libdnszone_la_LDFLAGS) $(LDFLAGS) -o $@
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -383,6 +421,7 @@ DEPDIR = @DEPDIR@
 DLLTOOL = @DLLTOOL@
 DNSCORE = @DNSCORE@
 DNSDB = @DNSDB@
+DNSLG = @DNSLG@
 DNSZONE = @DNSZONE@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
@@ -485,21 +524,23 @@ top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I m4
 dist_noinst_DATA = VERSION
 lib_LTLIBRARIES = libdnszone.la
-libdnszone_la_SOURCES = src/output_stream_write_dname.c src/dnszone.c src/output_stream_write_rdata.c src/zone_axfr_reader.c src/zone_file_reader.c src/resourcerecord.c
-pkginclude_HEADERS = include/dnszone/output_stream_write_rdata.h include/dnszone/dnszone.h include/dnszone/dnszone-config.h include/dnszone/zone_axfr_reader.h include/dnszone/zone_file_reader.h include/dnszone/resourcerecord.h
+libdnszone_la_SOURCES = src/dnszone.c src/zone_axfr_reader.c src/zone_file_reader.c src/hints_file_reader.c
+pkginclude_HEADERS = include/dnszone/dnszone.h include/dnszone/dnszone-config.h include/dnszone/zone_axfr_reader.h include/dnszone/zone_file_reader.h include/dnszone/hints_file_reader.h
+libdnszone_la_LDFLAGS = -version-info 2:0:0
 
 #
 #
 #
-AM_CFLAGS = -Wall -D_FILE_OFFSET_BITS=64 $(am__append_1) \
-	$(am__append_3) $(am__append_5) $(am__append_7) \
-	$(am__append_9) $(am__append_10) $(am__append_11) \
-	$(am__append_13) $(am__append_17) $(am__append_19) \
-	$(LOCALFLAGS) $(YCFLAGS)
+AM_CFLAGS = -Wall -Werror=missing-field-initializers \
+	-D_FILE_OFFSET_BITS=64 -g $(am__append_1) $(am__append_3) \
+	$(am__append_5) $(am__append_7) $(am__append_9) \
+	$(am__append_10) $(am__append_11) $(am__append_13) \
+	$(am__append_17) $(am__append_19) $(LOCALFLAGS) $(YCFLAGS)
 AM_LDFLAGS = $(am__append_2) $(am__append_6) $(am__append_12) \
 	$(YLDFLAGS)
 DEBUGFLAGS = $(am__append_4) $(am__append_8) $(am__append_14) \
 	$(am__append_15) $(am__append_16) $(am__append_18)
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"'
 @HAS_LTO_SUPPORT_FALSE@@USES_CLANG_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@AM_AR = llvm-ar
 @HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@AM_AR = xiar
@@ -512,7 +553,7 @@ YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -DCMR
 YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP
 YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
 YSCFLAGS = $(YRCFLAGS)
-YRLDFLAGS = 
+YRLDFLAGS = -g
 YPLDFLAGS = -pg
 YDLDFLAGS = -g
 YSLDFLAGS = $(YRLDFLAGS)
@@ -614,20 +655,16 @@ src/$(am__dirstamp):
 src/$(DEPDIR)/$(am__dirstamp):
 	@$(MKDIR_P) src/$(DEPDIR)
 	@: > src/$(DEPDIR)/$(am__dirstamp)
-src/output_stream_write_dname.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
 src/dnszone.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/output_stream_write_rdata.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
 src/zone_axfr_reader.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/zone_file_reader.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/resourcerecord.lo: src/$(am__dirstamp) \
+src/hints_file_reader.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 
 libdnszone.la: $(libdnszone_la_OBJECTS) $(libdnszone_la_DEPENDENCIES) $(EXTRA_libdnszone_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(LINK) -rpath $(libdir) $(libdnszone_la_OBJECTS) $(libdnszone_la_LIBADD) $(LIBS)
+	$(AM_V_CCLD)$(libdnszone_la_LINK) -rpath $(libdir) $(libdnszone_la_OBJECTS) $(libdnszone_la_LIBADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -638,9 +675,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnszone.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/output_stream_write_dname.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/output_stream_write_rdata.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/resourcerecord.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/hints_file_reader.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zone_axfr_reader.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zone_file_reader.Plo@am__quote@
 
@@ -1056,13 +1091,24 @@ uninstall-am: uninstall-libLTLIBRARIES uninstall-pkgincludeHEADERS
 
 
 release:
+	echo YCFLAGS=$(YRCFLAGS)
+	echo YLDFLAGS=$(YRLDFLAGS)
 	$(MAKE) all "YCFLAGS=$(YRCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YRLDFLAGS)"
 
 profile:
+	echo YCFLAGS=$(YPCFLAGS)
+	echo YLDFLAGS=$(YPLDFLAGS)
 	$(MAKE) all "YCFLAGS=$(YPCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YPLDFLAGS)"
 
 debug:
+	echo YCFLAGS=$(YDCFLAGS)
+	echo YLDFLAGS=$(YDLDFLAGS)
 	$(MAKE) all "YCFLAGS=$(YDCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YDLDFLAGS)"
+
+buildinfo.h: config.log
+	echo \#pragma once > buildinfo.h 2> /dev/null
+	echo // generated file, do not modify >> buildinfo.h 2> /dev/null
+	echo \#define BUILD_OPTIONS \"$$(grep "./configure" config.log | head -1 | sed 's/.*\.\/configure *//')\" >> buildinfo.h 2> /dev/null
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

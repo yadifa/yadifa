@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbdnssec DNSSEC functions
  *  @ingroup dnsdb
  *  @brief 
@@ -42,10 +42,15 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
-#ifndef _DNSSEC_SCHEDULER_H
+
 #define	_DNSSEC_SCHEDULER_H
 
-#include <dnscore/scheduler.h>
+#ifndef _DNSSEC_SCHEDULER_H
+
+#error "getting rid of this"
+
+#define	_DNSSEC_SCHEDULER_H
+
 #include <dnsdb/zdb_config.h>
 #include <dnscore/message.h>
 
@@ -115,7 +120,7 @@ extern "C"
      *
      */
 
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
 
     /*
      *  Use this to create and add a key in background
@@ -132,7 +137,7 @@ extern "C"
 
 #endif
 
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
 
     /*
      * Use this to verify/update the nsec3 records of the zone and all signatures

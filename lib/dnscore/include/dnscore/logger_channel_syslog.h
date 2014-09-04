@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup logger Logging functions
  *  @ingroup dnscore
  *  @brief 
@@ -43,7 +43,7 @@
 #ifndef _LOGGER_CHANNEL_SYSLOG_H
 #define	_LOGGER_CHANNEL_SYSLOG_H
 
-#include <dnscore/logger_channel.h>
+#include <dnscore/logger.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -54,7 +54,7 @@ extern "C"
  * NOTE: ONLY ONE SYSLOG CHANNEL SHOULD BE OPEN !!!
  */
 
-void logger_channel_syslog_open(char* ident, int options, int facility, logger_channel* chan);
+void logger_channel_syslog_open(const char* ident, int options, int facility, logger_channel *chan);
 
 #ifdef	__cplusplus
 }

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup 
  *  @ingroup dnscore
  *  @brief 
@@ -114,7 +114,7 @@ static inline bool dnsname_set_insert(dnsname_set* set, const u8 *name)
 {
     if(set->next_free >= &set->pool[DNSNAME_SET_MEMORY_POOL_SIZE])
     {
-        return false;
+        return FALSE;
     }
     
     dnsname_node** nodep;
@@ -129,7 +129,7 @@ static inline bool dnsname_set_insert(dnsname_set* set, const u8 *name)
         
         if(cmp == 0)
         {
-            return true;
+            return TRUE;
         }
 
         nodep = &node->children.child[(cmp > 0) & 1];
@@ -143,7 +143,7 @@ static inline bool dnsname_set_insert(dnsname_set* set, const u8 *name)
     node->children.lr.right = NULL;
     node->key = (u8*)name;
     
-    return true;
+    return TRUE;
 }
 
 static inline void dnsname_set_iterator_init(dnsname_set* set, dnsname_set_iterator* iter)

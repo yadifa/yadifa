@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdb
  *  @ingroup dnsdb
  *  @brief journal file & incremental changes
@@ -137,7 +137,7 @@ struct zdb_icmtl
  * @return
  */
 
-ya_result zdb_icmtl_open_ix(const u8 *origin, const char* folder, u32 serial, input_stream* target_is, u32 *serial_limit, char** out_file_name);
+ya_result zdb_icmtl_open_ix_OBSOLETE(const u8 *origin, const char* folder, u32 serial, input_stream* target_is, u32 *serial_limit, char** out_file_name);
 
 /**
  * Reads the ix stream until the SOA of the remove part is bigger than or equal to serial
@@ -162,10 +162,19 @@ ya_result zdb_icmtl_skip_rdata(input_steam *is, u32 len);
 ya_result zdb_icmtl_begin(zdb_zone *zone, zdb_icmtl *icmtl, const char *folder);
 
 /**
- * Disables incremental changes recording in the zone and record them into a file
+ * Disables incremental changes recording in the zone and records them into a file
  */
 
 ya_result zdb_icmtl_end(zdb_icmtl* icmtl, const char *folder);
+
+/**
+ * Disables incremental changes recording in the zone and discards recorded changes
+ * 
+ * @param icmtl
+ * @return 
+ */
+
+ya_result zdb_icmtl_cancel(zdb_icmtl *icmtl);
 
 /**
  * Replays incremental changes for the zone, looking in the directory for the files (.ix)
@@ -185,33 +194,19 @@ struct zdb_icmtl_replay_args
 };
 */
 
-ya_result zdb_icmtl_replay(zdb_zone *zone, const char *directory, u64 serial_offset, u32 until_serial, u8 flags);
+ya_result zdb_icmtl_replay(zdb_zone *zone, const char *directory);
 
 /**
  * Quick-check for the last available serial for an origin and return it. (It's based on file names)
  */
 
-ya_result zdb_icmtl_get_last_serial_from(u32 serial, u8 *origin, const char *directory, u32 *last_serial);
+ya_result zdb_icmtl_get_last_serial_from(zdb_zone *zone, const char *directory, u32 *last_serial);
 
 /**
  * Loads the first "DEL" soa matching that serial
  */
 
 ya_result zdb_icmtl_get_soa_with_serial(input_stream *is, u32 serial, u8 *out_dname, struct type_class_ttl_rdlen *out_tctr, u8 *soa_rdata_780);
-
-/**
- * Loads the last SOA on a journal, starting from the given serial
- * 
- * @param serial
- * @param origin
- * @param directory
- * @param last_serial
- * @param ttl
- * @param rdata_size
- * @param rdata
- * @return 
- */
-ya_result zdb_icmtl_get_last_soa_from(u32 serial, u8 *origin, const char* directory, u32 *last_serial, u32 *ttl, u16 *rdata_size, u8 *rdata);
 
 /**
  * Opens the right incremental stream and reads the soa for the serial

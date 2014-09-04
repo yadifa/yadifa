@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -43,9 +43,6 @@
 
 #if _FILE_OFFSET_BITS != 64
 #define _LARGEFILE64_SOURCE
-#pragma message("64")
-#else
-#pragma message("BSD")
 #endif
 
 
@@ -56,6 +53,7 @@
 
 #include "dnscore/file_input_stream.h"
 #include "dnscore/fdtools.h"
+#include "dnscore/timems.h"
 
 typedef struct file_input_stream file_input_stream;
 
@@ -68,8 +66,22 @@ struct file_input_stream
         int fd;
     } data;
 
-    input_stream_vtbl* vtbl;
+    const input_stream_vtbl* vtbl;
 };
+
+#if DEBUG_BENCH_FD
+static debug_bench_s debug_read;
+static bool file_input_stream_debug_bench_register_done = FALSE;
+
+static inline void file_input_stream_debug_bench_register()
+{
+    if(!file_input_stream_debug_bench_register_done)
+    {
+        file_input_stream_debug_bench_register_done = TRUE;
+        debug_bench_register(&debug_read, "read");
+    }
+}
+#endif
 
 /*
  * Maybe I should not do a "read-fully" here ...
@@ -84,6 +96,11 @@ file_read(input_stream* stream_, u8* buffer, u32 len)
 #endif
 #endif
 
+#if DEBUG_BENCH_FD
+    file_input_stream_debug_bench_register();
+    u64 bench = debug_bench_start(&debug_read);
+#endif
+    
     file_input_stream* stream = (file_input_stream*)stream_;
 
     u8* start = buffer;
@@ -105,16 +122,18 @@ file_read(input_stream* stream_, u8* buffer, u32 len)
             return MAKE_ERRNO_ERROR(err);
         }
 
-        if(ret == 0)
+        if(ret == 0) /* EOF */
         {
-            /* EOF */
-
             break;
         }
 
         buffer += ret;
         len -= ret;
     }
+    
+#if DEBUG_BENCH_FD
+    debug_bench_stop(&debug_read, bench);
+#endif
 
     return buffer - start;
 }
@@ -126,7 +145,10 @@ file_close(input_stream* stream_)
     
     assert((stream->data.fd < 0)||(stream->data.fd >2));
     
-    close_ex(stream->data.fd);
+    if(stream->data.fd != ~0)
+    {
+        close_ex(stream->data.fd);
+    }
     
     input_stream_set_void(stream_);
 }
@@ -143,7 +165,7 @@ file_skip(input_stream* stream_, u32 len)
     return ERRNO_ERROR;
 }
 
-static input_stream_vtbl file_input_stream_vtbl ={
+static const input_stream_vtbl file_input_stream_vtbl ={
     file_read,
     file_skip,
     file_close,
@@ -166,10 +188,18 @@ fd_input_stream_attach(int fd, input_stream *stream_)
     return SUCCESS;
 }
 
+void
+fd_input_stream_detach(input_stream *stream_)
+{
+    file_input_stream* stream = (file_input_stream*)stream_;
+
+    stream->data.fd = -1;
+}
+
 ya_result
 file_input_stream_open(const char *filename, input_stream *stream_)
 {
-    int fd = open(filename, O_RDONLY);
+    int fd = open_ex(filename, O_RDONLY);
 
     return fd_input_stream_attach(fd, stream_);
 }
@@ -177,7 +207,7 @@ file_input_stream_open(const char *filename, input_stream *stream_)
 ya_result
 file_input_stream_open_ex(const char *filename, int flags, input_stream *stream_)
 {
-    int fd = open(filename, O_RDONLY | flags);
+    int fd = open_ex(filename, O_RDONLY | flags);
 
     return fd_input_stream_attach(fd, stream_);
 }
@@ -227,4 +257,3 @@ is_fd_input_stream(input_stream* stream_)
 /** @} */
 
 /*----------------------------------------------------------------------------*/
-

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbupdate Dynamic update functions
  *  @ingroup dnsdb
  *  @brief
@@ -46,43 +46,39 @@
 
 #include <dnscore/rfc.h>
 #include <dnscore/ptr_vector.h>
+#include <dnscore/threaded_queue.h>
 #include <dnscore/treeset.h>
+#include <dnscore/logger.h>
+#include <dnscore/dnsname.h>
 
 #include "dnsdb/zdb_types.h"
 #include "dnsdb/dynupdate.h"
 #include "dnsdb/zdb_rr_label.h"
 #include "dnsdb/zdb_record.h"
 #include "dnsdb/zdb_sanitize.h"
-
-
-#include <dnscore/logger_handle.h>
-
-#include <dnscore/dnsname.h>
+#include "dnsdb/zdb_utils.h"
 #include "dnsdb/zdb_listener.h"
 
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
 
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
 #include "dnsdb/dnssec.h"
+#include "dnsdb/rrsig_updater.h"
 
-#if ZDB_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT != 0
 #include "dnsdb/nsec.h"
 #include "dnsdb/nsec_collection.h"
+#endif
+
+#if ZDB_HAS_NSEC3_SUPPORT != 0
+#include "dnsdb/nsec3_rrsig_updater.h"
 #endif
 
 /*
  * The dynamic update is made in the main thread (so it can write)
  */
-
-extern dnssec_task_descriptor dnssec_updater_task_descriptor;
-/*extern dnssec_task_descriptor dnssec_updater_task_descriptor_scheduled;*/
-
-#if ZDB_NSEC3_SUPPORT != 0
-extern dnssec_task_descriptor dnssec_nsec3_updater_task_descriptor;
-/*extern dnssec_task_descriptor dnssec_nsec3_updater_task_descriptor_scheduled;*/
-#endif
 
 #endif
 
@@ -126,13 +122,24 @@ struct label_update_status
     bool inversed;
 };
 
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
 
 static ya_result
-dynupdate_update_rrsig_body(zdb_zone* zone, dnssec_task* task, void* whatyouwant)
+dynupdate_update_rrsig_body(zdb_zone *zone, treeset_tree *lus_set)
 {
-    treeset_tree *lus_set = (treeset_tree *)whatyouwant;
-
+    ya_result return_code;
+    dnsname_stack path;
+    rrsig_updater_parms parms;
+    ZEROMEMORY(&parms, sizeof(rrsig_updater_parms));
+    rrsig_updater_init(&parms, zone);
+    
+    //rrsig_updater_process_zone(&parms); // with only the required labels
+    
+    if(FAIL(return_code = dnssec_process_begin(&parms.task)))
+    {
+        return return_code;
+    }
+    
     treeset_avl_iterator lus_iter;
     treeset_avl_iterator_init(lus_set, &lus_iter);
     while(treeset_avl_iterator_hasnext(&lus_iter))
@@ -142,15 +149,13 @@ dynupdate_update_rrsig_body(zdb_zone* zone, dnssec_task* task, void* whatyouwant
 
         if(!lus->inversed)
         {
-            dnsname_to_dnsname_stack(lus->dname, &task->path);
+            dnsname_to_dnsname_stack(lus->dname, &path);
         }
         else
         {
             /* the only difference is the order of the map */
-            dnsname_to_dnsname_vector(lus->dname, (dnsname_vector*)&task->path);
+            dnsname_to_dnsname_vector(lus->dname, (dnsname_vector*)&path);
         }
-
-        /* dnssec_process_rr_label(lus->label, task); */
 
         /*
          * If the label is marked as "updating" and contains records ...
@@ -160,18 +165,17 @@ dynupdate_update_rrsig_body(zdb_zone* zone, dnssec_task* task, void* whatyouwant
         {
             lus->label->flags &= ~ZDB_RR_LABEL_UPDATING;
 
-            rrsig_update_query* query;
+            rrsig_update_item_s *query;
 
-            MALLOC_OR_DIE(rrsig_update_query*, query, sizeof (rrsig_update_query), ZDB_RRSIGUPQ_TAG);
+            MALLOC_OR_DIE(rrsig_update_item_s*, query, sizeof(rrsig_update_item_s), ZDB_RRSIGUPQ_TAG);
 
-            query->zone = zone;
             query->label = lus->label;
-            MEMCOPY(&query->path.labels[0], &task->path.labels[0], (task->path.size + 1) * sizeof (u8*));
-            query->path.size = task->path.size;
+            MEMCOPY(&query->path.labels[0], &path.labels[0], (path.size + 1) * sizeof (u8*));
+            query->path.size = path.size;
+            
             query->added_rrsig_sll = NULL;
             query->removed_rrsig_sll = NULL;
-
-            query->delegation = FALSE;
+            query->zone = zone;
 
             /*
              * The label from root TLD and the zone cut have one thing in common:
@@ -180,26 +184,34 @@ dynupdate_update_rrsig_body(zdb_zone* zone, dnssec_task* task, void* whatyouwant
 
             if(lus->label->name[0] != 0)
             {
-                query->delegation = (zdb_record_find(&lus->label->resource_record_set, TYPE_NS) != NULL);
-
-                /** NOTE: Should I set a "delegation" flag (?) */
+                bool delegation = (zdb_record_find(&lus->label->resource_record_set, TYPE_NS) != NULL);
+                
+                if(delegation)
+                {
+                    lus->label->flags |= ZDB_RR_LABEL_DELEGATION;
+                }
             }
 
 #ifndef NDEBUG
-            log_debug("dynupdate_update_rrsig_body: queuing %{dnsnamestack}", &task->path);
+            log_debug("dynupdate_update_rrsig_body: queuing %{dnsnamestack}", &path);
 #endif
 
-            threaded_queue_enqueue(task->query, query);
+            threaded_queue_enqueue(&parms.task.dnssec_task_query_queue, query);
         }
     }
+    
+    dnssec_process_end(&parms.task);
+    
+    rrsig_updater_commit(&parms);
+    rrsig_updater_finalize(&parms);
 
     return SUCCESS;
 }
 
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
 
 static inline void
-dynupdate_update_nsec3_body_postdel(zdb_zone *zone, ptr_vector *candidates, treeset_tree* nsec3_del, zdb_rr_label *label, u8 *dname)
+dynupdate_update_nsec3_body_postdel(zdb_zone *zone, ptr_vector *candidates, treeset_tree *nsec3_del, zdb_rr_label *label, u8 *dname)
 {
     if(!RR_LABEL_HASSUBORREC(label))
     {
@@ -266,7 +278,7 @@ dynupdate_update_nsec3_body_postdel(zdb_zone *zone, ptr_vector *candidates, tree
 }
 
 static inline void
-dynupdate_update_nsec_body_postdel(zdb_zone *zone, ptr_vector *candidates, treeset_tree* nsec_del, zdb_rr_label *label, u8 *dname)
+dynupdate_update_nsec_body_postdel(zdb_zone *zone, ptr_vector *candidates, treeset_tree *nsec_del, zdb_rr_label *label, u8 *dname)
 {
     if(!RR_LABEL_HASSUBORREC(label))
     {
@@ -339,16 +351,18 @@ dynupdate_update_nsec_body_postdel(zdb_zone *zone, ptr_vector *candidates, trees
 }
 
 static ya_result
-dynupdate_update_nsec3_body(zdb_zone* zone, dnssec_task* task, void* whatyouwant)
+dynupdate_update_nsec3_body(zdb_zone *zone, treeset_tree *lus_set)
 {
     bool opt_out = ((zone->apex->flags & ZDB_RR_LABEL_NSEC3_OPTOUT) != 0);
     
     treeset_tree nsec3_del = TREESET_EMPTY;
     treeset_tree nsec3_upd = TREESET_EMPTY;
     ptr_vector label_del = EMPTY_PTR_VECTOR;
+    
+    dnsname_stack path;
 
-    treeset_tree *lus_set = (treeset_tree *)whatyouwant;
-
+    ya_result return_code;
+        
     treeset_avl_iterator lus_iter;
     treeset_avl_iterator_init(lus_set, &lus_iter);
     while(treeset_avl_iterator_hasnext(&lus_iter))
@@ -356,7 +370,7 @@ dynupdate_update_nsec3_body(zdb_zone* zone, dnssec_task* task, void* whatyouwant
         treeset_node *lus_node = treeset_avl_iterator_next_node(&lus_iter);
         label_update_status *lus = (label_update_status *)lus_node->data;
 
-        dnsname_to_dnsname_stack(lus->dname, &task->path);
+        dnsname_to_dnsname_stack(lus->dname, &path);
 
         zdb_rr_label *label = lus->label;
 
@@ -477,6 +491,15 @@ dynupdate_update_nsec3_body(zdb_zone* zone, dnssec_task* task, void* whatyouwant
     /*
      * All nsec3 candidates to be resigned are in nsec3_upd
      */
+    
+    nsec3_rrsig_updater_parms parms;
+    ZEROMEMORY(&parms, sizeof(nsec3_rrsig_updater_parms));
+    nsec3_rrsig_updater_init(&parms, zone);
+    
+    if(FAIL(return_code = dnssec_process_begin(&parms.task)))
+    {
+        return return_code;
+    }
 
     treeset_avl_iterator_init(&nsec3_upd, &iter);
     while(treeset_avl_iterator_hasnext(&iter))
@@ -491,9 +514,9 @@ dynupdate_update_nsec3_body(zdb_zone* zone, dnssec_task* task, void* whatyouwant
         nsec3_zone* n3 = nsec3_zone_from_item(zone, nsec3_item);
         zdb_listener_notify_add_nsec3(nsec3_item, n3, 0);
 
-        nsec3_rrsig_update_query* query;
+        nsec3_rrsig_update_item_s* query;
 
-        MALLOC_OR_DIE(nsec3_rrsig_update_query*, query, sizeof (nsec3_rrsig_update_query), ZDB_RRSIGUPQ_TAG);
+        MALLOC_OR_DIE(nsec3_rrsig_update_item_s*, query, sizeof (nsec3_rrsig_update_item_s), ZDB_RRSIGUPQ_TAG);
 
         query->zone = zone;
         query->item = nsec3_item;
@@ -501,9 +524,15 @@ dynupdate_update_nsec3_body(zdb_zone* zone, dnssec_task* task, void* whatyouwant
         query->added_rrsig_sll = NULL;
         query->removed_rrsig_sll = NULL;
 
-        threaded_queue_enqueue(task->query, query);
+        threaded_queue_enqueue(&parms.task.dnssec_task_query_queue, query);
     }
-
+    
+    dnssec_process_end(&parms.task);
+    
+    nsec3_rrsig_updater_commit(&parms);
+    
+    nsec3_rrsig_updater_finalize(&parms);
+    
     treeset_avl_destroy(&nsec3_upd);
     treeset_avl_destroy(&nsec3_del);
     
@@ -526,7 +555,7 @@ dynupdate_update_nsec3_body(zdb_zone* zone, dnssec_task* task, void* whatyouwant
 
 #endif
 
-#if ZDB_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT != 0
 
 /**
  *
@@ -768,7 +797,7 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
             treeset_node *lus_node = treeset_avl_find(lus_set, label);
             if(lus_node != NULL)
             {
-                ZFREE(lus_node->data, sizeof(label_update_status));
+                ZFREE(lus_node->data, label_update_status);
                 treeset_avl_delete(lus_set, label);
             }
         }
@@ -867,7 +896,7 @@ static void label_update_status_destroy(treeset_tree* lus_setp)
     {
         treeset_node *lus_node = treeset_avl_iterator_next_node(&lus_iter);
         label_update_status *lus = (label_update_status *)lus_node->data;
-        ZFREE(lus,sizeof(label_update_status));
+        ZFREE(lus,label_update_status);
     }
     treeset_avl_destroy(lus_setp);
 }
@@ -877,7 +906,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
 {
     if(ZDB_ZONE_INVALID(zone))
     {
-        return ERROR; /* todo: use a specific code */
+        return ZDB_ERROR_ZONE_INVALID;
     }
      
     if(count == 0)
@@ -907,21 +936,20 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
     //bool soa_changed = false;
     u8 wire[MAX_DOMAIN_LENGTH + 10 + 65535];
     
-#ifndef NDEBUG
-    rdata = (u8*)~0;
-    rname_size = ~0;
-    rttl = ~0;
-    rtype = ~0;
-    rclass = ~0;
-    rdata_size = ~0;
+#ifdef DEBUG
+    rdata = (u8*)~0; // DEBUG
+    rname_size = ~0; // DEBUG
+    rttl = ~0;       // DEBUG
+    rtype = ~0;      // DEBUG
+    rclass = ~0;     // DEBUG
+    rdata_size = ~0; // DEBUG
 #endif
 
-
     ya_result edit_status;
-
     
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
     bool dnssec_zone = (zone->apex->nsec.dnssec != NULL);
-
+    
     if(dnssec_zone)
     {
         ya_result return_code = SUCCESS;
@@ -966,7 +994,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
             return return_code;
         }
     }
-
+#endif
     treeset_tree lus_set = TREESET_EMPTY;
     treeset_avl_iterator lus_iter;
     
@@ -974,6 +1002,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
     memset(&lus_iter, 0xff, sizeof(lus_iter));
 #endif
 
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
     ptr_vector_init(&nsec3param_rrset);
     
     zdb_packed_ttlrdata *n3prrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_NSEC3PARAM);
@@ -984,7 +1013,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
         
         n3prrset = n3prrset->next;
     }
-
+#endif
     dnsname_to_dnsname_vector(zone->origin, &origin_path);
     
     do
@@ -1070,9 +1099,10 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
             return SERVER_ERROR_CODE(RCODE_REFUSED);
         }
         
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
         if((rtype == TYPE_NSEC3PARAM) && dnsname_equals_ignorecase(zone->origin, rname)) /* don't care about NSEC3PARAM put anywhere else than the apex*/
         {
-            if(!ZONE_IS_NSEC3(zone))
+            if(!ZONE_HAS_NSEC3PARAM(zone))
             {
                 // don't add/del NSEC3PARAM on a zone that is not already NSEC3 (it works if the zone is not secure
                 // but only if the zone has keys already. So for now : disabled
@@ -1140,7 +1170,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                 }
             }
         }
-
+#endif
         if(rclass == CLASS_NONE)
         {
             /* delete from an rrset */
@@ -1196,7 +1226,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                         {
                             if(rtype != TYPE_ANY)
                             {
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
                                 rrsig_delete(rname, label, rtype);
 #endif
 
@@ -1276,7 +1306,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
 
                         if(edit_status < ZDB_RR_LABEL_DELETE_NODE)
                         {
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
                             rrsig_delete(rname, label, rtype);
 #endif
                             /*
@@ -1333,7 +1363,10 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                 log_debug("update: add %{dnsname} %{dnstype} ...", rname, &rtype);
 #endif
 
-                u16 flag_mask = 0;
+                u16 flag_mask = 0; /** @todo there is potential for wrongness here ...
+                                    *        why don't I store directly in the label ?
+                                    *        test dynamic updates around CNAME
+                                    */
                 bool record_accepted = TRUE;
 
                 switch(rtype)
@@ -1388,7 +1421,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                     }
                 }
 
-                label->flags |= flag_mask;
+                label->flags |= flag_mask; /** @TODO : check */
 
                 if(record_accepted)
                 {
@@ -1399,7 +1432,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                     if(zdb_record_insert_checked(&label->resource_record_set, rtype, record)) /*  FB done (THIS IS A BOOLEAN !!!) */
                     {
 
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
                         rrsig_delete(rname, label, rtype); /* No empty-termninal issue */
 #endif
                         if((rtype == TYPE_NS) && ((label->flags & ZDB_RR_LABEL_APEX) == 0))
@@ -1407,7 +1440,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                             label->flags |= ZDB_RR_LABEL_DELEGATION;
                         }
 
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
                         if(dnssec_zone)
                         {
                             label->flags |= ZDB_RR_LABEL_UPDATING;
@@ -1498,14 +1531,14 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                  * 
                  */
 
-                log_err("update: sanitise reports that the zone should be dropped");
+                log_err("update: sanitise reports that the zone should be dropped: %r", return_value);
             }
         }
     }
     
     ya_result return_value = SUCCESS;
 
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
     
     if( !dryrun && (zone->apex->nsec.dnssec != NULL) )
     {
@@ -1518,14 +1551,11 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
          *
          * Then I wait that all the tasks are done and from that point the zone should be ok.
          *
-         * All text beyond this should be more or less obsolete (I make the callback system a few minutes ago)
+         * All text beyond this should be more or less obsolete (I made the callback system a few minutes ago)
          *
          */
 
-        dnssec_task task;
-        dnssec_task_descriptor *main_task = &dnssec_updater_task_descriptor;
-
-#if ZDB_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT != 0
         if((zone->apex->flags & ZDB_RR_LABEL_NSEC) != 0)
         {
             treeset_avl_iterator_init(&lus_set, &lus_iter);
@@ -1546,13 +1576,9 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
         }
 #endif
 
-        dnssec_process_initialize(&task, main_task);
-        zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_DYNUPDATE); /** @todo : "give" the mutex instead of this */
-        return_value = dnssec_process_task(zone, &task, dynupdate_update_rrsig_body, &lus_set);
-        zdb_zone_lock(zone, ZDB_ZONE_MUTEX_DYNUPDATE); /** @todo : "give" the mutex instead of this */
-        dnssec_process_finalize(&task);
-
-#if ZDB_NSEC3_SUPPORT != 0
+        dynupdate_update_rrsig_body(zone, &lus_set);
+                
+#if ZDB_HAS_NSEC3_SUPPORT != 0
         if(ISOK(return_value) && ((zone->apex->flags & ZDB_RR_LABEL_NSEC3) != 0))
         {
             treeset_avl_iterator_init(&lus_set, &lus_iter);
@@ -1563,14 +1589,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                 lus->label->flags |= ZDB_RR_LABEL_UPDATING;
             }
 
-            dnssec_task_descriptor *dnssec_task;
-            dnssec_task = &dnssec_nsec3_updater_task_descriptor;
-
-            dnssec_process_initialize(&task, dnssec_task);
-            zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_DYNUPDATE); /** @todo : "give" the mutex instead of this */
-            return_value = dnssec_process_task(zone, &task, dynupdate_update_nsec3_body, &lus_set);
-            zdb_zone_lock(zone, ZDB_ZONE_MUTEX_DYNUPDATE); /** @todo : "give" the mutex instead of this */
-            dnssec_process_finalize(&task);
+            dynupdate_update_nsec3_body(zone, &lus_set);
         }
 #endif
 
@@ -1584,9 +1603,6 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
     return return_value;
 }
 
-/*    ------------------------------------------------------------    */
-
-/** @} */
 
 /*----------------------------------------------------------------------------*/
 

@@ -30,21 +30,87 @@ dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
 dnl ############################################################################
+dnl
+dnl       SVN Program:
+dnl               $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/bin/yadifa/configure.ac $
+dnl
+dnl       Last Update:
+dnl               $Date: 2012-03-27 16:56:49 +0200 (Tue, 27 Mar 2012) $
+dnl               $Revision: 1868 $
+dnl
+dnl       Purpose:
+dnl              common yadifa m4 macros
+dnl
+dnl ############################################################################
 
 dnl CTRL class
 
 AC_DEFUN([AC_CHECK_ENABLE_CTRL], [
 
 AM_CONDITIONAL([HAS_CTRL], [false])
+AC_MSG_CHECKING(if ctrl has been enabled )
+AC_ARG_ENABLE(ctrl, AS_HELP_STRING([--enable-ctrl], [Enables remote control]), [enable_ctrl=yes], [enable_ctrl=no])
+AC_MSG_RESULT($enable_ctrl)
+case "$enable_ctrl" in
+    yes)
+        AC_DEFINE_UNQUOTED([HAS_CTRL], [1], [Define this to enable the remote control])
+        AM_CONDITIONAL([HAS_CTRL], [true])
+        ;;
+    *)
+        ;;
+esac
+AM_CONDITIONAL([HAS_CTRL], [test $enable_ctrl = yes])
+
+])
+
+dnl DYNAMIC_PROVISIONING
+
+AC_DEFUN([AC_CHECK_ENABLE_DYNAMIC_PROVISIONING], [
+
+AM_CONDITIONAL([HAS_DYNAMIC_PROVISIONING], [false])
+AC_MSG_CHECKING(if dynamic provisioning has been enabled )
+AC_ARG_ENABLE(dynamic-provisioning, AS_HELP_STRING([--enable-dynamic-provisioning], [Enables dynamic-provisioning]), [enable_dynamic_provisioning=yes], [enable_dynamic_provisioning=no])
+AC_MSG_RESULT($enable_dynamic_provisioning)
+case "$enable_dynamic_provisioning" in
+    yes)
+        AC_DEFINE_UNQUOTED([HAS_DYNAMIC_PROVISIONING], [1], [Define this to enable dynamic provisioning])
+        AM_CONDITIONAL([HAS_DYNAMIC_PROVISIONING], [true])
+        ;;
+    *)
+        ;;
+esac
+AM_CONDITIONAL([HAS_DYNAMIC_PROVISIONING], [test $enable_dynamic_provisioning = yes])
+AM_CONDITIONAL([HAS_CTRL], [true])
+
+])
+
+dnl DNS_RRL
+
+AC_DEFUN([AC_CHECK_ENABLE_RRL], [
+
+AM_CONDITIONAL([HAS_RRL_SUPPORT], [false])
+AC_MSG_CHECKING(if DNS Response Rate Limiting has been enabled )
+AC_ARG_ENABLE(rrl, AS_HELP_STRING([--enable-rrl], [Enables DNS RRL]), [enable_rrl=yes], [enable_rrl=no])
+AC_MSG_RESULT($enable_rrl)
+case "$enable_rrl" in
+    yes)
+        AC_DEFINE_UNQUOTED([HAS_RRL_SUPPORT], [1], [Define this to enable DNS RRL])
+        AM_CONDITIONAL([HAS_RRL_SUPPORT], [true])
+        ;;
+    *)
+        ;;
+esac
+AM_CONDITIONAL([HAS_RRL_SUPPORT], [test $enable_rrl = yes])
 
 ])
 
 dnl SSL DNSCORE DNSDB DNSZONE (all defaulted to FALSE)
 
-requires_ssl=0
+requires_ssl=1
 requires_dnscore=0
 requires_dnsdb=0
 requires_dnszone=0
+requires_dnslg=0
 
 AC_DEFUN([AC_YADIFA_ENABLE_SSL], [
 	requires_ssl=1
@@ -60,6 +126,10 @@ AC_DEFUN([AC_YADIFA_ENABLE_DNSDB], [
 
 AC_DEFUN([AC_YADIFA_ENABLE_DNSZONE], [
 	requires_dnszone=1
+])
+
+AC_DEFUN([AC_YADIFA_ENABLE_DNSLG], [
+	requires_dnslg=1
 ])
 
 AC_DEFUN([AC_YADIFA_ADD_LIBS], [
@@ -82,15 +152,17 @@ LIBS="$LDDYN $LIBS"
 
 dnl SSL
 
-SSLDEPS=""
-AC_CHECK_LIB([socket], [socket],[SSLDEPS="$SSLDEPS -lsocket"],[echo no socket],)
-AC_CHECK_LIB([dl], [dlinfo],[SSLDEPS="$SSLDEPS -ldl"],[echo no dl],)
-echo "SSLDEPS=${SSLDEPS}"
-
 if [[ $requires_ssl -eq 1 ]]
 then
-
 	echo "SSL is required by this setup ..."
+    
+    SSLDEPS=""
+    echo "Finding the SSL dependencies"
+    AC_CHECK_LIB([socket], [socket],[SSLDEPS="$SSLDEPS -lsocket"],[echo no socket],)
+    AC_CHECK_LIB([dl], [dlinfo],[SSLDEPS="$SSLDEPS -ldl"],[echo no dl],)
+    AC_CHECK_LIB([z], [deflate],[SSLDEPS="$SSLDEPS -lz"],[echo no z],)
+
+    echo "SSLDEPS=${SSLDEPS}"
 
 	AC_MSG_CHECKING(if SSL is available)
 	AC_ARG_WITH(openssl, AS_HELP_STRING([--with-openssl=DIR], [Use the openssl from directory DIR]),
@@ -125,6 +197,34 @@ else
 	AC_CHECK_LIB([socket], [socket],,,)
 fi
 
+
+dnl DNSLG
+
+if [[ $requires_dnslg -eq 1 ]]
+then
+
+AC_MSG_CHECKING(for the DNS Looking Glass library)
+AC_ARG_WITH(dnslg, AS_HELP_STRING([--with-dnslg=DIR], [Use the dnslg from directory DIR/lib (devs only)]),
+    [
+		CPPFLAGS="-I$with_dnslg/include $CPPFLAGS"
+        LDFLAGS="-L$with_dnszone/lib $LDFLAGS";
+        AC_CHECK_LIB([dnslg], [dnslg_init],,[exit],[$LDSTAT -ldnscore $LDDYN -lssl])
+    ],
+    [
+		
+		if [[ ! -d ${srcdir}/../../lib/dnslg ]]
+		then
+        	AC_CHECK_LIB([dnslg], [dnslg_init],,[exit],[$LDSTAT -ldnscore $LDDYN ])
+        else
+            CPPFLAGS="-I${srcdir}/../../lib/dnslg/include $CPPFLAGS"
+            LDFLAGS="-L../../lib/dnslg/.libs $LDFLAGS"
+
+            LDFLAGS="$LDFLAGS $LDSTAT -ldnslg $LDDYN"	
+		fi
+    ])
+AC_SUBST(DNSLG)
+
+fi
 
 dnl DNSZONE
 
@@ -220,82 +320,11 @@ dnl Features
 
 AC_DEFUN([AC_YADIFA_FEATURES], [
 
-dnl CTRL class
+AC_CHECK_ENABLE_DYNAMIC_PROVISIONING
+AC_CHECK_ENABLE_RRL
 
-AM_CONDITIONAL([HAS_CTRL], [false])
-
-dnl Less memory usage (Z-alloc uses smaller chunks when he gets new buffers, of course it's slower)
-
-AM_CONDITIONAL([HAS_TINY_FOOTPRINT], [false])
-AC_MSG_CHECKING(if tiny footprint has been required )
-AC_ARG_ENABLE(tiny_footprint, AS_HELP_STRING([--enable-tiny-footprint], [Uses less memory at once]), [enable_tiny_footprint=yes], [enable_tiny_footprint=no])
-AC_MSG_RESULT($enable_tiny_footprint)
-case "$enable_tiny_footprint" in
-    yes)
-        AC_DEFINE_UNQUOTED([HAS_TINY_FOOTPRINT], [1], [Define this to use less memory])
-        AM_CONDITIONAL([HAS_TINY_FOOTPRINT], [true])
-        ;;
-    *)
-        ;;
-esac
-AM_CONDITIONAL([HAS_TINY_FOOTPRINT], [test $enable_tiny_footprint = yes])
-
-dnl ACL
-
-AM_CONDITIONAL(HAS_ACL_SUPPORT, [true])
-AC_DEFINE_UNQUOTED([HAS_ACL_SUPPORT], [1], [Enable ACL support])
-
-dnl TSIG
-
-AM_CONDITIONAL(HAS_TSIG_SUPPORT, [true])
-AC_DEFINE_UNQUOTED([HAS_TSIG_SUPPORT], [1], [Enable TSIG support])
-
-dnl NSEC3
-
-AM_CONDITIONAL([HAS_DNSSEC_SUPPORT], [false])
-
-dnl AC_MSG_CHECKING(if NSEC3 has been disabled)
-enable_nsec3=yes
-
-case "$enable_nsec3" in
-	yes)
-		AC_DEFINE_UNQUOTED([HAS_NSEC3_SUPPORT], [1], [Set this to 1 to enable NSEC3 support])
-		AM_CONDITIONAL([HAS_DNSSEC_SUPPORT], [true])
-		AC_DEFINE_UNQUOTED([HAS_DNSSEC_SUPPORT], [1], [MUST be enabled if either NSEC3 or NSEC are enabled])
-		AC_YADIFA_ENABLE_SSL
-		;;
-	no|*)
-		;;
-esac
-AM_CONDITIONAL([HAS_NSEC3_SUPPORT], [test $enable_nsec3 = yes])
-
-dnl NSEC
-
-dnl AC_MSG_CHECKING(if NSEC has been disabled)
-enable_nsec=yes
-case "$enable_nsec" in
-	yes)
-		AC_DEFINE_UNQUOTED([HAS_NSEC_SUPPORT], [1], [Set this to 1 to enable NSEC support])
-		AM_CONDITIONAL([HAS_DNSSEC_SUPPORT], [true])
-		AC_DEFINE_UNQUOTED([HAS_DNSSEC_SUPPORT], [1], [MUST be enabled if either NSEC3 or NSEC are enabled])
-		AC_YADIFA_ENABLE_SSL
-		;;
-	no|*)
-		;;
-esac
-AM_CONDITIONAL([HAS_NSEC_SUPPORT], [test $enable_nsec = yes])
-
-AM_CONDITIONAL([TCLCOMMANDS], [false])
-
-dnl MIRROR debug 
-
-AM_CONDITIONAL([HAS_MIRROR_SUPPORT], [false])
-
-dnl DROPALL debug 
-
-AM_CONDITIONAL([HAS_DROPALL_SUPPORT], [false])
-
-dnl send messages instead of sendto
+dnl SENDMSG / SENDTO : send messages with sendmsg instead of sendto
+dnl ==========================================================================
 
 AC_MSG_CHECKING(if MESSAGES has been enabled)
 AC_ARG_ENABLE(messages, AS_HELP_STRING([--enable-messages], [Use messages instead of send. Needed if you have many IPs aliased on the same interface.]),
@@ -310,9 +339,123 @@ case "$enable_messages" in
 esac
 AM_CONDITIONAL([HAS_MESSAGES_SUPPORT], [test $enable_messages = yes])
 
+
+dnl MASTER
+dnl ==========================================================================
+
+AM_CONDITIONAL(HAS_MASTER_SUPPORT, [true])
+AC_MSG_CHECKING(if MASTER has been disabled)
+AC_ARG_ENABLE(master, AS_HELP_STRING([--disable-master], [Disable MASTER support (devs only)]), [disable_master=yes], [disable_master=no])
+AC_MSG_RESULT($disable_master)
+case "$disable_master" in
+	yes)
+		AC_DEFINE_UNQUOTED([HAS_MASTER_SUPPORT], [0], [Do not support MASTER (devs only)])
+		AM_CONDITIONAL([HAS_MASTER_SUPPORT], [false])
+        enable_dynupdate='no'
+        disable_dynupdate='yes'
+        enable_rrsig_management='no'
+        disable_rrsig_management='yes'
+		;;
+	no|*)
+		AC_DEFINE_UNQUOTED([HAS_MASTER_SUPPORT], [1], [Enable MASTER support])
+        AM_CONDITIONAL([HAS_MASTER_SUPPORT], [true])
+		AC_YADIFA_ENABLE_SSL
+        ;;
+esac
+AM_CONDITIONAL([HAS_MASTER_SUPPORT], [test $disable_master = no])
+
+dnl CTRL class
+dnl ==========================================================================
+
+AM_CONDITIONAL([HAS_CTRL], [false])
+AC_MSG_CHECKING(if ctrl has been enabled )
+AC_ARG_ENABLE(ctrl, AS_HELP_STRING([--enable-ctrl], [Enables remote control (devs only)]), [enable_ctrl=yes], [enable_ctrl=no])
+AC_MSG_RESULT($enable_ctrl)
+case "$enable_ctrl" in
+    yes)
+        AC_DEFINE_UNQUOTED([HAS_CTRL], [1], [Define this to enable the remote control (devs only)])
+        AM_CONDITIONAL([HAS_CTRL], [true])
+        ;;
+    *)
+        ;;
+esac
+AM_CONDITIONAL([HAS_CTRL], [test $enable_ctrl = yes])
+
+dnl NSID
+dnl ==========================================================================
+
+AM_CONDITIONAL([HAS_NSID_SUPPORT], [false])
+AC_MSG_CHECKING(if NSID has been enabled )
+AC_ARG_ENABLE(nsid, AS_HELP_STRING([--enable-nsid], [Enable NSID support]), [enable_nsid=yes], [enable_nsid=no])
+AC_MSG_RESULT($enable_nsid)
+case "$enable_nsid" in
+    yes)
+        AC_DEFINE_UNQUOTED([HAS_NSID_SUPPORT], [1], [Define this to enable NSID support])
+        AM_CONDITIONAL([HAS_NSID_SUPPORT], [true])
+        ;;
+    *)
+        ;;
+esac
+AM_CONDITIONAL([HAS_NSID_SUPPORT], [test $enable_nsid = yes])
+
+dnl DYNUPDATE
+dnl ==========================================================================
+
+AM_CONDITIONAL(HAS_DYNUPDATE_SUPPORT, [true])
+AC_MSG_CHECKING(if DYNUPDATE has been disabled)
+AC_ARG_ENABLE(dynupdate, AS_HELP_STRING([--disable-dynupdate], [Disable dynamic update support (devs only)]), [disable_dynupdate=yes], [disable_dynupdate=no])
+AC_MSG_RESULT($disable_dynupdate)
+case "$disable_dynupdate" in
+	yes)
+		AC_DEFINE_UNQUOTED([HAS_DYNUPDATE_SUPPORT], [0], [Do not support dynamic update (devs only)])
+		AM_CONDITIONAL([HAS_DYNUPDATE_SUPPORT], [false])
+		;;
+	no|*)
+		AC_DEFINE_UNQUOTED([HAS_DYNUPDATE_SUPPORT], [1], [Enable dynamic update support])
+        AM_CONDITIONAL([HAS_DYNUPDATE_SUPPORT], [true])
+        ;;
+esac
+AM_CONDITIONAL([HAS_DYNUPDATE_SUPPORT], [test $disable_dynupdate = no])
+
+dnl RRSIG_MANAGEMENT
+dnl ==========================================================================
+
+AM_CONDITIONAL(HAS_RRSIG_MANAGEMENT_SUPPORT, [true])
+AC_MSG_CHECKING(if RRSIG_MANAGEMENT has been disabled)
+AC_ARG_ENABLE(rrsig_management, AS_HELP_STRING([--disable-rrsig-management], [Disable RRSIG verification and generation for zones]), [disable_rrsig_management=yes], [disable_rrsig_management=no])
+AC_MSG_RESULT($disable_rrsig_management)
+case "$disable_rrsig_management" in
+	yes)
+		AC_DEFINE_UNQUOTED([HAS_RRSIG_MANAGEMENT_SUPPORT], [0], [Do not verify nor generate RRSIG for zones])
+		AM_CONDITIONAL([HAS_RRSIG_MANAGEMENT_SUPPORT], [false])
+		;;
+	no|*)
+		AC_DEFINE_UNQUOTED([HAS_RRSIG_MANAGEMENT_SUPPORT], [1], [Do verify and/or generate RRSIG for zones])
+        AM_CONDITIONAL([HAS_RRSIG_MANAGEMENT_SUPPORT], [true])
+		AC_YADIFA_ENABLE_SSL
+        ;;
+esac
+AM_CONDITIONAL([HAS_RRSIG_MANAGEMENT_SUPPORT], [test $disable_rrsig_management = no])
+
+
+AM_CONDITIONAL([HAS_ACL_SUPPORT], [true])
+AC_DEFINE(HAS_ACL_SUPPORT, 1, [always on])
+AM_CONDITIONAL([HAS_TSIG_SUPPORT], [true])
+AC_DEFINE(HAS_TSIG_SUPPORT, 1, [always on])
+AM_CONDITIONAL([HAS_DNSSEC_SUPPORT], [true])
+AC_DEFINE(HAS_DNSSEC_SUPPORT, 1, [always on])
+AM_CONDITIONAL([HAS_NSEC3_SUPPORT], [true])
+AC_DEFINE(HAS_NSEC3_SUPPORT, 1, [always on])
+AM_CONDITIONAL([HAS_NSEC_SUPPORT], [true])
+AC_DEFINE(HAS_NSEC_SUPPORT, 1, [always on])
+AM_CONDITIONAL([TCLCOMMANDS], [false])
+AM_CONDITIONAL([HAS_MIRROR_SUPPORT], [false])
+AM_CONDITIONAL([HAS_DROPALL_SUPPORT], [false])
+
 AC_SOCKADDR_SA_LEN_CHECK
 AC_FADDRESS_SANITIZER_CHECK
 AC_FNO_OMIT_FRAME_POINTER_CHECK
+AC_FCATCH_UNDEFINED_BEHAVIOR_CHECK
 
 ])
 
@@ -333,13 +476,11 @@ echo CPPFLAGS .......... : $CPPFLAGS
 echo LDFLAGS ........... : $LDFLAGS
 echo LIBS .............. : $LIBS
 echo
-echo ACL ............... : $enable_acl
+echo MASTER ............ : $enable_master
+echo DYNUPDATE ......... : $enable_dynupdate
+echo RRSIG MANAGEMENT .. : $enable_rrsig_management
 echo CTRL .............. : $enable_ctrl
-echo NSEC .............. : $enable_nsec
-echo NSEC3 ............. : $enable_nsec3
-echo TSIG .............. : $enable_tsig
-echo
-echo TCL ............... : $enable_tcl
+echo RRL ............... : $enable_rrl
 echo
 
 ])

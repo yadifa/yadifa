@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup logger Logging functions
  *  @ingroup dnscore
  *  @brief 
@@ -43,7 +43,7 @@
 #ifndef _LOGGER_CHANNEL_FILE_H
 #define	_LOGGER_CHANNEL_FILE_H
 
-#include <dnscore/logger_channel.h>
+#include <dnscore/logger.h>
 #include <dnscore/output_stream.h>
 
 #ifdef	__cplusplus
@@ -51,7 +51,7 @@ extern "C"
 {
 #endif
 
-ya_result logger_channel_file_open(const char *fullpath, uid_t uid, gid_t gid, u16 mode, bool forceflush,logger_channel* chan);
+ya_result logger_channel_file_open(const char *fullpath, uid_t uid, gid_t gid, u16 mode, bool forceflush, logger_channel *chan);
 
 /**
  * 

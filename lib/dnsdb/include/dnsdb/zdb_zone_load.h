@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief Functions used to manipulate a zone
@@ -65,10 +65,10 @@ extern "C"
  *
  */
 
-#define ZDB_ZONE_MOUNT_ON_LOAD     1   /* put the zone in the database after a load    */
-#define ZDB_ZONE_REPLAY_JOURNAL    2   /* replay the journal after the load            */
-#define ZDB_ZONE_DESTROY_JOURNAL   4   /* destroys the journal after a successful load */
-#define ZDB_ZONE_IS_SLAVE          8   /* any NSEC3 inconsistencies must trigger an AXFR reload */
+#define ZDB_ZONE_MOUNT_ON_LOAD      0x01   /* put the zone in the database after a load    */
+#define ZDB_ZONE_REPLAY_JOURNAL     0x02   /* replay the journal after the load            */
+#define ZDB_ZONE_DESTROY_JOURNAL    0x04   /* destroys the journal after a successful load */
+#define ZDB_ZONE_IS_SLAVE           0x08   /* any NSEC3 inconsistencies must trigger an AXFR reload */
 
 #define ZDB_ZONE_DNSSEC_SHIFT           4
 #define ZDB_ZONE_DNSSEC_MASK       0x0070
@@ -81,7 +81,7 @@ ya_result zdb_zone_load(zdb* db, zone_reader* zr, zdb_zone** zone_out, const cha
 
 ya_result zdb_zone_get_soa(zone_reader *zone_data, u16 *rdata_size, u8 *rdata);
 
-ya_result zdb_zone_get_serial(zdb* db, zone_reader* zr, const char *incremental_data_path, u32 *serial, bool withjournal);
+ya_result zdb_zone_read_serial(zdb* db, zone_reader* zr, const char *incremental_data_path, u32 *serial, bool withjournal);
 
 
 #ifdef	__cplusplus

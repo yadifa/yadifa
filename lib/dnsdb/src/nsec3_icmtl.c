@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -158,7 +158,7 @@ nsec3_remove_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec
         {
             u8 digest[256];
 
-#ifndef NDEBUG
+#ifdef DEBUG
             memset(digest, 0xd1, sizeof(digest));
 #endif
 
@@ -194,7 +194,7 @@ nsec3_remove_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec
                     }
                     nsec3_remove_all_owners(item);
 
-                    zassert(item->rc == 0 && item->sc == 0);
+                    yassert(item->rc == 0 && item->sc == 0);
 
                     ZFREE_ARRAY(item->type_bit_maps, item->type_bit_maps_size);
 
@@ -250,7 +250,7 @@ nsec3_remove_nsec3_by_digest(zdb_zone* zone, const u8 *nsec3_digest, const u8* n
                 }
                 nsec3_remove_all_owners(item);
 
-                zassert(item->rc == 0 && item->sc == 0);
+                yassert(item->rc == 0 && item->sc == 0);
 
                 ZFREE_ARRAY(item->type_bit_maps, item->type_bit_maps_size);
 
@@ -282,7 +282,7 @@ nsec3_get_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec3_r
         {
             u8 digest[256];
 
-#ifndef NDEBUG
+#ifdef DEBUG
             memset(digest, 0xd1, sizeof(digest));
 #endif
 
@@ -354,7 +354,7 @@ nsec3_add_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec3_r
         {
             u8 digest[256];
 
-#ifndef NDEBUG
+#ifdef DEBUG
             memset(digest, 0xd1, sizeof(digest));
 #endif
 
@@ -477,12 +477,7 @@ nsec3_icmtl_destroy_nsec3rrsig_add(treeset_tree *tree)
             while(ttlrdata != NULL)
             {
                 zdb_ttlrdata *tmp = ttlrdata->next;
-                
-                if(ttlrdata != NULL)
-                {
-                    ZDB_RECORD_ZFREE(ttlrdata);
-                }
-                
+                ZDB_RECORD_ZFREE(ttlrdata);                
                 ttlrdata = tmp;
             }
         }
@@ -512,12 +507,7 @@ nsec3_icmtl_destroy_nsec3rrsig_del(treeset_tree *tree)
             while(ttlrdata != NULL)
             {
                 zdb_ttlrdata *tmp = ttlrdata->next;
-                
-                if(ttlrdata != NULL)
-                {
-                    zdb_ttlrdata_delete(ttlrdata);
-                }
-                
+                zdb_ttlrdata_delete(ttlrdata);
                 ttlrdata = tmp;
             }
         }
@@ -737,7 +727,7 @@ nsec3_icmtl_replay_label_add(nsec3_icmtl_replay *replay, const u8 *fqdn, dnslabe
 
             if(node->data == NULL)
             {
-#ifndef NDEBUG
+#ifdef DEBUG
                 log_debug("journal: NSEC3: queue: %{dnsname} for NSEC3 update", fqdn);
 #endif
                 node->key = dnsname_dup(fqdn);
@@ -802,7 +792,7 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             u8 *fqdn = (u8*)node->key;
             zdb_ttlrdata *ttlrdata = (zdb_ttlrdata*)node->data;
 
-#ifndef NDEBUG
+#ifdef DEBUG
             log_debug("journal: NSEC3: post/del %{dnsname}", fqdn);
 #endif
             treeset_node *add_node;
@@ -811,7 +801,7 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             {
                 /* replace */
 
-#ifndef NDEBUG
+#ifdef DEBUG
                 log_debug("journal: NSEC3: upd %{dnsname}", fqdn);
 
                 rdata_desc type_len_rdata = {TYPE_NSEC3, ttlrdata->rdata_size, ttlrdata->rdata_pointer };
@@ -820,7 +810,7 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
 
                 zdb_ttlrdata *add_ttlrdata = (zdb_ttlrdata *)add_node->data;
 
-#ifndef NDEBUG
+#ifdef DEBUG
                 rdata_desc add_type_len_rdata = {TYPE_NSEC3, add_ttlrdata->rdata_size, add_ttlrdata->rdata_pointer };
                 log_debug("journal: NSEC3: + %{typerdatadesc}", &add_type_len_rdata);
 #endif
@@ -848,12 +838,12 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
                 {
                     log_err("journal: NSEC3: %{dnsname} has not been found in the NSEC3 database (del/add)", fqdn);
                     
-                    return ERROR;
+                    return ZDB_JOURNAL_NSEC3_LABEL_NOT_FOUND_IN_DB;
                 }
             }
             else
             {
-#ifndef NDEBUG
+#ifdef DEBUG
                 log_debug("journal: NSEC3: del %{dnsname}", fqdn);
 
                 rdata_desc type_len_rdata = {TYPE_NSEC3, ttlrdata->rdata_size, ttlrdata->rdata_pointer };
@@ -899,13 +889,13 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             treeset_node *node = treeset_avl_iterator_next_node(&ts_avl_iter);
             u8 *fqdn = (u8*)node->key;
 
-#ifndef NDEBUG
+#ifdef DEBUG
             log_debug("journal: NSEC3: post/add %{dnsname}", fqdn);
 #endif
 
             zdb_ttlrdata *ttlrdata = (zdb_ttlrdata*)node->data;
 
-#ifndef NDEBUG
+#ifdef DEBUG
             log_debug("journal: NSEC3: add %{dnsname}", fqdn);
 
             rdata_desc type_len_rdata = {TYPE_NSEC3, ttlrdata->rdata_size, ttlrdata->rdata_pointer };
@@ -927,25 +917,32 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
                 
                 if(n3 != NULL )
                 {
+#ifdef DEBUG
                     zdb_packed_ttlrdata *nsec3;
-                    zdb_packed_ttlrdata *nsec3_rrsig;
-                    u8 owner[256];
+                    const zdb_packed_ttlrdata *nsec3_rrsig;
+                    u8 *owner;
+                    u8 *pool;
+                    u8 pool_buffer[NSEC3_ZONE_ITEM_TO_NEW_ZDB_PACKED_TTLRDATA_SIZE];
+                    pool = pool_buffer;
                     
-                    nsec3_zone_item_to_zdb_packed_ttlrdata(n3,
-                                                    add_item,
-                                                    replay->zone->origin,
-                                                    owner,
-                                                    600,
-                                                    &nsec3,
-                                                    &nsec3_rrsig);
+                    nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm nsec3_parms =
+                    {
+                        n3,
+                        add_item,
+                        replay->zone->origin,
+                        &pool,
+                        600
+                    };
                     
-#ifndef NDEBUG
+                    nsec3_zone_item_to_new_zdb_packed_ttlrdata(
+                            &nsec3_parms,
+                            &owner,
+                            &nsec3,
+                            &nsec3_rrsig);
+                    
                     rdata_desc type_len_rdata = {TYPE_NSEC3, nsec3->rdata_size, nsec3->rdata_start };
                     log_debug("journal: NSEC3: ? %{typerdatadesc}", &type_len_rdata);
-#endif
-                    
-                    free(nsec3);
-                    
+#endif                    
                     nsec3_remove_nsec3_by_digest(replay->zone, add_item->digest, ttlrdata->rdata_pointer);
                 }
             }
@@ -973,13 +970,13 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             treeset_node *node = treeset_avl_iterator_next_node(&ts_avl_iter);
             u8 *fqdn = (u8*)node->key;
             
-#ifndef NDEBUG
+#ifdef DEBUG
             log_debug("journal: NSEC3: post/add %{dnsname}", fqdn);
 #endif
 
             zdb_ttlrdata *nsec3_rrsig = (zdb_ttlrdata*)node->data;
 
-#ifndef NDEBUG
+#ifdef DEBUG
             log_debug("journal: NSEC3: add %{dnsname}", fqdn);
 
             rdata_desc type_len_rdata = {TYPE_RRSIG, ZDB_RECORD_PTR_RDATASIZE(nsec3_rrsig), ZDB_RECORD_PTR_RDATAPTR(nsec3_rrsig) };
@@ -1018,13 +1015,13 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             treeset_node *node = treeset_avl_iterator_next_node(&ts_avl_iter);
             u8 *fqdn = (u8*)node->key;
 
-#ifndef NDEBUG
+#ifdef DEBUG
             log_debug("journal: NSEC3: post/add %{dnsname}", fqdn);
 #endif
 
             zdb_packed_ttlrdata *nsec3_rrsig = (zdb_packed_ttlrdata*)node->data;
 
-#ifndef NDEBUG
+#ifdef DEBUG
             log_debug("journal: NSEC3: add %{dnsname}", fqdn);
 
             rdata_desc type_len_rdata = {TYPE_RRSIG, ZDB_PACKEDRECORD_PTR_RDATASIZE(nsec3_rrsig), ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec3_rrsig) };
@@ -1067,7 +1064,7 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             u8 *fqdn = (u8*)node->key;
             zdb_rr_label *rr_label = (zdb_rr_label*)node->data;
 
-#ifndef NDEBUG
+#ifdef DEBUG
             log_debug("journal: NSEC3: lbl %{dnsname} (%{dnslabel})", fqdn, rr_label->name);
 #endif
             

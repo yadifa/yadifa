@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief 
@@ -45,7 +45,8 @@
 #define	_THREADED_RINGBUFFER_CW_H
 
 #include <pthread.h>
-#include "sys_types.h"
+
+#include <dnscore/sys_types.h>
 
 #ifdef	__cplusplus
 extern "C" {
@@ -86,6 +87,7 @@ void* threaded_ringbuffer_cw_try_dequeue(threaded_ringbuffer_cw *queue);
 u32   threaded_ringbuffer_cw_dequeue_set(threaded_ringbuffer_cw *queue, void** array, u32 array_size);
 void  threaded_ringbuffer_cw_wait_empty(threaded_ringbuffer_cw *queue);
 int   threaded_ringbuffer_cw_size(threaded_ringbuffer_cw *queue);
+int   threaded_ringbuffer_cw_room(threaded_ringbuffer_cw *queue);
 
 /*
  * The queue will block (write) if bigger than this.

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief 

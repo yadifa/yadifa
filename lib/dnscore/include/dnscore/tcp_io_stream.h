@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -60,7 +60,7 @@ ya_result
 gethostaddr(const char* host, u16 port, struct sockaddr *sa, int family);
 
 ya_result
-tcp_input_output_stream_connect_sockaddr(struct sockaddr *sa, input_stream *istream_, output_stream *ostream_, struct sockaddr *bind_from, u8 to_sec);
+tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream *istream_, output_stream *ostream_, struct sockaddr *bind_from, u8 to_sec);
 
 ya_result
 tcp_input_output_stream_connect_ex(const char *server, u16 port, input_stream *istream_, output_stream *ostream_, struct sockaddr *bind_from, u8 to_sec);
@@ -69,7 +69,7 @@ ya_result
 tcp_input_output_stream_connect(const char *server, u16 port, input_stream *istream, output_stream *ostream);
 
 ya_result
-tcp_input_output_stream_connect_host_address(host_address *ha, input_stream *istream_, output_stream *ostream_, u8 to_sec);
+tcp_input_output_stream_connect_host_address(const host_address *ha, input_stream *istream_, output_stream *ostream_, u8 to_sec);
 
 ya_result
 tcp_io_stream_connect_ex(const char *server, u16 port, io_stream *ios, struct sockaddr *bind_from);
@@ -85,20 +85,32 @@ void tcp_get_recvtimeout(int fd, int *seconds, int *useconds);
 
 void tcp_set_linger(int fd, bool enable, int seconds);
 
-static inline void tcp_set_graceful_close(int fd)
+/**
+ * Nagle
+ * 
+ * @param fd
+ * @param enable
+ */
+void tcp_set_nodelay(int fd, bool enable);
+
+void tcp_set_cork(int fd, bool enable);
+
+static inline void tcp_set_graceful_close(int fd) // no-wait possible
 {
     tcp_set_linger(fd, FALSE, 0);
 }
 
-static inline void tcp_set_abortive_close(int fd)
+static inline void tcp_set_abortive_close(int fd) // closes now
 {
     tcp_set_linger(fd, TRUE, 0);
 }
 
-static inline void tcp_set_agressive_close(int fd, int seconds)
+static inline void tcp_set_agressive_close(int fd, int seconds) // closes up to seconds after the close ...
 {
     tcp_set_linger(fd, TRUE, seconds);
 }
+
+void tcp_init_with_env();
 
 #ifdef	__cplusplus
 }

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup ### #######
  *  @ingroup dnscore
  *  @brief
@@ -40,6 +40,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "dnscore-config.h"
 
 #include "dnscore/sys_types.h"
 

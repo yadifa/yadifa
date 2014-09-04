@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnscoretools Generic Tools
  *  @ingroup dnscore
  *  @brief host address (list) functions
@@ -40,21 +40,57 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
+
+#include "dnscore-config.h"
+
 #include <assert.h>
 #include <string.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#if  0 /* BSD */
-#include <sys/types.>
-#endif
+
 #include <sys/socket.h>
 #include <netinet/in.h>
 
 #include "dnscore/host_address.h"
+#include "dnscore/tsig.h"
 
+#define ADDRINFO_TAG 0x4f464e4952444441
 
 /*------------------------------------------------------------------------------
  * FUNCTIONS */
+
+host_address
+*host_address_alloc()
+{
+    host_address *new_address;
+    MALLOC_OR_DIE(host_address*, new_address, sizeof(host_address), HOSTADDR_TAG);
+    new_address->version = 0;
+    new_address->next = NULL;
+    
+#if DNSCORE_HAS_TSIG_SUPPORT
+    new_address->tsig = NULL;
+#endif
+    return new_address;
+}
+
+/**
+ * Clears the content of a host_address (mostly : deletes the dname if it's
+ * what it contains.
+ * 
+ * @param the host address
+ */
+
+void
+host_address_clear(host_address *address)
+{
+    if(address->version == HOST_ADDRESS_DNAME)
+    {
+        free(address->ip.dname.dname);
+    }
+    
+    address->version = 0;
+}
+
 
 /**
  * Deletes a host addresse
@@ -67,16 +103,20 @@ host_address_delete(host_address *address)
 {
     if(address->version == HOST_ADDRESS_DNAME)
     {
+#ifdef DEBUG
+        memset(address->ip.dname.dname, 0xff, dnsname_len(address->ip.dname.dname));
+#endif
         free(address->ip.dname.dname);
     }
-
+    
+#ifdef DEBUG
+    memset(address, 0xff, sizeof(host_address));
+#endif
     free(address);
 }
 
 /**
  * Deletes a list of host addresses
- *
- * @todo: move to a better place
  * 
  * @param the first host address in the list
  */
@@ -95,16 +135,40 @@ host_address_delete_list(host_address *address)
 }
 
 host_address *
-host_address_copy_list(host_address *address)
+host_address_copy(const host_address *address)
 {
     host_address clone_head;
+#ifdef DEBUG
+    memset(&clone_head, 0xff, sizeof(clone_head));
+#endif
+    /* no need to set TSIG */
     clone_head.next = NULL;
+    clone_head.version = HOST_ADDRESS_NONE;
+    
+    if(address != NULL)
+    {
+        host_address_append_host_address(&clone_head, address); // copy made
+    }
+    
+    return clone_head.next;
+}
+
+host_address *
+host_address_copy_list(const host_address *address)
+{
+    host_address clone_head;
+#ifdef DEBUG
+    memset(&clone_head, 0xff, sizeof(clone_head));
+#endif
+    /* no need to set TSIG */
+    clone_head.next = NULL;
+    clone_head.version = HOST_ADDRESS_NONE;
     
     host_address *clone = &clone_head;
     
     while(address != NULL)
     {
-        host_address_append_host_address(clone, address);
+        host_address_append_host_address(clone, address); // copy made
                 
         clone = clone->next;
 
@@ -115,7 +179,7 @@ host_address_copy_list(host_address *address)
 }
 
 u32
-host_address_count(host_address *address)
+host_address_count(const host_address *address)
 {
     u32 n = 0;
 
@@ -129,7 +193,7 @@ host_address_count(host_address *address)
 }
 
 ya_result
-host_address2allocated_sockaddr(struct sockaddr **sap, host_address *address)
+host_address2allocated_sockaddr(struct sockaddr **sap, const host_address *address)
 {
     switch(address->version)
     {
@@ -170,13 +234,13 @@ host_address2allocated_sockaddr(struct sockaddr **sap, host_address *address)
         }
         default:
         {
-            return ERROR;   /* unsupported ip version */
+            return IP_VERSION_NOT_SUPPORTED;   /* unsupported ip version */
         }
     }
 }
 
 ya_result
-host_address2sockaddr(socketaddress *sap, host_address *address)
+host_address2sockaddr(socketaddress *sap, const host_address *address)
 {
     switch(address->version)
     {
@@ -212,7 +276,7 @@ host_address2sockaddr(socketaddress *sap, host_address *address)
         }
         default:
         {
-            return ERROR;   /* unsupported ip version */
+            return IP_VERSION_NOT_SUPPORTED;   /* unsupported ip version */
         }
     }
 }
@@ -234,12 +298,12 @@ host_set_default_port_value(host_address *address, u16 port)
 }
 
 ya_result
-host_address2addrinfo(struct addrinfo **addrp, host_address *address)
+host_address2addrinfo(struct addrinfo **addrp, const host_address *address)
 {
     struct addrinfo *addr;
     ya_result return_value;
 
-    MALLOC_OR_DIE(struct addrinfo*, addr, sizeof(struct addrinfo), GENERIC_TAG);
+    MALLOC_OR_DIE(struct addrinfo*, addr, sizeof(struct addrinfo), ADDRINFO_TAG);
 
     addr->ai_flags = AI_PASSIVE;
 
@@ -263,7 +327,7 @@ host_address2addrinfo(struct addrinfo **addrp, host_address *address)
         default:
         {
             free(addr);
-            return ERROR;
+            return IP_VERSION_NOT_SUPPORTED;
         }
     }
 
@@ -307,7 +371,7 @@ host_address_set_with_sockaddr(host_address *address, const socketaddress *sa)
         }
         default:
         {
-            return ERROR;
+            return IP_VERSION_NOT_SUPPORTED;
         }
     }
 }
@@ -316,7 +380,10 @@ bool
 host_address_list_contains_ip(host_address *address_list, const socketaddress *sa)
 {
     host_address address;
-    
+#ifdef DEBUG
+    memset(&address, 0xff, sizeof(address));
+#endif
+    /* no need to set NEXT nor TSIG */
     if(ISOK(host_address_set_with_sockaddr(&address, sa)))
     {
         switch(address.version)
@@ -365,6 +432,72 @@ host_address_list_contains_ip(host_address *address_list, const socketaddress *s
     return FALSE;
 }
 
+#if DNSCORE_HAS_TSIG_SUPPORT
+
+bool
+host_address_list_contains_ip_tsig(host_address *address_list, const socketaddress *sa, const tsig_item *tsig)
+{
+    host_address address;
+#ifdef DEBUG
+    memset(&address, 0xff, sizeof(address));
+#endif
+    /* no need to set NEXT nor TSIG */
+    if(ISOK(host_address_set_with_sockaddr(&address, sa)))
+    {
+        switch(address.version)
+        {
+            case HOST_ADDRESS_IPV4:
+            {
+                while(address_list != NULL)
+                {
+                    if(address_list->version == HOST_ADDRESS_IPV4)
+                    {
+                        if(address_list->ip.v4.value == address.ip.v4.value)
+                        {
+                            if(address_list->tsig == tsig)
+                            {
+                                return TRUE;
+                            }
+                        }
+                    }
+
+                    address_list = address_list->next;
+                }
+                
+                break;
+            }
+            case HOST_ADDRESS_IPV6:
+            {
+                while(address_list != NULL)
+                {
+                    if(address_list->version == HOST_ADDRESS_IPV6)
+                    {
+                        if((address_list->ip.v6.lohi[0] == address.ip.v6.lohi[0]) && (address_list->ip.v6.lohi[1] == address.ip.v6.lohi[1]))
+                        {
+                            if(address_list->tsig == tsig)
+                            {
+                                return TRUE;
+                            }
+                        }
+                    }
+
+                    address_list = address_list->next;
+                }
+                
+                break;
+            }
+            default:
+            {
+                break;
+            }
+        }
+    }
+    
+    return FALSE;
+}
+
+#endif
+
 bool
 host_address_list_contains_host(host_address *address_list, const host_address *address)
 {
@@ -378,7 +511,14 @@ host_address_list_contains_host(host_address *address_list, const host_address *
                 {
                     if(address_list->ip.v4.value == address->ip.v4.value)
                     {
+#if DNSCORE_HAS_TSIG_SUPPORT
+                        if(address_list->tsig == address->tsig)
+                        {
+                            return TRUE;
+                        }
+#else
                         return TRUE;
+#endif
                     }
                 }
 
@@ -395,7 +535,14 @@ host_address_list_contains_host(host_address *address_list, const host_address *
                 {
                     if((address_list->ip.v6.lohi[0] == address->ip.v6.lohi[0]) && (address_list->ip.v6.lohi[1] == address->ip.v6.lohi[1]))
                     {
+#if DNSCORE_HAS_TSIG_SUPPORT
+                        if(address_list->tsig == address->tsig)
+                        {
+                            return TRUE;
+                        }
+#else
                         return TRUE;
+#endif
                     }
                 }
 
@@ -414,7 +561,7 @@ host_address_list_contains_host(host_address *address_list, const host_address *
 }
 
 void
-host_address_set_ipv4(host_address *address, u8 *ipv4, u16 port)
+host_address_set_ipv4(host_address *address, const u8 *ipv4, u16 port)
 {
     memcpy(address->ip.v4.bytes, ipv4, 4);
     address->port = port;
@@ -422,7 +569,7 @@ host_address_set_ipv4(host_address *address, u8 *ipv4, u16 port)
 }
 
 void
-host_address_set_ipv6(host_address *address, u8 *ipv6, u16 port)
+host_address_set_ipv6(host_address *address, const u8 *ipv6, u16 port)
 {
     memcpy(address->ip.v6.bytes, ipv6, 16);
     address->port = port;
@@ -430,7 +577,7 @@ host_address_set_ipv6(host_address *address, u8 *ipv6, u16 port)
 }
 
 void
-host_address_set_dname(host_address *address, u8 *dname, u16 port)
+host_address_set_dname(host_address *address, const u8 *dname, u16 port)
 {
     address->ip.dname.dname = dnsname_dup(dname);
     address->port = port;
@@ -438,7 +585,7 @@ host_address_set_dname(host_address *address, u8 *dname, u16 port)
 }
 
 ya_result
-host_address_append_ipv4(host_address *address, u8 *ipv4, u16 port)
+host_address_append_ipv4(host_address *address, const u8 *ipv4, u16 port)
 {
     for(;;)
     {
@@ -447,7 +594,7 @@ host_address_append_ipv4(host_address *address, u8 *ipv4, u16 port)
             if(memcmp(address->ip.v4.bytes, ipv4, 4) == 0)
             {
                 /* dup */
-                return ERROR;
+                return COLLECTION_DUPLICATE_ENTRY;
             }
         }
         
@@ -463,7 +610,9 @@ host_address_append_ipv4(host_address *address, u8 *ipv4, u16 port)
 
     MALLOC_OR_DIE(host_address*, new_address, sizeof(host_address), HOSTADDR_TAG);
     new_address->next = NULL;
+#if DNSCORE_HAS_TSIG_SUPPORT
     new_address->tsig = NULL;
+#endif
     host_address_set_ipv4(new_address, ipv4, port);
     address->next = new_address;
 
@@ -471,7 +620,7 @@ host_address_append_ipv4(host_address *address, u8 *ipv4, u16 port)
 }
 
 ya_result
-host_address_append_ipv6(host_address *address, u8 *ipv6, u16 port)
+host_address_append_ipv6(host_address *address, const u8 *ipv6, u16 port)
 {
     for(;;)
     {
@@ -480,7 +629,7 @@ host_address_append_ipv6(host_address *address, u8 *ipv6, u16 port)
             if(memcmp(address->ip.v6.bytes, ipv6, 16) == 0)
             {
                 /* dup */
-                return ERROR;
+                return COLLECTION_DUPLICATE_ENTRY;
             }
         }
 
@@ -496,7 +645,9 @@ host_address_append_ipv6(host_address *address, u8 *ipv6, u16 port)
 
     MALLOC_OR_DIE(host_address*, new_address, sizeof(host_address), HOSTADDR_TAG);
     new_address->next = NULL;
+#if DNSCORE_HAS_TSIG_SUPPORT
     new_address->tsig = NULL;
+#endif
     host_address_set_ipv6(new_address, ipv6, port);
     address->next = new_address;
 
@@ -504,7 +655,7 @@ host_address_append_ipv6(host_address *address, u8 *ipv6, u16 port)
 }
 
 ya_result
-host_address_append_dname(host_address *address, u8 *dname, u16 port)
+host_address_append_dname(host_address *address, const u8 *dname, u16 port)
 {
     int dname_len = dnsname_len(dname);
     
@@ -515,7 +666,7 @@ host_address_append_dname(host_address *address, u8 *dname, u16 port)
             if(memcmp(address->ip.dname.dname, dname, dname_len) == 0)
             {
                 /* dup */
-                return ERROR;
+                return COLLECTION_DUPLICATE_ENTRY;
             }
         }
 
@@ -531,7 +682,9 @@ host_address_append_dname(host_address *address, u8 *dname, u16 port)
 
     MALLOC_OR_DIE(host_address*, new_address, sizeof(host_address), HOSTADDR_TAG);
     new_address->next = NULL;
+#if DNSCORE_HAS_TSIG_SUPPORT
     new_address->tsig = NULL;
+#endif
     host_address_set_dname(new_address, dname, port);
     address->next = new_address;
 
@@ -539,7 +692,7 @@ host_address_append_dname(host_address *address, u8 *dname, u16 port)
 }
 
 ya_result
-host_address_append_host_address(host_address *address, host_address *ha)
+host_address_append_host_address(host_address *address, const host_address *ha)
 {
     switch(ha->version)
     {
@@ -552,7 +705,7 @@ host_address_append_host_address(host_address *address, host_address *ha)
                     if(address->ip.v4.value == ha->ip.v4.value)
                     {
                         /* dup */
-                        return ERROR;
+                        return COLLECTION_DUPLICATE_ENTRY;
                     }
                 }
                 if(address->next == NULL)
@@ -567,7 +720,9 @@ host_address_append_host_address(host_address *address, host_address *ha)
 
             MALLOC_OR_DIE(host_address*, new_address, sizeof(host_address), HOSTADDR_TAG);
             new_address->next = NULL;
+#if DNSCORE_HAS_TSIG_SUPPORT
             new_address->tsig = ha->tsig;
+#endif            
             host_address_set_ipv4(new_address, ha->ip.v4.bytes, ha->port);
             address->next = new_address;
 
@@ -582,7 +737,7 @@ host_address_append_host_address(host_address *address, host_address *ha)
                     if((address->ip.v6.lohi[0] == ha->ip.v6.lohi[0]) && (address->ip.v6.lohi[1] == ha->ip.v6.lohi[1]))
                     {
                         /* dup */
-                        return ERROR;
+                        return COLLECTION_DUPLICATE_ENTRY;
                     }
                 }
                 if(address->next == NULL)
@@ -597,7 +752,9 @@ host_address_append_host_address(host_address *address, host_address *ha)
 
             MALLOC_OR_DIE(host_address*, new_address, sizeof(host_address), HOSTADDR_TAG);
             new_address->next = NULL;
+#if DNSCORE_HAS_TSIG_SUPPORT
             new_address->tsig = ha->tsig;
+#endif            
             host_address_set_ipv6(new_address, ha->ip.v6.bytes, ha->port);
             address->next = new_address;
 
@@ -611,10 +768,10 @@ host_address_append_host_address(host_address *address, host_address *ha)
             {
                 if(address->version == ha->version)
                 {
-                    if(memcmp(address->ip.v4.bytes, ha->ip.dname.dname, dname_len) == 0)
+                    if(memcmp(address->ip.dname.dname, ha->ip.dname.dname, dname_len) == 0)
                     {
                         /* dup */
-                        return ERROR;
+                        return COLLECTION_DUPLICATE_ENTRY;
                     }
                 }
                 if(address->next == NULL)
@@ -629,13 +786,17 @@ host_address_append_host_address(host_address *address, host_address *ha)
 
             MALLOC_OR_DIE(host_address*, new_address, sizeof(host_address), HOSTADDR_TAG);
             new_address->next = NULL;
+#if DNSCORE_HAS_TSIG_SUPPORT
             new_address->tsig = ha->tsig;
-            host_address_set_ipv6(new_address, ha->ip.v6.bytes, ha->port);
+#endif
+            host_address_set_dname(new_address, ha->ip.dname.dname, ha->port);
             address->next = new_address;
+            
+            break;
         }
         default:
         {
-            return ERROR;
+            return IP_VERSION_NOT_SUPPORTED;
         }
     }
     
@@ -682,11 +843,11 @@ host_address_append_hostent(host_address *address, struct hostent *he, u16 port)
         }
     }
 
-    return ERROR;
+    return UNEXPECTED_NULL_ARGUMENT_ERROR;
 }
 
 bool
-host_address_equals(host_address *a, host_address *b)
+host_address_equals(const host_address *a, const host_address *b)
 {
     if(a->version == b->version && a->port == b->port)
     {
@@ -711,7 +872,82 @@ host_address_equals(host_address *a, host_address *b)
 }
 
 bool
-host_address_match(host_address *a, host_address *b)
+host_address_list_equals(const host_address *a, const host_address *b)
+{
+    while((a != NULL) && (b != NULL))
+    {
+        if(a == b)
+        {
+            return TRUE;
+        }
+        
+        if(!host_address_equals(a, b))
+        {
+            return FALSE;
+        }
+        
+        a = a->next;
+        b = b->next;
+    }
+    
+    return (a == b);
+}
+
+s32
+host_address_compare(const host_address *a, const host_address *b)
+{
+    s32 v = (s32)a->version - (s32)b->version;
+    if(v == 0)
+    {
+        switch(a->version)
+        {
+            case HOST_ADDRESS_IPV4:
+            {
+                s32 d = memcmp(a->ip.v4.bytes, b->ip.v4.bytes, 4);
+                
+                if(d != 0)
+                {
+                    return d;
+                }
+                
+                break;
+            }
+            case HOST_ADDRESS_IPV6:
+            {
+                s32 d = memcmp(a->ip.v6.bytes, b->ip.v6.bytes, 16);
+
+                if(d != 0)
+                {
+                    return d;
+                }
+                
+                break;
+            }
+            case HOST_ADDRESS_DNAME:
+            {
+                s32 d = dnsname_compare(a->ip.dname.dname, b->ip.dname.dname);
+                
+                if(d != 0)
+                {
+                    return d;
+                }
+                break;
+            }
+        }
+        
+        return (s32)a->port - (s32)b->port;
+    }
+    else
+    {
+        return v;
+    }
+
+    return FALSE;
+}
+
+
+bool
+host_address_match(const host_address *a, const host_address *b)
 {
     if(a->version == b->version && ((a->port == b->port) || (b->port == 0) || (a->port == 0)) )
     {
@@ -764,5 +1000,191 @@ host_address_remove_host_address(host_address **address, host_address *ha_match)
 
     return NULL;
 }
+
+bool
+host_address_update_host_address_list(host_address **dp, host_address *s)
+{    
+    host_address* d = *dp;
+    bool changed = FALSE;
+    
+    // if the first list is empty (NULL)
+    //      and the second one is not null
+    //          put a copy of the second one in the first one
+    //      else
+    //          do nothing and it's an error
+    //  else
+    //       ...
+    
+    if(d == NULL)
+    {
+        if(s != NULL)
+        {
+            d = host_address_copy_list(s);
+            *dp = d;
+            return TRUE;
+        }
+        else
+        {
+            return FALSE;
+        }
+    }
+    
+    // *dp is not NULL
+    
+    // ...
+    //
+    // for each ha in d
+    //     not in s -> remove from d
+    //
+    // now d is smaller, test what it still contains
+    //
+    // for each ha in s
+    //     not in d -> add to d
+    //
+    for(host_address *ha = d; ha != NULL; ha = ha->next)
+    {
+        if(!host_address_list_contains_host(s, ha))
+        {
+            // remove from d
+            host_address *removed = host_address_remove_host_address(&d, ha);
+            // release it
+            host_address_delete(removed);
+            
+            // if d was ha, then d is now empty
+            if(d == NULL)
+            {
+                break;
+            }
+            
+            // awful, don't care
+            ha = d;
+            changed = TRUE;
+        }
+    }
+    
+    /// @note host_address_append_host_address checks for duplicate before putting a copy
+    
+    for(host_address *ha = s; ha != NULL; ha = ha->next)
+    {
+        if(ISOK(host_address_append_host_address(d, ha))) // copy made
+        {
+            changed = true;
+        }
+    }
+    
+    // this is not a leak, the head of the list may have changed so this fixes it
+    
+    if(changed)
+    {
+        *dp = d;
+    }
+    
+    return changed;
+}
+
+ya_result
+host_address_to_str(const host_address *ha, char *str, int len, u8 flags)
+{
+    char *limit = &str[len];
+    char *p = str;
+    char port_separator;
+    
+    switch(ha->version)
+    {
+        case HOST_ADDRESS_IPV4:
+        {
+            port_separator = ':';
+            if(inet_ntop(AF_INET, ha->ip.v4.bytes, p, limit - p) == NULL)
+            {
+                *p = '\0';
+                return ERRNO_ERROR;
+            }
+            p += strlen(p);
+            break;
+        }
+        case HOST_ADDRESS_IPV6:
+        {
+            port_separator = '#';
+            if(inet_ntop(AF_INET6, ha->ip.v6.bytes, p, limit - p) == NULL)
+            {
+                *p = '\0';
+                return ERRNO_ERROR;
+            }
+            p += strlen(p);
+
+            break;
+        }
+        case HOST_ADDRESS_DNAME:
+        {
+            s32 n;
+            port_separator = ':';
+            *p = '\0';
+            if(FAIL(n = snformat(p, len, "%{dnsname}", ha->ip.dname.dname)))
+            {
+                // it failed, and n is the error code
+                return n;
+            }
+            p += n;
+            break;
+        }
+        default:
+        {
+            port_separator = ':';
+            *p = '\0';
+            break;
+        }
+    }
+
+    if((ha->port != 0) && (flags & HOST_ADDRESS_TO_STR_SHOW_PORT_ZERO))
+    {
+        if(flags & (HOST_ADDRESS_TO_STR_FULLPORT|HOST_ADDRESS_TO_STR_PORT))
+        {
+            s32 n;
+            
+            if(flags & HOST_ADDRESS_TO_STR_FULLPORT)
+            {                    
+                n = snformat(p, limit - p, " port %i", ntohs(ha->port));
+            }
+            else
+            {
+                n = snformat(p, limit - p, "%c%i", port_separator, ntohs(ha->port));
+            }
+            
+            if(FAIL(n))
+            {
+                // it failed, and n is the error code
+                return n;
+            }
+
+            p += n;
+        }
+    }
+    
+#if DNSCORE_HAS_TSIG_SUPPORT
+    if((ha->tsig != NULL) && (ha->tsig->name != NULL))
+    {
+        s32 n;
+        if(flags & HOST_ADDRESS_TO_STR_TSIG)
+        {
+            n = snformat(p, limit - p, "*%{dnsname}", ha->tsig->name);
+        }
+        else if(flags & HOST_ADDRESS_TO_STR_FULLTSIG)
+        {
+            n = snformat(p, limit - p, "key %{dnsname}", ha->tsig->name);
+        }
+        
+        if(FAIL(n))
+        {
+            // it failed, and n is the error code
+            return n;
+        }
+
+        p += n;
+    }
+#endif
+    
+    return p - str;
+}
+
 
 /** @} */

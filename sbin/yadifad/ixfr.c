@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -38,20 +38,27 @@
  * @{
  */
 
+#include "config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 
 #include <dnsdb/zdb_zone.h>
 #include <dnscore/rfc.h>
-#include <dnsdb/dnssec_scheduler.h>
 #include <dnscore/format.h>
 #include <dnscore/logger.h>
 #include <dnscore/random.h>
 #include <dnscore/tcp_io_stream.h>
 #include <dnscore/buffer_output_stream.h>
 #include <dnscore/xfr_copy.h>
+#include <dnscore/xfr_input_stream.h>
 #include <dnscore/serial.h>
 #include <dnscore/fdtools.h>
+#include <dnscore/thread_pool.h>
+
+#include <dnsdb/journal.h>
+#include <dnsdb/zdb-zone-answer-ixfr.h>
+#include <dnsdb/zdb_icmtl.h>
 
 #include "server.h"
 #include "ixfr.h"
@@ -81,6 +88,12 @@ ixfr_process(message_data *mesg)
     zdb_zone *zone;
 
     u8 *fqdn = mesg->qname;
+    u32 fqdn_len = dnsname_len(fqdn);
+    
+    if(fqdn_len > MAX_DOMAIN_LENGTH)
+    {
+        return DOMAIN_TOO_LONG;
+    }
     
     ya_result return_value = SUCCESS;
 
@@ -88,15 +101,13 @@ ixfr_process(message_data *mesg)
 
     dnsname_to_dnsname_vector(fqdn, &fqdn_vector);
 
-    fqdn += dnsname_len(fqdn) + 2; /* ( 2 because of the type ) */
+    u16 qclass = GET_U16_AT(mesg->buffer[DNS_HEADER_LENGTH + fqdn_len + 2]);
 
-    u16 qclass = GET_U16_AT(*fqdn);
-
-    if(((zone = zdb_zone_find((zdb*)g_config->database, &fqdn_vector, qclass)) != NULL) && ZDB_ZONE_VALID(zone))
+    if(((zone = zdb_zone_find(g_config->database, &fqdn_vector, qclass)) != NULL) && ZDB_ZONE_VALID(zone))
     {
+#if ZDB_HAS_ACL_SUPPORT
         access_control *ac = (access_control*)zone->extension;
-
-#if HAS_ACL_SUPPORT == 1
+        
         if(!ACL_REJECTED(acl_check_access_filter(mesg, &ac->allow_transfer)))
         {
 #endif
@@ -110,11 +121,15 @@ ixfr_process(message_data *mesg)
             {
                 u32 zone_serial;
                 
-                if(ISOK(return_value = zdb_zone_getserial(zone, &zone_serial)))
+                zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+                return_value = zdb_zone_getserial(zone, &zone_serial);
+                zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+                
+                if(ISOK(return_value))
                 {                
                     if(serial_lt(query_serial, zone_serial))
                     {
-                        scheduler_queue_zone_send_ixfr(zone, g_config->xfr_path, g_config->axfr_max_packet_size, g_config->axfr_max_record_by_packet, g_config->axfr_compress_packets, mesg);
+                        zdb_zone_answer_ixfr(zone, mesg, NULL, NULL, g_config->axfr_max_packet_size, g_config->axfr_max_record_by_packet, g_config->axfr_compress_packets);
                         
                         return SUCCESS;
                     }
@@ -124,6 +139,28 @@ ixfr_process(message_data *mesg)
                         
                         log_info("ixfr: already up-to-date");
                  
+                        // answer with the SOA
+                        
+                        packet_writer pc;
+                        packet_writer_init(&pc, mesg->buffer, DNS_HEADER_LENGTH + fqdn_len + 2 + 2, MAX_U16);
+
+                        const u8 *soa_rdata;
+                        u32 soa_ttl;
+                        u16 soa_rdata_size;
+                        
+                        zdb_zone_getsoa_ttl_rdata(zone, &soa_ttl, &soa_rdata_size, &soa_rdata);
+                        
+                        packet_writer_add_fqdn(&pc, &mesg->buffer[12]);
+                        packet_writer_add_u16(&pc, TYPE_SOA);
+                        packet_writer_add_u16(&pc, CLASS_IN);
+                        packet_writer_add_u32(&pc, ntohl(soa_ttl));
+                        packet_writer_add_rdata(&pc, TYPE_SOA, soa_rdata, soa_rdata_size);
+                        MESSAGE_FLAGS_OR(mesg->buffer, QR_BITS|AA_BITS, 0);
+                        MESSAGE_SET_QD(mesg->buffer, NETWORK_ONE_16);
+                        MESSAGE_SET_AN(mesg->buffer, NETWORK_ONE_16);
+                        MESSAGE_SET_NSAR(mesg->buffer, 0);
+                        
+                        mesg->send_length = pc.packet_offset;
                         mesg->status = FP_XFR_UP_TO_DATE;
                     }
                 }
@@ -143,7 +180,7 @@ ixfr_process(message_data *mesg)
                 mesg->status = FP_XFR_QUERYERROR;
             }
             
-#if HAS_ACL_SUPPORT == 1
+#if ZDB_HAS_ACL_SUPPORT
         }
         else
         {
@@ -171,16 +208,21 @@ ixfr_process(message_data *mesg)
         }
     }
     
-    message_make_error(mesg, mesg->status);
+    if(mesg->status != FP_XFR_UP_TO_DATE)
+    {
+        message_make_error(mesg, mesg->status);
+    }
     
+#if HAS_TSIG_SUPPORT
     if(MESSAGE_HAS_TSIG(*mesg))
     {
         message_sign_answer(mesg,mesg->tsig.tsig);
     }
+#endif
 
     tcp_send_message_data(mesg);
     
-    assert((mesg->sockfd < 0)||(mesg->sockfd >2));
+    yassert((mesg->sockfd < 0)||(mesg->sockfd >2));
     
     close_ex(mesg->sockfd);
 
@@ -203,7 +245,7 @@ ixfr_process(message_data *mesg)
  */
 
 ya_result
-ixfr_start_query(host_address *servers, const u8 *origin, u32 ttl, const u8 *soa_rdata, u16 soa_rdata_size, input_stream *is, output_stream *os, message_data *ixfr_queryp)
+ixfr_start_query(const host_address *servers, const u8 *origin, u32 ttl, const u8 *soa_rdata, u16 soa_rdata_size, input_stream *is, output_stream *os, message_data *ixfr_queryp)
 {
     /**
      * Create the IXFR query packet
@@ -215,12 +257,14 @@ ixfr_start_query(host_address *servers, const u8 *origin, u32 ttl, const u8 *soa
 
     message_make_ixfr_query(ixfr_queryp, id, origin, ttl, soa_rdata_size, soa_rdata);
     
+#if HAS_TSIG_SUPPORT
     if(servers->tsig != NULL)
     {
         log_info("ixfr: transfer will be signed with key '%{dnsname}'", servers->tsig->name);
         
         message_sign_query(ixfr_queryp, servers->tsig);
     }
+#endif
 
     /**
      * @todo start by doing it UDP (1.0.1)
@@ -246,6 +290,11 @@ ixfr_start_query(host_address *servers, const u8 *origin, u32 ttl, const u8 *soa
             return return_value;
         }
     }
+    
+#ifdef DEBUG
+    log_debug("ixfr_start_query: write: sending %d bytes to %{hostaddr}", ixfr_queryp->send_length + 2, servers);
+    log_memdump_ex(g_server_logger, LOG_DEBUG, &ixfr_queryp->buffer_tcp_len[0], ixfr_queryp->send_length + 2, 16, OSPRINT_DUMP_HEXTEXT);
+#endif
     
     if(ISOK(return_value = output_stream_write(os, &ixfr_queryp->buffer_tcp_len[0], ixfr_queryp->send_length + 2)))
     {
@@ -273,7 +322,7 @@ ixfr_start_query(host_address *servers, const u8 *origin, u32 ttl, const u8 *soa
  */
 
 ya_result
-ixfr_query(host_address *servers, zdb_zone *zone, u32* loaded_serial, u64* journal_offset)
+ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
 {
     /*
      * Background:
@@ -298,27 +347,26 @@ ixfr_query(host_address *servers, zdb_zone *zone, u32* loaded_serial, u64* journ
     u32 current_serial;
     u32 ttl;
     u16 rdata_size;
-    u8 *rdata;
-    
-    char file_path[1024];
+    const u8 *rdata;
 
     /** @todo check if zdb_zone_lock(zone, ZDB_ZONE_MUTEX_XFR) is needed */
 
+    zdb_zone_lock(zone, ZDB_ZONE_MUTEX_XFR);
+    
     if(FAIL(return_value = zdb_zone_getserial(zone, &current_serial)))
     {
+        zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_XFR);
         return return_value;
     }
 
     if(FAIL(return_value = zdb_zone_getsoa_ttl_rdata(zone, &ttl, &rdata_size, &rdata)))
     {
-        return return_value;
-    }
-
-    if(FAIL(return_value = snformat(file_path, sizeof(file_path), "%s/%{dnsname}%08x-HHHHHHHH.icmtl.tmp", g_config->xfr_path, zone->origin, current_serial)))
-    {
+        zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_XFR);
         return return_value;
     }
     
+    zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_XFR);
+
     input_stream is;
     output_stream os;
     message_data mesg;
@@ -334,53 +382,113 @@ ixfr_query(host_address *servers, zdb_zone *zone, u32* loaded_serial, u64* journ
         xfr_copy_args xfr;
         xfr.is = &is;
         xfr.origin = zone->origin;
-        xfr.base_data_path = g_config->xfr_path;
         xfr.message = &mesg;
         xfr.current_serial = current_serial;
         xfr.flags = XFR_ALLOW_BOTH;
         
-        if(ISOK(return_value = xfr_copy(&xfr)))
+        input_stream xfris;
+        if(ISOK(return_value = xfr_input_stream_init(&xfr, &xfris)))
         {
-            if(loaded_serial != NULL)
+            switch(xfr_input_stream_get_type(&xfris))
             {
-                *loaded_serial = xfr.out_loaded_serial;
-            }
-            
-            if(journal_offset != NULL)
-            {
-                *journal_offset = xfr.out_journal_file_append_offset;
-            }
-            
-            if(return_value == TYPE_AXFR)
-            {
-                /* delete ix files */
+                case TYPE_AXFR:
+                case TYPE_ANY:
+                {
+                    /* delete axfr files */
+                    
+                    char data_path[PATH_MAX]; 
+#ifdef DEBUG
+                    memset(data_path, 0x5a, sizeof(data_path));
+#endif
+                    xfr_copy_get_data_path(data_path, sizeof(data_path), g_config->xfr_path, zone->origin);
+                    
+                    xfr_delete_axfr(zone->origin, data_path);
+                    
+                    /* delete ix files */
 
-                xfr_delete_ix(zone->origin, g_config->xfr_path);
+                    journal_truncate(zone->origin, g_config->xfr_path);
+                    
+                    /*
+                    tcp_set_sendtimeout(fd, 30, 0);
+                    tcp_set_recvtimeout(fd, 30, 0);
+                    */
+                    if(ISOK(return_value = xfr_copy(&xfris, g_config->xfr_path)))
+                    {
+                        if(out_loaded_serial != NULL)
+                        {
+                            *out_loaded_serial = xfr.out_loaded_serial;
+                        }
+                    }
+                    else
+                    {
+                        log_debug("ixfr: AXFR stream copy failed: %r", return_value);
+                    }
+                    
+                    break;
+                }
+                case TYPE_IXFR:
+                {
+                    journal *jh = NULL;
+                    if(ISOK(journal_open(&jh, zone, g_config->xfr_path, TRUE))) // does close
+                    {
+                        if(jh != NULL)
+                        {
+                            return_value = journal_append_ixfr_stream(jh, &xfris);
+                            
+                            if(out_loaded_serial != NULL)
+                            {
+                                journal_get_last_serial(jh, out_loaded_serial);
+                            }
+                            
+                            journal_close(jh);
+#ifdef DEBUG
+                            log_debug("ixfr: journal_append_ixfr_stream returned %r", return_value);
+#endif
+                            
+                            zdb_zone_lock(zone, ZDB_ZONE_MUTEX_LOAD);                          
+                            ya_result err;
+                            if(FAIL(err = zdb_icmtl_replay(zone, g_config->xfr_path)))
+                            {
+                                return_value = err;
+                                log_err("zone load: journal replay returned %r", return_value);
+                            }
+                            zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_LOAD);
+                        }
+                    }
+                    
+                    break;
+                }
+                default:
+                {
+                    return_value = ERROR;
+                    break;
+                }
             }
-            else
-            {
-                /*
-                 * at this point we know where the added journal page(s) do start, their size and last serial
-                 * using them will increase performance
-                 */
-            }
+            
+            input_stream_close(&xfris);
         }
         else
         {
-            log_info("ixfr: transfer from master failed for zone %{dnsname}: %r", zone->origin, return_value);
+            if(return_value == ZONE_ALREADY_UP_TO_DATE)
+            {
+                return_value = SUCCESS;
+            }
+            else
+            {
+                log_info("ixfr: transfer from master failed for zone %{dnsname}: %r", zone->origin, return_value);
+            }
         }
 
         input_stream_close(&is);
         output_stream_close(&os);
 
-
         /**
-         * @todo Here is a good place to check the IXFR size status.
+         * @todo Here is a good place to check the journal size.
          *
          * If it worked, it may be nice to know the current total size of the journaling file
-         * If it's beyond a given size, then an AXFR could be written on the disk and the older files deleted
+         * If it's beyond a given size, then an zone file/AXFR could be written on the disk and the older files deleted
          */
-	}
+    }
 
     return return_value;
 }

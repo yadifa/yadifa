@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief 
@@ -55,6 +55,8 @@ extern "C" {
     
     /* Create an input stream and assigns the fd to it. */
     ya_result fd_input_stream_attach(int fd, input_stream *stream);
+    
+    void fd_input_stream_detach(input_stream *stream);
 
     ya_result fd_input_stream_get_filedescriptor(input_stream* stream);
     

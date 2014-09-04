@@ -30,82 +30,35 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
-/** @defgroup zonefile Zone file loader module
- *  @ingroup dnszone
- *  @brief Zone file loader module
- *
- * @{
- */
-/*----------------------------------------------------------------------------*/
+*/
 
-#ifndef ZONE_FILE_READER_H_
-#define ZONE_FILE_READER_H_
-/*------------------------------------------------------------------------------
- *
- * USE INCLUDES */
+#pragma once
 
-#include <dnszone/dnszone.h>
+#include <dnsdb/zdb_zone_load_interface.h>
 
-/*    ------------------------------------------------------------
- *
- *      VALUES
- */
-/** \def ttl value used for the zone file if none provided */
-#define		DEFAULT_TTL             86400
-#define		DOT_DOMAIN              "."
+#define ZONEFILE_ERROR_BASE                       0x800A0000
+#define ZONEFILE_ERROR_CODE(code_)                ((s32)(ZONEFILE_ERROR_BASE+(code_)))
 
-#define		BRACKET_CLOSED          0x00U
-#define		BRACKET_OPEN            0x01U
-/**  flag settings for printing the zone file
- * \param 0 means not printing of the resource records
- * \param 1 means printing of the resource records
- */
-#define		WITHOUT_RR		0
-#define		WITH_RR                 1
+#define ZONEFILE_FEATURE_NOT_SUPPORTED            ZONEFILE_ERROR_CODE(0x0001)
+#define ZONEFILE_EXPECTED_FILE_PATH               ZONEFILE_ERROR_CODE(0x0002)
+#define ZONEFILE_SOA_WITHOUT_CLASS                ZONEFILE_ERROR_CODE(0x0003)
+#define ZONEFILE_SALT_TOO_BIG                     ZONEFILE_ERROR_CODE(0x0011)
+#define ZONEFILE_TEXT_TOO_BIG                     ZONEFILE_ERROR_CODE(0x0012)
+#define ZONEFILE_FLAGS_TOO_BIG                    ZONEFILE_ERROR_CODE(0x0013)
+#define ZONEFILE_SERVICE_TOO_BIG                  ZONEFILE_ERROR_CODE(0x0014)
+#define ZONEFILE_REGEX_TOO_BIG                    ZONEFILE_ERROR_CODE(0x0015)
+#define ZONEFILE_RDATA_PARSE_ERROR                ZONEFILE_ERROR_CODE(0x0016)
+#define ZONEFILE_RDATA_BUFFER_TOO_SMALL           ZONEFILE_ERROR_CODE(0x0017)
+#define ZONEFILE_RDATA_SIZE_MISMATCH              ZONEFILE_ERROR_CODE(0x0018)
 
-/*    ------------------------------------------------------------
- *
- *      VALUES
- */
+void zone_file_reader_init_error_codes();
 
-/*    ------------------------------------------------------------
- *
- *      ENUM
- */
+ya_result zone_file_reader_parse_stream(input_stream *ins, zone_reader *zr);
 
-/*    ------------------------------------------------------------
- *
- *      STRUCTS
- */
+ya_result zone_file_reader_open(const char *fullpath, zone_reader *zr);
 
-/*    ------------------------------------------------------------
- *
- *      PROTOTYPES
- */
+ya_result zone_file_reader_set_origin(zone_reader *zr, const u8* origin);
 
-/** @brief Opens a zone file
- *
- *  Opens a zone file
- *
- *  @param[in]  fullpath the path and name of the file to open
- *  @param[out] zone a pointer to a structure that will be used by the function
- *              to hold the zone-file information
- *
- *  @return     A result code
- *  @retval     OK   : the file has been opened successfully
- *  @retval     else : an error occurred
- */
+void zone_file_reader_ignore_missing_soa(zone_reader *zr);
 
-ya_result zone_file_reader_parse_stream(input_stream *ins, zone_reader *dst);
-ya_result zone_file_reader_open(const char* fullpath, zone_reader *dst);
-
-void zone_file_reader_ignore_missing_soa(zone_reader *dst);
-
-#endif
-
-/*    ------------------------------------------------------------    */
-
-/**
- * @}
- */
+ya_result zone_file_reader_copy_rdata(const char *text, u16 rtype, u8 *rdata, u32 rdata_size, const u8 *origin);

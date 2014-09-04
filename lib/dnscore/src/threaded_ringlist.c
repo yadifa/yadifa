@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief
@@ -185,7 +185,7 @@ threaded_ringlist_enqueue(threaded_ringlist* queue, void* constant_pointer)
     }
     else
     {
-        MALLOC_OR_DIE(threaded_ringlist_node*, node, sizeof (threaded_ringlist_node), THREADED_QUEUE_TAG);
+        MALLOC_OR_DIE(threaded_ringlist_node*, node, sizeof(threaded_ringlist_node), THREADED_QUEUE_TAG);
     }
 
     node->prev = queue->prev;
@@ -532,7 +532,7 @@ threaded_ringlist_dequeue_set(threaded_ringlist* queue, void** array, u32 array_
     bool unlock_enqueue = queue->size == queue->max_size; /* enqueue has just been locked -> schedule unlock */
 
     u32 loops = MIN(queue->size, array_size); /* The amount we will be able to extract */
-    void** limit = &array[loops];
+    void ** const limit = &array[loops];
 
     while(array < limit)
     {

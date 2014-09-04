@@ -2,6 +2,6 @@
 	domain		somedomain.eu
 	file		slaves/somedomain.eu.zone
 	type		slave
-	master		192.2.0.1
+	master		192.0.2.1
 </zone>
 

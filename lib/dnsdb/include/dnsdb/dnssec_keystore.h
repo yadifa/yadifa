@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnskey DNSSEC keys functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -47,85 +47,28 @@
 #include <openssl/engine.h>
 
 #include <dnscore/sys_types.h>
-#include <dnsdb/btree.h>
+#include <dnscore/dnskey.h>
+
+//#include <dnsdb/btree.h>
 #include <dnsdb/zdb_zone.h>
 
-#if ZDB_DNSSEC_SUPPORT == 0
-#error "Please do not include dnssec_keystore.h if ZDB_DNSSEC_SUPPORT is 0 (Not NSEC3 nor NSEC)"
+#if ZDB_HAS_DNSSEC_SUPPORT == 0
+#error "Please do not include dnssec_keystore.h if ZDB_HAS_DNSSEC_SUPPORT is 0 (Not NSEC3 nor NSEC)"
 #endif
 
 
 #ifdef	__cplusplus
 extern "C" {
 #endif
-
-#define DNSKEY_RDATA_TAG 0x445259454b534e44 /* DNSKEYRD */
-
-typedef struct dnssec_key_vtbl dnssec_key_vtbl;
-
-
-typedef struct dnssec_key_contextmethods dnssec_key_contextmethods;
-
-
-struct dnssec_key_vtbl;
-
-union dnssec_key_key_types
-{
-    void* any;
-    RSA* rsa;
-    DSA* dsa;
-};
-
-typedef union dnssec_key_key_types dnssec_key_key_types;
-
-typedef struct dnssec_key dnssec_key;
-
-
-/* Hash should be tag<<8 | algorithm */
-struct dnssec_key
-{
-    struct dnssec_key* next;
-    dnssec_key_vtbl* vtbl;
-    char* origin;
-    u8* owner_name;		/* = zone origin */
-
-    dnssec_key_key_types key;	/* RSA* or DSA* */
-    int	    nid;		/* NID_sha1, NID_md5 */
-
-    u16 flags;
-    u16 tag;
-    u8 algorithm;
-    bool is_private;    /* Because I'll probably allow to put public keys here, later ... */
-
-    /*
-     * Later, add a list of (wannabe) signers and for each of these
-     * if said signature has been verified, not verified or is wrong
-     */
-};
-
-typedef struct dnssec_key_sll dnssec_key_sll;
-
-
-struct dnssec_key_sll
-{
-    struct dnssec_key_sll* next;
-    dnssec_key* key;
-};
-
-typedef void dnskey_key_free_method(dnssec_key* key);
-typedef u32 dnskey_key_rdatasize_method(dnssec_key* key);
-typedef u32 dnskey_key_writerdata_method(dnssec_key* key,u8* output);
-typedef ya_result dnssec_key_sign_digest_method(dnssec_key* key,u8* digest,u32 digest_len,u8* output);
-typedef bool dnssec_key_verify_digest_method(dnssec_key* key,u8* digest,u32 digest_len,u8* signature,u32 signature_len);
-
-struct dnssec_key_vtbl
-{
-    dnssec_key_sign_digest_method* dnssec_key_sign_digest;
-    dnssec_key_verify_digest_method* dnssec_key_verify_digest;
-    dnskey_key_rdatasize_method* dnskey_key_rdatasize;
-    dnskey_key_writerdata_method* dnskey_key_writerdata;
-    dnskey_key_free_method* dnskey_key_free;
-};
+    
+/**
+ * Notes about the keyring:
+ * 
+ * It can handle keys from multiple domains.
+ * It is not designed to hold thousands of keys.
+ * Keys are referenced by their TAG, grouped in lists.
+ * 
+ */
 
 typedef btree dnssec_keystore;
 
@@ -141,18 +84,15 @@ void		dnssec_keystore_destroy();
 
 bool		dnssec_key_equals(dnssec_key* a,dnssec_key* b);
 
-/* Tool */
-dnssec_key*	dnssec_key_newemptyinstance(u8 algorithm,u16 flags,const char *origin);
-
 /** Generates a private key, store in the keystore */
-ya_result   dnssec_key_createnew(u8 algorithm,u32 size,u16 flags,const char *origin, dnssec_key **out_key);
+ya_result       dnssec_key_createnew(u8 algorithm,u32 size,u16 flags,const char *origin, dnssec_key **out_key);
 
 /** Removes the key from the keystore, then deletes it */
 void		dnssec_key_free(dnssec_key* key);
 
 /** Load a public key from the rdata, then return it */
 
-ya_result   dnskey_load_public(const u8 *rdata, u16 rdata_size, const char* origin, dnssec_key **out_key);
+ya_result       dnskey_load_public(const u8 *rdata, u16 rdata_size, const char* origin, dnssec_key **out_key);
 
 /**
  *  Load a private key from the disk or the keystore, then return it.

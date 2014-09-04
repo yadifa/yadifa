@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup
  *  @ingroup dnscore
  *  @brief
@@ -40,7 +40,9 @@
  * @{
  *
  *----------------------------------------------------------------------------*/
-#include "dnscore/sys_types.h"
+
+#include "dnscore-config.h"
+
 #include "dnscore/rfc.h"
 #include "dnscore/typebitmap.h"
 
@@ -53,7 +55,7 @@ type_bit_maps_write(u8* output, type_bit_maps_context* context)
 {
     /* No types at all ? Should NOT have been called */
 
-    zassert(context->type_bit_maps_size > 2);
+    yassert(context->type_bit_maps_size > 2);
 
     u8* type_bitmap_field = context->type_bitmap_field;
     u8* window_size = context->window_size;
@@ -83,7 +85,7 @@ type_bit_maps_write(u8* output, type_bit_maps_context* context)
 s32
 type_bit_maps_expand(type_bit_maps_context* context, u8* type_bitmap, u32 size)
 {
-    u8* limit = type_bitmap + size;
+    const u8 * const limit = type_bitmap + size;
     s32 last_type = -1;
     while(type_bitmap < limit)
     {

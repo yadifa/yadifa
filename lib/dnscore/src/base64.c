@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /**
  *  @defgroup base Base conversion functions
  *  @ingroup dnscore
@@ -198,7 +198,10 @@ static const u8 __DEBASE64__[256] ={
 ya_result
 base64_decode(const char* buffer_in, u32 size_in, u8* buffer_out)
 {
-    zassert((size_in & 3) == 0);
+    if((size_in & 3) != 0)
+    {
+        return PARSEB64_ERROR; // wrong number of bytes
+    }
 
     u8* in = (u8*)buffer_in;
     u8* out = buffer_out;

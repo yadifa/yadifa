@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief 
@@ -51,7 +51,7 @@ extern "C" {
 
 #define BUFFER_INPUT_STREAM_DEFAULT_BUFFER_SIZE 4096
 
-void buffer_input_stream_init(input_stream* filtered,input_stream* stream, int buffer_size);
+void buffer_input_stream_init(input_stream* filtered_in, input_stream* stream_out, int buffer_size);
 
 /*
  * Function specific to the buffer_input_stream to read a line up to the '\n'
@@ -61,6 +61,30 @@ ya_result buffer_input_stream_read_line(input_stream* stream, char* buffer, u32 
 /*
 ya_result buffer_input_stream_init(input_stream* stream,input_stream* fildered);
 */
+
+input_stream *buffer_input_stream_get_filtered(input_stream* bis);
+
+/**
+ * Rewinds the input stream back of a given number of bytes
+ * 
+ * @param bos
+ * @param bytes_back
+ * 
+ * @return bytes_back : the operation was successful
+ *         > 0        : the maximum number of bytes available for rewind at the time of the call
+ */
+
+ya_result buffer_input_stream_rewind(input_stream* bos, u32 bytes_back);
+
+/**
+ * Returns true iff the input stream is a buffer input stream
+ * 
+ * @param bos
+ * @return 
+ */
+
+bool is_buffer_input_stream(input_stream *bos);
+
 #ifdef	__cplusplus
 }
 #endif

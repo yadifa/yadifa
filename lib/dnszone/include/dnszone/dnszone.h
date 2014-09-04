@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnszone Zone loader modules
  * 
  *  @brief Zone loader modules
@@ -44,7 +44,7 @@
 
 #include <dnscore/sys_types.h>
 #include <dnscore/dnscore.h>
-#include <dnszone/resourcerecord.h>
+#include <dnsdb/zdb_zone_load_interface.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,32 +54,13 @@ extern "C" {
  * This is supposed to help with huge amounts of file read only once ... except it does not really work (not always).
  * 
  */
-#define     DNSDB_USE_POSIX_ADVISE  0
+#define     DNSDB_USE_POSIX_ADVISE  1
 
 #define     ZONEREAD_ERROR_BASE             0x800a0000
 #define     ZONEREAD_ERROR_CODE(code_)      ((s32)(ZONEREAD_ERROR_BASE+(code_)))
-#define     ZRE_NO_CLASS_FOUND              ZONEREAD_ERROR_CODE( 1)
-#define     ZRE_DIFFERENT_CLASSES           ZONEREAD_ERROR_CODE( 2)
-#define     ZRE_WRONG_APEX                  ZONEREAD_ERROR_CODE( 3)
-#define     ZRE_DUPLICATED_SOA              ZONEREAD_ERROR_CODE( 4)
-#define     ZRE_FILE_OPEN_ERR               ZONEREAD_ERROR_CODE( 5)
-#define     ZRE_FILE_NOT_FOUND_ERR          ZONEREAD_ERROR_CODE( 6)
-#define     ZRE_INCORRECT_DOMAINNAME        ZONEREAD_ERROR_CODE( 7)
-#define     ZRE_INCORRECT_DOMAIN_LEN        ZONEREAD_ERROR_CODE( 8)
-#define     ZRE_INCORRECT_LABEL_LEN         ZONEREAD_ERROR_CODE( 9)
-#define     ZRE_INCORRECT_ORIGIN            ZONEREAD_ERROR_CODE(10)
-#define     ZRE_INCORRECT_TTL               ZONEREAD_ERROR_CODE(11)
-#define     ZRE_NO_VALUE_FOUND              ZONEREAD_ERROR_CODE(12)
-#define     ZRE_DUPLICATED_OPEN_BRACKET     ZONEREAD_ERROR_CODE(13)
-#define     ZRE_DUPLICATED_CLOSED_BRACKET   ZONEREAD_ERROR_CODE(14)
-#define     ZRE_NO_TYPE_FOUND               ZONEREAD_ERROR_CODE(15)
-#define     ZRE_NO_RDATA_FOUND              ZONEREAD_ERROR_CODE(17)
-#define     ZRE_INCORRECT_RDATA_LEN         ZONEREAD_ERROR_CODE(18)
+#define     ZRE_AXFR_FILE_NOT_FOUND         ZONEREAD_ERROR_CODE( 1)
+#define     ZRE_NO_VALID_FILE_FOUND              ZONEREAD_ERROR_CODE( 2)
     
-    
-#define     ZRE_CRAP_AT_END_OF_RECORD       ZONEREAD_ERROR_CODE(21)
-#define     ZRE_UNBALANCED_QUOTES           ZONEREAD_ERROR_CODE(24)
-#define     ZRE_AXFR_FILE_NOT_FOUND         ZONEREAD_ERROR_CODE(25)
 /*
  * This fingerprint feature has been added so libraries could check they are compatible
  */

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup logging Server logging
  *  @ingroup yadifad
  *  @brief 
@@ -40,6 +40,8 @@
  * @{
  *
  *----------------------------------------------------------------------------*/
+
+#include "config.h"
 
 #include <dnscore/logger.h>
 
@@ -57,6 +59,26 @@
 logger_handle* g_queries_logger = NULL;
 log_query_function* log_query = log_query_yadifa;
 
+void
+log_query_set_mode(u32 mode)
+{
+    switch(mode)
+    {
+        case 1:
+            log_query = log_query_yadifa;
+            break;
+        case 2:
+            log_query = log_query_bind;
+            break;
+        case 3:
+            log_query = log_query_both;
+            break;
+        default:
+            log_query = log_query_none;
+            break;
+    }
+}
+    
 static u8
 log_query_add_du16(char *dest, u16 v)
 {
@@ -97,11 +119,13 @@ log_query_bind(int socket_fd, message_data *mesg)
     {
         return;
     }
-        
-    char query_text[1024];
-        
-    char *buffer = query_text;    
     
+    char *buffer;
+    const char *class_name;
+    const char *type_name;
+    char query_text[1024];
+    buffer = query_text;
+        
     memcpy(buffer, "client ", 7);
     buffer+=7;
     
@@ -144,7 +168,7 @@ log_query_bind(int socket_fd, message_data *mesg)
     
     *buffer++ = ' ';
     
-    const char *class_name = get_name_from_class(mesg->qclass);
+    class_name = get_name_from_class(mesg->qclass);
     if(class_name != NULL)
     {
         strcpy(buffer, class_name);
@@ -159,7 +183,7 @@ log_query_bind(int socket_fd, message_data *mesg)
     
     *buffer++ = ' ';
     
-    const char *type_name = get_name_from_type(mesg->qtype);
+    type_name = get_name_from_type(mesg->qtype);
     if(type_name != NULL)
     {
         strcpy(buffer, type_name);
@@ -176,10 +200,12 @@ log_query_bind(int socket_fd, message_data *mesg)
     
     *buffer++ = (MESSAGE_RD(mesg->buffer)==0)?'-':'+';
 
+#if HAS_TSIG_SUPPORT
     if(mesg->tsig.tsig != NULL)
     {
         *buffer++ = 'S';
     }
+#endif
     
     if(mesg->edns)
     {
@@ -218,14 +244,18 @@ log_query_bind(int socket_fd, message_data *mesg)
 void
 log_query_yadifa(int socket_fd, message_data *mesg)
 {
+    (void)socket_fd;
+    
     if(g_queries_logger == NULL)
     {
         return;
     }
     
+    char *buffer;
+    const char *class_name;
+    const char *type_name;
     char query_text[1024];
-    
-    char *buffer = query_text;    
+    buffer = query_text;
     
     memcpy(buffer, "query [", 7);
     buffer+=7;    
@@ -235,7 +265,11 @@ log_query_yadifa(int socket_fd, message_data *mesg)
     
     *buffer++ = '{';    
     *buffer++ = (MESSAGE_RD(mesg->buffer)!=0)?'+':'-';
+#if HAS_TSIG_SUPPORT
     *buffer++ = (mesg->tsig.tsig != NULL)?    'S':'-';
+#else
+    *buffer++ = '-';
+#endif
     *buffer++ = (mesg->edns)?                 'E':'-';
     *buffer++ = (mesg->protocol == IPPROTO_TCP)?'T':'-';
     *buffer++ = ((mesg->rcode_ext & RCODE_EXT_DNSSEC)!=0)?'D':'-';
@@ -248,7 +282,7 @@ log_query_yadifa(int socket_fd, message_data *mesg)
     
     *buffer++ = ' ';
     
-    const char *class_name = get_name_from_class(mesg->qclass);
+    class_name = get_name_from_class(mesg->qclass);
     if(class_name != NULL)
     {
         strcpy(buffer, class_name);
@@ -263,7 +297,7 @@ log_query_yadifa(int socket_fd, message_data *mesg)
     
     *buffer++ = ' ';
     
-    const char *type_name = get_name_from_type(mesg->qtype);
+    type_name = get_name_from_type(mesg->qtype);
     if(type_name != NULL)
     {
         strcpy(buffer, type_name);

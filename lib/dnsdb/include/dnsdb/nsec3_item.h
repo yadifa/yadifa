@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -75,23 +75,45 @@ nsec3_zone_item* nsec3_zone_item_find_by_name_ext(zdb_zone *zone, const u8 *nsec
 
 nsec3_zone_item* nsec3_zone_item_find_by_record(zdb_zone *zone, const u8 *fqdn, u16 rdata_size, const u8 *rdata);
 
-bool nsec3_zone_item_equals_rdata(nsec3_zone* n3,
-                             nsec3_zone_item* item,
-                             u16 rdata_size,
-                             const u8* rdata);
+bool nsec3_zone_item_equals_rdata(
+                            const nsec3_zone* n3,
+                            const nsec3_zone_item* item,
+                            u16 rdata_size,
+                            const u8* rdata);
 
-void nsec3_zone_item_to_zdb_packed_ttlrdata(
-			        nsec3_zone* n3,
-			        nsec3_zone_item* item,
-			        u8* origin,
-			        u8* out_owner, /* dnsname */
-                    u32 ttl,
-			        zdb_packed_ttlrdata** out_nsec3,
-			        zdb_packed_ttlrdata** out_nsec3_rrsig);
+ya_result nsec3_zone_item_to_zdb_packed_ttlrdata(
+                            const nsec3_zone* n3,
+                            const nsec3_zone_item* item,
+                            const u8* origin,
+                            u8* out_owner, /* dnsname */
+                            u32 ttl,
+                            zdb_packed_ttlrdata* nsec3,
+                            u32  nsec3_max_size,
+                            const zdb_packed_ttlrdata** out_nsec3_rrsig);
 
-u32 nsec3_zone_item_get_label(   nsec3_zone_item* item,
-                    u8* output_buffer,
-                    u32 buffer_size);
+struct nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm
+{
+    const nsec3_zone* n3;
+    const nsec3_zone_item* item;
+    const u8* origin;
+    u8 * restrict * pool; // memory pool
+    u32 ttl;
+};
+
+typedef struct nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm;
+
+#define NSEC3_ZONE_ITEM_TO_NEW_ZDB_PACKED_TTLRDATA_SIZE (ALIGN16(MAX_DOMAIN_LENGTH) + ALIGN16(NSEC3_ZONE_STRUCT_SIZE_FROM_SALT(255)))
+
+void nsec3_zone_item_to_new_zdb_packed_ttlrdata(
+                            nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm *nsec3_parms,
+                            u8 **out_owner_p, /* dnsname */
+                            zdb_packed_ttlrdata** out_nsec3,
+                            const zdb_packed_ttlrdata** out_nsec3_rrsig);
+
+u32 nsec3_zone_item_get_label(
+                            nsec3_zone_item* item,
+                            u8* output_buffer,
+                            u32 buffer_size);
 
 void nsec3_zone_item_write_owner(  output_stream* os,
 				    nsec3_zone_item* item,

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief 
@@ -50,15 +50,26 @@ extern "C" {
 #endif
 
 /**
- * Can only fail if in_filtered has not been set
+ * 
+ * Bufferise the in_filtered output stream wrapping it in out_stream
+ * 
+ * Can only fail if in_filtered has not been set properly
+ * 
+ * @param in_filtered the stream to bufferise
+ * @param out_stream the resulting stream
+ * @param in_buffer_size the size of the buffer
+ * 
+ * @return SUCCESS except if in_filtered has not been opened
  */
 
-ya_result buffer_output_stream_init(output_stream* in_filtered,
-	output_stream* out_stream,
-	int in_buffer_size);
+ya_result buffer_output_stream_init(output_stream* in_filtered, output_stream* out_stream, int in_buffer_size);
 
-output_stream *buffer_output_stream_get_filtered(output_stream* bos);
-	
+/***/
+
+output_stream *buffer_output_stream_get_filtered(output_stream *bos);
+
+bool is_buffer_output_stream(output_stream* os);
+
 #ifdef	__cplusplus
 }
 #endif

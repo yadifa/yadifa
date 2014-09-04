@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup ### #######
  *  @ingroup dnsdb
  *  @brief 
@@ -40,7 +40,7 @@
 #ifndef _DNSRDATA_H
 #define	_DNSRDATA_H
 
-#include "zdb_types.h"
+#include <dnsdb/zdb_types.h>
 
 #ifdef	__cplusplus
 extern "C" {
@@ -78,18 +78,17 @@ struct rrsig_rdata
 
 void rdata_to_rrsig(u8* rdata,struct rrsig_rdata* rrsig);
 
-
 typedef struct soa_rdata soa_rdata;
 
 struct soa_rdata
 {
-    u8* mname;
-    u8* rname;
+    const u8* mname;
+    const u8* rname;
     u32 serial;
     u32 refresh;
     u32 retry;
     u32 expire;
-    u32 minimum;    /* TTL */
+    u32 minimum;    /* TTL / NTTL */
 };
 
 /* rfc3845 */

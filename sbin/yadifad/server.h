@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /**
  *  @defgroup server Server
  *  @ingroup yadifad
@@ -49,7 +49,6 @@
 
 #include <dnscore/message.h>
 #include <dnscore/logger.h>
-#include <dnscore/mutex.h>
 
 #include "confs.h"
 
@@ -61,9 +60,16 @@ extern logger_handle *g_server_logger;
 extern volatile int program_mode;
 #endif
 
+#include <dnscore/mutex.h>
+
 #define SOA_MIN_REFRESH 60
 #define SOA_MIN_RETRY   60
 #define SOA_MIN_EXPIRE  60
+
+#define ANCILIARY_BUFFER_SIZE 65536
+
+#define TPROCPRM_TAG 0x4d5250434f525054
+#define POLLFDBF_TAG 0x464244464c4c4f50
 
 /*    ------------------------------------------------------------
  *
@@ -118,10 +124,13 @@ struct server_statistics_t
     volatile u64 tcp_axfr_count;
     volatile u64 tcp_ixfr_count;
     volatile u64 tcp_overflow_count;    
-
-    /* scheduler  */
-
-    volatile u64 sched_queries_count;
+    
+    /* rrl */
+    
+#if HAS_RRL_SUPPORT
+    volatile u64 rrl_slip;
+    volatile u64 rrl_drop;
+#endif
     
     /* answers */
     
@@ -137,13 +146,13 @@ extern server_statistics_t server_statistics;
 
 #endif
 
-void server_run();
 
-/** @todo : maybe move this outside ? */
-void udp_send_message_data(message_data* mesg);
+
+ya_result server_run();
+
 void tcp_send_message_data(message_data* mesg);
 
-void server_process_tcp(database_t *database, tcp *tcp_itf);
+void server_process_tcp(zdb *database, tcp *tcp_itf);
 
 /*    ------------------------------------------------------------    */
 

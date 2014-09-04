@@ -3,7 +3,7 @@
 /* number of harware core if the auto-detect fails */
 #undef DEFAULT_ASSUMED_CPU_COUNT
 
-/* Enable ACL support */
+/* always on */
 #undef HAS_ACL_SUPPORT
 
 /* i386, Athlon, Opteron, Core2, i3, i5, i7, ... */
@@ -12,8 +12,20 @@
 /* T1000 has a Niagara cpu */
 #undef HAS_CPU_NIAGARA
 
-/* MUST be enabled if either NSEC3 or NSEC are enabled */
+/* Define this to enable the remote control (devs only) */
+#undef HAS_CTRL
+
+/* always on */
 #undef HAS_DNSSEC_SUPPORT
+
+/* Define this to enable dynamic provisioning */
+#undef HAS_DYNAMIC_PROVISIONING
+
+/* Enable dynamic update support */
+#undef HAS_DYNUPDATE_SUPPORT
+
+/* Enable MASTER support */
+#undef HAS_MASTER_SUPPORT
 
 /* Define this to enable slow but safe memory accesses */
 #undef HAS_MEMALIGN_ISSUES
@@ -22,22 +34,31 @@
    same interface. */
 #undef HAS_MESSAGES_SUPPORT
 
-/* Set this to 1 to enable NSEC3 support */
+/* always on */
 #undef HAS_NSEC3_SUPPORT
 
-/* Set this to 1 to enable NSEC support */
+/* always on */
 #undef HAS_NSEC_SUPPORT
+
+/* Define this to enable NSID support */
+#undef HAS_NSID_SUPPORT
+
+/* The system supports thread names */
+#undef HAS_PTHREAD_SETNAME_NP
 
 /* The system supports spinlocks */
 #undef HAS_PTHREAD_SPINLOCK
 
+/* Define this to enable DNS RRL */
+#undef HAS_RRL_SUPPORT
+
+/* Do verify and/or generate RRSIG for zones */
+#undef HAS_RRSIG_MANAGEMENT_SUPPORT
+
 /* The sockaddr struct has an sa_len field */
 #undef HAS_SOCKADDR_SA_LEN
 
-/* Define this to use less memory */
-#undef HAS_TINY_FOOTPRINT
-
-/* Enable TSIG support */
+/* always on */
 #undef HAS_TSIG_SUPPORT
 
 /* Define to 1 if you have the <dlfcn.h> header file. */

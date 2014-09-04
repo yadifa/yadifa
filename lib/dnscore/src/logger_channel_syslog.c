@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup logger Logging functions
  *  @ingroup dnscore
  *  @brief
@@ -56,9 +56,8 @@
 #include <pthread.h>
 #endif
 
+#include "dnscore/logger_channel_syslog.h"
 #include "dnscore/sys_types.h"
-#include "dnscore/logger_channel.h"
-
 #include "dnscore/format.h"
 
 #define SYSLOG_MAX_LINE_SIZE 1024
@@ -77,8 +76,13 @@ struct syslog_data
 static ya_result
 logger_channel_syslog_constmsg(logger_channel* chan, int level, char* text, u32 text_len, u32 date_offset)
 {
+    (void)text_len;
+    if(level > LOG_DEBUG)
+    {
+        level = LOG_DEBUG;
+    }
     syslog(level, "%s", &text[date_offset]); /* don't worry about not being a string literal */
-
+    
     return SUCCESS;
 }
 
@@ -98,29 +102,17 @@ logger_channel_syslog_msg(logger_channel* chan, int level, char* text, ...)
         return_code = SYSLOG_FORMATTING_ERROR_TEXT_LENGTH;
     }
 
-    /*
-     *  In order to avoid syslog % issues : replace all '%' by something else: ie: '°'
-     */
-/*
-    s32 i;
-    for(i = 0; i < return_code; i++)
-    {
-        if(tmp[i] == '%')
-        {
-            tmp[i] = '~';
-        }
-    }
-*/
     syslog(level, "%s", tmp);
 
     va_end(args);
 
-    return SUCCESS;
+    return return_code;
 }
 
 static ya_result
 logger_channel_syslog_vmsg(logger_channel* chan, int level, char* text, va_list args)
 {
+    (void)chan;
     char tmp[SYSLOG_MAX_LINE_SIZE];
 
     ya_result return_code = vsnformat(tmp, sizeof (tmp), text, args);
@@ -130,26 +122,13 @@ logger_channel_syslog_vmsg(logger_channel* chan, int level, char* text, va_list 
         memcpy(tmp, SYSLOG_FORMATTING_ERROR_TEXT, SYSLOG_FORMATTING_ERROR_TEXT_LENGTH);
         return_code = SYSLOG_FORMATTING_ERROR_TEXT_LENGTH;
     }
-
-    /*
-     *  In order to avoid syslog % issues : replace all '%' by something else: ie: '°'
-     */
-
-    s32 i;
-    for(i = 0; i < return_code; i++)
-    {
-        if(tmp[i] == '%')
-        {
-            tmp[i] = '~';
-        }
-    }
-
     /*
      * NOTE: LOG_DEBUG is the last supported level
      */
-    syslog(level & LOG_PRIMASK, tmp, NULL);
+    
+    syslog(level & LOG_PRIMASK, "%s", tmp);
 
-    return SUCCESS;
+    return return_code;
 }
 
 static void
@@ -183,7 +162,7 @@ logger_channel_syslog_reopen(logger_channel* chan)
     return SUCCESS;
 }
 
-static logger_channel_vtbl syslog_vtbl = {
+static const logger_channel_vtbl syslog_vtbl = {
     logger_channel_syslog_constmsg,
     logger_channel_syslog_msg,
     logger_channel_syslog_vmsg,
@@ -194,10 +173,8 @@ static logger_channel_vtbl syslog_vtbl = {
 };
 
 void
-logger_channel_syslog_open(char* ident, int options, int facility, logger_channel* chan)
+logger_channel_syslog_open(const char* ident, int options, int facility, logger_channel* chan)
 {
-    openlog(ident, options, facility);
-
     syslog_data *sd;
     MALLOC_OR_DIE(syslog_data*, sd, sizeof (syslog_data), 0x4d5254534e414843); /* CHANSTRM */
     sd->ident = strdup(ident);
@@ -207,8 +184,9 @@ logger_channel_syslog_open(char* ident, int options, int facility, logger_channe
     chan->data = sd;
 
     chan->vtbl = &syslog_vtbl;
+    
+    openlog(sd->ident, options, facility);
 }
 /** @} */
 
 /*----------------------------------------------------------------------------*/
-

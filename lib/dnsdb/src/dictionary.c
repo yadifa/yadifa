@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief Hash-based collection designed to change it's structure to improve speed.
@@ -48,8 +48,8 @@
 #define ZDB_HASHTABLE_THRESHOLD_DISABLE (~0)
 
 void dictionary_btree_init(dictionary* dico);
-void
-dictionary_htbt_init(dictionary* dico);
+
+void dictionary_htbt_init(dictionary* dico);
 
 struct dictionary_mutation_table_entry
 {
@@ -61,6 +61,7 @@ static struct dictionary_mutation_table_entry dictionary_mutation_table[2] = {
     { ZDB_HASHTABLE_THRESHOLD, dictionary_btree_init},
     { MAX_U32, dictionary_htbt_init},
 };
+
 
 static struct dictionary_mutation_table_entry*
 dictionary_get_mutation_entry(dictionary* dico)
@@ -121,6 +122,32 @@ dictionary_mutate(dictionary* dico)
     dictionary_destroy(dico, dictionary_destroy_record_callback);
 
     MEMCOPY(dico, &new_dico, sizeof (dictionary));
+}
+
+static bool
+dictionary_empty_iterator_hasnext(dictionary_iterator* dico)
+{
+    (void)dico;
+    return FALSE;
+}
+
+static void**
+dictionary_empty_iterator_next(dictionary_iterator* dico)
+{
+    (void)dico;
+    return NULL;
+}
+
+static const struct dictionary_iterator_vtbl no_element_iterator = 
+{
+    dictionary_empty_iterator_hasnext,
+    dictionary_empty_iterator_next
+};
+
+void
+dictionary_empty_iterator_init(dictionary_iterator *iter)
+{
+    iter->vtbl = &no_element_iterator;
 }
 
 /** @} */

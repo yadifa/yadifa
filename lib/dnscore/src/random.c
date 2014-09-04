@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnscoretools Generic Tools
  *  @ingroup dnscore
  *  @brief
@@ -66,6 +66,10 @@
 /* Create a length 624 array to store the state of the generator */
 
 #define MERSERNE_TWISTER_STATE_SIZE 624
+
+/* used by the auto init to randomise the seed further */
+
+static volatile u32 random_serial = 0x7565edf1;
 
 typedef struct random_context random_context;
 
@@ -106,6 +110,18 @@ random_init(u32 seed)
 
     return (random_ctx)ctx;
 }
+
+random_ctx
+random_init_auto()
+{
+    u64 now = timeus();
+    now ^= (now >> 32);
+    now ^= (u32)pthread_self();
+    now ^= random_serial;
+    random_serial += 0xc18e2a1d;
+    return random_init((u32)now);
+}
+
 
 void
 random_finalize(random_ctx ctx)

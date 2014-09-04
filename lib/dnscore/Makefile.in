@@ -23,14 +23,14 @@
 # modification, are permitted provided that the following conditions
 # are met:
 #
-#        * Redistributions of source code must retain the above copyright 
-#          notice, this list of conditions and the following disclaimer.
-#        * Redistributions in binary form must reproduce the above copyright 
-#          notice, this list of conditions and the following disclaimer in the 
-#          documentation and/or other materials provided with the distribution.
-#        * Neither the name of EURid nor the names of its contributors may be 
-#          used to endorse or promote products derived from this software 
-#          without specific prior written permission.
+#		* Redistributions of source code must retain the above copyright 
+#		  notice, this list of conditions and the following disclaimer.
+#		* Redistributions in binary form must reproduce the above copyright 
+#		  notice, this list of conditions and the following disclaimer in the 
+#		  documentation and/or other materials provided with the distribution.
+#		* Neither the name of EURid nor the names of its contributors may be 
+#		  used to endorse or promote products derived from this software 
+#		  without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
@@ -75,6 +75,18 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Settings common to all makefiles
+#
+################################################################################
 
 ################################################################################
 #
@@ -104,6 +116,18 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Labels common to all makefiles
 #
 ################################################################################
 
@@ -172,8 +196,10 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-@HAS_TSIG_SUPPORT_TRUE@am__append_1 = src/tsig.c src/tsig_algorithms.c
-@HAS_TSIG_SUPPORT_TRUE@am__append_2 = include/dnscore/tsig.h
+@HAS_TSIG_SUPPORT_TRUE@am__append_1 = $(I)/tsig.h
+@HAS_TSIG_SUPPORT_TRUE@am__append_2 = src/tsig.c src/tsig_algorithms.c
+@HAS_NSID_SUPPORT_TRUE@am__append_3 = $(I)/nsid.h
+@HAS_NSID_SUPPORT_TRUE@am__append_4 = src/nsid.c
 DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 	$(srcdir)/../../mk/common-labels.mk INSTALL NEWS README \
 	AUTHORS ChangeLog $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
@@ -189,52 +215,65 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 
 #ICC
 #IPO= -ipo (need to use the intel xiar instead of ar)
-@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_3 = -DLTO -ipo
-@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_4 = -ipo
-@USES_ICC_TRUE@am__append_5 = -DUSES_ICC -ansi-alias -std=c99 -U__STRICT_ANSI__ -I$(abs_builddir) -I$(abs_srcdir)/include
-@USES_ICC_TRUE@am__append_6 = -O0 -g -DMODE_DEBUG_ICC
+@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_5 = -DLTO -ipo
+@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_6 = -ipo
+@USES_ICC_TRUE@am__append_7 = -DUSES_ICC -ansi-alias -std=c99 -U__STRICT_ANSI__ -I$(abs_builddir) -I$(abs_srcdir)/include
+@USES_ICC_TRUE@am__append_8 = -O0 -g -DMODE_DEBUG_ICC
 
 #
 # LLVM Clang
 #
 
 # CLANG
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_7 = -DLTO -flto
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_8 = -use-gold-plugin
-@USES_CLANG_TRUE@am__append_9 = -mtune=native -DUSES_LLVM \
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_9 = -DLTO -flto
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_10 = -flto
+@USES_CLANG_TRUE@am__append_11 = -mtune=native -DUSES_LLVM \
 @USES_CLANG_TRUE@	-I$(abs_builddir) -I$(abs_srcdir)/include
-@USES_CLANG_TRUE@am__append_10 = -O0 -g -DMODE_DEBUG_CLANG
+@USES_CLANG_TRUE@am__append_12 = -O0 -g -DMODE_DEBUG_CLANG
+
+# THIS WILL BREAK THE CONFIGURE ON EXTERNAL USERS OF THE LIBS IF INSTALLED AS DEBUG
+# FUTURE SOLUTION: ADD A _d SUFFIX TO LIBS WHEN BUILD IN DEBUG ?
+#
+#if HAS_FADDRESS_SANITIZER
+#DEBUGFLAGS+=-fsanitize=address
+#endif
+#
+#
+#if HAS_FNO_OMIT_FRAME_POINTER
+#DEBUGFLAGS+=-fno-omit-frame-pointer
+#endif
+#
+#if HAS_CATCH_UNDEFINED_BEHAVIOR
+#DEBUGFLAGS+=-fcatch_undefined_behavior
+#endif
 
 #
 # Gnu C
 #
 
 #GCC
-@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_11 = -mcpu=niagara
-@HAS_CPU_AMDINTEL_TRUE@@USES_GCC_TRUE@am__append_12 = -mtune=native
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_13 = -DLTO -flto
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_14 = -flto
-@USES_GCC_TRUE@am__append_15 = -fno-ident -ansi -pedantic -std=gnu99 -I$(abs_builddir) -I$(abs_srcdir)/include
-@IS_BSD_FAMILY_FALSE@@USES_GCC_TRUE@am__append_16 = -g3 -gdwarf-2 -O0 -DMODE_DEBUG_GCC -rdynamic
+@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_13 = -mcpu=niagara
+@HAS_CPU_AMDINTEL_TRUE@@USES_GCC_TRUE@am__append_14 = -mtune=native
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_15 = -DLTO -flto -fwhole-program -ffat-lto-objects
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_16 = -flto -fwhole-program -ffat-lto-objects
+@USES_GCC_TRUE@am__append_17 = -fno-ident -ansi -pedantic -std=gnu99 -I$(abs_builddir) -I$(abs_srcdir)/include
+@IS_BSD_FAMILY_FALSE@@USES_GCC_TRUE@am__append_18 = -g3 -gdwarf-2 -O0 -DMODE_DEBUG_GCC -rdynamic
 
 # one of these: address,thread,undefined
-@HAS_FADDRESS_SANITIZER_TRUE@@IS_BSD_FAMILY_FALSE@@USES_GCC_TRUE@am__append_17 = -fsanitize=address
-@IS_BSD_FAMILY_TRUE@@USES_GCC_TRUE@am__append_18 = -g -O0 -DMODE_DEBUG_GCC -rdynamic
+@HAS_FADDRESS_SANITIZER_TRUE@@IS_BSD_FAMILY_FALSE@@USES_GCC_TRUE@am__append_19 = -fsanitize=address
+@IS_BSD_FAMILY_TRUE@@USES_GCC_TRUE@am__append_20 = -g -O0 -DMODE_DEBUG_GCC -rdynamic
 
 # if an unknown compiler is used, it should have its own section
-@USES_UNKNOWN_TRUE@am__append_19 = -DUSES_UNKNOWN_COMPILER -I$(abs_builddir) -I$(abs_srcdir)/include
-@USES_UNKNOWN_TRUE@am__append_20 = -g -O0
+@USES_UNKNOWN_TRUE@am__append_21 = -DUSES_UNKNOWN_COMPILER -I$(abs_builddir) -I$(abs_srcdir)/include
+@USES_UNKNOWN_TRUE@am__append_22 = -g -O0
 
 #
 # Some BSD-based OSes need this
 #
-@IS_BSD_FAMILY_TRUE@am__append_21 = -std=c99 -I./include
+@IS_BSD_FAMILY_TRUE@am__append_23 = -std=c99 -I./include
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
-	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
-	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
-	$(top_srcdir)/../../m4/eurid.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/../../m4/eurid.m4 \
 	$(top_srcdir)/../../m4/yadifa.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
@@ -274,54 +313,88 @@ am__uninstall_files_from_dir = { \
 am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(pkgincludedir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
 libdnscore_la_LIBADD =
-am__libdnscore_la_SOURCES_DIST = src/sys_error.c \
-	src/sys_get_cpu_count.c src/timems.c src/input_stream.c \
-	src/file_input_stream.c src/buffer_input_stream.c \
-	src/output_stream.c src/file_output_stream.c \
-	src/buffer_output_stream.c src/mt_output_stream.c \
-	src/clone_input_output_stream.c src/bytearray_output_stream.c \
-	src/counter_output_stream.c src/fdtools.c src/tcp_io_stream.c \
-	src/host_address.c src/network.c src/packet_reader.c \
-	src/packet_writer.c src/message.c src/logger_channel_syslog.c \
-	src/logger_channel_stream.c src/logger_channel_file.c \
-	src/logger_channel.c src/logger_handle.c src/logger.c \
-	src/dnsname.c src/typebitmap.c src/base64.c src/base32hex.c \
-	src/base32.c src/base16.c src/parsing.c src/ptr_vector.c \
-	src/string_set.c src/u32_set.c src/threaded_ringlist.c \
+am__libdnscore_la_SOURCES_DIST = src/alarm.c src/allocator.c \
+	src/async.c src/base16.c src/base32.c src/base32hex.c \
+	src/base64.c src/basic-priority-queue.c \
+	src/buffer_input_stream.c src/buffer_output_stream.c \
+	src/bytearray_input_stream.c src/bytearray_output_stream.c \
+	src/chroot.c src/clone_input_output_stream.c src/cmdline.c \
+	src/concat_input_stream.c src/config-cmdline.c \
+	src/config_file_reader.c src/config_key.c src/config_logger.c \
+	src/config_settings.c src/config_struct.c \
+	src/counter_output_stream.c src/debug.c src/digest_sha0.c \
+	src/digest_sha1.c src/digest_sha256.c src/digest_sha384.c \
+	src/digest_sha512.c src/dns-udp.c src/dns_resource_record.c \
+	src/dnscore.c src/dnsformat.c src/dnskey.c src/dnskey_dsa.c \
+	src/dnskey_rsa.c src/dnsname.c src/fdtools.c \
+	src/file_input_stream.c src/file_output_stream.c src/format.c \
+	src/host_address.c src/hsdllist.c src/identity.c \
+	src/input_stream.c src/limited_input_stream.c src/list-dl.c \
+	src/list-sl.c src/logger.c src/logger_channel_file.c \
+	src/logger_channel_stream.c src/logger_channel_syslog.c \
+	src/logger_handle.c src/logger-output-stream.c src/message.c \
+	src/message_dnsupdate.c src/message_print_format_dig.c \
+	src/message_verify_rrsig.c src/mt_output_stream.c src/mutex.c \
+	src/network.c src/output_stream.c src/pace.c \
+	src/packet_reader.c src/packet_writer.c src/parser.c \
+	src/parsing.c src/pid.c src/pipe_stream.c src/pool.c \
+	src/ptr_vector.c src/random.c src/rfc.c src/serial.c \
+	src/service.c src/server-setup.c src/string_set.c \
+	src/sys_error.c src/sys_get_cpu_count.c src/tcp_io_stream.c \
+	src/thread_pool.c src/threaded_nb_mm.c src/threaded_nbrb.c \
 	src/threaded_ringbuffer.c src/threaded_ringbuffer_cw.c \
-	src/threaded_nbrb.c src/threaded_nb_mm.c src/thread_pool.c \
-	src/scheduler.c src/random.c src/format.c src/dnsformat.c \
-	src/debug.c src/rdtsc.c src/dnscore.c src/rfc.c src/serial.c \
-	src/xfr_copy.c src/alarm.c src/treeset.c src/tsig.c \
-	src/tsig_algorithms.c
+	src/threaded_ringlist.c src/threaded_sll_cw.c src/timeformat.c \
+	src/timems.c src/treeset.c src/typebitmap.c src/u32_set.c \
+	src/u64_set.c src/xfr_copy.c src/xfr_input_stream.c src/tsig.c \
+	src/tsig_algorithms.c src/nsid.c
 am__dirstamp = $(am__leading_dot)dirstamp
 @HAS_TSIG_SUPPORT_TRUE@am__objects_1 = src/tsig.lo \
 @HAS_TSIG_SUPPORT_TRUE@	src/tsig_algorithms.lo
-am_libdnscore_la_OBJECTS = src/sys_error.lo src/sys_get_cpu_count.lo \
-	src/timems.lo src/input_stream.lo src/file_input_stream.lo \
-	src/buffer_input_stream.lo src/output_stream.lo \
-	src/file_output_stream.lo src/buffer_output_stream.lo \
-	src/mt_output_stream.lo src/clone_input_output_stream.lo \
-	src/bytearray_output_stream.lo src/counter_output_stream.lo \
-	src/fdtools.lo src/tcp_io_stream.lo src/host_address.lo \
-	src/network.lo src/packet_reader.lo src/packet_writer.lo \
-	src/message.lo src/logger_channel_syslog.lo \
-	src/logger_channel_stream.lo src/logger_channel_file.lo \
-	src/logger_channel.lo src/logger_handle.lo src/logger.lo \
-	src/dnsname.lo src/typebitmap.lo src/base64.lo \
-	src/base32hex.lo src/base32.lo src/base16.lo src/parsing.lo \
-	src/ptr_vector.lo src/string_set.lo src/u32_set.lo \
-	src/threaded_ringlist.lo src/threaded_ringbuffer.lo \
-	src/threaded_ringbuffer_cw.lo src/threaded_nbrb.lo \
-	src/threaded_nb_mm.lo src/thread_pool.lo src/scheduler.lo \
-	src/random.lo src/format.lo src/dnsformat.lo src/debug.lo \
-	src/rdtsc.lo src/dnscore.lo src/rfc.lo src/serial.lo \
-	src/xfr_copy.lo src/alarm.lo src/treeset.lo $(am__objects_1)
+@HAS_NSID_SUPPORT_TRUE@am__objects_2 = src/nsid.lo
+am_libdnscore_la_OBJECTS = src/alarm.lo src/allocator.lo src/async.lo \
+	src/base16.lo src/base32.lo src/base32hex.lo src/base64.lo \
+	src/basic-priority-queue.lo src/buffer_input_stream.lo \
+	src/buffer_output_stream.lo src/bytearray_input_stream.lo \
+	src/bytearray_output_stream.lo src/chroot.lo \
+	src/clone_input_output_stream.lo src/cmdline.lo \
+	src/concat_input_stream.lo src/config-cmdline.lo \
+	src/config_file_reader.lo src/config_key.lo \
+	src/config_logger.lo src/config_settings.lo \
+	src/config_struct.lo src/counter_output_stream.lo src/debug.lo \
+	src/digest_sha0.lo src/digest_sha1.lo src/digest_sha256.lo \
+	src/digest_sha384.lo src/digest_sha512.lo src/dns-udp.lo \
+	src/dns_resource_record.lo src/dnscore.lo src/dnsformat.lo \
+	src/dnskey.lo src/dnskey_dsa.lo src/dnskey_rsa.lo \
+	src/dnsname.lo src/fdtools.lo src/file_input_stream.lo \
+	src/file_output_stream.lo src/format.lo src/host_address.lo \
+	src/hsdllist.lo src/identity.lo src/input_stream.lo \
+	src/limited_input_stream.lo src/list-dl.lo src/list-sl.lo \
+	src/logger.lo src/logger_channel_file.lo \
+	src/logger_channel_stream.lo src/logger_channel_syslog.lo \
+	src/logger_handle.lo src/logger-output-stream.lo \
+	src/message.lo src/message_dnsupdate.lo \
+	src/message_print_format_dig.lo src/message_verify_rrsig.lo \
+	src/mt_output_stream.lo src/mutex.lo src/network.lo \
+	src/output_stream.lo src/pace.lo src/packet_reader.lo \
+	src/packet_writer.lo src/parser.lo src/parsing.lo src/pid.lo \
+	src/pipe_stream.lo src/pool.lo src/ptr_vector.lo src/random.lo \
+	src/rfc.lo src/serial.lo src/service.lo src/server-setup.lo \
+	src/string_set.lo src/sys_error.lo src/sys_get_cpu_count.lo \
+	src/tcp_io_stream.lo src/thread_pool.lo src/threaded_nb_mm.lo \
+	src/threaded_nbrb.lo src/threaded_ringbuffer.lo \
+	src/threaded_ringbuffer_cw.lo src/threaded_ringlist.lo \
+	src/threaded_sll_cw.lo src/timeformat.lo src/timems.lo \
+	src/treeset.lo src/typebitmap.lo src/u32_set.lo src/u64_set.lo \
+	src/xfr_copy.lo src/xfr_input_stream.lo $(am__objects_1) \
+	$(am__objects_2)
 libdnscore_la_OBJECTS = $(am_libdnscore_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
+libdnscore_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
+	$(libdnscore_la_LDFLAGS) $(LDFLAGS) -o $@
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -364,52 +437,45 @@ am__can_run_installinfo = \
     *) (install-info --version) >/dev/null 2>&1;; \
   esac
 DATA = $(dist_noinst_DATA)
-am__pkginclude_HEADERS_DIST = include/dnscore/base16.h \
-	include/dnscore/base32.h include/dnscore/base32hex.h \
-	include/dnscore/base64.h include/dnscore/dnscore-config.h \
-	include/dnscore/buffer_input_stream.h \
-	include/dnscore/buffer_output_stream.h \
-	include/dnscore/bytearray_output_stream.h \
-	include/dnscore/mt_output_stream.h \
-	include/dnscore/clone_input_output_stream.h \
-	include/dnscore/host_address.h include/dnscore/network.h \
-	include/dnscore/counter_output_stream.h \
-	include/dnscore/debug_config.h include/dnscore/debug.h \
-	include/dnscore/dnscore.h include/dnscore/dnsformat.h \
-	include/dnscore/dnsname.h include/dnscore/dnsname_set.h \
-	include/dnscore/u32_set.h include/dnscore/treeset.h \
-	include/dnscore/file_input_stream.h \
-	include/dnscore/file_output_stream.h \
-	include/dnscore/filter_input_stream.h \
-	include/dnscore/fingerprint.h include/dnscore/format.h \
-	include/dnscore/input_stream.h \
-	include/dnscore/logger_channel.h \
-	include/dnscore/logger_channel_stream.h \
-	include/dnscore/logger_channel_syslog.h \
-	include/dnscore/logger.h include/dnscore/logger_handle.h \
-	include/dnscore/logger_channel_file.h \
-	include/dnscore/message.h include/dnscore/mutex.h \
-	include/dnscore/output_stream.h \
-	include/dnscore/packet_reader.h \
-	include/dnscore/packet_writer.h include/dnscore/parsing.h \
-	include/dnscore/print_stream.h include/dnscore/ptr_vector.h \
-	include/dnscore/random.h include/dnscore/rdtsc.h \
-	include/dnscore/rfc.h include/dnscore/scheduler.h \
-	include/dnscore/serial.h include/dnscore/string_set.h \
-	include/dnscore/sys_error.h \
-	include/dnscore/sys_get_cpu_count.h \
-	include/dnscore/sys_types.h include/dnscore/threaded_queue.h \
-	include/dnscore/threaded_ringbuffer.h \
-	include/dnscore/threaded_ringbuffer_cw.h \
-	include/dnscore/threaded_ringlist.h \
-	include/dnscore/threaded_nbrb.h include/dnscore/thread_pool.h \
-	include/dnscore/threaded_nb_mm.h include/dnscore/timems.h \
-	include/dnscore/typebitmap.h include/dnscore/zonefile_reader.h \
-	include/dnscore/avl.h.inc include/dnscore/avl.c.inc \
-	include/dnscore/fdtools.h include/dnscore/tcp_io_stream.h \
-	include/dnscore/io_stream.h include/dnscore/xfr_copy.h \
-	include/dnscore/alarm.h include/dnscore/ctrl-rfc.h \
-	include/dnscore/tsig.h
+am__pkginclude_HEADERS_DIST = $(I)/$(FEATURESFILE) $(I)/alarm.h \
+	$(I)/allocator.h $(I)/async.h $(I)/avl.c.inc $(I)/avl.h.inc \
+	$(I)/base16.h $(I)/base32.h $(I)/base32hex.h $(I)/base64.h \
+	$(I)/basic-priority-queue.h $(I)/buffer_input_stream.h \
+	$(I)/buffer_output_stream.h $(I)/bytearray_input_stream.h \
+	$(I)/bytearray_output_stream.h $(I)/chroot.h \
+	$(I)/clone_input_output_stream.h $(I)/cmdline.h \
+	$(I)/concat_input_stream.h $(I)/config-cmdline.h \
+	$(I)/config_file_reader.h $(I)/config_settings.h \
+	$(I)/counter_output_stream.h $(I)/ctrl-rfc.h $(I)/debug.h \
+	$(I)/debug_config.h $(I)/digest.h $(I)/dns-udp.h \
+	$(I)/dns_resource_record.h $(I)/dnscore-config.h \
+	$(I)/dnscore.h $(I)/dnsformat.h $(I)/dnskey.h \
+	$(I)/dnskey_dsa.h $(I)/dnskey_rsa.h $(I)/dnsname.h \
+	$(I)/dnsname_set.h $(I)/dnssec_errors.h $(I)/fdtools.h \
+	$(I)/file_input_stream.h $(I)/file_output_stream.h \
+	$(I)/filter_input_stream.h $(I)/fingerprint.h $(I)/format.h \
+	$(I)/host_address.h $(I)/hsdllist.h $(I)/identity.h \
+	$(I)/input_stream.h $(I)/io_stream.h \
+	$(I)/limited_input_stream.h $(I)/list-dl.h $(I)/list-sl.h \
+	$(I)/logger.h $(I)/logger_channel_file.h \
+	$(I)/logger_channel_stream.h $(I)/logger_channel_syslog.h \
+	$(I)/logger_handle.h $(I)/logger-output-stream.h \
+	$(I)/message.h $(I)/message_dnsupdate.h \
+	$(I)/message_verify_rrsig.h $(I)/mt_output_stream.h \
+	$(I)/mutex.h $(I)/network.h $(I)/output_stream.h $(I)/pace.h \
+	$(I)/packet_reader.h $(I)/packet_writer.h $(I)/parser.h \
+	$(I)/parsing.h $(I)/pid.h $(I)/pipe_stream.h $(I)/pool.h \
+	$(I)/print_stream.h $(I)/ptr_vector.h $(I)/random.h $(I)/rfc.h \
+	$(I)/serial.h $(I)/server-setup.h $(I)/service.h \
+	$(I)/string_set.h $(I)/sys_error.h $(I)/sys_get_cpu_count.h \
+	$(I)/sys_types.h $(I)/tcp_io_stream.h $(I)/thread_pool.h \
+	$(I)/threaded_nb_mm.h $(I)/threaded_nbrb.h \
+	$(I)/threaded_queue.h $(I)/threaded_ringbuffer.h \
+	$(I)/threaded_ringbuffer_cw.h $(I)/threaded_ringlist.h \
+	$(I)/threaded_sll_cw.h $(I)/timeformat.h $(I)/timems.h \
+	$(I)/treeset.h $(I)/typebitmap.h $(I)/u32_set.h $(I)/u64_set.h \
+	$(I)/xfr_copy.h $(I)/xfr_input_stream.h $(I)/zonefile_reader.h \
+	$(I)/tsig.h $(I)/nsid.h
 HEADERS = $(pkginclude_HEADERS)
 am__tagged_files = $(HEADERS) $(SOURCES) $(TAGS_FILES) $(LISP)
 # Read a list of newline-separated strings from the standard input,
@@ -470,6 +536,7 @@ DEPDIR = @DEPDIR@
 DLLTOOL = @DLLTOOL@
 DNSCORE = @DNSCORE@
 DNSDB = @DNSDB@
+DNSLG = @DNSLG@
 DNSZONE = @DNSZONE@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
@@ -571,85 +638,98 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I m4
 dist_noinst_DATA = VERSION
+I = include/dnscore
+FEATURESFILE = dnscore-config-features.h
+FEATURES = $(I)/$(FEATURESFILE)
 lib_LTLIBRARIES = libdnscore.la
-libdnscore_la_SOURCES = src/sys_error.c src/sys_get_cpu_count.c \
-	src/timems.c src/input_stream.c src/file_input_stream.c \
-	src/buffer_input_stream.c src/output_stream.c \
-	src/file_output_stream.c src/buffer_output_stream.c \
-	src/mt_output_stream.c src/clone_input_output_stream.c \
-	src/bytearray_output_stream.c src/counter_output_stream.c \
-	src/fdtools.c src/tcp_io_stream.c src/host_address.c \
-	src/network.c src/packet_reader.c src/packet_writer.c \
-	src/message.c src/logger_channel_syslog.c \
-	src/logger_channel_stream.c src/logger_channel_file.c \
-	src/logger_channel.c src/logger_handle.c src/logger.c \
-	src/dnsname.c src/typebitmap.c src/base64.c src/base32hex.c \
-	src/base32.c src/base16.c src/parsing.c src/ptr_vector.c \
-	src/string_set.c src/u32_set.c src/threaded_ringlist.c \
+libdnscore_la_SOURCES = src/alarm.c src/allocator.c src/async.c \
+	src/base16.c src/base32.c src/base32hex.c src/base64.c \
+	src/basic-priority-queue.c src/buffer_input_stream.c \
+	src/buffer_output_stream.c src/bytearray_input_stream.c \
+	src/bytearray_output_stream.c src/chroot.c \
+	src/clone_input_output_stream.c src/cmdline.c \
+	src/concat_input_stream.c src/config-cmdline.c \
+	src/config_file_reader.c src/config_key.c src/config_logger.c \
+	src/config_settings.c src/config_struct.c \
+	src/counter_output_stream.c src/debug.c src/digest_sha0.c \
+	src/digest_sha1.c src/digest_sha256.c src/digest_sha384.c \
+	src/digest_sha512.c src/dns-udp.c src/dns_resource_record.c \
+	src/dnscore.c src/dnsformat.c src/dnskey.c src/dnskey_dsa.c \
+	src/dnskey_rsa.c src/dnsname.c src/fdtools.c \
+	src/file_input_stream.c src/file_output_stream.c src/format.c \
+	src/host_address.c src/hsdllist.c src/identity.c \
+	src/input_stream.c src/limited_input_stream.c src/list-dl.c \
+	src/list-sl.c src/logger.c src/logger_channel_file.c \
+	src/logger_channel_stream.c src/logger_channel_syslog.c \
+	src/logger_handle.c src/logger-output-stream.c src/message.c \
+	src/message_dnsupdate.c src/message_print_format_dig.c \
+	src/message_verify_rrsig.c src/mt_output_stream.c src/mutex.c \
+	src/network.c src/output_stream.c src/pace.c \
+	src/packet_reader.c src/packet_writer.c src/parser.c \
+	src/parsing.c src/pid.c src/pipe_stream.c src/pool.c \
+	src/ptr_vector.c src/random.c src/rfc.c src/serial.c \
+	src/service.c src/server-setup.c src/string_set.c \
+	src/sys_error.c src/sys_get_cpu_count.c src/tcp_io_stream.c \
+	src/thread_pool.c src/threaded_nb_mm.c src/threaded_nbrb.c \
 	src/threaded_ringbuffer.c src/threaded_ringbuffer_cw.c \
-	src/threaded_nbrb.c src/threaded_nb_mm.c src/thread_pool.c \
-	src/scheduler.c src/random.c src/format.c src/dnsformat.c \
-	src/debug.c src/rdtsc.c src/dnscore.c src/rfc.c src/serial.c \
-	src/xfr_copy.c src/alarm.c src/treeset.c $(am__append_1)
-pkginclude_HEADERS = include/dnscore/base16.h include/dnscore/base32.h \
-	include/dnscore/base32hex.h include/dnscore/base64.h \
-	include/dnscore/dnscore-config.h \
-	include/dnscore/buffer_input_stream.h \
-	include/dnscore/buffer_output_stream.h \
-	include/dnscore/bytearray_output_stream.h \
-	include/dnscore/mt_output_stream.h \
-	include/dnscore/clone_input_output_stream.h \
-	include/dnscore/host_address.h include/dnscore/network.h \
-	include/dnscore/counter_output_stream.h \
-	include/dnscore/debug_config.h include/dnscore/debug.h \
-	include/dnscore/dnscore.h include/dnscore/dnsformat.h \
-	include/dnscore/dnsname.h include/dnscore/dnsname_set.h \
-	include/dnscore/u32_set.h include/dnscore/treeset.h \
-	include/dnscore/file_input_stream.h \
-	include/dnscore/file_output_stream.h \
-	include/dnscore/filter_input_stream.h \
-	include/dnscore/fingerprint.h include/dnscore/format.h \
-	include/dnscore/input_stream.h \
-	include/dnscore/logger_channel.h \
-	include/dnscore/logger_channel_stream.h \
-	include/dnscore/logger_channel_syslog.h \
-	include/dnscore/logger.h include/dnscore/logger_handle.h \
-	include/dnscore/logger_channel_file.h \
-	include/dnscore/message.h include/dnscore/mutex.h \
-	include/dnscore/output_stream.h \
-	include/dnscore/packet_reader.h \
-	include/dnscore/packet_writer.h include/dnscore/parsing.h \
-	include/dnscore/print_stream.h include/dnscore/ptr_vector.h \
-	include/dnscore/random.h include/dnscore/rdtsc.h \
-	include/dnscore/rfc.h include/dnscore/scheduler.h \
-	include/dnscore/serial.h include/dnscore/string_set.h \
-	include/dnscore/sys_error.h \
-	include/dnscore/sys_get_cpu_count.h \
-	include/dnscore/sys_types.h include/dnscore/threaded_queue.h \
-	include/dnscore/threaded_ringbuffer.h \
-	include/dnscore/threaded_ringbuffer_cw.h \
-	include/dnscore/threaded_ringlist.h \
-	include/dnscore/threaded_nbrb.h include/dnscore/thread_pool.h \
-	include/dnscore/threaded_nb_mm.h include/dnscore/timems.h \
-	include/dnscore/typebitmap.h include/dnscore/zonefile_reader.h \
-	include/dnscore/avl.h.inc include/dnscore/avl.c.inc \
-	include/dnscore/fdtools.h include/dnscore/tcp_io_stream.h \
-	include/dnscore/io_stream.h include/dnscore/xfr_copy.h \
-	include/dnscore/alarm.h include/dnscore/ctrl-rfc.h \
-	$(am__append_2)
+	src/threaded_ringlist.c src/threaded_sll_cw.c src/timeformat.c \
+	src/timems.c src/treeset.c src/typebitmap.c src/u32_set.c \
+	src/u64_set.c src/xfr_copy.c src/xfr_input_stream.c \
+	$(am__append_2) $(am__append_4)
+pkginclude_HEADERS = $(FEATURES) $(I)/alarm.h $(I)/allocator.h \
+	$(I)/async.h $(I)/avl.c.inc $(I)/avl.h.inc $(I)/base16.h \
+	$(I)/base32.h $(I)/base32hex.h $(I)/base64.h \
+	$(I)/basic-priority-queue.h $(I)/buffer_input_stream.h \
+	$(I)/buffer_output_stream.h $(I)/bytearray_input_stream.h \
+	$(I)/bytearray_output_stream.h $(I)/chroot.h \
+	$(I)/clone_input_output_stream.h $(I)/cmdline.h \
+	$(I)/concat_input_stream.h $(I)/config-cmdline.h \
+	$(I)/config_file_reader.h $(I)/config_settings.h \
+	$(I)/counter_output_stream.h $(I)/ctrl-rfc.h $(I)/debug.h \
+	$(I)/debug_config.h $(I)/digest.h $(I)/dns-udp.h \
+	$(I)/dns_resource_record.h $(I)/dnscore-config.h \
+	$(I)/dnscore.h $(I)/dnsformat.h $(I)/dnskey.h \
+	$(I)/dnskey_dsa.h $(I)/dnskey_rsa.h $(I)/dnsname.h \
+	$(I)/dnsname_set.h $(I)/dnssec_errors.h $(I)/fdtools.h \
+	$(I)/file_input_stream.h $(I)/file_output_stream.h \
+	$(I)/filter_input_stream.h $(I)/fingerprint.h $(I)/format.h \
+	$(I)/host_address.h $(I)/hsdllist.h $(I)/identity.h \
+	$(I)/input_stream.h $(I)/io_stream.h \
+	$(I)/limited_input_stream.h $(I)/list-dl.h $(I)/list-sl.h \
+	$(I)/logger.h $(I)/logger_channel_file.h \
+	$(I)/logger_channel_stream.h $(I)/logger_channel_syslog.h \
+	$(I)/logger_handle.h $(I)/logger-output-stream.h \
+	$(I)/message.h $(I)/message_dnsupdate.h \
+	$(I)/message_verify_rrsig.h $(I)/mt_output_stream.h \
+	$(I)/mutex.h $(I)/network.h $(I)/output_stream.h $(I)/pace.h \
+	$(I)/packet_reader.h $(I)/packet_writer.h $(I)/parser.h \
+	$(I)/parsing.h $(I)/pid.h $(I)/pipe_stream.h $(I)/pool.h \
+	$(I)/print_stream.h $(I)/ptr_vector.h $(I)/random.h $(I)/rfc.h \
+	$(I)/serial.h $(I)/server-setup.h $(I)/service.h \
+	$(I)/string_set.h $(I)/sys_error.h $(I)/sys_get_cpu_count.h \
+	$(I)/sys_types.h $(I)/tcp_io_stream.h $(I)/thread_pool.h \
+	$(I)/threaded_nb_mm.h $(I)/threaded_nbrb.h \
+	$(I)/threaded_queue.h $(I)/threaded_ringbuffer.h \
+	$(I)/threaded_ringbuffer_cw.h $(I)/threaded_ringlist.h \
+	$(I)/threaded_sll_cw.h $(I)/timeformat.h $(I)/timems.h \
+	$(I)/treeset.h $(I)/typebitmap.h $(I)/u32_set.h $(I)/u64_set.h \
+	$(I)/xfr_copy.h $(I)/xfr_input_stream.h $(I)/zonefile_reader.h \
+	$(am__append_1) $(am__append_3)
+libdnscore_la_LDFLAGS = -version-info 2:0:0
 
 #
 #
 #
-AM_CFLAGS = -Wall -D_FILE_OFFSET_BITS=64 $(am__append_3) \
-	$(am__append_5) $(am__append_7) $(am__append_9) \
-	$(am__append_11) $(am__append_12) $(am__append_13) \
-	$(am__append_15) $(am__append_19) $(am__append_21) \
-	$(LOCALFLAGS) $(YCFLAGS)
-AM_LDFLAGS = $(am__append_4) $(am__append_8) $(am__append_14) \
+AM_CFLAGS = -Wall -Werror=missing-field-initializers \
+	-D_FILE_OFFSET_BITS=64 -g $(am__append_5) $(am__append_7) \
+	$(am__append_9) $(am__append_11) $(am__append_13) \
+	$(am__append_14) $(am__append_15) $(am__append_17) \
+	$(am__append_21) $(am__append_23) $(LOCALFLAGS) $(YCFLAGS)
+AM_LDFLAGS = $(am__append_6) $(am__append_10) $(am__append_16) \
 	$(YLDFLAGS)
-DEBUGFLAGS = $(am__append_6) $(am__append_10) $(am__append_16) \
-	$(am__append_17) $(am__append_18) $(am__append_20)
+DEBUGFLAGS = $(am__append_8) $(am__append_12) $(am__append_18) \
+	$(am__append_19) $(am__append_20) $(am__append_22)
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"'
 @HAS_LTO_SUPPORT_FALSE@@USES_CLANG_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@AM_AR = llvm-ar
 @HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@AM_AR = xiar
@@ -662,7 +742,7 @@ YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -DCMR
 YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP
 YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
 YSCFLAGS = $(YRCFLAGS)
-YRLDFLAGS = 
+YRLDFLAGS = -g
 YPLDFLAGS = -pg
 YDLDFLAGS = -g
 YSLDFLAGS = $(YRLDFLAGS)
@@ -764,89 +844,149 @@ src/$(am__dirstamp):
 src/$(DEPDIR)/$(am__dirstamp):
 	@$(MKDIR_P) src/$(DEPDIR)
 	@: > src/$(DEPDIR)/$(am__dirstamp)
-src/sys_error.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/sys_get_cpu_count.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/timems.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/input_stream.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/file_input_stream.lo: src/$(am__dirstamp) \
+src/alarm.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/allocator.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/async.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/base16.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/base32.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/base32hex.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/base64.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/basic-priority-queue.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/buffer_input_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/output_stream.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/file_output_stream.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
 src/buffer_output_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/mt_output_stream.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/clone_input_output_stream.lo: src/$(am__dirstamp) \
+src/bytearray_input_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/bytearray_output_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
+src/chroot.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/clone_input_output_stream.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/cmdline.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/concat_input_stream.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/config-cmdline.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/config_file_reader.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/config_key.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/config_logger.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/config_settings.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/config_struct.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 src/counter_output_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/fdtools.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/tcp_io_stream.lo: src/$(am__dirstamp) \
+src/debug.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/digest_sha0.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/digest_sha1.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/digest_sha256.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
+src/digest_sha384.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/digest_sha512.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/dns-udp.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/dns_resource_record.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/dnscore.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/dnsformat.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/dnskey.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/dnskey_dsa.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/dnskey_rsa.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/dnsname.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/fdtools.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/file_input_stream.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/file_output_stream.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/format.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/host_address.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/hsdllist.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/identity.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/input_stream.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/limited_input_stream.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/list-dl.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/list-sl.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/logger.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/logger_channel_file.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/logger_channel_stream.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/logger_channel_syslog.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/logger_handle.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/logger-output-stream.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/message.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/message_dnsupdate.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/message_print_format_dig.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/message_verify_rrsig.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/mt_output_stream.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/mutex.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/network.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/output_stream.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/pace.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/packet_reader.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/packet_writer.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/message.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/logger_channel_syslog.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/logger_channel_stream.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/logger_channel_file.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/logger_channel.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/logger_handle.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/logger.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/dnsname.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/typebitmap.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/base64.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/base32hex.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/base32.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/base16.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/parser.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/parsing.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/pid.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/pipe_stream.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/pool.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/ptr_vector.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/random.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/rfc.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/serial.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/service.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/server-setup.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/string_set.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/u32_set.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/threaded_ringlist.lo: src/$(am__dirstamp) \
+src/sys_error.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/sys_get_cpu_count.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/tcp_io_stream.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/thread_pool.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/threaded_nb_mm.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/threaded_nbrb.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/threaded_ringbuffer.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/threaded_ringbuffer_cw.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/threaded_nbrb.lo: src/$(am__dirstamp) \
+src/threaded_ringlist.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/threaded_nb_mm.lo: src/$(am__dirstamp) \
+src/threaded_sll_cw.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/thread_pool.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/scheduler.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/random.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/format.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/dnsformat.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/debug.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/rdtsc.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/dnscore.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/rfc.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/serial.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/xfr_copy.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/alarm.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/timeformat.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/timems.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/treeset.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/typebitmap.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/u32_set.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/u64_set.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/xfr_copy.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/xfr_input_stream.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 src/tsig.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/tsig_algorithms.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
+src/nsid.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 
 libdnscore.la: $(libdnscore_la_OBJECTS) $(libdnscore_la_DEPENDENCIES) $(EXTRA_libdnscore_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(LINK) -rpath $(libdir) $(libdnscore_la_OBJECTS) $(libdnscore_la_LIBADD) $(LIBS)
+	$(AM_V_CCLD)$(libdnscore_la_LINK) -rpath $(libdir) $(libdnscore_la_OBJECTS) $(libdnscore_la_LIBADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -857,44 +997,82 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/alarm.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/allocator.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/async.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/base16.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/base32.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/base32hex.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/base64.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/basic-priority-queue.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/buffer_input_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/buffer_output_stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/bytearray_input_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/bytearray_output_stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/chroot.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/clone_input_output_stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/cmdline.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/concat_input_stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/config-cmdline.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/config_file_reader.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/config_key.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/config_logger.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/config_settings.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/config_struct.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/counter_output_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/debug.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/digest_sha0.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/digest_sha1.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/digest_sha256.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/digest_sha384.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/digest_sha512.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dns-udp.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dns_resource_record.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnscore.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnsformat.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey_dsa.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey_rsa.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnsname.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/fdtools.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/file_input_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/file_output_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/format.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/host_address.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/hsdllist.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/identity.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/input_stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/limited_input_stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/list-dl.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/list-sl.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/logger-output-stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/logger.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/logger_channel.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/logger_channel_file.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/logger_channel_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/logger_channel_syslog.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/logger_handle.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/message.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/message_dnsupdate.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/message_print_format_dig.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/message_verify_rrsig.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/mt_output_stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/mutex.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/network.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/nsid.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/output_stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/pace.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/packet_reader.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/packet_writer.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/parser.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/parsing.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/pid.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/pipe_stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/pool.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/ptr_vector.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/random.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/rdtsc.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/rfc.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/scheduler.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/serial.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/server-setup.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/service.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/string_set.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/sys_error.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/sys_get_cpu_count.Plo@am__quote@
@@ -905,13 +1083,17 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/threaded_ringbuffer.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/threaded_ringbuffer_cw.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/threaded_ringlist.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/threaded_sll_cw.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/timeformat.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/timems.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/treeset.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/tsig.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/tsig_algorithms.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/typebitmap.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/u32_set.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/u64_set.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/xfr_copy.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/xfr_input_stream.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -1325,13 +1507,33 @@ uninstall-am: uninstall-libLTLIBRARIES uninstall-pkgincludeHEADERS
 
 
 release:
+	echo YCFLAGS=$(YRCFLAGS)
+	echo YLDFLAGS=$(YRLDFLAGS)
 	$(MAKE) all "YCFLAGS=$(YRCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YRLDFLAGS)"
 
 profile:
+	echo YCFLAGS=$(YPCFLAGS)
+	echo YLDFLAGS=$(YPLDFLAGS)
 	$(MAKE) all "YCFLAGS=$(YPCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YPLDFLAGS)"
 
 debug:
+	echo YCFLAGS=$(YDCFLAGS)
+	echo YLDFLAGS=$(YDLDFLAGS)
 	$(MAKE) all "YCFLAGS=$(YDCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YDLDFLAGS)"
+
+buildinfo.h: config.log
+	echo \#pragma once > buildinfo.h 2> /dev/null
+	echo // generated file, do not modify >> buildinfo.h 2> /dev/null
+	echo \#define BUILD_OPTIONS \"$$(grep "./configure" config.log | head -1 | sed 's/.*\.\/configure *//')\" >> buildinfo.h 2> /dev/null
+
+src/alarm.c: $(FEATURES)
+
+$(FEATURES): config.log
+	echo "#pragma once" > $(FEATURES)
+	echo "#define DNSCORE_HAS_TSIG_SUPPORT 1" >> $(FEATURES)
+	echo "#define DNSCORE_HAS_ACL_SUPPORT 1" >> $(FEATURES)
+	echo "#define DNSCORE_HAS_NSEC3_SUPPORT 1" >> $(FEATURES)
+	echo "#define DNSCORE_HAS_NSEC_SUPPORT 1" >> $(FEATURES)
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

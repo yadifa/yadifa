@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnscoretools Generic Tools
  *  @ingroup dnscore
  *  @brief
@@ -96,6 +96,119 @@ parse_u32_check_range(const char *src, u32 *dst, u32 min, u32 max, u8 base)
     return OK;
 }
 
+ya_result
+parse_u32_check_range_len_base10(const char *src, u32 src_len, u32 *dst, u32 min, u32 max)
+{
+    // 0......N
+    // 67612321
+
+    --src_len;
+    
+    if(src_len > 9)
+    {
+        return PARSEINT_ERROR; // out of range
+    }
+    
+    u32 base_multiplier = 10;
+    
+    u64 output_value = ((u64)src[src_len]) - '0';
+    
+    if((u64)output_value > 9)
+    {
+        return PARSEINT_ERROR;
+    }
+    
+    while(src_len > 0)
+    {
+        --src_len;
+        
+        u64 value = ((u64)src[src_len]) - '0';
+        
+        if((u64)value > 9)
+        {
+            return PARSEINT_ERROR;
+        }
+        
+        value *= base_multiplier;
+        
+        output_value += value;
+        
+        base_multiplier *= 10;
+    }
+    
+    if((output_value < min) || (output_value > max))
+    {
+        return PARSEINT_ERROR;
+    }
+    
+    *dst = (u32)output_value;
+
+    return output_value;
+}
+
+ya_result
+parse_s32_check_range_len_base10(const char *src, u32 src_len, s32 *dst, s32 min, s32 max)
+{
+    // 0......N
+    // 67612321
+    
+    --src_len;
+    
+    if(src_len > 10)
+    {
+        return PARSEINT_ERROR; // out of range
+    }
+    
+    bool minus;
+    
+    if((minus = (src[0] == '-')))
+    {
+        src++;
+        --src_len;
+    }
+    
+    u32 base_multiplier = 10;
+        
+    s64 output_value = ((s64)src[src_len]) - '0';
+    
+    if((u64)output_value > 9)
+    {
+        return PARSEINT_ERROR;
+    }
+    
+    while(src_len > 0)
+    {
+        --src_len;
+        
+        s64 value = ((s64)src[src_len]) - '0';
+        
+        if((u64)value > 9)
+        {
+            return PARSEINT_ERROR;
+        }
+        
+        value *= base_multiplier;
+        
+        output_value += value;
+        
+        base_multiplier *= 10;
+    }
+    
+    if(minus)
+    {
+        output_value = -output_value;
+    }
+    
+    if((output_value < min) || (output_value > max))
+    {
+        return PARSEINT_ERROR;
+    }
+    
+    *dst = (s32)output_value;
+
+    return output_value;
+}
+
 /** \brief Converts a string to an epoch
  *
  *  Converts a string to an epoch
@@ -107,15 +220,14 @@ parse_u32_check_range(const char *src, u32 *dst, u32 min, u32 max, u8 base)
  *  @retval NOK, if no digits found, or number not in the range
  */
 ya_result
-parse_yyyymmddhhmmss_check_range(const char *src, u32 *dst)
+parse_yyyymmddhhmmss_check_range_len(const char *src, u32 src_len, u32 *dst)
 {
     struct tm thetime;
-    /*
-        time_t epoch0 = 0;
-        gmtime_r(&epoch0,&thetime);
-
-        time_t t0 = mktime(&thetime);
-     */
+    
+    if(src_len != 14)
+    {
+        return PARSEDATE_ERROR;
+    }
 
 #ifndef NDEBUG
     memset(&thetime, 0xff, sizeof (thetime));
@@ -124,17 +236,49 @@ parse_yyyymmddhhmmss_check_range(const char *src, u32 *dst)
     thetime.tm_gmtoff = 0;
     thetime.tm_isdst = 0;
     thetime.tm_zone = "GMT";
-
-    if(sscanf(src, "%04d%02d%02d%02d%02d%02d",
-              &thetime.tm_year,
-              &thetime.tm_mon,
-              &thetime.tm_mday,
-              &thetime.tm_hour,
-              &thetime.tm_min,
-              &thetime.tm_sec) != 6)
+    
+    u32 tmp_u32;
+    
+    if(FAIL(parse_u32_check_range_len_base10(src, 4, &tmp_u32, 1970, 2038)))
     {
         return PARSEDATE_ERROR;
     }
+    thetime.tm_year = tmp_u32;
+    src += 4;
+    
+    if(FAIL(parse_u32_check_range_len_base10(src, 2, &tmp_u32, 1, 12)))
+    {
+        return PARSEDATE_ERROR;
+    }
+    thetime.tm_mon = tmp_u32;
+    src += 2;
+    
+    if(FAIL(parse_u32_check_range_len_base10(src, 2, &tmp_u32, 1, 31)))
+    {
+        return PARSEDATE_ERROR;
+    }
+    thetime.tm_mday = tmp_u32;
+    src += 2;
+    
+    if(FAIL(parse_u32_check_range_len_base10(src, 2, &tmp_u32, 0, 23)))
+    {
+        return PARSEDATE_ERROR;
+    }
+    thetime.tm_hour = tmp_u32;
+    src += 2;
+    
+    if(FAIL(parse_u32_check_range_len_base10(src, 2, &tmp_u32, 0, 59)))
+    {
+        return PARSEDATE_ERROR;
+    }
+    thetime.tm_min = tmp_u32;
+    src += 2;
+    
+    if(FAIL(parse_u32_check_range_len_base10(src, 2, &tmp_u32, 0, 61)))
+    {
+        return PARSEDATE_ERROR;
+    }
+    thetime.tm_sec = tmp_u32;
 
     thetime.tm_year -= 1900;
     thetime.tm_mon--;
@@ -142,7 +286,8 @@ parse_yyyymmddhhmmss_check_range(const char *src, u32 *dst)
 #ifndef __FreeBSD__
     time_t t = mktime(&thetime) - timezone;
 #else
-    time_t t = mktime(&thetime) - 3600;
+
+    time_t t = mktime(&thetime) + thetime.tm_gmtoff; //- 3600;    /** TODO: this should be the answer -- gery */ 
 #endif
 
     if(t < 0)
@@ -153,6 +298,16 @@ parse_yyyymmddhhmmss_check_range(const char *src, u32 *dst)
     *dst = (u32)t;
 
     return OK;
+}
+
+ya_result
+parse_yyyymmddhhmmss_check_range(const char *src, u32 *dst)
+{
+    ya_result return_code;
+    
+    return_code = parse_yyyymmddhhmmss_check_range_len(src, strlen(src), dst);
+    
+    return return_code;
 }
 
 /** \brief Converts a chain of pascal strings to a string
@@ -169,7 +324,7 @@ ya_result
 parse_pstring(char **srcp, size_t src_len, u8 *dst, size_t dst_len)
 {
     char *s = *srcp;
-    const char *limit = &s[src_len];
+    const char * const limit = &s[src_len];
     u8 *p;
     const u8 *dst_limit;
     bool quoted;
@@ -243,7 +398,7 @@ parse_pstring(char **srcp, size_t src_len, u8 *dst, size_t dst_len)
         
         if(!quoted)
         {
-            if(isblank(c))
+            if(isspace(c))
             {
                 break;
             }
@@ -294,7 +449,7 @@ parse_pstring(char **srcp, size_t src_len, u8 *dst, size_t dst_len)
 ya_result
 parse_copy_trim_spaces(const char *src, u32 src_len, char *dst, u32 dst_len)
 {
-    zassert(src != NULL && dst != NULL && dst_len > 0);
+    yassert(src != NULL && dst != NULL && dst_len > 0);
 
     const char *src_limit = src + src_len;
     const char *dst_limit = dst + dst_len - 1;
@@ -311,7 +466,7 @@ parse_copy_trim_spaces(const char *src, u32 src_len, char *dst, u32 dst_len)
 
     while(src < src_limit)
     {
-        char c = *src;
+        char c = *src++;
 
         if(isspace(c))
         {
@@ -344,6 +499,27 @@ parse_copy_trim_spaces(const char *src, u32 src_len, char *dst, u32 dst_len)
     return dst - dst_org;
 }
 
+ya_result
+parse_remove_spaces(char *inout_txt)
+{
+    char *p = inout_txt;
+    char c;
+    
+    while((c = *inout_txt++) != '\0')
+    {
+        if(isspace(c))
+        {
+            continue;
+        }
+        
+        *p++ = c;
+    }
+    
+    *p = '\0';
+    
+    return p - inout_txt;
+}
+
 /** \brief Skips a specific keyword from a string, case insensitive
  *
  *  Skips a specific keyword from a string,  case insensitive, skips white spaces before and after the match
@@ -364,18 +540,40 @@ parse_skip_word_specific(const char *src, u32 src_len, const char **words, u32 w
     const char *src_org = src;
     const char *src_limit = src + src_len;
     
-    while(src < src_limit && isspace(*src))
+    // skip spaces
+    
+    src = parse_skip_spaces(src);
+        
+    // get the non-space
+    
+    const char *p = src;
+    while(p < src_limit && !isspace(*p))
     {
-        src++;
+        p++;
     }
+    // p == src_limit OR p is at the first blank after the word
+    
+    src_limit = p;
+    
+    src_len = src_limit - src;
 
     for(u32 i = 0; i < word_count; i++)
     {
         const char *ptr = src;
         const char *word = words[i];
-        const char *word_limit = word + strlen(word);
-
-        while(word < word_limit && ptr < src_limit)
+        
+        u32 word_len = strlen(word);
+        
+        if(word_len != src_len)
+        {
+            continue;
+        }
+        
+        const char *word_limit = word + word_len;
+        
+        // lenght are the same
+        
+        while(word < word_limit)
         {
             if(tolower(*ptr++) != tolower(*word++))
             {
@@ -391,12 +589,7 @@ parse_skip_word_specific(const char *src, u32 src_len, const char **words, u32 w
                 *matched_word = i;
             }
             
-            while(ptr < src_limit && isspace(*ptr))
-            {
-                ptr++;
-            }
-
-            return ptr - src_org;
+            return src_limit - src_org;
         }
     }
 
@@ -406,6 +599,31 @@ parse_skip_word_specific(const char *src, u32 src_len, const char **words, u32 w
     }
 
     return PARSEWORD_NOMATCH_ERROR; /* no match */
+}
+
+const char *
+parse_skip_until_chars(const char *src, const char *chars, u32 chars_len)
+{
+    
+    for(;;)
+    {
+        char c = *src;
+        
+        if(c == '\0')
+        {
+            return src;
+        }
+        
+        for(u32 i = 0; i < chars_len; i++)
+        {
+            if(c == chars[i])
+            {
+                return src;
+            }
+        }
+        
+        src++;
+    }
 }
 
 /** \brief Skips a specific keyword from a string, case insensitive
@@ -422,12 +640,34 @@ parse_skip_word_specific(const char *src, u32 src_len, const char **words, u32 w
  */
 
 ya_result
-parse_ip_address(const char *src, u32 src_len, u8 *dst, u32 dst_len)
+parse_ip_address(const char *src, u32 src_len_, u8 *dst, u32 dst_len)
 {
+    const char *new_src = parse_skip_spaces(src);
+    s32 src_len = (s32)src_len_;
+    src_len -= new_src - src;
+    bool expect_v6_or_more = FALSE;
+    
+    if(src_len <= 0)
+    {
+        return PARSEIP_ERROR;
+    }
+
+    if(*new_src == '[') /// @note handle RFC 3986, section 3.2.2
+    {
+        expect_v6_or_more = TRUE;
+        
+        new_src++;
+        // IPv6+ delimiter
+        char *end = strchr(new_src, ']');
+        if(end == NULL)
+        {
+            return PARSEIP_ERROR;
+        }
+        src_len = end - new_src;
+    }
+    
     char tmp[64];
-
     src_len = MIN(src_len, sizeof(tmp)-1);
-
     memcpy(tmp, src, src_len);
     tmp[src_len] = '\0';
 
@@ -438,6 +678,11 @@ parse_ip_address(const char *src, u32 src_len, u8 *dst, u32 dst_len)
 
     if(inet_pton(AF_INET, tmp, dst) == 1)
     {
+        if(expect_v6_or_more)
+        {
+            return PARSEIP_ERROR;
+        }
+        
         return 4;
     }
 
@@ -452,6 +697,52 @@ parse_ip_address(const char *src, u32 src_len, u8 *dst, u32 dst_len)
     }
 
     return PARSEIP_ERROR;
+}
+
+s32
+parse_next_token(char *dest, size_t dest_size, const char *from, const char *delim)
+{
+    const char *to = from;
+    for(;;)
+    {
+        char c = *to;
+        
+        if(c == '\0')
+        {
+            size_t len = to - from;
+                
+            if(len > dest_size)
+            {
+                return PARSE_BUFFER_TOO_SMALL_ERROR;
+            }
+
+            memcpy(dest, from, len);
+            dest[len] = '\0';
+            return len;
+        }
+        
+        // for every delimiter, test if c if such a delimiter
+        // if it is, then
+        
+        for(const char *d = delim; *d != 0; d++)
+        {
+            if(*d == c)
+            {
+                // end of word
+                size_t len = to - from;
+                
+                if(len > dest_size)
+                {
+                    return PARSE_BUFFER_TOO_SMALL_ERROR;
+                }
+                
+                memcpy(dest, from, len);
+                dest[len] = '\0';
+                return len;
+            }
+        }
+        ++to;
+    }
 }
 
 /** @} */

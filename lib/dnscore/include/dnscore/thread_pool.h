@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief 
@@ -43,9 +43,9 @@
 #ifndef _THREAD_POOL_H
 #define	_THREAD_POOL_H
 
-#include <dnscore/sys_types.h>
 #include <pthread.h>
 
+#include <dnscore/sys_types.h>
 #include <dnscore/random.h>
 
 #ifdef	__cplusplus
@@ -88,21 +88,43 @@ struct thread_pool_task_counter
     volatile s32 value;
 };
 
-void thread_pool_counter_init(thread_pool_task_counter* counter, s32 value);
-void thread_pool_counter_destroy(thread_pool_task_counter* counter);
-s32 thread_pool_counter_get_value(thread_pool_task_counter* counter);
-s32 thread_pool_counter_add_value(thread_pool_task_counter* counter, s32 value);
+void thread_pool_counter_init(thread_pool_task_counter *counter, s32 value);
+void thread_pool_counter_destroy(thread_pool_task_counter *counter);
+s32 thread_pool_counter_get_value(thread_pool_task_counter *counter);
+s32 thread_pool_counter_add_value(thread_pool_task_counter *counter, s32 value);
 
-ya_result thread_pool_init(u16 thread_count);
+struct thread_pool_s;
 
-ya_result thread_pool_schedule_job(thread_pool_function func, void *parm, thread_pool_task_counter *counter, const char* categoryname);
+struct thread_pool_s *thread_pool_init_ex(u8 thread_count, u32 queue_size, const char* pool_name);
 
-ya_result thread_pool_destroy();
+struct thread_pool_s *thread_pool_init(u8 thread_count, u32 queue_size);
 
-u8 thread_pool_get_pool_size();
+ya_result thread_pool_enqueue_call(struct thread_pool_s *tp, thread_pool_function func, void *parm, thread_pool_task_counter *counter, const char *categoryname);
+
+ya_result thread_pool_destroy(struct thread_pool_s *tp);
+
+/**
+ * Returns the new size of the pool or an error.
+ * 
+ * @param tp
+ * @param new_size
+ * @return 
+ */
+
+ya_result thread_pool_resize(struct thread_pool_s* tp, u8 new_size);
+u8 thread_pool_get_pool_size(struct thread_pool_s *tp);
 
 random_ctx thread_pool_get_random_ctx();
 void thread_pool_setup_random_ctx();
+void thread_pool_destroy_random_ctx();
+
+u8 thread_pool_get_size(struct thread_pool_s *tp);
+
+// before and after a fork
+
+ya_result thread_pool_stop_all();
+// fork
+ya_result thread_pool_start_all();
 
 #ifdef	__cplusplus
 }

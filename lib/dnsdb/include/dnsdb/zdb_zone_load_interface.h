@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief Functions used to manipulate a zone
@@ -44,6 +44,7 @@
 #define	__ZDB_ZONE_LOAD_INTERFACE__H__
 
 #include <dnsdb/zdb_types.h>
+#include <dnscore/bytearray_output_stream.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -59,11 +60,15 @@ extern "C"
  * AXFR FILE
  * 
  */
+    
+//#define RR_OS_RDATA
 
 typedef struct resource_record resource_record;
 struct resource_record
 {
+#ifdef RR_OS_RDATA
     output_stream                                                      os_rdata;
+#endif
 
     /* Next resource record */
     resource_record                                                       *next;
@@ -73,13 +78,15 @@ struct resource_record
     u16                                                                    type;
     /* Contains one of the RR CLASS codes */
     u16                                                                   class; /* should be renamed to something else */
-
-    bool                                                                   isat;
-
+    
+#ifndef RR_OS_RDATA
+    u16                                                              rdata_size;
+#endif
+    
     /* The name of the node to which this resource record pertains */
     u8                                                  name[MAX_DOMAIN_LENGTH];
 
-    char                                            rdata[RDATA_MAX_LENGTH + 1];
+    u8                                              rdata[RDATA_MAX_LENGTH + 1];
 };
 
 void resource_record_init(resource_record* entry);
@@ -92,28 +99,43 @@ typedef struct zone_reader zone_reader;
 struct zone_reader
 {
     void *data;
-    struct zone_reader_vtbl *vtbl;
+    const struct zone_reader_vtbl *vtbl;
 };
 
 typedef ya_result zone_reader_read_record_method(zone_reader *, resource_record *);
+typedef ya_result zone_reader_unread_record_method(zone_reader *, resource_record *);
 typedef ya_result zone_reader_free_record_method(zone_reader *, resource_record *);
 typedef void zone_reader_close_method(zone_reader *);
 typedef void zone_reader_handle_error_method(zone_reader *zr, ya_result error_code);
+typedef bool zone_reader_canwriteback_method(zone_reader *);
 
 typedef struct zone_reader_vtbl zone_reader_vtbl;
 struct zone_reader_vtbl
 {
-    zone_reader_read_record_method *zone_reader_read_record;
-    zone_reader_free_record_method *zone_reader_free_record;
-    zone_reader_close_method *zone_reader_close;
-    zone_reader_handle_error_method *zone_reader_handle_error;
+    zone_reader_read_record_method *read_record;
+    zone_reader_unread_record_method *unread_record;
+    zone_reader_free_record_method *free_record;
+    zone_reader_close_method *close;
+    zone_reader_handle_error_method *handle_error;
+    zone_reader_canwriteback_method *can_write_back;
     const char* __class__;
 };
 
-#define zone_reader_read_record(zr__,rr__) (zr__)->vtbl->zone_reader_read_record((zr__),(rr__))
-#define zone_reader_free_record(zr__,rr__) (zr__)->vtbl->zone_reader_free_record((zr__),(rr__))
-#define zone_reader_handle_error(zr__,rr__) (zr__)->vtbl->zone_reader_handle_error((zr__),(rr__))
-#define zone_reader_close(zr__) (zr__)->vtbl->zone_reader_close((zr__))
+#define zone_reader_read_record(zr__,rr__) (zr__)->vtbl->read_record((zr__),(rr__))
+#define zone_reader_free_record(zr__,rr__) (zr__)->vtbl->free_record((zr__),(rr__))
+#define zone_reader_handle_error(zr__,rr__) (zr__)->vtbl->handle_error((zr__),(rr__))
+#define zone_reader_close(zr__) (zr__)->vtbl->close((zr__))
+#define zone_reader_canwriteback(zr__) (zr__)->vtbl->can_write_back((zr__))
+
+#define zone_reader_unread_record(zr__,rr__) (zr__)->vtbl->unread_record((zr__),(rr__))
+
+#ifdef RR_OS_RDATA
+#define zone_reader_rdata(zr__)      bytearray_output_stream_buffer(&((zr__)->os_rdata))
+#define zone_reader_rdata_size(zr__) bytearray_output_stream_size(&((zr__)->os_rdata))
+#else
+#define zone_reader_rdata(zr__)      ((zr__).rdata)
+#define zone_reader_rdata_size(zr__) ((zr__).rdata_size)
+#endif
 
 #ifdef	__cplusplus
 }

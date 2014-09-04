@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup zone Functions used to manipulate a zone
  *  @ingroup dnsdb
  *  @brief Functions used to manipulate a zone
@@ -61,6 +61,7 @@ extern "C"
 #define SANITY_TRASHATDELEGATION     64
 #define SANITY_TRASHUNDERDELEGATION 128
 #define SANITY_TOOMANYNSEC          256
+#define SANITY_RRSIGWITHOUTKEYS     512
 
 #define SANITY_MUSTDROPZONE    32768
 

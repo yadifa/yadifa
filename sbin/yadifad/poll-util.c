@@ -30,7 +30,9 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
+
+#include "config.h"
 
 #include <dnscore/logger.h>
 #include <dnscore/sys_error.h>
@@ -111,7 +113,7 @@ int
 poll_update()
 {
     int n = poll(tcp_fds, tcp_fds_idx, 0);
-
+    
     if(n > 0)
     {
         /* got hits */
@@ -164,7 +166,7 @@ poll_update()
             n = 0;
         }
         
-        return n;
+        return tcp_fds_idx;
     }
 }
 

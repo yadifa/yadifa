@@ -7,14 +7,14 @@
 # modification, are permitted provided that the following conditions
 # are met:
 #
-#        * Redistributions of source code must retain the above copyright 
-#          notice, this list of conditions and the following disclaimer.
-#        * Redistributions in binary form must reproduce the above copyright 
-#          notice, this list of conditions and the following disclaimer in the 
-#          documentation and/or other materials provided with the distribution.
-#        * Neither the name of EURid nor the names of its contributors may be 
-#          used to endorse or promote products derived from this software 
-#          without specific prior written permission.
+#		* Redistributions of source code must retain the above copyright 
+#		  notice, this list of conditions and the following disclaimer.
+#		* Redistributions in binary form must reproduce the above copyright 
+#		  notice, this list of conditions and the following disclaimer in the 
+#		  documentation and/or other materials provided with the distribution.
+#		* Neither the name of EURid nor the names of its contributors may be 
+#		  used to endorse or promote products derived from this software 
+#		  without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
@@ -29,71 +29,245 @@
 #
 ##############################################################################
 
-srcdir =        @srcdir@
+srcdir =	@srcdir@
 libdir =	@libdir@
-top_srcdir =    @top_srcdir@
-VPATH =         @srcdir@
+top_srcdir =	@top_srcdir@
+VPATH =	 	@srcdir@
 
 ACLOCAL_AMFLAGS = -I m4
 
 dist_noinst_DATA = VERSION
 
+I=include/dnscore
+
+FEATURESFILE=dnscore-config-features.h
+FEATURES=$(I)/$(FEATURESFILE)
+
 lib_LTLIBRARIES= libdnscore.la
 
-libdnscore_la_SOURCES = src/sys_error.c src/sys_get_cpu_count.c src/timems.c \
-			\
-			src/input_stream.c src/file_input_stream.c src/buffer_input_stream.c \
-			src/output_stream.c src/file_output_stream.c src/buffer_output_stream.c src/mt_output_stream.c src/clone_input_output_stream.c\
-			src/bytearray_output_stream.c src/counter_output_stream.c \
-			src/fdtools.c \
-			src/tcp_io_stream.c \
-			src/host_address.c src/network.c \
-			src/packet_reader.c src/packet_writer.c src/message.c \
-			src/logger_channel_syslog.c src/logger_channel_stream.c src/logger_channel_file.c \
-			src/logger_channel.c \
-			src/logger_handle.c  \
-			src/logger.c \
-			src/dnsname.c \
-			src/typebitmap.c \
-			src/base64.c src/base32hex.c src/base32.c src/base16.c src/parsing.c \
-			src/ptr_vector.c \
-			src/string_set.c \
-            src/u32_set.c \
-			src/threaded_ringlist.c src/threaded_ringbuffer.c src/threaded_ringbuffer_cw.c \
-			src/threaded_nbrb.c src/threaded_nb_mm.c \
-			src/thread_pool.c \
-			src/scheduler.c \
-			src/random.c \
-			src/format.c src/dnsformat.c \
-			src/debug.c src/rdtsc.c \
-			src/dnscore.c src/rfc.c src/serial.c \
-			src/xfr_copy.c \
-			src/alarm.c src/treeset.c
-if HAS_TSIG_SUPPORT
-libdnscore_la_SOURCES+= src/tsig.c src/tsig_algorithms.c
-endif		
+libdnscore_la_SOURCES = \
+	src/alarm.c \
+	src/allocator.c \
+	src/async.c \
+	src/base16.c \
+	src/base32.c \
+	src/base32hex.c \
+	src/base64.c \
+	src/basic-priority-queue.c \
+	src/buffer_input_stream.c \
+	src/buffer_output_stream.c \
+	src/bytearray_input_stream.c \
+	src/bytearray_output_stream.c \
+	src/chroot.c \
+	src/clone_input_output_stream.c \
+	src/cmdline.c \
+	src/concat_input_stream.c \
+	src/config-cmdline.c \
+	src/config_file_reader.c \
+	src/config_key.c \
+	src/config_logger.c \
+	src/config_settings.c \
+	src/config_struct.c \
+	src/counter_output_stream.c \
+	src/debug.c \
+	src/digest_sha0.c \
+	src/digest_sha1.c \
+	src/digest_sha256.c \
+	src/digest_sha384.c \
+	src/digest_sha512.c \
+	src/dns-udp.c \
+	src/dns_resource_record.c \
+	src/dnscore.c \
+	src/dnsformat.c \
+	src/dnskey.c \
+	src/dnskey_dsa.c \
+	src/dnskey_rsa.c \
+	src/dnsname.c \
+	src/fdtools.c \
+	src/file_input_stream.c \
+	src/file_output_stream.c \
+	src/format.c \
+	src/host_address.c \
+	src/hsdllist.c \
+	src/identity.c \
+	src/input_stream.c \
+	src/limited_input_stream.c \
+	src/list-dl.c \
+	src/list-sl.c \
+	src/logger.c \
+	src/logger_channel_file.c \
+	src/logger_channel_stream.c \
+	src/logger_channel_syslog.c \
+	src/logger_handle.c \
+	src/logger-output-stream.c \
+	src/message.c \
+	src/message_dnsupdate.c \
+	src/message_print_format_dig.c \
+	src/message_verify_rrsig.c \
+	src/mt_output_stream.c \
+	src/mutex.c \
+	src/network.c \
+	src/output_stream.c \
+	src/pace.c \
+	src/packet_reader.c \
+	src/packet_writer.c \
+	src/parser.c \
+	src/parsing.c \
+	src/pid.c \
+	src/pipe_stream.c \
+	src/pool.c \
+	src/ptr_vector.c \
+	src/random.c \
+	src/rfc.c \
+	src/serial.c \
+	src/service.c \
+	src/server-setup.c \
+	src/string_set.c \
+	src/sys_error.c \
+	src/sys_get_cpu_count.c \
+	src/tcp_io_stream.c \
+	src/thread_pool.c \
+	src/threaded_nb_mm.c \
+	src/threaded_nbrb.c \
+	src/threaded_ringbuffer.c \
+	src/threaded_ringbuffer_cw.c \
+	src/threaded_ringlist.c \
+	src/threaded_sll_cw.c \
+	src/timeformat.c \
+	src/timems.c \
+	src/treeset.c \
+	src/typebitmap.c \
+	src/u32_set.c \
+	src/u64_set.c \
+	src/xfr_copy.c \
+	src/xfr_input_stream.c
 
-pkginclude_HEADERS =include/dnscore/base16.h include/dnscore/base32.h include/dnscore/base32hex.h include/dnscore/base64.h \
-					include/dnscore/dnscore-config.h \
-					include/dnscore/buffer_input_stream.h include/dnscore/buffer_output_stream.h include/dnscore/bytearray_output_stream.h include/dnscore/mt_output_stream.h include/dnscore/clone_input_output_stream.h \
-					include/dnscore/host_address.h include/dnscore/network.h \
-					include/dnscore/counter_output_stream.h \
-					include/dnscore/debug_config.h include/dnscore/debug.h include/dnscore/dnscore.h include/dnscore/dnsformat.h include/dnscore/dnsname.h include/dnscore/dnsname_set.h include/dnscore/u32_set.h include/dnscore/treeset.h \
-					include/dnscore/file_input_stream.h include/dnscore/file_output_stream.h include/dnscore/filter_input_stream.h include/dnscore/fingerprint.h include/dnscore/format.h \
-					include/dnscore/input_stream.h include/dnscore/logger_channel.h include/dnscore/logger_channel_stream.h \
-					include/dnscore/logger_channel_syslog.h include/dnscore/logger.h include/dnscore/logger_handle.h include/dnscore/logger_channel_file.h \
-					include/dnscore/message.h include/dnscore/mutex.h include/dnscore/output_stream.h \
-					include/dnscore/packet_reader.h include/dnscore/packet_writer.h include/dnscore/parsing.h include/dnscore/print_stream.h include/dnscore/ptr_vector.h \
-					include/dnscore/random.h include/dnscore/rdtsc.h include/dnscore/rfc.h include/dnscore/scheduler.h include/dnscore/serial.h include/dnscore/string_set.h include/dnscore/sys_error.h include/dnscore/sys_get_cpu_count.h \
-					include/dnscore/sys_types.h include/dnscore/threaded_queue.h include/dnscore/threaded_ringbuffer.h include/dnscore/threaded_ringbuffer_cw.h include/dnscore/threaded_ringlist.h include/dnscore/threaded_nbrb.h include/dnscore/thread_pool.h include/dnscore/threaded_nb_mm.h \
-					include/dnscore/timems.h include/dnscore/typebitmap.h include/dnscore/zonefile_reader.h include/dnscore/avl.h.inc include/dnscore/avl.c.inc include/dnscore/fdtools.h include/dnscore/tcp_io_stream.h include/dnscore/io_stream.h include/dnscore/xfr_copy.h include/dnscore/alarm.h \
-					include/dnscore/ctrl-rfc.h
+pkginclude_HEADERS = \
+	$(FEATURES) \
+	$(I)/alarm.h \
+	$(I)/allocator.h \
+	$(I)/async.h \
+	$(I)/avl.c.inc \
+	$(I)/avl.h.inc \
+	$(I)/base16.h \
+	$(I)/base32.h \
+	$(I)/base32hex.h \
+	$(I)/base64.h \
+	$(I)/basic-priority-queue.h \
+	$(I)/buffer_input_stream.h \
+	$(I)/buffer_output_stream.h \
+	$(I)/bytearray_input_stream.h \
+	$(I)/bytearray_output_stream.h \
+	$(I)/chroot.h \
+	$(I)/clone_input_output_stream.h \
+	$(I)/cmdline.h \
+	$(I)/concat_input_stream.h \
+	$(I)/config-cmdline.h \
+	$(I)/config_file_reader.h \
+	$(I)/config_settings.h \
+	$(I)/counter_output_stream.h \
+	$(I)/ctrl-rfc.h \
+	$(I)/debug.h \
+	$(I)/debug_config.h \
+	$(I)/digest.h \
+	$(I)/dns-udp.h \
+	$(I)/dns_resource_record.h \
+	$(I)/dnscore-config.h \
+	$(I)/dnscore.h \
+	$(I)/dnsformat.h \
+	$(I)/dnskey.h \
+	$(I)/dnskey_dsa.h \
+	$(I)/dnskey_rsa.h \
+	$(I)/dnsname.h \
+	$(I)/dnsname_set.h \
+	$(I)/dnssec_errors.h \
+	$(I)/fdtools.h \
+	$(I)/file_input_stream.h \
+	$(I)/file_output_stream.h \
+	$(I)/filter_input_stream.h \
+	$(I)/fingerprint.h \
+	$(I)/format.h \
+	$(I)/host_address.h \
+	$(I)/hsdllist.h \
+	$(I)/identity.h \
+	$(I)/input_stream.h \
+	$(I)/io_stream.h \
+	$(I)/limited_input_stream.h \
+	$(I)/list-dl.h \
+	$(I)/list-sl.h \
+	$(I)/logger.h \
+	$(I)/logger_channel_file.h \
+	$(I)/logger_channel_stream.h \
+	$(I)/logger_channel_syslog.h \
+	$(I)/logger_handle.h \
+	$(I)/logger-output-stream.h \
+	$(I)/message.h \
+	$(I)/message_dnsupdate.h \
+	$(I)/message_verify_rrsig.h \
+	$(I)/mt_output_stream.h \
+	$(I)/mutex.h \
+	$(I)/network.h \
+	$(I)/output_stream.h \
+	$(I)/pace.h \
+	$(I)/packet_reader.h \
+	$(I)/packet_writer.h \
+	$(I)/parser.h \
+	$(I)/parsing.h \
+	$(I)/pid.h \
+	$(I)/pipe_stream.h \
+	$(I)/pool.h \
+	$(I)/print_stream.h \
+	$(I)/ptr_vector.h \
+	$(I)/random.h \
+	$(I)/rfc.h \
+	$(I)/serial.h \
+	$(I)/server-setup.h \
+	$(I)/service.h \
+	$(I)/string_set.h \
+	$(I)/sys_error.h \
+	$(I)/sys_get_cpu_count.h \
+	$(I)/sys_types.h \
+	$(I)/tcp_io_stream.h \
+	$(I)/thread_pool.h \
+	$(I)/threaded_nb_mm.h \
+	$(I)/threaded_nbrb.h \
+	$(I)/threaded_queue.h \
+	$(I)/threaded_ringbuffer.h \
+	$(I)/threaded_ringbuffer_cw.h \
+	$(I)/threaded_ringlist.h \
+	$(I)/threaded_sll_cw.h \
+	$(I)/timeformat.h \
+	$(I)/timems.h \
+	$(I)/treeset.h \
+	$(I)/typebitmap.h \
+	$(I)/u32_set.h \
+	$(I)/u64_set.h \
+	$(I)/xfr_copy.h \
+	$(I)/xfr_input_stream.h \
+	$(I)/zonefile_reader.h
 
 if HAS_TSIG_SUPPORT
-pkginclude_HEADERS+=include/dnscore/tsig.h
+pkginclude_HEADERS += $(I)/tsig.h
+libdnscore_la_SOURCES += src/tsig.c src/tsig_algorithms.c
 endif
+
+if HAS_NSID_SUPPORT
+pkginclude_HEADERS += $(I)/nsid.h
+libdnscore_la_SOURCES += src/nsid.c
+endif
+
+libdnscore_la_LDFLAGS = -version-info 2:0:0
 
 include ../../mk/common-settings.mk
 
 include ../../mk/common-labels.mk
+
+src/alarm.c: $(FEATURES)
+
+$(FEATURES): config.log
+	echo "#pragma once" > $(FEATURES)
+	echo "#define DNSCORE_HAS_TSIG_SUPPORT 1" >> $(FEATURES)
+	echo "#define DNSCORE_HAS_ACL_SUPPORT 1" >> $(FEATURES)
+	echo "#define DNSCORE_HAS_NSEC3_SUPPORT 1" >> $(FEATURES)
+	echo "#define DNSCORE_HAS_NSEC_SUPPORT 1" >> $(FEATURES)
 

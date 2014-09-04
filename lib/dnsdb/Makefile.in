@@ -75,6 +75,18 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Settings common to all makefiles
+#
+################################################################################
 
 ################################################################################
 #
@@ -104,6 +116,18 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Labels common to all makefiles
 #
 ################################################################################
 
@@ -174,19 +198,34 @@ build_triplet = @build@
 host_triplet = @host@
 
 # DNSSEC is defined if either NSEC3 or NSEC are defined
-@HAS_DNSSEC_SUPPORT_TRUE@am__append_1 = src/dnssec.c src/dnskey.c src/dnssec_keystore.c src/dnssec_process.c src/dnssec_rsa.c \
-@HAS_DNSSEC_SUPPORT_TRUE@			src/rr_canonize.c src/rrsig.c src/rrsig_updater.c \
-@HAS_DNSSEC_SUPPORT_TRUE@			src/nsec_common.c \
-@HAS_DNSSEC_SUPPORT_TRUE@			src/zdb_update_signatures.c \
-@HAS_DNSSEC_SUPPORT_TRUE@			src/scheduler_queue_dnskey_create.c src/scheduler_task_rrsig_update_commit.c
+@HAS_DNSSEC_SUPPORT_TRUE@am__append_1 = \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/dnssec.c \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/dnssec_keystore.c \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/dnssec_process.c \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/nsec_common.c \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/rr_canonize.c \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/rrsig.c \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/rrsig_updater.c \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/zdb_update_signatures.c
 
-@HAS_NSEC3_SUPPORT_TRUE@am__append_2 = src/nsec3.c src/nsec3_collection.c src/nsec3_hash.c src/nsec3_item.c src/nsec3_icmtl.c \
-@HAS_NSEC3_SUPPORT_TRUE@			src/nsec3_load.c src/nsec3_name_error.c src/nsec3_nodata_error.c \
-@HAS_NSEC3_SUPPORT_TRUE@			src/nsec3_owner.c src/nsec3_update.c src/nsec3_zone.c \
-@HAS_NSEC3_SUPPORT_TRUE@			src/nsec3_rrsig_updater.c \
-@HAS_NSEC3_SUPPORT_TRUE@			src/scheduler_queue_nsec3_update.c src/scheduler_task_nsec3_rrsig_update_commit.c
+@HAS_NSEC3_SUPPORT_TRUE@am__append_2 = \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_collection.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_hash.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_item.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_icmtl.c  \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_load.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_name_error.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_nodata_error.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_owner.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_rrsig_updater.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_update.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_zone.c
 
-@HAS_NSEC_SUPPORT_TRUE@am__append_3 = src/nsec.c src/nsec_collection.c
+@HAS_NSEC_SUPPORT_TRUE@am__append_3 = \
+@HAS_NSEC_SUPPORT_TRUE@	src/nsec.c \
+@HAS_NSEC_SUPPORT_TRUE@	src/nsec_collection.c
+
 DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 	$(srcdir)/../../mk/common-labels.mk INSTALL NEWS README \
 	AUTHORS ChangeLog $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
@@ -212,10 +251,26 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 
 # CLANG
 @HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_8 = -DLTO -flto
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_9 = -use-gold-plugin
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_9 = -flto
 @USES_CLANG_TRUE@am__append_10 = -mtune=native -DUSES_LLVM \
 @USES_CLANG_TRUE@	-I$(abs_builddir) -I$(abs_srcdir)/include
 @USES_CLANG_TRUE@am__append_11 = -O0 -g -DMODE_DEBUG_CLANG
+
+# THIS WILL BREAK THE CONFIGURE ON EXTERNAL USERS OF THE LIBS IF INSTALLED AS DEBUG
+# FUTURE SOLUTION: ADD A _d SUFFIX TO LIBS WHEN BUILD IN DEBUG ?
+#
+#if HAS_FADDRESS_SANITIZER
+#DEBUGFLAGS+=-fsanitize=address
+#endif
+#
+#
+#if HAS_FNO_OMIT_FRAME_POINTER
+#DEBUGFLAGS+=-fno-omit-frame-pointer
+#endif
+#
+#if HAS_CATCH_UNDEFINED_BEHAVIOR
+#DEBUGFLAGS+=-fcatch_undefined_behavior
+#endif
 
 #
 # Gnu C
@@ -224,8 +279,8 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 #GCC
 @HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_12 = -mcpu=niagara
 @HAS_CPU_AMDINTEL_TRUE@@USES_GCC_TRUE@am__append_13 = -mtune=native
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_14 = -DLTO -flto
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_15 = -flto
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_14 = -DLTO -flto -fwhole-program -ffat-lto-objects
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_15 = -flto -fwhole-program -ffat-lto-objects
 @USES_GCC_TRUE@am__append_16 = -fno-ident -ansi -pedantic -std=gnu99 -I$(abs_builddir) -I$(abs_srcdir)/include
 @IS_BSD_FAMILY_FALSE@@USES_GCC_TRUE@am__append_17 = -g3 -gdwarf-2 -O0 -DMODE_DEBUG_GCC -rdynamic
 
@@ -243,10 +298,7 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 @IS_BSD_FAMILY_TRUE@am__append_22 = -std=c99 -I./include
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
-	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
-	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
-	$(top_srcdir)/../../m4/eurid.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/../../m4/eurid.m4 \
 	$(top_srcdir)/../../m4/yadifa.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
@@ -286,84 +338,74 @@ am__uninstall_files_from_dir = { \
 am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(pkgincludedir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
 libdnsdb_la_LIBADD =
-am__libdnsdb_la_SOURCES_DIST = src/avl.c src/dictionary_btree.c \
-	src/dictionary.c src/dictionary_htbt.c src/zdb_dnsname.c \
-	src/hash.c src/hash_table_values.c src/htable.c src/htbt.c \
-	src/zdb_alloc.c src/zdb.c src/zdb_error.c src/zdb_query_ex.c \
-	src/zdb_query_ex_wire.c src/zdb_record.c src/zdb_rr_label.c \
-	src/zdb_utils.c src/zdb_zone_load.c src/zdb_zone_write_text.c \
-	src/zdb_zone_write_unbound.c src/zdb_zone.c \
+am__libdnsdb_la_SOURCES_DIST = src/avl.c src/dictionary.c \
+	src/dictionary_btree.c src/dictionary_htbt.c \
+	src/dynupdate_check_prerequisites.c src/dynupdate_icmtlhook.c \
+	src/dynupdate_update.c src/hash.c src/hash_table_values.c \
+	src/htable.c src/htbt.c src/icmtl_input_stream.c src/journal.c \
+	src/journal_ix.c src/zdb.c src/zdb_alloc.c src/zdb_dnsname.c \
+	src/zdb_error.c src/zdb_icmtl.c src/zdb_listener.c \
+	src/zdb_query_ex.c src/zdb_query_ex_wire.c src/zdb_record.c \
+	src/zdb_rr_label.c src/zdb_sanitize.c src/zdb_utils.c \
+	src/zdb_zone.c src/zdb-zone-answer-axfr.c \
+	src/zdb-zone-answer-ixfr.c src/zdb_zone_axfr_input_stream.c \
 	src/zdb_zone_label.c src/zdb_zone_label_iterator.c \
-	src/zonefile.c src/zdb_store.c src/zdb_zone_update_ixfr.c \
-	src/zdb_zone_store_axfr.c src/dynupdate_check_prerequisites.c \
-	src/dynupdate_update.c src/dynupdate_icmtlhook.c \
-	src/zdb_listener.c src/zdb_icmtl.c src/icmtl_input_stream.c \
-	src/scheduler_queue_zone_write.c \
-	src/scheduler_queue_zone_write_axfr.c \
-	src/scheduler_queue_zone_write_ixfr.c \
-	src/scheduler_queue_zone_freeze.c \
-	src/scheduler_queue_zone_unfreeze.c src/zdb_sanitize.c \
-	src/dnssec.c src/dnskey.c src/dnssec_keystore.c \
-	src/dnssec_process.c src/dnssec_rsa.c src/rr_canonize.c \
-	src/rrsig.c src/rrsig_updater.c src/nsec_common.c \
-	src/zdb_update_signatures.c \
-	src/scheduler_queue_dnskey_create.c \
-	src/scheduler_task_rrsig_update_commit.c src/nsec3.c \
-	src/nsec3_collection.c src/nsec3_hash.c src/nsec3_item.c \
-	src/nsec3_icmtl.c src/nsec3_load.c src/nsec3_name_error.c \
-	src/nsec3_nodata_error.c src/nsec3_owner.c src/nsec3_update.c \
-	src/nsec3_zone.c src/nsec3_rrsig_updater.c \
-	src/scheduler_queue_nsec3_update.c \
-	src/scheduler_task_nsec3_rrsig_update_commit.c src/nsec.c \
-	src/nsec_collection.c
+	src/zdb_zone_load.c src/zdb_zone_process.c \
+	src/zdb-zone-reader-filter.c src/zdb_zone_store_axfr.c \
+	src/zdb_zone_update_ixfr.c src/zdb_zone_write_text.c \
+	src/zdb_zone_write_unbound.c src/dnssec.c \
+	src/dnssec_keystore.c src/dnssec_process.c src/nsec_common.c \
+	src/rr_canonize.c src/rrsig.c src/rrsig_updater.c \
+	src/zdb_update_signatures.c src/nsec3.c src/nsec3_collection.c \
+	src/nsec3_hash.c src/nsec3_item.c src/nsec3_icmtl.c \
+	src/nsec3_load.c src/nsec3_name_error.c \
+	src/nsec3_nodata_error.c src/nsec3_owner.c \
+	src/nsec3_rrsig_updater.c src/nsec3_update.c src/nsec3_zone.c \
+	src/nsec.c src/nsec_collection.c
 am__dirstamp = $(am__leading_dot)dirstamp
-@HAS_DNSSEC_SUPPORT_TRUE@am__objects_1 = src/dnssec.lo src/dnskey.lo \
+@HAS_DNSSEC_SUPPORT_TRUE@am__objects_1 = src/dnssec.lo \
 @HAS_DNSSEC_SUPPORT_TRUE@	src/dnssec_keystore.lo \
 @HAS_DNSSEC_SUPPORT_TRUE@	src/dnssec_process.lo \
-@HAS_DNSSEC_SUPPORT_TRUE@	src/dnssec_rsa.lo src/rr_canonize.lo \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/nsec_common.lo src/rr_canonize.lo \
 @HAS_DNSSEC_SUPPORT_TRUE@	src/rrsig.lo src/rrsig_updater.lo \
-@HAS_DNSSEC_SUPPORT_TRUE@	src/nsec_common.lo \
-@HAS_DNSSEC_SUPPORT_TRUE@	src/zdb_update_signatures.lo \
-@HAS_DNSSEC_SUPPORT_TRUE@	src/scheduler_queue_dnskey_create.lo \
-@HAS_DNSSEC_SUPPORT_TRUE@	src/scheduler_task_rrsig_update_commit.lo
+@HAS_DNSSEC_SUPPORT_TRUE@	src/zdb_update_signatures.lo
 @HAS_NSEC3_SUPPORT_TRUE@am__objects_2 = src/nsec3.lo \
 @HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_collection.lo \
 @HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_hash.lo src/nsec3_item.lo \
 @HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_icmtl.lo src/nsec3_load.lo \
 @HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_name_error.lo \
 @HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_nodata_error.lo \
-@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_owner.lo src/nsec3_update.lo \
-@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_zone.lo \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_owner.lo \
 @HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_rrsig_updater.lo \
-@HAS_NSEC3_SUPPORT_TRUE@	src/scheduler_queue_nsec3_update.lo \
-@HAS_NSEC3_SUPPORT_TRUE@	src/scheduler_task_nsec3_rrsig_update_commit.lo
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_update.lo src/nsec3_zone.lo
 @HAS_NSEC_SUPPORT_TRUE@am__objects_3 = src/nsec.lo \
 @HAS_NSEC_SUPPORT_TRUE@	src/nsec_collection.lo
-am_libdnsdb_la_OBJECTS = src/avl.lo src/dictionary_btree.lo \
-	src/dictionary.lo src/dictionary_htbt.lo src/zdb_dnsname.lo \
-	src/hash.lo src/hash_table_values.lo src/htable.lo src/htbt.lo \
-	src/zdb_alloc.lo src/zdb.lo src/zdb_error.lo \
+am_libdnsdb_la_OBJECTS = src/avl.lo src/dictionary.lo \
+	src/dictionary_btree.lo src/dictionary_htbt.lo \
+	src/dynupdate_check_prerequisites.lo \
+	src/dynupdate_icmtlhook.lo src/dynupdate_update.lo src/hash.lo \
+	src/hash_table_values.lo src/htable.lo src/htbt.lo \
+	src/icmtl_input_stream.lo src/journal.lo src/journal_ix.lo \
+	src/zdb.lo src/zdb_alloc.lo src/zdb_dnsname.lo \
+	src/zdb_error.lo src/zdb_icmtl.lo src/zdb_listener.lo \
 	src/zdb_query_ex.lo src/zdb_query_ex_wire.lo src/zdb_record.lo \
-	src/zdb_rr_label.lo src/zdb_utils.lo src/zdb_zone_load.lo \
-	src/zdb_zone_write_text.lo src/zdb_zone_write_unbound.lo \
-	src/zdb_zone.lo src/zdb_zone_label.lo \
-	src/zdb_zone_label_iterator.lo src/zonefile.lo \
-	src/zdb_store.lo src/zdb_zone_update_ixfr.lo \
-	src/zdb_zone_store_axfr.lo \
-	src/dynupdate_check_prerequisites.lo src/dynupdate_update.lo \
-	src/dynupdate_icmtlhook.lo src/zdb_listener.lo \
-	src/zdb_icmtl.lo src/icmtl_input_stream.lo \
-	src/scheduler_queue_zone_write.lo \
-	src/scheduler_queue_zone_write_axfr.lo \
-	src/scheduler_queue_zone_write_ixfr.lo \
-	src/scheduler_queue_zone_freeze.lo \
-	src/scheduler_queue_zone_unfreeze.lo src/zdb_sanitize.lo \
-	$(am__objects_1) $(am__objects_2) $(am__objects_3)
+	src/zdb_rr_label.lo src/zdb_sanitize.lo src/zdb_utils.lo \
+	src/zdb_zone.lo src/zdb-zone-answer-axfr.lo \
+	src/zdb-zone-answer-ixfr.lo src/zdb_zone_axfr_input_stream.lo \
+	src/zdb_zone_label.lo src/zdb_zone_label_iterator.lo \
+	src/zdb_zone_load.lo src/zdb_zone_process.lo \
+	src/zdb-zone-reader-filter.lo src/zdb_zone_store_axfr.lo \
+	src/zdb_zone_update_ixfr.lo src/zdb_zone_write_text.lo \
+	src/zdb_zone_write_unbound.lo $(am__objects_1) \
+	$(am__objects_2) $(am__objects_3)
 libdnsdb_la_OBJECTS = $(am_libdnsdb_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
+libdnsdb_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
+	$(libdnsdb_la_LDFLAGS) $(LDFLAGS) -o $@
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -466,6 +508,7 @@ DEPDIR = @DEPDIR@
 DLLTOOL = @DLLTOOL@
 DNSCORE = @DNSCORE@
 DNSDB = @DNSDB@
+DNSLG = @DNSLG@
 DNSZONE = @DNSZONE@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
@@ -568,66 +611,106 @@ top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I m4
 dist_noinst_DATA = VERSION
 lib_LTLIBRARIES = libdnsdb.la
-pkginclude_HEADERS = include/dnsdb/dnsdb-config.h include/dnsdb/avl.h \
-	include/dnsdb/btree.h include/dnsdb/dictionary.h \
-	include/dnsdb/dnskey.h include/dnsdb/dnsrdata.h \
-	include/dnsdb/dnssec_config.h include/dnsdb/dnssec_dsa.h \
-	include/dnsdb/dnssec.h include/dnsdb/dnssec_keystore.h \
-	include/dnsdb/dnssec_rsa.h include/dnsdb/dnssec_scheduler.h \
-	include/dnsdb/dnssec_task.h include/dnsdb/dynupdate.h \
-	include/dnsdb/hash.h include/dnsdb/htable.h \
-	include/dnsdb/htbt.h include/dnsdb/icmtl_input_stream.h \
-	include/dnsdb/nsec3_collection.h include/dnsdb/nsec3.h \
-	include/dnsdb/nsec3_hash.h include/dnsdb/nsec3_item.h \
-	include/dnsdb/nsec3_icmtl.h include/dnsdb/nsec3_load.h \
-	include/dnsdb/nsec3_name_error.h \
-	include/dnsdb/nsec3_nodata_error.h include/dnsdb/nsec3_owner.h \
-	include/dnsdb/nsec3_types.h include/dnsdb/nsec3_update.h \
-	include/dnsdb/nsec3_zone.h include/dnsdb/nsec_common.h \
-	include/dnsdb/nsec.h include/dnsdb/nsec_collection.h \
-	include/dnsdb/rrsig.h include/dnsdb/zdb_alloc.h \
-	include/dnsdb/zdb_config.h include/dnsdb/zdb_dnsname.h \
-	include/dnsdb/zdb_error.h include/dnsdb/zdb.h \
-	include/dnsdb/zdb_icmtl.h include/dnsdb/zdb_listener.h \
-	include/dnsdb/zdb_record.h include/dnsdb/zdb_rr_label.h \
-	include/dnsdb/zdb_store.h include/dnsdb/zdb_types.h \
-	include/dnsdb/zdb_utils.h include/dnsdb/zdb_zone.h \
-	include/dnsdb/zdb_zone_label.h \
-	include/dnsdb/zdb_zone_label_iterator.h \
-	include/dnsdb/zdb_zone_write.h include/dnsdb/zonefile.h \
-	include/dnsdb/zdb_sanitize.h include/dnsdb/zdb_zone_load.h \
-	include/dnsdb/zdb_zone_load_interface.h
-libdnsdb_la_SOURCES = src/avl.c src/dictionary_btree.c \
-	src/dictionary.c src/dictionary_htbt.c src/zdb_dnsname.c \
-	src/hash.c src/hash_table_values.c src/htable.c src/htbt.c \
-	src/zdb_alloc.c src/zdb.c src/zdb_error.c src/zdb_query_ex.c \
-	src/zdb_query_ex_wire.c src/zdb_record.c src/zdb_rr_label.c \
-	src/zdb_utils.c src/zdb_zone_load.c src/zdb_zone_write_text.c \
-	src/zdb_zone_write_unbound.c src/zdb_zone.c \
+I = include/dnsdb
+FEATURESFILE = zdb-config-features.h
+FEATURES = $(I)/$(FEATURESFILE)
+
+# alphabetically please
+pkginclude_HEADERS = \
+	$(FEATURES) \
+	$(I)/avl.h \
+	$(I)/btree.h \
+	$(I)/dictionary.h \
+	$(I)/dictionary-node.h \
+	$(I)/dnsdb-config.h \
+	$(I)/dnsrdata.h \
+	$(I)/dnssec.h \
+	$(I)/dnssec_config.h \
+	$(I)/dnssec_keystore.h \
+	$(I)/dnssec_scheduler.h \
+	$(I)/dnssec_task.h \
+	$(I)/dynupdate.h \
+	$(I)/hash.h \
+	$(I)/htable.h \
+	$(I)/htbt.h \
+	$(I)/icmtl_input_stream.h \
+	$(I)/journal.h \
+	$(I)/journal_ix.h \
+	$(I)/nsec.h \
+	$(I)/nsec3.h \
+	$(I)/nsec3_collection.h \
+	$(I)/nsec3_hash.h \
+	$(I)/nsec3_icmtl.h \
+	$(I)/nsec3_item.h \
+	$(I)/nsec3_load.h \
+	$(I)/nsec3_name_error.h \
+	$(I)/nsec3_nodata_error.h \
+	$(I)/nsec3_owner.h \
+	$(I)/nsec3_rrsig_updater.h \
+	$(I)/nsec3_types.h \
+	$(I)/nsec3_update.h \
+	$(I)/nsec3_zone.h \
+	$(I)/nsec_collection.h \
+	$(I)/nsec_common.h \
+	$(I)/rr_canonize.h \
+	$(I)/rrsig.h \
+	$(I)/rrsig_updater.h \
+	$(I)/zdb.h \
+	$(I)/zdb_alloc.h \
+	$(I)/zdb_config.h \
+	$(I)/zdb_dnsname.h \
+	$(I)/zdb_error.h \
+	$(I)/zdb_icmtl.h \
+	$(I)/zdb_listener.h \
+	$(I)/zdb_record.h \
+	$(I)/zdb_rr_label.h \
+	$(I)/zdb_sanitize.h \
+	$(I)/zdb_types.h \
+	$(I)/zdb_utils.h \
+	$(I)/zdb_zone.h \
+	$(I)/zdb-zone-answer-axfr.h \
+	$(I)/zdb-zone-answer-ixfr.h \
+	$(I)/zdb_zone_axfr_input_stream.h \
+	$(I)/zdb_zone_label.h \
+	$(I)/zdb_zone_label_iterator.h \
+	$(I)/zdb_zone_load.h \
+	$(I)/zdb_zone_load_interface.h \
+	$(I)/zdb_zone_process.h \
+	$(I)/zdb-zone-reader-filter.h \
+	$(I)/zdb_zone_write.h
+
+libdnsdb_la_SOURCES = src/avl.c src/dictionary.c \
+	src/dictionary_btree.c src/dictionary_htbt.c \
+	src/dynupdate_check_prerequisites.c src/dynupdate_icmtlhook.c \
+	src/dynupdate_update.c src/hash.c src/hash_table_values.c \
+	src/htable.c src/htbt.c src/icmtl_input_stream.c src/journal.c \
+	src/journal_ix.c src/zdb.c src/zdb_alloc.c src/zdb_dnsname.c \
+	src/zdb_error.c src/zdb_icmtl.c src/zdb_listener.c \
+	src/zdb_query_ex.c src/zdb_query_ex_wire.c src/zdb_record.c \
+	src/zdb_rr_label.c src/zdb_sanitize.c src/zdb_utils.c \
+	src/zdb_zone.c src/zdb-zone-answer-axfr.c \
+	src/zdb-zone-answer-ixfr.c src/zdb_zone_axfr_input_stream.c \
 	src/zdb_zone_label.c src/zdb_zone_label_iterator.c \
-	src/zonefile.c src/zdb_store.c src/zdb_zone_update_ixfr.c \
-	src/zdb_zone_store_axfr.c src/dynupdate_check_prerequisites.c \
-	src/dynupdate_update.c src/dynupdate_icmtlhook.c \
-	src/zdb_listener.c src/zdb_icmtl.c src/icmtl_input_stream.c \
-	src/scheduler_queue_zone_write.c \
-	src/scheduler_queue_zone_write_axfr.c \
-	src/scheduler_queue_zone_write_ixfr.c \
-	src/scheduler_queue_zone_freeze.c \
-	src/scheduler_queue_zone_unfreeze.c src/zdb_sanitize.c \
-	$(am__append_1) $(am__append_2) $(am__append_3)
+	src/zdb_zone_load.c src/zdb_zone_process.c \
+	src/zdb-zone-reader-filter.c src/zdb_zone_store_axfr.c \
+	src/zdb_zone_update_ixfr.c src/zdb_zone_write_text.c \
+	src/zdb_zone_write_unbound.c $(am__append_1) $(am__append_2) \
+	$(am__append_3)
+libdnsdb_la_LDFLAGS = -version-info 2:0:0
 
 #
 #
 #
-AM_CFLAGS = -Wall -D_FILE_OFFSET_BITS=64 $(am__append_4) \
-	$(am__append_6) $(am__append_8) $(am__append_10) \
-	$(am__append_12) $(am__append_13) $(am__append_14) \
-	$(am__append_16) $(am__append_20) $(am__append_22) \
-	$(LOCALFLAGS) $(YCFLAGS)
+AM_CFLAGS = -Wall -Werror=missing-field-initializers \
+	-D_FILE_OFFSET_BITS=64 -g $(am__append_4) $(am__append_6) \
+	$(am__append_8) $(am__append_10) $(am__append_12) \
+	$(am__append_13) $(am__append_14) $(am__append_16) \
+	$(am__append_20) $(am__append_22) $(LOCALFLAGS) $(YCFLAGS)
 AM_LDFLAGS = $(am__append_5) $(am__append_9) $(am__append_15) \
 	$(YLDFLAGS)
 DEBUGFLAGS = $(am__append_7) $(am__append_11) $(am__append_17) \
 	$(am__append_18) $(am__append_19) $(am__append_21)
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"'
 @HAS_LTO_SUPPORT_FALSE@@USES_CLANG_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@AM_AR = llvm-ar
 @HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@AM_AR = xiar
@@ -640,7 +723,7 @@ YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -DCMR
 YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP
 YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
 YSCFLAGS = $(YRCFLAGS)
-YRLDFLAGS = 
+YRLDFLAGS = -g
 YPLDFLAGS = -pg
 YDLDFLAGS = -g
 YSLDFLAGS = $(YRLDFLAGS)
@@ -743,81 +826,75 @@ src/$(DEPDIR)/$(am__dirstamp):
 	@$(MKDIR_P) src/$(DEPDIR)
 	@: > src/$(DEPDIR)/$(am__dirstamp)
 src/avl.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/dictionary.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/dictionary_btree.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/dictionary.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/dictionary_htbt.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/zdb_dnsname.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/dynupdate_check_prerequisites.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/dynupdate_icmtlhook.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/dynupdate_update.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 src/hash.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/hash_table_values.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/htable.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/htbt.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/zdb_alloc.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/icmtl_input_stream.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/journal.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/journal_ix.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/zdb.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/zdb_alloc.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/zdb_dnsname.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_error.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/zdb_icmtl.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/zdb_listener.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_query_ex.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_query_ex_wire.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_record.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_rr_label.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/zdb_sanitize.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_utils.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/zdb_zone.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/zdb-zone-answer-axfr.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/zdb-zone-answer-ixfr.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/zdb_zone_axfr_input_stream.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/zdb_zone_label.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/zdb_zone_label_iterator.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_zone_load.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/zdb_zone_process.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/zdb-zone-reader-filter.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/zdb_zone_store_axfr.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/zdb_zone_update_ixfr.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_zone_write_text.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_zone_write_unbound.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/zdb_zone.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/zdb_zone_label.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/zdb_zone_label_iterator.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/zonefile.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/zdb_store.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/zdb_zone_update_ixfr.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/zdb_zone_store_axfr.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/dynupdate_check_prerequisites.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/dynupdate_update.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/dynupdate_icmtlhook.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/zdb_listener.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/zdb_icmtl.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/icmtl_input_stream.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/scheduler_queue_zone_write.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/scheduler_queue_zone_write_axfr.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/scheduler_queue_zone_write_ixfr.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/scheduler_queue_zone_freeze.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/scheduler_queue_zone_unfreeze.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/zdb_sanitize.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/dnssec.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/dnskey.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/dnssec_keystore.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/dnssec_process.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/dnssec_rsa.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/nsec_common.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/rr_canonize.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/rrsig.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/rrsig_updater.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/nsec_common.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_update_signatures.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/scheduler_queue_dnskey_create.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/scheduler_task_rrsig_update_commit.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/nsec3.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/nsec3_collection.lo: src/$(am__dirstamp) \
@@ -831,20 +908,16 @@ src/nsec3_name_error.lo: src/$(am__dirstamp) \
 src/nsec3_nodata_error.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/nsec3_owner.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/nsec3_update.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/nsec3_zone.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/nsec3_rrsig_updater.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/scheduler_queue_nsec3_update.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
-src/scheduler_task_nsec3_rrsig_update_commit.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
+src/nsec3_update.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/nsec3_zone.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/nsec.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/nsec_collection.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 
 libdnsdb.la: $(libdnsdb_la_OBJECTS) $(libdnsdb_la_DEPENDENCIES) $(EXTRA_libdnsdb_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(LINK) -rpath $(libdir) $(libdnsdb_la_OBJECTS) $(libdnsdb_la_LIBADD) $(LIBS)
+	$(AM_V_CCLD)$(libdnsdb_la_LINK) -rpath $(libdir) $(libdnsdb_la_OBJECTS) $(libdnsdb_la_LIBADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -858,11 +931,9 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dictionary.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dictionary_btree.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dictionary_htbt.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnssec.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnssec_keystore.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnssec_process.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnssec_rsa.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dynupdate_check_prerequisites.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dynupdate_icmtlhook.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dynupdate_update.Plo@am__quote@
@@ -871,6 +942,8 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/htable.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/htbt.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/icmtl_input_stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/journal.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/journal_ix.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/nsec.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/nsec3.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/nsec3_collection.Plo@am__quote@
@@ -889,15 +962,9 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/rr_canonize.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/rrsig.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/rrsig_updater.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/scheduler_queue_dnskey_create.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/scheduler_queue_nsec3_update.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/scheduler_queue_zone_freeze.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/scheduler_queue_zone_unfreeze.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/scheduler_queue_zone_write.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/scheduler_queue_zone_write_axfr.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/scheduler_queue_zone_write_ixfr.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/scheduler_task_nsec3_rrsig_update_commit.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/scheduler_task_rrsig_update_commit.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb-zone-answer-axfr.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb-zone-answer-ixfr.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb-zone-reader-filter.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_alloc.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_dnsname.Plo@am__quote@
@@ -909,18 +976,18 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_record.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_rr_label.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_sanitize.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_store.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_update_signatures.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_utils.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_zone.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_zone_axfr_input_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_zone_label.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_zone_label_iterator.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_zone_load.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_zone_process.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_zone_store_axfr.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_zone_update_ixfr.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_zone_write_text.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_zone_write_unbound.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zonefile.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -1334,13 +1401,35 @@ uninstall-am: uninstall-libLTLIBRARIES uninstall-pkgincludeHEADERS
 
 
 release:
+	echo YCFLAGS=$(YRCFLAGS)
+	echo YLDFLAGS=$(YRLDFLAGS)
 	$(MAKE) all "YCFLAGS=$(YRCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YRLDFLAGS)"
 
 profile:
+	echo YCFLAGS=$(YPCFLAGS)
+	echo YLDFLAGS=$(YPLDFLAGS)
 	$(MAKE) all "YCFLAGS=$(YPCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YPLDFLAGS)"
 
 debug:
+	echo YCFLAGS=$(YDCFLAGS)
+	echo YLDFLAGS=$(YDLDFLAGS)
 	$(MAKE) all "YCFLAGS=$(YDCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YDLDFLAGS)"
+
+buildinfo.h: config.log
+	echo \#pragma once > buildinfo.h 2> /dev/null
+	echo // generated file, do not modify >> buildinfo.h 2> /dev/null
+	echo \#define BUILD_OPTIONS \"$$(grep "./configure" config.log | head -1 | sed 's/.*\.\/configure *//')\" >> buildinfo.h 2> /dev/null
+
+src/avl.c: $(FEATURES)
+
+$(FEATURES): config.log
+	echo "#pragma once" > $(FEATURES)
+	echo "#define ZDB_HAS_RRCACHE_ENABLED 0" >> $(FEATURES)
+	echo "#define ZDB_HAS_DNSSEC_SUPPORT 1" >> $(FEATURES)
+	echo "#define ZDB_HAS_NSEC_SUPPORT 1" >> $(FEATURES)
+	echo "#define ZDB_HAS_NSEC3_SUPPORT 1" >> $(FEATURES)
+	echo "#define ZDB_HAS_ACL_SUPPORT 1" >> $(FEATURES)
+	echo "#define ZDB_HAS_TSIG_SUPPORT 1" >> $(FEATURES)
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

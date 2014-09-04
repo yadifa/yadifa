@@ -40,9 +40,11 @@ dist_noinst_DATA = VERSION
 
 lib_LTLIBRARIES= libdnszone.la
 
-libdnszone_la_SOURCES = src/output_stream_write_dname.c src/dnszone.c src/output_stream_write_rdata.c src/zone_axfr_reader.c src/zone_file_reader.c src/resourcerecord.c
+libdnszone_la_SOURCES = src/dnszone.c src/zone_axfr_reader.c src/zone_file_reader.c src/hints_file_reader.c
 	
-pkginclude_HEADERS = include/dnszone/output_stream_write_rdata.h include/dnszone/dnszone.h include/dnszone/dnszone-config.h include/dnszone/zone_axfr_reader.h include/dnszone/zone_file_reader.h include/dnszone/resourcerecord.h
+pkginclude_HEADERS = include/dnszone/dnszone.h include/dnszone/dnszone-config.h include/dnszone/zone_axfr_reader.h include/dnszone/zone_file_reader.h include/dnszone/hints_file_reader.h
+
+libdnszone_la_LDFLAGS = -version-info 2:0:0
 
 include ../../mk/common-settings.mk
 

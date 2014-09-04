@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec NSEC functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -49,7 +49,8 @@
 #include <dnscore/dnsname.h>
 #include <dnscore/logger.h>
 #include <dnscore/format.h>
-#include <dnscore/treeset.h>
+
+#include "dnscore/treeset.h"
 
 #include "dnsdb/zdb_rr_label.h"
 #include "dnsdb/zdb_zone_label_iterator.h"
@@ -174,11 +175,14 @@ extern logger_handle *g_dnssec_logger;
 static int nsec_update_zone_count = 0;
 
 ya_result
-nsec_update_zone(zdb_zone *zone)
+nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
 {
     nsec_node *nsec_tree = NULL;
     soa_rdata soa;
-
+    u32 missing_nsec_records = 0;
+    u32 sibling_count = 0;
+    u32 nsec_under_delegation = 0;
+    
     u8 name[MAX_DOMAIN_LENGTH];
     u8 inverse_name[MAX_DOMAIN_LENGTH];
     u8 tmp_bitmap[256 * (1 + 1 + 32)]; /* 'max window count' * 'max window length' */
@@ -189,17 +193,27 @@ nsec_update_zone(zdb_zone *zone)
     {
         return return_code;
     }
-
+    
     zdb_zone_label_iterator label_iterator;
     zdb_zone_label_iterator_init(zone, &label_iterator);
 
     while(zdb_zone_label_iterator_hasnext(&label_iterator))
     {
+#ifdef DEBUG
+        memset(name, 0xde, sizeof(name));
+#endif
         zdb_zone_label_iterator_nextname(&label_iterator, name);
         zdb_rr_label* label = zdb_zone_label_iterator_next(&label_iterator);
 
         if(zdb_rr_label_is_glue(label) || (label->resource_record_set == NULL))
         {
+            zdb_packed_ttlrdata *nsec_record;
+
+            if((nsec_record = zdb_record_find(&label->resource_record_set, TYPE_NSEC)) != NULL)
+            {
+                nsec_under_delegation++;
+            }
+            
             continue;
         }
 
@@ -268,9 +282,9 @@ nsec_update_zone(zdb_zone *zone)
                  *
                  */
 
-                if(nsec_record->next == NULL)
+                if(nsec_record->next == NULL) // should only be one record => delete all if not the case (the rrsig is lost anyway)
                 {
-                    u8* rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_record);
+                    u8 *rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_record);
                     u16 size = ZDB_PACKEDRECORD_PTR_RDATASIZE(nsec_record);
 
                     u16 dname_len = dnsname_len(rdata);
@@ -301,6 +315,12 @@ nsec_update_zone(zdb_zone *zone)
                         }
                     }
                 }
+                else
+                {
+                    sibling_count++;
+                }
+                
+                // wrong NSEC RRSET
                 
                 if(zdb_listener_notify_enabled())
                 {
@@ -329,30 +349,38 @@ nsec_update_zone(zdb_zone *zone)
             }
 
             /*
-             * no record -> create one and schedule a signature
+             * no record -> create one and schedule a signature (MASTER ONLY)
              */
 
+            
             if(nsec_record == NULL)
             {
-                zdb_packed_ttlrdata *nsec_record;
+                if(!read_only)
+                {
+                    zdb_packed_ttlrdata *nsec_record;
 
-                u16 dname_len = nsec_inverse_name(name, next_node->inverse_relative_name);
-                u16 rdata_size = dname_len + tbm_size;
+                    u16 dname_len = nsec_inverse_name(name, next_node->inverse_relative_name);
+                    u16 rdata_size = dname_len + tbm_size;
 
-                ZDB_RECORD_ZALLOC_EMPTY(nsec_record, soa.minimum, rdata_size);
+                    ZDB_RECORD_ZALLOC_EMPTY(nsec_record, soa.minimum, rdata_size);
 
-                u8* rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_record);
+                    u8* rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_record);
 
-                memcpy(rdata, name, dname_len);
-                rdata += dname_len;
+                    memcpy(rdata, name, dname_len);
+                    rdata += dname_len;
 
-                memcpy(rdata, tmp_bitmap, tbm_size);
-                
-                zdb_record_insert(&label->resource_record_set, TYPE_NSEC, nsec_record);
+                    memcpy(rdata, tmp_bitmap, tbm_size);
 
-                /*
-                 * Schedule a signature
-                 */
+                    zdb_record_insert(&label->resource_record_set, TYPE_NSEC, nsec_record);
+
+                    /*
+                     * Schedule a signature
+                     */
+                }
+                else
+                {
+                    missing_nsec_records++;
+                }
             }
 
             label->flags |= ZDB_RR_LABEL_NSEC;
@@ -363,7 +391,24 @@ nsec_update_zone(zdb_zone *zone)
     }
 
     zone->nsec.nsec = nsec_tree;
-
+    
+    if(read_only)
+    {
+        if(missing_nsec_records + sibling_count + nsec_under_delegation)
+        {
+            log_err("nsec: missing records: %u, nsec with siblings: %u, nsec under delegation: %u", missing_nsec_records, sibling_count, nsec_under_delegation);
+            
+            return DNSSEC_ERROR_NSEC_INVALIDZONESTATE;
+        }
+    }
+    else
+    {
+        if(missing_nsec_records + sibling_count + nsec_under_delegation)
+        {
+            log_warn("nsec: missing records: %u, nsec with siblings: %u, nsec under delegation: %u", missing_nsec_records, sibling_count, nsec_under_delegation);
+        }
+    }
+    
     return SUCCESS;
 }
 
@@ -821,7 +866,7 @@ nsec_icmtl_replay_execute(nsec_icmtl_replay *replay)
  */
 
 zdb_rr_label *
-nsec_find_interval(const zdb_zone *zone, const dnsname_vector *name_vector, u8 *dname_out)
+nsec_find_interval(const zdb_zone *zone, const dnsname_vector *name_vector, u8 **out_dname_p, u8 * restrict * pool)
 {
     u8 dname_inverted[MAX_DOMAIN_LENGTH];
     
@@ -829,7 +874,10 @@ nsec_find_interval(const zdb_zone *zone, const dnsname_vector *name_vector, u8 *
     
     nsec_node *node = nsec_avl_find_interval_start(&zone->nsec.nsec, dname_inverted);
 
-    nsec_inverse_name(dname_out, node->inverse_relative_name);
+    u8 *out_dname = *pool;
+    *out_dname_p = out_dname;
+    u32 out_dname_len = nsec_inverse_name(out_dname, node->inverse_relative_name);
+    *pool += ALIGN16(out_dname_len);
 
     return node->label;
 }
@@ -862,19 +910,24 @@ nsec_find_interval_and_wild(zdb_zone *zone, const dnsname_vector *name_vector, z
 */
 void
 nsec_name_error(const zdb_zone* zone, const dnsname_vector *name, s32 closest_index,
-                 u8* out_encloser_nsec_name,
-                 zdb_rr_label** out_encloser_nsec_label,
-                 u8* out_wild_encloser_nsec_name,
-                 zdb_rr_label** out_wildencloser_nsec_label
+                u8 * restrict * pool,
+                u8 **out_encloser_nsec_name_p,
+                zdb_rr_label **out_encloser_nsec_label,
+                u8 **out_wild_encloser_nsec_name_p,
+                zdb_rr_label **out_wildencloser_nsec_label
                  )
 {
+    u32 len;
     u8 dname_inverted[MAX_DOMAIN_LENGTH + 2];
     
     dnslabel_stack_to_dnsname(name->labels, name->size, dname_inverted);
     
     nsec_node *node = nsec_avl_find_interval_start(&zone->nsec.nsec, dname_inverted);
     
-    nsec_inverse_name(out_encloser_nsec_name, node->inverse_relative_name);
+    u8 *out_encloser_nsec_name = *pool;
+    *out_encloser_nsec_name_p = out_encloser_nsec_name;
+    len = nsec_inverse_name(out_encloser_nsec_name, node->inverse_relative_name);
+    *pool += ALIGN16(len);
     
     dnslabel_stack_to_dnsname(&name->labels[closest_index], name->size - closest_index, dname_inverted);
     
@@ -882,7 +935,10 @@ nsec_name_error(const zdb_zone* zone, const dnsname_vector *name, s32 closest_in
     
     if(wild_node != node)
     {
-        nsec_inverse_name(out_wild_encloser_nsec_name, wild_node->inverse_relative_name);
+        u8 *out_wild_encloser_nsec_name = *pool;
+        *out_wild_encloser_nsec_name_p = out_wild_encloser_nsec_name;
+        len = nsec_inverse_name(out_wild_encloser_nsec_name, wild_node->inverse_relative_name);
+        *pool += ALIGN16(len);
     }
     
     *out_encloser_nsec_label = node->label;

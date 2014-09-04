@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -231,7 +231,7 @@ nsec3_insert_empty_nsec3(zdb_zone* zone, u32 index)
     {
         zdb_rr_label* label = zdb_zone_label_iterator_next(&label_iterator);
 
-        zassert((label->flags & ZDB_RR_LABEL_NSEC) == 0);
+        yassert((label->flags & ZDB_RR_LABEL_NSEC) == 0);
 
         label->flags |= ZDB_RR_LABEL_NSEC3;
         
@@ -293,7 +293,7 @@ nsec3_zone*
 nsec3_zone_add_from_rdata(zdb_zone* zone, u16 nsec3param_rdata_size, const u8* nsec3param_rdata)
 {
     /* Check that the rdata is big enough */
-    zassert(nsec3param_rdata_size >= NSEC3PARAM_MINIMUM_LENGTH);
+    yassert(nsec3param_rdata_size >= NSEC3PARAM_MINIMUM_LENGTH);
 
     nsec3_zone* n3 = nsec3_zone_get_from_rdata(zone, nsec3param_rdata_size, nsec3param_rdata);
 
@@ -355,7 +355,7 @@ nsec3_zone*
 nsec3_zone_get_from_rdata(zdb_zone* zone, u16 nsec3param_rdata_size, const u8* nsec3param_rdata)
 {
     /* Check that the rdata is big enough */
-    zassert(nsec3param_rdata_size >= NSEC3PARAM_MINIMUM_LENGTH);
+    yassert(nsec3param_rdata_size >= NSEC3PARAM_MINIMUM_LENGTH);
 
     nsec3_zone* n3;
 
@@ -365,13 +365,8 @@ nsec3_zone_get_from_rdata(zdb_zone* zone, u16 nsec3param_rdata_size, const u8* n
         u32 a = GET_U32_AT(n3->rdata[0]);
         u32 b = GET_U32_AT(nsec3param_rdata[0]);
 
-#if defined(WORDS_BIGENDIAN)
-        a &= 0xff00ffff;
-        b &= 0xff00ffff;
-#else
-        a &= 0xffff00ff;
-        b &= 0xffff00ff;
-#endif
+        a &= NU32(0xff00ffff);
+        b &= NU32(0xff00ffff);
 
         if(a == b)
         {

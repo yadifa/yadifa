@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup name Functions used to manipulate dns formatted names and labels
  *  @ingroup dnsdb
  *  @brief Functions used to manipulate dns formatted names and labels

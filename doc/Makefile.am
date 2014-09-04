@@ -29,7 +29,7 @@
 #
 ################################################################################
 
-dist_man1_MANS = yadifad.man
+dist_man1_MANS = yadifad.man yadifa.man
 dist_man5_MANS = yadifad.conf.man
 
 ACLOCAL_AMFLAGS = -I m4

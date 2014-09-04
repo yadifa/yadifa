@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief Balanced Tree structures and functions for the database
@@ -47,7 +47,7 @@
 #ifndef _btree_H
 #define	_btree_H
 
-#include "avl.h"
+#include <dnsdb/avl.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -76,9 +76,10 @@ typedef avl_iterator btree_iterator;
 #define btree_destroy avl_destroy
 #define btree_callback_and_destroy avl_callback_and_destroy
 
-#define btree_iterator_init          avl_iterator_init
-#define btree_iterator_hasnext       avl_iterator_hasnext
-#define btree_iterator_next       avl_iterator_next
+#define btree_iterator_init avl_iterator_init
+#define btree_iterator_init_from avl_iterator_init_from
+#define btree_iterator_hasnext avl_iterator_hasnext
+#define btree_iterator_next avl_iterator_next
 #define btree_iterator_next_node avl_iterator_next_node
 
 #define btree_notempty(tree) ((tree)!=NULL)

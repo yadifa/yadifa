@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup logging Server logging
  *  @ingroup yadifad
  *  @brief 
@@ -83,6 +83,8 @@ static inline void
 log_query_none(int socket_fd, message_data *mesg)
 {
 }
+
+void log_query_set_mode(u32 mode);
 
 #endif
 

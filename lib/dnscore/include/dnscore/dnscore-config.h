@@ -4,13 +4,10 @@
 /* Define if building universal (internal helper macro) */
 /* #undef AC_APPLE_UNIVERSAL_BUILD */
 
-/* cleared socket */
-#define CLEARED_SOCKET -1
-
 /* number of harware core if the auto-detect fails */
 #define DEFAULT_ASSUMED_CPU_COUNT 2
 
-/* Enable ACL support */
+/* always on */
 #define HAS_ACL_SUPPORT 1
 
 /* i386, Athlon, Opteron, Core2, i3, i5, i7, ... */
@@ -19,8 +16,20 @@
 /* T1000 has a Niagara cpu */
 /* #undef HAS_CPU_NIAGARA */
 
-/* MUST be enabled if either NSEC3 or NSEC are enabled */
+/* Define this to enable the remote control (devs only) */
+/* #undef HAS_CTRL */
+
+/* always on */
 #define HAS_DNSSEC_SUPPORT 1
+
+/* Define this to enable dynamic provisioning */
+/* #undef HAS_DYNAMIC_PROVISIONING */
+
+/* Enable dynamic update support */
+#define HAS_DYNUPDATE_SUPPORT 1
+
+/* Enable MASTER support */
+#define HAS_MASTER_SUPPORT 1
 
 /* Define this to enable slow but safe memory accesses */
 #define HAS_MEMALIGN_ISSUES 0
@@ -29,22 +38,31 @@
    same interface. */
 /* #undef HAS_MESSAGES_SUPPORT */
 
-/* Set this to 1 to enable NSEC3 support */
+/* always on */
 #define HAS_NSEC3_SUPPORT 1
 
-/* Set this to 1 to enable NSEC support */
+/* always on */
 #define HAS_NSEC_SUPPORT 1
+
+/* Define this to enable NSID support */
+/* #undef HAS_NSID_SUPPORT */
+
+/* The system supports thread names */
+#define HAS_PTHREAD_SETNAME_NP 1
 
 /* The system supports spinlocks */
 #define HAS_PTHREAD_SPINLOCK 1
 
+/* Define this to enable DNS RRL */
+/* #undef HAS_RRL_SUPPORT */
+
+/* Do verify and/or generate RRSIG for zones */
+#define HAS_RRSIG_MANAGEMENT_SUPPORT 1
+
 /* The sockaddr struct has an sa_len field */
 #define HAS_SOCKADDR_SA_LEN 0
 
-/* Define this to use less memory */
-/* #undef HAS_TINY_FOOTPRINT */
-
-/* Enable TSIG support */
+/* always on */
 #define HAS_TSIG_SUPPORT 1
 
 /* Define to 1 if you have the <arpa/inet.h> header file. */
@@ -85,6 +103,9 @@
 
 /* Define to 1 if you have the `dnsdb' library (-ldnsdb). */
 /* #undef HAVE_LIBDNSDB */
+
+/* Define to 1 if you have the `dnslg' library (-ldnslg). */
+/* #undef HAVE_LIBDNSLG */
 
 /* Define to 1 if you have the `dnszone' library (-ldnszone). */
 /* #undef HAVE_LIBDNSZONE */
@@ -188,9 +209,6 @@
    */
 #define LT_OBJDIR ".libs/"
 
-/* Network buffer size */
-#define NETWORK_BUFFER_SIZE 65536
-
 /* Name of package */
 #define PACKAGE "dnscore"
 
@@ -201,7 +219,7 @@
 #define PACKAGE_NAME "dnscore"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "dnscore 1.0.4-3981"
+#define PACKAGE_STRING "dnscore 2.0.0-4192"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "dnscore"
@@ -210,7 +228,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "1.0.4-3981"
+#define PACKAGE_VERSION "2.0.0-4192"
 
 /* Define as the return type of signal handlers (`int' or `void'). */
 #define RETSIGTYPE void
@@ -231,7 +249,7 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* Version number of package */
-#define VERSION "1.0.4-3981"
+#define VERSION "2.0.0-4192"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */

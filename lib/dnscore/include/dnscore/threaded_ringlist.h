@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief 

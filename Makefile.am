@@ -39,6 +39,9 @@ ACLOCAL_AMFLAGS = -I m4
 dist_noinst_DATA = VERSION
 
 SUBDIRS = lib/dnscore lib/dnsdb lib/dnszone sbin/yadifad etc doc var
+if DNSTOOLS
+SUBDIRS += lib/dnslg bin/yadifa
+endif
 
 release:
 	for m in $(SUBDIRS); do $(MAKE) -C $$m release;done

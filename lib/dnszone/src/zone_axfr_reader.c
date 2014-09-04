@@ -30,12 +30,10 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup zoneaxfr AXFR file loader module
  *  @ingroup dnszone
  *  @brief zone functions
- *
- *  @todo move this into dnsdb (it's a db file format)
  *
  *  Implementation of routines for the zone_data struct
  *   - add
@@ -54,6 +52,7 @@
 #include <arpa/inet.h>		/* or netinet/in.h */
 #include <dirent.h>
 #include <unistd.h>
+#include <stddef.h>
 
 #include <dnscore/format.h>
 #include <dnscore/logger.h>
@@ -72,20 +71,44 @@ extern logger_handle *g_zone_logger;
 typedef struct zone_axfr_reader zone_axfr_reader;
 struct zone_axfr_reader
 {
-    /** @todo The zone data is a persistent information along with loading context information. Maybe it should be split.
-     */
-
     input_stream is;                    /* LOAD */
     char* file_path;
+    resource_record* unread_next;
     bool soa_found;                     /* LOAD */
 };
 
 static ya_result
+zone_axfr_reader_unread_record(zone_reader *zr, resource_record *entry)
+{
+    zone_axfr_reader *zone = (zone_axfr_reader*)zr->data;
+    resource_record *rr;
+    u32 required = offsetof(resource_record,rdata) + entry->rdata_size;
+    MALLOC_OR_DIE(resource_record*, rr, required, GENERIC_TAG);
+    memcpy(rr, entry, required);
+    rr->next = zone->unread_next;
+    zone->unread_next = rr;
+    
+    return SUCCESS;
+}
+
+static ya_result
 zone_axfr_reader_read_record(zone_reader *zr, resource_record *entry)
 {
-    zassert((zr != NULL) && (entry != NULL));
+    yassert((zr != NULL) && (entry != NULL));
 
     zone_axfr_reader *zone = (zone_axfr_reader*)zr->data;
+    
+    if(zone->unread_next != NULL)
+    {
+        resource_record *top = zone->unread_next;
+        u32 required = offsetof(resource_record,rdata) + top->rdata_size;
+        memcpy(entry, top, required);
+        zone->unread_next = top->next;
+        free(top);
+        
+        return 0;
+    }
+    
     ya_result return_value;
     u16 rdata_len;
 
@@ -99,10 +122,13 @@ zone_axfr_reader_read_record(zone_reader *zr, resource_record *entry)
                 {
                     if(ISOK(return_value = input_stream_read_nu16(&zone->is, &rdata_len)))
                     {
-                        if(ISOK(return_value = input_stream_read_fully(&zone->is, (u8*)entry->rdata, rdata_len)))
+                        if(ISOK(return_value = input_stream_read_fully(&zone->is, entry->rdata, rdata_len)))
                         {
+#ifdef RR_OS_RDATA
                             return_value = output_stream_write(&entry->os_rdata, (u8*)entry->rdata, rdata_len);
-
+#else
+                            entry->rdata_size = return_value;
+#endif
                             if(entry->type == TYPE_SOA)
                             {
                                 if(zone->soa_found)
@@ -133,18 +159,33 @@ zone_axfr_reader_free_record(zone_reader *zone, resource_record *entry)
 static void
 zone_axfr_reader_close(zone_reader *zr)
 {
-    zassert(zr != NULL);
+    yassert(zr != NULL);
 
     zone_axfr_reader *zone = (zone_axfr_reader*)zr->data;
 
     free(zone->file_path);
 
     input_stream_close(&zone->is);
+    
+    resource_record *rr = zone->unread_next;
+    while(rr != NULL)
+    {
+        resource_record *tmp = rr;
+        rr = rr->next;
+        free(tmp);
+    }
 
     free(zone);
 
     zr->data = NULL;
     zr->vtbl = NULL;
+}
+
+static bool
+zone_axfr_reader_canwriteback(zone_reader *zr)
+{
+    yassert(zr != NULL);
+    return TRUE;
 }
 
 static void
@@ -156,13 +197,13 @@ zone_axfr_reader_handle_error(zone_reader *zr, ya_result error_code)
      * More subtle tests on the error code could also be done.
      */
 
-    zassert(zr != NULL);
+    yassert(zr != NULL);
 
     if(FAIL(error_code))
     {
         zone_axfr_reader *zone = (zone_axfr_reader*)zr->data;
 
-#ifndef NDEBUG
+#ifdef DEBUG
         log_debug("zone axfr: deleting broken AXFR file: %s", zone->file_path);
 #endif
 
@@ -176,9 +217,11 @@ zone_axfr_reader_handle_error(zone_reader *zr, ya_result error_code)
 static zone_reader_vtbl zone_axfr_reader_vtbl =
 {
     zone_axfr_reader_read_record,
+    zone_axfr_reader_unread_record,
     zone_axfr_reader_free_record,
     zone_axfr_reader_close,
     zone_axfr_reader_handle_error,
+    zone_axfr_reader_canwriteback,
     "zone_axfr_reader"
 };
 
@@ -212,11 +255,11 @@ ya_result zone_axfr_reader_open(const char* axfrpath, zone_reader *dst)
 }
 
 static void
-zone_axfr_delete(const char* axfrpath, u8 *origin, u32 serial)
+zone_axfr_delete(const char* axfrpath, const u8 *origin, u32 serial)
 {
     char file_path[1024];
     
-    snformat(file_path, sizeof(file_path), "%s/%{dnsname}%08x.axfr", axfrpath, origin, serial);
+    snformat(file_path, sizeof(file_path), "%s/%{dnsname}%08x.axfr", axfrpath, origin, serial); // all uses of this function have serial set
 
     if(unlink(file_path) >= 0)
     {
@@ -246,10 +289,12 @@ zone_axfr_reader_open_last(const char* axfrpath, u8 *origin, zone_reader *dst)
 
     /* returns the number of bytes = strlen(x) + 1 */
     
-    char data_path[1024];
+    char data_path[PATH_MAX];
     
-    if(FAIL(return_code = xfr_copy_make_data_path(axfrpath, origin, data_path, sizeof(data_path))))
+    if(FAIL(return_code = xfr_copy_mkdir_data_path(data_path, sizeof(data_path), axfrpath, origin)))
     {
+        log_err("axfr: unable to create directory '%s' for %{dnsname}: %r", data_path, origin, return_code);
+        
         return return_code;
     }
     
@@ -296,7 +341,7 @@ zone_axfr_reader_open_last(const char* axfrpath, u8 *origin, zone_reader *dst)
                             {
                                 /* the previous one is obsolete */
 
-                                zone_axfr_delete(axfrpath, origin, serial); // false positive. set serial=> got_one true => can go through here
+                                zone_axfr_delete(axfrpath, origin, serial); // serial IS initialised
                             }
 
                             serial = tmp;
@@ -307,7 +352,7 @@ zone_axfr_reader_open_last(const char* axfrpath, u8 *origin, zone_reader *dst)
                         }
                         else    /* we got one already and it has a higher serial */
                         {
-                            zone_axfr_delete(axfrpath, origin, tmp);
+                            zone_axfr_delete(axfrpath, origin, tmp); // tmp (serial) IS initialised
                         }
                     }
                 }
@@ -341,9 +386,9 @@ zone_axfr_reader_open_with_serial(const char* xfr_path, u8 *origin, u32 loaded_s
     DIR* dir;
     
     char file_name[1024];    
-    char data_path[1024];
+    char data_path[PATH_MAX];
     
-    if(FAIL(return_code = xfr_copy_get_data_path(xfr_path, origin, data_path, sizeof(data_path))))
+    if(FAIL(return_code = xfr_copy_get_data_path(data_path, sizeof(data_path), xfr_path, origin)))
     {
         return return_code;
     }
@@ -390,7 +435,7 @@ zone_axfr_reader_open_with_serial(const char* xfr_path, u8 *origin, u32 loaded_s
                             {
                                 /* the previous one is obsolete */
 
-                                zone_axfr_delete(xfr_path, origin, tmp);
+                                zone_axfr_delete(xfr_path, origin, tmp); // tmp (serial) IS initialised
                             }
                             else
                             {

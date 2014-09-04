@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief 
@@ -49,89 +49,92 @@
 extern "C" {
 #endif
 
-    typedef struct input_stream input_stream;
-    
+typedef struct input_stream input_stream;
 
-    typedef ya_result input_stream_read_method(input_stream* stream,u8* in_buffer,u32 in_len);
-    typedef void input_stream_close_method(input_stream* stream);
 
-    typedef ya_result input_stream_skip_method(input_stream* stream,u32 byte_count);
+typedef ya_result input_stream_read_method(input_stream *stream,u8 *in_buffer,u32 in_len);
+typedef void input_stream_close_method(input_stream *stream);
 
-    typedef struct input_stream_vtbl input_stream_vtbl;
-    
+typedef ya_result input_stream_skip_method(input_stream *stream,u32 byte_count);
 
-    struct input_stream_vtbl
+typedef struct input_stream_vtbl input_stream_vtbl;
+
+
+struct input_stream_vtbl
+{
+    input_stream_read_method*  read;
+    input_stream_skip_method*  skip;
+    input_stream_close_method* close;
+    const char* __class__;              /* MUST BE A UNIQUE POINTER, ie: One defined in the class's .c file */
+                                        /* The name should be unique in order to avoid compiler tricks	*/
+
+                                        /* Add your inheritable methods here    */
+};
+
+struct input_stream
+{
+    void* data;
+    const input_stream_vtbl* vtbl;
+};
+
+#define input_stream_class(is_) ((is_)->vtbl)
+#define input_stream_class_name(is_) ((is_)->vtbl->__class__)
+#define input_stream_read(is_,buffer_,len_) (is_)->vtbl->read(is_,buffer_,len_)
+#define input_stream_close(is_) (is_)->vtbl->close(is_)
+#define input_stream_skip(is_,len_) (is_)->vtbl->skip(is_,len_)
+#define input_stream_valid(is_) ((is_)->vtbl != NULL)
+
+ya_result input_stream_read_fully(input_stream *stream, void *buffer, u32 len);
+ya_result input_stream_skip_fully(input_stream *stream, u32 len_start);
+
+ya_result input_stream_read_nu32(input_stream *stream,u32 *output);
+ya_result input_stream_read_nu16(input_stream *stream,u16 *output);
+ya_result input_stream_read_u32(input_stream *stream,u32 *output);
+ya_result input_stream_read_u16(input_stream *stream,u16 *output);
+ya_result input_stream_read_u8(input_stream *stream,u8 *output);
+
+ya_result input_stream_read_dnsname(input_stream *stream,u8 *output);
+
+ya_result input_stream_read_rname(input_stream *stream, u8 *output_buffer);
+
+ya_result input_stream_read_line(input_stream *stream, char *output, int max_len);
+
+static inline ya_result input_stream_read_rr_header(input_stream *is, u8 *rname, u32 rname_size, u16 *rtype, u16 *rclass, u32 *rttl, u16 *rdata_size)
+{
+    ya_result ret;
+
+    if(FAIL(ret = input_stream_read_dnsname(is, rname/*, rname_size*/)))
     {
-        input_stream_read_method*  read;
-        input_stream_skip_method*  skip;
-        input_stream_close_method* close;
-        const char* __class__;              /* MUST BE A UNIQUE POINTER, ie: One defined in the class's .c file */
-                                            /* The name should be unique in order to avoid compiler tricks	*/
-
-                                            /* Add your inheritable methods here    */
-    };
-
-    struct input_stream
-    {
-        void* data;
-        input_stream_vtbl* vtbl;
-    };
-
-    #define input_stream_class(is_) ((is_)->vtbl)
-    #define input_stream_class_name(is_) ((is_)->vtbl->__class__)
-    #define input_stream_read(is_,buffer_,len_) (is_)->vtbl->read(is_,buffer_,len_)
-    #define input_stream_close(is_) (is_)->vtbl->close(is_)
-    #define input_stream_skip(is_,len_) (is_)->vtbl->skip(is_,len_)
-    #define input_stream_valid(is_) ((is_)->vtbl != NULL)
-
-    ya_result input_stream_read_fully(input_stream* stream, u8* buffer, u32 len);
-    ya_result input_stream_skip_fully(input_stream* stream, u32 len_start);
-
-    ya_result input_stream_read_nu32(input_stream* stream,u32* output);
-    ya_result input_stream_read_nu16(input_stream* stream,u16* output);
-    ya_result input_stream_read_u32(input_stream* stream,u32* output);
-    ya_result input_stream_read_u16(input_stream* stream,u16* output);
-    ya_result input_stream_read_u8(input_stream* stream,u8* output);
-    
-    ya_result input_stream_read_dnsname(input_stream* stream,u8* output);
-    
-    ya_result input_stream_read_rname(input_stream* stream, u8* output_buffer);
-    
-    ya_result input_stream_read_line(input_stream* stream, char *output, int max_len);
-
-    static inline ya_result input_stream_read_rr_header(input_stream* is, u8* rname, u32 rname_size, u16* rtype, u16* rclass, u32* rttl, u16* rdata_size)
-    {
-	ya_result ret;
-
-	if(FAIL(ret = input_stream_read_dnsname(is, rname/*, rname_size*/)))
-	{
-	    return ret;
-	}
-
-	if(FAIL(ret = input_stream_read_fully(is, (u8*)rtype, 2)))   /** @note NATIVETYPE */
-	{
-	    return ret;
-	}
-
-	if(FAIL(ret = input_stream_read_fully(is, (u8*)rclass, 2))) /** @note NATIVECLASS */
-	{
-	    return ret;
-	}
-
-	if(FAIL(ret = input_stream_read_nu32(is, rttl)))
-	{
-	    return ret;
-	}
-
-	return input_stream_read_nu16(is, rdata_size);
+        return ret;
     }
+
+    if(FAIL(ret = input_stream_read_fully(is, rtype, 2)))   /** @note NATIVETYPE */
+    {
+        return ret;
+    }
+
+    if(FAIL(ret = input_stream_read_fully(is, rclass, 2))) /** @note NATIVECLASS */
+    {
+        return ret;
+    }
+
+    if(FAIL(ret = input_stream_read_nu32(is, rttl)))
+    {
+        return ret;
+    }
+
+    return input_stream_read_nu16(is, rdata_size);
+}
+
 
 /**
  * This tools allows a safer misuse (and detection) of closed streams
  * It sets the stream to a sink that warns abouts its usage and for which every call that can fail fails.
+ * 
+ * @param is the stream to set as a void.  It needs to have been closed already.
  */
 
-void input_stream_set_void(input_stream* stream);
+void input_stream_set_void(input_stream *is);
 
 #ifdef	__cplusplus
 }

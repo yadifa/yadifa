@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -56,11 +56,19 @@
 #include <dnsdb/nsec3_update.h>
 #include <dnsdb/nsec3_zone.h>
 
+/**
+ * Set this to 1 to dump a lot more about the NSEC3 updates/generation.
+ * I use this whenever something weird happens with NSEC3.
+ * (It seems bind is more liberal about handling broken/invalid NSEC3 databases,
+ * YADIFA only accepts valid ones)
+ */
+
 #define NSEC3_UPDATE_ZONE_DEBUG 0
 
 /**
  * Used to be like this (NSEC3_INCLUDE_ZONE_PATH 1) with older bind
  * Not anymore in 9.7.1 (probably since 9.7.x)
+ * Set this to 1 to comply with that old bind issue.
  * 
  */
 
@@ -81,7 +89,6 @@ extern "C"
      * Since the digest is base32hex encoded, is unencoded size is max (64/8)*5 = 40 bytes.
      * This covers more than a SHA-256 (32 bytes), but it (40) should be the upper bound.
      */
-    
 
 #define MAX_DIGEST_LENGTH  40
 #define MAX_SALT_LENGTH   255
@@ -167,12 +174,12 @@ extern "C"
     void nsec3_closest_encloser_proof(
                         const zdb_zone *zone,
                         const dnsname_vector *qname, s32 apex_index,
-                        nsec3_zone_item** encloser_nsec3p,
-                        nsec3_zone_item** closest_provable_encloser_nsec3p,
-                        nsec3_zone_item** wild_closest_provable_encloser_nsec3p
+                        const nsec3_zone_item **encloser_nsec3p,
+                        const nsec3_zone_item **closest_provable_encloser_nsec3p,
+                        const nsec3_zone_item **wild_closest_provable_encloser_nsec3p
                         );
 
-    bool nsec3_check_item(nsec3_zone_item* item, u32 param_index);
+    bool nsec3_check_item(nsec3_zone_item *item, u32 param_index);
 
     bool nsec3_check(zdb_zone *zone);
 

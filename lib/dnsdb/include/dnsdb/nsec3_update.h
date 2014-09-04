@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -56,6 +56,17 @@ extern "C"
 ya_result nsec3_update_zone(zdb_zone* zone);
 
 bool nsec3_is_label_covered(zdb_rr_label *label, bool opt_out);
+
+/**
+ * 
+ * Commits the changes
+ * There is NO lock made on the zone
+ * 
+ * @param removed_rrsig_sll
+ * @param added_rrsig_sll
+ * @param item
+ * @param zone
+ */
 
 void nsec3_update_rrsig_commit(zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttlrdata *added_rrsig_sll, nsec3_zone_item *item, zdb_zone *zone);
 

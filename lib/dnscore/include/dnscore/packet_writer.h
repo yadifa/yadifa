@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnspacket DNS Messages
  *  @ingroup dnscore
  *  @brief 
@@ -78,7 +78,27 @@ struct packet_writer
     packet_dictionary_node pool[4096];
 };
 
+/**
+ * 
+ * creates an new packet
+ * 
+ * @param pc
+ * @param packet
+ * @param limit
+ */
+
 void packet_writer_create(packet_writer* pc, u8* packet, u16 limit);
+
+/**
+ * 
+ * initialises a writer based on an existing message
+ * 
+ * @param pc
+ * @param packet a packet containing a valid message
+ * @param packet_offset
+ * @param size_limit
+ * @return 
+ */
 
 ya_result packet_writer_init(packet_writer* pc, u8* packet, u32 packet_offset, u32 size_limit);
 
@@ -92,6 +112,11 @@ ya_result packet_writer_add_fqdn(packet_writer* pc, const u8* fqdn);
 ya_result packet_writer_add_rdata(packet_writer* pc, u16 rr_type, const u8* rdata, u16 rdata_len);
 
 ya_result packet_writer_add_record(packet_writer* pc, const u8* fqdn, u16 rr_type, u16 rr_class, u32 ttl, const u8* rdata, u16 rdata_len);
+
+static inline s32 packet_writer_remaining_capacity(packet_writer* pc)
+{
+    return (s32)pc->packet_limit - (s32)pc->packet_offset;
+}
 
 static inline void packet_writer_set_u16(packet_writer* pc, u16 value, u32 offset)
 {

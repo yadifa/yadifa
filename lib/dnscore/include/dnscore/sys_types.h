@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup systemtypes Definition of types in order to ensure architecture-independence
  *  @ingroup dnscore
  *  @brief Definition of types in order to ensure architecture-independence
@@ -41,16 +41,21 @@
 #ifndef _SYSTYPES_H
 #define	_SYSTYPES_H
 
-#define HAS_TSIG_SUPPORT 1
-
-#define HAS_ATOMIC_FEATURES 1
-
 #include <stdlib.h>
 
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
 
+#if defined __FreeBSD__
+#include <sys/endian.h>
+#elif defined __APPLE__
+#include <machine/endian.h>
+#else
+#include <endian.h>
+#endif
+
+#include <dnscore/dnscore-config-features.h>
 #include <dnscore/sys_error.h>
 
 #include <sys/types.h> /** @note must be used for u_char on Mac OS X */
@@ -58,6 +63,10 @@
 #ifdef	__cplusplus
 extern "C"
 {
+#endif
+    
+#ifndef HAS_DYNAMIC_PROVISIONING
+#define HAS_DYNAMIC_PROVISIONING 1
 #endif
     
 #ifndef PATH_MAX
@@ -119,6 +128,7 @@ typedef signed long long s64;
 #endif
 
 typedef void callback_function(void*);
+typedef ya_result result_callback_function(void*);
 
 /*
 AIX : __64BIT__
@@ -181,16 +191,61 @@ typedef unsigned long long intptr;
 
 #define U8_AT(address)  (*((u8*)&(address)))
 
+#define GET_U8_AT(address__) (*((u8*)&(address)))
+#define SET_U8_AT(address__,value__) (*((u8*)&(address)) = (value__))
+
+#define AVOID_ANTIALIASING 1
+
 #if HAS_MEMALIGN_ISSUES == 0
 
+#if AVOID_ANTIALIASING
+static inline u16 GET_U16_AT_P(const void* address)
+{
+    const u16 *p = (const u16*)address;
+    return *p;
+}
+static inline void SET_U16_AT_P(void* address, u16 value)
+{
+    u16 *p = (u16*)address;
+    *p = value;
+}
+static inline u32 GET_U32_AT_P(const void* address)
+{
+    const u32 *p = (const u32*)address;
+    return *p;
+}
+static inline void SET_U32_AT_P(void* address, u32 value)
+{
+    u32 *p = (u32*)address;
+    *p = value;
+}
+static inline u64 GET_U64_AT_P(const void* address)
+{
+    const u64 *p = (const u64*)address;
+    return *p;
+}
+static inline void SET_U64_AT_P(void* address, u64 value)
+{
+    u64 *p = (u64*)address;
+    *p = value;
+}
+
+#define GET_U16_AT(address__) GET_U16_AT_P(&(address__))
+#define SET_U16_AT(address__,value__) SET_U16_AT_P(&(address__),(value__))
+#define GET_U32_AT(address__) GET_U32_AT_P(&(address__))
+#define SET_U32_AT(address__,value__) SET_U32_AT_P(&(address__),(value__))
+#define GET_U64_AT(address__) GET_U64_AT_P(&(address__))
+#define SET_U64_AT(address__,value__) SET_U64_AT_P(&(address__),(value__))
+#else
 #define GET_U16_AT(address) (*((u16*)&(address)))
-#define SET_U16_AT(address,value) *((u16*)&(address))=(value);
+#define SET_U16_AT(address,value) *((u16*)&(address))=(value)
 
 #define GET_U32_AT(address) (*((u32*)&(address)))
-#define SET_U32_AT(address,value) *((u32*)&(address))=(value);
+#define SET_U32_AT(address,value) *((u32*)&(address))=(value)
 
 #define GET_U64_AT(address) (*((u64*)&(address)))
-#define SET_U64_AT(address,value) *((u64*)&(address))=(value);
+#define SET_U64_AT(address,value) *((u64*)&(address))=(value)
+#endif
 
 #else /* sparc ... */
 
@@ -350,7 +405,20 @@ static inline void SET_U64_AT_P(void* p, u64 v)
 
 #define SET_U64_AT(x___,y___) SET_U64_AT_P(&(x___),(y___))
 
+#endif
 
+#if __SIZEOF_POINTER__ == 4
+#define SET_PTR_AT_P SET_U32_AT_P
+#define SET_PTR_AT SET_U32_AT
+#define GET_PTR_AT_P GET_U32_AT_P
+#define GET_PTR_AT GET_U32_AT
+#elif __SIZEOF_POINTER__ == 8
+#define SET_PTR_AT_P SET_U64_AT_P
+#define SET_PTR_AT SET_U64_AT
+#define GET_PTR_AT_P GET_U64_AT_P
+#define GET_PTR_AT GET_U64_AT
+#else
+#error "unsupported pointer size"
 #endif
 
 #define MAX_U8  ((u8)0xff)
@@ -370,6 +438,61 @@ static inline void SET_U64_AT_P(void* p, u64 v)
 
 #define CLEARED_SOCKET (-1)
 
+#ifndef htobe64
+
+#if defined __APPLE__
+#define __bswap_16 _OSSwapInt16
+#define __bswap_32 _OSSwapInt32
+#define __bswap_64 _OSSwapInt64
+#endif
+
+/* Conversion interfaces.  */
+
+# if __BYTE_ORDER == __LITTLE_ENDIAN
+#  define htobe16(x) __bswap_16 (x)
+#  define htole16(x) (x)
+#  define be16toh(x) __bswap_16 (x)
+#  define le16toh(x) (x)
+
+#  define htobe32(x) __bswap_32 (x)
+#  define htole32(x) (x)
+#  define be32toh(x) __bswap_32 (x)
+#  define le32toh(x) (x)
+
+#  define htobe64(x) __bswap_64 (x)
+#  define htole64(x) (x)
+#  define be64toh(x) __bswap_64 (x)
+#  define le64toh(x) (x)
+# else
+#  define htobe16(x) (x)
+#  define htole16(x) __bswap_16 (x)
+#  define be16toh(x) (x)
+#  define le16toh(x) __bswap_16 (x)
+
+#  define htobe32(x) (x)
+#  define htole32(x) __bswap_32 (x)
+#  define be32toh(x) (x)
+#  define le32toh(x) __bswap_32 (x)
+
+#  define htobe64(x) (x)
+#  define htole64(x) __bswap_64 (x)
+#  define be64toh(x) (x)
+#  define le64toh(x) __bswap_64 (x)
+# endif
+#endif
+
+/**/
+
+/// Used for collection callback processing (list)
+/// Their support by a collection is not guaranteed
+
+/// @note PROCESS_THEN_STOP = PROCESS|STOP
+
+#define COLLECTION_ITEM_SKIP                    0
+#define COLLECTION_ITEM_PROCESS                 1
+#define COLLECTION_ITEM_STOP                    2
+#define COLLECTION_ITEM_PROCESS_THEN_STOP       (COLLECTION_ITEM_PROCESS|COLLECTION_ITEM_STOP)
+
 /**/
 
 typedef u32 process_flags_t;
@@ -382,13 +505,38 @@ typedef u32 process_flags_t;
 #define NU32(value)     (u32)(( (((u32)(value)) >> 24) & 0xff) | ((((u32)(value)) >> 8) & 0xff00) | ((((u32)(value)) << 8) & 0xff0000) | (((u32)(value)) << 24))
 #endif
 
+#define VERSION_U32(h__,l__) (((h__) << 16) || (l__))
+#define VERSION_U16(h__,l__) (((h__) <<  8) || (l__))
+#define VERSION_U8(h__,l__)  (((h__) <<  4) || (l__))
+
 #define NETWORK_ONE_16  NU16(0x0001)
-#define IS_WILD_LABEL(u8dnslabel_) ( GET_U16_AT(*(u16*)(u8dnslabel_)) == NU16(0x012a))       /* 01 2a = 1 '*' */
+#define IS_WILD_LABEL(u8dnslabel_) ( GET_U16_AT(*(u8dnslabel_)) == NU16(0x012a))       /* 01 2a = 1 '*' */
 
 /* sys_types.h is included everywhere.  This ensure the debug hooks will be too. */
 
+#ifndef DEBUG
 #define MALLOC_OR_DIE(cast,target,size,tag) if(((target)=(cast)malloc(size))==NULL){perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
+#else
+#define MALLOC_OR_DIE(cast,target,size,tag) if(((target)=(cast)malloc(size))!=NULL){memset((void*)(target),0xac,(size));}else{perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
+#endif
+
 #define REALLOC_OR_DIE(cast,src_and_target,newsize,tag) if(((src_and_target)=(cast)realloc((src_and_target),(newsize)))==NULL){perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
+
+// the string if not NULL, else a empty string
+
+#define STRNULL(__str__) (((__str__)!=NULL)?(__str__):"")
+
+// the fqdn if not NULL, else "."
+
+#define FQDNNULL(__str__) (((__str__)!=NULL)?(__str__):(const u8*)"")
+
+#define TOSTRING(s) TOSTRING_(s)
+#define TOSTRING_(s) #s    
+#define PREPROCESSOR_INT2STR(x) #x
+
+#define BOOL2INT(b_) ((b_)?1:0)
+#define BOOL2STR(b_) ((b_)?"true":"false")
+#define BOOL2CHR(b_) ((b_)?'y':'n')
 
 #include <dnscore/debug.h>
 

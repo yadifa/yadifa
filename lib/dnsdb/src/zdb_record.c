@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup records Internal functions for the database: resource records.
  *  @ingroup dnsdb
  *  @brief Internal functions for the database: resource records.
@@ -56,6 +56,9 @@
 #include "dnsdb/zdb_error.h"
 
 #include "dnsdb/btree.h"
+
+#define TTLRDATA_TAG 0x41544144524c5454
+#define ZDBRDATA_TAG 0x415441445242445a
 
 /** @brief Frees a resource record
  *
@@ -217,7 +220,7 @@ zdb_record_findp(const zdb_rr_collection* collection, u16 type)
 zdb_packed_ttlrdata**
 zdb_record_find_insert(zdb_rr_collection* collection, u16 type)
 {
-    zassert(collection != NULL);
+    yassert(collection != NULL);
 
     zdb_packed_ttlrdata** record_list = (zdb_packed_ttlrdata**)btree_insert(collection, type);
 
@@ -238,7 +241,7 @@ zdb_record_find_insert(zdb_rr_collection* collection, u16 type)
 ya_result
 zdb_record_delete(zdb_rr_collection* collection, u16 type)
 {
-    zassert(collection != NULL);
+    yassert(collection != NULL);
 
     if(type != TYPE_ANY)
     {
@@ -277,7 +280,7 @@ zdb_record_delete(zdb_rr_collection* collection, u16 type)
  */
 
 bool
-zdb_record_equals_unpacked(zdb_packed_ttlrdata* a, zdb_ttlrdata* b)
+zdb_record_equals_unpacked(const zdb_packed_ttlrdata* a, const zdb_ttlrdata* b)
 {
     int len;
     bool ret = FALSE;
@@ -303,7 +306,7 @@ zdb_record_equals_unpacked(zdb_packed_ttlrdata* a, zdb_ttlrdata* b)
  */
 
 bool
-zdb_record_equals(zdb_packed_ttlrdata *a, zdb_packed_ttlrdata *b)
+zdb_record_equals(const zdb_packed_ttlrdata *a, const zdb_packed_ttlrdata *b)
 {
     int len;
     bool ret = FALSE;
@@ -337,9 +340,9 @@ zdb_record_equals(zdb_packed_ttlrdata *a, zdb_packed_ttlrdata *b)
  */
 
 ya_result
-zdb_record_delete_exact(zdb_rr_collection* collection, u16 type, zdb_ttlrdata* ttlrdata)
+zdb_record_delete_exact(zdb_rr_collection* collection, u16 type, const zdb_ttlrdata* ttlrdata)
 {
-    zassert((collection != NULL) && (type != TYPE_ANY));
+    yassert((collection != NULL) && (type != TYPE_ANY));
 
     zdb_packed_ttlrdata** record_listp = (zdb_packed_ttlrdata**)btree_findp(collection, type);
 
@@ -418,6 +421,8 @@ zdb_record_destroy_callback(void* record_list_)
 void
 zdb_record_destroy(zdb_rr_collection* collection)
 {
+    yassert(collection != NULL);
+    
     btree_callback_and_destroy(*collection, zdb_record_destroy_callback);
     *collection = NULL;
 }
@@ -430,8 +435,10 @@ zdb_record_destroy(zdb_rr_collection* collection)
  */
 
 bool
-zdb_record_isempty(zdb_rr_collection* collection)
+zdb_record_isempty(const zdb_rr_collection* collection)
 {
+    yassert(collection != NULL);
+    
     return *collection == NULL;
 }
 
@@ -447,11 +454,11 @@ zdb_record_isempty(zdb_rr_collection* collection)
  */
 
 ya_result
-zdb_record_getsoa(zdb_packed_ttlrdata* soa, soa_rdata* soa_out)
+zdb_record_getsoa(const zdb_packed_ttlrdata* soa, soa_rdata* soa_out)
 {
     s32 soa_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(soa);
 
-    u8* soa_start = soa->rdata_start;
+    const u8* soa_start = soa->rdata_start;
     soa_out->mname = soa_start;
 
     u32 len = dnsname_len(soa_start);
@@ -485,7 +492,7 @@ zdb_record_getsoa(zdb_packed_ttlrdata* soa, soa_rdata* soa_out)
     soa_out->expire = ntohl(GET_U32_AT(*soa_start));
     soa_start += 4;
     soa_out->minimum = ntohl(GET_U32_AT(*soa_start));
-    soa_start += 4;
+    //soa_start += 4;
 
     return SUCCESS;
 }
@@ -497,11 +504,11 @@ zdb_record_getsoa(zdb_packed_ttlrdata* soa, soa_rdata* soa_out)
 zdb_ttlrdata* zdb_ttlrdata_clone(const zdb_ttlrdata* source)
 {
     zdb_ttlrdata *rec;
-    MALLOC_OR_DIE(zdb_ttlrdata*, rec, sizeof(zdb_ttlrdata), ~1);
+    MALLOC_OR_DIE(zdb_ttlrdata*, rec, sizeof(zdb_ttlrdata), TTLRDATA_TAG);
     rec->next = NULL;
     rec->ttl = source->ttl;
     rec->rdata_size = source->rdata_size;
-    MALLOC_OR_DIE(u8*, rec->rdata_pointer, rec->rdata_size, ~1);
+    MALLOC_OR_DIE(u8*, rec->rdata_pointer, rec->rdata_size, ZDBRDATA_TAG);
     memcpy(rec->rdata_pointer, source->rdata_pointer, rec->rdata_size);
     
     return rec;
@@ -523,7 +530,7 @@ void zdb_ttlrdata_delete(zdb_ttlrdata* record)
  */
 
 void
-zdb_record_print_indented(zdb_rr_collection collection, int indent)
+zdb_record_print_indented(zdb_rr_collection collection, output_stream *os, int indent)
 {
     btree_iterator iter;
     btree_iterator_init(collection, &iter);
@@ -537,15 +544,15 @@ zdb_record_print_indented(zdb_rr_collection collection, int indent)
 
         if(ttlrdata_sll == NULL)
         {
-            formatln("%t[%{dnstype}] EMPTY TYPE", indent, &type);
+            osformatln(os, "%t[%{dnstype}] EMPTY TYPE", indent, &type);
             continue;
         }
 
         do
         {
-            format("%t[%{dnstype} %9d] ", indent, &type, ttlrdata_sll->ttl);
-            osprint_rdata(termout, type, ZDB_PACKEDRECORD_PTR_RDATAPTR(ttlrdata_sll), ZDB_PACKEDRECORD_PTR_RDATASIZE(ttlrdata_sll));
-            println("");
+            osformat(os, "%t[%{dnstype} %9d] ", indent, &type, ttlrdata_sll->ttl);
+            osprint_rdata(os, type, ZDB_PACKEDRECORD_PTR_RDATAPTR(ttlrdata_sll), ZDB_PACKEDRECORD_PTR_RDATASIZE(ttlrdata_sll));
+            osprintln(os, "");
 
             ttlrdata_sll = ttlrdata_sll->next;
         }
@@ -554,9 +561,9 @@ zdb_record_print_indented(zdb_rr_collection collection, int indent)
 }
 
 void
-zdb_record_print(zdb_rr_collection collection)
+zdb_record_print(zdb_rr_collection collection, output_stream *os)
 {
-    zdb_record_print_indented(collection, 0);
+    zdb_record_print_indented(collection, os, 0);
 }
 
 #endif

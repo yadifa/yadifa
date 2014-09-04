@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -46,6 +46,7 @@
 #include <stdlib.h>
 
 #include <openssl/sha.h>
+#include <dnscore/dnssec_errors.h>
 
 #include "dnsdb/zdb_error.h"
 #include "dnsdb/nsec3_hash.h"

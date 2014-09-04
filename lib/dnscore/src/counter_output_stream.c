@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -81,10 +81,12 @@ counter_flush(output_stream* stream)
 static void
 counter_close(output_stream* stream)
 {
+    // counter_output_stream_data* data = (counter_output_stream_data*)stream->data;
+    
     output_stream_set_void(stream);
 }
 
-static output_stream_vtbl counter_output_stream_vtbl ={
+static const output_stream_vtbl counter_output_stream_vtbl ={
     counter_write,
     counter_flush,
     counter_close,

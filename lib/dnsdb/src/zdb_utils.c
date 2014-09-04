@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup
  *  @ingroup dnsdb
  *  @brief
@@ -53,14 +53,14 @@
 
 #include <dnscore/bytearray_output_stream.h>
 
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#include "dnsdb/dnssec.h"
+#endif
+
 #include "dnsdb/zdb_error.h"
 #include "dnsdb/zdb_utils.h"
 #include "dnsdb/zdb_dnsname.h"
 #include "dnsdb/zdb_zone_label_iterator.h"
-
-#if ZDB_DNSSEC_SUPPORT != 0
-#include "dnsdb/dnssec.h"
-#endif
 
 /*
  * SOA
@@ -94,7 +94,10 @@ rr_soa_get_serial(const u8* rdata, u16 rdata_size, u32* serial)
 
     soa_start += len;
 
-    *serial = ntohl(GET_U32_AT(*soa_start));
+    if(serial != NULL)
+    {
+        *serial = ntohl(GET_U32_AT(*soa_start));
+    }
 
     return SUCCESS;
 }
@@ -175,9 +178,10 @@ log_rdata(logger_handle *hndl, int level, u16 type, u8* rdata_pointer, u16 rdata
 {
     ya_result return_code;
     output_stream os;
+    bytearray_output_stream_context os_context;
     char buffer[4096];
 
-    bytearray_output_stream_init((u8*)buffer, sizeof (buffer), &os);
+    bytearray_output_stream_init_ex_static(&os, (u8*)buffer, sizeof (buffer), 0, &os_context);
 
     if(FAIL(return_code = osprint_rdata(&os, type, rdata_pointer, rdata_size)))
     {

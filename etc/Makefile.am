@@ -28,30 +28,45 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#	YADIFA config Makefile.am script
+#
+#      	Makefile.am script
+#
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.0.0-public/etc/Makefile.am $
+#
+#	$Date: 2014-08-27 11:13:41 +0200 (Wed, 27 Aug 2014) $
+#
+#	$Revision: 4081 $
+#
+##############################################################################
 
 ACLOCAL_AMFLAGS = -I m4
 
-doc_DATA = yadifad.conf.example yadifad-master.conf.example yadifad-slave.conf.example
+OC=yadifad.conf
+OCE=$(OC).example
+YI=yadifad.init
+YIE=$(YI).example
 
-noinst_HEADERS = yadifad.conf.example yadifad-master.conf.example yadifad-slave.conf.example yadifad.init
+doc_DATA = $(OCE) $(YIE) yadifad-master.conf.example yadifad-slave.conf.example
 
-update_prefix:
-	cat yadifad.conf.example | sed "s@\"\(.*\)/var/\(.*\)\"@\"$(localstatedir)/\2\"@" > yadifad.conf.example.tmp
-	if [ $$? -eq 0 ];										\
-	then													\
-		mv yadifad.conf.example yadifad.conf.example.bak;	\
-		mv yadifad.conf.example.tmp yadifad.conf.example;	\
-	fi
+noinst_HEADERS = yadifad.conf.example yadifad-master.conf.example yadifad-slave.conf.example yadifad.init.example
 
-	cat yadifad.init | sed "s@^PREFIX=.*@PREFIX=\"$(prefix)\"@" > yadifad.init.tmp
-	if [ $$? -eq 0 ];										\
-	then													\
-		mv yadifad.init yadifad.init.bak;					\
-		mv yadifad.init.tmp yadifad.init;					\
-	fi
+$(OC): $(OCE)
+	cat $(OCE) | sed "s@\"\(.*\)/var/\(.*\)\"@\"$(localstatedir)/\2\"@" > $(OC)
 
-release: update_prefix
+$(YI): $(YIE)
+	cat $(YIE) | sed "s@^PREFIX=.*@PREFIX=\"$(prefix)\"@" > $(YI)
 
-profile: update_prefix
+all: $(YI) $(OC)
 
-debug: update_prefix
+install-data-hook: $(OC)
+	mkdir -p $(DESTDIR)$(sysconfdir)
+	touch $(DESTDIR)$(sysconfdir)/$(OC)
+
+release: $(YI) $(OC)
+
+profile: $(YI) $(OC)
+
+debug: $(YI) $(OC)
+

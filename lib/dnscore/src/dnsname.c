@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnscore
  *  @ingroup dnscore
  *  @brief Functions used to manipulate dns formatted names and labels
@@ -49,6 +49,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+
+#include "dnscore-config.h"
 
 #include "dnscore/dnsname.h"
 #include "dnscore/rfc.h"
@@ -97,34 +99,7 @@ static bool cstr_to_dnsname_terminators[256] =
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
 };
 
-#if 0
-/*
- * This table contains TRUE for each character in the DNS charset
- * 
- * Not used anymore ?
- * 
- */
 
-static bool cstr_to_dnsname_charspace[256] =
-{
-    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, /* 00 */
-    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, /* 10 */
-    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE,  FALSE, FALSE, /* 20 */
-    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, /* 30 */
-    FALSE, TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  /* 40 */
-    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  FALSE, FALSE, FALSE, FALSE, FALSE, /* 50 */
-    FALSE, TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  /* 60 */
-    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  FALSE, FALSE, FALSE, FALSE, FALSE, /* 70 */
-    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
-    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
-    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
-    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
-    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
-    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
-    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
-    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
-};
-#endif
 /**
  *  0: out of space
  *  1: in space
@@ -244,7 +219,7 @@ dnslabel_verify_charspace(u8 *label)
         return FALSE;
     }
 
-    u8 *limit = &label[n];
+    u8 * const limit = &label[n];
 
     while(++label < limit)
     {
@@ -277,7 +252,7 @@ dnslabel_locase_verify_charspace(u8 *label)
         return FALSE;
     }
 
-    u8 *limit = &label[n];
+    u8 * const limit = &label[n];
 
     while(++label <= limit)
     {
@@ -321,7 +296,7 @@ dnsname_locase_verify_charspace(u8 *name_wire)
             return FALSE;
         }
 
-        u8 *limit = &name_wire[n];
+        u8 * const limit = &name_wire[n];
 
         while(++name_wire <= limit)
         {
@@ -366,7 +341,7 @@ dnsname_locase_verify_extended_charspace(u8 *name_wire)
             return FALSE;
         }
 
-        u8 *limit = &name_wire[n];
+        u8 * const limit = &name_wire[n];
 
         while(++name_wire <= limit)
         {
@@ -396,7 +371,7 @@ dnsname_locase_verify_extended_charspace(u8 *name_wire)
 ya_result
 cstr_to_dnsname(u8* name_parm, const char* str)
 {
-    u8 *limit = &name_parm[MAX_DOMAIN_LENGTH];
+    u8 * const limit = &name_parm[MAX_DOMAIN_LENGTH];
     u8 *s = name_parm;
     u8 *p = &name_parm[1];
 
@@ -445,6 +420,210 @@ cstr_to_dnsname(u8* name_parm, const char* str)
     return s - name_parm;
 }
 
+ya_result
+cstr_to_locase_dnsname(u8* name_parm, const char* str)
+{
+    u8 * const limit = &name_parm[MAX_DOMAIN_LENGTH];
+    u8 *s = name_parm;
+    u8 *p = &name_parm[1];
+
+    u8 c;
+
+    for(c = *str++;; c = *str++)
+    {
+        if(!cstr_to_dnsname_terminators[c] /*(c != '.') && (c != '\0')*/)
+        {
+            *p = LOCASE(c);
+        }
+        else
+        {
+            u8 l = p - s - 1;
+            *s = l;
+            s = p;
+
+            if(l == 0)
+            {
+                break;
+            }
+
+            if(l > MAX_LABEL_LENGTH)
+            {
+                return LABEL_TOO_LONG;
+            }
+
+            if(c == '\0')
+            {
+                if(p >= limit)
+                {
+                    return DOMAIN_TOO_LONG;
+                }
+
+                *s++ = '\0';
+                break;
+            }
+        }
+
+        if(++p > limit)
+        {
+            return DOMAIN_TOO_LONG;
+        }
+    }
+
+    return s - name_parm;
+}
+
+ya_result
+charp_to_dnsname(u8* name_parm, const char* str, u32 str_len)
+{
+    const char * const limit = &str[str_len];
+    u8 *s = name_parm;
+    u8 *p = &name_parm[1];
+
+    u8 c;
+    
+    if(str_len >= MAX_DOMAIN_LENGTH)
+    {
+        return DOMAIN_TOO_LONG;
+    }
+
+    for(c = *str++; ; c = *str++)
+    {
+        if((str <= limit) && !cstr_to_dnsname_terminators[c] /*(c != '.') && (c != '\0')*/)
+        {
+            *p = c;
+        }
+        else
+        {
+            u8 l = p - s - 1;
+            *s = l;
+            s = p;
+
+            if(l == 0)
+            {
+                break;
+            }
+
+            if(l > MAX_LABEL_LENGTH)
+            {
+                return LABEL_TOO_LONG;
+            }
+
+            if(str >= limit)
+            {
+                *s++ = '\0';
+                break;
+            }
+        }
+
+        ++p;
+    }
+
+    return s - name_parm;
+}
+
+ya_result
+charp_to_locase_dnsname(u8* name_parm, const char* str, u32 str_len)
+{
+    const char * const limit = &str[str_len];
+    u8 *s = name_parm;
+    u8 *p = &name_parm[1];
+
+    u8 c;
+    
+    if(str_len >= MAX_DOMAIN_LENGTH)
+    {
+        return DOMAIN_TOO_LONG;
+    }
+
+    for(c = *str++; ; c = *str++)
+    {
+        if((str <= limit) && !cstr_to_dnsname_terminators[c] /*(c != '.') && (c != '\0')*/)
+        {
+            *p = LOCASE(c);
+        }
+        else
+        {
+            u8 l = p - s - 1;
+            *s = l;
+            s = p;
+
+            if(l == 0)
+            {
+                break;
+            }
+
+            if(l > MAX_LABEL_LENGTH)
+            {
+                return LABEL_TOO_LONG;
+            }
+
+            if(str >= limit)
+            {
+                *s++ = '\0';
+                break;
+            }
+        }
+
+        ++p;
+    }
+
+    return s - name_parm;
+}
+
+ya_result
+charp_to_locase_dnsname_with_check(u8* name_parm, const char* str, u32 str_len)
+{
+    const char * const limit = &str[str_len];
+    u8 *s = name_parm;
+    u8 *p = &name_parm[1];
+
+    u8 c;
+    
+    if(str_len >= MAX_DOMAIN_LENGTH)
+    {
+        return DOMAIN_TOO_LONG;
+    }
+
+    for(c = *str++; ; c = *str++)
+    {       
+        if((str <= limit) && !cstr_to_dnsname_terminators[c] /*(c != '.') && (c != '\0')*/)
+        {
+            if(cstr_to_dnsname_map_nostar[c] == 0)
+            {
+                return INVALID_CHARSET;
+            }
+            
+            *p = LOCASE(c);
+        }
+        else
+        {
+            u8 l = p - s - 1;
+            *s = l;
+            s = p;
+
+            if(l == 0)
+            {
+                break;
+            }
+
+            if(l > MAX_LABEL_LENGTH)
+            {
+                return LABEL_TOO_LONG;
+            }
+
+            if(str >= limit)
+            {
+                *s++ = '\0';
+                break;
+            }
+        }
+
+        ++p;
+    }
+
+    return s - name_parm;
+}
+
 /**
  *  @brief Converts a C string to a dns name and checks for validity
  *
@@ -459,7 +638,7 @@ cstr_to_dnsname(u8* name_parm, const char* str)
 ya_result
 cstr_to_dnsname_with_check(u8* name_parm, const char* str)
 {
-    u8 *limit = &name_parm[MAX_DOMAIN_LENGTH];
+    u8 * const limit = &name_parm[MAX_DOMAIN_LENGTH];
     u8 *s = name_parm;
     u8 *p = &name_parm[1];
 
@@ -561,6 +740,695 @@ cstr_to_dnsname_with_check(u8* name_parm, const char* str)
     return s - name_parm;
 }
 
+ya_result
+cstr_to_dnsname_with_check_len(u8* name_parm, const char* text, u32 text_len)
+{
+    /*
+     * .        => 1 => 00 => 1
+     * 
+     * a        => 1 => 01 'A' 00 => 3
+     * a.b      => 3 => 01 'A' 01 'B' 00 => 5
+     * a.b.     => 4 => 01 'A' 01 'B' 00 => 5
+     * 
+     */
+
+    u8 *label_start = name_parm;
+    u8 *p = &name_parm[1];
+    
+    u8 c;
+
+    /*
+     * I cannot check this in one go actually.
+     *
+     * It would work 99.9999999% of the time but if the string is "" and is at the end of a page it would overlap to a non-mapped
+     * memory and crash.
+     *
+     */
+    
+    if(text_len == 0)
+    {
+        return DOMAINNAME_INVALID;
+    }
+    
+    if(text[0] == '.')
+    {
+        if(text_len == 1)
+        {
+            *name_parm = 0;
+            return 1;
+        }
+        else
+        {
+            return DOMAINNAME_INVALID;
+        }
+    }
+
+    if(text[0] != '*')
+    {
+        // ensure the length is acceptable
+        
+        u32 output_len = text_len + 1;
+        
+        if(text[text_len - 1] != '.')
+        {
+            output_len += 1;
+        }
+        
+        if(output_len > MAX_DOMAIN_LENGTH)
+        {
+            return DOMAIN_TOO_LONG;
+        }
+    }
+    else
+    {
+        if(text_len == 1)      // '*'
+        {
+            name_parm[0] = 1;
+            name_parm[1] = '*';
+            name_parm[2] = '\0';
+            return 3;
+        }
+        else if(text[1] == '.')  //  '*.????' note: at this point str_len is 2 or more
+        {
+            // ensure the length is acceptable
+            
+            u32 output_len = text_len + 1;
+        
+            if(text[text_len - 1] != '.')
+            {
+                output_len += 1;
+            }
+
+            if(output_len > MAX_DOMAIN_LENGTH)
+            {
+                return DOMAIN_TOO_LONG;
+            }
+            
+            name_parm[0] = 1;
+            name_parm[1] = '*';
+            
+            if(text_len == 2)   
+            {
+                name_parm[2] = '\0';
+                return 3;
+            }
+            
+            text += 2;
+            label_start += 2;
+            p += 2;
+        }
+        else                    // '*????'
+        {
+            return DOMAINNAME_INVALID;
+        }
+    }
+    
+    const char * const text_limit = &text[text_len];
+
+    for(c = *text++; ; c = *text++)
+    {
+        /* test if a switch/case is better (break mix issues for this switch in this particular loop)
+         *
+         * in theory this is test/jb/jz
+         * a switch would be jmp [v]
+         *
+         */
+        
+        if(cstr_to_dnsname_map_nostar[c] >= 0)          // (c != '.') && (c != '\0')
+        {
+            if(cstr_to_dnsname_map_nostar[c] == 0)
+            {
+                return INVALID_CHARSET;
+            }
+
+            *p++ = c;
+            
+            if(text == text_limit)
+            {
+                // close the label
+                
+                u8 label_length = p - label_start - 1;      // size of the label
+            
+                if(label_length > MAX_LABEL_LENGTH)
+                {
+                    return LABEL_TOO_LONG;
+                }
+                
+                *label_start = label_length;
+                
+                // close the fqdn
+                
+                *p++ = 0;
+                
+                return p - name_parm;
+            }
+        }
+        else    // reached '.' or end of cstr (which should not occur in this algorithm)
+        {
+            u8 label_length = p - label_start - 1;      // size of the label
+            /*
+            if(label_length == 0)                       // .. case
+            {
+                if(c != '\0')
+                {
+                    return DOMAINNAME_INVALID;
+                }
+
+                break;
+            }
+            */
+            if(label_length > MAX_LABEL_LENGTH)
+            {
+                return LABEL_TOO_LONG;
+            }
+            
+            *label_start = label_length;
+            
+            if(text == text_limit)
+            {
+                *p++ = '\0';
+                return p - name_parm;
+            }
+            
+            label_start = p;
+            p++;
+        }
+    }
+}
+
+ya_result
+cstr_to_locase_dnsname_with_check_len(u8* name_parm, const char* text, u32 text_len)
+{
+    /*
+     * .        => 1 => 00 => 1
+     * 
+     * a        => 1 => 01 'A' 00 => 3
+     * a.b      => 3 => 01 'A' 01 'B' 00 => 5
+     * a.b.     => 4 => 01 'A' 01 'B' 00 => 5
+     * 
+     */
+
+    u8 *label_start = name_parm;
+    u8 *p = &name_parm[1];
+    
+    u8 c;
+
+    /*
+     * I cannot check this in one go actually.
+     *
+     * It would work 99.9999999% of the time but if the string is "" and is at the end of a page it would overlap to a non-mapped
+     * memory and crash.
+     *
+     */
+    
+    if(text_len == 0)
+    {
+        return DOMAINNAME_INVALID;
+    }
+    
+    if(text[0] == '.')
+    {
+        if(text_len == 1)
+        {
+            *name_parm = 0;
+            return 1;
+        }
+        else
+        {
+            return DOMAINNAME_INVALID;
+        }
+    }
+
+    if(text[0] != '*')
+    {
+        // ensure the length is acceptable
+        
+        u32 output_len = text_len + 1;
+        
+        if(text[text_len - 1] != '.')
+        {
+            output_len += 1;
+        }
+        
+        if(output_len > MAX_DOMAIN_LENGTH)
+        {
+            return DOMAIN_TOO_LONG;
+        }
+    }
+    else
+    {
+        if(text_len == 1)      // '*'
+        {
+            name_parm[0] = 1;
+            name_parm[1] = '*';
+            name_parm[2] = '\0';
+            return 3;
+        }
+        else if(text[1] == '.')  //  '*.????' note: at this point str_len is 2 or more
+        {
+            // ensure the length is acceptable
+            
+            u32 output_len = text_len + 1;
+        
+            if(text[text_len - 1] != '.')
+            {
+                output_len += 1;
+            }
+
+            if(output_len > MAX_DOMAIN_LENGTH)
+            {
+                return DOMAIN_TOO_LONG;
+            }
+            
+            name_parm[0] = 1;
+            name_parm[1] = '*';
+            
+            if(text_len == 2)   
+            {
+                name_parm[2] = '\0';
+                return 3;
+            }
+            
+            text += 2;
+            label_start += 2;
+            p += 2;
+        }
+        else                    // '*????'
+        {
+            return DOMAINNAME_INVALID;
+        }
+    }
+    
+    const char * const text_limit = &text[text_len];
+
+    for(c = *text++; ; c = *text++)
+    {
+        /* test if a switch/case is better (break mix issues for this switch in this particular loop)
+         *
+         * in theory this is test/jb/jz
+         * a switch would be jmp [v]
+         *
+         */
+        
+        if(cstr_to_dnsname_map_nostar[c] >= 0)          // (c != '.') && (c != '\0')
+        {
+            if(cstr_to_dnsname_map_nostar[c] == 0)
+            {
+                return INVALID_CHARSET;
+            }
+
+            *p++ = LOCASE(c);
+            
+            if(text == text_limit)
+            {
+                // close the label
+                
+                u8 label_length = p - label_start - 1;      // size of the label
+            
+                if(label_length > MAX_LABEL_LENGTH)
+                {
+                    return LABEL_TOO_LONG;
+                }
+                
+                *label_start = label_length;
+                
+                // close the fqdn
+                
+                *p++ = 0;
+                
+                return p - name_parm;
+            }
+        }
+        else    // reached '.' or end of cstr (which should not occur in this algorithm)
+        {
+            u8 label_length = p - label_start - 1;      // size of the label
+            /*
+            if(label_length == 0)                       // .. case
+            {
+                if(c != '\0')
+                {
+                    return DOMAINNAME_INVALID;
+                }
+
+                break;
+            }
+            */
+            if(label_length > MAX_LABEL_LENGTH)
+            {
+                return LABEL_TOO_LONG;
+            }
+            
+            *label_start = label_length;
+            
+            if(text == text_limit)
+            {
+                *p++ = '\0';
+                return p - name_parm;
+            }
+            
+            label_start = p;
+            p++;
+        }
+    }
+}
+
+ya_result
+cstr_to_dnsname_with_check_len_with_origin(u8* name_parm, const char* text, u32 text_len, const u8 *origin)
+{
+    /*
+     * .        => 1 => 00 => 1
+     * 
+     * a        => 1 => 01 'A' 00 => 3
+     * a.b      => 3 => 01 'A' 01 'B' 00 => 5
+     * a.b.     => 4 => 01 'A' 01 'B' 00 => 5
+     * 
+     */
+
+    u8 *label_start = name_parm;
+    u8 *p = &name_parm[1];
+    
+    u8 c;
+
+    /*
+     * I cannot check this in one go actually.
+     *
+     * It would work 99.9999999% of the time but if the string is "" and is at the end of a page it would overlap to a non-mapped
+     * memory and crash.
+     *
+     */
+    
+    if(text_len == 0)
+    {
+        return DOMAINNAME_INVALID;
+    }
+    
+    if(text[0] == '.')
+    {
+        if(text_len == 1)
+        {
+            *name_parm = 0;
+            return 1;
+        }
+        else
+        {
+            return DOMAINNAME_INVALID;
+        }
+    }
+
+    if(text[0] != '*')
+    {
+        // ensure the length is acceptable
+        
+        u32 output_len = text_len + 1;
+        
+        if(text[text_len - 1] != '.')
+        {
+            output_len += 1;
+        }
+        
+        if(output_len > MAX_DOMAIN_LENGTH)
+        {
+            return DOMAIN_TOO_LONG;
+        }
+    }
+    else
+    {
+        if(text_len == 1)      // '*'
+        {
+            name_parm[0] = 1;
+            name_parm[1] = '*';
+
+            ya_result return_value = dnsname_copy(&name_parm[2], origin) + 2;
+            
+            return return_value;
+        }
+        else if(text[1] == '.')  //  '*.????' note: at this point str_len is 2 or more
+        {
+            // ensure the length is acceptable
+            
+            u32 output_len = text_len + 1;
+        
+            if(text[text_len - 1] != '.')
+            {
+                output_len += 1;
+            }
+
+            if(output_len > MAX_DOMAIN_LENGTH)
+            {
+                return DOMAIN_TOO_LONG;
+            }
+            
+            name_parm[0] = 1;
+            name_parm[1] = '*';
+            
+            if(text_len == 2)   
+            {
+                name_parm[2] = '\0';
+                return 3;
+            }
+            
+            text += 2;
+            label_start += 2;
+            p += 2;
+        }
+        else                    // '*????'
+        {
+            return DOMAINNAME_INVALID;
+        }
+    }
+    
+    const char * const text_limit = &text[text_len];
+
+    for(c = *text++; ; c = *text++)
+    {
+        /* test if a switch/case is better (break mix issues for this switch in this particular loop)
+         *
+         * in theory this is test/jb/jz
+         * a switch would be jmp [v]
+         *
+         */
+        
+        if(cstr_to_dnsname_map_nostar[c] >= 0)          // (c != '.') && (c != '\0')
+        {
+            if(cstr_to_dnsname_map_nostar[c] == 0)
+            {
+                return INVALID_CHARSET;
+            }
+
+            *p++ = c;
+            
+            if(text == text_limit)
+            {
+                // close the label
+                
+                u8 label_length = p - label_start - 1;      // size of the label
+            
+                if(label_length > MAX_LABEL_LENGTH)
+                {
+                    return LABEL_TOO_LONG;
+                }
+                
+                *label_start = label_length;
+                
+                // close the fqdn
+                
+                ya_result return_value = dnsname_copy(p, origin) + p - name_parm;
+            
+                return return_value;
+            }
+        }
+        else    // reached '.' or end of cstr (which should not occur in this algorithm)
+        {
+            u8 label_length = p - label_start - 1;      // size of the label
+
+            if(label_length > MAX_LABEL_LENGTH)
+            {
+                return LABEL_TOO_LONG;
+            }
+            
+            *label_start = label_length;
+            
+            if(text == text_limit)
+            {
+                *p++ = '\0';
+                return p - name_parm;
+            }
+            
+            label_start = p;
+            p++;
+        }
+    }
+}
+
+ya_result
+cstr_to_locase_dnsname_with_check_len_with_origin(u8* name_parm, const char* text, u32 text_len, const u8 *origin)
+{
+    /*
+     * .        => 1 => 00 => 1
+     * 
+     * a        => 1 => 01 'A' 00 => 3
+     * a.b      => 3 => 01 'A' 01 'B' 00 => 5
+     * a.b.     => 4 => 01 'A' 01 'B' 00 => 5
+     * 
+     */
+
+    u8 *label_start = name_parm;
+    u8 *p = &name_parm[1];
+    
+    u8 c;
+
+    /*
+     * I cannot check this in one go actually.
+     *
+     * It would work 99.9999999% of the time but if the string is "" and is at the end of a page it would overlap to a non-mapped
+     * memory and crash.
+     *
+     */
+    
+    if(text_len == 0)
+    {
+        return DOMAINNAME_INVALID;
+    }
+    
+    if(text[0] == '.')
+    {
+        if(text_len == 1)
+        {
+            *name_parm = 0;
+            return 1;
+        }
+        else
+        {
+            return DOMAINNAME_INVALID;
+        }
+    }
+
+    if(text[0] != '*')
+    {
+        // ensure the length is acceptable
+        
+        u32 output_len = text_len + 1;
+        
+        if(text[text_len - 1] != '.')
+        {
+            output_len += 1;
+        }
+        
+        if(output_len > MAX_DOMAIN_LENGTH)
+        {
+            return DOMAIN_TOO_LONG;
+        }
+    }
+    else
+    {
+        if(text_len == 1)      // '*'
+        {
+            name_parm[0] = 1;
+            name_parm[1] = '*';
+
+            //ya_result return_value = dnsname_copy(&name_parm[2], origin) + 2;
+            ya_result return_value = dnsname_canonize(origin, &name_parm[2]) + 2;
+            
+            return return_value;
+        }
+        else if(text[1] == '.')  //  '*.????' note: at this point str_len is 2 or more
+        {
+            // ensure the length is acceptable
+            
+            u32 output_len = text_len + 1;
+        
+            if(text[text_len - 1] != '.')
+            {
+                output_len += 1;
+            }
+
+            if(output_len > MAX_DOMAIN_LENGTH)
+            {
+                return DOMAIN_TOO_LONG;
+            }
+            
+            name_parm[0] = 1;
+            name_parm[1] = '*';
+            
+            if(text_len == 2)   
+            {
+                name_parm[2] = '\0';
+                return 3;
+            }
+            
+            text += 2;
+            label_start += 2;
+            p += 2;
+        }
+        else                    // '*????'
+        {
+            return DOMAINNAME_INVALID;
+        }
+    }
+    
+    const char * const text_limit = &text[text_len];
+
+    for(c = *text++; ; c = *text++)
+    {
+        /* test if a switch/case is better (break mix issues for this switch in this particular loop)
+         *
+         * in theory this is test/jb/jz
+         * a switch would be jmp [v]
+         *
+         */
+        
+        if(cstr_to_dnsname_map_nostar[c] >= 0)          // (c != '.') && (c != '\0')
+        {
+            if(cstr_to_dnsname_map_nostar[c] == 0)
+            {
+                return INVALID_CHARSET;
+            }
+
+            *p++ = LOCASE(c);
+            
+            if(text == text_limit)
+            {
+                // close the label
+                
+                u8 label_length = p - label_start - 1;      // size of the label
+            
+                if(label_length > MAX_LABEL_LENGTH)
+                {
+                    return LABEL_TOO_LONG;
+                }
+                
+                *label_start = label_length;
+                
+                // close the fqdn
+                
+                ya_result return_value = dnsname_copy(p, origin) + p - name_parm;
+            
+                return return_value;
+            }
+        }
+        else    // reached '.' or end of cstr (which should not occur in this algorithm)
+        {
+            u8 label_length = p - label_start - 1;      // size of the label
+
+            if(label_length > MAX_LABEL_LENGTH)
+            {
+                return LABEL_TOO_LONG;
+            }
+            
+            *label_start = label_length;
+            
+            if(text == text_limit)
+            {
+                *p++ = '\0';
+                return p - name_parm;
+            }
+            
+            label_start = p;
+            p++;
+        }
+    }
+}
+
 /**
  *  @brief Converts a C string to a dns rname and checks for validity
  *
@@ -575,7 +1443,7 @@ cstr_to_dnsname_with_check(u8* name_parm, const char* str)
 ya_result
 cstr_to_dnsrname_with_check(u8* name_parm, const char* str)
 {
-    u8 *limit = &name_parm[MAX_DOMAIN_LENGTH];
+    u8 * const limit = &name_parm[MAX_DOMAIN_LENGTH];
     u8 *s = name_parm;
     u8 *p = &name_parm[1];
 
@@ -736,7 +1604,7 @@ u32
 dnsname_to_cstr(char* dest_cstr, const u8* name)
 {
 #if defined(DEBUG)
-    zassert(name != NULL);
+    yassert(name != NULL);
 #endif
     
     char* start = dest_cstr;
@@ -1055,7 +1923,7 @@ dnsname_equals_ignorecase(const u8* name_a, const u8* name_b)
 u32
 dnsname_len(const u8 *name)
 {
-    zassert(name != NULL);
+    yassert(name != NULL);
     
     const u8 *start = name;
 
@@ -1074,15 +1942,15 @@ dnsname_len(const u8 *name)
 u32
 dnsname_getdepth(const u8 *name)
 {
-    zassert(name != NULL);
+    yassert(name != NULL);
     
     u32 d = 0;
 
     u8 c;
 
-    while((c = *name++) > 0)
+    while((c = *name) > 0)
     {
-        name += c;
+        name += c + 1;
         d++;
     }
 
@@ -1274,7 +2142,7 @@ dnsname_vector_sub_to_dnsname(const dnsname_vector *name, s32 from, u8 *name_sta
 s32
 dnsname_to_dnslabel_vector(const u8 *dns_name, dnslabel_vector_reference labels)
 {
-    zassert(dns_name != NULL && labels != NULL);
+    yassert(dns_name != NULL && labels != NULL);
     
     s32 idx = -1;
     int offset = 0;
@@ -1312,7 +2180,7 @@ dnsname_to_dnslabel_vector(const u8 *dns_name, dnslabel_vector_reference labels)
 s32
 dnsname_to_dnsname_vector(const u8* dns_name, dnsname_vector* name)
 {
-    zassert(dns_name != NULL && name != NULL);
+    yassert(dns_name != NULL && name != NULL);
     
     s32 size = dnsname_to_dnslabel_vector(dns_name, name->labels);
     name->size = size;
@@ -1328,6 +2196,19 @@ u32 dnsname_vector_copy(dnsname_vector* dst, const dnsname_vector* src)
         memcpy(&dst->labels[0], &src->labels[0], sizeof(u8*) * dst->size);
     }
     return dst->size;
+}
+
+u32
+dnsname_vector_len(dnsname_vector *name_vector)
+{
+    u32 len = 1;
+
+    for(s32 size = 0; size <= name_vector->size; size++)
+    {
+        len += name_vector->labels[size][0] + 1;
+    }
+
+    return len;
 }
 
 /*****************************************************************************
@@ -1428,13 +2309,11 @@ dnsname_to_dnslabel_stack(const u8* dns_name, dnslabel_stack_reference labels)
 /* ONE use */
 
 u32
-dnsname_stack_to_dnsname(const dnsname_stack* name_stack, u8* name_start)
+dnsname_stack_to_dnsname(const dnsname_stack *name_stack, u8 *name_start)
 {
     u8* name = name_start;
 
-    s32 size = name_stack->size;
-
-    for(; size >= 0; size--)
+    for(s32 size = name_stack->size; size >= 0; size--)
     {
         u32 len = name_stack->labels[size][0] + 1;
         MEMCOPY(name, name_stack->labels[size], len);
@@ -1444,6 +2323,19 @@ dnsname_stack_to_dnsname(const dnsname_stack* name_stack, u8* name_start)
     *name++ = '\0';
 
     return name - name_start;
+}
+
+u32
+dnsname_stack_len(const dnsname_stack* name_stack)
+{
+    u32 len = 1;
+
+    for(s32 size = 0; size <= name_stack->size; size++)
+    {
+        len += name_stack->labels[size][0] + 1;
+    }
+
+    return len;
 }
 
 /* TWO uses (debug) */
@@ -1523,7 +2415,7 @@ dnsname_under_dnsname_stack(const u8* str, const dnsname_stack* name)
 s32
 dnsname_stack_push_label(dnsname_stack* dns_name, u8* dns_label)
 {
-    zassert(dns_name != NULL && dns_label != NULL);
+    yassert(dns_name != NULL && dns_label != NULL);
    
     dns_name->labels[++dns_name->size] = dns_label;
 
@@ -1535,7 +2427,7 @@ dnsname_stack_push_label(dnsname_stack* dns_name, u8* dns_label)
 s32
 dnsname_stack_pop_label(dnsname_stack* name)
 {
-    zassert(name != NULL);
+    yassert(name != NULL);
     
 #ifndef NDEBUG
     name->labels[name->size] = (u8*)~0;

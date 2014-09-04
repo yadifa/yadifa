@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief Functions used to manipulate a zone
@@ -66,17 +66,18 @@
 
 #include "dnsdb/zdb_listener.h"
 
-#if ZDB_NSEC_SUPPORT != 0
+#include "dnsdb/journal.h"
+
+#if ZDB_HAS_NSEC_SUPPORT != 0
 #include "dnsdb/nsec.h"
 #endif
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
 #include "dnsdb/nsec3.h"
 #endif
 
-#define ZONE_MUTEX_LOG 0
-
-#ifndef DEBUG
-#undef ZONE_MUTEX_LOG 0
+#ifdef DEBUG
+#define ZONE_MUTEX_LOG 0    // set this to 0 to disable in DEBUG
+#else
 #define ZONE_MUTEX_LOG 0
 #endif
 
@@ -97,7 +98,7 @@ extern logger_handle* g_database_logger;
  */
 
 ya_result
-zdb_zone_unload(zdb* db, dnsname_vector* name, u16 zclass)
+zdb_zone_unload(zdb* db, dnsname_vector* name, u16 zclass) // mutex checked
 {
     /* Find an existing label */
 
@@ -105,15 +106,9 @@ zdb_zone_unload(zdb* db, dnsname_vector* name, u16 zclass)
 
     if(zone_label == NULL)
     {
-        return ZDB_ERROR_ZONENOTLOADED;
+        return ZDB_READER_ZONENOTLOADED;
     }
 
-    /*
-    if(zone_label->zone == NULL)
-    {
-        return ZDB_ERROR_ZONENOTLOADED;
-    }
-    */
     /* destroy zone */
 
     zdb_zone *zone = zone_label->zone;
@@ -127,9 +122,7 @@ zdb_zone_unload(zdb* db, dnsname_vector* name, u16 zclass)
     /* do we require this label for anything else ? */
 
     if(dictionary_isempty(&zone_label->sub)
-#if ZDB_CACHE_ENABLED!=0
-            && btree_isempty(zone_label->global_resource_record_set)
-#endif
+
             )
     {
         /**
@@ -159,7 +152,7 @@ zdb_zone_unload(zdb* db, dnsname_vector* name, u16 zclass)
  */
 
 zdb_zone*
-zdb_zone_find(zdb* db, dnsname_vector* exact_match_origin, u16 zclass)
+zdb_zone_find(zdb* db, dnsname_vector* exact_match_origin, u16 zclass) // mutex checked
 {
     /* Find label */
 
@@ -182,7 +175,7 @@ zdb_zone_find(zdb* db, dnsname_vector* exact_match_origin, u16 zclass)
  */
 
 zdb_zone*
-zdb_zone_find_from_name(zdb* db, const char* name, u16 qclass)
+zdb_zone_find_from_name(zdb* db, const char* name, u16 qclass) // mutex checked
 {
     dnsname_vector origin;
 
@@ -212,7 +205,7 @@ zdb_zone_find_from_name(zdb* db, const char* name, u16 qclass)
  */
 
 zdb_zone*
-zdb_zone_find_from_dnsname(zdb* db, const u8 *dns_name, u16 qclass)
+zdb_zone_find_from_dnsname(zdb* db, const u8 *dns_name, u16 qclass) // mutex checked
 {
     dnsname_vector origin;
 
@@ -234,12 +227,12 @@ zdb_zone_find_from_dnsname(zdb* db, const u8 *dns_name, u16 qclass)
  */
 
 void
-zdb_zone_record_add(zdb_zone* zone, dnslabel_vector_reference labels, s32 labels_top, u16 type, zdb_packed_ttlrdata* ttlrdata)
+zdb_zone_record_add(zdb_zone *zone, dnslabel_vector_reference labels, s32 labels_top, u16 type, zdb_packed_ttlrdata* ttlrdata)
 {
     zdb_rr_label* rr_label = zdb_rr_label_add(zone, labels, labels_top);
     /* This record will be put as it is in the DB */
 
-#if ZDB_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT != 0
     /*
      * At this point I could add empty nsec3 records, or schedule the nsec3 signature
      */
@@ -347,7 +340,7 @@ zdb_zone_record_add(zdb_zone* zone, dnslabel_vector_reference labels, s32 labels
 
 
 ya_result
-zdb_zone_record_delete(zdb_zone* zone, dnslabel_vector_reference labels, s32 labels_top, u16 type, zdb_packed_ttlrdata* packed_ttlrdata)
+zdb_zone_record_delete(zdb_zone *zone, dnslabel_vector_reference labels, s32 labels_top, u16 type, zdb_packed_ttlrdata* packed_ttlrdata)
 {
     zdb_ttlrdata ttlrdata;
 
@@ -371,7 +364,7 @@ zdb_zone_record_delete(zdb_zone* zone, dnslabel_vector_reference labels, s32 lab
  */
 
 zdb_packed_ttlrdata*
-zdb_zone_record_find(zdb_zone* zone, dnslabel_vector_reference labels, s32 labels_top, u16 type)
+zdb_zone_record_find(zdb_zone *zone, dnslabel_vector_reference labels, s32 labels_top, u16 type)
 {
     zdb_rr_label* rr_label = zdb_rr_label_find_exact(zone->apex, labels, labels_top);
 
@@ -384,9 +377,17 @@ zdb_zone_record_find(zdb_zone* zone, dnslabel_vector_reference labels, s32 label
 }
 
 static ya_result
-zdb_default_query_access_filter(message_data *mesg, void *extension)
+zdb_default_query_access_filter(const message_data *mesg, const void *extension)
 {
     return SUCCESS;
+}
+
+static
+u32 zdb_zone_get_struct_size(const u8 *origin)
+{
+    u32 zone_footprint = sizeof(zdb_zone) - sizeof(dnsname_vector) + sizeof(u8*) * (dnsname_getdepth(origin) + 1);
+    
+    return zone_footprint;
 }
 
 zdb_zone*
@@ -399,9 +400,12 @@ zdb_zone_create(const u8* origin, u16 zclass)
     }
 #endif
     
-    zdb_zone* zone;
-    ZALLOC_OR_DIE(zdb_zone*, zone, zdb_zone, ZDB_ZONETAG)
-
+    zdb_zone *zone;
+    u32 zone_footprint = zdb_zone_get_struct_size(origin);
+    ZALLOC_ARRAY_OR_DIE(zdb_zone*, zone, zone_footprint, ZDB_ZONETAG);
+   
+    log_debug7("zdb_zone_create %{dnsname}@%p", origin, zone);
+            
     zone->origin = dnsname_zdup(origin);
 
     dnsname_to_dnsname_vector(zone->origin, &zone->origin_vector);
@@ -409,13 +413,16 @@ zdb_zone_create(const u8* origin, u16 zclass)
 #if ZDB_RECORDS_MAX_CLASS != 1
     zone->zclass = zclass;
 #endif
+    
+    zone->axfr_timestamp = 1;
+    /* zone->axfr_serial = 0; implicit */
 
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
     ZEROMEMORY(&zone->nsec, sizeof (nsec_zone_union));
     zone->sig_validity_interval_seconds = 30*24*3600;       /* 1 month */
     zone->sig_validity_regeneration_seconds = 7*24*3600;    /* 1 week */
     zone->sig_validity_jitter_seconds = 86400;              /* 1 day */
-    zone->sig_invalid_first = MAX_U32;
+    zone->sig_quota = 100;
 #endif
 
     zone->alarm_handle = alarm_open(zone->origin);
@@ -425,11 +432,13 @@ zdb_zone_create(const u8* origin, u16 zclass)
 
     zone->query_access_filter = zdb_default_query_access_filter;
     zone->extension = NULL;
-
     mutex_init(&zone->mutex);
     zone->mutex_owner = ZDB_ZONE_MUTEX_NOBODY;
     zone->mutex_count = 0;
-
+    zone->mutex_reserved_owner = ZDB_ZONE_MUTEX_NOBODY;
+    zone->journal = NULL;
+    zone->sig_last_processed_node = NULL;
+    
     return zone;
 }
 
@@ -442,29 +451,30 @@ zdb_zone_create(const u8* origin, u16 zclass)
  */
 
 void
-zdb_zone_truncate_invalidate(zdb_zone* zone)
+zdb_zone_truncate_invalidate(zdb_zone *zone)
 {
     if(zone != NULL)
     {
+        // remove all alarms linked to the zone
         alarm_close(zone->alarm_handle);
+        
         zone->alarm_handle = ALARM_HANDLE_INVALID;
-
+        
+        // empty the zone records
         if(zone->apex != NULL)
         {
-
-#if ZDB_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT != 0
             if(zdb_zone_is_nsec(zone))
             {
                 nsec_destroy_zone(zone);
             }
 #endif
 
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
             if(zdb_zone_is_nsec3(zone))
             {
                 nsec3_destroy_zone(zone);
             }
-
 #endif
             
             // zdb_rr_label_destroy(zone, &zone->apex);
@@ -480,7 +490,6 @@ zdb_zone_truncate_invalidate(zdb_zone* zone)
     }
 }
 
-
 /**
  * @brief Destroys a zone and all its content
  *
@@ -490,39 +499,55 @@ zdb_zone_truncate_invalidate(zdb_zone* zone)
  */
 
 void
-zdb_zone_destroy(zdb_zone* zone)
-{    
+zdb_zone_destroy(zdb_zone *zone)
+{     
     if(zone != NULL)
     {
+        log_debug5("zdb_zone_destroy zone@%p", zone);
+        
         /* zdb_rr_label_set apex;                          SOA, NS, ... */
         /* ya_result	zdb_rr_label_delete(
          *		    zdb_rr_label** apex,
          *		    dnslabel_vector_reference path,s32 path_index);
          */
 
+        u32 lock_count = 0;
         while(!zdb_zone_trylock(zone, ZDB_ZONE_MUTEX_DESTROY))
         {
-            log_warn("zone: waiting to destroy zone locked by #%i (wait)", zone->mutex_owner);
-            sleep(1);
+            if((lock_count++ & 0x3ff) != 0)
+            {
+                log_debug6("zone: waiting to destroy zone locked by #%i (wait)", zone->mutex_owner);
+            }
+            usleep(1000);
         }
-
         
-        alarm_close(zone->alarm_handle);
-        zone->alarm_handle = ALARM_HANDLE_INVALID;
+        if(zone->alarm_handle != ALARM_HANDLE_INVALID)
+        {
+            alarm_close(zone->alarm_handle);
+            zone->alarm_handle = ALARM_HANDLE_INVALID;
+        }
         
+        if(zone->journal != NULL)
+        {
+            journal_close(zone->journal);
+        }
+                
+#ifndef DEBUG
+        // do not bother clearing the memory if it's for a shutdown (faster)
         if(!dnscore_shuttingdown())
+#endif
         {
             if(zone->apex != NULL)
             {
 
-#if ZDB_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT != 0
                 if(zdb_zone_is_nsec(zone))
                 {
                     nsec_destroy_zone(zone);
                 }
 #endif
 
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
                 if(zdb_zone_is_nsec3(zone))
                 {
                     nsec3_destroy_zone(zone);
@@ -533,16 +558,21 @@ zdb_zone_destroy(zdb_zone* zone)
                 zone->apex = NULL;
             }
         }
-
+        
+        u32 zone_footprint = zdb_zone_get_struct_size(zone->origin);
+        
         ZFREE_STRING(zone->origin);
 
-#ifndef NDEBUG
+#ifdef DEBUG
         zone->origin = NULL;
+        zone->min_ttl= 0xbadbad01;
+        zone->extension = NULL;
+        zone->axfr_serial = 0xbadbad00;
 #endif
 
         mutex_destroy(&zone->mutex);
-
-        ZFREE(zone, zdb_zone);
+                
+        ZFREE_ARRAY(zone, zone_footprint);
     }
 }
 
@@ -558,24 +588,55 @@ zdb_zone_destroy(zdb_zone* zone)
  */
 
 ya_result
-zdb_zone_getsoa(zdb_zone* zone, soa_rdata* soa_out)
+zdb_zone_getsoa(const zdb_zone *zone, soa_rdata* soa_out)
 {
-    zdb_rr_label* apex = zone->apex;
-    zdb_packed_ttlrdata* soa = zdb_record_find(&apex->resource_record_set, TYPE_SOA);
-
-    if(soa == NULL)
+#ifdef DEBUG
+    if(zone->mutex_owner == ZDB_ZONE_MUTEX_NOBODY)
     {
-        return ZDB_ERROR_NOSOAATAPEX;
+        log_err("zdb_zone_getsoa called on an unlocked zone: %{dnsname}", zone->origin);
+        debug_log_stacktrace(MODULE_MSG_HANDLE, LOG_ERR, "zdb_zone_getsoa");
+        logger_flush();
     }
+    else
+    {
+        log_debug("zdb_zone_getsoa called on a zone locked by %02hhx (%{dnsname})", zone->mutex_owner, zone->origin);
+    }
+#endif
+    
+    const zdb_rr_label *apex = zone->apex;
+    const zdb_packed_ttlrdata *soa = zdb_record_find(&apex->resource_record_set, TYPE_SOA);
+    ya_result return_code;
 
-    return zdb_record_getsoa(soa, soa_out);
+    if(soa != NULL)
+    {
+        return_code = zdb_record_getsoa(soa, soa_out);
+    }
+    else
+    {
+        return_code = ZDB_ERROR_NOSOAATAPEX;
+    }
+    
+    return return_code;
 }
 
 ya_result
-zdb_zone_getsoa_ttl_rdata(zdb_zone* zone, u32 *ttl, u16 *rdata_size, u8 **rdata)
+zdb_zone_getsoa_ttl_rdata(const zdb_zone *zone, u32 *ttl, u16 *rdata_size, const u8 **rdata)
 {
-    zdb_rr_label* apex = zone->apex;
-    zdb_packed_ttlrdata* soa = zdb_record_find(&apex->resource_record_set, TYPE_SOA);
+#ifdef DEBUG
+    if(zone->mutex_owner == ZDB_ZONE_MUTEX_NOBODY)
+    {
+        log_err("zdb_zone_getsoa_ttl_rdata called on an unlocked zone: %{dnsname}", zone->origin);
+        debug_log_stacktrace(MODULE_MSG_HANDLE, LOG_ERR, "zdb_zone_getsoa_ttl_rdata");
+        logger_flush();
+    }
+    else
+    {
+        log_debug("zdb_zone_getsoa_ttl_rdata called on a zone locked by %02hhx (%{dnsname})", zone->mutex_owner, zone->origin);
+    }
+#endif
+    
+    const zdb_rr_label *apex = zone->apex;
+    const zdb_packed_ttlrdata *soa = zdb_record_find(&apex->resource_record_set, TYPE_SOA);
 
     if(soa == NULL)
     {
@@ -608,10 +669,23 @@ zdb_zone_getsoa_ttl_rdata(zdb_zone* zone, u32 *ttl, u16 *rdata_size, u8 **rdata)
 ya_result
 zdb_zone_getserial(const zdb_zone *zone, u32 *serial)
 {
-    zassert(serial != NULL);
+#ifdef DEBUG
+    if(zone->mutex_owner == ZDB_ZONE_MUTEX_NOBODY)
+    {
+        log_err("zdb_zone_getserial called on an unlocked zone (%{dnsname})", zone->origin);
+        debug_log_stacktrace(MODULE_MSG_HANDLE, LOG_ERR, "zdb_zone_getserial");
+        logger_flush();
+    }
+    else
+    {
+        log_debug("zdb_zone_getserial called on a zone locked by %02hhx (%{dnsname})", zone->mutex_owner, zone->origin);
+    }
+#endif
+    
+    yassert(serial != NULL);
 
-    zdb_rr_label* apex = zone->apex;
-    zdb_packed_ttlrdata* soa = zdb_record_find(&apex->resource_record_set, TYPE_SOA);
+    zdb_rr_label *apex = zone->apex;
+    zdb_packed_ttlrdata *soa = zdb_record_find(&apex->resource_record_set, TYPE_SOA);
 
     if(soa != NULL)
     {
@@ -635,35 +709,164 @@ void
 zdb_zone_lock(zdb_zone *zone, u8 owner)
 {
 #if ZONE_MUTEX_LOG
-    log_debug7("acquiring lock for zone %{dnsname} for %x", zone->origin, owner);
+    log_debug7("acquiring lock for zone %{dnsname}@%p for %x", zone->origin, zone, owner);
 #endif
 
     for(;;)
     {
         mutex_lock(&zone->mutex);
 
-		/*
-			An simple way to ensure that a lock can be shared
-			by similar entities or not.
-			Sharable entities have their msb off.
-		*/
+        /*
+         * An simple way to ensure that a lock can be shared
+         * by similar entities or not.
+         * Sharable entities have their msb off.
+         */
 
         u8 co = zone->mutex_owner & 0x7f;
         
         if(co == ZDB_ZONE_MUTEX_NOBODY || co == owner)
         {
-            zassert(zone->mutex_count != 255);
+            yassert(zone->mutex_count != 255);
 
-#if ZONE_MUTEX_LOG
-            log_debug7("acquired lock for zone %{dnsname} for %x", zone->origin, owner);
-#endif
-            
             zone->mutex_owner = owner & 0x7f;
             zone->mutex_count++;
             
+#if ZONE_MUTEX_LOG
+            log_debug7("acquired lock for zone %{dnsname}@%p for %x (#%i)", zone->origin, zone, owner, zone->mutex_count);
+#endif
+                        
             mutex_unlock(&zone->mutex);
             
             break;
+        }
+
+        mutex_unlock(&zone->mutex);
+
+        /**
+         * Don't set this too low.
+         * A lock basically slows down a task to 100000Hz
+         * Waiting close to 0.00001 seconds is counterproductive.
+         * Given that we are using locks for slow tasks, waiting 1ms seems reasonable.
+         * 
+         * @todo: use broadcasts
+         */
+
+        usleep(10);
+    }
+}
+
+bool
+zdb_zone_trylock(zdb_zone *zone, u8 owner)
+{
+#if ZONE_MUTEX_LOG
+    log_debug7("trying to acquire lock for zone %{dnsname}@%p for %x", zone->origin, zone, owner);
+#endif
+
+    mutex_lock(&zone->mutex);
+
+    u8 co = zone->mutex_owner & 0x7f;
+    
+    if(co == ZDB_ZONE_MUTEX_NOBODY || co == owner)
+    {
+        yassert(zone->mutex_count != 255);
+
+        zone->mutex_owner = owner & 0x7f;
+        zone->mutex_count++;
+
+#if ZONE_MUTEX_LOG
+        log_debug7("acquired lock for zone %{dnsname}@%p for %x (#%i)", zone->origin, zone, owner, zone->mutex_count);
+#endif
+
+        mutex_unlock(&zone->mutex);
+
+        return TRUE;
+    }
+
+    mutex_unlock(&zone->mutex);
+
+#if ZONE_MUTEX_LOG
+    log_debug7("failed to acquire lock for zone %{dnsname}@%p for %x", zone->origin, zone, owner);
+#endif
+
+    return FALSE;
+}
+
+void
+zdb_zone_unlock(zdb_zone *zone, u8 owner)
+{
+#if ZONE_MUTEX_LOG
+    log_debug7("releasing lock for zone %{dnsname}@%p by %x (owned by %x)", zone->origin, zone, owner, zone->mutex_owner);
+#endif
+
+    mutex_lock(&zone->mutex);
+
+#ifdef DEBUG
+    if((zone->mutex_owner != (owner & 0x7f)) || (zone->mutex_count == 0))
+    {
+        logger_flush();
+        mutex_unlock(&zone->mutex);
+        yassert(zone->mutex_owner == (owner & 0x7f));
+        yassert(zone->mutex_count != 0);
+    }
+#endif
+
+    zone->mutex_count--;
+
+#if ZONE_MUTEX_LOG
+    log_debug7("released lock for zone %{dnsname}@%p by %x (#%i)", zone->origin, zone, owner, zone->mutex_count);
+#endif
+    
+    if(zone->mutex_count == 0)
+    {
+        zone->mutex_owner = ZDB_ZONE_MUTEX_NOBODY;
+    }
+    
+    mutex_unlock(&zone->mutex);
+}
+
+void
+zdb_zone_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
+{
+#if ZONE_MUTEX_LOG
+    log_debug7("acquiring lock for zone %{dnsname}@%p for %x", zone->origin, zone, owner);
+#endif
+
+    for(;;)
+    {
+        mutex_lock(&zone->mutex);
+
+        /*
+         * An simple way to ensure that a lock can be shared
+         * by similar entities or not.
+         * Sharable entities have their msb off.
+         */
+        
+        u8 so = zone->mutex_reserved_owner & 0x7f;
+        
+        if(so == ZDB_ZONE_MUTEX_NOBODY || so == secondary_owner)
+        {
+            u8 co = zone->mutex_owner & 0x7f;
+
+            if(co == ZDB_ZONE_MUTEX_NOBODY || co == owner)
+            {
+                yassert(zone->mutex_count != 255);
+
+                zone->mutex_owner = owner & 0x7f;
+                zone->mutex_count++;
+                zone->mutex_reserved_owner = secondary_owner & 0x7f;
+            
+#if ZONE_MUTEX_LOG
+                log_debug7("acquired lock for zone %{dnsname}@%p for %x (#%i)", zone->origin, zone, owner, zone->mutex_count);
+#endif
+                
+                mutex_unlock(&zone->mutex);
+
+                break;
+            }
+        }
+        else
+        {
+            // the secondary owner is already taken
         }
 
         mutex_unlock(&zone->mutex);
@@ -677,60 +880,89 @@ zdb_zone_lock(zdb_zone *zone, u8 owner)
          * todo: use broadcasts
          */
 
-        usleep(1000);
+        usleep(10);
     }
 }
 
 bool
-zdb_zone_trylock(zdb_zone *zone, u8 owner)
+zdb_zone_try_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 {
 #if ZONE_MUTEX_LOG
-    log_debug7("trying to acquire lock for zone %{dnsname} for %x", zone->origin, owner);
+    log_debug7("trying to acquire lock for zone %{dnsname}@%p for %x", zone->origin, zone, owner);
 #endif
 
     mutex_lock(&zone->mutex);
 
-    u8 co = zone->mutex_owner & 0x7f;
-    
-    if(co == ZDB_ZONE_MUTEX_NOBODY || co == owner)
+    u8 so = zone->mutex_reserved_owner & 0x7f;
+        
+    if(so == ZDB_ZONE_MUTEX_NOBODY || so == secondary_owner)
     {
-        zassert(zone->mutex_count != 255);
+        u8 co = zone->mutex_owner & 0x7f;
+    
+        if(co == ZDB_ZONE_MUTEX_NOBODY || co == owner)
+        {
+            yassert(zone->mutex_count != 255);
 
-        zone->mutex_owner = owner & 0x7f;
-        zone->mutex_count++;
+            zone->mutex_owner = owner & 0x7f;
+            zone->mutex_count++;
+            zone->mutex_reserved_owner = secondary_owner & 0x7f;
 
 #if ZONE_MUTEX_LOG
-        log_debug7("acquired lock for zone %{dnsname} for %x", zone->origin, owner);
+            log_debug7("acquired lock for zone %{dnsname}@%p for %x (#%i)", zone->origin, zone, owner, zone->mutex_count);
 #endif
 
-        mutex_unlock(&zone->mutex);
+            mutex_unlock(&zone->mutex);
 
-        return TRUE;
+            return TRUE;
+        }
+
+        mutex_unlock(&zone->mutex);
+    }
+    else
+    {
+        // already double-owned
     }
 
-    mutex_unlock(&zone->mutex);
-
 #if ZONE_MUTEX_LOG
-    log_debug7("failed to acquire lock for zone %{dnsname} for %x", zone->origin, owner);
+    log_debug7("failed to acquire lock for zone %{dnsname}@%p for %x", zone->origin, zone, owner);
 #endif
 
     return FALSE;
 }
 
 void
-zdb_zone_unlock(zdb_zone *zone, u8 owner)
+zdb_zone_double_unlock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 {
 #if ZONE_MUTEX_LOG
-    log_debug7("releasing lock for zone %{dnsname} by %x", zone->origin, owner);
+    log_debug7("releasing lock for zone %{dnsname}@%p by %x (owned by %x)", zone->origin, zone, owner, zone->mutex_owner);
 #endif
 
     mutex_lock(&zone->mutex);
 
-    zassert(zone->mutex_owner == (owner & 0x7f));
-    zassert(zone->mutex_count != 0);
-
+#ifdef DEBUG
+    if((zone->mutex_owner != (owner & 0x7f)) || (zone->mutex_count == 0))
+    {
+        logger_flush();
+        mutex_unlock(&zone->mutex);
+        yassert(zone->mutex_owner == (owner & 0x7f));
+        yassert(zone->mutex_count != 0);
+    }
+    
+    if(zone->mutex_reserved_owner != (secondary_owner & 0x7f))
+    {
+        logger_flush();
+        mutex_unlock(&zone->mutex);
+        yassert(zone->mutex_reserved_owner != (secondary_owner & 0x7f));
+    }
+#endif
+    
     zone->mutex_count--;
+    zone->mutex_reserved_owner = ZDB_ZONE_MUTEX_NOBODY;
 
+#if ZONE_MUTEX_LOG
+    log_debug7("released lock for zone %{dnsname}@%p by %x (#%i)", zone->origin, zone, owner, zone->mutex_count);
+#endif
+    
     if(zone->mutex_count == 0)
     {
         zone->mutex_owner = ZDB_ZONE_MUTEX_NOBODY;
@@ -739,84 +971,169 @@ zdb_zone_unlock(zdb_zone *zone, u8 owner)
     mutex_unlock(&zone->mutex);
 }
 
-bool
-zdb_zone_transferlock(zdb_zone *zone, u8 owner, u8 newowner)
+void
+zdb_zone_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 {
 #if ZONE_MUTEX_LOG
-    log_debug7("trying to transfer lock for zone %{dnsname} from %x to %x", zone->origin, owner, newowner);
+    log_debug7("transferring lock for zone %{dnsname}@%p from %x to %x (owned by %x:%x)", zone->origin, zone, owner, secondary_owner, zone->mutex_owner, zone->mutex_reserved_owner);
 #endif
-    
-    bool r;
 
     mutex_lock(&zone->mutex);
 
-    u8 co = zone->mutex_owner & 0x7f;
-    
-    if((r = (co == owner)))
+#ifdef DEBUG
+    if((zone->mutex_owner != (owner & 0x7f)) || (zone->mutex_count == 0))
     {
-        zone->mutex_owner = newowner;
+        logger_flush();
+        mutex_unlock(&zone->mutex);
+        yassert(zone->mutex_owner == (owner & 0x7f));
+        yassert(zone->mutex_count != 0);
     }
-
-    mutex_unlock(&zone->mutex);
-
-#if ZONE_MUTEX_LOG
-    if(!r)
+    
+    if(zone->mutex_reserved_owner != (secondary_owner & 0x7f))
     {
-        log_debug7("failed to transfer lock for zone %{dnsname} from %x to %x", zone->origin, owner, newowner);
+        logger_flush();
+        mutex_unlock(&zone->mutex);
+        yassert(zone->mutex_reserved_owner != (secondary_owner & 0x7f));
     }
 #endif
+    
+    // wait to be the last one
+    
+    while(zone->mutex_count != 1)
+    {
+        mutex_unlock(&zone->mutex);
+        usleep(10); /// @todo use group wait
+        mutex_lock(&zone->mutex);
+    }
+    
+    zone->mutex_owner = secondary_owner & 0x7f;
+    zone->mutex_reserved_owner = ZDB_ZONE_MUTEX_NOBODY;
+    
 
-    return r;
+#if ZONE_MUTEX_LOG
+    log_debug7("transferred lock for zone %{dnsname}@%p from %x to %x (#%i)", zone->origin, zone, owner, secondary_owner, zone->mutex_count);
+#endif
+
+    mutex_unlock(&zone->mutex);
+}
+
+void
+zdb_zone_exchange_locks(zdb_zone *zone, u8 owner, u8 secondary_owner)
+{
+#if ZONE_MUTEX_LOG
+    log_debug7("exchanging locks for zone %{dnsname}@%p from %x to %x (owned by %x:%x)", zone->origin, zone, owner, secondary_owner, zone->mutex_owner, zone->mutex_reserved_owner);
+#endif
+
+    mutex_lock(&zone->mutex);
+
+#ifdef DEBUG
+    if((zone->mutex_owner != (owner & 0x7f)) || (zone->mutex_count == 0))
+    {
+        logger_flush();
+        mutex_unlock(&zone->mutex);
+        yassert(zone->mutex_owner == (owner & 0x7f));
+        yassert(zone->mutex_count != 0);
+    }
+    
+    if(zone->mutex_reserved_owner != (secondary_owner & 0x7f))
+    {
+        logger_flush();
+        mutex_unlock(&zone->mutex);
+        yassert(zone->mutex_reserved_owner != (secondary_owner & 0x7f));
+    }
+#endif
+    
+    // wait to be the last one
+    
+    while(zone->mutex_count != 1)
+    {
+        mutex_unlock(&zone->mutex);
+        usleep(10); /// @todo use group wait
+        mutex_lock(&zone->mutex);
+    }
+    
+    zone->mutex_owner = secondary_owner & 0x7f;
+    zone->mutex_reserved_owner = owner & 0x7f;
+    
+
+#if ZONE_MUTEX_LOG
+    log_debug7("exchanged locks for zone %{dnsname}@%p from %x to %x (#%i)", zone->origin, zone, owner, secondary_owner, zone->mutex_count);
+#endif
+
+    mutex_unlock(&zone->mutex);
 }
 
 zdb_zone*
-zdb_zone_xchg_with_invalid(zdb *db, const u8 *origin, u16 zclass, u16 or_flags)
+zdb_zone_xchg_with_invalid(zdb *db, const u8 *origin, u16 zclass, u16 or_flags) // lock checked
 {
     dnsname_vector name;    
-    dnsname_to_dnsname_vector(origin, &name);                
-    
+    dnsname_to_dnsname_vector(origin, &name);
+        
     zdb_zone_label *zone_label = zdb_zone_label_add(db, &name, zclass);
     
     zdb_zone *old = zone_label->zone;
     
     /*
-     * If the zone exists and is invalid, skip
+     * If the zone exists and is invalid already : skip
      */
     
-    if(!((old != NULL) && (old->apex->flags & ZDB_RR_LABEL_INVALID_ZONE)))
+    if(old != NULL)
     {
-        zdb_zone *zone = zdb_zone_create(origin, zclass);
+        zdb_zone_lock(old, ZDB_ZONE_MUTEX_INVALIDATE);
         
-        if(zone != NULL)
+        alarm_close(old->alarm_handle);
+        old->alarm_handle = ALARM_HANDLE_INVALID;
+        
+        if((old->apex->flags & ZDB_RR_LABEL_INVALID_ZONE) == 0)
         {
-            zone->apex->flags |= ZDB_RR_LABEL_INVALID_ZONE;
-        
-            zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+            // create a dummy invalid zone
+            zdb_zone *zone = zdb_zone_create(origin, zclass);
+
+            if(zone != NULL)
+            {
+                // mark the dummy zone as invalid
+                zone->apex->flags |= ZDB_RR_LABEL_INVALID_ZONE;
+
+                // locks so that only readers can access it
+                zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // see scheduler_database_replace_zone_init
+                
+                // so here is a rule : an invalid zone is always locked, and is only unlocked to be destroyed
+            }
+
+            log_debug("zdb_zone_xchg_with_invalid: replacing %p with %p", zone_label->zone, zone);
+
+            zone_label->zone = zone;
         }
         
-        zone_label->zone = zone;
-        
-        
+        zdb_zone_unlock(old, ZDB_ZONE_MUTEX_INVALIDATE);
+    }
+    else
+    {
+        if(old == NULL)
+        {
+            log_err("zdb_zone_xchg_with_invalid: no zone %{dnsname} found", origin);
+        }
+        else
+        {
+            log_err("zdb_zone_xchg_with_invalid: zone %{dnsname}@%p is invalid already", old->origin, old);
+            old = NULL;
+        }
     }
     
     return old;
 }
 
 bool
-zdb_zone_isinvalid(zdb *db, const u8 *origin, u16 zclass)
+zdb_zone_isinvalid(zdb_zone *zone)
 {
-    zdb_zone_label* label = zdb_zone_label_find_from_dnsname(db, origin, zclass);
+    bool invalid = TRUE;
     
-    if(label != NULL)
+    if((zone != NULL) && (zone->apex != NULL))
     {
-        if(label->zone != NULL)
-        {
-            
-            return (label->zone->apex->flags & ZDB_RR_LABEL_INVALID_ZONE) != 0;
-        }
+        invalid = (zone->apex->flags & ZDB_RR_LABEL_INVALID_ZONE) != 0;
     }
     
-    return FALSE;
+    return invalid;
 }
 
 #ifndef NDEBUG
@@ -826,24 +1143,25 @@ zdb_zone_isinvalid(zdb *db, const u8 *origin, u16 zclass)
  */
 
 void
-zdb_zone_print_indented(zdb_zone* zone, int indent)
+zdb_zone_print_indented(zdb_zone *zone, output_stream *os, int indent)
 {
     if(zone == NULL)
     {
-        formatln("%tz: NULL", indent);
+        osformatln(os, "%tz: NULL", indent);
+        return;
     }
     
     u16 zclass = zdb_zone_getclass(zone);
 
-    formatln("%tzone@%p(CLASS=%{dnsclass},ORIGIN='%{dnsname}'", indent, (void*)zone, &zclass, zone->origin);
-    zdb_rr_label_print_indented(zone->apex, indent + 1);
-    formatln("%t+:", indent);
+    osformatln(os, "%tzone@%p(CLASS=%{dnsclass},ORIGIN='%{dnsname}'", indent, (void*)zone, &zclass, zone->origin);
+    zdb_rr_label_print_indented(zone->apex, os, indent + 1);
+    osformatln(os, "%t+:", indent);
 }
 
 void
-zdb_zone_print(zdb_zone* zone)
+zdb_zone_print(zdb_zone *zone, output_stream *os)
 {
-    zdb_zone_print_indented(zone, 0);
+    zdb_zone_print_indented(zone, os, 0);
 }
 
 #endif

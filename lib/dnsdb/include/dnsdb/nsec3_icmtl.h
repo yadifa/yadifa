@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -43,9 +43,9 @@
 #ifndef _NSEC3_ICMTL_H
 #define	_NSEC3_ICMTL_H
 
-#include <dnscore/treeset.h>
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/nsec3_types.h>
+#include <dnscore/treeset.h>
 
 #ifdef	__cplusplus
 extern "C"

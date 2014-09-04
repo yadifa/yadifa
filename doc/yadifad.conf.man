@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man on Fri Aug 22 13:33:53 CEST 2014
+.\" Manual page created with latex2man on Wed Jul  9 14:15:09 CEST 2014
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFAD\-CONF" "5" "2014\-08\-22" "YADIFA " "YADIFA "
+.TH "YADIFAD\-CONF" "5" "2014\-07\-02" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -28,23 +28,23 @@ ${PREFIX}/etc/yadifad.conf
 The configuration of yadifad
 has several containers: 
 .TP
-.B *
-<main> General container 
+\fB<main>\fP
+ General container 
 .TP
-.B *
-<zone> Description of the domain name in specific attributes 
+<zone> 
+Description of the domain name in specific attributes 
 .TP
-.B *
-<channels> Description of the logger outputs 
+<channels> 
+Description of the logger outputs 
 .TP
-.B *
-<loggers> Description of the loggers 
+<loggers> 
+Description of the loggers 
 .TP
-.B *
-<key> TSIG keys 
+<key> 
+TSIG keys 
 .TP
-.B *
-<acl> Access lists. 
+<acl> 
+Access lists. 
 .PP
 The configuration supports included files.
 .br
@@ -95,7 +95,7 @@ Config with includes
 .PP
 .Vb
 # start yadifad.conf <main> container
-        include /usr/local/etc/yadifad\-main.conf
+        include /usr/local\-dev/etc/yadifad\-main.conf
 # end yadifad.conf <main> container
 .Ve
 .PP
@@ -114,8 +114,8 @@ Main without includes
         # The path of the log files
         logpath                 "/usr/local/var/log"
 
-        # The path of the pid file
-        pidpath                 "/usr/local/var/run"    
+        # The location of the pid file
+        pidfile                 "/usr/local/var/run/yadifad.pid"
 
         # The path of the zone files
         datapath                "/usr/local/var/zones"
@@ -448,12 +448,37 @@ from the sources
 .SH VERSION
 
 .PP
-Version: 1.0.4 of 2014-08-22\&.
+Version: 2.0.0 of 2014-07-02\&.
+.PP
+.SH MAILING LISTS
+
+.PP
+There exists a mailinglist for questions relating to any program in the yadifa package:
+.br
+.RE
+.TP
+.B *
+\fByadifa\-users@mailinglists.yadifa.eu\fP
+.br
+for submitting questions/answers. 
+.PP
+.TP
+.B *
+\fBhttp://www.yadifa.eu/mailing\-list\-users\fP
+.br
+for subscription requests. 
+.PP
+If you would like to stay informed about new versions and official patches send a subscription request to 
+via: 
+.TP
+.B *
+\fBhttp://www.yadifa.eu/mailing\-list\-announcements\fP
+.PP
+(this is a readonly list). 
 .PP
 .SH LICENSE AND COPYRIGHT
 
 .PP
-.RE
 .TP
 Copyright 
 (C)2012, EURid

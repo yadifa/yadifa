@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief
@@ -45,6 +45,8 @@
 //#include <stdatomic.h>
 
 #include "dnscore/threaded_nbrb.h"
+
+#define HAS_ATOMIC_FEATURES 0
 
 #if HAS_ATOMIC_FEATURES != 0
 
@@ -175,8 +177,7 @@ threaded_nbrb_enqueue(threaded_nbrb* queue, void* constant_pointer)
 
     s32 wo = __sync_fetch_and_add(&queue->write_offset, one);
 
-#if 0
-    __sync_lock_test_and_set(&queue->buffer[wo & queue->size_mask], constant_pointer);
+#if 0 /* fix */
 #elif 1
     //__sync_synchronize();
     queue->buffer[wo & queue->size_mask] = constant_pointer;
@@ -296,8 +297,7 @@ threaded_nbrb_dequeue(threaded_nbrb *queue)
 
     s32 ro = __sync_fetch_and_add(&queue->read_offset, one);
 
-#if 0
-    void* p = __sync_lock_test_and_set(&queue->buffer[ro & queue->size_mask], NULL);
+#if 0 /* fix */
 #elif 1
     void * volatile *pp = (void* volatile *)&queue->buffer[ro & queue->size_mask];
     void* p;

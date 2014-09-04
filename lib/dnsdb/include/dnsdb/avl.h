@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief AVL structure and functions
@@ -42,8 +42,8 @@
 #ifndef _AVL_H
 #define	_AVL_H
 
-#include "zdb_config.h"
-#include "hash.h"
+#include <dnsdb/zdb_config.h>
+#include <dnsdb/hash.h>
 
 #ifndef ZDB_INLINES_AVL_FIND
 #error "ZDB_INLINES_AVL_FIND not defined"
@@ -158,6 +158,7 @@ typedef struct
     avl_node *stack[AVL_MAX_DEPTH]; /* An AVL depth of 64 is HUGE */
 } avl_iterator;
 
+#undef AVL_MAX_DEPTH
 
 /** @brief Initializes the tree
  *
@@ -299,7 +300,17 @@ void* avl_delete(avl_tree* tree, hashcode obj_hash);
 void avl_destroy(avl_tree* tree);
 
 void avl_iterator_init(avl_tree tree, avl_iterator* iter);
+void avl_iterator_init_from(avl_tree tree, avl_iterator* iter, hashcode obj_hash);
+
+#if ZDB_INLINES_AVL_FIND == 0
 bool avl_iterator_hasnext(avl_iterator* iter);
+#else
+static inline bool
+avl_iterator_hasnext(avl_iterator* iter)
+{
+    return iter->stack_pointer >= 0;
+}
+#endif
 void** avl_iterator_next(avl_iterator* iter);
 avl_node* avl_iterator_next_node(avl_iterator* iter);
 

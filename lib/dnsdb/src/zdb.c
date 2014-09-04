@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdb Zone database
  *  @brief The zone dataBase
  *
@@ -42,18 +42,24 @@
 
 #include <dnscore/logger.h>
 #include <dnscore/format.h>
-#include <dnscore/rdtsc.h>
 
 #include <dnscore/sys_error.h>
+
+#include <dnscore/dnscore.h>
+#include <dnscore/sys_get_cpu_count.h>
+
+#include <dnscore/thread_pool.h>
+
 
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
-static void
-zdb_rdtsc_registations(){
-    /* rdtsc_register(&rdtsc_zdb_rr_label_find); */ }
-
 #include "dnsdb/zdb.h"
+
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#include "dnsdb/dnssec_keystore.h"
+#endif
+
 #include "dnsdb/zdb_zone.h"
 #include "dnsdb/zdb_zone_label.h"
 #include "dnsdb/zdb_rr_label.h"
@@ -61,24 +67,9 @@ zdb_rdtsc_registations(){
 #include "dnsdb/zdb_utils.h"
 #include "dnsdb/zdb_dnsname.h"
 #include "dnsdb/dictionary.h"
-
-#if ZDB_DNSSEC_SUPPORT != 0
-#include "dnsdb/dnssec_keystore.h"
-#endif
-
-#include <dnscore/dnscore.h>
-
-#include <dnscore/sys_get_cpu_count.h>
-
-#if ZDB_USE_THREADPOOL != 0
-#include <dnscore/thread_pool.h>
-
-static bool thread_pool_initialized_by_zdb = FALSE;
-
-#endif
+#include "dnsdb/journal.h"
 
 #if ZDB_OPENSSL_SUPPORT!=0
-
 #include <openssl/ssl.h>
 #include <openssl/engine.h>
 
@@ -133,16 +124,16 @@ static volatile bool zdb_init_done = FALSE;
 dnslib_fingerprint dnsdb_getfingerprint()
 {
     dnslib_fingerprint ret = (dnslib_fingerprint)(0
-#if HAS_TSIG_SUPPORT != 0
+#if ZDB_HAS_TSIG_SUPPORT
     | DNSLIB_TSIG
 #endif
-#if HAS_ACL_SUPPORT != 0
+#if ZDB_HAS_ACL_SUPPORT != 0
     | DNSLIB_ACL
 #endif
-#if HAS_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT != 0
     | DNSLIB_NSEC
 #endif
-#if HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
     | DNSLIB_NSEC3
 #endif
     );
@@ -155,9 +146,13 @@ u32 dnsdb_fingerprint_mask()
     return DNSLIB_TSIG|DNSLIB_ACL|DNSLIB_NSEC|DNSLIB_NSEC3;
 }
 
+int zdb_alloc_init();
+
 void
-zdb_init()
+zdb_init_ex(u32 thread_pool_count)
 {
+    (void)thread_pool_count;
+    
     if(zdb_init_done)
     {
         return;
@@ -167,7 +162,7 @@ zdb_init()
 
     if(dnscore_getfingerprint() != (dnsdb_getfingerprint() & dnscore_fingerprint_mask()))
     {
-        osformatln(termerr, "Mismatched fingerprints: %08x != (%08x = %08x & %08x)",
+        osformatln(termerr, "mismatched fingerprints: %08x != (%08x = %08x & %08x)",
                 dnscore_getfingerprint(),
                 dnsdb_getfingerprint() & dnscore_fingerprint_mask(),
                 dnsdb_getfingerprint() , dnscore_fingerprint_mask());
@@ -178,10 +173,12 @@ zdb_init()
     }
 
     zdb_init_done = TRUE;
-
+    
     /* Init the dns core */
 
     dnscore_init();
+    
+    zdb_alloc_init();
 
     /* Init the error table */
 
@@ -197,6 +194,7 @@ zdb_init()
 
     ENGINE_load_openssl();
     ENGINE_load_builtin_engines();
+    SSL_load_error_strings();
 
     ssl_mutex_count = CRYPTO_num_locks();
 
@@ -213,35 +211,21 @@ zdb_init()
     CRYPTO_set_locking_callback(ssl_lock);
 #endif
 
-#if ZDB_USE_THREADPOOL != 0
-    /*
-     *  The default value for the database.
-     *  This initialization will do nothing if it has already been done.
-     *
-     *  The server will have to do it before calling zdb_init();
-     *
-     */
-    
-    u32 count = sys_get_cpu_count() + 2;
-    
-    ya_result return_value = thread_pool_init(count);
-    
-    if(FAIL(return_value))
-    {
-        log_crit("unable to initialise the thread pool to %d threads: %r", count, return_value); /* will ultimately lead to the end of the program */
-        exit(-1);
-    }
-    
-    thread_pool_initialized_by_zdb = (return_value == count);
-#endif
-
 #if ZDB_USES_ZALLOC != 0
     zdb_set_zowner(pthread_self());
 #endif
 
+    journal_init(0);    // uses the default mru size (512)
+    
     logger_start();
+}
 
-    zdb_rdtsc_registations();
+void
+zdb_init()
+{
+    u32 thread_pool_count = sys_get_cpu_count() + 2;
+    
+    zdb_init_ex(thread_pool_count);
 }
 
 void
@@ -254,7 +238,7 @@ zdb_finalize()
 
     zdb_init_done = FALSE;
 
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
     dnssec_keystore_destroy();
     dnssec_keystore_resetpath();
 #endif
@@ -274,30 +258,14 @@ zdb_finalize()
     {
         pthread_mutex_destroy(&ssl_mutex[i]);
     }
+    
+    ssl_mutex_count = 0;
 
     free(ssl_mutex);
 
     ENGINE_cleanup();
 
 #endif
-
-    logger_stop();
-
-#if ZDB_USE_THREADPOOL != 0
-    /*
-     *  The default value for the database.
-     *  This initialization will do nothing if it has already been done.
-     *
-     *  The server will have to do it before calling zdb_init();
-     *
-     */
-
-    if(thread_pool_initialized_by_zdb)
-    {
-        thread_pool_destroy();
-    }
-#endif
-
 }
 
 /** @brief Initializes a database.
@@ -321,95 +289,20 @@ zdb_create(zdb* db)
         zone_label->name = dnslabel_dup(ROOT_LABEL); /* . */
         dictionary_init(&zone_label->sub);
 
-#if ZDB_CACHE_ENABLED!=0
-        btree_init(&zone_label->global_resource_record_set);
-#endif
-        db->root[i] = zone_label;
-    }
 
-    db->alarm_handle = alarm_open((const u8*)"\010database");
+        db->root[i] = zone_label; /* native order */
+    }
+        
+    db->alarm_handle = alarm_open((const u8*)"\010database"); /** @todo change this (uppercase?) */
+    
+    group_mutex_init(&db->mutex, "database");
 }
 
-#if ZDB_CACHE_ENABLED!=0
 
-/** @brief Adds a zone file to the global/cache part of the database
- *
- *  Adds a zone file to the global/cache part of the database
- *
- *  @param[in]  db a pointer to a zdb structure that will be initialized.
- *  @param[in]  filename the path to the zone file.
- *  @param[in]  dnszone the dns-name of the zone file.
- *
- *
- *  @return SUCCESS in case of success.
- */
 
-ya_result
-zdb_load_global(zdb* db, const char* filename)
-{
-#if ZDB_DEBUG_LOADZONE!=0
-    u64 rdata_allocated_size = 0;
-    u64 rdata_total_size = 0;
-    u32 rdata_inline_count = 0;
-#endif
+#if 1
 
-    ya_result err;
-    zone_data file;
-
-    if(FAIL(err = zone_file_open(filename, &file)))
-    {
-        return err;
-    }
-
-    resource_record entry;
-
-    u32 entry_count = 0;
-
-    for(;;)
-    {
-        zone_file_read(&file, &entry);
-
-        if(ZONEFILE_ENTRY_IS_EOF(entry))
-        {
-            rr_entry_freecontent(&entry);
-
-            break;
-        }
-
-        /* Add the entry */
-
-        dnsname_vector entry_name;
-        DEBUG_RESET_dnsname(entry_name);
-        dnsname_to_dnsname_vector(entry.name, &entry_name);
-
-#if ZDB_DEBUG_LOADZONE!=0
-        rdata_total_size += entry.data.length;
-        if(entry.data.length > TTLRDATA_INLINESIZE)
-        {
-            rdata_allocated_size += entry.data.length;
-        }
-        else
-        {
-            rdata_inline_count++;
-        }
-#endif
-
-        /* The record will be cloned in this call */
-        zdb_add_global(db, entry.name, entry.class, entry.type, entry.ttl, entry.data.length, entry.data.rdata_pointer); /* 4 match, add    1 */
-
-        entry_count++;
-
-        rr_entry_freecontent(&entry);
-    }
-
-    db->items += entry_count;
-
-    zone_file_close(&file);
-
-    return err;
-}
-
-#endif
+//#error obsolete
 
 /** @brief Search for a match in the database
  *
@@ -428,7 +321,7 @@ zdb_load_global(zdb* db, const char* filename)
 ya_result
 zdb_query(zdb* db, u8* name_, u16 zclass, u16 type, zdb_packed_ttlrdata** ttlrdata_out)
 {
-    zassert(ttlrdata_out != NULL);
+    yassert(ttlrdata_out != NULL);
 
     dnsname_vector name;
     DEBUG_RESET_dnsname(name);
@@ -467,27 +360,12 @@ zdb_query(zdb* db, u8* name_, u16 zclass, u16 type, zdb_packed_ttlrdata** ttlrda
         sp--;
     }
 
-#if ZDB_CACHE_ENABLED!=0
 
-    /* We exhausted the zone files direct matches.
-     * We have to fallback on the global (cache) matches.
-     * And it's easy because we have the answer already:
-     */
-
-    if(top == name.size)
-    {
-        /* We found a perfect match label in the global part of the database */
-
-        if((*ttlrdata_out = zdb_record_find(&zone_label_stack[top]->global_resource_record_set, type)) != NULL)
-        {
-            return SUCCESS;
-        }
-    }
-
-#endif
 
     return ZDB_ERROR_KEY_NOTFOUND;
 }
+
+#endif
 
 /** @brief Search for a match in the database
  *
@@ -504,12 +382,11 @@ zdb_query(zdb* db, u8* name_, u16 zclass, u16 type, zdb_packed_ttlrdata** ttlrda
  */
 
 ya_result
-zdb_query_ip_records(zdb* db, u8* name_, u16 zclass, zdb_packed_ttlrdata* * restrict ttlrdata_out_a, zdb_packed_ttlrdata* * restrict ttlrdata_out_aaaa)
+zdb_query_ip_records(zdb* db, const u8* name_, u16 zclass, zdb_packed_ttlrdata* * restrict ttlrdata_out_a, zdb_packed_ttlrdata* * restrict ttlrdata_out_aaaa) // mutex checked
 {
-    zassert(ttlrdata_out_a != NULL && ttlrdata_out_aaaa != NULL);
+    yassert(ttlrdata_out_a != NULL && ttlrdata_out_aaaa != NULL);
 
     dnsname_vector name;
-    DEBUG_RESET_dnsname(name);
 
     dnsname_to_dnsname_vector(name_, &name);
 
@@ -517,6 +394,10 @@ zdb_query_ip_records(zdb* db, u8* name_, u16 zclass, zdb_packed_ttlrdata* * rest
      * Should return a stack of zones
      */
 
+#ifdef HAS_DYNAMIC_PROVISIONING
+    group_mutex_lock(&db->mutex, ZDB_MUTEX_READER); // zdb_query_ip_records
+#endif
+    
     zdb_zone_label_pointer_array zone_label_stack;
 
     s32 top = zdb_zone_label_match(db, &name, zclass, zone_label_stack);
@@ -543,6 +424,11 @@ zdb_query_ip_records(zdb* db, u8* name_, u16 zclass, zdb_packed_ttlrdata* * rest
                 {
                     *ttlrdata_out_a = a;
                     *ttlrdata_out_aaaa = aaaa;
+                    
+#ifdef HAS_DYNAMIC_PROVISIONING
+                    group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER); // zdb_query_ip_records (success)
+#endif
+                    
                     return SUCCESS;
                 }
             }
@@ -551,70 +437,16 @@ zdb_query_ip_records(zdb* db, u8* name_, u16 zclass, zdb_packed_ttlrdata* * rest
         sp--;
     }
 
-#if ZDB_CACHE_ENABLED!=0
 
-    /* We exhausted the zone files direct matches.
-     * We have to fallback on the global (cache) matches.
-     * And it's easy because we have the answer already:
-     */
 
-    if(top == name.size)
-    {
-        /* We found a perfect match label in the global part of the database */
-
-        zdb_packed_ttlrdata* a = zdb_record_find(&zone_label_stack[top]->global_resource_record_set, TYPE_A);
-        zdb_packed_ttlrdata* aaaa = zdb_record_find(&zone_label_stack[top]->global_resource_record_set, TYPE_AAAA);
-
-        if(a != NULL || aaaa != NULL)
-        {
-            *ttlrdata_out_a = a;
-            *ttlrdata_out_aaaa = aaaa;
-            return SUCCESS;
-        }
-    }
-
+#ifdef HAS_DYNAMIC_PROVISIONING
+    group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER); // zdb_query_ip_records (failure)
 #endif
-
+    
     return ZDB_ERROR_KEY_NOTFOUND;
 }
 
-#if ZDB_CACHE_ENABLED!=0
 
-/** @brief Search for a match in global/cache part of the database
- *
- *  Search for a match in global/cache part of the database
- *
- *  @param[in]  db the database
- *  @param[in]  dnsname_name the name dnsname to search for
- *  @param[in]  class the class to match
- *  @param[in]  type the type to match
- *  @param[out] ttl_rdara_out a pointer to a pointer set of results (single linked list)
- *
- *  @return SUCCESS in case of success.
- */
-
-
-ya_result
-zdb_query_global(zdb* db, u8* name_, u16 zclass, u16 type, zdb_packed_ttlrdata** ttlrdata_out)
-{
-    zassert(ttlrdata_out != NULL);
-
-    dnsname_vector name;
-
-    DEBUG_RESET_dnsname(name);
-
-    dnsname_to_dnsname_vector(name_, &name);
-
-    zdb_zone_label* zone_label = zdb_zone_label_find(db, &name, zclass);
-
-    zdb_packed_ttlrdata* ttlrdata = zdb_record_find(&zone_label->global_resource_record_set, type);
-
-    *ttlrdata_out = ttlrdata;
-
-    return (ttlrdata != NULL) ? SUCCESS : ZDB_ERROR_KEY_NOTFOUND;
-}
-
-#endif
 
 /** @brief Adds an entry in a zone of the database
  *
@@ -633,9 +465,9 @@ zdb_query_global(zdb* db, u8* name_, u16 zclass, u16 type, zdb_packed_ttlrdata**
  */
 
 ya_result
-zdb_add(zdb* db, u8* origin_, u8* name_, u16 zclass, u16 type, u32 ttl, u16 rdata_size, void* rdata) /* 4 match, add    1 */
+zdb_add(zdb* db, u8* origin_, u8* name_, u16 zclass, u16 type, u32 ttl, u16 rdata_size, void* rdata) /* 4 match, add 1 */ // mutex checked
 {
-    zassert(db != NULL && origin_ != NULL && name_ != NULL && (rdata_size == 0 || rdata != NULL));
+    yassert(db != NULL && origin_ != NULL && name_ != NULL && (rdata_size == 0 || rdata != NULL));
 
     dnsname_vector origin;
     DEBUG_RESET_dnsname(origin);
@@ -653,7 +485,7 @@ zdb_add(zdb* db, u8* origin_, u8* name_, u16 zclass, u16 type, u32 ttl, u16 rdat
     {
         zdb_packed_ttlrdata* ttlrdata;
 
-        ZDB_RECORD_ZALLOC(ttlrdata, ttl, rdata_size, rdata);
+        ZDB_RECORD_ZALLOC(ttlrdata, ttl, rdata_size, rdata); // rdata can be null if rdata_size is 0, no problem here
         /* The record will be cloned in this call */
         zdb_zone_record_add(zone, name.labels, (name.size - origin.size) - 1, type, ttlrdata);
 
@@ -675,8 +507,9 @@ zdb_add(zdb* db, u8* origin_, u8* name_, u16 zclass, u16 type, u32 ttl, u16 rdat
         return SUCCESS;
     }
 
-    return ZDB_ERROR_ZONENOTLOADED;
+    return ZDB_READER_ZONENOTLOADED;
 }
+
 
 
 /** @brief Deletes an entry from a zone in the database
@@ -696,9 +529,9 @@ zdb_add(zdb* db, u8* origin_, u8* name_, u16 zclass, u16 type, u32 ttl, u16 rdat
  */
 
 ya_result
-zdb_delete(zdb* db, u8* origin_, u8* name_, u16 zclass, u16 type, u32 ttl, u16 rdata_size, void* rdata) /* 5 match, delete 1 */
+zdb_delete(zdb* db, u8* origin_, u8* name_, u16 zclass, u16 type, u32 ttl, u16 rdata_size, void* rdata) /* 5 match, delete 1 */ // mutex checked
 {
-    zassert(db != NULL && origin_ != NULL && name_ != NULL && (rdata_size == 0 || rdata != NULL));
+    yassert(db != NULL && origin_ != NULL && name_ != NULL && (rdata_size == 0 || rdata != NULL));
 
     dnsname_vector origin;
     DEBUG_RESET_dnsname(origin);
@@ -734,65 +567,67 @@ zdb_delete(zdb* db, u8* origin_, u8* name_, u16 zclass, u16 type, u32 ttl, u16 r
 
     }
 
-    return ZDB_ERROR_ZONENOTLOADED;
+    return ZDB_READER_ZONENOTLOADED;
 }
 
-#if ZDB_CACHE_ENABLED!=0
-
-/** @brief Deletes an entry from the database
- *
- *  Matches and deletes an entry from the database
- *
- *  @param[in]  db the database
- *  @param[in]  name_ the name of the record
- *  @param[in]  zclass the class of the record
- *  @param[in]  type the type of the record
- *  @param[in]  ttl the ttl of the record
- *  @param[in]  rdata_size the size of the rdata of the record
- *  @param[in]  rdata a pointer to the rdata of the record
- *
- *  @return SUCCESS in case of success.
+/**
+ * Looks for a zone and tells if zone is marked as invalid.
+ * The zone can only be invalid if it exists.
+ * 
+ * @param db
+ * @param origin
+ * @param zclass
+ * @return 
  */
 
-ya_result
-zdb_delete_global(zdb* db, u8* name_, u16 zclass, u16 type, u32 ttl, u16 rdata_size, void* rdata) /* 5 match, delete 1 */
+bool
+zdb_is_zone_invalid(zdb *db, const u8 *origin, u16 zclass)
 {
-    zassert(db != NULL && name_ != NULL && (rdata_size == 0 || rdata != NULL));
-
-    dnsname_stack name;
-    DEBUG_RESET_dnsname(name);
-
-    dnsname_to_dnsname_vector(name_, &name);
-
-    zdb_ttlrdata ttlrdata;
-
-    ZDB_RECORD_TTLRDATA_SET(ttlrdata, ttl, rdata_size, rdata);
-
-    /* I do not really require a record set here ... */
-    return zdb_zone_label_delete_record_exact(db, &name, zclass, type, &ttlrdata);
+    zdb_zone_label* label = zdb_zone_label_find_from_dnsname(db, origin, zclass);
+    bool invalid = FALSE;
+    
+    if(label != NULL)
+    {
+        invalid = zdb_zone_isinvalid(label->zone);
+    }
+    
+    return invalid;
 }
 
-#endif
+
 
 /** @brief Destroys the database
  *
- *  Destroys a database. (Emtpies it)
+ *  Destroys a database. (Empties it)
  *
  *  @param[in]  db the database to destroy
  *
  */
 
 void
-zdb_destroy(zdb* db)
+zdb_destroy(zdb* db) // mutex checked
 {
     int zclass;
+    
+#ifdef HAS_DYNAMIC_PROVISIONING
+    group_mutex_lock(&db->mutex, ZDB_MUTEX_WRITER); // zdb_destroy
+#endif
 
+    alarm_close(db->alarm_handle);
+    db->alarm_handle = ALARM_HANDLE_INVALID;
+    
     for(zclass = HOST_CLASS_IN - 1; zclass < ZDB_RECORDS_MAX_CLASS; zclass++)
     {
-        alarm_close(db->alarm_handle);
-        db->alarm_handle = ALARM_HANDLE_INVALID;
-        zdb_zone_label_destroy(&db->root[zclass]);
+        zdb_zone_label_destroy(&db->root[zclass]);  /* native order */
     }
+    
+#ifdef HAS_DYNAMIC_PROVISIONING
+    group_mutex_unlock(&db->mutex, ZDB_MUTEX_WRITER); // zdb_destroy
+#endif
+    
+#ifdef HAS_DYNAMIC_PROVISIONING
+    group_mutex_destroy(&db->mutex);
+#endif
 }
 
 #ifndef NDEBUG
@@ -806,21 +641,27 @@ zdb_destroy(zdb* db)
  */
 
 void
-zdb_print(zdb* db)
+zdb_print(zdb* db, output_stream *os) // mutex checked
 {
     int zclass;
 
-    formatln("zdb@%p\n", (void*)db);
+    osformatln(os, "zdb@%p\n", (void*)db);
 
     if(db != NULL)
     {
+#ifdef HAS_DYNAMIC_PROVISIONING
+        group_mutex_lock(&db->mutex, ZDB_MUTEX_READER); // for print db
+#endif
         for(zclass = HOST_CLASS_IN - 1; zclass < ZDB_RECORDS_MAX_CLASS; zclass++)
         {
             u16 class_value = zclass + 1;
-            formatln("zdb@%p class=%{dnsclass}\n", (void*)db, &class_value);
+            osformatln(os, "zdb@%p class=%{dnsclass}\n", (void*)db, &class_value);
 
-            zdb_zone_label_print_indented(db->root[zclass], 1);
+            zdb_zone_label_print_indented(db->root[zclass], os, 1); /* native order */
         }
+#ifdef HAS_DYNAMIC_PROVISIONING
+        group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER); // for print db
+#endif
     }
 }
 

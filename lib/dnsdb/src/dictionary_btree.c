@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief Dictionary module based on a btree
@@ -45,6 +45,7 @@
 #include <dnscore/sys_types.h>
 #include "dnsdb/zdb_error.h"
 #include "dnsdb/dictionary.h"
+#include "dnsdb/dictionary-node.h"
 
 /*
  *
@@ -61,13 +62,14 @@ ya_result dictionary_btree_process(dictionary* dico, hashcode key, void* record_
 void dictionary_btree_iterator_init(const dictionary* dico, dictionary_iterator* iter);
 bool dictionary_btree_iterator_hasnext(dictionary_iterator* dico);
 void** dictionary_btree_iterator_next(dictionary_iterator* dico);
+void dictionary_btree_iterator_init_from(const dictionary* dico, dictionary_iterator* iter, hashcode key);
 
 void dictionary_btree_empties(dictionary* dico, void* bucket, dictionary_bucket_record_function destroy);
 void
 dictionary_btree_fills(dictionary* dico, hashcode key, dictionary_node* node);
 
 
-static struct dictionary_vtbl dictionary_btree_vtbl = {
+static const struct dictionary_vtbl dictionary_btree_vtbl = {
     dictionary_btree_destroy,
     dictionary_btree_add,
     dictionary_btree_find,
@@ -76,12 +78,13 @@ static struct dictionary_vtbl dictionary_btree_vtbl = {
     dictionary_btree_process,
     dictionary_btree_destroy_ex,
     dictionary_btree_iterator_init,
+    dictionary_btree_iterator_init_from,
     dictionary_btree_empties,
     dictionary_btree_fills,
     "BTREE"
 };
 
-static struct dictionary_iterator_vtbl dictionary_iterator_btree_vtbl = {
+static const struct dictionary_iterator_vtbl dictionary_iterator_btree_vtbl = {
     dictionary_btree_iterator_hasnext,
     dictionary_btree_iterator_next
 };
@@ -98,7 +101,7 @@ dictionary_btree_init(dictionary* dico)
 void
 dictionary_btree_destroy(dictionary* dico, dictionary_destroy_record_function destroy)
 {
-    zassert(dico != NULL);
+    yassert(dico != NULL);
 
     if(dico->ct.btree_collection != NULL)
     {
@@ -130,7 +133,7 @@ dictionary_btree_destroy(dictionary* dico, dictionary_destroy_record_function de
 void
 dictionary_btree_destroy_ex(dictionary* dico, dictionary_destroy_ex_record_function destroyex, void* arg)
 {
-    zassert(dico != NULL);
+    yassert(dico != NULL);
 
     if(dico->ct.btree_collection != NULL)
     {
@@ -329,15 +332,23 @@ dictionary_btree_process(dictionary* dico, hashcode key, void* record_match_data
 }
 
 void
-dictionary_btree_iterator_init(const dictionary* dico, dictionary_iterator* iter)
+dictionary_btree_iterator_init(const dictionary *dico, dictionary_iterator *iter)
 {
     iter->vtbl = &dictionary_iterator_btree_vtbl;
     iter->sll = NULL;
     btree_iterator_init(dico->ct.btree_collection, &iter->ct.as_btree);
 }
 
+void
+dictionary_btree_iterator_init_from(const dictionary *dico, dictionary_iterator *iter, hashcode key)
+{
+    iter->vtbl = &dictionary_iterator_btree_vtbl;
+    iter->sll = NULL;
+    btree_iterator_init_from(dico->ct.btree_collection, &iter->ct.as_btree, key);
+}
+
 bool
-dictionary_btree_iterator_hasnext(dictionary_iterator* iter)
+dictionary_btree_iterator_hasnext(dictionary_iterator *iter)
 {
     /* If the Single Linked List is empty, fallback on the balanced tree,
      * else there is something next ...
@@ -350,7 +361,7 @@ dictionary_btree_iterator_hasnext(dictionary_iterator* iter)
 }
 
 void**
-dictionary_btree_iterator_next(dictionary_iterator* iter)
+dictionary_btree_iterator_next(dictionary_iterator *iter)
 {
     void* vpp;
 
@@ -373,7 +384,7 @@ dictionary_btree_iterator_next(dictionary_iterator* iter)
 void
 dictionary_btree_empties(dictionary* dico, void* bucket_data, dictionary_bucket_record_function bucket)
 {
-    zassert(dico != NULL);
+    yassert(dico != NULL);
 
     if(dico->ct.btree_collection != NULL)
     {

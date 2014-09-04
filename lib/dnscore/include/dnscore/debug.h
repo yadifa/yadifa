@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup debug Debug functions
  *  @ingroup dnscore
  *  @brief Debug functions.
@@ -49,51 +49,39 @@
 #error PLEASE DO NOT INCLUDE debug.h DIRECTLY.  USE sys_types.h.
 #endif
 
+#ifdef DEBUG
+#include <pthread.h>
+#endif
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <pthread.h>
-
 #include <assert.h>
-/** @note : DO NOT INCLUDE THIS HERE WITHOUT SOME KIND OF PROTECTION #include <format.h> */
+/** @note : DO NOT INCLUDE THIS HERE WITHOUT SOME KIND OF PROTECTION #include <dnscore/format.h> */
 
-#if 0
 
-/*
- * This is supposed to tell if an address is outside the mapped memory.
- * I've seen it give false errors (on a CentOS 5.6 xen client) so I disable it until further investigation.
- * 
- */
-
-#ifndef NDEBUG
-#if _BSD_SOURCE || _SVID_SOURCE
-#define DEBUG_VALID_ADDRESS
-bool debug_is_valid_address(void* ptr, size_t len);
-#endif
-#else
-#undef DEBUG_VALID_ADDRESS
-#endif
-
-#endif
 
 #include <dnscore/debug_config.h>
 
 #if !defined(DEBUG)
-#define zassert(x)
+#define yassert(x)
 #else
 void log_assert__(bool b, const char *txt, const char *file, int line);
-#define zassert(cond__) log_assert__((cond__), #cond__, __FILE__, __LINE__)
+#define yassert(cond__) log_assert__((cond__), #cond__, __FILE__, __LINE__);assert((cond__))
 #endif
 
 #ifdef	__cplusplus
 extern "C" {
 #endif
-
+    
 #define GENERIC_TAG 0x434952454e4547 /* GENERIC */
 #define ZDB_STRDUP_TAG  0x505544525453 /* "STRDUP" */
 
 void debug_dump(void* data_pointer_,size_t size,size_t line_size,bool hex,bool text);
 void debug_dump_ex(void* data_pointer_, size_t size_, size_t line_size, bool hex, bool text, bool address);
+
+struct logger_handle;
+
+void debug_log_stacktrace(struct logger_handle *handle, u32 level, const char *prefix);
 
 #ifndef NDEBUG
 /*
@@ -116,11 +104,11 @@ void debug_dump_ex(void* data_pointer_, size_t size_, size_t line_size, bool hex
 #if ZDB_DEBUG_MALLOC!=0
 
 #ifndef MALLOC_OR_DIE
-#error Something fishy is happening.  MALLOC_OR_DIE has not been defined yet.
+#error "something fishy is happening.  MALLOC_OR_DIE has not been defined yet."
 #endif
 
 #ifndef REALLOC_OR_DIE
-#error Something fishy is happening.  REALLOC_OR_DIE has not been defined yet.
+#error "something fishy is happening.  REALLOC_OR_DIE has not been defined yet."
 #endif
 
 #undef MALLOC_OR_DIE
@@ -149,7 +137,7 @@ void* debug_realloc(
 
 bool debug_mallocated(void* ptr);
 
-#define assert_mallocated(ptr) zassert(debug_mallocated(ptr))
+#define assert_mallocated(ptr) yassert(debug_mallocated(ptr))
 
 void debug_free(void* ptr,const char* file, int line);
 void debug_mtest(void* ptr);
@@ -164,7 +152,7 @@ u32 debug_get_block_count();
 
 #define strdup debug_strdup
 
-#if ZDB_DEBUG_TAG_BLOCKS==0
+#if ZDB_DEBUG_TAG_BLOCKS == 0
 
 #define malloc(len) debug_malloc((len),__FILE__,__LINE__)
 #define calloc(len) debug_calloc((len),__FILE__,__LINE__)
@@ -198,7 +186,37 @@ u32 debug_get_block_count();
 
 #endif
 
-#ifndef NDEBUG
+#ifdef DEBUG
+
+struct debug_bench_s
+{
+    struct debug_bench_s *next;
+    const char *name;
+    u64 time_min;
+    u64 time_max;
+    u64 time_total;
+    u64 time_count;
+};
+
+typedef struct debug_bench_s debug_bench_s;
+
+// declares timeus()
+
+u64 timeus();
+
+void debug_bench_register(debug_bench_s *bench, const char *name);
+
+#define debug_bench_start(bench__) timeus()
+
+#define debug_bench_stop(bench__, from__) debug_bench_commit((bench__), timeus() - (from__));
+
+void debug_bench_commit(debug_bench_s *bench, u64 delta);
+
+void debug_bench_logdump_all();
+
+#endif
+
+#ifdef DEBUG
 
 /*
  * These debugging tools ensure that ONE and only ONE thread is working on the structure.
@@ -230,6 +248,14 @@ void debug_unicity_release(debug_unicity *dus);
 #define UNICITY_RELEASE(x)
 
 #endif
+
+/*
+ * This is a helper for valgrind
+ * Reads the bytes and prints them using putchar
+ * Called to hunt unintialised bytes
+ */
+
+void debug_vg(const void* b, int len);
 
 #ifdef	__cplusplus
 }

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -53,13 +53,13 @@
 #define MODULE_MSG_HANDLE g_system_logger
 
 ya_result
-input_stream_read_fully(input_stream* stream, u8* buffer_start, u32 len_start)
+input_stream_read_fully(input_stream* stream, void* buffer_start, u32 len_start)
 {
     input_stream_read_method* readfunc = stream->vtbl->read;
     u32 len = len_start;
-    u8* buffer = buffer_start;
+    u8* buffer = (u8*)buffer_start;
     ya_result ret;
-
+    
     while(len > 0)
     {
         if(FAIL(ret = readfunc(stream, buffer, len)))
@@ -73,7 +73,7 @@ input_stream_read_fully(input_stream* stream, u8* buffer_start, u32 len_start)
         }
 
         buffer += ret;
-        len -= ret;
+        len -= ret; // cppcheck: false positive
     }
 
     /* If we only read a partial it's wrong.
@@ -86,7 +86,7 @@ input_stream_read_fully(input_stream* stream, u8* buffer_start, u32 len_start)
         return UNABLE_TO_COMPLETE_FULL_READ;
     }
 
-    return buffer - buffer_start;
+    return buffer - (u8*)buffer_start;
 }
 
 ya_result
@@ -108,7 +108,7 @@ input_stream_skip_fully(input_stream* stream, u32 len_start)
             break;
         }
 
-        len -= ret;
+        len -= ret; // cppcheck: false positive
     }
 
     /* If we only read a partial it's wrong.
@@ -130,7 +130,7 @@ input_stream_read_nu32(input_stream* stream, u32* output)
     u32 data;
     ya_result err;
 
-    if(ISOK(err = input_stream_read_fully(stream, (u8*) & data, 4)))
+    if(ISOK(err = input_stream_read_fully(stream, &data, 4)))
     {
         *output = ntohl(data);
     }
@@ -144,7 +144,7 @@ input_stream_read_nu16(input_stream* stream, u16* output)
     u16 data;
     ya_result err;
 
-    if(ISOK(err = input_stream_read_fully(stream, (u8*) & data, 2)))
+    if(ISOK(err = input_stream_read_fully(stream, &data, 2)))
     {
         *output = ntohs(data);
     }
@@ -158,7 +158,7 @@ input_stream_read_u32(input_stream* stream, u32* output)
     u32 data;
     ya_result err;
 
-    if(ISOK(err = input_stream_read_fully(stream, (u8*) & data, 4)))
+    if(ISOK(err = input_stream_read_fully(stream, &data, 4)))
     {
         *output = data;
     }
@@ -172,7 +172,7 @@ input_stream_read_u16(input_stream* stream, u16* output)
     u16 data;
     ya_result err;
 
-    if(ISOK(err = input_stream_read_fully(stream, (u8*) & data, 2)))
+    if(ISOK(err = input_stream_read_fully(stream, &data, 2)))
     {
         *output = data;
     }
@@ -189,8 +189,8 @@ input_stream_read_u8(input_stream* stream, u8* output)
 ya_result
 input_stream_read_dnsname(input_stream* stream, u8* output_buffer)
 {
-    u8* output = output_buffer;
-    u8* limit = &output_buffer[MAX_DOMAIN_LENGTH - 1];  /* -1 because the limit is computed after the terminator */
+    u8 *output = output_buffer;
+    const u8 * const limit = &output_buffer[MAX_DOMAIN_LENGTH - 1];  /* -1 because the limit is computed after the terminator */
 
     for(;;)
     {
@@ -242,8 +242,8 @@ input_stream_read_dnsname(input_stream* stream, u8* output_buffer)
 ya_result
 input_stream_read_rname(input_stream* stream, u8* output_buffer)
 {
-    u8* output = output_buffer;
-    u8* limit = &output_buffer[MAX_DOMAIN_LENGTH - 1];  /* -1 because the limit is computed after the terminator */
+    u8 *output = output_buffer;
+    const u8 * const limit = &output_buffer[MAX_DOMAIN_LENGTH - 1];  /* -1 because the limit is computed after the terminator */
 
     for(;;)
     {
@@ -285,7 +285,7 @@ input_stream_read_rname(input_stream* stream, u8* output_buffer)
 ya_result
 input_stream_read_line(input_stream* stream, char *output_, int max_len)
 {
-    char *limit = &output_[max_len];
+    const char * const limit = &output_[max_len];
     char *output = output_;
     
     /*
@@ -298,11 +298,11 @@ input_stream_read_line(input_stream* stream, char *output_, int max_len)
     {
         ya_result n = read_method(stream, (u8*)output, 1);
         
-        if(n != 1)
+        if(n <= 0)
         {
-            if(ISOK(n))
+            if(n == 0)
             {
-                n = ((ya_result)(output - output_)) + 1;
+                n = ((ya_result)(output - output_));
             }
             
             return n;
@@ -320,21 +320,24 @@ input_stream_read_line(input_stream* stream, char *output_, int max_len)
 static ya_result input_stream_void_read(input_stream* stream,u8* in_buffer,u32 in_len)
 {
     log_err("tried to read a closed stream");
-    return ERROR;
+    return INVALID_STATE_ERROR;
 }
 
 static ya_result input_stream_void_skip(input_stream* stream,u32 byte_count)
 {
     log_err("tried to skip a closed stream");
-    return ERROR;
+    return INVALID_STATE_ERROR;
 }
 
 static void input_stream_void_close(input_stream* stream)
 {
     log_err("tried to close a closed stream");
+#ifdef DEBUG
+    abort();
+#endif
 }
 
-static input_stream_vtbl void_input_stream_vtbl ={
+static const input_stream_vtbl void_input_stream_vtbl ={
     input_stream_void_read,
     input_stream_void_skip,
     input_stream_void_close,

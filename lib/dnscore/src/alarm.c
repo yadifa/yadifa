@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- * DOCUMENTATION */
+*
+* Copyright (c) 2011, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup alarm
  *  @ingroup dnscore
  *  @brief Alarm functions
@@ -38,13 +38,12 @@
  * @{
  */
 
-#include "dnscore/ptr_vector.h"
 #include "dnscore/logger.h"
 #include "dnscore/alarm.h"
 #include "dnscore/mutex.h"
+#include "dnscore/timeformat.h"
 
 #define MODULE_MSG_HANDLE g_system_logger
-
 extern logger_handle *g_system_logger;
 
 /*
@@ -94,10 +93,12 @@ static ptr_vector alarm_handles = EMPTY_PTR_VECTOR;
 static alarm_time_node doomsday = { NULL, {NULL, NULL}, MAX_U32 };
 static alarm_time_node time_list = { &doomsday, {NULL, NULL}, 0 };
 static mutex_t alarm_mutex = MUTEX_INITIALIZER;
-#ifndef NDEBUG
+static int alarm_handles_next_free = -1;
+#ifdef DEBUG
 static volatile bool alarm_mutex_locked = FALSE;
 static u32 alarm_event_count = 0;
 #endif
+
 
 /**/
 
@@ -161,7 +162,7 @@ alarm_event_alloc()
     alarm_event_node *node;
     MALLOC_OR_DIE(alarm_event_node*, node, sizeof(alarm_event_node), ALARM_NODE_DESC_TAG);
 
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(node, 0xff,sizeof(alarm_event_node));
 #endif
 
@@ -171,7 +172,7 @@ alarm_event_alloc()
 void
 alarm_event_free(alarm_event_node *node)
 {
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(node, 0xff,sizeof(alarm_event_node));
 #endif
     free(node);
@@ -231,6 +232,7 @@ static void
 alarm_event_remove(alarm_event_list *hndl, alarm_event_list *time, alarm_event_node *node)
 {
     assert(alarm_mutex_locked);
+    assert(time != NULL);
     
     if(node->hndl_prev != NULL)                             // A<- N<->B ?
     {
@@ -261,7 +263,7 @@ alarm_time_alloc()
     alarm_time_node *node;
     MALLOC_OR_DIE(alarm_time_node*, node, sizeof(alarm_time_node), ALARM_NODE_TIME_TAG);
 
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(node, 0xff,sizeof(alarm_time_node));
 #endif
 
@@ -274,7 +276,7 @@ alarm_time_alloc()
 static void
 alarm_time_free(alarm_time_node *node)
 {
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(node, 0xff,sizeof(alarm_time_node));
 #endif
     free(node);
@@ -344,33 +346,53 @@ alarm_init()
     alarm_event_list_init(&time_list.events); /* init: NO LOCK */
 }
 
+void
+alarm_finalise()
+{
+}
+
 alarm_t
 alarm_open(const u8 *owner_dnsname)
 {
     alarm_handle *handle_struct;
     MALLOC_OR_DIE(alarm_handle*, handle_struct, sizeof(alarm_handle), ALARM_HANDLE_TAG);
 
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(handle_struct, 0xac,sizeof(alarm_handle));
 #endif
 
     alarm_event_list_init(&handle_struct->events); /* newly allocated: NO LOCK */
 
     mutex_lock(&alarm_mutex);
-#ifndef NDEBUG
+#ifdef DEBUG
     alarm_mutex_locked = TRUE;
 #endif
-    ptr_vector_append(&alarm_handles, handle_struct);
-#ifndef NDEBUG
+    
+    intptr h;
+    
+    if(alarm_handles_next_free >= 0)
+    {
+        h = alarm_handles_next_free;
+        // get the next one if any
+        alarm_handles_next_free = (intptr)ptr_vector_get(&alarm_handles, h);
+        ptr_vector_set(&alarm_handles, (intptr)h, handle_struct);
+    }
+    else
+    {    
+        ptr_vector_append(&alarm_handles, handle_struct);
+        h = (intptr)alarm_handles.offset;
+    }
+    
+#ifdef DEBUG
     alarm_mutex_locked = FALSE;
 #endif
     mutex_unlock(&alarm_mutex);
 
     handle_struct->owner_dnsname = owner_dnsname;
     
-    log_debug("alarm_open(%{dnsname}) opened alarm with handle %x", handle_struct->owner_dnsname, alarm_handles.offset);
+    log_debug("alarm_open(%{dnsname}) opened alarm with handle %x", handle_struct->owner_dnsname, (int)h);
     
-    return (alarm_t)alarm_handles.offset;
+    return (alarm_t)h;
 }
 
 static alarm_handle *
@@ -382,7 +404,7 @@ alarm_get_struct_from_handle(alarm_t hndl)
     {
         /* ERROR ! */
 
-#ifndef NDEBUG
+#ifdef DEBUG
         log_debug("invalid alarm handle: %x", hndl);
 #endif
 
@@ -403,19 +425,16 @@ alarm_clear_struct_from_handle(alarm_t hndl)
     {
         /* ERROR ! */
 
-#ifndef NDEBUG
+#ifdef DEBUG
         log_debug("invalid alarm handle: %x", hndl);
 #endif
 
         return;
     }
-
-    ptr_vector_set(&alarm_handles, hndl, NULL);
+    
+    ptr_vector_set(&alarm_handles, hndl, (void*)(intptr)alarm_handles_next_free);
+    alarm_handles_next_free = (intptr)hndl;
 }
-
-/**
- * @todo check the alarm is properly removed
- */
 
 void 
 alarm_close(alarm_t hndl)
@@ -427,16 +446,14 @@ alarm_close(alarm_t hndl)
     
     mutex_lock(&alarm_mutex);    
     
-#ifndef NDEBUG
+#ifdef DEBUG
     alarm_mutex_locked = TRUE;
 #endif
     alarm_handle *handle_struct = alarm_get_struct_from_handle(hndl);
     
-    log_debug("alarm_close(%x) closing alarm for %{dnsname}", hndl, handle_struct->owner_dnsname);
-
     if(handle_struct == NULL)
     {
-#ifndef NDEBUG
+#ifdef DEBUG
         alarm_mutex_locked = FALSE;
 #endif
         mutex_unlock(&alarm_mutex);
@@ -445,6 +462,8 @@ alarm_close(alarm_t hndl)
 
         return;
     }
+    
+    log_debug("alarm_close(%x) closing alarm for %{dnsname}", hndl, handle_struct->owner_dnsname);
 
     alarm_event_node *node = handle_struct->events.first;
 
@@ -459,6 +478,10 @@ alarm_close(alarm_t hndl)
             alarm_event_list *time_list = &time_node->events;
 
             alarm_event_remove(&handle_struct->events, time_list, node);
+            
+#ifdef DEBUG
+            alarm_event_count--;
+#endif
         }
 
         alarm_event_free(node);
@@ -468,13 +491,13 @@ alarm_close(alarm_t hndl)
     
     alarm_clear_struct_from_handle(hndl);
 
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(handle_struct, 0xe4,sizeof(alarm_event_list));
 #endif
 
     free(handle_struct);
 
-#ifndef NDEBUG
+#ifdef DEBUG
     alarm_mutex_locked = FALSE;
 #endif
     
@@ -486,7 +509,7 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
 {
     mutex_lock(&alarm_mutex);
     
-#ifndef NDEBUG
+#ifdef DEBUG
     alarm_mutex_locked = TRUE;
 #endif
 
@@ -497,7 +520,7 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
     if(handle_struct == NULL)
     {
         
-#ifndef NDEBUG
+#ifdef DEBUG
         alarm_mutex_locked = FALSE;
 #endif
 
@@ -511,7 +534,7 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
     if(desc->epoch == MAX_U32)
     {
 
-#ifndef NDEBUG
+#ifdef DEBUG
         alarm_mutex_locked = FALSE;
 #endif
 
@@ -524,7 +547,7 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
 
     alarm_event_list *head = &handle_struct->events;
 
-#ifndef NDEBUG
+#ifdef DEBUG
     
     char epoch_buffer[64];
     time_t epoch_time = desc->epoch;
@@ -554,7 +577,7 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
 
                         alarm_event_free(desc);
 
-#ifndef NDEBUG
+#ifdef DEBUG
                         alarm_mutex_locked = FALSE;
 #endif
                         
@@ -568,7 +591,7 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
                     free(node);
                     node = node_next;
 
-#ifndef NDEBUG
+#ifdef DEBUG
                     alarm_event_count--;
 #endif
 
@@ -586,7 +609,7 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
             {
                 if(node->key == desc->key)
                 {
-#ifndef NDEBUG
+#ifdef DEBUG
                     log_debug("alarm_set: %p: dropping latest dup", desc);
 #endif
                     if(desc->epoch > node->epoch)
@@ -595,7 +618,7 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
 
                         alarm_event_free(desc);
 
-#ifndef NDEBUG
+#ifdef DEBUG
                         alarm_mutex_locked = FALSE;
 #endif
                         
@@ -609,7 +632,7 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
                     free(node);
                     node = node_next;
 
-#ifndef NDEBUG
+#ifdef DEBUG
                     alarm_event_count--;
 #endif
                 }
@@ -621,7 +644,7 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
         }
     }
 
-#ifndef NDEBUG
+#ifdef DEBUG
     log_debug("alarm_set: %p: added", desc);
 #endif
 
@@ -634,11 +657,11 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
     desc->handle = hndl;
     alarm_event_append(head, &timenode->events, desc);
 
-#ifndef NDEBUG
+#ifdef DEBUG
     alarm_event_count++;
 #endif
 
-#ifndef NDEBUG
+#ifdef DEBUG
     alarm_mutex_locked = FALSE;
 #endif
     
@@ -652,19 +675,21 @@ alarm_run_tick(u32 epoch)
 
     mutex_lock(&alarm_mutex);
     
-#ifndef NDEBUG
+#ifdef DEBUG
     alarm_mutex_locked = TRUE;
 #endif
 
     alarm_time_node *node = time_list.next;
 
-#ifndef NDEBUG
+#ifdef DEBUG
     if(alarm_event_count > 0)
     {
         static u32 last_alarm_debug_dump = 0;
         if(epoch - last_alarm_debug_dump > 60)
         {
-            log_debug("alarm: processing alarms. %d events in queue. (next in %i seconds)", alarm_event_count, node->epoch - epoch);
+            u32 next_epoch = MAX(node->epoch, epoch);
+            EPOCH_DEF(next_epoch);
+            log_debug("alarm: processing alarms. %d events in queue. (next on %w in %i seconds)", alarm_event_count, EPOCH_REF(next_epoch), next_epoch - epoch);
             last_alarm_debug_dump = epoch;
         }
     }
@@ -676,11 +701,11 @@ alarm_run_tick(u32 epoch)
         {
             alarm_event_node *event = alarm_event_list_removefirst(&node->events);
 
-#ifndef NDEBUG
+#ifdef DEBUG
             alarm_event_count--;
 #endif
             
-#ifndef NDEBUG
+#ifdef DEBUG
             alarm_mutex_locked = FALSE;
 #endif
             
@@ -702,7 +727,7 @@ alarm_run_tick(u32 epoch)
 
                 mutex_lock(&alarm_mutex);
                 
-#ifndef NDEBUG
+#ifdef DEBUG
                 alarm_mutex_locked = TRUE;
 #endif
             }
@@ -710,7 +735,7 @@ alarm_run_tick(u32 epoch)
             {
                 mutex_lock(&alarm_mutex);
                 
-#ifndef NDEBUG
+#ifdef DEBUG
                 alarm_mutex_locked = TRUE;
 #endif
                 alarm_event_free(event);
@@ -725,7 +750,7 @@ alarm_run_tick(u32 epoch)
         time_list.next = node;
     }
     
-#ifndef NDEBUG
+#ifdef DEBUG
     alarm_mutex_locked = FALSE;
 #endif
 
@@ -737,7 +762,7 @@ alarm_lock()
 {
     mutex_lock(&alarm_mutex);
     
-#ifndef NDEBUG
+#ifdef DEBUG
     alarm_mutex_locked = TRUE;
 #endif
     
@@ -746,7 +771,7 @@ alarm_lock()
 void
 alarm_unlock()
 {
-#ifndef NDEBUG
+#ifdef DEBUG
     alarm_mutex_locked = FALSE;
 #endif
     

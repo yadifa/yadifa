@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @ingroup dnscore
  *
  */
@@ -66,7 +66,7 @@ extern "C" {
 
         const char* __class__;              /* MUST BE A UNIQUE POINTER, ie: One defined in the class's .c file
                                                The name should be unique in order to avoid compiler tricks
-					     */
+                                            */
         
                                             /* Add your inheritable methods here */
     };
@@ -74,16 +74,16 @@ extern "C" {
     struct output_stream
     {
         void* data;
-        output_stream_vtbl* vtbl;
+        const output_stream_vtbl* vtbl;
     };
 
-    #define output_stream_class(os) ((os)->vtbl)
-    #define output_stream_class_name(os) ((os)->vtbl->__class__)
-    #define output_stream_write(os,buffer,len) (os)->vtbl->write(os,buffer,len)
-    #define output_stream_flush(os) (os)->vtbl->flush(os)
-    #define output_stream_close(os) (os)->vtbl->close(os)
-    #define output_stream_skip(os,len) (os)->vtbl->skip(os,len)
-    #define output_stream_valid(is) ((is)->vtbl != NULL)
+    #define output_stream_class(os__) ((os__)->vtbl)
+    #define output_stream_class_name(os__) ((os__)->vtbl->__class__)
+    #define output_stream_write(os__,buffer__,len__) (os__)->vtbl->write((os__),(const u8*)(buffer__),(len__))
+    #define output_stream_flush(os__) (os__)->vtbl->flush(os__)
+    #define output_stream_close(os__) (os__)->vtbl->close(os__)
+    #define output_stream_skip(os__,len__) (os__)->vtbl->skip((os__),(len__))
+    #define output_stream_valid(os__) ((os__)->vtbl != NULL)
 
     ya_result output_stream_write_nu32(output_stream* os, u32 value);
     ya_result output_stream_write_nu16(output_stream* os, u16 value);
@@ -127,7 +127,7 @@ extern "C" {
     /* Found on typebitmap.h */    
     #define output_stream_write_type_bit_maps type_bit_maps_output_stream_write
 
-    output_stream* output_stream_alloc();
+    output_stream *output_stream_alloc();
 
 /**
  * This tools allows a safer misuse (and detection) of closed streams
@@ -135,6 +135,8 @@ extern "C" {
  */
 
 void output_stream_set_void(output_stream *stream);
+
+ya_result output_stream_write_fully(output_stream *stream, const void *buffer_start, u32 len_start);
     
 #ifdef	__cplusplus
 }

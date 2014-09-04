@@ -30,6 +30,18 @@ dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
 dnl ############################################################################
+dnl
+dnl       SVN Program:
+dnl               $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/bin/yadifa/configure.ac $
+dnl
+dnl       Last Update:
+dnl               $Date: 2012-03-27 16:56:49 +0200 (Tue, 27 Mar 2012) $
+dnl               $Revision: 1868 $
+dnl
+dnl       Purpose:
+dnl              common generic m4 macros
+dnl
+dnl ############################################################################
 
 dnl Assume it is true
 
@@ -46,6 +58,7 @@ case "$(uname -s)" in
 
         alias libtoolize="glibtoolize"
         alias libtool="glibtool"
+dnl        alias sed="gsed"
 
         is_darwin_os=1
         is_bsd_family=1
@@ -223,10 +236,10 @@ then
 		fi
 	fi
 
-        AM_CONDITIONAL([USES_ICC], [false])
-        AM_CONDITIONAL([USES_GCC], [true])
-        AM_CONDITIONAL([USES_CLANG], [false])
-        AM_CONDITIONAL([USES_UNKNOWN], [false])
+    AM_CONDITIONAL([USES_ICC], [false])
+    AM_CONDITIONAL([USES_GCC], [true])
+    AM_CONDITIONAL([USES_CLANG], [false])
+    AM_CONDITIONAL([USES_UNKNOWN], [false])
 
 elif [[ "$CCNAME" = "icc" ]]
 then
@@ -234,10 +247,10 @@ then
 
 	CCOPTIMISATIONFLAGS=-O3
 
-        AM_CONDITIONAL([USES_ICC], [true])
-        AM_CONDITIONAL([USES_GCC], [false])
-        AM_CONDITIONAL([USES_CLANG], [false])
-        AM_CONDITIONAL([USES_UNKNOWN], [false])
+    AM_CONDITIONAL([USES_ICC], [true])
+    AM_CONDITIONAL([USES_GCC], [false])
+    AM_CONDITIONAL([USES_CLANG], [false])
+    AM_CONDITIONAL([USES_UNKNOWN], [false])
 
 	AR=xiar
 
@@ -247,10 +260,10 @@ then
 
 	CCOPTIMISATIONFLAGS=-O3
 	
-        AM_CONDITIONAL([USES_ICC], [false])
-        AM_CONDITIONAL([USES_GCC], [false])
-        AM_CONDITIONAL([USES_CLANG], [true])
-        AM_CONDITIONAL([USES_UNKNOWN], [false])
+    AM_CONDITIONAL([USES_ICC], [false])
+    AM_CONDITIONAL([USES_GCC], [false])
+    AM_CONDITIONAL([USES_CLANG], [true])
+    AM_CONDITIONAL([USES_UNKNOWN], [false])
 else
 	echo "unsupported compiler"
 
@@ -259,9 +272,9 @@ else
 	CCOPTIMISATIONFLAGS=-O2
 	
 	AM_CONDITIONAL([USES_ICC], [false])
-        AM_CONDITIONAL([USES_GCC], [false])
-        AM_CONDITIONAL([USES_CLANG], [false])	
-        AM_CONDITIONAL([USES_UNKNOWN], [true])
+    AM_CONDITIONAL([USES_GCC], [false])
+    AM_CONDITIONAL([USES_CLANG], [false])	
+    AM_CONDITIONAL([USES_UNKNOWN], [true])
 fi
 
 echo "detected compiler is $CCNAME $CCMAJOR $CCMINOR"
@@ -322,7 +335,7 @@ int main(int argc, char** argv)
 {
 	argc=argc;
 	argv=argv;
-        return 0;
+    return 0;
 }
 _ACEOF
 has_faddress_sanitizer=0
@@ -346,22 +359,48 @@ cat > fno-omit-frame-pointer_test.c <<_ACEOF
 #include<stdlib.h>
 int main(int argc, char** argv)
 {
-        argc=argc;
-        argv=argv;
-        return 0;
+    argc=argc;
+    argv=argv;
+    return 0;
 }
 _ACEOF
 has_fno_omit_frame_pointer=0
 ${CC} -fno-omit-frame-pointer fno-omit-frame-pointer_test.c -o fno-omit-frame-pointer_test > /dev/null 2>&1
 if [[ $? -eq 0 ]]; then
-        has_fno_omit_frame_pointer=1
-        echo yes
+    has_fno_omit_frame_pointer=1
+    echo yes
 	AM_CONDITIONAL([HAS_FNO_OMIT_FRAME_POINTER], [true])
 else
-        echo no
+    echo no
 	AM_CONDITIONAL([HAS_FNO_OMIT_FRAME_POINTER], [false])
 fi
 rm -f fno-omit-frame-pointer_test.c fno-omit-frame-pointer_test
+])
+
+dnl clang -fcatch-undefined-behavior
+AC_DEFUN([AC_FCATCH_UNDEFINED_BEHAVIOR_CHECK], [
+echo -n "checking if ${CC} supports -fcatch-undefined-behavior ... "
+AM_CONDITIONAL([HAS_CATCH_UNDEFINED_BEHAVIOR], [false])
+cat > fcatch-undefined-behavior_test.c <<_ACEOF
+#include<stdlib.h>
+int main(int argc, char** argv)
+{
+    argc=argc;
+    argv=argv;
+    return 0;
+}
+_ACEOF
+has_fcatch_undefined_behavior=0
+${CC} -fcatch-undefined-behavior fcatch-undefined-behavior_test.c -o fcatch-undefined-behavior_test > /dev/null 2>&1
+if [[ $? -eq 0 ]]; then
+        has_fcatch_undefined_behavior=1
+        echo yes
+	AM_CONDITIONAL([HAS_CATCH_UNDEFINED_BEHAVIOR], [true])
+else
+        echo no
+	AM_CONDITIONAL([HAS_CATCH_UNDEFINED_BEHAVIOR], [false])
+fi
+rm -f fcatch-undefined-behavior_test.c fcatch-undefined-behavior_test
 ])
 
 dnl pthread spinlock support
@@ -373,6 +412,18 @@ echo -n "checking for pthread_spin_init ... "
 AC_TRY_LINK([#include<pthread.h>],[pthread_spinlock_t lock; pthread_spin_init(&lock, 0);],[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SPINLOCK], [1], [The system supports spinlocks]) echo yes],[echo no]);
 
 ])
+
+dnl pthread_setname_np support
+
+AC_DEFUN([AC_PTHREAD_SETNAME_NP_CHECK], [
+
+echo -n "checking for pthread_setname_np ... "
+
+AC_TRY_LINK([#define __USE_GNU
+#include<pthread.h>],[pthread_setname_np(pthread_self(), "myname");],[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SETNAME_NP], [1], [The system supports thread names]) echo yes],[echo no]);
+
+])
+
 
 
 dnl LTO
@@ -459,5 +510,9 @@ cat <<EOF
 	32/64		:	$CFLAGS3264
 	LTO		:	$enable_lto
 EOF
+])
+
+AC_DEFUN([AC_MAKE_BUILDINFO], [
+make buildinfo.h
 ])
 

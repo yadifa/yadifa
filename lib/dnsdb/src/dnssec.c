@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbdnssec DNSSEC functions
  *  @ingroup dnsdb
  *  @brief
@@ -71,14 +71,14 @@ logger_handle *g_dnssec_logger = NULL;
  */
 
 ENGINE*
-dnssec_loadengine(const char* engine_name_const)
+dnssec_loadengine(const char *engine_name_const)
 {
-    ENGINE* engine;
-    char* token_pointer = NULL;
+    ENGINE *engine;
+    char *token_pointer = NULL;
 
-    char* engine_name = strdup(engine_name_const);
+    char *engine_name = strdup(engine_name_const);
 
-    char* token = strtok_r(engine_name, ENGINE_COMMAND_DELIMITER, &token_pointer);
+    char *token = strtok_r(engine_name, ENGINE_COMMAND_DELIMITER, &token_pointer);
 
     if(token == NULL)
     {
@@ -98,15 +98,15 @@ dnssec_loadengine(const char* engine_name_const)
 
     while(token != NULL)
     {
-        char* command_pointer;
-        char* command = strtok_r(token, "=", &command_pointer);
+        char *command_pointer;
+        char *command = strtok_r(token, "=", &command_pointer);
 
         if(command == NULL)
         {
             log_err("bad command %s", command);
             DIE(DNSSEC_ERROR_INVALIDENGINE);
         }
-        char* command_value = strtok_r(NULL, "=", &command_pointer);
+        char *command_value = strtok_r(NULL, "=", &command_pointer);
         if(command_value == NULL)
         {
             log_err("bad command value %s", command_value);
@@ -130,27 +130,11 @@ dnssec_loadengine(const char* engine_name_const)
 }
 
 void
-dnssec_unloadengine(ENGINE* engine)
+dnssec_unloadengine(ENGINE *engine)
 {
     ENGINE_finish((ENGINE*)engine);
     ENGINE_free((ENGINE*)engine);
 }
-
-void
-dnssec_inittask(u16 flags, dnssec_task* task)
-{
-    ZEROMEMORY(task, sizeof (dnssec_task));
-
-    task->path.size = -1;
-    task->task_flags = flags;
-}
-
-void
-dnssec_finalizetask(dnssec_task* key)
-{
-    zassert(key != NULL);
-}
-
 
 /*    ------------------------------------------------------------    */
 

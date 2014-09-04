@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -57,15 +57,13 @@ struct io_stream
     output_stream out;
 };
 
-static inline ya_result io_stream_link(io_stream *ios, input_stream *is, output_stream *os)
+static inline void io_stream_link(io_stream *ios, input_stream *is, output_stream *os)
 {
     ios->in.data = is->data;
     ios->in.vtbl = is->vtbl;
     
     ios->out.data = os->data;
     ios->out.vtbl = os->vtbl;
-    
-    return SUCCESS;
 }
 
 static inline ya_result io_stream_read(io_stream *ios, u8 *buffer, u32 len)

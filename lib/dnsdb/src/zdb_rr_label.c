@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup records_labels Internal functions for the database: zoned resource records label.
  *  @ingroup dnsdb
  *  @brief Internal functions for the database: zoned resource records label.
@@ -40,7 +40,7 @@
  * @{
  */
 
-#include <dnscore/rdtsc.h>
+
 
 #include <dnscore/format.h>
 
@@ -67,11 +67,11 @@ static inline void
 zdb_rr_label_free(zdb_zone* zone, zdb_rr_label* label)
 {
     dictionary_destroy_ex(&(label)->sub, zdb_rr_label_destroy_callback, zone);
-    zdb_record_destroy(&(label)->resource_record_set); /* FB: Not an edit.  TODO: check it's only used for cleanup */
+    zdb_record_destroy(&(label)->resource_record_set); /// @note not an edition, use only for cleanup/delete
 
 
 #ifndef NDEBUG
-#if ZDB_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT != 0
     if((label->flags & ZDB_RR_LABEL_NSEC) != 0)
     {
         /*
@@ -79,13 +79,13 @@ zdb_rr_label_free(zdb_zone* zone, zdb_rr_label* label)
          */
 
 #if defined(DEBUG)
-        zassert(label->nsec.nsec.node == NULL);
+        yassert(label->nsec.nsec.node == NULL);
 #endif
     }
 #endif
 #endif
 
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
     if((label->flags & ZDB_RR_LABEL_NSEC3) != 0)
     {
         /*
@@ -94,16 +94,19 @@ zdb_rr_label_free(zdb_zone* zone, zdb_rr_label* label)
 
         if(label->nsec.nsec3 != NULL)
         {
-            zassert(label->nsec.nsec3->self == NULL);
-            zassert(label->nsec.nsec3->star == NULL);
+            yassert(label->nsec.nsec3->self == NULL);
+            yassert(label->nsec.nsec3->star == NULL);
 
             ZFREE(label->nsec.nsec3, nsec3_label_extension);
         }
     }
 #endif
+    
+    u32 len = label->name[0]; /* get the memory required to store the label name */
+    len++;
+    u32 pad = (len > 2)?0:2-len;
 
-    ZFREE_ARRAY(label, sizeof (zdb_rr_label) + label->name[0]);
-
+    ZFREE_ARRAY(label, sizeof(zdb_rr_label) - 1 + len + pad);
 }
 
 /**
@@ -128,7 +131,7 @@ zdb_rr_label_destroy_callback(dictionary_node* rr_label_record, void* zone)
      * Maybe I should use the iterator directly instead.
      */
 
-    zdb_rr_label_free((zdb_zone*)zone, rr_label);
+    zdb_rr_label_free((zdb_zone*)zone, rr_label); // valid call because in a delete
 }
 
 /**
@@ -148,9 +151,17 @@ zdb_rr_label_new_instance(const u8* label_name)
 {
     zdb_rr_label* rr_label;
 
-    u32 len = (*label_name) + 1; /* get the memory required to store the label name */
-
-    ZALLOC_ARRAY_OR_DIE(zdb_rr_label*, rr_label, sizeof(zdb_rr_label) - 1 + len, ZDB_RRLABEL_TAG);
+    u32 len = label_name[0]; /* get the memory required to store the label name */
+    len++;
+    u32 pad = (len > 2)?0:2-len;
+    ZALLOC_ARRAY_OR_DIE(zdb_rr_label*, rr_label, sizeof(zdb_rr_label) - 1 + len + pad, ZDB_RRLABEL_TAG);
+    
+#ifdef DEBUG
+    memset(rr_label, 0xac, sizeof(zdb_rr_label) - 1 + len);
+#endif
+    rr_label->name[1] = (u8)0xee;   // this slot is guaranteed by pad, and used by the wild card 16 bits test
+                                    // specifically written a byte here avoid a valgrind check
+                                    // (otherwise harmless : 8 bytes are allocated at least, no overrun is possible)
     MEMCOPY(rr_label->name, label_name, len);
 
     rr_label->next = NULL;
@@ -159,7 +170,7 @@ zdb_rr_label_new_instance(const u8* label_name)
 
     rr_label->flags = 0;
 
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
     /* I have to clean this pointer, the caller will be responsible
      * for setting it up.
      */
@@ -195,13 +206,13 @@ zdb_rr_label_create_callback(const void* data)
 void
 zdb_rr_label_destroy(zdb_zone* zone, zdb_rr_label** rr_labelp)
 {
-    zassert(rr_labelp != NULL);
+    yassert(rr_labelp != NULL);
 
-    zdb_rr_label* rr_label = *rr_labelp;
+    zdb_rr_label *rr_label = *rr_labelp;
 
     if(rr_label != NULL)
     {
-        zdb_rr_label_free(zone, rr_label);
+        zdb_rr_label_free(zone, rr_label); // valid call because in a delete
         *rr_labelp = NULL;
     }
 }
@@ -222,7 +233,7 @@ zdb_rr_label_truncate(zdb_zone* zone, zdb_rr_label* rr_label)
     if(rr_label != NULL)
     {
         dictionary_destroy_ex(&rr_label->sub, zdb_rr_label_destroy_callback, zone);
-        zdb_record_destroy(&rr_label->resource_record_set); /* FB: Not an edit.  TODO: check it's only used for cleanup */
+        zdb_record_destroy(&rr_label->resource_record_set); /// @note not an edition, use only for cleanup/delete
     }
 }
 
@@ -305,7 +316,7 @@ zdb_rr_label_stack_find(zdb_rr_label* apex, dnslabel_stack_reference sections, s
 zdb_rr_label*
 zdb_rr_label_find(zdb_rr_label* apex, dnslabel_vector_reference sections, s32 index)
 {
-    zassert(apex != NULL);
+    yassert(apex != NULL);
 
     zdb_rr_label* rr_label = apex; /* the zone cut */
 
@@ -344,7 +355,7 @@ zdb_rr_label_find(zdb_rr_label* apex, dnslabel_vector_reference sections, s32 in
 zdb_rr_label*
 zdb_rr_label_find(zdb_rr_label* apex, dnslabel_vector_reference label_sections, s32 index)
 {
-    zassert(apex != NULL);
+    yassert(apex != NULL);
 
     zdb_rr_label* rr_label = apex; /* the zone cut */
 
@@ -382,7 +393,7 @@ zdb_rr_label_find(zdb_rr_label* apex, dnslabel_vector_reference label_sections, 
 zdb_rr_label*
 zdb_rr_label_find_ext(zdb_rr_label* apex, dnslabel_vector_reference sections, s32 index_, zdb_rr_label_find_ext_data *ext)
 {
-    zassert(apex != NULL && sections != NULL);
+    yassert(apex != NULL && sections != NULL);
 
     s32 index = index_;
     zdb_rr_label* rr_label = apex; /* the zone cut */
@@ -507,7 +518,7 @@ struct zdb_rr_label_delete_record_process_callback_args
 static ya_result
 zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
 {
-    zassert(node != NULL);
+    yassert(node != NULL);
 
     zdb_rr_label* rr_label = (zdb_rr_label*)node;
 
@@ -552,7 +563,7 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
 
             if(RR_LABEL_IRRELEVANT(rr_label))
             {
-                zdb_rr_label_free(args->zone, rr_label);
+                zdb_rr_label_free(args->zone, rr_label); // valid call because in a delete
 
                 return COLLECTION_PROCESS_DELETENODE;
             }
@@ -590,20 +601,24 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
             switch(args->type)
             {
                 case TYPE_NS:
-                    clear_mask = ~ZDB_RR_LABEL_DELEGATION;
+                    clear_mask = ~ZDB_RR_LABEL_DELEGATION; // will clear "delegation"
                     break;
                 case TYPE_CNAME:
-                    clear_mask = ~ZDB_RR_LABEL_HASCNAME;
+                    clear_mask = ~ZDB_RR_LABEL_HASCNAME; // will clear "has cname"
                     break;
                 case TYPE_ANY:
-                    clear_mask = ~ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_DROPCNAME;
+                    clear_mask = ~(ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_DROPCNAME|ZDB_RR_LABEL_HASCNAME); // will clear "delegation", "drop cname" and "has cname"
+                    break;
+                case TYPE_RRSIG:
+                case TYPE_NSEC:
                     break;
                 default:
-                    /** @todo check if there are any other types than RRSIG & NSEC, clear DROPCNAME if it's true */
+                    // checks if there are any other types than CNAME, RRSIG and NSEC, clears DROPCNAME if it's true
+                    clear_mask = ~ZDB_RR_LABEL_DROPCNAME; // will clear "drop cname"
                     break;
             }
 
-            rr_label->flags &= clear_mask;
+            rr_label->flags &= clear_mask; // clears the bits using the mask
 
             return COLLECTION_PROCESS_STOP;
         }
@@ -615,7 +630,7 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
          * iterate through it calling the passed function.
          */
 
-        zdb_rr_label_free(args->zone, rr_label);
+        zdb_rr_label_free(args->zone, rr_label); // valid call because in a delete
 
         return COLLECTION_PROCESS_DELETENODE;
     }
@@ -639,7 +654,7 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
 ya_result
 zdb_rr_label_delete_record(zdb_zone* zone, dnslabel_vector_reference path, s32 path_index, u16 type)
 {
-    zassert(zone != NULL && path != NULL && path_index >= -1);
+    yassert(zone != NULL && path != NULL && path_index >= -1);
 
     zdb_rr_label* apex = zone->apex;
 
@@ -658,7 +673,7 @@ zdb_rr_label_delete_record(zdb_zone* zone, dnslabel_vector_reference path, s32 p
             /*
             if(RR_LABEL_IRRELEVANT(apex))
             {
-                zdb_rr_label_free(zone, apex);
+                zdb_rr_label_free(zone, apex); // valid call because in a delete
                 zone->apex = NULL;
 
                 return ZDB_RR_LABEL_DELETE_TREE;
@@ -685,7 +700,7 @@ zdb_rr_label_delete_record(zdb_zone* zone, dnslabel_vector_reference path, s32 p
     {
         if(RR_LABEL_IRRELEVANT(apex))
         {
-            zdb_rr_label_free(zone, apex);
+            zdb_rr_label_free(zone, apex); // valid call because in a delete
             zone->apex = NULL;
 
             return ZDB_RR_LABEL_DELETE_TREE;
@@ -723,7 +738,7 @@ struct zdb_rr_label_delete_record_exact_process_callback_args
 static ya_result
 zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node)
 {
-    zassert(node != NULL);
+    yassert(node != NULL);
 
     zdb_rr_label* rr_label = (zdb_rr_label*)node;
 
@@ -769,7 +784,7 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
 
             if(RR_LABEL_IRRELEVANT(rr_label))
             {
-                zdb_rr_label_free(args->zone, rr_label);
+                zdb_rr_label_free(args->zone, rr_label); // valid call because in a delete
 
                 return COLLECTION_PROCESS_DELETENODE;
             }
@@ -818,17 +833,20 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
                 switch(args->type)
                 {
                     case TYPE_NS:
-                        clear_mask = ~ZDB_RR_LABEL_DELEGATION;
+                        clear_mask = ~ZDB_RR_LABEL_DELEGATION; // will clear "delegation"
                         break;
                     case TYPE_CNAME:
-                        clear_mask = ~ZDB_RR_LABEL_HASCNAME;
+                        clear_mask = ~ZDB_RR_LABEL_HASCNAME; // will clear "has cname"
                         break;
                     case TYPE_ANY:
-                        /* Actually this should not happen */
-                        clear_mask = ~(ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_DROPCNAME|ZDB_RR_LABEL_HASCNAME);
+                        clear_mask = ~(ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_DROPCNAME|ZDB_RR_LABEL_HASCNAME); // will clear "delegation", "drop cname" and "has cname"
+                        break;
+                    case TYPE_RRSIG:
+                    case TYPE_NSEC:
                         break;
                     default:
-                        /** @todo check if there are any other types than RRSIG & NSEC, clear DROPCNAME if it's true */
+                        // checks if there are any other types than CNAME, RRSIG and NSEC, clears DROPCNAME if it's true
+                        clear_mask = ~ZDB_RR_LABEL_DROPCNAME; // will clear "drop cname"
                         break;
                 }
 
@@ -845,7 +863,7 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
          * iterate through it calling the passed function.
          */
 
-        zdb_rr_label_free(args->zone, rr_label);
+        zdb_rr_label_free(args->zone, rr_label); // valid call because in a delete
 
         return COLLECTION_PROCESS_DELETENODE;
     }
@@ -888,7 +906,7 @@ zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path,
 #endif
             if(RR_LABEL_IRRELEVANT(apex))
             {
-                zdb_rr_label_free(zone, apex);
+                zdb_rr_label_free(zone, apex); // valid call because in a delete
                 zone->apex = NULL;
 
                 return ZDB_RR_LABEL_DELETE_TREE;
@@ -917,7 +935,7 @@ zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path,
     {
         if(RR_LABEL_IRRELEVANT(apex))
         {
-            zdb_rr_label_free(zone, apex);
+            zdb_rr_label_free(zone, apex); // valid call because in a delete
             zone->apex = NULL;
 
             return COLLECTION_PROCESS_DELETENODE;
@@ -939,13 +957,13 @@ zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path,
 #ifndef NDEBUG
 
 void
-zdb_rr_label_print_indented(zdb_rr_label* rr_label, int indent)
+zdb_rr_label_print_indented(zdb_rr_label* rr_label, output_stream *os, int indent)
 {
-    formatln("%tl: '%{dnslabel}'(%u)", indent, rr_label->name, rr_label->flags);
+    osformatln(os, "%tl: '%{dnslabel}'(%u) #[%08x]", indent, rr_label->name, rr_label->flags, hash_dnslabel(rr_label->name));
 
     indent++;
 
-    zdb_record_print_indented(rr_label->resource_record_set, indent);
+    zdb_record_print_indented(rr_label->resource_record_set, os, indent);
 
     dictionary_iterator iter;
     dictionary_iterator_init(&rr_label->sub, &iter);
@@ -953,14 +971,14 @@ zdb_rr_label_print_indented(zdb_rr_label* rr_label, int indent)
     {
         zdb_rr_label** sub_labelp = (zdb_rr_label**)dictionary_iterator_next(&iter);
 
-        zdb_rr_label_print_indented(*sub_labelp, indent);
+        zdb_rr_label_print_indented(*sub_labelp, os, indent);
     }
 }
 
 void
-zdb_rr_label_print(zdb_rr_label* rr_label)
+zdb_rr_label_print(zdb_rr_label* rr_label, output_stream *os)
 {
-    zdb_rr_label_print_indented(rr_label, 0);
+    zdb_rr_label_print_indented(rr_label, os, 0);
 }
 
 #endif

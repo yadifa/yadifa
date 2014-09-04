@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -59,56 +59,49 @@ struct zone_data_set
     mutex_t lock;
 };
 
-#include	"check.h"
-#include	"parser.h"
-#include    "zone_data.h"
+#include "zone_desc.h"
 
 /*    ------------------------------------------------------------
  *
  *      VALUES
  */
-/** \def ttl value used for the zone file if none provided */
-#define		DEFAULT_TTL             86400
-#define		DOT_DOMAIN              "."
 
-#define		BRACKET_CLOSED          0x00U
-#define		BRACKET_OPEN            0x01U
+#define BRACKET_CLOSED          0x00U
+#define BRACKET_OPEN            0x01U
 /**  flag settings for printing the zone file
  * \param 0 means not printing of the resource records
  * \param 1 means printing of the resource records
  */
-#define		WITHOUT_RR		0
-#define		WITH_RR                 1
+#define WITHOUT_RR		0
+#define WITH_RR                 1
 
-/*    ------------------------------------------------------------
- *
- *      VALUES
- */
+#define ZONE_NAME              0x01U
+#define ZONE_TYPE              0x02U
+#define ZONE_ACL               0x04U
+#define ZONE_GLOBAL_RR         0x08U
+#define ZONE_RR                0x10U
+#define ZONE_ALL               (ZONE_NAME | ZONE_TYPE | ZONE_ACL | ZONE_GLOBAL_RR | ZONE_RR)
 
-/*    ------------------------------------------------------------
- *
- *      ENUM
- */
+struct zone_command_s
+{
+    union
+    {
+        u8       *origin;
+        zdb_zone *zone;
+        void     *ptr;
+    } parm;
+    
+    u32 id;
+};
+
+typedef struct zone_command_s zone_command_s;
 
 
-/*    ------------------------------------------------------------
- *
- *      STRUCTS
- */
+typedef bool zone_data_matching_callback(zone_desc_s*);
 
-/*    ------------------------------------------------------------
- *
- *      PROTOTYPES
- */
+bool zone_data_is_clone(zone_desc_s *desc);
 
-
-
-#define         ZONE_NAME              0x01U
-#define         ZONE_TYPE              0x02U
-#define         ZONE_ACL               0x04U
-#define         ZONE_GLOBAL_RR         0x08U
-#define         ZONE_RR                0x10U
-#define         ZONE_ALL               (ZONE_NAME | ZONE_TYPE | ZONE_ACL | ZONE_GLOBAL_RR | ZONE_RR)
+s32 zone_desc_match(const zone_desc_s *a, const zone_desc_s *b);
 
 void zone_init(zone_data_set *set);
 
@@ -118,9 +111,9 @@ void zone_init(zone_data_set *set);
  *
  *  @retval clean new zone_data
  */
-zone_data *zone_alloc();
+zone_desc_s *zone_alloc();
 
-zone_data *zone_clone(zone_data *zone_setup);
+zone_desc_s *zone_clone(zone_desc_s *zone_setup);
 
 /** \brief
  *  Frees a zone data
@@ -128,7 +121,23 @@ zone_data *zone_clone(zone_data *zone_setup);
  *  @param[in] src is a * to the zone data
  */
 
-void zone_free(zone_data *zone_setup);
+void zone_acquire(zone_desc_s *zone_desc);
+
+void zone_free(zone_desc_s *zone_setup);
+
+#define zone_release(zd__) zone_free(zd__)
+
+void zone_dump_allocated();
+
+/**
+ * 
+ */
+
+void zone_remove_all_matching(zone_data_set *dset, zone_data_matching_callback *matchcallback);
+
+
+
+#if 1 // NOT USED
 
 /** \brief Frees all elements of the collection
  *
@@ -139,11 +148,20 @@ void zone_free(zone_data *zone_setup);
 
 void zone_free_all(zone_data_set *set);
 
+#endif
+
+ya_result zone_complete_settings(zone_desc_s *zone_desc);
+
 /**
+ * 
  * Adds the zone in the collection (if it's not there already)
+ * 
+ * @param set
+ * @param zone
+ * @return 
  */
 
-ya_result zone_register(zone_data_set *set, zone_data *zone);
+ya_result zone_register(zone_data_set *set, zone_desc_s *zone);
 
 /**
  * Removes the zone with the given origin from the collection.
@@ -151,7 +169,17 @@ ya_result zone_register(zone_data_set *set, zone_data *zone);
  * he wants)
  */
 
-zone_data *zone_unregister(zone_data_set *set, u8 *origin);
+zone_desc_s *zone_unregister(zone_data_set *set, const u8 *origin);
+
+/**
+ * returns the zone_data from the zone config that's just after the name
+ * in lexicographic order
+ * 
+ * @param name
+ * @return 
+ */
+
+zone_desc_s *zone_getafterdnsname(const u8 *name);
 
 /**
  * returns the zone_data from the zone config for the name
@@ -160,46 +188,39 @@ zone_data *zone_unregister(zone_data_set *set, u8 *origin);
  * @return 
  */
 
-zone_data *zone_getbydnsname(const u8 *name);
+zone_desc_s *zone_acquirebydnsname(const u8 *name);
 
-/**
- * returns the zone_data from the dynamic zone config for the name
- * 
- * @param name
- * @return 
- */
-
-zone_data *zone_getdynamicbydnsname(const u8 *name);
 
 /*
  * functions used for removing a zone_desc
  */
 
-void zone_setmodified(zone_data *zone_desc, bool v);
-void zone_setloading(zone_data *zone_desc, bool v);
-void zone_setmustsavefile(zone_data *zone_desc, bool v);
-void zone_setmustsaveaxfr(zone_data *zone_desc, bool v);
-void zone_setsavingfile(zone_data *zone_desc, bool v);
-void zone_setsavingaxfr(zone_data *zone_desc, bool v);
-void zone_setstartingup(zone_data *zone_desc, bool v);
-void zone_setdynamicupdating(zone_data *zone_desc, bool v);
+void zone_setmodified(zone_desc_s *zone_desc, bool v);
+void zone_setloading(zone_desc_s *zone_desc, bool v);
+void zone_setmustsavefile(zone_desc_s *zone_desc, bool v);
+void zone_setmustsaveaxfr(zone_desc_s *zone_desc, bool v);
+void zone_setsavingfile(zone_desc_s *zone_desc, bool v);
+void zone_setsavingaxfr(zone_desc_s *zone_desc, bool v);
+void zone_setstartingup(zone_desc_s *zone_desc, bool v);
+void zone_setdynamicupdating(zone_desc_s *zone_desc, bool v);
 
-bool zone_isidle(zone_data *zone_desc);
-bool zone_ismodified(zone_data *zone_desc);
-bool zone_isloading(zone_data *zone_desc);
-bool zone_mustsavefile(zone_data *zone_desc);
-bool zone_mustsaveaxfr(zone_data *zone_desc);
-bool zone_issavingfile(zone_data *zone_desc);
-bool zone_issavingaxfr(zone_data *zone_desc);
-bool zone_isdynamicupdating(zone_data *zone_desc);
-bool zone_canbeedited(zone_data *zone_desc);
+bool zone_isidle(zone_desc_s *zone_desc);
+bool zone_isfrozen(zone_desc_s *zone_desc);
+bool zone_ismodified(zone_desc_s *zone_desc);
+bool zone_isloading(zone_desc_s *zone_desc);
+bool zone_mustsavefile(zone_desc_s *zone_desc);
+bool zone_mustsaveaxfr(zone_desc_s *zone_desc);
+bool zone_issavingfile(zone_desc_s *zone_desc);
+bool zone_issavingaxfr(zone_desc_s *zone_desc);
+bool zone_isdynamicupdating(zone_desc_s *zone_desc);
+bool zone_canbeedited(zone_desc_s *zone_desc);
 /*
  * This will mark a zone as being obsolete.
  * It means that we are about to delete it.
  * It also means that nobody can lock it anymore, but the destoyer) (lock will return an error for anybody else)
  */
 
-ya_result zone_set_obsolete(zone_data *zone, u8 destroyer_mark);
+ya_result zone_wait_unlocked(zone_desc_s *zone_desc);
 
 void zone_set_lock(zone_data_set *dset);
 void zone_set_unlock(zone_data_set *dset);
@@ -208,42 +229,78 @@ void zone_set_unlock(zone_data_set *dset);
  * returns true if a zone is obsolete
  */
 
-bool zone_is_obsolete(zone_data *zone);
+bool zone_is_obsolete(zone_desc_s *zone_desc);
 
 /*
  * returns true if the zone hasn't even tried to load its zone
  */
 
-bool zone_isstartingup(zone_data *zone_desc);
+bool zone_isstartingup(zone_desc_s *zone_desc);
 
 /*
  * returns the owner, or error if the zone_desc is obsolete
  */
 
-ya_result zone_try_lock(zone_data *zone, u8 owner_mark);
+ya_result zone_try_lock(zone_desc_s *zone_desc, u8 owner_mark);
 
 /*
  * wait for lock (and return the owner) or return an error if the zone_desc becomes obsolete
  */
 
-ya_result zone_lock(zone_data *zone, u8 owner_mark);
+ya_result zone_lock(zone_desc_s *zone_desc, u8 owner_mark);
 
 /*
  * unlocks if locked by the owner, else return an error
  */
 
-ya_result zone_unlock(zone_data *zone, u8 owner_mark);
+void zone_unlock(zone_desc_s *zone_desc, u8 owner_mark);
 
 const char *zone_type_to_name(zone_type t);
+const char* zone_dnssec_to_name(u32 dnssec_flags);
 
-void zone_setdefaults(zone_data *zone);
+void zone_setdefaults(zone_desc_s *zone_desc);
 
-/*
- * functions used to print a zone desc
+// 0 : no merge, 1 : merge, < 0 : error
+ya_result zone_setwithzone(zone_desc_s *zone_desc, zone_desc_s *src);
+
+static inline bool
+zone_is_auto_notify(zone_desc_s *zone_desc)
+{
+    return (zone_desc->flags & ZONE_FLAG_NOTIFY_AUTO) != 0;
+}
+
+static inline void
+zone_auto_notify_set(zone_desc_s *zone_desc, bool enable)
+{
+    if(enable)
+    {
+        zone_desc->flags |= ZONE_FLAG_NOTIFY_AUTO;
+    }
+    else
+    {
+        zone_desc->flags &= ~ZONE_FLAG_NOTIFY_AUTO;
+    }
+}
+
+static inline bool
+zone_is_drop_before_load(zone_desc_s *zone_desc)
+{
+    return (zone_desc->flags & ZONE_FLAG_DROP_BEFORE_LOAD) != 0;
+}
+
+void zone_enqueue_command(zone_desc_s *zone_desc, u32 id, void* parm, bool has_priority);
+zone_command_s* zone_dequeue_command(zone_desc_s *zone_desc);
+void zone_command_free(zone_command_s *cmd);
+/**
+ * 
+ * Functions to log a zone desc
+ * 
+ * @param zone_desc
+ * @param text
  */
 
-void zone_print(const zone_data *, const char *text, u8 flag, output_stream*);
-void zone_print_all(zone_data_set *dset, const char *text, u8 flag, output_stream*);
+void zone_desc_log(logger_handle* handle, u32 level, const zone_desc_s *zone_desc, const char *text);
+void zone_desc_log_all(logger_handle* handle, u32 level, zone_data_set *dset, const char *text);
 
 #endif
 

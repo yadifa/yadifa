@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief Hash-based collection designed to change it's structure to improve speed.
@@ -43,28 +43,31 @@
 #define	_dictionary_H
 
 #include <dnscore/sys_types.h>
-#include "btree.h"
-#include "htbt.h"
+
+#include <dnsdb/btree.h>
+#include <dnsdb/htbt.h>
+
+//#define DICTIONARY_NODE_MODE 0 // struct
+#define DICTIONARY_NODE_MODE 1 // union
 
 #ifdef	__cplusplus
 extern "C"
 {
 #endif
 
+#if DICTIONARY_NODE_MODE == 0
+    
+struct dictionary_node;
+    
 typedef struct dictionary_node dictionary_node;
 
-/**
- * @brief All dictionary object/data/nodes MUST and will begin with/like this.
- *
- * All dictionary object/data/nodes MUST and will begin with/like this.
- * The first sizeof(void*) bytes are used for a single-linked list "next" pointer.
- *
- */
+#else
 
-struct dictionary_node
-{
-    dictionary_node* next;
-};
+union dictionary_node;
+
+typedef union dictionary_node dictionary_node;
+
+#endif
 
 /**
  * @brief Function type used to find a node match
@@ -169,7 +172,7 @@ struct dictionary
 	btree btree_collection; /*  4  8 */
 	htbt htbt_collection; /*  4  8 */
     } ct; /* Collection-type*/
-    struct dictionary_vtbl* vtbl; /*  4  8 */
+    const struct dictionary_vtbl* vtbl; /*  4  8 */
     u32 count; /*  4  4 */
     u32 threshold; /*  4  4 */
 }; /* 16 24 */
@@ -185,7 +188,7 @@ typedef struct dictionary_iterator dictionary_iterator;
 
 struct dictionary_iterator
 {
-    struct dictionary_iterator_vtbl* vtbl;
+    const struct dictionary_iterator_vtbl* vtbl;
     dictionary_node* sll;
 
     union
@@ -382,7 +385,21 @@ typedef bool dictionary_iterator_hasnext_method(dictionary_iterator* dico);
 
 typedef void** dictionary_iterator_next_method(dictionary_iterator* dico);
 
-typedef const char* dictionary_class;
+/**
+ * @brief Function type called to initialize a dictionary iterator from a starting point
+ *
+ * Function type called to initialize a dictionary iterator
+ * If the key has not been found the previous or next key is used instead (whatever has been hit last)
+ *
+ * @param[in] dico a pointer to the dictionary descriptor
+ * @param[in] iter a pointer to the dictionary iterator
+ * @param[in] the key to start from.
+ */
+
+
+typedef void dictionary_iterator_init_from_method(const dictionary* dico, dictionary_iterator* iter, hashcode key);
+
+typedef const char * const dictionary_class;
 
 /**
  * @brief The dictionary virtual table
@@ -393,19 +410,21 @@ typedef const char* dictionary_class;
 struct dictionary_vtbl
 {
     /*dictionary_init_method* dictionary_init_call;*/
-    dictionary_destroy_method* dictionary_destroy_call;
-    dictionary_add_method* dictionary_add_call;
-    dictionary_find_method* dictionary_find_call;
-    dictionary_findp_method* dictionary_findp_call;
-    dictionary_remove_method* dictionary_remove_call;
-    dictionary_process_method* dictionary_process_call;
+    dictionary_destroy_method * const dictionary_destroy_call;
+    dictionary_add_method * const dictionary_add_call;
+    dictionary_find_method * const dictionary_find_call;
+    dictionary_findp_method * const dictionary_findp_call;
+    dictionary_remove_method * const dictionary_remove_call;
+    dictionary_process_method * const dictionary_process_call;
 
-    dictionary_destroy_ex_method* dictionary_destroy_ex_call;
+    dictionary_destroy_ex_method * const dictionary_destroy_ex_call;
 
-    dictionary_iterator_init_method* dictionary_iterator_init_call;
+    dictionary_iterator_init_method * const dictionary_iterator_init_call;
+    
+    dictionary_iterator_init_from_method * const dictionary_iterator_init_from_call;
 
-    dictionary_empties_method* dictionary_empties_call;
-    dictionary_fills_method* dictionary_fills_call;
+    dictionary_empties_method * const dictionary_empties_call;
+    dictionary_fills_method * const dictionary_fills_call;
 
     dictionary_class __class__;
 };
@@ -419,8 +438,8 @@ struct dictionary_vtbl
 
 struct dictionary_iterator_vtbl
 {
-    dictionary_iterator_hasnext_method* dictionary_iterator_hasnext_call;
-    dictionary_iterator_next_method* dictionary_iterator_next_call;
+    dictionary_iterator_hasnext_method * const dictionary_iterator_hasnext_call;
+    dictionary_iterator_next_method * const dictionary_iterator_next_call;
 };
 
 /**
@@ -450,6 +469,15 @@ void dictionary_init(dictionary* dico);
 void dictionary_mutate(dictionary* dico);
 
 /**
+ * 
+ * Initialises the iterator so that it has no next items to return
+ * 
+ * @param iter
+ */
+
+void dictionary_empty_iterator_init(dictionary_iterator* iter);
+
+/**
  * @brief Checks if a dictionary should be processed by dictionary_mutate
  *
  * Checks if a dictionary should be processed by dictionary_mutate
@@ -475,6 +503,8 @@ void dictionary_mutate(dictionary* dico);
 #define dictionary_process(dico_, key_, record_match_data_, compare_) (dico_)->vtbl->dictionary_process_call((dico_), (key_), (record_match_data_), (compare_))
 /** @brief helper macro */
 #define dictionary_iterator_init(dico_, iter_) (dico_)->vtbl->dictionary_iterator_init_call((dico_), (iter_))
+/** @brief helper macro */
+#define dictionary_iterator_init_from(dico_, iter_, key_) (dico_)->vtbl->dictionary_iterator_init_from_call((dico_), (iter_), (key_))
 /** @brief helper macro */
 #define dictionary_iterator_hasnext(iter_) (iter_)->vtbl->dictionary_iterator_hasnext_call((iter_))
 /** @brief helper macro */

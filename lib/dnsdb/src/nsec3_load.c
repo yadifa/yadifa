@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -58,8 +58,10 @@
 
 #include <dnscore/format.h>
 
-#define MODULE_MSG_HANDLE g_dnssec_logger
+#define N3CHNCTX_TAG 0x5854434e4843334e
+#define N3PRDATA_TAG 0x415441445250334e
 
+#define MODULE_MSG_HANDLE g_dnssec_logger
 extern logger_handle *g_dnssec_logger;
 
 /******************************************************************************
@@ -232,10 +234,10 @@ static nsec3_chain_context*
 nsec3_load_chain_init(const u8 *rdata, u16 rdata_size)
 {
     nsec3_chain_context *ctx;
-    MALLOC_OR_DIE(nsec3_chain_context*, ctx, sizeof(nsec3_chain_context), 1);
+    MALLOC_OR_DIE(nsec3_chain_context*, ctx, sizeof(nsec3_chain_context), N3CHNCTX_TAG);
     ctx->next = NULL;
 
-    MALLOC_OR_DIE(u8*, ctx->nsec3param_rdata, rdata_size, 1);
+    MALLOC_OR_DIE(u8*, ctx->nsec3param_rdata, rdata_size, N3PRDATA_TAG);
     memcpy(ctx->nsec3param_rdata, rdata, rdata_size);
     ctx->nsec3param_rdata_size = rdata_size;
 
@@ -467,9 +469,6 @@ nsec3_load_compile(nsec3_load_context *context)
             *
             * Build a copy of the ttl/rdata, ignore dups
             */
-
-
-            
             bool dup = FALSE;
             
             zdb_packed_ttlrdata **rrsigp = &item->rrsig;
@@ -563,31 +562,39 @@ nsec3_load_compile(nsec3_load_context *context)
                  * Didn't matched: The signature, if any, will be wrong
                  */
 
-#ifndef NDEBUG
+#ifdef DEBUG
                 rdata_desc nsec3_desc = {TYPE_NSEC3, cr->rdata_size, cr->rdata};
                 log_debug("nsec3: %{digest32h} %{typerdatadesc} rejected (do not agree with rdata value).", item->digest, &nsec3_desc);
-#endif
 
-                u8 owner[256];
                 zdb_packed_ttlrdata *nsec3_ttlrdata;
-                zdb_packed_ttlrdata *nsec3_ttlrdata_rrsig;
+                const zdb_packed_ttlrdata *nsec3_ttlrdata_rrsig;
 
-                nsec3_zone_item_to_zdb_packed_ttlrdata(n3, item, zone->origin, owner, min_ttl, &nsec3_ttlrdata, &nsec3_ttlrdata_rrsig);
+                u8 *owner;
+                u8 *pool;
+                u8 pool_buffer[NSEC3_ZONE_ITEM_TO_NEW_ZDB_PACKED_TTLRDATA_SIZE];
+                pool = pool_buffer;
+                
+                nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm nsec3_parms =
+                {
+                    n3,
+                    item,
+                    zone->origin,
+                    &pool,
+                    min_ttl
+                };
+
+                nsec3_zone_item_to_new_zdb_packed_ttlrdata(&nsec3_parms, &owner, &nsec3_ttlrdata, &nsec3_ttlrdata_rrsig);
 
                 if(nsec3_ttlrdata != NULL)
                 {
-#ifndef NDEBUG
                     rdata_desc nsec3_desc = {TYPE_NSEC3, nsec3_ttlrdata->rdata_size, &nsec3_ttlrdata->rdata_start[0]};
                     log_debug("nsec3: computed: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
                     nsec3_desc.len = cr->rdata_size;
                     nsec3_desc.rdata = cr->rdata;
                     log_debug("nsec3: received: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
-#endif
-
-                    free(nsec3_ttlrdata);
                 }
                 
-
+#endif
                 nsec3_rejected++;
 
                 nsec3_zone_item_rrsig_delete_all(item);

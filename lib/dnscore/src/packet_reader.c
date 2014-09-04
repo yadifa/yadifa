@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnspacket DNS Messages
  *  @ingroup dnscore
  *  @brief
@@ -45,17 +45,25 @@
 #include <arpa/inet.h>
 #include <ctype.h>
 
+#include "dnscore-config.h"
 #include "dnscore/packet_reader.h"
 #include "dnscore/rfc.h"
+#include "dnscore/tsig.h"
+
+#if HAS_CTRL
+#include "dnscore/ctrl-rfc.h"
+#endif
 
 ya_result
-packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8* output_buffer, u32 len_)
+packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8 *output_buffer, u32 len_)
 {
-    const u8* p_limit = &reader->packet[reader->packet_size];
+    const u8                *p_limit = &reader->packet[reader->packet_size];
 
-    u8* buffer = output_buffer;
-    u8* buffer_limit = &buffer[len_];
-    const u8* p = &reader->packet[reader->offset];
+    u8                                              *buffer = output_buffer;
+    u8                                        *buffer_limit = &buffer[len_];
+    const u8                           *p = &reader->packet[reader->offset];
+
+    /*    ------------------------------------------------------------    */ 
 
     if(p >= p_limit)
     {
@@ -115,10 +123,10 @@ packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8* output_buffer, u3
         {
             /* reposition the pointer */
             u32 new_offset = len & 0x3f;
-            new_offset <<= 8;
-            new_offset |= *p;
+            new_offset   <<= 8;
+            new_offset    |= *p;
 
-            p = &reader->packet[new_offset];
+            p             = &reader->packet[new_offset];
 
             continue;
         }
@@ -142,10 +150,12 @@ packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8* output_buffer, u3
         }
         while(buffer < buffer_limit);
     }
+    
+    // never reached
 }
 
 ya_result
-packet_reader_read(packet_unpack_reader_data* reader, u8* output_buffer, u32 len)
+packet_reader_read(packet_unpack_reader_data* reader, void *output_buffer, u32 len)
 {
     u32 remaining = reader->packet_size - reader->offset;
 
@@ -164,7 +174,7 @@ packet_reader_read(packet_unpack_reader_data* reader, u8* output_buffer, u32 len
 ya_result
 packet_reader_read_u16(packet_unpack_reader_data* reader, u16 *val)
 {
-    zassert(val != NULL);
+    yassert(val != NULL);
 
     u32 remaining = reader->packet_size - reader->offset;
 
@@ -182,7 +192,7 @@ packet_reader_read_u16(packet_unpack_reader_data* reader, u16 *val)
 ya_result
 packet_reader_read_u32(packet_unpack_reader_data* reader, u32 *val)
 {
-    zassert(val != NULL);
+    yassert(val != NULL);
     
     u32 remaining = reader->packet_size - reader->offset;
 
@@ -226,7 +236,7 @@ packet_reader_read_zone_record(packet_unpack_reader_data* reader, u8* output_buf
         return err;
     }
 
-    zassert(err == 4);
+    yassert(err == 4);
 
     buffer += 4;
 
@@ -266,7 +276,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
         return err;
     }
 
-    zassert(err == 10);
+    yassert(err == 10);
 
     u16 size = ntohs(GET_U16_AT(buffer[8]));
 
@@ -314,7 +324,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
                 return INVALID_RECORD;      /* wrong size */
             }
 
-            if(FAIL(err = packet_reader_read_fqdn(reader, buffer, len)))
+            if(FAIL(err = packet_reader_read_fqdn(reader, buffer, len))) /* err = error code or bytes filled, not bytes read (compression) */
             {
                 return err;
             }
@@ -367,12 +377,11 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
 
             if(rdata_limit - reader->offset != 20)
             {
-                err = UNEXPECTED_EOF;
-                break;
+                return UNEXPECTED_EOF;
             }
 
             buffer += err;
-            len -= err;
+            //len -= err;
 
             if(FAIL(err = packet_reader_read(reader, buffer, 20)))
             {
@@ -392,8 +401,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
 
             if(size < 18)
             {
-                err = UNEXPECTED_EOF;
-                break;
+                return UNEXPECTED_EOF;
             }
 
             if(FAIL(err = packet_reader_read(reader, buffer, 18)))
@@ -410,7 +418,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
             }
 
             buffer += err;
-            len -= err;
+            //len -= err;
 
             if(FAIL(err = packet_reader_read(reader, buffer, rdata_limit - reader->offset)))
             {
@@ -429,7 +437,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
             }
 
             buffer += err;
-            len -= err;
+            //len -= err;
 
             if(FAIL(err = packet_reader_read(reader, buffer, rdata_limit - reader->offset)))
             {
@@ -457,7 +465,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
                 return err;
             }
 
-            buffer += err;
+            //buffer += err;
 
             return UNSUPPORTED_TYPE;
         }
@@ -473,7 +481,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
                 return err;
             }
 
-            buffer += err;
+            //buffer += err;
 
             return UNSUPPORTED_TYPE;
         }
@@ -489,7 +497,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
                 return err;
             }
 
-            buffer += err;
+            //buffer += err;
 
             return UNSUPPORTED_TYPE;
 
@@ -560,7 +568,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
     /*
      * This len was the rdata_size but this was the packed size.
      * So I cannot compare without a relatively expensive test
-     * zassert(len == 0);
+     * yassert(len == 0);
      *
      */
 
@@ -651,7 +659,7 @@ packet_reader_skip_record(packet_unpack_reader_data* reader)
     /*
      * This len was the rdata_size but this was the packed size.
      * So I cannot compare without a relatively expensive test
-     * zassert(len == 0);
+     * yassert(len == 0);
      *
      */
 
@@ -659,13 +667,261 @@ packet_reader_skip_record(packet_unpack_reader_data* reader)
 }
 
 void
-packet_reader_init(u8* buffer, u32 buffer_size, packet_unpack_reader_data* reader)
+packet_reader_init(packet_unpack_reader_data* reader, const u8* buffer, u32 buffer_size)
 {
     reader->packet = buffer;
     reader->packet_size = buffer_size;
 
     reader->offset = 0;
 }
+
+#if HAS_CTRL
+
+/**
+ * 
+ * Returns true iff the string txt is utf-8
+ * The current implementation checks it's ASCII7 (which is a valid subset of utf-8)
+ * 
+ * @todo 20140523 edf -- internal use and only needs ASCIIZ, do handle utf-8 when it will be required (very low priority)
+ *  
+ * @param txt
+ * @param len
+ * @return 
+ */
+
+static bool
+is_utf8(const char *txt, u16 len)
+{
+    for(u16 i = 0; i < len; i++)
+    {
+        if((txt[i] & 0x80) != 0)
+        {
+            return FALSE;
+        }
+    }
+    
+    return TRUE;
+}
+
+/**
+ * 
+ * @note Yes, this COULD go in the message.* files, once they are finalised
+ * 
+ * @param reader
+ * @param rdatasize
+ * @param rclass
+ * @param txt
+ * @param dryrun
+ * @return 
+ */
+
+ya_result
+packet_reader_read_utf8(packet_unpack_reader_data *reader, u16 rdatasize, u16 rclass, char **txt, bool dryrun)
+{
+    char *tmp = NULL;
+    ya_result return_value = ERROR;
+    
+    if(rclass == CLASS_ANY)
+    {
+        if(rdatasize != 0)
+        {
+            return ERROR; /* formerr */
+        }
+        
+        if(!dryrun)
+        {
+            free(*txt);
+            *txt = NULL;
+        }
+
+        return_value = SUCCESS;
+    }
+    else
+    {
+        MALLOC_OR_DIE(char *, tmp, rdatasize + 1, GENERIC_TAG);
+        packet_reader_read(reader, (u8*)tmp, rdatasize);
+        tmp[rdatasize] = '\0';
+
+        if(is_utf8(tmp, rdatasize))
+        {        
+            return_value = SUCCESS;
+
+            if(!dryrun)
+            {
+                if(rclass != CLASS_NONE)
+                {
+                    if(*txt != NULL)
+                    {
+                        free(*txt);
+                    }
+
+                    *txt = tmp;
+                    tmp = NULL;
+                }
+                else
+                {
+                    if(*txt != NULL)
+                    {
+                        if(strcmp(*txt, tmp) == 0)
+                        {
+                            free(*txt);
+                            *txt = NULL;
+                        }
+                    }
+                }
+            }
+        }
+
+        if(tmp != NULL)
+        {                    
+            free(tmp);
+        }
+    }
+    
+    return return_value;
+}
+
+/**
+ * 
+ * @note Yes, this COULD go in the message.* files, once they are finalised
+ * 
+ * @param reader
+ * @param rdatasize
+ * @param rclass
+ * @param ha
+ * @param dryrun
+ * @return 
+ */
+
+ya_result
+packet_reader_read_remote_server(packet_unpack_reader_data *reader, u16 rdatasize, u16 rclass, host_address **ha, bool dryrun)
+{
+    u16 ip_port = 0;
+    u8 ipver;
+    u8 flags;
+    
+    u8 ip_buffer[16];
+    u8 tsig_name[MAX_DOMAIN_LENGTH];
+    
+    if(rclass == CLASS_ANY)
+    {
+        if(rdatasize != 0)
+        {
+            return ERROR; /* formerr */
+        }
+        
+        if(!dryrun)
+        {
+            if(*ha != NULL)
+            {
+                host_address_delete_list(*ha);
+                *ha = NULL;
+            }
+        }
+        
+        return SUCCESS;
+    }
+    
+    ya_result return_value;
+            
+    if(ISOK(return_value = packet_reader_read(reader, &flags, 1)))
+    {
+        return_value = ERROR;
+
+        ipver = flags & REMOTE_SERVER_FLAGS_IP_MASK;
+
+        if((ipver == HOST_ADDRESS_IPV4) || (ipver == HOST_ADDRESS_IPV6))
+        {
+            tsig_item *tsig = NULL;
+
+            if(ipver == HOST_ADDRESS_IPV4)
+            {
+                return_value = packet_reader_read(reader, ip_buffer, 4);
+            }
+            else
+            {
+                return_value = packet_reader_read(reader, ip_buffer, 16);
+            }
+            
+            if(FAIL(return_value))
+            {
+                return return_value;
+            }
+
+            if((flags & REMOTE_SERVER_FLAGS_PORT_MASK) != 0)
+            {
+                if(FAIL(return_value = packet_reader_read_u16(reader, &ip_port)))
+                {
+                    return return_value;
+                }
+            }
+
+            if((flags & REMOTE_SERVER_FLAGS_KEY_MASK) != 0)
+            {
+                if(FAIL(return_value = packet_reader_read_fqdn(reader, tsig_name, sizeof(tsig_name))))
+                {
+                    return return_value;
+                }
+
+                if((tsig = tsig_get(tsig_name)) == NULL)
+                {
+                    return ERROR;
+                }                
+            }
+
+            if(!dryrun)
+            {
+                host_address *address;
+
+                MALLOC_OR_DIE(host_address*, address, sizeof(host_address), HOSTADDR_TAG);
+
+                address->next = NULL;
+                address->tsig = tsig;
+
+                if(ipver == HOST_ADDRESS_IPV4)
+                {
+                    memcpy(address->ip.v4.bytes, ip_buffer, 4);
+                    address->port = ip_port;
+                    address->version = HOST_ADDRESS_IPV4;
+                }
+                else // HOST_ADDRESS_IPV6:
+                {
+                    memcpy(address->ip.v6.bytes, ip_buffer, 16);
+                    address->port = ip_port;
+                    address->version = HOST_ADDRESS_IPV6;
+                }
+                
+                /*
+                 * Here the rclass changes the behaviour
+                 */
+
+                if(rclass != CLASS_NONE)
+                {
+                    if(*ha == NULL)
+                    {
+                        *ha = address;
+                    }
+                    else
+                    {
+                        host_address_append_host_address(*ha, address); /* copy made */
+                        free(address);
+                    }
+                }
+                else
+                {
+                    host_address_remove_host_address(ha, address); /* not freed */
+                    free(address);
+                }
+
+                return_value = SUCCESS;
+            }
+        }
+    }
+    
+    return return_value;
+}
+
+#endif
 
 /** @} */
 

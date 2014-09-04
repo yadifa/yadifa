@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup records_labels Internal functions for the database: zoned resource records label.
  *  @ingroup dnsdb
  *  @brief Internal functions for the database: zoned resource records label.
@@ -42,7 +42,7 @@
 #ifndef _RR_LABEL_H
 #define	_RR_LABEL_H
 
-#include "zdb_types.h"
+#include <dnsdb/zdb_record.h>
 
 #ifdef	__cplusplus
 extern "C" {
@@ -201,7 +201,7 @@ ya_result zdb_rr_label_delete_record(zdb_zone* zone, dnslabel_vector_reference p
 ya_result zdb_rr_label_delete_record_exact(zdb_zone* zone,dnslabel_vector_reference path,s32 path_index,u16 type,zdb_ttlrdata* ttlrdata);
 
 /**
- * @brief Deletes an EMPTY label (TODO)
+ * @brief Deletes an EMPTY label
  *
  * Deletes an EMPTY label an all it's EMPTY parents
  * Parents bound to an NSEC structures are not removed
@@ -216,6 +216,11 @@ ya_result zdb_rr_label_delete_record_exact(zdb_zone* zone,dnslabel_vector_refere
 /* 1 USE */
 ya_result zdb_rr_label_delete(zdb_zone* zone,dnslabel_vector_reference path,s32 path_index);
 
+static inline zdb_packed_ttlrdata* zdb_rr_label_get_rrset(zdb_rr_label *rr_label, u16 type)
+{
+    zdb_packed_ttlrdata* rrset = zdb_record_find(&rr_label->resource_record_set, type);
+    return rrset;
+}
 
 /**
  * @brief Destroys a zone label and its contents
@@ -236,7 +241,7 @@ static inline bool zdb_rr_label_is_glue(zdb_rr_label* label)
     return (label->flags & (ZDB_RR_LABEL_UNDERDELEGATION | ZDB_RR_LABEL_DELEGATION)) == ZDB_RR_LABEL_UNDERDELEGATION;
 }
 
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
 /* 2 USES */
 #define RR_LABEL_RELEVANT(rr_label_)   ((dictionary_notempty(&(rr_label_)->sub))||(btree_notempty((rr_label_)->resource_record_set))||(rr_label_->nsec.dnssec != NULL))
 
@@ -262,9 +267,9 @@ static inline bool zdb_rr_label_is_glue(zdb_rr_label* label)
 
 #ifndef NDEBUG
 
-void zdb_rr_label_print_indented(zdb_rr_label* rr_label, int indent);
+void zdb_rr_label_print_indented(zdb_rr_label* rr_label, output_stream *os, int indent);
 
-void zdb_rr_label_print(zdb_rr_label* zone_label);
+void zdb_rr_label_print(zdb_rr_label* zone_label, output_stream *os);
 
 #endif
 

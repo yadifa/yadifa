@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec NSEC functions
  *  @ingroup dnsdbdnssec
  *  @brief 

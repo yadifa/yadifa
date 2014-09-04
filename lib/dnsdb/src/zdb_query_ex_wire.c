@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup query_ex Database top-level query function
  *  @ingroup dnsdb
  *  @brief Database top-level query function
@@ -44,16 +44,23 @@
 #include <stdlib.h>
 #include <arpa/inet.h>
 
+#include "dnsdb-config.h"
+
 #include "dnsdb/zdb_types.h"
 
 #include <dnscore/format.h>
 #include <dnscore/message.h>
 #include <dnscore/packet_writer.h>
 
+#include <dnscore/logger.h>
+
 #include "dnsdb/htable.h"
 #include "dnsdb/hash.h"
+#include "dnsdb/dnsdb-config.h"
 
-#include <dnscore/logger.h>
+#if HAS_NSID_SUPPORT
+#include <dnscore/nsid.h>
+#endif
 
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
@@ -217,19 +224,24 @@ zdb_query_message_update(message_data* message, zdb_query_ex_answer* answer_set)
 
     packet_writer pc;
 
-#ifndef NDEBUG
+#ifdef DEBUG
     count = ~0;
     memset(&pc, 0xff, sizeof (pc));
 #endif
 
     if(message->edns)
     {
+#if HAS_NSID_SUPPORT
+        message->size_limit -= edns0_record_size;  /* edns0 opt record */
+#else
         message->size_limit -= EDNS0_RECORD_SIZE;  /* edns0 opt record */
+#endif
     }
 
     packet_writer_init(&pc, message->buffer, message->received, message->size_limit);
 
-    /** @todo If answer has been truncated (check for it) then set tuncated and do NOT update the offset */
+    // write_label handles truncation
+    
     fully_written = write_label(answer_set->answer, &count, &pc);
     header->ancount = htons(count);
     header->nscount = 0;
@@ -249,20 +261,50 @@ zdb_query_message_update(message_data* message, zdb_query_ex_answer* answer_set)
             header->arcount = htons(count);
         }
     }
-
+    
     if(message->edns)
     {
+        /* 00 00 29 SS SS rr vv 80 00 00 00 */
+        /* 00 00 29 SS SS rr vv 80 00 |opt| 00 03 |nsid| nsid */
+
+#if HAS_NSID_SUPPORT
+        if(!message->nsid)
+        {
+            message->size_limit += EDNS0_RECORD_SIZE;  /* edns0 opt record */
+            pc.packet_limit += EDNS0_RECORD_SIZE;
+
+            memset(&pc.packet[pc.packet_offset], 0, EDNS0_RECORD_SIZE);
+            pc.packet_offset += 2;
+            pc.packet[pc.packet_offset++] = 0x29;
+            packet_writer_add_u16(&pc, htons(edns0_maxsize));
+            packet_writer_add_u32(&pc, message->rcode_ext);
+            pc.packet_offset += 2; // rdata size already set to 0, skip it
+        }
+        else
+        {
+            message->size_limit += edns0_record_size;  /* edns0 opt record */
+            pc.packet_limit += edns0_record_size;
+
+            packet_writer_add_u16(&pc, 0);          // fqdn + 1st half of type
+            pc.packet[pc.packet_offset++] = 0x29;   // 2nd half of type
+
+            packet_writer_add_u16(&pc, htons(edns0_maxsize));
+            packet_writer_add_u32(&pc, message->rcode_ext);
+
+            memcpy(&pc.packet[pc.packet_offset], edns0_rdatasize_nsid_option_wire, edns0_rdatasize_nsid_option_wire_size);
+            pc.packet_offset += edns0_rdatasize_nsid_option_wire_size;
+        }
+#else
         message->size_limit += EDNS0_RECORD_SIZE;  /* edns0 opt record */
         pc.packet_limit += EDNS0_RECORD_SIZE;
-
-        /* 00 00 29 SS SS rr vv 80 00 00 00 */
-
+        
         memset(&pc.packet[pc.packet_offset], 0, EDNS0_RECORD_SIZE);
         pc.packet_offset += 2;
         pc.packet[pc.packet_offset++] = 0x29;
         packet_writer_add_u16(&pc, htons(edns0_maxsize));
         packet_writer_add_u32(&pc, message->rcode_ext);
-        pc.packet_offset += 2;
+        pc.packet_offset += 2; // rdata size already set to 0, skip it
+#endif
 
         header->arcount = htons(ntohs(header->arcount) + 1);
     }

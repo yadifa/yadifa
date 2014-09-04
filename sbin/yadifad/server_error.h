@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup server Server
  *  @ingroup yadifad
  *  @brief
@@ -42,6 +42,9 @@
 #ifndef _SERVER_ERROR_H
 #define	_SERVER_ERROR_H
 
+#include <dnscore/format.h>
+#include <dnscore/logger.h>
+
 #ifdef	__cplusplus
 extern "C"
 {
@@ -52,40 +55,59 @@ extern "C"
  *      VALUES
  */
 
-#define		YDF_ERROR_BASE				0x80080000
-#define		YDF_ERROR_CODE(code_)			((s32)(YDF_ERROR_BASE+(code_)))
+#define	    YDF_ERROR_BASE                  0x80080000
+#define	    YDF_ERROR_CODE(code_)			((s32)(YDF_ERROR_BASE+(code_)))
 
+#define     YDF_ALREADY_RUNNING                     YDF_ERROR_CODE(1)
+#define     YDF_PID_PATH_IS_WRONG                   YDF_ERROR_CODE(2)
+    
 /* Main errorcodes */
-#define		YDF_ERROR_CONFIGURATION         YDF_ERROR_CODE( 2)      /* Error in configuration                   */
-
-#define		YDF_ERROR_CHOWN			YDF_ERROR_CODE( 3)     /* Can change owner of file                 */
-
-#define		VALUE_FOUND             YDF_ERROR_CODE( 4)     /* Pointer is not empty                     */
-
-#define		FILE_NOT_FOUND_ERR      YDF_ERROR_CODE(20)     /* No file found                            */
-#define     FILE_OPEN_ERR           YDF_ERROR_CODE(21)     /* Error opening file                       */
-#define     FILE_CLOSE_ERR          YDF_ERROR_CODE(22)     /* Error closing file                       */
-#define     FILE_READ_ERR           YDF_ERROR_CODE(23)     /* Error reading file                       */
-#define     FILE_WRITE_ERR          YDF_ERROR_CODE(24)     /* Error writing file                       */
-#define     FILE_CHOWN_ERR          YDF_ERROR_CODE(25)     /* Error changing owner of file             */
 
 #define     ZONE_LOAD_MASTER_TYPE_EXPECTED          YDF_ERROR_CODE(30)
 #define     ZONE_LOAD_MASTER_ZONE_FILE_UNDEFINED    YDF_ERROR_CODE(31)
 #define     ZONE_LOAD_SLAVE_TYPE_EXPECTED           YDF_ERROR_CODE(40)
     
-#define     ANSWER_NOT_ACCEPTABLE   YDF_ERROR_CODE(50)
-#define     ANSWER_UNEXPECTED_EOF   YDF_ERROR_CODE(51)
+#define     ANSWER_NOT_ACCEPTABLE                   YDF_ERROR_CODE(50)
+#define     ANSWER_UNEXPECTED_EOF                   YDF_ERROR_CODE(51)
     
-#define     NOTIFY_ANSWER_NOT_AA    YDF_ERROR_CODE(1025)
-#define     NOTIFY_QUERY_TO_MASTER  YDF_ERROR_CODE(1026)
-#define     NOTIFY_QUERY_TO_UNKNOWN YDF_ERROR_CODE(1027)
-#define     NOTIFY_QUERY_FROM_UNKNOWN YDF_ERROR_CODE(1028)
+#define     NOTIFY_QUERY_TO_MASTER                  YDF_ERROR_CODE(1026)
+#define     NOTIFY_QUERY_TO_UNKNOWN                 YDF_ERROR_CODE(1027)
+#define     NOTIFY_QUERY_FROM_UNKNOWN               YDF_ERROR_CODE(1028)
     
 #define     EXIT_CONFIG_ERROR                10
 #define     EXIT_CODE_DATABASE_LOAD_ERROR    11
 #define     EXIT_CODE_SYSCLEANUP_ERROR       12
-
-
+    
+#ifndef MODULE_MSG_HANDLE
+extern logger_handle *g_server_logger;
+#define MODULE_MSG_HANDLE g_server_logger
+#endif
+    
+static inline void
+ttylog_err(const char *format, ...)
+{
+    va_list args;
+    
+    
+    if(logger_is_running())
+    {
+        va_start(args, format);
+        logger_handle_vmsg(MODULE_MSG_HANDLE, MSG_ERR, format, args);
+        va_end(args);
+        logger_flush();
+    }
+    // else 
+    {
+        flushout();
+        osprint(termerr, "error: ");
+        va_start(args, format);
+        vosformat(termerr, format, args);
+        va_end(args);
+        osprintln(termerr, "");
+        flusherr();
+    }
+}
+    
 #ifdef	__cplusplus
 }
 #endif

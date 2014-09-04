@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup config Database configuration
  *  @ingroup dnsdb
  *  @brief Database configuration
@@ -45,17 +45,14 @@
 
 #include <dnscore/sys_types.h>
 
+#include <dnsdb/zdb-config-features.h>
+
 #ifdef	__cplusplus
 extern "C"
 {
 #endif
 
-#define HAS_DNSSEC_SUPPORT 1
-#define HAS_NSEC_SUPPORT 1
-#define HAS_NSEC3_SUPPORT 1
-#define HAS_ACL_SUPPORT 1
-#define DEFAULT_ASSUMED_CPU_COUNT 2
-#define HAS_RRCACHE_ENABLED 1
+#define DEFAULT_ASSUMED_CPU_COUNT       2
     
 /**
  * Version of the database.
@@ -99,39 +96,15 @@ extern "C"
 
 #define ZDB_USE_THREADPOOL 1
 
-/**
- *
- * Enables or disables the support for NSEC
- *
- */
-
-#ifdef HAS_NSEC_SUPPORT
-#define ZDB_NSEC_SUPPORT 1
+/*#define ZDB_HAS_DNSSEC_SUPPORT (ZDB_HAS_NSEC_SUPPORT+ZDB_HAS_NSEC3_SUPPORT)*/
+#ifdef ZDB_HAS_DNSSEC_SUPPORT
+#define ZDB_HAS_DNSSEC_SUPPORT 1
 #else
-#define ZDB_NSEC_SUPPORT 0
-#endif
-
-/**
- *
- * Enables or disables the support for NSEC3
- *
- */
-
-#ifdef HAS_NSEC3_SUPPORT
-#define ZDB_NSEC3_SUPPORT 1
-#else
-#define ZDB_NSEC3_SUPPORT 0
-#endif
-
-/*#define ZDB_DNSSEC_SUPPORT (ZDB_NSEC_SUPPORT+ZDB_NSEC3_SUPPORT)*/
-#ifdef HAS_DNSSEC_SUPPORT
-#define ZDB_DNSSEC_SUPPORT 1
-#else
-#define ZDB_DNSSEC_SUPPORT 0
+#define ZDB_HAS_DNSSEC_SUPPORT 0
 #endif
 
 /* Here disable all the DNSSEC related third party libs */
-#if ZDB_DNSSEC_SUPPORT == 0
+#if ZDB_HAS_DNSSEC_SUPPORT == 0
       #undef ZDB_OPENSSL_SUPPORT
       #define ZDB_OPENSSL_SUPPORT 0
 #endif
@@ -145,7 +118,10 @@ extern "C"
  *
  */
 
+#if 0 /* fix */
+#else
 #define ZDB_CACHE_ENABLED 0
+#endif
 
 /**
  * Enables (1) or disables (0) the specialized memory allocator.
@@ -256,6 +232,24 @@ extern "C"
     
 #define ZDB_CNAME_LOOP_MAX  20
 
+/**
+ * The fixed minimum number of file descriptors opened at the same time for journals
+ */
+
+#define ZDB_JOURNAL_FD_MIN      4096
+    
+/**
+ * The fixed maximum number of file descriptors opened at the same time for journals
+ */
+
+#define ZDB_JOURNAL_FD_MAX      4096
+    
+/**
+ * The default maximum number of file descriptors opened at the same time for journals
+ */
+    
+#define ZDB_JOURNAL_FD_DEFAULT  512
+    
 #ifdef	__cplusplus
 }
 #endif

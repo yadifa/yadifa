@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /**
  *  @defgroup base Base conversion functions
  *  @ingroup dnscore
@@ -49,11 +49,11 @@ extern "C" {
 #endif
 
 #define BASE64_ENCODED_SIZE(binary_size) ((((binary_size)+2)/3)*4)
-#define BASE64_DECODED_SIZE(binary_size) ((((binary_size)+3)/4)*3)
+#define BASE64_DECODED_SIZE(text_size) ((((text_size)+3)/4)*3)
     
 /**
  * Encodes bytes into base64
- * The output size must be at least size_in * 8/5
+ * The output size must be at least size_in * 4/3
  * 
  * @param buffer_in     bytes to convert
  * @param size_in       number of bytes

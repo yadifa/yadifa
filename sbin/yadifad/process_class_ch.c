@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup server
  *  @ingroup yadifad
  *  @brief server
@@ -41,11 +41,7 @@
  */
 /*----------------------------------------------------------------------------*/
 
-/** @note: here we define the variable that is holding the default logger handle for the current source file
- *         Such a handle should NEVER been set in an include file.
- */
-
-#define MODULE_MSG_HANDLE g_server_logger
+#include "config.h"
 
 #include <poll.h>
 
@@ -55,6 +51,9 @@
 #include <dnscore/fdtools.h>
 
 #include <dnscore/rfc.h>
+
+extern logger_handle *g_server_logger;
+#define MODULE_MSG_HANDLE g_server_logger
 
 #include "process_class_ch.h"
 #include "confs.h"
@@ -101,6 +100,7 @@ process_class_ch(message_data *mesg)
     
     u8 qname[MAX_DOMAIN_LENGTH];
     
+#if HAS_ACL_SUPPORT
     if(ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac.allow_query)))
     {
         mesg->status = FP_ACCESS_REJECTED;
@@ -108,6 +108,7 @@ process_class_ch(message_data *mesg)
         
         return;
     }
+#endif
 
     packet_unpack_reader_data purd;
     purd.packet = mesg->buffer;
@@ -156,7 +157,7 @@ process_class_ch(message_data *mesg)
             memcpy(p, version_soa, sizeof(version_soa));
             p += sizeof(version_soa);
 
-            MESSAGE_AN(mesg->buffer) = NETWORK_ONE_16;
+            MESSAGE_SET_AN(mesg->buffer, NETWORK_ONE_16);
 
             an++;
         }
@@ -173,8 +174,8 @@ process_class_ch(message_data *mesg)
             au++;
         }
         
-        MESSAGE_AN(mesg->buffer) = htons(an);
-        MESSAGE_NS(mesg->buffer) = htons(au);
+        MESSAGE_SET_AN(mesg->buffer, htons(an));
+        MESSAGE_SET_NS(mesg->buffer, htons(au));
         
         if(mesg->edns)
         {
@@ -186,16 +187,18 @@ process_class_ch(message_data *mesg)
             p[ 3] = edns0_maxsize>>8;
             p[ 4] = edns0_maxsize;
             p[ 5] = (mesg->status >> 4);
-            p[ 6] = rcode_ext >> 24;
-            p[ 7] = rcode_ext >> 16;
-            p[ 8] = rcode_ext >> 8;
-            p[ 9] = rcode_ext;
+            //p[ 6] = rcode_ext >> 24;
+            p[ 6] = rcode_ext >> 16;
+            p[ 7] = rcode_ext >> 8;
+            p[ 8] = rcode_ext;
+            p[ 9] = 0;
             p[10] = 0;
-            p[11] = 0;
+            
+            // nsid
             
             p += 11;
          
-            MESSAGE_AR(mesg->buffer) = NETWORK_ONE_16;
+            MESSAGE_SET_AR(mesg->buffer, NETWORK_ONE_16);
         }
 
         mesg->send_length = p - mesg->buffer;

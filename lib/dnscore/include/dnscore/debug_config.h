@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup debug Debug functions
  *  @ingroup dnscore
  *  @brief Debug functions settings
@@ -55,8 +55,6 @@ extern "C"
  *
  * DEBUG: Enables (1) or disables (0) the internal memory debugging.
  *
- * If ZALLOC is enabled, the memory debugger does not do much.
- *
  * Recommended value: 0
  *
  */
@@ -67,6 +65,10 @@ extern "C"
 #undef ZDB_DEBUG_MALLOC
 #define ZDB_DEBUG_MALLOC 0
 #endif
+    
+/**
+ * Freed memory is trashed
+ */
 
 #define ZDB_DEBUG_MALLOC_TRASHMEMORY 1
 
@@ -111,7 +113,7 @@ extern "C"
  *
  */
 
-#define ZDB_DEBUG_ALLOC_MAX 0x80000000
+#define ZDB_DEBUG_ALLOC_MAX 0x200000000LL // 8GB
 
 /**
  * DEBUG: Enables block chaining (RECOMMENDED)
@@ -137,6 +139,16 @@ extern "C"
 
 #define ZDB_DEBUG_SERIALNUMBERIZE_BLOCKS 1
 
+/**
+ * DEBUG: measure timings on open/close/...
+ */
+    
+#define DEBUG_BENCH_FD 1
+#ifndef DEBUG
+#undef  DEBUG_BENCH_FD
+#define DEBUG_BENCH_FD 0
+#endif
+    
 #ifdef	__cplusplus
 }
 #endif
@@ -146,4 +158,3 @@ extern "C"
 /** @} */
 
 /*----------------------------------------------------------------------------*/
-

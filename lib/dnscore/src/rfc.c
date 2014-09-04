@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup
  *  @ingroup dnscore
  *  @brief
@@ -41,19 +41,24 @@
  *
  *----------------------------------------------------------------------------*/
 
+
 #include <stdlib.h>
 #include <arpa/inet.h>
 #include <ctype.h>
+
+#include "dnscore-config.h"
 
 #include "dnscore/rfc.h"
 #include "dnscore/ctrl-rfc.h"
 #include "dnscore/string_set.h"
 
+#define DNSCORE_RFC_C
+
 /*------------------------------------------------------------------------------
  * GLOBAL VARIABLES */
 
-static string_node* class_set;
-static string_node* type_set;
+static string_node* class_set = NULL;
+static string_node* type_set = NULL;
 
 const class_table qclass[] = {
     { CLASS_IN,   CLASS_IN_NAME   },
@@ -119,15 +124,23 @@ const type_table qtype[] = {
     { TYPE_DHCID,      TYPE_DHCID_NAME      },
     { TYPE_NSEC3,      TYPE_NSEC3_NAME      },
     { TYPE_NSEC3PARAM, TYPE_NSEC3PARAM_NAME },
+    { TYPE_TLSA,       TYPE_TLSA_NAME       },
     { TYPE_HIP,        TYPE_HIP_NAME        },
     { TYPE_NINFO,      TYPE_NINFO_NAME      },
     { TYPE_RKEY,       TYPE_RKEY_NAME       },
     { TYPE_TALINK,     TYPE_TALINK_NAME     },
+    { TYPE_CDS,        TYPE_CDS_NAME        },
     { TYPE_SPF,        TYPE_SPF_NAME        },
     { TYPE_UINFO,      TYPE_UINFO_NAME      },
     { TYPE_UID,        TYPE_UID_NAME        },
     { TYPE_GID,        TYPE_GID_NAME        },
     { TYPE_UNSPEC,     TYPE_UNSPEC_NAME     },
+    { TYPE_NID,        TYPE_NID_NAME        },
+    { TYPE_L32,        TYPE_L32_NAME        },
+    { TYPE_L64,        TYPE_L64_NAME        },
+    { TYPE_LP,         TYPE_LP_NAME         },
+    { TYPE_EUI48,      TYPE_EUI48_NAME      },
+    { TYPE_EUI64,      TYPE_EUI64_NAME      },
     { TYPE_TKEY,       TYPE_TKEY_NAME       },
     { TYPE_TSIG,       TYPE_TSIG_NAME       },
     { TYPE_IXFR,       TYPE_IXFR_NAME       },
@@ -140,24 +153,118 @@ const type_table qtype[] = {
     { TYPE_TA,         TYPE_TA_NAME         },
     { TYPE_DLV,        TYPE_DLV_NAME        },
     
+#if HAS_DYNAMIC_PROVISIONING
     { TYPE_ZONE_TYPE,           TYPE_ZONE_TYPE_NAME         },
     { TYPE_ZONE_FILE,           TYPE_ZONE_FILE_NAME         },
-    { TYPE_ZONE_ALSO_NOTIFY,    TYPE_ZONE_ALSO_NOTIFY_NAME  },
+    { TYPE_ZONE_NOTIFY,         TYPE_ZONE_NOTIFY_NAME       },
     { TYPE_ZONE_MASTER,         TYPE_ZONE_MASTER_NAME       },
     { TYPE_ZONE_DNSSEC,         TYPE_ZONE_DNSSEC_NAME       },
+    { TYPE_ZONE_SLAVES,         TYPE_ZONE_SLAVES_NAME       },
+    { TYPE_SIGINTV,             TYPE_SIGINTV_NAME           },
+    { TYPE_SIGREGN,             TYPE_SIGREGN_NAME           },
+    { TYPE_SIGJITR,             TYPE_SIGJITR_NAME           },
+    { TYPE_NTFRC,               TYPE_NTFRC_NAME             },
+    { TYPE_NTFRP,               TYPE_NTFRP_NAME             },
+    { TYPE_NTFRPI,              TYPE_NTFRPI_NAME            },
+    { TYPE_NTFAUTO,             TYPE_NTFAUTO_NAME           },
+#endif
+    
+#if 1//HAS_CTRL
+    { TYPE_CTRL_SRVCFGRELOAD,     TYPE_CTRL_SRVCFGRELOAD_NAME     },
+    { TYPE_CTRL_SRVLOGREOPEN,     TYPE_CTRL_SRVLOGREOPEN_NAME     },
+    { TYPE_CTRL_SRVSHUTDOWN,      TYPE_CTRL_SHUTDOWN_NAME         },
+    { TYPE_CTRL_ZONECFGRELOAD,    TYPE_CTRL_ZONECFGRELOAD_NAME    },
+    { TYPE_CTRL_ZONECFGRELOADALL, TYPE_CTRL_ZONECFGRELOADALL_NAME },
+    { TYPE_CTRL_ZONEFREEZE,       TYPE_CTRL_ZONEFREEZE_NAME       },
+    { TYPE_CTRL_ZONEFREEZEALL,    TYPE_CTRL_ZONEFREEZEALL_NAME    },
+    { TYPE_CTRL_ZONERELOAD,       TYPE_CTRL_ZONERELOAD_NAME       },
+    { TYPE_CTRL_ZONEUNFREEZE,     TYPE_CTRL_ZONEUNFREEZE_NAME     },
+    { TYPE_CTRL_ZONEUNFREEZEALL,  TYPE_CTRL_ZONEUNFREEZEALL_NAME  },
 
-    
-    { TYPE_CTRL_SHUTDOWN,       TYPE_CTRL_SHUTDOWN_NAME     },
-    { TYPE_CTRL_ZONEFREEZE,     TYPE_CTRL_ZONEFREEZE_NAME   },
-    { TYPE_CTRL_ZONEUNFREEZE,   TYPE_CTRL_ZONEUNFREEZE_NAME },
-    { TYPE_CTRL_ZONERELOAD,     TYPE_CTRL_ZONERELOAD_NAME   },
-    { TYPE_CTRL_LOGREOPEN,      TYPE_CTRL_LOGREOPEN_NAME    },
-    { TYPE_CTRL_CFGMERGE,       TYPE_CTRL_CFGMERGE_NAME     },
-    { TYPE_CTRL_CFGSAVE,        TYPE_CTRL_CFGSAVE_NAME      },
-    { TYPE_CTRL_CFGLOAD,        TYPE_CTRL_CFGLOAD_NAME      },
-    
+#endif  
     { 0,               NULL                 }
 };
+
+
+
+static char *opcode[16] =
+{
+    "QUERY",
+    "IQUERY",
+    "STATUS",
+    "NOTIFY",
+
+    "UPDATE",
+    "?",
+    "?",
+    "?",
+
+    "?",
+    "?",
+    "?",
+    "?",
+
+    "?",
+    "?",
+    "?",
+    "?"
+};
+
+static char *rcode[32] =
+{
+    "NOERROR",                //   0       /* No error                           rfc 1035 */
+    "FORMERR",                //   1       /* Format error                       rfc 1035 */
+    "SERVFAIL",               //   2       /* Server failure                     rfc 1035 */
+    "NXDOMAIN",               //   3       /* Name error                         rfc 1035 */
+    "NOTIMP",                 //   4       /* Not implemented                    rfc 1035 */
+    "REFUSED",                //   5       /* Refused                            rfc 1035 */
+
+    "YXDOMAIN",               //   6       /* Name exists when it should not     rfc 2136 */
+    "YXRRSET",                //   7       /* RR Set exists when it should not   rfc 2136 */
+    "NXRRSET",                //   8       /* RR set that should exist doesn't   rfc 2136 */
+    "NOTAUTH",                //   9       /* Server not Authortative for zone   rfc 2136 */
+    "NOTZONE",                //   10      /* Name not contained in zone         rfc 2136 */
+
+    "?",
+    "?",
+    "?",
+    "?",
+    "?",
+
+    "BADVERS",                //   16      /* Bad OPT Version                    rfc 2671 */
+    
+    "-",
+    "-",
+    "-",
+    
+    "-",
+    "-",
+    "-",
+    "-",
+    
+    "-",
+    "-",
+    "-",
+    "-",
+    
+    "-",
+    "-",
+    "-",
+    "-"
+};
+
+const char*
+get_opcode(u16 o)
+{
+    return opcode[o & 0x0f];
+}
+
+
+const char*
+get_rcode(u16 r)
+{
+    return rcode[r & 0x1f];
+}
 
 
 const char*
@@ -288,6 +395,8 @@ get_name_from_type(u16 t)
             return TYPE_NSEC3_NAME;
         case TYPE_NSEC3PARAM:
             return TYPE_NSEC3PARAM_NAME;
+        case TYPE_TLSA:
+            return TYPE_TLSA_NAME;
         case TYPE_HIP:
             return TYPE_HIP_NAME;
         case TYPE_NINFO:
@@ -329,23 +438,7 @@ get_name_from_type(u16 t)
         case TYPE_DLV:
             return TYPE_DLV_NAME;
             
-        case TYPE_CTRL_SHUTDOWN:
-            return TYPE_CTRL_SHUTDOWN_NAME;         
-        case TYPE_CTRL_ZONEFREEZE:
-            return TYPE_CTRL_ZONEFREEZE_NAME;
-        case TYPE_CTRL_ZONEUNFREEZE:
-            return TYPE_CTRL_ZONEUNFREEZE_NAME;
-        case TYPE_CTRL_ZONERELOAD:
-            return TYPE_CTRL_ZONERELOAD_NAME;
-        case TYPE_CTRL_LOGREOPEN:
-            return TYPE_CTRL_LOGREOPEN_NAME;
-        case TYPE_CTRL_CFGMERGE:
-            return TYPE_CTRL_CFGMERGE_NAME;
-        case TYPE_CTRL_CFGSAVE:
-            return TYPE_CTRL_CFGSAVE_NAME;
-        case TYPE_CTRL_CFGLOAD:
-            return TYPE_CTRL_CFGLOAD_NAME;
-            
+
         default:
             return NULL;
     }
@@ -366,9 +459,10 @@ get_class_from_name(const char *src, u16 *dst)
 
     if(node != NULL)
     {
-        *dst = node->value;
-
-        return OK;
+        u16 c = node->value;
+        *dst = c;
+        
+        return c;
     }
     else
     {
@@ -387,13 +481,14 @@ get_class_from_name(const char *src, u16 *dst)
 
             if(!((endptr == src) || (err == EINVAL) || (err == ERANGE) || ((val & 0xffffLL) != val)))
             {
-                *dst = htons((u16)val);
-
-                return OK;
+                u16 c = htons((u16)val);
+                *dst = c;
+                
+                return c;
             }
         }
 
-        return NOK;
+        return UNKNOWN_DNS_CLASS;
     }
 }
 
@@ -412,9 +507,9 @@ get_type_from_name(const char *src, u16 *dst)
 
     if(node != NULL)
     {
-        *dst = node->value;
-
-        return OK;
+        u16 t = node->value;
+        *dst = t;
+        return 0;
     }
     else
     {
@@ -427,19 +522,21 @@ get_type_from_name(const char *src, u16 *dst)
 
             src    += 4;
 
+            errno = 0;
+            
             val     = strtoll(src, &endptr, 10);
 
             int err = errno;
 
             if(!((endptr == src) || (err == EINVAL) || (err == ERANGE) || ((val & 0xffffLL) != val)))
             {
-                *dst = htons((u16)val);
-
-                return OK;
+                u16 t = htons((u16)val);
+                *dst = t;
+                return 1;
             }
         }
 
-        return NOK;
+        return UNKNOWN_DNS_TYPE;
     }
 }
 
@@ -450,7 +547,7 @@ get_class_from_case_name(const char *src, u16 *dst)
     s32 n = strlen(src);
     if(n > sizeof(txt))
     {
-        return -1;
+        return UNKNOWN_DNS_CLASS;
     }
     
     for(s32 i = 0; i < n; i++)
@@ -471,7 +568,7 @@ get_type_from_case_name(const char *src, u16 *dst)
     s32 n = strlen(src);
     if(n > sizeof(txt))
     {
-        return -1;
+        return UNKNOWN_DNS_TYPE;
     }
     
     for(s32 i = 0; i < n; i++)
@@ -481,7 +578,31 @@ get_type_from_case_name(const char *src, u16 *dst)
     
     txt[n] = '\0';
     
-    return get_type_from_name(txt, dst);
+    ya_result ret = get_type_from_name(txt, dst);
+    
+    return ret;
+}
+
+int
+get_type_from_case_name_len(const char *src, int src_len, u16 *dst)
+{
+    char txt[16];
+
+    if(src_len > sizeof(txt))
+    {
+        return UNKNOWN_DNS_TYPE;
+    }
+    
+    for(s32 i = 0; i < src_len; i++)
+    {
+        txt[i] = toupper(src[i]);
+    }
+    
+    txt[src_len] = '\0';
+    
+    ya_result ret = get_type_from_name(txt, dst);
+    
+    return ret;
 }
 
 
@@ -515,7 +636,7 @@ rfc_finalize()
 }
 
 ya_result
-get_value_from_casename(value_name_table *table, const char *name, u32 *out_value)
+get_value_from_casename(const value_name_table *table, const char *name, u32 *out_value)
 {
     while(table->data != NULL)
     {

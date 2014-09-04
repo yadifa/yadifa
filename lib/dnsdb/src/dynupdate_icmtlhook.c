@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbupdate Dynamic update functions
  *  @ingroup dnsdb
  *  @brief Generates "IXFR" (ICMTL) streams by registering as a listener to the changes in the database
@@ -52,7 +52,7 @@
 
 #include "dnsdb/zdb_listener.h"
 
-#if ZDB_NSEC3_SUPPORT!=0
+#if ZDB_HAS_NSEC3_SUPPORT!=0
 #include "dnsdb/nsec3_types.h"
 #include "dnsdb/nsec3_item.h"
 #include "dnsdb/nsec3_collection.h"
@@ -69,6 +69,8 @@
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
+#define DEBUG_ICMTL_RECORDS 0
+
 typedef struct icmtl_dnssec_listener icmtl_dnssec_listener;
 typedef struct icmtl_dnssec_listener icmtl_zdb_listener;
 
@@ -79,12 +81,12 @@ struct icmtl_dnssec_listener
     zdb_listener_on_add_record_callback* on_add_record;
     zdb_listener_on_remove_record_callback* on_remove_record;
 
-#if ZDB_NSEC3_SUPPORT!=0
+#if ZDB_HAS_NSEC3_SUPPORT!=0
     zdb_listener_on_add_nsec3_callback* on_add_nsec3;
     zdb_listener_on_remove_nsec3_callback* on_remove_nsec3;
     zdb_listener_on_update_nsec3rrsig_callback* on_update_nsec3rrsig;
 #endif
-#if ZDB_DNSSEC_SUPPORT!=0
+#if ZDB_HAS_DNSSEC_SUPPORT!=0
     zdb_listener_on_update_rrsig_callback* on_update_rrsig;
 #endif
 
@@ -177,7 +179,7 @@ icmtl_on_add_record_callback(zdb_listener* base_listener, dnslabel_vector_refere
 {
     icmtl_zdb_listener* listener = (icmtl_zdb_listener*)base_listener;
 
-#ifndef NDEBUG
+#if DEBUG_ICMTL_RECORDS
     rdata_desc rdatadesc = {type, record->rdata_size, record->rdata_pointer};
     u8 label[MAX_DOMAIN_LENGTH + 1];
     dnslabel_vector_to_dnsname(labels, top, label);
@@ -195,7 +197,7 @@ icmtl_on_remove_record_callback(zdb_listener* base_listener, const u8* dnsname, 
 {
     icmtl_zdb_listener* listener = (icmtl_zdb_listener*)base_listener;
 
-#ifndef NDEBUG
+#if DEBUG_ICMTL_RECORDS
     rdata_desc rdatadesc = {type, record->rdata_size, record->rdata_pointer};
     log_debug("incremental: del %{dnsname} %d IN %{typerdatadesc}", dnsname, record->ttl, &rdatadesc);
 #endif
@@ -220,7 +222,7 @@ output_stream_write_rrsig_wire(output_stream* os, u8* label, u32 label_len, u8* 
         output_stream_write_nu16(os, sig_sll->rdata_size);
         output_stream_write(os, &sig_sll->rdata_start[0], sig_sll->rdata_size);
 
-#ifndef NDEBUG
+#if DEBUG_ICMTL_RECORDS
         rdata_desc rdatadesc = {TYPE_RRSIG, sig_sll->rdata_size, &sig_sll->rdata_start[0]};
 
         if(origin != NULL)
@@ -237,12 +239,12 @@ output_stream_write_rrsig_wire(output_stream* os, u8* label, u32 label_len, u8* 
     }
 }
 
-#if ZDB_NSEC3_SUPPORT!=0
+#if ZDB_HAS_NSEC3_SUPPORT!=0
 
 static void
 icmtl_on_add_nsec3_callback(zdb_listener* base_listener, nsec3_zone_item* nsec3_item, nsec3_zone* n3, u32 ttl)
 {
-#ifndef NDEBUG
+#if DEBUG_ICMTL_RECORDS
     log_debug("incremental: add NSEC3");
 #endif
 
@@ -258,7 +260,7 @@ icmtl_on_add_nsec3_callback(zdb_listener* base_listener, nsec3_zone_item* nsec3_
 static void
 icmtl_on_remove_nsec3_callback(zdb_listener* base_listener, nsec3_zone_item* nsec3_item, nsec3_zone* n3, u32 ttl)
 {
-#ifndef NDEBUG
+#if DEBUG_ICMTL_RECORDS
     log_debug("incremental: del NSEC3");
 #endif
 
@@ -282,13 +284,13 @@ icmtl_on_update_nsec3rrsig_callback(zdb_listener* base_listener, zdb_packed_ttlr
 
     u32 label_len = nsec3_zone_item_get_label(item, label, sizeof (label));
 
-#ifndef NDEBUG
+#if DEBUG_ICMTL_RECORDS
     log_debug("incremental: del RRSIG: (NSEC3)");
 #endif
     
     output_stream_write_rrsig_wire(&listener->os_remove, label, label_len, listener->origin, origin_len, removed_rrsig_sll);
     
-#ifndef NDEBUG
+#if DEBUG_ICMTL_RECORDS
     log_debug("incremental: add RRSIG: (NSEC3)");
 #endif
     
@@ -306,13 +308,13 @@ icmtl_on_update_rrsig_callback(zdb_listener* base_listener, zdb_packed_ttlrdata*
 
     u32 fqdn_len = dnsname_stack_to_dnsname(name, fqdn);
 
-#ifndef NDEBUG
+#if DEBUG_ICMTL_RECORDS
     log_debug("incremental: del RRSIG:");
 #endif
     
     output_stream_write_rrsig_wire(&listener->os_remove, fqdn, fqdn_len, NULL, 0, removed_rrsig_sll);
     
-#ifndef NDEBUG
+#if DEBUG_ICMTL_RECORDS
     log_debug("incremental: add RRSIG:");
 #endif
     
@@ -323,12 +325,12 @@ static struct icmtl_dnssec_listener icmtl_listener ={
     icmtl_on_remove_record_type_callback,
     icmtl_on_add_record_callback,
     icmtl_on_remove_record_callback,
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
     icmtl_on_add_nsec3_callback,
     icmtl_on_remove_nsec3_callback,
     icmtl_on_update_nsec3rrsig_callback,
 #endif
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
     icmtl_on_update_rrsig_callback,
 #endif
     NULL,
@@ -345,7 +347,7 @@ static struct icmtl_dnssec_listener icmtl_listener ={
 ya_result
 dynupdate_icmtlhook_enable(u8* origin, output_stream* os_remove, output_stream* os_add)
 {
-    zassert(icmtl_listener.next == NULL);
+    yassert(icmtl_listener.next == NULL);
 
 #ifndef NDEBUG
     log_debug("incremental: enabled %{dnsname} for updates", origin);

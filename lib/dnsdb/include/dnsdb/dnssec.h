@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbdnssec DNSSEC functions
  *  @ingroup dnsdb
  *  @brief 
@@ -42,22 +42,21 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
+#include <dnscore/dnskey.h>
+#include <dnscore/dnskey_rsa.h>
+#include <dnscore/dnskey_dsa.h>
+
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/dnssec_config.h>
 #include <dnsdb/rrsig.h>
-#include <dnsdb/dnskey.h>
 
 #include <dnsdb/dnssec_keystore.h>
-#include <dnsdb/dnssec_rsa.h>
-#include <dnsdb/dnssec_dsa.h>
-#include <dnsdb/dnssec_scheduler.h>
-
 
 /**
  * @todo NOTE: WARNING: IF THE MIN_TTL CHANGES IN THE SOA we MUST resign the NSEC* stuff.
  */
 
-#if HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
 
 #ifndef _DNSSEC_C
 #include <dnscore/logger.h>
@@ -80,22 +79,17 @@ extern "C" {
 #define ENGINE_PRESET_DELIMITER ","
 #define ENGINE_COMMAND_DELIMITER ":"
 
-ENGINE* dnssec_loadengine(const char* engine_name);
-void dnssec_unloadengine(ENGINE* engine);
+ENGINE* dnssec_loadengine(const char *engine_name);
+void dnssec_unloadengine(ENGINE *engine);
 
-void dnssec_inittask(u16 flags,dnssec_task* task);
-void dnssec_finalizetask(dnssec_task* task);
+ya_result zdb_update_zone_signatures_alarm(void *zone);     /* zdb_zone* */
+ya_result zdb_update_zone_signatures(zdb_zone *zone, u32 signature_count_loose_limit);
 
-int dnssec_process_getthreadcount();
-void dnssec_process_setthreadcount(int count);
 
-ya_result zdb_update_zone_signatures_alarm(void* zone);     /* zdb_zone* */
-ya_result zdb_update_zone_signatures(zdb_zone* zone, bool scheduled);
-ya_result zdb_update_signatures(zdb* db, bool scheduled);
 
 /// @note MUST BE SET
 
-void dnssec_set_xfr_path(const char* xfr_path);
+void dnssec_set_xfr_path(const char *xfr_path);
 
 #ifdef	__cplusplus
 }
@@ -104,8 +98,6 @@ void dnssec_set_xfr_path(const char* xfr_path);
 #endif
 
 #endif	/* _DNSSEC_H */
-
-    /*    ------------------------------------------------------------    */
 
 /** @} */
 

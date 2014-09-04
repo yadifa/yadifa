@@ -30,19 +30,12 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup zmalloc The database specialized allocation function
  *  @ingroup dnsdb
  *  @brief The database specialized allocation function
  *
  * The database specialized allocation function
- *
- * NOTE: THIS IS NOT THREAD-SAFE
- * NOTE: THIS IS NOT THREAD-SAFE
- * NOTE: THIS IS NOT THREAD-SAFE
- * NOTE: THIS IS NOT THREAD-SAFE
- * NOTE: THIS IS NOT THREAD-SAFE
- *
  * Which basically mean either I find a (very fast) way to use different memory pools
  * (one for each thread) either I can only use these allocations with the core
  * database : not the signer.
@@ -72,7 +65,7 @@ extern "C" {
 #define ZFREE(label,object) free(label)
 
 #define ZALLOC_ARRAY_OR_DIE(cast,label,size,tag) MALLOC_OR_DIE(cast,label,size,tag)
-#define ZFREE_ARRAY(ptr,size_) free(ptr);(void)(size_)
+#define ZFREE_ARRAY(ptr,size_) (void)(size_);free(ptr)
 
 /* not aligned, max size 256 */
 #define ZALLOC_STRING_OR_DIE(cast,label,size,tag) MALLOC_OR_DIE(cast,label,size,tag)
@@ -87,11 +80,31 @@ extern "C" {
 
 #else
 
-#define ZDB_ALLOC_PG_SIZE_COUNT         32
+/**
+ * ZDB_ALLOC_PG_SIZE_COUNT tells how many memory sizes are supported, with 8 bytes increments.
+ * Setting this up involves some computation and bigger numbers may lead to unmanagable amounts of memory.
+ * The current setting (256 = 2K) should be enough for most structures.
+ * Exceptions like message_data should be on stack or mallocated any maybe in a pool too.
+ * 
+ * I feel more and more that this allocator could and should be put in the core.
+ * The logger could benefit greatly from it. (although I don't know if I'd use
+ * it like this or by forcing an higher granularity like 32 or 64 to avoid mapping too many slots.)
+ * 
+ */
+   
+#define ZDB_ALLOC_PG_SIZE_COUNT         256 // 2K
 #define ZDB_ALLOC_PG_PAGEABLE_MAXSIZE   (ZDB_ALLOC_PG_SIZE_COUNT * 8) /* x 8 because we are going by 8 increments */
 #define ZDB_MALLOC_SIZE_TO_PAGE(size_)  (((size_)-1)>>3)
 #define ZDB_ALLOC_CANHANDLE(size_)      ((size_)<=ZDB_ALLOC_PG_PAGEABLE_MAXSIZE)
 
+// prepares the zdb_alloc tables
+    
+int zdb_alloc_init();
+
+// actually does nothing, just there for symmetry
+
+void zdb_alloc_finalise();
+    
 /**
  * @brief Allocates one slot in a memory set
  *
@@ -136,7 +149,7 @@ void zdb_set_zowner(pthread_t owner);
 static inline void* zalloc(s32 size)
 {
 #if ZDB_ZALLOC_THREAD_SAFE == 0
-    zassert(pthread_self() == zalloc_owner);
+    yassert(pthread_self() == zalloc_owner);
 #endif
 
     u32 page = ZDB_MALLOC_SIZE_TO_PAGE(size);
@@ -144,11 +157,11 @@ static inline void* zalloc(s32 size)
 
     if(page < ZDB_ALLOC_PG_SIZE_COUNT)
     {
-	ptr = zdb_malloc(ZDB_MALLOC_SIZE_TO_PAGE(size));
+        ptr = zdb_malloc(ZDB_MALLOC_SIZE_TO_PAGE(size));
     }
     else
     {
-	ptr = malloc(size);
+        ptr = malloc(size);
     }
 
     return ptr;
@@ -157,18 +170,18 @@ static inline void* zalloc(s32 size)
 static inline void zfree(void* ptr, s32 size)
 {
 #if ZDB_ZALLOC_THREAD_SAFE == 0
-    zassert(pthread_self() == zalloc_owner);
+    yassert(pthread_self() == zalloc_owner);
 #endif
     
     u32 page = ZDB_MALLOC_SIZE_TO_PAGE(size);
 
     if(page < ZDB_ALLOC_PG_SIZE_COUNT)
     {
-	zdb_mfree(ptr,ZDB_MALLOC_SIZE_TO_PAGE(size));
+        zdb_mfree(ptr,ZDB_MALLOC_SIZE_TO_PAGE(size));
     }
     else
     {
-	free(ptr);
+        free(ptr);
     }
 }
 
@@ -205,118 +218,13 @@ void zdb_mfree_unaligned(void* ptr);
 #define ZFREE_STRING(label) zdb_mfree_unaligned(label)
 
 /* 
- * THIS WILL BE OPTIMIZED BY THE COMPILER AS ONE AND ONLY ONE CALL
- *
+ * THIS SHOULD BE OPTIMIZED BY THE COMPILER AS ONE AND ONLY ONE CALL
  */
 
-#define ZALLOC(object)                            \
-    (sizeof(object)<= 8)?zdb_malloc(0):           \
-    (sizeof(object)<=16)?zdb_malloc(1):           \
-    (sizeof(object)<=24)?zdb_malloc(2):           \
-    (sizeof(object)<=32)?zdb_malloc(3):           \
-    (sizeof(object)<=40)?zdb_malloc(4):           \
-    (sizeof(object)<=48)?zdb_malloc(5):           \
-    (sizeof(object)<=56)?zdb_malloc(6):           \
-    (sizeof(object)<=64)?zdb_malloc(7):           \
-    (sizeof(object)<=72)?zdb_malloc(8):           \
-    (sizeof(object)<=80)?zdb_malloc(9):           \
-    (sizeof(object)<=88)?zdb_malloc(10):          \
-    (sizeof(object)<=96)?zdb_malloc(11):          \
-    (sizeof(object)<=104)?zdb_malloc(12):         \
-    (sizeof(object)<=112)?zdb_malloc(13):         \
-    (sizeof(object)<=120)?zdb_malloc(14):         \
-    (sizeof(object)<=128)?zdb_malloc(15):         \
-    (sizeof(object)<=136)?zdb_malloc(16):         \
-    (sizeof(object)<=144)?zdb_malloc(17):         \
-    (sizeof(object)<=152)?zdb_malloc(18):         \
-    (sizeof(object)<=160)?zdb_malloc(19):         \
-    (sizeof(object)<=168)?zdb_malloc(20):         \
-    (sizeof(object)<=176)?zdb_malloc(21):         \
-    (sizeof(object)<=184)?zdb_malloc(22):         \
-    (sizeof(object)<=192)?zdb_malloc(23):         \
-    (sizeof(object)<=200)?zdb_malloc(24):         \
-    (sizeof(object)<=208)?zdb_malloc(25):         \
-    (sizeof(object)<=216)?zdb_malloc(26):         \
-    (sizeof(object)<=224)?zdb_malloc(27):         \
-    (sizeof(object)<=232)?zdb_malloc(28):         \
-    (sizeof(object)<=240)?zdb_malloc(29):         \
-    (sizeof(object)<=248)?zdb_malloc(30):         \
-    (sizeof(object)<=256)?zdb_malloc(31):         \
-    malloc(sizeof(object));
-
-#define ZFREE(ptr,object)                         \
-    (sizeof(object)<= 8)?zdb_mfree(ptr,0):        \
-    (sizeof(object)<=16)?zdb_mfree(ptr,1):        \
-    (sizeof(object)<=24)?zdb_mfree(ptr,2):        \
-    (sizeof(object)<=32)?zdb_mfree(ptr,3):        \
-    (sizeof(object)<=40)?zdb_mfree(ptr,4):        \
-    (sizeof(object)<=48)?zdb_mfree(ptr,5):        \
-    (sizeof(object)<=56)?zdb_mfree(ptr,6):        \
-    (sizeof(object)<=64)?zdb_mfree(ptr,7):        \
-    (sizeof(object)<=72)?zdb_mfree(ptr,8):        \
-    (sizeof(object)<=80)?zdb_mfree(ptr,9):        \
-    (sizeof(object)<=88)?zdb_mfree(ptr,10):       \
-    (sizeof(object)<=96)?zdb_mfree(ptr,11):       \
-    (sizeof(object)<=104)?zdb_mfree(ptr,12):      \
-    (sizeof(object)<=112)?zdb_mfree(ptr,13):      \
-    (sizeof(object)<=120)?zdb_mfree(ptr,14):      \
-    (sizeof(object)<=128)?zdb_mfree(ptr,15):      \
-    (sizeof(object)<=136)?zdb_mfree(ptr,16):      \
-    (sizeof(object)<=144)?zdb_mfree(ptr,17):      \
-    (sizeof(object)<=152)?zdb_mfree(ptr,18):      \
-    (sizeof(object)<=160)?zdb_mfree(ptr,19):      \
-    (sizeof(object)<=168)?zdb_mfree(ptr,20):      \
-    (sizeof(object)<=176)?zdb_mfree(ptr,21):      \
-    (sizeof(object)<=184)?zdb_mfree(ptr,22):      \
-    (sizeof(object)<=192)?zdb_mfree(ptr,23):      \
-    (sizeof(object)<=200)?zdb_mfree(ptr,24):      \
-    (sizeof(object)<=208)?zdb_mfree(ptr,25):      \
-    (sizeof(object)<=216)?zdb_mfree(ptr,26):      \
-    (sizeof(object)<=224)?zdb_mfree(ptr,27):      \
-    (sizeof(object)<=232)?zdb_mfree(ptr,28):      \
-    (sizeof(object)<=240)?zdb_mfree(ptr,29):      \
-    (sizeof(object)<=248)?zdb_mfree(ptr,30):      \
-    (sizeof(object)<=256)?zdb_mfree(ptr,31):      \
-    free(ptr);
-
-#define ZALLOC_OR_DIE(cast,label,object,tag)                     \
-    if(sizeof(object)<=  8) { label=(cast)zdb_malloc( 0); } else \
-    if(sizeof(object)<= 16) { label=(cast)zdb_malloc( 1); } else \
-    if(sizeof(object)<= 24) { label=(cast)zdb_malloc( 2); } else \
-    if(sizeof(object)<= 32) { label=(cast)zdb_malloc( 3); } else \
-    if(sizeof(object)<= 40) { label=(cast)zdb_malloc( 4); } else \
-    if(sizeof(object)<= 48) { label=(cast)zdb_malloc( 5); } else \
-    if(sizeof(object)<= 56) { label=(cast)zdb_malloc( 6); } else \
-    if(sizeof(object)<= 64) { label=(cast)zdb_malloc( 7); } else \
-    if(sizeof(object)<= 72) { label=(cast)zdb_malloc( 8); } else \
-    if(sizeof(object)<= 80) { label=(cast)zdb_malloc( 9); } else \
-    if(sizeof(object)<= 88) { label=(cast)zdb_malloc(10); } else \
-    if(sizeof(object)<= 96) { label=(cast)zdb_malloc(11); } else \
-    if(sizeof(object)<=104) { label=(cast)zdb_malloc(12); } else \
-    if(sizeof(object)<=112) { label=(cast)zdb_malloc(13); } else \
-    if(sizeof(object)<=120) { label=(cast)zdb_malloc(14); } else \
-    if(sizeof(object)<=128) { label=(cast)zdb_malloc(15); } else \
-    if(sizeof(object)<=136) { label=(cast)zdb_malloc(16); } else \
-    if(sizeof(object)<=144) { label=(cast)zdb_malloc(17); } else \
-    if(sizeof(object)<=152) { label=(cast)zdb_malloc(18); } else \
-    if(sizeof(object)<=160) { label=(cast)zdb_malloc(19); } else \
-    if(sizeof(object)<=168) { label=(cast)zdb_malloc(20); } else \
-    if(sizeof(object)<=176) { label=(cast)zdb_malloc(21); } else \
-    if(sizeof(object)<=184) { label=(cast)zdb_malloc(22); } else \
-    if(sizeof(object)<=192) { label=(cast)zdb_malloc(23); } else \
-    if(sizeof(object)<=200) { label=(cast)zdb_malloc(24); } else \
-    if(sizeof(object)<=208) { label=(cast)zdb_malloc(25); } else \
-    if(sizeof(object)<=216) { label=(cast)zdb_malloc(26); } else \
-    if(sizeof(object)<=224) { label=(cast)zdb_malloc(27); } else \
-    if(sizeof(object)<=232) { label=(cast)zdb_malloc(28); } else \
-    if(sizeof(object)<=240) { label=(cast)zdb_malloc(29); } else \
-    if(sizeof(object)<=248) { label=(cast)zdb_malloc(30); } else \
-    if(sizeof(object)<=256) { label=(cast)zdb_malloc(31); } else \
-    if((label=(cast)malloc(sizeof(object)))==NULL) {DIE(ZDB_ERROR_OUTOFMEMORY); }
-
-#define ZALLOC_ARRAY_OR_DIE(cast,label,size_,tag) \
-    if((label = (cast)zalloc(size_)) == NULL) {DIE(ZDB_ERROR_OUTOFMEMORY); }
-
+#define ZALLOC(object) ((((sizeof(object) + 7) >> 3)-1) < ZDB_ALLOC_PG_SIZE_COUNT)?zdb_malloc(((sizeof(object) + 7) >> 3)-1):malloc(sizeof(object))
+#define ZFREE(ptr,object) ((((sizeof(object) + 7) >> 3)-1) < ZDB_ALLOC_PG_SIZE_COUNT)?zdb_mfree(ptr,(((sizeof(object) + 7) >> 3)-1)):free(ptr)
+#define ZALLOC_OR_DIE(cast,label,object,tag) if((label=(cast)ZALLOC(object))==NULL) {DIE(ZDB_ERROR_OUTOFMEMORY); }
+#define ZALLOC_ARRAY_OR_DIE(cast,label,size_,tag) if((label = (cast)zalloc(size_)) == NULL) {DIE(ZDB_ERROR_OUTOFMEMORY); }
 #define ZFREE_ARRAY(ptr,size_) zfree(ptr,size_)
 
 /**
@@ -334,33 +242,39 @@ void zdb_mfree_unaligned(void* ptr);
 
 #define ZALLOC_ARRAY_RESIZE_TAG 0x44455a49534552 /* RESIZED */
 
-#define ZALLOC_ARRAY_RESIZE(type_,array_,count_,newcount_)			                                            \
-{										                                                                        \
-    u32 zalloc_new_count = (newcount_);						                                                    \
-    if((count_) != zalloc_new_count)						                                                    \
-    {										                                                                    \
-    	if( ZDB_MALLOC_SIZE_TO_PAGE(sizeof(type_)*(count_)) !=                                                  \
-	        ZDB_MALLOC_SIZE_TO_PAGE(sizeof(type_)*zalloc_new_count))		                                    \
-    	{									                                                                    \
-	        type_* __tmp__;							                                                            \
-										                                                                        \
-    	    if(zalloc_new_count > 0)						                                                    \
-	        {									                                                                \
-        		ZALLOC_ARRAY_OR_DIE(type_*,__tmp__,sizeof(type_)*zalloc_new_count, ZALLOC_ARRAY_RESIZE_TAG);    \
-		        MEMCOPY(__tmp__,(array_),sizeof(type_)*MIN((count_),zalloc_new_count));	                        \
-    	    }									                                                                \
-	        else								                                                                \
-	        {									                                                                \
-    		    __tmp__ = NULL;							                                                        \
-	        }									                                                                \
-    										                                                                    \
-	        ZFREE_ARRAY((array_),sizeof(type_)*(count_));			                                            \
-	        array_ = __tmp__;							                                                        \
-    	    count_ = newcount_;							                                                        \
-    	}									                                                                    \
-    }										                                                                    \
+#define ZALLOC_ARRAY_RESIZE(type_,array_,count_,newcount_)			\
+{										\
+    int zalloc_new_count = (newcount_);						\
+    if((count_) != zalloc_new_count)						\
+    {										\
+	if( ZDB_MALLOC_SIZE_TO_PAGE(sizeof(type_)*(count_)) !=                  \
+	    ZDB_MALLOC_SIZE_TO_PAGE(sizeof(type_)*zalloc_new_count))		\
+	{									\
+	    type_* __tmp__;							\
+										\
+	    if(zalloc_new_count > 0)						\
+	    {									\
+		ZALLOC_ARRAY_OR_DIE(type_*,__tmp__,sizeof(type_)*zalloc_new_count, \
+				    ZALLOC_ARRAY_RESIZE_TAG);			\
+		MEMCOPY(__tmp__,(array_),sizeof(type_)*MIN((count_),zalloc_new_count));	\
+	    }									\
+	    else								\
+	    {									\
+		__tmp__ = NULL;							\
+	    }									\
+										\
+	    ZFREE_ARRAY((array_),sizeof(type_)*(count_));			\
+	    array_ = __tmp__;							\
+	    count_ = newcount_;							\
+	}									\
+    }										\
 }
 
+#endif
+
+#if ZDB_ZALLOC_STATISTICS
+struct output_stream;
+void zdb_alloc_print_stats(struct output_stream *os);
 #endif
 
 #ifdef	__cplusplus

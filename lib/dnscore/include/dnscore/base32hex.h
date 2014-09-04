@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /**
  *  @defgroup base Base conversion functions
  *  @ingroup dnscore

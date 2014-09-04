@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup collections Generic collections functions
  *  @ingroup dnscore
  *  @brief A dynamic-sized array of pointers
@@ -54,6 +54,21 @@ void
 ptr_vector_init(ptr_vector* v)
 {
     v->size = PTR_VECTOR_DEFAULT_SIZE;
+    MALLOC_OR_DIE(void**, v->data, v->size * sizeof (void*), PTR_VECTOR_TAG);
+    v->offset = -1;
+}
+
+/**
+ * Initialises a vector structure with a size of PTR_VECTOR_DEFAULT_SIZE entries
+ * 
+ * @param v a pointer to the ptr_vector structure to initialise
+ * @param initial_capacity the size to allocate to start with
+ */
+
+void
+ptr_vector_init_ex(ptr_vector* v, s32 initial_capacity)
+{
+    v->size = initial_capacity;
     MALLOC_OR_DIE(void**, v->data, v->size * sizeof (void*), PTR_VECTOR_TAG);
     v->offset = -1;
 }
@@ -100,20 +115,27 @@ ptr_vector_resize(ptr_vector*v, s32 newsize)
 {
     void** data;
 
-    zassert(newsize >= v->offset + 1);
+    yassert(newsize >= v->offset + 1);
 
-    /* Only the data up to v->offset (included) is relevant */
-    MALLOC_OR_DIE(void**, data, newsize * sizeof (void*), PTR_VECTOR_TAG);
-    MEMCOPY(data, v->data, (v->offset + 1) * sizeof (void*));
+    if(v->offset >= 0)
+    {
+        /* Only the data up to v->offset (included) is relevant */
+        MALLOC_OR_DIE(void**, data, newsize * sizeof (void*), PTR_VECTOR_TAG);
+        MEMCOPY(data, v->data, (v->offset + 1) * sizeof (void*));
 
 #ifndef NDEBUG
-    if(v->data != NULL)
-    {
-        memset(v->data, 0xff, v->size * sizeof (void*));
-    }
+        if(v->data != NULL)
+        {
+            memset(v->data, 0xff, v->size * sizeof (void*));
+        }
 #endif
-
-    free(v->data);
+        free(v->data);
+    }
+    else
+    {
+        free(v->data);
+        MALLOC_OR_DIE(void**, data, newsize * sizeof (void*), PTR_VECTOR_TAG);
+    }
     v->data = data;
     v->size = newsize;
 }
@@ -173,6 +195,36 @@ ptr_vector_append(ptr_vector* v, void* data)
     v->data[++v->offset] = data;
 }
 
+void
+ptr_vector_append_restrict_size(ptr_vector* v, void* data, u32 restrictedlimit)
+{
+    if(v->offset + 1 >= v->size)
+    {
+        u32 size = v->size;
+        
+        // if the size is not 0 prepare to double it, else set it to a reasonable minimum
+        if(size != 0)
+        {
+            size <<= 1;
+        }
+        else
+        {
+            size = PTR_VECTOR_DEFAULT_SIZE;
+        }
+        
+        // if the size is bigger than the restriction, set it to the maximum between the restriction and what we actually need
+        
+        if(size > restrictedlimit)
+        {
+            size = MAX(restrictedlimit, v->offset + 1);
+        }
+        
+        ptr_vector_resize(v, size);
+    }
+
+    v->data[++v->offset] = data;
+}
+
 /**
  * Appends the item (pointer) to the vector
  * 
@@ -185,10 +237,12 @@ ptr_vector_pop(ptr_vector* v)
 {
     if(v->offset >= 0)
     {
-        v->offset--;
+        return v->data[v->offset--];
     }
-    
-    return &v->data[v->offset];
+    else
+    {
+        return NULL;
+    }
 }
 
 /**
@@ -240,7 +294,7 @@ ptr_vector_free_empties(ptr_vector* v, void_function_voidp free_memory)
  */
 
 void*
-ptr_vector_linear_search(ptr_vector* v, const void* what, ptr_vector_search_callback compare)
+ptr_vector_linear_search(const ptr_vector* v, const void* what, ptr_vector_search_callback compare)
 {
     int last = v->offset;
     int i;
@@ -259,6 +313,35 @@ ptr_vector_linear_search(ptr_vector* v, const void* what, ptr_vector_search_call
 }
 
 /**
+ * Look sequentially in the vector for an item using a key and a comparison function, returns the index of the first matching item
+ * 
+ * @param v         a pointer to the ptr_vector structure
+ * @param what      the key
+ * @param compare   the comparison function
+ * 
+ * @return the first matching item index or -1 if none has been found
+ */
+
+s32
+ptr_vector_index_of(const ptr_vector* v, const void* what, ptr_vector_search_callback compare)
+{
+    s32 last = v->offset;
+    s32 i;
+
+    for(i = 0; i <= last; i++)
+    {
+        void* data = v->data[i];
+
+        if(compare(what, data) == 0)
+        {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+/**
  * Look in the vector for an item using a key and a comparison function
  * The callback needs to tell equal (0) smaller (<0) or bigger (>0)
  * 
@@ -270,7 +353,7 @@ ptr_vector_linear_search(ptr_vector* v, const void* what, ptr_vector_search_call
  */
 
 void*
-ptr_vector_search(ptr_vector* v, const void* what, ptr_vector_search_callback compare)
+ptr_vector_search(const ptr_vector* v, const void* what, ptr_vector_search_callback compare)
 {
     int first = 0;
     int last = v->offset;
@@ -312,17 +395,6 @@ ptr_vector_search(ptr_vector* v, const void* what, ptr_vector_search_callback co
         {
             return item;
         }
-    }
-
-    return NULL;
-}
-
-void*
-ptr_vector_last(ptr_vector* v)
-{
-    if(v->offset >= 0)
-    {
-        return v->data[v->offset];
     }
 
     return NULL;

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -105,7 +105,7 @@ clone_input_output_stream_skip(input_stream* stream, u32 len)
     return return_code;
 }
 
-static input_stream_vtbl clone_input_output_stream_vtbl ={
+static const input_stream_vtbl clone_input_output_stream_vtbl ={
     clone_input_output_stream_read,
     clone_input_output_stream_skip,
     clone_input_output_stream_close,

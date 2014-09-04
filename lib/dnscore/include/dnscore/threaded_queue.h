@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief 
@@ -51,7 +51,42 @@
 #define THEADED_QUEUE_RINGBUFFER    2
 #define THEADED_QUEUE_RINGBUFFER_CW 3
 #define THEADED_QUEUE_NBRB          4
+/*
+typedef void  threaded_queue_init_method(threaded_queue *queue, int max_size);
+typedef void  threaded_queue_finalize_method(threaded_queue *queue);
+typedef void  threaded_queue_enqueue_method(threaded_queue *queue,void* constant_pointer);
+typedef bool  threaded_queue_try_enqueue_method(threaded_queue *queue,void* constant_pointer);
+typedef void* threaded_queue_peek_method(threaded_queue *queue);
+typedef void* threaded_queue_try_peek_method(threaded_queue *queue);
+typedef void* threaded_queue_dequeue_method(threaded_queue *queue);
+typedef void* threaded_queue_try_dequeue_method(threaded_queue *queue);
+typedef u32   threaded_queue_dequeue_set_method(threaded_queue *queue, void** array, u32 array_size);
+typedef void  threaded_queue_wait_empty_method(threaded_queue *queue);
+typedef int   threaded_queue_size_method(threaded_queue *queue);
 
+struct threaded_queue_vtbl
+{
+    threaded_queue_enqueue_method *enqueue;
+    threaded_queue_dequeue_method *dequeue;
+    threaded_queue_peek_method *peek;
+    
+    threaded_queue_try_enqueue_method *try_enqueue;
+    threaded_queue_try_dequeue_method *try_dequeue;
+    threaded_queue_try_peek_method *try_peek;
+    
+    threaded_queue_dequeue_set_method *dequeue_set;
+    threaded_queue_wait_empty_method *wait_empty;
+    threaded_queue_size_method *size;
+    
+    threaded_queue_finalize_method *finalize;
+};
+
+struct threaded_queue_wrapper
+{
+    struct threaded_queue_vtbl *vtbl;
+    void *data;
+};
+*/
 #define THREADED_QUEUE_MODE THEADED_QUEUE_RINGBUFFER_CW
 
 #if THREADED_QUEUE_MODE == THEADED_QUEUE_RINGLIST

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief 
@@ -43,8 +43,8 @@
 #ifndef _ZDB_WRITE_ZONE_H
 #define	_ZDB_WRITE_ZONE_H
 
-#include "zdb_types.h"
 #include <dnscore/output_stream.h>
+#include <dnsdb/zdb_types.h>
 
 #ifdef	__cplusplus
 extern "C" {

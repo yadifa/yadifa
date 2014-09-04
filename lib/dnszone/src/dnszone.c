@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnszone Zone loader modules
  * 
  *  @brief Zone loader modules
@@ -41,6 +41,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "dnszone/dnszone-config.h"
+
 #include <dnscore/output_stream.h>
 #include <dnscore/logger.h>
 #include <dnscore/dnscore.h>
@@ -49,13 +51,13 @@
 #include <dnsdb/zdb.h>
 
 #include "dnszone/dnszone.h"
-#include "dnszone/output_stream_write_rdata.h"
+#include "dnszone/zone_file_reader.h"
 
 dnslib_fingerprint
 dnszone_getfingerprint()
 {
     dnslib_fingerprint ret = 0
-#if HAS_TSIG_SUPPORT != 0
+#if HAS_TSIG_SUPPORT
     | DNSLIB_TSIG
 #endif
 #if HAS_ACL_SUPPORT != 0
@@ -82,29 +84,10 @@ static void
 dnszone_register_errors()
 {
     error_register(ZONEREAD_ERROR_BASE,"ZONEREAD_ERROR_BASE");
-    error_register(ZRE_NO_CLASS_FOUND,"ZRE_NO_CLASS_FOUND");
-    error_register(ZRE_DIFFERENT_CLASSES,"ZRE_DIFFERENT_CLASSES");
-    error_register(ZRE_WRONG_APEX,"ZRE_WRONG_APEX");
-    error_register(ZRE_DUPLICATED_SOA,"ZRE_DUPLICATED_SOA");
-    
-    error_register(ZRE_FILE_NOT_FOUND_ERR,"ZRE_FILE_NOT_FOUND_ERR");
-    error_register(ZRE_FILE_OPEN_ERR,"ZRE_FILE_OPEN_ERR");   
-    
-    error_register(ZRE_INCORRECT_DOMAINNAME,"ZRE_INCORRECT_DOMAINNAME");
-    error_register(ZRE_INCORRECT_DOMAIN_LEN,"ZRE_INCORRECT_DOMAIN_LEN");
-    error_register(ZRE_INCORRECT_LABEL_LEN,"ZRE_INCORRECT_LABEL_LEN");
-    error_register(ZRE_INCORRECT_ORIGIN,"ZRE_INCORRECT_ORIGIN");
-    error_register(ZRE_INCORRECT_TTL,"ZRE_INCORRECT_TTL");
-    error_register(ZRE_NO_VALUE_FOUND,"ZRE_NO_VALUE_FOUND");
-    error_register(ZRE_DUPLICATED_OPEN_BRACKET,"ZRE_DUPLICATED_OPEN_BRACKET");
-    error_register(ZRE_DUPLICATED_CLOSED_BRACKET,"ZRE_DUPLICATED_CLOSED_BRACKET");
-    error_register(ZRE_NO_TYPE_FOUND,"ZRE_NO_TYPE_FOUND");
-    error_register(ZRE_NO_RDATA_FOUND,"ZRE_NO_RDATA_FOUND");
-    error_register(ZRE_INCORRECT_RDATA_LEN,"ZRE_INCORRECT_RDATA_LEN");
-    error_register(ZRE_CRAP_AT_END_OF_RECORD,"ZRE_CRAP_AT_END_OF_RECORD");
-    error_register(ZRE_UNBALANCED_QUOTES,"ZRE_UNBALANCED_QUOTES");
-    
     error_register(ZRE_AXFR_FILE_NOT_FOUND,"ZRE_AXFR_FILE_NOT_FOUND");
+    error_register(ZRE_NO_VALID_FILE_FOUND,"ZRE_NO_VALID_FILE_FOUND");
+        
+    zone_file_reader_init_error_codes();
 }
 
 logger_handle *g_zone_logger = NULL;
@@ -140,9 +123,7 @@ dnszone_init()
         exit(-1);
     }
     
-    output_stream_write_rdata_init();
-    
-    g_zone_logger = logger_handle_get("zone");
+    //g_zone_logger = logger_handle_get("zone");
 
     return SUCCESS;
 }

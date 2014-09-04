@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- * DOCUMENTATION */
+*
+* Copyright (c) 2011, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup 
  *  @ingroup dnscore
  *  @brief 
@@ -49,7 +49,6 @@
  *
  *      INCLUDES
  */
-
 
 /*    ------------------------------------------------------------
  *
@@ -74,7 +73,6 @@
 #define     EDNS0_OPT_0                     0        /* Reserverd                         rfc 2671 */
 #define     EDNS0_OPT_3                     3        /* NSID                              rfc 5001 */
 
-/** @todo check this value RFC */
 #define     DNSPACKET_MAX_LENGTH            0xffff
 #define     UDPPACKET_MAX_LENGTH            512
 #define     RDATA_MAX_LENGTH                0xffff
@@ -89,17 +87,53 @@
 
 #define     ID_BITS                         0xFF    /*                                    rfc 1035 */
 
+// HIGH flags
+
 #define     QR_BITS                         0x80    /*                                    rfc 1035 */
 #define     OPCODE_BITS                     0x78    /*                                    rfc 1035 */
 #define     OPCODE_SHIFT                    3
 #define     AA_BITS                         0x04    /*                                    rfc 1035 */
 #define     TC_BITS                         0x02    /*                                    rfc 1035 */
 #define     RD_BITS                         0x01    /*                                    rfc 1035 */
+
+// LOW flags
+
 #define     RA_BITS                         0x80    /*                                    rfc 1035 */
 #define     Z_BITS                          0x40    /*                                    rfc 1035 */
 #define     AD_BITS                         0x20    /*                                    rfc 2065 */
 #define     CD_BITS                         0x10    /*                                    rfc 2065 */
 #define     RCODE_BITS                      0x0F    /*                                    rfc 1035 */
+
+#ifdef WORDS_BIGENDIAN
+// BIG endian
+
+#define     DNS_FLAGS_HAS_QR(f_)             (f_ & ((u16)QR_BITS << 8))
+#define     DNS_FLAGS_GET_OPCODE(f_)         ((f_ >> (OPCODE_SHIFT + 8)) & OPCODE_BITS)
+#define     DNS_FLAGS_HAS_AA(f_)             (f_ & ((u16)AA_BITS << 8))
+#define     DNS_FLAGS_HAS_TC(f_)             (f_ & ((u16)TC_BITS << 8))
+#define     DNS_FLAGS_HAS_RD(f_)             (f_ & ((u16)RD_BITS << 8))
+
+#define     DNS_FLAGS_HAS_RA(f_)             (f_ & ((u16)RA_BITS))
+#define     DNS_FLAGS_HAS_Z(f_)              (f_ & ((u16)Z_BITS))
+#define     DNS_FLAGS_HAS_AD(f_)             (f_ & ((u16)AD_BITS))
+#define     DNS_FLAGS_HAS_CD(f_)             (f_ & ((u16)CD_BITS))
+#define     DNS_FLAGS_GET_RCODE(f_)          (f_ & RCODE_BITS)
+
+#else
+
+#define     DNS_FLAGS_HAS_QR(f_)             (f_ & ((u16)QR_BITS))
+#define     DNS_FLAGS_GET_OPCODE(f_)         ((f_ >> OPCODE_SHIFT) & OPCODE_BITS)
+#define     DNS_FLAGS_HAS_AA(f_)             (f_ & ((u16)AA_BITS))
+#define     DNS_FLAGS_HAS_TC(f_)             (f_ & ((u16)TC_BITS))
+#define     DNS_FLAGS_HAS_RD(f_)             (f_ & ((u16)RD_BITS))
+
+#define     DNS_FLAGS_HAS_RA(f_)             (f_ & ((u16)RA_BITS << 8))
+#define     DNS_FLAGS_HAS_Z(f_)              (f_ & ((u16)Z_BITS  << 8))
+#define     DNS_FLAGS_HAS_AD(f_)             (f_ & ((u16)AD_BITS << 8))
+#define     DNS_FLAGS_HAS_CD(f_)             (f_ & ((u16)CD_BITS << 8))
+#define     DNS_FLAGS_GET_RCODE(f_)          ((f_ >> 8) & RCODE_BITS)
+
+#endif
 
 #define     QDCOUNT_BITS                    0xFFFF  /* number of questions                rfc 1035 */
 #define     ANCOUNT_BITS                    0xFFFF  /* number of resource records         rfc 1035 */
@@ -475,6 +509,7 @@
 #define     TYPE_RKEY                       NU16(57)  /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
 #define     TYPE_TALINK                     NU16(58)  /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
 
+#define     TYPE_CDS                        NU16(59)      /* Child DS                           IANA approved */
 
 #define     TYPE_SPF                        NU16(99)      /* SPF                                rfc 4408 */
 
@@ -482,6 +517,14 @@
 #define     TYPE_UID                        NU16(101)
 #define     TYPE_GID                        NU16(102)
 #define     TYPE_UNSPEC                     NU16(103)
+
+#define     TYPE_NID                        NU16(104)     /*                                    rfc 6742 */
+#define     TYPE_L32                        NU16(105)     /*                                    rfc 6742 */
+#define     TYPE_L64                        NU16(106)     /*                                    rfc 6742 */
+#define     TYPE_LP                         NU16(107)     /*                                    rfc 6742 */
+
+#define     TYPE_EUI48                      NU16(108)     /*                                    rfc 7043 */
+#define     TYPE_EUI64                      NU16(109)     /*                                    rfc 7043 */
 
 #define     TYPE_TKEY                       NU16(249)     /* Transaction Key                    rfc 2930 */
 #define     TYPE_TSIG                       NU16(250)     /* Transaction Signature              rfc 2845 */
@@ -531,14 +574,14 @@
 #define     DNSKEY_FLAG_KEYSIGNINGKEY       0x0001
 #define     DNSKEY_FLAG_ZONEKEY             0x0100
 
-#define     DNSKEY_PROTOCOL_FIELD           3           /* MUST be this */
+#define     DNSKEY_PROTOCOL_FIELD               3       /* MUST be this */
 
-#define     DNSKEY_ALGORITHM_DSASHA1        3
-#define     DNSKEY_ALGORITHM_RSASHA1        5
-#define     DNSKEY_ALGORITHM_DSASHA1_NSEC3  6
-#define     DNSKEY_ALGORITHM_RSASHA1_NSEC3  7
-#define     DNSKEY_ALGORITHM_RSASHA256_NSEC3  8         /* RFC 5702 */
-#define     DNSKEY_ALGORITHM_RSASHA512_NSEC3  10        /* RFC 5702 */
+#define     DNSKEY_ALGORITHM_DSASHA1            3
+#define     DNSKEY_ALGORITHM_RSASHA1            5
+#define     DNSKEY_ALGORITHM_DSASHA1_NSEC3      6
+#define     DNSKEY_ALGORITHM_RSASHA1_NSEC3      7
+#define     DNSKEY_ALGORITHM_RSASHA256_NSEC3    8       /* RFC 5702 */
+#define     DNSKEY_ALGORITHM_RSASHA512_NSEC3   10       /* RFC 5702 */
 
 #define     DS_DIGEST_SHA1                  1
 #define     DS_DIGEST_SHA256                2
@@ -671,6 +714,12 @@ extern const class_table qclass[];
 #define     TYPE_UID_NAME                   "UID"
 #define     TYPE_GID_NAME                   "GID"
 #define     TYPE_UNSPEC_NAME                "UNSPEC"
+#define     TYPE_NID_NAME                   "NID"
+#define     TYPE_L32_NAME                   "L32"
+#define     TYPE_L64_NAME                   "L64"
+#define     TYPE_LP_NAME                    "LP"
+#define     TYPE_EUI48_NAME                 "EUI48"
+#define     TYPE_EUI64_NAME                 "EUI64"
 #define     TYPE_TKEY_NAME                  "TKEY"
 #define     TYPE_TSIG_NAME                  "TSIG"
 #define     TYPE_IXFR_NAME                  "IXFR"
@@ -687,6 +736,8 @@ extern const class_table qclass[];
 #define     TYPE_TA_NAME                    "TA"        /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
 #define     TYPE_DLV_NAME                   "DLV"
 
+#define     OPT_NSID                        3       // the option value for NSID
+
 extern const type_table qtype[];
 
 /**
@@ -696,8 +747,7 @@ extern const type_table qtype[];
  * @return the c-string
  */
 
-const char*
-get_name_from_class(u16 c);
+const char *get_name_from_class(u16 c);
 
 /**
  * Static asciiz representation of a dns type
@@ -706,8 +756,7 @@ get_name_from_class(u16 c);
  * @return the c-string
  */
 
-const char*
-get_name_from_type(u16 t);
+const char *get_name_from_type(u16 t);
 
 /** \brief Get the numeric value of a class (network order) from its name
  *
@@ -717,8 +766,7 @@ get_name_from_type(u16 t);
  *  @retval OK
  *  @retval NOK
  */
-int
-get_class_from_name(const char *src, u16 *dst);
+int get_class_from_name(const char *src, u16 *dst);
 
 /** \brief Get the numeric value of a class (network order) from its name
  *  Case insensitive
@@ -729,8 +777,7 @@ get_class_from_name(const char *src, u16 *dst);
  *  @retval OK
  *  @retval NOK
  */
-int
-get_class_from_case_name(const char *src, u16 *dst);
+int get_class_from_case_name(const char *src, u16 *dst);
 
 /** \brief Get the numeric value of a type (network order) from its name
  *
@@ -740,8 +787,7 @@ get_class_from_case_name(const char *src, u16 *dst);
  *  @retval OK
  *  @retval NOK
  */
-int
-get_type_from_name(const char *src, u16 *dst);
+int get_type_from_name(const char *src, u16 *dst);
 
 /** \brief Get the numeric value of a type (network order) from its name
  *  Case insensitive
@@ -752,8 +798,9 @@ get_type_from_name(const char *src, u16 *dst);
  *  @retval OK
  *  @retval NOK
  */
-int
-get_type_from_case_name(const char *src, u16 *dst);
+int get_type_from_case_name(const char *src, u16 *dst);
+
+int get_type_from_case_name_len(const char *src, int src_len, u16 *dst);
 
 /**
  * @brief Case-insensitive search for the name in the table, returns the value
@@ -764,8 +811,37 @@ get_type_from_case_name(const char *src, u16 *dst);
  * 
  * @return SUCCESS iff the name was matched
  */
-ya_result
-get_value_from_casename(value_name_table *table, const char *name, u32 *out_value);
+ya_result get_value_from_casename(const value_name_table *table, const char *name, u32 *out_value);
+
+/**
+ * @brief Static asciiz representation of a dns opcode
+ * 
+ * @param c
+ *
+ * @return the c-string
+ */
+const char *get_opcode(u16 c);
+
+/**
+ * @brief Static asciiz representation of a dns rcode
+ * 
+ * @param c
+ *
+ * @return the c-string
+ */
+const char *get_rcode(u16 c);
+
+#if HAS_NSID_SUPPORT
+
+#ifndef DNSCORE_RFC_C
+extern u32 edns0_record_size;
+extern u8 *edns0_rdatasize_nsid_option_wire;
+extern u32 edns0_rdatasize_nsid_option_wire_size;
+#endif
+
+void edns0_set_nsid(u8 *bytes, u16 size);
+
+#endif
 
 #endif /* RFC_H_ */
 

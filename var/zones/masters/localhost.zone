@@ -3,7 +3,7 @@ $ORIGIN localhost.
 
 localhost.  86400   IN  SOA localhost. root.localhost. (
                          20120201 ; serial
-                         3Ha      ; refresh
+                         3H       ; refresh
                          15       ; retry
                          1w       ; expire
                          3h       ; minimum

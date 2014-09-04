@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -48,24 +48,25 @@ extern "C" {
 
     /*----------------------------------------------------------------------------*/
 
-#include    "config.h"
+#include "config.h"
 
 #include <dnscore/message.h>
 #include <dnscore/fingerprint.h>
+    
 #include <dnscore/treeset.h>
+    
+#include <dnsdb/zdb_types.h>
 
 #include    "zone.h"
 
     /* List of database type in string form */
 #define     DB_STRING_NO            "no database"
 
-    typedef void *database_t;
-
     void            database_init();
     void            database_finalize();
 
-    ya_result       database_clear_zones(database_t *database, zone_data_set *dset);
-    ya_result       database_load(database_t **, zone_data_set *dset);
+    ya_result       database_clear_zones(zdb *database, zone_data_set *dset);
+    ya_result       database_startup(zdb **);
     
     /** \brief Get dns answer from database
      *
@@ -75,36 +76,26 @@ extern "C" {
      *  @retval NOK
      *  @return status of message is written in mesg->status
      */
-    void            database_query(database_t *database, message_data *mesg);
-    
+#if HAS_RRL_SUPPORT
+    ya_result       database_query(zdb *database, message_data *mesg);
+#else
+    void            database_query(zdb *database, message_data *mesg);
+#endif
     /**
      * A task is a function called in the main thread loop
      * A delegate is a task we are waiting for
      */
-    void            database_delegate_query(database_t *database, message_data *mesg);
+    void            database_delegate_query(zdb *database, message_data *mesg);
     
-    finger_print    database_update(database_t *database, message_data *mesg);
+    finger_print    database_update(zdb *database, message_data *mesg);
     
-    finger_print    database_delegate_update(database_t *database, message_data *mesg);
+    finger_print    database_delegate_update(zdb *database, message_data *mesg);
 
-    ya_result       database_print_zones(zone_data *, char *);
-    ya_result       database_unload(database_t *);
-
-    /**
-     *  Master only :
-     * 
-     * For all (valid) master zones,
-     *  if the zone has signatures (about to) expire(d), 
-     *   queue the database_update_signatures_alarm for said zone.
-     * 
-     * This does not makes as much sense to call this at startup now that zones are async
-     * 
-     */
-    ya_result       database_signature_maintenance(database_t *database);
+    ya_result       database_print_zones(zone_desc_s *, char *);
+    ya_result       database_shutdown(zdb *);
 
     /* Slave only */
-    ya_result       database_zone_refresh_maintenance(database_t *database, const u8 *origin);
-    ya_result       database_refresh_maintenance(database_t *database);
+    ya_result       database_zone_refresh_maintenance(zdb *database, const u8 *origin, u32 next_alarm_epoch);
     
     bool            database_are_all_zones_saved_to_disk();
     void            database_wait_all_zones_saved_to_disk();

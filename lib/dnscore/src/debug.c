@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup debug Debug functions
  *  @ingroup dnscore
  *  @brief Debug functions.
@@ -53,6 +53,8 @@
 #include "dnscore/sys_types.h"
 #include "dnscore/format.h"
 #include "dnscore/debug.h"
+#include "dnscore/mutex.h"
+#include "dnscore/logger.h"
 
 #undef malloc
 #undef free
@@ -68,6 +70,9 @@
 #define ZDB_DEBUG_STACKTRACE 0
 #endif
 
+#undef ZDB_DEBUG_STACKTRACE
+#define ZDB_DEBUG_STACKTRACE 0
+
 #ifdef	__cplusplus
 extern "C" output_stream __termout__;
 extern "C" output_stream __termerr__;
@@ -76,19 +81,10 @@ extern output_stream __termout__;
 extern output_stream __termerr__;
 #endif
 
-#if defined(DEBUG_VALID_ADDRESS)
-bool debug_is_valid_address(void* ptr, size_t len)
-{
-    assert(len <= 0x1000000);
-    
-    unsigned char v[0x1000000/0x1000];  /* enough memory for 16MB */
-    intptr addr = (intptr)ptr;
-    addr &= ~0xfff;
-    int r = mincore((void*)addr, len, v);
-    
-    return r == 0;
-}
-#endif
+extern logger_handle *g_system_logger;
+#define MODULE_MSG_HANDLE g_system_logger
+
+
 
 
 /**
@@ -217,85 +213,63 @@ debug_dump_ex(void* data_pointer_, size_t size_, size_t line_size, bool hex, boo
     {
         return;
     }
-
-    u8* data_pointer = (u8*)data_pointer_;
-    s32 size = size_;
-
-
-    int dump_size;
-    int i;
-
-    do
-    {
-        dump_size = MIN(line_size, size);
-
-        u8* data;
-
-        if(address)
-        {
-            format("%p ", data_pointer);
-        }
-
-        if(hex)
-        {
-            data = data_pointer;
-            for(i = 0; i < dump_size; i++)
-            {
-                format("%02x", *data++);
-                if((i & 3) == 3)
-                {
-                    print(" ");
-                }
-            }
-
-            for(; i < line_size; i++)
-            {
-                print("  ");
-                if((i & 3) == 0)
-                {
-                    print(" ");
-                }
-            }
-        }
-
-        if(hex & text)
-        {
-            print(" | ");
-        }
-
-        if(text)
-        {
-            data = data_pointer;
-            for(i = 0; i < dump_size; i++)
-            {
-                char c = *data++;
-                if(c < ' ')
-                {
-                    c = '.';
-                }
-                format("%c", c);
-            }
-        }
-
-        data_pointer += dump_size;
-        size -= dump_size;
-
-        if(size != 0)
-        {
-            println("");
-        }
-    }
-    while(size > 0);
-
-    if(size_ > line_size)
-    {
-        println("");
-    }
+    
+    osprint_dump(termout, data_pointer_, size_, line_size,
+        (address)?OSPRINT_DUMP_ADDRESS:0    |
+        (hex)?OSPRINT_DUMP_HEX:0            |
+        (text)?OSPRINT_DUMP_TEXT:0);
 }
 
 /****************************************************************************/
 
 /****************************************************************************/
+
+#if defined(__linux__)
+
+void
+debug_log_stacktrace(logger_handle *handle, u32 level, const char *prefix)
+{
+    void* addresses[1024];
+
+    int n = backtrace(addresses, sizeof (addresses) / sizeof (void*));
+    
+    if(n > 0)
+    {
+        char **symbols = backtrace_symbols(addresses, n);
+    
+        if(symbols != NULL)
+        {
+            for(int i = 0; i < n; i++)
+            {
+                logger_handle_msg(handle, level, "%s: %p: %s", prefix, addresses[i], symbols[i]);
+            }
+
+            free(symbols);
+        }
+        else
+        {
+            for(int i = 0; i < n; i++)
+            {
+                logger_handle_msg(handle, level, "%s: %p: ?", prefix, addresses[i]);
+            }
+        }
+    }
+    else
+    {
+        logger_handle_msg(handle, level, "%s: ?: ?", prefix);
+    }
+}
+
+#else
+
+void debug_log_stacktrace(logger_handle *handle, u32 level, const char *prefix)
+{
+    (void)handle;
+    (void)level;
+    (void)prefix;
+}
+
+#endif
 
 void*
 debug_malloc(
@@ -676,9 +650,80 @@ debug_stat(bool dump)
 #if ZDB_DEBUG_CHAIN_ALLOCATED_BLOCKS!=0
     if(dump)
     {
+        db_header *ptr;
+        
+        u64 mintag = MAX_U64;
+        u64 nexttag;
+        
+        // find the minimum
+        
+        for(ptr = db_mem_first.next; ptr != &db_mem_first; ptr = ptr->next)
+        {   
+            u64 tag = ptr->tag;
+            if(tag < mintag)
+            {
+                mintag = tag;
+            }
+        }
+        
+        println("");
+        
+        //        0123456789ABCDEF   012345678   012345678   012345678   012345678   012345678
+        println("[-----TAG------] :   COUNT   :    MIN    :    MAX    :    MEAN    :   TOTAL");
+        
+        for(; mintag != MAX_U64; mintag = nexttag)
+        {
+            nexttag = MAX_U64;
+            u32 count = 0;
+            u32 minsize = MAX_U32;
+            u32 maxsize = 0;
+            u64 totalsize = 0;
+
+            for(ptr = db_mem_first.next; ptr != &db_mem_first; ptr = ptr->next)
+            {   
+                u64 tag = ptr->tag;
+
+                if((tag > mintag) && (tag < nexttag))
+                {
+                    nexttag = tag;
+                    continue;
+                }
+
+                if(tag != mintag)
+                {
+                    continue;
+                }
+
+                count++;
+                totalsize += ptr->size;
+
+                if(ptr->size < minsize)
+                {
+                    minsize = ptr->size;
+                }
+
+                if(ptr->size > maxsize)
+                {
+                    maxsize = ptr->size;
+                }
+            }
+            
+            char tag_text[9];
+            SET_U64_AT(tag_text[0], mintag);
+            tag_text[8] = '\0';
+
+            formatln("%16s : %9u : %9u : %9u : %9u : %12llu", tag_text, count, minsize, maxsize, totalsize / count, totalsize);
+            flushout();
+        }
+        
+        println("");
+    }
+    
+    if(dump)
+    {
         db_header* ptr = db_mem_first.next;
         int index = 0;
-
+        
         while(ptr != &db_mem_first)
         {
             formatln("%04x %16p [%08x]", index, (void*)& ptr[1], ptr->size);
@@ -698,7 +743,7 @@ debug_stat(bool dump)
 #if ZDB_DEBUG_SERIALNUMBERIZE_BLOCKS!=0
             formatln("#%08llx | ", ptr->serial);
 #endif
-            debug_dump((u8*) & ptr[1], ptr->size, 32, TRUE, TRUE);
+            osprint_dump(termout, & ptr[1], ptr->size, 32, OSPRINT_DUMP_ALL);
 
             formatln("\n");
             ptr = ptr->next;
@@ -766,7 +811,71 @@ debug_mallocated(void* ptr)
     }
 }
 
-#ifndef NDEBUG
+#ifdef DEBUG
+
+static mutex_t debug_bench_mtx = MUTEX_INITIALIZER;
+static debug_bench_s *debug_bench_first = NULL;
+
+void
+debug_bench_register(debug_bench_s *bench, const char *name)
+{
+    mutex_lock(&debug_bench_mtx);
+    
+    debug_bench_s *b = debug_bench_first;
+    while((b != bench) && (b != NULL))
+    {
+        b = b->next;
+    }
+    
+    if(b == NULL)
+    {
+        bench->next = debug_bench_first;
+        bench->name = strdup(name);
+        bench->time_min = MAX_U64;
+        bench->time_max = 0;
+        bench->time_total = 0;
+        bench->time_count = 0;
+        debug_bench_first = bench;
+    }
+    else
+    {
+        log_debug("debug_bench_register(%p,%s): duplicate", bench, name);
+    }
+    mutex_unlock(&debug_bench_mtx);
+}
+
+void
+debug_bench_commit(debug_bench_s *bench, u64 delta)
+{
+    mutex_lock(&debug_bench_mtx);
+    bench->time_min = MIN(bench->time_min, delta);
+    bench->time_max = MAX(bench->time_max, delta);
+    bench->time_total += delta;
+    bench->time_count++;
+    mutex_unlock(&debug_bench_mtx);
+}
+
+void debug_bench_logdump_all()
+{
+    debug_bench_s *p = debug_bench_first;
+    while(p != NULL)
+    {
+        double min = p->time_min;
+        min /= 1000000.0;
+        double max = p->time_max;
+        max /= 1000000.0;
+        double total = p->time_total;
+        total /= 1000000.0;
+        u32 count = p->time_count;
+        log_info("bench: %10s: [%9.6fs:%9.6fs] total=%9.6fs mean=%9.6fs rate=%9.6f/s calls=%9u", p->name, min, max, total, total / count, count / total, count);
+        p = p->next;
+    }
+}
+
+#endif
+
+
+#ifdef DEBUG
 
 void debug_unicity_init(debug_unicity *dus)
 {
@@ -795,6 +904,24 @@ void debug_unicity_release(debug_unicity *dus)
     assert(dus->counter == 0);
     pthread_mutex_unlock(&dus->mutex);
 }
+
+
+void debug_vg(const void* b, int len)
+{
+    const char* s = (const char*)b;
+    for(int i = 0; i < len; i++)
+    {
+        if((s[i] >= ' ') && (s[i] < 127))
+        {
+            putchar(s[i]);
+        }
+        else
+        {
+            putchar('.');
+        }
+    }
+}
+
 
 #endif
 

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief Internal functions for the database: zoned resource records label.
@@ -50,7 +50,7 @@
 #ifndef _ZONE_LABEL_H
 #define	_ZONE_LABEL_H
 
-#include "zdb_types.h"
+#include <dnsdb/zdb_types.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -79,6 +79,11 @@ zdb_zone_label* zdb_zone_label_find_from_name(zdb* db, const char* name, u16 zcl
 
 zdb_zone_label* zdb_zone_label_find_from_dnsname(zdb* db, const u8* dns_name, u16 zclass);
 
+zdb_zone_label* zdb_zone_label_find_from_dnsname_nolock(zdb* db, const u8* dns_name);
+
+zdb_zone_label* zdb_zone_label_find_nolock(zdb * db, dnsname_vector* origin);
+zdb_zone_label* zdb_zone_label_add_nolock(zdb * db, dnsname_vector* origin);
+
 /**
  * @brief Destroys a label and its collections.
  *
@@ -105,7 +110,7 @@ void zdb_zone_label_destroy(zdb_zone_label** zone_labelp);
  */
 
 /* 1 USE */
-s32 zdb_zone_label_match(const zdb* db, const dnsname_vector* name, u16 zclass, zdb_zone_label_pointer_array zone_label_vector);
+s32 zdb_zone_label_match(zdb* db, const dnsname_vector* name, u16 zclass, zdb_zone_label_pointer_array zone_label_vector);
 
 /**
  * @brief Retrieve the zone label origin, adds it in the database if needed.
@@ -137,59 +142,9 @@ zdb_zone_label* zdb_zone_label_add(zdb* db, dnsname_vector* origin, u16 zclass);
 /* 2 USES */
 ya_result zdb_zone_label_delete(zdb* db, dnsname_vector* name, u16 zclass);
 
-#if ZDB_CACHE_ENABLED!=0
 
-/**
- * @brief Destroys all records of a given type for a zone label (cache)
- *
- * Destroys all records of a given type for a zone label (cache)
- *
- * @parm[in] db a pointer to the database
- * @parm[in] name a pointer to the name
- * @parm[in] zclass the class of the zone of the label
- * @parm[in] type the type of the records to delete
- *
- * @return an error code
- */
 
-/* NOT USED */
-ya_result zdb_zone_label_delete_record(zdb* db, dnsname_vector* origin, u16 zclass, u16 type);
-
-/**
- * @brief Destroys a record matching of a given type, ttl and rdata for a zone label (cache)
- *
- * Destroys a record matching of a given type, ttl and rdata for a zone label (cache)
- *
- * @parm[in] db a pointer to the database
- * @parm[in] name a pointer to the name
- * @parm[in] zclass the class of the zone of the label
- * @parm[in] type the type of the records to delete
- * @parm[in] ttlrdata the ttl and rdata to match
- *
- * @return an error code
- */
-
-/* NOT USED ??? */
-ya_result zdb_zone_label_delete_record_exact(zdb* db, dnsname_vector* origin, u16 zclass, u16 type, zdb_ttlrdata* ttl_rdata);
-
-#endif
-
-#if ZDB_CACHE_ENABLED!=0
-
-/**
- * @brief TRUE if the zone_label contains information (records, zone or a set of labels), else FALSE
- */
-
-/* 2 USES */
-#define ZONE_LABEL_RELEVANT(zone_label) ((zone_label)->zone!=NULL||dictionary_notempty((zone_label)->sub)||btree_notempty((zone_label)->global_resource_record_set))
-
-/**
- * @brief FALSE if the zone_label contains information (records, zone or a set of labels), else TRUE
- */
-
-/* 4 USES */
-#define ZONE_LABEL_IRRELEVANT(zone_label) ((zone_label)->zone==NULL&&dictionary_isempty((zone_label)->sub)&&btree_isempty((zone_label)->global_resource_record_set))
-
+#if 0 /* fix */
 #else
 
 /**
@@ -215,8 +170,8 @@ ya_result zdb_zone_label_delete_record_exact(zdb* db, dnsname_vector* origin, u1
  * DEBUG: prints the label content
  */
 
-void zdb_zone_label_print_indented(zdb_zone_label* zone_label, int indent);
-void zdb_zone_label_print(zdb_zone_label* zone_label);
+void zdb_zone_label_print_indented(zdb_zone_label* zone_label, output_stream *os, int indent);
+void zdb_zone_label_print(zdb_zone_label* zone_label, output_stream *os);
 
 #endif
 

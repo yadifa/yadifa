@@ -7,7 +7,7 @@
 /* number of harware core if the auto-detect fails */
 #define DEFAULT_ASSUMED_CPU_COUNT 2
 
-/* Enable ACL support */
+/* always on */
 #define HAS_ACL_SUPPORT 1
 
 /* i386, Athlon, Opteron, Core2, i3, i5, i7, ... */
@@ -16,8 +16,20 @@
 /* T1000 has a Niagara cpu */
 /* #undef HAS_CPU_NIAGARA */
 
-/* MUST be enabled if either NSEC3 or NSEC are enabled */
+/* Define this to enable the remote control (devs only) */
+/* #undef HAS_CTRL */
+
+/* always on */
 #define HAS_DNSSEC_SUPPORT 1
+
+/* Define this to enable dynamic provisioning */
+/* #undef HAS_DYNAMIC_PROVISIONING */
+
+/* Enable dynamic update support */
+#define HAS_DYNUPDATE_SUPPORT 1
+
+/* Enable MASTER support */
+#define HAS_MASTER_SUPPORT 1
 
 /* Define this to enable slow but safe memory accesses */
 #define HAS_MEMALIGN_ISSUES 0
@@ -26,29 +38,38 @@
    same interface. */
 /* #undef HAS_MESSAGES_SUPPORT */
 
-/* Set this to 1 to enable NSEC3 support */
+/* always on */
 #define HAS_NSEC3_SUPPORT 1
 
-/* Set this to 1 to enable NSEC support */
+/* always on */
 #define HAS_NSEC_SUPPORT 1
+
+/* Define this to enable NSID support */
+/* #undef HAS_NSID_SUPPORT */
+
+/* The system supports thread names */
+#define HAS_PTHREAD_SETNAME_NP 1
 
 /* The system supports spinlocks */
 #define HAS_PTHREAD_SPINLOCK 1
 
+/* Define this to enable DNS RRL */
+/* #undef HAS_RRL_SUPPORT */
+
+/* Do verify and/or generate RRSIG for zones */
+#define HAS_RRSIG_MANAGEMENT_SUPPORT 1
+
 /* The sockaddr struct has an sa_len field */
 #define HAS_SOCKADDR_SA_LEN 0
 
-/* Define this to use less memory */
-/* #undef HAS_TINY_FOOTPRINT */
-
-/* Enable TSIG support */
+/* always on */
 #define HAS_TSIG_SUPPORT 1
 
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #define HAVE_ARPA_INET_H 1
 
 /* Define to 1 if you have the `bzero' function. */
-#define HAVE_BZERO 1
+/* #undef HAVE_BZERO */
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #define HAVE_DLFCN_H 1
@@ -57,7 +78,7 @@
 #define HAVE_FCNTL_H 1
 
 /* Define to 1 if you have the `fork' function. */
-#define HAVE_FORK 1
+/* #undef HAVE_FORK */
 
 /* Define to 1 if you have the <i386/limits.h> header file. */
 /* #undef HAVE_I386_LIMITS_H */
@@ -83,6 +104,9 @@
 /* Define to 1 if you have the `dnsdb' library (-ldnsdb). */
 /* #undef HAVE_LIBDNSDB */
 
+/* Define to 1 if you have the `dnslg' library (-ldnslg). */
+/* #undef HAVE_LIBDNSLG */
+
 /* Define to 1 if you have the `dnszone' library (-ldnszone). */
 /* #undef HAVE_LIBDNSZONE */
 
@@ -105,7 +129,7 @@
 #define HAVE_MEMORY_H 1
 
 /* Define to 1 if you have the `memset' function. */
-#define HAVE_MEMSET 1
+/* #undef HAVE_MEMSET */
 
 /* Define to 1 if you have the <netinet/in.h> header file. */
 #define HAVE_NETINET_IN_H 1
@@ -114,14 +138,14 @@
 /* #undef HAVE_PPC_LIMITS_H */
 
 /* Define to 1 if you have the `select' function. */
-#define HAVE_SELECT 1
+/* #undef HAVE_SELECT */
 
 /* Define to 1 if you have the `socket' function. */
-#define HAVE_SOCKET 1
+/* #undef HAVE_SOCKET */
 
 /* Define to 1 if `stat' has the bug that it succeeds when given the
    zero-length file name argument. */
-/* #undef HAVE_STAT_EMPTY_STRING_BUG */
+#define HAVE_STAT_EMPTY_STRING_BUG 1
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #define HAVE_STDINT_H 1
@@ -163,20 +187,20 @@
 #define HAVE_U_CHAR 1
 
 /* Define to 1 if you have the `vfork' function. */
-#define HAVE_VFORK 1
+/* #undef HAVE_VFORK */
 
 /* Define to 1 if you have the <vfork.h> header file. */
 /* #undef HAVE_VFORK_H */
 
 /* Define to 1 if `fork' works. */
-#define HAVE_WORKING_FORK 1
+/* #undef HAVE_WORKING_FORK */
 
 /* Define to 1 if `vfork' works. */
-#define HAVE_WORKING_VFORK 1
+/* #undef HAVE_WORKING_VFORK */
 
 /* Define to 1 if `lstat' dereferences a symlink specified with a trailing
    slash. */
-#define LSTAT_FOLLOWS_SLASHED_SYMLINK 1
+/* #undef LSTAT_FOLLOWS_SLASHED_SYMLINK */
 
 /* Define to the sub-directory in which libtool stores uninstalled libraries.
    */
@@ -192,7 +216,7 @@
 #define PACKAGE_NAME "dnsdb"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "dnsdb 1.0.4-3981"
+#define PACKAGE_STRING "dnsdb 2.0.0-4192"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "dnsdb"
@@ -201,7 +225,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "1.0.4-3981"
+#define PACKAGE_VERSION "2.0.0-4192"
 
 /* Define as the return type of signal handlers (`int' or `void'). */
 #define RETSIGTYPE void
@@ -222,7 +246,7 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* Version number of package */
-#define VERSION "1.0.4-3981"
+#define VERSION "2.0.0-4192"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */
@@ -260,4 +284,4 @@
 /* #undef size_t */
 
 /* Define as `fork' if `vfork' does not work. */
-/* #undef vfork */
+#define vfork fork

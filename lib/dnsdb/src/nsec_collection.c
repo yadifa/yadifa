@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec NSEC functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -156,7 +156,7 @@ AVL_PREFIXED(avl_find_interval_start)(AVL_CONST_TREE_TYPE* root, AVL_REFERENCE_T
     const AVL_NODE_TYPE* lower_bound = NULL;
     AVL_REFERENCE_TYPE h;
     
-    zassert(node != NULL);
+    yassert(node != NULL);
 
     /* This is one of the parts I could try to optimize
      * I've checked the assembly, and it sucks ...
@@ -202,7 +202,7 @@ AVL_PREFIXED(avl_find_interval_start)(AVL_CONST_TREE_TYPE* root, AVL_REFERENCE_T
     {
         lower_bound = *root;
         
-        zassert(lower_bound != NULL);
+        yassert(lower_bound != NULL);
         
         while((node = AVL_CHILD(lower_bound, DIR_RIGHT)) != NULL)
         {

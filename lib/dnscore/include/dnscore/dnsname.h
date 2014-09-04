@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- * DOCUMENTATION */
+*
+* Copyright (c) 2011, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnscore
  *  @ingroup dnscore
  *  @brief Functions used to manipulate dns formatted names and labels
@@ -60,7 +60,7 @@
 
 #define SRV_UNDERSCORE_SUPPORT 1
 
-#define DNSNAME_MAX_SECTIONS ((MAX_DOMAIN_LENGTH+1) / 2)
+#define DNSNAME_MAX_SECTIONS ((MAX_DOMAIN_LENGTH + 1) / 2)
 
 // dns equal chars comparison should give 0x00 or 0x20
 // the '_' breaks this so there is a slightly different (slightly slower) way to handle it
@@ -91,7 +91,7 @@ static inline bool LOCASEEQUALSBY4(const u8* name_a, const u8* name_b)
 {
     return (((GET_U32_AT(name_a[0]) - GET_U32_AT(name_b[0])) & ((u16)0xdfdfdfdf)) == 0);
 }
-#else // slightly modified to take that stupid '_' into account
+#else // slightly modified to take '_' into account
 #define LOCASE(c__) (((((char)(c__)+(char)0x01)|(char)0x20))-(char)0x01)
 
 static inline bool LOCASEEQUALS(u8 a, u8 b)
@@ -204,6 +204,57 @@ struct dnsname_vector
 
 ya_result cstr_to_dnsname(u8* name_parm, const char* str);
 
+/** @brief Converts a C string to a lower-case dns name.
+ *
+ *  Converts a C string to a lower-case dns name.
+ *
+ *  @param[in] name_parm a pointer to a buffer that will get the full dns name
+ *  @param[in] str a pointer to the source c-string
+ *
+ *  @return Returns the length of the string up to the last '\0'
+ */
+
+ya_result cstr_to_locase_dnsname(u8* name_parm, const char* str);
+
+/** @brief Converts a text buffer to a dns name.
+ *
+ *  Converts a text buffer to a dns name.
+ *
+ *  @param[in] name_parm a pointer to a buffer that will get the full dns name
+ *  @param[in] str a pointer to the source buffer
+ *  @param[in] str_len the length of the source buffer
+ *
+ *  @return Returns the length of the string up to the last '\0'
+ */
+
+ya_result charp_to_dnsname(u8* name_parm, const char* str, u32 str_len);
+
+/** @brief Converts a text buffer to a lower-case dns name.
+ *
+ *  Converts a text buffer to a lower-case dns name.
+ *
+ *  @param[in] name_parm a pointer to a buffer that will get the full dns name
+ *  @param[in] str a pointer to the source buffer
+ *  @param[in] str_len the length of the source buffer
+ *
+ *  @return Returns the length of the string up to the last '\0'
+ */
+
+ya_result charp_to_locase_dnsname(u8* name_parm, const char* str, u32 str_len);
+
+/** @brief Converts a text buffer to a lower-case dns name and checks for validity
+ *
+ *  Converts a text buffer to a lower-case dns name.
+ *
+ *  @param[in] name_parm a pointer to a buffer that will get the full dns name
+ *  @param[in] str a pointer to the source buffer
+ *  @param[in] str_len the length of the source buffer
+ *
+ *  @return Returns the length of the string up to the last '\0'
+ */
+
+ya_result charp_to_locase_dnsname_with_check(u8* name_parm, const char* str, u32 str_len);
+
 /**
  *  @brief Converts a C string to a dns name and checks for validity
  *
@@ -230,11 +281,13 @@ ya_result cstr_to_dnsname_with_check(u8* name_parm, const char* str);
 
 ya_result cstr_to_dnsrname_with_check(u8* name_parm, const char* str);
 
-static inline int
-rr_convert_2dname2(u_char *dst, const u_char *src)
-{
-    return cstr_to_dnsname((u8*)dst, (const char*)src);
-}
+ya_result cstr_to_dnsname_with_check_len(u8* name_parm, const char* text, u32 text_len);
+
+ya_result cstr_to_locase_dnsname_with_check_len(u8* name_parm, const char* text, u32 text_len);
+
+ya_result cstr_to_dnsname_with_check_len_with_origin(u8* name_parm, const char* text, u32 text_len, const u8 *origin);
+
+ya_result cstr_to_locase_dnsname_with_check_len_with_origin(u8* name_parm, const char* text, u32 text_len, const u8 *origin);
 
 /* ONE use */
 
@@ -422,6 +475,14 @@ u32 dnslabel_vector_to_dnsname(const_dnslabel_vector_reference name, s32 top, u8
 
 u32 dnslabel_vector_dnslabel_to_dnsname(const u8 *prefix, const dnsname_vector *namestack, s32 bottom, u8 *str);
 
+static inline u32
+dnslabel_copy(u8 *target, const u8 *src)
+{
+    u32 len = src[0] + 1;
+    memcpy(target, src, len);
+    return len;
+}
+
 /* ONE use */
 
 u32 dnsname_vector_sub_to_dnsname(const dnsname_vector *name, s32 from, u8 *name_start);
@@ -460,7 +521,9 @@ s32 dnsname_to_dnslabel_stack(const u8* dns_name, dnslabel_stack_reference label
 
 s32 dnsname_to_dnsname_vector(const u8* dns_name, dnsname_vector* name);
 
-u32 dnsname_vector_copy(dnsname_vector* dst, const dnsname_vector* src);
+u32 dnsname_vector_copy(dnsname_vector *dst, const dnsname_vector* src);
+
+u32 dnsname_vector_len(dnsname_vector *name_vector);
 
 /*****************************************************************************
  *
@@ -490,6 +553,10 @@ u32 dnslabel_stack_to_dnsname(const const_dnslabel_stack_reference name, s32 top
 /* ONE use */
 
 u32 dnsname_stack_to_dnsname(const dnsname_stack* name_stack, u8* name_start);
+
+/* ONE use, returns the fqdn len */
+
+u32 dnsname_stack_len(const dnsname_stack* name_stack);
 
 /* TWO uses (debug) */
 

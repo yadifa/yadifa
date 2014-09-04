@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief Functions used to iterate through the labels of a zone
@@ -43,6 +43,7 @@
 
 #include "dnsdb/zdb_types.h"
 #include "dnsdb/zdb_zone_label_iterator.h"
+#include "dnsdb/zdb_rr_label.h"
 
 /**
  * @brief Initializes a zone label iterator
@@ -50,34 +51,128 @@
  * Initializes a zone label iterator (iterates zdb_rr_label)
  *
  * @param[in] zone The zone to explore
- * @param[in] iter a poitner to the iterator to initialize
+ * @param[in] iter a pointer to the iterator to initialize
  *
  */
 
 void
 zdb_zone_label_iterator_init(const zdb_zone* zone, zdb_zone_label_iterator* iter)
 {
-    s32 top = dnsname_to_dnslabel_stack(zone->origin, iter->dnslabels);
+#ifdef DEBUG
+    memset(iter, 0xff, sizeof(zdb_zone_label_iterator));
+#endif
+    
+    s32 top;
+    
+    if(*zone->origin != '\0')
+    {    
+        top = dnsname_to_dnslabel_stack(zone->origin, iter->dnslabels);
 
-    if(top > 0)
-    {
-        dictionary empty;
-        dictionary_init(&empty);
+        // sets an empty iterator for the labels in the path of the zone
 
-        s32 i;
-        for(i = 0; i < top; i++)
+        for(s32 i = 0; i < top; i++)
         {
-            dictionary_iterator_init(&empty, &iter->stack[i]);
+            dictionary_empty_iterator_init(&iter->stack[i]);
+        }
+
+        dictionary_iterator_init(&zone->apex->sub, &iter->stack[top]);
+
+        iter->top = top;
+        iter->current_label = zone->apex;
+        iter->zone = zone;
+        iter->prev_top = -1; // prev_top is used to skip children of the current label
+        iter->current_top = top;
+    }
+    else
+    {
+        dictionary_iterator_init(&zone->apex->sub, &iter->stack[0]);
+        iter->dnslabels[0] = zone->apex->name;
+        iter->top = 0;
+        iter->current_label = zone->apex;
+        iter->zone = zone;
+        iter->prev_top = -1; // prev_top is used to skip children of the current label
+        iter->current_top = 0;
+    }
+}
+
+void
+zdb_zone_label_iterator_init_from(const zdb_zone* zone, zdb_zone_label_iterator* iter, const u8 *from_name)
+{
+#ifdef DEBUG
+    memset(iter, 0xff, sizeof(zdb_zone_label_iterator));
+#endif
+    
+    dnslabel_stack from_name_stack;
+            
+    if(from_name == NULL)
+    {
+        zdb_zone_label_iterator_init(zone, iter);
+        return;
+    }
+    
+    s32 top = dnsname_to_dnslabel_stack(zone->origin, iter->dnslabels);
+    s32 real_top = dnsname_to_dnslabel_stack(from_name, from_name_stack);
+    
+    if(real_top <= top)
+    {
+        zdb_zone_label_iterator_init(zone, iter);
+        return;
+    }
+    
+    for(s32 i = 0; i < top; i++)
+    {
+        if(!dnslabel_equals(iter->dnslabels[i], from_name_stack[i]))
+        {
+            zdb_zone_label_iterator_init(zone, iter);
+            return;
         }
     }
+    
+    // sets an empty iterator for the labels in the path of the zone
 
-    dictionary_iterator_init(&zone->apex->sub, &iter->stack[top]);
-
+    for(s32 i = 0; i < top; i++)
+    {
+        dictionary_empty_iterator_init(&iter->stack[i]);
+    }
+    
+    // while there are labels in from_name
+    //   find if the next level exists
+    //     if yes, initialise the iterator from it
+    //  initialise an iterator for the next level
+    
+    // note: real_top > top
+    
+    zdb_rr_label *parent = zone->apex;
+    
+    do
+    {
+        zdb_rr_label *child = zdb_rr_label_find_child(parent, from_name_stack[top + 1]);
+        
+        if(child == NULL)
+        {
+            break;
+        }
+        
+        iter->dnslabels[top + 1] = child->name;
+        hashcode key = hash_dnslabel(child->name);
+        dictionary_iterator_init_from(&parent->sub, &iter->stack[top], key);
+        
+        parent = child;
+    }
+    while( ++top < real_top);
+    
+    dictionary_iterator_init(&parent->sub, &iter->stack[top]);
+    
     iter->top = top;
-    iter->current_label = zone->apex;
+    iter->current_label = parent;
     iter->zone = zone;
-    iter->prev_top = -1;
+    iter->prev_top = top - 1; // prev_top is used to skip children of the current label
     iter->current_top = top;
+    
+    if(zdb_zone_label_iterator_hasnext(iter))
+    {
+        zdb_zone_label_iterator_next(iter);
+    }
 }
 
 /**
@@ -85,7 +180,7 @@ zdb_zone_label_iterator_init(const zdb_zone* zone, zdb_zone_label_iterator* iter
  *
  * Checks if there is still data available from an iterator
  *
- * @param[in] iter a poitner to the iterator
+ * @param[in] iter a pointer to the iterator
  *
  * @return TRUE if data is available, FALSE otherwise.
  *
@@ -137,7 +232,7 @@ zdb_zone_label_iterator_next(zdb_zone_label_iterator* iter)
 {
     zdb_rr_label* ret = iter->current_label;
     iter->prev_top = iter->current_top;
-
+#if 1
     iter->current_label = NULL;
 
     while(iter->top >= 0)
@@ -155,6 +250,30 @@ zdb_zone_label_iterator_next(zdb_zone_label_iterator* iter)
 
         iter->top--;
     }
+#else
+    do
+    {
+        if(dictionary_iterator_hasnext(iter->current_label))
+        {
+            iter->current_label = *(zdb_rr_label**)dictionary_iterator_next(&iter->stack[iter->top]);
+            iter->current_top = iter->top + 1;
+
+            dictionary_iterator_init(&iter->current_label->sub, &iter->stack[++iter->top]);
+            iter->dnslabels[iter->top] = iter->current_label->name;
+
+            break;
+        }
+        
+        if(iter->top <= 0)
+        {
+            iter->current_label = NULL;
+            break;
+        }
+        
+        
+    }
+    while(--iter->top >= 0);
+#endif
 
     return ret;
 }

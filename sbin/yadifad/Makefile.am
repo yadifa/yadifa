@@ -31,29 +31,109 @@
 
 ACLOCAL_AMFLAGS = -I m4
 
-LOCALFLAGS = -DPREFIX='"$(prefix)"'
-
 dist_noinst_DATA = VERSION
 
 sbin_PROGRAMS = yadifad
-yadifad_SOURCES = axfr.c check.c confs.c database.c ixfr.c notify.c parser.c list.c main.c process_command_line.c server.c server-st.c server-mt.c server_context.c log_statistics.c log_query.c poll-util.c signals.c wrappers.c zone.c confs_channels.c confs_control.c confs_main.c confs_zone.c scheduler_xfr.c process_class_ch.c process_class_ctrl.c scheduler_database_load_zone.c
 
-if TCLCOMMANDS
-yadifad_SOURCES += tcl_cmd.c
+yadifad_SOURCES = \
+	main.c \
+	axfr.c \
+	config_main.c \
+	config_zone.c \
+	confs.c \
+	database-service-zone-desc-load.c \
+	database-service-zone-desc-unload.c \
+	database-service-zone-download.c \
+	database-service-zone-freeze.c \
+	database-service-zone-load.c \
+	database-service-zone-mount.c \
+	database-service-zone-save.c \
+	database-service-zone-unfreeze.c \
+	database-service-zone-unload.c \
+	database-service-zone-unmount.c \
+	database-service.c \
+	database.c \
+	ixfr.c \
+	log_query.c \
+	log_statistics.c \
+	notify.c \
+	poll-util.c \
+	process_class_ch.c \
+	server-mt.c \
+	server.c \
+	server_context.c \
+	signals.c \
+	zone.c
+
+if HAS_NSID_SUPPORT
+yadifad_SOURCES += config-nsid.c
+endif
+
+noinst_HEADERS = \
+	axfr.h \
+	config.h \
+	config_error.h \
+	confs.h \
+	database-service-zone-desc-load.h \
+	database-service-zone-desc-unload.h \
+	database-service-zone-download.h \
+	database-service-zone-freeze.h \
+	database-service-zone-load.h \
+	database-service-zone-mount.h \
+	database-service-zone-save.h \
+	database-service-zone-unfreeze.h \
+	database-service-zone-unload.h \
+	database-service-zone-unmount.h \
+	database-service.h \
+	database.h \
+	ixfr.h \
+	log_query.h \
+	log_statistics.h \
+	notify.h \
+	poll-util.h \
+	process_class_ch.h \
+	server-mt.h \
+	server.h \
+	server_context.h \
+	server_error.h \
+	signals.h \
+	zone.h \
+	zone_data.h \
+	zone_desc.h
+
+if HAS_CTRL
+yadifad_SOURCES +=	config_control.c \
+	ctrl.c \
+	ctrl_query.c \
+	ctrl_zone.c
+
+noinst_HEADERS +=	ctrl.h \
+	ctrl_query.h \
+	ctrl_zone.h
 endif
 
 if HAS_ACL_SUPPORT 
-yadifad_SOURCES += acl.c confs_acl.c
+yadifad_SOURCES += acl.c config_acl.c
+noinst_HEADERS += config_acl.h
 endif
 
-if HAS_TSIG_SUPPORT
-yadifad_SOURCES += confs_key.c
+if HAS_RRL_SUPPORT
+yadifad_SOURCES += rrl.c
+noinst_HEADERS += rrl.h
 endif
-
-noinst_HEADERS = axfr.h check.h config_error.h config.h confs.h database.h ixfr.h notify.h list.h parser.h server_context.h server_error.h server.h server-st.h server-mt.h log_query.h log_statistics.h poll-util.h signals.h tcl_cmd.h wrappers.h zone_data.h zone.h scheduler_xfr.h process_class_ch.h process_class_ctrl.h scheduler_database_load_zone.h
 
 if HAS_ACL_SUPPORT
 noinst_HEADERS += acl.h
+endif
+
+if HAS_DYNUPDATE_SUPPORT
+yadifad_SOURCES += dynupdate_query_service.c
+noinst_HEADERS += dynupdate_query_service.h
+endif
+
+if HAS_RRSIG_MANAGEMENT_SUPPORT
+yadifad_SOURCES += database-service-zone-resignature.c
+noinst_HEADERS += database-service-zone-resignature.h
 endif
 
 include ../../mk/common-settings.mk

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief Internal functions for the database: zoned resource records label.
@@ -76,9 +76,7 @@ zdb_zone_label_create(const void *data)
     zone_label->next = NULL;
     dictionary_init(&zone_label->sub);
     zone_label->name = dnslabel_dup(data);
-#if ZDB_CACHE_ENABLED!=0
-    btree_init(&zone_label->global_resource_record_set);
-#endif
+
     zone_label->zone = NULL;
 
     return (dictionary_node *)zone_label;
@@ -101,9 +99,7 @@ zdb_zone_label_destroy_callback(dictionary_node * zone_label_record)
     /* detach is made by destroy */
 
     dictionary_destroy(&zone_label->sub, zdb_zone_label_destroy_callback);
-#if ZDB_CACHE_ENABLED!=0
-    zdb_record_destroy(&zone_label->global_resource_record_set);
-#endif
+
     ZFREE_STRING(zone_label->name);
 
     zdb_zone_destroy(zone_label->zone);
@@ -125,14 +121,18 @@ zdb_zone_label_destroy_callback(dictionary_node * zone_label_record)
  */
 
 zdb_zone_label*
-zdb_zone_label_find(zdb * db, dnsname_vector* origin, u16 zclass)
+zdb_zone_label_find(zdb * db, dnsname_vector* origin, u16 zclass) // mutex checked
 {
     zdb_zone_label* zone_label;
-
+    
+#ifdef HAS_DYNAMIC_PROVISIONING
+    group_mutex_lock(&db->mutex, ZDB_MUTEX_READER);
+#endif
+    
 #if ZDB_RECORDS_MAX_CLASS==1
     zone_label = db->root[0]; /* the "." zone */
 #else
-    zone_label = db->root[zclass - 1]; /* the "." zone */
+    zone_label = db->root[ntohs(zclass) - 1]; /* the "." zone */
 #endif
 
     dnslabel_stack_reference sections = origin->labels;
@@ -151,12 +151,60 @@ zdb_zone_label_find(zdb * db, dnsname_vector* origin, u16 zclass)
 
         index--;
     }
+    
+#ifdef HAS_DYNAMIC_PROVISIONING
+    group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+#endif
 
     return zone_label;
 }
 
+/**
+ * @brief Search for the label of a zone in the database
+ *
+ * Search for the label of a zone in the database
+ *
+ * @param[in] db the database to explore
+ * @param[in] origin the dnsname_vector mapping the label
+ * @param[in] zclass the class of the zone we are looking for
+ *
+ * @return a pointer to the label or NULL if it does not exists in the database.
+ *
+ */
+
 zdb_zone_label*
-zdb_zone_label_find_from_name(zdb* db, const char* name, u16 zclass)
+zdb_zone_label_find_nolock(zdb * db, dnsname_vector* origin)
+{
+    zdb_zone_label* zone_label;
+    
+#if ZDB_RECORDS_MAX_CLASS==1
+    zone_label = db->root[0]; /* the "." zone */
+#else
+    zone_label = db->root[ntohs(zclass) - 1]; /* the "." zone */
+#endif
+
+    dnslabel_stack_reference sections = origin->labels;
+    s32 index = origin->size;
+
+    /* look into the sub level */
+
+    while(zone_label != NULL && index >= 0)
+    {
+        u8* label = sections[index];
+        hashcode hash = hash_dnslabel(label);
+
+        zone_label =
+                (zdb_zone_label*)dictionary_find(&zone_label->sub, hash, label,
+                                                 zdb_zone_label_zlabel_match);
+
+        index--;
+    }
+    
+    return zone_label;
+}
+
+zdb_zone_label*
+zdb_zone_label_find_from_name(zdb* db, const char* name, u16 zclass) // mutex checked
 {
     dnsname_vector origin;
 
@@ -166,22 +214,30 @@ zdb_zone_label_find_from_name(zdb* db, const char* name, u16 zclass)
     {
         dnsname_to_dnsname_vector(dns_name, &origin);
 
-        return zdb_zone_label_find(db, &origin, zclass);
+        return zdb_zone_label_find(db, &origin, zclass); // locks
     }
 
     return NULL;
 }
 
 zdb_zone_label*
-zdb_zone_label_find_from_dnsname(zdb* db, const u8* dns_name, u16 zclass)
+zdb_zone_label_find_from_dnsname(zdb* db, const u8* dns_name, u16 zclass) // mutex checked
 {
     dnsname_vector origin;
 
     dnsname_to_dnsname_vector(dns_name, &origin);
 
-    return zdb_zone_label_find(db, &origin, zclass);
+    return zdb_zone_label_find(db, &origin, zclass); // locks
+}
 
-    return NULL;
+zdb_zone_label*
+zdb_zone_label_find_from_dnsname_nolock(zdb* db, const u8* dns_name)
+{
+    dnsname_vector origin;
+
+    dnsname_to_dnsname_vector(dns_name, &origin);
+
+    return zdb_zone_label_find_nolock(db, &origin); // locks
 }
 
 /**
@@ -194,18 +250,16 @@ zdb_zone_label_find_from_dnsname(zdb* db, const u8* dns_name, u16 zclass)
  */
 
 void
-zdb_zone_label_destroy(zdb_zone_label* * zone_labelp)
+zdb_zone_label_destroy(zdb_zone_label **zone_labelp)
 {
-    zassert(zone_labelp != NULL);
+    yassert(zone_labelp != NULL);
 
     zdb_zone_label* zone_label = *zone_labelp;
 
     if(zone_label != NULL)
     {
         dictionary_destroy(&zone_label->sub, zdb_zone_label_destroy_callback);
-#if ZDB_CACHE_ENABLED!=0
-        zdb_record_destroy(&zone_label->global_resource_record_set);
-#endif
+
         zdb_zone_destroy(zone_label->zone);
         ZFREE_STRING(zone_label->name);
         ZFREE(zone_label, zdb_zone_label);
@@ -227,15 +281,19 @@ zdb_zone_label_destroy(zdb_zone_label* * zone_labelp)
  */
 
 s32
-zdb_zone_label_match(const zdb * db, const dnsname_vector* origin, u16 zclass,
+zdb_zone_label_match(zdb * db, const dnsname_vector* origin, u16 zclass,  // mutex checked
                      zdb_zone_label_pointer_array zone_label_stack)
 {
     zdb_zone_label* zone_label;
+    
+#ifdef HAS_DYNAMIC_PROVISIONING
+    group_mutex_lock(&db->mutex, ZDB_MUTEX_READER);
+#endif
 
 #if ZDB_RECORDS_MAX_CLASS==1
     zone_label = db->root[0]; /* the "." zone */
 #else
-    zone_label = db->root[zclass - 1]; /* the "." zone */
+    zone_label = db->root[ntohs(zclass) - 1]; /* the "." zone */
 #endif
 
     const_dnslabel_stack_reference sections = origin->labels;
@@ -247,14 +305,12 @@ zdb_zone_label_match(const zdb * db, const dnsname_vector* origin, u16 zclass,
 
     /* look into the sub level */
 
-    while(/*zone_label!=NULL&& */ index >= 0)
+    while(index >= 0)
     {
         u8* label = sections[index];
         hashcode hash = hash_dnslabel(label);
 
-        zone_label =
-                (zdb_zone_label*)dictionary_find(&zone_label->sub, hash, label,
-                                                 zdb_zone_label_zlabel_match);
+        zone_label = (zdb_zone_label*)dictionary_find(&zone_label->sub, hash, label, zdb_zone_label_zlabel_match);
 
         if(zone_label == NULL)
         {
@@ -265,6 +321,10 @@ zdb_zone_label_match(const zdb * db, const dnsname_vector* origin, u16 zclass,
 
         index--;
     }
+    
+#ifdef HAS_DYNAMIC_PROVISIONING
+    group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+#endif
 
     return sp;
 }
@@ -282,14 +342,18 @@ zdb_zone_label_match(const zdb * db, const dnsname_vector* origin, u16 zclass,
  */
 
 zdb_zone_label*
-zdb_zone_label_add(zdb * db, dnsname_vector* origin, u16 zclass)
+zdb_zone_label_add(zdb * db, dnsname_vector* origin, u16 zclass) // mutex checked
 {
     zdb_zone_label* zone_label;
+    
+#ifdef HAS_DYNAMIC_PROVISIONING
+    group_mutex_lock(&db->mutex, ZDB_MUTEX_WRITER);
+#endif
 
 #if ZDB_RECORDS_MAX_CLASS==1
     zone_label = db->root[0]; /* the "." zone */
 #else
-    zone_label = db->root[zclass - 1]; /* the "." zone */
+    zone_label = db->root[ntohs(zclass) - 1]; /* the "." zone */
 #endif
 
     dnslabel_stack_reference sections = origin->labels;
@@ -301,10 +365,39 @@ zdb_zone_label_add(zdb * db, dnsname_vector* origin, u16 zclass)
     {
         u8* label = sections[index];
         hashcode hash = hash_dnslabel(label);
-        zone_label =
-                (zdb_zone_label*)dictionary_add(&zone_label->sub, hash, label,
-                                                zdb_zone_label_zlabel_match,
-                                                zdb_zone_label_create);
+        zone_label = (zdb_zone_label*)dictionary_add(&zone_label->sub, hash, label, zdb_zone_label_zlabel_match, zdb_zone_label_create);
+
+        index--;
+    }
+
+#ifdef HAS_DYNAMIC_PROVISIONING
+    group_mutex_unlock(&db->mutex, ZDB_MUTEX_WRITER);
+#endif
+    
+    return zone_label;
+}
+
+zdb_zone_label*
+zdb_zone_label_add_nolock(zdb * db, dnsname_vector* origin) // mutex checked
+{
+    zdb_zone_label* zone_label;
+
+#if ZDB_RECORDS_MAX_CLASS==1
+    zone_label = db->root[0]; /* the "." zone */
+#else
+    zone_label = db->root[ntohs(zclass) - 1]; /* the "." zone */
+#endif
+
+    dnslabel_stack_reference sections = origin->labels;
+    s32 index = origin->size;
+
+    /* look into the sub level */
+
+    while(index >= 0)
+    {
+        u8* label = sections[index];
+        hashcode hash = hash_dnslabel(label);
+        zone_label = (zdb_zone_label*)dictionary_add(&zone_label->sub, hash, label, zdb_zone_label_zlabel_match, zdb_zone_label_create);
 
         index--;
     }
@@ -328,12 +421,11 @@ struct zdb_zone_label_delete_process_callback_args
 static ya_result
 zdb_zone_label_delete_process_callback(void *a, dictionary_node * node)
 {
-    zassert(node != NULL);
+    yassert(node != NULL);
 
     zdb_zone_label* zone_label = (zdb_zone_label*)node;
 
-    zdb_zone_label_delete_process_callback_args *args =
-            (zdb_zone_label_delete_process_callback_args *)a;
+    zdb_zone_label_delete_process_callback_args *args = (zdb_zone_label_delete_process_callback_args *)a;
 
     /*
      * a points to a kind of dnsname and we are going in
@@ -381,9 +473,7 @@ zdb_zone_label_delete_process_callback(void *a, dictionary_node * node)
 
                 dictionary_destroy(&zone_label->sub,
                                    zdb_zone_label_destroy_callback);
-#if ZDB_CACHE_ENABLED!=0
-                zdb_record_destroy(&zone_label->global_resource_record_set);
-#endif
+
                 zdb_zone_destroy(zone_label->zone);
                 ZFREE_STRING(zone_label->name);
                 ZFREE(zone_label, zdb_zone_label);
@@ -407,9 +497,7 @@ zdb_zone_label_delete_process_callback(void *a, dictionary_node * node)
      */
 
     dictionary_destroy(&zone_label->sub, zdb_zone_label_destroy_callback);
-#if ZDB_CACHE_ENABLED!=0
-    zdb_record_destroy(&zone_label->global_resource_record_set);
-#endif
+
     zdb_zone_destroy(zone_label->zone);
     ZFREE_STRING(zone_label->name);
     ZFREE(zone_label, zdb_zone_label);
@@ -430,22 +518,30 @@ zdb_zone_label_delete_process_callback(void *a, dictionary_node * node)
  */
 
 ya_result
-zdb_zone_label_delete(zdb * db, dnsname_vector* name, u16 zclass)
+zdb_zone_label_delete(zdb * db, dnsname_vector* name, u16 zclass) // mutex checked
 {
-    zassert(db != NULL && name != NULL && name->size >= 0 && zclass > 0);
+    yassert(db != NULL && name != NULL && name->size >= 0 && zclass > 0);
 
     zdb_zone_label* root_label;
+    
+#ifdef HAS_DYNAMIC_PROVISIONING
+    group_mutex_lock(&db->mutex, ZDB_MUTEX_WRITER);
+#endif
 
 #if ZDB_RECORDS_MAX_CLASS==1
     root_label = db->root[0]; /* the "." zone */
 #else
-    root_label = db->root[zclass - 1]; /* the "." zone */
+    root_label = db->root[ntohs(zclass) - 1]; /* the "." zone */
 #endif
 
     if(root_label == NULL)
     {
         /* has already been destroyed */
 
+#ifdef HAS_DYNAMIC_PROVISIONING
+        group_mutex_unlock(&db->mutex, ZDB_MUTEX_WRITER);
+#endif
+        
         return ZDB_ERROR_NOSUCHCLASS;
     }
 
@@ -455,395 +551,21 @@ zdb_zone_label_delete(zdb * db, dnsname_vector* name, u16 zclass)
 
     hashcode hash = hash_dnslabel(args.sections[args.top]);
 
-    ya_result err;
-    if((err =
-            dictionary_process(&root_label->sub, hash, &args,
-                               zdb_zone_label_delete_process_callback)) ==
-            COLLECTION_PROCESS_DELETENODE)
+    ya_result err = dictionary_process(&root_label->sub, hash, &args, zdb_zone_label_delete_process_callback);
+    
+#ifdef HAS_DYNAMIC_PROVISIONING
+    group_mutex_unlock(&db->mutex, ZDB_MUTEX_WRITER);
+#endif
+
+    if(err == COLLECTION_PROCESS_DELETENODE)
     {
-        return COLLECTION_PROCESS_STOP;
+        err = COLLECTION_PROCESS_STOP;
     }
 
     return err;
 }
 
-#if ZDB_CACHE_ENABLED!=0
 
-typedef struct zdb_zone_label_delete_record_process_callback_args
-zdb_zone_label_delete_record_process_callback_args;
-
-struct zdb_zone_label_delete_record_process_callback_args
-{
-    dnslabel_stack_reference sections;
-    s32 top;
-    u16 type;
-};
-
-/**
- * @brief INTERNAL callback
- */
-
-static ya_result
-zdb_zone_label_delete_record_process_callback(void *a,
-                                              dictionary_node * node)
-{
-    zassert(node != NULL);
-
-    zdb_zone_label* zone_label = (zdb_zone_label*)node;
-
-    zdb_zone_label_delete_record_process_callback_args *args =
-            (zdb_zone_label_delete_record_process_callback_args *)a;
-
-    /*
-     * a points to a kind of dnsname and we are going in
-     *
-     * we go down and down each time calling the dictionnary process for the next level
-     *
-     * at the last level we return the "delete" code
-     *
-     * from there, the dictionnary processor will remove the entry
-     *
-     * at that point the calling dictionnary will know if he has to delete his node or not
-     *
-     * and so on and so forth ...
-     *
-     */
-
-    s32 top = args->top;
-    dnslabel label = (dnslabel)args->sections[top];
-
-    if(!dnslabel_equals(zone_label->name, label))
-    {
-        return COLLECTION_PROCESS_NEXT;
-    }
-
-    /* match */
-
-    if(top > 0)
-    {
-        /* go to the next level */
-
-        label = args->sections[--args->top];
-        hashcode hash = hash_dnslabel(label);
-
-        ya_result err;
-        if((err =
-                dictionary_process(&zone_label->sub, hash, args,
-                                   zdb_zone_label_delete_record_process_callback))
-                == COLLECTION_PROCESS_DELETENODE)
-        {
-            /* check the node for relevance, return "delete" if irrelevant */
-
-            if(ZONE_LABEL_IRRELEVANT(zone_label))
-            {
-                dictionary_destroy(&zone_label->sub,
-                                   zdb_zone_label_destroy_callback);
-                zdb_record_destroy(&zone_label->global_resource_record_set);
-                zdb_zone_destroy(zone_label->zone);
-                ZFREE_STRING(zone_label->name);
-                ZFREE(zone_label, zdb_zone_label);
-
-                return COLLECTION_PROCESS_DELETENODE;
-            }
-
-            return COLLECTION_PROCESS_STOP;
-        }
-
-        /* or ... stop */
-
-        return err;
-    }
-
-    /* We are at the right place for the record */
-
-    if(FAIL(zdb_record_delete(&zone_label->global_resource_record_set, args->type))) /* CACHE: No FeedBack  */
-    {
-        return COLLECTION_PROCESS_RETURNERROR;
-    }
-
-    if(ZONE_LABEL_RELEVANT(zone_label))
-    {
-        return COLLECTION_PROCESS_STOP;
-    }
-
-    /* NOTE: the 'detach' is made by destroy : do not touch to the "next" field */
-    /* NOTE: the freee of the node is made by destroy : do not do it */
-
-    /* dictionary destroy will take every item in the dictionary and
-     * iterate through it calling the passed function.
-     */
-
-    dictionary_destroy(&zone_label->sub, zdb_zone_label_destroy_callback);
-    zdb_record_destroy(&zone_label->global_resource_record_set);
-    zdb_zone_destroy(zone_label->zone);
-    ZFREE_STRING(zone_label->name);
-    ZFREE(zone_label, zdb_zone_label);
-
-    return COLLECTION_PROCESS_DELETENODE;
-}
-
-/**
- * @brief Destroys all records of a given type for a zone label (cache)
- *
- * Destroys all records of a given type for a zone label (cache)
- *
- * @parm[in] db a pointer to the database
- * @parm[in] name a pointer to the name
- * @parm[in] zclass the class of the zone of the label
- * @parm[in] type the type of the records to delete
- *
- * @return an error code
- */
-
-ya_result
-zdb_zone_label_delete_record(zdb * db, dnsname_vector* origin, u16 zclass,
-                             u16 type)
-{
-    zassert(db != NULL && origin != NULL && origin->size >= 0);
-
-    zdb_zone_label* root_label;
-
-#if ZDB_RECORDS_MAX_CLASS==1
-    root_label = db->root[0]; /* the "." zone */
-#else
-    root_label = db->root[zclass - 1]; /* the "." zone */
-#endif
-
-    if(root_label == NULL)
-    {
-        /* has already been destroyed */
-
-        return ZDB_ERROR_NOSUCHCLASS;
-    }
-
-    zdb_zone_label_delete_record_process_callback_args args;
-    args.sections = origin->labels;
-    args.top = origin->size;
-    args.type = type;
-
-    hashcode hash = hash_dnslabel(args.sections[args.top]);
-
-    ya_result err;
-    if((err =
-            dictionary_process(&root_label->sub, hash, &args,
-                               zdb_zone_label_delete_record_process_callback)) ==
-            COLLECTION_PROCESS_DELETENODE)
-    {
-        if(ZONE_LABEL_IRRELEVANT(root_label))
-        {
-            dictionary_destroy(&root_label->sub,
-                               zdb_zone_label_destroy_callback);
-            zdb_record_destroy(&root_label->global_resource_record_set);
-            ZFREE_STRING(root_label->name);
-            ZFREE(root_label, zdb_zone_label);
-
-#if ZDB_RECORDS_MAX_CLASS==1
-            db->root[0] = NULL;
-#else
-            db->root[zclass - 1] = NULL;
-#endif
-
-            return COLLECTION_PROCESS_DELETENODE;
-        }
-
-        return COLLECTION_PROCESS_STOP;
-    }
-
-    return err;
-}
-
-typedef struct zdb_zone_label_delete_record_exact_process_callback_args
-zdb_zone_label_delete_record_exact_process_callback_args;
-
-struct zdb_zone_label_delete_record_exact_process_callback_args
-{
-    dnslabel_stack_reference sections;
-    s32 top;
-    u16 type;
-    zdb_ttlrdata* ttlrdata;
-};
-
-/**
- * @brief INTERNAL callback
- */
-
-static ya_result
-zdb_zone_label_delete_record_exact_process_callback(void *a,
-                                                    dictionary_node * node)
-{
-    zassert(node != NULL);
-
-    zdb_zone_label* zone_label = (zdb_zone_label*)node;
-
-    zdb_zone_label_delete_record_exact_process_callback_args *args =
-            (zdb_zone_label_delete_record_exact_process_callback_args *)a;
-
-    /*
-     * a points to a kind of dnsname and we are going in
-     *
-     * we go down and down each time calling the dictionnary process for the next level
-     *
-     * at the last level we return the "delete" code
-     *
-     * from there, the dictionnary processor will remove the entry
-     *
-     * at that point the calling dictionnary will know if he has to delete his node or not
-     *
-     * and so on and so forth ...
-     *
-     */
-
-    s32 top = args->top;
-    dnslabel label = (dnslabel)args->sections[top];
-
-    if(!dnslabel_equals(zone_label->name, label))
-    {
-        return COLLECTION_PROCESS_NEXT;
-    }
-
-    /* match */
-
-    if(top > 0)
-    {
-        /* go to the next level */
-
-        label = args->sections[--args->top];
-        hashcode hash = hash_dnslabel(label);
-
-        ya_result err;
-        if((err =
-                dictionary_process(&zone_label->sub, hash, args,
-                                   zdb_zone_label_delete_record_exact_process_callback))
-                == COLLECTION_PROCESS_DELETENODE)
-        {
-            /* check the node for relevance, return "delete" if irrelevant */
-
-            if(ZONE_LABEL_IRRELEVANT(zone_label))
-            {
-                /* Irrelevant means that only the name remains
-                 * Still, it's not because a collection is empty that it does not uses memory.
-                 */
-
-                dictionary_destroy(&zone_label->sub,
-                                   zdb_zone_label_destroy_callback);
-                zdb_record_destroy(&zone_label->global_resource_record_set);
-                zdb_zone_destroy(zone_label->zone);
-                ZFREE_STRING(zone_label->name);
-                ZFREE(zone_label, zdb_zone_label);
-
-                return COLLECTION_PROCESS_DELETENODE;
-            }
-
-            return COLLECTION_PROCESS_STOP;
-        }
-
-        /* or ... stop */
-
-        return err;
-    }
-
-    /* We are at the right place for the record */
-
-    if(FAIL(zdb_record_delete_exact(&zone_label->global_resource_record_set, args->type, args->ttlrdata))) /* CACHE: No FeedBack */
-    {
-        return COLLECTION_PROCESS_RETURNERROR;
-    }
-
-    if(ZONE_LABEL_RELEVANT(zone_label))
-    {
-        return COLLECTION_PROCESS_STOP;
-    }
-
-    /* NOTE: the 'detach' is made by destroy : do not touch to the "next" field */
-    /* NOTE: the freee of the node is made by destroy : do not do it */
-
-    /* dictionary destroy will take every item in the dictionary and
-     * iterate through it calling the passed function.
-     */
-
-    dictionary_destroy(&zone_label->sub, zdb_zone_label_destroy_callback);
-    zdb_record_destroy(&zone_label->global_resource_record_set);
-    zdb_zone_destroy(zone_label->zone);
-    ZFREE_STRING(zone_label->name);
-    ZFREE(zone_label, zdb_zone_label);
-
-    return COLLECTION_PROCESS_DELETENODE;
-}
-
-/**
- * @brief Destroys a record matching of a given type, ttl and rdata for a zone label (cache)
- *
- * Destroys a record matching of a given type, ttl and rdata for a zone label (cache)
- *
- * @parm[in] db a pointer to the database
- * @parm[in] name a pointer to the name
- * @parm[in] zclass the class of the zone of the label
- * @parm[in] type the type of the records to delete
- * @parm[in] ttlrdata the ttl and rdata to match
- *
- * @return an error code
- */
-
-ya_result
-zdb_zone_label_delete_record_exact(zdb * db, dnsname_vector* origin,
-                                   u16 zclass, u16 type,
-                                   zdb_ttlrdata* ttlrdata)
-{
-    zassert(db != NULL && origin != NULL && origin->size >= 0);
-
-    zdb_zone_label* root_label;
-
-#if ZDB_RECORDS_MAX_CLASS==1
-    root_label = db->root[0]; /* the "." zone */
-#else
-    root_label = db->root[zclass - 1]; /* the "." zone */
-#endif
-
-    if(root_label == NULL)
-    {
-        /* has already been destroyed */
-
-        return ZDB_ERROR_NOSUCHCLASS;
-    }
-
-    zdb_zone_label_delete_record_exact_process_callback_args args;
-    args.sections = origin->labels;
-    args.top = origin->size;
-    args.type = type;
-    args.ttlrdata = ttlrdata;
-
-    hashcode hash = hash_dnslabel(args.sections[args.top]);
-
-    ya_result err;
-    if((err =
-            dictionary_process(&root_label->sub, hash, &args,
-                               zdb_zone_label_delete_record_exact_process_callback))
-            == COLLECTION_PROCESS_DELETENODE)
-    {
-        if(ZONE_LABEL_IRRELEVANT(root_label))
-        {
-            dictionary_destroy(&root_label->sub,
-                               zdb_zone_label_destroy_callback);
-            zdb_record_destroy(&root_label->global_resource_record_set);
-            ZFREE_STRING(root_label->name);
-            ZFREE(root_label, zdb_zone_label);
-
-#if ZDB_RECORDS_MAX_CLASS==1
-            db->root[0] = NULL;
-#else
-            db->root[zclass - 1] = NULL;
-#endif
-
-            return COLLECTION_PROCESS_DELETENODE;
-        }
-
-        return COLLECTION_PROCESS_STOP;
-    }
-
-    return err;
-}
-
-#endif
 
 #ifndef NDEBUG
 
@@ -852,31 +574,29 @@ zdb_zone_label_delete_record_exact(zdb * db, dnsname_vector* origin,
  */
 
 void
-zdb_zone_label_print_indented(zdb_zone_label* zone_label, int indented)
+zdb_zone_label_print_indented(zdb_zone_label* zone_label, output_stream *os, int indented)
 {
     if(zone_label == NULL)
     {
-        formatln("%tg: NULL", indented);
+        osformatln(os, "%tg: NULL", indented);
         return;
     }
 
     if(zone_label->zone != NULL)
     {
-        zdb_zone_print_indented(zone_label->zone, indented + 1);
+        zdb_zone_print_indented(zone_label->zone, os, indented + 1);
     }
 
     if(zone_label->name != NULL)
     {
-        formatln("%tg: '%{dnslabel}'", indented, zone_label->name);
+        osformatln(os, "%tg: '%{dnslabel}'", indented, zone_label->name);
     }
     else
     {
-        formatln("%tg: WRONG", indented);
+        osformatln(os, "%tg: WRONG", indented);
     }
 
-#if ZDB_CACHE_ENABLED!=0
-    zdb_record_print_indented(zone_label->global_resource_record_set, indented);
-#endif
+
 
     dictionary_iterator iter;
     dictionary_iterator_init(&zone_label->sub, &iter);
@@ -885,14 +605,14 @@ zdb_zone_label_print_indented(zdb_zone_label* zone_label, int indented)
     {
         zdb_zone_label* *sub_labelp = (zdb_zone_label* *)dictionary_iterator_next(&iter);
 
-        zdb_zone_label_print_indented(*sub_labelp, indented + 1);
+        zdb_zone_label_print_indented(*sub_labelp, os, indented + 1);
     }
 }
 
 void
-zdb_zone_label_print(zdb_zone_label* zone_label)
+zdb_zone_label_print(zdb_zone_label* zone_label, output_stream *os)
 {
-    zdb_zone_label_print_indented(zone_label, 0);
+    zdb_zone_label_print_indented(zone_label, os, 0);
 }
 
 #endif

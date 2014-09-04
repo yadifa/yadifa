@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief
@@ -474,7 +474,7 @@ threaded_ringbuffer_dequeue_set(threaded_ringbuffer* queue, void** array, u32 ar
     bool unlock_enqueue = queue->size == queue->max_size; /* enqueue has just been locked -> schedule unlock */
     u32 loops = MIN(queue->size, array_size); /* The amount we will be able to extract */
 
-    void** limit = &array[loops]; /* compute the limit so we only have one increment and one compare */
+    void ** const limit = &array[loops]; /* compute the limit so we only have one increment and one compare */
 
     while(array < limit)
     {

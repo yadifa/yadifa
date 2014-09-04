@@ -30,16 +30,28 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnscore System core functions
  *  @brief System core functions
  *
  * @{ */
+
 #define __DNSCORE_C__
 
+#include "dnscore-config.h"
+
+#if HAS_PTHREAD_SETNAME_NP
+#ifdef DEBUG
+#define _GNU_SOURCE 1
+#endif
+#endif
+
 #include <time.h>
-#include <pthread.h>
 #include <unistd.h>
+#include <openssl/ssl.h>
+#include <signal.h>
+
+#include <pthread.h>
 
 #include "dnscore/message.h"
 
@@ -50,21 +62,35 @@
 #include "dnscore/dnsformat.h"
 #include "dnscore/logger.h"
 #include "dnscore/random.h"
-#include "dnscore/rdtsc.h"
+
 #include "dnscore/sys_error.h"
 #include "dnscore/thread_pool.h"
 #include "dnscore/tsig.h"
-#include "dnscore/scheduler.h"
 #include "dnscore/mutex.h"
 #include "dnscore/alarm.h"
+#include "dnscore/tcp_io_stream.h"
+#include "dnscore/config_settings.h"
+#include "dnscore/async.h"
 
 #include <sys/time.h>
 
+#if DNSCORE_HAS_TSIG_SUPPORT
+#include <openssl/ssl.h>
+#include <openssl/engine.h>
+#endif
+
 #define TERM_BUFFER_SIZE 4096
+#define DNSCORE_TIDY_UP_MEMORY 1
 
 #define MODULE_MSG_HANDLE g_system_logger
 
 /*****************************************************************************/
+
+#if DNSCORE_HAS_TSIG_SUPPORT
+#if !HAS_ACL_SUPPORT
+#error "TSIG support is irrelevant without ACL support"
+#endif
+#endif
 
 static const char* ARCH_RECOMPILE_WARNING = "Please recompile with the correct settings.";
 static const char* ARCH_CHECK_SIZE_WARNING = "PANIC: %s does not match the size requirements (%i instead of %i).\n";
@@ -75,13 +101,15 @@ static const char* ARCH_CHECK_SIGN_WARNING = "PANIC: %s does not match the sign 
 
 logger_handle *g_system_logger = NULL;
 
+
+
 static smp_int g_shutdown = SMP_INT_INITIALIZER;
 
 static void
 dnscore_arch_checkup()
 {
     /* Test the archi=tecture */
-#pragma message("Don't worry about the possible warnings here")
+#pragma message("Don't worry about the possible warnings below")
     ARCH_CHECK_SIZE(__SIZEOF_POINTER__, sizeof (void*));
     ARCH_CHECK_SIZE(sizeof (u8), 1);
     ARCH_CHECK_SIZE(sizeof (s8), 1);
@@ -103,15 +131,14 @@ dnscore_arch_checkup()
     ARCH_CHECK_UNSIGNED(intptr);
 
     message_data* msg = NULL;
-    intptr msg_diffs = (intptr)(msg->buffer - msg->buffer_tcp_len);
+    intptr msg_diffs = (intptr)(msg->buffer - msg->buffer_tcp_len); // cppcheck : false positive: of course it's a null pointer
     if((msg->buffer - msg->buffer_tcp_len) != 2)
     {
         printf("Structure aligment is wrong.  Expected 2 but got %i. (see message_data)\n", (int)msg_diffs);
         DIE(ERROR);
     }
 
-#pragma message("You can resume worrying now ...")
-
+#pragma message("You can resume worrying about warnings ...")
     
 #if WORDS_BIGENDIAN==1
     u8 endian[4] = {1, 2, 3, 4}; /* BIG    */
@@ -137,7 +164,7 @@ dnslib_fingerprint dnscore_getfingerprint()
 {
     dnslib_fingerprint ret = (dnslib_fingerprint)(0
     
-#if HAS_TSIG_SUPPORT
+#if DNSCORE_HAS_TSIG_SUPPORT
     | DNSLIB_TSIG
 #endif
     )
@@ -172,6 +199,40 @@ stdstream_init()
 }
 
 static void
+stdtream_detach_fd(output_stream *os)
+{
+    output_stream_flush(os);
+    if(!is_mt_output_stream(os))
+    {
+        log_err("unexpected stream in term");
+        exit(EXIT_FAILURE);
+    }
+    os = mt_output_stream_get_filtered(os);
+    if(!is_buffer_output_stream(os))
+    {
+        log_err("unexpected stream in term");
+        exit(EXIT_FAILURE);
+    }
+    os = buffer_output_stream_get_filtered(os);
+    if(!is_fd_output_stream(os))
+    {
+        log_err("unexpected stream in term");
+        exit(EXIT_FAILURE);
+    }
+    output_stream_flush(os);
+    fd_output_stream_detach(os);
+}
+
+void
+stdtream_detach_fd_and_close()
+{
+    stdtream_detach_fd(&__termout__);
+    output_stream_close(&__termout__);
+    stdtream_detach_fd(&__termerr__);
+    output_stream_close(&__termerr__);
+}
+
+static void
 stdstream_flush_both_terms()
 {
     output_stream_flush(&__termout__);
@@ -184,9 +245,10 @@ void format_class_finalize();
 
 static bool dnscore_init_done = FALSE;
 
-static smp_int dnscore_running = SMP_INT_INITIALIZER;
+//static smp_int dnscore_time_thread_must_run = SMP_INT_INITIALIZER;
+static async_wait_s timer_thread_sync;
 static pthread_t dnscore_timer_thread_id = 0;
-static int dnscore_timer_creator_pid = 0;
+static volatile int dnscore_timer_creator_pid = 0;
 static int dnscore_timer_period = 5;
 static volatile u32 dnscore_timer_tick = 0;
 
@@ -195,35 +257,44 @@ dnscore_timer_thread(void * unused0)
 {
     thread_pool_setup_random_ctx();
 
-    int last_call = time(NULL);
-    dnscore_timer_tick = last_call;
+    dnscore_timer_tick = time(NULL);
 
-    while(smp_int_get(&dnscore_running) != 0)
+#ifdef HAS_PTHREAD_SETNAME_NP
+#ifdef DEBUG
+    pthread_setname_np(pthread_self(), "timer");
+#endif
+#endif
+    
+    log_debug5("dnscore_timer_thread started");
+
+    // if the counter reaches 0 then we have to stop
+    
+    u64 loop_period = dnscore_timer_period;
+    loop_period *= 1000000LL;
+    
+    u64 loop_next_timeout_epoch = timeus();
+    
+    while(!async_wait_timeout_absolute(&timer_thread_sync, loop_next_timeout_epoch))
     {
         /* log & term output flush handling */
         stdstream_flush_both_terms();
 
         logger_flush();
 
-        /* alarm callback handling */        
-        int period = dnscore_timer_period;
-
-        do
-        {
-            sleep(period);
-
-            dnscore_timer_tick = time(NULL);
-
-            period = dnscore_timer_tick - last_call;
-        }
-        while((period < dnscore_timer_period) && (smp_int_get(&dnscore_running) != 0));
-
-        alarm_run_tick(dnscore_timer_tick);
+        dnscore_timer_tick = time(NULL);
         
-        last_call = dnscore_timer_tick;
-    }
+        alarm_run_tick(dnscore_timer_tick);
 
-    pthread_exit(NULL);
+        loop_next_timeout_epoch += loop_period;
+    }
+    
+    log_debug5("dnscore_timer_thread stopping");
+
+    thread_pool_destroy_random_ctx();
+    
+    log_debug5("dnscore_timer_thread stopped");
+    
+    pthread_exit(NULL); /* not from the pool, so it's the way */
 
     return NULL;
 }
@@ -237,11 +308,16 @@ dnscore_reset_timer()
     {
         dnscore_timer_tick = 0;
         dnscore_timer_creator_pid = mypid;
-
-        smp_int_set(&dnscore_running, 1);
+        
+        async_wait_init(&timer_thread_sync, 1);
+        
+        log_debug("starting timer");
 
         if(pthread_create(&dnscore_timer_thread_id, NULL, dnscore_timer_thread, NULL) != 0)
         {
+            dnscore_timer_thread_id = 0;
+            dnscore_timer_creator_pid = 0;
+            log_err("failed to create timer thread: %r", ERRNO_ERROR);
             exit(EXIT_CODE_THREADCREATE_ERROR);
         }
     }
@@ -263,8 +339,6 @@ dnscore_init()
 
     dnscore_init_done = TRUE;
     dnscore_arch_checkup();
-
-    //random_init(time(NULL));
     
     thread_pool_setup_random_ctx();
     random_ctx rnd = thread_pool_get_random_ctx();
@@ -275,30 +349,40 @@ dnscore_init()
         u32 r1 = random_next(rnd);
         u32 r2 = random_next(rnd);
         u32 r3 = random_next(rnd);
-       
-        if( ((r0 == 0) && (r1 == 0) && (r2 == 0) && (r3 == 0)) || ((r0 == r1) && (r1 == r2) && (r2 == r3)) ) 
+        
+        if( ((r0 == 0) && (r1 == 0) && (r2 == 0) && (r3 == 0)) || ((r0 == r1) && (r1 == r2) && (r2 == r3)) )
         {
+            // this IS possible, but has one chance in the order of 2^128 to happen
+            
             printf("panic: random generation fails. (%08x,%08x,%08x,%08x)\n", r0, r1, r2, r3);
             exit(-1);
         }
     }
 
     rfc_init();
-
+    
     format_class_init();
     dnsformat_class_init();
     stdstream_init();
     logger_init();
 
     dnscore_register_errors();
-
-#if HAS_TSIG_SUPPORT
+    
+#if DNSCORE_HAS_TSIG_SUPPORT
+    ENGINE_load_openssl();
+    ENGINE_load_builtin_engines();
+    SSL_library_init();
+    SSL_load_error_strings();
     tsig_register_algorithms();
 #endif
-
+    
     atexit(dnscore_finalize);
-
+    
+    alarm_init();
+    
     dnscore_reset_timer();
+    
+    tcp_init_with_env();
 }
 
 void
@@ -312,27 +396,41 @@ dnscore_stop_timer()
 
     if(mypid == dnscore_timer_creator_pid)
     {
-        smp_int_set(&dnscore_running, 0);
-
+        dnscore_timer_creator_pid = 0;
+        
         if(dnscore_timer_thread_id != 0)
         {
             log_debug("stopping timer");
-
-            pthread_join(dnscore_timer_thread_id, NULL);
-            pthread_detach(dnscore_timer_thread_id);
             
-            dnscore_timer_creator_pid = 0;
+            async_wait_progress(&timer_thread_sync, 1);
+            
+            // pthread_kill(dnscore_timer_thread_id, SIGUSR1);
+            pthread_join(dnscore_timer_thread_id, NULL);
+            
             dnscore_timer_thread_id = 0;
+            
+            async_wait_finalize(&timer_thread_sync);
         }
     }
     else
     {
-#ifndef NDEBUG
+#ifdef DEBUG
         log_debug("timer owned by %d (0 meaning stopped already), not touching it (I'm %d)", dnscore_timer_creator_pid, mypid);
 #endif
     }
     
     logger_flush();
+}
+
+void
+dnscore_wait_timer_stopped()
+{
+    pthread_t id = dnscore_timer_thread_id;
+    
+    if(id != 0)
+    {
+        pthread_join(id, NULL);
+    }
 }
 
 void
@@ -353,10 +451,18 @@ void log_assert__(bool b, const char *txt, const char *file, int line)
 {
     if(!b)
     {
-        log_err("assert: at %s:%d: %s", file, line, txt); /* this is in zassert */
-        logger_flush();
-        sleep(10);                  /* be nice */
-        exit(-1);
+        if(logger_is_running() && (g_system_logger != NULL))
+        {
+            logger_handle_exit_level(MAX_U32);
+            log_crit("assert: at %s:%d: %s", file, line, txt); /* this is in zassert */
+            logger_flush();
+        }
+        else
+        {
+            osformatln(&__termerr__,"assert: at %s:%d: %s", file, line, txt);            
+        }
+        stdstream_flush_both_terms();
+        abort();
     }
 }
 
@@ -379,14 +485,16 @@ dnscore_finalize()
     dnscore_finalizing = TRUE;
     
     dnscore_shutdown();
-
-#ifndef NDEBUG
+    
+#ifdef DEBUG
+    debug_bench_logdump_all();
+#endif
+    
+#ifdef DEBUG
     log_debug("exit: destroying the thread pool");
 #endif
     
     logger_flush();
-
-    thread_pool_destroy();
     
 #ifdef DEBUG
     log_debug("exit: bye (pid=%hd)", getpid());
@@ -394,61 +502,45 @@ dnscore_finalize()
     logger_flush();
 #endif
     
-    scheduler_finalize();
-
     logger_flush();
+    
+    dnscore_stop_timer();               // timer uses logger
+    dnscore_wait_timer_stopped();
+    
+    config_finalise();
+    
+    async_message_pool_finalize();
 
+    stdstream_flush_both_terms();
+    
     logger_finalize();  /** @note does a logger_stop */
 
-    logger_handle_finalize();
-
-#ifndef NDEBUG
+#if defined(DEBUG) || defined(DNSCORE_TIDY_UP_MEMORY)
     /*
      *  It may not be required right now, but in case the stdstream are filtered/buffered
      *  this will flush them.
      */
 
-#if HAS_TSIG_SUPPORT
-    tsig_finalize();
-#endif
-
-    stdstream_flush_both_terms();
-
-    error_unregister_all();
-
-    rfc_finalize();
-
-    format_class_finalize();
-
-#endif
+     thread_pool_destroy_random_ctx();
     
-#ifndef NDEBUG
 #if ZDB_DEBUG_MALLOC != 0
     debug_stat(TRUE);
 #endif
-#endif
 
     stdstream_flush_both_terms();
     
+#if DNSCORE_HAS_TSIG_SUPPORT
+    tsig_finalize();
+#endif
+    
+    error_unregister_all();
+    rfc_finalize();
+    format_class_finalize();
+#endif // DNSCORE_TIDY_UP_MEMORY
+        
     output_stream_close(&__termerr__);
     output_stream_close(&__termout__);
 }
-
-/*
-#if HAS_STRDUP == 0
-
-char *
-strdup(const char* txt)
-{
-    char *r;
-    size_t n = strlen(txt) + 1;
-    MALLOC_OR_DIE(char *, r, n, GENERIC_TAG);
-    memcpy(r, txt, n);
-    return r;
-}
-
-#endif
-*/
 
 /** @} */
 

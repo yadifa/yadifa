@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -49,12 +49,13 @@
 #define BYTE_ARRAY_OUTPUT_STREAM_DATA_TAG 0x41544144534f4142 /* BAOSDATA */
 #define BYTE_ARRAY_OUTPUT_STREAM_BUFF_TAG 0x46465542534f4142 /* BAOSBUFF */
 
-typedef struct bytearray_output_stream_data bytearray_output_stream_data;
-
-
 #define BYTEARRAY_STARTSIZE 1024
 
-/* flags */
+typedef struct bytearray_output_stream_data bytearray_output_stream_data;
+
+/**
+ * @NOTE: if this changes, take care that bytearray_output_stream_context in the header file has at least the SAME SIZE
+ */
 
 struct bytearray_output_stream_data
 {
@@ -65,7 +66,7 @@ struct bytearray_output_stream_data
 };
 
 static ya_result
-bytearray_write(output_stream* stream, const u8* buffer, u32 len)
+bytearray_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
 {
     if(len == 0)
     {
@@ -118,40 +119,45 @@ bytearray_write(output_stream* stream, const u8* buffer, u32 len)
 }
 
 static ya_result
-bytearray_flush(output_stream* stream)
+bytearray_output_stream_flush(output_stream* stream)
 {
     return SUCCESS;
 }
 
 static void
-bytearray_close(output_stream* stream)
+bytearray_output_stream_close(output_stream* stream)
 {
     bytearray_output_stream_data* data = (bytearray_output_stream_data*)stream->data;
 
     if((data->flags & BYTEARRAY_OWNED) != 0)
     {
+#ifdef DEBUG
+        memset(data->buffer, 0xe5, data->buffer_size);
+#endif
         free(data->buffer);
     }
 
-    free(data);
+    if((data->flags & BYTEARRAY_MALLOC_CONTEXT) != 0)
+    {
+        free(data);
+    }
 
     output_stream_set_void(stream);
 }
 
-static output_stream_vtbl bytearray_output_stream_vtbl = {
-    bytearray_write,
-    bytearray_flush,
-    bytearray_close,
+static const output_stream_vtbl bytearray_output_stream_vtbl =
+{
+    bytearray_output_stream_write,
+    bytearray_output_stream_flush,
+    bytearray_output_stream_close,
     "bytearray_output_stream",
 };
 
 void
-bytearray_output_stream_init_ex(u8* array, u32 size, output_stream* out_stream, u8 flags)
+bytearray_output_stream_init_ex_static(output_stream* out_stream, u8* array,u32 size, u8 flags, bytearray_output_stream_context *ctx)
 {
-    bytearray_output_stream_data* data;
-
-    MALLOC_OR_DIE(bytearray_output_stream_data*, data, sizeof (bytearray_output_stream_data), BYTE_ARRAY_OUTPUT_STREAM_DATA_TAG);
-
+    bytearray_output_stream_data *data = (bytearray_output_stream_data*)ctx;
+ 
     if(array == NULL)
     {
         flags |= BYTEARRAY_OWNED;
@@ -176,9 +182,21 @@ bytearray_output_stream_init_ex(u8* array, u32 size, output_stream* out_stream, 
 }
 
 void
-bytearray_output_stream_init(u8* array, u32 size, output_stream* out_stream)
+bytearray_output_stream_init_ex(output_stream* out_stream, u8* array, u32 size, u8 flags)
 {
-    bytearray_output_stream_init_ex(array, size, out_stream, 0);
+    bytearray_output_stream_data* data;
+
+    MALLOC_OR_DIE(bytearray_output_stream_data*, data, sizeof(bytearray_output_stream_data), BYTE_ARRAY_OUTPUT_STREAM_DATA_TAG);
+
+    flags |= BYTEARRAY_MALLOC_CONTEXT;
+    
+    bytearray_output_stream_init_ex_static(out_stream, array, size, flags, (bytearray_output_stream_context*)data);
+}
+
+void
+bytearray_output_stream_init(output_stream* out_stream, u8* array, u32 size)
+{
+    bytearray_output_stream_init_ex(out_stream, array, size, 0);
 }
 
 void
@@ -211,6 +229,20 @@ bytearray_output_stream_detach(output_stream* stream)
     data->flags &= ~BYTEARRAY_OWNED;
 
     return data->buffer;
+}
+
+void
+bytearray_output_stream_set(output_stream* stream, u8 *buffer, u32 buffer_size, bool owned)
+{
+    bytearray_output_stream_data* data = (bytearray_output_stream_data*)stream->data;
+    if((data->buffer != buffer) && ((data->flags & BYTEARRAY_OWNED) != 0))
+    {
+        free(data->buffer);
+    }
+    data->buffer = buffer;
+    data->buffer_offset = buffer_size;
+    data->buffer_size = buffer_size;
+    data->flags = (data->flags & BYTEARRAY_MALLOC_CONTEXT) | ((owned)?BYTEARRAY_OWNED:0);
 }
 
 /** @} */

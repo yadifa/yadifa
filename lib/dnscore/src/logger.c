@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup logger Logging functions
  *  @ingroup dnscore
  *  @brief
@@ -48,109 +48,75 @@
 #include "dnscore/logger.h"
 #include "dnscore/format.h"
 
+static u32 log_memdump_ex_layout_mask = 0x000003ff;
+
 void
-log_memdump_ex(logger_handle* hndl, u32 level, const void* data_pointer_, size_t size_, size_t line_size, bool hex, bool text, bool address)
+log_memdump_set_layout(u32 group_mask, u32 separator_mask)
 {
+    log_memdump_ex_layout_mask = ((group_mask <<  OSPRINT_DUMP_LAYOUT_GROUP_SHIFT) & OSPRINT_DUMP_LAYOUT_GROUP_MASK)            |
+                                 ((separator_mask << OSPRINT_DUMP_LAYOUT_SEPARATOR_SHIFT) & OSPRINT_DUMP_LAYOUT_SEPARATOR_MASK);
+}
+
+void
+log_memdump_ex(logger_handle* hndl, u32 level, const void* data_pointer_, size_t size_, size_t line_size, u32 flags)
+{
+    /*
+     * ensure there is an output for this handle/level
+     */
+    
     if((hndl == NULL) || (level >= MSG_LEVEL_COUNT) || (hndl->channels[level].offset < 0))
     {
         return;
     }
-
+    
     output_stream os;
-    char buffer[4096];
+    bytearray_output_stream_context os_context;
+    
+    char buffer[1024];
+    
+#ifdef DEBUG
+    assert(line_size > 0);
+    assert(line_size < sizeof(buffer) / 8);
+    memset(buffer, 0xba, sizeof(buffer));
+#endif
+    
+    flags |= log_memdump_ex_layout_mask;
 
-    bytearray_output_stream_init((u8*)buffer, sizeof (buffer), &os);
+    bytearray_output_stream_init_ex_static(&os, (u8*)buffer, sizeof (buffer), 0, &os_context);
 
-    u8* data_pointer = (u8*)data_pointer_;
+    const u8* data_pointer = (const u8*)data_pointer_;
     s32 size = size_;
-
-
-    int dump_size;
-    int i;
-
-    do
+    
+    while(size > line_size)
     {
-        dump_size = MIN(line_size, size);
-
-        u8* data;
-
-        if(address)
-        {
-            osformat(&os, "%p ", data_pointer);
-        }
-
-        if(hex)
-        {
-            data = data_pointer;
-            for(i = 0; i < dump_size; i++)
-            {
-                osformat(&os, "%02x", *data++);
-                if((i & 3) == 3)
-                {
-                    output_stream_write_u8(&os, (u8)' ');
-                }
-            }
-
-            for(; i < line_size; i++)
-            {
-                osprint(&os, "  ");
-                if((i & 3) == 0)
-                {
-                    osprint(&os, " ");
-                }
-            }
-        }
-
-        if(hex & text)
-        {
-            output_stream_write(&os, (u8*)" | ", 3);
-        }
-
-        if(text)
-        {
-            data = data_pointer;
-            for(i = 0; i < dump_size; i++)
-            {
-                char c = *data++;
-                if(c < ' ')
-                {
-                    c = '.';
-                }
-                else if(c == '%')
-                {
-                    output_stream_write_u8(&os, '%');
-                }
-
-                output_stream_write_u8(&os, (u8)c);
-            }
-        }
-
-        data_pointer += dump_size;
-        size -= dump_size;
-
-        if(size != 0)
-        {
-            output_stream_write_u8(&os, 0);
-            logger_handle_msg(hndl, level, "%s", bytearray_output_stream_buffer(&os));
-            bytearray_output_stream_reset(&os);
-        }
+        osprint_dump(&os, data_pointer, line_size, line_size, flags);        
+        
+        u32 buffer_size = bytearray_output_stream_size(&os);
+        
+        logger_handle_msg_text(hndl, level, buffer, buffer_size);
+        
+        bytearray_output_stream_reset(&os);
+        
+        data_pointer += line_size;
+        size -= line_size;
     }
-    while(size > 0);
-
-    //if(size_ > line_size)
-    if(bytearray_output_stream_size(&os) > 0)
+    
+    if(size > 0)
     {
-        output_stream_write_u8(&os, 0);
-        logger_handle_msg(hndl, level, "%s", bytearray_output_stream_buffer(&os));
+        osprint_dump(&os, data_pointer, size, line_size, flags);        
+        
+        u32 buffer_size = bytearray_output_stream_size(&os);
+        
+        logger_handle_msg_text(hndl, level, buffer, buffer_size);
     }
 
     output_stream_close(&os);
 }
 
 void
-log_memdump(logger_handle* hndl, u32 level, const void* data_pointer_, size_t size_, size_t line_size, bool hex, bool text)
+log_memdump(logger_handle* hndl, u32 level, const void* data_pointer_, size_t size_, size_t line_size)
 {
-    log_memdump_ex(hndl, level, data_pointer_, size_, line_size, hex, text, FALSE);
+    log_memdump_ex(hndl, level, data_pointer_, size_, line_size, OSPRINT_DUMP_HEXTEXT);
 }
 
 /** @} */

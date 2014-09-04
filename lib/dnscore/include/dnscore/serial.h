@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnscore
  *  @ingroup dnscore
  *  @brief serial arithmetic

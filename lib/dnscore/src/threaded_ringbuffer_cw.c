@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- * DOCUMENTATION */
+*
+* Copyright (c) 2011, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief 
@@ -45,33 +45,6 @@
 #include "dnscore/threaded_ringbuffer_cw.h"
 
 #define THREADED_QUEUE_TAG	    0x455545555154	/* TQUEUE */
-
-/*
- * The maximum number of nodes I should ever require is the queue size + 1
- *
- * A good way to handle this is :
- *
- * Node allocator, node destroyer
- *
- * But the node allocator only allocates a node if none are free
- * And the node destroyer does not release a node but queue it instead.
- *
- * If I enforce the requirement that the allocation/destruction is done
- * by a single thread I could gain some cpu cycles.
- *
- * This reasoning is also valid for the thread_pool_task
- *
- */
-
-typedef struct threaded_ringbuffer_cw_node threaded_ringbuffer_cw_node;
-
-struct threaded_ringbuffer_cw_node
-{
-    threaded_ringbuffer_cw_node *next;
-    threaded_ringbuffer_cw_node *prev;
-    
-    void* data;
-};
 
 /*
  * Note:
@@ -365,7 +338,7 @@ threaded_ringbuffer_cw_try_dequeue(threaded_ringbuffer_cw *queue)
 }
 
 u32
-threaded_ringbuffer_cw_dequeue_set(threaded_ringbuffer_cw* queue, void** array, u32 array_size)
+threaded_ringbuffer_cw_dequeue_set(threaded_ringbuffer_cw *queue, void **array, u32 array_size)
 {
     /*
      * Ensure I'm allowed to work on queue (only one working on it)
@@ -388,23 +361,23 @@ threaded_ringbuffer_cw_dequeue_set(threaded_ringbuffer_cw* queue, void** array, 
 
     u32 loops = MIN(queue->size, array_size);		  /* The amount we will be able to extract */
     
-    void** limit = &array[loops];			  /* compute the limit so we only have one increment and one compare */
+    void ** const limit = &array[loops];		  /* compute the limit so we only have one increment and one compare */
 
     while(array < limit)
     {
-	void* data = *queue->read_slot++;
-	*array++ = data;
+        void* data = *queue->read_slot++;
+        *array++ = data;
 
-	if(queue->read_slot == queue->buffer_limit)
-	{
-	    queue->read_slot = queue->buffer;
-	}
+        if(queue->read_slot == queue->buffer_limit)
+        {
+            queue->read_slot = queue->buffer;
+        }
 
-	if(data == NULL)				    /* Break if a terminator is found*/
-	{
-	    loops -= limit-array;
-	    break;
-	}
+        if(data == NULL)				    /* Break if a terminator is found*/
+        {
+            loops -= limit - array;
+            break;
+        }
     }
 
     queue->size -= loops;				  /* adjust the size */
@@ -465,6 +438,20 @@ threaded_ringbuffer_cw_size(threaded_ringbuffer_cw *queue)
     return size;
 }
 
+int
+threaded_ringbuffer_cw_room(threaded_ringbuffer_cw *queue)
+{
+    int room;
+
+    pthread_mutex_lock(&queue->mutex);
+
+    room = queue->max_size - queue->size;
+
+    pthread_mutex_unlock(&queue->mutex);
+
+    return room;
+}
+
 ya_result
 threaded_ringbuffer_cw_set_maxsize(threaded_ringbuffer_cw *queue, int max_size)
 {
@@ -515,7 +502,6 @@ threaded_ringbuffer_cw_set_maxsize(threaded_ringbuffer_cw *queue, int max_size)
         }
 
         queue->write_slot = p;
-
         queue->max_size = max_size;
     }
     

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnscoretools Generic Tools
  *  @ingroup dnscore
  *  @brief 
@@ -43,7 +43,9 @@
 #ifndef _RANDOM_H
 #define	_RANDOM_H
 
+#include <pthread.h>
 #include <dnscore/sys_types.h>
+#include <dnscore/timems.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -52,7 +54,21 @@ extern "C"
 
 typedef void* random_ctx;
 
+/**
+ * For IDs ensure that seed is enough randomised.
+ * 
+ * @param seed
+ * @return 
+ */
+
 random_ctx random_init(u32 seed);
+
+/**
+ * Chooses a seed with little change of collision.
+ * @return 
+ */
+
+random_ctx random_init_auto();
 
 u32 random_next(random_ctx ctx);
 

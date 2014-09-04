@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -61,7 +61,7 @@ ya_result axfr_process(message_data *mesg);
  * 
  */
 
-ya_result axfr_query(host_address *servers, u8 *origin, u32* loaded_serial);
+ya_result axfr_query(const host_address *servers, const u8 *origin, u32* out_loaded_serial);
 
 
 #endif	/* _AXFR_H */

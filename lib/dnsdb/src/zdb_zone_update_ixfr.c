@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief
@@ -46,15 +46,17 @@
 #include <stdlib.h>
 #include <arpa/inet.h>
 
-#include "dnsdb/zdb_types.h"
 #include <dnscore/sys_types.h>
+#include <dnscore/dnssec_errors.h>
+
+#include "dnsdb/zdb_types.h"
 #include "dnsdb/zdb_zone.h"
 #include "dnsdb/zdb_zone_label.h"
 #include "dnsdb/zdb_utils.h"
 
 #include <dnscore/input_stream.h>
 
-#if ZDB_NSEC3_SUPPORT!=0
+#if ZDB_HAS_NSEC3_SUPPORT!=0
 #include "dnsdb/nsec3_icmtl.h"
 #include "dnsdb/nsec3_load.h"
 #endif
@@ -99,7 +101,7 @@
  */
 
 ya_result
-zdb_zone_update_ixfr(zdb* db, input_stream* is)
+zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
 {
     u8 rname[MAX_DOMAIN_LENGTH];
     u16 rtype;
@@ -135,6 +137,7 @@ zdb_zone_update_ixfr(zdb* db, input_stream* is)
     ZDB_RECORD_ZALLOC_EMPTY(soa_ttlrdata, rttl, rdata_size);
     if(FAIL(err = input_stream_read_fully(is, ZDB_PACKEDRECORD_PTR_RDATAPTR(soa_ttlrdata), rdata_size)))
     {
+        ZDB_RECORD_ZFREE(soa_ttlrdata);
         return err;
     }
 
@@ -153,6 +156,7 @@ zdb_zone_update_ixfr(zdb* db, input_stream* is)
 
     if(FAIL(err = rr_soa_get_serial(soa_ttlrdata->rdata_start, soa_ttlrdata->rdata_size, &serial_first)))
     {
+        ZDB_RECORD_ZFREE(soa_ttlrdata);
         return err;
     }
 
@@ -161,7 +165,8 @@ zdb_zone_update_ixfr(zdb* db, input_stream* is)
     if((zone_label == NULL) || (zone_label->zone == NULL))
     {
         /* Not loaded */
-
+        ZDB_RECORD_ZFREE(soa_ttlrdata);
+        
         return ZDB_ERROR_GENERAL;
     }
 
@@ -171,10 +176,12 @@ zdb_zone_update_ixfr(zdb* db, input_stream* is)
 
     if(FAIL(err = zdb_zone_getserial(zone, &serial_current)))
     {
+        ZDB_RECORD_ZFREE(soa_ttlrdata);
+        
         return err;
     }
 
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
     nsec3_load_context nsec3_context;
     nsec3_load_init(&nsec3_context, zone);
 #endif
@@ -189,11 +196,15 @@ zdb_zone_update_ixfr(zdb* db, input_stream* is)
 
     if(FAIL(err = input_stream_read_rr_header(is, rname, sizeof (rname), &rtype, &rclass, &rttl, &rdata_size)))
     {
+        ZDB_RECORD_ZFREE(soa_ttlrdata);
+        free(tmp_ttlrdata);
         return err;
     }
 
     if(rtype != TYPE_SOA)
     {
+        ZDB_RECORD_ZFREE(soa_ttlrdata);
+        free(tmp_ttlrdata);
         return ZDB_ERROR_GENERAL;
     }
 
@@ -299,7 +310,7 @@ zdb_zone_update_ixfr(zdb* db, input_stream* is)
             DEBUG_RESET_dnsname(entry_name);
             dnsname_to_dnsname_vector(rname, &entry_name);
 
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
 
             if(rtype == TYPE_NSEC3PARAM)
             {
@@ -401,7 +412,7 @@ zdb_zone_update_ixfr(zdb* db, input_stream* is)
                 break;
             }
 
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
 
             if(rtype == TYPE_NSEC3PARAM)
             {
@@ -525,7 +536,7 @@ zdb_zone_update_ixfr(zdb* db, input_stream* is)
 
                 zdb_zone_record_add(zone, entry_name.labels, (entry_name.size - name.size) - 1, rtype, ttlrdata); /* class is implicit */
 
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
             }
 #endif
         }
@@ -553,13 +564,13 @@ zdb_zone_update_ixfr(zdb* db, input_stream* is)
 
         zdb_zone_record_add(zone, NULL, -1, TYPE_SOA, soa_ttlrdata);
 
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
         /**
          * Check if there is both NSEC & NSEC3.  Reject if yes.
          *       compile NSEC if any
          *	 compile NSEC3 if any
          *
-         * @todo: I'm only doing NSEC3 here. Do NSEC as well
+         * @todo: I'm only doing NSEC3 here. Do NSEC as well.
          */
         
         err = nsec3_load_compile(&nsec3_context);
@@ -576,12 +587,12 @@ zdb_zone_update_ixfr(zdb* db, input_stream* is)
             zone_label->zone = zone;
 
             return err;
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
         }
 #endif
     }
 
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
     nsec3_load_destroy(&nsec3_context);
 #endif
 

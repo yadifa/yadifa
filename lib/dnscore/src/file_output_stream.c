@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -62,11 +62,11 @@ struct file_output_stream
 
     union
     {
-        void* voidp;
+        void *voidp;
         int fd;
     } data;
 
-    output_stream_vtbl* vtbl;
+    const output_stream_vtbl* vtbl;
 };
 
 static ya_result
@@ -120,12 +120,15 @@ file_close(output_stream* stream_)
     
     /* don't, it's only for a test that I did this assert((stream->data.fd < 0)||(stream->data.fd >2)); */
     
-    close_ex(stream->data.fd);
+    if(stream->data.fd != -1)   /* harmless close but still ... */
+    {
+        close_ex(stream->data.fd);
+    }
 
     output_stream_set_void(stream_);
 }
 
-static output_stream_vtbl file_output_stream_vtbl ={
+static const output_stream_vtbl file_output_stream_vtbl ={
     file_write,
     file_flush,
     file_close,
@@ -135,21 +138,21 @@ static output_stream_vtbl file_output_stream_vtbl ={
 ya_result
 file_output_stream_open(const char* filename, output_stream* stream)
 {
-    return file_output_stream_open_ex(filename, O_WRONLY, 0600, stream);
+    return file_output_stream_open_ex(filename, O_RDWR, 0600, stream);
 }
 
 ya_result
 file_output_stream_create(const char* filename, mode_t mode, output_stream* stream)
 {
-    return file_output_stream_open_ex(filename, O_WRONLY | O_CREAT | O_TRUNC, mode, stream);
+    return file_output_stream_open_ex(filename, O_RDWR | O_CREAT | O_TRUNC, mode, stream);
 }
 
 ya_result
 file_output_stream_open_ex(const char* filename, int flags, mode_t mode, output_stream* stream_)
 {
-    zassert(sizeof (void*) >= sizeof (int));
+    yassert(sizeof (void*) >= sizeof (int));
 
-    int fd = open(filename, flags, mode);
+    int fd = open_create_ex(filename, flags, mode);
 
     if(fd < 0)
     {
@@ -167,7 +170,7 @@ file_output_stream_open_ex(const char* filename, int flags, mode_t mode, output_
 ya_result
 fd_output_stream_attach(int fd, output_stream* stream_)
 {
-    zassert(sizeof (void*) >= sizeof (int));
+    yassert(sizeof(void*) >= sizeof(int));
 
     file_output_stream* stream = (file_output_stream*)stream_;
     stream->data.fd = fd;
@@ -175,6 +178,15 @@ fd_output_stream_attach(int fd, output_stream* stream_)
     stream->vtbl = &file_output_stream_vtbl;
 
     return SUCCESS;
+}
+
+void
+fd_output_stream_detach(output_stream* stream_)
+{
+    yassert(sizeof(void*) >= sizeof(int));
+
+    file_output_stream* stream = (file_output_stream*)stream_;
+    stream->data.fd = -1;
 }
 
 ya_result
@@ -191,7 +203,7 @@ is_fd_output_stream(output_stream* stream_)
     return (stream != NULL) && (stream->vtbl == &file_output_stream_vtbl);
 }
 
-s64 fd_input_stream_get_size(output_stream* stream_)
+s64 fd_output_stream_get_size(output_stream* stream_)
 {
     file_output_stream* stream = (file_output_stream*)stream_;
     

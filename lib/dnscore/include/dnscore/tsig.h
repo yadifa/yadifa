@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup ### #######
  *  @ingroup dnscore
  *  @brief
@@ -58,7 +58,7 @@
 #define HMAC_SHA384     164
 #define HMAC_SHA512     165
 
-#if HAS_TSIG_SUPPORT==1
+#if DNSCORE_HAS_TSIG_SUPPORT
 
 #ifdef	__cplusplus
 extern "C"
@@ -108,6 +108,8 @@ struct tsig_item
     u16 mac_algorithm_name_len;
     u16 mac_size;
     u8 mac_algorithm;
+    
+    u8 load_serial;
 };
 
 /*
@@ -122,7 +124,11 @@ struct tsig_node
     s8 balance;
 };
 
+/**
+ * Call this before a config reload
+ */
 
+void tsig_serial_next();
 
 /*
  * I recommand setting a define to identify the C part of the template
@@ -136,6 +142,10 @@ ya_result tsig_register(const u8 *name, const u8 *mac, u16 mac_size, u8 mac_algo
 void tsig_finalize();
 
 tsig_item *tsig_get(const u8 *name);
+
+u32 tsig_get_count();
+
+tsig_item *tsig_get_at_index(s32 index);
 
 struct message_data;
 
@@ -249,6 +259,7 @@ ya_result tsig_sign_query(struct message_data *mesg);
 
 ya_result tsig_verify_answer(struct message_data *mesg, const u8 *mac, u16 mac_size);
 
+ya_result tsig_append_unsigned_error(struct message_data *mesg);
 ya_result tsig_append_error(struct message_data *mesg);
 
 /**

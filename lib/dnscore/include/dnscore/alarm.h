@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup alarm
  *  @ingroup dnscore
  *  @brief Alarm functions
@@ -94,6 +94,8 @@ struct alarm_event_node
 };
 
 typedef struct alarm_event_node alarm_event_node;
+
+void alarm_init();
 
 /**
  * Alarm events MUST be allocated through this.

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnspacket DNS Messages
  *  @ingroup dnscore
  *  @brief
@@ -43,10 +43,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "dnscore/packet_writer.h"
 #include "dnscore/dnsname.h"
-#include "dnscore/rfc.h"
+#include "dnscore/logger.h"
 #include "dnscore/message.h"
+#include "dnscore/rfc.h"
+
+extern logger_handle *g_system_logger;
+#define MODULE_MSG_HANDLE g_system_logger
 
 /*
  *
@@ -83,8 +86,15 @@ packet_writer_init(packet_writer* pc, u8* packet, u32 packet_offset, u32 size_li
 
         child_node = node;
     }
-
-    *fqdn = 0;
+    
+#ifdef DEBUG
+    fqdn += 1 + 2 + 2;
+    
+    if(packet_offset != fqdn - packet)
+    {
+        log_err("packet_writer_init expected %u = %u", packet_offset, fqdn - packet);
+    }
+#endif
 
     pc->head = child_node;
     pc->packet = packet;
@@ -223,7 +233,7 @@ packet_writer_add_fqdn(packet_writer* pc, const u8* fqdn)
 ya_result
 packet_writer_add_rdata(packet_writer* pc, u16 rr_type, const u8* rdata, u16 rdata_size)
 {
-    zassert(pc->packet_offset + rdata_size < pc->packet_limit);
+    yassert(pc->packet_offset + rdata_size < pc->packet_limit);
     
     u32 offset = pc->packet_offset;
     pc->packet_offset += 2;
@@ -281,22 +291,27 @@ packet_writer_add_rdata(packet_writer* pc, u16 rr_type, const u8* rdata, u16 rda
     return pc->packet_offset;
 }
 
-/*
- * Small tool function
+/**
+ * Writes the content of the buffer of a packet writer to a TCP output stream,
+ * that is: first the size of the buffer in network endiant 16 bits followed
+ * by the actual content of the buffer
+ * 
+ * @param pw the packet writer whose content needs to be written
+ * @param tcpos the TCP output stream
+ * 
+ * @return an error code or the size of the buffer
  */
 
 ya_result
 write_tcp_packet(packet_writer *pw, output_stream *tcpos)
 {
-    // @TODO: If TSIG ...
-
     int n;
 
     if(FAIL(n = output_stream_write_nu16(tcpos, pw->packet_offset)))
     {
         return n;
     }
-
+    
     if(FAIL(n = output_stream_write(tcpos, pw->packet, pw->packet_offset)))
     {
         return n;
@@ -308,9 +323,11 @@ write_tcp_packet(packet_writer *pw, output_stream *tcpos)
 ya_result
 packet_writer_add_record(packet_writer* pw, const u8* fqdn, u16 rr_type, u16 rr_class, u32 rr_ttl, const u8* rdata, u16 rdata_size)
 {
+    ya_result return_code;
+    
     u32 offset = pw->packet_offset;
     
-    if(ISOK(packet_writer_add_fqdn(pw, fqdn)))
+    if(ISOK(return_code = packet_writer_add_fqdn(pw, fqdn)))
     {
         if(pw->packet_limit - pw->packet_offset >= 10)
         {
@@ -318,7 +335,7 @@ packet_writer_add_record(packet_writer* pw, const u8* fqdn, u16 rr_type, u16 rr_
             packet_writer_add_u16(pw, rr_class);
             packet_writer_add_u32(pw, rr_ttl);
 
-            if(ISOK(packet_writer_add_rdata(pw, rr_type, rdata, rdata_size)))
+            if(ISOK(return_code = packet_writer_add_rdata(pw, rr_type, rdata, rdata_size)))
             {
                 return pw->packet_offset;
             }
@@ -327,7 +344,7 @@ packet_writer_add_record(packet_writer* pw, const u8* fqdn, u16 rr_type, u16 rr_
 
     pw->packet_offset = offset;
 
-    return ERROR;
+    return return_code;
 }
 
 /** @} */

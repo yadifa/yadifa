@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -147,7 +147,7 @@ buffer_close(output_stream* stream)
     output_stream_set_void(stream);
 }
 
-static output_stream_vtbl buffer_output_stream_vtbl ={
+static const output_stream_vtbl buffer_output_stream_vtbl ={
     buffer_write,
     buffer_flush,
     buffer_close,
@@ -187,6 +187,12 @@ buffer_output_stream_get_filtered(output_stream* bos)
     buffer_output_stream_data* data = (buffer_output_stream_data*)bos->data;
 
     return &data->filtered;
+}
+
+bool
+is_buffer_output_stream(output_stream* os)
+{
+    return os->vtbl == &buffer_output_stream_vtbl;
 }
 
 /** @} */

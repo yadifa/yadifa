@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnscore
  *  @ingroup dnscore
  *  @brief serial arithmetic
@@ -38,6 +38,9 @@
  * @{
  *
  *----------------------------------------------------------------------------*/
+
+#include "dnscore-config.h"
+
 #include "dnscore/serial.h"
 
 /*

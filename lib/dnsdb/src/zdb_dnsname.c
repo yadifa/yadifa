@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup name Functions used to manipulate dns formatted names and labels
  *  @ingroup dnsdb
  *  @brief Functions used to manipulate dns formatted names and labels
@@ -57,14 +57,14 @@
 u8*
 dnsname_zdup(const u8* name)
 {
-    zassert(name != NULL);
+    yassert(name != NULL);
 
     u32 len = dnsname_len(name);
 
     u8* dup;
 
     ZALLOC_STRING_OR_DIE(u8*, dup, len, ZDB_NAME_TAG);
-    MEMCOPY(dup, name, len);
+    MEMCOPY(dup, name, len); // nothing wrong here
 
     return dup;
 }
@@ -81,7 +81,7 @@ dnsname_zdup(const u8* name)
 u8*
 dnslabel_dup(const u8* name)
 {
-    zassert(name != NULL);
+    yassert(name != NULL);
 
     u32 len = name[0] + 1;
 

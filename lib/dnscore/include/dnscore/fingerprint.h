@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnscore
  *  @ingroup dnscore
  *  @brief fingerprints, mapping between answer code and dns code
@@ -58,12 +58,13 @@ enum finger_print
     FP_DATABASE_ERR             = RCODE_SERVFAIL,       /* NOT USED */
     FP_ANCOUNT_NOT_0            = RCODE_FORMERR,        /* NOT USED */
     FP_TC_BIT_SET               = RCODE_FORMERR,        /* NOT USED */
+    FP_QR_BIT_SET               = RCODE_FORMERR,
     FP_Z_BITS_SET               = RCODE_FORMERR,        /* NOT USED */
     FP_RCODE_BITS_SET           = RCODE_FORMERR,        /* NOT USED */
     FP_ZOCOUNT_NOT_1            = RCODE_FORMERR,        /* NOT USED */
     FP_CH_REFUSED               = RCODE_FORMERR,        /* NOT USED */    
     FP_NOT_SUPP_CLASS           = RCODE_NOTIMP,         /* NOT USED, same remark as for FP_NOT_SUPP_TYPE */
-
+    
     FP_NSCOUNT_NOT_0            = RCODE_FORMERR,        /* Message processing.  Not used anymore (conflicts with updates) */
 
     /*
@@ -95,7 +96,7 @@ enum finger_print
                                                          * too long (labels too big or name too big)
                                                          */
 
-	FP_NAME_FORMAT_ERROR		= RCODE_FORMERR,		/* Bad compression of a NAME */
+    FP_NAME_FORMAT_ERROR	= RCODE_FORMERR,	/* Bad compression of a NAME */
     
     FP_INCORR_PROTO             = RCODE_FORMERR,        /* The message processing found out that something "wrong"
                                                          * was queried (ie: AXFR/IXFR on UDP).
@@ -121,7 +122,9 @@ enum finger_print
     FP_TSIG_ERROR               = RCODE_NOTAUTH,        /* The message processing handled the included TSIG but rejected
                                                          * it
                                                          */
-    
+    FP_TSIG_UNEXPECTED          = RCODE_FORMERR,        /* The message processing did not expect the included TSIG */
+    FP_TSIG_BROKEN              = RCODE_FORMERR,        /* The TSIG cannot be read properly */
+
     FP_TSIG_IS_NOT_LAST         = RCODE_FORMERR,        /* There is a record after the TSIG */
 
     FP_EDNS_BAD_VERSION         = RCODE_BADVERS,        /* Found an EDNS version that is not 0
@@ -185,7 +188,9 @@ enum finger_print
             
     FP_INVALID_ZONE             = RCODE_SERVFAIL,
     
-    FP_IXFR_UDP                 = RCODE_NOTIMP
+    FP_IXFR_UDP                 = RCODE_NOTIMP,
+    
+    FP_FEATURE_DISABLED         = RCODE_NOTIMP
 };
 
 typedef enum finger_print finger_print;

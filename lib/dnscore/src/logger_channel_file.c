@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup logger Logging functions
  *  @ingroup dnscore
  *  @brief
@@ -45,6 +45,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <fcntl.h>
 
 #include <pthread.h>
@@ -56,11 +57,13 @@
 
 #include "dnscore/format.h"
 
+#include "dnscore/chroot.h"
+
 /*
  * The new logger model does not requires MT protection on the channels
  */
 
-#define FILE_CHANNEL_BUFFER_SIZE 65536   /** @TODO this should come from a configuration file */
+#define FILE_CHANNEL_BUFFER_SIZE 65536   /// @todo 20140523 edf -- make this configurable
 
 typedef struct file_data file_data;
 
@@ -138,6 +141,8 @@ logger_channel_file_close(logger_channel* chan)
     output_stream_flush(&sd->os);
     output_stream_close(&sd->os);
 
+    chroot_unmanage_path(&sd->file_name);
+    
     free(sd->file_name);
     
     chan->vtbl = NULL;
@@ -170,12 +175,15 @@ logger_channel_file_append(const char *fullpath, uid_t uid, gid_t gid, u16 mode,
 
     int fd = fd_output_stream_get_filedescriptor(&errlog_os);
     
-    if(fchown(fd, uid, gid) < 0)
+    if((getuid() != uid) || (getgid() != gid))
     {
-        return_code = ERRNO_ERROR;
-        output_stream_close(&errlog_os);
-        sd->fd = -1;
-        return return_code;
+        if(fchown(fd, uid, gid) < 0)
+        {
+            return_code = ERRNO_ERROR;
+            output_stream_close(&errlog_os);
+            sd->fd = -1;
+            return return_code;
+        }
     }
     
     sd->fd = fd;
@@ -196,12 +204,18 @@ logger_channel_file_append(const char *fullpath, uid_t uid, gid_t gid, u16 mode,
 static ya_result
 logger_channel_file_reopen(logger_channel* chan)
 {    
-    ya_result return_code;
-    
+    ya_result return_code;        
     file_data* sd = (file_data*)chan->data;
+    struct timeval tv;
+    struct tm t;
 
     output_stream_flush(&sd->os);
 
+    sd->uid = logger_get_uid();
+    sd->gid = logger_get_gid();
+    
+    ///
+    
     /* open a new file stream */
     
     output_stream errlog_os;
@@ -212,7 +226,15 @@ logger_channel_file_reopen(logger_channel* chan)
                     &errlog_os)))
     {
         logger_channel_file_flush(chan);
-        logger_channel_file_msg(chan, LOG_NOTICE, "unable to reopen '%s': %r, resuming on original", sd->file_name, return_code);
+
+        gettimeofday(&tv, NULL);
+        localtime_r(&tv.tv_sec, &t);
+
+        logger_channel_file_msg(chan, LOG_NOTICE, "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | N | unable to reopen '%s': %r, resuming on original",
+                                t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
+                                t.tm_hour, t.tm_min, t.tm_sec, tv.tv_usec,
+                                getpid(), pthread_self(),  "system",
+                                sd->file_name, return_code);
         logger_channel_file_flush(chan);
         
         return return_code;
@@ -221,22 +243,43 @@ logger_channel_file_reopen(logger_channel* chan)
     /* change ownership of the file */
 
     int fd = fd_output_stream_get_filedescriptor(&errlog_os);
-    
-    if(fchown(fd, sd->uid, sd->gid) < 0)
+        
+    if((getuid() != sd->uid) || (getgid() != sd->gid))
     {
-        return_code = ERRNO_ERROR;
-        
-        output_stream_close(&errlog_os);
-        
-        logger_channel_file_flush(chan);
-        logger_channel_file_msg(chan, LOG_NOTICE, "unable to fchown '%s': %r, resuming on original", sd->file_name, return_code);
-        logger_channel_file_flush(chan);
-        
-        return return_code;
+        if(fchown(fd, sd->uid, sd->gid) < 0)
+        {
+            return_code = ERRNO_ERROR;
+
+            output_stream_close(&errlog_os);
+
+            logger_channel_file_flush(chan);
+            
+            gettimeofday(&tv, NULL);
+            localtime_r(&tv.tv_sec, &t);
+
+            logger_channel_file_msg(chan, LOG_NOTICE, "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | N | unable to fchown '%s': %r, resuming on original",
+                                    t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
+                                    t.tm_hour, t.tm_min, t.tm_sec, tv.tv_usec,
+                                    getpid(), pthread_self(),  "system",
+                                    sd->file_name, return_code);
+
+            logger_channel_file_flush(chan);
+
+            return return_code;
+        }
     }
     
     logger_channel_file_flush(chan);
-    logger_channel_file_msg(chan, LOG_NOTICE, "reopening '%s'", sd->file_name);
+    
+    gettimeofday(&tv, NULL);
+    localtime_r(&tv.tv_sec, &t);
+
+    logger_channel_file_msg(chan, LOG_NOTICE, "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | N | reopening '%s'",
+                            t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
+                            t.tm_hour, t.tm_min, t.tm_sec, tv.tv_usec,
+                            getpid(), pthread_self(),  "system",
+                            sd->file_name);
+    
     logger_channel_file_flush(chan);
     
     output_stream* fos = buffer_output_stream_get_filtered(&sd->os);
@@ -249,13 +292,21 @@ logger_channel_file_reopen(logger_channel* chan)
     output_stream_close(&errlog_os);
     
     logger_channel_file_flush(chan);
-    logger_channel_file_msg(chan, LOG_NOTICE, "reopened '%s'", sd->file_name);
+    
+    gettimeofday(&tv, NULL);
+    localtime_r(&tv.tv_sec, &t);
+
+    logger_channel_file_msg(chan, LOG_NOTICE, "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | N | reopened '%s'",
+                            t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
+                            t.tm_hour, t.tm_min, t.tm_sec, tv.tv_usec,
+                            getpid(), pthread_self(),  "system",
+                            sd->file_name);
     logger_channel_file_flush(chan);
         
     return return_code;
 }
 
-static logger_channel_vtbl stream_vtbl =
+static const logger_channel_vtbl stream_vtbl =
 {
     logger_channel_file_constmsg,
     logger_channel_file_msg,
@@ -277,6 +328,7 @@ logger_channel_file_open(const char *fullpath, uid_t uid, gid_t gid, u16 mode, b
     if(ISOK(return_code = logger_channel_file_append(fullpath, uid, gid, mode, sd)))
     {
         sd->file_name = strdup(fullpath);
+        chroot_manage_path(&sd->file_name, fullpath, FALSE);
         sd->uid = uid;
         sd->gid = gid;
         sd->mode = mode;
@@ -309,7 +361,7 @@ logger_channel_file_rename(logger_channel *chan, const char *newpath)
         }
     }
     
-    return ERROR;
+    return INVALID_STATE_ERROR;
 }
 
 

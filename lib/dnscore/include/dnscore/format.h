@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup format C-string formatting
  *  @ingroup dnscore
  *  @brief 
@@ -53,18 +53,94 @@
 #ifdef	__cplusplus
 extern "C" {
 #endif
+    
+#define OSPRINT_DUMP_LAYOUT_GROUP_MASK      0x0000ff00
+#define OSPRINT_DUMP_LAYOUT_GROUP_SHIFT     8
+#define OSPRINT_DUMP_LAYOUT_SEPARATOR_MASK  0x000000ff
+#define OSPRINT_DUMP_LAYOUT_SEPARATOR_SHIFT 0
+#define OSPRINT_DUMP_ADDRESS                0x40000000
+#define OSPRINT_DUMP_HEX                    0x20000000
+#define OSPRINT_DUMP_TEXT                   0x10000000
+    
+// predefined layouts
+#define OSPRINT_DUMP_LAYOUT_DENSE           0x0000ffff
+#define OSPRINT_DUMP_LAYOUT_ERIC            0x000003ff
+#define OSPRINT_DUMP_LAYOUT_GERY            0x00000003
+    
+#define OSPRINT_DUMP_ALL                    (OSPRINT_DUMP_ADDRESS|OSPRINT_DUMP_HEX|OSPRINT_DUMP_TEXT)
+#define OSPRINT_DUMP_HEXTEXT                (OSPRINT_DUMP_HEX|OSPRINT_DUMP_TEXT)
 
 /**
  *
+ * Formats:
+ * 
+ *   modifier   : restrict :
+ *              :    to    :
+ * -            :          : change justification
+ * 123456789    :          : padding space
+ * 0            :          : use '0' char for padding
+ * .12345789    : f        : for float types, precision to use
+ * hh           : iudXxo   : half half : 8 bits
+ * h            : iudXxo   : half : 16 bits
+ * l            : iudXxo   : long : 32 bits
+ * ll           : iudXxo   : long long : 64 bits
+ * L            : f        : long double
+ * 
+ *    formats   :
+ *              :
+ * %t           : integer, prints the number of tabs on the output
+ * %T           : integer, prints the number of spaces on the output
+ * %i           : integer, prints the signed 8/16/32/64 bits integer in base 10 on the output
+ * %r           : integer, prints the ya_result registered message on the output or the hexadecimal code
+ * %u           : integer, prints the unsigned 8/16/32/64 bits integer in base 10 on the output
+ * %d           : integer, prints the unsigned 8/16/32/64 bits integer in base 10 on the output
+ * %X           : integer, prints the unsigned 8/16/32/64 bits integer in base 16 uppercase on the output
+ * %x           : integer, prints the unsigned 8/16/32/64 bits integer in base 16 lowercase on the output
+ * %o           : integer, prints the unsigned 8/16/32/64 bits integer in base 8 on the output
+ * %p           : void*  , prints the pointer in hexadecimal on the output
+ * %P           : void*  , prints the name of the pointer if possible, else the hexadecimal on the output
+ * %f           : double , prints the long double/double/float on the output
+ * %s           : char*  , prints the ASCIIZ string on the output
+ * %c           : char   , prints the 8-bits char on the output
+ * %w           : format_writer, calls the format_writer callback to print on the output
+ * 
  * Format extention mechanism:
- *
+ * 
+ * "%{registeredformatname}" : void*, prints the pointed value on the output
+ *                           : use ya_result format_registerclass(format_handler_descriptor* fhd) for registration
  */
 
-/* void* value, output_stream*, s32 padding, char pad_char, bool left_justified */
-typedef void format_handler_method(void*, output_stream*, s32, char, bool, void* reserved_for_method_parameters);
+/* void* value, output_stream*, s32 padding, char pad_char, bool left_justified, void* reserved */
+    
+typedef void format_handler_method(const void*, output_stream*, s32, char, bool, void* reserved_for_method_parameters);
 
 typedef struct format_handler_descriptor format_handler_descriptor;
 
+// About the %w format:
+// 
+// a pointer to this can be given as a 'w' parameter ie: "%w"
+// the writer callback get's called with
+// void* value as first parameter, what to print
+// output_stream *os as second parameter, where to write the chars to
+// s32 padding the number of chars it's supposed to take on the output (minimum)
+// char padchar the character to use for padding
+// bool left_justified where to justify the text
+// void* don't use that one
+//
+// ex:
+//
+// format_writer temp_fw_0(my_complex_or_rare_type_printer_callback, &my_complex_or_rare_type);
+//
+// format("So the value is : '%w'\n", &temp_fw_0);
+//
+
+struct format_writer
+{
+    format_handler_method *callback;
+    const void *value;
+};
+
+typedef struct format_writer format_writer;
 
 struct format_handler_descriptor
 {
@@ -75,7 +151,7 @@ struct format_handler_descriptor
 
 void format_class_init();
 
-ya_result format_registerclass(format_handler_descriptor* fhd);
+ya_result format_registerclass(const format_handler_descriptor* fhd);
 
 /**
  * %% -> %
@@ -153,23 +229,17 @@ void osprint_u32_hex(output_stream* os, u32 value);
 
 void print_char(char value);
 
-void osprint_char(output_stream* os, char value);
+void osprint_char(output_stream *os, char value);
+void osprint_dump(output_stream *os, const void* data_pointer_, size_t size_, size_t line_size, u32 flags);
 
-void print_payload(output_stream* os, const u_char *, int);
+ya_result osprint_type_bitmap(output_stream *os, const u8 *rdata_pointer, u16 rdata_size);
+ya_result osprint_rdata(output_stream *os, u16 type, const u8 *rdata_pointer, u16 rdata_size);
+ya_result print_rdata(u16 type, u8 *rdata, u16 rdata_size);
 
-void osprint_u32(output_stream* os, u32 value);
-void osprint_u16(output_stream* os, u16 value);
-void osprint_u32_hex(output_stream* os, u32 value);
+void osprint_question(output_stream *os, u8 *qname, u16 qclass, u16 qtype);
+void print_question(u8 *qname, u16 qclass, u16 qtype);
 
-
-ya_result osprint_type_bitmap(output_stream* os, const u8* rdata_pointer, u16 rdata_size);
-ya_result osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_size);
-ya_result print_rdata(u16 type, u8* rdata, u16 rdata_size);
-void osprint_question(output_stream* os, u8* qname, u16 qclass, u16 qtype);
-void print_question(u8* qname, u16 qclass, u16 qtype);
-
-#if defined(DEBUG_VALID_ADDRESS)
-#define FORMAT_BREAK_ON_INVALID(address__, len__) if(!debug_is_valid_address(address__, len__)){ output_stream_write(stream, (const u8*)"INVALID_ADDRESS", 15);return;}
+#if 0 /* fix */
 #else
 #define FORMAT_BREAK_ON_INVALID(address__, len__)
 #endif

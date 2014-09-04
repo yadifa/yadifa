@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -432,14 +432,14 @@ static ya_result
 void_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
 {
     log_err("tried to write a closed stream");
-    return ERROR;
+    return INVALID_STATE_ERROR;
 }
 
 static ya_result
 void_output_stream_flush(output_stream* stream)
 {
     log_err("tried to flush a closed stream");
-    return ERROR;
+    return INVALID_STATE_ERROR;
 }
 
 static void
@@ -449,9 +449,13 @@ void_output_stream_close(output_stream* stream)
      * WARNING
      */
     log_err("tried to close a closed stream");
+    
+#ifdef DEBUG
+    abort();
+#endif
 }
 
-static output_stream_vtbl void_output_stream_vtbl ={
+static const output_stream_vtbl void_output_stream_vtbl ={
     void_output_stream_write,
     void_output_stream_flush,
     void_output_stream_close,
@@ -468,6 +472,44 @@ void output_stream_set_void(output_stream* stream)
     stream->data = NULL;
     stream->vtbl = &void_output_stream_vtbl;
 }
+
+ya_result
+output_stream_write_fully(output_stream* stream, const void* buffer_start, u32 len_start)
+{
+    output_stream_write_method* writefunc = stream->vtbl->write;
+    u32 len = len_start;
+    u8* buffer = (u8*)buffer_start;
+    ya_result ret;
+    
+    while(len > 0)
+    {
+        if(FAIL(ret = writefunc(stream, buffer, len)))
+        {
+            return ret;
+        }
+
+        if(ret == 0) /* eof */
+        {
+            break;
+        }
+
+        buffer += ret;
+        len -= ret; // cppcheck: false positive
+    }
+
+    /* If we only read a partial it's wrong.
+     * If we were aked to read nothing it's ok.
+     * If we read nothing at all we were on EOF and its still ok
+     */
+
+    if(len > 0)
+    {
+        return UNABLE_TO_COMPLETE_FULL_WRITE;
+    }
+
+    return buffer - (u8*)buffer_start;
+}
+
 
 /** @} */
 

@@ -1,9 +1,214 @@
+################################################################################
+# 
+#  Copyright (c) 2011, EURid. All rights reserved.
+#  The YADIFA TM software product is provided under the BSD 3-clause license:
+# 
+#  Redistribution and use in source and binary forms, with or without 
+#  modification, are permitted provided that the following conditions
+#  are met:
+# 
+#         * Redistributions of source code must retain the above copyright 
+#           notice, this list of conditions and the following disclaimer.
+#         * Redistributions in binary form must reproduce the above copyright 
+#           notice, this list of conditions and the following disclaimer in the 
+#           documentation and/or other materials provided with the distribution.
+#         * Neither the name of EURid nor the names of its contributors may be 
+#           used to endorse or promote products derived from this software 
+#           without specific prior written permission.
+# 
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+#  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE 
+#  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+#  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
+#  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+#  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# 
+################################################################################
+
+20140905:
+    YADIFA 2.0.0
+
+    This release is a public release
+
+    Fixes:
+    - fixed a log incorrectly reporting an error when the client didn't close the TCP connection fast enough
+    - fixed an issue with the statistics on TCP queries
+
+    Known issue:
+    - removing the last key of a signed zone is permitted by YADIFA but triggers some chicken-egg issue with signatures.
+
+20140829:
+    YADIFA 2.0.0-beta3-public
+
+    This release is a public release
+
+    - --disable-master feature at configure now builds a slave-only server
+
+    Fixes:
+    - fixed an issue with TSIG signed queries
+    - fixed an issue with thread pool live resizing
+    - fixed an issue where reading an undeleted obsolete journal ending at the start of a newly transferred zone from the master would incorrectly trigger an error
+
+    Known issue:
+    - removing the last key of a signed zone is permitted by YADIFA but triggers some chicken-egg issue with signatures.
+
+20140630:
+    YADIFA 2.0.0-beta2-public
+
+    This release is a public release
+
+    - basepath disabled
+    - pidpath removed, only pidfile remains
+    - log reopen notification is now timestamped
+    - slave zones no longer complain about missing NSEC/NSEC3 private keys
+    - the error code ZRE_FILE_NOT_FOUND has been replaced by the more accurate code ZRE_NO_VALID_FILE_FOUND
+    - default logging settings no longer output debug
+
+    Fixes:
+    - fixed issue in flag computation (AD,CD)
+    - fixed an issue with journal truncation sometimes leading to a crash
+    - zone parsing now correctly accepts '#' as a comment marker
+    - zone parsing now rejects wrong fqdn as soon as it reads them, leading to a more accurate error message
+    - removing the last dnskey of a zone no longer crashes the server
+
+    Known issue:
+    - removing the last key of a signed zone is permitted by YADIFA but triggers some chicken-egg issue with signatures.
+
+    yadifa remote client commands prototype is now available with the following supported commands:
+
+        -shutdown
+            shuts down yadifa
+            e.g. ./yadifa -s "192.0.2.1 port 53" -t shutdown
+            
+        -cfgreload
+            reloads the <key> and <zone> sections of the yadifad configuration
+
+            e.g. ./yadifa -s "192.0.2.1 port 53" -t cfgreload
+
+        -logreopen
+            closes and reopen the log files
+
+            e.g. ./yadifa -s "192.0.2.1 port 53" -t logreopen
+
+        -freezeall
+            prevents all zones from being updated dynamically with nsupdate
+            
+            e.g. ./yadifa -s "192.0.2.1 port 53" -t freezeall
+
+        -freeze
+            prevents a zone from being updated dynamically with nsupdate
+
+            e.g. ./yadifa -s "192.0.2.1 port 53" -t freeze -q somedomain.eu
+
+        -unfreezeall
+            enables updates of all zones again
+
+            e.g. ./yadifa -s "192.0.2.1 port 53" -t unfreezeall
+
+        -unfreeze
+            enables updates of a zone again
+
+            e.g. ./yadifa -s "192.0.2.1 port 53" -t unfreeze -q somedomain.eu
+
+        In order to work, the allow-control ACL must be defined either in <main> for the global commands and
+        may also be defined in <zone> for the ones targetting a specific zone.
+
+            e.g. allow-control 127.0.0.1
+
+        Note that tsig is not supported in the client yet.
+
+20140528:
+    YADIFA 2.0.0-beta1-public
+
+	This release is a public release
+
+	- NSID implemented (enabled at ./configure time with --enable-nsid
+        - generic parser for:
+ 		- getops
+		- zone file
+		- resolv.conf
+		- configuration
+	- '@' can now be used in a zone file
+        - new binary for controlling 'yadifad' (yadifa)
+        - framework is rewritten for multi core systems
+        - single core server has been removed
+
+    Fixes:	
+	- fixed several minor issues
+
+    Know issues:
+	- removing all dnskeys from a zone file crashes the server
+	- yadifa has some issues with nodelay, nocork
+	
+20130424:
+    YADIFA 1.1.0
+        _ added DSA signature
+        _ added SHA-256 SHA-384 SHA-512 digest algorithms
+        _ now supports additional DNSSEC algorithms:
+            DSASHA1
+            DSASHA1_NSEC3
+            RSASHA256_NSEC3
+            RSASHA512_NSEC3
+        _ Respone Rate Limitation implemented (enabled at ./configure time with --enable-rrl)
+        _ --enable-tiny-footprint now reduces the memory usage further by reducing the standard log queue from 2^20 to 2^12 entries
+        _ the general speed has been slightly improved
+        _ dynamic updates pending for more than 3 seconds are now dropped with an error
+        _ dynamic provisioning
+    Fixes:
+        _ fixed a memory leak that could occur at NSEC3 generation when loading the zone failed in a particular way
+        _ fixed a memory leak at ixfr send
+        _ fixed handling of '_' character that was improperly stored in the database
+        _ fixed bandwidth limit settings (tcp stream in and out) not always being taken from the configuration
+        _ fixed TSIG answer verification for notifies
+        _ fixed error codes not being registered and thus logged as unkown hexadecimal error code.
+        _ other minor fixes
+
+20130612:
+    YADIFA 1.0.3
+        Fixes only (backports from 1.1.0)
+
+    Fixes:
+        _ fixed an issue preventing YADIFA from being build from another directory
+        _ fixed an issue with OSX systems where gsed has to be used instead of sed
+        _ fixed an issue with the '_' character not being properly handled
+        _ fixed an issue where reading MX record from a zone file would incorrecly be rejected as invalid
+        _ fixed an issue where the OPT record would not be properly written
+        _ fixed an issue where an undefined ACL reference would be silently ignored
+        _ fixed missing code tags for several error codes.  From now on unregistered codes are dumped in hexadicimal.
+        _ fixed portability issues with BSD and OSX
+        _ fixed several minor issues
+
+
+20120921:
+    YADIFA 1.0.2
+        Fixes only
+
+    Fixes:
+        _ fixed an issue where the journal file was sometimes not properly closed at the end of a task
+        _ fixed an issue where the TCP usage slots would sometimes wrongly return that they were all being used
+        _ fixed an issue on IXFR processing (slave side) where the type of answer from the master would not be properly detected
+        _ fixed an issue with TSIG on secrets not exactly 16 bytes long (binary form)
+        _ fixed an issue on 32 bits architectures where the sig-validity-* fields would not be properly handled if not set
+          on each zone section.
+        _ slightly improved the replay time of big journal files
+        _ fixed several minor issues
+
+    Known issues:
+        _ if the serial of a zone is changed in a way that it goes beyond a value such as
+          the journal serial start is bigger than the journal serial end, issues are expected
+          for IXFR answers.
+        _ notify is ignored on TCP  
+
 20120709:
 	YADIFA 1.0.1
 		_ logging repeat compression is now by channel instead of global
 
 	Fixes:
-                _ fixed an issue where glibc whould assert if libgcc_s.so (libgcc_s.so.1) and libc.so (libc.so.6) where not
+        _ fixed an issue where glibc whould assert if libgcc_s.so (libgcc_s.so.1) and libc.so (libc.so.6) where not
 		  available inside the chrooted directory of YADIFA
 		_ fixed an issue in the syslog module
 

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup config Configuration handling
  *  @ingroup yadifad
  *  @brief
@@ -48,9 +48,7 @@
 
 #include <dnscore/sys_types.h>
 #include <dnsdb/zdb_config.h>
-/*#include <dnszone.h>*/
-
-#include<server-config.h>
+#include "server-config.h"
 
 #endif
 

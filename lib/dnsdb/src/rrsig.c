@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup rrsig RRSIG functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -53,13 +53,14 @@
 #include <dnscore/logger.h>
 #include <dnscore/dnsname.h>
 #include <dnscore/format.h>
-
 #include <dnscore/random.h>
+#include <dnscore/dnskey.h>
+#include <dnscore/thread_pool.h>
 
 #include "dnsdb/dnsrdata.h"
-#include "dnsdb/dnskey.h"
 #include "dnsdb/dnssec.h"
 #include "dnsdb/rrsig.h"
+#include "dnsdb/rr_canonize.h"
 #include "dnsdb/zdb_listener.h"
 #include "dnsdb/zdb_record.h"
 #include "dnsdb/zdb_zone.h"
@@ -79,13 +80,15 @@
  */
 
 #define RRSIG_DUMP 0
+
+#define RRSIG_AUTOMATIC_ALARM_REFRESH 0
+
 /*
 #ifdef NDEBUG
 #undef RRSIG_DUMP
 #define RRSIG_DUMP  0
 #endif
- */
-/* setup the header except the signature */
+ *//* setup the header except the signature */
 /* canonize the rr list */
 /* sign the resulting stream (give the order to sign the the signature engine */
 
@@ -97,19 +100,19 @@
  * The result is for the batch so when we get the result, we know we can insert it.
  */
 
-/* self-splainatory */
+/* self-explanatory */
 ya_result
-rrsig_initialize_context(zdb_zone *zone, rrsig_context *context, const char *engine_name, u32 sign_from)
+rrsig_context_initialize(rrsig_context_s *context, const zdb_zone *zone, const char *engine_name, u32 sign_from, smp_int *quota)
 {
     /* Grab the keys */
     /* Grab the origin */
     /* Verify that all the keys are matching the origin */
     /* Init the engine */
 
-    zassert(zone != NULL && context != NULL);
+    yassert(zone != NULL && context != NULL);
 
     /* Ensure the context is harmless */
-    ZEROMEMORY(context, sizeof (rrsig_context));
+    ZEROMEMORY(context, sizeof(rrsig_context_s));
     context->rrs.offset = -1;
     /* */
 
@@ -131,9 +134,7 @@ rrsig_initialize_context(zdb_zone *zone, rrsig_context *context, const char *eng
     context->sig_validity_regeneration_seconds = zone->sig_validity_regeneration_seconds;
     context->sig_validity_interval_seconds = zone->sig_validity_interval_seconds;
     context->sig_jitter_seconds = zone->sig_validity_jitter_seconds;
-    context->sig_invalid_first = zone->sig_invalid_first;
-
-    zone->sig_invalid_first = MAX_U32;
+    context->sig_invalid_first = MAX_S32;//zone->sig_invalid_first;
 
 #if RRSIG_DUMP>=1
     log_debug5("rrsig: header: sig_validity_interval_seconds=%d", context->sig_validity_interval_seconds);
@@ -150,12 +151,15 @@ rrsig_initialize_context(zdb_zone *zone, rrsig_context *context, const char *eng
 
     do
     {
+        ya_result return_value;
+        
         u8 algorithm = DNSKEY_ALGORITHM(*key);
         u16 tag = DNSKEY_TAG(*key);
         u16 flags = DNSKEY_FLAGS(*key);
-        dnssec_key* priv_key;
         
-        ya_result return_value = dnssec_key_load_private(algorithm, tag, flags, zone_dnsname, &priv_key);
+        dnssec_key* priv_key;
+        // from disk or from global keyring
+        return_value = dnssec_key_load_private(algorithm, tag, flags, zone_dnsname, &priv_key);
 
         if(priv_key != NULL)
         {
@@ -215,7 +219,7 @@ rrsig_initialize_context(zdb_zone *zone, rrsig_context *context, const char *eng
         key = key->next;
     }
     while(key != NULL);
-
+    
     if(context->key_sll == NULL)
     {
         /* No key available at all : nothing to do.
@@ -233,6 +237,8 @@ rrsig_initialize_context(zdb_zone *zone, rrsig_context *context, const char *eng
     {
         return DNSSEC_ERROR_RRSIG_NOSOA;
     }
+    
+    context->loose_quota = quota;
 
     ptr_vector_init(&context->rrs);
 
@@ -253,6 +259,8 @@ rrsig_initialize_context(zdb_zone *zone, rrsig_context *context, const char *eng
     SET_U32_AT(context->rrsig_header[ 8], 0);
     SET_U32_AT(context->rrsig_header[12], htonl(context->valid_from));
 
+    context->rrsig_header_length = dnsname_copy(&context->rrsig_header[RRSIG_RDATA_HEADER_LEN], zone->origin) + RRSIG_RDATA_HEADER_LEN;
+    
     context->engine = dnssec_loadengine(engine_name);
 
     if(zdb_zone_is_nsec3(zone))
@@ -282,7 +290,7 @@ rrsig_initialize_context(zdb_zone *zone, rrsig_context *context, const char *eng
 
 /* self-splainatory */
 void
-rrsig_destroy_context(rrsig_context* context)
+rrsig_context_destroy(rrsig_context_s *context)
 {
     dnssec_key_sll* keys = context->key_sll;
 
@@ -299,7 +307,8 @@ rrsig_destroy_context(rrsig_context* context)
 #endif
     }
 
-    rr_free_canonized(&context->rrs);
+    rr_canonize_free(&context->rrs);
+    context->canonised_rrset = NULL;
     ptr_vector_destroy(&context->rrs);
     dnssec_unloadengine(context->engine);
 
@@ -311,9 +320,9 @@ rrsig_destroy_context(rrsig_context* context)
  */
 
 void
-rrsig_update_context_push_name_rrsigsll(rrsig_context* context, u8* name, zdb_packed_ttlrdata* rrsig_sll)
+rrsig_context_push_name_rrsigsll(rrsig_context_s *context, u8* name, zdb_packed_ttlrdata* rrsig_sll)
 {
-    zassert(context != NULL && name != NULL);
+    yassert(context != NULL && name != NULL);
 
     /* CANONIZED RR HEADER PRECALC : */
 
@@ -358,13 +367,13 @@ rrsig_update_context_push_name_rrsigsll(rrsig_context* context, u8* name, zdb_pa
  * zdb_icmtl_end
  */
 void
-rrsig_update_context_push_label(rrsig_context* context, zdb_rr_label* label)
+rrsig_context_push_label(rrsig_context_s *context, zdb_rr_label* label)
 {
-    zassert(context != NULL && label != NULL);
+    yassert(context != NULL && label != NULL);
 
     /* CANONIZED RR HEADER PRECALC : */
 
-    rrsig_update_context_push_name_rrsigsll(context, label->name, zdb_record_find(&label->resource_record_set, TYPE_RRSIG));
+    rrsig_context_push_name_rrsigsll(context, label->name, zdb_record_find(&label->resource_record_set, TYPE_RRSIG));
 }
 
 /*
@@ -375,7 +384,7 @@ rrsig_update_context_push_label(rrsig_context* context, zdb_rr_label* label)
  */
 
 void
-rrsig_update_context_pop_label(rrsig_context* context)
+rrsig_context_pop_label(rrsig_context_s *context)
 {
     if(!context->rr_dnsname_processing_apex)
     {
@@ -383,7 +392,7 @@ rrsig_update_context_pop_label(rrsig_context* context)
         dnsname_stack_pop_label(&context->rr_dnsname);
     }
 
-    // zassert(context->rr_dnsname_len >= 0);
+    // yassert(context->rr_dnsname_len >= 0);
 
     context->rrsig_sll = NULL;
     context->added_rrsig_sll = NULL;
@@ -391,9 +400,9 @@ rrsig_update_context_pop_label(rrsig_context* context)
 }
 
 void
-rrsig_update_context_set_key(rrsig_context* context, dnssec_key* key)
+rrsig_context_set_key(rrsig_context_s *context, dnssec_key* key)
 {
-    zassert(key != NULL);
+    yassert(key != NULL);
 
     /* ONLY THE TYPE CHANGES IN THE TWO FOLLOWING CANONIZED HEADERS : */
 
@@ -404,10 +413,10 @@ rrsig_update_context_set_key(rrsig_context* context, dnssec_key* key)
     U8_AT(context->rrsig_header[ 2]) = key->algorithm;
     SET_U16_AT(context->rrsig_header[16], htons(key->tag));
 
-    context->rrsig_header_length = dnsname_canonize(key->owner_name, &context->rrsig_header[RRSIG_RDATA_HEADER_LEN]) + RRSIG_RDATA_HEADER_LEN;
+    //context->rrsig_header_length = dnsname_copy(&context->rrsig_header[RRSIG_RDATA_HEADER_LEN], key->owner_name) + RRSIG_RDATA_HEADER_LEN;
 }
 
-static void
+static u32
 rrsig_compute_digest(u8 * restrict rrsig_header,
                      u32 rrsig_header_length,
                      u8 * restrict record_header_label_type_class_ttl,
@@ -422,9 +431,9 @@ rrsig_compute_digest(u8 * restrict rrsig_header,
 
     assert( (offsetof(zdb_canonized_packed_ttlrdata, rdata_start) - offsetof(zdb_canonized_packed_ttlrdata, rdata_canonized_size)) == 2  );
 
-    SHA_CTX sha1;
+    digest_s ctx;
 
-    SHA1_Init(&sha1);
+    dnskey_digest_init(&ctx, rrsig_header[2]);
 
     /*
      * Add the rrsig (except the signature) to the digest.
@@ -441,14 +450,14 @@ rrsig_compute_digest(u8 * restrict rrsig_header,
 
 #if RRSIG_DUMP>=2
     log_debug5("rrsig: header:");
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, rrsig_header, rrsig_header_length, 32, TRUE, TRUE);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, rrsig_header, rrsig_header_length, 32, OSPRINT_DUMP_HEXTEXT);
 #endif
 
     /*
      * Type covered | algorithm | labels | original_ttl | exp | inception | tag | origin
      *
      */
-    SHA1_Update(&sha1, rrsig_header, rrsig_header_length);
+    digest_update(&ctx, rrsig_header, rrsig_header_length);
 
     /* For EACH rr, canonization-order :
      *
@@ -490,29 +499,29 @@ rrsig_compute_digest(u8 * restrict rrsig_header,
 
 #if RRSIG_DUMP>=2
         log_debug5("rrsig: record header:");
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, record_header_label_type_class_ttl, record_header_label_type_class_ttl_length, 32, TRUE, TRUE);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, record_header_label_type_class_ttl, record_header_label_type_class_ttl_length, 32, OSPRINT_DUMP_HEXTEXT);
 #endif
 
-        SHA1_Update(&sha1, record_header_label_type_class_ttl, record_header_label_type_class_ttl_length);
+        digest_update(&ctx, record_header_label_type_class_ttl, record_header_label_type_class_ttl_length);
 
         /*
          * ttl
          */
 
 #if RRSIG_DUMP>=2
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, &rrsig_header[4], 4, 32, TRUE, TRUE);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, &rrsig_header[4], 4, 32, OSPRINT_DUMP_HEXTEXT);
 #endif
 
-        SHA1_Update(&sha1, &rrsig_header[4], 4);
+        digest_update(&ctx, &rrsig_header[4], 4);
 
         /*
          * rdata+ , canonical order
          */
 
 #if RRSIG_DUMP>=2
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, &rdata->rdata_canonized_size, rdata->rdata_size + 2, 32, TRUE, TRUE);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, &rdata->rdata_canonized_size, rdata->rdata_size + 2, 32, OSPRINT_DUMP_HEXTEXT);
 #endif
-        SHA1_Update(&sha1, &rdata->rdata_canonized_size, rdata->rdata_size + 2);
+        digest_update(&ctx, &rdata->rdata_canonized_size, rdata->rdata_size + 2);
 
         /* I used to free the rdata here.  I cannot do this anymore since
          * the digest could be recomputed with slight variations
@@ -525,16 +534,20 @@ rrsig_compute_digest(u8 * restrict rrsig_header,
      * Retrieve the digest
      */
 
-    SHA1_Final(digest_out, &sha1);
+    u32 digest_len = digest_get_size(&ctx);
+    
+    digest_final(&ctx, digest_out, digest_get_size(&ctx));
 
 #if RRSIG_DUMP!=0
     log_debug5("rrsig: digest:");
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, digest_out, SHA_DIGEST_LENGTH, 32, TRUE, FALSE);
+    log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG5, digest_out, digest_len, 32, OSPRINT_DUMP_HEX);
 #endif
+    
+    return digest_len;
 }
 
 static void
-rrsig_schedule_delete_signature(rrsig_context* context, zdb_packed_ttlrdata* rrsig)
+rrsig_context_append_delete_signature(rrsig_context_s *context, zdb_packed_ttlrdata* rrsig)
 {
     zdb_packed_ttlrdata* rrsig_clone;
 
@@ -548,10 +561,21 @@ rrsig_schedule_delete_signature(rrsig_context* context, zdb_packed_ttlrdata* rrs
     context->removed_rrsig_sll = rrsig_clone;
 }
 
-static bool
-rrsig_verify_signature(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrdata* rrsig)
+static void rrsig_context_update_canon(rrsig_context_s *context, u16 rtype, zdb_packed_ttlrdata *rrset)
 {
-    u8 digest[SHA_DIGEST_LENGTH];
+    if(context->canonised_rrset != rrset)
+    {
+        rr_canonize_free(&context->rrs);
+        /* copy, canonize labels & sort the RRs */
+        rr_canonize_rrset(rtype, rrset, &context->rrs);
+        context->canonised_rrset = rrset;
+    }
+}
+
+static bool
+rrsig_verify_signature(rrsig_context_s *context, dnssec_key* key, zdb_packed_ttlrdata* rrsig, zdb_packed_ttlrdata *rrset)
+{
+    u8 digest[DIGEST_BUFFER_SIZE];
 
     u8* rrsig_name = &rrsig->rdata_start[RRSIG_RDATA_HEADER_LEN];
 
@@ -594,12 +618,31 @@ rrsig_verify_signature(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrd
 #endif
             return FALSE;
         }
+        
+        // skip the verification
+        
+        if(!context->do_verify_signatures)
+        {
+            context->good_signatures++;
+            context->sig_invalid_first = MIN(valid_until, context->sig_invalid_first);
+            
+            return TRUE;
+        }
+        
+        /*
+         * Update canonised
+         */
+        
+        u16 rtype = RRSIG_TYPE_COVERED(rrsig);
+        
+        rrsig_context_update_canon(context, rtype, rrset);
 
         /*
-         * The length of the
+         * The length of the header in the RRSIG
          */
+                
         u32 rrsig_start_len = RRSIG_RDATA_HEADER_LEN + context->origin_len;
-        rrsig_compute_digest(rrsig->rdata_start,
+        u32 digest_len = rrsig_compute_digest(rrsig->rdata_start,
                              rrsig_start_len,
                              context->record_header_label_type_class_ttl,
                              context->record_header_label_type_class_ttl_length,
@@ -611,11 +654,11 @@ rrsig_verify_signature(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrd
 
 #if RRSIG_DUMP>=2
         log_debug5("rrsig: signature record:");
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, rrsig->rdata_start, rrsig->rdata_size, 32, TRUE, TRUE);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, rrsig->rdata_start, rrsig->rdata_size, 32, OSPRINT_DUMP_HEXTEXT);
         log_debug5("rrsig: signature to verify:");
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, signature, signature_len, 32, TRUE, TRUE);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, signature, signature_len, 32, OSPRINT_DUMP_HEXTEXT);
         log_debug5("rrsig: verifying digest:");
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, digest, SHA_DIGEST_LENGTH, 32, TRUE, TRUE);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, digest, digest_len, 32, OSPRINT_DUMP_HEXTEXT);
 #endif
 
         /**
@@ -623,7 +666,7 @@ rrsig_verify_signature(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrd
          *        And said digest only needs to be verified if it comes from a zone file or dynupdate
          */
 
-        if(key->vtbl->dnssec_key_verify_digest(key, digest, SHA_DIGEST_LENGTH, signature, signature_len))
+        if(key->vtbl->dnssec_key_verify_digest(key, digest, digest_len, signature, signature_len))
         {
 #if RRSIG_DUMP!=0
             log_debug5("rrsig: verify: -- OK");
@@ -661,10 +704,8 @@ rrsig_verify_signature(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrd
 
 /** @todo: Loop through the keys AFTER having computed the digest */
 ya_result
-rrsig_update_records(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrdata* rr_sll, u16 type, bool do_update)
+rrsig_update_records(rrsig_context_s *context, dnssec_key* key, zdb_packed_ttlrdata* rr_sll, u16 type, bool do_update)
 {
-    u8 digest[SHA_DIGEST_LENGTH];
-
     do_update &= key->is_private;
 
     /*******************************************************************
@@ -677,20 +718,14 @@ rrsig_update_records(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrdat
     /* Update the type */
     SET_U16_AT(context->record_header_label_type_class_ttl[context->canonized_rr_type_offset], type); /** @note: NATIVETYPE */
 
-    rr_free_canonized(&context->rrs);
-
-    /* copy, canonize labels & sort the RRs */
-    rr_canonize(type, rr_sll, &context->rrs);
-
-    /* I got the digest, now I must compute the signature on it */
-
     /*******************************************************************
      * Find & Verify the signature (IF ANY)
      ******************************************************************/
 
     /* Look into rrsig records for one that covers the current type */
 
-    zdb_packed_ttlrdata* rrsig = context->rrsig_sll;
+    zdb_packed_ttlrdata *rrsig = context->rrsig_sll;
+    //zdb_packed_ttlrdata* rrsig_prev = NULL; /* I could need to detach the node from the list */
 
     /**
      * While I've got signatures records
@@ -706,7 +741,7 @@ rrsig_update_records(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrdat
 #endif
 
     u32 now = time(NULL);
-
+    u32 sig_count = 0;
     if(context->sig_invalid_first == 0)
     {
         context->sig_invalid_first = MAX_U32;
@@ -732,7 +767,10 @@ rrsig_update_records(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrdat
                  *
                  */
 
-                bool valid_signature = rrsig_verify_signature(context, key, rrsig);
+                bool valid_signature;
+                
+                valid_signature = rrsig_verify_signature(context, key, rrsig, rr_sll);
+                
                 type_signed |= valid_signature;
 
                 if(!valid_signature)
@@ -742,7 +780,7 @@ rrsig_update_records(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrdat
 #endif
                     if(do_update)
                     {
-                        rrsig_schedule_delete_signature(context, rrsig);
+                        rrsig_context_append_delete_signature(context, rrsig);
                         deleted_already = TRUE;
                     }
                 }
@@ -760,6 +798,7 @@ rrsig_update_records(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrdat
             }
         }
 
+        //rrsig_prev = rrsig;
         rrsig = rrsig->next;
     }
 
@@ -779,7 +818,7 @@ rrsig_update_records(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrdat
             type_signed = FALSE;
             if((rrsig != NULL) && (!deleted_already))
             {
-                rrsig_schedule_delete_signature(context, rrsig);
+                rrsig_context_append_delete_signature(context, rrsig);
             }
         }
 
@@ -829,33 +868,35 @@ rrsig_update_records(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrdat
 #if RRSIG_DUMP!=0
         log_debug5("rrsig: create: computing digest");
 #endif
+        
+        rrsig_context_update_canon(context, type, rr_sll);
 
-        rrsig_compute_digest(context->rrsig_header,
-                             context->rrsig_header_length,
-                             context->record_header_label_type_class_ttl,
-                             context->record_header_label_type_class_ttl_length,
-                             &context->rrs,
-                             digest);
-
-        rr_free_canonized(&context->rrs);
+        u32 digest_len;
+        u32 signature_len;
+        u8 digest[DIGEST_BUFFER_SIZE];
+        u8 signature[DNSSEC_MAXIMUM_KEY_SIZE_BYTES];
+        
+        digest_len = rrsig_compute_digest(context->rrsig_header,
+                                context->rrsig_header_length,
+                                context->record_header_label_type_class_ttl,
+                                context->record_header_label_type_class_ttl_length,
+                                &context->rrs,
+                                digest);
 
 #if RRSIG_DUMP>2
         log_debug5("rrsig: signing digest:");
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, digest, SHA_DIGEST_LENGTH, 32, TRUE, TRUE);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, digest, digest_len, 32, OSPRINT_DUMP_HEXTEXT);
 #endif
 
-        u32 signature_len;
-        u8 signature[DNSSEC_MAXIMUM_KEY_SIZE_BYTES];
+        signature_len = key->vtbl->dnssec_key_sign_digest(key, digest, digest_len, signature);
 
-        signature_len = key->vtbl->dnssec_key_sign_digest(key, digest, SHA_DIGEST_LENGTH, signature);
-
-        zassert(signature_len > 0);
+        yassert(signature_len > 0);
 
         /* We got the signature. */
 
 #if RRSIG_DUMP>=2
         log_debug5("rrsig: signature:");
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, signature, signature_len, 32, TRUE, TRUE);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG5, signature, signature_len, 32, OSPRINT_DUMP_HEXTEXT);
         log_debug5("<< ------------------------------------------------------------------------");
 #endif
 
@@ -875,33 +916,42 @@ rrsig_update_records(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrdat
         context->added_rrsig_sll = rrsig;
 
         context->flags |= UPDATED_SIGNATURES;
+        
+        sig_count++;
     }
     else
     {
-        rr_free_canonized(&context->rrs);
+        // NOP
     }
 
-    return SUCCESS; /* Signed */
+    return sig_count; /* Signed */
 }
 
 ya_result
-rrsig_update_label_type(rrsig_context* context, zdb_rr_label* label, u16 type, bool delegation) /* Maybe It's a dup*/
+rrsig_update_label_rrset(rrsig_context_s *context, zdb_rr_label* label, u16 rrset_type) /* Maybe It's a dup*/
 {
-    zassert(context != NULL);
+    yassert(context != NULL);
 
-    if(type == TYPE_ANY)
+    if(rrset_type == TYPE_ANY)
     {
-        return rrsig_update_label(context, label, delegation);
+        ya_result return_code = rrsig_update_label(context, label);
+        
+        rrsig_context_update_quota(context, return_code);
+        
+        return return_code;
     }
 
     ya_result ret = DNSSEC_ERROR_RRSIG_NOSIGNINGKEY; /* No signing key */
+    s32 sig_count = 0;
 
     /* Get the first key (container) */
 
     dnssec_key_sll* key_sll;
 
-    zdb_packed_ttlrdata* records_sll = zdb_record_find(&label->resource_record_set, type);
+    zdb_packed_ttlrdata* records_sll = zdb_record_find(&label->resource_record_set, rrset_type);
 
+    bool delegation = ZDB_LABEL_ATDELEGATION(label);
+    
     /* While we have signing keys ... */
 
     for(key_sll = context->key_sll; key_sll != NULL; key_sll = key_sll->next)
@@ -910,7 +960,7 @@ rrsig_update_label_type(rrsig_context* context, zdb_rr_label* label, u16 type, b
 
         dnssec_key* key = key_sll->key;
 
-        rrsig_update_context_set_key(context, key);
+        rrsig_context_set_key(context, key);
 
         /* Get all the signatures on this label (NULL if there are no signatures) */
 
@@ -923,17 +973,17 @@ rrsig_update_label_type(rrsig_context* context, zdb_rr_label* label, u16 type, b
          * ie: avoid glue records, non-auth, ...
          *
          */
-
+        
         if(!delegation)
         {
             if(key->flags == (DNSKEY_FLAG_ZONEKEY | DNSKEY_FLAG_KEYSIGNINGKEY))
             {
                 /* KSK */
 
-                if(type != TYPE_DNSKEY)
+                if(rrset_type != TYPE_DNSKEY)
                 {
 #if RRSIG_DUMP>=3
-                    log_debug5("rrsig: skipping : KSK of !DNSKEY (%{dnstype}/%{dnslabel}.%{dnsnamestack})", &type, label, &context->rr_dnsname);
+                    log_debug5("rrsig: skipping : KSK of !DNSKEY (%{dnstype}/%{dnslabel}.%{dnsnamestack})", &rrset_type, label, &context->rr_dnsname);
 #endif
 
                     continue;
@@ -941,10 +991,10 @@ rrsig_update_label_type(rrsig_context* context, zdb_rr_label* label, u16 type, b
             }
             else if(key->flags == DNSKEY_FLAG_ZONEKEY)
             {
-                if(type == TYPE_RRSIG)
+                if(rrset_type == TYPE_RRSIG)
                 {
 #if RRSIG_DUMP>=3
-                    log_debug5("rrsig: skipping ; ZSK of RRSIG (%{dnstype}/%{dnslabel}.%{dnsnamestack})", &type, label, &context->rr_dnsname);
+                    log_debug5("rrsig: skipping ; ZSK of RRSIG (%{dnstype}/%{dnslabel}.%{dnsnamestack})", &rrset_type, label, &context->rr_dnsname);
 #endif
                     continue;
                 }
@@ -952,17 +1002,17 @@ rrsig_update_label_type(rrsig_context* context, zdb_rr_label* label, u16 type, b
             else
             {
 #if RRSIG_DUMP>=3
-                log_debug5("rrsig: skipping : unsupported key type (%{dnstype}/%{dnslabel}.%{dnsnamestack})", &type, label, &context->rr_dnsname);
+                log_debug5("rrsig: skipping : unsupported key type (%{dnstype}/%{dnslabel}.%{dnsnamestack})", &rrset_type, label, &context->rr_dnsname);
 #endif
                 continue;
             }
         }
         else /* delegation */
         {
-            if((type != TYPE_DS) || (key->flags != DNSKEY_FLAG_ZONEKEY))
+            if((rrset_type != TYPE_DS) || (key->flags != DNSKEY_FLAG_ZONEKEY))
             {
 #if RRSIG_DUMP>=3
-                log_debug5("rrsig: skipping : delegation (%{dnstype}/%{dnslabel}.%{dnsnamestack})", &type, label, &context->rr_dnsname);
+                log_debug5("rrsig: skipping : delegation (%{dnstype}/%{dnslabel}.%{dnsnamestack})", &rrset_type, label, &context->rr_dnsname);
 #endif
                 continue;
             }
@@ -972,23 +1022,30 @@ rrsig_update_label_type(rrsig_context* context, zdb_rr_label* label, u16 type, b
          * Get the right RRSIG for the type
          */
 
-        if(FAIL(ret = rrsig_update_records(context, key, records_sll, type, TRUE)))
+        if(FAIL(ret = rrsig_update_records(context, key, records_sll, rrset_type, TRUE)))
         {
             break;
         }
+        
+        sig_count += ret;
 
     } /* Loop for the next key */
 
     /* Inject the signatures back
      */
-
+    
+    if(ISOK(ret))
+    {
+        ret = sig_count;
+    }
+    
     return ret;
 }
 
 ya_result
-rrsig_update_label(rrsig_context* context, zdb_rr_label* label, bool delegation)
+rrsig_update_label(rrsig_context_s *context, zdb_rr_label* label)
 {
-    zassert(context != NULL);
+    yassert(context != NULL);
 
     if(context->key_sll == NULL)
     {
@@ -998,6 +1055,7 @@ rrsig_update_label(rrsig_context* context, zdb_rr_label* label, bool delegation)
     }
     
     u8 nsec_flags = context->nsec_flags;
+    //bool at_apex = (label->name[0] == 0);
 
     /* Get all the signatures on this label (NULL if there are no signatures) */
 
@@ -1014,12 +1072,12 @@ rrsig_update_label(rrsig_context* context, zdb_rr_label* label, bool delegation)
      */
 
     /* Sign relevant resource records */
+    
+    s32 sig_count = 0;
 
-    //if!zdb_rr_label_is_glue(label))
     if(!ZDB_LABEL_UNDERDELEGATION(label))
     {
-        log_debug("rrsig: update: %{dnsnamestack} %04x", &context->rr_dnsname, label->flags);
-        
+
         btree_iterator iter;
         btree_iterator_init(label->resource_record_set, &iter);
 
@@ -1043,7 +1101,7 @@ rrsig_update_label(rrsig_context* context, zdb_rr_label* label, bool delegation)
 
                 dnssec_key* key = key_sll->key;
 
-                rrsig_update_context_set_key(context, key);
+                rrsig_context_set_key(context, key);
 
                 /* can the key sign this kind of record */
 
@@ -1137,6 +1195,8 @@ rrsig_update_label(rrsig_context* context, zdb_rr_label* label, bool delegation)
                     return return_code;
                 }
                 
+                sig_count += return_code;
+                
             }   /* for every key */
         }
     }
@@ -1154,7 +1214,7 @@ rrsig_update_label(rrsig_context* context, zdb_rr_label* label, bool delegation)
             log_debug5("rrsig: destroying illegaly placed signatures (%{dnslabel}.%{dnsnamestack})", &type, label->name, &context->rr_dnsname);
 #endif
 
-            rrsig_schedule_delete_signature(context, rrsig_sll);
+            rrsig_context_append_delete_signature(context, rrsig_sll);
             
             rrsig_sll = rrsig_sll->next;
         }
@@ -1162,7 +1222,7 @@ rrsig_update_label(rrsig_context* context, zdb_rr_label* label, bool delegation)
 
     /* All the signatures for this label have been processed. */
 
-    return SUCCESS;
+    return sig_count;
 }
 
 /**
@@ -1202,6 +1262,9 @@ rrsig_update_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata*
     }
 
 #if ZDB_CHANGE_FEEDBACK_SUPPORT != 0
+    
+    // notify the journal
+    
     zdb_listener_notify_update_rrsig(removed_rrsig_sll, added_rrsig_sll, label, name);
 #endif
 
@@ -1307,9 +1370,11 @@ rrsig_update_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata*
         log_debug5("rrsig: updating: adding: %{dnsnamestack} %{typerdatadesc}", name, &rdatadesc);
 #endif
         /* Handle signature invalidation time */
-
-        u32 valid_until = MIN(ntohl(GET_U32_AT(rdata[8])), zone->sig_invalid_first);
-
+        
+#if RRSIG_AUTOMATIC_ALARM_REFRESH
+        
+        u32 valid_until = MIN(RRSIG_VALID_UNTIL(rrsig_record), zone->sig_invalid_first);
+        
         if(zone->sig_invalid_first > valid_until)
         {
             /**
@@ -1332,6 +1397,7 @@ rrsig_update_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata*
 
             alarm_set(zone->alarm_handle, event);
         }
+#endif
 
         /**/
 
@@ -1347,17 +1413,7 @@ rrsig_update_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata*
         free(tmp);
     }
 
-#ifndef NDEBUG
-    sig = *rrsig_sllp;
-    u32 sig_idx = 0;
-    while(sig != NULL)
-    {
-        rdata_desc rdatadesc={TYPE_RRSIG, ZDB_PACKEDRECORD_PTR_RDATASIZE(sig), ZDB_PACKEDRECORD_PTR_RDATAPTR(sig)};
-        log_debug("rrsig: current: #%d %{dnsnamestack} %{typerdatadesc}", sig_idx, name, &rdatadesc);
-        sig_idx++;
-        sig = sig->next;
-    }
-#endif
+
 
     /*
      * If the head of the list is NULL
@@ -1380,15 +1436,25 @@ rrsig_update_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata*
 #endif
 
 #ifndef NDEBUG
-        zassert(*rrsig_sllp_check == NULL);
+        yassert(*rrsig_sllp_check == NULL);
 #endif
 
         zdb_record_delete(&label->resource_record_set, TYPE_RRSIG); /* FB handled separately */
     }
 }
 
+/**
+ * 
+ * Returns the first RRSIG record that applies to the give type.
+ * 
+ * @param label        the label where to do the search
+ * @param covered_type the type covered by the RRSIG
+ * 
+ * @return the first RRSIG covering the type or NULL
+ */
+
 zdb_packed_ttlrdata*
-rrsig_find(const zdb_rr_label* label, u16 type)
+rrsig_find_first(const zdb_rr_label* label, u16 type)
 {
     zdb_packed_ttlrdata* rrsig = zdb_record_find(&label->resource_record_set, TYPE_RRSIG);
 
@@ -1405,8 +1471,18 @@ rrsig_find(const zdb_rr_label* label, u16 type)
     return NULL;
 }
 
+/**
+ * 
+ * Returns the next RRSIG record that applies to the give type.
+ * 
+ * @param rrsig        the previous RRSIG covering the type
+ * @param covered_type the type covered by the RRSIG
+ * 
+ * @return  covered_type the next RRSIG covering the type or NULL
+ */
+ 
 zdb_packed_ttlrdata*
-rrsig_next(const zdb_packed_ttlrdata* rrsig, u16 type)
+rrsig_find_next(const zdb_packed_ttlrdata* rrsig, u16 type)
 {
     rrsig = rrsig->next;
     
@@ -1423,7 +1499,15 @@ rrsig_next(const zdb_packed_ttlrdata* rrsig, u16 type)
     return NULL;
 }
 
-/* true in case of last-record removed */
+/**
+ * 
+ * Removes all the RRSIG covering the type
+ * 
+ * @param dname         the fqdn of the label
+ * @param label         the label
+ * @param covered_type  the type covered by the RRSIG
+ */
+
 void
 rrsig_delete(const u8 *dname, zdb_rr_label* label, u16 type)
 {

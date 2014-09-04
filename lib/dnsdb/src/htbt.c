@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief Hash-Table of Balanced trees structure and functions.
@@ -224,9 +224,8 @@ htbt_delete(htbt collection, hashcode obj_hash)
 void
 htbt_destroy(htbt* collectionp)
 {
-    zassert(collectionp != NULL);
+    yassert(collectionp != NULL);
     htbt collection = *collectionp;
-
 
     if(collection != NULL)
     {
@@ -249,22 +248,72 @@ htbt_iterator_init(htbt collection, htbt_iterator* iter)
 {
     if(collection != NULL)
     {
-        s32 idx;
-        for(idx = DEFAULT_HTABLE_SIZE; (idx > 0) && (collection->data == NULL); idx--, collection++);
+        for(htbt const collection_limit = &collection[DEFAULT_HTABLE_SIZE]; collection < collection_limit; collection++)
+        {
+            if(collection->data != NULL)
+            {
+                /* We got one */
+                btree_iterator_init((btree)collection->data, &iter->iter);
+                /* The next one, if any, can be found from the next hash-table slot*/
+                
+                iter->table = collection + 1;
+                iter->count = collection_limit - collection - 1;
 
-        /* Did we got a btree ? */
-        if(idx > 0)
+                return;
+            }
+        }
+    }
+
+    iter->count = -1;
+    iter->table = NULL;
+
+    btree_iterator_init(NULL, &iter->iter);
+}
+
+void
+htbt_iterator_init_from(htbt collection, htbt_iterator* iter, hashcode obj_hash)
+{
+    if(collection != NULL)
+    {
+        hashcode table_hash = HTBT_HASH_TRANSFORM(obj_hash);
+        
+        htbt const collection_limit = &collection[DEFAULT_HTABLE_SIZE];
+                
+        collection = &htable_get(collection, table_hash);
+        
+        // if the tree exists
+        
+        if(collection->data != NULL)
         {
             /* We got one */
-            btree_iterator_init((btree)collection->data, &iter->iter);
+
+            btree_iterator_init_from((btree)collection->data, &iter->iter, obj_hash);
             /* The next one, if any, can be found from the next hash-table slot*/
-            idx--;
+
             iter->table = collection + 1;
-            iter->count = idx;
+            iter->count = collection_limit - collection - 1;
 
             return;
         }
+        
+        // else find the first tree that exists
+        
+        for(collection++; collection < collection_limit; collection++)
+        {
+            if(collection->data != NULL)
+            {
+                /* We got one */
+
+                btree_iterator_init((btree)collection->data, &iter->iter);
+                /* The next one, if any, can be found from the next hash-table slot*/
+
+                iter->table = collection + 1;
+                iter->count = collection_limit - collection - 1;
+            }
+        }
     }
+    
+    // else there is nothing to see here
 
     iter->count = -1;
     iter->table = NULL;

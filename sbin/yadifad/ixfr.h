@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -60,7 +60,7 @@ ya_result ixfr_process(message_data *mesg);
  * @TODO: Set the IXFR storage path
  */
 
-ya_result ixfr_query(host_address *servers, zdb_zone *zone, u32* loaded_serial, u64* journal_offset);
+ya_result ixfr_query(const host_address *servers, zdb_zone *zone, u32 *output_loaded_serial);
 
 /**
  * Connects to the server and sends an IXFR query with the given parameters.
@@ -77,7 +77,7 @@ ya_result ixfr_query(host_address *servers, zdb_zone *zone, u32* loaded_serial, 
  * @return 
  */
 
-ya_result ixfr_start_query(host_address *servers, const u8 *origin, u32 ttl, const u8 *rdata, u16 rdata_size, input_stream *is, output_stream *os, message_data *ixfr_queryp);
+ya_result ixfr_start_query(const host_address *servers, const u8 *origin, u32 ttl, const u8 *rdata, u16 rdata_size, input_stream *is, output_stream *os, message_data *ixfr_queryp);
 
 #ifdef	__cplusplus
 }

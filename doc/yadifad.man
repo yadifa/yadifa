@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man on Fri Aug 22 13:34:28 CEST 2014
+.\" Manual page created with latex2man on Mon Jul 14 14:27:45 CEST 2014
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFAD" "1" "2014\-08\-22" "YADIFA " "YADIFA "
+.TH "YADIFAD" "8" "2014\-07\-02" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -23,19 +23,28 @@ is an authoritative name server.
 yadifad
 [\fB\-\-config|\-c\fP\fI configfile\fP]
 [\fB\-\-daemon|\-d\fP]
-[\fB\-V\fP]
 [\fB\-u\fP\fI uid\fP]
 [\fB\-g\fP\fI gid\fP]
+[\fB\-V\fP]
 [\fB\-h\fP]
 .PP
 .SH DESCRIPTION
 
 yadifad
-reads the zone files from yadifad.conf, and starts up an authoritative name server. 
-It listens to UDP and TCP DNS queries, and returns answers from its own database. 
+is a Domain Name System (DNS) server, part of the YADIFA distrubution from EURid vzw/asbl. The latest version of YADIFA
+can be found on:
+.br
+.ce 100
+\fBhttp://www.yadifa.eu/download\fP
+.ce 0
+
 .PP
 yadifad
-knows the main dns protocols: 
+reads the zone files from yadifad.conf, and starts up an authoritative name server. 
+It listens to UDP and TCP DNS queries and returns answers from its own database. 
+.PP
+yadifad
+knows the main DNS protocols: 
 .TP
 .B *
 AXFR 
@@ -44,10 +53,7 @@ AXFR
 IXFR 
 .TP
 .B *
-NSEC 
-.TP
-.B *
-NSEC3 
+DNSSEC 
 .TP
 .B *
 DNS Update 
@@ -55,73 +61,222 @@ DNS Update
 .B *
 NOTIFY 
 .PP
+.br
 yadifad
 works only with 1 CLASS:
 .PP
-.TP
-1.
-IN (Internet class)
+.TS
+tab(&);
+l l l.
+T{
+Class 
+T}&T{
+Value 
+T}&T{
+Definition
+T}
+T{
+T}
+T{
+IN
+T}&T{
+1 
+T}&T{
+Internet class
+T}
+.TE
 .PP
 yadifad
 supports following TYPES:
 .PP
-.TP
-1.
+.TS
+tab(&);
+l l l.
+T{
+Type 
+T}&T{
+Value 
+T}&T{
+Defining RFC
+T}
+T{
+T}
+T{
 A 
-.TP
-2.
+T}&T{
+1 
+T}&T{
+1035
+T}
+T{
 AAAA 
-.TP
-3.
+T}&T{
+28 
+T}&T{
+3596
+T}
+T{
 CNAME 
-.TP
-4.
+T}&T{
+5 
+T}&T{
+1035
+T}
+T{
 DNSKEY 
-.TP
-5.
+T}&T{
+48 
+T}&T{
+4034
+T}
+T{
 DS 
-.TP
-6.
+T}&T{
+43 
+T}&T{
+4034
+T}
+T{
 HINFO 
-.TP
-7.
+T}&T{
+12 
+T}&T{
+1035
+T}
+T{
 MX 
-.TP
-8.
+T}&T{
+15 
+T}&T{
+1035
+T}
+T{
 NAPTR 
-.TP
-9.
+T}&T{
+35 
+T}&T{
+3403
+T}
+T{
 NS 
-.TP
-10.
+T}&T{
+2 
+T}&T{
+1035
+T}
+T{
 NSEC 
-.TP
-11.
+T}&T{
+47 
+T}&T{
+4034
+T}
+T{
 NSEC3 
-.TP
-12.
+T}&T{
+50 
+T}&T{
+5155
+T}
+T{
 NSEC3PARAM 
-.TP
-13.
+T}&T{
+51 
+T}&T{
+5155
+T}
+T{
 PTR 
-.TP
-14.
+T}&T{
+12 
+T}&T{
+1035
+T}
+T{
 RRSIG 
-.TP
-15.
+T}&T{
+46 
+T}&T{
+4034
+T}
+T{
 SOA 
-.TP
-16.
+T}&T{
+6 
+T}&T{
+1035
+T}
+T{
 SRV 
-.TP
-17.
+T}&T{
+33 
+T}&T{
+2782
+T}
+T{
 SSHFP 
-.TP
-18.
-TXT. 
+T}&T{
+44 
+T}&T{
+4255
+T}
+T{
+TXT 
+T}&T{
+16 
+T}&T{
+1035
+T}
+.TE
+.PP
+.br
+Other tyes and pseudo resource records: 
+.PP
+.TS
+tab(&);
+l l l.
+T{
+Type 
+T}&T{
+Value 
+T}&T{
+Defining RFC
+T}
+T{
+T}
+T{
+* 
+T}&T{
+255 
+T}&T{
+1035
+T}
+T{
+AXFR 
+T}&T{
+252 
+T}&T{
+1035
+T}
+T{
+IXFR 
+T}&T{
+251 
+T}&T{
+1035
+T}
+T{
+OPT 
+T}&T{
+41 
+T}&T{
+6891
+T}
+.TE
 .PP
 .SH OPTIONS
 
+.PP
 .TP
 [\fB\-\-config|\-c\fP\fI configfile\fP]
  Another config file will be used. 
@@ -137,10 +292,23 @@ TXT.
 .PP
 .TP
 [\fB\-V\fP]
- Show version information. 
+ Shows version information. 
 .TP
 [\fB\-\-help|\-h\fP]
- Show a help text 
+ Shows a help text 
+.PP
+.SH SIGNALS
+
+.PP
+.TP
+SIGHUP 
+reloads the zone and key sections in the configuration file and reloads the zone file(s) with incremented serial number, and close all log files and reopens them. 
+.TP
+SIGINT 
+shutdowns the server 
+.TP
+SIGTERM 
+(see SIGINT) 
 .PP
 .SH FILES
 
@@ -153,7 +321,7 @@ configuration file.
 yadifad
  The name server binary. 
 .TP
-yadifad.1
+yadifad.8
  This man page. 
 .TP
 yadifad.conf.5
@@ -175,19 +343,44 @@ requires OpenSSL version 0.9.8 or later.
 .SH CHANGES
 
 Please check the ChangeLog
-file from the sources code. 
+file from the source code. 
 .PP
 .SH VERSION
 
 .PP
-Version: 1.0.4 of 2014-08-22\&.
+Version: 2.0.0 of 2014-07-02\&.
+.PP
+.SH MAILING LISTS
+
+.PP
+There is a mailinglist for questions relating to any program in the yadifa package:
+.br
+.TP
+.B *
+\fByadifa\-users@mailinglists.yadifa.eu\fP
+.br
+for submitting questions/answers. 
+.PP
+.TP
+.B *
+\fBhttp://www.yadifa.eu/mailing\-list\-users\fP
+.br
+for subscription requests. 
+.PP
+If you would like to stay informed about new versions and official patches send a subscription request to 
+via: 
+.TP
+.B *
+\fBhttp://www.yadifa.eu/mailing\-list\-announcements\fP
+.PP
+(this is a read\-only list). 
 .PP
 .SH LICENSE AND COPYRIGHT
 
 .PP
 .TP
 Copyright 
-(C)2012, EURid
+(C)2012, EURid vzw/asbl
 .br
 B\-1831 Diegem, Belgium
 .br

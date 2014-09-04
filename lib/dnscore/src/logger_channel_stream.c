@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup logger Logging functions
  *  @ingroup dnscore
  *  @brief
@@ -45,8 +45,6 @@
 #include <pthread.h>
 
 #include "dnscore/logger_channel_stream.h"
-#include "dnscore/logger_channel.h"
-
 #include "dnscore/output_stream.h"
 #include "dnscore/format.h"
 
@@ -140,10 +138,10 @@ logger_channel_stream_reopen(logger_channel* chan)
 
     output_stream_flush(&sd->os);
 
-    return ERROR;
+    return SUCCESS;
 }
 
-static logger_channel_vtbl stream_vtbl =
+static const logger_channel_vtbl stream_vtbl =
 {
     logger_channel_stream_constmsg,
     logger_channel_stream_msg,    

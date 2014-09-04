@@ -28,10 +28,25 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Settings common to all makefiles
+#
+################################################################################
 
-AM_CFLAGS = -Wall -D_FILE_OFFSET_BITS=64
+
+AM_CFLAGS = -Wall -Werror=missing-field-initializers -D_FILE_OFFSET_BITS=64 -g
 AM_LDFLAGS =
 DEBUGFLAGS =
+
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"'
 
 #
 # Intel C Compiler
@@ -65,7 +80,7 @@ if USES_CLANG
 
 if HAS_LTO_SUPPORT
 AM_CFLAGS += -DLTO -flto
-AM_LDFLAGS += -use-gold-plugin
+AM_LDFLAGS += -flto
 AM_AR = llvm-ar
 AM_LD = ld.gold
 else
@@ -78,7 +93,24 @@ AM_CFLAGS += -I$(abs_builddir) -I$(abs_srcdir)/include
 
 DEBUGFLAGS += -O0 -g -DMODE_DEBUG_CLANG
 
-endif
+# THIS WILL BREAK THE CONFIGURE ON EXTERNAL USERS OF THE LIBS IF INSTALLED AS DEBUG
+# FUTURE SOLUTION: ADD A _d SUFFIX TO LIBS WHEN BUILD IN DEBUG ?
+#
+#if HAS_FADDRESS_SANITIZER
+## one of these: address,thread,undefined
+#DEBUGFLAGS+=-fsanitize=address
+#endif
+#
+#
+#if HAS_FNO_OMIT_FRAME_POINTER
+#DEBUGFLAGS+=-fno-omit-frame-pointer
+#endif
+#
+#if HAS_CATCH_UNDEFINED_BEHAVIOR
+#DEBUGFLAGS+=-fcatch_undefined_behavior
+#endif
+
+endif # CLANG
 
 #
 # Gnu C
@@ -96,8 +128,8 @@ AM_CFLAGS += -mtune=native
 endif
 
 if HAS_LTO_SUPPORT
-AM_CFLAGS += -DLTO -flto
-AM_LDFLAGS += -flto
+AM_CFLAGS += -DLTO -flto -fwhole-program -ffat-lto-objects
+AM_LDFLAGS += -flto -fwhole-program -ffat-lto-objects
 endif
 
 AM_CFLAGS += -fno-ident -ansi -pedantic -std=gnu99 -I$(abs_builddir) -I$(abs_srcdir)/include
@@ -147,7 +179,7 @@ YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP
 YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
 YSCFLAGS = $(YRCFLAGS)
 
-YRLDFLAGS =
+YRLDFLAGS = -g
 YPLDFLAGS = -pg
 YDLDFLAGS = -g
 YSLDFLAGS = $(YRLDFLAGS)

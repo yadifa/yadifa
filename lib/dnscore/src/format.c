@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- * DOCUMENTATION */
+*
+* Copyright (c) 2011, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup format C-string formatting
  *  @ingroup dnscore
  *  @brief
@@ -49,25 +49,19 @@
 
 #include "dnscore/ctrl-rfc.h"
 
+// Enables or disables the feature
 #define HAS_DLADDR_SUPPORT 0
 
 #ifdef __linux__
 #ifdef __GNUC__
-
 #pragma message "linux + gnu: Enabling enhanced function address translation"
-
 #define __USE_GNU
 #define _GNU_SOURCE
 #include <dlfcn.h>
-
 #undef HAS_DLADDR_SUPPORT
-#define HAS_DLADDR_SUPPORT 0
-
+#define HAS_DLADDR_SUPPORT 0    // keep it disabled for the rest of the binary
 #endif
 #endif
-
-
-
 
 /* Added this for FreeBSD */
 #ifdef __FreeBSD__
@@ -80,7 +74,6 @@
 #include <arpa/inet.h>
 #include <time.h>
 
-#include "dnscore/dnscore.h"
 #include "dnscore/format.h"
 #include "dnscore/bytearray_output_stream.h"
 #include "dnscore/counter_output_stream.h"
@@ -191,7 +184,7 @@ format_get_format_handler(const char* name, u32 name_len)
  */
 
 static void
-dummy_format_handler_method(void* val, output_stream* stream, s32 padding, char pad_char, bool left_justified, void* reserved_for_method_parameters)
+dummy_format_handler_method(const void* val, output_stream* stream, s32 padding, char pad_char, bool left_justified, void* reserved_for_method_parameters)
 {
     intptr ival = (intptr)val;
     format_hex_u64_lo(ival, stream, padding, pad_char, left_justified);
@@ -229,14 +222,14 @@ format_available()
 }
 
 ya_result
-format_registerclass(format_handler_descriptor* fhd)
+format_registerclass(const format_handler_descriptor* fhd)
 {
     if(format_get_format_handler(fhd->name, fhd->name_len) != NULL)
     {
         return FORMAT_ALREADY_REGISTERED; /* Already registered */
     }
 
-    ptr_vector_append(&format_handler_descriptor_table, fhd);
+    ptr_vector_append(&format_handler_descriptor_table, (format_handler_descriptor*)fhd);
 
     ptr_vector_qsort(&format_handler_descriptor_table, format_handler_qsort_compare);
     
@@ -972,6 +965,14 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
 
                     break;
                 }
+                
+                case 'w':
+                {
+                    void* ptr = va_arg(args, void*);
+                    format_writer *fw = (format_writer*)ptr;
+                    fw->callback(fw->value, &os, padding, pad_char, left_justified, NULL);
+                    break;
+                }
             }
 
             fmt = next;
@@ -1100,8 +1101,9 @@ vsnformat(char* out, size_t out_size, const char* fmt, va_list args)
     }
 
     output_stream baos;
+    bytearray_output_stream_context baos_context;
 
-    bytearray_output_stream_init((u8*)out, out_size - 1, &baos);
+    bytearray_output_stream_init_ex_static(&baos, (u8*)out, out_size - 1, 0, &baos_context);
 
     int ret = vosformat(&baos, fmt, args);
 
@@ -1203,138 +1205,6 @@ fformat(FILE* out, const char* fmt, ...)
 /*------------------------------------------------------------------------------
  * FUNCTIONS */
 
-/** \brief Print string in hex values in ascii
- *
- *  @param[in] payload string to be printed
- *  @param[in] len length of the be printed string
- *  @param[in] offset
- *
- *  @return NONE
- */
-static void
-print_hex_ascii_line(output_stream* os, const u_char *payload, int len, int offset)
-{
-    int i;
-    int gap;
-    const u_char *ch;
-
-    /*    ------------------------------------------------------------    */
-
-    /* offset */
-    osformat(os, "%05d   ", offset);
-
-    /* hex */
-    ch = payload;
-
-    for(i = 0; i < len; i++)
-    {
-        osformat(os, "%02x ", *ch);
-        ch++;
-        /* Print extra space after 8th byte for visual aid */
-        if(i == 7)
-            osformat(os, " ");
-    }
-    /* Print space to handle line less than 8 bytes */
-    if(len < 8)
-        osformat(os, " ");
-
-    /* Fill hex gap with spaces if not full line */
-    if(len < 16)
-    {
-        gap = 16 - len;
-        for(i = 0; i < gap; i++)
-            osformat(os, "   ");
-    }
-    osformat(os, "   ");
-
-    /* Ascii (if printable) */
-    ch = payload;
-    for(i = 0; i < len; i++)
-    {
-        if(isprint(*ch))
-            osformat(os, "%c", *ch);
-        else
-            osformat(os, ".");
-        ch++;
-    }
-
-    osformat(os, "\n");
-}
-
-void
-print_payload_with_header(output_stream *os, const u_char *payload, int size_payload, const char *text)
-{
-    osformat(os, text);
-    print_payload(os, payload, size_payload);
-}
-
-/** \brief  Print packet payload data (avoid printing binary data)
- *
- * @param[in] os the output stream
- *  @param[in] payload string to be printed
- *  @param[in] size_payload length of the be printed string
- *
- *  @return NONE
- */
-
-
-void
-print_payload(output_stream *os, const u_char *payload, int size_payload)
-{
-    int                                              len_rem = size_payload;
-
-    /* Number of bytes per line */
-    int                                                     line_width = 16;
-    int                                                            line_len;
-
-    /* Zero-based offset counter */
-    int                                                          offset = 0;
-    const                                              u_char *ch = payload;
-
-    /*    ------------------------------------------------------------    */
-
-    if(size_payload > 0)
-    {
-        osformat(os, ";; Address Hex dump                                         Readable\n");
-        osformat(os, ";; -------------------------------------------------------------------------\n");
-
-        if(size_payload <= 0)
-            return;
-
-        /* Data fits on one line */
-        if(size_payload <= line_width)
-        {
-            print_hex_ascii_line(os, ch, size_payload, offset);
-            return;
-        }
-
-        /* Data spans multiple lines */
-        for(;;)
-        {
-            /* Compute current line length */
-            line_len = line_width % len_rem;
-            /* Print line */
-            print_hex_ascii_line(os, ch, line_len, offset);
-            /* Compute total remaining */
-            len_rem = len_rem - line_len;
-            /* Shift pointer to remaining bytes to print */
-            ch = ch + line_len;
-            /* Add offset */
-            offset = offset + line_width;
-
-            /* Check if we have line width chars or less */
-            if(len_rem <= line_width)
-            {
-                /* Print last line and get out */
-                print_hex_ascii_line(os, ch, len_rem, offset);
-                break;
-            }
-        }
-        osformat(os, ";; Data payload (bytes): %d\n\n", size_payload);
-        osformat(os, "\n\n");
-    }
-}
-
 void
 osprint_u32(output_stream* os, u32 value)
 {
@@ -1432,7 +1302,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
                 osformat(os, "%d.%d.%d.%d", rdata_pointer[0], rdata_pointer[1], rdata_pointer[2], rdata_pointer[3]);
                 return SUCCESS;
             }
-            break;
+            return INCORRECT_RDATA;
         }
         case TYPE_AAAA:
         {
@@ -1447,7 +1317,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
                 return SUCCESS;
             }
-            break;
+            return INCORRECT_RDATA;
         }
         case TYPE_MX:
             osformat(os, "%hd ", ntohs(GET_U16_AT(*rdata_pointer)));
@@ -1470,7 +1340,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
                 osformat(os, "%{dnsname}", rdata_pointer);
                 return SUCCESS;
             }
-            break;
+            return INCORRECT_RDATA;
         }
         case TYPE_HINFO:
         case TYPE_MINFO:
@@ -1569,7 +1439,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
                 }
             }
 
-            break;
+            return INCORRECT_RDATA;
         }
         case TYPE_RRSIG:
         {
@@ -1578,7 +1448,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
             time_t t = (time_t)ntohl(GET_U32_AT(rdata_pointer[8]));
             gmtime_r(&t, &exp);
-
             t = (time_t)ntohl(GET_U32_AT(rdata_pointer[12]));
             gmtime_r(&t, &inc);
 
@@ -1650,12 +1519,14 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             rdata_pointer += len;
             rdata_size -= len;
 
-            if(ISOK(osprint_type_bitmap(os, rdata_pointer, rdata_size)))
+            ya_result return_code;
+            
+            if(ISOK(return_code = osprint_type_bitmap(os, rdata_pointer, rdata_size)))
             {
                 return SUCCESS;
             }
 
-            break;
+            return return_code;
         }
         case TYPE_NSEC3:
         case TYPE_NSEC3PARAM:
@@ -1690,20 +1561,19 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
                 len = *rdata_pointer++;
 
                 rdata_size -= 1 + len;
+                
+                ya_result return_code;
 
-                if(FAIL(output_stream_write_base32hex(os, rdata_pointer, len)))
+                if(FAIL(return_code = output_stream_write_base32hex(os, rdata_pointer, len)))
                 {
-                    return ERROR;
+                    return return_code;
                 }
 
                 rdata_pointer += len;
 
-                if(ISOK(osprint_type_bitmap(os, rdata_pointer, rdata_size)))
-                {
-                    return SUCCESS;
-                }
+                return_code = osprint_type_bitmap(os, rdata_pointer, rdata_size);
 
-                break;
+                return return_code;
             }
 
             return SUCCESS;
@@ -1728,6 +1598,96 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             const u8 *fqdn = (const u8*)&rdata_pointer[6];
             
             return osformat(os, "%hd %hd %hd %{dnsname}", priority, weight, port, fqdn);
+        }
+        case TYPE_ZONE_TYPE:
+        {
+            u8 zone_type = rdata_pointer[0];
+            
+            char *txt;
+            
+            switch(zone_type)
+            {
+                case ZT_HINT:
+                {
+                    txt = "hint";
+                    break;
+                }
+                case ZT_MASTER:
+                {
+                    txt = "master";
+                    break;
+                }
+                case ZT_SLAVE:
+                {
+                    txt = "slave";
+                    break;
+                }
+                case ZT_STUB:
+                {
+                    txt = "stub";
+                    break;
+                }
+                default:
+                {
+                    txt = "undefined";
+                    break;
+                }
+            }
+            
+            return osprint(os, txt);
+        }
+        case TYPE_ZONE_MASTER:
+        case TYPE_ZONE_SLAVES:
+        case TYPE_ZONE_NOTIFY:
+        {
+            u8 flags = rdata_pointer[0];
+            const u8 *src = &rdata_pointer[1];
+            
+            ya_result total = 0;
+            
+            switch(flags & 0x0f)
+            {
+                case 4:
+                {
+                    // 4 bytes
+                    
+                    total += osformat(os, "%d.%d.%d.%d", src[0], src[1], src[2], src[3]);
+                    
+                    src += 4;
+                    
+                    break;
+                }
+                case 6:
+                {
+                    // 16 bytes
+                    
+                    char ip6txt[INET6_ADDRSTRLEN];
+
+                    inet_ntop(AF_INET6, &src, ip6txt, sizeof(ip6txt));
+
+                    total += osprint(os, ip6txt);
+                    
+                    src += 16;
+                    
+                    break;
+                }
+            }
+            
+            if((flags & REMOTE_SERVER_FLAGS_PORT_MASK) != 0)
+            {
+                u16 port = GET_U16_AT(*src);
+                
+                total += osformat(os, " %hd", port);
+                
+                src += 2;
+            }
+            
+            if((flags & REMOTE_SERVER_FLAGS_KEY_MASK) != 0)
+            {
+                total += osformat(os, " %{dnsname}", src);
+            }
+            
+            return total;
         }
         case TYPE_TXT:
         {
@@ -1767,13 +1727,115 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             return SUCCESS;
     }
     
-    return ERROR;
+    return INCORRECT_RDATA;
 }
 
 ya_result
 print_rdata(u16 type, u8* rdata_pointer, u16 rdata_size)
 {
     return osprint_rdata(termout, type, rdata_pointer, rdata_size);
+}
+
+void
+osprint_dump(output_stream *os, const void* data_pointer_, size_t size_, size_t line_size, u32 flags)
+{
+    const u8* data_pointer = (const u8*)data_pointer_;
+    s32 size = size_;
+    
+    bool address = (flags & OSPRINT_DUMP_ADDRESS) != 0;
+    bool hex = (flags & OSPRINT_DUMP_HEX) != 0;
+    bool text = (flags & OSPRINT_DUMP_TEXT) != 0;
+    
+    int group = flags & OSPRINT_DUMP_LAYOUT_GROUP_MASK;
+    group >>= OSPRINT_DUMP_LAYOUT_GROUP_SHIFT;
+    int separator = flags & OSPRINT_DUMP_LAYOUT_SEPARATOR_MASK;
+    separator >>= OSPRINT_DUMP_LAYOUT_SEPARATOR_SHIFT;
+
+    int dump_size;
+    int i;
+    
+    char hexbyte[2];
+
+    do
+    {
+        dump_size = MIN(line_size, size);
+
+        const u8* data;
+
+        if(address)
+        {
+            format_hex_u64_hi((intptr)data_pointer, os, __SIZEOF_POINTER__ * 2, '0', FALSE);
+            output_stream_write(os, (const u8*)" | ", 3);
+        }
+
+        if(hex)
+        {
+            data = data_pointer;
+            
+            for(i = 0; i < dump_size; i++)
+            {
+                u8 val = *data++;
+                
+                hexbyte[0] = __hexa__[val >> 4];
+                hexbyte[1] = __hexa__[val & 0x0f];
+                
+                output_stream_write(os, (u8*)hexbyte, 2);
+                
+                if((i & group) == group)
+                {
+                    output_stream_write_u8(os, (u8)' ');
+                }
+                if((i & separator) == separator)
+                {
+                    output_stream_write_u8(os, (u8)' ');
+                }
+            }
+
+            for(; i < line_size; i++)
+            {
+                output_stream_write(os, (const u8*)"  ", 2);                             // these are two spaces
+                if((i & group) == group)
+                {
+                    output_stream_write_u8(os, (u8)' ');
+                }
+                if((i & separator) == separator)
+                {
+                    output_stream_write_u8(os, (u8)' ');
+                }
+            }
+        }
+
+        if(text)
+        {
+            if(hex)
+            {
+                output_stream_write(os, (const u8*)" |  ", 4);
+            }
+            
+            data = data_pointer;
+            
+            for(i = 0; i < dump_size; i++)
+            {
+                char c = *data++;
+                
+                if(c < ' ')
+                {
+                    c = '.';
+                }
+
+                output_stream_write_u8(os, (u8)c);
+            }
+        }
+
+        data_pointer += dump_size;
+        size -= dump_size;
+
+        if(size != 0)
+        {
+            output_stream_write_u8(os, (u8)'\n');
+        }
+    }
+    while(size > 0);
 }
 
 void

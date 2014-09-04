@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief 
@@ -44,6 +44,7 @@
 #include <stdlib.h>
 
 #include "dnscore/mt_output_stream.h"
+#include "dnscore/mutex.h"
 
 #define MT_OUTPUT_STREAM_TAG 0x534F544D /* MTOS */
 
@@ -53,7 +54,9 @@ typedef struct mt_output_stream_data mt_output_stream_data;
 struct mt_output_stream_data
 {
     output_stream filtered;
-	pthread_mutex_t mutex;
+    mutex_t mutex;
+    cond_t cond;
+    volatile s32 locked;
 };
 
 static ya_result 
@@ -61,9 +64,21 @@ mt_write(output_stream* stream, const u8* buffer, u32 len)
 {
     mt_output_stream_data* data = (mt_output_stream_data*) stream->data;
 
-	pthread_mutex_lock(&data->mutex);
-	ya_result ret = output_stream_write(&data->filtered, buffer, len);
-	pthread_mutex_unlock(&data->mutex);
+    mutex_lock(&data->mutex);
+    
+    data->locked++;
+    
+    while(data->locked > 1)
+    {
+        cond_wait(&data->cond, &data->mutex);
+    }
+    
+    ya_result ret = output_stream_write(&data->filtered, buffer, len);
+    
+    data->locked--;
+    
+    cond_notify(&data->cond);
+    mutex_unlock(&data->mutex);
 
     return ret;
 }
@@ -72,10 +87,22 @@ static ya_result
 mt_flush(output_stream* stream)
 {
     mt_output_stream_data* data = (mt_output_stream_data*) stream->data;
-
-	pthread_mutex_lock(&data->mutex);
-	ya_result ret = output_stream_flush(&data->filtered);
-	pthread_mutex_unlock(&data->mutex);
+    
+    mutex_lock(&data->mutex);
+    
+    data->locked++;
+    
+    while(data->locked > 1)
+    {
+        cond_wait(&data->cond, &data->mutex);
+    }
+    
+    ya_result ret = output_stream_flush(&data->filtered);
+    
+    data->locked--;
+    
+    cond_notify(&data->cond);
+    mutex_unlock(&data->mutex);
 
     return ret;
 }
@@ -84,18 +111,32 @@ static void
 mt_close(output_stream* stream)
 {
     mt_output_stream_data* data = (mt_output_stream_data*) stream->data;
-
-	pthread_mutex_lock(&data->mutex);
+    
+    mutex_lock(&data->mutex);
+        
+    data->locked++;
+    
+    while(data->locked > 1)
+    {
+        cond_wait(&data->cond, &data->mutex);
+    }
+    
+    output_stream_set_void(stream);
+    
     output_stream_close(&data->filtered);
-	pthread_mutex_unlock(&data->mutex);
-
-	pthread_mutex_destroy(&data->mutex);
-
+    
+    data->locked--;
+    
+    cond_notify(&data->cond);
+    mutex_unlock(&data->mutex);
+    
+    cond_finalize(&data->cond);
+    mutex_destroy(&data->mutex);
+    
     free(data);
-    stream->data = NULL;
 }
 
-static output_stream_vtbl mt_output_stream_vtbl =
+static const output_stream_vtbl mt_output_stream_vtbl =
 {    
     mt_write,
     mt_flush,
@@ -110,7 +151,7 @@ mt_output_stream_init(output_stream* filtered, output_stream* stream)
 
     if(filtered->vtbl == NULL)
     {
-		return ERROR;
+		return INVALID_STATE_ERROR;
     }
 
     MALLOC_OR_DIE(mt_output_stream_data*, data, sizeof (mt_output_stream_data), MT_OUTPUT_STREAM_TAG);
@@ -121,12 +162,28 @@ mt_output_stream_init(output_stream* filtered, output_stream* stream)
     filtered->data = NULL;		    /* Clean the filtered BEFORE setting up the stream */
     filtered->vtbl = NULL;
 
-	pthread_mutex_init(&data->mutex, NULL);
+	mutex_init(&data->mutex);
+    cond_init(&data->cond);
+    data->locked = 0;
 
     stream->data = data;
     stream->vtbl = &mt_output_stream_vtbl;
 
     return SUCCESS;
+}
+
+output_stream*
+mt_output_stream_get_filtered(output_stream* bos)
+{
+    mt_output_stream_data* data = (mt_output_stream_data*)bos->data;
+
+    return &data->filtered;
+}
+
+bool
+is_mt_output_stream(output_stream* bos)
+{
+    return bos->vtbl == &mt_output_stream_vtbl;
 }
 
 /** @} */

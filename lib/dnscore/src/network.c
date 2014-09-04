@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup network Network functions
  *  @ingroup dnscore
  *  @brief core network

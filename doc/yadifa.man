@@ -1,0 +1,248 @@
+'\" t
+.\" Manual page created with latex2man on Mon Jul 14 14:33:06 CEST 2014
+.\" NOTE: This file is generated, DO NOT EDIT.
+.de Vb
+.ft CW
+.nf
+..
+.de Ve
+.ft R
+
+.fi
+..
+.TH "YADIFA" "8" "2014\-07\-01" "YADIFA " "YADIFA "
+.SH NAME
+
+.PP
+YADIFA
+is an utility for controlling YADIFAD 
+.PP
+.SH SYNOPSIS
+
+.PP
+yadifa
+[\fB\-s\fP\fI host\fP]
+[\fB@host\fP]
+[\fB\-V\fP]
+[\fB\-h\fP]
+\fBcommand\fP
+.PP
+.SH DESCRIPTION
+
+yadifa
+controls the operation of yadifad\&.
+.PP
+yadifa
+communicates with a name server over a TCP connection. The protocol used between client \- server is an extension of the DNS protocol. The authentication is done by a mutual key between client and server. This key has the same format as a TSIG. Authentication is not needed, but provides more secure communication if used. 
+.PP
+Several algorithms can be used for creating a TSIG: 
+.TP
+.B *
+HMAC\-MD5 
+.TP
+.B *
+HMAC\-SHA1 
+.PP
+.SH OPTIONS
+
+.TP
+[\fB\-\-config|\-c\fP\fI configfile\fP]
+ Another config file will be used. 
+.TP
+[\fB\-\-server|\-s\fP\fI host\fP]
+ Host is the remote server to operate. 
+.PP
+.TP
+[\fB\-V\fP]
+ Show version information. 
+.TP
+[\fB\-\-help|\-h\fP]
+ Show a help text 
+.PP
+\fBNote\fP
+.br
+If there is ambiguity between the zone and the command: 
+.TP
+[\fB\-t\fP\fI command\fP]
+ ommand part without the zone or level information 
+.TP
+[\fB\-q\fP\fI zone\fP]
+ zone 
+.TP
+[\fB\-\-level|\-l\fP\fI level\fP]
+ level (0\-15) used with certain commands. 
+.PP
+.SH COMMANDS
+
+.TP
+[\fBfreeze \fP[\fIzone\fP]]
+ disables updates to a zone. 
+If no zone is specified, all zones are implied. 
+.TP
+[\fBunfreeze \fP[\fIzone\fP]]
+ enables updates to a zone. 
+If no zone is specified, all zones are implied. 
+.PP
+.TP
+[\fBreload \fP[\fIzone\fP]]
+ triggers the loading of the zone file(s) if the serial number is incremented. 
+If no zone is specified, all zones are implied. 
+.TP
+[\fBcfgreload \fP[\fIzone\fP]]
+ reload the zone and key sections in the configuration file and reload the zone file(s) with increased serial number. 
+If a zone is specified only that zone section is reloaded. 
+.TP
+[\fBsync \fP[\fIclean\fP]]
+ write the zone to disk and optionally removes the journal. 
+If no zone is specified, all zones are implied. 
+.TP
+[\fBquerylog \fP\fIlevel\fP]
+ sets the log level to the given value (0\-15). 
+.PP
+\fBLevels\fP
+.TP
+0.
+EMERG system is unusable 
+.TP
+1.
+ALERT action must be taken immediately 
+.TP
+2.
+CRIT critical conditions 
+.TP
+3.
+ERR error conditions 
+.TP
+4.
+WARNING warning conditions 
+.TP
+5.
+NOTICE normal, but significant, condition 
+.TP
+6.
+INFO informative message 
+.TP
+7.
+DEBUG debug\-level message 
+.TP
+8.
+DEBUG1 debug\-level message 
+.TP
+9
+DEBUG2 debug\-level message 
+.TP
+10.
+DEBUG3 debug\-level message 
+.TP
+11.
+DEBUG4 debug\-level message 
+.TP
+12.
+DEBUG5 debug\-level message 
+.TP
+13.
+DEBUG6 debug\-level message 
+.TP
+13.
+DEBUG7 debug\-level message 
+.TP
+15.
+ALL all message levels 
+.PP
+.TP
+[\fBlogreopen\fP]
+ close all log files and reopens them. 
+.TP
+[\fBshutdown\fP]
+ shut downs the server. 
+.PP
+.SH FILES
+
+.PP
+.TP
+yadifa
+ The name server remote client. 
+.TP
+$HOME/.yadifa.rc
+ default rcfile. 
+.PP
+.TP
+yadifa.rc.5
+ Configuration man page for yadifa\&.
+.TP
+yadifa.8
+ This man page. 
+.PP
+.SH SEE ALSO
+
+.PP
+\fIyadifa.rc\fP(5)
+\fIyadifad\fP(8)
+.PP
+.SH REQUIREMENTS
+
+.PP
+.TP
+OpenSSL 
+yadifad
+requires OpenSSL version 0.9.8 or later. 
+.PP
+.SH CHANGES
+
+Please check the ChangeLog
+file from the sources code. 
+.PP
+.SH VERSION
+
+.PP
+Version: 2.0.0 of 2014-07-01\&.
+.PP
+.SH MAILINGLIST
+
+There is a mailinglist for questions relating to any program in the yadifa package:
+.br
+.TP
+.B *
+\fByadifa\-users@mailinglists.yadifa.eu\fP
+.br
+for submitting questions/answers. 
+.PP
+.TP
+.B *
+\fBhttp://www.yadifa.eu/mailing\-list\-users\fP
+.br
+for subscription requests. 
+.PP
+If you would like to stay informed about new versions and official patches send a subscription request to 
+via: 
+.TP
+.B *
+\fBhttp://www.yadifa.eu/mailing\-list\-announcements\fP
+.PP
+(this is a read\-only list). 
+.PP
+.SH LICENSE AND COPYRIGHT
+
+.PP
+.TP
+Copyright 
+(C)2012, EURid
+.br
+B\-1831 Diegem, Belgium
+.br
+\fBinfo@yadifa.eu\fP
+.PP
+.SH AUTHORS
+
+.PP
+Gery Van Emelen 
+.br
+Email: \fBGery.VanEmelen@EURid.eu\fP
+.br
+Eric Diaz Fernandez 
+.br
+Email: \fBEric.DiazFernandez@EURid.eu\fP
+.PP
+WWW: \fBhttp://www.EURid.eu\fP
+.PP
+.\" NOTE: This file is generated, DO NOT EDIT.

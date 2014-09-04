@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief Dictionary module based on an hash table of binary trees
@@ -45,6 +45,7 @@
 #include <dnscore/sys_types.h>
 #include "dnsdb/zdb_error.h"
 #include "dnsdb/dictionary.h"
+#include "dnsdb/dictionary-node.h"
 
 /*
  *
@@ -61,13 +62,15 @@ ya_result dictionary_htbt_process(dictionary* dico, hashcode key, void* record_m
 void dictionary_htbt_iterator_init(const dictionary* dico, dictionary_iterator* iter);
 bool dictionary_htbt_iterator_hasnext(dictionary_iterator* dico);
 void** dictionary_htbt_iterator_next(dictionary_iterator* dico);
+void dictionary_htbt_iterator_init_from(const dictionary* dico, dictionary_iterator* iter, hashcode key);
 
 void dictionary_htbt_empties(dictionary* dico, void* bucket, dictionary_bucket_record_function destroy);
 void
 dictionary_htbt_fills(dictionary* dico, hashcode key, dictionary_node* node);
 
 
-static struct dictionary_vtbl dictionary_htbt_vtbl = {
+static const struct dictionary_vtbl dictionary_htbt_vtbl =
+{
     /*dictionary_htbt_init,*/
     dictionary_htbt_destroy,
     dictionary_htbt_add,
@@ -77,12 +80,14 @@ static struct dictionary_vtbl dictionary_htbt_vtbl = {
     dictionary_htbt_process,
     dictionary_htbt_destroy_ex,
     dictionary_htbt_iterator_init,
+    dictionary_htbt_iterator_init_from,
     dictionary_htbt_empties,
     dictionary_htbt_fills,
     "HTBT"
 };
 
-static struct dictionary_iterator_vtbl dictionary_iterator_htbt_vtbl = {
+const static struct dictionary_iterator_vtbl dictionary_iterator_htbt_vtbl =
+{
     dictionary_htbt_iterator_hasnext,
     dictionary_htbt_iterator_next
 };
@@ -99,7 +104,7 @@ dictionary_htbt_init(dictionary* dico)
 void
 dictionary_htbt_destroy(dictionary* dico, dictionary_destroy_record_function destroy)
 {
-    zassert(dico != NULL);
+    yassert(dico != NULL);
 
     if(dico->ct.htbt_collection != NULL)
     {
@@ -134,7 +139,7 @@ dictionary_htbt_destroy(dictionary* dico, dictionary_destroy_record_function des
 void
 dictionary_htbt_destroy_ex(dictionary* dico, dictionary_destroy_ex_record_function destroyex, void* arg)
 {
-    zassert(dico != NULL);
+    yassert(dico != NULL);
 
     if(dico->ct.htbt_collection != NULL)
     {
@@ -338,6 +343,14 @@ dictionary_htbt_iterator_init(const dictionary* dico, dictionary_iterator* iter)
     htbt_iterator_init(dico->ct.htbt_collection, &(iter->ct.as_htbt));
 }
 
+void
+dictionary_htbt_iterator_init_from(const dictionary* dico, dictionary_iterator* iter, hashcode key)
+{
+    iter->vtbl = &dictionary_iterator_htbt_vtbl;
+    iter->sll = NULL;
+    htbt_iterator_init_from(dico->ct.htbt_collection, &(iter->ct.as_htbt), key);
+}
+
 bool
 dictionary_htbt_iterator_hasnext(dictionary_iterator* iter)
 {
@@ -370,7 +383,7 @@ dictionary_htbt_iterator_next(dictionary_iterator* iter)
 void
 dictionary_htbt_empties(dictionary* dico, void* bucket_data, dictionary_bucket_record_function bucket)
 {
-    zassert(dico != NULL);
+    yassert(dico != NULL);
 
     if(dico->ct.htbt_collection != NULL)
     {

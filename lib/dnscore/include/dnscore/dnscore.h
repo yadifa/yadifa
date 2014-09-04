@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnscore System core functions
  *  @brief System core functions
  *
@@ -49,7 +49,8 @@ extern "C" logger_handle *g_system_logger;
 #else
 extern output_stream __termout__;
 extern output_stream __termerr__;
-extern logger_handle *g_system_logger;
+struct logger_handle;
+extern struct logger_handle *g_system_logger;
 #endif
 
 static inline void flushout()
@@ -84,47 +85,23 @@ typedef enum
     DNSLIB_NSEC3=8
 } dnslib_fingerprint;
 
-u32
-dnscore_fingerprint_mask();
+u32 dnscore_fingerprint_mask();
 
-dnslib_fingerprint
-dnscore_getfingerprint();
+dnslib_fingerprint dnscore_getfingerprint();
 
-void
-dnscore_init();
+void dnscore_init();
 
-u32
-dnscore_timer_get_tick();
+u32 dnscore_timer_get_tick();
 
-void
-dnscore_reset_timer();
+void dnscore_reset_timer();
 
-void
-dnscore_stop_timer();
+void dnscore_stop_timer();
 
-void
-dnscore_finalize();
+void dnscore_finalize();
 
-void
-dnscore_shutdown();
+void dnscore_shutdown();
 
-bool
-dnscore_shuttingdown();
-
-void
-log_assert__(bool b, const char *txt, const char *file, int line);
-
-#ifdef DEBUG
-#define lassert(cond) log_assert__(cond, #cond, __FILE__, __LINE__)
-#else
-#define lassert(cond)
-#endif
-
-#if HAS_STRDUP == 0
-
-//char *strdup(const char* txt);
-
-#endif
+bool dnscore_shuttingdown();
 
 #ifdef	__cplusplus
 }

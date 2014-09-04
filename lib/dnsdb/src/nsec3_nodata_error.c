@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -67,38 +67,44 @@
 void
 nsec3_nodata_error(const zdb_zone *zone, const zdb_rr_label* owner,
                    const dnsname_vector *qname, s32 apex_index,
-                   u8* out_owner_nsec3_owner,
+                   u8 * restrict * pool,
+                   u8 **out_owner_nsec3_owner,
                    zdb_packed_ttlrdata** out_owner_nsec3,
-                   zdb_packed_ttlrdata** out_owner_nsec3_rrsig,
-                   u8* out_closest_encloser_nsec3_owner,
+                   const zdb_packed_ttlrdata** out_owner_nsec3_rrsig,
+                   u8 **out_closest_encloser_nsec3_owner,
                    zdb_packed_ttlrdata** out_closest_encloser_nsec3,
-                   zdb_packed_ttlrdata** out_closest_encloser_nsec3_rrsig)
+                   const zdb_packed_ttlrdata** out_closest_encloser_nsec3_rrsig)
 {   
-    nsec3_zone_item *owner_nsec3;
+    const nsec3_zone_item *owner_nsec3;
 
     nsec3_zone* n3 = zone->nsec.nsec3;
     
     u32 min_ttl = 900;
     
     zdb_zone_getminttl(zone, &min_ttl);
+    
+    nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm nsec3_parms =
+    {
+        n3,
+        NULL,
+        zone->origin,
+        pool,
+        min_ttl
+    };
 
     if((owner->nsec.dnssec) == NULL)
     {
-        nsec3_zone_item *closest_provable_encloser_nsec3;
-
         nsec3_closest_encloser_proof(zone, qname, apex_index,
                                     &owner_nsec3,
-                                    &closest_provable_encloser_nsec3,
+                                    &nsec3_parms.item, // closest_provable_encloser_nsec3
                                     NULL
                                     );
 
-        nsec3_zone_item_to_zdb_packed_ttlrdata(n3,
-                                                closest_provable_encloser_nsec3,
-                                                zone->origin,
-                                                out_closest_encloser_nsec3_owner,
-                                                min_ttl,
-                                                out_closest_encloser_nsec3,
-                                                out_closest_encloser_nsec3_rrsig);
+        nsec3_zone_item_to_new_zdb_packed_ttlrdata(
+                &nsec3_parms,
+                out_closest_encloser_nsec3_owner,
+                out_closest_encloser_nsec3,
+                out_closest_encloser_nsec3_rrsig);
     }
     else
     {
@@ -111,13 +117,12 @@ nsec3_nodata_error(const zdb_zone *zone, const zdb_rr_label* owner,
      * Don't do dups
      */
 
-    nsec3_zone_item_to_zdb_packed_ttlrdata(n3,
-                                           owner_nsec3,
-                                           zone->origin,
-                                           out_owner_nsec3_owner,
-                                           min_ttl,
-                                           out_owner_nsec3,
-                                           out_owner_nsec3_rrsig);
+    nsec3_parms.item = owner_nsec3;
+    nsec3_zone_item_to_new_zdb_packed_ttlrdata(
+            &nsec3_parms,
+            out_owner_nsec3_owner,
+            out_owner_nsec3,
+            out_owner_nsec3_rrsig);
 }
 
 /**
@@ -135,24 +140,25 @@ nsec3_nodata_error(const zdb_zone *zone, const zdb_rr_label* owner,
 
 void nsec3_wild_nodata_error(const zdb_zone *zone, const zdb_rr_label *owner,
                              const dnsname_vector *qname, u32 apex_index,
-                             u8* out_next_closer_nsec3_owner,
+                             u8 * restrict * pool,
+                             u8 **out_next_closer_nsec3_owner_p,
                              zdb_packed_ttlrdata** out_encloser_nsec3,
-                             zdb_packed_ttlrdata** out_encloser_nsec3_rrsig,
-                             u8* out_closest_encloser_nsec3_owner,
+                             const zdb_packed_ttlrdata** out_encloser_nsec3_rrsig,
+                             u8 **out_closest_encloser_nsec3_owner_p,
                              zdb_packed_ttlrdata** out_closest_encloser_nsec3,
-                             zdb_packed_ttlrdata** out_closest_encloser_nsec3_rrsig,
-                             u8* out_wild_closest_encloser_nsec3_owner,
+                             const zdb_packed_ttlrdata** out_closest_encloser_nsec3_rrsig,
+                             u8 **out_wild_closest_encloser_nsec3_owner_p,
                              zdb_packed_ttlrdata** out_wild_closest_encloser_nsec3,
-                             zdb_packed_ttlrdata** out_wild_closest_encloser_nsec3_rrsig
+                             const zdb_packed_ttlrdata** out_wild_closest_encloser_nsec3_rrsig
                              )
 {    
-    nsec3_name_error(zone, qname, apex_index,
-                     out_next_closer_nsec3_owner,
+    nsec3_name_error(zone, qname, apex_index, pool,
+                     out_next_closer_nsec3_owner_p,
                      out_encloser_nsec3, out_encloser_nsec3_rrsig,
-                     out_closest_encloser_nsec3_owner,
+                     out_closest_encloser_nsec3_owner_p,
                      out_closest_encloser_nsec3,
                      out_closest_encloser_nsec3_rrsig,
-                     out_wild_closest_encloser_nsec3_owner,
+                     out_wild_closest_encloser_nsec3_owner_p,
                      out_wild_closest_encloser_nsec3,
                      out_wild_closest_encloser_nsec3_rrsig);
 }

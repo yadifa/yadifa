@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief 
@@ -49,22 +49,24 @@
 extern "C" {
 #endif
 
-ya_result file_output_stream_open(const char* filename, output_stream* stream);
+ya_result file_output_stream_open(const char *filename, output_stream *stream);
 
 /**
  * man 2 open
  */
-ya_result file_output_stream_open_ex(const char* filename,int flags, mode_t mode, output_stream* stream);
+ya_result file_output_stream_open_ex(const char *filename,int flags, mode_t mode, output_stream *stream);
 
-ya_result file_output_stream_create(const char* filename,mode_t mode, output_stream* stream);
+ya_result file_output_stream_create(const char *filename,mode_t mode, output_stream *stream);
 
-ya_result fd_output_stream_attach(int fd, output_stream* stream);
+ya_result fd_output_stream_attach(int fd, output_stream *stream);
 
-ya_result fd_output_stream_get_filedescriptor(output_stream* stream);
+void      fd_output_stream_detach(output_stream *stream_);
 
-s64 fd_input_stream_get_size(output_stream* stream);
+ya_result fd_output_stream_get_filedescriptor(output_stream *stream);
 
-bool is_fd_output_stream(output_stream* stream);
+s64       fd_output_stream_get_size(output_stream *stream);
+
+bool      is_fd_output_stream(output_stream *stream);
 
 #ifdef	__cplusplus
 }

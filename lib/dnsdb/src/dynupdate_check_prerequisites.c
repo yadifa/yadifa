@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbupdate Dynamic update functions
  *  @ingroup dnsdb
  *  @brief
@@ -117,7 +117,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
 {
     if(ZDB_ZONE_INVALID(zone))
     {
-        return ERROR; /* todo: use a specific code */
+        return ZDB_ERROR_ZONE_INVALID;
     }
     
     if(count == 0)

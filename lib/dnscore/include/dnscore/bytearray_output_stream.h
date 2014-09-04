@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief 
@@ -53,21 +53,39 @@ extern "C" {
      * The buffer will be freed (free) on close.
      */
 
-    #define BYTEARRAY_OWNED	1
+    #define BYTEARRAY_OWNED             1
 
     /*
      * The buffer's size can be changed.
      */
 
-    #define BYTEARRAY_DYNAMIC   2
+    #define BYTEARRAY_DYNAMIC           2
 
-    void bytearray_output_stream_init(u8* array,u32 size, output_stream* out_stream);
-    void bytearray_output_stream_init_ex(u8* array,u32 size, output_stream* out_stream, u8 flags);
+    /*
+     * The internal context has been allocated by a malloc (the default exept if the _static variant is used)
+     * YOU MOSTLY WILL NOT USE THAT FLAG
+     */
+    
+    #define BYTEARRAY_MALLOC_CONTEXT    4
+
+    typedef char bytearray_output_stream_context[sizeof(void*) + 9];
+
+    void bytearray_output_stream_init(output_stream* out_stream, u8* array,u32 size);
+    void bytearray_output_stream_init_ex(output_stream* out_stream, u8* array,u32 size, u8 flags);
+    
+    /*
+     * most of bytearray_output_stream usages function-enclosed : init, work on, close
+     * this variant of initialisation avoids an malloc
+     */
+    
+    void bytearray_output_stream_init_ex_static(output_stream* out_stream, u8* array,u32 size, u8 flags, bytearray_output_stream_context *ctx);
 
     void bytearray_output_stream_reset(output_stream* out_stream);
     u32 bytearray_output_stream_size(output_stream* out_stream);
     u8* bytearray_output_stream_buffer(output_stream* out_stream);
     u8* bytearray_output_stream_detach(output_stream* out_stream);
+    
+    void bytearray_output_stream_set(output_stream* out_stream, u8 *buffer, u32 buffer_size, bool owned);
 
 #ifdef	__cplusplus
 }

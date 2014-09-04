@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief "no-wait" stack allocator
@@ -50,21 +50,22 @@
 void threaded_nb_mm_init(threaded_nb_mm *mm, u32 count, u32 size)
 {
     assert(count > 1);
-
+    
     size = (size + sizeof(void*) - 1) & ~(sizeof(void*)-1);
+    
     u32 n = count * size;
-
-
+    
     MALLOC_OR_DIE(u8*,mm->items, n, THRDNBMM_TAG);
     mm->item_count = count;
     mm->item_size = size;
     
     if(n == 0)
     {
+        mm->item_head = NULL;
         return;
     }
 
-    u8* limit = &mm->items[n];
+    const u8 * const limit = &mm->items[n];
 
     u8** pp;
     for(u8* p = &mm->items[0]; p < limit; p += size)
@@ -72,7 +73,7 @@ void threaded_nb_mm_init(threaded_nb_mm *mm, u32 count, u32 size)
         pp = (u8**)p;
         *pp = &p[size];
     }
-    *pp = NULL; // false "maybe-uninitialized" positive : the loop always runs AT LEAST once
+    *pp = NULL; // false "maybe-uninitialized" positive : the loop always runs AT LEAST once (n > 0 => and limit > p)
 
     mm->item_head = (volatile void**)&mm->items[0];
 }

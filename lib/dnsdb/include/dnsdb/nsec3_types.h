@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -46,11 +46,13 @@
 #include <arpa/inet.h>
 
 #include <dnscore/ptr_vector.h>
+#include <dnscore/typebitmap.h>
+
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/nsec3_collection.h>
 
-#if ZDB_NSEC3_SUPPORT == 0
-#error "Please do not include nsec3.h if ZDB_NSEC3_SUPPORT is 0"
+#if ZDB_HAS_NSEC3_SUPPORT == 0
+#error "Please do not include nsec3.h if ZDB_HAS_NSEC3_SUPPORT is 0"
 #endif
 
 #ifdef	__cplusplus
@@ -69,6 +71,7 @@ extern "C"
  * NSEC3PARAM as well.
  *
  */
+    
 #define MAX_SUPPORTED_NSEC3PARAM    4
 
 #define NSEC3_DIGEST_TAG	    0x474944334e	/* N3DIG */
@@ -89,6 +92,8 @@ extern "C"
 
 #define NSEC3_PROPRIETARY_FLAG_SCHEDULED 0x80
 #define NSEC3_PROPRIETARY_FLAG_DELETED   0x40
+    
+#define TMP_NSEC3_TTLRDATA_SIZE (1 + 1 + 2 + 1 + MAX_DOMAIN_LENGTH + 1 + MAX_DOMAIN_LENGTH + TYPE_BIT_MAPS_MAX_RDATA_SIZE)
 
 //typedef struct nsec3_node nsec3_zone_item;
 #define nsec3_zone_item struct nsec3_node
@@ -184,9 +189,7 @@ typedef struct nsec3_load_context nsec3_load_context;
 #define NSEC3_ZONE_SALT(n3_)	    		NSEC3PARAM_RDATA_SALT((n3_)->rdata)
 
 #define NSEC3PARAM_DEFAULT_TTL			0
-//#define NSEC3_DEFAULT_TTL			600                 /** @todo: Take it from the SOA instead */
-//#define NSEC3_DEFAULT_FLAGS                     NSEC3_FLAGS_OPTOUT  /** @todo: Take it from a zone configration field */
-#define NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD		0x80   /* DO NOT PUT THIS IN THE RFC
+#define NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD	0x80   /* DO NOT PUT THIS IN THE RFC
 							* IT'S PROPRIETARY
 							*/
 
@@ -201,7 +204,7 @@ typedef struct nsec3_load_context nsec3_load_context;
 
 #define nsec3_zone_get_item_next(n3_,idx_)	((nsec3_zone_item*)((n3_)->items.data[(idx_+1)%nsec3_zone_get_item_count(n3_)]))
 
-#define ZONE_IS_NSEC3(zone_) (((zone_)->nsec.nsec3!=NULL) && (zdb_record_find(&(zone_)->apex->resource_record_set, TYPE_NSEC3PARAM)!=NULL))
+#define ZONE_HAS_NSEC3PARAM(zone_) (((zone_)->nsec.nsec3!=NULL) && (zdb_record_find(&(zone_)->apex->resource_record_set, TYPE_NSEC3PARAM)!=NULL))
 #define ZONE_NSEC3_AVAILABLE(zone_) ( ((zone_)->apex->flags & (ZDB_RR_LABEL_DNSSEC_EDIT|ZDB_RR_LABEL_NSEC3)) == ZDB_RR_LABEL_NSEC3)
 
 #ifdef	__cplusplus

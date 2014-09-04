@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -52,10 +52,10 @@ typedef struct buffer_input_stream_data buffer_input_stream_data;
 struct buffer_input_stream_data
 {
     input_stream filtered;
-    u32 buffer_maxsize;
+    u32 buffer_maxsize; // physical size of the buffer
 
-    u32 buffer_size;
-    u32 buffer_offset;
+    u32 buffer_size;    // amount of the buffer that's filled
+    u32 buffer_offset;  // position in the buffer
 
     u8 buffer[1];
 };
@@ -114,7 +114,7 @@ buffer_read(input_stream* stream, u8* buffer, u32 len)
         data->buffer_size = 0;
         data->buffer_offset = 0;
 
-        return (remaining > 0) ? remaining : ERROR /* eof */;
+        return (remaining > 0) ? remaining : ERROR /* eof */; // TODO: this should be 0, not ERROR ... what are the side effects if fixed ?
     }
 
     MEMCOPY(buffer, data->buffer, len); /* starts at offset 0 */
@@ -162,7 +162,7 @@ buffer_skip(input_stream* stream, u32 len)
     return total_len;
 }
 
-static input_stream_vtbl buffer_input_stream_vtbl =
+static const input_stream_vtbl buffer_input_stream_vtbl =
 {
     buffer_read,
     buffer_skip,
@@ -174,8 +174,13 @@ void
 buffer_input_stream_init(input_stream* filtered, input_stream* stream, int buffer_size)
 {
     buffer_input_stream_data* data;
+    
+    if(buffer_size == 0)
+    {
+        buffer_size = BUFFER_INPUT_STREAM_DEFAULT_BUFFER_SIZE;
+    }
 
-    zassert(filtered->vtbl != NULL);
+    yassert(filtered->vtbl != NULL);
 
     MALLOC_OR_DIE(buffer_input_stream_data*, data, sizeof (buffer_input_stream_data) + buffer_size - 1, BUFFER_INPUT_STREAM_TAG);
 
@@ -206,7 +211,7 @@ buffer_input_stream_read_line(input_stream* stream, char* buffer, u32 len)
     
     if(len == 0)
     {
-        return ERROR;
+        return BUFFER_WOULD_OVERFLOW;
     }
     
     len--;
@@ -240,24 +245,23 @@ buffer_input_stream_read_line(input_stream* stream, char* buffer, u32 len)
         
         n = MIN((s32)len, n);
         
-        char *l = &b[n]; 
-        char *p = b;
-
-        while(p < l)
+#if 0 /* fix */
+#else
+        //
+        char *eol = (char*)memchr(b, '\n', n);
+        if(eol != NULL)
         {
-            char c = *p++;
-            *buffer++ = c;
-
-            if(c == '\n')
-            {
-                data->buffer_offset = p - src;
-                
-                *buffer = '\0';
-
-                return total + p - b;
-            }
+            ++eol;
+            u32 len = eol - b;
+            data->buffer_offset = eol - src;
+            memcpy(buffer, b, len);
+            buffer[len] = '\0';
+            return total + len;
         }
-        
+        memcpy(buffer, b, n);
+        buffer += n;
+#endif
+        //
         total += n;
         len -= (s32)n;
         
@@ -270,7 +274,7 @@ buffer_input_stream_read_line(input_stream* stream, char* buffer, u32 len)
             return total;
         }
 
-    #   /* What remains to read is smaller than the buffer max size */
+       /* What remains to read is smaller than the buffer max size */
 
         data->buffer_offset = 0;
 
@@ -287,6 +291,53 @@ buffer_input_stream_read_line(input_stream* stream, char* buffer, u32 len)
 
         b = src;
     }
+}
+
+input_stream*
+buffer_input_stream_get_filtered(input_stream *bos)
+{
+    buffer_input_stream_data* data = (buffer_input_stream_data*)bos->data;
+
+    return &data->filtered;
+}
+
+/**
+ * Rewinds the input stream back of a given number of bytes
+ * 
+ * @param bos
+ * @param bytes_back
+ * 
+ * @return bytes_back : the operation was successful
+ *         > 0        : the maximum number of bytes available for rewind at the time of the call
+ */
+
+ya_result
+buffer_input_stream_rewind(input_stream *bos, u32 bytes_back)
+{
+    buffer_input_stream_data* data = (buffer_input_stream_data*)bos->data;
+    
+    if(bytes_back < data->buffer_offset)
+    {
+        data->buffer_offset -= bytes_back;
+        return bytes_back;
+    }
+    else
+    {
+        return data->buffer_offset;
+    }
+}
+
+/**
+ * Returns true iff the input stream is a buffer input stream
+ * 
+ * @param bos
+ * @return 
+ */
+
+bool
+is_buffer_input_stream(input_stream *bos)
+{
+    return bos->vtbl == &buffer_input_stream_vtbl;
 }
 
 /** @} */

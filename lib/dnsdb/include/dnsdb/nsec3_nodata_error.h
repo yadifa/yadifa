@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -52,28 +52,29 @@ extern "C"
 
 void nsec3_nodata_error(const zdb_zone *zone, const zdb_rr_label* owner,
                         const dnsname_vector *qname, s32 apex_index,
-        
-                        u8* out_owner_nsec3_owner,
+                        u8 * restrict * pool,
+                        u8 **out_owner_nsec3_owner_p,
                         zdb_packed_ttlrdata** out_owner_nsec3,
-                        zdb_packed_ttlrdata** out_owner_nsec3_rrsig,
-                        u8* out_closest_encloser_nsec3_owner,
+                        const zdb_packed_ttlrdata** out_owner_nsec3_rrsig,
+                        u8 **out_closest_encloser_nsec3_owner_p,
                         zdb_packed_ttlrdata** out_closest_encloser_nsec3,
-                        zdb_packed_ttlrdata** out_closest_encloser_nsec3_rrsig);
+                        const zdb_packed_ttlrdata** out_closest_encloser_nsec3_rrsig);
 
 void nsec3_wild_nodata_error(const zdb_zone* zone, const zdb_rr_label* owner,
                  const dnsname_vector *qname, u32 apex_index,
+                 u8 * restrict * pool,
         
-                 u8* out_next_closer_nsec3_owner,
+                 u8 **out_next_closer_nsec3_owner_p,
                  zdb_packed_ttlrdata** out_encloser_nsec3,
-                 zdb_packed_ttlrdata** out_encloser_nsec3_rrsig,
+                 const zdb_packed_ttlrdata** out_encloser_nsec3_rrsig,
         
-                 u8* out_closest_encloser_nsec3_owner,
+                 u8 **out_closest_encloser_nsec3_owner_p,
                  zdb_packed_ttlrdata** out_closest_encloser_nsec3,
-                 zdb_packed_ttlrdata** out_closest_encloser_nsec3_rrsig,
+                 const zdb_packed_ttlrdata** out_closest_encloser_nsec3_rrsig,
         
-                 u8* out_wild_closest_encloser_nsec3_owner,
+                 u8 **out_wild_closest_encloser_nsec3_owner_p,
                  zdb_packed_ttlrdata** out_wild_closest_encloser_nsec3,
-                 zdb_packed_ttlrdata** out_wild_closest_encloser_nsec3_rrsig
+                 const zdb_packed_ttlrdata** out_wild_closest_encloser_nsec3_rrsig
                  );
 
 #ifdef	__cplusplus

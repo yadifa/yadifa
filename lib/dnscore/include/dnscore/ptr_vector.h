@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup collections Generic collections functions
  *  @ingroup dnscore
  *  @brief A dynamic-sized array of pointers
@@ -67,6 +67,14 @@ struct ptr_vector
     s32 size;
 };
 
+static inline void
+ptr_vector_init_empty(ptr_vector* v)
+{
+    v->data = NULL;
+    v->offset = -1;
+    v->size = 0;
+}
+
 /**
  * Initialises a vector structure with a size of PTR_VECTOR_DEFAULT_SIZE entries
  * 
@@ -74,6 +82,16 @@ struct ptr_vector
  */
 
 void  ptr_vector_init(ptr_vector* v);
+
+/**
+ * Initialises a vector structure with a size of PTR_VECTOR_DEFAULT_SIZE entries
+ * 
+ * @param v a pointer to the ptr_vector structure to initialise
+ * @param initial_capacity the size to allocate to start with
+ */
+
+void  ptr_vector_init_ex(ptr_vector* v, s32 initial_capacity);
+
 
 /**
  * Frees the memory used by a vector structure (not the vector structure itself)
@@ -129,7 +147,20 @@ void  ptr_vector_shrink(ptr_vector*v);
  * @param data  a pointer to the item
  */
 
-void  ptr_vector_append(ptr_vector* v, void* data);
+void ptr_vector_append(ptr_vector* v, void* data);
+
+/**
+ * Appends the item (pointer) to the vector and try to keep the buffer size at at most
+ * restrictedlimit.
+ * The goal is to avoid a growth of *2 that would go far beyond the restrictedlimit.
+ * The performance is extremely poor when the number of items in the buffer is restrictedlimit or more.
+ * 
+ * @param v     a pointer to the ptr_vector structure
+ * @param data  a pointer to the item
+ * @param restrictedlimit a guideline limit on the size of the vector
+ */
+
+void ptr_vector_append_restrict_size(ptr_vector* v, void* data, u32 restrictedlimit);
 
 /**
  * Removes an item from the back of the vector and returns its reference
@@ -180,7 +211,19 @@ typedef int ptr_vector_search_callback(const void*, const void*);
  * @return the first matching item or NULL if none has been found
  */
 
-void* ptr_vector_linear_search(ptr_vector* v, const void* what, ptr_vector_search_callback compare);
+void* ptr_vector_linear_search(const ptr_vector* v, const void* what, ptr_vector_search_callback compare);
+
+/**
+ * Look sequentially in the vector for an item using a key and a comparison function, returns the index of the first matching item
+ * 
+ * @param v         a pointer to the ptr_vector structure
+ * @param what      the key
+ * @param compare   the comparison function
+ * 
+ * @return the first matching item index or -1 if none has been found
+ */
+
+s32 ptr_vector_index_of(const ptr_vector* v, const void* what, ptr_vector_search_callback compare);
 
 /**
  * Look in the vector for an item using a key and a comparison function
@@ -193,11 +236,50 @@ void* ptr_vector_linear_search(ptr_vector* v, const void* what, ptr_vector_searc
  * @return the first matching item or NULL if none has been found
  */
 
-void* ptr_vector_search(ptr_vector* v, const void* what,ptr_vector_search_callback compare);
+void* ptr_vector_search(const ptr_vector* v, const void* what,ptr_vector_search_callback compare);
 
-#define ptr_vector_get(_v_,_idx_) (_v_)->data[(_idx_)]
+static inline void* ptr_vector_get(const ptr_vector* v, s32 idx)
+{
+    return v->data[idx];
+}
 
-#define ptr_vector_set(_v_,_idx_,_val_) (_v_)->data[(_idx_)]=(_val_)
+static inline void ptr_vector_set(ptr_vector* v, s32 idx, void* val)
+{
+     v->data[idx] = val;
+}
+
+static inline void *ptr_vector_last(const ptr_vector* v)
+{
+    void *r = NULL;
+    if(v->offset >= 0)
+    {
+        r = v->data[v->offset];
+    }
+    
+    return r;
+}
+
+static inline s32 ptr_vector_size(const ptr_vector *v)
+{
+    return v->offset + 1;
+}
+
+static inline s32 ptr_vector_capacity(const ptr_vector *v)
+{
+    return v->size;
+}
+
+static inline bool ptr_vector_isempty(const ptr_vector* v)
+{
+    return (v->offset < 0);
+}
+
+static inline void ptr_vector_end_swap(ptr_vector *pv,s32 idx)
+{
+    void* tmp = pv->data[idx];
+    pv->data[idx] = pv->data[pv->offset];
+    pv->data[pv->offset] = tmp;
+}
 
 #ifdef	__cplusplus
 }

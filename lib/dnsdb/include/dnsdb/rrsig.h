@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup rrsig RRSIG functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -43,26 +43,16 @@
 #ifndef _RRSIG_H
 #define	_RRSIG_H
 
-#ifndef RRSIG_UPDATE_SCHEDULED
-#define RRSIG_UPDATE_SCHEDULED 1
-#endif
-
 #include <dnscore/threaded_queue.h>
 #include <dnscore/ptr_vector.h>
 
-#include "zdb_types.h"
-#include "dnssec_task.h"
-#include "dnsrdata.h"
-#include "zdb_utils.h"
-#include "dnssec.h"
+#include <dnsdb/zdb_types.h>
+#include <dnsdb/dnssec_task.h>
+#include <dnsdb/rr_canonize.h>
 
-/** @todo: The key<->record loop should be inverted.  Should take one half day or something.
- *         This should be marginally faster for signing zones with more than one ZSK.
- */
+#if ZDB_HAS_NSEC3_SUPPORT != 0
 
-#if ZDB_NSEC3_SUPPORT != 0
-
-#include "nsec3.h"
+#include <dnsdb/nsec3.h>
 
 #endif
 
@@ -108,11 +98,11 @@
 
 #define RRSIG_TYPE_COVERED(x__)	    (GET_U16_AT((x__)->rdata_start[0]))       /** @todo : NATIVETYPE */
 #define RRSIG_ALGORITHM(x__)	    ((x__)->rdata_start[2])
-#define RRSIG_LABELS(x__)	    ((x__)->rdata_start[3])
+#define RRSIG_LABELS(x__)           ((x__)->rdata_start[3])
 #define RRSIG_ORIGINAL_TTL(x__)	    (ntohl(GET_U32_AT((x__)->rdata_start[4])))
 #define RRSIG_VALID_UNTIL(x__)	    (ntohl(GET_U32_AT((x__)->rdata_start[8])))
 #define RRSIG_VALID_SINCE(x__)	    (ntohl(GET_U32_AT((x__)->rdata_start[12])))
-#define RRSIG_KEY_TAG(x__)	    (ntohs(GET_U16_AT((x__)->rdata_start[16]))) /** @todo : NATIVETAG (LOOK FOR ALL OF THEM) */
+#define RRSIG_KEY_TAG(x__)          (ntohs(GET_U16_AT((x__)->rdata_start[16]))) /** @todo : NATIVETAG (LOOK FOR ALL OF THEM) */
 #define RRSIG_KEY_NATIVETAG(x__)    (GET_U16_AT((x__)->rdata_start[16]))
 #define RRSIG_SIGNER_NAME(x__)	    (&(x__)->rdata_start[18])
 
@@ -126,40 +116,48 @@
 extern "C" {
 #endif
 
-typedef struct rrsig_context rrsig_context;
+typedef struct rrsig_context_s rrsig_context_s;
 
 
-struct rrsig_context
+struct rrsig_context_s
 {
-    ENGINE* engine;
+    ENGINE *engine;
 
-    dnssec_key_sll* key_sll;
+    dnssec_key_sll *key_sll;
 
     /*
      * Current rrsig_sll (ZALLOC)
      */
 
-    zdb_packed_ttlrdata* rrsig_sll;
+    zdb_packed_ttlrdata *rrsig_sll;
 
     /*
      * New rrsig_ssl (MALLOC)
      */
 
-    zdb_packed_ttlrdata* added_rrsig_sll;
+    zdb_packed_ttlrdata *added_rrsig_sll;
 
     /*
      * Expired/invalid rrsig_ssl (MALLOC)
      */
 
-    zdb_packed_ttlrdata* removed_rrsig_sll;
+    zdb_packed_ttlrdata *removed_rrsig_sll;
+    
+    zdb_packed_ttlrdata *canonised_rrset;
+    
+    dnssec_task_s *task;
 
     /* Used for RR canonization */
     ptr_vector rrs;
 
-    u8* origin;	   /* Origin of the zone.  The rrsig has to match
+    u8 *origin;	   /* Origin of the zone.  The rrsig has to match
                     * this.
                     */
-
+    
+    smp_int *loose_quota;       // each signature will decrease this by 1
+                                // since signatures are made by label, this
+                                // is a best effort deal and this value will
+                                // most likely drop below zero
     /**/
 
     u32 rr_dnsname_len;
@@ -204,7 +202,10 @@ struct rrsig_context
     u8  label_depth;
     u8  flags;
     u8  nsec_flags;
-
+    bool do_verify_signatures;  // once the signatures are in, there is no point doing it again
+                                // if we do them, they are right
+                                // if the master do them, he is right
+                                // the only time they should be verified is at load time
     /**/
 
     /*
@@ -240,73 +241,34 @@ struct rrsig_context
     u8 rrsig_header[2+1+1+4+4+4+2+MAX_DOMAIN_LENGTH];
 };
 
-typedef struct processor_thread_context processor_thread_context;
-
-
-struct processor_thread_context
+struct rrsig_update_item_s
 {
-    /*
-     * Required in order to process signatures
-     */
-    
-    rrsig_context sig_context;
-
-    /** The do task query queue */
-    threaded_queue* query_queue;
-    /** The do answer query queue */
-    threaded_queue* answer_queue;
-
-    int id;
-    int job_count;
-    
-};
-
-typedef struct rrsig_update_query rrsig_update_query;
-
-
-struct rrsig_update_query
-{
-    /*
-     * So I can reschedule verifications
-     */
+    /// The zone being updated
 
     zdb_zone* zone;
-    
-    /*
-     * I need the full path to the label
-     *
-     * I need the said label
-     */
+
+    /// The label being processed
 
     zdb_rr_label* label;
 
-    /*
-     * New rrsig_ssl (MALLOC)
-     */
+    /// An rrset of records (mallocated) to add in the label
 
     zdb_packed_ttlrdata* added_rrsig_sll;
 
-    /*
-     * Expired/invalid rrsig_ssl (MALLOC)
-     */
+    /// An rrset of records (mallocated) to remove (and free) from the label
 
     zdb_packed_ttlrdata* removed_rrsig_sll;
 
-    /* STACK! */
+    // The fqdn of the label 
     
     dnsname_stack path;
-
-    /* We are not at the apex and we have at least one NS record */
-
-    bool delegation;
 };
 
-#if ZDB_NSEC3_SUPPORT != 0
+typedef struct rrsig_update_item_s rrsig_update_item_s;
 
-typedef struct nsec3_rrsig_update_query nsec3_rrsig_update_query;
+#if ZDB_HAS_NSEC3_SUPPORT != 0
 
-
-struct nsec3_rrsig_update_query
+struct nsec3_rrsig_update_item_s
 {
     zdb_zone* zone;
     nsec3_zone_item* item;
@@ -325,70 +287,93 @@ struct nsec3_rrsig_update_query
     zdb_packed_ttlrdata* removed_rrsig_sll;
 };
 
+typedef struct nsec3_rrsig_update_item_s nsec3_rrsig_update_item_s;
+
 #endif
 
-/* CANNOT BE ALLOCATED BY Z-ALLOC (THREAD ISSUE) */
+ya_result rrsig_context_initialize(rrsig_context_s *context, const zdb_zone *zone, const char *engine_name, u32 sign_from, smp_int *quota);
 
-typedef struct zdb_canonized_packed_ttlrdata zdb_canonized_packed_ttlrdata;
-struct zdb_canonized_packed_ttlrdata
+void rrsig_context_destroy(rrsig_context_s *context);
+
+static inline void rrsig_context_update_quota(rrsig_context_s *context, s32 sig_count)
 {
-    u16 rdata_size;
-    u16 rdata_canonized_size;   /* = htons(rdata_size) */
-    u8  rdata_start[1];
-};
+    if((sig_count > 0) && (context->loose_quota != NULL))
+    {
+        smp_int_sub(context->loose_quota, sig_count);
+    }
+}
 
+static inline s32 rrsig_context_get_quota(rrsig_context_s *context)
+{
+    if(context->loose_quota != NULL)
+    {
+        s32 quota = smp_int_get(context->loose_quota);
+        return quota;
+    }
+    else
+    {
+        return MAX_S32;
+    }
+}
 
-void rr_canonize(u16 type,zdb_packed_ttlrdata* rr_sll,ptr_vector* rrsp);
-void rr_free_canonized(ptr_vector* rrsp);
-
-ya_result rrsig_initialize_context(zdb_zone* zone, rrsig_context* context, const char* engine_name, u32 sign_from);
-void rrsig_destroy_context(rrsig_context* context);
-
-void rrsig_update_context_set_key(rrsig_context* context, dnssec_key* key);
+void rrsig_context_set_key(rrsig_context_s *context, dnssec_key* key);
 
 /*
  * Adds/Removes a label in the path in order to process it
  */
 
-void rrsig_update_context_push_name_rrsigsll(rrsig_context* context, u8* name, zdb_packed_ttlrdata* rrsig_sll);
+void rrsig_context_push_name_rrsigsll(rrsig_context_s *context, u8* name, zdb_packed_ttlrdata* rrsig_sll);
 
 /* Calls rrsig_update_context_push_name_rrsigsll using the label's fields */
-void rrsig_update_context_push_label(rrsig_context* context, zdb_rr_label* label);
-void rrsig_update_context_pop_label(rrsig_context* context);
+void rrsig_context_push_label(rrsig_context_s *context, zdb_rr_label* label);
+void rrsig_context_pop_label(rrsig_context_s *context);
 
 /** @todo: check is it a dup of rrsig_update_records ? */
-ya_result rrsig_update_label_type(rrsig_context* context, zdb_rr_label* label, u16 type, bool delegation);
+ya_result rrsig_update_label_rrset(rrsig_context_s *context, zdb_rr_label* label, u16 type);
 
-ya_result rrsig_update_records(rrsig_context* context, dnssec_key* key, zdb_packed_ttlrdata* rr_sll, u16 type, bool do_update);
-ya_result rrsig_update_label(rrsig_context* context, zdb_rr_label* label, bool delegation);
+ya_result rrsig_update_records(rrsig_context_s *context, dnssec_key* key, zdb_packed_ttlrdata* rr_sll, u16 type, bool do_update);
+ya_result rrsig_update_label(rrsig_context_s *context, zdb_rr_label* label);
 
 /*
  * Takes the result of an update and commits it to the label
  */
 
-void
-rrsig_update_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata* added_rrsig_sll, zdb_rr_label* label, zdb_zone* zone, dnsname_stack* name);
-
-/*
- * Returns the first rrsig record that applies to the give type.
- */
-
-zdb_packed_ttlrdata* rrsig_find(const zdb_rr_label* label, u16 type);
-
-/*
- * Returns the next rrsig record that applies to the give type.
- */
-
-zdb_packed_ttlrdata* rrsig_next(const zdb_packed_ttlrdata* rrsig, u16 type);
+void rrsig_update_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata* added_rrsig_sll, zdb_rr_label* label, zdb_zone* zone, dnsname_stack* name);
 
 /**
  * 
- * Remove the RRSIG covering the type
- *
+ * Returns the first RRSIG record that applies to the give type.
+ * 
+ * @param label        the label where to do the search
+ * @param covered_type the type covered by the RRSIG
+ * 
+ * @return the first RRSIG covering the type or NULL
  */
 
-void
-rrsig_delete(const u8 *dname, zdb_rr_label* label, u16 type);
+zdb_packed_ttlrdata* rrsig_find_first(const zdb_rr_label* label, u16 covered_type);
+
+/**
+ * 
+ * Returns the next RRSIG record that applies to the give type.
+ * 
+ * @param rrsig        the previous RRSIG covering the type
+ * @param covered_type the type covered by the RRSIG
+ * 
+ * @return  covered_type the next RRSIG covering the type or NULL
+ */
+ 
+zdb_packed_ttlrdata* rrsig_find_next(const zdb_packed_ttlrdata* rrsig, u16 covered_type);
+
+/**
+ * 
+ * Removes all the RRSIG covering the type
+ * 
+ * @param dname         the fqdn of the label
+ * @param label         the label
+ * @param covered_type  the type covered by the RRSIG
+ */
+
+void rrsig_delete(const u8 *dname, zdb_rr_label* label, u16 covered_type);
 
 #ifdef	__cplusplus
 }

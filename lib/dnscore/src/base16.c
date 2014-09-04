@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup base Base conversion functions
  *  @ingroup dnscore
  *  @brief Base 16 codec
@@ -128,8 +128,11 @@ static const u8 __DEBASE16__[256] ={
 ya_result
 base16_decode(const char* buffer_in, u32 size_in, u8* buffer_out)
 {
-    zassert((size_in & 1) == 0);
-
+    if((size_in & 1) != 0)
+    {
+        return PARSEB16_ERROR; // wrong number of bytes
+    }
+    
     u8* in = (u8*)buffer_in;
     u8* out = buffer_out;
 

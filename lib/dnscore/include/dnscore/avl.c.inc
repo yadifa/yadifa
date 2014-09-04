@@ -28,8 +28,6 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
  * DOCUMENTATION */
 /** @defgroup collections Generic collections functions
  *  @ingroup dnscore
@@ -47,8 +45,8 @@
 #include <string.h>
 #include <assert.h>
 
-#include "sys_types.h"
-#include "format.h"
+#include "dnscore/sys_types.h"
+#include "dnscore/format.h"
 
 #ifndef DUMPER_FUNCTION
 #define DUMPER_FUNCTION(...) formatln(__VA_ARGS__);flushout()
@@ -102,8 +100,8 @@
 #define AVL_REFERENCE_CONST const
 #endif
 
-#define TOOLEFT    -2
-#define LEFT       -1
+#define TOOLEFT    (-2)
+#define LEFT       (-1)
 #define MIDDLE      0
 #define RIGHT       1
 #define TOORIGHT    2
@@ -151,7 +149,7 @@ static s8 AVL_BALANCE_TO_DIR_[5] = {DIR_LEFT, DIR_LEFT, DIR_CRASH, DIR_RIGHT, DI
                     logger_flush();                             \
                     flushout();                                 \
                     flusherr();                                 \
-                    puts("assertion failed");fflush(NULL);      \
+                    puts("assertion failed on a " TOSTRING(AVL_NODE_TYPE));fflush(NULL);      \
                     exit(253);                                  \
                 }                                               \
         }                                                       \
@@ -654,7 +652,7 @@ AVL_PREFIXED(avl_insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
  */
 
 void
-AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
+AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
 {
     DUMP("avl_delete(%p, " AVL_REFERENCE_FORMAT_STRING ") ------------------------------", tree, AVL_REFERENCE_FORMAT(obj_hash));
 
@@ -1039,7 +1037,7 @@ AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
         {
             DUMP("Single Rotation (delete)");
 
-            AVL_NODE_TYPE* newroot = node;
+            AVL_NODE_TYPE* newroot;
 
             newroot = avl_node_single_rotation2(node);
 
@@ -1259,10 +1257,28 @@ AVL_PREFIXED(avl_callback_and_destroy)(AVL_TREE_TYPE *tree, callback_function ca
     }
 }
 
+AVL_NODE_TYPE*
+AVL_PREFIXED(avl_get_first)(AVL_CONST_TREE_TYPE* tree)
+{
+    assert(tree != NULL);
+
+    AVL_NODE_TYPE* node = AVL_TREE_ROOT(tree);
+    
+    if(node != NULL)
+    {
+        while(node->children.lr.left != NULL)
+        {
+            node = node->children.lr.left;
+        }
+    }
+    
+    return node;
+}
+
 #ifdef AVL_PARENT
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_node_next)(AVL_NODE_TYPE* node)
+AVL_PREFIXED(avl_node_next)(const AVL_NODE_TYPE* node)
 {
     AVL_NODE_TYPE* next;
 
@@ -1308,7 +1324,7 @@ AVL_PREFIXED(avl_node_next)(AVL_NODE_TYPE* node)
 }
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_node_prev)(AVL_NODE_TYPE* node)
+AVL_PREFIXED(avl_node_prev)(const AVL_NODE_TYPE* node)
 {
     AVL_NODE_TYPE* prev;
 
@@ -1356,10 +1372,10 @@ AVL_PREFIXED(avl_node_prev)(AVL_NODE_TYPE* node)
 }
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_node_mod_next)(AVL_NODE_TYPE* node)
+AVL_PREFIXED(avl_node_mod_next)(const AVL_NODE_TYPE* node)
 {
     AVL_NODE_TYPE* next;
-
+    
     next = AVL_RIGHT_CHILD(node);
 
     if(next != NULL)
@@ -1405,7 +1421,7 @@ AVL_PREFIXED(avl_node_mod_next)(AVL_NODE_TYPE* node)
              * or ourself.
              */
 
-            next = node;
+            next = (AVL_NODE_TYPE*)node; // node is not the starting point anymore, so casting to not-const is ok
 
             while(AVL_LEFT_CHILD(next) != NULL)
             {
@@ -1418,7 +1434,7 @@ AVL_PREFIXED(avl_node_mod_next)(AVL_NODE_TYPE* node)
 }
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_node_mod_prev)(AVL_NODE_TYPE* node)
+AVL_PREFIXED(avl_node_mod_prev)(const AVL_NODE_TYPE* node)
 {
     AVL_NODE_TYPE* prev;
 
@@ -1457,7 +1473,7 @@ AVL_PREFIXED(avl_node_mod_prev)(AVL_NODE_TYPE* node)
 
                 if(prev == NULL)
                 {
-                    prev = node;
+                    prev = (AVL_NODE_TYPE*)node; // node is not the starting point anymore, so casting to not-const is ok
                 }
 
                 break;
@@ -1541,37 +1557,13 @@ AVL_PREFIXED(avl_check_node)(AVL_NODE_TYPE* node, int depth)
         AVL_NODE_TYPE *parent__ = AVL_PARENT(node);
         if(parent__ != NULL)
         {
-#if defined(DEBUG_VALID_ADDRESS)
-            if(!debug_is_valid_address(parent__, sizeof(AVL_NODE_TYPE)))
-            {
-                DUMP("avl_check_node: node=(%p, " AVL_REFERENCE_FORMAT_STRING")",node, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));
-                DUMP("avl_check_node: parent node contains trash (%p)", parent__);
-                logger_flush();
-                return -depth;
-            }
-#endif
+
             AVL_NODE_TYPE *l__ = AVL_LEFT_CHILD(parent__);
 
-#if defined(DEBUG_VALID_ADDRESS)
-            if((l__ != NULL) && !debug_is_valid_address(l__, sizeof(AVL_NODE_TYPE)))
-            {
-                DUMP("avl_check_node: node=(%p, " AVL_REFERENCE_FORMAT_STRING")",node, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));
-                DUMP("avl_check_node: left node contains trash (%p)", l__);
-                logger_flush();
-                return -depth;
-            }
-#endif
+
             AVL_NODE_TYPE *r__ = AVL_RIGHT_CHILD(parent__);
 
-#if defined(DEBUG_VALID_ADDRESS)
-            if((r__ != NULL) && !debug_is_valid_address(r__, sizeof(AVL_NODE_TYPE)))
-            {
-                DUMP("avl_check_node: node=(%p, " AVL_REFERENCE_FORMAT_STRING")",node, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));
-                DUMP("avl_check_node: right node contains trash (%p)", r__);
-                logger_flush();
-                return -depth;
-            }
-#endif
+
 
             if(!(l__==(node) ||
                  r__==(node))	)

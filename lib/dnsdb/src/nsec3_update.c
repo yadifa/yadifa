@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -75,7 +75,7 @@ extern logger_handle *g_dnssec_logger;
  */
 
 void
-nsec3_update_rrsig_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata* added_rrsig_sll, nsec3_zone_item* item, zdb_zone *zone)
+nsec3_update_rrsig_commit(zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttlrdata *added_rrsig_sll, nsec3_zone_item *item, zdb_zone *zone)
 {
     /*
      * NOTE: NSEC3 records have no associated label. (Not really, not in the zone-contained-label sense from the DB )
@@ -84,12 +84,9 @@ nsec3_update_rrsig_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttl
      *       I have all the information available in the zone item.
      */
 
-    zdb_zone_lock(zone, ZDB_ZONE_MUTEX_NSEC3_UPDATER);
-
     zdb_listener_notify_update_nsec3rrsig(removed_rrsig_sll, added_rrsig_sll, item);
 
     zdb_packed_ttlrdata *sig;
-
     zdb_packed_ttlrdata **rrsig_sllp = &item->rrsig;
 
     /*
@@ -113,7 +110,6 @@ nsec3_update_rrsig_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttl
         zdb_packed_ttlrdata *rrsig_record = *rrsig_recordp;
         /* This is why my "next" pointer is ALWAYS the first field */
         
-
 #ifndef NDEBUG
         rdata_desc rdatadesc = {TYPE_RRSIG, ZDB_PACKEDRECORD_PTR_RDATASIZE(sig), ZDB_PACKEDRECORD_PTR_RDATAPTR(sig)};
         log_debug("rrsig: deleting: %{digest32h} %{typerdatadesc}", item->digest, &rdatadesc);
@@ -192,26 +188,17 @@ nsec3_update_rrsig_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttl
         free(tmp);
     }
 
-#ifndef NDEBUG
-    sig = item->rrsig;
-    u32 sig_idx = 0;
-    while(sig != NULL)
-    {
-        rdata_desc rdatadesc={TYPE_RRSIG, ZDB_PACKEDRECORD_PTR_RDATASIZE(sig), ZDB_PACKEDRECORD_PTR_RDATAPTR(sig)};
-        log_debug("rrsig: current: #%d %{digest32h} %{typerdatadesc}", sig_idx, item->digest, &rdatadesc);
-        sig_idx++;
-        sig = sig->next;
-    }
-#endif
 
-    zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_NSEC3_UPDATER);
+
 }
 
-bool nsec3_is_label_covered(zdb_rr_label *label, bool opt_out)
+bool
+nsec3_is_label_covered(zdb_rr_label *label, bool opt_out)
 {
     bool opt_in = !opt_out;
     bool skip_children = FALSE;    
     bool nsec3_covered = FALSE;
+    //bool force_rrsig = FALSE;
     
     if(!ZDB_LABEL_ISAPEX(label)) /* Not the origin (The apex of a zone has got a '.' label */
     {
@@ -222,6 +209,7 @@ bool nsec3_is_label_covered(zdb_rr_label *label, bool opt_out)
             bool has_ds = zdb_record_find(&label->resource_record_set, TYPE_DS) != NULL;
             
             nsec3_covered = opt_in|has_ds;
+            //force_rrsig = has_ds;            
 
             /*
              * After processing this node, the brother will be processed.
@@ -233,6 +221,7 @@ bool nsec3_is_label_covered(zdb_rr_label *label, bool opt_out)
             
             nsec3_covered = false;
             skip_children = true;
+            //force_rrsig = false;
         }
         else
         {
@@ -241,6 +230,8 @@ bool nsec3_is_label_covered(zdb_rr_label *label, bool opt_out)
             bool notempty = !zdb_record_isempty(&label->resource_record_set);
             
             nsec3_covered = notempty;
+            
+            //force_rrsig = notempty;
         }
     }
     else
@@ -353,7 +344,7 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
 
     commonargs->internal_statistics_label_count++;
 
-    zassert((label->flags & ZDB_RR_LABEL_NSEC) == 0);   /* Bad, this should not be called on an NSEC zone */
+    yassert((label->flags & ZDB_RR_LABEL_NSEC) == 0);   /* Bad, this should not be called on an NSEC zone */
 
     /*
      * First check the delegation
@@ -531,7 +522,7 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
 
     do
     {
-        zassert(n3ext != NULL); /* The label is supposed to be ready */
+        yassert(n3ext != NULL); /* The label is supposed to be ready */
 
         /*
             * If the NSEC3 extension has not been set up yet
@@ -718,7 +709,7 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
 
             /* nsec3_set_label_extension */
 
-            zassert(node != NULL);
+            yassert(node != NULL);
 
             n3ext->self = node;
             n3ext = n3ext->next;
@@ -962,7 +953,7 @@ nsec3_update_zone(zdb_zone* zone)
 
         do
         {
-            zassert(n3ext != NULL);
+            yassert(n3ext != NULL);
 
             /* Compute the digest */
             
@@ -990,7 +981,7 @@ nsec3_update_zone(zdb_zone* zone)
 
             nsec3_add_star(node, label);
 
-            zassert(n3ext->star == NULL);
+            yassert(n3ext->star == NULL);
 
             n3ext->star = node;
             n3ext = n3ext->next;
@@ -999,7 +990,7 @@ nsec3_update_zone(zdb_zone* zone)
         }
         while(n3 != NULL);
 
-        zassert(n3ext == NULL);
+        yassert(n3ext == NULL);
     }
 
     /** @todo: SCHEDULE a signature for all NSEC3 of the zone */

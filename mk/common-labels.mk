@@ -28,18 +28,40 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Labels common to all makefiles
+#
+################################################################################
 
 YCFLAGS=$(YSCFLAGS)
 
 YLDFLAGS=$(YNLDFLAGS)
 
 release:
+	echo YCFLAGS=$(YRCFLAGS)
+	echo YLDFLAGS=$(YRLDFLAGS)
 	$(MAKE) all "YCFLAGS=$(YRCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YRLDFLAGS)"
 
 profile:
+	echo YCFLAGS=$(YPCFLAGS)
+	echo YLDFLAGS=$(YPLDFLAGS)
 	$(MAKE) all "YCFLAGS=$(YPCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YPLDFLAGS)"
 
 debug:
+	echo YCFLAGS=$(YDCFLAGS)
+	echo YLDFLAGS=$(YDLDFLAGS)
 	$(MAKE) all "YCFLAGS=$(YDCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YDLDFLAGS)"
 
+buildinfo.h: config.log
+	echo \#pragma once > buildinfo.h 2> /dev/null
+	echo // generated file, do not modify >> buildinfo.h 2> /dev/null
+	echo \#define BUILD_OPTIONS \"$$(grep "./configure" config.log | head -1 | sed 's/.*\.\/configure *//')\" >> buildinfo.h 2> /dev/null
 

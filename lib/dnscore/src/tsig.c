@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup ### #######
  *  @ingroup dnscore
  *  @brief
@@ -41,13 +41,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "dnscore/sys_types.h"
+#include "dnscore-config.h"
 
-#include "dnscore/message.h"
+#include "dnscore/message.h" // DO NOT REMOVE ME
 #include "dnscore/tsig.h"
 #include "dnscore/packet_reader.h"
 
-#if HAS_TSIG_SUPPORT == 1
+#if DNSCORE_HAS_TSIG_SUPPORT
 
 #define TSIGNODE_TAG 0x45444f4e47495354
 #define TSIGPAYL_TAG 0x4c59415047495354
@@ -76,7 +76,7 @@
  * Worst case : N is enough for sum[n = 0,N](Fn) where F is Fibonacci
  * Best case : N is enough for (2^(N+1))-1
  */
-#define AVL_MAX_DEPTH   16	/* 2047 TSIG keys max */
+#define AVL_MAX_DEPTH   10	/* 2047 TSIG keys max */
 
 /*
  * The previx that will be put in front of each function name
@@ -212,7 +212,7 @@
 #define AVL_NODE_DELETE_CALLBACK(node)
 
 #include "dnscore/avl.c.inc"
-#include "dnscore/message.h"
+#include "dnscore/message.h" // DO NOT REMOVE ME
 
 #undef AVL_MAX_DEPTH
 #undef AVL_PREFIX
@@ -228,6 +228,18 @@
  */
 
 static tsig_node *tsig_tree = NULL;
+static u32 tsig_tree_count = 0;
+static u8 tsig_serial = 0; /// @note load serial
+
+/**
+ * Call this before a config reload
+ */
+
+void
+tsig_serial_next()
+{
+    tsig_serial++;
+}
 
 ya_result
 tsig_register(const u8 *name, const u8 *mac, u16 mac_size, u8 mac_algorithm)
@@ -238,22 +250,50 @@ tsig_register(const u8 *name, const u8 *mac, u16 mac_size, u8 mac_algorithm)
 
     if(node != NULL)
     {
-        if(node->item.mac == NULL)
+        if(node->item.mac != NULL)
         {
-            MALLOC_OR_DIE(u8*, node->item.mac, mac_size, TSIGMAC_TAG);
-            MEMCOPY((u8*)node->item.mac, mac, mac_size);
+            bool same = (node->item.mac_size == mac_size)                 &&
+                        (node->item.mac_algorithm == mac_algorithm)       &&
+                        (memcmp((u8*)node->item.mac, mac, mac_size) == 0);
+            
+            if(node->item.load_serial != tsig_serial)
+            {
+                if(same)
+                {
+                    // same key, different instances ... nothing to do
+                    
+                    return SUCCESS;
+                }
+                else
+                {
+                    // this is an old version of the key
+                    
+                    free((void*)node->item.mac);
+                    node->item.mac = NULL;
+                }
+            }
+            else
+            {
+                // it's a dup in the config file
+                
+                return TSIG_DUPLICATE_REGISTRATION; /* dup */
+            }
+        }
+        
+        yassert(node->item.mac == NULL);
+        
+        MALLOC_OR_DIE(u8*, node->item.mac, mac_size, TSIGMAC_TAG);
+        MEMCOPY((u8*)node->item.mac, mac, mac_size);
 
-            node->item.evp_md = tsig_get_EVP_MD(mac_algorithm);
-            node->item.mac_algorithm_name = tsig_get_algorithm_name(mac_algorithm);
-            node->item.name_len = dnsname_len(name);
-            node->item.mac_algorithm_name_len = dnsname_len(node->item.mac_algorithm_name);
-            node->item.mac_size = mac_size;
-            node->item.mac_algorithm = mac_algorithm;
-        }
-        else
-        {
-            return_code = TSIG_DUPLICATE_REGISTRATION; /* dup */
-        }
+        node->item.evp_md = tsig_get_EVP_MD(mac_algorithm);
+        node->item.mac_algorithm_name = tsig_get_algorithm_name(mac_algorithm);
+        node->item.name_len = dnsname_len(name);
+        node->item.mac_algorithm_name_len = dnsname_len(node->item.mac_algorithm_name);
+        node->item.mac_size = mac_size;
+        node->item.mac_algorithm = mac_algorithm;
+        node->item.load_serial = tsig_serial;
+
+        tsig_tree_count++;
     }
     else
     {
@@ -263,7 +303,7 @@ tsig_register(const u8 *name, const u8 *mac, u16 mac_size, u8 mac_algorithm)
     return return_code;
 }
 
-tsig_item *
+tsig_item*
 tsig_get(const u8 *name)
 {
     tsig_node *node = tsig_avl_find(&tsig_tree, name);
@@ -273,6 +313,40 @@ tsig_get(const u8 *name)
         return &node->item;
     }
 
+    return NULL;
+}
+
+u32
+tsig_get_count()
+{
+    return tsig_tree_count;
+}
+
+tsig_item*
+tsig_get_at_index(s32 index)
+{
+    if(index < 0 || index >= tsig_tree_count)
+    {
+        return NULL;
+    }
+    
+    tsig_avl_iterator iter;
+    tsig_avl_iterator_init(&tsig_tree, &iter);
+    
+    while(tsig_avl_iterator_hasnext(&iter))
+    {
+        tsig_node *node = tsig_avl_iterator_next_node(&iter);
+        
+        if(index == 0)
+        {
+            return &node->item;
+        }
+        
+        index--;
+    }
+    
+    // should never be reached
+    
     return NULL;
 }
 
@@ -287,6 +361,7 @@ tsig_finalize()
 
 static u8 tsig_typeclassttl[8] = {0x00, 0xfa, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00};
 static u8 tsig_classttl[6] = {0x00, 0xff, 0x00, 0x00, 0x00, 0x00};
+static u8 tsig_noerror_noother[4] = {0x00, 0x00, 0x00, 0x00};
 
 static ya_result
 tsig_verify_query(message_data *mesg)
@@ -296,19 +371,19 @@ tsig_verify_query(message_data *mesg)
 
 #if LOG_DIGEST_INPUT >= 2
     log_debug("tsig_verify: %hx", mesg->tsig.mac_size);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.mac_size, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, 32, TRUE, TRUE);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.mac_size, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, 32);
     log_debug("tsig_verify: start");
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, tsig_classttl, sizeof (tsig_classttl), 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timehi, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timelo, 4, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.fudge, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.error, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.other_len, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.other, ntohs(mesg->tsig.other_len), 32, TRUE, TRUE);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, tsig_classttl, sizeof (tsig_classttl), 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timehi, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timelo, 4, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.fudge, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.error, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.other_len, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.other, ntohs(mesg->tsig.other_len), 32);
     log_debug("tsig_verify: stop");
 #endif
 
@@ -343,6 +418,8 @@ tsig_verify_query(message_data *mesg)
 
     if((md_len != mesg->tsig.mac_size) || (memcmp(mesg->tsig.mac, md, md_len) != 0))
     {
+        mesg->status = FP_TSIG_ERROR;
+        mesg->tsig.error = NU16(RCODE_BADSIG);
         return TSIG_BADSIG;
     }
 
@@ -360,18 +437,18 @@ tsig_verify_answer(message_data *mesg, const u8 *mac, u16 mac_size)
 #if LOG_DIGEST_INPUT >= 2
     log_debug("tsig_verify_answer: %hx", mesg->tsig.mac_size);
     log_debug("tsig_verify_answer: start");
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) &mac_size_network, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mac, mac_size, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, tsig_classttl, sizeof (tsig_classttl), 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) &mesg->tsig.timehi, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) &mesg->tsig.timelo, 4, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) &mesg->tsig.fudge, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) &mesg->tsig.error, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) &mesg->tsig.other_len, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.other, ntohs(mesg->tsig.other_len), 32, TRUE, TRUE);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) &mac_size_network, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mac, mac_size, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, tsig_classttl, sizeof (tsig_classttl), 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) &mesg->tsig.timehi, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) &mesg->tsig.timelo, 4, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) &mesg->tsig.fudge, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) &mesg->tsig.error, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) &mesg->tsig.other_len, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.other, ntohs(mesg->tsig.other_len), 32);
     log_debug("tsig_verify_answer: stop");
 #endif
 
@@ -410,11 +487,13 @@ tsig_verify_answer(message_data *mesg, const u8 *mac, u16 mac_size)
     //if(md_len != ntohs(mesg->tsig.mac_size))
     if(md_len != mac_size)
     {
+        mesg->status = FP_TSIG_ERROR;
         return TSIG_BADSIG;
     }
 
     if(memcmp(mesg->tsig.mac, md, md_len) != 0)
     {
+        mesg->status = FP_TSIG_ERROR;
         return TSIG_BADSIG;
     }
 
@@ -437,17 +516,17 @@ tsig_digest_query(message_data *mesg)
 
     log_debug("tsig_digest_query: start");
 
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32, TRUE, TRUE);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32);
 
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, tsig_classttl, sizeof (tsig_classttl), 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timehi, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timelo, 4, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.fudge, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.error, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.other_len, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.other, ntohs(mesg->tsig.other_len), 32, TRUE, TRUE);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, tsig_classttl, sizeof (tsig_classttl), 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timehi, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timelo, 4, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.fudge, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.error, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.other_len, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.other, ntohs(mesg->tsig.other_len), 32);
     log_debug("tsig_digest_query: stop");
 #endif
 
@@ -463,13 +542,10 @@ tsig_digest_query(message_data *mesg)
     HMAC_Update(&ctx, (u8*) & mesg->tsig.timehi, 2);
     HMAC_Update(&ctx, (u8*) & mesg->tsig.timelo, 4);
     HMAC_Update(&ctx, (u8*) & mesg->tsig.fudge, 2);
-    HMAC_Update(&ctx, (u8*) & mesg->tsig.error, 2);
-    HMAC_Update(&ctx, (u8*) & mesg->tsig.other_len, 2);
-
-    if(mesg->tsig.other_len != 0)
-    {
-        HMAC_Update(&ctx, mesg->tsig.other, ntohs(mesg->tsig.other_len));
-    }
+    // error is 0
+    // other len is 0
+    // no need to work on other data either (since other len is 0)
+    HMAC_Update(&ctx, tsig_noerror_noother, 4); // four zeros
 
     u32 tmp_mac_size;
     HMAC_Final(&ctx, mesg->tsig.mac, &tmp_mac_size);
@@ -495,20 +571,20 @@ tsig_digest_answer(message_data *mesg)
 
     log_debug("tsig_digest_answer: start");
     
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.tsig->mac_size, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, 32, TRUE, TRUE);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.tsig->mac_size, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, 32);
 
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32, TRUE, TRUE);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32);
 
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, tsig_classttl, sizeof (tsig_classttl), 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timehi, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timelo, 4, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.fudge, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.error, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.other_len, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.other, ntohs(mesg->tsig.other_len), 32, TRUE, TRUE);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, tsig_classttl, sizeof (tsig_classttl), 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timehi, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timelo, 4, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.fudge, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.error, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.other_len, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.other, ntohs(mesg->tsig.other_len), 32);
     log_debug("tsig_digest_answer: stop");
 #endif
 
@@ -584,8 +660,6 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
             /* oops */
 
             /**
-             * @todo RCODE9 + BADKEY
-             *
              * If a non-forwarding server does not recognize the key used by the
              * client, the server MUST generate an error response with RCODE 9
              * (NOTAUTH) and TSIG ERROR 17 (BADKEY).
@@ -594,9 +668,8 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
              *
              */
 
-            mesg->tsig.error = htons(RCODE_BADKEY);
-
-            mesg->status = FP_TSIG_ERROR;
+            mesg->tsig.error = NU16(RCODE_BADKEY);
+            mesg->status = RCODE_NOTAUTH; // no fingerprint here, it's RFC
             MESSAGE_LOFLAGS(mesg->buffer) = (MESSAGE_LOFLAGS(mesg->buffer)&~RCODE_BITS) | mesg->status;
 
             return TSIG_BADKEY;
@@ -612,7 +685,8 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
         ya_result return_code;
 
         mesg->received = tsig_offset;
-        MESSAGE_AR(mesg->buffer) = htons(ar_count - 1);
+        mesg->send_length = tsig_offset;
+        MESSAGE_SET_AR(mesg->buffer,htons(ar_count - 1));
 
         /*
          * Read the algoritm name and see if it matches our TSIG key
@@ -623,7 +697,7 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
             /* oops */
 
             mesg->tsig.error = NU16(RCODE_BADKEY);
-
+            mesg->status = FP_TSIG_BROKEN;
             return TSIG_BADKEY;
         }
 
@@ -634,7 +708,7 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
             /* oops */
 
             mesg->tsig.error = NU16(RCODE_BADKEY);
-
+            mesg->status = FP_TSIG_ERROR;
             return TSIG_BADKEY;
         }
 
@@ -646,43 +720,12 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
         mesg->tsig.tsig = tsig;
         mesg->tsig.mac_algorithm = alg;
         
-#if 1
-        if(FAIL(return_code = packet_reader_read(purd, (u8*) & mesg->tsig.timehi, 10)))
+        if(FAIL(return_code = packet_reader_read(purd, &mesg->tsig.timehi, 10)))
         {
             /* oops */
-
+            mesg->status = FP_TSIG_BROKEN;
             return TSIG_FORMERR;
         }
-#else
-
-        if(FAIL(return_code = packet_reader_read(purd, (u8*) & mesg->tsig.timehi, 2)))
-        {
-            /* oops */
-
-            return TSIG_FORMERR;
-        }
-
-        if(FAIL(return_code = packet_reader_read(purd, (u8*) & mesg->tsig.timelo, 4)))
-        {
-            /* oops */
-
-            return TSIG_FORMERR;
-        }
-
-        if(FAIL(return_code = packet_reader_read(purd, (u8*) & mesg->tsig.fudge, 2)))
-        {
-            /* oops */
-
-            return TSIG_FORMERR;
-        }
-        
-        if(FAIL(return_code = packet_reader_read(purd, (u8*) & mesg->tsig.mac_size, 2)))
-        {
-            /* oops */
-
-            return TSIG_FORMERR;
-        }
-#endif
         
         /* Check the time */
 
@@ -704,20 +747,12 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
 
         u64 fudge = ntohs(mesg->tsig.fudge);
 
-        if(abs(then - now) > fudge)
-        {
-            mesg->tsig.error = htons(RCODE_BADTIME);
-            return TSIG_BADTIME;
-        }
-
-
-
         u16 mac_size = ntohs(mesg->tsig.mac_size);  /* NETWORK => NATIVE */
 
-        if(mac_size > sizeof (mesg->tsig.mac))
+        if(mac_size > sizeof(mesg->tsig.mac))
         {
             /* oops */
-
+            mesg->status = FP_TSIG_BROKEN;
             return TSIG_FORMERR;
         }
 
@@ -726,42 +761,21 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
         if(FAIL(return_code = packet_reader_read(purd, mesg->tsig.mac, mac_size)))
         {
             /* oops */
-
+            mesg->status = FP_TSIG_BROKEN;
             return TSIG_FORMERR;
         }
-#if 1
-        if(FAIL(return_code = packet_reader_read(purd, (u8*) & mesg->tsig.original_id, 6)))
+
+        if(FAIL(return_code = packet_reader_read(purd, &mesg->tsig.original_id, 6))) // and error, and other len
         {
             /* oops */
-
-            return TSIG_FORMERR;
-        }
-#else
-        if(FAIL(return_code = packet_reader_read(purd, (u8*) & mesg->tsig.original_id, 2)))
-        {
-            /* oops */
-
+            mesg->status = FP_TSIG_BROKEN;
             return TSIG_FORMERR;
         }
 
-        if(FAIL(return_code = packet_reader_read(purd, (u8*) & mesg->tsig.error, 2)))
-        {
-            /* oops */
-
-            return TSIG_FORMERR;
-        }
-
-        if(FAIL(return_code = packet_reader_read(purd, (u8*) & mesg->tsig.other_len, 2)))
-        {
-            /* oops */
-
-            return TSIG_FORMERR;
-        }
-#endif
         if(mesg->tsig.other_len != 0)
         {
             /**
-             * @todo This should never be run in input queries ...
+             * @note This should never be run in input queries ...
              */
 
             u16 other_len = ntohs(mesg->tsig.other_len);
@@ -774,9 +788,16 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
 
                 free(mesg->tsig.other);
                 mesg->tsig.other = NULL;
-
+                mesg->status = FP_TSIG_BROKEN;
                 return TSIG_FORMERR;
             }
+        }
+        
+        if(abs(then - now) > fudge)
+        {
+            mesg->tsig.error = htons(RCODE_BADTIME);
+            mesg->status = FP_TSIG_ERROR;
+            return TSIG_BADTIME;
         }
 
         /*
@@ -788,7 +809,7 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
     }
 
     /* error : tsig but wrong tsig setup */
-
+    mesg->status = FP_TSIG_BROKEN;
     return TSIG_FORMERR;
 }
 
@@ -801,17 +822,33 @@ tsig_process_query(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig
     
     if(ISOK(return_value = tsig_process(mesg, purd, tsig_offset, tsig, tctr)))
     {
-        if(FAIL(return_value = tsig_verify_query(mesg)))
+        if(ISOK(return_value = tsig_verify_query(mesg)))
         {
-            /* oops */
-
-            free(mesg->tsig.other);
-            mesg->tsig.other = NULL;
-            mesg->tsig.error = htons(RCODE_BADSIG);
-
-            tsig_append_error(mesg);
-        }        
+            return return_value;
+        }
+        
+        // tsig process may have allocated tsig other
+        
+        free(mesg->tsig.other);
+        mesg->tsig.other = NULL;
+        mesg->tsig.error = htons(RCODE_BADSIG);
     }
+    
+    switch(return_value)
+    {
+        case TSIG_FORMERR:
+            break;
+        case TSIG_BADTIME:
+            tsig_append_error(mesg);
+            break;
+        default:
+            tsig_append_unsigned_error(mesg);
+            break;
+    }
+                    
+    /* oops */
+
+    
     
     return return_value;
 }
@@ -849,7 +886,7 @@ tsig_process_answer(message_data *mesg, packet_unpack_reader_data *purd, u32 tsi
 ya_result
 tsig_extract_and_process(message_data *mesg)
 {
-    /*zassert(mesg->ar_start != NULL);*/
+    /*yassert(mesg->ar_start != NULL);*/
 
     /*
      * rfc2845
@@ -915,9 +952,9 @@ tsig_extract_and_process(message_data *mesg)
         return TSIG_FORMERR;
     }
 
-    /*zassert(((u8*)&tctr.rdlen) - ((u8*)&tctr.qtype) == 8);*/
+    /*yassert(((u8*)&tctr.rdlen) - ((u8*)&tctr.qtype) == 8);*/
 
-    if(ISOK(packet_reader_read(&purd, (u8*) & tctr, 10)))
+    if(ISOK(packet_reader_read(&purd, &tctr, 10)))
     {
         if(tctr.qtype == TYPE_TSIG) /* && (tctr.qclass == TYPE_ANY) && (tctr.ttl == 0 )*/
         {
@@ -1006,7 +1043,7 @@ tsig_add_tsig(message_data *mesg)
 
     mesg->send_length = (tsig_ptr - mesg->buffer);
 
-    MESSAGE_AR(mesg->buffer) = htons(ar_count + 1);
+    MESSAGE_SET_AR(mesg->buffer, htons(ar_count + 1));
     
     return SUCCESS;
 }
@@ -1018,7 +1055,7 @@ tsig_add_tsig(message_data *mesg)
 ya_result
 tsig_sign_answer(message_data *mesg)
 {
-    zassert(mesg->ar_start != NULL);
+    yassert(mesg->ar_start != NULL);
 
     tsig_digest_answer(mesg);
 
@@ -1032,7 +1069,7 @@ tsig_sign_answer(message_data *mesg)
 ya_result
 tsig_sign_query(message_data *mesg)
 {
-    zassert(mesg->ar_start != NULL);
+    yassert(mesg->ar_start != NULL);
 
     tsig_digest_query(mesg);
 
@@ -1044,36 +1081,15 @@ tsig_sign_query(message_data *mesg)
  *
  *  Adds a TSIG error to the message
  *
- * @TODO: Change the algorithm to use tsig_add_tsig
+ * @todo 20140523 edf -- Change the algorithm to use tsig_add_tsig
  */
 
 ya_result
-tsig_append_error(message_data *mesg)
+tsig_append_unsigned_error(message_data *mesg)
 {
-    zassert(mesg->ar_start != NULL);
+    yassert(mesg->ar_start != NULL);
 
     u16 ar_count = ntohs(MESSAGE_AR(mesg->buffer));
-
-    /*
-     * rfc2845
-     *
-     * If there is a TSIG then
-     * _ It must be put aside, safely
-     * _ It must be removed from the query
-     * _ It must be processed
-     *
-     */
-
-    /*
-     * Read DNS name (decompression on)
-     * Read type (TSIG = 250)
-     * Read class (ANY)
-     * Read TTL (0)
-     * Read RDLEN
-     *
-     */
-
-    /* truncate */
 
     packet_unpack_reader_data purd;
     purd.packet = mesg->buffer;
@@ -1084,9 +1100,9 @@ tsig_append_error(message_data *mesg)
     mesg->send_length = purd.offset;
     mesg->received = purd.offset;
 
-    MESSAGE_AN(mesg->buffer) = 0;
-    MESSAGE_NS(mesg->buffer) = 0;
-    MESSAGE_AR(mesg->buffer) = 0;
+    MESSAGE_SET_AN(mesg->buffer, 0);
+    MESSAGE_SET_NS(mesg->buffer, 0);
+    MESSAGE_SET_AR(mesg->buffer, 0);
 
     if(!MESSAGE_HAS_TSIG(*mesg) ||
             mesg->size_limit < (mesg->send_length +
@@ -1133,7 +1149,18 @@ tsig_append_error(message_data *mesg)
 
     mesg->send_length = (tsig_ptr - mesg->buffer);
 
-    MESSAGE_AR(mesg->buffer) = htons(ar_count + 1);
+    MESSAGE_SET_AR(mesg->buffer, htons(ar_count + 1));
+
+    return SUCCESS;
+}
+
+ya_result
+tsig_append_error(message_data *mesg)
+{
+    yassert(mesg->ar_start != NULL);
+    
+    MESSAGE_FLAGS_OR(mesg->buffer, QR_BITS, mesg->status);
+    tsig_sign_answer(mesg);
 
     return SUCCESS;
 }
@@ -1162,9 +1189,9 @@ tsig_sign_tcp_first_message(struct message_data *mesg)
     u16 mac_size_network = htons(mesg->tsig.mac_size);
 
 #if LOG_DIGEST_INPUT != 0
-    log_debug("tsig_sign_tcp: PRIOR: ");
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mac_size_network, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.mac, mesg->tsig.mac_size, 32, TRUE, TRUE);
+    log_debug("tsig_sign_tcp: PRIOR: (%p)", mesg);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mac_size_network, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.mac, mesg->tsig.mac_size, 32);
 #endif
 
     HMAC_Update(&mesg->tsig.ctx, (u8*) & mac_size_network, 2);
@@ -1183,8 +1210,8 @@ tsig_sign_tcp_next_message(struct message_data *mesg)
      */
 
 #if LOG_DIGEST_INPUT != 0
-    log_debug("tsig_sign_tcp: Message: ");
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32, TRUE, TRUE);
+    log_debug("tsig_sign_tcp: Message: (%p)", mesg);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32);
 #endif
 
     HMAC_Update(&mesg->tsig.ctx, mesg->buffer, mesg->send_length);
@@ -1202,10 +1229,10 @@ tsig_sign_tcp_next_message(struct message_data *mesg)
          */
 
 #if LOG_DIGEST_INPUT != 0
-        log_debug("tsig_sign_tcp: Timers: ");
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timehi, 2, 32, TRUE, TRUE);
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timelo, 4, 32, TRUE, TRUE);
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.fudge, 2, 32, TRUE, TRUE);
+        log_debug("tsig_sign_tcp: Timers: (%p)", mesg);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timehi, 2, 32);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timelo, 4, 32);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.fudge, 2, 32);
 #endif
 
         HMAC_Update(&mesg->tsig.ctx, (u8*) & mesg->tsig.timehi, 2);
@@ -1234,9 +1261,9 @@ tsig_sign_tcp_next_message(struct message_data *mesg)
         u16 mac_size_network = htons(mesg->tsig.mac_size);
 
 #if LOG_DIGEST_INPUT != 0
-        log_debug("tsig_sign_tcp: Prior: ");
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mac_size_network, 2, 32, TRUE, TRUE);
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.mac, mesg->tsig.mac_size, 32, TRUE, TRUE);
+        log_debug("tsig_sign_tcp: Prior: (%p)", mesg);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mac_size_network, 2, 32);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.mac, mesg->tsig.mac_size, 32);
 #endif
 
         HMAC_Update(&mesg->tsig.ctx, (u8*) & mac_size_network, 2);
@@ -1254,8 +1281,8 @@ tsig_sign_tcp_last_message(struct message_data *mesg)
      */
 
 #if LOG_DIGEST_INPUT != 0
-    log_debug("tsig_sign_tcp: MESSAGE: ");
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32, TRUE, TRUE);
+    log_debug("tsig_sign_tcp: MESSAGE: (%p)", mesg);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32);
 #endif
 
     HMAC_Update(&mesg->tsig.ctx, mesg->buffer, mesg->send_length);
@@ -1271,10 +1298,10 @@ tsig_sign_tcp_last_message(struct message_data *mesg)
      */
 
 #if LOG_DIGEST_INPUT != 0
-    log_debug("tsig_sign_tcp: TIMERS: ");
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timehi, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timelo, 4, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.fudge, 2, 32, TRUE, TRUE);
+    log_debug("tsig_sign_tcp: TIMERS: (%p)", mesg);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timehi, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timelo, 4, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.fudge, 2, 32);
 #endif
 
     HMAC_Update(&mesg->tsig.ctx, (u8*) & mesg->tsig.timehi, 2);
@@ -1328,7 +1355,7 @@ tsig_sign_tcp_message(struct message_data *mesg, tsig_tcp_message_position pos)
                 return_code = tsig_sign_answer(mesg);
                 break;
             }
-            case TSIG_NOWHERE: /** @todo check this is the right code */
+            case TSIG_NOWHERE:
             {
                 break;
             }
@@ -1342,7 +1369,7 @@ ya_result
 tsig_verify_tcp_first_message(struct message_data *mesg, const u8 *mac, u16 mac_size)
 {
 #if LOG_DIGEST_INPUT != 0
-    log_debug("tsig_verify_tcp_first_message: first verify: ");
+    log_debug("tsig_verify_tcp_first_message: first verify: (%p)", mesg);
 #endif
     
     ya_result ret = tsig_verify_answer(mesg, mac, mac_size);
@@ -1366,9 +1393,9 @@ tsig_verify_tcp_first_message(struct message_data *mesg, const u8 *mac, u16 mac_
     u16 mac_size_network = htons(mesg->tsig.mac_size);
 
 #if LOG_DIGEST_INPUT != 0
-    log_debug("tsig_verify_tcp_first_message: previous MAC: ");
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mac_size_network, 2, 32, TRUE, TRUE);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.mac, mesg->tsig.mac_size, 32, TRUE, TRUE);
+    log_debug("tsig_verify_tcp_first_message: previous MAC: (%p)", mesg);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mac_size_network, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.mac, mesg->tsig.mac_size, 32);
 #endif
 
     HMAC_Update(&mesg->tsig.ctx, (u8*) & mac_size_network, 2);
@@ -1389,8 +1416,8 @@ tsig_verify_tcp_next_message(struct message_data *mesg)
     u8 mac[64];
 
 #if LOG_DIGEST_INPUT != 0
-    log_debug("tsig_verify_tcp_next_message: message: ");
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->received, 32, TRUE, TRUE);
+    log_debug("tsig_verify_tcp_next_message: message: (%p)", mesg);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->received, 32);
 #endif
 
     if(mesg->tsig.tcp_tsig_countdown-- < 0)
@@ -1413,10 +1440,10 @@ tsig_verify_tcp_next_message(struct message_data *mesg)
          */
 
 #if LOG_DIGEST_INPUT != 0
-        log_debug("tsig_verify_tcp_next_message: timers: ");
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timehi, 2, 32, TRUE, TRUE);
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timelo, 4, 32, TRUE, TRUE);
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.fudge, 2, 32, TRUE, TRUE);
+        log_debug("tsig_verify_tcp_next_message: timers: (%p)", mesg);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timehi, 2, 32);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timelo, 4, 32);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.fudge, 2, 32);
 #endif
 
         HMAC_Update(&mesg->tsig.ctx, (u8*) & mesg->tsig.timehi, 2);
@@ -1445,9 +1472,9 @@ tsig_verify_tcp_next_message(struct message_data *mesg)
         u16 mac_size_network = htons(mesg->tsig.mac_size);
 
 #if LOG_DIGEST_INPUT != 0
-        log_debug("tsig_verify_tcp_next_message: previous MAC: ");
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mac_size_network, 2, 32, TRUE, TRUE);
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.mac, mesg->tsig.mac_size, 32, TRUE, TRUE);
+        log_debug("tsig_verify_tcp_next_message: previous MAC: (%p)", mesg);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mac_size_network, 2, 32);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.mac, mesg->tsig.mac_size, 32);
 #endif
 
         HMAC_Update(&mesg->tsig.ctx, (u8*) & mac_size_network, 2);
@@ -1457,12 +1484,24 @@ tsig_verify_tcp_next_message(struct message_data *mesg)
     return SUCCESS;
 }
 
+/**
+ * This only cleans-up after the verify
+ * 
+ * @param mesg
+ */
+
 void 
 tsig_verify_tcp_last_message(struct message_data *mesg)
 {
     /*
-     * Digest the message
+     * Clear the digest
      */
+    
+#if LOG_DIGEST_INPUT != 0
+    log_debug("tsig_verify_tcp_last_message: message: (%p)", mesg);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->received, 32);
+#endif
+
 
     HMAC_CTX_cleanup(&mesg->tsig.ctx);
 }
@@ -1497,7 +1536,7 @@ tsig_message_extract(struct message_data *mesg)
     u16 an = ntohs(MESSAGE_AN(mesg->buffer));
     u16 ns = ntohs(MESSAGE_NS(mesg->buffer));
 
-    packet_reader_init(mesg->buffer, mesg->received, &reader);
+    packet_reader_init(&reader, mesg->buffer, mesg->received);
     reader.offset = DNS_HEADER_LENGTH;
     
     while(qd > 0)
@@ -1507,7 +1546,7 @@ tsig_message_extract(struct message_data *mesg)
             return return_value;
         }
         
-        if(FAIL(packet_reader_skip(&reader, 4)))
+        if(FAIL(return_value = packet_reader_skip(&reader, 4)))
         {
             return return_value;
         }
@@ -1540,7 +1579,7 @@ tsig_message_extract(struct message_data *mesg)
 
     struct type_class_ttl_rdlen tctr;
     
-    if(FAIL(return_value = packet_reader_read(&reader, (u8*)&tctr, 10)))
+    if(FAIL(return_value = packet_reader_read(&reader, &tctr, 10)))
     {
         return return_value;
     }
@@ -1619,7 +1658,7 @@ tsig_message_extract(struct message_data *mesg)
         return TSIG_FORMERR;
     }
 
-    mesg->tsig.other = NULL;    /** @todo use this at some point ... */
+    mesg->tsig.other = NULL;
 
     mesg->tsig.tsig = tsig;
 
@@ -1627,7 +1666,7 @@ tsig_message_extract(struct message_data *mesg)
 
     mesg->received = tsig_offset;
 
-    MESSAGE_AR(mesg->buffer) = htons(ar - 1);
+    MESSAGE_SET_AR(mesg->buffer, htons(ar - 1));
 
     return 1;   /* got 1 signature */
 }

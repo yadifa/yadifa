@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup ### #######
  *  @ingroup dnsdb
  *  @brief
@@ -121,14 +121,14 @@ zdb_icmtl_input_stream_next_record(input_stream* is, zdb_icmtl_input_stream_data
 
         size += ret;
 
-        zassert(ret == 10);
+        yassert(ret == 10);
 
         if(FAIL(ret = input_stream_read(is, &data->buffer[size], rdata_size)))
         {
             return ret;
         }
 
-        zassert(ret == rdata_size);
+        yassert(ret == rdata_size);
 
         size += ret;
     }
@@ -221,7 +221,12 @@ zdb_icmtl_input_stream_fillbuffer(zdb_icmtl_input_stream_data* data)
 
             data->status = ICMTL_IS_STATUS_SUFFIX;
 
-            /* Falltrough */
+            err = SUCCESS;
+
+            data->buffer_size = 0;
+            data->buffer_offset = 0;
+
+            break;
         }
 
         case ICMTL_IS_STATUS_SUFFIX:

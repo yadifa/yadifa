@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnscoretools Generic Tools
  *  @ingroup dnscore
  *  @brief
@@ -47,7 +47,7 @@
 extern "C"
 {
 #endif
-
+    
 #define US_RATE(x) (0.000001 * (x))
 
 /**
@@ -71,10 +71,45 @@ ssize_t writefully_limited(int fd, const void *buf, size_t count, double minimum
 
 ssize_t readfully_limited(int fd, void *buf, size_t count, double minimum_rate);
 
+/**
+ * Reads an ASCII text line from fd, stops at EOF or '\n'
+ */
+
+ssize_t readtextline(int fd, char *buf, size_t count);
+
+/**
+ * Deletes a file (see man 2 unlink).
+ * Handles EINTR and other retry errors.
+ * 
+ * @param fd
+ * @return 
+ */
+
 int unlink_ex(const char *folder, const char *filename);
 
 /**
- * Handles EINTR.
+ * Opens a file. (see man 2 open)
+ * Handles EINTR and other retry errors.
+ * 
+ * @param fd
+ * @return 
+ */
+
+ya_result open_ex(const char *pathname, int flags);
+
+/**
+ * Opens a file, create if it does not exist. (see man 2 open with O_CREAT)
+ * Handles EINTR and other retry errors.
+ * 
+ * @param fd
+ * @return 
+ */
+
+ya_result open_create_ex(const char *pathname, int flags, mode_t mode);
+
+/**
+ * Closes a file descriptor (see man 2 close)
+ * Handles EINTR and other retry errors.
  * At return the file will be closed or not closable.
  * 
  * @param fd
@@ -82,6 +117,14 @@ int unlink_ex(const char *folder, const char *filename);
  */
 
 ya_result close_ex(int fd);
+
+
+/**
+ * Returns the size of a file
+ * 
+ * @param name
+ * @return 
+ */
 
 s64 filesize(const char *name);
 

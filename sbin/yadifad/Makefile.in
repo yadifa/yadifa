@@ -75,6 +75,18 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Settings common to all makefiles
+#
+################################################################################
 
 ################################################################################
 #
@@ -104,6 +116,18 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Labels common to all makefiles
 #
 ################################################################################
 
@@ -174,17 +198,32 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 sbin_PROGRAMS = yadifad$(EXEEXT)
-@TCLCOMMANDS_TRUE@am__append_1 = tcl_cmd.c
-@HAS_ACL_SUPPORT_TRUE@am__append_2 = acl.c confs_acl.c
-@HAS_TSIG_SUPPORT_TRUE@am__append_3 = confs_key.c
-@HAS_ACL_SUPPORT_TRUE@am__append_4 = acl.h
+@HAS_NSID_SUPPORT_TRUE@am__append_1 = config-nsid.c
+@HAS_CTRL_TRUE@am__append_2 = config_control.c \
+@HAS_CTRL_TRUE@	ctrl.c \
+@HAS_CTRL_TRUE@	ctrl_query.c \
+@HAS_CTRL_TRUE@	ctrl_zone.c
+
+@HAS_CTRL_TRUE@am__append_3 = ctrl.h \
+@HAS_CTRL_TRUE@	ctrl_query.h \
+@HAS_CTRL_TRUE@	ctrl_zone.h
+
+@HAS_ACL_SUPPORT_TRUE@am__append_4 = acl.c config_acl.c
+@HAS_ACL_SUPPORT_TRUE@am__append_5 = config_acl.h
+@HAS_RRL_SUPPORT_TRUE@am__append_6 = rrl.c
+@HAS_RRL_SUPPORT_TRUE@am__append_7 = rrl.h
+@HAS_ACL_SUPPORT_TRUE@am__append_8 = acl.h
+@HAS_DYNUPDATE_SUPPORT_TRUE@am__append_9 = dynupdate_query_service.c
+@HAS_DYNUPDATE_SUPPORT_TRUE@am__append_10 = dynupdate_query_service.h
+@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@am__append_11 = database-service-zone-resignature.c
+@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@am__append_12 = database-service-zone-resignature.h
 DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 	$(srcdir)/../../mk/common-labels.mk INSTALL NEWS README \
-	AUTHORS ChangeLog $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
-	$(top_srcdir)/configure $(am__configure_deps) \
-	$(srcdir)/server-config.h.in depcomp $(dist_noinst_DATA) \
-	$(am__noinst_HEADERS_DIST) COPYING compile config.guess \
-	config.sub install-sh missing ltmain.sh
+	AUTHORS ChangeLog COPYING $(srcdir)/Makefile.in \
+	$(srcdir)/Makefile.am $(top_srcdir)/configure \
+	$(am__configure_deps) $(srcdir)/server-config.h.in depcomp \
+	$(dist_noinst_DATA) $(am__noinst_HEADERS_DIST) compile \
+	config.guess config.sub install-sh missing ltmain.sh
 
 #
 # Intel C Compiler
@@ -192,52 +231,65 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 
 #ICC
 #IPO= -ipo (need to use the intel xiar instead of ar)
-@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_5 = -DLTO -ipo
-@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_6 = -ipo
-@USES_ICC_TRUE@am__append_7 = -DUSES_ICC -ansi-alias -std=c99 -U__STRICT_ANSI__ -I$(abs_builddir) -I$(abs_srcdir)/include
-@USES_ICC_TRUE@am__append_8 = -O0 -g -DMODE_DEBUG_ICC
+@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_13 = -DLTO -ipo
+@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_14 = -ipo
+@USES_ICC_TRUE@am__append_15 = -DUSES_ICC -ansi-alias -std=c99 -U__STRICT_ANSI__ -I$(abs_builddir) -I$(abs_srcdir)/include
+@USES_ICC_TRUE@am__append_16 = -O0 -g -DMODE_DEBUG_ICC
 
 #
 # LLVM Clang
 #
 
 # CLANG
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_9 = -DLTO -flto
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_10 = -use-gold-plugin
-@USES_CLANG_TRUE@am__append_11 = -mtune=native -DUSES_LLVM \
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_17 = -DLTO -flto
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_18 = -flto
+@USES_CLANG_TRUE@am__append_19 = -mtune=native -DUSES_LLVM \
 @USES_CLANG_TRUE@	-I$(abs_builddir) -I$(abs_srcdir)/include
-@USES_CLANG_TRUE@am__append_12 = -O0 -g -DMODE_DEBUG_CLANG
+@USES_CLANG_TRUE@am__append_20 = -O0 -g -DMODE_DEBUG_CLANG
+
+# THIS WILL BREAK THE CONFIGURE ON EXTERNAL USERS OF THE LIBS IF INSTALLED AS DEBUG
+# FUTURE SOLUTION: ADD A _d SUFFIX TO LIBS WHEN BUILD IN DEBUG ?
+#
+#if HAS_FADDRESS_SANITIZER
+#DEBUGFLAGS+=-fsanitize=address
+#endif
+#
+#
+#if HAS_FNO_OMIT_FRAME_POINTER
+#DEBUGFLAGS+=-fno-omit-frame-pointer
+#endif
+#
+#if HAS_CATCH_UNDEFINED_BEHAVIOR
+#DEBUGFLAGS+=-fcatch_undefined_behavior
+#endif
 
 #
 # Gnu C
 #
 
 #GCC
-@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_13 = -mcpu=niagara
-@HAS_CPU_AMDINTEL_TRUE@@USES_GCC_TRUE@am__append_14 = -mtune=native
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_15 = -DLTO -flto
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_16 = -flto
-@USES_GCC_TRUE@am__append_17 = -fno-ident -ansi -pedantic -std=gnu99 -I$(abs_builddir) -I$(abs_srcdir)/include
-@IS_BSD_FAMILY_FALSE@@USES_GCC_TRUE@am__append_18 = -g3 -gdwarf-2 -O0 -DMODE_DEBUG_GCC -rdynamic
+@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_21 = -mcpu=niagara
+@HAS_CPU_AMDINTEL_TRUE@@USES_GCC_TRUE@am__append_22 = -mtune=native
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_23 = -DLTO -flto -fwhole-program -ffat-lto-objects
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_24 = -flto -fwhole-program -ffat-lto-objects
+@USES_GCC_TRUE@am__append_25 = -fno-ident -ansi -pedantic -std=gnu99 -I$(abs_builddir) -I$(abs_srcdir)/include
+@IS_BSD_FAMILY_FALSE@@USES_GCC_TRUE@am__append_26 = -g3 -gdwarf-2 -O0 -DMODE_DEBUG_GCC -rdynamic
 
 # one of these: address,thread,undefined
-@HAS_FADDRESS_SANITIZER_TRUE@@IS_BSD_FAMILY_FALSE@@USES_GCC_TRUE@am__append_19 = -fsanitize=address
-@IS_BSD_FAMILY_TRUE@@USES_GCC_TRUE@am__append_20 = -g -O0 -DMODE_DEBUG_GCC -rdynamic
+@HAS_FADDRESS_SANITIZER_TRUE@@IS_BSD_FAMILY_FALSE@@USES_GCC_TRUE@am__append_27 = -fsanitize=address
+@IS_BSD_FAMILY_TRUE@@USES_GCC_TRUE@am__append_28 = -g -O0 -DMODE_DEBUG_GCC -rdynamic
 
 # if an unknown compiler is used, it should have its own section
-@USES_UNKNOWN_TRUE@am__append_21 = -DUSES_UNKNOWN_COMPILER -I$(abs_builddir) -I$(abs_srcdir)/include
-@USES_UNKNOWN_TRUE@am__append_22 = -g -O0
+@USES_UNKNOWN_TRUE@am__append_29 = -DUSES_UNKNOWN_COMPILER -I$(abs_builddir) -I$(abs_srcdir)/include
+@USES_UNKNOWN_TRUE@am__append_30 = -g -O0
 
 #
 # Some BSD-based OSes need this
 #
-@IS_BSD_FAMILY_TRUE@am__append_23 = -std=c99 -I./include
+@IS_BSD_FAMILY_TRUE@am__append_31 = -std=c99 -I./include
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
-	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
-	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
-	$(top_srcdir)/../../m4/eurid.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/../../m4/eurid.m4 \
 	$(top_srcdir)/../../m4/yadifa.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
@@ -249,31 +301,48 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(sbindir)"
 PROGRAMS = $(sbin_PROGRAMS)
-am__yadifad_SOURCES_DIST = axfr.c check.c confs.c database.c ixfr.c \
-	notify.c parser.c list.c main.c process_command_line.c \
-	server.c server-st.c server-mt.c server_context.c \
-	log_statistics.c log_query.c poll-util.c signals.c wrappers.c \
-	zone.c confs_channels.c confs_control.c confs_main.c \
-	confs_zone.c scheduler_xfr.c process_class_ch.c \
-	process_class_ctrl.c scheduler_database_load_zone.c tcl_cmd.c \
-	acl.c confs_acl.c confs_key.c
-@TCLCOMMANDS_TRUE@am__objects_1 = tcl_cmd.$(OBJEXT)
-@HAS_ACL_SUPPORT_TRUE@am__objects_2 = acl.$(OBJEXT) \
-@HAS_ACL_SUPPORT_TRUE@	confs_acl.$(OBJEXT)
-@HAS_TSIG_SUPPORT_TRUE@am__objects_3 = confs_key.$(OBJEXT)
-am_yadifad_OBJECTS = axfr.$(OBJEXT) check.$(OBJEXT) confs.$(OBJEXT) \
-	database.$(OBJEXT) ixfr.$(OBJEXT) notify.$(OBJEXT) \
-	parser.$(OBJEXT) list.$(OBJEXT) main.$(OBJEXT) \
-	process_command_line.$(OBJEXT) server.$(OBJEXT) \
-	server-st.$(OBJEXT) server-mt.$(OBJEXT) \
-	server_context.$(OBJEXT) log_statistics.$(OBJEXT) \
-	log_query.$(OBJEXT) poll-util.$(OBJEXT) signals.$(OBJEXT) \
-	wrappers.$(OBJEXT) zone.$(OBJEXT) confs_channels.$(OBJEXT) \
-	confs_control.$(OBJEXT) confs_main.$(OBJEXT) \
-	confs_zone.$(OBJEXT) scheduler_xfr.$(OBJEXT) \
-	process_class_ch.$(OBJEXT) process_class_ctrl.$(OBJEXT) \
-	scheduler_database_load_zone.$(OBJEXT) $(am__objects_1) \
-	$(am__objects_2) $(am__objects_3)
+am__yadifad_SOURCES_DIST = main.c axfr.c config_main.c config_zone.c \
+	confs.c database-service-zone-desc-load.c \
+	database-service-zone-desc-unload.c \
+	database-service-zone-download.c \
+	database-service-zone-freeze.c database-service-zone-load.c \
+	database-service-zone-mount.c database-service-zone-save.c \
+	database-service-zone-unfreeze.c \
+	database-service-zone-unload.c database-service-zone-unmount.c \
+	database-service.c database.c ixfr.c log_query.c \
+	log_statistics.c notify.c poll-util.c process_class_ch.c \
+	server-mt.c server.c server_context.c signals.c zone.c \
+	config-nsid.c config_control.c ctrl.c ctrl_query.c ctrl_zone.c \
+	acl.c config_acl.c rrl.c dynupdate_query_service.c \
+	database-service-zone-resignature.c
+@HAS_NSID_SUPPORT_TRUE@am__objects_1 = config-nsid.$(OBJEXT)
+@HAS_CTRL_TRUE@am__objects_2 = config_control.$(OBJEXT) ctrl.$(OBJEXT) \
+@HAS_CTRL_TRUE@	ctrl_query.$(OBJEXT) ctrl_zone.$(OBJEXT)
+@HAS_ACL_SUPPORT_TRUE@am__objects_3 = acl.$(OBJEXT) \
+@HAS_ACL_SUPPORT_TRUE@	config_acl.$(OBJEXT)
+@HAS_RRL_SUPPORT_TRUE@am__objects_4 = rrl.$(OBJEXT)
+@HAS_DYNUPDATE_SUPPORT_TRUE@am__objects_5 =  \
+@HAS_DYNUPDATE_SUPPORT_TRUE@	dynupdate_query_service.$(OBJEXT)
+@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@am__objects_6 = database-service-zone-resignature.$(OBJEXT)
+am_yadifad_OBJECTS = main.$(OBJEXT) axfr.$(OBJEXT) \
+	config_main.$(OBJEXT) config_zone.$(OBJEXT) confs.$(OBJEXT) \
+	database-service-zone-desc-load.$(OBJEXT) \
+	database-service-zone-desc-unload.$(OBJEXT) \
+	database-service-zone-download.$(OBJEXT) \
+	database-service-zone-freeze.$(OBJEXT) \
+	database-service-zone-load.$(OBJEXT) \
+	database-service-zone-mount.$(OBJEXT) \
+	database-service-zone-save.$(OBJEXT) \
+	database-service-zone-unfreeze.$(OBJEXT) \
+	database-service-zone-unload.$(OBJEXT) \
+	database-service-zone-unmount.$(OBJEXT) \
+	database-service.$(OBJEXT) database.$(OBJEXT) ixfr.$(OBJEXT) \
+	log_query.$(OBJEXT) log_statistics.$(OBJEXT) notify.$(OBJEXT) \
+	poll-util.$(OBJEXT) process_class_ch.$(OBJEXT) \
+	server-mt.$(OBJEXT) server.$(OBJEXT) server_context.$(OBJEXT) \
+	signals.$(OBJEXT) zone.$(OBJEXT) $(am__objects_1) \
+	$(am__objects_2) $(am__objects_3) $(am__objects_4) \
+	$(am__objects_5) $(am__objects_6)
 yadifad_OBJECTS = $(am_yadifad_OBJECTS)
 yadifad_LDADD = $(LDADD)
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -322,13 +391,20 @@ am__can_run_installinfo = \
     *) (install-info --version) >/dev/null 2>&1;; \
   esac
 DATA = $(dist_noinst_DATA)
-am__noinst_HEADERS_DIST = axfr.h check.h config_error.h config.h \
-	confs.h database.h ixfr.h notify.h list.h parser.h \
-	server_context.h server_error.h server.h server-st.h \
-	server-mt.h log_query.h log_statistics.h poll-util.h signals.h \
-	tcl_cmd.h wrappers.h zone_data.h zone.h scheduler_xfr.h \
-	process_class_ch.h process_class_ctrl.h \
-	scheduler_database_load_zone.h acl.h
+am__noinst_HEADERS_DIST = axfr.h config.h config_error.h confs.h \
+	database-service-zone-desc-load.h \
+	database-service-zone-desc-unload.h \
+	database-service-zone-download.h \
+	database-service-zone-freeze.h database-service-zone-load.h \
+	database-service-zone-mount.h database-service-zone-save.h \
+	database-service-zone-unfreeze.h \
+	database-service-zone-unload.h database-service-zone-unmount.h \
+	database-service.h database.h ixfr.h log_query.h \
+	log_statistics.h notify.h poll-util.h process_class_ch.h \
+	server-mt.h server.h server_context.h server_error.h signals.h \
+	zone.h zone_data.h zone_desc.h ctrl.h ctrl_query.h ctrl_zone.h \
+	config_acl.h rrl.h acl.h dynupdate_query_service.h \
+	database-service-zone-resignature.h
 HEADERS = $(noinst_HEADERS)
 am__tagged_files = $(HEADERS) $(SOURCES) $(TAGS_FILES) \
 	$(LISP)server-config.h.in
@@ -389,6 +465,7 @@ DEPDIR = @DEPDIR@
 DLLTOOL = @DLLTOOL@
 DNSCORE = @DNSCORE@
 DNSDB = @DNSDB@
+DNSLG = @DNSLG@
 DNSZONE = @DNSZONE@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
@@ -489,36 +566,48 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I m4
-LOCALFLAGS = -DPREFIX='"$(prefix)"'
 dist_noinst_DATA = VERSION
-yadifad_SOURCES = axfr.c check.c confs.c database.c ixfr.c notify.c \
-	parser.c list.c main.c process_command_line.c server.c \
-	server-st.c server-mt.c server_context.c log_statistics.c \
-	log_query.c poll-util.c signals.c wrappers.c zone.c \
-	confs_channels.c confs_control.c confs_main.c confs_zone.c \
-	scheduler_xfr.c process_class_ch.c process_class_ctrl.c \
-	scheduler_database_load_zone.c $(am__append_1) $(am__append_2) \
-	$(am__append_3)
-noinst_HEADERS = axfr.h check.h config_error.h config.h confs.h \
-	database.h ixfr.h notify.h list.h parser.h server_context.h \
-	server_error.h server.h server-st.h server-mt.h log_query.h \
-	log_statistics.h poll-util.h signals.h tcl_cmd.h wrappers.h \
-	zone_data.h zone.h scheduler_xfr.h process_class_ch.h \
-	process_class_ctrl.h scheduler_database_load_zone.h \
-	$(am__append_4)
+yadifad_SOURCES = main.c axfr.c config_main.c config_zone.c confs.c \
+	database-service-zone-desc-load.c \
+	database-service-zone-desc-unload.c \
+	database-service-zone-download.c \
+	database-service-zone-freeze.c database-service-zone-load.c \
+	database-service-zone-mount.c database-service-zone-save.c \
+	database-service-zone-unfreeze.c \
+	database-service-zone-unload.c database-service-zone-unmount.c \
+	database-service.c database.c ixfr.c log_query.c \
+	log_statistics.c notify.c poll-util.c process_class_ch.c \
+	server-mt.c server.c server_context.c signals.c zone.c \
+	$(am__append_1) $(am__append_2) $(am__append_4) \
+	$(am__append_6) $(am__append_9) $(am__append_11)
+noinst_HEADERS = axfr.h config.h config_error.h confs.h \
+	database-service-zone-desc-load.h \
+	database-service-zone-desc-unload.h \
+	database-service-zone-download.h \
+	database-service-zone-freeze.h database-service-zone-load.h \
+	database-service-zone-mount.h database-service-zone-save.h \
+	database-service-zone-unfreeze.h \
+	database-service-zone-unload.h database-service-zone-unmount.h \
+	database-service.h database.h ixfr.h log_query.h \
+	log_statistics.h notify.h poll-util.h process_class_ch.h \
+	server-mt.h server.h server_context.h server_error.h signals.h \
+	zone.h zone_data.h zone_desc.h $(am__append_3) $(am__append_5) \
+	$(am__append_7) $(am__append_8) $(am__append_10) \
+	$(am__append_12)
 
 #
 #
 #
-AM_CFLAGS = -Wall -D_FILE_OFFSET_BITS=64 $(am__append_5) \
-	$(am__append_7) $(am__append_9) $(am__append_11) \
-	$(am__append_13) $(am__append_14) $(am__append_15) \
-	$(am__append_17) $(am__append_21) $(am__append_23) \
-	$(LOCALFLAGS) $(YCFLAGS)
-AM_LDFLAGS = $(am__append_6) $(am__append_10) $(am__append_16) \
+AM_CFLAGS = -Wall -Werror=missing-field-initializers \
+	-D_FILE_OFFSET_BITS=64 -g $(am__append_13) $(am__append_15) \
+	$(am__append_17) $(am__append_19) $(am__append_21) \
+	$(am__append_22) $(am__append_23) $(am__append_25) \
+	$(am__append_29) $(am__append_31) $(LOCALFLAGS) $(YCFLAGS)
+AM_LDFLAGS = $(am__append_14) $(am__append_18) $(am__append_24) \
 	$(YLDFLAGS)
-DEBUGFLAGS = $(am__append_8) $(am__append_12) $(am__append_18) \
-	$(am__append_19) $(am__append_20) $(am__append_22)
+DEBUGFLAGS = $(am__append_16) $(am__append_20) $(am__append_26) \
+	$(am__append_27) $(am__append_28) $(am__append_30)
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"'
 @HAS_LTO_SUPPORT_FALSE@@USES_CLANG_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@AM_AR = llvm-ar
 @HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@AM_AR = xiar
@@ -531,7 +620,7 @@ YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -DCMR
 YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP
 YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
 YSCFLAGS = $(YRCFLAGS)
-YRLDFLAGS = 
+YRLDFLAGS = -g
 YPLDFLAGS = -pg
 YDLDFLAGS = -g
 YSLDFLAGS = $(YRLDFLAGS)
@@ -655,57 +744,60 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/acl.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/axfr.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/check.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/config-nsid.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/config_acl.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/config_control.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/config_main.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/config_zone.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/confs.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/confs_acl.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/confs_channels.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/confs_control.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/confs_key.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/confs_main.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/confs_zone.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ctrl.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ctrl_query.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ctrl_zone.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-desc-load.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-desc-unload.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-download.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-freeze.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-load.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-mount.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-resignature.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-save.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-unfreeze.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-unload.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-unmount.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dynupdate_query_service.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ixfr.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/list.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/log_query.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/log_statistics.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/main.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/notify.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parser.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/poll-util.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/process_class_ch.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/process_class_ctrl.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/process_command_line.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/scheduler_database_load_zone.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/scheduler_xfr.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rrl.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/server-mt.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/server-st.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/server.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/server_context.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/signals.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tcl_cmd.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/wrappers.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/zone.Po@am__quote@
 
 .c.o:
-@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
-@am__fastdepCC_TRUE@	$(COMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ $< &&\
-@am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Po
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(COMPILE) -c -o $@ $<
 
 .c.obj:
-@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.obj$$||'`;\
-@am__fastdepCC_TRUE@	$(COMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ `$(CYGPATH_W) '$<'` &&\
-@am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Po
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ `$(CYGPATH_W) '$<'`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(COMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
 
 .c.lo:
-@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.lo$$||'`;\
-@am__fastdepCC_TRUE@	$(LTCOMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ $< &&\
-@am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Plo
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LTCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Plo
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LTCOMPILE) -c -o $@ $<
@@ -1073,13 +1165,24 @@ uninstall-am: uninstall-sbinPROGRAMS
 
 
 release:
+	echo YCFLAGS=$(YRCFLAGS)
+	echo YLDFLAGS=$(YRLDFLAGS)
 	$(MAKE) all "YCFLAGS=$(YRCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YRLDFLAGS)"
 
 profile:
+	echo YCFLAGS=$(YPCFLAGS)
+	echo YLDFLAGS=$(YPLDFLAGS)
 	$(MAKE) all "YCFLAGS=$(YPCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YPLDFLAGS)"
 
 debug:
+	echo YCFLAGS=$(YDCFLAGS)
+	echo YLDFLAGS=$(YDLDFLAGS)
 	$(MAKE) all "YCFLAGS=$(YDCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YDLDFLAGS)"
+
+buildinfo.h: config.log
+	echo \#pragma once > buildinfo.h 2> /dev/null
+	echo // generated file, do not modify >> buildinfo.h 2> /dev/null
+	echo \#define BUILD_OPTIONS \"$$(grep "./configure" config.log | head -1 | sed 's/.*\.\/configure *//')\" >> buildinfo.h 2> /dev/null
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

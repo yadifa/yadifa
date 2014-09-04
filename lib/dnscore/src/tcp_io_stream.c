@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -42,10 +42,19 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/socket.h>
 #include <arpa/inet.h>
 
 #include "dnscore/tcp_io_stream.h"
 #include "dnscore/fdtools.h"
+#include "dnscore/parsing.h"
+#include "dnscore/format.h"
+
+#define DNSCORE_TCP_FLAGS "DNSCORE_TCP_FLAGS"
+// nodelay,delay,cork,nocork
+static bool tcp_nodelay = TRUE;
+static bool tcp_cork = FALSE;
 
 /*
  * AF_INET
@@ -79,7 +88,7 @@ gethostaddr(const char* host, u16 port, struct sockaddr *sa, int familly)
 
     if((eai_err = getaddrinfo(host, NULL, &hints, &info)) != 0)
     {
-        return NET_UNABLE_TO_RESOLVE_HOST;
+        return EAI_ERROR_CODE(eai_err); // NET_UNABLE_TO_RESOLVE_HOST
     }
 
     next = info;
@@ -117,7 +126,7 @@ gethostaddr(const char* host, u16 port, struct sockaddr *sa, int familly)
 }
 
 ya_result
-tcp_input_output_stream_connect_sockaddr(struct sockaddr *sa, input_stream *istream_, output_stream *ostream_, struct sockaddr *bind_from, u8 to_sec)
+tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream *istream_, output_stream *ostream_, struct sockaddr *bind_from, u8 to_sec)
 {
     int fd;
 
@@ -157,6 +166,9 @@ tcp_input_output_stream_connect_sockaddr(struct sockaddr *sa, input_stream *istr
 
     tcp_set_sendtimeout(fd, to_sec, 0);
     tcp_set_recvtimeout(fd, to_sec, 0);
+    
+    tcp_set_nodelay(fd, tcp_nodelay);
+    tcp_set_cork(fd, tcp_cork);
 
     while(connect(fd, sa, sizeof(struct sockaddr)) < 0)
     {
@@ -216,7 +228,7 @@ tcp_input_output_stream_connect(const char *server, u16 port, input_stream *istr
 }
 
 ya_result
-tcp_input_output_stream_connect_host_address(host_address *ha, input_stream *istream_, output_stream *ostream_, u8 to_sec)
+tcp_input_output_stream_connect_host_address(const host_address *ha, input_stream *istream_, output_stream *ostream_, u8 to_sec)
 {
     socketaddress sa;
     
@@ -263,6 +275,59 @@ tcp_set_linger(int fd, bool enable, int seconds)
     setsockopt(fd, SOL_SOCKET, SO_LINGER, &l, sizeof(l));
 }
 
+/**
+ * Nagle
+ * 
+ * @param fd
+ * @param enable
+ */
+void tcp_set_nodelay(int fd, bool enable)
+{
+    int flag = (enable)?1:0;
+
+    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag) );
+}
+
+#if defined(__linux__)
+
+/**
+ * @param fd
+ * @param enable
+ */
+void tcp_set_cork(int fd, bool enable)
+{
+    int flag = (enable)?1:0;
+
+    setsockopt(fd, IPPROTO_TCP, TCP_CORK, &flag, sizeof(flag) );
+}
+
+#elif defined(__FreeBSD__)
+
+/**
+ * @param fd
+ * @param enable
+ */
+
+//#error THIS NEEDS TO BE TESTED ON BSD (This error message is to remind you that)
+
+void tcp_set_cork(int fd, bool enable)
+{
+    int flag = (enable)?1:0;
+
+    setsockopt(fd, IPPROTO_TCP, TCP_NOPUSH, &flag, sizeof(flag) );
+}
+
+#else
+
+void tcp_set_cork(int fd, bool enable)
+{
+    /**
+     * Cork/NoPush have been documented as Linux/FreeBSD specifics
+     */
+}
+
+#endif
+
 void
 tcp_set_sendtimeout(int fd, int seconds, int useconds)
 {
@@ -300,5 +365,73 @@ tcp_get_recvtimeout(int fd, int *seconds, int *useconds)
     *seconds = tv.tv_sec;
     *useconds = tv.tv_usec;
 }
+
+static const char* tcp_env_keywords[4] =
+{
+    "nodelay",
+    "delay",
+    "cork",
+    "nocork"
+};
+
+void
+tcp_init_with_env()
+{
+    char tmp[256];
+    
+    const char* tcp_flags_cfg = getenv(DNSCORE_TCP_FLAGS);
+    
+    if(tcp_flags_cfg != NULL)
+    {
+        strncpy(tmp, tcp_flags_cfg, sizeof(tmp)-1);
+        tmp[sizeof(tmp) - 1] = '\0';
+        size_t tmp_len = strlen(tmp);
+        for(int i = 0; i < tmp_len; i++)
+        {
+            if(tmp[i] == ',')
+            {
+                tmp[i] = ' ';
+            }
+        }
+        
+        const char *p = parse_skip_spaces(tmp);
+       
+        while(*p != '\0')
+        {
+            s32 keyword = -1;
+            
+            s32 word_len = parse_skip_word_specific(p, strlen(p), tcp_env_keywords, 4, &keyword);
+            
+            if(FAIL(word_len))
+            {
+                break;
+            }
+            
+            switch(keyword)       
+            {
+                case 0: // nodelay
+                    tcp_nodelay = TRUE;
+                    break;
+                case 1: // delay
+                    tcp_nodelay = FALSE;
+                    break;
+                case 2: // cork
+                    tcp_cork = TRUE;
+                    break;
+                case 3: // nocork
+                    tcp_cork = FALSE;
+                    break;
+                default:
+                    osformatln(termerr, "syntax error in env %s", DNSCORE_TCP_FLAGS);
+                    flusherr();
+                    break;
+            }
+            
+            p += word_len;
+            p = parse_skip_spaces(p);
+        }
+    }
+}
+
 
 /** @} */

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief Functions used to hash a dns formatted string
@@ -126,6 +126,7 @@ hash_init()
     hashcode* wild_hashp = (hashcode*) & WILD_HASH;
     *wild_hashp = hash_dnslabel(WILD_LABEL);
 }
+
 
 
 /** @brief Compute the hash code of a pascal name

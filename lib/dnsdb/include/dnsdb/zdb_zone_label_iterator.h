@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief Functions used to iterate through the labels of a zone
@@ -41,7 +41,7 @@
 #ifndef _ZDB_ZONE_LABEL_ITERATOR_H
 #define	_ZDB_ZONE_LABEL_ITERATOR_H
 
-#include "zdb_types.h"
+#include <dnsdb/zdb_types.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -54,12 +54,24 @@ extern "C"
  * Initializes a zone label iterator (iterates zdb_rr_label)
  *
  * @param[in] zone The zone to explore
- * @param[in] iter a pointer to the iterator to initialize
+ * @param[in] iter a pointer to the iterator to initialise
  *
  */
 
 void zdb_zone_label_iterator_init(const zdb_zone* zone, zdb_zone_label_iterator* iter);
 
+/**
+ * @brief Initializes a zone label iterator from a given starting name
+ *
+ * Initializes a zone label iterator (iterates zdb_rr_label)
+ *
+ * @param[in] zone The zone to explore
+ * @param[in] iter a pointer to the iterator to initialise
+ * @param[in] from_name the first name the iterator should start from
+ *
+ */
+
+void zdb_zone_label_iterator_init_from(const zdb_zone* zone, zdb_zone_label_iterator* iter, const u8 *from_name);
 /**
  * @brief Checks if there is still data available from an iterator
  *

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec NSEC functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -45,12 +45,12 @@
 
 #include <dnsdb/zdb_types.h>
 
-#if ZDB_NSEC_SUPPORT == 0
-#error "Please do not include nsec.h if ZDB_NSEC_SUPPORT is 0"
+#if ZDB_HAS_NSEC_SUPPORT == 0
+#error "Please do not include nsec.h if ZDB_HAS_NSEC_SUPPORT is 0"
 #endif
 
-#include <dnscore/treeset.h>
 #include <dnsdb/nsec_collection.h>
+#include <dnscore/treeset.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -82,8 +82,17 @@ struct nsec_zone
 
 u32 nsec_inverse_name(u8 *inverse_name,const u8 *name);
 
+/**
+ * 
+ * Updates/Verifies the NSEC structures of the zone.
+ * 
+ * @param zone the zone
+ * @param read_only a slave would not change the records.
+ * 
+ * @return an error code (only fails if a slave got a zone with errors)
+ */
 
-ya_result nsec_update_zone(zdb_zone* zone);
+ya_result nsec_update_zone(zdb_zone* zone, bool read_only); /* read_only a.k.a slave */
 
 /**
  * Creates the NSEC node, creates or update the NSEC record
@@ -147,13 +156,14 @@ bool nsec_delete_label_node(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector
  * @return
  */
 
-zdb_rr_label *nsec_find_interval(const zdb_zone *zone, const dnsname_vector *name_vector, u8 *dname_out);
+zdb_rr_label *nsec_find_interval(const zdb_zone *zone, const dnsname_vector *name_vector, u8 **out_dname_p, u8 * restrict * pool);
 
 void nsec_name_error(const zdb_zone* zone, const dnsname_vector *qname_not_const, s32 closest_index,
-                     u8* out_encloser_nsec_name,
-                     zdb_rr_label** out_encloser_nsec_label,
-                     u8* out_wild_encloser_nsec_name,
-                     zdb_rr_label** out_wildencloser_nsec_label
+                    u8 * restrict * pool,
+                    u8 **out_encloser_nsec_name_p,
+                    zdb_rr_label** out_encloser_nsec_label,
+                    u8 **out_wild_encloser_nsec_name_p,
+                    zdb_rr_label** out_wildencloser_nsec_label
                     );
 
 void nsec_destroy_zone(zdb_zone* zone);

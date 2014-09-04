@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief AVL structure and functions
@@ -55,8 +55,7 @@
 
 #include <dnscore/format.h>
 
-#if 0 /* DEBUG DUMP */
-#define DUMP_NODE avl_printnode
+#if 0 /* fix */
 #else
 #define DUMP_NODE(...)
 #endif
@@ -637,7 +636,7 @@ avl_delete(avl_tree* root, hashcode obj_hash)
 
     LDEBUG(9, "Level = %i\n", level);
 
-    zassert(level < MAX_DEPTH);
+    yassert(level < MAX_DEPTH);
 
     if(node == NULL)
     {
@@ -740,7 +739,7 @@ avl_delete(avl_tree* root, hashcode obj_hash)
             dirs[level++] = DIR_RIGHT;
         }
 
-        zassert(level < MAX_DEPTH);
+        yassert(level < MAX_DEPTH);
         
         /* successor has at most one left child */
 
@@ -892,11 +891,11 @@ avl_delete(avl_tree* root, hashcode obj_hash)
         {
             LDEBUG(9, "Single Rotation (delete)\n");
 
-            avl_node* root = node;
+            avl_node* root;
 
             root = avl_node_single_rotation2(node);
 
-            zassert(root == child);
+            yassert(root == child);
 
             BALANCE(child) = -parent_balance;
             BALANCE(node) = parent_balance;
@@ -909,7 +908,7 @@ avl_delete(avl_tree* root, hashcode obj_hash)
 
             node = avl_node_single_rotation2(node);
 
-            zassert(node == child);
+            yassert(node == child);
         }
         else
         {
@@ -998,7 +997,7 @@ avl_iterator_init(avl_tree tree, avl_iterator* iter)
     {
         /* Let's stack the whole left path */
 
-        avl_node* node = tree;
+        register avl_node* node = tree;
 
         while(node != NULL)
         {
@@ -1008,31 +1007,69 @@ avl_iterator_init(avl_tree tree, avl_iterator* iter)
     }
 }
 
+void
+avl_iterator_init_from(avl_tree tree, avl_iterator* iter, hashcode obj_hash)
+{
+    /* Do we have a tree to iterate ? */
+
+    iter->stack_pointer = -1;
+
+    if(tree != NULL)
+    {
+        /* Let's stack the path left path */
+
+        register avl_node* node = tree;
+
+        while(node != NULL)
+        {
+            register hashcode h = node->hash;
+            
+            if(obj_hash < h)
+            {                
+                iter->stack[++iter->stack_pointer] = node;
+                node = LEFT_CHILD(node);
+            }
+            else if(obj_hash > h)
+            {
+                node = RIGHT_CHILD(node);
+            }
+            else
+            {
+                iter->stack[++iter->stack_pointer] = node;
+                
+                break;
+            }
+        }
+    }
+}
+
+#if ZDB_INLINES_AVL_FIND == 0
 bool
 avl_iterator_hasnext(avl_iterator* iter)
 {
     return iter->stack_pointer >= 0;
 }
+#endif
 
 void**
 avl_iterator_next(avl_iterator* iter)
 {
-    zassert(iter->stack_pointer >= 0);
+    yassert(iter->stack_pointer >= 0);
     
-    avl_node* node = iter->stack[iter->stack_pointer];
+    register avl_node* node = iter->stack[iter->stack_pointer];
     void** datapp = &node->data;
 
     /* we got the data, now let's ready the next node */
 
-    avl_node* tmp;
+    register avl_node* tmp;
 
     /* let's branch right if possible */
 
     if((tmp = RIGHT_CHILD(node)) != NULL)
     {
         iter->stack[iter->stack_pointer] = tmp; /* replace TOP */
-
         node = tmp;
+        
         while((tmp = LEFT_CHILD(node)) != NULL)
         {
             iter->stack[++iter->stack_pointer] = tmp; /* PUSH */
@@ -1050,14 +1087,14 @@ avl_iterator_next(avl_iterator* iter)
 avl_node*
 avl_iterator_next_node(avl_iterator* iter)
 {
-    zassert(iter->stack_pointer >= 0);
+    yassert(iter->stack_pointer >= 0);
     
     avl_node* node = iter->stack[iter->stack_pointer];
     avl_node* current = node;
 
     /* we got the data, now let's ready the next node */
 
-    avl_node* tmp;
+    register avl_node* tmp;
 
     /* let's branch right if possible */
 

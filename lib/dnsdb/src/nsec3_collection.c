@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -111,7 +111,7 @@ extern logger_handle *g_dnssec_logger;
  * A macro to allocate a new node
  */
 #define AVL_ALLOC_NODE(node,reference)				\
-	zassert((reference)[0]!=0);					    \
+	yassert((reference)[0]!=0);					    \
 	ZALLOC_ARRAY_OR_DIE(AVL_NODE_TYPE*, node, (sizeof(AVL_NODE_TYPE)+(reference)[0]), AVL_NODE_TAG); \
 	ZEROMEMORY(node,sizeof(AVL_NODE_TYPE)+(reference)[0])
 
@@ -126,7 +126,8 @@ nsec3_free_node(nsec3_zone_item* node)
      * This assert is wrong because this is actually the payload that has just overwritten our node
      * assert(node->rc == 0 && node->sc == 0 && node->label.owners == NULL && node->star_label.owners == NULL & node->type_bit_maps == NULL);
      */
-    ZFREE_ARRAY(node, NSEC3_NODE_SIZE(node));
+    u32 node_size = NSEC3_NODE_SIZE(node);
+    ZFREE_ARRAY(node, node_size);
 }
 
 #define AVL_FREE_NODE(node) nsec3_free_node(node)
@@ -173,7 +174,7 @@ AVL_PREFIXED(avl_find_interval_start)(AVL_TREE_TYPE* root, AVL_REFERENCE_TYPE ob
     AVL_NODE_TYPE* lower_bound = NULL;
     AVL_REFERENCE_TYPE h;
     
-    zassert(node != NULL);
+    yassert(node != NULL);
 
     /* This is one of the parts I could try to optimize
      * I've checked the assembly, and it sucks ...
@@ -229,7 +230,7 @@ AVL_PREFIXED(avl_find_interval_start)(AVL_TREE_TYPE* root, AVL_REFERENCE_TYPE ob
     {
         lower_bound = *root;
         
-        zassert(lower_bound != NULL);
+        yassert(lower_bound != NULL);
         
         while((node = AVL_CHILD(lower_bound, DIR_RIGHT)) != NULL)
         {

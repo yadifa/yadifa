@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -65,7 +65,11 @@
  *
  *      PROTOTYPES
  */
-void init_signals();
+
+
+ya_result signal_handler_init();
+
+void signal_handler_finalise();
 
 /*    ------------------------------------------------------------    */
 

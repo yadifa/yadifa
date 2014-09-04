@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnspacket DNS Messages
  *  @ingroup dnscore
  *  @brief 
@@ -44,6 +44,7 @@
 #define	_PACKET_READER_H
 
 #include <dnscore/sys_types.h>
+#include <dnscore/host_address.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -64,9 +65,11 @@ struct packet_unpack_reader_data
     u32 offset;
 };
 
-ya_result packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8* output_buffer, u32 len);
+ya_result packet_reader_read_record(packet_unpack_reader_data* reader, u8 *output_buffer, u32 len);
 
-ya_result packet_reader_read(packet_unpack_reader_data* reader, u8* output_buffer, u32 len);
+ya_result packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8 *output_buffer, u32 len);
+
+ya_result packet_reader_read(packet_unpack_reader_data* reader, void *output_buffer, u32 len);
 
 ya_result packet_reader_read_u16(packet_unpack_reader_data* reader, u16 *val);
 ya_result packet_reader_read_u32(packet_unpack_reader_data* reader, u32 *val);
@@ -80,21 +83,27 @@ static inline ya_result packet_reader_skip(packet_unpack_reader_data* reader, u3
         return UNEXPECTED_EOF;	/* unexpected EOF */
     }
 
-    return SUCCESS;
+    return len;
 }
 
 /* fqdn + type + class */
 ya_result packet_reader_read_zone_record(packet_unpack_reader_data* reader, u8* output_buffer, u32 len);
 
 /* fqdn + type + class + ttl + size + rdata */
-ya_result packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, u32 len);
+
 
 void packet_reader_rewind(packet_unpack_reader_data* reader);
 
 ya_result packet_reader_skip_fqdn(packet_unpack_reader_data* reader);
 ya_result packet_reader_skip_record(packet_unpack_reader_data* reader);
 
-void packet_reader_init(u8* buffer, u32 buffer_size, packet_unpack_reader_data* reader);
+void packet_reader_init(packet_unpack_reader_data* reader, const u8* buffer, u32 buffer_size);
+
+/* two tools functions for the controller */
+
+ya_result packet_reader_read_utf8(packet_unpack_reader_data *reader, u16 rdatasize, u16 rclass, char **txt, bool dryrun);
+
+ya_result packet_reader_read_remote_server(packet_unpack_reader_data *reader, u16 rdatasize, u16 rclass, host_address **ha, bool dryrun);
 
 #ifdef	__cplusplus
 }

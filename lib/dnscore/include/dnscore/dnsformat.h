@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup format C-string formatting
  *  @ingroup dnscore
  *  @brief 

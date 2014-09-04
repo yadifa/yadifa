@@ -34,6 +34,8 @@ ACLOCAL_AMFLAGS = -I m4
 zonesmastersdir = $(localstatedir)/zones/masters
 dist_zonesmasters_DATA = zones/masters/0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa.zone zones/masters/0.0.127.in-addr.arpa.zone zones/masters/localhost6.zone zones/masters/localhost.zone zones/masters/somedomain.eu.zone
 
+all:
+
 release:
 
 profile:

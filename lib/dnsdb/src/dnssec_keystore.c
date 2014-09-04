@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnskey DNSSEC keys functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -75,9 +75,7 @@ extern logger_handle *g_dnssec_logger;
 #define MAX_PATH 4096
 #endif
 
-#define ZDB_DNSKEY_TAG 0x59454b534e44
 #define ZDB_KEYSTORE_ORIGIN_TAG 0x4e494749524f534b
-#define ZDB_DNSKEY_NAME_TAG 0x454d414e59454b
 
 #define OAT_PRIVATE_FORMAT "K%s+%03d+%05i.private"
 #define OAT_DNSKEY_FORMAT "K%s+%03d+%05i.key"
@@ -89,45 +87,7 @@ static pthread_mutex_t keystore_mutex = PTHREAD_MUTEX_INITIALIZER;
 #define KEY_HASH(key) ((((hashcode)key->tag)<<16)|key->flags|(key->algorithm<<1))
 #define TAG_FLAGS_ALGORITHM_HASH(t_,f_,a_) ((((hashcode)t_)<<16)|(f_)|((a_)<<1))
 
-static char*
-origin_zdup_sanitize(const char* origin)
-{
-    char* ret;
-
-    if(origin == NULL)
-    {
-        ZALLOC_STRING_OR_DIE(char*, ret, 2, ZDB_KEYSTORE_ORIGIN_TAG);
-        ret[0] = '.';
-        ret[1] = '\0';
-        return ret;
-    }
-
-    int origin_len = strlen(origin);
-
-    if(origin_len == 0)
-    {
-        ZALLOC_STRING_OR_DIE(char*, ret, 2, ZDB_KEYSTORE_ORIGIN_TAG);
-        ret[0] = '.';
-        ret[1] = '\0';
-        return ret;
-    }
-
-    if(origin[origin_len - 1] == '.')
-    {
-        origin_len++;
-        ZALLOC_STRING_OR_DIE(char*, ret, origin_len, ZDB_KEYSTORE_ORIGIN_TAG);
-        MEMCOPY(ret, origin, origin_len);
-    }
-    else
-    {
-        ZALLOC_STRING_OR_DIE(char*, ret, origin_len + 2, ZDB_KEYSTORE_ORIGIN_TAG);
-        MEMCOPY(ret, origin, origin_len);
-        ret[origin_len++] = '.';
-        ret[origin_len] = '\0';
-    }
-
-    return ret;
-}
+// sanitises an origin
 
 static void
 origin_copy_sanitize(char* target, const char* origin)
@@ -197,7 +157,7 @@ dnssec_keystore_setpath(const char* path)
 ya_result
 dnssec_keystore_add(dnssec_key* key)
 {
-    zassert(key != NULL);
+    yassert(key != NULL);
 
     pthread_mutex_lock(&keystore_mutex);
 
@@ -288,11 +248,11 @@ dnssec_keystore_remove(u8 algorithm, u16 tag, u16 flags, const char *origin)
 
     dnssec_key* ret_sll = NULL;
 
-    dnssec_key* prev = NULL;
     dnssec_key* tmp = *head;
 
     if(tmp != NULL)
     {
+        dnssec_key* prev = NULL;
         char clean_origin[MAX_DOMAIN_LENGTH];
 
         origin_copy_sanitize(clean_origin, origin);
@@ -338,16 +298,14 @@ dnssec_keystore_remove(u8 algorithm, u16 tag, u16 flags, const char *origin)
 static void
 dnssec_keystore_destroy_callback(void* data)
 {
-    dnssec_key* key = (dnssec_key*)data;
+    dnssec_key *key = (dnssec_key*)data;
 
     while(key != NULL)
     {
-        dnssec_key* tmp = key;
-        key = key->next;
-        tmp->vtbl->dnskey_key_free(tmp);
-        ZFREE_STRING(tmp->owner_name);
-        ZFREE_STRING(tmp->origin);
-        ZFREE(tmp, dnssec_key);
+        dnssec_key *next = key->next;
+        key->next = NULL;
+        dnskey_free(key);
+        key = next;
     }
 }
 
@@ -377,68 +335,12 @@ dnssec_key_equals(dnssec_key* a, dnssec_key* b)
         if(strcmp(a->origin, b->origin) == 0)
         {
             /* Compare the content of the key */
-
-            switch(a->algorithm)
-            {
-                case DNSKEY_ALGORITHM_RSASHA1_NSEC3:
-                case DNSKEY_ALGORITHM_RSASHA1:
-                {
-                    /* RSA, compare modulus and exponent, exponent first (it's the smallest) */
-
-                    RSA* a_rsa = a->key.rsa;
-                    RSA* b_rsa = b->key.rsa;
-
-                    if(BN_cmp(a_rsa->e, b_rsa->e) == 0)
-                    {
-                        if(BN_cmp(a_rsa->n, b_rsa->n) == 0)
-                        {
-                            return TRUE;
-                        }
-                    }
-
-                    return FALSE;
-                }
-                default:
-                {
-                    DIE(DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM); /* Unsupported */
-                }
-            }
+            
+            return a->vtbl->dnssec_key_equals(a, b);
         }
     }
 
     return FALSE;
-}
-
-/*
- * Creates an empty key, it will then have to be initialized with a "real" key
- */
-
-dnssec_key*
-dnssec_key_newemptyinstance(u8 algorithm, u16 flags, const char *origin)
-{
-    zassert(origin != NULL);
-
-    dnssec_key* key;
-    ZALLOC_OR_DIE(dnssec_key*, key, dnssec_key, ZDB_DNSKEY_TAG);
-    key->next = NULL;
-
-    key->origin = origin_zdup_sanitize(origin);
-
-    /* origin is allocated with ZALLOC using ZALLOC_STRING_OR_DIE
-     * In this mode, the byte before the pointer is the size of the string.
-     */
-
-    ZALLOC_STRING_OR_DIE(u8*, key->owner_name, cstr_get_dnsname_len(key->origin), ZDB_DNSKEY_NAME_TAG);
-    cstr_to_dnsname(key->owner_name, key->origin);
-
-    key->flags = flags;
-    key->algorithm = algorithm;
-
-    /*key->key.X=....*/
-    /*key->tag=00000*/
-    /*key->is_private=TRUE;*/
-
-    return key;
 }
 
 /** Generates a private key, store in the keystore
@@ -467,10 +369,22 @@ dnssec_key_createnew(u8 algorithm, u32 size, u16 flags, const char *origin, dnss
     {
         switch(algorithm)
         {
-            case DNSKEY_ALGORITHM_RSASHA1_NSEC3:
             case DNSKEY_ALGORITHM_RSASHA1:
+            case DNSKEY_ALGORITHM_RSASHA1_NSEC3:
+            case DNSKEY_ALGORITHM_RSASHA256_NSEC3:
+            case DNSKEY_ALGORITHM_RSASHA512_NSEC3:
             {
                 if(FAIL(return_value = rsa_newinstance(size, algorithm, flags, clean_origin, &key)))
+                {
+                    return return_value;
+                }
+
+                break;
+            }
+            case DNSKEY_ALGORITHM_DSASHA1:
+            case DNSKEY_ALGORITHM_DSASHA1_NSEC3:
+            {
+                if(FAIL(return_value = dsa_newinstance(size, algorithm, flags, clean_origin, &key)))
                 {
                     return return_value;
                 }
@@ -538,7 +452,7 @@ dnskey_load_public(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_k
 
     if(key == NULL)
     {
-        if(ISOK(return_value = rsa_loadpublic(rdata, rdata_size, origin, &key)))
+        if(ISOK(return_value = dnskey_new_from_rdata(rdata, rdata_size, origin, &key)))
         {
             dnssec_keystore_add(key);
         }
@@ -590,11 +504,20 @@ dnssec_key_load_private(u8 algorithm, u16 tag, u16 flags, const char* origin, dn
         }
 
         switch(algorithm)
-        {
-            case DNSKEY_ALGORITHM_RSASHA1_NSEC3:
+        {            
             case DNSKEY_ALGORITHM_RSASHA1:
+            case DNSKEY_ALGORITHM_RSASHA1_NSEC3:
+            case DNSKEY_ALGORITHM_RSASHA256_NSEC3:
+            case DNSKEY_ALGORITHM_RSASHA512_NSEC3:
             {
                 return_value = rsa_loadprivate(f, algorithm, flags, clean_origin, &key);
+
+                break;
+            }
+            case DNSKEY_ALGORITHM_DSASHA1:
+            case DNSKEY_ALGORITHM_DSASHA1_NSEC3:
+            {
+                return_value = dsa_loadprivate(f, algorithm, flags, clean_origin, &key);
 
                 break;
             }
@@ -636,11 +559,10 @@ dnssec_key_store_private(dnssec_key* key)
 {
     char path[MAX_PATH];
 
-    if(key == NULL || key->key.any == NULL || key->origin == NULL)
+    if(key == NULL || key->key.any == NULL || key->origin == NULL || !key->is_private)
     {
         return DNSSEC_ERROR_INCOMPLETEKEY;
     }
-
 
     if(snprintf(path, MAX_PATH, "%s/" OAT_PRIVATE_FORMAT, g_keystore_path, key->origin, key->algorithm, key->tag) >= MAX_PATH)
     {
@@ -648,19 +570,15 @@ dnssec_key_store_private(dnssec_key* key)
         return DNSSEC_ERROR_KEYSTOREPATHISTOOLONG;
     }
 
-    FILE* f;
-
-    if((f = fopen(path, "w+b")) == NULL)
-    {
-        return DNSSEC_ERROR_UNABLETOCREATEKEYFILES;
-    }
-
     switch(key->algorithm)
     {
-        case DNSKEY_ALGORITHM_RSASHA1_NSEC3:
         case DNSKEY_ALGORITHM_RSASHA1:
+        case DNSKEY_ALGORITHM_RSASHA1_NSEC3:
+        case DNSKEY_ALGORITHM_RSASHA256_NSEC3:
+        case DNSKEY_ALGORITHM_RSASHA512_NSEC3:
+        case DNSKEY_ALGORITHM_DSASHA1:
+        case DNSKEY_ALGORITHM_DSASHA1_NSEC3:
         {
-            rsa_storeprivate(f, key);
             break;
         }
         default:
@@ -668,10 +586,48 @@ dnssec_key_store_private(dnssec_key* key)
             return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
         }
     }
+    
+    FILE* f;
+
+    if((f = fopen(path, "w+b")) == NULL)
+    {
+        return DNSSEC_ERROR_UNABLETOCREATEKEYFILES;
+    }
+    
+    u8 tmp_in[DNSSEC_MAXIMUM_KEY_SIZE_BYTES];
+    char tmp_out[BASE64_ENCODED_SIZE(DNSSEC_MAXIMUM_KEY_SIZE_BYTES)];
+
+    void* base = key->key.any;
+    
+    /* Modulus */
+
+    fprintf(f, "Private-key-format: v1.2\nAlgorithm: %i (?)", key->algorithm); /// @todo 20140523 edf -- think about handling v1.3
+
+    const struct structdescriptor *sd = key->vtbl->dnssec_key_get_fields_descriptor(key);
+    
+    ya_result return_code = ERROR;
+    
+    while(sd->name != NULL)
+    {
+        fprintf(f, "%s: ", sd->name);
+        
+        BIGNUM **valuep = (BIGNUM**)&(((u8*)base)[sd->address]);
+        
+        //WRITE_BIGNUM_AS_BASE64(f, *valuep, tmp_in, tmp_out);
+        
+        if(FAIL(return_code = dnskey_write_bignum_as_base64(f, *valuep, tmp_in, sizeof(tmp_in), tmp_out, sizeof(tmp_out))))
+        {
+            break;
+        }
+        
+        fputs("\n", f);
+        
+        sd++;
+    }
 
     fclose(f);
 
-    return SUCCESS;
+    return return_code;
 }
 
 ya_result
@@ -703,7 +659,7 @@ dnssec_key_store_dnskey(dnssec_key* key)
         p++;
     }
 
-    fprintf(f, "%s IN DNSKEY %i %i %i ", key->origin, key->flags, lc, key->algorithm);
+    fprintf(f, "%s IN DNSKEY %u %u %u ", key->origin, key->flags, lc, key->algorithm);
 
     u8* rdata;
     u32 rdata_size = key->vtbl->dnskey_key_rdatasize(key);
@@ -722,6 +678,7 @@ dnssec_key_store_dnskey(dnssec_key* key)
         base64_encode(ptr, 48, b64);
         if(fwrite(b64, 64, 1, f) != 1)
         {
+            fclose(f);
             return DNSSEC_ERROR_KEYWRITEERROR;
         }
         rdata_size -= 48;
@@ -732,6 +689,7 @@ dnssec_key_store_dnskey(dnssec_key* key)
         u32 n = base64_encode(ptr, rdata_size, b64);
         if(fwrite(b64, n, 1, f) != 1)
         {
+            fclose(f);
             return DNSSEC_ERROR_KEYWRITEERROR;
         }
     }
@@ -768,7 +726,7 @@ dnssec_key_addrecord(zdb_zone* zone, dnssec_key* key)
     ZDB_RECORD_ZALLOC_EMPTY(dnskey, 86400, rdata_size);
     u8* rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(dnskey);
 
-    SET_U16_AT(rdata[0], htons(key->flags)); /** @todo: NATIVEFLAGS */
+    SET_U16_AT(rdata[0], htons(key->flags)); /// @todo 20140523 edf -- DNSKEY NATIVEFLAGS
     rdata[2] = DNSKEY_PROTOCOL_FIELD;
     rdata[3] = key->algorithm;
     key->vtbl->dnskey_key_writerdata(key, &rdata[4]);

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdb Zone database
  *  @brief The zone database
  *
@@ -58,6 +58,7 @@
 #ifndef _ZDB_H
 #define	_ZDB_H
 
+#include <dnsdb/zdb_config.h>
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/zdb_error.h>
 #include <dnscore/message.h>
@@ -95,6 +96,8 @@ dnsdb_fingerprint_mask();
 
 void zdb_init();
 
+void zdb_init_ex(u32 thread_pool_count);
+
 /** @brief Destroys the database internals.
  *
  *  Destroys the database internals.
@@ -130,6 +133,8 @@ void zdb_create(zdb* db);
  */
 /* ya_result zdb_axfr   (zdb* db, u8* origin,zone_iterator* iterator);*/
 
+#if 1
+//#error obsolete
 /** @brief Search for a single match in the database
  *
  *  Search for a match in the database.
@@ -145,6 +150,7 @@ void zdb_create(zdb* db);
  */
 
 ya_result zdb_query(zdb* db, u8* dnsname_name, u16 class, u16 type, zdb_packed_ttlrdata** ttlrdara_out);
+#endif
 
 static inline void zdb_query_ex_answer_create(zdb_query_ex_answer *ans_auth_add)
 {
@@ -168,7 +174,7 @@ static inline void zdb_query_ex_answer_create(zdb_query_ex_answer *ans_auth_add)
  * @return
  */
 
-finger_print zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 *restrict pool_buffer);
+finger_print zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 *restrict pool_buffer);
 
 /**
  * Destroys a zdb_query_ex_answer structure created with zdb_query_ex
@@ -176,7 +182,8 @@ finger_print zdb_query_ex(const zdb *db, message_data *mesg, zdb_query_ex_answer
  * @param ans_auth_add
  */
 
-void zdb_query_ex_answer_destroy(zdb_query_ex_answer* ans_auth_add);
+// void zdb_query_ex_answer_destroy(zdb_query_ex_answer* ans_auth_add);
+#define zdb_query_ex_answer_destroy(unused__) ((void)unused__)
 
 /**
  * @brief Writes the answer into the message.
@@ -193,7 +200,7 @@ void zdb_query_ex_answer_destroy(zdb_query_ex_answer* ans_auth_add);
  */
 ya_result zdb_query_message_update(message_data* message, zdb_query_ex_answer* answer_set);
 
-ya_result zdb_query_ip_records(zdb* db, u8* name_, u16 zclass, zdb_packed_ttlrdata **ttlrdata_out_a, zdb_packed_ttlrdata **ttlrdata_out_aaaa);
+ya_result zdb_query_ip_records(zdb* db, const u8* name_, u16 zclass, zdb_packed_ttlrdata **ttlrdata_out_a, zdb_packed_ttlrdata **ttlrdata_out_aaaa);
 
 /** @brief Adds an entry in a zone of the database
  *
@@ -234,13 +241,25 @@ ya_result zdb_delete(zdb* db, u8* origin, u8* name, u16 zclass, u16 type, u32 tt
 
 /** @brief Destroys the database
  *
- *  Destroys a database. (Emtpies it)
+ *  Destroys a database. (Empties it)
  *
  *  @param[in]  db the database to destroy
  *
  */
 
 void zdb_destroy(zdb* db);
+
+/**
+ * Looks for a zone and tells if zone is marked as invalid.
+ * The zone can only be invalid if it exists.
+ * 
+ * @param db
+ * @param origin
+ * @param zclass
+ * @return 
+ */
+
+bool zdb_is_zone_invalid(zdb *db, const u8 *origin, u16 zclass);
 
 /** @brief DEBUG: Prints the content of the database.
  *
@@ -250,79 +269,14 @@ void zdb_destroy(zdb* db);
  *
  */
 
-#if ZDB_CACHE_ENABLED!=0
 
-/** @brief Adds a zone file to the global/cache part of the database
- *
- *  Adds a zone file to the global/cache part of the database
- *
- *  @param[in]  db a pointer to a zdb structure that will be initialized.
- *  @param[in]  filename the path to the zone file.
- *  @param[in]  dnszone the dns-name of the zone file.
- *
- *
- *  @return SUCCESS in case of success.
- */
-
-ya_result zdb_load_global(zdb* db, const char* filename);
-
-/** @brief Search for a match in global/cache part of the database
- *
- *  Search for a match in global/cache part of the database
- *
- *  @param[in]  db the database
- *  @param[in]  dnsname_name the name dnsname to search for
- *  @param[in]  class the class to match
- *  @param[in]  type the type to match
- *  @param[out] ttl_rdara_out a pointer to a pointer set of results (single linked list)
- *
- *  @return SUCCESS in case of success.
- */
-
-ya_result zdb_query_global(zdb* db, u8* name_, u16 zclass, u16 type, zdb_packed_ttlrdata** ttlrdata_out);
-
-/** @brief Adds an entry in the database
- *
- *  Adds an entry in the database
- *
- *  @param[in]  db the database
- *  @param[in]  name_ the full name of the record (dns form)
- *  @param[in]  zclass the class of the record
- *  @param[in]  type the type of the record
- *  @param[in]  ttl the ttl of the record
- *  @param[in]  rdata_size the size of the rdata of the record
- *  @param[in]  rdata a pointer to the rdata of the record
- *
- *  @return SUCCESS in case of success.
- */
-
-ya_result zdb_add_global(zdb* db, u8* name_, u16 zclass, u16 type, u32 ttl, u16 rdata_size, void* rdata); /* 4 match, add    1 */
-
-/** @brief Deletes an entry from the database
- *
- *  Matches and deletes an entry from the database
- *
- *  @param[in]  db the database
- *  @param[in]  name_ the name of the record
- *  @param[in]  zclass the class of the record
- *  @param[in]  type the type of the record
- *  @param[in]  ttl the ttl of the record
- *  @param[in]  rdata_size the size of the rdata of the record
- *  @param[in]  rdata a pointer to the rdata of the record
- *
- *  @return SUCCESS in case of success.
- */
-
-ya_result zdb_delete_global(zdb* db, u8* name_, u16 zclass, u16 type, u32 ttl, u16 rdata_size, void* rdata); /* 5 match, delete 1 */
-
-#endif
 
 #ifndef NDEBUG
 /**
  * DEBUG
  */
 
-void zdb_print(zdb* db);
+void zdb_print(zdb *db, output_stream *os);
 
 #endif
 

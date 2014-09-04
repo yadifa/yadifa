@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup records Internal functions for the database: resource records.
  *  @ingroup dnsdb
  *  @brief Internal functions for the database: resource records.
@@ -177,7 +177,7 @@ ya_result zdb_record_delete(zdb_rr_collection* collection, u16 type);
  */
 
 /* 4 USES */
-ya_result zdb_record_delete_exact(zdb_rr_collection* collection, u16 type, zdb_ttlrdata* ttl_rdata);
+ya_result zdb_record_delete_exact(zdb_rr_collection* collection, u16 type, const zdb_ttlrdata* ttl_rdata);
 
 /** @brief Destroys all the a resource record of the collection
  *
@@ -197,7 +197,7 @@ void zdb_record_destroy(zdb_rr_collection* collection);
  */
 
 /* 1 USE */
-bool zdb_record_isempty(zdb_rr_collection* collection);
+bool zdb_record_isempty(const zdb_rr_collection* collection);
 
 /** @brief Checks if two records are equal.
  *
@@ -207,7 +207,7 @@ bool zdb_record_isempty(zdb_rr_collection* collection);
  */
 
 /* 1 USE */
-bool zdb_record_equals_unpacked(zdb_packed_ttlrdata* a, zdb_ttlrdata* b);
+bool zdb_record_equals_unpacked(const zdb_packed_ttlrdata* a, const zdb_ttlrdata* b);
 
 /** @brief Checks if two records are equal.
  *
@@ -217,7 +217,7 @@ bool zdb_record_equals_unpacked(zdb_packed_ttlrdata* a, zdb_ttlrdata* b);
  */
 
 /* 1 USE */
-bool zdb_record_equals(zdb_packed_ttlrdata* a, zdb_packed_ttlrdata* b);
+bool zdb_record_equals(const zdb_packed_ttlrdata* a, const zdb_packed_ttlrdata* b);
 
 /**
  * @brief Copies the soa rdata to an soa_rdata native structure.
@@ -230,7 +230,7 @@ bool zdb_record_equals(zdb_packed_ttlrdata* a, zdb_packed_ttlrdata* b);
  * @param[out] soa_out a pointer to an soa_rdata structure
  */
 
-ya_result zdb_record_getsoa(zdb_packed_ttlrdata* soa, soa_rdata* soa_out);
+ya_result zdb_record_getsoa(const zdb_packed_ttlrdata* soa, soa_rdata* soa_out);
 
 /**
  * @brief Allocated and duplicates the content of the source
@@ -248,8 +248,8 @@ void zdb_ttlrdata_delete(zdb_ttlrdata* record);
  * DEBUG
  */
 
-void zdb_record_print_indented(zdb_rr_collection collection, int indent);
-void zdb_record_print(zdb_rr_collection collection);
+void zdb_record_print_indented(zdb_rr_collection collection, output_stream *os, int indent);
+void zdb_record_print(zdb_rr_collection collection, output_stream *os);
 
 #endif
 

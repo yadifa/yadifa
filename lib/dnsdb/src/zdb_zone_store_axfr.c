@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief
@@ -57,7 +57,7 @@
 
 #include <dnscore/dnsname.h>
 
-#if ZDB_NSEC3_SUPPORT!=0
+#if ZDB_HAS_NSEC3_SUPPORT!=0
 #include "dnsdb/nsec3.h"
 #endif
 
@@ -100,7 +100,7 @@ zdb_zone_store_axfr(zdb_zone* zone, output_stream* os)
 
     struct type_class_ttl_size rec;
 
-    zassert((((u8*) & rec.rtype - (u8*) & rec) == 0) &&
+    yassert((((u8*) & rec.rtype - (u8*) & rec) == 0) &&
            (((u8*) & rec.rclass - (u8*) & rec) == 2) &&
            (((u8*) & rec.rttl - (u8*) & rec) == 4) &&
            (((u8*) & rec.rsize - (u8*) & rec) == 8)
@@ -187,7 +187,7 @@ zdb_zone_store_axfr(zdb_zone* zone, output_stream* os)
         }
     }
 
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
 
     /*
      * NSEC3 part of the DB

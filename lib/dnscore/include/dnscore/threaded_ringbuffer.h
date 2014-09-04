@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief 
@@ -44,7 +44,8 @@
 #define	_THREADED_RINGBUFFER_H
 
 #include <pthread.h>
-#include "sys_types.h"
+
+#include <dnscore/sys_types.h>
 
 #ifdef	__cplusplus
 extern "C" {

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup logging Server logging
  *  @ingroup yadifad
  *  @brief 
@@ -41,11 +41,11 @@
  *
  *----------------------------------------------------------------------------*/
 
+#include "config.h"
+
 #define LOG_STATISTICS_C_
 
 #include "log_statistics.h"
-
-#define SHOW_REFERRAL 1
 
 logger_handle* g_statistics_logger;
 
@@ -66,9 +66,6 @@ log_statistics_legend()
             "\tdr : dropped count \n"
             "\tst : total bytes sent (simple queries only) \n"
             "\tun : undefined opcode count \n"
-#if SHOW_REFERRAL
-            "\trf : referral count\n"
-#endif
             
             "\tax : axfr query count \n"
             "\tix : ixfr query count \n"
@@ -77,7 +74,7 @@ log_statistics_legend()
             "output:\n"
             "\n"
             "\tOK : NOERROR answer count \n"
-            "\tFR : FORMERR answer count \n"
+            "\tFE : FORMERR answer count \n"
             "\tSF : SERVFAIL answer count \n"
             "\tNE : NXDOMAIN answer count \n"
             "\tNI : NOTIMP answer count \n"
@@ -95,33 +92,35 @@ log_statistics_legend()
             "\tBM : BADMODE answer count \n"
             "\tBN : BADNAME answer count \n"
             "\tBA : BADALG answer count \n"
-            "\tTR : BADTRUNC answer count"
+            "\tTR : BADTRUNC answer count\n"
+            
+#if HAS_RRL_SUPPORT
+            "\n"
+            "rrl:\n"
+            "\n"
+            "\tslip: truncated answer count\n"
+            "\tdrop: dropped answer count\n"
+#endif            
             );
 }
 
 void
 log_statistics(server_statistics_t *server_statistics)
 {
+#ifdef DEBUG
+    zone_dump_allocated();
+#endif
+    
     logger_handle_msg(g_statistics_logger,
             MSG_INFO,
-#if 0
-            "loops=%llu (%llu/s) "
-            "timeout=%llu "
-            "sched=%llu "
-#endif
+
              "udp (in=%llu qr=%llu ni=%llu up=%llu "
-                  "dr=%llu st=%llu un=%llu "
-#if SHOW_REFERRAL
-                  "rf=%llu) "
-#endif
-            
+                  "dr=%llu st=%llu un=%llu) "
+                  
              "tcp (in=%llu qr=%llu ni=%llu up=%llu "
-                  "dr=%llu st=%llu un=%llu """
-#if SHOW_REFERRAL
-                  "rf=%llu "
-#endif
+                  "dr=%llu st=%llu un=%llu "
                   "ax=%llu ix=%llu ov=%llu) "
-            
+                        
             "udpa (OK=%llu FE=%llu SF=%llu NE=%llu "
                   "NI=%llu RE=%llu XD=%llu XR=%llu "
                   "NR=%llu NA=%llu NZ=%llu BV=%llu "
@@ -132,14 +131,11 @@ log_statistics(server_statistics_t *server_statistics)
                   "NI=%llu RE=%llu XD=%llu XR=%llu "
                   "NR=%llu NA=%llu NZ=%llu BV=%llu "
                   "BS=%llu BK=%llu BT=%llu BM=%llu "
-                  "BN=%llu BA=%llu TR=%llu)"
-            ,
-#if 0
-            server_statistics->input_loop_count,
-            1000LL * server_statistics->loop_rate_counter / server_statistics->loop_rate_elapsed,
-            server_statistics->input_timeout_count,
-            server_statistics->sched_queries_count,
+                  "BN=%llu BA=%llu TR=%llu) "
+#if HAS_RRL_SUPPORT
+            "rrl (slip=%llu drop=%llu)"
 #endif
+            ,
             // udp
             
             server_statistics->udp_input_count,
@@ -150,9 +146,6 @@ log_statistics(server_statistics_t *server_statistics)
             server_statistics->udp_dropped_count,
             server_statistics->udp_output_size_total,
             server_statistics->udp_undefined_count,
-#if SHOW_REFERRAL
-            server_statistics->udp_referrals_count,
-#endif
 
             // tcp
 
@@ -164,14 +157,11 @@ log_statistics(server_statistics_t *server_statistics)
             server_statistics->tcp_dropped_count,
             server_statistics->tcp_output_size_total,
             server_statistics->tcp_undefined_count,
-#if SHOW_REFERRAL
-            server_statistics->tcp_referrals_count,
-#endif
             
             server_statistics->tcp_axfr_count,            
             server_statistics->tcp_ixfr_count,
             server_statistics->tcp_overflow_count,
-            
+               
             // udp fp
                         
             server_statistics->udp_fp[RCODE_NOERROR],
@@ -216,6 +206,11 @@ log_statistics(server_statistics_t *server_statistics)
             server_statistics->tcp_fp[RCODE_BADALG],
             server_statistics->tcp_fp[RCODE_BADTRUNC]
             
+#if HAS_RRL_SUPPORT
+            ,
+            server_statistics->rrl_slip,
+            server_statistics->rrl_drop
+#endif           
             );
 }
 

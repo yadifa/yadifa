@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief Functions used to hash a dns formatted string
@@ -98,12 +98,12 @@ static inline hashcode hash_dnslabel(const u8 *dns_label)
     u32 hash = ZDB_HASH_TABLE[len][0];
 
     const u32 *hash_line = (u32*) & ZDB_HASH_TABLE[1][0];
-    const u8 *limit = &dns_label[len];
+    const u8 * const limit = &dns_label[len];
 
     while(dns_label != limit)
     {
-	hash += hash_line[ZDB_HASH_TABLE_MAP[*dns_label++]];
-	hash_line += ZDB_HASH_TABLE_CHAR_SET_SIZE;
+        hash += hash_line[ZDB_HASH_TABLE_MAP[*dns_label++]];
+        hash_line += ZDB_HASH_TABLE_CHAR_SET_SIZE;
     }
 
     return hash;

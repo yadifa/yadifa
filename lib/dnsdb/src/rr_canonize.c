@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup rrsig RRSIG functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -51,15 +51,16 @@
 
 #include "dnsdb/zdb_error.h"
 #include "dnsdb/rrsig.h"
+#include "dnsdb/rr_canonize.h"
 
 #define ZDB_GUARANTEED_LOWCASE_RDATA 1	/* The zone loader guarantees that dnames in the rdata are stored lo-case */
 
 #define RR_CANONIZE_TWONAMES_TAG    0x4e324e4f4e4143	/* CANON2N  */
 #define RR_CANONIZE_ONENAME_TAG	    0x4e314e4f4e4143    /* CANON1N  */
-#define RR_CANONIZE_MX_TAG	    0x584d4e4f4e4143	/* CANONMX  */
-#define RR_CANONIZE_SOA_TAG	    0x414f534e4f4e4143	/* CANONSOA */
+#define RR_CANONIZE_MX_TAG          0x584d4e4f4e4143	/* CANONMX  */
+#define RR_CANONIZE_SOA_TAG         0x414f534e4f4e4143	/* CANONSOA */
 #define RR_CANONIZE_NSEC1_TAG	    0x31534e4e4f4e4143  /* CANONNS1 */
-#define RR_CANONIZE_NOP_TAG	    0x504f4e4e4f4e4143	/* CANONNOP */
+#define RR_CANONIZE_NOP_TAG         0x504f4e4e4f4e4143	/* CANONNOP */
 
 /*
  *
@@ -190,7 +191,7 @@ rr_canonize_mx(zdb_packed_ttlrdata* rr, ptr_vector* v)
 static void
 rr_canonize_soa(zdb_packed_ttlrdata* rr, ptr_vector* v)
 {
-    zassert(rr != NULL && rr->next == NULL);
+    yassert(rr != NULL && rr->next == NULL);
 
     zdb_canonized_packed_ttlrdata* c_rr;
 
@@ -288,8 +289,9 @@ rr_canonize_nop(zdb_packed_ttlrdata* rr, ptr_vector* v)
 }
 
 
+
 void
-rr_canonize(u16 type, zdb_packed_ttlrdata* rr_sll, ptr_vector* rrsp)
+rr_canonize_rrset(u16 type, zdb_packed_ttlrdata* rr_sll, ptr_vector* rrsp)
 {
     switch(type)
     {
@@ -379,7 +381,7 @@ rr_free_canonized_free(void* ptr)
 }
 
 void
-rr_free_canonized(ptr_vector* rrsp)
+rr_canonize_free(ptr_vector* rrsp)
 {
     ptr_vector_free_empties(rrsp, rr_free_canonized_free);
     /* DO NOT DO NOT DO NOT : ptr_vector_destroy(rrsp); */

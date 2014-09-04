@@ -1,36 +1,36 @@
-/*-----------------------------------------------------------------------------
- *
- * Copyright (c) 2011, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- * DOCUMENTATION */
+/*------------------------------------------------------------------------------
+*
+* Copyright (c) 2011, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup acl Access Control List
  *  @ingroup yadifad
  *  @brief
@@ -40,6 +40,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "config.h"
 
 #include <netinet/in.h>
 
@@ -51,15 +53,19 @@ extern logger_handle *g_server_logger;
 #include <dnscore/base64.h>
 #include <dnscore/message.h>
 #include <dnscore/format.h>
+#include <dnscore/bytearray_output_stream.h>
+
+#if !HAS_ACL_SUPPORT
+#error "ACL support should not be compiled in"
+#endif
 
 #include "acl.h"
-
-#include "parser.h"
 
 #define ADRMITEM_TAG 0x4d4554494d524441
 #define ACLENTRY_TAG 0x5952544e454c4341
 
-#define ACL_DEBUG_FULL 0
+#define ACL_DEBUG_FULL  0
+#define ACL_DEBUG_FLUSH 0 // enabling this will greatly slow down the zone configuration
 
 #ifndef DEBUG
 #undef ACL_DEBUG_FULL
@@ -71,17 +77,8 @@ extern logger_handle *g_server_logger;
  */
 
 
-#if ACL_DEBUG_FULL == 0
-#undef DEBUGLNF
-#undef DEBUGF
-#undef OSDEBUG
-#undef LDEBUG
-#undef OSLDEBUG
-#define DEBUGLNF(...)
-#define DEBUGF(...)
-#define OSDEBUG(...)
-#define LDEBUG(...)
-#define OSLDEBUG(...)
+#if !ACL_DEBUG_FLUSH
+#define logger_flush(...)
 #endif
 
 #define STR(x) ((x)!=NULL)?(x):"NULL"
@@ -113,18 +110,25 @@ amim_ipv4_print(ptr_vector *ipv4v)
     address_match_item **itemp = (address_match_item **)ipv4v->data;
     s32 idx = 0;
 
-    osformat(termerr, "\tipv4@%p\n", (void*)itemp);
+#ifdef DEBUG
+    log_debug7("\tipv4@%p", (void*)itemp);
+    logger_flush();
+#endif
 
     while(idx <= ipv4v->offset)
     {
         u8* ip = itemp[idx]->parameters.ipv4.address.bytes;
         u8* mask = itemp[idx]->parameters.ipv4.mask.bytes;
-
-        osformat(termerr, "\t\t[%hhu.%hhu.%hhu.%hhu/%hhu.%hhu.%hhu.%hhu (%hu) %c]\n",
+        
+#ifdef DEBUG
+        log_debug7("\t\t[%hhu.%hhu.%hhu.%hhu/%hhu.%hhu.%hhu.%hhu (%hu) %c]",
                 ip[0], ip[1], ip[2], ip[3],
                 mask[0], mask[1], mask[2], mask[3],
                 itemp[idx]->parameters.ipv4.maskbits,
                 (itemp[idx]->parameters.ipv4.rejects == 0) ? 'a' : 'r');
+        logger_flush();
+#endif
+        
         idx++;
     }
 #endif
@@ -137,24 +141,31 @@ amim_ipv6_print(ptr_vector *ipv6v)
     address_match_item **itemp = (address_match_item **)ipv6v->data;
     s32 idx = 0;
 
-    osformat(termerr, "\tipv6@%p\n", (void*)itemp);
+#ifdef DEBUG
+    log_debug7("\tipv6@%p", (void*)itemp);
+    logger_flush();
+#endif
 
     while(idx <= ipv6v->offset)
     {
         u8* ip = itemp[idx]->parameters.ipv6.address.bytes;
         u8* mask = itemp[idx]->parameters.ipv6.mask.bytes;
 
-        osformat(termerr, "\t\t[%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx/%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx (%hi) %c]\n",
+#ifdef DEBUG
+    log_debug7("\t\t[%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx/%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx:%2hhx%2hhx (%hi) %c]",
                 ip[0], ip[1], ip[2], ip[3], ip[4], ip[5], ip[6], ip[7], ip[8], ip[9], ip[10], ip[11], ip[12], ip[13], ip[14], ip[15],
                 mask[0], mask[1], mask[2], mask[3], mask[4], mask[5], mask[6], mask[7], mask[8], mask[9], mask[10], mask[11], mask[12], mask[13], mask[14], mask[15],
                 itemp[idx]->parameters.ipv6.maskbits,
                 (itemp[idx]->parameters.ipv6.rejects == 0) ? 'a' : 'r');
-
+    logger_flush();
+#endif
+        
         idx++;
     }
 #endif
 }
 
+#if HAS_TSIG_SUPPORT
 static void
 amim_tsig_print(ptr_vector *tsigv)
 {
@@ -162,16 +173,25 @@ amim_tsig_print(ptr_vector *tsigv)
     address_match_item **itemp = (address_match_item **)tsigv->data;
     s32 idx = 0;
 
-    osformat(termerr, "\ttsig@%p\n", (void*)itemp);
-
+#ifdef DEBUG
+    log_debug7("\ttsig@%p", (void*)itemp);
+    logger_flush();
+#endif
+    
     while(idx <= tsigv->offset)
     {
         u8* name = itemp[idx]->parameters.tsig.name;
-        osformat(termerr, "\t\t%{dnsname}\n", name);
+        
+#ifdef DEBUG
+        log_debug7("\t\t%{dnsname}", name);
+        logger_flush();
+#endif
+        
         idx++;
     }
 #endif
 }
+#endif // TSIG SUPPORT
 
 #endif
 
@@ -186,36 +206,36 @@ typedef int amim_function(struct address_match_item*, void*);
 // <editor-fold defaultstate="collapsed" desc="AMIM functions">
 
 static int
-amim_none(struct address_match_item* item, void* data)
+amim_none(const struct address_match_item* item, const void* data)
 {
     return AMIM_REJECT;
 }
 
 static int
-amim_any(struct address_match_item* item, void* data)
+amim_any(const struct address_match_item* item, const void* data)
 {
     return AMIM_ACCEPT;
 }
 
 static int
-amim_ipv4(struct address_match_item* item, void* data)
+amim_ipv4(const struct address_match_item* item, const void* data)
 {
-    ipv4_id* items = &item->parameters.ipv4;
-    u32* ip = (u32*)data;
+    const ipv4_id* items = &item->parameters.ipv4;
+    const u32* ip = (const u32*)data;
     return ( (items->address.value & items->mask.value) == (*ip & items->mask.value)) ? AMIM_ACCEPT : AMIM_SKIP;
 }
 
 static int
-amim_ipv4_not(struct address_match_item *item, void* data)
+amim_ipv4_not(const struct address_match_item *item, const void* data)
 {
     return -amim_ipv4(item, data);
 }
 
 static int
-amim_ipv6(struct address_match_item *item, void* data)
+amim_ipv6(const struct address_match_item *item, const void* data)
 {
-    u64* ipv6_bytes = (u64*)data;
-    ipv6_id* items = &item->parameters.ipv6;
+    const u64* ipv6_bytes = (const u64*)data;
+    const ipv6_id* items = &item->parameters.ipv6;
     return (
             ((items->address.lohi[0] & items->mask.lohi[0]) == (ipv6_bytes[0] & items->mask.lohi[0])) &&
             ((items->address.lohi[1] & items->mask.lohi[1]) == (ipv6_bytes[1] & items->mask.lohi[1]))
@@ -223,15 +243,16 @@ amim_ipv6(struct address_match_item *item, void* data)
 }
 
 static int
-amim_ipv6_not(struct address_match_item *item, void *data)
+amim_ipv6_not(const struct address_match_item *item, const void *data)
 {
     return -amim_ipv6(item, data);
 }
 
+#if HAS_TSIG_SUPPORT
 static int
-amim_tsig(struct address_match_item *item, void *data)
+amim_tsig(const struct address_match_item *item, const void *data)
 {
-    message_data *mesg = (message_data*)data;
+    const message_data *mesg = (const message_data*)data;
 
     /*
      * The TSIG has already been verified as being valid.  So all we need to know if : is it allowed ?
@@ -241,7 +262,6 @@ amim_tsig(struct address_match_item *item, void *data)
     // log_debug("tsig : %p", mesg->tsig.tsig->name);
 
     const tsig_item *tsig = mesg->tsig.tsig;
-
     if(tsig != NULL)
     {
         if(item->parameters.tsig.mac_algorithm == tsig->mac_algorithm)
@@ -260,13 +280,14 @@ amim_tsig(struct address_match_item *item, void *data)
 }
 
 static int
-amim_tsig_not(struct address_match_item *item, void *data)
+amim_tsig_not(const struct address_match_item *item, const void *data)
 {
     return -amim_tsig(item, data);
 }
+#endif
 
 static int
-amim_reference(struct address_match_item *item, void *data)
+amim_reference(const struct address_match_item *item, const void *data)
 {
     return AMIM_REJECT;
 }// </editor-fold>
@@ -336,13 +357,13 @@ amim_ipv6_sort(ptr_vector *ipv6v)
 #define AML_FILTER 2 /* DO NOT CHANGE THESES VALUES */
 
 static inline u32
-address_match_list_size(address_match_list *aml)
+address_match_list_size(const address_match_list *aml)
 {
-    return (aml != NULL)?aml->limit - aml->items:0;
+    return (aml != NULL)?(aml->limit - aml->items):0;
 }
 
 static u32
-address_match_list_get_type(address_match_list *aml)
+address_match_list_get_type(const address_match_list *aml)
 {
     if(aml == NULL)
     {
@@ -376,7 +397,7 @@ address_match_list_get_type(address_match_list *aml)
 }
 
 static u32
-address_match_set_get_type(address_match_set *ams)
+address_match_set_get_type(const address_match_set *ams)
 {
     /*
      * TSIG cannot be globally accepted nor rejected.
@@ -411,7 +432,9 @@ address_match_set_get_type(address_match_set *ams)
 
 #define IS_IPV4_ITEM(x_) (((x_)->match == amim_ipv4)||((x_)->match == amim_ipv4_not))
 #define IS_IPV6_ITEM(x_) (((x_)->match == amim_ipv6)||((x_)->match == amim_ipv6_not))
+#if HAS_TSIG_SUPPORT
 #define IS_TSIG_ITEM(x_) (((x_)->match == amim_tsig)||((x_)->match == amim_tsig_not))
+#endif
 #define IS_ANY_ITEM(x_)  (((x_)->match == amim_any)||((x_)->match == amim_none))
 #define IS_NONE_ITEM(x_) (((x_)->match == amim_any)||((x_)->match == amim_none))
 
@@ -429,7 +452,7 @@ address_match_set_get_type(address_match_set *ams)
 
 
 static address_match_item*
-alloc_address_match_item()
+address_match_item_alloc()
 {
     address_match_item* item;
     
@@ -439,12 +462,62 @@ alloc_address_match_item()
     return item;
 }
 
+static void
+address_match_item_free(address_match_item *ami)
+{
+#ifdef DEBUG
+    u32 txt_size;
+    char txt[512];
+    txt_size = sizeof(txt);
+    acl_address_match_item_to_string(ami, txt, &txt_size);
+    
+    if(txt_size <= sizeof(txt))
+    {
+        log_debug7("acl: destroying '%s' (rc=%i)", txt, ami->rc);
+    }
+    else
+    {
+        log_debug7("acl: destroying @%p (rc=%i)", ami, ami->rc);
+    }
+#endif
+        
+    if(ami->match == amim_reference)
+    {
+        free((void*)ami->parameters.ref.name);
+    }
+#if HAS_TSIG_SUPPORT
+    else if((ami->match == amim_tsig) || (ami->match == amim_tsig_not))
+    {
+        free(ami->parameters.tsig.name);
+        free(ami->parameters.tsig.known);
+    }
+#endif
+    
+#ifdef DEBUG
+    memset(ami, 0xff, sizeof(address_match_item));
+#endif
+
+    free(ami);
+}
+
+/**
+ * Returns the number of conversions (0 or 1)
+ * 
+ * @param amlv
+ * @param word
+ * @param acls
+ * @return 
+ */
+
 static ya_result
-acl_expand_address_match_reference(ptr_vector *amlv, const char* word, ptr_vector *acls)
+acl_expand_address_match_reference(ptr_vector *amlv, const char* word, const ptr_vector *acls)
 {
     ya_result return_value = 0;
     
-    OSDEBUG(termerr,  "acl_expand_address_match_reference(%p, %s, %p)\n", (void*)amlv, word, (void*)acls);
+#ifdef DEBUG
+    log_debug7("acl_expand_address_match_reference(%p, %s, %p)", (void*)amlv, word, (void*)acls);
+    logger_flush();
+#endif
 
     s32 index = 0;
 
@@ -454,21 +527,21 @@ acl_expand_address_match_reference(ptr_vector *amlv, const char* word, ptr_vecto
 
         if(strcasecmp(acl->name, word) == 0)
         {
-            address_match_item **itemp = acl->list.items;
+            address_match_item **amip = acl->list.items;
 
-            while(itemp < acl->list.limit)
+            while(amip < acl->list.limit)
             {
-                address_match_item *item = *itemp;
+                address_match_item *ami = *amip;
 
-                if(item->match == amim_reference)
+                if(ami->match == amim_reference)
                 {
                     /* recurse */
 
-                    if(!item->parameters.ref.mark)
+                    if(!ami->parameters.ref.mark)
                     {
-                        item->parameters.ref.mark = TRUE;
+                        ami->parameters.ref.mark = TRUE;
 
-                        ya_result expand = acl_expand_address_match_reference(amlv, item->parameters.ref.name, acls);
+                        ya_result expand = acl_expand_address_match_reference(amlv, ami->parameters.ref.name, acls);
 
                         if(expand > 0)
                         {
@@ -478,26 +551,27 @@ acl_expand_address_match_reference(ptr_vector *amlv, const char* word, ptr_vecto
                         {
                             if(expand == 0)
                             {
-                                log_err("acl: expanding '%s': '%s' is undefined", word, item->parameters.ref.name);
+                                log_err("acl: expanding '%s': '%s' is undefined", word, ami->parameters.ref.name);
                             }
                             else
                             {
-                                log_err("acl: expanding '%s': '%s' cannot be expanded", word, item->parameters.ref.name);
+                                log_err("acl: expanding '%s': '%s' cannot be expanded", word, ami->parameters.ref.name);
                             }
                             return_value = MIN_S32; // forces an error
                         }
 
-                        item->parameters.ref.mark = FALSE;
+                        ami->parameters.ref.mark = FALSE;
                     }
                 }
                 else
                 {
-                    ptr_vector_append(amlv, *itemp);
+                    ptr_vector_append(amlv, ami);
+                    ami->rc++;
                     
                     return_value++;
                 }
 
-                itemp++;
+                amip++;
             }
 
             break;
@@ -508,9 +582,9 @@ acl_expand_address_match_reference(ptr_vector *amlv, const char* word, ptr_vecto
 }
 
 static inline u32
-netmask_bit_count(u8 *bytes, u32 len)
+netmask_bit_count(const u8 *bytes, u32 len)
 {
-    u8* limit = &bytes[len];
+    const u8 * const limit = &bytes[len];
     u32 bits = 0;
 
     while(bytes < limit)
@@ -538,6 +612,18 @@ netmask_bit_count(u8 *bytes, u32 len)
     return bits;
 }
 
+static int acl_ptr_vector_address_match_list_compare(const void *a, const void *b)
+{
+    if(acl_address_match_item_equals((address_match_item*)a, (address_match_item*)b))
+    {
+        return 0;
+    }
+    else
+    {
+        return -1;
+    }
+}
+
 /**
  * Used to build the acl content
  *
@@ -548,16 +634,19 @@ netmask_bit_count(u8 *bytes, u32 len)
  */
 
 static ya_result
-acl_parse_address_match_list(address_match_list *aml, const char *description, ptr_vector *acls)
+acl_parse_address_match_list(address_match_list *aml, const char *description, const ptr_vector *acls)
 {
-    OSDEBUG(termerr,  "acl_parse_address_match_list(%p, \"%s\", %p)\n", (void*)aml, STR(description), (void*)acls);
+#ifdef DEBUG
+    log_debug7("acl_parse_address_match_list(%p, \"%s\", %p)", (void*)aml, STR(description), (void*)acls);
+    logger_flush();
+#endif
 
     if(description == NULL)
     {
         return 0; /* successfully parsed 0 descriptors */
     }
 
-    zassert(aml != NULL && aml->items == NULL && aml->limit == NULL);
+    yassert(aml != NULL && aml->items == NULL && aml->limit == NULL);
 
     const char *separator = description;
     ptr_vector list;
@@ -640,31 +729,30 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, p
         {
             accept = FALSE;
             word++;
-            SKIP_WHSPACE(word);
+            word = (char*)parse_skip_spaces(word);
         }
 
-        char *next_word = word;
-
-        SKIP_JUST_WORD(next_word);
+        char *next_word = (char*)parse_next_space(word);
         
         if(*next_word != '\0')
         {
             *next_word++ = '\0';
-            SKIP_WHSPACE(next_word);
+            next_word = (char*)parse_skip_spaces(next_word);
         }
 
         address_match_item *ami = NULL;
-        //address_match_item *not_ami = NULL;
 
         if(strcasecmp(word, "key") == 0)
         {
+#if HAS_TSIG_SUPPORT
             /* TSIG : key xxxxx; */
 
-            ami = alloc_address_match_item();
+            ami = address_match_item_alloc();
             ami->match = (accept) ? amim_tsig : amim_tsig_not;
+#
             word = next_word;
-            SKIP_JUST_WORD(next_word);
-
+            next_word = (char*)parse_next_space(next_word);
+            
             if(next_word - word > sizeof (token))
             {
                 /* free(ami); */ /* pointless since the cleanup will not be fully done anyway (list) */
@@ -695,21 +783,26 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, p
             ami->parameters.tsig.secret_size = key->mac_size;
             ami->parameters.tsig.name_size = dnsname_len;
             ami->parameters.tsig.mac_algorithm = key->mac_algorithm;
-            memcpy(ami->parameters.tsig.secret, key->mac, key->mac_size);
+            MALLOC_OR_DIE(u8*, ami->parameters.tsig.known, key->mac_size, GENERIC_TAG);
+            memcpy(ami->parameters.tsig.known, key->mac, key->mac_size);
+            MALLOC_OR_DIE(u8*, ami->parameters.tsig.name, dnsname_len, GENERIC_TAG);
             memcpy(ami->parameters.tsig.name, dnsname, dnsname_len);
+#else
+            return ACL_UNKNOWN_TSIG_KEY;    // not supported
+#endif
         }
         else if(strcasecmp(word, "none") == 0)
         {
             /* Reject all */
 
-            ami = alloc_address_match_item();
+            ami = address_match_item_alloc();
             ami->match = (accept) ? amim_none : amim_any;
         }
         else if(strcasecmp(word, "any") == 0)
         {
             /* Accept all */
 
-            ami = alloc_address_match_item();
+            ami = address_match_item_alloc();
             ami->match = (accept) ? amim_any : amim_none;
         }
         else /* parse an ipv4 or ipv6, with or without an ipv4, ipv6 or sized bitmask */
@@ -726,7 +819,7 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, p
                 if(*slash == '/')
                 {
                     *slash++ = '\0';
-                    SKIP_WHSPACE(slash);
+                    slash = (char*)parse_skip_spaces(slash);
                     mask = TRUE;
                     break;
                 }
@@ -740,7 +833,7 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, p
 
                 proto = AF_INET;
 
-                ami = alloc_address_match_item();
+                ami = address_match_item_alloc();
                 ami->match = (accept) ? amim_ipv4 : amim_ipv4_not;
                 ami->parameters.ipv4.rejects = (accept) ? 0 : 1;
 
@@ -758,7 +851,7 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, p
 
                 proto = AF_INET6;
 
-                ami = alloc_address_match_item();
+                ami = address_match_item_alloc();
                 ami->match = (accept) ? amim_ipv6 : amim_ipv6_not;
                 ami->parameters.ipv6.rejects = (accept) ? 0 : 1;
 
@@ -808,15 +901,16 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, p
                 }
                 else /* just store the name */
                 {
-                    ami = alloc_address_match_item();
+                    ami = address_match_item_alloc();
                     ami->match = amim_reference;
                     ami->parameters.ref.name = strdup(word);
                     ami->parameters.ref.mark = FALSE;
 
-                    OSDEBUG(termerr,  "acl_parse_address_match_list(%p, %s, %p) : adding %p (%s)\n",
-                            (void*)aml, STR(description), (void*)acls, (void*)ami, word);
-
+#ifdef DEBUG
+                    log_debug7("acl_parse_address_match_list(%p, %s, %p) : adding %p (%s)", (void*)aml, STR(description), (void*)acls, (void*)ami, word);
+#endif
                     ptr_vector_append(&list, ami);
+                    ami->rc++;
                 }
 
                 continue;
@@ -828,7 +922,20 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, p
 
             if(acls != NULL)
             {
-                ptr_vector_append(&g_amim, ami);
+                address_match_item *known = ptr_vector_linear_search(&g_amim, ami, acl_ptr_vector_address_match_list_compare);
+                
+                if(known == NULL)
+                {
+                    log_debug7("acl_parse_address_match_list(%p, %s, %p) : adding to amim", (void*)aml, STR(description), (void*)acls, (void*)ami, word);
+                    ptr_vector_append(&g_amim, ami);
+                    ami->rc++;
+                }
+                else
+                {
+                    // this one is known already
+                    address_match_item_free(ami);
+                    ami = known;
+                }
             }
 
             if(mask)
@@ -906,12 +1013,15 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, p
             }
         }
 
-        zassert(ami != NULL);
+        yassert(ami != NULL);
 
-        OSDEBUG(termerr,  "acl_parse_address_match_list(%p, %s, %p) : adding %p (---)\n",
-                (void*)aml, STR(description), (void*)acls, (void*)ami);
-
+#ifdef DEBUG
+        log_debug7("acl_parse_address_match_list(%p, %s, %p) : adding %p (---)", (void*)aml, STR(description), (void*)acls, (void*)ami);
+        logger_flush();
+#endif
+        
         ptr_vector_append(&list, ami);
+        ami->rc++;
 
     } /* while there is something to parse */
 
@@ -921,14 +1031,18 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, p
     {
         ptr_vector_shrink(&list);
 
-        OSDEBUG(termerr,  "acl_parse_address_match_list(%p, %s, %p) : items at %p\n",
+#ifdef DEBUG
+        log_debug7("acl_parse_address_match_list(%p, %s, %p) : items at %p",
                 (void*)aml, STR(description), (void*)acls, (void*)list.data);
-
+        logger_flush();
+#endif
+        
         aml->items = (address_match_item**)list.data;
         aml->limit = &aml->items[count];
     }
     else
     {
+        // the list is empty
         ptr_vector_destroy(&list);
     }
 
@@ -943,8 +1057,14 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, p
 ya_result
 acl_add_definition(const char* name, const char *description)
 {
-    OSDEBUG(termerr,  "acl_add_definition(%s, %s)\n", STR(name), STR(description));
-
+#ifdef DEBUG
+    log_debug7("acl_add_definition(%s, %s)", STR(name), STR(description));
+    logger_flush();
+#endif
+    
+    yassert(name != NULL);
+    yassert(description != NULL);
+    
     acl_entry *acl;
     ya_result return_code;
 
@@ -971,8 +1091,11 @@ acl_add_definition(const char* name, const char *description)
 
     acl->name = strdup(name);
 
-    OSDEBUG(termerr,  "acl_add_definition(%s @ %p, %s) list %p items %p\n", STR(name), (void*)acl, STR(description), (void*)&acl->list, (void*)acl->list.items);
-
+#ifdef DEBUG
+    log_debug7("acl_add_definition(%s @ %p, %s) list %p items %p", STR(name), (void*)acl, STR(description), (void*)&acl->list, (void*)acl->list.items);
+    logger_flush();
+#endif
+    
     ptr_vector_append(&g_acl, acl);
 
     return SUCCESS;
@@ -982,36 +1105,58 @@ static void
 acl_free_address_match_item(void *ami_)
 {
     address_match_item *ami = (address_match_item*)ami_;
-
-    if(ami->match == amim_reference)
+       
+    if(--ami->rc <= 0)
     {
-        free((void*)ami->parameters.ref.name);
+        address_match_item_free(ami);
     }
+    else
+    {
+        u32 txt_size;
+        char txt[512];
+        txt_size = sizeof(txt);
+        acl_address_match_item_to_string(ami, txt, &txt_size);
 
-    free(ami);
+        if(txt_size <= sizeof(txt))
+        {
+            log_debug7("acl: not destroying '%s' (rc=%i)", txt, ami->rc);
+        }
+        else
+        {
+            log_debug7("acl: not destroying @%p (rc=%i)", ami, ami->rc);
+        }
+    }
 }
 
 static void
 acl_free_definition(void *def)
 {
-    OSDEBUG(termerr,  "acl_free_definition(%p)\n", def);
-
     acl_entry *entry = (acl_entry*)def;
-
+    
+#ifdef DEBUG
+    log_debug7("acl_free_definition(%p) : '%s'", def, entry->name);
+    logger_flush();
+#endif
+        
     free((void*)entry->name);
 
-    address_match_item** items = entry->list.items;
-    address_match_item** limit = entry->list.limit;
+    address_match_item **amip = entry->list.items;
+    address_match_item **limit = entry->list.limit;
 
-    while(items < limit)
+    while(amip < limit)
     {
-        address_match_item* item = (*items++);
-
-        acl_free_address_match_item(item);
+        address_match_item* ami = (*amip++);
+        if(--ami->rc <= 0)
+        {
+            address_match_item_free(ami);
+        }
     }
 
-    OSDEBUG(termerr,  "acl_free_definition(%p) items: %p\n", def, (void*)entry->list.items);
-
+#ifdef DEBUG
+    log_debug7("acl_free_definition(%p) items: %p", def, (void*)entry->list.items);
+    logger_flush();
+#endif
+    
     free(entry->list.items);
 
     free(entry);
@@ -1020,11 +1165,16 @@ acl_free_definition(void *def)
 void
 acl_free_definitions()
 {
-    OSDEBUG(termerr,  "acl_free_definitions()\n");
-
+#ifdef DEBUG
+    log_debug7("acl_free_definitions()");
+    logger_flush();
+#endif
+    
+    log_debug7("acl_free_definitions(): %u amim", ptr_vector_size(&g_amim));
     ptr_vector_free_empties(&g_amim, &acl_free_address_match_item);
     ptr_vector_destroy(&g_amim);
 
+    log_debug7("acl_free_definitions(): %u acl", ptr_vector_size(&g_acl));
     ptr_vector_free_empties(&g_acl, &acl_free_definition);
     ptr_vector_destroy(&g_acl);
 }
@@ -1044,9 +1194,11 @@ acl_build_access_control(access_control *ac,
                          const char *allow_notify,
                          const char *allow_control)
 {
-    OSDEBUG(termerr,  "acl_build_access_control(%p, %s, %s ,%s, %s, %s)\n",
+#ifdef DEBUG
+    log_debug7("acl_build_access_control(%p, %s, %s ,%s, %s, %s)",
             (void*)ac, STR(allow_query), STR(allow_update), STR(allow_update_forwarding), STR(allow_transfer), STR(allow_notify), STR(allow_control));
-
+    logger_flush();
+#endif
     ya_result return_code;
 
     if(ISOK(return_code = acl_build_access_control_item(&ac->allow_query, allow_query)))
@@ -1070,11 +1222,35 @@ acl_build_access_control(access_control *ac,
 }
 
 void
-acl_emtpies_address_match_list(address_match_list *aml)
+acl_empties_address_match_list(address_match_list *aml)
 {
-    OSDEBUG(termerr,  "acl_emtpies_address_match_list(%p) : %p\n", (void*)aml, (void*)aml->items);
-
-#ifndef NDEBUG
+#ifdef DEBUG
+    log_debug7("acl_emtpies_address_match_list(%p): %p", (void*)aml, (void*)aml->items);
+    logger_flush();
+#endif
+    
+    for(address_match_item **amip = aml->items; amip < aml->limit; amip++)
+    {
+        address_match_item *ami = *amip;
+        ami->rc--;
+        if(ami->rc <= 0)
+        {
+            log_debug7("acl_emtpies_address_match_list(%p): %p has rc=%i", (void*)aml, ami->rc);
+            
+            s32 amim_idx = ptr_vector_index_of(&g_amim, ami, acl_ptr_vector_address_match_list_compare);
+            
+            if(amim_idx >= 0)
+            {
+                log_debug7("acl_emtpies_address_match_list(%p): %p is part of amim", (void*)aml, ami->rc);
+                ptr_vector_end_swap(&g_amim, amim_idx);
+                g_amim.offset--;
+            }
+                
+            address_match_item_free(ami);
+        }
+    }
+    
+#ifdef DEBUG
     if(aml->items != NULL)
     {
         size_t n = (u8*)aml->limit - (u8*)aml->items;
@@ -1091,19 +1267,23 @@ acl_emtpies_address_match_list(address_match_list *aml)
 void
 acl_empties_address_match_set(address_match_set *ams)
 {
-#ifndef NDEBUG
-    OSDEBUG(termerr, "acl_empties_address_match_set(%p)\n", (void*)ams);
+#ifdef DEBUG
+    log_debug7("acl_empties_address_match_set(%p)", (void*)ams);
+    logger_flush();
 #endif
-
-    acl_emtpies_address_match_list(&ams->ipv4);
-    acl_emtpies_address_match_list(&ams->ipv6);
-    acl_emtpies_address_match_list(&ams->tsig);
+    
+    acl_empties_address_match_list(&ams->ipv4);
+    acl_empties_address_match_list(&ams->ipv6);
+    acl_empties_address_match_list(&ams->tsig);
 }
 
 void
 acl_empties_access_control(access_control *ac)
 {
-    OSDEBUG(termerr, "acl_empties_access_control(%p)\n", (void*)ac);
+#ifdef DEBUG
+    log_debug7("acl_empties_access_control(%p)", (void*)ac);
+    logger_flush();
+#endif
 
     acl_empties_address_match_set(&ac->allow_notify);
     acl_empties_address_match_set(&ac->allow_query);
@@ -1115,18 +1295,18 @@ acl_empties_access_control(access_control *ac)
 
 
 void
-acl_copy_address_match_list(address_match_list *target, address_match_list* aml)
+acl_copy_address_match_list(address_match_list *target, const address_match_list* aml)
 {
     int n = aml->limit - aml->items;
     
     if(n > 0)
     {
-        MALLOC_OR_DIE(address_match_item**, target->items, n * sizeof(address_match_item*), GENERIC_TYPE);
+        MALLOC_OR_DIE(address_match_item**, target->items, n * sizeof(address_match_item*), ADRMITEM_TAG);
         target->limit = &target->items[n];
         
         for(int i = 0; i < n; i++)
         {
-            target->items[i] = alloc_address_match_item();
+            target->items[i] = address_match_item_alloc();
             memcpy(target->items[i], aml->items[i], sizeof(address_match_item));
             if(target->items[i]->match == amim_reference)
             {
@@ -1142,7 +1322,7 @@ acl_copy_address_match_list(address_match_list *target, address_match_list* aml)
 }
 
 void
-acl_copy_address_match_set(address_match_set *target, address_match_set *ams)
+acl_copy_address_match_set(address_match_set *target, const address_match_set *ams)
 {
     acl_copy_address_match_list(&target->ipv4, &ams->ipv4);
     acl_copy_address_match_list(&target->ipv6, &ams->ipv6);
@@ -1150,7 +1330,7 @@ acl_copy_address_match_set(address_match_set *target, address_match_set *ams)
 }
 
 void
-acl_copy_access_control(access_control *target, access_control *ac)
+acl_copy_access_control(access_control *target, const access_control *ac)
 {
     acl_copy_address_match_set(&target->allow_query, &ac->allow_query);
     acl_copy_address_match_set(&target->allow_update, &ac->allow_update);
@@ -1164,39 +1344,44 @@ ya_result
 acl_build_access_control_item(address_match_set *ams, const char* allow_whatever)
 {
 #ifdef DEBUG
-    OSDEBUG(termerr, "acl_build_access_control_item(%p, \"%s\")\n", ams, STR(allow_whatever));
-    flusherr();
+    log_debug7("acl_build_access_control_item(%p, \"%s\")", ams, STR(allow_whatever));
 #endif
     
     ya_result return_code;
 
-    address_match_list ami;
-    ZEROMEMORY(&ami, sizeof (ami));
+    address_match_list aml;
+    ZEROMEMORY(&aml, sizeof (aml));
 
-    if(ISOK(return_code = acl_parse_address_match_list(&ami, allow_whatever, &g_acl)))
+    if(ISOK(return_code = acl_parse_address_match_list(&aml, allow_whatever, &g_acl)))
     {
-        if(ami.items == NULL)
+        if(aml.items == NULL)
         {
             /*
              * Empty set
              */
+            
+#ifdef DEBUG
+            log_debug7("acl_build_access_control_item(%p, \"%s\") returning empty set", ams, STR(allow_whatever));
+#endif
             
             return SUCCESS;
         }
 
         ptr_vector ipv4v = EMPTY_PTR_VECTOR;
         ptr_vector ipv6v = EMPTY_PTR_VECTOR;
+        
+#if HAS_TSIG_SUPPORT
         ptr_vector tsigv = EMPTY_PTR_VECTOR;
+#endif
+        address_match_item **amip = aml.items;
 
-        address_match_item **itemp = ami.items;
-
-        while(itemp < ami.limit)
+        while(amip < aml.limit)
         {
-            address_match_item *item = *itemp;
+            address_match_item *ami = *amip;
 
-            if(IS_IPV4_ITEM(item))
+            if(IS_IPV4_ITEM(ami))
             {
-                if(((item->parameters.ipv4.maskbits == 32) || (item->parameters.ipv4.maskbits == 0)) && (item->parameters.ipv4.address.value == 0) )
+                if(((ami->parameters.ipv4.maskbits == 32) || (ami->parameters.ipv4.maskbits == 0)) && (ami->parameters.ipv4.address.value == 0) )
                 {
                     /* A.K.A any/none IPv4 */
                     //             ^ | &
@@ -1206,21 +1391,22 @@ acl_build_access_control_item(address_match_set *ams, const char* allow_whatever
                     // R ~0 => A 1 1 1 1
                     
                     //             REJECTS                                 NONE
-                    bool rejects = (item->parameters.ipv4.rejects != 0);
-                    bool none = (item->parameters.ipv4.maskbits != 0);
+                    bool rejects = (ami->parameters.ipv4.rejects != 0);
+                    bool none = (ami->parameters.ipv4.maskbits != 0);
                     bool xored = (rejects || none) && !(rejects && none);
                     
                     //acl_free_address_match_item(item);
                     //item = alloc_address_match_item();
                     
-                    item->match = (xored) ? amim_none : amim_any;
+                    ami->match = (xored) ? amim_none : amim_any;
                 }
 
-                ptr_vector_append(&ipv4v, item);
+                ptr_vector_append(&ipv4v, ami);
+                ami->rc++;
             }
-            else if(IS_IPV6_ITEM(item))
+            else if(IS_IPV6_ITEM(ami))
             {                
-                if(((item->parameters.ipv6.maskbits == 128) || (item->parameters.ipv6.maskbits == 0)) && IPV6_ADDRESS_ALL0(item->parameters.ipv6.address))
+                if(((ami->parameters.ipv6.maskbits == 128) || (ami->parameters.ipv6.maskbits == 0)) && IPV6_ADDRESS_ALL0(ami->parameters.ipv6.address))
                 {
                     /* A.K.A any/none IPv6 */
                     
@@ -1230,30 +1416,36 @@ acl_build_access_control_item(address_match_set *ams, const char* allow_whatever
                     // R ~0 => A
                     
                     //             REJECTS                                 NONE
-                    bool rejects = (item->parameters.ipv6.rejects != 0);
-                    bool none = (item->parameters.ipv6.maskbits != 0);
+                    bool rejects = (ami->parameters.ipv6.rejects != 0);
+                    bool none = (ami->parameters.ipv6.maskbits != 0);
                     bool xored = (rejects || none) && !(rejects && none);
                     
                     //acl_free_address_match_item(item);
                     //item = alloc_address_match_item();
                     
-                    item->match = (xored) ? amim_none : amim_any;
+                    ami->match = (xored) ? amim_none : amim_any;
                 }
                 
-                ptr_vector_append(&ipv6v, item);
+                ptr_vector_append(&ipv6v, ami);
+                ami->rc++;
             }
-            else if(IS_TSIG_ITEM(item))
+#if HAS_TSIG_SUPPORT
+            else if(IS_TSIG_ITEM(ami))
             {
-                ptr_vector_append(&tsigv, item);
+                ptr_vector_append(&tsigv, ami);
+                ami->rc++;
             }
+#endif
             else /* any or none */
             {
-                ptr_vector_append(&ipv4v, item);
-                ptr_vector_append(&ipv6v, item);
+                ptr_vector_append(&ipv4v, ami);
+                ami->rc++;
+                ptr_vector_append(&ipv6v, ami);
+                ami->rc++;
                 //ptr_vector_append(&tsigv, item);
             }
 
-            itemp++;
+            amip++;
         }
 
         ptr_vector_shrink(&ipv4v);
@@ -1280,23 +1472,30 @@ acl_build_access_control_item(address_match_set *ams, const char* allow_whatever
         amim_ipv6_print(&ipv6v);
 #endif
 
-        ptr_vector_shrink(&tsigv);        
+#if HAS_TSIG_SUPPORT
+        ptr_vector_shrink(&tsigv);
         ams->tsig.items = (address_match_item**)tsigv.data;
         ams->tsig.limit = &ams->tsig.items[tsigv.offset + 1];
         
-#ifndef NDEBUG
+#ifdef DEBUG
         amim_tsig_print(&tsigv);
 #endif
+#endif        
     }
 
-    acl_emtpies_address_match_list(&ami);
+    acl_empties_address_match_list(&aml);
     
 #ifdef DEBUG
-#if ACL_DEBUG_FULL != 0
-    u32 t =  address_match_set_get_type(ams);
-    OSDEBUG(termerr, "=> AMS type: %s (%2d)\n", query_access_filter_type_name[t], t);
-    flusherr();
+    output_stream baos;
+    bytearray_output_stream_init(&baos, NULL, 0);    
+    acl_address_match_set_to_stream(&baos, ams);
+    output_stream_write_u8(&baos,0);
+    log_debug7("acl_build_access_control_item(%p, \"%s\"): %s", ams, STR(allow_whatever), bytearray_output_stream_buffer(&baos));
+    output_stream_close(&baos);
 #endif
+    
+#ifdef DEBUG
+    log_debug7("acl_build_access_control_item(%p, \"%s\") returning {%p,%p,%p}", ams, STR(allow_whatever), ams->ipv4.items, ams->ipv6.items, ams->tsig.items);
 #endif
 
     return return_code;
@@ -1363,13 +1562,13 @@ acl_unmerge_access_control(access_control *dest, const access_control *src)
 }// </editor-fold>
 
 bool
-acl_address_match_set_isempty(address_match_set *ams)
+acl_address_match_set_isempty(const address_match_set *ams)
 {
     return (ams->ipv4.items == NULL) && (ams->ipv6.items == NULL) && (ams->tsig.items == NULL);
 }
 
 static ya_result
-acl_address_match_set_check_v4(address_match_set *set, struct sockaddr_in *ipv4)
+acl_address_match_set_check_v4(const address_match_set *set, const struct sockaddr_in *ipv4)
 {
     ya_result return_code = 0;
 
@@ -1395,7 +1594,7 @@ acl_address_match_set_check_v4(address_match_set *set, struct sockaddr_in *ipv4)
 }
 
 static ya_result
-acl_address_match_set_check_v6(address_match_set *set, struct sockaddr_in6 *ipv6)
+acl_address_match_set_check_v6(const address_match_set *set, const struct sockaddr_in6 *ipv6)
 {
     ya_result return_code = 0;
 
@@ -1421,7 +1620,7 @@ acl_address_match_set_check_v6(address_match_set *set, struct sockaddr_in6 *ipv6
 }
 
 static ya_result
-acl_address_match_set_check_tsig(address_match_set *set, void *message_with_tsig)
+acl_address_match_set_check_tsig(const address_match_set *set, const void *message_with_tsig)
 {
     ya_result return_code = 0;
 
@@ -1453,19 +1652,19 @@ acl_address_match_set_check_tsig(address_match_set *set, void *message_with_tsig
 // RRI ARI 4RI
 
 static inline ya_result
-acl_check_access_filter_RRI(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_RRI(const message_data *mesg, const address_match_set *ams)
 {
     return AMIM_REJECT;
 }
 
 static inline ya_result
-acl_check_access_filter_ARI(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_ARI(const message_data *mesg, const address_match_set *ams)
 {
     return (mesg->other.sa.sa_family == AF_INET)?AMIM_ACCEPT:AMIM_REJECT;
 }
 
 static inline ya_result
-acl_check_access_filter_4RI(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_4RI(const message_data *mesg, const address_match_set *ams)
 {
     if(mesg->other.sa.sa_family == AF_INET)
     {
@@ -1478,19 +1677,19 @@ acl_check_access_filter_4RI(message_data *mesg, address_match_set *ams)
 // RAI AAI 4AI
 
 static inline ya_result
-acl_check_access_filter_RAI(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_RAI(const message_data *mesg, const address_match_set *ams)
 {
     return (mesg->other.sa.sa_family == AF_INET6)?AMIM_ACCEPT:AMIM_REJECT;
 }
 
 static ya_result
-acl_check_access_filter_AAI(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_AAI(const message_data *mesg, const address_match_set *ams)
 {
     return AMIM_ACCEPT;
 }
 
 static inline ya_result
-acl_check_access_filter_4AI(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_4AI(const message_data *mesg, const address_match_set *ams)
 {
     if(mesg->other.sa.sa_family == AF_INET)
     {
@@ -1505,7 +1704,7 @@ acl_check_access_filter_4AI(message_data *mesg, address_match_set *ams)
 // R6I A6I 46I
 
 static inline ya_result
-acl_check_access_filter_R6I(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_R6I(const message_data *mesg, const address_match_set *ams)
 {
     if(mesg->other.sa.sa_family == AF_INET6)
     {
@@ -1516,7 +1715,7 @@ acl_check_access_filter_R6I(message_data *mesg, address_match_set *ams)
 }
 
 static inline ya_result
-acl_check_access_filter_A6I(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_A6I(const message_data *mesg, const address_match_set *ams)
 {
     if(mesg->other.sa.sa_family == AF_INET6)
     {
@@ -1529,7 +1728,7 @@ acl_check_access_filter_A6I(message_data *mesg, address_match_set *ams)
 }
 
 static inline ya_result
-acl_check_access_filter_46I(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_46I(const message_data *mesg, const address_match_set *ams)
 {
     if(mesg->other.sa.sa_family == AF_INET)
     {
@@ -1549,13 +1748,13 @@ acl_check_access_filter_46I(message_data *mesg, address_match_set *ams)
 // RRT ART 4RT
 
 static inline ya_result
-acl_check_access_filter_RRT(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_RRT(const message_data *mesg, const address_match_set *ams)
 {
     return AMIM_REJECT;
 }
 
 static inline ya_result
-acl_check_access_filter_ART(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_ART(const message_data *mesg, const address_match_set *ams)
 {
     if((mesg->ar_start != NULL) && (mesg->other.sa.sa_family == AF_INET))
     {
@@ -1566,7 +1765,7 @@ acl_check_access_filter_ART(message_data *mesg, address_match_set *ams)
 }
 
 static inline ya_result
-acl_check_access_filter_4RT(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_4RT(const message_data *mesg, const address_match_set *ams)
 {
     if((mesg->ar_start != NULL) && (mesg->other.sa.sa_family == AF_INET))
     {
@@ -1582,7 +1781,7 @@ acl_check_access_filter_4RT(message_data *mesg, address_match_set *ams)
 // RAT AAT 4AT
 
 static inline ya_result
-acl_check_access_filter_RAT(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_RAT(const message_data *mesg, const address_match_set *ams)
 {
     if((mesg->ar_start != NULL) && (mesg->other.sa.sa_family == AF_INET6))
     {
@@ -1593,7 +1792,7 @@ acl_check_access_filter_RAT(message_data *mesg, address_match_set *ams)
 }
 
 static inline ya_result
-acl_check_access_filter_AAT(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_AAT(const message_data *mesg, const address_match_set *ams)
 {
     if(mesg->ar_start != NULL)
     {
@@ -1604,7 +1803,7 @@ acl_check_access_filter_AAT(message_data *mesg, address_match_set *ams)
 }
 
 static inline ya_result
-acl_check_access_filter_4AT(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_4AT(const message_data *mesg, const address_match_set *ams)
 {
     if(mesg->ar_start != NULL)
     {
@@ -1625,7 +1824,7 @@ acl_check_access_filter_4AT(message_data *mesg, address_match_set *ams)
 // R6T A6T 46T
 
 static inline ya_result
-acl_check_access_filter_R6T(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_R6T(const message_data *mesg, const address_match_set *ams)
 {
     if(mesg->ar_start != NULL)
     {
@@ -1643,7 +1842,7 @@ acl_check_access_filter_R6T(message_data *mesg, address_match_set *ams)
 }
 
 static inline ya_result
-acl_check_access_filter_A6T(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_A6T(const message_data *mesg, const address_match_set *ams)
 {
     if(mesg->ar_start != NULL)
     {
@@ -1662,7 +1861,7 @@ acl_check_access_filter_A6T(message_data *mesg, address_match_set *ams)
 }
 
 static inline ya_result
-acl_check_access_filter_46T(message_data *mesg, address_match_set *ams)
+acl_check_access_filter_46T(const message_data *mesg, const address_match_set *ams)
 {
     if(mesg->ar_start != NULL)
     {
@@ -1689,7 +1888,7 @@ acl_check_access_filter_46T(message_data *mesg, address_match_set *ams)
 }
 
 ya_result
-acl_check_access_filter(message_data *mesg, address_match_set *ams)
+acl_check_access_filter(const message_data *mesg, const address_match_set *ams)
 {
     ya_result return_code = AMIM_SKIP;
     
@@ -1780,7 +1979,7 @@ static acl_check_access_filter_callback* access_filter_by_type[18]=
 #undef CAF
 
 acl_check_access_filter_callback *
-acl_get_check_access_filter(address_match_set *set)
+acl_get_check_access_filter(const address_match_set *set)
 {
     acl_check_access_filter_callback* cb;
 
@@ -1801,26 +2000,26 @@ acl_get_check_access_filter(address_match_set *set)
  * The only hooks that are not using it are the most simple ones (returning ACCEPT or REJECT) 
  */
 
-#define CAF_HOOK(x) static inline ya_result acl_query_access_filter_##x(message_data *mesg, void *extension) \
+#define CAF_HOOK(x) static inline ya_result acl_query_access_filter_##x(const message_data *mesg, const void *extension) \
 { \
-    access_control *ac = (access_control*)extension; \
+    const access_control *ac = (const access_control*)extension; \
     return acl_check_access_filter_##x(mesg, &ac->allow_query); \
 }
 
 static ya_result
-acl_query_access_filter_AAI(message_data *mesg, void *extension)
+acl_query_access_filter_AAI(const message_data *mesg, const void *extension)
 {
     return AMIM_ACCEPT;
 }
 
 static ya_result
-acl_query_access_filter_RRI(message_data *mesg, void *extension)
+acl_query_access_filter_RRI(const message_data *mesg, const void *extension)
 {
     return AMIM_REJECT;
 }
 
 static ya_result
-acl_query_access_filter_RRT(message_data *mesg, void *extension)
+acl_query_access_filter_RRT(const message_data *mesg, const void *extension)
 {
     return AMIM_REJECT;
 }
@@ -1867,7 +2066,7 @@ static acl_query_access_filter_callback* query_access_filter_by_type[18]=
 
 
 acl_query_access_filter_callback *
-acl_get_query_access_filter(address_match_set *set)
+acl_get_query_access_filter(const address_match_set *set)
 {
     acl_query_access_filter_callback* cb;
         
@@ -1879,7 +2078,7 @@ acl_get_query_access_filter(address_match_set *set)
 }
 
 ya_result
-acl_address_match_item_to_stream(output_stream *os, address_match_item *ami)
+acl_address_match_item_to_stream(output_stream *os, const address_match_item *ami)
 {
     ya_result return_code;
     
@@ -1923,6 +2122,7 @@ acl_address_match_item_to_stream(output_stream *os, address_match_item *ami)
             return_code = osformat(os, "!%{sockaddrip}/%d", &ipv6, b);
         }
     }
+#if HAS_TSIG_SUPPORT
     else if(IS_TSIG_ITEM(ami))
     {
         if(IS_TSIG_ITEM_MATCH(ami))
@@ -1934,28 +2134,18 @@ acl_address_match_item_to_stream(output_stream *os, address_match_item *ami)
             return_code = osformat(os, "! key %{dnsname}", ami->parameters.tsig.name);
         }
     }
+#endif
     else if(IS_ANY_ITEM(ami))
     {
         if(IS_ANY_ITEM_MATCH(ami))
-        {/*
-            return_code = osformat(os, "any");
-            
-            if(ISOK(return_code))
-            {
-                return 1;
-            }*/
+        {
+            osformat(os, "[%i]", ami->rc);
             
             return 1;
         }
         else
         {
-            /*
-            return_code = osformat(os, "none");
-            
-            if(ISOK(return_code))
-            {
-                return 2;
-            }*/
+            osformat(os, "[%i]", ami->rc);
             
             return 2;
         }
@@ -1967,6 +2157,8 @@ acl_address_match_item_to_stream(output_stream *os, address_match_item *ami)
     
     if(ISOK(return_code))
     {
+        osformat(os, "[%i]", ami->rc);
+        
         return_code = 0;
     }
 
@@ -1974,7 +2166,7 @@ acl_address_match_item_to_stream(output_stream *os, address_match_item *ami)
 }
 
 void
-acl_address_match_set_to_stream(output_stream *os, address_match_set *ams)
+acl_address_match_set_to_stream(output_stream *os, const address_match_set *ams)
 {
     address_match_item **item;
     address_match_item **limit;
@@ -2053,7 +2245,7 @@ acl_address_match_set_to_stream(output_stream *os, address_match_set *ams)
 }
 
 ya_result
-acl_address_match_item_to_string(address_match_item *ami, char *out_txt, u32 *out_txt_lenp)
+acl_address_match_item_to_string(const address_match_item *ami, char *out_txt, u32 *out_txt_lenp)
 {
     ya_result return_code;
     
@@ -2099,6 +2291,7 @@ acl_address_match_item_to_string(address_match_item *ami, char *out_txt, u32 *ou
             return_code = snformat(out_txt, out_txt_len, "![%{sockaddrip}/%d]", &ipv6, b);
         }
     }
+#if HAS_TSIG_SUPPORT
     else if(IS_TSIG_ITEM(ami))
     {
         if(IS_TSIG_ITEM_MATCH(ami))
@@ -2110,6 +2303,7 @@ acl_address_match_item_to_string(address_match_item *ami, char *out_txt, u32 *ou
             return_code = snformat(out_txt, out_txt_len, "![%{dnsname}]", ami->parameters.tsig.name);
         }
     }
+#endif
     else if(IS_ANY_ITEM(ami))
     {
         if(IS_ANY_ITEM_MATCH(ami))
@@ -2132,6 +2326,128 @@ acl_address_match_item_to_string(address_match_item *ami, char *out_txt, u32 *ou
     }
     
     return return_code;
+}
+
+bool
+acl_address_match_item_equals(const address_match_item *a, const address_match_item *b)
+{
+    if(a == b)
+    {
+        return TRUE;
+    }
+    
+    if((a == NULL) || (b == NULL))
+    {
+        return FALSE;
+    }
+    
+    if(a->match == b->match)
+    {
+        if((a->match ==  amim_none) || (a->match ==  amim_any))
+        {
+            return TRUE;
+        }
+        
+        if((a->match == amim_ipv4) || (a->match == amim_ipv4_not))
+        {
+            return a->parameters.ipv4.address.value == b->parameters.ipv4.address.value;
+        }
+        
+        if((a->match == amim_ipv6) || (a->match == amim_ipv6_not))
+        {
+            return (a->parameters.ipv6.address.lohi[0] == b->parameters.ipv6.address.lohi[0]) ||
+                   (a->parameters.ipv6.address.lohi[1] == b->parameters.ipv6.address.lohi[1]);
+        }
+        
+#if HAS_TSIG_SUPPORT
+        if((a->match == amim_tsig) || (a->match == amim_tsig_not))
+        {
+            return (a->parameters.tsig.mac_algorithm == b->parameters.tsig.mac_algorithm) &&
+                   (a->parameters.tsig.name_size == b->parameters.tsig.name_size) &&
+                   (a->parameters.tsig.secret_size == b->parameters.tsig.secret_size) &&
+                   (memcmp(a->parameters.tsig.name, b->parameters.tsig.name, a->parameters.tsig.name_size) == 0) &&
+                   (memcmp(a->parameters.tsig.known, b->parameters.tsig.known, a->parameters.tsig.secret_size) == 0);
+        }
+#endif
+        
+        if(a->match == amim_reference)
+        {
+            return (a->parameters.ref.mark == b->parameters.ref.mark) &&
+                   (strcmp(a->parameters.ref.name, b->parameters.ref.name) == 0);
+        }
+    }
+    
+    return FALSE;
+}
+
+bool
+acl_address_match_list_equals(const address_match_list *a, const address_match_list *b)
+{
+    if(a == b)
+    {
+        return TRUE;
+    }
+    if((a == NULL) || (b == NULL))
+    {
+        return FALSE;
+    }
+    
+    u64 n = address_match_list_size(a);
+    
+    if(n == address_match_list_size(b))
+    {
+        address_match_item **a_items = a->items;
+        address_match_item **b_items = b->items;
+     
+        for(intptr i = 0; i < n; i++)
+        {
+            if(!acl_address_match_item_equals(a_items[i], b_items[i]))
+            {
+                return FALSE;
+            }
+        }
+        
+        return TRUE;
+    }
+    
+    return FALSE;
+}
+
+bool
+acl_address_match_set_equals(const address_match_set *a, const address_match_set *b)
+{
+    if(a == b)
+    {
+        return TRUE;
+    }
+    if((a == NULL) || (b == NULL))
+    {
+        return FALSE;
+    }
+    
+    return acl_address_match_list_equals(&a->ipv4, &b->ipv4) &&
+           acl_address_match_list_equals(&a->ipv6, &b->ipv6) &&
+           acl_address_match_list_equals(&a->tsig, &b->tsig);
+}
+
+bool
+acl_address_control_equals(const access_control *a, const access_control *b)
+{
+    if(a == b)
+    {
+        return TRUE;
+    }
+    if((a == NULL) || (b == NULL))
+    {
+        return FALSE;
+    }
+
+    return acl_address_match_set_equals(&a->allow_query, &b->allow_query) &&
+           acl_address_match_set_equals(&a->allow_update, &b->allow_update) &&
+           acl_address_match_set_equals(&a->allow_update_forwarding, &b->allow_update_forwarding) &&
+           acl_address_match_set_equals(&a->allow_transfer, &b->allow_transfer) &&
+           acl_address_match_set_equals(&a->allow_notify, &b->allow_notify) &&
+           acl_address_match_set_equals(&a->allow_control, &b->allow_control);
 }
 
 /** @} */

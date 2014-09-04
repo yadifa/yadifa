@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief Hash-Table structure and functions.
@@ -74,7 +74,7 @@ htable_entry* htable_alloc();
  *
  *  Frees an htable
  *
- *  @param[in]  table a poitner to the htable to free
+ *  @param[in]  table a pointer to the htable to free
  *
  */
 

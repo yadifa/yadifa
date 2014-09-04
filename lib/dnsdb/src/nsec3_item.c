@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -56,6 +56,10 @@
 #include "dnsdb/rrsig.h"
 
 #include <dnscore/base32hex.h>
+
+#define MODULE_MSG_HANDLE g_dnssec_logger
+
+extern logger_handle *g_dnssec_logger;
 
 nsec3_zone_item*
 nsec3_zone_item_find(nsec3_zone* n3, const u8* digest)
@@ -122,8 +126,8 @@ nsec3_zone_item_find_by_record(zdb_zone *zone, const u8 *fqdn, u16 rdata_size, c
 }
 
 bool
-nsec3_zone_item_equals_rdata(nsec3_zone* n3,
-                             nsec3_zone_item *item,
+nsec3_zone_item_equals_rdata(const nsec3_zone* n3,
+                             const nsec3_zone_item *item,
                              u16 rdata_size,
                              const u8* rdata)
 {
@@ -152,12 +156,12 @@ nsec3_zone_item_equals_rdata(nsec3_zone* n3,
     if(memcmp(p, next->digest, hash_len + 1) != 0)
     {
 #if DEBUG_LEVEL >= 9
-        nsec3_avl_find_debug(&n3->items, item->digest);
-        nsec3_avl_find_debug(&n3->items, next->digest);
-        bool exists = nsec3_avl_find_debug(&n3->items, p) != NULL;
-
-        OSLDEBUG(9, termout, "REJECT: %{digest32h} NSEC3 ... %{digest32h} was expected to be followed by %{digest32h} (%i)",
-                 item->digest, next->digest, p, exists);
+        //nsec3_avl_find_debug(&n3->items, item->digest);
+        //nsec3_avl_find_debug(&n3->items, next->digest);
+        //bool exists = nsec3_avl_find_debug(&n3->items, p) != NULL;
+        
+        log_debug("nsec3_zone_item_equals_rdata: REJECT: %{digest32h} NSEC3 ... %{digest32h} was expected to be followed by %{digest32h}",
+                 item->digest, next->digest, p);
 #endif
         return FALSE;
     }
@@ -173,19 +177,20 @@ nsec3_zone_item_equals_rdata(nsec3_zone* n3,
  * @param item
  * @param origin
  * @param out_owner
- * @param out_nsec3         return value, if not NULL, it is allocated by a malloc
- * @param out_nsec3_rrsig   return value, if not NULL, it's a reference into the DB
+ * @param nsec3            output buffer
+ * @param nsec3_max_size   output_buffer rdata size
+ * @param out_nsec3_rrsig  return value, if not NULL, it's a reference into the DB
  */
 
-void
-nsec3_zone_item_to_zdb_packed_ttlrdata(
-                                       nsec3_zone* n3,
-                                       nsec3_zone_item* item,
-                                       u8* origin,
+ya_result
+nsec3_zone_item_to_zdb_packed_ttlrdata(const nsec3_zone* n3,
+                                       const nsec3_zone_item* item,
+                                       const u8* origin,
                                        u8* out_owner, /* dnsname */
                                        u32 ttl,
-                                       zdb_packed_ttlrdata** out_nsec3,
-                                       zdb_packed_ttlrdata** out_nsec3_rrsig)
+                                       zdb_packed_ttlrdata* nsec3,
+                                       u32 nsec3_max_size,
+                                       const zdb_packed_ttlrdata** out_nsec3_rrsig)
 {
     u32 param_rdata_size = NSEC3_ZONE_RDATA_SIZE(n3);
     u8 hash_len = NSEC3_NODE_DIGEST_SIZE(item);
@@ -194,14 +199,18 @@ nsec3_zone_item_to_zdb_packed_ttlrdata(
     /* Whatever the editor says: rdata_size is used. */
     u32 rdata_size = param_rdata_size + 1 + hash_len + type_bit_maps_size;
 
-    zdb_packed_ttlrdata* nsec3;
+    if(nsec3_max_size < rdata_size)
+    {
+        return BUFFER_WOULD_OVERFLOW;
+    }
 
     /*
      * NOTE: ZALLOC SHOULD NEVER BE USED IN MT
      *
      */
 
-    ZDB_RECORD_MALLOC_EMPTY(nsec3, ttl, rdata_size);
+    nsec3->ttl = ttl;
+    nsec3->rdata_size = rdata_size;
 
     nsec3->next = NULL;
 
@@ -225,6 +234,76 @@ nsec3_zone_item_to_zdb_packed_ttlrdata(
 
     nsec3->rdata_start[1] = item->flags&1; /* Opt-Out or Opt-In */
 
+    *out_nsec3_rrsig = item->rrsig;
+    
+    return rdata_size;
+}
+
+/**
+ *
+ * @param n3
+ * @param item
+ * @param origin
+ * @param out_owner
+ * @param out_nsec3         return value, if not NULL, it is allocated by a malloc
+ * @param out_nsec3_rrsig   return value, if not NULL, it's a reference into the DB
+ */
+
+void
+nsec3_zone_item_to_new_zdb_packed_ttlrdata(
+                                       nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm *nsec3_parms,
+                                       u8** out_owner_p, /* dnsname */
+                                       zdb_packed_ttlrdata** out_nsec3,
+                                       const zdb_packed_ttlrdata** out_nsec3_rrsig)
+{
+    const nsec3_zone* n3 = nsec3_parms->n3;
+    u32 param_rdata_size = NSEC3_ZONE_RDATA_SIZE(n3);
+    const nsec3_zone_item* item = nsec3_parms->item;
+    u8 hash_len = NSEC3_NODE_DIGEST_SIZE(nsec3_parms->item);
+    u32 type_bit_maps_size = item->type_bit_maps_size;
+
+    /* Whatever the editor says: rdata_size is used. */
+    u32 rdata_size = param_rdata_size + 1 + hash_len + type_bit_maps_size;
+
+    zdb_packed_ttlrdata* nsec3;
+
+    // ZDB_RECORD_MALLOC_EMPTY(nsec3, nsec3_parms->ttl, rdata_size);
+    
+    u8 * restrict * pool = nsec3_parms->pool;
+    nsec3 = (zdb_packed_ttlrdata*)*pool;
+    *pool += ALIGN16(ZDB_RECORD_SIZE_FROM_RDATASIZE(rdata_size));
+    nsec3->next = NULL;
+    nsec3->ttl = nsec3_parms->ttl;
+    nsec3->rdata_size = rdata_size;
+
+    u8* p = &nsec3->rdata_start[0];
+
+    MEMCOPY(p, &n3->rdata[0], param_rdata_size);
+    p += param_rdata_size;
+
+    nsec3_zone_item* next = nsec3_avl_node_mod_next(item);
+
+    MEMCOPY(p, next->digest, hash_len + 1);
+    p += hash_len + 1;
+
+    MEMCOPY(p, item->type_bit_maps, item->type_bit_maps_size);
+
+    u8 *out_owner = *pool;
+    *out_owner_p = out_owner;
+    
+    u32 b32_len = base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), hash_len, (char*)&out_owner[1]);
+    out_owner[0] = b32_len;
+
+    const u8 *origin = nsec3_parms->origin;
+    
+    u32 origin_len = dnsname_len(origin);
+    MEMCOPY(&out_owner[1 + b32_len], origin, origin_len);
+    
+    *pool += ALIGN16(1 + b32_len + origin_len);
+    
+    
+    nsec3->rdata_start[1] = item->flags & 1; /* Opt-Out or Opt-In */
+
     *out_nsec3 = nsec3;
     *out_nsec3_rrsig = item->rrsig;
 }
@@ -235,7 +314,7 @@ nsec3_zone_item_get_label(nsec3_zone_item* item,
                           u32 buffer_size
                           )
 {
-    zassert(buffer_size >= 128);
+    yassert(buffer_size >= 128);
 
     u8 hash_len = NSEC3_NODE_DIGEST_SIZE(item);
     u32 b32_len = base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), hash_len, (char*)&output_buffer[1]);
@@ -470,7 +549,7 @@ nsec3_zone_item_empties(nsec3_zone_item *item)
     nsec3_remove_all_star(item);
     nsec3_remove_all_owners(item);
 
-    zassert(item->rc == 0 && item->sc == 0);
+    yassert(item->rc == 0 && item->sc == 0);
 
     ZFREE_ARRAY(item->type_bit_maps, item->type_bit_maps_size);
 
@@ -502,26 +581,32 @@ ya_result nsec3_zone_item_update_bitmap(nsec3_zone_item* nsec3_item, const u8 *r
 
     if(rdata_size < 8)
     {
-        return ERROR;
+        return BUFFER_WOULD_OVERFLOW;
     }
 
     const u8 *bitmap = rdata;
     u16 type_bit_maps_size = rdata_size;
 
+    // skip hash + flags + iterations
+    
     bitmap += 4;
     type_bit_maps_size -= 4;
 
+    // skip salt length + salt (and checks)
+    
     if(type_bit_maps_size < *bitmap + 1)
     {
-        return ERROR;
+        return INCORRECT_RDATA;
     }
 
     type_bit_maps_size -= *bitmap + 1;
     bitmap += *bitmap + 1;
+    
+    // skip hash length + hash (and checks)
 
     if(type_bit_maps_size < *bitmap + 1)
     {
-        return ERROR;
+        return INCORRECT_RDATA;
     }
     
     type_bit_maps_size -= *bitmap + 1;
@@ -537,7 +622,7 @@ ya_result nsec3_zone_item_update_bitmap(nsec3_zone_item* nsec3_item, const u8 *r
 
         if(nsec3_item->type_bit_maps_size != type_bit_maps_size)
         {
-            /* TODO : take the memory granularty in account in case of ZALLOC enabled */
+            /* TODO : take the memory granularity in account in case of ZALLOC enabled */
             ZFREE_ARRAY(nsec3_item->type_bit_maps, nsec3_item->type_bit_maps_size);
             ZALLOC_ARRAY_OR_DIE(u8*, nsec3_item->type_bit_maps, type_bit_maps_size, NSEC3_TYPEBITMAPS_TAG);
             nsec3_item->type_bit_maps_size = type_bit_maps_size;

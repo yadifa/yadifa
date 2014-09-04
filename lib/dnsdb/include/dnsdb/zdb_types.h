@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup types The types used in the database
  *  @ingroup dnsdb
  *  @brief The types used in the database
@@ -42,20 +42,25 @@
 #ifndef _ZDB_TYPES_H
 #define	_ZDB_TYPES_H
 
+#include <dnsdb/zdb-config-features.h>
+
+#include <dnscore/dnsname.h>
 #include <dnsdb/zdb_config.h>
 #include <dnsdb/zdb_alloc.h>
-#include <dnscore/dnsname.h>
 #include <dnsdb/dictionary.h>
+//#include <dnsdb/journal.h>
 #include <dnscore/rfc.h>
 #include <dnscore/message.h>
-#include <dnscore/mutex.h>
 #include <dnscore/alarm.h>
+#include <dnscore/mutex.h>
 
 #ifdef	__cplusplus
 extern "C"
 {
 #endif
 
+struct journal;
+    
 #define ROOT_LABEL                  ((u8*)"")
 
 /* zdb_ttlrdata
@@ -80,6 +85,10 @@ struct zdb_packed_ttlrdata
 };
 
 #define ZDB_RDATABUF_TAG    0x4655424154414452
+#define ZDB_RECORD_TAG      0x4443455242445a    /** "ZDBRECD" */
+
+#define ZDB_RECORD_SIZE_FROM_RDATASIZE(rdata_size_) (sizeof(zdb_packed_ttlrdata)-1+(rdata_size_))
+#define ZDB_RECORD_SIZE(record_)                    ZDB_RECORD_SIZE_FROM_RDATASIZE((record_)->rdata_size)
 
 #if ZDB_USES_ZALLOC==0
 
@@ -88,8 +97,6 @@ struct zdb_packed_ttlrdata
         MALLOC_OR_DIE(cast_,data_,size_, GENERIC_TAG); /* ZALLOC IMPOSSIBLE */    \
     }
 
-#define ZDB_RECORD_TAG              0x4443455242445a    /** "ZDBRECD" */
-
 #define ZDB_RECORD_ZALLOC(record,ttl_,len_,rdata_)                   \
     {                                                                \
         MALLOC_OR_DIE(zdb_packed_ttlrdata*,(record),sizeof(zdb_packed_ttlrdata)-1+len_,ZDB_RECORD_TAG); /* ZALLOC IMPOSSIBLE */ \
@@ -97,8 +104,6 @@ struct zdb_packed_ttlrdata
         (record)->rdata_size=len_;                                   \
         MEMCOPY(&(record)->rdata_start[0],rdata_,len_);               \
     }
-
-#define ZDB_RECORD_SIZE(record_) (sizeof(zdb_packed_ttlrdata)-1+(record_)->rdata_size)
 
 #define ZDB_RECORD_ZALLOC_EMPTY(record,ttl_,len_)                    \
     {                                                                \
@@ -138,16 +143,12 @@ struct zdb_packed_ttlrdata
         }                                                               \
     }
 
-#define ZDB_RECORD_TAG              0x4443455242445a    /** "ZDBRECD" */
-
-#define ZDB_RECORD_SIZE(record_) (sizeof(zdb_packed_ttlrdata)-1+(record_)->rdata_size)
-
 #define ZDB_RECORD_ZALLOC(record_,ttl_,len_,rdata_)                     \
     {                                                                   \
-        u32 size=sizeof(zdb_packed_ttlrdata)-1+len_;                    \
+        u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE(len_);                  \
         if(size<=ZDB_ALLOC_PG_PAGEABLE_MAXSIZE)                         \
         {                                                               \
-            record_=(zdb_packed_ttlrdata*)zdb_malloc((size-1)>>3);   \
+            record_=(zdb_packed_ttlrdata*)zdb_malloc((size-1)>>3);      \
         }                                                               \
         else                                                            \
         {                                                               \
@@ -156,15 +157,15 @@ struct zdb_packed_ttlrdata
                                                                         \
         (record_)->ttl=ttl_;                                            \
         (record_)->rdata_size=len_;                                     \
-        MEMCOPY(&(record_)->rdata_start[0],rdata_,len_);                 \
+        MEMCOPY(&(record_)->rdata_start[0],rdata_,len_);                \
     }
 
 #define ZDB_RECORD_ZALLOC_EMPTY(record_,ttl_,len_)                      \
     {                                                                   \
-        u32 size=sizeof(zdb_packed_ttlrdata)-1+len_;                    \
+        u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE(len_);                  \
         if(size<=ZDB_ALLOC_PG_PAGEABLE_MAXSIZE)                         \
         {                                                               \
-            record_=(zdb_packed_ttlrdata*)zdb_malloc((size-1)>>3);   \
+            record_=(zdb_packed_ttlrdata*)zdb_malloc((size-1)>>3);      \
         }                                                               \
         else                                                            \
         {                                                               \
@@ -177,7 +178,7 @@ struct zdb_packed_ttlrdata
 
 #define ZDB_RECORD_CLONE(record_s_,record_d_)                           \
     {                                                                   \
-        u32 size=sizeof(zdb_packed_ttlrdata)-1+(record_s_)->rdata_size; \
+        u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE((record_s_)->rdata_size);\
         if(size<=ZDB_ALLOC_PG_PAGEABLE_MAXSIZE)                         \
         {                                                               \
             record_d_=(zdb_packed_ttlrdata*)zdb_malloc((size-1)>>3); \
@@ -194,7 +195,7 @@ struct zdb_packed_ttlrdata
 /* DOES NOT CHECKS FOR NULL */
 #define ZDB_RECORD_ZFREE(record_)                                       \
     {                                                                   \
-        u32 size=sizeof(zdb_packed_ttlrdata)-1+(record_)->rdata_size;   \
+        u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE((record_)->rdata_size); \
         if(size<=ZDB_ALLOC_PG_PAGEABLE_MAXSIZE)                         \
         {                                                               \
             zdb_mfree(record_,(size-1)>>3);                             \
@@ -209,7 +210,7 @@ struct zdb_packed_ttlrdata
 #define ZDB_RECORD_SAFE_ZFREE(record_)                                  \
     if(record_ != NULL)                                                 \
     {                                                                   \
-        u32 size=sizeof(zdb_packed_ttlrdata)-1+(record_)->rdata_size;   \
+        u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE((record_)->rdata_size); \
         if(size<=ZDB_ALLOC_PG_PAGEABLE_MAXSIZE)                         \
         {                                                               \
             zdb_mfree(record_,(size-1)>>3);                             \
@@ -219,18 +220,14 @@ struct zdb_packed_ttlrdata
             free(record_);                                              \
         }                                                               \
     }
-
-
-
 #endif
 
-#define ZDB_RECORD_MALLOC_EMPTY(record_,ttl_,len_)                      \
+#define ZDB_RECORD_MALLOC_EMPTY(record_,ttl_,rdata_size_)               \
     {                                                                   \
-        u32 size=sizeof(zdb_packed_ttlrdata)-1+len_;                    \
+        u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE(rdata_size_);           \
         MALLOC_OR_DIE(zdb_packed_ttlrdata*,(record_),size,ZDB_RECORD_TAG); /* ZALLOC IMPOSSIBLE */ \
-                                                                        \
         (record_)->ttl=ttl_;                                            \
-        (record_)->rdata_size=len_;                                     \
+        (record_)->rdata_size=rdata_size_;                              \
     }
 
 /*
@@ -245,11 +242,10 @@ struct zdb_packed_ttlrdata
 #define ZDB_PACKEDRECORD_PTR_RDATAPTR(record_)  (&(record_)->rdata_start[0])
 #define ZDB_PACKEDRECORD_PTR_RDATASIZE(record_) ((record_)->rdata_size)
 
-#define ZDB_RECORD_PTR_RDATASIZE(record_) ((record_)->rdata_size)
-#define ZDB_RECORD_PTR_RDATAPTR(record_) ((record_)->rdata_pointer)
+#define ZDB_RECORD_PTR_RDATASIZE(record_)       ((record_)->rdata_size)
+#define ZDB_RECORD_PTR_RDATAPTR(record_)        ((record_)->rdata_pointer)
 
 typedef struct zdb_ttlrdata zdb_ttlrdata;
-
 
 struct zdb_ttlrdata
 {
@@ -266,7 +262,7 @@ struct zdb_ttlrdata
     {                                                               \
         (record).ttl=ttl_;                                          \
         (record).rdata_size=len_;                                   \
-        (record).rdata_pointer=rdata_;                                  \
+        (record).rdata_pointer=rdata_;                              \
     }
 
 typedef btree zdb_rr_collection;
@@ -274,15 +270,14 @@ typedef btree zdb_rr_collection;
 
 #define ZDB_RESOURCERECORD_TAG 0x444345524c4c5546   /** "FULLRECD" */
 
-typedef struct zdb_resourcerecord zdb_resourcerecord;
-
-
 /* zdb_zone */
 
 typedef struct zdb_zone zdb_zone;
 
 
 #define LABEL_HAS_RECORDS(label_) ((label_)->resource_record_set != NULL)
+
+typedef struct zdb_resourcerecord zdb_resourcerecord;
 
 struct zdb_resourcerecord
 {
@@ -300,9 +295,9 @@ typedef dictionary zdb_rr_label_set;
 
 typedef struct zdb_rr_label zdb_rr_label;
 
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
 
-#if ZDB_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT != 0
 
 typedef struct nsec_label_extension nsec_label;
 typedef struct nsec_label_extension nsec_label_extension;
@@ -311,7 +306,7 @@ typedef struct nsec_node nsec_zone;
 
 #endif
 
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
 
 typedef struct nsec3_zone nsec3_zone;
 
@@ -322,7 +317,7 @@ typedef union nsec_zone_union nsec_zone_union;
 
 union nsec_zone_union
 {
-#if ZDB_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT != 0
     /*
      * A pointer to an array of nsec_label (nsec_label buffer[])
      * The size is the same as the dictionnary
@@ -330,7 +325,7 @@ union nsec_zone_union
     nsec_zone* nsec;
 #endif
     
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
     nsec3_zone* nsec3;
 #endif
 };
@@ -345,12 +340,12 @@ struct nsec_label_extension
 union nsec_label_union
 {
     /* NSEC */
-#if ZDB_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT != 0
     nsec_label_extension nsec;
 #endif
 
     /* NSEC3 */
-#if ZDB_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT != 0
     struct nsec3_label_extension* nsec3;
 #endif
 
@@ -364,6 +359,8 @@ union nsec_label_union
  * RR_LABEL flags
  */
 
+// 5ff7
+// unused : a008
 
 /*
  * For the apex, marks a label as being the apex
@@ -407,12 +404,18 @@ union nsec_label_union
 
 #define ZDB_RR_LABEL_INVALID_ZONE   0x0800
 
+/**
+ * This is a virtual label, most likely a translation of NSEC3 nodes
+ */
+
+#define ZDB_RR_LABEL_VIRTUAL        0x4000
+
 /*
  * For any label : marks that one owns a '*' label
  */
 #define ZDB_RR_LABEL_GOT_WILD       0x0010
 
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
 /*
  * This flag means that the label has a valid NSEC structure
  *
@@ -433,6 +436,12 @@ union nsec_label_union
 
 #endif
 
+/**
+ * Reserved for zone wide processing
+ */
+
+#define ZDB_RR_LABEL_MARK           0x8000
+
 /*
  * Forbid updates to the apex
  */
@@ -447,15 +456,16 @@ union nsec_label_union
  * This lock is set while a threaded read or a writer wants to edit the zone.
  * Beside the owner, no threaded operation no write can occur while it is on.
  */
-#define ZDB_RR_APEX_LABEL_LOCKED    0x0008
+//#define ZDB_RR_APEX_LABEL_LOCKED    0x0008
 
-#define ZDB_ZONE_FLAGS_LOCKED       0x0001
+//#define ZDB_ZONE_FLAGS_LOCKED       0x0001
 
 #define ZDB_ZONE_VALID(__z__) ((((__z__)->apex->flags)&ZDB_RR_LABEL_INVALID_ZONE) == 0)
 #define ZDB_ZONE_INVALID(__z__) ((((__z__)->apex->flags)&ZDB_RR_LABEL_INVALID_ZONE) != 0)
 
 #define ZDB_LABEL_UNDERDELEGATION(__l__) ((((__l__)->flags)&ZDB_RR_LABEL_UNDERDELEGATION)!=0)
 #define ZDB_LABEL_ATDELEGATION(__l__) ((((__l__)->flags)&ZDB_RR_LABEL_DELEGATION)!=0)
+#define ZDB_LABEL_ATORUNDERDELEGATION(__l__) ((((__l__)->flags)&(ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_UNDERDELEGATION))!=0)
 
 #define ZDB_LABEL_ISAPEX(__l__) ((((__l__)->flags)&ZDB_RR_LABEL_APEX)!=0)
 
@@ -466,7 +476,7 @@ struct zdb_rr_label
 
     zdb_rr_collection resource_record_set; /* resource records for the label (a btree)*/ /*  4  4 */
 
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
     nsec_label_union nsec;
 #endif
 
@@ -476,17 +486,21 @@ struct zdb_rr_label
     /* No zone ptr */
 }; /* 28 44 => 32 48 */
 
-#define ZDB_ZONE_MUTEX_NOBODY           0
+#define ZDB_ZONE_MUTEX_EXCLUSIVE_FLAG   0x80
+
+#define ZDB_ZONE_MUTEX_NOBODY           GROUP_MUTEX_NOBODY
 #define ZDB_ZONE_MUTEX_SIMPLEREADER     0x01 /* non-conflicting */
-#define ZDB_ZONE_MUTEX_RRSIG_UPDATER    0x02 /* non-conflicting as far as the global task has not been launched more than ONCE */
-#define ZDB_ZONE_MUTEX_NSEC3_UPDATER    0x02 /* non-conflicting as far as ... */
+#define ZDB_ZONE_MUTEX_RRSIG_UPDATER    0x82 /* conflicting */
 #define ZDB_ZONE_MUTEX_XFR              0x84 /* conflicting, cannot by nature be launched more than once in parallel.  new ones have to be discarded */
 #define ZDB_ZONE_MUTEX_REFRESH          0x85 /* conflicting, can never be launched more than once.  new ones have to be discarded */
 #define ZDB_ZONE_MUTEX_DYNUPDATE        0x86 /* conflicting */
 #define ZDB_ZONE_MUTEX_UNFREEZE         0x87 /* conflicting, needs to be sure nobody else (ie: the freeze) is acting at the same time */
+#define ZDB_ZONE_MUTEX_INVALIDATE       0x88 /* conflicting */
+#define ZDB_ZONE_MUTEX_REPLACE          0x89 /* conflicting */
+#define ZDB_ZONE_MUTEX_LOAD             0x8a /* conflicting but this case is impossible */
 #define ZDB_ZONE_MUTEX_DESTROY          0xFF /* conflicting, can never be launched more than once.  The zone will be destroyed before unlock. */
 
-typedef ya_result zdb_zone_access_filter(message_data* /*mesg*/, void* /*zone_extension*/);
+typedef ya_result zdb_zone_access_filter(const message_data* /*mesg*/, const void* /*zone_extension*/);
 
 #define ALARM_KEY_ZONE_SIGNATURE_UPDATE 1
 #define ALARM_KEY_ZONE_AXFR_QUERY       2
@@ -497,37 +511,53 @@ struct zdb_zone
     u8 *origin; /* dnsname, origin */
     zdb_rr_label *apex; /* pointer to the zone cut, 1 name for : SOA, NS, ... */
     
-#if ZDB_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
     nsec_zone_union nsec;
 #endif
 
     zdb_zone_access_filter* query_access_filter;
-    void *extension;	/**
-			 * This pointer is meant to be used by the server so it can associate data with the zone
-			 * without having to do the match on its side too.
-			 *
-			 */
+    void *extension;    /**
+                         * This pointer is meant to be used by the server so it can associate data with the zone
+                         * without having to do the match on its side too.
+                         *
+                         */
+    
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
+    u8 *sig_last_processed_node;
+#endif
     
     u32 min_ttl;        /* a copy of the min-ttl from the SOA */
 
-#if ZDB_DNSSEC_SUPPORT != 0
+    /* 
+     * AXFR handling.
+     * 
+     * In order to be nicer with the resources of the machine and more reactive we are adding a pace mechanism.
+     * MASTER:
+     * init: ts=1, serial = real serial - 1
+     * axfr(1): ts=0, serial = real serial, writing on disk, streaming to client until axfr_timestamp>1 OR axfr_serial has changed
+     *         (both meaning the file has fully been written on disk)
+     * axfr(2): ts=0, serial = real serial, reading from the file being written
+     * axfr(3): ts=T, serial = real serial, reading from the written file
+     * axfr(4): now - ts > too_much, do axfr(1)
+     * SLAVE:
+     *        : ts=last time the axfr has been fully done, serial = serial in the axfr on file
+     * 
+     */
     
+    volatile u32 axfr_timestamp;    /* The last time when an AXFR has ENDED to be written on disk, if 0, an AXFR is being written right now */
+    volatile u32 axfr_serial;       /* The serial number of the AXFR (being written) on disk */
+    
+#if ZDB_HAS_DNSSEC_SUPPORT != 0
     u32 sig_validity_regeneration_seconds;
     u32 sig_validity_interval_seconds;
     u32 sig_validity_jitter_seconds;
-
-    /**
-     * The earliest epoch at which a signature will be invalidated.
-     * This does not account for missing signatures.
-     * 0 means both "unknown" and "now"
-     */
-    
-    u32 sig_invalid_first;
+    u32 sig_quota;              // starts at 100, updated so a batch does not takes more than a fraction of a second
 #endif
     
-    alarm_t alarm_handle;
-    volatile u8  mutex_owner;
-    volatile u8  mutex_count;
+    alarm_t alarm_handle;       // 32 bits
+    volatile u8 mutex_owner;
+    volatile u8 mutex_count;
+    volatile u8 mutex_reserved_owner;
 
 #if ZDB_RECORDS_MAX_CLASS != 1
     u16 zclass;
@@ -535,6 +565,10 @@ struct zdb_zone
     
     mutex_t mutex;
 
+    /** journal is only to be accessed trough the journal_* functions, between a journal_open and a journal_close */
+    
+    struct journal *journal;
+    
     dnsname_vector origin_vector;
 
 }; /* 18 34 => 20 40 */
@@ -551,10 +585,7 @@ struct zdb_zone_label
     zdb_zone_label* next;/* used to link labels with the same hash into a SLL */
     zdb_zone_label_set sub; /* labels of the sub-level                           */
     u8* name;               /* label name                                        */
-#if ZDB_CACHE_ENABLED!=0
-    /* global resource record (used by the cache) */
-    zdb_rr_collection global_resource_record_set;
-#endif
+
     zdb_zone* zone; /* zone cut starting at this level                   */
 }; /* 32 56 */
 
@@ -562,14 +593,16 @@ typedef zdb_zone_label* zdb_zone_label_pointer_array[DNSNAME_MAX_SECTIONS];
 
 /* zdb */
 
+#define ZDB_MUTEX_NOBODY GROUP_MUTEX_NOBODY
+#define ZDB_MUTEX_READER 0x01
+#define ZDB_MUTEX_WRITER 0x82                   // only one allowed at once
 typedef struct zdb zdb;
-
 
 struct zdb
 {
     zdb_zone_label* root[ZDB_RECORDS_MAX_CLASS];
     alarm_t alarm_handle;
-    /* u32 items; */
+    group_mutex_t mutex;
 };
 
 typedef zdb_ttlrdata** zdb_ttlrdata_pointer_array;
@@ -595,15 +628,16 @@ struct zdb_query_ex_answer
 
 typedef struct zdb_zone_label_iterator zdb_zone_label_iterator;
 
-struct zdb_zone_label_iterator
+struct zdb_zone_label_iterator /// 47136 bytes on a 64 bits architecture
 {
-    dnslabel_stack dnslabels;
-    dictionary_iterator stack[DNSNAME_MAX_SECTIONS];
-    s32 top;
-    zdb_rr_label* current_label;
     const zdb_zone* zone;
+    zdb_rr_label* current_label;
+    s32 top;
     s32 current_top;    /* "top" of the label pointer by current_label  */
     s32 prev_top;       /* "top" of the label returned with "_next"     */
+    s32 __reserved__;
+    dnslabel_stack dnslabels;
+    dictionary_iterator stack[DNSNAME_MAX_SECTIONS];
 };
 
 #ifdef	__cplusplus

@@ -30,7 +30,7 @@
 *
 *------------------------------------------------------------------------------
 *
-* DOCUMENTATION */
+*/
 /** @defgroup ### #######
  *  @ingroup dnscore
  *  @brief
@@ -43,36 +43,16 @@
 
 #include <dirent.h>
 
-#include <dnscore/input_stream.h>
+#include <dnscore/xfr_input_stream.h>
 #include <dnscore/message.h>
 
 #ifdef	__cplusplus
 extern "C" {
 #endif
 
-/**
- * Reads from the tcp input stream for an xfr
- * Detects the xfr
- * Copies into the right file
- *
- * @return error code
- */
-
-typedef enum
-{
-    XFR_ALLOW_AXFR=1,
-    XFR_ALLOW_IXFR=2,
-    XFR_ALLOW_BOTH=3
-} xfr_copy_flags;
-
 #define XFR_FULL_EXT ".axfr"
 #define XFR_FULL_EXT_STRLEN 5
 #define XFR_FULL_FILE_MODE      0600
-
-#define XFR_INCREMENTAL_EXT ".ix"
-#define XFR_INCREMENTAL_EXT_STRLEN 3
-#define XFR_INCREMENTAL_FILE_MODE      0600
-#define XFR_INCREMENTAL_WIRE_FILE_FORMAT "%s/%{dnsname}%08x-%08x" XFR_INCREMENTAL_EXT
 
 /**
  * Fixes an issue with the dirent not always set as expected.
@@ -83,52 +63,56 @@ typedef enum
 
 u8 dirent_get_file_type(const char* folder, struct dirent *entry);
 
-ya_result xfr_copy_get_data_path(const char *base_data_path, const u8 *origin, char *data_path, u32 data_path_size);
+/**
+ * 
+ * Returns the hashed folder path for a zone.
+ * 
+ * @param data_path             the target buffer for the data path
+ * @param data_path_size        the target buffer size
+ * @param base_data_path        the base folder
+ * @param origin                the origin of the zone
+ * 
+ * @return 
+ */
 
-ya_result xfr_copy_make_data_path(const char *base_data_path, const u8 *origin, char *data_path, u32 data_path_size);
-
-ya_result xfr_delete_axfr(const u8 *origin, const char* folder);
-
-ya_result xfr_delete_ix(const u8 *origin, const char* folder);
-
-ya_result xfr_opendir(const char* filepath);
-
-ya_result xfr_unlink(const char* filepath);
+ya_result xfr_copy_get_data_path(char *data_path, u32 data_path_size, const char *base_data_path, const u8 *origin);
 
 /**
  * 
- * Downloads an AXFR/IXFR stream and builds (or updates) a journal on disk
+ * Returns the hashed folder path for a zone.  Creates the path
  * 
- * @param is the input stream with the AXFR or IXFR, wire format
- * @param flags mostly XFR_ALLOW_AXFR or XFR_ALLOW_IXFR
- * @param origin the domain of the zone
- * @param base_data_path the folder where to put the journal (or journal hash directories and journal)
- * @param current_serial the serial currently available
- * @param loaded_serial a pointer to get the serial available after loading
- * @param message the message that led to this download
+ * @param data_path             the target buffer for the data path
+ * @param data_path_size        the target buffer size
+ * @param base_data_path        the base folder
+ * @param origin                the origin of the zone
  * 
- * @return an error code, TYPE_AXFR, TYPE_IXFR, TYPE_NONE
+ * @return 
  */
 
-typedef struct xfr_copy_args xfr_copy_args;
+ya_result xfr_copy_mkdir_data_path(char *data_path, u32 data_path_size, const char *base_data_path, const u8 *origin);
 
-struct xfr_copy_args
-{
-    input_stream            *is;
-    u8                      *origin;
-    const char              *base_data_path;
-    message_data            *message;
-    
-    u32                     current_serial;
-    u32                     out_loaded_serial;
-    
-    u64                     out_journal_file_append_offset;    
-    u64                     out_journal_file_append_size;    
-    xfr_copy_flags          flags;    
-};
+/**
+ * 
+ * Deletes the AXFR wire dumps of a zone. Hashed folders are not removed.
+ * 
+ * @param origin
+ * @param base_data_path where to remove the file from (and its hashed folders)
+ * @return 
+ */
 
-ya_result xfr_copy(xfr_copy_args* args);
+ya_result xfr_delete_axfr(const u8 *origin, const char *base_data_path);
 
+/**
+ * 
+ * Copies an AXFR stream from an XFR (xfr_input_stream) into a wire dump (.axfr)
+ * 
+ * @param xis the xfr_input_stream
+ * @param base_data_path where to put the file (and its hashed folder)
+ * 
+ * @return an error code
+ */
+
+ya_result xfr_copy(input_stream *xis, const char *base_data_path);
 
 #ifdef	__cplusplus
 }
