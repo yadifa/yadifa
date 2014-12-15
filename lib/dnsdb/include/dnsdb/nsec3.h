@@ -74,7 +74,7 @@
 
 #define NSEC3_INCLUDE_ZONE_PATH 0
 
-#ifdef NDEBUG
+#ifndef DEBUG
 #undef NSEC3_UPDATE_ZONE_DEBUG
 #define NSEC3_UPDATE_ZONE_DEBUG  0
 #endif

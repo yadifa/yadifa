@@ -59,3 +59,4 @@ ya_result config_set_acl_item(const char *value, address_match_set *dest, anytyp
 #define CONFIG_ACL_FILTER(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_acl_item, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
 
 /** @} */
+

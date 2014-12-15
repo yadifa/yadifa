@@ -153,7 +153,6 @@ libdnsdb_la_SOURCES = \
 
 # DNSSEC is defined if either NSEC3 or NSEC are defined
 			
-if HAS_DNSSEC_SUPPORT
 libdnsdb_la_SOURCES += \
 	src/dnssec.c \
 	src/dnssec_keystore.c \
@@ -163,9 +162,7 @@ libdnsdb_la_SOURCES += \
 	src/rrsig.c \
 	src/rrsig_updater.c \
 	src/zdb_update_signatures.c
-endif
 			
-if HAS_NSEC3_SUPPORT
 libdnsdb_la_SOURCES += \
 	src/nsec3.c \
 	src/nsec3_collection.c \
@@ -179,13 +176,10 @@ libdnsdb_la_SOURCES += \
 	src/nsec3_rrsig_updater.c \
 	src/nsec3_update.c \
 	src/nsec3_zone.c
-endif
 
-if HAS_NSEC_SUPPORT
 libdnsdb_la_SOURCES += \
 	src/nsec.c \
 	src/nsec_collection.c
-endif
 
 libdnsdb_la_LDFLAGS = -version-info 2:0:0
 

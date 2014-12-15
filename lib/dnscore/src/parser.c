@@ -87,7 +87,7 @@ parser_set_couples(parser_s *parser, const char* input, u8 kind, u8 closer_kind)
     return n>>1;
 }
 
-static inline void
+static inline u32
 parser_set_singleton(parser_s *parser, const char* input, u8 kind)
 {
     u32 n = strlen(input);
@@ -96,6 +96,8 @@ parser_set_singleton(parser_s *parser, const char* input, u8 kind)
     {
         parser->char_type[(u8)input[i]] = kind;
     }
+    
+    return n;
 }
 
 void
@@ -122,6 +124,7 @@ parser_init_error_codes()
     error_register(PARSER_NO_MARK_SET,"PARSER_NO_MARK_SET");
     error_register(PARSER_REACHED_END_OF_LINE,"PARSER_REACHED_END_OF_LINE");
     error_register(PARSER_FOUND_WORD,"PARSER_FOUND_WORD");
+    error_register(PARSER_REACHED_END_OF_FILE, "PARSER_REACHED_END_OF_FILE");
 }
 
 ya_result
@@ -143,11 +146,18 @@ parser_init(parser_s *parser,
 
     if(ISOK(return_code = parser_set_couples(parser, string_delimiters, PARSER_CHAR_TYPE_STRING_DELIMITER, PARSER_CHAR_TYPE_IGNORE)))
     {
+        parser->string_delimiters_count = return_code;
+        
         if(ISOK(return_code = parser_set_couples(parser, multiline_delimiters, PARSER_CHAR_TYPE_MULTILINE_DELIMITER, PARSER_CHAR_TYPE_MULTILINE_DELIMITER_END)))
         {
-            parser_set_singleton(parser, comment_markers, PARSER_CHAR_TYPE_COMMENT_MARKER);
-            parser_set_singleton(parser, blank_makers, PARSER_CHAR_TYPE_BLANK_MARKER);
-            parser_set_singleton(parser, escape_characters, PARSER_CHAR_TYPE_ESCAPE_CHARACTER);
+            parser->multiline_delimiters_count = return_code;
+            
+            parser->comment_marker_count = parser_set_singleton(parser, comment_markers, PARSER_CHAR_TYPE_COMMENT_MARKER);
+            parser->comment_marker = comment_markers;
+            parser->blank_marker_count = parser_set_singleton(parser, blank_makers, PARSER_CHAR_TYPE_BLANK_MARKER);
+            parser->blank_marker = blank_makers;
+            parser->escape_characters_count =parser_set_singleton(parser, escape_characters, PARSER_CHAR_TYPE_ESCAPE_CHARACTER);
+            parser->escape_characters = escape_characters;
             parser_set_singleton(parser, "\n", PARSER_CHAR_TYPE_EOL);
         }
     }
@@ -204,11 +214,13 @@ parser_clear_escape_codes(char **startp, int *lenp, char escape_char, char *new_
             memcpy(op, start, n);
 #if 0 /* fix */
 #else
-            op[n] = escape_char_ptr[0];
+            op[n] = escape_char_ptr[1];
             op += n + 1;
-            start = &escape_char_ptr[1];
-            len -= n + 1;
+            start = escape_char_ptr + 2;
+            len -= n + 2;
 #endif
+            yassert(len >= 0);
+            
             if(len == 0)
             {
                 break;
@@ -219,13 +231,13 @@ parser_clear_escape_codes(char **startp, int *lenp, char escape_char, char *new_
                 // copy the remaining bytes
                 
                 memcpy(op, start, len);
-                start += len;
+                op += len;
                 break;
             }
         }
         
         *startp = new_start;
-        *lenp = start - new_start;
+        *lenp = op - new_start;
     }
     // else we have nothing more to do
     
@@ -243,7 +255,7 @@ parser_clear_escape_codes(char **startp, int *lenp, char escape_char, char *new_
 static inline ya_result
 parser_read_line(parser_s *parser)
 {
-    ya_result return_code = 1;
+    ya_result return_code;
         
     if(parser_line_size(parser) == 0)
     {
@@ -255,42 +267,68 @@ parser_read_line(parser_s *parser)
             return return_code;
         }
         
+        char *buffer = parser->line_buffer;
+        char *limit = &parser->line_buffer[sizeof(parser->line_buffer)];
+        
+        for(;;)
+        {
+            if(limit - buffer == 0)
+            {
+                return PARSER_SYNTAX_ERROR_LINE_TOO_BIG;
+            }
+            
 #if DO_BUFFERIZE
-        return_code = buffer_input_stream_read_line(parser->input_stream_stack[parser->input_stream_stack_size - 1],
-                                                     parser->line_buffer,
-                                                     sizeof(parser->line_buffer));
+            return_code = buffer_input_stream_read_line(parser->input_stream_stack[parser->input_stream_stack_size - 1],
+                                                            buffer,
+                                                            limit - buffer);
 #else
-        return_code = input_stream_read_line(parser->input_stream_stack[parser->input_stream_stack_size - 1],
-                                                     parser->line_buffer,
-                                                     sizeof(parser->line_buffer));
+            return_code = input_stream_read_line(parser->input_stream_stack[parser->input_stream_stack_size - 1],
+                                                    buffer,
+                                                    limit - buffer);
 #endif
         
-        if(return_code > 0)
-        {        
-            // one line has been read
+            if(return_code > 0)
+            {        
+                // one line has been read (maybe)
 
-            parser->limit = &parser->line_buffer[return_code];
-            parser->needle = parser->line_buffer;
-            parser->line_number++;
-        }
-        else
-        {
-            // error or end of stream
-            
-            parser->limit = parser->line_buffer;
-            parser->needle = parser->line_buffer;
-            
-            if(return_code == 0)
-            {
-                if(parser->multiline != 0)
+                buffer += return_code;
+
+                if(return_code > 1)
                 {
-                    return_code = PARSER_SYNTAX_ERROR_MULTILINE;
+                    if(buffer[-2] == parser->escape_characters[0])
+                    {
+                        // the EOL was escaped, concat the next line ...
+                        // do NOT remove the escape code now
+
+                        continue;
+                    }
+                }
+
+                parser->limit = buffer;
+                parser->needle = parser->line_buffer;
+                parser->line_number++;
+            }
+            else
+            {
+                // error or end of stream
+
+                parser->limit = parser->line_buffer;
+                parser->needle = parser->line_buffer;
+
+                if(return_code == 0)
+                {
+                    if(parser->multiline != 0)
+                    {
+                        return_code = PARSER_SYNTAX_ERROR_MULTILINE;
+                    }
                 }
             }
+            
+            return return_code;
         }
     }
- 
-    return return_code;
+    
+    return PARSER_EOF;
 }
 
 ya_result
@@ -337,7 +375,6 @@ parser_next_token(parser_s *parser)
                     // COMMENT => CUT
 
                     bool has_escapes = FALSE;
-
                     parser->text = needle++;
 
                     for(; needle < parser->limit; needle++)
@@ -452,19 +489,21 @@ parser_next_token(parser_s *parser)
 
                     if(has_escapes)
                     {
-                        for(u32 escape_index = 0; escape_index < parser->escape_characters_count; escape_index++)
+                        yassert(parser->escape_characters_count <= 1);
+                        
+                        if(parser->escape_characters_count == 1)
                         {
                             ya_result err;
                             
-                            char escape_char = parser->escape_characters[escape_index];
-                            
-                            if(FAIL(err = parser_clear_escape_codes(&needle, &token_len, escape_char, parser->extra_buffer)))
+                            char escape_char = parser->escape_characters[0];
+
+                            if(FAIL(err = parser_clear_escape_codes(&parser->text, &token_len, escape_char, parser->extra_buffer)))
                             {
                                 return err;
                             }
                         }
 
-                        parser->text = needle;
+                        parser->needle = needle + token_len;
                     }
 
                     parser->text_length = token_len;
@@ -552,6 +591,8 @@ parser_next_token(parser_s *parser)
 
                     int token_len = string_end - needle;
 
+                    yassert(parser->escape_characters_count <= 1);
+                    
                     for(u32 escape_index = 0; escape_index < parser->escape_characters_count; escape_index++)
                     {
                         ya_result err;

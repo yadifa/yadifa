@@ -62,10 +62,6 @@ config_section_key_init(struct config_section_descriptor_s *csd)
         return INVALID_STATE_ERROR; // base SHOULD be NULL at init
     }
     
-    config_section_key_s *csk;
-    MALLOC_OR_DIE(config_section_key_s*, csk, sizeof(config_section_key_s), GENERIC_TAG);
-    csd->base = csk;
-    
     return SUCCESS;
 }
 
@@ -73,7 +69,12 @@ static ya_result
 config_section_key_start(struct config_section_descriptor_s *csd)
 {
     // NOP
-    config_section_key_s *csk = (config_section_key_s*)csd->base;
+    //config_section_key_s *csk = (config_section_key_s*)csd->base;
+
+    config_section_key_s *csk;
+    MALLOC_OR_DIE(config_section_key_s*, csk, sizeof(config_section_key_s), GENERIC_TAG);
+    csd->base = csk;
+
     csk->name[0] = '\0';
     csk->algorithm[0] = '\0';
     csk->secret[0] = '\0';
@@ -158,7 +159,10 @@ config_section_key_finalise(struct config_section_descriptor_s *csd)
 {
     if(csd != NULL)
     {
-        free(csd->base);
+        if(csd->base != NULL)
+        {
+            free(csd->base);
+        }
         free(csd);
     }
     

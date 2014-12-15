@@ -34,7 +34,7 @@
 		Second release of yadifa.
 
 		It still uses one domain name (it.eurid.eu) with 1 slave name server
-		Zone file is transfered with AXFR and TSIG.
+		Zone file is transferred with AXFR and TSIG.
 
 		First RR are updated with DNS UPDATE (RFC 2136)
 		

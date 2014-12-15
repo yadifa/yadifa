@@ -28,29 +28,98 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
-#
-#       SVN Program:
-#               $URL: $
-#
-#       Last Update:
-#               $Date:$
-#               $Revision: 1717 $
-#
-#       Purpose:
-#               Settings common to all makefiles
-#
-################################################################################
 
+#
+# ALL
+#
 
-AM_CFLAGS = -Wall -Werror=missing-field-initializers -D_FILE_OFFSET_BITS=64 -g
+AM_CFLAGS  = -D_FILE_OFFSET_BITS=64 -I$(abs_builddir) -I$(abs_srcdir)/include
 AM_LDFLAGS =
 DEBUGFLAGS =
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"'
 
-LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"'
+if USES_SUNC
+DEBUGFLAGS +=
+else
+DEBUGFLAGS += -O0
+endif
+
+if HAS_CC_NO_IDENT
+AM_CFLAGS += -fno-ident
+endif
+
+if HAS_CC_ANSI
+AM_CFLAGS += -ansi
+endif
+
+if HAS_CC_PEDANTIC
+AM_CFLAGS += -pedantic
+endif
+
+if HAS_CC_WALL
+AM_CFLAGS += -Wall
+endif
+
+if HAS_CC_MISSING_FIELD_INITIALIZERS
+AM_CFLAGS += -Werror=missing-field-initializers
+endif
+
+if HAS_CC_STD_GNU99
+AM_CFLAGS += -std=gnu99
+else
+if HAS_CC_STD_C99
+AM_CFLAGS += -std=c99
+endif
+if HAS_CC_XC99
+AM_CFLAGS += -xc99
+endif
+endif
+
+if HAS_CC_TUNE_NATIVE
+AM_CFLAGS += -mtune=native
+endif
+
+if FORCE64BITS
+if HAS_CC_M64
+AM_CFLAGS += -m64
+AM_LDFLAGS += -m64
+endif
+
+else
+
+if FORCE32BITS
+if HAS_CC_M32
+AM_CFLAGS += -m32
+AM_LDFLAGS += -m32
+endif
+endif
+
+endif
+
+#
+# DEBUG
+#
+
+if HAS_CC_G3
+DEBUGFLAGS += -g3
+else
+if HAS_CC_G
+DEBUGFLAGS += -g
+endif
+endif
+
+if HAS_CC_DWARF4
+DEBUGFLAGS += -gdwarf-4
+else
+if HAS_CC_DWARF3
+DEBUGFLAGS += -gdwarf-3
+endif
+endif
 
 #
 # Intel C Compiler
 #
+###############################################################################
 
 if USES_ICC
 
@@ -63,16 +132,22 @@ AM_LDFLAGS += -ipo
 AM_AR = xiar
 endif
 
-AM_CFLAGS += -DUSES_ICC -ansi-alias -std=c99 -U__STRICT_ANSI__ -I$(abs_builddir) -I$(abs_srcdir)/include
 AM_LD = ld
 
-DEBUGFLAGS += -O0 -g -DMODE_DEBUG_ICC
+AM_CFLAGS += -DUSES_ICC 
+
+if HAS_CC_ANSI_ALIAS
+AM_CFLAGS += -ansi-alias -U__STRICT_ANSI__ 
+endif
+
+DEBUGFLAGS += -DMODE_DEBUG_ICC
 
 endif
 
 #
 # LLVM Clang
 #
+###############################################################################
 
 if USES_CLANG
 
@@ -88,33 +163,18 @@ AM_AR = ar
 AM_LD = ld
 endif
 
-AM_CFLAGS += -mtune=native -DUSES_LLVM
-AM_CFLAGS += -I$(abs_builddir) -I$(abs_srcdir)/include
+AM_CFLAGS += -DUSES_LLVM
 
-DEBUGFLAGS += -O0 -g -DMODE_DEBUG_CLANG
+DEBUGFLAGS += -DMODE_DEBUG_CLANG
 
-# THIS WILL BREAK THE CONFIGURE ON EXTERNAL USERS OF THE LIBS IF INSTALLED AS DEBUG
-# FUTURE SOLUTION: ADD A _d SUFFIX TO LIBS WHEN BUILD IN DEBUG ?
-#
-#if HAS_FADDRESS_SANITIZER
-## one of these: address,thread,undefined
-#DEBUGFLAGS+=-fsanitize=address
-#endif
-#
-#
-#if HAS_FNO_OMIT_FRAME_POINTER
-#DEBUGFLAGS+=-fno-omit-frame-pointer
-#endif
-#
-#if HAS_CATCH_UNDEFINED_BEHAVIOR
-#DEBUGFLAGS+=-fcatch_undefined_behavior
-#endif
+# Note: add a _d suffix for debug builds ?
 
 endif # CLANG
 
 #
 # Gnu C
 #
+###############################################################################
 
 if USES_GCC
 
@@ -123,41 +183,48 @@ if HAS_CPU_NIAGARA
 AM_CFLAGS += -mcpu=niagara
 endif
 
-if HAS_CPU_AMDINTEL
-AM_CFLAGS += -mtune=native
-endif
-
 if HAS_LTO_SUPPORT
 AM_CFLAGS += -DLTO -flto -fwhole-program -ffat-lto-objects
 AM_LDFLAGS += -flto -fwhole-program -ffat-lto-objects
 endif
 
-AM_CFLAGS += -fno-ident -ansi -pedantic -std=gnu99 -I$(abs_builddir) -I$(abs_srcdir)/include
+AM_AR = ar
+AM_LD = ld
+
+AM_CFLAGS += -DUSES_GCC
+DEBUGFLAGS += -DMODE_DEBUG_GCC
+
+endif # USES_GCC
+
+#
+# Sun C
+#
+###############################################################################
+
+if USES_SUNC
+
+# SUNC
 
 AM_AR = ar
 AM_LD = ld
 
-if !IS_BSD_FAMILY
+AM_CFLAGS += -DUSES_SUNC
 
-DEBUGFLAGS+=-g3 -gdwarf-2 -O0 -DMODE_DEBUG_GCC -rdynamic
+DEBUGFLAGS += -DMODE_DEBUG_SUNC
 
-if HAS_FADDRESS_SANITIZER
-# one of these: address,thread,undefined
-DEBUGFLAGS += -fsanitize=address
-endif
+# Note: add a _d suffix for debug builds ?
 
-else
+endif # SUNC
 
-DEBUGFLAGS+=-g -O0 -DMODE_DEBUG_GCC -rdynamic
-
-endif # IS_BSD_FAMILY
-
-endif # USES_GCC
+#
+# Unknown compiler
+#
+###############################################################################
 
 if USES_UNKNOWN
 # if an unknown compiler is used, it should have its own section
-AM_CFLAGS += -DUSES_UNKNOWN_COMPILER -I$(abs_builddir) -I$(abs_srcdir)/include
-DEBUGFLAGS += -g -O0
+AM_CFLAGS += -DUSES_UNKNOWN_COMPILER
+DEBUGFLAGS += -DMODE_DEBUG_UNKNOWN
 endif
 
 #
@@ -165,7 +232,11 @@ endif
 #
 
 if IS_BSD_FAMILY
-AM_CFLAGS += -std=c99 -I./include
+AM_CFLAGS += -I./include
+endif
+
+if IS_SOLARIS_FAMILY
+AM_CFLAGS += -D_POSIX_PTHREAD_SEMANTICS
 endif
 
 #
@@ -179,9 +250,15 @@ YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP
 YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
 YSCFLAGS = $(YRCFLAGS)
 
-YRLDFLAGS = -g
+YRLDFLAGS =
 YPLDFLAGS = -pg
 YDLDFLAGS = -g
+
+if HAS_CC_RDYNAMIC
+YPLDFLAGS += -rdynamic
+YDLDFLAGS += -rdynamic
+endif
+
 YSLDFLAGS = $(YRLDFLAGS)
 
 AM_CFLAGS += $(YCFLAGS)

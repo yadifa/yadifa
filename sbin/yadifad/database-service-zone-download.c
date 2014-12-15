@@ -53,6 +53,8 @@
 
 #include <dnscore/logger.h>
 #include <dnscore/serial.h>
+#include <dnscore/timeformat.h>
+
 #include <dnsdb/zdb_zone.h>
 
 #include "database-service.h"
@@ -124,11 +126,14 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
 
     if(zone != NULL)
     {
+        soa_rdata soa;
         u32 local_serial;
         
         zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
-        return_value = zdb_zone_getserial(zone, &local_serial);
+        return_value = zdb_zone_getsoa(zone, &soa);
+        //return_value = zdb_zone_getserial(zone, &local_serial);
         zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+        local_serial = soa.serial;
         
         if(ISOK(return_value))
         {
@@ -156,10 +161,17 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                     log_debug("database_service_zone_download_thread: serial of %{dnsname} is not lower than the one on the master", origin);
                     
                     zone_lock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
-                    
+                               
                     zone_desc->status_flags &= ~(ZONE_STATUS_DOWNLOADING_XFR_FILE|ZONE_STATUS_PROCESSING);
                     zone_desc->refresh.refreshed_time = time(NULL);
-    
+                    zone_desc->refresh.retried_time = zone_desc->refresh.refreshed_time;
+
+                    u32 next_refresh = zone_desc->refresh.refreshed_time + soa.refresh;
+                    EPOCH_DEF(next_refresh);
+                    log_info("database: refresh: zone %{dnsname}: refreshed, next one at %w", origin, EPOCH_REF(next_refresh));
+
+                    database_zone_refresh_maintenance_wih_zone(zone, next_refresh);
+                    
                     database_fire_zone_downloaded(origin, TYPE_NONE, local_serial, SUCCESS);
 
                     zone_unlock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
@@ -241,9 +253,17 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                     log_err("slave: query error for domain %{dnsname} from master at %{hostaddr}: %r", origin, servers, return_value);
                 }
             }
+            else
+            {
+                loaded_serial = 0;
+            }
             // else XFRs to the master are disabled
             
             break;
+        }
+        default:
+        {
+            
         }
     }
 

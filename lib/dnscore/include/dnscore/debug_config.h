@@ -61,7 +61,7 @@ extern "C"
 
 #define ZDB_DEBUG_MALLOC 0
     
-#ifdef NDEBUG
+#ifndef DEBUG
 #undef ZDB_DEBUG_MALLOC
 #define ZDB_DEBUG_MALLOC 0
 #endif

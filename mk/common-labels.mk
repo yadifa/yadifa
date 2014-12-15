@@ -28,18 +28,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
-#
-#       SVN Program:
-#               $URL: $
-#
-#       Last Update:
-#               $Date:$
-#               $Revision: 1717 $
-#
-#       Purpose:
-#               Labels common to all makefiles
-#
-################################################################################
 
 YCFLAGS=$(YSCFLAGS)
 
@@ -48,17 +36,19 @@ YLDFLAGS=$(YNLDFLAGS)
 release:
 	echo YCFLAGS=$(YRCFLAGS)
 	echo YLDFLAGS=$(YRLDFLAGS)
-	$(MAKE) all "YCFLAGS=$(YRCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YRLDFLAGS)"
+	$(MAKE) all "YCFLAGS=$(YRCFLAGS)" "YLDFLAGS=$(YRLDFLAGS)"
 
 profile:
 	echo YCFLAGS=$(YPCFLAGS)
 	echo YLDFLAGS=$(YPLDFLAGS)
-	$(MAKE) all "YCFLAGS=$(YPCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YPLDFLAGS)"
+	$(MAKE) all "YCFLAGS=$(YPCFLAGS)" "YLDFLAGS=$(YPLDFLAGS)"
 
 debug:
 	echo YCFLAGS=$(YDCFLAGS)
 	echo YLDFLAGS=$(YDLDFLAGS)
-	$(MAKE) all "YCFLAGS=$(YDCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YDLDFLAGS)"
+	$(MAKE) all "YCFLAGS=$(YDCFLAGS)" "YLDFLAGS=$(YDLDFLAGS)"
+
+rebuild: clean debug
 
 buildinfo.h: config.log
 	echo \#pragma once > buildinfo.h 2> /dev/null

@@ -89,7 +89,7 @@ extern logger_handle *g_server_logger;
 
 // <editor-fold defaultstate="collapsed" desc="DEBUG-ONLY FUNCTIONS">
 
-#ifndef NDEBUG
+#ifdef DEBUG
 
 #if ACL_DEBUG_FULL != 0
 static const char* query_access_filter_type_name[18]=
@@ -1456,7 +1456,7 @@ acl_build_access_control_item(address_match_set *ams, const char* allow_whatever
         amim_ipv4_sort(&ipv4v);
 #endif
 
-#ifndef NDEBUG
+#ifdef DEBUG
         amim_ipv4_print(&ipv4v);
 #endif
 
@@ -1468,7 +1468,7 @@ acl_build_access_control_item(address_match_set *ams, const char* allow_whatever
         amim_ipv6_sort(&ipv6v);
 #endif
 
-#ifndef NDEBUG
+#ifdef DEBUG
         amim_ipv6_print(&ipv6v);
 #endif
 

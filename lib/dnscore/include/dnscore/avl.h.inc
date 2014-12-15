@@ -162,7 +162,7 @@ void AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE *tree,AVL_REFERENCE_CONST AVL_REFERE
  *
  *  Releases all the nodes of a tree.  Data is not destroyed.
  *  Only the right and left childs are used.  Everything else
- *  is of no importance. (Usefull for destroying data & keys,
+ *  is of no importance. (Useful for destroying data & keys,
  *  then only calling this to free the container structure)
  *
  *  @param[in] tree the tree to empty

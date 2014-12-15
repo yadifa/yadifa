@@ -32,7 +32,7 @@ dnl
 dnl ############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 4192 $])
+AC_REVISION([$Revision: 4532 $])
 AC_INIT([yadifa],m4_esyscmd([svn info 2> /dev/null |  sed -e 's/^/$/' -e 's/$/ $/' > revision.txt;echo $(cat VERSION)-$(grep -r \$Revision: revision.txt configure.ac Makefile.am sbin/* lib/* bin/* | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[info@yadifa.eu])
 
 m4_include([m4/eurid.m4])
@@ -41,27 +41,9 @@ m4_include([m4/yadifa.m4])
 AC_CONFIG_AUX_DIR([.])
 AM_INIT_AUTOMAKE([subdir-objects -Wall -Werror tar-pax])
 
-echo -n "enabled modules: "
-
 AC_CONFIG_SUBDIRS([lib/dnscore lib/dnsdb lib/dnszone sbin/yadifad])
 
-dnstools=0
-
-AC_ARG_WITH(tools, AS_HELP_STRING([--with-tools], [build the dns tools (after 1.0.0)]),
-	[
-		AM_CONDITIONAL([DNSTOOLS], [true])
-		AC_CONFIG_SUBDIRS([lib/dnslg bin/yadifa])
-		echo "tools will be build"
-		dnstools=1
-		sleep 1
-	],
-	[
-		AM_CONDITIONAL([DNSTOOLS], [false])
-		echo "tools will not be build"
-		dnstools=0
-		sleep 1
-	])
-AC_SUBST(DNSTOOLS,$dnstools)
+AC_HAS_WITHOUT(tools, TOOLS, "build the DNS tools",,AC_CONFIG_SUBDIRS([lib/dnslg bin/yadifa]),)
 
 AC_CONFIG_HEADERS([yadifa-config.h])
 
@@ -80,9 +62,7 @@ AC_CONFIG_FILES([Makefile etc/Makefile doc/Makefile var/Makefile])
 
 AC_SYS_LARGEFILE
 
-AC_CPU_CHECK
 AC_COMPILER_CHECK
-AC_MEMALIGN_CHECK
 AC_PTHREAD_SPINLOCK_CHECK
 AC_PTHREAD_SETNAME_NP_CHECK
 

@@ -315,10 +315,10 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
     }
     else
     {
-      if(FAIL(return_value = zone_file_reader_open(file_name, &zr)))
-      {
-          return return_value;
-      }
+        if(FAIL(return_value = zone_file_reader_open(file_name, &zr)))
+        {
+            return return_value;
+        }
     }
         
     log_info("zone load: loading '%s'", file_name);    
@@ -379,16 +379,6 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
            
             //database_replace_zone(g_config->database, zone_desc, zone_pointer_out);
             
-#if defined(DEBUG) && 0
-            output_stream fos;
-            char tmp_name[PATH_MAX];
-            snformat(tmp_name, sizeof(tmp_name), "%s.dump.txt", file_name);
-            if(ISOK(file_output_stream_create(tmp_name, 0644, &fos)))
-            {   buffer_output_stream_init(&fos, &fos, 4096);
-                zdb_zone_print(zone_pointer_out, &fos);
-                output_stream_close(&fos);
-            }
-#endif
             
             return_value = SUCCESS;
         }
@@ -438,18 +428,10 @@ database_get_ixfr_answer_type(const u8 *zone_desc_origin, const host_address *zo
     memset(&current_serial,0x5a,sizeof(current_serial));
 #endif
     
-#if GERY
-    vg(soa_rdata, soa_rdata_size);
-#endif
-    
     if(FAIL(return_value = rr_soa_get_serial(soa_rdata, soa_rdata_size, &current_serial)))
     {
         return return_value;
     }
-    
-#if GERY
-    vg(&current_serial, sizeof(current_serial));
-#endif
     
     if(ISOK(return_value = ixfr_start_query(zone_desc_masters, zone_desc_origin, ttl, soa_rdata, soa_rdata_size, &is, &os, &ixfr_query)))
     {
@@ -545,7 +527,7 @@ database_get_ixfr_answer_type(const u8 *zone_desc_origin, const host_address *zo
             else
             {
                 return_value = ANSWER_NOT_ACCEPTABLE;
-                break;
+                //break;
             }
 
             /** @todo add checks */
@@ -904,7 +886,7 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
 
                         xfr_delete_axfr(zone_desc_origin, data_path);
 
-                        journal_truncate(zone_desc_origin, data_path);
+                        journal_truncate(zone_desc_origin, g_config->xfr_path);
 
                         axfr_file_available = zone_file_available = FALSE;
                     }
@@ -965,7 +947,7 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
         // at this point, the file is about to be loaded.  It is the right time to test the drop-before-load flag
     
         if(!((current_zone != NULL) && is_drop_before_load))
-        {        
+        {
             /* Avoid cpy & cat : overrun potential */
 
             return_value = zdb_zone_load(db, &zr, &zone_pointer_out, g_config->xfr_path, zone_desc_origin, ZDB_ZONE_REPLAY_JOURNAL|ZDB_ZONE_IS_SLAVE);
@@ -1002,7 +984,7 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
                 zone_pointer_out->query_access_filter = acl_get_query_access_filter(&zone_desc->ac.allow_query);
 #endif
 
-#if HAS_DNSSEC_SUPPORT != 0
+#if HAS_DNSSEC_SUPPORT
 
                /*
                 * Setup the validity period and the jitter
@@ -1194,7 +1176,6 @@ database_service_zone_load_thread(void *parms)
         else
         {
             log_notice("zone load: slave zone %{dnsname} requires download from the master", zone_desc->origin);
-            return_code = SUCCESS;
         }
     }
     

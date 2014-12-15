@@ -390,7 +390,7 @@ operates.
      instead of getting a bunch at once.  Disabled by default.
 
 `--enable-messages'
-     Will use recvmsg/sendmsg instead of recvfrom/sendto.  This is only usefull if
+     Will use recvmsg/sendmsg instead of recvfrom/sendto.  This is only useful if
      * any interface the server listens from has aliased IPs. (ie: eth0 & eth0:1)
        AND
      * the server is configured to listen to 0.0.0.0 (it's its default)

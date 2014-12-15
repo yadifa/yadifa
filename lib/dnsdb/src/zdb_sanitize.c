@@ -687,7 +687,7 @@ zdb_sanitize_rr_label_with_parent(zdb_zone *zone, zdb_rr_label *label, dnsname_s
         // note: int index = zone->origin_vector.size + 1;
         zdb_rr_label* label_stack[128];
         
-#ifndef NDEBUG
+#ifdef DEBUG
         memset(label_stack, 0xff, sizeof(label_stack));
 #endif
         

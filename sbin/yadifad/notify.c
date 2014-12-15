@@ -570,8 +570,10 @@ notify_send(host_address* ha, message_data *msgdata, u16 id, const u8 *origin, u
         else
         {
             return_code = ERROR; // wrong socket
+
+            // if we cannot get the reply, no point trying to send the query
             
-            log_err("notify: no listening interface can send to %{sockaddr}", &sa.sa);
+            log_err("notify: no listening interface can receive from %{sockaddr}", &sa.sa);
         }
     }
     else
@@ -919,6 +921,10 @@ notify_service(struct service_worker_s *worker)
             {
                 send_socket4 = intf->udp.sockfd;
             }
+            else
+            {
+                log_info("%{sockaddr} cannot be used for notification", sa);
+            }
         }
                 
         if(( send_socket6 < 0) && (intf->udp.addr->ai_family == AF_INET6))
@@ -931,25 +937,27 @@ notify_service(struct service_worker_s *worker)
             {
                 send_socket6 = intf->udp.sockfd;
             }
+            else
+            {
+                log_info("%{sockaddr} cannot be used for notification", sa);
+            }
         }
     }
 
     if((send_socket4 < 0))
     {
-        log_warn("notify: no IPv4 socket bound");
+        log_warn("notify: no usable IPv4 socket bound");
     }
     
     if((send_socket6 < 0))
     {
-        log_warn("notify: no IPv6 socket bound");
-        
-        logger_flush();
+        log_warn("notify: no usable IPv6 socket bound");
         
         if(send_socket4 < 0)
         {
-            log_warn("notify: no socket bound");
+            log_warn("notify: no usable socket bound");
             
-            dnscore_shutdown();
+            // note: shutting down now does not makes sense
         }
     }
     

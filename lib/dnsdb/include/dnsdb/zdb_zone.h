@@ -434,7 +434,7 @@ static inline bool zdb_zone_isvalid(zdb_zone *zone)
     return !zdb_zone_isinvalid(zone);
 }
 
-#ifndef NDEBUG
+#ifdef DEBUG
 
 /**
  * DEBUG

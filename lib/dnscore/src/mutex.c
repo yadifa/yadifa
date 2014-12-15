@@ -206,7 +206,7 @@ group_mutex_transferlock(group_mutex_t *mtx, u8 owner, u8 newowner)
     
 #if DEBUG_GROUP_MUTEX
 #ifdef MODULE_MSG_HANDLE
-    log_debug7("group_mutex: transfering ownership of mutex@%p '%s' from %x to %x (owned by %x)", mtx, mtx->name, owner, newowner, mtx->owner);
+    log_debug7("group_mutex: transferring ownership of mutex@%p '%s' from %x to %x (owned by %x)", mtx, mtx->name, owner, newowner, mtx->owner);
 #endif
 #endif
 

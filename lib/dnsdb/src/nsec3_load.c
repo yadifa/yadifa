@@ -156,7 +156,7 @@ nsec3_load_add_collection(nsec3_load_context *context, const u8 *entry_name, u32
 {
     /*
      * NOTE: I use MALLOC instead of ZALLOC.
-     *       ZALLOC is typically for persistant or recurrent memory
+     *       ZALLOC is typically for persistent or recurrent memory
      *       I don't know if this bloc size will be highly re-used
      */
 
@@ -606,7 +606,7 @@ nsec3_load_compile(nsec3_load_context *context)
         }
         else
         {
-#ifndef NDEBUG
+#ifdef DEBUG
             rdata_desc nsec3_desc = {TYPE_NSEC3, cr->rdata_size, cr->rdata};
             log_debug("nsec3: discarded: %{digest32h} %{typerdatadesc}", cr->digest, &nsec3_desc);
 #endif

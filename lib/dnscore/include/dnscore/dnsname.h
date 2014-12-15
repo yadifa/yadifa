@@ -160,7 +160,7 @@ typedef u8** dnslabel_vector_reference;
 typedef u8*const* const_dnslabel_stack_reference;
 typedef u8*const* const_dnslabel_vector_reference;
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #define DEBUG_RESET_dnsname(name) memset(&(name),0x5b,sizeof(dnsname_stack))
 #else
 #define DEBUG_RESET_dnsname(name)

@@ -62,7 +62,7 @@ extern "C" {
     #define BYTEARRAY_DYNAMIC           2
 
     /*
-     * The internal context has been allocated by a malloc (the default exept if the _static variant is used)
+     * The internal context has been allocated by a malloc (the default except if the _static variant is used)
      * YOU MOSTLY WILL NOT USE THAT FLAG
      */
     

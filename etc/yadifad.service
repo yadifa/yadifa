@@ -1,0 +1,14 @@
+[Unit]
+Description=YADIFA Domain Name Server
+Documentation=man:yadifa(8)
+After=network.target
+
+[Service]
+Type=simple
+PIDFile=/var/run/yadifad.pid
+ExecStart=/usr/sbin/yadifad
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

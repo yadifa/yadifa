@@ -16,27 +16,30 @@
 /* T1000 has a Niagara cpu */
 /* #undef HAS_CPU_NIAGARA */
 
-/* Define this to enable the remote control (devs only) */
-/* #undef HAS_CTRL */
+/* remote control disabled. */
+#define HAS_CTRL 0
 
 /* always on */
 #define HAS_DNSSEC_SUPPORT 1
 
-/* Define this to enable dynamic provisioning */
-/* #undef HAS_DYNAMIC_PROVISIONING */
-
-/* Enable dynamic update support */
+/* dynamic update support disabled. */
 #define HAS_DYNUPDATE_SUPPORT 1
 
-/* Enable MASTER support */
+/* where to put the log files */
+#define HAS_LOGDIR 0
+
+/* DNS master disabled. */
 #define HAS_MASTER_SUPPORT 1
 
-/* Define this to enable slow but safe memory accesses */
+/* Define this to enable slow but safe unaligned memory accesses */
 #define HAS_MEMALIGN_ISSUES 0
 
-/* Use messages instead of send. Needed if you have many IPs aliased on the
-   same interface. */
-/* #undef HAS_MESSAGES_SUPPORT */
+/* use messages instead of send (needed if you use more than one IP aliased on
+   the same network interface) disabled. */
+#define HAS_MESSAGES_SUPPORT 0
+
+/* always off */
+#define HAS_MIRROR_SUPPORT 0
 
 /* always on */
 #define HAS_NSEC3_SUPPORT 1
@@ -44,8 +47,8 @@
 /* always on */
 #define HAS_NSEC_SUPPORT 1
 
-/* Define this to enable NSID support */
-/* #undef HAS_NSID_SUPPORT */
+/* NSID support disabled. */
+#define HAS_NSID_SUPPORT 1
 
 /* The system supports thread names */
 #define HAS_PTHREAD_SETNAME_NP 1
@@ -53,11 +56,17 @@
 /* The system supports spinlocks */
 #define HAS_PTHREAD_SPINLOCK 1
 
-/* Define this to enable DNS RRL */
-/* #undef HAS_RRL_SUPPORT */
+/* DNS Response Rate Limiter disabled. */
+#define HAS_RRL_SUPPORT 1
 
-/* Do verify and/or generate RRSIG for zones */
+/* RRSIG verification and generation for zones disabled. */
 #define HAS_RRSIG_MANAGEMENT_SUPPORT 1
+
+/* The sockaddr_in6 struct has an sin6_len field */
+#define HAS_SOCKADDR_IN6_SIN6_LEN 0
+
+/* The sockaddr_in struct has an sin_len field */
+#define HAS_SOCKADDR_IN_SIN_LEN 0
 
 /* The sockaddr struct has an sa_len field */
 #define HAS_SOCKADDR_SA_LEN 0
@@ -65,14 +74,23 @@
 /* always on */
 #define HAS_TSIG_SUPPORT 1
 
+/* where to put the log files */
+/* #undef HAS_WITH_LOGDIR */
+
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #define HAVE_ARPA_INET_H 1
+
+/* Define to 1 if you have the <byteswap.h> header file. */
+#define HAVE_BYTESWAP_H 1
 
 /* Define to 1 if you have the `bzero' function. */
 /* #undef HAVE_BZERO */
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #define HAVE_DLFCN_H 1
+
+/* Define to 1 if you have the <endian.h> header file. */
+#define HAVE_ENDIAN_H 1
 
 /* Define to 1 if you have the <fcntl.h> header file. */
 #define HAVE_FCNTL_H 1
@@ -95,9 +113,6 @@
 /* Define to 1 if you have the `c' library (-lc). */
 #define HAVE_LIBC 1
 
-/* Define to 1 if you have the `crypto' library (-lcrypto). */
-#define HAVE_LIBCRYPTO 1
-
 /* Define to 1 if you have the `dnscore' library (-ldnscore). */
 /* #undef HAVE_LIBDNSCORE */
 
@@ -113,17 +128,14 @@
 /* Define to 1 if you have the `pthread' library (-lpthread). */
 #define HAVE_LIBPTHREAD 1
 
-/* Define to 1 if you have the `socket' library (-lsocket). */
-/* #undef HAVE_LIBSOCKET */
-
-/* Define to 1 if you have the `ssl' library (-lssl). */
-#define HAVE_LIBSSL 1
-
 /* Define to 1 if you have the <linux/limits.h> header file. */
 #define HAVE_LINUX_LIMITS_H 1
 
 /* Define to 1 if the system has the type `long long'. */
 #define HAVE_LONG_LONG 1
+
+/* Define to 1 if you have the <machine/endian.h> header file. */
+/* #undef HAVE_MACHINE_ENDIAN_H */
 
 /* Define to 1 if you have the <memory.h> header file. */
 #define HAVE_MEMORY_H 1
@@ -131,11 +143,17 @@
 /* Define to 1 if you have the `memset' function. */
 /* #undef HAVE_MEMSET */
 
+/* Define to 1 if you have the <netinet6/in6.h> header file. */
+/* #undef HAVE_NETINET6_IN6_H */
+
 /* Define to 1 if you have the <netinet/in.h> header file. */
 #define HAVE_NETINET_IN_H 1
 
 /* Define to 1 if you have the <ppc/limits.h> header file. */
 /* #undef HAVE_PPC_LIMITS_H */
+
+/* Define to 1 if you have the <pthread.h> header file. */
+#define HAVE_PTHREAD_H 1
 
 /* Define to 1 if you have the `select' function. */
 /* #undef HAVE_SELECT */
@@ -150,6 +168,9 @@
 /* Define to 1 if you have the <stdint.h> header file. */
 #define HAVE_STDINT_H 1
 
+/* Define to 1 if you have the <stdio.h> header file. */
+#define HAVE_STDIO_H 1
+
 /* Define to 1 if you have the <stdlib.h> header file. */
 #define HAVE_STDLIB_H 1
 
@@ -162,6 +183,12 @@
 /* Define to 1 if you have the <syslog.h> header file. */
 #define HAVE_SYSLOG_H 1
 
+/* Define to 1 if you have the <sys/byteorder.h> header file. */
+/* #undef HAVE_SYS_BYTEORDER_H */
+
+/* Define to 1 if you have the <sys/endian.h> header file. */
+/* #undef HAVE_SYS_ENDIAN_H */
+
 /* Define to 1 if you have the <sys/select.h> header file. */
 #define HAVE_SYS_SELECT_H 1
 
@@ -170,6 +197,9 @@
 
 /* Define to 1 if you have the <sys/stat.h> header file. */
 #define HAVE_SYS_STAT_H 1
+
+/* Define to 1 if you have the <sys/syslimits.h> header file. */
+/* #undef HAVE_SYS_SYSLIMITS_H */
 
 /* Define to 1 if you have the <sys/time.h> header file. */
 #define HAVE_SYS_TIME_H 1
@@ -198,6 +228,18 @@
 /* Define to 1 if `vfork' works. */
 /* #undef HAVE_WORKING_VFORK */
 
+/* BSD */
+#define IS_BSD_FAMILY 0
+
+/* OSX */
+#define IS_DARWIN_OS 0
+
+/* LINUX */
+#define IS_LINUX_FAMILY 1
+
+/* SOLARIS */
+#define IS_SOLARIS_FAMILY 0
+
 /* Define to 1 if `lstat' dereferences a symlink specified with a trailing
    slash. */
 /* #undef LSTAT_FOLLOWS_SLASHED_SYMLINK */
@@ -216,7 +258,7 @@
 #define PACKAGE_NAME "dnsdb"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "dnsdb 2.0.0-4192"
+#define PACKAGE_STRING "dnsdb 2.0.4-4585"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "dnsdb"
@@ -225,7 +267,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.0.0-4192"
+#define PACKAGE_VERSION "2.0.4-4585"
 
 /* Define as the return type of signal handlers (`int' or `void'). */
 #define RETSIGTYPE void
@@ -246,7 +288,7 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* Version number of package */
-#define VERSION "2.0.0-4192"
+#define VERSION "2.0.4-4585"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */

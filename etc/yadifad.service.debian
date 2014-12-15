@@ -1,0 +1,10 @@
+[Unit]
+Description=YADIFA Domain Name Server
+Documentation=man:yadifa(8)
+After=network.target
+
+[Service]
+ExecStart=/usr/sbin/yadifad -c /etc/yadifa/yadifad.conf
+
+[Install]
+WantedBy=multi-user.target

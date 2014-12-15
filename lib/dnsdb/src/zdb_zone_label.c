@@ -567,7 +567,7 @@ zdb_zone_label_delete(zdb * db, dnsname_vector* name, u16 zclass) // mutex check
 
 
 
-#ifndef NDEBUG
+#ifdef DEBUG
 
 /**
  * DEBUG

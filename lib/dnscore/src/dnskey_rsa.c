@@ -237,7 +237,7 @@ rsa_signdigest(dnssec_key *key, u8 *digest, u32 digest_len, u8 *output)
 
     int err = RSA_sign(key->nid, digest, digest_len, output, &output_size, key->key.rsa);
 
-#ifndef NDEBUG
+#ifdef DEBUG
     if(err == 0)
     {
         ERR_print_errors_fp(stderr);
@@ -285,10 +285,18 @@ rsa_verifydigest(dnssec_key* key, u8* digest, u32 digest_len, u8* signature, u32
 static RSA*
 rsa_public_load(const u8* rdata, u16 rdata_size)
 {
+    // rdata_size < 4 is harsher than needed but anyway such a small key would
+    // and this avoid another test later be worthless
+    
+    if(rdata == NULL || rdata_size < 4)
+    {
+        return NULL;
+    }
+    
     const u8 *inptr = rdata;
     u32 n;
     n = *inptr++;
-    rdata_size--;
+    rdata_size--;       // rdata_size is at least 1, so it is OK
     if(n == 0)
     {
         n = *inptr++;
@@ -296,14 +304,37 @@ rsa_public_load(const u8* rdata, u16 rdata_size)
         n |= *inptr++;
         rdata_size-=2;
     }
+    
+    if(rdata_size < n + 1)
+    {
+        return NULL;
+    }
 
     BIGNUM* exponent;
     BIGNUM* modulus;
 
     exponent = BN_bin2bn(inptr, n, NULL);
+    
+    if(exponent == NULL)
+    {
+        log_err("rsa_public_load: NULL exponent");
+        
+        return NULL;
+    }
+    
     inptr += n;
     n = rdata_size - n;
+    
     modulus = BN_bin2bn(inptr, n, NULL);
+    
+    if(modulus == NULL)
+    {
+        log_err("rsa_public_load: NULL modulus");
+        
+        BN_free(exponent);
+        
+        return NULL;
+    }
 
     BN_CTX *ctx;
     RSA* rsa;
@@ -448,7 +479,7 @@ ya_result rsa_initinstance(RSA* rsa, u8 algorithm, u16 flags, const char* origin
         return nid;
     }
 
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(rdata, 0xff, sizeof (rdata));
 #endif
 
@@ -560,7 +591,7 @@ rsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key**
     rdata += 4;
     rdata_size -= 4;
     
-    ya_result return_value = ERROR;
+    ya_result return_value = DNSSEC_ERROR_KEYRING_KEY_IS_INVALID;
 
     RSA *rsa = rsa_public_load(rdata, rdata_size);
     

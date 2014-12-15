@@ -75,18 +75,10 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+
 #
-#       SVN Program:
-#               $URL: $
+# ALL
 #
-#       Last Update:
-#               $Date:$
-#               $Revision: 1717 $
-#
-#       Purpose:
-#               Settings common to all makefiles
-#
-################################################################################
 
 ################################################################################
 #
@@ -116,18 +108,6 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-################################################################################
-#
-#       SVN Program:
-#               $URL: $
-#
-#       Last Update:
-#               $Date:$
-#               $Revision: 1717 $
-#
-#       Purpose:
-#               Labels common to all makefiles
 #
 ################################################################################
 
@@ -205,69 +185,88 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 	$(srcdir)/server-config.h.in depcomp $(dist_noinst_DATA) \
 	$(noinst_HEADERS) COPYING compile config.guess config.sub \
 	install-sh missing ltmain.sh
+@USES_SUNC_TRUE@am__append_1 = 
+@USES_SUNC_FALSE@am__append_2 = -O0
+@HAS_CC_NO_IDENT_TRUE@am__append_3 = -fno-ident
+@HAS_CC_ANSI_TRUE@am__append_4 = -ansi
+@HAS_CC_PEDANTIC_TRUE@am__append_5 = -pedantic
+@HAS_CC_WALL_TRUE@am__append_6 = -Wall
+@HAS_CC_MISSING_FIELD_INITIALIZERS_TRUE@am__append_7 = -Werror=missing-field-initializers
+@HAS_CC_STD_GNU99_TRUE@am__append_8 = -std=gnu99
+@HAS_CC_STD_C99_TRUE@@HAS_CC_STD_GNU99_FALSE@am__append_9 = -std=c99
+@HAS_CC_STD_GNU99_FALSE@@HAS_CC_XC99_TRUE@am__append_10 = -xc99
+@HAS_CC_TUNE_NATIVE_TRUE@am__append_11 = -mtune=native
+@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_12 = -m64
+@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_13 = -m64
+@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_14 = -m32
+@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_15 = -m32
+
+#
+# DEBUG
+#
+@HAS_CC_G3_TRUE@am__append_16 = -g3
+@HAS_CC_G3_FALSE@@HAS_CC_G_TRUE@am__append_17 = -g
+@HAS_CC_DWARF4_TRUE@am__append_18 = -gdwarf-4
+@HAS_CC_DWARF3_TRUE@@HAS_CC_DWARF4_FALSE@am__append_19 = -gdwarf-3
 
 #
 # Intel C Compiler
 #
+###############################################################################
 
 #ICC
 #IPO= -ipo (need to use the intel xiar instead of ar)
-@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_1 = -DLTO -ipo
-@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_2 = -ipo
-@USES_ICC_TRUE@am__append_3 = -DUSES_ICC -ansi-alias -std=c99 -U__STRICT_ANSI__ -I$(abs_builddir) -I$(abs_srcdir)/include
-@USES_ICC_TRUE@am__append_4 = -O0 -g -DMODE_DEBUG_ICC
+@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_20 = -DLTO -ipo
+@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_21 = -ipo
+@USES_ICC_TRUE@am__append_22 = -DUSES_ICC 
+@HAS_CC_ANSI_ALIAS_TRUE@@USES_ICC_TRUE@am__append_23 = -ansi-alias -U__STRICT_ANSI__ 
+@USES_ICC_TRUE@am__append_24 = -DMODE_DEBUG_ICC
 
 #
 # LLVM Clang
 #
+###############################################################################
 
 # CLANG
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_5 = -DLTO -flto
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_6 = -flto
-@USES_CLANG_TRUE@am__append_7 = -mtune=native -DUSES_LLVM \
-@USES_CLANG_TRUE@	-I$(abs_builddir) -I$(abs_srcdir)/include
-@USES_CLANG_TRUE@am__append_8 = -O0 -g -DMODE_DEBUG_CLANG
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_25 = -DLTO -flto
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_26 = -flto
+@USES_CLANG_TRUE@am__append_27 = -DUSES_LLVM
+@USES_CLANG_TRUE@am__append_28 = -DMODE_DEBUG_CLANG
 
-# THIS WILL BREAK THE CONFIGURE ON EXTERNAL USERS OF THE LIBS IF INSTALLED AS DEBUG
-# FUTURE SOLUTION: ADD A _d SUFFIX TO LIBS WHEN BUILD IN DEBUG ?
-#
-#if HAS_FADDRESS_SANITIZER
-#DEBUGFLAGS+=-fsanitize=address
-#endif
-#
-#
-#if HAS_FNO_OMIT_FRAME_POINTER
-#DEBUGFLAGS+=-fno-omit-frame-pointer
-#endif
-#
-#if HAS_CATCH_UNDEFINED_BEHAVIOR
-#DEBUGFLAGS+=-fcatch_undefined_behavior
-#endif
+# Note: add a _d suffix for debug builds ?
 
 #
 # Gnu C
 #
+###############################################################################
 
 #GCC
-@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_9 = -mcpu=niagara
-@HAS_CPU_AMDINTEL_TRUE@@USES_GCC_TRUE@am__append_10 = -mtune=native
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_11 = -DLTO -flto -fwhole-program -ffat-lto-objects
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_12 = -flto -fwhole-program -ffat-lto-objects
-@USES_GCC_TRUE@am__append_13 = -fno-ident -ansi -pedantic -std=gnu99 -I$(abs_builddir) -I$(abs_srcdir)/include
-@IS_BSD_FAMILY_FALSE@@USES_GCC_TRUE@am__append_14 = -g3 -gdwarf-2 -O0 -DMODE_DEBUG_GCC -rdynamic
+@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_29 = -mcpu=niagara
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_30 = -DLTO -flto -fwhole-program -ffat-lto-objects
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_31 = -flto -fwhole-program -ffat-lto-objects
+@USES_GCC_TRUE@am__append_32 = -DUSES_GCC
+@USES_GCC_TRUE@am__append_33 = -DMODE_DEBUG_GCC
+@USES_SUNC_TRUE@am__append_34 = -DUSES_SUNC
+@USES_SUNC_TRUE@am__append_35 = -DMODE_DEBUG_SUNC
 
-# one of these: address,thread,undefined
-@HAS_FADDRESS_SANITIZER_TRUE@@IS_BSD_FAMILY_FALSE@@USES_GCC_TRUE@am__append_15 = -fsanitize=address
-@IS_BSD_FAMILY_TRUE@@USES_GCC_TRUE@am__append_16 = -g -O0 -DMODE_DEBUG_GCC -rdynamic
+# Note: add a _d suffix for debug builds ?
+
+#
+# Unknown compiler
+#
+###############################################################################
 
 # if an unknown compiler is used, it should have its own section
-@USES_UNKNOWN_TRUE@am__append_17 = -DUSES_UNKNOWN_COMPILER -I$(abs_builddir) -I$(abs_srcdir)/include
-@USES_UNKNOWN_TRUE@am__append_18 = -g -O0
+@USES_UNKNOWN_TRUE@am__append_36 = -DUSES_UNKNOWN_COMPILER
+@USES_UNKNOWN_TRUE@am__append_37 = -DMODE_DEBUG_UNKNOWN
 
 #
 # Some BSD-based OSes need this
 #
-@IS_BSD_FAMILY_TRUE@am__append_19 = -std=c99 -I./include
+@IS_BSD_FAMILY_TRUE@am__append_38 = -I./include
+@IS_SOLARIS_FAMILY_TRUE@am__append_39 = -D_POSIX_PTHREAD_SEMANTICS
+@HAS_CC_RDYNAMIC_TRUE@am__append_40 = -rdynamic
+@HAS_CC_RDYNAMIC_TRUE@am__append_41 = -rdynamic
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/../../m4/eurid.m4 \
@@ -403,11 +402,49 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GREP = @GREP@
+HAS_BIG_ENDIAN = @HAS_BIG_ENDIAN@
+HAS_CC_ADDRESS_SANITIZER_CHECK = @HAS_CC_ADDRESS_SANITIZER_CHECK@
+HAS_CC_ANSI = @HAS_CC_ANSI@
+HAS_CC_ANSI_ALIAS = @HAS_CC_ANSI_ALIAS@
+HAS_CC_CATCH_UNDEFINED_BEHAVIOR = @HAS_CC_CATCH_UNDEFINED_BEHAVIOR@
+HAS_CC_DWARF2 = @HAS_CC_DWARF2@
+HAS_CC_DWARF3 = @HAS_CC_DWARF3@
+HAS_CC_DWARF4 = @HAS_CC_DWARF4@
+HAS_CC_EXCEPTIONS = @HAS_CC_EXCEPTIONS@
+HAS_CC_G = @HAS_CC_G@
+HAS_CC_G3 = @HAS_CC_G3@
+HAS_CC_M32 = @HAS_CC_M32@
+HAS_CC_M64 = @HAS_CC_M64@
+HAS_CC_MISSING_FIELD_INITIALIZERS = @HAS_CC_MISSING_FIELD_INITIALIZERS@
+HAS_CC_NO_IDENT = @HAS_CC_NO_IDENT@
+HAS_CC_NO_OMIT_FRAME_POINTER = @HAS_CC_NO_OMIT_FRAME_POINTER@
+HAS_CC_PEDANTIC = @HAS_CC_PEDANTIC@
+HAS_CC_RDYNAMIC = @HAS_CC_RDYNAMIC@
+HAS_CC_SANITIZE_ADDRESS = @HAS_CC_SANITIZE_ADDRESS@
+HAS_CC_STACK_PROTECTOR = @HAS_CC_STACK_PROTECTOR@
+HAS_CC_STD_C99 = @HAS_CC_STD_C99@
+HAS_CC_STD_GNU99 = @HAS_CC_STD_GNU99@
+HAS_CC_TUNE_NATIVE = @HAS_CC_TUNE_NATIVE@
+HAS_CC_WALL = @HAS_CC_WALL@
+HAS_CC_XC99 = @HAS_CC_XC99@
+HAS_CTRL = @HAS_CTRL@
+HAS_DYNUPDATE_SUPPORT = @HAS_DYNUPDATE_SUPPORT@
+HAS_LITTLE_ENDIAN = @HAS_LITTLE_ENDIAN@
+HAS_LOGDIR = @HAS_LOGDIR@
+HAS_MASTER_SUPPORT = @HAS_MASTER_SUPPORT@
+HAS_MESSAGES_SUPPORT = @HAS_MESSAGES_SUPPORT@
+HAS_NSID_SUPPORT = @HAS_NSID_SUPPORT@
+HAS_RRL_SUPPORT = @HAS_RRL_SUPPORT@
+HAS_RRSIG_MANAGEMENT_SUPPORT = @HAS_RRSIG_MANAGEMENT_SUPPORT@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
+IS_BSD_FAMILY = @IS_BSD_FAMILY@
+IS_DARWIN_OS = @IS_DARWIN_OS@
+IS_LINUX_FAMILY = @IS_LINUX_FAMILY@
+IS_SOLARIS_FAMILY = @IS_SOLARIS_FAMILY@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
@@ -477,6 +514,7 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
+logdir = @logdir@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -503,31 +541,47 @@ noinst_HEADERS = common-config.h query-result.h yadifa.h \
 #
 #
 #
-AM_CFLAGS = -Wall -Werror=missing-field-initializers \
-	-D_FILE_OFFSET_BITS=64 -g $(am__append_1) $(am__append_3) \
-	$(am__append_5) $(am__append_7) $(am__append_9) \
-	$(am__append_10) $(am__append_11) $(am__append_13) \
-	$(am__append_17) $(am__append_19) $(LOCALFLAGS) $(YCFLAGS)
-AM_LDFLAGS = $(am__append_2) $(am__append_6) $(am__append_12) \
-	$(YLDFLAGS)
-DEBUGFLAGS = $(am__append_4) $(am__append_8) $(am__append_14) \
-	$(am__append_15) $(am__append_16) $(am__append_18)
-LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"'
+AM_CFLAGS = -D_FILE_OFFSET_BITS=64 -I$(abs_builddir) \
+	-I$(abs_srcdir)/include $(am__append_3) $(am__append_4) \
+	$(am__append_5) $(am__append_6) $(am__append_7) \
+	$(am__append_8) $(am__append_9) $(am__append_10) \
+	$(am__append_11) $(am__append_12) $(am__append_14) \
+	$(am__append_20) $(am__append_22) $(am__append_23) \
+	$(am__append_25) $(am__append_27) $(am__append_29) \
+	$(am__append_30) $(am__append_32) $(am__append_34) \
+	$(am__append_36) $(am__append_38) $(am__append_39) \
+	$(LOCALFLAGS) $(YCFLAGS)
+AM_LDFLAGS = $(am__append_13) $(am__append_15) $(am__append_21) \
+	$(am__append_26) $(am__append_31) $(YLDFLAGS)
+DEBUGFLAGS = $(am__append_1) $(am__append_2) $(am__append_16) \
+	$(am__append_17) $(am__append_18) $(am__append_19) \
+	$(am__append_24) $(am__append_28) $(am__append_33) \
+	$(am__append_35) $(am__append_37)
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"'
 @HAS_LTO_SUPPORT_FALSE@@USES_CLANG_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@AM_AR = llvm-ar
 @HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@AM_AR = xiar
 @USES_GCC_TRUE@AM_AR = ar
+
+#
+# Sun C
+#
+###############################################################################
+
+# SUNC
+@USES_SUNC_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_FALSE@@USES_CLANG_TRUE@AM_LD = ld
 @HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@AM_LD = ld.gold
 @USES_GCC_TRUE@AM_LD = ld
 @USES_ICC_TRUE@AM_LD = ld
+@USES_SUNC_TRUE@AM_LD = ld
 YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -DCMR
 YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP
 YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
 YSCFLAGS = $(YRCFLAGS)
-YRLDFLAGS = -g
-YPLDFLAGS = -pg
-YDLDFLAGS = -g
+YRLDFLAGS = 
+YPLDFLAGS = -pg $(am__append_40)
+YDLDFLAGS = -g $(am__append_41)
 YSLDFLAGS = $(YRLDFLAGS)
 AM_MAKEFLAGS = MODE_CFLAGS="$(AM_CFLAGS)" CC=$(CC) AR=$(AM_AR) LD=$(AM_LD)
 YCFLAGS = $(YSCFLAGS)
@@ -1037,17 +1091,19 @@ uninstall-am: uninstall-binPROGRAMS
 release:
 	echo YCFLAGS=$(YRCFLAGS)
 	echo YLDFLAGS=$(YRLDFLAGS)
-	$(MAKE) all "YCFLAGS=$(YRCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YRLDFLAGS)"
+	$(MAKE) all "YCFLAGS=$(YRCFLAGS)" "YLDFLAGS=$(YRLDFLAGS)"
 
 profile:
 	echo YCFLAGS=$(YPCFLAGS)
 	echo YLDFLAGS=$(YPLDFLAGS)
-	$(MAKE) all "YCFLAGS=$(YPCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YPLDFLAGS)"
+	$(MAKE) all "YCFLAGS=$(YPCFLAGS)" "YLDFLAGS=$(YPLDFLAGS)"
 
 debug:
 	echo YCFLAGS=$(YDCFLAGS)
 	echo YLDFLAGS=$(YDLDFLAGS)
-	$(MAKE) all "YCFLAGS=$(YDCFLAGS)" "CFLAGS=" "YLDFLAGS=$(YDLDFLAGS)"
+	$(MAKE) all "YCFLAGS=$(YDCFLAGS)" "YLDFLAGS=$(YDLDFLAGS)"
+
+rebuild: clean debug
 
 buildinfo.h: config.log
 	echo \#pragma once > buildinfo.h 2> /dev/null

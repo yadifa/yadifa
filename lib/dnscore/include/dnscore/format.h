@@ -104,7 +104,7 @@ extern "C" {
  * %c           : char   , prints the 8-bits char on the output
  * %w           : format_writer, calls the format_writer callback to print on the output
  * 
- * Format extention mechanism:
+ * Format extension mechanism:
  * 
  * "%{registeredformatname}" : void*, prints the pointed value on the output
  *                           : use ya_result format_registerclass(format_handler_descriptor* fhd) for registration

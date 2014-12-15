@@ -65,7 +65,7 @@
 
 extern logger_handle *g_dnssec_logger;
 
-#ifdef NDEBUG
+#ifndef DEBUG
 #undef NSEC3_UPDATE_ZONE_DEBUG
 #define NSEC3_UPDATE_ZONE_DEBUG 0
 #endif
@@ -110,7 +110,7 @@ nsec3_update_rrsig_commit(zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttl
         zdb_packed_ttlrdata *rrsig_record = *rrsig_recordp;
         /* This is why my "next" pointer is ALWAYS the first field */
         
-#ifndef NDEBUG
+#ifdef DEBUG
         rdata_desc rdatadesc = {TYPE_RRSIG, ZDB_PACKEDRECORD_PTR_RDATASIZE(sig), ZDB_PACKEDRECORD_PTR_RDATAPTR(sig)};
         log_debug("rrsig: deleting: %{digest32h} %{typerdatadesc}", item->digest, &rdatadesc);
 #endif
@@ -131,7 +131,7 @@ nsec3_update_rrsig_commit(zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttl
                      */
 
                     *rrsig_recordp = rrsig_record->next;
-    #ifndef NDEBUG
+    #ifdef DEBUG
                     rrsig_record->next = (zdb_packed_ttlrdata*)~0;
     #endif
                     ZDB_RECORD_ZFREE(rrsig_record);
@@ -173,7 +173,7 @@ nsec3_update_rrsig_commit(zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttl
         log_debug("rrsig_update_commit : '%{dnsname}' adding RRSIG %{dnstype}",label->name,&type);
          */
 
-#ifndef NDEBUG
+#ifdef DEBUG
         rdata_desc rdatadesc={TYPE_RRSIG, ZDB_PACKEDRECORD_PTR_RDATASIZE(sig), ZDB_PACKEDRECORD_PTR_RDATAPTR(sig)};
         log_debug("rrsig: adding: %{digest32h} %{typerdatadesc}", item->digest, &rdatadesc);
 #endif

@@ -37,7 +37,7 @@
  *
  *  Definitions of the Balanced Tree structures and functions for the database.
  *
- *  btree is the choosen balanced tree for the database.
+ *  btree is the chosen balanced tree for the database.
  *  The current choice right now is AVL Tree.
  *  It could be set to something else. ie: Red-Black Tree.
  *

@@ -321,7 +321,7 @@ void logger_set_level(u8 level);
  *      MACROS
  */
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #define DERROR_MSG(...) logger_handle_msg(MODULE_MSG_HANDLE,MSG_ERR,__VA_ARGS__)
 #else
 #define DERROR_MSG(...)   /* nothing */

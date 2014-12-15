@@ -312,6 +312,11 @@ dsa_verifydigest(dnssec_key* key, u8* digest, u32 digest_len, u8* signature, u32
 static DSA*
 dsa_public_load(const u8* rdata, u16 rdata_size)
 {
+    if(rdata == NULL)
+    {
+        return NULL;
+    }
+    
     const u8 *inptr = rdata;
     u32 t;
     t = *inptr;
@@ -331,12 +336,42 @@ dsa_public_load(const u8* rdata, u16 rdata_size)
     BIGNUM* y;
 
     q = BN_bin2bn(inptr, 20, NULL);
+    if(q == NULL)
+    {
+        log_err("dsa_public_load: NULL q");
+        
+        return NULL;
+    }
     inptr += 20;
     p = BN_bin2bn(inptr, pgy_len, NULL);
+    if(p == NULL)
+    {
+        log_err("dsa_public_load: NULL p");
+        BN_free(q);
+        
+        return NULL;
+    }
     inptr += pgy_len;
     g = BN_bin2bn(inptr, pgy_len, NULL);
+    if(g == NULL)
+    {
+        log_err("dsa_public_load: NULL g");
+        BN_free(q);
+        BN_free(p);
+        
+        return NULL;
+    }
     inptr += pgy_len;
     y = BN_bin2bn(inptr, pgy_len, NULL);
+    if(y == NULL)
+    {
+        log_err("dsa_public_load: NULL y");
+        BN_free(q);
+        BN_free(p);
+        BN_free(g);
+        
+        return NULL;
+    }
 
     DSA* dsa;
     dsa = DSA_new();
@@ -522,7 +557,7 @@ ya_result dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin
         return nid;
     }
 
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(rdata, 0xff, sizeof (rdata));
 #endif
 

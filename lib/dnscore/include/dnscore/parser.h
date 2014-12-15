@@ -94,6 +94,7 @@ typedef struct parser_delimiter_s parser_delimiter_s;
 #define PARSER_NO_MARK_SET                      PARSER_ERROR_CODE(0x000C)
 #define PARSER_REACHED_END_OF_LINE              PARSER_ERROR_CODE(0x000D)
 #define PARSER_FOUND_WORD                       PARSER_ERROR_CODE(0x000E)
+#define PARSER_REACHED_END_OF_FILE              PARSER_ERROR_CODE(0x000F)
 
 struct parser_token_s
 {
@@ -115,13 +116,13 @@ struct parser_s
     parser_delimiter_s *multiline_delimiters;
         
     // ie: # ;
-    char *comment_marker;
+    const char *comment_marker;
         
     // ie: SPACE TAB
-    char *blank_marker;
+    const char *blank_marker;
         
     // ie: BACKSLASH
-    char *escape_characters;
+    const char *escape_characters;
         
     // STATE MACHINE
     
@@ -307,7 +308,15 @@ parser_next_word(parser_s *p)
 
         if(return_code & (PARSER_EOL|PARSER_EOF))
         {
-            return PARSER_REACHED_END_OF_LINE;
+            if(return_code & PARSER_EOL)
+            {
+                return PARSER_REACHED_END_OF_LINE;
+            }
+            else
+            {
+                return PARSER_REACHED_END_OF_FILE;
+            }
+            
         }
     }
 }

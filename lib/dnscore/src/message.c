@@ -598,13 +598,23 @@ message_process_answer_additionals(message_data *mesg, u8* s, u16 ar_count)
 
 /* Defines a mask and the expected result for the 4 first 16 bits of the header */
 #ifdef WORDS_BIGENDIAN
-#define MESSAGE_HEADER_MASK     (( (u64) 0 )                                      |  \
-        ( (u64) (/* QR_BITS |*/ AA_BITS | TC_BITS ) << 24 )  |  \
-        ( (u64) ( RA_BITS | RCODE_BITS ) << 16 )         |  \
-        ( (u64) 1LL << 0 ))
-#define MESSAGE_HEADER_RESULT   ( ((u64) 1LL) << 0 )
+#define MESSAGE_HEADER_MASK     (( (u64) 0 )                        |  \
+        ( ((u64) ( QR_BITS | AA_BITS | RA_BITS | TC_BITS )) << 40 ) |  \
+        ( ((u64) ( RA_BITS | RCODE_BITS )) << 32 )                  |  \
+        ( ((u64) 1LL) << 16 ))
 
+#define MESSAGE_HEADER_RESULT   ( ((u64) 1LL) << 16 )
+
+/* Bind gives "RA" here (seems irrelevant, nonsense, but we need to accept it) */
+
+#define NOTIFY_MESSAGE_HEADER_MASK     (( (u64) 0LL )             |  \
+        ( ((u64) ( TC_BITS )) << 40 )                             |  \
+        ( ((u64) 1LL) << 16 ))
+
+#define NOTIFY_MESSAGE_HEADER_RESULT   ( ((u64) 1LL) << 16 )
+   
 #else
+
 #define MESSAGE_HEADER_MASK     (( (u64) 0LL )                      |  \
         ( ((u64) ( QR_BITS | AA_BITS | RA_BITS | TC_BITS )) << 16 ) |  \
         ( ((u64) ( RA_BITS | RCODE_BITS )) << 24 )                  |  \
@@ -617,8 +627,6 @@ message_process_answer_additionals(message_data *mesg, u8* s, u16 ar_count)
 #define NOTIFY_MESSAGE_HEADER_MASK     (( (u64) 0LL )             |  \
         ( ((u64) ( TC_BITS )) << 16 )                             |  \
         ( ((u64) 1LL) << 40 ))
-
-//( ((u64) ( /*RA_BITS | RCODE_BITS*/ )) << 24 )            |
 
 #define NOTIFY_MESSAGE_HEADER_RESULT   ( ((u64) 1LL) << 40 )
 
@@ -1916,7 +1924,7 @@ message_query_tcp_with_timeout(message_data *mesg, host_address *address,  u8 to
         if(ISOK(return_value = output_stream_write(&os, &mesg->buffer_tcp_len[0], mesg->send_length + 2)))
         { 
 #if DEBUG
-            formatln("message_query_tcp_with_timeouot C");
+            formatln("message_query_tcp_with_timeout C");
 #endif
             output_stream_flush(&os);
 
@@ -2051,15 +2059,6 @@ message_query_udp_with_time_out(message_data *mesg, host_address *server, int se
 
     /*    ------------------------------------------------------------    */ 
 
-#if GERY
-    osprintln(termout, "FOR TIM:");
-
-    osprint_dump(termout, mesg->buffer, mesg->send_length, 16, OSPRINT_DUMP_LAYOUT_GERY|OSPRINT_DUMP_HEXTEXT);
-    osprintln(termout,"");
-
-    osformatln(termout, "VERSION: %d", server->version);
-    osformatln(termout, "PORT   : %d", ntohs(server->port));
-#endif
     
     if(ISOK(return_value = host_address2sockaddr(&sa, server)))
     {
@@ -2073,14 +2072,10 @@ message_query_udp_with_time_out(message_data *mesg, host_address *server, int se
             tcp_set_recvtimeout(s, seconds, useconds); /* half a second for UDP is a lot ... */
 
             mesg->received = 0;
-#if GERY
-            osformatln(termout, "sending %d bytes to %{sockaddr}", mesg->send_length, &sa);
-#endif
 #ifdef DEBUG
             log_debug("sending %d bytes to %{sockaddr} (%i)", mesg->send_length, &sa, sa_len);
             log_memdump_ex(g_system_logger, MSG_DEBUG5, mesg->buffer, mesg->send_length, 16, OSPRINT_DUMP_HEXTEXT);
 #endif
-#if 1
             if((n = sendto(s, mesg->buffer, mesg->send_length, 0, (struct sockaddr*)&sa, sa_len)) == mesg->send_length)
             {
                 struct sockaddr ans_sa;
@@ -2089,9 +2084,6 @@ message_query_udp_with_time_out(message_data *mesg, host_address *server, int se
                 while((n = recvfrom(s, mesg->buffer, sizeof(mesg->buffer), 0, &ans_sa, &ans_sa_len)) >= 0)
                 {
                     /* check that the sender is the one we spoke to */
-#if GERY
-                    osformatln(termout, "received %d bytes from %{sockaddr}", n, &ans_sa);
-#endif
 #ifdef DEBUG
                     log_memdump_ex(g_system_logger, MSG_DEBUG5, mesg->buffer, n, 16, OSPRINT_DUMP_HEXTEXT);
 #endif
@@ -2103,10 +2095,6 @@ message_query_udp_with_time_out(message_data *mesg, host_address *server, int se
                         break;
                     }
                 }
-#if GERY
-                osprintln(termout, "FOR TIM:");
-                osprint_dump(termout, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_LAYOUT_GERY|OSPRINT_DUMP_HEXTEXT);
-#endif
                 
                 if(n < 0)
                 {
@@ -2118,10 +2106,7 @@ message_query_udp_with_time_out(message_data *mesg, host_address *server, int se
             else
             {
                 return_value = (n < 0)?ERRNO_ERROR:ERROR;
-
-                log_err("NOT GOOD FOR SENDING"); // GERY
             }
-#endif
             
             close_ex(s);
         }

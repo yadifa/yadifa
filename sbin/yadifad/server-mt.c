@@ -51,7 +51,6 @@
 #define SERVER_ST_C_
 
 #include "config.h"
-
 #include <dnscore/logger.h>
 #include <dnscore/fdtools.h>
 #include <dnscore/tcp_io_stream.h>
@@ -63,6 +62,9 @@
 #include <dnsdb/zdb_types.h>
 
 #ifdef DEBUG
+
+#define ZDB_JOURNAL_CODE 1
+
 #include <dnsdb/journal.h>
 #endif
 
@@ -97,19 +99,20 @@ extern logger_handle *g_server_logger;
 #include "rrl.h"
 #endif
 
-
 #define MSGHDR_TAG 0x52444847534d
 
 #ifdef HAS_MIRROR_SUPPORT
 #define DUMB_MIRROR 1
 #endif
 
-#if defined(HAS_MESSAGES_SUPPORT)
+#if HAS_MESSAGES_SUPPORT
 #define UDP_USE_MESSAGES 1
+#else
+#define UDP_USE_MESSAGES 0
 #endif
 
 /**
- * This contains the sum of statistics everytime they are all summed.
+ * This contains the sum of statistics every time they are all summed.
  */
 
 static server_statistics_t server_statistics_sum;
@@ -136,7 +139,7 @@ struct synced_thread_t
     
     message_data *udp_mesg;
     
-#if UDP_USE_MESSAGES != 0
+#if UDP_USE_MESSAGES
     struct iovec    udp_iovec;
     struct msghdr   udp_msghdr;
 #endif
@@ -291,13 +294,7 @@ synced_stop()
     }
 }
 
-#if defined(HAS_MESSAGES_SUPPORT)
-#define UDP_USE_MESSAGES 1
-#endif
-
-/* #define UDP_USE_MESSAGES 1 */
-
-#if UDP_USE_MESSAGES != 0
+#if UDP_USE_MESSAGES
 
 /*
  * from: http://www.mombu.com/programming/c/t-how-to-get-udp-destination-address-on-incoming-packets-7784569.html
@@ -351,7 +348,7 @@ server_mt_process_udp_update(zdb *database, synced_thread_t *st)
 {
     struct msghdr *msghdr;
     
-#if UDP_USE_MESSAGES != 0
+#if UDP_USE_MESSAGES
     msghdr = &st->udp_msghdr;
 #else
     msghdr = NULL;
@@ -394,7 +391,7 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
             synced_wait(st);
         }
 
-#if UDP_USE_MESSAGES == 0
+#if !UDP_USE_MESSAGES
         
         n = recvfrom(fd, mesg->buffer, sizeof(mesg->buffer), 0, (struct sockaddr*)&mesg->other.sa, &mesg->addr_len);
         
@@ -585,6 +582,11 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
                          &mesg->other.sa);
 
                 local_statistics->udp_fp[mesg->status]++;
+                
+                if(return_code == UNPROCESSABLE_MESSAGE)
+                {
+                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_ERR, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_ALL);
+                }
                 
                 /*
                  * If not FE, or if we answer FE
@@ -780,6 +782,9 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
 
         default:
         {
+            return_code = message_process_query(mesg);
+            mesg->status = RCODE_NOTIMP;
+
             log_warn("unknown [%04hx] error: %r", ntohs(MESSAGE_ID(mesg->buffer)), MAKE_DNSMSG_ERROR(mesg->status));
                 
             if( (mesg->status != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0))
@@ -799,8 +804,6 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
     } // switch operation code
     
 
-    ssize_t sent;
-
 #ifdef DEBUG
     if(mesg->send_length < 12)
     {
@@ -810,14 +813,17 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
     }
 #endif
 
-#ifndef HAS_DROPALL_SUPPORT
-          
-#if UDP_USE_MESSAGES == 0
+#if !HAS_DROPALL_SUPPORT
+
+    ssize_t sent;
+    
+#if !UDP_USE_MESSAGES
     
 #ifdef DEBUG
     log_debug("server_mt_process_udp: sendto(%d, %p, %d, %d, %{sockaddr}, %d)", mesg->sockfd, mesg->buffer, mesg->send_length, 0, (struct sockaddr*)&mesg->other.sa, mesg->addr_len);
     log_memdump_ex(g_server_logger, MSG_DEBUG5, mesg->buffer, mesg->send_length, 16, OSPRINT_DUMP_HEXTEXT);
 #endif
+    
     while((sent = sendto(mesg->sockfd, mesg->buffer, mesg->send_length, 0, (struct sockaddr*)&mesg->other.sa, mesg->addr_len)) < 0)
     {
         int error_code = errno;
@@ -917,7 +923,7 @@ server_mt_query_loop_udp(void* parm)
     log_debug("server_mt_query_loop_udp: ready with #%d id=%p fd=%d", st->idx, st->id, st->udp_mesg->sockfd);
 #endif
 
-#if UDP_USE_MESSAGES != 0
+#if UDP_USE_MESSAGES
 
     /* UDP messages handling requires more setup */
 
@@ -1066,7 +1072,7 @@ server_mt_query_loop()
          * Update the select read set for the current interface (udp + tcp)
          */
 
-#if UDP_USE_MESSAGES != 0
+#if UDP_USE_MESSAGES
         int sockopt_dstaddr = 1;
         setsockopt(intf->udp.sockfd, IPPROTO_IP, DSTADDR_SOCKOPT, &sockopt_dstaddr, sizeof(sockopt_dstaddr));
 #endif

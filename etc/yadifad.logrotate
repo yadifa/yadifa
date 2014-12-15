@@ -1,0 +1,17 @@
+/var/log/yadifa/*log {
+    daily
+    rotate 10
+    compress
+    missingok
+    notifempty
+    sharedscripts
+    postrotate
+        if [ -f "/usr/sbin/service" ]; then
+            /usr/sbin/service yadifad reload > /dev/null 2>/dev/null || true
+        elif [ -f "/etc/init.d/yadifad" ]; then
+            /etc/init.d/yadifad reload > /dev/null 2>/dev/null || true
+        else
+            /sbin/service yadifad reload > /dev/null 2>/dev/null || true
+        fi
+    endscript
+}

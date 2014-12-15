@@ -1,0 +1,12 @@
+[Unit]
+Description=Yadifa DNS server
+After=network.target
+
+[Service]
+Type=simple
+PIDFile=/run/yadifad.pid
+ExecStart=/usr/sbin/yadifad
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target

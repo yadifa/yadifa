@@ -267,7 +267,7 @@ axfr_query(const host_address *servers, const u8 *origin, u32* out_loaded_serial
                 {
                     if(out_loaded_serial != NULL)
                     {
-                        *out_loaded_serial = xfr.out_loaded_serial;
+                        *out_loaded_serial = xfr_input_stream_get_serial(&xfris);
                     }
                 }
                 else

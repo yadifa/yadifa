@@ -326,7 +326,7 @@ avl_node* avl_iterator_next_node(avl_iterator* iter);
 
 void avl_callback_and_destroy(avl_tree tree, callback_function callback);
 
-#ifndef NDEBUG
+#ifdef DEBUG
 
 /** @brief DEBUG: check that a tree fits the AVL definition.
  *

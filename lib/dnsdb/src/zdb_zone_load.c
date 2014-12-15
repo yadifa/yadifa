@@ -853,7 +853,7 @@ zdb_zone_load_loop:
          *
          */
 
-#ifndef NDEBUG
+#ifdef DEBUG
         log_debug("zone load: replaying changes from journal");
 #endif
         if(FAIL(return_code = zdb_icmtl_replay(zone, data_path)))
@@ -868,7 +868,7 @@ zdb_zone_load_loop:
                 //modified = TRUE;
             }
 
-#ifndef NDEBUG
+#ifdef DEBUG
             log_debug("zone load: post-replay sanity check for %{dnsname}", zone->origin);
 #endif
             if(FAIL(return_code = zdb_sanitize_zone(zone)))
@@ -1152,12 +1152,12 @@ zdb_zone_read_serial(zdb *db, zone_reader *zr, const char *data_path, u32 *seria
                 if(withjournal)
                 {
 
-#ifndef NDEBUG
+#ifdef DEBUG
                     log_debug("zone load: getting last serial for zone using journal");
 #endif
                     if(ISOK(return_value = journal_last_serial(entry.name, data_path, serialp)))
                     {
-#ifndef NDEBUG
+#ifdef DEBUG
                         log_debug("zone load: got serial");
 #endif
                     }

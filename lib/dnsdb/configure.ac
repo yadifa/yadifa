@@ -32,7 +32,7 @@ dnl
 dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 4183 $])
+AC_REVISION([$Revision: 4532 $])
 AC_INIT([dnsdb],m4_esyscmd([svn info 2> /dev/null |  sed -e 's/^/$/' -e 's/$/ $/' > revision.txt;echo $(cat VERSION)-$(grep \$Revision: * | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[bugreport@yadifa.eu])
 
 m4_include([../../m4/eurid.m4])
@@ -90,9 +90,7 @@ AC_CHECK_TYPES(u_char)
 
 AC_SYS_LARGEFILE
 
-AC_CPU_CHECK
 AC_COMPILER_CHECK
-AC_MEMALIGN_CHECK
 AC_PTHREAD_SPINLOCK_CHECK
 AC_PTHREAD_SETNAME_NP_CHECK
 

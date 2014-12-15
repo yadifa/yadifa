@@ -10,12 +10,9 @@
 
 .fi
 ..
-.TH "YADIFAD" "8" "2014\-07\-02" "YADIFA " "YADIFA "
+.TH "YADIFAD" "8" "2014\-12\-08" "YADIFA " "YADIFA "
 .SH NAME
-
-.PP
-YADIFAD
-is an authoritative name server. 
+yadifad \- an authoritative Internet domain name server. 
 .PP
 .SH SYNOPSIS
 
@@ -31,7 +28,7 @@ yadifad
 .SH DESCRIPTION
 
 yadifad
-is a Domain Name System (DNS) server, part of the YADIFA distrubution from EURid vzw/asbl. The latest version of YADIFA
+is a Domain Name System (DNS) server, part of the YADIFA distribution from EURid vzw/asbl. The latest version of YADIFA
 can be found on:
 .br
 .ce 100
@@ -65,214 +62,83 @@ NOTIFY
 yadifad
 works only with 1 CLASS:
 .PP
-.TS
-tab(&);
-l l l.
-T{
-Class 
-T}&T{
-Value 
-T}&T{
-Definition
-T}
-T{
-T}
-T{
-IN
-T}&T{
-1 
-T}&T{
-Internet class
-T}
-.TE
+.TP
+1.
+IN (Internet class)
 .PP
 yadifad
 supports following TYPES:
 .PP
-.TS
-tab(&);
-l l l.
-T{
-Type 
-T}&T{
-Value 
-T}&T{
-Defining RFC
-T}
-T{
-T}
-T{
+.TP
+1.
 A 
-T}&T{
-1 
-T}&T{
-1035
-T}
-T{
+.TP
+2.
 AAAA 
-T}&T{
-28 
-T}&T{
-3596
-T}
-T{
+.TP
+3.
 CNAME 
-T}&T{
-5 
-T}&T{
-1035
-T}
-T{
+.TP
+4.
 DNSKEY 
-T}&T{
-48 
-T}&T{
-4034
-T}
-T{
+.TP
+5.
 DS 
-T}&T{
-43 
-T}&T{
-4034
-T}
-T{
+.TP
+6.
 HINFO 
-T}&T{
-12 
-T}&T{
-1035
-T}
-T{
+.TP
+7.
 MX 
-T}&T{
-15 
-T}&T{
-1035
-T}
-T{
+.TP
+8.
 NAPTR 
-T}&T{
-35 
-T}&T{
-3403
-T}
-T{
+.TP
+9.
 NS 
-T}&T{
-2 
-T}&T{
-1035
-T}
-T{
+.TP
+10.
 NSEC 
-T}&T{
-47 
-T}&T{
-4034
-T}
-T{
+.TP
+11.
 NSEC3 
-T}&T{
-50 
-T}&T{
-5155
-T}
-T{
+.TP
+12.
 NSEC3PARAM 
-T}&T{
-51 
-T}&T{
-5155
-T}
-T{
+.TP
+13.
 PTR 
-T}&T{
-12 
-T}&T{
-1035
-T}
-T{
+.TP
+14.
 RRSIG 
-T}&T{
-46 
-T}&T{
-4034
-T}
-T{
+.TP
+15.
 SOA 
-T}&T{
-6 
-T}&T{
-1035
-T}
-T{
+.TP
+16.
 SRV 
-T}&T{
-33 
-T}&T{
-2782
-T}
-T{
+.TP
+17.
 SSHFP 
-T}&T{
-44 
-T}&T{
-4255
-T}
-T{
+.TP
+18.
+TLSA 
+.TP
+19.
 TXT 
-T}&T{
-16 
-T}&T{
-1035
-T}
-.TE
 .PP
 .br
 Other tyes and pseudo resource records: 
 .PP
-.TS
-tab(&);
-l l l.
-T{
-Type 
-T}&T{
-Value 
-T}&T{
-Defining RFC
-T}
-T{
-T}
-T{
-* 
-T}&T{
-255 
-T}&T{
-1035
-T}
-T{
+.TP
+1.
 AXFR 
-T}&T{
-252 
-T}&T{
-1035
-T}
-T{
+.TP
+2.
 IXFR 
-T}&T{
-251 
-T}&T{
-1035
-T}
-T{
+.TP
+3.
 OPT 
-T}&T{
-41 
-T}&T{
-6891
-T}
-.TE
 .PP
 .SH OPTIONS
 
@@ -348,7 +214,7 @@ file from the source code.
 .SH VERSION
 
 .PP
-Version: 2.0.0 of 2014-07-02\&.
+Version: 2.0.4 of 2014-12-08\&.
 .PP
 .SH MAILING LISTS
 

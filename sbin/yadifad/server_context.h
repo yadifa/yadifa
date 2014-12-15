@@ -39,8 +39,7 @@
  */
 /*----------------------------------------------------------------------------*/
 
-#ifndef _SERVER_CONTEXT_H
-#define	_SERVER_CONTEXT_H
+#pragma once
 
 #include "config.h"
 
@@ -49,7 +48,7 @@
 
 #include "confs.h"
 
-#if defined(HAS_MESSAGES_SUPPORT)
+#if HAS_MESSAGES_SUPPORT
 #define UDP_USE_MESSAGES 1
 #else
 #define UDP_USE_MESSAGES 0
@@ -97,6 +96,4 @@ void server_context_clear(config_data *);
 #ifdef	__cplusplus
 }
 #endif
-
-#endif	/* _SERVER_CONTEXT_H */
 

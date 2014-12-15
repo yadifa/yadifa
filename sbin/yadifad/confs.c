@@ -168,7 +168,7 @@ config_logger_setdefault()
         logger_handle_add_channel(name_handle->name, MSG_PROD_MASK, default_channel);
     }
 
-#ifndef NDEBUG
+#ifdef DEBUG
     log_debug("logging to stdout");
 #endif
 }

@@ -70,43 +70,11 @@ extern logger_handle *g_server_logger;
 
 #include "notify.h"
 
-#ifdef HAS_CTRL
+#if HAS_CTRL
 
 extern zone_data_set database_zone_desc;
 
-// CH fqdn TXT command
-// freeze zone
-// unfreeze zone
-// reload zone
-// load zone
-// drop zone
-
-/**
- * The q&d model used types for control.
- *
- * Do we want a script model ? A loop could make sense but I don't see a real practical use yet.
- *
- * for $z in (a,b,c,d){load $z}
- * if(whatever) {notify hostname}
- *
- * Do we want optional encryption ? (This may be interesting).
- *
- * ie: one may want to send a command with a TSIG through an unsafe network.
- *
- * If we use TXT we can simply have:
- *
- * script. TXT load this;foreach(a,b,c,d){drop $};if(whateverstatus){reload whatever}
- * key. TXT mycbckeyname
- *
- *
- */
-
-
-
-
-
 /*****************************************************************************/
-
 
 static ya_result
 ctrl_query_parse_no_parameters(packet_unpack_reader_data *pr)

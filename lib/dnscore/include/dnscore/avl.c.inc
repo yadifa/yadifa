@@ -669,7 +669,7 @@ AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_
     s8 balances[AVL_MAX_DEPTH];
     u8 dirs[AVL_MAX_DEPTH];
 
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(&nodes, 0xff, sizeof (AVL_NODE_TYPE*) * AVL_MAX_DEPTH);
     memset(&balances, 0xff, AVL_MAX_DEPTH);
     memset(&dirs, 0xff, AVL_MAX_DEPTH);
@@ -757,7 +757,7 @@ AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_
      *       We link the parent of the successor
      *       We then rebalance from the node right before where successor was.
      *
-     *  #3 is dependant on #1 and #2 so let's handle #3 first.
+     *  #3 is dependent on #1 and #2 so let's handle #3 first.
      */
 
     if(victim_left != NULL && victim_right != NULL)

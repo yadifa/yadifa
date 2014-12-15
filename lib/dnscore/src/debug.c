@@ -867,7 +867,7 @@ void debug_bench_logdump_all()
         double total = p->time_total;
         total /= 1000000.0;
         u32 count = p->time_count;
-        log_info("bench: %10s: [%9.6fs:%9.6fs] total=%9.6fs mean=%9.6fs rate=%9.6f/s calls=%9u", p->name, min, max, total, total / count, count / total, count);
+        log_info("bench: %12s: [%9.6fs:%9.6fs] total=%9.6fs mean=%9.6fs rate=%-12.3f/s calls=%9u", p->name, min, max, total, total / count, count / total, count);
         p = p->next;
     }
 }

@@ -229,13 +229,19 @@ parse_yyyymmddhhmmss_check_range_len(const char *src, u32 src_len, u32 *dst)
         return PARSEDATE_ERROR;
     }
 
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(&thetime, 0xff, sizeof (thetime));
 #endif
 
+#if defined(__USE_MISC)
     thetime.tm_gmtoff = 0;
+#endif
+
     thetime.tm_isdst = 0;
+
+#if defined(__USE_MISC)
     thetime.tm_zone = "GMT";
+#endif
     
     u32 tmp_u32;
     
@@ -285,9 +291,10 @@ parse_yyyymmddhhmmss_check_range_len(const char *src, u32 src_len, u32 *dst)
 
 #ifndef __FreeBSD__
     time_t t = mktime(&thetime) - timezone;
+#elif defined(__USE_MISC)
+    time_t t = mktime(&thetime) + thetime.tm_gmtoff;
 #else
-
-    time_t t = mktime(&thetime) + thetime.tm_gmtoff; //- 3600;    /** TODO: this should be the answer -- gery */ 
+    time_t t = mktime(&thetime);
 #endif
 
     if(t < 0)
@@ -571,7 +578,7 @@ parse_skip_word_specific(const char *src, u32 src_len, const char **words, u32 w
         
         const char *word_limit = word + word_len;
         
-        // lenght are the same
+        // lengths are the same
         
         while(word < word_limit)
         {

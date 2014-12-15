@@ -151,7 +151,7 @@ void alarm_run_tick(u32 epoch);
 
 /**
  * These three are harmful.  Use with care.
- * They are only meant to be used in an independant thread (tcp, remote controller) to send the status of a zone.
+ * They are only meant to be used in an independent thread (tcp, remote controller) to send the status of a zone.
  *
  * The usage is: lock, get first, process the list, unlock
  * 

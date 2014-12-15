@@ -70,7 +70,7 @@ zdb_rr_label_free(zdb_zone* zone, zdb_rr_label* label)
     zdb_record_destroy(&(label)->resource_record_set); /// @note not an edition, use only for cleanup/delete
 
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #if ZDB_HAS_NSEC_SUPPORT != 0
     if((label->flags & ZDB_RR_LABEL_NSEC) != 0)
     {
@@ -954,7 +954,7 @@ zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path,
     return err;
 }
 
-#ifndef NDEBUG
+#ifdef DEBUG
 
 void
 zdb_rr_label_print_indented(zdb_rr_label* rr_label, output_stream *os, int indent)

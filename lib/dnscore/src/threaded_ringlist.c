@@ -143,7 +143,7 @@ threaded_ringlist_finalize(threaded_ringlist *queue)
 
     while(node != NULL)
     {
-#ifndef NDEBUG
+#ifdef DEBUG
         assert(node->data == (void*)~0);
 #endif
 
@@ -396,7 +396,7 @@ threaded_ringlist_dequeue(threaded_ringlist *queue)
 
     void* data = node->data;
 
-#ifndef NDEBUG
+#ifdef DEBUG
     node->prev = (threaded_ringlist_node*)~0;
     node->data = (void*)~0;
 #endif
@@ -470,7 +470,7 @@ threaded_ringlist_try_dequeue(threaded_ringlist *queue)
 
     void* data = node->data;
 
-#ifndef NDEBUG
+#ifdef DEBUG
     node->prev = (threaded_ringlist_node*)~0;
     node->data = (void*)~0;
 #endif

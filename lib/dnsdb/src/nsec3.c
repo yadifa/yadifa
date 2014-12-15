@@ -636,7 +636,7 @@ nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference l
          * Destroy the prev's star references.
          */
 
-#ifndef NDEBUG
+#ifdef DEBUG
         if(self_prev->sc > 0)
         {
             log_debug("nsec3_add_label: %{dnsname}: clearing %{digest32h} (predecessor)", &name[2], self_prev->digest);
@@ -653,7 +653,7 @@ nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference l
          *
          */
 
-#ifndef NDEBUG
+#ifdef DEBUG
         if(self->rc != 0)
         {
             log_debug("nsec3_add_label: %{dnsname}: %{digest32h} has got owner collisions", &name[2], self->digest);
@@ -748,7 +748,7 @@ nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference l
 
             ZALLOC_OR_DIE(nsec3_label_extension*, next_n3_ext, nsec3_label_extension, NSEC3_LABELEXT_TAG);
 
-#ifndef NDEBUG
+#ifdef DEBUG
             memset(next_n3_ext, 0xac, sizeof(nsec3_label_extension));
 #endif
 
@@ -760,7 +760,7 @@ nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference l
 
             ZALLOC_OR_DIE(nsec3_label_extension*, next_n3_ext->next, nsec3_label_extension, NSEC3_LABELEXT_TAG);
 
-#ifndef NDEBUG
+#ifdef DEBUG
             memset(next_n3_ext->next, 0xca, sizeof(nsec3_label_extension));
 #endif
 
@@ -873,7 +873,7 @@ nsec3_label_link(zdb_zone *zone, zdb_rr_label* label, const u8 *fqdn)
 
             ZALLOC_OR_DIE(nsec3_label_extension*, *n3lep, nsec3_label_extension, NSEC3_LABELEXT_TAG);
             n3le = *n3lep;            
-    #ifndef NDEBUG
+    #ifdef DEBUG
             memset(n3le, 0xac, sizeof(nsec3_label_extension));
     #endif          
             n3le->next = NULL;

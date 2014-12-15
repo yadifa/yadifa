@@ -1,0 +1,109 @@
+#!/bin/bash
+#
+# yadifad  This shell script takes care of starting and stopping
+#          yadifad on RedHat or other chkconfig-based system.
+#
+# chkconfig: - 13 87
+# processname: yadifad
+# config: /etc/yadifad.conf
+# pidfile: /var/run/yadifad.pid
+#
+# description: YADIFA is a name server implementation developed from \
+#              scratch by .eu. It is portable across multiple operating \
+#              systems and supports DNSSEC, TSIG, DNS notify, DNS update, IPv6.
+
+### BEGIN INIT INFO
+# Provides: yadifad
+# Required-Start: $network
+# Required-Stop: $network
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: start and stop yadifad
+# Description: YADIFA is a name server implementation developed from \
+#              scratch by .eu. It is portable across multiple operating \
+#              systems and supports DNSSEC, TSIG, DNS notify, DNS update, IPv6.
+### END INIT INFO
+
+# Written by Denis Fateyev (denis@fateyev.com)
+# 2014.07.05
+
+# Source function library
+. /etc/init.d/functions
+
+# Source networking configuration
+[ -r /etc/sysconfig/network ] && . /etc/sysconfig/network
+
+start() {
+    [ "$EUID" != "0" ] && exit 4
+    [ "${NETWORKING}" = "no" ] && exit 1
+    [ -f /usr/sbin/yadifad ] || exit 5
+
+        # Start daemon
+        echo -n $"Starting yadifad: "
+        daemon /usr/sbin/yadifad >/dev/null 2>&1 && success || failure
+        RETVAL=$?
+        echo
+        [ $RETVAL = 0 ] && touch /var/lock/subsys/yadifad
+}
+
+stop() {
+    [ "$EUID" != "0" ] && exit 4
+
+        # Stop daemon
+        echo -n $"Shutting down yadifad: "
+        if [ -n "`pidfileofproc yadifad`" ] ; then
+        killproc /usr/sbin/yadifad
+    else
+        failure $"Shutting down yadifad"
+    fi
+    RETVAL=$?
+        echo
+        [ $RETVAL = 0 ] && rm -f /var/lock/subsys/yadifad
+}
+
+restart() {
+    stop
+    start
+}
+
+reload() {
+    [ "$EUID" != "0" ] && exit 4
+
+        # Reload daemon
+        echo -n $"Reloading yadifad: "
+        if [ -n "`pidfileofproc yadifad`" ] ; then
+        killproc /usr/sbin/yadifad -HUP
+    else
+        failure $"Reloading yadifad"
+    fi
+    RETVAL=$?
+        echo
+}
+
+# See how we were called
+case "$1" in
+  start)
+    start
+    ;;
+  stop)
+    stop
+    ;;
+  restart)
+    restart
+    ;;
+  reload)
+    reload
+    ;;
+  condrestart|try-restart)
+    status yadifad > /dev/null || exit 0
+    restart
+    ;;
+  status)
+    status yadifad
+    ;;
+  *)
+    echo $"Usage: $0 {start|stop|restart|reload|status|condrestart|try-restart}"
+    exit 2
+esac
+
+exit $RETVAL

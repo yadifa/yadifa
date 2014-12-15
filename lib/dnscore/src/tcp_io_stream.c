@@ -38,6 +38,7 @@
  * @{
  */
 
+#include "dnscore/dnscore-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -82,7 +83,7 @@ gethostaddr(const char* host, u16 port, struct sockaddr *sa, int familly)
 
     hints.ai_family = familly;
 
-    ZEROMEMORY(sa, sizeof (struct sockaddr));
+    ZEROMEMORY(sa, sizeof(struct sockaddr)); // valid use of sizeof(struct sockaddr)
 
     /*    ------------------------------------------------------------    */
 
@@ -99,6 +100,9 @@ gethostaddr(const char* host, u16 port, struct sockaddr *sa, int familly)
             struct sockaddr_in *sai = (struct sockaddr_in *)sa;
             memcpy(sai, next->ai_addr, next->ai_addrlen);
             sai->sin_port = htons(port);
+#if HAS_SOCKADDR_IN_SIN_LEN
+            sai->sin_len = sizeof(struct sockaddr_in);
+#endif
 
             break;
         }
@@ -108,6 +112,9 @@ gethostaddr(const char* host, u16 port, struct sockaddr *sa, int familly)
             struct sockaddr_in6 *sai6 = (struct sockaddr_in6 *)sa;
             memcpy(sai6, next->ai_addr, next->ai_addrlen);
             sai6->sin6_port = htons(port);
+#if HAS_SOCKADDR_IN6_SIN6_LEN
+            sai6->sin6_len = sizeof(struct sockaddr_in6);
+#endif
 
             break;
         }
@@ -146,7 +153,7 @@ tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream
 
     if(bind_from != NULL)
     {
-        while((bind(fd, bind_from, sizeof (struct sockaddr))) < 0)
+        while((bind(fd, bind_from, sizeof(socketaddress))) < 0)
         {
             int err = errno;
 
@@ -170,7 +177,11 @@ tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream
     tcp_set_nodelay(fd, tcp_nodelay);
     tcp_set_cork(fd, tcp_cork);
 
-    while(connect(fd, sa, sizeof(struct sockaddr)) < 0)
+#if HAS_SOCKADDR_SA_LEN
+    while(connect(fd, sa, sa->sa_len) < 0)
+#else
+    while(connect(fd, sa, sizeof(socketaddress)) < 0)
+#endif
     {
         int err = errno;
         

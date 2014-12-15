@@ -83,7 +83,7 @@ struct logger_handle;
 
 void debug_log_stacktrace(struct logger_handle *handle, u32 level, const char *prefix);
 
-#ifndef NDEBUG
+#ifdef DEBUG
 /*
  * DO NOT FORGET THAT THE "L" FUNCTIONS DO REQUIRE A DEBUG_LEVEL #define
  * BEFORE THE "debug.h" INCLUDE !

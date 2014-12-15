@@ -110,7 +110,7 @@ extern "C"
      * @note AXFR write
      *       The AXFR stream is put on the disk.  On EOF it is sent to be written in the zone.
      *       The AXFR resets the zone.  It means that the writers can and MUST be stopped.
-     *       When everyting is still the zone is dropped and reloaded (and verified, signed, ...)
+     *       When everything is still the zone is dropped and reloaded (and verified, signed, ...)
      *
      * @note The cache has nothing to do with the dynupdate & dnssec, they are never in conflict
      *       The cache entries have an absolute end TTL

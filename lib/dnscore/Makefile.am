@@ -246,6 +246,11 @@ pkginclude_HEADERS = \
 	$(I)/xfr_input_stream.h \
 	$(I)/zonefile_reader.h
 
+if IS_DARWIN_OS
+pkginclude_HEADERS += $(I)/osx_clock_gettime.h
+libdnscore_la_SOURCES += src/osx_clock_gettime.c
+endif
+
 if HAS_TSIG_SUPPORT
 pkginclude_HEADERS += $(I)/tsig.h
 libdnscore_la_SOURCES += src/tsig.c src/tsig_algorithms.c
@@ -267,6 +272,7 @@ src/alarm.c: $(FEATURES)
 $(FEATURES): config.log
 	echo "#pragma once" > $(FEATURES)
 	echo "#define DNSCORE_HAS_TSIG_SUPPORT 1" >> $(FEATURES)
+	echo "#define DNSCORE_HAS_RDTSC 0" >> $(FEATURES)
 	echo "#define DNSCORE_HAS_ACL_SUPPORT 1" >> $(FEATURES)
 	echo "#define DNSCORE_HAS_NSEC3_SUPPORT 1" >> $(FEATURES)
 	echo "#define DNSCORE_HAS_NSEC_SUPPORT 1" >> $(FEATURES)

@@ -2429,7 +2429,7 @@ dnsname_stack_pop_label(dnsname_stack* name)
 {
     yassert(name != NULL);
     
-#ifndef NDEBUG
+#ifdef DEBUG
     name->labels[name->size] = (u8*)~0;
 #endif
 

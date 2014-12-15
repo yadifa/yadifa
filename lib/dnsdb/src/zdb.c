@@ -630,7 +630,7 @@ zdb_destroy(zdb* db) // mutex checked
 #endif
 }
 
-#ifndef NDEBUG
+#ifdef DEBUG
 
 /** @brief DEBUG: Prints the content of the database.
  *

@@ -10,17 +10,15 @@
 
 .fi
 ..
-.TH "YADIFAD\-CONF" "5" "2014\-07\-02" "YADIFA " "YADIFA "
+.TH "YADIFAD\-CONF" "5" "2014\-12\-08" "YADIFA " "YADIFA "
 .SH NAME
 
-.PP
-yadifad.conf
-is the configuration file for \fIyadifad\fP(1)\&.
+yadifad.conf \- configuration file for \fIyadifad\fP(8)\&.
 .PP
 .SH SYNOPSIS
 
 .PP
-${PREFIX}/etc/yadifad.conf 
+/etc/yadifad.conf 
 .PP
 .SH DESCRIPTION
 
@@ -48,7 +46,7 @@ Access lists.
 .PP
 The configuration supports included files.
 .br
-example: include /usr/local/var/zones/master/yadifad\-2.conf 
+example: include /var/lib/yadifa/master/yadifad\-2.conf 
 .PP
 The configuration files can be nested. 
 .PP
@@ -95,7 +93,7 @@ Config with includes
 .PP
 .Vb
 # start yadifad.conf <main> container
-        include /usr/local\-dev/etc/yadifad\-main.conf
+        include /etc/yadifa/yadifad\-main.conf
 # end yadifad.conf <main> container
 .Ve
 .PP
@@ -112,25 +110,22 @@ Main without includes
         chroot                  off
 
         # The path of the log files
-        logpath                 "/usr/local/var/log"
+        logpath                 "/var/log/yadifa"
 
         # The location of the pid file
-        pidfile                 "/usr/local/var/run/yadifad.pid"
+        pidfile                 "/var/run/yadifad.pid"
 
         # The path of the zone files
-        datapath                "/usr/local/var/zones"
+        datapath                "/var/lib/yadifa"
 
         # The path of the DNSSEC keys
-        keyspath                "/usr/local/var/zones/keys"
+        keyspath                "/var/lib/yadifa/keys"
 
         # The path of the transfer and journaling files (AXFR & IXFR)
-        xfrpath                 "/usr/local/var/zones/xfr"
+        xfrpath                 "/var/lib/yadifa/xfr"
 
         # The version returned by a query to version.yadifa. CH TXT
-        version                 "1.0.0rc2"
-
-        # Enable EDNS0 support (?)
-        edns0                   on
+        version                 "2.0.4"
 
         # Set the maximum UDP packet size.  Packetsize annot be less than 512.  or more than 65535.  A typical choice is 4096.
         edns0\-max\-size          4096
@@ -448,7 +443,7 @@ from the sources
 .SH VERSION
 
 .PP
-Version: 2.0.0 of 2014-07-02\&.
+Version: 2.0.4 of 2014-12-08\&.
 .PP
 .SH MAILING LISTS
 

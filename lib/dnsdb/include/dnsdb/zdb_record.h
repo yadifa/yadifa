@@ -243,7 +243,7 @@ zdb_ttlrdata* zdb_ttlrdata_clone(const zdb_ttlrdata* source);
  */
 void zdb_ttlrdata_delete(zdb_ttlrdata* record);
 
-#ifndef NDEBUG
+#ifdef DEBUG
 /**
  * DEBUG
  */

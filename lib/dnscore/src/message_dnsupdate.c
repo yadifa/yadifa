@@ -329,7 +329,7 @@ message_dnsupdate_data_init(message_dnsupdate_data* new_entry)
     new_entry->ztype    = 0;
     new_entry->zclass   = 0;
 
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(new_entry->zname,  0xff, sizeof(new_entry->zname));
     memset(new_entry->zrdata, 0xff, sizeof(new_entry->zrdata));
 #endif

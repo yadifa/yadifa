@@ -164,7 +164,7 @@ ya_result zdb_zone_label_delete(zdb* db, dnsname_vector* name, u16 zclass);
 
 #endif
 
-#ifndef NDEBUG
+#ifdef DEBUG
 
 /**
  * DEBUG: prints the label content

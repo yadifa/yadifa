@@ -101,14 +101,73 @@ struct xfr_input_stream_data
  * @return error code
  */
 
+#if HAS_NON_AA_AXFR_SUPPORT
+
+/*
+ * Non-RFC-compliant masks (allows AA bit not set)
+ * 
+ * It seems (some?) Microsoft DNS answers to an AXFR query without setting the AA bit
+ * 
+ * The RFC 5936 states that in the case of an AXFR answer with no error (RCODE set to 0),
+ * the AA bit MUST be set.
+ * 
+ */
+
 #ifdef WORDS_BIGENDIAN
 #define AXFR_MESSAGE_HEADER_MASK    (( (u64) 0 )                                    | \
-                                     (((u64) (QR_BITS | AA_BITS | TC_BITS )) << 24 )| \
-                                     (((u64) ( RA_BITS | RCODE_BITS )) << 16 )      | \
-                                     ( (u64) 1LL << 0 ))
+                                     (((u64) (QR_BITS  | TC_BITS )) << 40 )| \
+                                     (((u64) ( RA_BITS | RCODE_BITS )) << 32 )      | \
+                                     ( (u64) 1LL << 16 ))
 
-#define AXFR_MESSAGE_HEADER_RESULT  (( (u64) (QR_BITS | AA_BITS) << 24 )            | \
-                                     ( ((u64) 1LL) << 0 ))
+#define AXFR_MESSAGE_HEADER_RESULT  (( (u64) (QR_BITS ) << 40 )            | \
+                                     ( ((u64) 1LL) << 16 ))
+
+#define AXFR_NEXT_MESSAGE_HEADER_MASK (( (u64) 0LL )                                   | \
+                                      (((u64) ( QR_BITS  | TC_BITS )) << 40 )| \
+                                      (((u64) ( RCODE_BITS )) << 32 ))
+
+
+#define AXFR_NEXT_MESSAGE_HEADER_RESULT   (((u64) ( QR_BITS  )) << 40 )
+
+#else
+#define AXFR_MESSAGE_HEADER_MASK     (( (u64) 0LL )                                   | \
+                                      (((u64) ( QR_BITS  | TC_BITS )) << 16 )| \
+                                      (((u64) ( RCODE_BITS )) << 24 )       | \
+                                      (((u64) 1LL) << 40 ))
+
+#define AXFR_MESSAGE_HEADER_RESULT   ((((u64) ( QR_BITS  )) << 16 )| \
+                                      (((u64) 1LL) << 40 ))
+
+#define AXFR_NEXT_MESSAGE_HEADER_MASK     (( (u64) 0LL )                                   | \
+                                      (((u64) ( QR_BITS  | TC_BITS )) << 16 )| \
+                                      (((u64) ( RCODE_BITS )) << 24 ))
+
+
+#define AXFR_NEXT_MESSAGE_HEADER_RESULT   (((u64) ( QR_BITS  )) << 16 )
+
+#endif
+
+#else
+
+/*
+ * RFC compliant masks (AA bit must be set) 
+ */
+
+#ifdef WORDS_BIGENDIAN
+#define AXFR_MESSAGE_HEADER_MASK    (( (u64) 0 )                                    | \
+                                     (((u64) (QR_BITS | AA_BITS | TC_BITS )) << 40 )| \
+                                     (((u64) ( RA_BITS | RCODE_BITS )) << 32 )      | \
+                                     ( (u64) 1LL << 16 ))
+
+#define AXFR_MESSAGE_HEADER_RESULT  (( (u64) (QR_BITS | AA_BITS) << 40 )            | \
+                                     ( ((u64) 1LL) << 16 ))
+
+#define AXFR_NEXT_MESSAGE_HEADER_MASK (( (u64) 0LL )                                   | \
+                                      (((u64) ( QR_BITS | AA_BITS | TC_BITS )) << 40 )| \
+                                      (((u64) ( RCODE_BITS )) << 32 ))
+
+
+#define AXFR_NEXT_MESSAGE_HEADER_RESULT   (((u64) ( QR_BITS | AA_BITS )) << 40 )
 
 #else
 #define AXFR_MESSAGE_HEADER_MASK     (( (u64) 0LL )                                   | \
@@ -125,6 +184,8 @@ struct xfr_input_stream_data
 
 
 #define AXFR_NEXT_MESSAGE_HEADER_RESULT   (((u64) ( QR_BITS | AA_BITS )) << 16 )
+
+#endif
 
 #endif
 
@@ -546,6 +607,12 @@ xfr_input_stream_close(input_stream *is)
     output_stream_close(&data->pipe_stream_output);
     input_stream_close(&data->pipe_stream_input);
     free(data->first_soa_record);
+    
+#ifdef DEBUG
+    memset(data, 0xfe, sizeof(xfr_input_stream_data));
+#endif
+   
+    free(data); 
     
     input_stream_set_void(is);
 }

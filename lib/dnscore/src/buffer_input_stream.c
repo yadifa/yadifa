@@ -103,7 +103,7 @@ buffer_read(input_stream* stream, u8* buffer, u32 len)
         return ret;
     }
 
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(data->buffer, 0xee, data->buffer_maxsize);
 #endif
 

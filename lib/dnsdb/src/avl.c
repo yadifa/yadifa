@@ -328,13 +328,13 @@ avl_find(avl_tree* root, hashcode obj_hash)
              "testq %rax,%rax\n\t"
              "jnz avl_find_loop\n\t"
              "\navl_find_return_null:\n\t"
-#ifndef NDEBUG
+#ifdef DEBUG
             "leave\n\t"
 #endif
             "ret\n\t"
              "\navl_find_return_data:\n\t"
              "mov 16(%rax),%rax\n\t"
-#ifndef NDEBUG
+#ifdef DEBUG
             "leave\n\t"
 #endif
             "ret\n\t"
@@ -611,7 +611,7 @@ avl_delete(avl_tree* root, hashcode obj_hash)
     s8 balances[MAX_DEPTH];
     u8 dirs[MAX_DEPTH];
 
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(&nodes, 0xff, sizeof (avl_node*) * MAX_DEPTH);
     memset(&balances, 0xff, MAX_DEPTH);
     memset(&dirs, 0xff, MAX_DEPTH);
@@ -687,7 +687,7 @@ avl_delete(avl_tree* root, hashcode obj_hash)
      *       We link the parent of the successor
      *       We then rebalance from the node right before where successor was.
      *
-     *  #3 is dependant on #1 and #2 so let's handle #3 first.
+     *  #3 is dependent on #1 and #2 so let's handle #3 first.
      */
 
     if(victim_left != NULL && victim_right != NULL)
@@ -1157,7 +1157,7 @@ avl_callback_and_destroy(avl_tree tree, callback_function callback)
     }
 }
 
-#ifndef NDEBUG
+#ifdef DEBUG
 
 /** @brief DEBUG: check that a tree fits the AVL definition.
  *

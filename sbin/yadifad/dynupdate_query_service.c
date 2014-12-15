@@ -59,6 +59,8 @@
 #include <dnscore/thread_pool.h>
 #include <dnsdb/zdb_types.h>
 
+#include "server_context.h"
+
 #include "database.h"
 #include "server.h"
 
@@ -180,7 +182,7 @@ dynupdate_query_service_thread(void *args)
 
             //local_statistics->udp_fp[mesg->status]++;
 
-#ifndef HAS_DROPALL_SUPPORT
+#if !HAS_DROPALL_SUPPORT
 
             s32 sent;
 

@@ -113,7 +113,7 @@ server_context_set_socket_name_to(u16 s, const char *text)
 {    
     server_context_socket_name_ensure(s);
     
-#ifndef NDEBUG
+#ifdef DEBUG
     log_debug("socket #%d is named '%s'", s, text);
 #endif
     struct itf_name *tmp = server_context_socket_name.data[s];
@@ -206,7 +206,7 @@ server_context_clear(config_data *config)
 {
     interface *intf;
     
-#ifndef NDEBUG
+#ifdef DEBUG
     log_debug("server_context_clear()");
     logger_flush();
 #endif

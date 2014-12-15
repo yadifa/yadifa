@@ -177,7 +177,7 @@ dnssec_keystore_add(dnssec_key* key)
         {
             /* Already in ... */
 
-#ifndef NDEBUG
+#ifdef DEBUG
             formatln("dnssec_keystore_add: duplicate key %{dnsname} %u %u", key->owner_name, key->flags, key->tag);
 #endif
 

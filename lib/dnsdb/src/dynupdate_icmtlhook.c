@@ -349,7 +349,7 @@ dynupdate_icmtlhook_enable(u8* origin, output_stream* os_remove, output_stream* 
 {
     yassert(icmtl_listener.next == NULL);
 
-#ifndef NDEBUG
+#ifdef DEBUG
     log_debug("incremental: enabled %{dnsname} for updates", origin);
 #endif
 
@@ -370,7 +370,7 @@ dynupdate_icmtlhook_disable()
 {
     zdb_listener_unchain((zdb_listener*) & icmtl_listener);
 
-#ifndef NDEBUG
+#ifdef DEBUG
     log_debug("incremental: disabled %{dnsname} for updates", icmtl_listener.origin);
 #endif
     

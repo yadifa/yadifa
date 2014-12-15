@@ -271,7 +271,7 @@ bool zdb_is_zone_invalid(zdb *db, const u8 *origin, u16 zclass);
 
 
 
-#ifndef NDEBUG
+#ifdef DEBUG
 /**
  * DEBUG
  */

@@ -49,10 +49,55 @@
 
 #if defined __FreeBSD__
 #include <sys/endian.h>
+
+#ifndef __BYTE_ORDER
+    #if defined(_BYTE_ORDER)
+        #define __BIG_ENDIAN _BIG_ENDIAN
+        #define __LITTLE_ENDIAN _LITTLE_ENDIAN
+        #define __BYTE_ORDER _BYTE_ORDER
+    #elif defined(WORDS_BIGENDIAN)
+        #define __BIG_ENDIAN 4321
+        #define __LITTLE_ENDIAN 1234
+        #define __BYTE_ORDER __BIG_ENDIAN
+    #else
+        #error "endianness detection code will most likely fail"
+    #endif
+#endif
+
 #elif defined __APPLE__
 #include <machine/endian.h>
+
+#ifndef __BYTE_ORDER
+    #if defined(BYTE_ORDER)
+        #define __BIG_ENDIAN BIG_ENDIAN
+        #define __LITTLE_ENDIAN LITTLE_ENDIAN
+        #define __BYTE_ORDER BYTE_ORDER
+    #elif defined(WORDS_BIGENDIAN)
+        #define __BIG_ENDIAN 4321
+        #define __LITTLE_ENDIAN 1234
+        #define __BYTE_ORDER __BIG_ENDIAN
+    #else
+        #error "endianness detection code will most likely fail"
+    #endif
+#endif
+#elif defined __sun
+#include <sys/byteorder.h>
+#ifndef __BYTE_ORDER
+    #if defined(__BYTE_ORDER__)
+        #define __BIG_ENDIAN __ORDER_BIG_ENDIAN__
+        #define __LITTLE_ENDIAN __ORDER_LITTLE_ENDIAN__
+        #define __BYTE_ORDER __BYTE_ORDER__
+    #else
+        // assume big endian
+        #define __BIG_ENDIAN 4321
+        #define __LITTLE_ENDIAN 1234
+        #define __BYTE_ORDER __BIG_ENDIAN
+    #endif
+#endif
+
 #else
 #include <endian.h>
+#include <byteswap.h>
 #endif
 
 #include <dnscore/dnscore-config-features.h>
@@ -123,6 +168,9 @@ typedef signed long long s64;
 #elif defined(__LONG_LONG_MAX__) && (__LONG_LONG_MAX__ == 9223372036854775807LL)
 typedef unsigned long long u64;
 typedef signed long long s64;
+#elif defined(_LONGLONG_TYPE)
+typedef unsigned long long u64;
+typedef signed long long s64;
 #else
 #error NO UNSIGNED 64 BITS TYPE KNOWN ON THIS 64 BITS ARCHITECTURE (u64 + s64)
 #endif
@@ -159,10 +207,13 @@ typedef unsigned long long intptr;
 typedef unsigned long long intptr;
 #elif defined(_LONGLONG)  && ( _LONGLONG == 1 ) // FreeBSD 9.1 gcc 4.2.1
 typedef unsigned long long intptr;
+#elif defined(_LONGLONG_TYPE)
+typedef unsigned long long intptr;
 #else
 #error NO UNSIGNED 64 BITS TYPE KNOWN ON THIS 64 BITS ARCHITECTURE (intptr)
 #endif
-#else
+
+#else // __SIZEOF_POINTER not 4 nor 8
 #error __SIZEOF_POINTER__ value not handled (only 4 and 8 are)
 #endif
 
@@ -189,10 +240,20 @@ typedef unsigned long long intptr;
  *     the 8th byte inside packet as a (native) unsigned 32bits integer.
  */
 
-#define U8_AT(address)  (*((u8*)&(address)))
+#define U8_AT(address__)  (*((u8*)&(address__)))
 
-#define GET_U8_AT(address__) (*((u8*)&(address)))
-#define SET_U8_AT(address__,value__) (*((u8*)&(address)) = (value__))
+#define GET_U8_AT(address__) (*((u8*)&(address__)))
+#define SET_U8_AT(address__,value__) (*((u8*)&(address__)) = (value__))
+
+#ifndef WORDS_BIGENDIAN
+#if __BYTE_ORDER == __BIG_ENDIAN
+#define WORDS_BIGENDIAN 1
+#endif
+#else // WORDS_BIGENDIAN defined
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+#error "confusing endianness"
+#endif
+#endif
 
 #define AVOID_ANTIALIASING 1
 
@@ -478,8 +539,8 @@ static inline void SET_U64_AT_P(void* p, u64 v)
 #  define htole64(x) __bswap_64 (x)
 #  define be64toh(x) (x)
 #  define le64toh(x) __bswap_64 (x)
-# endif
-#endif
+# endif // __BYTE_ORDER
+#endif // htobe64
 
 /**/
 
@@ -501,8 +562,8 @@ typedef u32 process_flags_t;
 #define NU16(value)     ((u16)(value))
 #define NU32(value)     ((u32)(value))
 #else
-#define NU16(value)     (u16)(((((u16)(value))>>8)&0xff)|(((u16)(value))<<8))
-#define NU32(value)     (u32)(( (((u32)(value)) >> 24) & 0xff) | ((((u32)(value)) >> 8) & 0xff00) | ((((u32)(value)) << 8) & 0xff0000) | (((u32)(value)) << 24))
+#define NU16(value)     ((u16)(((((u16)(value))>>8)&0xff)|(((u16)(value))<<8)))
+#define NU32(value)     ((u32)(( (((u32)(value)) >> 24) & 0xff) | ((((u32)(value)) >> 8) & 0xff00) | ((((u32)(value)) << 8) & 0xff0000) | (((u32)(value)) << 24)))
 #endif
 
 #define VERSION_U32(h__,l__) (((h__) << 16) || (l__))

@@ -141,7 +141,7 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
         return err;
     }
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #if DUMP_ICMTL_UPDATE != 0
     if(err != 0)
     {
@@ -215,7 +215,7 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
             break;
         }
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #if DUMP_ICMTL_UPDATE != 0
         if(err != 0)
         {
@@ -290,7 +290,7 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
                 break;
             }
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #if DUMP_ICMTL_UPDATE != 0
             if(err != 0)
             {
@@ -379,7 +379,7 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
             break;
         }
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #if DUMP_ICMTL_UPDATE != 0
         if(err != 0)
         {
@@ -423,7 +423,7 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
                     break;
                 }
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #if DUMP_ICMTL_UPDATE != 0
                 if(err != 0)
                 {
@@ -454,7 +454,7 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
                     break;
                 }
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #if DUMP_ICMTL_UPDATE != 0
                 if(err != 0)
                 {
@@ -521,7 +521,7 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
                     break;
                 }
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #if DUMP_ICMTL_UPDATE != 0
                 if(err != 0)
                 {

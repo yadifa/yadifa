@@ -54,6 +54,15 @@ extern "C" {
 #define XFR_FULL_EXT_STRLEN 5
 #define XFR_FULL_FILE_MODE      0600
 
+#ifndef _DIRENT_HAVE_D_TYPE
+#ifndef DT_UNKNOWN
+#define DT_UNKNOWN  0
+#endif
+#ifndef DT_REG 
+#define DT_REG      8
+#endif
+#endif
+    
 /**
  * Fixes an issue with the dirent not always set as expected.
  *

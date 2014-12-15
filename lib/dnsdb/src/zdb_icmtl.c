@@ -151,7 +151,7 @@ zdb_icmtl_replay(zdb_zone *zone, const char *directory)
     
     input_stream is;
     
-#ifndef NDEBUG
+#ifdef DEBUG
     log_debug("journal: zdb_icmtl_replay(%{dnsname}, %s)", zone->origin, directory);
 #endif
     
@@ -369,7 +369,7 @@ zdb_icmtl_replay(zdb_zone *zone, const char *directory)
              * "TO DEL" record
              */
 
-#ifndef NDEBUG
+#ifdef DEBUG
             rdata_desc type_len_rdata = {rr.tctr.qtype, rr.rdata_size, rr.rdata };
             log_debug("journal: del %{dnsname} %{typerdatadesc}", fqdn, &type_len_rdata);
 #endif
@@ -379,7 +379,7 @@ zdb_icmtl_replay(zdb_zone *zone, const char *directory)
 #if ZDB_HAS_NSEC3_SUPPORT != 0
                 case TYPE_NSEC3PARAM:
                 {
-#ifndef NDEBUG
+#ifdef DEBUG
                     rdata_desc type_len_rdata = {TYPE_NSEC3PARAM, ttlrdata.rdata_size, ttlrdata.rdata_pointer };
                     log_debug("journal: del %{dnsname} %{typerdatadesc}", fqdn, &type_len_rdata);
 #endif
@@ -511,7 +511,7 @@ zdb_icmtl_replay(zdb_zone *zone, const char *directory)
                         
                         return ZDB_JOURNAL_NSEC3_HASH_NOT_SUPPORTED;
                     }
-#ifndef NDEBUG
+#ifdef DEBUG
                     rdata_desc type_len_rdata = {TYPE_NSEC3PARAM, ttlrdata.rdata_size, ttlrdata.rdata_pointer };
                     log_debug("journal: add %{dnsname} %{typerdatadesc}", fqdn, &type_len_rdata);
 #endif
@@ -572,7 +572,7 @@ zdb_icmtl_replay(zdb_zone *zone, const char *directory)
                     ZDB_RECORD_ZALLOC_EMPTY(packed_ttlrdata, ttlrdata.ttl, rr.rdata_size);
                     packed_ttlrdata->next = NULL;
                     MEMCOPY(ZDB_PACKEDRECORD_PTR_RDATAPTR(packed_ttlrdata), rr.rdata, rr.rdata_size);
-#ifndef NDEBUG
+#ifdef DEBUG
                     rdata_desc type_len_rdata = {rr.tctr.qtype, rr.rdata_size, ZDB_PACKEDRECORD_PTR_RDATAPTR(packed_ttlrdata) };
                     log_debug("journal: add %{dnsname} %{typerdatadesc}", fqdn, &type_len_rdata);
 #endif
@@ -599,7 +599,7 @@ zdb_icmtl_replay(zdb_zone *zone, const char *directory)
                     ZDB_RECORD_ZALLOC_EMPTY(packed_ttlrdata, ttlrdata.ttl, rr.rdata_size);
                     packed_ttlrdata->next = NULL;
                     MEMCOPY(ZDB_PACKEDRECORD_PTR_RDATAPTR(packed_ttlrdata), rr.rdata, rr.rdata_size);
-#ifndef NDEBUG
+#ifdef DEBUG
                     rdata_desc type_len_rdata = {rr.tctr.qtype, rr.rdata_size, ZDB_PACKEDRECORD_PTR_RDATAPTR(packed_ttlrdata) };
                     log_debug("journal: add %{dnsname} %{typerdatadesc}", fqdn, &type_len_rdata);
 #endif
@@ -680,7 +680,7 @@ zdb_icmtl_replay(zdb_zone *zone, const char *directory)
 
     log_info("journal: %{dnsname}: done", zone->origin);
 
-#ifndef NDEBUG
+#ifdef DEBUG
     if(is_nsec)
     {
         nsec_logdump_tree(zone);

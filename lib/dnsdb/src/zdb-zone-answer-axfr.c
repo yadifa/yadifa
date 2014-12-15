@@ -107,7 +107,7 @@
  *
  * 4096 because compression only covers the first 4K of the packet
  * no limit because there is no point (1 is supposed to be nicer but at what cost !)
- * compression enabled because it reduces the bandwith AND the time
+ * compression enabled because it reduces the bandwidth AND the time
  *
  *  With buffering enabled this increases to:
  *
@@ -173,8 +173,12 @@ zdb_zone_write_axfr_clean_older(const char *directory, zdb_zone* zone, u32 seria
             {
                 break;
             }
-
+            
+#ifdef _DIRENT_HAVE_D_TYPE
             if( (result->d_type & DT_REG) != 0 )
+#else
+            if(dirent_get_file_type(directory, &entry) == DT_REG)
+#endif
             {
                 if(memcmp(result->d_name, fqdn, fqdn_len) == 0)
                 {

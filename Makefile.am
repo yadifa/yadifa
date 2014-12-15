@@ -39,7 +39,7 @@ ACLOCAL_AMFLAGS = -I m4
 dist_noinst_DATA = VERSION
 
 SUBDIRS = lib/dnscore lib/dnsdb lib/dnszone sbin/yadifad etc doc var
-if DNSTOOLS
+if HAS_TOOLS
 SUBDIRS += lib/dnslg bin/yadifa
 endif
 

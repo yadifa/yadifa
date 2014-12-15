@@ -300,8 +300,6 @@ dnskey_new_from_rdata(const u8 *rdata, u16 rdata_size, const char *origin, dnsse
             break;
     }
     
-    
-    
     return return_value;
 }
 

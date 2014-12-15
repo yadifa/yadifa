@@ -123,7 +123,7 @@ ptr_vector_resize(ptr_vector*v, s32 newsize)
         MALLOC_OR_DIE(void**, data, newsize * sizeof (void*), PTR_VECTOR_TAG);
         MEMCOPY(data, v->data, (v->offset + 1) * sizeof (void*));
 
-#ifndef NDEBUG
+#ifdef DEBUG
         if(v->data != NULL)
         {
             memset(v->data, 0xff, v->size * sizeof (void*));
@@ -276,7 +276,7 @@ ptr_vector_free_empties(ptr_vector* v, void_function_voidp free_memory)
     for(i = 0; i <= n; i++)
     {
         free_memory(v->data[i]);
-#ifndef NDEBUG
+#ifdef DEBUG
         v->data[i] = NULL;
 #endif
     }

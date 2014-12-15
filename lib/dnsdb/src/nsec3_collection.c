@@ -199,7 +199,7 @@ AVL_PREFIXED(avl_find_interval_start)(AVL_TREE_TYPE* root, AVL_REFERENCE_TYPE ob
          *
          */
 
-#ifndef NDEBUG
+#ifdef DEBUG
         if(h[0] != obj_hash[0])
         {
             DIE_MSG("NSEC3 corrupted NSEC3 node");

@@ -309,7 +309,7 @@ rrsig_updater_thread(void *context_)
          *
          */
 
-#ifndef NDEBUG
+#ifdef DEBUG
         yassert(query->added_rrsig_sll != ((zdb_packed_ttlrdata*)0xfefefefefefefefe));
 #endif
 
@@ -338,7 +338,7 @@ rrsig_updater_thread(void *context_)
         log_debug("rrsig_updater_thread(%i): enqueue (RESULT)", id);
 #endif
 
-#ifndef NDEBUG
+#ifdef DEBUG
         if(query != NULL)
         {
             yassert(query->added_rrsig_sll != ((zdb_packed_ttlrdata*)0xfefefefefefefefe));
@@ -444,7 +444,7 @@ rrsig_updater_result_process(rrsig_answer_context_s *answer_context)
         if(previous_query != NULL)
         {
         
-#ifndef NDEBUG
+#ifdef DEBUG
             memset(previous_query, 0xfe, sizeof(rrsig_update_item_s));
 #endif
 
@@ -504,7 +504,7 @@ rrsig_updater_result_process(rrsig_answer_context_s *answer_context)
         
         // release
         
-#ifndef NDEBUG
+#ifdef DEBUG
         memset(previous_query, 0xfe, sizeof(rrsig_update_item_s));
 #endif
 

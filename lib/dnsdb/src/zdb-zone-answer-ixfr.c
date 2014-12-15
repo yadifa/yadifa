@@ -179,7 +179,7 @@ zdb_zone_answer_ixfr_send_message(output_stream *tcpos, packet_writer *pw, messa
      * Flush and stop
      */
 
-#ifndef NDEBUG
+#ifdef DEBUG
     log_debug("zone write ixfr: sending message for %{dnsname}", mesg->qname);
 #endif
     

@@ -83,17 +83,17 @@ extern "C" {
 
 #define     PROGRAM_NAME                PACKAGE
 #define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASEDATE                 "2014-09-05"
+#define     RELEASEDATE                 "2014-12-16"
 #define     COMPILEDATE                 __DATE__
 
     /* List of default values for the different configuration parameters */
 #define     S_CONFIGDIR                 SYSCONFDIR "/"
-#define     S_CONFIGFILE                "yadifad.conf"
-#define     S_CONFIGFILEDYNAMIC         "yadifad.conf.dyn"
+#define     S_CONFIGFILE                PACKAGE ".conf"
+#define     S_CONFIGFILEDYNAMIC         PACKAGE ".conf.dyn"
 #define     S_DATAPATH                  LOCALSTATEDIR "/zones/"
 #define     S_XFRPATH                   LOCALSTATEDIR "/zones/xfr/"
 #define     S_KEYSPATH                  LOCALSTATEDIR "/zones/keys/"        /** Keys should not be in "shared" */
-#define     S_LOGPATH                   LOCALSTATEDIR "/log/"
+#define     S_LOGPATH                   LOGDIR                              /** defined at configure time, see: --with-logdir (default is /var/log/yadifa) */
 #define     S_PIDFILE                   LOCALSTATEDIR "/run/" PACKAGE ".pid"
 
 #define     S_VERSION_CHAOS             PACKAGE_VERSION                  /* limit the size */ 
@@ -369,7 +369,7 @@ struct config_data
 
     u32                                                  queries_log_type;
 
-#if HAS_DNSSEC_SUPPORT != 0
+#if HAS_DNSSEC_SUPPORT
     u32                                             sig_validity_interval;
     u32                                         sig_validity_regeneration;
     u32                                               sig_validity_jitter;

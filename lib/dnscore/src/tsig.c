@@ -76,7 +76,7 @@
  * Worst case : N is enough for sum[n = 0,N](Fn) where F is Fibonacci
  * Best case : N is enough for (2^(N+1))-1
  */
-#define AVL_MAX_DEPTH   10	/* 2047 TSIG keys max */
+#define AVL_MAX_DEPTH   32	/* worst case scenario : about 9M keys */
 
 /*
  * The previx that will be put in front of each function name
@@ -689,7 +689,7 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
         MESSAGE_SET_AR(mesg->buffer,htons(ar_count - 1));
 
         /*
-         * Read the algoritm name and see if it matches our TSIG key
+         * Read the algorithm name and see if it matches our TSIG key
          */
 
         if(FAIL(return_code = packet_reader_read_fqdn(purd, algorithm, sizeof (algorithm))))
@@ -793,7 +793,7 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
             }
         }
         
-        if(abs(then - now) > fudge)
+        if(llabs((s64)(then - now)) > fudge) // cast to signed in case now > then
         {
             mesg->tsig.error = htons(RCODE_BADTIME);
             mesg->status = FP_TSIG_ERROR;

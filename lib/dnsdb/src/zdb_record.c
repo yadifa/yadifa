@@ -523,7 +523,7 @@ void zdb_ttlrdata_delete(zdb_ttlrdata* record)
     free(record);
 }
 
-#ifndef NDEBUG
+#ifdef DEBUG
 
 /**
  * DEBUG

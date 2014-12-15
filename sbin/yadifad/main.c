@@ -246,7 +246,7 @@ yadifad_config_on_section_loggers_read(const char* name, int index)
  * 
  * @param argc
  * @param argv
- * @return  0  if the configuration is successfull and the server can start
+ * @return  0  if the configuration is successful and the server can start
  * @return  1 if no error occurred but the server must stop
  * @return -1 if an error occurred and the server must stop
  */

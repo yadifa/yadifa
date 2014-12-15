@@ -41,7 +41,7 @@
  *
  * USE INCLUDES */
 
-#include "dnscore-config.h"
+#include "dnscore/dnscore-config.h"
 
 #include <assert.h>
 #include <string.h>
@@ -201,15 +201,15 @@ host_address2allocated_sockaddr(struct sockaddr **sap, const host_address *addre
         {
             struct sockaddr_in *sa_in;
 
-#if HAS_SOCKADDR_SA_LEN != 0
-            sa_in->sa_len = sizeof(struct sockaddr_in);
-#endif
             MALLOC_OR_DIE(struct sockaddr_in*, sa_in, sizeof(struct sockaddr_in), SOCKADD4_TAG);
             ZEROMEMORY(sa_in, sizeof(struct sockaddr_in));
             memcpy(&sa_in->sin_addr.s_addr, address->ip.v4.bytes, 4);
             //sa_in->sin_addr.s_addr = htonl(sa_in->sin_addr.s_addr);
             sa_in->sin_port = address->port;
             sa_in->sin_family = AF_INET;
+#if HAS_SOCKADDR_IN_SIN_LEN != 0
+            sa_in->sin_len = sizeof(struct sockaddr_in);
+#endif
             *sap = (struct sockaddr*)sa_in;
             return sizeof(struct sockaddr_in);
         }
@@ -217,14 +217,14 @@ host_address2allocated_sockaddr(struct sockaddr **sap, const host_address *addre
         {
             struct sockaddr_in6 *sa_in6;
 
-#if HAS_SOCKADDR_SA_LEN != 0
-            sa_in6->sa_len = sizeof(struct sockaddr_in6);
-#endif
             MALLOC_OR_DIE(struct sockaddr_in6*, sa_in6, sizeof(struct sockaddr_in6), SOCKADD6_TAG);
             ZEROMEMORY(sa_in6, sizeof(struct sockaddr_in6));
             memcpy(&sa_in6->sin6_addr, address->ip.v6.bytes, 16);
             sa_in6->sin6_port = address->port;
             sa_in6->sin6_family = AF_INET6;
+#if HAS_SOCKADDR_IN6_SIN6_LEN != 0
+            sa_in6->sin6_len = sizeof(struct sockaddr_in6);
+#endif
             /*
                sa_in6->sin6_flowinfo = 0;
                sa_in6->sin6_scope_id = 0;
@@ -248,14 +248,15 @@ host_address2sockaddr(socketaddress *sap, const host_address *address)
         {
             struct sockaddr_in *sa_in = (struct sockaddr_in*)sap;
 
-#if HAS_SOCKADDR_SA_LEN != 0
-            sa_in->sa_len = sizeof(struct sockaddr_in);
-#endif
             ZEROMEMORY(sa_in, sizeof(struct sockaddr_in));
             memcpy(&sa_in->sin_addr.s_addr, address->ip.v4.bytes, 4);
 
             sa_in->sin_port = address->port;
             sa_in->sin_family = AF_INET;
+
+#if HAS_SOCKADDR_IN_SIN_LEN != 0
+            sa_in->sin_len = sizeof(struct sockaddr_in);
+#endif
 
             return sizeof(struct sockaddr_in);
         }
@@ -263,14 +264,15 @@ host_address2sockaddr(socketaddress *sap, const host_address *address)
         {
             struct sockaddr_in6 *sa_in6 = (struct sockaddr_in6*)sap;
 
-#if HAS_SOCKADDR_SA_LEN != 0
-            sa_in6->sa_len = sizeof(struct sockaddr_in6);
-#endif
 
             ZEROMEMORY(sa_in6, sizeof(struct sockaddr_in6));
             memcpy(&sa_in6->sin6_addr, address->ip.v6.bytes, 16);
             sa_in6->sin6_port = address->port;
             sa_in6->sin6_family = AF_INET6;
+
+#if HAS_SOCKADDR_IN6_SIN6_LEN != 0
+            sa_in6->sin6_len = sizeof(struct sockaddr_in6);
+#endif
 
             return sizeof(struct sockaddr_in6);
         }
@@ -1163,7 +1165,7 @@ host_address_to_str(const host_address *ha, char *str, int len, u8 flags)
 #if DNSCORE_HAS_TSIG_SUPPORT
     if((ha->tsig != NULL) && (ha->tsig->name != NULL))
     {
-        s32 n;
+        s32 n = 0;
         if(flags & HOST_ADDRESS_TO_STR_TSIG)
         {
             n = snformat(p, limit - p, "*%{dnsname}", ha->tsig->name);

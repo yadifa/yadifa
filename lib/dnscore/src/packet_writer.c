@@ -61,7 +61,7 @@ packet_writer_init(packet_writer* pc, u8* packet, u32 packet_offset, u32 size_li
     pc->pool_head = pc->pool;
     pc->head = NULL;
 
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(&packet[packet_offset], 0xff, size_limit - packet_offset);
 #endif
 

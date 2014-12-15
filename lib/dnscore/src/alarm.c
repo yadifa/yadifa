@@ -544,6 +544,20 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
         
         return;
     }
+    
+    if(desc->epoch == time(NULL))
+    {
+
+#ifdef DEBUG
+        alarm_mutex_locked = FALSE;
+#endif
+
+        mutex_unlock(&alarm_mutex);
+
+        log_err("alarm_set(%p,%x) is NOW", hndl, desc);
+        
+        return;
+    }
 
     alarm_event_list *head = &handle_struct->events;
 

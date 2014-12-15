@@ -409,6 +409,8 @@ signal_handler(int signo, siginfo_t* info, void* context)
             errno = errno_value;
             
             signal_shutdown_received = TRUE;
+            
+            // fall-through
         }
         case SIGHUP:
         case SIGUSR1:
@@ -755,12 +757,6 @@ signal_handler_init()
             {
                 sigemptyset(&action.sa_mask);    /* can interrupt the interrupt */
                 
-                /*
-                sigaddset(&action.sa_mask, SIGBUS);
-                sigaddset(&action.sa_mask, SIGFPE);
-                sigaddset(&action.sa_mask, SIGILL);
-                sigaddset(&action.sa_mask, SIGSEGV);
-                */
                 break;
             }
             default:

@@ -98,7 +98,7 @@ osprint_tab_padded(output_stream* os, char* str, u32 len, s32 tabs)
     }
 }
 
-#ifndef NDEBUG
+#ifdef DEBUG
 static void
 zdb_zone_rr_label_flags_format(const void *value, output_stream *os, s32 padding, char pad_char, bool left_justified, void* reserved_for_method_parameters)
 {
@@ -193,7 +193,7 @@ zdb_zone_write_text(const zdb_zone* zone, output_stream* fos, bool force_label)
         return ret;
     }
     
-#ifndef NDEBUG
+#ifdef DEBUG
     format_writer status_flags_fw = {zdb_zone_rr_label_flags_format, NULL};
     osprintln(&bos, "; A=apex 1=NSEC 3=NSEC3 O=NSEC3-OPTOUT E=dnssec-edited F=frozen/loading *=wildcard present U=updating D=at-delegation d=under-delegation C=has-CNAME c=no-CNAME-allowed I=invalid-zone");
 #endif
@@ -270,7 +270,7 @@ zdb_zone_write_text(const zdb_zone* zone, output_stream* fos, bool force_label)
             
             ret = osprint_rdata(&bos, TYPE_SOA, ZDB_PACKEDRECORD_PTR_RDATAPTR(soa_ttlrdata), ZDB_PACKEDRECORD_PTR_RDATASIZE(soa_ttlrdata));
 
-#ifndef NDEBUG
+#ifdef DEBUG
             status_flags_fw.value = &label->flags;
             osformatln(&bos, " ; flags=%w", &status_flags_fw);
 #else
@@ -335,7 +335,7 @@ zdb_zone_write_text(const zdb_zone* zone, output_stream* fos, bool force_label)
 
                 ret = osprint_rdata(&bos, type, ZDB_PACKEDRECORD_PTR_RDATAPTR(ttlrdata_sll), ZDB_PACKEDRECORD_PTR_RDATASIZE(ttlrdata_sll));
                 
-#ifndef NDEBUG
+#ifdef DEBUG
                 status_flags_fw.value = &label->flags;
                 osformatln(&bos, " ; flags=%w", &status_flags_fw);
 #else

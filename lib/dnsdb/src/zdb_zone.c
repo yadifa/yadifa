@@ -43,7 +43,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #include <dnscore/format.h>
 #endif
 
@@ -1136,7 +1136,7 @@ zdb_zone_isinvalid(zdb_zone *zone)
     return invalid;
 }
 
-#ifndef NDEBUG
+#ifdef DEBUG
 
 /**
  * DEBUG

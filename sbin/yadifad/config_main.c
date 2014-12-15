@@ -145,7 +145,7 @@ CONFIG_U32(      xfr_connect_timeout         , S_XFR_CONNECT_TIMEOUT      )
 CONFIG_U32(      queries_log_type            , S_QUERIES_LOG_TYPE         )
 
 #if HAS_DNSSEC_SUPPORT != 0
-CONFIG_U32(      sig_signing_type            , S_SIG_SIGNING_TYPE          )
+CONFIG_U16(      sig_signing_type            , S_SIG_SIGNING_TYPE          )
 CONFIG_U32_RANGE(sig_validity_interval       , S_SIG_VALIDITY_INTERVAL    , SIGNATURE_VALIDITY_INTERVAL_MIN     , SIGNATURE_VALIDITY_INTERVAL_MAX    ) /* 7 to 365 days = 30 */
 CONFIG_U32_RANGE(sig_validity_regeneration   , S_SIG_VALIDITY_REGENERATION, SIGNATURE_VALIDITY_REGENERATION_MIN , SIGNATURE_VALIDITY_REGENERATION_MAX) /* 24 hours to 168 hours */
 CONFIG_U32_RANGE(sig_validity_jitter         , S_SIG_VALIDITY_JITTER      , SIGNATURE_VALIDITY_JITTER_MIN       , SIGNATURE_VALIDITY_JITTER_MAX      ) /* 0 to 86400 = 3600*/
@@ -400,7 +400,7 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
     
     if(!IS_TYPE_PRIVATE(g_config->sig_signing_type))
     {
-        osformatln(termerr, "error: signing type is not in the accepted range");
+        osformatln(termerr, "error: signing type is not in the accepted range: %hx", g_config->sig_signing_type);
         return CONFIG_WRONG_SIG_TYPE;
     }
     

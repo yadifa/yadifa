@@ -265,7 +265,7 @@ static inline bool zdb_rr_label_is_glue(zdb_rr_label* label)
 /* 0 USES */
 #define RR_LABEL_HASRECORDS(rr_label_) btree_isempty(&(rr_label_)->resource_record_set)
 
-#ifndef NDEBUG
+#ifdef DEBUG
 
 void zdb_rr_label_print_indented(zdb_rr_label* rr_label, output_stream *os, int indent);
 

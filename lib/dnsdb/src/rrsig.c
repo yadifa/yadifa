@@ -84,7 +84,7 @@
 #define RRSIG_AUTOMATIC_ALARM_REFRESH 0
 
 /*
-#ifdef NDEBUG
+#ifndef DEBUG
 #undef RRSIG_DUMP
 #define RRSIG_DUMP  0
 #endif
@@ -1145,19 +1145,19 @@ rrsig_update_label(rrsig_context_s *context, zdb_rr_label* label)
                             }
                             else
                             {
-                                /* sign everthing else */
+                                /* sign everything else */
                             }
 
                             break;
                         }
                         case RRSIG_CONTEXT_NSEC3:
                         {
-                            /* sign everthing not filtered out yet */
+                            /* sign everything not filtered out yet */
                             break;
                         }
                         case RRSIG_CONTEXT_NSEC:
                         {
-                            /* sign everthing not filtered out yet */
+                            /* sign everything not filtered out yet */
 
                             if(ZDB_LABEL_ATDELEGATION(label))
                             {
@@ -1168,7 +1168,7 @@ rrsig_update_label(rrsig_context_s *context, zdb_rr_label* label)
                             }
                             else
                             {
-                                /* sign everthing else */
+                                /* sign everything else */
                             }
 
                             break;
@@ -1272,7 +1272,7 @@ rrsig_update_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata*
 
     zdb_packed_ttlrdata** rrsig_sllp = zdb_record_find_insert(&label->resource_record_set, TYPE_RRSIG); /* FB handled separately */
 
-#ifndef NDEBUG
+#ifdef DEBUG
     zdb_packed_ttlrdata** rrsig_sllp_check = rrsig_sllp;
 #endif
 
@@ -1296,7 +1296,7 @@ rrsig_update_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata*
         zdb_packed_ttlrdata** rrsig_recordp = rrsig_sllp;
         zdb_packed_ttlrdata *rrsig_record = *rrsig_recordp;
 
-#ifndef NDEBUG
+#ifdef DEBUG
         rdata_desc rdatadesc={TYPE_RRSIG, ZDB_PACKEDRECORD_PTR_RDATASIZE(sig), ZDB_PACKEDRECORD_PTR_RDATAPTR(sig)};
         log_debug("rrsig: updating: deleting: %{dnsnamestack} %{typerdatadesc}", name, &rdatadesc);
 #endif
@@ -1317,7 +1317,7 @@ rrsig_update_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata*
                 {
                     /* remove it from the chain */
                     *rrsig_recordp = rrsig_record->next;
-#ifndef NDEBUG
+#ifdef DEBUG
                     rrsig_record->next = (zdb_packed_ttlrdata*)~0;
 #endif
                     ZDB_RECORD_ZFREE(rrsig_record);
@@ -1365,7 +1365,7 @@ rrsig_update_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata*
         u8* rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(sig);
         u32 rdata_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(sig);
 
-#ifndef NDEBUG
+#ifdef DEBUG
         rdata_desc rdatadesc={TYPE_RRSIG, rdata_size, rdata};
         log_debug5("rrsig: updating: adding: %{dnsnamestack} %{typerdatadesc}", name, &rdatadesc);
 #endif
@@ -1435,7 +1435,7 @@ rrsig_update_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata*
         log_debug5("rrsig: removing obsolete RRSIG node", label);
 #endif
 
-#ifndef NDEBUG
+#ifdef DEBUG
         yassert(*rrsig_sllp_check == NULL);
 #endif
 

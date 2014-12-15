@@ -32,7 +32,7 @@ dnl
 dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 4183 $])
+AC_REVISION([$Revision: 4577 $])
 # 1
 # svn log 2> /dev/null|head -2|grep ^r|sed 's/.\([1-9]*\).*/\1/'
 
@@ -120,9 +120,7 @@ AH_BOTTOM([
 
 AC_SYS_LARGEFILE
 
-AC_CPU_CHECK
 AC_COMPILER_CHECK
-AC_MEMALIGN_CHECK
 AC_PTHREAD_SPINLOCK_CHECK
 AC_PTHREAD_SETNAME_NP_CHECK
 
@@ -170,6 +168,7 @@ fi
 echo
 echo "Install prefix ...................... : $prefix"
 echo "Install sysconf ..................... : $sysconfdir"
+echo "Default log directory ............... : $logdir"
 echo
 echo
 

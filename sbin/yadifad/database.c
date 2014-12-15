@@ -803,8 +803,11 @@ database_zone_refresh_alarm(void *args)
     database_zone_refresh_alarm_args *sszra = (database_zone_refresh_alarm_args*)args;
     const u8 *origin = sszra->origin;
     zdb *db = g_config->database;
+    zdb_zone *zone;
     ya_result return_value;
+    u32 now = 0;
     u32 next_alarm_epoch = 0;
+    soa_rdata soa;
 
     log_info("database: refresh: zone %{dnsname}", origin);
 
@@ -819,7 +822,7 @@ database_zone_refresh_alarm(void *args)
         return ERROR;
     }
 
-    zdb_zone *zone = zdb_zone_find_from_name(db, zone_desc->domain, CLASS_IN);
+    zone = zdb_zone_find_from_name(db, zone_desc->domain, CLASS_IN);
     
     if(zone != NULL)
     {
@@ -829,10 +832,6 @@ database_zone_refresh_alarm(void *args)
 
         if(zdb_zone_trylock(zone, ZDB_ZONE_MUTEX_REFRESH))
         {
-            u32 now = time(NULL);
-
-            soa_rdata soa;
-
             if(FAIL(return_value = zdb_zone_getsoa(zone, &soa)))
             {
                 /*
@@ -845,6 +844,8 @@ database_zone_refresh_alarm(void *args)
                 
                 return ERROR;
             }
+            
+            now = time(NULL);
             
             // defines 3 epoch printers (to be used with %w)
             u32 rf = zone_desc->refresh.refreshed_time;
@@ -887,6 +888,9 @@ database_zone_refresh_alarm(void *args)
                 else
                 {
                     // next time we will check for the refresh status will be now + refresh ...
+                    
+                    log_info("database: refresh: zone %{dnsname}: refresh in %d seconds", origin, zone_desc->refresh.refreshed_time + soa.refresh - now);
+                    
                     next_alarm_epoch = zone_desc->refresh.refreshed_time + soa.refresh;
                 }
             }
@@ -894,8 +898,7 @@ database_zone_refresh_alarm(void *args)
             {
                 // else we are retrying ...
                 
-                if(now < zone_desc->refresh.refreshed_time + soa.expire) /// @todo check if it should not be also + soa.refresh
-                {
+                if(now < zone_desc->refresh.refreshed_time + soa.expire)                {
                     // then we have not expired yet ...
                     
                     // next time we will check for the refresh status will be now + retry ...
@@ -908,6 +911,10 @@ database_zone_refresh_alarm(void *args)
                         log_info("database: refresh: zone %{dnsname}: retry", origin);
 
                         database_zone_ixfr_query(zone_desc->origin);
+                    }
+                    else
+                    {
+                        log_debug("database: refresh: zone %{dnsname}: not retry time yet", origin);
                     }
                 }
                 else
@@ -924,7 +931,8 @@ database_zone_refresh_alarm(void *args)
         }
         else
         {
-            log_info("database: refresh: zone %{dnsname}: has already been locked", origin);
+            log_info("database: refresh: zone %{dnsname}: has already been locked, will retry layer", origin);
+            next_alarm_epoch = time(NULL) + 2;
         }
     }
     else
@@ -937,12 +945,23 @@ database_zone_refresh_alarm(void *args)
         /*
          * The alarm rang but nothing has been done
          */
-        log_warn("database: refresh: zone %{dnsname}: nothing to do, re-arming the alarm", origin);
+        
+        EPOCH_DEF(next_alarm_epoch);        
+        log_warn("database: refresh: zone %{dnsname}: re-arming the alarm for %w", origin, EPOCH_REF(next_alarm_epoch));
 
         database_zone_refresh_maintenance(db, origin, next_alarm_epoch);
     }
+    else
+    {
+        log_warn("database: refresh: zone %{dnsname}: alarm will not be re-armed", origin);
+    }
 
     free((char*)sszra->origin);
+    
+#ifdef DEBUG
+    memset(sszra, 0xff, sizeof(database_zone_refresh_alarm_args));
+#endif
+    
     free(sszra);
     
     zone_release(zone_desc);
@@ -950,8 +969,8 @@ database_zone_refresh_alarm(void *args)
     return SUCCESS;
 }
 
-static ya_result
-database_zone_refresh_maintenance_internal(zdb_zone* zone, u32 next_alarm_epoch)
+ya_result
+database_zone_refresh_maintenance_wih_zone(zdb_zone* zone, u32 next_alarm_epoch)
 {
     if((zone != NULL) && ZDB_ZONE_VALID(zone))
     {
@@ -1031,9 +1050,11 @@ database_zone_refresh_maintenance(zdb *database, const u8 *origin, u32 next_alar
 {
     log_debug("database: refresh: database_zone_refresh_maintenance for zone %{dnsname} at %u", origin, next_alarm_epoch);
 
-    zdb_zone *dbzone = zdb_zone_find_from_dnsname(database, origin, CLASS_IN);
+    zdb_zone *zone = zdb_zone_find_from_dnsname(database, origin, CLASS_IN);
 
-    return database_zone_refresh_maintenance_internal(dbzone, next_alarm_epoch);
+    ya_result ret = database_zone_refresh_maintenance_wih_zone(zone, next_alarm_epoch);
+
+    return ret;
 }
 
 

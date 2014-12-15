@@ -192,7 +192,7 @@ dynupdate_update_rrsig_body(zdb_zone *zone, treeset_tree *lus_set)
                 }
             }
 
-#ifndef NDEBUG
+#ifdef DEBUG
             log_debug("dynupdate_update_rrsig_body: queuing %{dnsnamestack}", &path);
 #endif
 
@@ -664,7 +664,7 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
             
             if(LABEL_HAS_RECORDS(label))
             {
-#ifndef NDEBUG
+#ifdef DEBUG
                 log_debug("dynupdate_update_nsec: pre-processing %{dnsname}", lus->dname);
 #endif
 
@@ -681,7 +681,7 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
 
                     nsec_update_label_node(zone, label, labels, labels_top);
 
-#ifndef NDEBUG
+#ifdef DEBUG
                     log_debug("dynupdate_update_nsec: marking for update %{dnsname}", lus->dname);
 #endif
 
@@ -702,7 +702,7 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
                     {
                         /* I only need the label, I don't set the data */
 
-#ifndef NDEBUG
+#ifdef DEBUG
                         log_debug("dynupdate_update_nsec: marking for delete %{dnslabel}", label->name);
 #endif
 
@@ -727,7 +727,7 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
 
                         if(pred != NULL)
                         {
-#ifndef NDEBUG
+#ifdef DEBUG
                             log_debug("dynupdate_update_nsec: marking for update %{dnslabel} (pred del)", pred->label->name);
 #endif
 
@@ -833,7 +833,7 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
              */
 
             
-#ifndef NDEBUG
+#ifdef DEBUG
             log_debug("dynupdate_update_nsec: %{dnsname} changed: scheduling", nsec_item->inverse_relative_name);
 #endif
 
@@ -858,7 +858,7 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
         }
         else
         {
-#ifndef NDEBUG
+#ifdef DEBUG
             log_debug("dynupdate_update_nsec: %{dnsname} didn't changed", nsec_item->inverse_relative_name);
 #endif
         }
@@ -917,7 +917,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
     dnsname_vector origin_path;
     dnsname_vector name_path;
 
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(&origin_path, 0xff, sizeof(origin_path));
     memset(&name_path, 0xff, sizeof(name_path));
 #endif
@@ -998,7 +998,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
     treeset_tree lus_set = TREESET_EMPTY;
     treeset_avl_iterator lus_iter;
     
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(&lus_iter, 0xff, sizeof(lus_iter));
 #endif
 
@@ -1196,7 +1196,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
             if(!dryrun)
             {
 
-#ifndef NDEBUG
+#ifdef DEBUG
                 log_debug("update: delete %{dnsname} %{dnstype} ...", rname, &rtype);
 #endif
                 
@@ -1286,7 +1286,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
 
             if(!dryrun)
             {
-#ifndef NDEBUG
+#ifdef DEBUG
                 log_debug("update: delete %{dnsname} %{dnstype} ...", rname, &rtype);
 #endif
 
@@ -1359,7 +1359,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
             {
                 zdb_rr_label *label = zdb_rr_label_add(zone, name_path.labels, (name_path.size - origin_path.size) - 1);
 
-#ifndef NDEBUG
+#ifdef DEBUG
                 log_debug("update: add %{dnsname} %{dnstype} ...", rname, &rtype);
 #endif
 
@@ -1511,13 +1511,13 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
             treeset_node *lus_node = treeset_avl_iterator_next_node(&lus_iter);
             label_update_status *lus = (label_update_status *)lus_node->data;
             
-#ifndef NDEBUG
+#ifdef DEBUG
             memset(&name_stack, 0xff, sizeof(name_stack));
 #endif
             
             dnsname_to_dnsname_stack(lus->dname, &name_stack);
 
-#ifndef NDEBUG
+#ifdef DEBUG
             log_debug("update: sanitise %{dnsnamestack}", &name_stack);
 #endif
 

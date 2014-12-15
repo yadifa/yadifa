@@ -236,7 +236,7 @@ config_register_rrl(s32 priority)
 
 /*
  * The item will be dynamic in size
- * the key being error_mask_ip_imputed_name, crafter everytime for a (fast) memcmp comparison
+ * the key being error_mask_ip_imputed_name, crafter every time for a (fast) memcmp comparison
  * The key should be a multiple of 8 bytes, padded with 0 (faster memcmp)
  * 
  * The epoch should cover enough time.

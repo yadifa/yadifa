@@ -867,9 +867,13 @@ database_service(struct service_worker_s *worker)
                     
                     zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_MOUNT, NULL, FALSE);
                 }
+                else if((message->payload.zone_loaded_event.result_code == ZRE_NO_VALID_FILE_FOUND) && (zone_desc->type == ZT_SLAVE))
+                {
+                    log_debug("no local copy of the zone for %{dnsname} is available, download required", message->origin);
+                }
                 else
                 {
-                    log_err("database: failed to load the zone for %{dnsname}: %r", message->origin, message->payload.zone_loaded_event.result_code);
+                    log_err("failed to load the zone for %{dnsname}: %r", message->origin, message->payload.zone_loaded_event.result_code);
                 }
                 
                 /// @todo why ? zone_desc = zone_acquirebydnsname(message->origin);
@@ -904,7 +908,7 @@ database_service(struct service_worker_s *worker)
 #endif
                     if(zone_desc->type == ZT_SLAVE)
                     {
-                        database_zone_refresh_maintenance(g_config->database, message->origin, 0);
+                        database_zone_refresh_maintenance(g_config->database, message->origin, 0); // means next refresh from now
                     }
                 }
                 else
@@ -968,7 +972,7 @@ database_service(struct service_worker_s *worker)
                     
                     if(message->payload.zone_downloaded_event.download_type == TYPE_AXFR)
                     {
-                        database_zone_load(message->origin);
+                        database_zone_load(message->origin); // the downloaded file can now be loaded
                     }
                 }
                 else

@@ -48,5 +48,6 @@ install-data-hook:
 		mkdir -p "$(DESTDIR)/$(localstatedir)/$$d"; 					\
 		chmod 755 "$(DESTDIR)/$(localstatedir)/$$d";					\
 	done
-	
+	mkdir -p "$(DESTDIR)/$(logdir)"
+	chmod 755 "$(DESTDIR)/$(logdir)"
 

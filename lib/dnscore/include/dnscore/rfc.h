@@ -356,7 +356,7 @@
    */
 #define     TYPE_TXT                        NU16(16) /* text strings                       rfc 1035 */
 
-#define     TYPE_RP                         NU16(17) /* For Responisble Person             rfc 1183 */
+#define     TYPE_RP                         NU16(17) /* For Responsible Person             rfc 1183 */
 #define     TYPE_ASFDB                      NU16(18) /* CANONIZE */
 #define     TYPE_X25                        NU16(19) /*                                    rfc 1183 */
 #define     TYPE_ISDN                       NU16(20) /*                                    rfc 1183 */
@@ -591,6 +591,7 @@
 /* -----------------------------------------------------------------*/
 
 #define     IS_TYPE_PRIVATE(t)              ((t)>=65280&&((t)<=65534))
+#define     IS_TYPE_NPRIVATE(t)             ( (NU16(t) >= 65280) && ( NU16(t) <= 65534))
 
 /*    ------------------------------------------------------------
  *

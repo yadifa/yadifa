@@ -1188,7 +1188,7 @@ fformat(FILE* out, const char* fmt, ...)
 {
     char tmp[4096];
 
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(tmp, '!', sizeof (tmp));
 #endif
 

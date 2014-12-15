@@ -124,7 +124,7 @@ tcp_send_message_data(message_data* mesg)
     /**
      * SAME AS READ : THERE HAS TO BE A RATE !
      */
-#ifndef HAS_DROPALL_SUPPORT
+#if !HAS_DROPALL_SUPPORT
     if(FAIL(sent = writefully_limited(mesg->sockfd, mesg->buffer_tcp_len, mesg->send_length + 2, g_config->tcp_query_min_rate_us)))
     {
         log_err("tcp write error: %r", sent);
@@ -584,6 +584,9 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
 #endif // HAS_CTRL
             default:
             {
+                return_code = message_process_query(mesg);
+                mesg->status = RCODE_NOTIMP;
+
                 log_warn("unknown [%04hx] error: %r", ntohs(MESSAGE_ID(mesg->buffer)), MAKE_DNSMSG_ERROR(mesg->status));
                 
                 if( (return_code != INVALID_MESSAGE) && (((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0) || mesg->status != RCODE_FORMERR) && (MESSAGE_QR(mesg->buffer) == 0) )

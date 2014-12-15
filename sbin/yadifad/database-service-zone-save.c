@@ -177,7 +177,7 @@ database_service_zone_save(zone_desc_s *zone_desc)
     
     log_debug1("database_service_zone_save(%{dnsname}@%p=%i)", zone_desc->origin, zone_desc, zone_desc->rc);
     
-    log_debug1("database_service_zone_save: locking zone '%{dnsname}' for saveing", zone_desc->origin);
+    log_debug1("database_service_zone_save: locking zone '%{dnsname}' for saving", zone_desc->origin);
     
     if(FAIL(zone_lock(zone_desc, ZONE_LOCK_SAVE)))
     {
@@ -202,11 +202,11 @@ database_service_zone_save(zone_desc_s *zone_desc)
     
     if(zone_desc->status_flags & (ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE))
     {
-        // already saveing
+        // already saving
         
         zone_desc_log(MODULE_MSG_HANDLE, MSG_DEBUG1, zone_desc, "database_service_zone_save");
         
-        log_err("database_service_zone_save: '%{dnsname}' already saveing", origin);
+        log_err("database_service_zone_save: '%{dnsname}' already saving", origin);
         
         zone_unlock(zone_desc, ZONE_LOCK_SAVE);
                         
@@ -218,7 +218,7 @@ database_service_zone_save(zone_desc_s *zone_desc)
     zone_acquire(zone_desc);
     database_service_zone_save_queue_thread(database_service_zone_save_thread, zone_desc, NULL, "database_zone_save_thread");
     
-    log_debug1("database_service_zone_save: unlocking zone '%{dnsname}' for saveing", origin);
+    log_debug1("database_service_zone_save: unlocking zone '%{dnsname}' for saving", origin);
     
     zone_unlock(zone_desc, ZONE_LOCK_SAVE);
     

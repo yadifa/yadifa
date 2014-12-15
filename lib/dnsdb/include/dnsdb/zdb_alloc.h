@@ -94,8 +94,8 @@ extern "C" {
    
 #define ZDB_ALLOC_PG_SIZE_COUNT         256 // 2K
 #define ZDB_ALLOC_PG_PAGEABLE_MAXSIZE   (ZDB_ALLOC_PG_SIZE_COUNT * 8) /* x 8 because we are going by 8 increments */
-#define ZDB_MALLOC_SIZE_TO_PAGE(size_)  (((size_)-1)>>3)
-#define ZDB_ALLOC_CANHANDLE(size_)      ((size_)<=ZDB_ALLOC_PG_PAGEABLE_MAXSIZE)
+#define ZDB_MALLOC_SIZE_TO_PAGE(size_)  ((s32)(((size_)-1)>>3))
+#define ZDB_ALLOC_CANHANDLE(size_)      ((s32)((size_)<=ZDB_ALLOC_PG_PAGEABLE_MAXSIZE))
 
 // prepares the zdb_alloc tables
     
@@ -244,10 +244,10 @@ void zdb_mfree_unaligned(void* ptr);
 
 #define ZALLOC_ARRAY_RESIZE(type_,array_,count_,newcount_)			\
 {										\
-    int zalloc_new_count = (newcount_);						\
-    if((count_) != zalloc_new_count)						\
+    int zalloc_new_count = (u32)(newcount_);						\
+    if(((u32)(count_)) != zalloc_new_count)						\
     {										\
-	if( ZDB_MALLOC_SIZE_TO_PAGE(sizeof(type_)*(count_)) !=                  \
+	if( ZDB_MALLOC_SIZE_TO_PAGE(sizeof(type_)*((u32)(count_))) !=                  \
 	    ZDB_MALLOC_SIZE_TO_PAGE(sizeof(type_)*zalloc_new_count))		\
 	{									\
 	    type_* __tmp__;							\
@@ -256,14 +256,14 @@ void zdb_mfree_unaligned(void* ptr);
 	    {									\
 		ZALLOC_ARRAY_OR_DIE(type_*,__tmp__,sizeof(type_)*zalloc_new_count, \
 				    ZALLOC_ARRAY_RESIZE_TAG);			\
-		MEMCOPY(__tmp__,(array_),sizeof(type_)*MIN((count_),zalloc_new_count));	\
+		MEMCOPY(__tmp__,(array_),sizeof(type_)*MIN(((u32)(count_)),zalloc_new_count));	\
 	    }									\
 	    else								\
 	    {									\
 		__tmp__ = NULL;							\
 	    }									\
 										\
-	    ZFREE_ARRAY((array_),sizeof(type_)*(count_));			\
+	    ZFREE_ARRAY((array_),sizeof(type_)*((u32)(count_)));			\
 	    array_ = __tmp__;							\
 	    count_ = newcount_;							\
 	}									\

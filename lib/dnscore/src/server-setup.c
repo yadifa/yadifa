@@ -164,7 +164,7 @@ server_setup_daemon_go()
     if(pid != 0) /* parent */
     {
 #ifdef DEBUG
-        formatln("first level parent done");
+        println("first level parent done");
         flushout();
 #endif
         
@@ -231,10 +231,13 @@ server_setup_daemon_go()
      */
     
 #ifdef DEBUG
-    const char *output_file  = "/tmp/server.std";
-    formatln("redirecting all to '%s'\n", output_file);fflush(NULL);
+    // Let's ensure predicting the file name is not trivial and that no overwrite would occur
+    char output_file[PATH_MAX];
+    snformat(output_file, sizeof(output_file), "/tmp/server-%013x-%05x.std", timeus(), getpid());
+    int file_flags = O_RDWR|O_CREAT|O_EXCL; // ensure no overwrite
 #else
     const char *output_file  = "/dev/null";
+    int file_flags = O_RDWR;
 #endif
 
     /* Attach file descriptors 0, 1, and 2 to /dev/null */
@@ -243,11 +246,15 @@ server_setup_daemon_go()
     flusherr();
 
     int tmpfd; 
-    if((tmpfd = open_create_ex(output_file, O_RDWR|O_CREAT, 0666)) < 0)
+    if((tmpfd = open_create_ex(output_file, O_RDWR|O_CREAT, 0660)) < 0)
     {
         log_err("stdin: %s '%s'", strerror(errno), output_file);
         exit(EXIT_FAILURE);
     }
+
+#ifdef DEBUG
+    formatln("redirected stdout/stderr to '%s'", output_file);
+#endif
 
     for(int i = 0; i <= 2; i++)
     {

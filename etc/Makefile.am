@@ -28,18 +28,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
-#
-#	YADIFA config Makefile.am script
-#
-#      	Makefile.am script
-#
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.0.0-public/etc/Makefile.am $
-#
-#	$Date: 2014-08-27 11:13:41 +0200 (Wed, 27 Aug 2014) $
-#
-#	$Revision: 4081 $
-#
-##############################################################################
 
 ACLOCAL_AMFLAGS = -I m4
 
@@ -48,9 +36,16 @@ OCE=$(OC).example
 YI=yadifad.init
 YIE=$(YI).example
 
-doc_DATA = $(OCE) $(YIE) yadifad-master.conf.example yadifad-slave.conf.example
+doc_DATA = $(OCE) $(YIE) yadifad-master.conf.example yadifad-slave.conf.example \
+				yadifad.init.debian	yadifad.init.rhel \
+				yadifad.logrotate \
+				yadifad.service yadifad.service.arch yadifad.service.debian yadifad.service.rhel
 
-noinst_HEADERS = yadifad.conf.example yadifad-master.conf.example yadifad-slave.conf.example yadifad.init.example
+noinst_HEADERS = yadifad.conf.example yadifad-master.conf.example yadifad-slave.conf.example \
+				yadifad.init.example yadifad.init.debian yadifad.init.rhel \
+				yadifad.logrotate \
+				yadifad.service yadifad.service.arch yadifad.service.debian yadifad.service.rhel \
+				$(OC) $(YI)
 
 $(OC): $(OCE)
 	cat $(OCE) | sed "s@\"\(.*\)/var/\(.*\)\"@\"$(localstatedir)/\2\"@" > $(OC)
@@ -63,6 +58,9 @@ all: $(YI) $(OC)
 install-data-hook: $(OC)
 	mkdir -p $(DESTDIR)$(sysconfdir)
 	touch $(DESTDIR)$(sysconfdir)/$(OC)
+
+clean-local:
+	rm -f $(YI) $(OC)
 
 release: $(YI) $(OC)
 

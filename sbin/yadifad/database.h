@@ -95,6 +95,7 @@ extern "C" {
     ya_result       database_shutdown(zdb *);
 
     /* Slave only */
+    ya_result       database_zone_refresh_maintenance_wih_zone(zdb_zone* zone, u32 next_alarm_epoch);
     ya_result       database_zone_refresh_maintenance(zdb *database, const u8 *origin, u32 next_alarm_epoch);
     
     bool            database_are_all_zones_saved_to_disk();

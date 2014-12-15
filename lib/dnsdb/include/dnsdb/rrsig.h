@@ -62,7 +62,7 @@
 #define DNSSEC_DEBUGLEVEL       0
 #define DNSSEC_DUMPSIGNCOUNT    0
 
-#ifdef  NDEBUG
+#ifndef DEBUG
 #define SIGNER_THREAD_COUNT     2
 #else
 #define SIGNER_THREAD_COUNT     1   /* EASIER FOR DEBUGGING */

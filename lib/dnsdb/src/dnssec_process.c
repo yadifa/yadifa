@@ -353,13 +353,13 @@ dnssec_process_finalize(dnssec_task_s *task)
     
     threaded_queue_finalize(&task->dnssec_task_query_queue);
     
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(&task->dnssec_task_query_queue, 0xfe, sizeof(threaded_queue));
 #endif
     
     threaded_queue_finalize(&task->dnssec_answer_query_queue);
     
-#ifndef NDEBUG
+#ifdef DEBUG
     memset(&task->dnssec_answer_query_queue, 0xfe, sizeof(threaded_queue));
 #endif
     
@@ -378,7 +378,7 @@ dnssec_process_finalize(dnssec_task_s *task)
         log_debug("dnssec_process_finalize: free contexts");
 #endif
 
-#ifndef NDEBUG
+#ifdef DEBUG
         memset(task->contexts, 0xfe, sizeof(void*) * (task->processor_threads_count + 1));
 #endif
 
