@@ -78,9 +78,6 @@ database_service_zone_unload_thread(void *parms)
     zdb_zone *zone = database_service_zone_unload_parms->zone;
     zdb_zone *replacement_zone = database_service_zone_unload_parms->replacement_zone;
     
-#ifdef DEBUG    
-    log_debug("database_service_zone_unload_thread(%p,%p,%p)", database_service_zone_unload_parms->zone_desc, zone, replacement_zone);
-    
     u8 origin[MAX_DOMAIN_LENGTH];
     
     if(zone->origin != NULL)
@@ -92,18 +89,15 @@ database_service_zone_unload_thread(void *parms)
         memcpy(origin, "\004NULL", 6);
     }
     
-    log_debug("database_service_zone_unload_thread(%{dnsname},%{dnsname})", origin, (replacement_zone != NULL)?replacement_zone->origin:(const u8*)"\004NULL");
-#endif
-    
+    log_debug("database-service: %{dnsname}: destroying old instance of zone", origin);
     zdb_zone_destroy(zone);
+    log_debug("database-service: %{dnsname}: old instance of zone destroyed", origin);
    
-#ifdef DEBUG
     zone = NULL;
-    log_debug("database_service_zone_unload_thread(%{dnsname},%{dnsname}) done", origin, (replacement_zone != NULL)?replacement_zone->origin:(const u8*)"\004NULL");
-#endif
     
     if(replacement_zone != NULL)
     {
+        log_debug("database-service: %{dnsname}: zone content will be replaced", origin);
         database_fire_zone_unloaded(replacement_zone, SUCCESS);
     }
     

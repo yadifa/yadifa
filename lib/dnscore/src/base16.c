@@ -67,8 +67,8 @@ base16_encode(const u8* buffer_in, u32 size_in, char* buffer_out)
     {
         u8 c = *buffer_in++;
 
-        *buffer_out++ = __BASE16__[c & 0x0f];
         *buffer_out++ = __BASE16__[c >> 4];
+        *buffer_out++ = __BASE16__[c & 0x0f];
         
         size_in--;
     }

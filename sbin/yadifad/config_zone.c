@@ -260,7 +260,12 @@ config_section_zone_finalise(struct config_section_descriptor_s *csd)
 {
     if(csd != NULL)
     {
-        free(csd->base);
+        if(csd->base != NULL)
+        {
+            zone_desc_s *zone_desc = (zone_desc_s*)csd->base;
+            zone_free(zone_desc);
+            csd->base = NULL;
+        }
         free(csd);
     }
     

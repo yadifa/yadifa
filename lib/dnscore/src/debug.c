@@ -262,7 +262,8 @@ debug_log_stacktrace(logger_handle *handle, u32 level, const char *prefix)
 
 #else
 
-void debug_log_stacktrace(logger_handle *handle, u32 level, const char *prefix)
+void
+debug_log_stacktrace(logger_handle *handle, u32 level, const char *prefix)
 {
     (void)handle;
     (void)level;

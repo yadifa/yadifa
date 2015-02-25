@@ -811,10 +811,18 @@ nsec_icmtl_replay_execute(nsec_icmtl_replay *replay)
 
                 dnslabel_vector labels;
                 s32 labels_top = dnsname_to_dnslabel_vector(fqdn, labels);
-                
+                ya_result err;
                 zdb_rr_label* label = zdb_rr_label_find_exact(replay->zone->apex, labels, labels_top);
 
                 nsec_delete_label_node(replay->zone, label, labels, labels_top);
+                
+                if(RR_LABEL_IRRELEVANT(label))
+                {
+                    if(FAIL(err = zdb_rr_label_delete_record(replay->zone, labels, labels_top, TYPE_ANY)))
+                    {
+                        log_err("icmtl replay: NSEC: %r", err);
+                    }
+                }
             }
 
             free(fqdn);

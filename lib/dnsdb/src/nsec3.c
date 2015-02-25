@@ -452,14 +452,26 @@ nsec3_update_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_referenc
         
         ZALLOC_ARRAY_OR_DIE(u8*, type_bit_maps, type_bit_maps_size, NSEC3_TYPEBITMAPS_TAG);
         type_bit_maps_write(type_bit_maps, &type_context);
-
-        /*
-         * @TODO check: Why merge ? Why not generate & compare instead ? I don't remember why I did this.
-         */
-
-        if(type_bit_maps_merge(&type_context, nsec3_item->type_bit_maps, nsec3_item->type_bit_maps_size, type_bit_maps, type_bit_maps_size))
+        
+        bool type_map_did_change = TRUE;
+        if(nsec3_item->type_bit_maps_size == type_bit_maps_size)
         {
-            /* TRUE : a merge occurred : the bitmap has to be changed, the signature remade */
+            if(memcmp(nsec3_item->type_bit_maps, type_bit_maps, type_bit_maps_size) == 0)
+            {
+                type_map_did_change = FALSE; 
+            }
+        }
+
+        if(type_map_did_change)
+        {
+            // notify the removal of NSEC3 before going further
+            
+            nsec3_zone* n3 = nsec3_zone_from_item(zone, nsec3_item);
+            zdb_listener_notify_update_nsec3rrsig(nsec3_item->rrsig, NULL, nsec3_item);
+            zdb_listener_notify_remove_nsec3(nsec3_item, n3, 0);
+            nsec3_zone_item_rrsig_delete_all(nsec3_item);
+            
+            type_bit_maps_merge(&type_context, nsec3_item->type_bit_maps, nsec3_item->type_bit_maps_size, type_bit_maps, type_bit_maps_size);
 
             /*
              * Try to re-use one of the buffers
@@ -487,13 +499,11 @@ nsec3_update_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_referenc
 
             type_bit_maps_write(nsec3_item->type_bit_maps, &type_context);
 
-            nsec3_zone_item_rrsig_delete_all(nsec3_item);
-
             return TRUE;
         }
         else
         {
-            /* Nothing to do */
+            // nothing to do
 
             ZFREE_ARRAY(type_bit_maps, type_bit_maps_size);
 
@@ -682,6 +692,8 @@ nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference l
                 ZALLOC_ARRAY_OR_DIE(u8*, self->type_bit_maps, type_bit_maps_size, NSEC3_TYPEBITMAPS_TAG);
                 type_bit_maps_write(self->type_bit_maps, &type_context);
             }
+            
+            zdb_listener_notify_add_nsec3(self, n3, zone->min_ttl);
         }
         else
         {

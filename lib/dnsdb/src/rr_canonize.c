@@ -332,8 +332,8 @@ rr_canonize_rrset(u16 type, zdb_packed_ttlrdata* rr_sll, ptr_vector* rrsp)
         case TYPE_NSEC:
             rr_canonize_nsec(rr_sll, rrsp);
             break;
-        case TYPE_ASFDB:
-            rr_canonize_notsupported(rr_sll, rrsp, TYPE_ASFDB);
+        case TYPE_AFSDB:
+            rr_canonize_notsupported(rr_sll, rrsp, TYPE_AFSDB);
             break;
         case TYPE_SRV:
             rr_canonize_notsupported(rr_sll, rrsp, TYPE_SRV);

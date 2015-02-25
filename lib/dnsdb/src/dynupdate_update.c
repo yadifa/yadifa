@@ -62,7 +62,6 @@
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
-
 #if ZDB_HAS_DNSSEC_SUPPORT != 0
 #include "dnsdb/dnssec.h"
 #include "dnsdb/rrsig_updater.h"
@@ -383,8 +382,6 @@ dynupdate_update_nsec3_body(zdb_zone *zone, treeset_tree *lus_set)
             if(LABEL_HAS_RECORDS(label))
             {
                 /*
-                 * @TODO: check rules of NSEC3 coverage
-                 * 
                  * Check if the label needs nsec
                  * If it does, update it if needed then request for a signature
                  * If it does not, delete it if needed along with its signature
@@ -953,11 +950,11 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
     if(dnssec_zone)
     {
         ya_result return_code = SUCCESS;
-        
+
         /* ensure all the private keys are available or servfail */
-        
+
         const zdb_packed_ttlrdata *dnskey = zdb_zone_get_dnskey_rrset(zone);
-                                                        
+
         if(dnskey != NULL)
         {
             char origin[MAX_DOMAIN_LENGTH];
@@ -1212,7 +1209,6 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
 
                     /*
                      * Check if we are about to remove the label.  Add an NSEC/NSEC3 pre-processing here.
-                     *
                      * NSEC is not a problem but with NSEC3 it's possible that we removed everything
                      */
 
@@ -1226,7 +1222,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                         {
                             if(rtype != TYPE_ANY)
                             {
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
                                 rrsig_delete(rname, label, rtype);
 #endif
 
@@ -1240,7 +1236,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                                     {
                                         label_update_status *lus;
 
-                                        ZALLOC_OR_DIE(label_update_status*,lus,label_update_status,GENERIC_TAG);
+                                        ZALLOC_OR_DIE(label_update_status*, lus, label_update_status, GENERIC_TAG);
 
                                         lus->label = label;
                                         lus->dname = rname;
@@ -1260,12 +1256,21 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                             }
                             /* @TODO if only the dnssec remains, delete */
                         }
+                        else
+                        {
+                            treeset_node *lus_node = treeset_avl_find(&lus_set, label);
+                            if(lus_node != NULL)
+                            {
+                                ZFREE(lus_node->data, label_update_status);
+                                treeset_avl_delete(&lus_set, label);
+                            }
+                        }
                     }
                 }
             }
         }
         else if(rclass == CLASS_ANY)
-        {   
+        {
             if((rttl != 0) || (rdata_size != 0))
             {
                 label_update_status_destroy(&lus_set);
@@ -1306,7 +1311,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
 
                         if(edit_status < ZDB_RR_LABEL_DELETE_NODE)
                         {
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
                             rrsig_delete(rname, label, rtype);
 #endif
                             /*
@@ -1347,6 +1352,15 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
 
                             /* @TODO if only the dnssec remains, delete */
                         }
+                        else
+                        {
+                            treeset_node *lus_node = treeset_avl_find(&lus_set, label);
+                            if(lus_node != NULL)
+                            {
+                                ZFREE(lus_node->data, label_update_status);
+                                treeset_avl_delete(&lus_set, label);
+                            }
+                        }
                     }
                 }
             }
@@ -1363,10 +1377,8 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                 log_debug("update: add %{dnsname} %{dnstype} ...", rname, &rtype);
 #endif
 
-                u16 flag_mask = 0; /** @todo there is potential for wrongness here ...
-                                    *        why don't I store directly in the label ?
-                                    *        test dynamic updates around CNAME
-                                    */
+                u16 flag_mask = 0; // set all the changes in a mask before applying them
+
                 bool record_accepted = TRUE;
 
                 switch(rtype)
@@ -1421,7 +1433,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                     }
                 }
 
-                label->flags |= flag_mask; /** @TODO : check */
+                label->flags |= flag_mask;
 
                 if(record_accepted)
                 {
@@ -1534,8 +1546,17 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                 log_err("update: sanitise reports that the zone should be dropped: %r", return_value);
             }
         }
+                    
+        zdb_packed_ttlrdata* soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);
+        if(soa != NULL)
+        {
+            rr_soa_increase_serial(&soa->rdata_start[0], soa->rdata_size, 1);
+#if ZDB_HAS_DNSSEC_SUPPORT
+            rrsig_delete(zone->origin, zone->apex, TYPE_SOA);
+#endif
+        }
     }
-    
+
     ya_result return_value = SUCCESS;
 
 #if ZDB_HAS_DNSSEC_SUPPORT != 0
@@ -1554,6 +1575,23 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
          * All text beyond this should be more or less obsolete (I made the callback system a few minutes ago)
          *
          */
+        
+        treeset_node *lus_node = treeset_avl_insert(&lus_set, zone->apex);
+
+        if(lus_node->data == NULL)
+        {
+            label_update_status *lus;
+
+            ZALLOC_OR_DIE(label_update_status*, lus, label_update_status, GENERIC_TAG);
+
+            lus->label = zone->apex;
+            lus->dname = zone->origin;
+            lus->rtype = TYPE_SOA;
+            lus->remove = TRUE;
+            lus->inversed = FALSE;
+
+            lus_node->data = lus;
+        }
 
 #if ZDB_HAS_NSEC_SUPPORT != 0
         if((zone->apex->flags & ZDB_RR_LABEL_NSEC) != 0)

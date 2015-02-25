@@ -60,16 +60,10 @@ extern "C"
  * AXFR FILE
  * 
  */
-    
-//#define RR_OS_RDATA
 
 typedef struct resource_record resource_record;
 struct resource_record
 {
-#ifdef RR_OS_RDATA
-    output_stream                                                      os_rdata;
-#endif
-
     /* Next resource record */
     resource_record                                                       *next;
 
@@ -79,9 +73,7 @@ struct resource_record
     /* Contains one of the RR CLASS codes */
     u16                                                                   class; /* should be renamed to something else */
     
-#ifndef RR_OS_RDATA
     u16                                                              rdata_size;
-#endif
     
     /* The name of the node to which this resource record pertains */
     u8                                                  name[MAX_DOMAIN_LENGTH];
@@ -129,13 +121,8 @@ struct zone_reader_vtbl
 
 #define zone_reader_unread_record(zr__,rr__) (zr__)->vtbl->unread_record((zr__),(rr__))
 
-#ifdef RR_OS_RDATA
-#define zone_reader_rdata(zr__)      bytearray_output_stream_buffer(&((zr__)->os_rdata))
-#define zone_reader_rdata_size(zr__) bytearray_output_stream_size(&((zr__)->os_rdata))
-#else
 #define zone_reader_rdata(zr__)      ((zr__).rdata)
 #define zone_reader_rdata_size(zr__) ((zr__).rdata_size)
-#endif
 
 #ifdef	__cplusplus
 }

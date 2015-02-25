@@ -103,7 +103,6 @@ gethostaddr(const char* host, u16 port, struct sockaddr *sa, int familly)
 #if HAS_SOCKADDR_IN_SIN_LEN
             sai->sin_len = sizeof(struct sockaddr_in);
 #endif
-
             break;
         }
 
@@ -111,11 +110,11 @@ gethostaddr(const char* host, u16 port, struct sockaddr *sa, int familly)
         {
             struct sockaddr_in6 *sai6 = (struct sockaddr_in6 *)sa;
             memcpy(sai6, next->ai_addr, next->ai_addrlen);
+            
             sai6->sin6_port = htons(port);
 #if HAS_SOCKADDR_IN6_SIN6_LEN
             sai6->sin6_len = sizeof(struct sockaddr_in6);
 #endif
-
             break;
         }
 
@@ -215,7 +214,7 @@ ya_result
 tcp_input_output_stream_connect_ex(const char *server, u16 port, input_stream *istream_, output_stream *ostream_, struct sockaddr *bind_from, u8 to_sec)
 {
     ya_result return_code;
-    struct sockaddr sa;
+    socketaddress sa;
 
     /*
      * If the client interface is specified, then use its family.
@@ -224,9 +223,9 @@ tcp_input_output_stream_connect_ex(const char *server, u16 port, input_stream *i
 
     int family = (bind_from != NULL) ? bind_from->sa_family : AF_UNSPEC;
 
-    if(ISOK(return_code = gethostaddr(server, port, &sa, family)))
+    if(ISOK(return_code = gethostaddr(server, port, &sa.sa, family)))
     {
-        return_code = tcp_input_output_stream_connect_sockaddr(&sa, istream_, ostream_, bind_from, to_sec);
+        return_code = tcp_input_output_stream_connect_sockaddr(&sa.sa, istream_, ostream_, bind_from, to_sec);
     }
 
     return return_code;

@@ -946,7 +946,7 @@ xfr_input_stream_init(xfr_copy_args *args, input_stream* filtering_stream)
     
     if(last_serial == args->current_serial)
     {
-        args->out_loaded_serial = args->current_serial;
+        // args->out_loaded_serial = args->current_serial; /// @todo 20150116 edf -- 
                         
         return ZONE_ALREADY_UP_TO_DATE;
     }

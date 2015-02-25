@@ -345,10 +345,6 @@ database_service_finalise()
     {
         err = database_service_stop();
         
-        service_finalize(&database_handler);
-
-        async_queue_finalize(&database_handler_queue);
-        
         if(database_zone_load_thread_pool != NULL)
         {
             thread_pool_destroy(database_zone_load_thread_pool);
@@ -389,6 +385,9 @@ database_service_finalise()
         }
         
 #endif
+        service_finalize(&database_handler);
+
+        async_queue_finalize(&database_handler_queue);
         
         /// destroy all the descs
         
@@ -652,7 +651,14 @@ database_service(struct service_worker_s *worker)
                 {
                     log_debug("load of '%{dnsname}'@%p", message->origin, zone_desc);
                     
-                    zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_LOAD, NULL, FALSE);
+                    if((zone_desc->status_flags & (ZONE_STATUS_LOAD|ZONE_STATUS_LOADING)) == 0)
+                    {                    
+                        zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_LOAD, NULL, FALSE);
+                    }
+                    else
+                    {
+                        log_warn("ignoring load command for %{dnsname}: already loading", message->origin);
+                    }
                 }
                 else
                 {
@@ -697,7 +703,7 @@ database_service(struct service_worker_s *worker)
                 zone_desc = zone_acquirebydnsname(message->origin);
                 if(zone_desc != NULL)
                 {
-                    zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_UNLOAD, message->payload.zone_unload.zone, FALSE);
+                    zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_UNLOAD, message->payload.zone_unload.zone, TRUE);
                 }
                 else
                 {
@@ -988,7 +994,7 @@ database_service(struct service_worker_s *worker)
             {
                 break;
             }
-        }        
+        }
         if(zone_desc != NULL)
         {
             if(FAIL(zone_lock(zone_desc, ZONE_LOCK_SERVICE)))

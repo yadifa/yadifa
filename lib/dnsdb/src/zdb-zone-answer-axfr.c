@@ -299,6 +299,7 @@ zdb_zone_answer_axfr_write_file_thread(void* data_)
         if(rename(storage->pathpart, storage->path) >= 0)
         {
             storage->data->zone->axfr_timestamp = time(NULL);
+            storage->data->zone->axfr_serial = storage->serial;
         }
         else
         {

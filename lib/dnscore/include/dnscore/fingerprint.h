@@ -177,7 +177,7 @@ enum finger_print
 
     FP_NSEC_LABEL_NOTFOUND      = RCODE_NXDOMAIN,       /* we didn't found a domain and we can prove it with nsec3 */
 
-    FP_CANNOT_DYNUPDATE         = RCODE_SERVFAIL,       /* the zone has been frozen (maintenance or admin) and cannot
+    FP_CANNOT_DYNUPDATE         = RCODE_REFUSED,        /* the zone has been frozen (maintenance or admin) and cannot
                                                          * accept an update until being unfrozen
                                                          */
     FP_UPDATE_UNKNOWN_ZONE      = RCODE_NOTZONE,        /* dynupdate on a zone we are not AA of */

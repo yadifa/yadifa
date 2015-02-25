@@ -493,7 +493,7 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
                             default:
                             {
 #if HAS_RRL_SUPPORT
-                                ya_result rrl = database_query(database, mesg);
+                                ya_result rrl = database_query_with_rrl(database, mesg);
 
                                 local_statistics->udp_referrals_count += mesg->referral;
                                 local_statistics->udp_fp[mesg->status]++;                                
@@ -517,7 +517,7 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
                                     }
                                 }
 #else
-                                database_query(database, mesg);  // not thread-safe
+                                database_query(database, mesg);
 
                                 local_statistics->udp_referrals_count += mesg->referral;
                                 local_statistics->udp_fp[mesg->status]++;

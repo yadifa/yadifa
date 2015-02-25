@@ -39,8 +39,8 @@
  */
 /*----------------------------------------------------------------------------*/
 
-#ifndef ZONE_H_
-#define ZONE_H_
+#pragma once
+
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
@@ -214,6 +214,8 @@ bool zone_issavingfile(zone_desc_s *zone_desc);
 bool zone_issavingaxfr(zone_desc_s *zone_desc);
 bool zone_isdynamicupdating(zone_desc_s *zone_desc);
 bool zone_canbeedited(zone_desc_s *zone_desc);
+bool zone_ismaster(zone_desc_s *zone_desc);
+
 /*
  * This will mark a zone as being obsolete.
  * It means that we are about to delete it.
@@ -224,6 +226,7 @@ ya_result zone_wait_unlocked(zone_desc_s *zone_desc);
 
 void zone_set_lock(zone_data_set *dset);
 void zone_set_unlock(zone_data_set *dset);
+bool zone_islocked(zone_desc_s *zone_desc);
 
 /*
  * returns true if a zone is obsolete
@@ -302,7 +305,10 @@ void zone_command_free(zone_command_s *cmd);
 void zone_desc_log(logger_handle* handle, u32 level, const zone_desc_s *zone_desc, const char *text);
 void zone_desc_log_all(logger_handle* handle, u32 level, zone_data_set *dset, const char *text);
 
-#endif
+/**
+ */
+
+void zone_desc_status_flags_long_format(const void *value, output_stream *os, s32 padding, char pad_char, bool left_justified, void* reserved_for_method_parameters);
 
 /*    ------------------------------------------------------------    */
 

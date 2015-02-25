@@ -392,9 +392,9 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                 len = 2;
                 txt = TYPE_RP_NAME;
                 break;
-            case TYPE_ASFDB:
+            case TYPE_AFSDB:
                 len = 5;
-                txt = TYPE_ASFDB_NAME;
+                txt = TYPE_AFSDB_NAME;
                 break;
             case TYPE_X25:
                 len = 3;
@@ -666,8 +666,48 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                 txt = TYPE_NTFAUTO_NAME;
                 break;
 #endif
-                
-
+#if 1 // HAS_CTRL
+            case TYPE_CTRL_SRVCFGRELOAD:
+                len = 9;
+                txt = TYPE_CTRL_SRVCFGRELOAD_NAME;
+                break;
+            case TYPE_CTRL_SRVLOGREOPEN:
+                len = 9;
+                txt = TYPE_CTRL_SRVLOGREOPEN_NAME;
+                break;
+            case TYPE_CTRL_SRVSHUTDOWN:
+                len = 8;
+                txt = TYPE_CTRL_SHUTDOWN_NAME;
+                break;
+            case TYPE_CTRL_ZONECFGRELOAD:
+                len = 13;
+                txt = TYPE_CTRL_ZONECFGRELOAD_NAME;
+                break;
+            case TYPE_CTRL_ZONECFGRELOADALL:
+                len = 16;
+                txt = TYPE_CTRL_ZONECFGRELOADALL_NAME;
+                break;
+            case TYPE_CTRL_ZONEFREEZE:
+                len = 6;
+                txt = TYPE_CTRL_ZONEFREEZE_NAME;
+                break;
+            case TYPE_CTRL_ZONEUNFREEZE:
+                len = 8;
+                txt = TYPE_CTRL_ZONEUNFREEZE_NAME;
+                break;
+            case TYPE_CTRL_ZONERELOAD:
+                len = 6;
+                txt = TYPE_CTRL_ZONERELOAD_NAME;
+                break;
+            case TYPE_CTRL_ZONEFREEZEALL:
+                len = 9;
+                txt = TYPE_CTRL_ZONEFREEZEALL_NAME;
+                break;
+            case TYPE_CTRL_ZONEUNFREEZEALL:
+                len = 11;
+                txt = TYPE_CTRL_ZONEUNFREEZEALL_NAME;
+                break;
+#endif
             default:
                 output_stream_write(stream, (u8 *)"TYPE", 4); /* rfc 3597 */
                 format_dec_u64((u64) ntohs(*typep), stream, 0, ' ', TRUE);

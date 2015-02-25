@@ -37,10 +37,6 @@
  *
  * @{
  */
-/**
- * @todo Test, debug then do the optimizations. (LATER)
- *
- */
 
 #define RRSIGN_TASKS_C
 

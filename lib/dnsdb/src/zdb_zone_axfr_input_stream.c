@@ -187,64 +187,70 @@ static input_stream_vtbl zdb_zone_axfr_input_stream_vtbl =
 ya_result
 zdb_zone_axfr_input_stream_open(input_stream *is, zdb_zone *zone, const char *directory)
 {
-    ya_result return_code;
+    ya_result ret;
     u32 serial;
     u32 timestamp;
-    char data_path[PATH_MAX];
     char path[PATH_MAX];
-    
-    if(FAIL(return_code = xfr_copy_mkdir_data_path(data_path, sizeof(data_path), directory, zone->origin)))
+    char data_path[PATH_MAX];
+
+    serial    = zone->axfr_serial;
+    timestamp = zone->axfr_timestamp;
+
+    if(FAIL(ret = xfr_copy_mkdir_data_path(data_path, sizeof(data_path), directory, zone->origin)))
     {
-        log_err("axfr: unable to create directory '%s' for %{dnsname}: %r", data_path, zone->origin, return_code);
+        log_err("axfr: unable to create directory '%s' for %{dnsname}: %r", data_path, zone->origin, ret);
         
-        return return_code;
+        return ret;
     }
-    
-    for(;;)
+
+    while(timestamp == 0)
     {
+       /* 
+        * being written : try to open the axfr.part file
+        * in the event of a success, a stream waiting for the completion of the file will be returned
+        */
+
+        if(ISOK(ret = snformat(path, sizeof (path), AXFR_FORMAT ".part", data_path, zone->origin, serial)))
+        {
+            memcpy(&path[ret], ".part", 6);
+
+            if(ISOK(ret = file_input_stream_open(path, is)))
+            {
+                zdb_zone_axfr_input_stream_data* data;
+                MALLOC_OR_DIE(zdb_zone_axfr_input_stream_data*, data, sizeof(zdb_zone_axfr_input_stream_data), AXFRIS_TAG);
+                data->filtered.data = is->data;
+                data->filtered.vtbl = is->vtbl;
+                data->serial = serial;
+                data->zone = zone;
+
+                is->data = data;
+                is->vtbl = &zdb_zone_axfr_input_stream_vtbl;
+
+                return ret;
+            }
+        }
+        
+        if(dnscore_shuttingdown())
+        {
+            return STOPPED_BY_APPLICATION_SHUTDOWN;
+        }
+
+        usleep(10000);
+
         serial    = zone->axfr_serial;
         timestamp = zone->axfr_timestamp;
-
-        if(timestamp == 0)
-        {
-           /* 
-            * being written : try to open the axfr.part file
-            * in the event of a success, a stream waiting for the completion of the file will be returned
-            */
-
-            if(ISOK(return_code = snformat(path, sizeof (path), AXFR_FORMAT ".part", data_path, zone->origin, serial)))
-            {
-                if(ISOK(return_code = file_input_stream_open(path, is)))
-                {
-                    zdb_zone_axfr_input_stream_data* data;                    
-                    MALLOC_OR_DIE(zdb_zone_axfr_input_stream_data*, data, sizeof(zdb_zone_axfr_input_stream_data), AXFRIS_TAG);
-                    data->filtered.data = is->data;
-                    data->filtered.vtbl = is->vtbl;
-                    data->serial = serial;
-                    data->zone = zone;
-                    is->data = data;
-                    is->vtbl = &zdb_zone_axfr_input_stream_vtbl;
-                    
-                    return return_code;
-                }
-            }
-        }
-        else
-        {
-           /*
-            * already written : try to open the axfr file
-            * in the event of a success, a simple file input stream will be returned
-            */
-            
-            if(ISOK(return_code = snformat(path, sizeof (path), AXFR_FORMAT, data_path, zone->origin, serial)))
-            {
-                if(ISOK(return_code = file_input_stream_open(path, is)))
-                {
-                    return return_code;
-                }
-            }
-        }
     }
+
+    /*
+     * already written : try to open the axfr file
+     * in the event of a success, a simple file input stream will be returned
+     */
+    if(ISOK(ret = snformat(path, sizeof (path), AXFR_FORMAT, data_path, zone->origin, serial)))
+    {
+        ret = file_input_stream_open(path, is);
+    }
+
+    return ret;
 }
 
 /*    ------------------------------------------------------------    */

@@ -39,65 +39,7 @@
  */
 /*----------------------------------------------------------------------------*/
 
-#ifndef NETWORK_H
-#define NETWORK_H
-
-#include <sys/types.h>	/* Required for BSD */
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>:
-
-
-#include <dnscore/sys_types.h>
-
-#define SOCKADD4_TAG 0x344444414b434f53
-#define SOCKADD6_TAG 0x364444414b434f53
-
-/*
- * In order to avoid casting, this is the type that should be used to store sockaddr
- */
-
-typedef union socketaddress socketaddress;
-
-union socketaddress
-{
-    struct sockaddr         sa;
-    struct sockaddr_in      sa4;
-    struct sockaddr_in6     sa6;
-    struct sockaddr_storage ss;
-};
-
-
-static inline bool sockaddr_equals(struct sockaddr *a, struct sockaddr *b)
-{
-    if(a.sin_family == b.sin_family)
-    {
-        switch (a.sin_family)
-        {
-            case AF_INET:
-                {
-                    struct sockaddr_in *sa4 = (struct sockaddr_in *)&a;
-                    struct sockaddr_in *sb4 = (struct sockaddr_in *)&b;
-
-                    return memcpy(&sa4->sin_addr, &sb4->sin_addr, 4) == 0;
-                }
-            case  AF_INET6:
-                {
-
-                    struct sockaddr_in6 *sa6 = (struct sockaddr_in6 *)&a;
-                    struct sockaddr_in6 *sb6 = (struct sockaddr_in6 *)&b;
-
-                    return memcpy(&sa4->sin6_addr, &sb4->sin6_addr, 16) == 0;
-                }
-        }
-    }
-
-    return FALSE;
-} 
-
-
-#endif /* HOST_ADDRESS_H */
+#error "do not include this"
 
 /** @} */
 

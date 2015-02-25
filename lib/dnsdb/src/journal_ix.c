@@ -993,8 +993,6 @@ struct journal_vtbl journal_ix_vtbl =
     JOURNAL_CLASS_NAME
 };
 
-
-
 static void
 journal_ix_writelock(journal_ix *jix)
 {

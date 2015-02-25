@@ -95,7 +95,7 @@
 /* Zone file variables */
 extern zone_data_set database_zone_desc;
 
-static mutex_t zone_desc_rc_mtx;
+static mutex_t zone_desc_rc_mtx = MUTEX_INITIALIZER;
 
 #ifdef DEBUG
 static u64_set zone_desc_tracked_set = U64_SET_EMPTY;
@@ -255,8 +255,10 @@ zone_dump_allocated()
     {
         u64_node *node = u64_set_avl_iterator_next_node(&iter);
         zone_desc_s *zone_desc = (zone_desc_s*)node->value;
-        
-        log_debug1("zone dump: %p #%llu, %llu, rc=%u, %{dnsname}",zone_desc, zone_desc->instance_id, zone_desc->instance_time_us, zone_desc->rc, zone_desc->origin);
+
+        u32 status_flags = zone_desc->status_flags;
+        format_writer status_flags_fw = {zone_desc_status_flags_long_format, &status_flags};
+        log_debug1("zone dump: %p #%llu, %llu, rc=%u, %{dnsname} status=%w",zone_desc, zone_desc->instance_id, zone_desc->instance_time_us, zone_desc->rc, zone_desc->origin, &status_flags_fw);
     }
     
     mutex_unlock(&zone_desc_rc_mtx);
@@ -992,6 +994,12 @@ zone_canbeedited(zone_desc_s *zone_desc)
     return ((zone_desc->status_flags & (ZONE_STATUS_STARTING_UP|ZONE_STATUS_DYNAMIC_UPDATING|ZONE_STATUS_SAVING_AXFR_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_LOADING)) == 0);
 }
 
+bool
+zone_ismaster(zone_desc_s *zone_desc)
+{
+    return zone_desc->type == ZT_MASTER;
+}
+
 ya_result
 zone_wait_unlocked(zone_desc_s *zone_desc)
 {
@@ -1054,7 +1062,8 @@ ya_result zone_try_lock(zone_desc_s *zone_desc, u8 owner_id)
     return return_value;
 }
 
-ya_result zone_lock(zone_desc_s *zone_desc, u8 owner_id)
+ya_result
+zone_lock(zone_desc_s *zone_desc, u8 owner_id)
 {
     ya_result return_value = ERROR;
     
@@ -1108,6 +1117,16 @@ zone_unlock(zone_desc_s *zone_desc, u8 owner_mark)
     pthread_cond_broadcast(&zone_desc->lock_cond);
     
     mutex_unlock(&zone_desc->lock);
+}
+
+bool
+zone_islocked(zone_desc_s *zone_desc)
+{
+    mutex_lock(&zone_desc->lock);
+    bool ret = (zone_desc->lock_owner != ZONE_LOCK_NOBODY);
+    mutex_unlock(&zone_desc->lock);
+    
+    return ret;
 }
 
 /**
@@ -1347,7 +1366,14 @@ zone_setwithzone(zone_desc_s *desc_zone_desc, zone_desc_s *src_zone_desc)
  * used by zone_desc_status_flags_format
  */
 
-static const char status_letters[32] = "IclLMUdDzZaAsSeERxX#---------r/!";
+static const char status_letters[32] = "IclL"
+                                       "MUdD"
+                                       "zZaA"
+                                       "sSeE"
+                                       "RxX#"
+                                       "f---"
+                                       "T---"
+                                       "ur/!";
 
 static void
 zone_desc_status_flags_format(const void *value, output_stream *os, s32 padding, char pad_char, bool left_justified, void* reserved_for_method_parameters)
@@ -1411,7 +1437,7 @@ static const char *status_words[32] =
     "?",
     "?",
     "?",
-    "?",
+    "DOWNLOADED",
     "?",                        // 25
     "?",
     "?",
@@ -1421,7 +1447,7 @@ static const char *status_words[32] =
     "PROCESSING"
 };
 
-static void
+void
 zone_desc_status_flags_long_format(const void *value, output_stream *os, s32 padding, char pad_char, bool left_justified, void* reserved_for_method_parameters)
 {
     (void)padding;

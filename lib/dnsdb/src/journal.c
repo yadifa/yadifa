@@ -81,7 +81,6 @@ static bool    journal_initialised = FALSE;
 
 static bool    journal_mru_remove(journal *jh);
 
-
 static char *xfr_path = LOCALSTATEDIR "/zones/xfr";
 static bool xfr_path_free = FALSE;
 
@@ -196,11 +195,15 @@ journal_mru_remove(journal *jh)
     }
 #ifdef DEBUG
     else
-    {
+    {   
         if((jh->next != NULL) || (jh->prev != NULL))
         {
-            log_err("%p not in MRU but is linked!", jh);
+            log_err("journal: MRU: %p not in MRU but kept link(s) to it!", jh);
+            logger_flush();
+            abort();
         }
+        
+        log_debug("journal: MRU: %p not in MRU", jh);
     }
 #endif
     
@@ -254,14 +257,15 @@ journal_mru_add(journal *jh)
         journal_mru_last = jh;
     }
     journal_mru_first = jh;
+    
+    // mark as being in the MRU
+    
     jh->mru = TRUE;
             
     //
     
     ++journal_mru_count;
-/*
-    journal_inc_reference_count(jh); // referenced in the MRU
-*/  
+
     if(!was_in_mru)
     {
         // new reference, so increase the count
@@ -324,9 +328,9 @@ journal_finalise()
 {
     if(journal_initialised)
     {
-	mutex_lock(&journal_mutex);
+        mutex_lock(&journal_mutex);
     
-	while(journal_mru_first != NULL)
+        while(journal_mru_first != NULL)
         {
             journal_mru_remove(journal_mru_first);
         }
@@ -334,7 +338,7 @@ journal_finalise()
         mutex_unlock(&journal_mutex);
         mutex_destroy(&journal_mutex);
 
-	journal_initialised = FALSE;
+        journal_initialised = FALSE;
     }
 }
 

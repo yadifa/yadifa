@@ -145,9 +145,9 @@ zdb_icmtl_replay(zdb_zone *zone, const char *directory)
         return return_value;
     }
 
-    bool is_nsec3 = zdb_zone_is_nsec3(zone);
+    const bool is_nsec3 = zdb_zone_is_nsec3(zone);
 
-    bool is_nsec = zdb_zone_is_nsec(zone);
+    const bool is_nsec = zdb_zone_is_nsec(zone);
     
     input_stream is;
     
@@ -183,7 +183,7 @@ zdb_icmtl_replay(zdb_zone *zone, const char *directory)
                 return 0;           // nothing to replay
             }
             
-            if(serial < first_serial)
+            if(serial_lt(serial, first_serial))
             {
                 journal_close(jh);
                 // journal after zone (oops)
@@ -191,7 +191,7 @@ zdb_icmtl_replay(zdb_zone *zone, const char *directory)
                 return 0;
             }
             
-            if(serial > last_serial)
+            if(serial_gt(serial, last_serial))
             {
                 journal_close(jh);
                 // journal obsolete
@@ -257,8 +257,12 @@ zdb_icmtl_replay(zdb_zone *zone, const char *directory)
     nsec_icmtl_replay_init(&nsecreplay, zone);
 #endif
     
+    treeset_tree downed_fqdn = TREESET_DNSNAME_EMPTY;
+    
     dns_resource_record rr;
     dns_resource_record_init(&rr);
+    
+    const bool keep_downed_fqdn = is_nsec3;
     
     u8 *fqdn = rr.name;
 
@@ -290,7 +294,15 @@ zdb_icmtl_replay(zdb_zone *zone, const char *directory)
         
         if((return_value = dns_resource_record_read(&rr, &is)) <= 0)
         {
-            log_info("journal: reached the end of the journal file");
+            if(ISOK(return_value))
+            {
+                log_info("journal: reached the end of the journal file");
+            }
+            else
+            {
+                log_err("journal: broken journal: %r", return_value);
+                logger_flush();
+            }
             
             break;
         }
@@ -466,8 +478,17 @@ zdb_icmtl_replay(zdb_zone *zone, const char *directory)
 #endif
                 default:
                 {
+                    if(keep_downed_fqdn)
+                    {
+                        if(treeset_avl_find(&downed_fqdn, fqdn) == NULL)
+                        {
+                            treeset_avl_insert(&downed_fqdn, dnsname_dup(fqdn));
+                        }
+                    }
+                    
                     if(FAIL(return_value = zdb_rr_label_delete_record_exact(zone, labels, (top - zone->origin_vector.size) - 1, rr.tctr.qtype, &ttlrdata)))
                     {
+                        log_err("journal: del %{dnsrr}", &rr);
                         log_err("journal: %{dnstype}: %r", &rr.tctr.qtype, return_value);
                     }
                 }
@@ -677,6 +698,53 @@ zdb_icmtl_replay(zdb_zone *zone, const char *directory)
     dns_resource_record_clear(&rr);
 
     input_stream_close(&is);
+    
+    if(keep_downed_fqdn)
+    {
+        treeset_avl_iterator downed_fqdn_iter;
+        dnslabel_vector labels;
+        treeset_avl_iterator_init(&downed_fqdn, &downed_fqdn_iter);
+
+        while(treeset_avl_iterator_hasnext(&downed_fqdn_iter))
+        {
+            treeset_node *node = treeset_avl_iterator_next_node(&downed_fqdn_iter);
+            // get the label, check if relevant, delete if not
+            const u8 *fqdn = (const u8*) node->key;
+            s32 labels_top = dnsname_to_dnslabel_vector(fqdn, labels);
+            
+            zdb_rr_label* rr_label = zdb_rr_label_find_exact(zone->apex, labels, labels_top);
+            if((rr_label != NULL) && RR_LABEL_IRRELEVANT(rr_label))
+            {
+                log_debug("journal: clearing %{dnsname}", fqdn);
+                
+                ya_result err;
+                
+                if(FAIL(err = zdb_rr_label_delete_record(zone, labels, labels_top, TYPE_ANY)))
+                {
+                    log_err("journal: failed to clear %{dnsname}${dnsname}: %r", fqdn, zone->origin, err);
+                }
+            }
+            
+            free(node->key);
+            node->key = NULL;
+        }
+        
+        treeset_avl_destroy(&downed_fqdn);
+    }
+    
+    if(FAIL(return_value = zdb_zone_getserial(zone, &serial)))
+    {
+        log_err("journal: %{dnsname}: error reading confirmation serial for zone: %r",zone->origin, return_value);
+                
+        return return_value;
+    }
+    
+    /*
+    if(serial != last_serial)
+    {
+        log_warn("journal: %{dnsname}: expected serial to be %i but it is %i instead",zone->origin, last_serial, serial);
+    }
+    */
 
     log_info("journal: %{dnsname}: done", zone->origin);
 
@@ -864,7 +932,7 @@ zdb_icmtl_end(zdb_icmtl *icmtl, const char* folder)
     // soa changed => no
     // no bytes written => no
     
-    u32 written = icmtl->os_add_stats.writed_count + icmtl->os_remove_stats.writed_count;
+    u32 written = icmtl->os_add_stats.written_count + icmtl->os_remove_stats.written_count;
     
     bool must_increment_serial;
     
@@ -887,72 +955,72 @@ zdb_icmtl_end(zdb_icmtl *icmtl, const char* folder)
     if(must_increment_serial)
     {
         rr_soa_increase_serial(&soa->rdata_start[0], soa->rdata_size, ICMTL_SOA_INCREMENT);
-    }
 
 #if ZDB_HAS_DNSSEC_SUPPORT != 0
-    /* Build new signatures */
-   
-    if(icmtl->zone->apex->nsec.dnssec != NULL)
-    {
-        rrsig_context_s context;
-
-        u32 sign_from = time(NULL);
-
-        if(ISOK(return_value = rrsig_context_initialize(&context, icmtl->zone, DEFAULT_ENGINE_NAME, sign_from, NULL)))
+        /* Build new signatures */
+       
+        if(icmtl->zone->apex->nsec.dnssec != NULL)
         {
-            rrsig_context_push_label(&context, icmtl->zone->apex);
-            rrsig_update_label_rrset(&context, icmtl->zone->apex, TYPE_SOA);
+            rrsig_context_s context;
 
-           /*
-            * Retrieve the old signatures (to be deleted)
-            * Retrieve the new signatures (to be added)
-            *
-            * This has to be injected as an answer query.
-            */
+            u32 sign_from = time(NULL);
 
-            dnsname_stack namestack;
-            dnsname_to_dnsname_stack(icmtl->zone->origin, &namestack);
-
-            /* Store the signatures */
-
-            zdb_packed_ttlrdata* rrsig_sll;
-
-            rrsig_sll = context.removed_rrsig_sll;
-
-            while(rrsig_sll != NULL)
+            if(ISOK(return_value = rrsig_context_initialize(&context, icmtl->zone, DEFAULT_ENGINE_NAME, sign_from, NULL)))
             {
-                if(RRSIG_TYPE_COVERED(rrsig_sll) == TYPE_SOA)
+                rrsig_context_push_label(&context, icmtl->zone->apex);
+                rrsig_update_label_rrset(&context, icmtl->zone->apex, TYPE_SOA);
+
+               /*
+                * Retrieve the old signatures (to be deleted)
+                * Retrieve the new signatures (to be added)
+                *
+                * This has to be injected as an answer query.
+                */
+
+                dnsname_stack namestack;
+                dnsname_to_dnsname_stack(icmtl->zone->origin, &namestack);
+
+                /* Store the signatures */
+
+                zdb_packed_ttlrdata* rrsig_sll;
+
+                rrsig_sll = context.removed_rrsig_sll;
+
+                while(rrsig_sll != NULL)
                 {
-                    zdb_icmtl_output_stream_write_packed_ttlrdata(&icmtl->os_remove, icmtl->zone->origin, TYPE_RRSIG, rrsig_sll);
+                    if(RRSIG_TYPE_COVERED(rrsig_sll) == TYPE_SOA)
+                    {
+                        zdb_icmtl_output_stream_write_packed_ttlrdata(&icmtl->os_remove, icmtl->zone->origin, TYPE_RRSIG, rrsig_sll);
+                    }
+
+                    rrsig_sll = rrsig_sll->next;
                 }
 
-                rrsig_sll = rrsig_sll->next;
-            }
+                rrsig_sll = context.added_rrsig_sll;
 
-            rrsig_sll = context.added_rrsig_sll;
-
-            while(rrsig_sll != NULL)
-            {
-                if(RRSIG_TYPE_COVERED(rrsig_sll) == TYPE_SOA)
+                while(rrsig_sll != NULL)
                 {
-                    zdb_icmtl_output_stream_write_packed_ttlrdata(&icmtl->os_add, icmtl->zone->origin, TYPE_RRSIG, rrsig_sll);
+                    if(RRSIG_TYPE_COVERED(rrsig_sll) == TYPE_SOA)
+                    {
+                        zdb_icmtl_output_stream_write_packed_ttlrdata(&icmtl->os_add, icmtl->zone->origin, TYPE_RRSIG, rrsig_sll);
+                    }
+
+                    rrsig_sll = rrsig_sll->next;
                 }
+                
+                rrsig_update_commit(context.removed_rrsig_sll, context.added_rrsig_sll, icmtl->zone->apex, icmtl->zone, &namestack);
 
-                rrsig_sll = rrsig_sll->next;
+                rrsig_context_pop_label(&context);
+
+                rrsig_context_destroy(&context);
             }
-            
-            rrsig_update_commit(context.removed_rrsig_sll, context.added_rrsig_sll, icmtl->zone->apex, icmtl->zone, &namestack);
-
-            rrsig_context_pop_label(&context);
-
-            rrsig_context_destroy(&context);
+            else
+            {
+                log_err("incremental: rrsig of the soa failed: %r", return_value);
+            }
         }
-        else
-        {
-            log_err("incremental: rrsig of the soa failed: %r", return_value);
-        }
-    }
 #endif
+    }
     
     dynupdate_icmtlhook_disable();
     

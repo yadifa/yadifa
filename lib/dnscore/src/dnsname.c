@@ -570,6 +570,10 @@ charp_to_locase_dnsname(u8* name_parm, const char* str, u32 str_len)
     return s - name_parm;
 }
 
+/**
+ * Allows for '*'
+ */
+
 ya_result
 charp_to_locase_dnsname_with_check(u8* name_parm, const char* str, u32 str_len)
 {
@@ -588,7 +592,7 @@ charp_to_locase_dnsname_with_check(u8* name_parm, const char* str, u32 str_len)
     {       
         if((str <= limit) && !cstr_to_dnsname_terminators[c] /*(c != '.') && (c != '\0')*/)
         {
-            if(cstr_to_dnsname_map_nostar[c] == 0)
+            if(cstr_to_dnsname_map[c] == 0)
             {
                 return INVALID_CHARSET;
             }

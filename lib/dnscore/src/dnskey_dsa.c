@@ -568,7 +568,7 @@ ya_result dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin
         return DNSSEC_ERROR_KEYISTOOBIG;
     }
 
-    SET_U16_AT(rdata[0], htons(flags)); /// @todo 20140523 edf -- DNSKEY NATIVEFLAGS
+    SET_U16_AT(rdata[0], htons(flags));
     rdata[2] = DNSKEY_PROTOCOL_FIELD;
     rdata[3] = algorithm;
 

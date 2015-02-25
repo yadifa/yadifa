@@ -17,7 +17,7 @@
 
 
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
-PREFIX="/usr/local"
+PREFIX="/registry/yadifa"
 NAME="yadifad"
 NAMED_USERNAME="nobody"
 DAEMON="/sbin/${NAME}"

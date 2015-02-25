@@ -225,6 +225,13 @@ database_service_zone_mount(zone_desc_s *zone_desc)
 #endif
         if(zone_desc->type == ZT_SLAVE)
         {
+            if(send_notify_to_slaves)
+            {
+                log_debug("notifying also slaves of zone %{dnsname}", zone_desc->origin);
+
+                notify_slaves(zone_desc->origin);
+            }
+
             if(((zone_desc->flags & ZONE_FLAG_NO_MASTER_UPDATES) == 0))
             {
                 if(zone_desc->masters != NULL)

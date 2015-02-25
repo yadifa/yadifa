@@ -357,7 +357,7 @@
 #define     TYPE_TXT                        NU16(16) /* text strings                       rfc 1035 */
 
 #define     TYPE_RP                         NU16(17) /* For Responsible Person             rfc 1183 */
-#define     TYPE_ASFDB                      NU16(18) /* CANONIZE */
+#define     TYPE_AFSDB                      NU16(18) /* CANONIZE */
 #define     TYPE_X25                        NU16(19) /*                                    rfc 1183 */
 #define     TYPE_ISDN                       NU16(20) /*                                    rfc 1183 */
 #define     TYPE_RT                         NU16(21) /*                                    rfc 1183 */
@@ -670,7 +670,7 @@ extern const class_table qclass[];
 #define     TYPE_MX_NAME                    "MX"
 #define     TYPE_TXT_NAME                   "TXT"
 #define     TYPE_RP_NAME                    "RP"
-#define     TYPE_ASFDB_NAME                 "ASFDB"
+#define     TYPE_AFSDB_NAME                 "AFSDB"
 #define     TYPE_X25_NAME                   "X25"
 #define     TYPE_ISDN_NAME                  "ISDN"
 #define     TYPE_RT_NAME                    "RT"

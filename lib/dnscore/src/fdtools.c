@@ -416,6 +416,11 @@ open_ex(const char *pathname, int flags)
 {
     int fd;
     
+#ifdef DEBUG
+    log_debug6("open_ex(%s,%o)", STRNULL(pathname), flags);
+    errno = 0;
+#endif
+    
 #if DEBUG_BENCH_FD
     fdtools_debug_bench_register();
     u64 bench = debug_bench_start(&debug_open);
@@ -436,6 +441,10 @@ open_ex(const char *pathname, int flags)
     debug_bench_stop(&debug_open, bench);
 #endif
     
+#ifdef DEBUG
+    log_debug6("open_ex(%s,%o): %r (fd)", STRNULL(pathname), flags, ERRNO_ERROR, fd);
+#endif
+    
     return fd;
 }
 
@@ -452,6 +461,11 @@ open_create_ex(const char *pathname, int flags, mode_t mode)
 {
     int fd;
     
+#ifdef DEBUG
+    log_debug6("open_create_ex(%s,%o,%o)", STRNULL(pathname), flags, mode);
+    errno = 0;
+#endif
+    
 #if DEBUG_BENCH_FD
     fdtools_debug_bench_register();
     u64 bench = debug_bench_start(&debug_open_create);
@@ -463,6 +477,7 @@ open_create_ex(const char *pathname, int flags, mode_t mode)
 
         if(err != EINTR)
         {
+            // do NOT set this to an error code other than -1
             //fd = MAKE_ERRNO_ERROR(err);
             break;
         }
@@ -470,6 +485,10 @@ open_create_ex(const char *pathname, int flags, mode_t mode)
     
 #if DEBUG_BENCH_FD
     debug_bench_stop(&debug_open_create, bench);
+#endif
+    
+#ifdef DEBUG
+    log_debug6("open_create_ex(%s,%o,%o): %r (%i)", STRNULL(pathname), flags, mode, ERRNO_ERROR, fd);
 #endif
     
     return fd;
@@ -488,10 +507,17 @@ ya_result
 close_ex(int fd)
 {
     ya_result return_value = SUCCESS;
+    
+#ifdef DEBUG
+    log_debug6("close_ex(%i)", fd);
+    errno = 0;
+#endif
+    
 #if DEBUG_BENCH_FD
     fdtools_debug_bench_register();
     u64 bench = debug_bench_start(&debug_close);    
 #endif
+        
     while(close(fd) < 0)
     {
         int err = errno;
@@ -504,6 +530,10 @@ close_ex(int fd)
     }
 #if DEBUG_BENCH_FD
     debug_bench_stop(&debug_close, bench);
+#endif
+    
+#ifdef DEBUG
+    log_debug6("close_ex(%i): %r", fd, return_value);
 #endif
     
     return return_value;
@@ -522,6 +552,102 @@ filesize(const char *name)
     }
     
     return (s64)ERRNO_ERROR;
+}
+
+/**
+ * 
+ * Creates all directories on pathname.
+ * 
+ * Could be optimised a bit :
+ *  
+ *      try the biggest path first,
+ *      going down until it works,
+ *      then create back up.
+ * 
+ * @param pathname
+ * @param mode
+ * @param flags
+ * 
+ * @return 
+ */
+
+int
+mkdir_ex(const char *pathname, mode_t mode, u32 flags)
+{
+#ifdef DEBUG
+    log_debug("mkdir_ex(%s,%o)", pathname, mode);
+#endif
+                
+    const char *s;
+    char *t;
+    
+    char dir_path[PATH_MAX];
+    
+    s = pathname;
+    t = dir_path;
+    
+    if(pathname[0] == '/')
+    {
+        t[0] = '/';
+        t++;
+        s++;
+    }
+    
+    for(;;)
+    {
+        const char *p = (const char*)strchr(s, '/');
+        
+        bool last = (p == NULL);
+        
+        if(last)
+        {
+            if((flags & MKDIR_EX_PATH_TO_FILE) != 0)
+            {
+                return s - pathname;
+            }
+            
+            p = s + strlen(s);
+        }
+        
+        intptr n = (p - s);
+        memcpy(t, s, n);
+        t[n] = '\0';
+        
+        struct stat file_stat;
+        if(stat(dir_path, &file_stat) < 0)
+        {
+            int err = errno;
+            
+            if(err != ENOENT)
+            {
+#ifdef DEBUG
+                log_debug("mkdir_ex(%s,%o): stat returned %r", pathname, mode, MAKE_ERRNO_ERROR(err));
+#endif
+                
+                return MAKE_ERRNO_ERROR(err);
+            }
+            
+            if(mkdir(dir_path, mode) < 0)
+            {
+#ifdef DEBUG
+                log_debug("mkdir_ex(%s,%o): mkdir(%s, %o) returned %r", pathname, mode, dir_path, mode, MAKE_ERRNO_ERROR(err));
+#endif
+    
+                return ERRNO_ERROR;
+            }
+        }
+        
+        if(last)
+        {
+            s = &s[n];
+            return s - pathname;
+        }
+        
+        t[n++] = '/';
+        
+        t = &t[n];
+        s = &s[n];
+    }
 }
 
 /** @} */

@@ -168,7 +168,6 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
     zone_reader zr;
     zdb_zone *zone_pointer_out;
     ya_result return_value;
-    
     u32 zone_desc_dnssec_mode;
     bool is_drop_before_load;
     bool zr_opened = FALSE;
@@ -195,8 +194,6 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
     /* Avoid cpy & cat : overrun potential */
             
     snformat(file_name, sizeof(file_name), "%s%s", g_config->data_path, zone_desc->file_name);
-    
-    /** @todo get the serial number from the file to avoid useless work */
     
     *zone = zdb_zone_find_from_dnsname(db, zone_desc_origin, CLASS_IN);
 
@@ -237,7 +234,7 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
                     return_value = ZDB_READER_ANOTHER_DOMAIN_WAS_EXPECTED;
                 }
                 
-                resource_record_freecontent(&rr);   /// @todo get rid of the os_rdata
+                resource_record_freecontent(&rr);
             }
         }
         
@@ -263,9 +260,9 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
         if(ZDB_ZONE_VALID(*zone))
         {
             return_value = zdb_zone_getserial(*zone, &zone_serial);
-                    
+            
             zdb_zone_unlock(*zone, ZDB_ZONE_MUTEX_LOAD);
-                    
+            
             if(ISOK(return_value))
             {
                 if(serial_ge(zone_serial, zone_file_soa_serial)) /// @note cppcheck false positive on zone_file_soa_serial
@@ -274,7 +271,7 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
                             zone_desc_origin, file_name, zone_serial, zone_file_soa_serial);
 
                     zone_reader_close(&zr);
-                    
+
                     return SUCCESS;
                 }
             }
@@ -290,9 +287,6 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
             log_debug1("zone load: instance of the zone in the database is invalid: %r", return_value);
         }
 
-        /// @todo invalidate zone if "drop-before-load"
-
-        
         // at this point, the file is about to be loaded.  It is the right time to test the drop-before-load flag
     
         if(is_drop_before_load)
@@ -333,7 +327,7 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
         return_value = zdb_zone_load(db, &zr, &zone_pointer_out, g_config->xfr_path, zone_desc_origin, ZDB_ZONE_REPLAY_JOURNAL|(zone_desc_dnssec_mode << ZDB_ZONE_DNSSEC_SHIFT));
 
         zone_reader_close(&zr);
-
+        
         /* If the zone load failed for any reason but "loaded already" ... */
 
         if(!(FAIL(return_value) && (return_value != ZDB_READER_ALREADY_LOADED)))
@@ -343,7 +337,7 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
              */
             
             zone_lock(zone_desc, ZONE_LOCK_LOAD);
-
+            
 #if ZDB_HAS_ACL_SUPPORT
 
             /*
@@ -385,11 +379,13 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
         else
         {
             log_err("zone load: cannot parse master zone file '%s': %r (not loaded)", file_name, return_value);
+            *zone = NULL;
         }
     }
     else
     {
         log_err("zone load: cannot open master zone file '%s': %r (not loaded)", file_name, return_value);
+        *zone = NULL;
     }
     
     return return_value;
@@ -450,7 +446,7 @@ database_get_ixfr_answer_type(const u8 *zone_desc_origin, const host_address *zo
 
         do
         {
-            if(FAIL(return_value = readfully_limited(fd, &ixfr_query.buffer_tcp_len[0], 2, g_config->tcp_query_min_rate_us)))
+            if(FAIL(return_value = readfully(fd, &ixfr_query.buffer_tcp_len[0], 2)))
             {
                 break;
             }
@@ -462,7 +458,7 @@ database_get_ixfr_answer_type(const u8 *zone_desc_origin, const host_address *zo
                 break;
             }
             
-            if(FAIL(return_value = readfully_limited(fd, &ixfr_query.buffer[0], message_get_tcp_length(&ixfr_query), g_config->tcp_query_min_rate_us)))
+            if(FAIL(return_value = readfully(fd, &ixfr_query.buffer[0], message_get_tcp_length(&ixfr_query))))
             {
                 break;
             }
@@ -470,7 +466,7 @@ database_get_ixfr_answer_type(const u8 *zone_desc_origin, const host_address *zo
             if(return_value < DNS_HEADER_LENGTH + 1 + 4)
             {
                 return_value = ANSWER_NOT_ACCEPTABLE;
-                
+                log_err("zone load: master answer is too short: %r", return_value);
                 break;
             }
             
@@ -485,8 +481,16 @@ database_get_ixfr_answer_type(const u8 *zone_desc_origin, const host_address *zo
 
             if(query_id != answer_id)
             {
-                log_err("zone load: master answer ID does not match query ID (q:%hd != a:%hd)", query_id, answer_id);
+                return_value = ANSWER_NOT_ACCEPTABLE;
                 
+                log_err("zone load: master answer ID does not match query ID (q:%hd != a:%hd)", query_id, answer_id);
+                break;
+            }
+            
+            if(MESSAGE_RCODE(&ixfr_query.buffer[0]) != RCODE_NOERROR)
+            {
+                return_value = MAKE_DNSMSG_ERROR(MESSAGE_RCODE(&ixfr_query.buffer[0]));
+                log_err("zone load: master answer with error: %r", return_value);
                 break;
             }
 
@@ -494,6 +498,8 @@ database_get_ixfr_answer_type(const u8 *zone_desc_origin, const host_address *zo
 
             if(answer_count == 0)
             {
+                return_value = ANSWER_NOT_ACCEPTABLE;
+                log_err("zone load: master gave empty answer: %r", return_value);
                 break;
             }
                         
@@ -530,8 +536,6 @@ database_get_ixfr_answer_type(const u8 *zone_desc_origin, const host_address *zo
                 //break;
             }
 
-            /** @todo add checks */
-
             /* read the next answer */
 
             for(;(answer_count > 0) && (answer_idx < 2); answer_count--)
@@ -543,7 +547,6 @@ database_get_ixfr_answer_type(const u8 *zone_desc_origin, const host_address *zo
 
                 u8 *p = record_wire + dnsname_len(record_wire);
                 u16 rtype = GET_U16_AT(*p);
-                //answer_type[answer_idx] = rtype;
 
                 if(rtype != TYPE_SOA)
                 {
@@ -581,6 +584,7 @@ database_get_ixfr_answer_type(const u8 *zone_desc_origin, const host_address *zo
     
     if(FAIL(return_value))
     {
+        log_err("zone load: failed to get update from the master: %r", return_value);
         answer_idx = 0;
     }
     
@@ -635,6 +639,187 @@ database_get_ixfr_answer_type(const u8 *zone_desc_origin, const host_address *zo
     return return_value;
 }
 
+#define ZONE_SOURCE_MISSING  0
+#define ZONE_SOURCE_EXISTS   1
+#define ZONE_SOURCE_OBSOLETE 2
+#define ZONE_SOURCE_RELEVANT 4
+#define ZONE_SOURCE_TEMPLATE 8
+#define ZONE_SOURCE_LOCALE  16 // on disk
+#define ZONE_SOURCE_REMOTE  32 // on master
+#define ZONE_SOURCE_LOADED  64 // in DB
+
+struct zone_source
+{
+    u32 serial;
+    u32 base_serial;
+    u32 flags;
+    const char *type_name;
+};
+
+typedef struct zone_source zone_source;
+
+#define ZONE_SOURCE_EMPTY {0, 0, 0, "UNDEFINED"}
+#define ZONE_SOURCE_INIT(__type_name) {0, 0, 0, (__type_name)}
+
+static inline void
+zone_source_init(zone_source *zs, const char *type_name)
+{
+    zs->serial = 0;
+    zs->flags = 0;
+    zs->type_name = type_name;
+}
+
+static inline void
+zone_source_set(zone_source *zs, u32 flags)
+{
+    zs->flags |= flags;
+}
+
+static inline void
+zone_source_unset(zone_source *zs, u32 flags)
+{
+    zs->flags &= ~flags;
+}
+
+static inline bool
+zone_source_has_flags(zone_source *zs, u32 flags)
+{
+    return (zs->flags & flags) == flags;
+}
+
+static inline bool
+zone_source_exists(zone_source *zs)
+{
+    yassert(zs != NULL);
+    
+    bool ret = zone_source_has_flags(zs, ZONE_SOURCE_EXISTS);
+    
+    return ret;
+}
+
+static inline bool
+zone_source_is_relevant(zone_source *zs)
+{
+    yassert(zs != NULL);
+    
+    bool ret = zone_source_has_flags(zs, ZONE_SOURCE_RELEVANT|ZONE_SOURCE_EXISTS);
+    
+    return ret;
+}
+
+static inline void
+zone_source_disable(zone_source *zs)
+{
+    yassert(zs != NULL);
+    
+    zs->flags |= ZONE_SOURCE_OBSOLETE;
+    zs->flags &= ~ZONE_SOURCE_RELEVANT;
+}
+
+static inline void
+zone_source_set_serial(zone_source *zs, u32 serial)
+{
+    yassert(zs != NULL);
+    
+    zs->serial = serial;
+    zs->base_serial = serial;
+}
+
+static inline void
+zone_source_set_journal_serial(zone_source *zs, u32 serial)
+{
+    yassert(zs != NULL);
+    
+    zs->serial = serial;
+}
+
+static inline int
+zone_source_compare(zone_source *zsa, zone_source *zsb)
+{
+    yassert(zsa != NULL);
+    yassert(zsb != NULL);
+    
+    if(zone_source_exists(zsa))
+    {
+        if(zone_source_exists(zsb))
+        {
+            if(zsa->serial != zsb->serial)
+            {
+                return serial_gt(zsa->serial, zsb->serial)?1:-1; // B or A
+            }
+            else
+            {
+                return 0; // equal
+            }
+        }
+        else
+        {
+            return -1; // A
+        }
+    }
+    else
+    {
+        if(zone_source_exists(zsb))
+        {
+            return 1; // B
+        }
+        else
+        {
+            return 0; // equaly lame
+        }
+    }
+}
+
+static inline zone_source*
+zone_source_get_best(zone_source *zsa, zone_source *zsb)
+{
+    yassert(zsa != NULL);
+    yassert(zsb != NULL);
+    
+    if(zone_source_exists(zsa))
+    {
+        if(zone_source_exists(zsb))
+        {
+            if(zsa->serial != zsb->serial)
+            {
+                return serial_gt(zsa->serial, zsb->serial)?zsb:zsa; // B or A
+            }
+            else
+            {
+                return zsa; // equal
+            }
+        }
+        else
+        {
+            return zsa; // A
+        }
+    }
+    else
+    {
+        if(zone_source_exists(zsb))
+        {
+            return zsb; // B
+        }
+        else
+        {
+            return zsa; // equaly lame
+        }
+    }
+}
+
+static void
+database_load_zone_slave_clear_xfr(const u8 *origin)
+{
+                    char data_path[PATH_MAX]; 
+#ifdef DEBUG
+                    memset(data_path, 0x5a, sizeof(data_path));
+#endif
+                    xfr_copy_get_data_path(data_path, sizeof(data_path), g_config->xfr_path, origin);
+                    xfr_delete_axfr(origin, data_path);
+
+                    journal_truncate(origin, g_config->xfr_path);
+}
+
 static ya_result
 database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
 {
@@ -651,8 +836,6 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
         return ZONE_LOAD_SLAVE_TYPE_EXPECTED;
     }
     
-    
-    
     /**
      * Load only the SOA
      * ask for an IXFR
@@ -665,17 +848,21 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
     zdb_zone *current_zone;
     zdb_zone *zone_pointer_out;
     host_address *zone_desc_masters;
-    u32  file_serial;
-    u32  axfr_serial;
-    //u32  zone_serial;
+    
+    zone_source file_source = ZONE_SOURCE_INIT("file");
+    zone_source axfr_source = ZONE_SOURCE_INIT("axfr");
+    zone_source db_source = ZONE_SOURCE_INIT("db");
+    zone_source master_source = ZONE_SOURCE_INIT("master");
+    u32 journal_last_serial = 0;
+    bool journal_available = FALSE;
+    bool file_opened = FALSE;
+    
+    zone_source *best_source = &master_source;
+  
     ya_result return_value;
-    
-    u32 current_serial = 0;
-    
+          
     u32 ttl = 0;
     u16 rdata_size = 0;
-    bool zone_file_available = FALSE;
-    bool axfr_file_available = FALSE;
     bool is_drop_before_load;
     bool has_file_name;
     u8 zone_desc_origin[MAX_DOMAIN_LENGTH];
@@ -686,6 +873,8 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
     is_drop_before_load = zone_is_drop_before_load(zone_desc);
     zone_desc_masters = host_address_copy_list(zone_desc->masters);
     dnsname_copy(zone_desc_origin, zone_desc->origin);
+    
+    log_debug("zone load: '%{dnsname}': loading slave zone", zone_desc_origin);
     
     has_file_name = (zone_desc->file_name != NULL);
     
@@ -702,19 +891,32 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
     {
         if(!ZDB_ZONE_INVALID(current_zone))
         {
+            u32 current_serial;
+            
             zdb_zone_lock(current_zone, ZDB_ZONE_MUTEX_LOAD);
             return_value = zdb_zone_getserial(current_zone, &current_serial);
             zdb_zone_unlock(current_zone, ZDB_ZONE_MUTEX_LOAD);
             
-            if(FAIL(return_value))
+            if(ISOK(return_value))
             {
-                log_err("zone load: unable to get current serial of '%{dnsname}': %r", zone_desc_origin, return_value);
-
+                log_debug("zone load: '%{dnsname}': in database with serial %d", zone_desc_origin, current_serial);
+                
+                zone_source_set(&db_source, ZONE_SOURCE_EXISTS|ZONE_SOURCE_LOADED);
+                zone_source_set_serial(&db_source, current_serial);
+                
+                best_source = &db_source;
+            }
+            else
+            {
+                log_err("zone load: '%{dnsname}': unable to get current serial: %r", zone_desc_origin, return_value);
+                
                 current_zone = NULL;
             }
         }
         else
         {
+            log_debug("zone load: '%{dnsname}': invalid in database", zone_desc_origin);
+            
             current_zone = NULL;
         }
     }
@@ -727,40 +929,45 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
     
     /*
      * FILE
+     * This part is supposed to see if there is a RELEVANT text file
      */
     
-    log_debug("zone load: loading slave '%{dnsname}'", zone_desc_origin);
-
-    if(has_file_name && (zone_desc_file_name != NULL) && (zone_desc_file_name[0] != '\0'))
+    if(has_file_name && (zone_desc_file_name[0] != '\0'))
     {
         snformat(file_name, sizeof(file_name), "%s%s", g_config->data_path, zone_desc_file_name);
 
-        log_debug("zone load: zone file is '%s'", file_name);
+        log_debug("zone load: '%{dnsname}': zone file is '%s'", zone_desc_origin, file_name);
         
         if(ISOK(return_value = zone_file_reader_open(file_name, &zr)))
         {
-            log_debug("zone load: checking serial in local copy '%s'", file_name);
+            log_debug("zone load: '%{dnsname}': checking serial in '%s'", zone_desc_origin, file_name);
             
             if(ISOK(return_value = zdb_zone_get_soa(&zr, &rdata_size, rdata)))
             {
+                u32 file_serial;
+                
                 if(ISOK(rr_soa_get_serial(rdata, rdata_size, &file_serial)))
                 {
-                    zone_file_available = ((current_zone == NULL) || serial_lt(current_serial, file_serial));
-                    //zone_serial = file_serial;
+                    zone_source_set(&file_source, ZONE_SOURCE_EXISTS | ZONE_SOURCE_LOCALE);
+                    zone_source_set_serial(&file_source, file_serial);
                     
-                    log_debug("zone load: serial in local copy '%s' is %u", file_name, file_serial);
-                    
-                    bool template_zone = !zone_reader_canwriteback(&zr);
+                    log_debug("zone load: '%{dnsname}': serial in local copy '%s' is %u",zone_desc_origin, file_name, file_serial);
                     
                     // if template_zone, the file CANNOT be written back to disk
                     
-                    if(template_zone)
+                    if(zone_reader_canwriteback(&zr))
                     {
-                        zone_lock(zone_desc, ZONE_LOCK_LOAD);
-                        zone_desc->status_flags |= ZONE_STATUS_TEMPLATE_SOURCE_FILE;
-                        zone_unlock(zone_desc, ZONE_LOCK_LOAD);
+                        zone_source_set(&file_source, ZONE_SOURCE_TEMPLATE);
                     }
                 }
+                else
+                {
+                    log_err("zone load: '%{dnsname}': could not get serial from SOA from '%s': %r", zone_desc_origin, file_name, return_value);
+                }
+            }
+            else
+            {
+                log_err("zone load: '%{dnsname}': could not get SOA from '%s': %r", zone_desc_origin, file_name, return_value);
             }
 
             zone_reader_close(&zr);
@@ -769,167 +976,196 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
         {
             if(zone_desc->type != ZT_SLAVE)
             {
-                log_err("zone load: could not open zone file '%s': %r", file_name, return_value);
+                log_err("zone load: '%{dnsname}': could not open zone file '%s': %r", zone_desc_origin, file_name, return_value);
+            }
+            else
+            {
+                log_debug("zone load: '%{dnsname}': could not open zone file '%s': %r", zone_desc_origin, file_name, return_value);
             }
         }
+    }
+    else
+    {
+        log_debug("zone load: '%{dnsname}': no file name set for zone file", zone_desc_origin);
     }
 
     /*
      * AXFR : the serial returned here does not takes the journal into account if the boolean is set to FALSE
+     * This part is supposed to see if there is a RELEVANT axfr file
      */
 
     if(ISOK(return_value = zone_axfr_reader_open_last(g_config->xfr_path, zone_desc_origin, &zr)))
     {
-        log_debug("zone load: found an AXFR image for %{dnsname}", zone_desc_origin);
+        log_debug("zone load: '%{dnsname}': found an AXFR image", zone_desc_origin);
         
         if(ISOK(return_value = zdb_zone_get_soa(&zr, &rdata_size, rdata)))
         {
+            u32 axfr_serial;
+            
             if(ISOK(rr_soa_get_serial(rdata, rdata_size, &axfr_serial)))
             {
-                axfr_file_available = ((current_zone == NULL) || serial_lt(current_serial, axfr_serial));
-                //zone_serial = axfr_serial;
+                zone_source_set(&axfr_source, ZONE_SOURCE_EXISTS | ZONE_SOURCE_LOCALE);
+                zone_source_set_serial(&axfr_source, axfr_serial);
                 
-                log_debug("zone load: serial in AXFR image is %u", axfr_serial);
+                log_debug("zone load: '%{dnsname}': serial in AXFR image is %u", zone_desc_origin, axfr_serial);
             }
+        }
+        else
+        {
+            log_err("zone load: '%{dnsname}': could not get SOA from AXFR file: %r", zone_desc_origin, return_value);
         }
 
         zone_reader_close(&zr);
     }
+    else
+    {
+        log_debug("zone load: '%{dnsname}': could not open AXFR file: %r", zone_desc_origin, return_value);
+    }
 
     /*
-     * check if both types are available
+     * check if both types are relevant
      * 
      * disable the lowest serial or the AXFR one if they are equal
      * 
      */
     
-    if(axfr_file_available && zone_file_available)
+    if(zone_source_exists(&axfr_source) || zone_source_exists(&file_source))
     {
-        /* choose one */
+        /* choose the best one */
         
-        if(serial_gt(axfr_serial, file_serial))
-        {
-            // serial of AXFR is bigger
-            
-            log_debug("zone load: using AXFR image");
-            
-            zone_file_available = FALSE;
-            //zone_serial = axfr_serial;
-        }
-        else
-        {
-            // serial of file is bigger
-            
-            log_debug("zone load: using local zone file");
-            
-            axfr_file_available = FALSE;
-            //zone_serial = file_serial;
-        }
-    }
-
-    if(axfr_file_available || zone_file_available)
-    {
-        /*
-        * Now we know the best (local) base for the file, but we need to know up to where we can go (journal)
-        * 
-        * Afterward, since we are a slave we need as for an IXFR and see the answer.
-        * If it's an IXFR we will load the zone then replay then download the IXFR.
-        * If it's an AXFR we will delete everything then download the zone.
-        * 
-        */
+        best_source = zone_source_get_best(&axfr_source, &file_source);
         
-        log_debug("zone load: parsing journal for last serial");
+        log_debug("zone load: '%{dnsname}': so far, best source is %s", zone_desc_origin, best_source->type_name);
+        
+        log_debug("zone load: '%{dnsname}': parsing journal for last serial", zone_desc_origin);
 
-        u32 zone_journal_serial = 0;
+        u32 zone_journal_serial = best_source->serial;
         
         if(FAIL(return_value = journal_last_soa(zone_desc_origin, g_config->xfr_path, &zone_journal_serial, &ttl, rdata, &rdata_size)))
         {
             if(return_value == ZDB_ERROR_ICMTL_NOTFOUND)
             {
-                log_debug("zone load: no journal");               
+                log_debug("zone load: '%{dnsname}': no journal found", zone_desc_origin);
                 
                 return_value = SUCCESS;
             }
-        }
-        
-        if((zone_desc->flags & ZONE_FLAG_NO_MASTER_UPDATES) == 0)
-        {
-            if(ISOK(return_value))
+            else
             {
-                log_debug("zone load: poking the master of %{dnsname} with an SOA query", zone_desc_origin);
-
-                u32 master_serial = (zone_journal_serial - 2)|1; /* default to less but avoid 0 */
-
-                if(ISOK(return_value = message_query_serial(zone_desc_origin, zone_desc_masters, &master_serial)))
-                {
-                    log_debug("zone load: serial of %{dnsname} on the master is %d\n", zone_desc_origin, master_serial);
-                }
-
-                if(ISOK(return_value) && (zone_journal_serial != master_serial))
-                {
-                    return_value = database_get_ixfr_answer_type(zone_desc_origin, zone_desc_masters, ttl, rdata_size, rdata);
-
-                    if((return_value != TYPE_IXFR) && (return_value != SUCCESS))
-                    {
-                        /* axfr or error */
-
-                        if(return_value != TYPE_AXFR)
-                        {                                            
-                            log_err("zone load: unexpected answer from the master (will query for a full zone transfer)");
-                        }
-
-                        char data_path[PATH_MAX]; 
-#ifdef DEBUG
-                        memset(data_path, 0x5a, sizeof(data_path));
-#endif
-                        xfr_copy_get_data_path(data_path, sizeof(data_path), g_config->xfr_path, zone_desc_origin);
-
-                        xfr_delete_axfr(zone_desc_origin, data_path);
-
-                        journal_truncate(zone_desc_origin, g_config->xfr_path);
-
-                        axfr_file_available = zone_file_available = FALSE;
-                    }
-                }
+                log_err("zone load: '%{dnsname}': an error occurred reading the journal: %r", zone_desc_origin, return_value);
             }
         }
-        
-        if(FAIL(return_value))
+        else
         {
-            log_err("zone load: unable to download %{dnsname} from master: %r", zone_desc_origin, return_value);
-        }                
+            log_debug("zone load: '%{dnsname}': journal ends at serial %d", zone_desc_origin, zone_journal_serial);
+            
+            journal_available = TRUE;
+            journal_last_serial = zone_journal_serial;
+            
+            // the best source must be local, let's update the serial to what it should reach using the journal
+            
+            best_source->serial = journal_last_serial;
+        }
+        
+        if(TRUE)
+        {
+            // compare the db with the best source
+            // parameter order is important, if they are equal, the left one is returned
+            best_source = zone_source_get_best(&db_source, best_source);
+        }
+    }
+    else
+    {
+        // clear journal file, if any
+        database_load_zone_slave_clear_xfr(zone_desc_origin);
+        
+        log_debug("zone load: '%{dnsname}': no local source available", zone_desc_origin);
+        
+        // note: the best_source is pointing to the master
+    }
+    
+    // Retrieve the serial on the master, if we are allowed to
+    
+    if(((zone_desc->flags & ZONE_FLAG_NO_MASTER_UPDATES) == 0) && zone_source_has_flags(best_source, ZONE_SOURCE_LOCALE))
+    {
+        // a fail here would mean something horribly wrong is going on with the journal ...
+        
+        u32 master_serial;
+        
+        if(ISOK(return_value = message_query_serial(zone_desc_origin, zone_desc_masters, &master_serial)))
+        {
+            log_debug("zone load: '%{dnsname}': master %{hostaddr} has serial %u", zone_desc_origin, zone_desc_masters, master_serial);
+            
+            zone_source_set(&master_source, ZONE_SOURCE_EXISTS | ZONE_SOURCE_REMOTE);
+            zone_source_set_serial(&master_source, master_serial);
+        }
+        else
+        {
+            log_err("zone load: '%{dnsname}': unable to get serial from master %{hostaddr}: %r", zone_desc_origin, zone_desc_masters, return_value);
+        }
+
+        if(zone_source_compare(best_source, &master_source) >= 0)
+        {
+            // we can reach locally at least what the master is giving us
+
+            log_debug("zone load: '%{dnsname}': no need to download the zone from the master", zone_desc_origin);
+        }
+        else
+        {
+            // see how the master would give us the incremental changes
+
+            if(ISOK(return_value = database_get_ixfr_answer_type(zone_desc_origin, zone_desc_masters, ttl, rdata_size, rdata)))
+            {
+                if(return_value == TYPE_AXFR)
+                {
+                    // the zone we have is a wrong start
+
+                    log_debug("zone load: '%{dnsname}': the master answered to the IXFR by an AXFR", zone_desc_origin);
+
+                    zone_source_unset(&axfr_source, ZONE_SOURCE_EXISTS);
+                    zone_source_unset(&file_source, ZONE_SOURCE_EXISTS);
+                    best_source = &master_source;
+
+                    database_load_zone_slave_clear_xfr(zone_desc_origin);
+                }
+
+                // else we did got an IXFR. Starting by loading the local zone file + journal should be more efficient.
+            }
+            else
+            {
+                log_err("zone load: '%{dnsname}': IXFR query to %{hostaddr} failed with: %r", zone_desc_origin, zone_desc_masters, return_value);
+            }
+        }
     }
     
     /*
      * Now ask to the master for an IXFR that we will interrupt.
      * After a few retries, load the current zone.
      */
-
-    if(axfr_file_available)
+     
+    if(best_source == &axfr_source)
     {
-        log_info("zone load: loading %{dnsname} axfr in '%s'", zone_desc_origin, g_config->xfr_path);
-
+        log_info("zone load: %{dnsname}: loading AXFR file in '%s'", zone_desc_origin, g_config->xfr_path);
+        file_opened = TRUE;
         if(FAIL(return_value = zone_axfr_reader_open_last(g_config->xfr_path, zone_desc_origin, &zr)))
         {
-            log_err("zone load: unexpectedly unable to load an axfr for %{dnsname}", zone_desc_origin);
-
-            axfr_file_available = FALSE;
-        }
-        else
-        {
-            zone_file_available = FALSE;
+            log_err("zone load: %{dnsname}: unexpectedly unable to load AXFR file in '%s'", zone_desc_origin, g_config->xfr_path);
+            zone_source_unset(&axfr_source, ZONE_SOURCE_EXISTS);
+            file_opened = FALSE;
+           
+            database_load_zone_slave_clear_xfr(zone_desc_origin);
         }
     }
-
-    if(zone_file_available)
+    else if(best_source == &file_source)
     {
-        log_info("zone load: loading %{dnsname} file '%s'", zone_desc_origin, file_name);
-
+        log_info("zone load: %{dnsname}: loading file '%s'", zone_desc_origin, file_name);
+        file_opened = TRUE;
         if(FAIL(return_value = zone_file_reader_open(file_name, &zr)))
         {
-            log_err("zone load: unexpectedly unable to load '%s' when it had just been found earlier", file_name);
+            log_err("zone load: %{dnsname}: unexpectedly unable to load '%s'", zone_desc_origin, file_name);
+            zone_source_unset(&file_source, ZONE_SOURCE_EXISTS);
+            file_opened = FALSE;
 
-            zone_file_available = FALSE;
+            /// cleaning is not an option (assuming operator error)
         }
     }
     
@@ -942,7 +1178,7 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
      * _ Schedule an NSEC/NSEC3 verify/update. (Here ?)
      */
 
-    if(axfr_file_available || zone_file_available)
+    if(file_opened)
     {
         // at this point, the file is about to be loaded.  It is the right time to test the drop-before-load flag
     
@@ -956,15 +1192,19 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
 
             zone_reader_close(&zr);
             
-            if(axfr_file_available)
+            u32 now = time(NULL);
+            
+            zone_lock(zone_desc, ZONE_LOCK_LOAD);
+            
+            if(best_source == &axfr_source)
             {
-                // if we didn't load the zone file ...
+                // if we didn't load the zone file, so mark it so a dump will actually dump its content into a text zone file
                 zone_desc->status_flags |= ZONE_STATUS_MODIFIED;
             }
-
-            u32 now = time(NULL);
-
-            zone_lock(zone_desc, ZONE_LOCK_LOAD);
+            if(zone_source_has_flags(best_source, ZONE_SOURCE_TEMPLATE))
+            {
+                zone_desc->status_flags |= ZONE_STATUS_TEMPLATE_SOURCE_FILE;
+            }
             
             zone_desc->refresh.refreshed_time = now;
             zone_desc->refresh.retried_time = now;
@@ -973,9 +1213,7 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
 
             if(ISOK(return_value))
             {
-
 #if ZDB_HAS_ACL_SUPPORT
-
                /*
                 * Setup the ACL filter function & configuration
                 */
@@ -985,7 +1223,6 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
 #endif
 
 #if HAS_DNSSEC_SUPPORT
-
                /*
                 * Setup the validity period and the jitter
                 */
@@ -994,8 +1231,10 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
                 zone_pointer_out->sig_validity_jitter_seconds = 0;/*zone->sig_validity_jitter * SIGNATURE_VALIDITY_JITTER_S */;
 #endif
                 *zone = zone_pointer_out;
-
+                
                 zone_unlock(zone_desc, ZONE_LOCK_LOAD);
+                
+                host_address_delete_list(zone_desc_masters);
 
                 return return_value;
             }
@@ -1005,27 +1244,25 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
                 {
                     case ZDB_READER_ALREADY_LOADED:
                     {
-                        log_warn("zone load: failed because it was loaded already");
+                        log_warn("zone load: '%{dnsname}': failed because it was loaded already", zone_desc_origin);
                         break;
                     }
                     case ZDB_ERROR_ICMTL_NOTFOUND:
                     {
-                        log_info("zone load: no journal to replay");
+                        log_info("zone load: '%{dnsname}': no journal to replay", zone_desc_origin);
                         return_value = SUCCESS;
                         break;
                     }
                     case UNABLE_TO_COMPLETE_FULL_READ:
                     {
-                        log_err("zone load: the zone file or the journal are likely corrupted for zone %{dnsname}: %r", zone_desc_origin, return_value);
-
-                        axfr_file_available = zone_file_available = FALSE;
+                        log_err("zone load: '%{dnsname}': the zone file or the journal are likely corrupted: %r", zone_desc_origin, return_value);
+                        best_source = &master_source;
                         break;
                     }
                     default:
                     {
-                        log_err("zone load: an error occurred while loading the zone or journal for %{dnsname}: %r", zone_desc_origin, return_value);
-
-                        axfr_file_available = zone_file_available = FALSE;
+                        log_err("zone load: '%{dnsname}': an error occurred while loading the zone or journal: %r", zone_desc_origin, return_value);
+                        best_source = &master_source;
                         break;
                     }
                 }
@@ -1039,33 +1276,38 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
             // so we unmount it (replacing it by the dummy)
             // then we ask for loading it again
             
+            zone_reader_close(&zr);
+            
             zone_lock(zone_desc, ZONE_LOCK_LOAD);
             zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_UNMOUNT, NULL, TRUE);
             zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_LOAD, NULL, TRUE);
             zone_unlock(zone_desc, ZONE_LOCK_LOAD);
+            
+            host_address_delete_list(zone_desc_masters);
          
             return SUCCESS;
         }
     }
     else if(current_zone != NULL)
     {
+        // no relevant local source        
         // update some parts
         
-        /// ALREADY LOCKED : zone_lock(current_zone, ZONE_LOCK_LOAD);
+        log_debug("zone load: '%{dnsname}': keeping the already loaded zone", zone_desc_origin);
+        
+        zone_lock(zone_desc, ZONE_LOCK_LOAD);
         
 #if ZDB_HAS_ACL_SUPPORT
 
        /*
         * Setup the ACL filter function & configuration
         */
-
-        zone_lock(zone_desc, ZONE_LOCK_LOAD);
+        
         current_zone->extension = &zone_desc->ac; /* The extension points to the ACL */
         current_zone->query_access_filter = acl_get_query_access_filter(&zone_desc->ac.allow_query);
-        zone_unlock(zone_desc, ZONE_LOCK_LOAD);
 #endif
 
-#if HAS_DNSSEC_SUPPORT != 0
+#if HAS_DNSSEC_SUPPORT
 
        /*
         * Setup the validity period and the jitter
@@ -1074,10 +1316,10 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
         current_zone->sig_validity_interval_seconds = MAX_S32;/*zone->sig_validity_interval * SIGNATURE_VALIDITY_INTERVAL_S */;
         current_zone->sig_validity_jitter_seconds = 0;/*zone->sig_validity_jitter * SIGNATURE_VALIDITY_JITTER_S */;
 #endif
-        /// ALREADY LOCKED : zone_unlock(current_zone, ZONE_LOCK_LOAD);
+        zone_unlock(zone_desc, ZONE_LOCK_LOAD);
     }
 
-    if(!(axfr_file_available || zone_file_available))
+    if(best_source == &master_source)
     {
        /**
         * Set a placeholder zone.  Marked as invalid.
@@ -1096,18 +1338,18 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
         *                                                                then the AXFR will be loaded and will be scheduled for a swap & destroy
         * 
         */
-        
-        /**
-         * Schedule an AXFR transfer from the master(s)
-         */
-        
+
         if((zone_desc->flags & ZONE_FLAG_NO_MASTER_UPDATES) == 0)
         {
+            log_debug("zone load: '%{dnsname}': the zone will be downloaded from the master %{hostaddr}", zone_desc_origin, zone_desc_masters);
+            
             database_zone_axfr_query(zone_desc_origin);
         }
         
         return_value = ZRE_NO_VALID_FILE_FOUND;
     }
+    
+    host_address_delete_list(zone_desc_masters);
     
     return return_value;
 }
@@ -1156,8 +1398,6 @@ database_service_zone_load_thread(void *parms)
                                                              &database_zone_load_parms->zone);
     // notify the fact that the zone has been loaded (or not)
     
-    zone_lock(zone_desc, ZONE_LOCK_LOAD);
-    
     if(ISOK(return_code))
     {
         log_debug7("%{dnsname}@%p: loaded_zone@%p (was %p)",
@@ -1165,7 +1405,9 @@ database_service_zone_load_thread(void *parms)
                 zone_desc,
                 database_zone_load_parms->zone,
                 zone_desc->loaded_zone);
+        zone_lock(zone_desc, ZONE_LOCK_LOAD);
         zone_desc->loaded_zone = database_zone_load_parms->zone;
+        zone_unlock(zone_desc, ZONE_LOCK_LOAD);
     }
     else
     {
@@ -1183,8 +1425,9 @@ database_service_zone_load_thread(void *parms)
     
     database_fire_zone_loaded(zone_desc, database_zone_load_parms->zone, return_code);
     
-    zone_desc->status_flags &= ~(ZONE_STATUS_LOAD|ZONE_STATUS_LOADING|ZONE_STATUS_PROCESSING);
     
+    zone_lock(zone_desc, ZONE_LOCK_LOAD);
+    zone_desc->status_flags &= ~(ZONE_STATUS_LOAD|ZONE_STATUS_LOADING|ZONE_STATUS_DOWNLOADED|ZONE_STATUS_PROCESSING);
     zone_unlock(zone_desc, ZONE_LOCK_LOAD);
     
     database_zone_load_parms_free(database_zone_load_parms);
@@ -1245,7 +1488,6 @@ database_service_zone_load(zone_desc_s *zone_desc)
     // wait
     
 #if HAS_MASTER_SUPPORT
-
     if(zone_desc->type == ZT_MASTER)
     {
         /*
@@ -1254,10 +1496,8 @@ database_service_zone_load(zone_desc_s *zone_desc)
          * => schedule the xchg with the invalidated zone
          */
 
-
-        
-        zone_desc->status_flags &= ~ZONE_STATUS_STARTING_UP;
         zone_desc->status_flags |= ZONE_STATUS_LOAD;
+        zone_desc->status_flags &= ~ZONE_STATUS_STARTING_UP;
         
         zone_acquire(zone_desc);
         database_service_zone_load_parms_s *database_zone_load_parms = database_zone_load_parms_alloc(db, zone_desc, database_load_zone_master);
@@ -1278,8 +1518,8 @@ database_service_zone_load(zone_desc_s *zone_desc)
          * 
          */
         
-        zone_desc->status_flags &= ~ZONE_STATUS_STARTING_UP;
         zone_desc->status_flags |= ZONE_STATUS_LOAD;
+        zone_desc->status_flags &= ~ZONE_STATUS_STARTING_UP;
         
         zone_acquire(zone_desc);
         database_service_zone_load_parms_s *database_zone_load_parms = database_zone_load_parms_alloc(db, zone_desc, database_load_zone_slave);
@@ -1288,10 +1528,8 @@ database_service_zone_load(zone_desc_s *zone_desc)
     else /* not master nor slave */
     {
         /* other types */
-
         log_err("zone load: unknown zone type");
-        
-        zone_desc->status_flags &= ~(ZONE_STATUS_LOAD|ZONE_STATUS_LOADING|ZONE_STATUS_PROCESSING);
+        zone_desc->status_flags &= ~(ZONE_STATUS_LOAD|ZONE_STATUS_LOADING|ZONE_STATUS_DOWNLOADED|ZONE_STATUS_PROCESSING);
     }
     
     log_debug1("database_service_zone_load: unlocking zone '%{dnsname}' for loading", origin);

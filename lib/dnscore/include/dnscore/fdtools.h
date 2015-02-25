@@ -128,6 +128,17 @@ ya_result close_ex(int fd);
 
 s64 filesize(const char *name);
 
+/**
+ * 
+ * @param pathname
+ * @param mode
+ * @return 
+ */
+
+#define MKDIR_EX_PATH_TO_FILE 1 // ie: pathname points to a file, so skip the file part
+
+int mkdir_ex(const char *pathname, mode_t mode, u32 flags);
+
 #ifdef	__cplusplus
 }
 #endif

@@ -29,17 +29,40 @@
 # 
 ################################################################################
 
-20141214:
+20150226:
+        YADIFA 2.0.5
+
+        This release is a public release.
+
+        Fixes:
+        - fixed an issue with huge IXFR transfers as a master
+        - fixed an issue with notifications on slave-slave-master setup
+        - fixed an issue with a potential infinite loop loading an AXFR from a master
+        - fixed missing hmac-sha* from <key> configuration
+        - fixed an issue with TLSA records parsing
+        - fixed an issue with base 16 encoding
+        - fixed an issue parsing * domains
+        - fixed an issue with some RRL motivated answers
+        - increased the maximum number of network interfaces from 5 to 16
+        - fixed an error in the configuration examples where "statistics" was used instead of "stats"
+        - minor fixes and improvements
+
+20141216:
         YADIFA 2.0.4
 
-        This release is a public release
+        This release is a public release.
+
+        By popular demand, the default log file directory is now PREFIX/var/log/yadifa.  It can be set using --with-logdir=/my/dir
 
         Improved build mechanism.
             It has been tested to work automatically on Linux, FreeBSD, OSX, SunOS.
             RedHat familly builds will use -O2 as maximum optimisations.
 
+            Note that some optional features are now enabled by default but can be disabled.
+
         Fixes:
         - fixed an issue with the AXFR transfer where the serial number would not be properly taken into account
+        - fixed an issue with the notify mechanism that could occur if the server was only listening to 127.0.0.1 
         - fixed an issue with bogus DNSKEY records that may potentially lead to a crash in openssl
         - fixed a reported potential "tmpfile" vulnerability on DEBUG builds (generated with make debug)
         - fixed an issue with IPv6 connections on some architectures
@@ -94,6 +117,12 @@
         ELF 32-bit MSB executable, PowerPC or cisco 4500, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.26, BuildID[sha1]=0xedc47c984a4af7eb9a7ecbc0f135e4d064ba08f0, with unknown capability 0x41000000 = 0x13676e75, with unknown capability 0x10000 = 0xb0401, not stripped
 
         note: using --enable-force64bits failed because of ssl, no simple/quick way to install openssl-devel.ppc64 seemed available
+
+20141016:
+    YADIFA 2.0.2
+
+    TCP fallback support on truncation
+
 
 20140905:
     YADIFA 2.0.0

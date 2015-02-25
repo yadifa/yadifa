@@ -68,6 +68,15 @@ u64 timems();
 
 u64 timems_new();
 
+/**
+ * usleep only support a limited range of time (sometimes 2^32 us, sometimes < 1 s)
+ * This wrapper ensures time supported is up to 4294967295.000000 seconds
+ * 
+ * @param us the number of microseconds to wait for, can range from 0 to 4294967295000000 micro seconds
+ */
+
+void usleep_ex(u64 us_);
+
 #ifdef	__cplusplus
 }
 #endif

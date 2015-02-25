@@ -534,12 +534,6 @@ zdb_zone_answer_ixfr_thread(void* data_)
                              * End
                              */
 
-                            packet_writer_add_fqdn(&pw, (const u8*)origin);
-                            packet_writer_add_bytes(&pw, (const u8*)&current_soa_tctrl, 8);
-                            packet_writer_add_rdata(&pw, TYPE_SOA, current_soa_rdata_buffer, current_soa_rdata_size);
-
-                            an_record_count++;
-
                             MESSAGE_SET_AN(mesg->buffer, htons(an_record_count));
                             mesg->send_length = pw.packet_offset;
 
@@ -563,11 +557,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
                              * Init
                              */
 
-                            packet_writer_add_fqdn(&pw, (const u8*)origin);
-                            packet_writer_add_bytes(&pw, (const u8*)&current_soa_tctrl, 8);
-                            packet_writer_add_rdata(&pw, TYPE_SOA, current_soa_rdata_buffer, current_soa_rdata_size);
-
-                            an_record_count = 1;
+                            an_record_count = 0;
                         }
                     }
                     else

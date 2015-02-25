@@ -56,7 +56,7 @@ extern "C" {
     {
         output_stream* filtered;
         u64 write_count;
-        u64 writed_count;
+        u64 written_count;
         ya_result result;
         u8 flags;
     };

@@ -485,7 +485,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
 
             return UNSUPPORTED_TYPE;
         }
-        case TYPE_ASFDB:
+        case TYPE_AFSDB:
         {
             if(size > 260)
             {

@@ -63,7 +63,7 @@
  * The new logger model does not requires MT protection on the channels
  */
 
-#define FILE_CHANNEL_BUFFER_SIZE 65536   /// @todo 20140523 edf -- make this configurable
+#define FILE_CHANNEL_BUFFER_SIZE 65536
 
 typedef struct file_data file_data;
 

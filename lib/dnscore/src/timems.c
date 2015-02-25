@@ -101,6 +101,44 @@ timems_new()
     return ttr;
 }
 
+#define USLEEP_LIMIT 0xffffffff
+//#define USLEEP_LIMIT 1000000
+
+/**
+ * usleep only support a limited range of time (sometimes 2^32 us, sometimes < 1 s)
+ * This wrapper ensures time supported is up to 4294967295.000000 seconds
+ * 
+ * @param us the number of microseconds to wait for, can range from 0 to 4294967295000000 micro seconds
+ */
+
+void
+usleep_ex(u64 us_)
+{
+    s64 us = (s64)us_;
+    s64 now = timeus();
+    s64 limit = now + us;
+    
+    if(us >= USLEEP_LIMIT)
+    {   
+        do
+        {
+            sleep(us / 1000000);
+            now = timeus();
+            us = limit - now;
+        }
+        while(us >= USLEEP_LIMIT);
+    }
+    
+    // us is the remaining us to wait for
+    
+    while(us > 0)
+    {
+        usleep(us);
+        now = timeus();
+        us = limit - now;
+    }
+}
+
 /** @} */
 
 /*----------------------------------------------------------------------------*/

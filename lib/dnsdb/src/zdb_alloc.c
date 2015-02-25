@@ -241,14 +241,19 @@ zdb_alloc_page(u32 page_index)
     
         if(map_pointer == MAP_FAILED)
         {
-            osformatln(termerr, "zalloc_page2(%u,%u) mmap failed with %r", size, chunk_size, ERRNO_ERROR);
+            osformatln(termerr, "zdb_alloc_page(%u,%u) mmap failed with %r", size, chunk_size, ERRNO_ERROR);
             DIE(ZDB_ERROR_MMAPFAILED);
         }
 
 #ifdef MADV_NOHUGEPAGE
         if(madvise(map_pointer, size, MADV_NOHUGEPAGE) < 0)
         {
-            osformatln(termerr, "zalloc_page2(%u,%u) madvise failed with %r", size, chunk_size, ERRNO_ERROR);
+            int err = errno;
+            if(err != EINVAL)
+            {
+                osformatln(termerr, "zdb_alloc_page(%u,%u) madvise failed with %r", size, chunk_size, MAKE_ERRNO_ERROR(err));
+            }
+            // else it means it's simply not supported
         }
 #endif
         /*

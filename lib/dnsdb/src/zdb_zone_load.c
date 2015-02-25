@@ -83,21 +83,12 @@ extern logger_handle *g_database_logger;
 void
 resource_record_init(resource_record* entry)
 {
-#ifdef RR_OS_RDATA
-    /* Initialize "os" stream */
-    bytearray_output_stream_init(&entry->os_rdata, NULL, 0);
-#endif
-
     entry->next    = NULL;
     entry->ttl     = 0;
     entry->type    = 0;
     entry->class   = 0;
 
-#ifndef RR_OS_RDATA
     entry->rdata_size = 0;
-#endif
-
-
 
     entry->name[0] = 0;
     entry->name[1] = 0;
@@ -107,11 +98,6 @@ void
 resource_record_freecontent(resource_record* entry)
 {
     yassert(entry != NULL);
-
-#ifdef RR_OS_RDATA
-    /* free the record  */
-    output_stream_close(&entry->os_rdata);
-#endif
 }
 
 void
@@ -121,11 +107,7 @@ resource_record_resetcontent(resource_record* entry)
 
     /* Resets the RDATA output stream so we can fill it again */
 
-#ifdef RR_OS_RDATA
-    bytearray_output_stream_reset(&entry->os_rdata);
-#else
     entry->rdata_size = 0;
-#endif
 }
 
 

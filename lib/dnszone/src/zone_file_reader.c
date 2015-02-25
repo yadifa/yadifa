@@ -652,7 +652,7 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 
                 // fingerprint
                 
-                if(FAIL(return_code = parser_next_token(p)))
+                if(FAIL(return_code = parser_concat_next_tokens_nospace(p)))
                 {
                     break;
                 }
@@ -697,7 +697,7 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 
                 // ?
                 
-                if(FAIL(return_code = parser_next_token(p)))
+                if(FAIL(return_code = parser_concat_next_tokens_nospace(p)))
                 {
                     break;
                 }
@@ -707,7 +707,7 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
                 
-                return_code += 2;
+                return_code += 3;
                 
                 break;
             }
@@ -924,7 +924,7 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             case TYPE_NULL:
             case TYPE_MINFO:
             case TYPE_RP:
-            case TYPE_ASFDB:
+            case TYPE_AFSDB:
             case TYPE_X25:
             case TYPE_ISDN:
             case TYPE_RT:
@@ -1155,7 +1155,7 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                     }
                     else if(parse_word_match(text, text_len, "$TTL", 4))
                     {
-                        if(FAIL(return_code = parser_copy_next_s32(p, &zfr->zttl)))
+                        if(FAIL(return_code = parser_copy_next_ttl(p, &zfr->zttl)))
                         {
                             return return_code;
                         }
@@ -1322,23 +1322,14 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
 
                         entry->class = rclass;
                     }
-#ifdef RR_OS_RDATA
-                    if(FAIL(return_code = zone_file_reader_copy_rdata_inline(p, rtype, zfr->rdata, sizeof(zfr->rdata), zfr->origin)))
-                    {
-                        return return_code;
-                    }
 
-                    // assigns the content of the rdata to the record ...
-
-                    bytearray_output_stream_set(&entry->os_rdata, zfr->rdata, return_code, FALSE);
-#else
                     if(FAIL(return_code = zone_file_reader_copy_rdata_inline(p, rtype, entry->rdata, sizeof(entry->rdata), zfr->origin)))
                     {
                         return return_code;
                     }
 
                     entry->rdata_size = return_code;
-#endif                    
+
                     // FULL RECORD READY
                     
                     return SUCCESS;
@@ -1352,7 +1343,9 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
         }
         else
         {
+#if DO_PRINT
             formatln("[ERROR %r]", return_code);
+#endif
             break;
         }
     }

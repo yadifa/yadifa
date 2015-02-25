@@ -121,7 +121,7 @@
         database        *                                   database,all
         dnssec          *                                   dnssec,all
         server          *                                   server,all
-        statistics      *                                   statistics
+        stats           *                                   statistics
         system          *                                   system,all
         zone            *                                   zone,all
         queries         *                                   queries

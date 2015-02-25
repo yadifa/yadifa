@@ -358,7 +358,24 @@ database_service_zone_resignature_thread(void *parms_)
     
     if(FAIL(return_code = zdb_update_zone_signatures(zone, zone->sig_quota)))
     {
-        log_err("zone signature failed: %r", return_code);
+        switch(return_code)
+        {
+            case ZDB_ERROR_ZONE_IS_NOT_DNSSEC:
+                log_warn("zone sign: unable to sign %{dnsname}, it has not been configured as DNSSEC", zone_desc->origin);
+                break;
+            case ZDB_ERROR_ZONE_IS_ALREADY_BEING_SIGNED:
+                log_warn("zone sign: could not refresh %{dnsname} signatures, it is already being signed", zone_desc->origin);
+                break;
+            case ZDB_ERROR_ZONE_NO_ZSK_PRIVATE_KEY_FILE:
+                log_warn("zone sign: unable to try to refresh %{dnsname} signatures because there are no private keys available", zone_desc->origin);
+                break;
+            case DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM:
+                log_warn("zone sign: unable to refresh %{dnsname} signatures because there is a key with an unsupported algorithm", zone_desc->origin);
+                break;
+            default:
+               log_err("zone sign: signature of %{dnsname} failed: %r", zone_desc->origin, return_code);
+               break;
+        }
     }
     else if(return_code == 0)   // no signature have been done, let's scan the current status
     {

@@ -310,7 +310,6 @@ static void logger_handle_trigger_shutdown()
 static inline logger_message*
 logger_message_alloc()
 {
-    /// @todo 20140523 edf -- use a better allocation mechanism
     logger_message* message;
     MALLOC_OR_DIE(logger_message*, message, sizeof (logger_message), LOGRMSG_TAG);
     
@@ -1879,28 +1878,35 @@ logger_flush()
     
     if(logger_initialised && logger_started)
     {
-        async_wait_s aw;
-        async_wait_init(&aw, 1);
-        
-        logger_message* message = logger_message_alloc();
+        if(logger_thread_id != pthread_self())
+        {
+            async_wait_s aw;
+            async_wait_init(&aw, 1);
+
+            logger_message* message = logger_message_alloc();
 
 #ifdef DEBUG        
-        ZEROMEMORY(message, sizeof (logger_message));
+            ZEROMEMORY(message, sizeof (logger_message));
 #endif
-        message->type = LOGGER_MESSAGE_TYPE_CHANNEL_FLUSH_ALL;
-        message->channel_flush_all.aw = &aw;
-        
-        threaded_queue_enqueue(&logger_commit_queue, message);
-        
-        // avoid being stuck forever if the service is down
-        
-        while(logger_initialised && logger_started)
-        {
-            if(async_wait_timeout(&aw, 1000000))
+            message->type = LOGGER_MESSAGE_TYPE_CHANNEL_FLUSH_ALL;
+            message->channel_flush_all.aw = &aw;
+
+            threaded_queue_enqueue(&logger_commit_queue, message);
+
+            // avoid being stuck forever if the service is down
+
+            while(logger_initialised && logger_started)
             {
-                async_wait_finalize(&aw);
-                break;
+                if(async_wait_timeout(&aw, 1000000))
+                {
+                    async_wait_finalize(&aw);
+                    break;
+                }
             }
+        }
+        else
+        {
+            logger_service_flush_all_channels();
         }
     }
 #if DEBUG_LOG_HANDLER != 0
@@ -2216,7 +2222,11 @@ logger_handle_msg(logger_handle* handle, u32 level, const char* fmt, ...)
 
     if(level <= exit_level)
     {
-        logger_handle_trigger_shutdown();
+        exit_level = 0;
+        if(!dnscore_shuttingdown())
+        {
+            logger_handle_trigger_shutdown();
+        }
     }
 }
 

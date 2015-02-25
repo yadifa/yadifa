@@ -202,7 +202,7 @@ rrsig_context_initialize(rrsig_context_s *context, const zdb_zone *zone, const c
 #if ALLOW_ZALLOC != 0
                 ZALLOC_OR_DIE(dnssec_key_sll*, node, dnssec_key_sll, DNSSEC_KEY_SLL_TAG);
 #else
-                MALLOC_OR_DIE(dnssec_key_sll*, node, sizeof (dnssec_key_sll), DNSSEC_KEY_SLL_TAG);
+                MALLOC_OR_DIE(dnssec_key_sll*, node, sizeof(dnssec_key_sll), DNSSEC_KEY_SLL_TAG);
 #endif
 
                 node->next = context->key_sll;
@@ -811,7 +811,7 @@ rrsig_update_records(rrsig_context_s *context, dnssec_key* key, zdb_packed_ttlrd
 
     context->sig_invalid_first = MIN(until, context->sig_invalid_first);
 
-    if(do_update && !type_signed)
+    if(/*do_update &&*/ !type_signed)
     {
         if(until < now + context->sig_validity_regeneration_seconds)
         {
@@ -1190,7 +1190,7 @@ rrsig_update_label(rrsig_context_s *context, zdb_rr_label* label)
 
                 ya_result return_code;
 
-                if(FAIL(return_code = rrsig_update_records(context, key, rr_sll, type, type != TYPE_SOA)))
+                if(FAIL(return_code = rrsig_update_records(context, key, rr_sll, type, type != TYPE_SOA/*TRUE*/)))
                 {
                     return return_code;
                 }

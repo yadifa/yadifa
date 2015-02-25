@@ -89,6 +89,11 @@ file_write(output_stream* stream_, const u8* buffer, u32 len)
                 continue;
             }
 
+            if(err == EAGAIN) /// @todo edf 20150218 -- OSX 10.9.4 generates this on unexpected streams
+            {
+                continue;
+            }
+
             /* error */
             return MAKE_ERRNO_ERROR(err);
         }

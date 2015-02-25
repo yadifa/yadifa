@@ -1110,10 +1110,6 @@ ctrl_query_process(message_data *mesg)
             break;
         }
         
-
-        
-
-
         default:
         {
             message_make_error(mesg, RCODE_NOTIMP); /* or do we drop ? */

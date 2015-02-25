@@ -76,11 +76,23 @@ extern "C" {
      *  @retval NOK
      *  @return status of message is written in mesg->status
      */
+
+    void database_query(zdb *database, message_data *mesg);
+
 #if HAS_RRL_SUPPORT
-    ya_result       database_query(zdb *database, message_data *mesg);
-#else
-    void            database_query(zdb *database, message_data *mesg);
+
+    /** \brief Get dns answer from database
+     *
+     *  Get dns answer from database
+     * 
+     *  @param mesg
+     *
+     *  @return RRL code
+     */
+
+    ya_result database_query_with_rrl(zdb *db, message_data *mesg);
 #endif
+    
     /**
      * A task is a function called in the main thread loop
      * A delegate is a task we are waiting for

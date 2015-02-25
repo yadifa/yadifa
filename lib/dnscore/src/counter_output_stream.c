@@ -58,7 +58,7 @@ counter_write(output_stream* stream, const u8* counter_, u32 len)
 
         if(ISOK(data->result))
         {
-            data->writed_count += data->result;
+            data->written_count += data->result;
         }
     }
 
@@ -96,11 +96,13 @@ static const output_stream_vtbl counter_output_stream_vtbl ={
 void
 counter_output_stream_init(output_stream* filtered, output_stream* stream, counter_output_stream_data* counter_data)
 {
+    yassert(filtered != stream);
+    
     counter_output_stream_data* data = counter_data;
 
     data->filtered = filtered;
     data->write_count = 0;
-    data->writed_count = 0;
+    data->written_count = 0;
     data->result = SUCCESS;
 
     stream->data = data;

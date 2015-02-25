@@ -665,21 +665,11 @@ zdb_rr_label_delete_record(zdb_zone* zone, dnslabel_vector_reference path, s32 p
     
     if(path_index < 0)
     {
+#if ZDB_CHANGE_FEEDBACK_SUPPORT != 0
+        zdb_listener_notify_remove_type(path[0], &apex->resource_record_set, type);
+#endif
         if(ISOK(zdb_record_delete(&apex->resource_record_set, type))) /* FB done, APEX : no delegation */
         {
-#if ZDB_CHANGE_FEEDBACK_SUPPORT != 0
-            zdb_listener_notify_remove_type(path[path_index], &apex->resource_record_set, type);
-#endif
-            /*
-            if(RR_LABEL_IRRELEVANT(apex))
-            {
-                zdb_rr_label_free(zone, apex); // valid call because in a delete
-                zone->apex = NULL;
-
-                return ZDB_RR_LABEL_DELETE_TREE;
-            }
-            */
-            
             return ZDB_RR_LABEL_DELETE_NODE;
         }
 
@@ -728,6 +718,7 @@ struct zdb_rr_label_delete_record_exact_process_callback_args
     zdb_zone* zone;
     s32 top;
     u16 type;
+    u8  flags;
 };
 
 /**
@@ -785,6 +776,8 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
             if(RR_LABEL_IRRELEVANT(rr_label))
             {
                 zdb_rr_label_free(args->zone, rr_label); // valid call because in a delete
+                
+                args->flags |= 2;
 
                 return COLLECTION_PROCESS_DELETENODE;
             }
@@ -810,7 +803,6 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
 
     if(ISOK(delete_return_code = zdb_record_delete_exact(&rr_label->resource_record_set, args->type, args->ttlrdata))) /* FB done */
     {
-
         /*
          * @NOTE delete_return_code can be either SUCCESS_STILL_RECORDS or SUCCESS_LAST_RECORD
          */
@@ -857,13 +849,15 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
         }
 
         /* NOTE: the 'detach' is made by destroy : do not touch to the "next" field */
-        /* NOTE: the freee of the node is made by destroy : do not do it */
+        /* NOTE: the free of the node is made by destroy : do not do it */
 
         /* dictionary destroy will take every item in the dictionary and
          * iterate through it calling the passed function.
          */
 
         zdb_rr_label_free(args->zone, rr_label); // valid call because in a delete
+        
+        args->flags |= 1;
 
         return COLLECTION_PROCESS_DELETENODE;
     }
@@ -902,7 +896,7 @@ zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path,
         if(ISOK(zdb_record_delete_exact(&apex->resource_record_set, type, ttlrdata))) /* FB done, APEX : no delegation */
         {
 #if ZDB_CHANGE_FEEDBACK_SUPPORT != 0
-            zdb_listener_notify_remove_record(path[path_index], type, ttlrdata);
+            zdb_listener_notify_remove_record(path[0], type, ttlrdata);
 #endif
             if(RR_LABEL_IRRELEVANT(apex))
             {
@@ -926,29 +920,44 @@ zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path,
     args.zone = zone;
     args.top = path_index;
     args.type = type;
+    args.flags = 0;
 
     hashcode hash = hash_dnslabel(args.sections[args.top]);
 
     ya_result err;
+    
+    err = dictionary_process(&apex->sub, hash, &args, zdb_rr_label_delete_record_exact_process_callback);
 
-    if((err = dictionary_process(&apex->sub, hash, &args, zdb_rr_label_delete_record_exact_process_callback)) == COLLECTION_PROCESS_DELETENODE)
+    if(ISOK(err)) //  == COLLECTION_PROCESS_DELETENODE
     {
-        if(RR_LABEL_IRRELEVANT(apex))
+        if(err == COLLECTION_PROCESS_DELETENODE)
         {
-            zdb_rr_label_free(zone, apex); // valid call because in a delete
-            zone->apex = NULL;
+            if(RR_LABEL_IRRELEVANT(apex))
+            {
+                zdb_rr_label_free(zone, apex); // valid call because in a delete
+                zone->apex = NULL;
 
-            return COLLECTION_PROCESS_DELETENODE;
+                return COLLECTION_PROCESS_DELETENODE;
+            }
+
+            /* If the label just removed is a wildcard, then the parent is marked as not having a wildcard. */
+
+            if(IS_WILD_LABEL(args.sections[args.top]))
+            {
+                apex->flags &= ~ZDB_RR_LABEL_GOT_WILD;
+            }
         }
         
         /* If the label just removed is a wildcard, then the parent is marked as not having a wildcard. */
 
-        if(IS_WILD_LABEL(args.sections[args.top]))
+        if(args.flags & 1)
         {
-            apex->flags &= ~ZDB_RR_LABEL_GOT_WILD;
+            return COLLECTION_PROCESS_DELETENODE; // LEAF
         }
-
-        return COLLECTION_PROCESS_STOP;
+        else
+        {
+            return COLLECTION_PROCESS_STOP;
+        }
     }
 
     return err;

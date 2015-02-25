@@ -43,6 +43,7 @@
 #define _POSIX_SOURCES
 #define __USE_POSIX
 
+#include "server-config.h"
 #include "config.h"
 
 #include <sys/types.h>
@@ -126,6 +127,9 @@ server_register_errors()
     error_register(ZONE_LOAD_MASTER_TYPE_EXPECTED,"ZONE_LOAD_MASTER_TYPE_EXPECTED");
     error_register(ZONE_LOAD_MASTER_ZONE_FILE_UNDEFINED,"ZONE_LOAD_MASTER_ZONE_FILE_UNDEFINED");
     error_register(ZONE_LOAD_SLAVE_TYPE_EXPECTED,"ZONE_LOAD_SLAVE_TYPE_EXPECTED");
+    
+    error_register(ANSWER_NOT_ACCEPTABLE,"ANSWER_NOT_ACCEPTABLE");
+    error_register(ANSWER_UNEXPECTED_EOF,"ANSWER_UNEXPECTED_EOF");
 
     /* ACL */
     error_register(ACL_ERROR_BASE,"ACL_ERROR_BASE");
@@ -380,7 +384,7 @@ main_exit()
     
     notify_service_stop();
     
-    database_shutdown(g_config->database);
+    // database_shutdown(g_config->database); // note: disabled on later versions
     
 #if ZDB_DEBUG_MALLOC != 0
     formatln("block_count=%d", debug_get_block_count());
@@ -414,6 +418,8 @@ main_exit()
 
     if(server_do_clean_exit)
     {
+        database_shutdown(g_config->database); // note: at this place on later versions
+        
         database_finalize();
         
 #if HAS_ACL_SUPPORT

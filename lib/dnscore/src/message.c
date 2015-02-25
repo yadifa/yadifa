@@ -196,8 +196,6 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
                 /**
                  * Handle EDNS
                  *
-                 * @todo 20140523 edf -- improve the EDNS handling
-                 * @todo 20140523 edf -- handle extended RCODE (supposed to be 0, but could be set to something else : FORMERR)
                  */
 
                 if((tctr.ttl & NU32(0x00ff0000)) == 0) /* ensure version is 0 */
@@ -614,7 +612,6 @@ message_process_answer_additionals(message_data *mesg, u8* s, u16 ar_count)
 #define NOTIFY_MESSAGE_HEADER_RESULT   ( ((u64) 1LL) << 16 )
    
 #else
-
 #define MESSAGE_HEADER_MASK     (( (u64) 0LL )                      |  \
         ( ((u64) ( QR_BITS | AA_BITS | RA_BITS | TC_BITS )) << 16 ) |  \
         ( ((u64) ( RA_BITS | RCODE_BITS )) << 24 )                  |  \
@@ -816,7 +813,6 @@ message_process_query(message_data *mesg)
         }
     }
 
-    /* cut the trash here */
 
 
     /* At this point the TSIG has been computed and removed */
@@ -1907,8 +1903,6 @@ message_query_tcp_with_timeout(message_data *mesg, host_address *address,  u8 to
     mesg->buffer_tcp_len[0] = mesg->send_length >> 8;
     mesg->buffer_tcp_len[1] = mesg->send_length;
 
-
-
 #if DEBUG
     formatln("message_query_tcp_with_timeout A %{hostaddr}", address);
 #endif
@@ -1988,7 +1982,7 @@ message_query_udp_with_time_out_and_retries(message_data *mesg, host_address *se
     u16                                                  id;
 
 
-    for(u8 countdown = retries; countdown > 0; countdown--)
+    for(u8 countdown = retries; countdown > 0; )
     {
         if (flags & RESET_ID)
         {
@@ -2012,17 +2006,22 @@ message_query_udp_with_time_out_and_retries(message_data *mesg, host_address *se
             }
             else if(MESSAGE_RCODE(mesg->buffer) != RCODE_NOERROR)
             {
-                return_value = MAKE_DNSMSG_ERROR(MESSAGE_AN(mesg->buffer));
+                return_value = MAKE_DNSMSG_ERROR(MESSAGE_RCODE(mesg->buffer));
             }
             else
             {
                 return_value = INVALID_MESSAGE;
             }
 
-            return return_value;
+            break;
+        }
+        
+        if(return_value == MAKE_ERRNO_ERROR(EINTR))
+        {
+            continue;
         }
 
-        if((return_value != MAKE_ERRNO_ERROR(EAGAIN)) && return_value != MAKE_ERRNO_ERROR(EINTR))
+        if(return_value != MAKE_ERRNO_ERROR(EAGAIN) || countdown <= 0)
         {
             /*
              * Do not retry for any other kind of error
@@ -2030,17 +2029,10 @@ message_query_udp_with_time_out_and_retries(message_data *mesg, host_address *se
 
             break;
         }
+        
+        countdown--;
 
-        if(countdown > 0)
-        {
-            usleep(10000);  /* 10 ms */
-        }
-
-        if (flags & CHANGE_NAME_SERVER)
-        {
-
-
-        }
+        usleep_ex(10000);  /* 10 ms */
     }
 
 
@@ -2076,18 +2068,18 @@ message_query_udp_with_time_out(message_data *mesg, host_address *server, int se
             log_debug("sending %d bytes to %{sockaddr} (%i)", mesg->send_length, &sa, sa_len);
             log_memdump_ex(g_system_logger, MSG_DEBUG5, mesg->buffer, mesg->send_length, 16, OSPRINT_DUMP_HEXTEXT);
 #endif
-            if((n = sendto(s, mesg->buffer, mesg->send_length, 0, (struct sockaddr*)&sa, sa_len)) == mesg->send_length)
+            if((n = sendto(s, mesg->buffer, mesg->send_length, 0, &sa.sa, sa_len)) == mesg->send_length)
             {
-                struct sockaddr ans_sa;
+                socketaddress ans_sa;
                 socklen_t ans_sa_len = sizeof(ans_sa);
                 
-                while((n = recvfrom(s, mesg->buffer, sizeof(mesg->buffer), 0, &ans_sa, &ans_sa_len)) >= 0)
+                while((n = recvfrom(s, mesg->buffer, sizeof(mesg->buffer), 0, &ans_sa.sa, &ans_sa_len)) >= 0)
                 {
                     /* check that the sender is the one we spoke to */
 #ifdef DEBUG
                     log_memdump_ex(g_system_logger, MSG_DEBUG5, mesg->buffer, n, 16, OSPRINT_DUMP_HEXTEXT);
 #endif
-                    if(sockaddr_equals(&sa.sa, &ans_sa))
+                    if(sockaddr_equals(&sa.sa, &ans_sa.sa))
                     {
                         mesg->received = n;
                         return_value   = message_process_lenient(mesg);
@@ -2182,7 +2174,7 @@ message_query_serial(const u8 *origin, host_address *server, u32 *serial_out)
     random_ctx rndctx = thread_pool_get_random_ctx();
     message_data soa_query_mesg;
 
-    for(u16 countdown = 5; countdown > 0; countdown--)
+    for(u16 countdown = 5; countdown > 0; )
     {
         u16 id = (u16)random_next(rndctx);
 
@@ -2246,29 +2238,33 @@ message_query_serial(const u8 *origin, host_address *server, u32 *serial_out)
             }
             else if(MESSAGE_RCODE(buffer) != RCODE_NOERROR)
             {
-                return_value = DNS_ERROR_CODE(MESSAGE_AN(buffer));
+                return_value = MAKE_DNSMSG_ERROR(MESSAGE_RCODE(buffer));
             }
             else
             {
                 return_value = INVALID_MESSAGE;
             }
             
-            return return_value;
+            break;
         }
         
-        if((return_value != MAKE_ERRNO_ERROR(EAGAIN)) && return_value != MAKE_ERRNO_ERROR(EINTR))
+        if(return_value == MAKE_ERRNO_ERROR(EINTR))
+        {
+            continue;
+        }
+
+        if(return_value != MAKE_ERRNO_ERROR(EAGAIN) || countdown <= 0)
         {
             /*
              * Do not retry for any other kind of error
              */
-            
+
             break;
         }
         
-        if(countdown > 0)
-        {
-            usleep(10000);  /* 10 ms */
-        }
+        countdown--;
+
+        usleep_ex(10000);  /* 10 ms */
     }
     
     return return_value;

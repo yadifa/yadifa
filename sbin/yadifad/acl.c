@@ -1225,7 +1225,7 @@ void
 acl_empties_address_match_list(address_match_list *aml)
 {
 #ifdef DEBUG
-    log_debug7("acl_emtpies_address_match_list(%p): %p", (void*)aml, (void*)aml->items);
+    log_debug7("acl_empties_address_match_list(%p): %p", (void*)aml, (void*)aml->items);
     logger_flush();
 #endif
     
@@ -1235,13 +1235,13 @@ acl_empties_address_match_list(address_match_list *aml)
         ami->rc--;
         if(ami->rc <= 0)
         {
-            log_debug7("acl_emtpies_address_match_list(%p): %p has rc=%i", (void*)aml, ami->rc);
+            log_debug7("acl_empties_address_match_list(%p): %p has rc=%i", (void*)aml, ami->rc);
             
             s32 amim_idx = ptr_vector_index_of(&g_amim, ami, acl_ptr_vector_address_match_list_compare);
             
             if(amim_idx >= 0)
             {
-                log_debug7("acl_emtpies_address_match_list(%p): %p is part of amim", (void*)aml, ami->rc);
+                log_debug7("acl_empties_address_match_list(%p): %p is part of amim", (void*)aml, ami->rc);
                 ptr_vector_end_swap(&g_amim, amim_idx);
                 g_amim.offset--;
             }

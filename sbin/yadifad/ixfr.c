@@ -62,6 +62,7 @@
 
 #include "server.h"
 #include "ixfr.h"
+#include "notify.h"
 #include "confs.h"
 
 
@@ -252,9 +253,18 @@ ixfr_start_query(const host_address *servers, const u8 *origin, u32 ttl, const u
      */
 
     random_ctx rndctx = thread_pool_get_random_ctx();
-    
+    ya_result return_value;
+    u32 serial;
     u16 id = (u16)random_next(rndctx);
-
+    
+    if(FAIL(return_value = rr_soa_get_serial(soa_rdata, soa_rdata_size, &serial)))
+    {
+        log_err("ixfr: error with the SOA: %r", return_value);
+        return return_value;
+    }
+    
+    log_info("ixfr: sending query from %{dnsname} to %{hostaddr} from serial %i", origin, servers, serial);
+             
     message_make_ixfr_query(ixfr_queryp, id, origin, ttl, soa_rdata_size, soa_rdata);
     
 #if HAS_TSIG_SUPPORT
@@ -279,14 +289,13 @@ ixfr_start_query(const host_address *servers, const u8 *origin, u32 ttl, const u
      * connect & send
      */
     
-    ya_result return_value;
-
     while(FAIL(return_value = tcp_input_output_stream_connect_host_address(servers, is, os, g_config->xfr_connect_timeout)))
 	{
         int err = errno;
         
         if(err != EINTR)
         {
+            log_info("ixfr: failed to send the query for %{dnsname} to %{hostaddr}: %r", origin, servers, return_value);
             return return_value;
         }
     }
@@ -384,14 +393,15 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
         xfr.origin = zone->origin;
         xfr.message = &mesg;
         xfr.current_serial = current_serial;
-        xfr.flags = XFR_ALLOW_BOTH;
-        
+        xfr.flags = XFR_ALLOW_BOTH|XFR_CURRENT_SERIAL_SET;
         input_stream xfris;
         if(ISOK(return_value = xfr_input_stream_init(&xfr, &xfris)))
         {
             switch(xfr_input_stream_get_type(&xfris))
             {
                 case TYPE_AXFR:
+                    log_info("ixfr: server %{hostaddr} answered with AXFR", servers);
+                    
                 case TYPE_ANY:
                 {
                     /* delete axfr files */
@@ -408,15 +418,13 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
 
                     journal_truncate(zone->origin, g_config->xfr_path);
                     
-                    /*
-                    tcp_set_sendtimeout(fd, 30, 0);
-                    tcp_set_recvtimeout(fd, 30, 0);
-                    */
+                    log_info("ixfr: loading AXFR stream from server %{hostaddr}", servers);
+                    
                     if(ISOK(return_value = xfr_copy(&xfris, g_config->xfr_path)))
                     {
                         if(out_loaded_serial != NULL)
                         {
-                            *out_loaded_serial = xfr.out_loaded_serial;
+                            *out_loaded_serial = xfr_input_stream_get_serial(&xfris);
                         }
                     }
                     else
@@ -466,6 +474,12 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
             }
             
             input_stream_close(&xfris);
+
+            if(ISOK(return_value))
+            {
+                log_debug("ixfr: notifying implicit and explicit slaves of %{dnsname}", zone->origin);
+                notify_slaves(zone->origin);
+            }
         }
         else
         {

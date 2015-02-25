@@ -45,6 +45,9 @@
 #include "dnsdb/zdb_zone_label_iterator.h"
 #include "dnsdb/zdb_rr_label.h"
 
+extern logger_handle* g_database_logger;
+#define MODULE_MSG_HANDLE g_database_logger
+
 /**
  * @brief Initializes a zone label iterator
  *
@@ -54,6 +57,9 @@
  * @param[in] iter a pointer to the iterator to initialize
  *
  */
+
+
+#define ZLI_DEBUG 0
 
 void
 zdb_zone_label_iterator_init(const zdb_zone* zone, zdb_zone_label_iterator* iter)
@@ -207,13 +213,56 @@ zdb_zone_label_iterator_hasnext(zdb_zone_label_iterator* iter)
 u32
 zdb_zone_label_iterator_nextname_to_cstr(zdb_zone_label_iterator* iter, char* buffer256)
 {
-    return dnslabel_stack_to_cstr(iter->dnslabels, iter->top, buffer256);
+    u32 ret = dnslabel_stack_to_cstr(iter->dnslabels, iter->top, buffer256);
+    
+#if ZLI_DEBUG
+    zdb_rr_label *label = iter->current_label;
+    if(label != NULL)
+    {
+        log_debug1("zli: %{dnsname}+%{dnslabel} nextname=%s (%u)", iter->zone->origin, label->name, buffer256, ret);
+    }
+    else
+    {
+        log_debug1("zli: %{dnsname}%NULL nextname=%s (%u)", iter->zone->origin, buffer256, ret);
+    }
+    u32 real_len = strlen(buffer256);
+    if(real_len != ret)
+    {
+        log_err("zli: %d != %d", real_len, ret);
+    }
+#endif
+    
+    return ret;
 }
 
 u32
 zdb_zone_label_iterator_nextname(zdb_zone_label_iterator* iter, u8* buffer256)
 { /* TOP-DOWN stack */
-    return dnslabel_stack_to_dnsname(iter->dnslabels, iter->top, buffer256);
+    u32 ret = dnslabel_stack_to_dnsname(iter->dnslabels, iter->top, buffer256);
+    
+    if(*iter->zone->origin == 0)
+    {
+        --ret;
+    }
+    
+#if ZLI_DEBUG
+    zdb_rr_label *label = iter->current_label;
+    if(label != NULL)
+    {
+        log_debug1("zli: %{dnsname}+%{dnslabel} nextname=%{dnsname} (%u)", iter->zone->origin, label->name, buffer256, ret);
+    }
+    else
+    {
+        log_debug1("zli: %{dnsname}%NULL nextname=%{dnsname} (%u)", iter->zone->origin, buffer256, ret);
+    }
+    u32 real_len = dnsname_len(buffer256);
+    if(real_len != ret)
+    {
+        log_err("zli: %d != %d", real_len, ret);
+    }
+#endif
+    
+    return ret;
 }
 
 /**
@@ -250,6 +299,19 @@ zdb_zone_label_iterator_next(zdb_zone_label_iterator* iter)
 
         iter->top--;
     }
+    
+#if ZLI_DEBUG
+    
+    if(ret != NULL)
+    {
+        log_debug1("zli: %{dnsname} nextlabel=%{dnslabel}@%p", iter->zone->origin, ret->name, ret);
+    }
+    else
+    {
+        log_debug1("zli: %{dnsname} nextlabel=NULL", iter->zone->origin);
+    }
+#endif
+    
 #else
     do
     {

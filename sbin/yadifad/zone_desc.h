@@ -93,7 +93,7 @@ extern "C" {
                                                              */
 
 // status flags
-// iIclLMUdDzZaAsSeERxX#--------r/!
+// iIclLMUdDzZaAsSeERxX#---T---ur/!
 //#define     ZONE_STATUS_IDLE                    0x00000000      /* i nothing happening at ALL */
 
 #define     ZONE_STATUS_STARTING_UP             0x00000001      /* I before we even tried to load it */
@@ -112,16 +112,19 @@ extern "C" {
 #define     ZONE_STATUS_SIGNATURES_UPDATING     0x00002000      /* S updating signatures */
 #define     ZONE_STATUS_DYNAMIC_UPDATE          0x00004000      /* e needs to update the database (?) */
 #define     ZONE_STATUS_DYNAMIC_UPDATING        0x00008000      /* E updating the database */
-#define     ZONE_STATUS_READONLY_NOT_USED       0x00010000      /* R database updates not allowed */
+#define     ZONE_STATUS_READONLY_______NOT_USED 0x00010000      /* R database updates not allowed */
 #define     ZONE_STATUS_DOWNLOAD_XFR_FILE       0x00020000      /* x */
 #define     ZONE_STATUS_DOWNLOADING_XFR_FILE    0x00040000      /* X */
 #define     ZONE_STATUS_DROP_AFTER_RELOAD       0x00080000      /* # when a config reload occurrs, this flag is set to all zones
                                                                  *   when the zone has its config reloaded, it is cleared
                                                                  *   all zones with this bit set after the reload are dropped
                                                                  */
-#define     ZONE_STATUS_FROZEN                  0x00100000      /* - zone is read only <-> READONLY ? */
+#define     ZONE_STATUS_FROZEN                  0x00100000      /* f zone is read only <-> READONLY ? */
 #define     ZONE_STATUS_TEMPLATE_SOURCE_FILE    0x00200000
-#define     ZONE_STATUS_UNREGISTERING           0x10000000
+#define     ZONE_STATUS_RESERVED_00____NOT_USED 0x00400000
+#define     ZONE_STATUS_RESERVED_01____NOT_USED 0x00800000
+#define     ZONE_STATUS_DOWNLOADED              0x01000000      /* T the file is on disk, soon to be loaded */
+#define     ZONE_STATUS_UNREGISTERING           0x10000000      /* u */
 #define     ZONE_STATUS_REGISTERED              0x20000000      /* r this instance of the zone is registered */
 #define     ZONE_STATUS_MARKED_FOR_DESTRUCTION  0x40000000      /* / a "destroy" command has been put in the queue */
 #define     ZONE_STATUS_PROCESSING              0x80000000      /* ! */

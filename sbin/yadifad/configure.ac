@@ -32,7 +32,7 @@ dnl
 dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 4577 $])
+AC_REVISION([$Revision: 4725 $])
 # 1
 # svn log 2> /dev/null|head -2|grep ^r|sed 's/.\([1-9]*\).*/\1/'
 
@@ -99,7 +99,7 @@ AC_CHECK_TYPES(u_char)
 dnl Add some defines.
 
 AC_DEFINE_UNQUOTED([TCP_LISTENQ], [1024],[TCP queue])
-AC_DEFINE_UNQUOTED([MAX_INTERFACES], [5],[max nic interfaces])
+AC_DEFINE_UNQUOTED([MAX_INTERFACES], [16],[max nic interfaces])
 
 dnl Add some macros
 AH_BOTTOM([

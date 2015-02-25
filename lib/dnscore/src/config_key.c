@@ -44,6 +44,25 @@ struct config_section_key_s
 
 typedef struct config_section_key_s config_section_key_s;
 
+#define HMAC_UNKNOWN	  0
+#define HMAC_MD5        157
+#define HMAC_SHA1       161
+#define HMAC_SHA224     162
+#define HMAC_SHA256     163
+#define HMAC_SHA384     164
+#define HMAC_SHA512     165
+
+static value_name_table hmac_digest_enum[]=
+{
+    {HMAC_MD5   , "hmac-md5"    },
+    {HMAC_SHA1  , "hmac-sha1"   },
+    {HMAC_SHA224, "hmac-sha224" },
+    {HMAC_SHA256, "hmac-sha256" },
+    {HMAC_SHA384, "hmac-sha384" },
+    {HMAC_SHA512, "hmac-sha512" },
+    {0, NULL}
+};
+
 #define CONFIG_TYPE config_section_key_s
 CONFIG_BEGIN(config_section_key_desc)
 CONFIG_STRING_COPY(name, NULL)
@@ -70,11 +89,11 @@ config_section_key_start(struct config_section_descriptor_s *csd)
 {
     // NOP
     //config_section_key_s *csk = (config_section_key_s*)csd->base;
-
+    
     config_section_key_s *csk;
     MALLOC_OR_DIE(config_section_key_s*, csk, sizeof(config_section_key_s), GENERIC_TAG);
     csd->base = csk;
-
+    
     csk->name[0] = '\0';
     csk->algorithm[0] = '\0';
     csk->secret[0] = '\0';
@@ -114,9 +133,13 @@ config_section_key_stop(struct config_section_descriptor_s *csd)
     
     // check if algorithm is supported
     
-    if(strcasecmp(csk->algorithm, "hmac-md5") != 0)
+    u32 hmac_digest;
+    
+    anytype table;
+    table._voidp = hmac_digest_enum;
+    if(FAIL(config_set_enum_value(csk->algorithm, &hmac_digest, table)))
     {
-        return CONFIG_KEY_UNSUPPORTED_ALGORITHM; /* Unsupported algorithm */
+        return CONFIG_KEY_UNSUPPORTED_ALGORITHM;
     }
     
     // decode the secret
@@ -137,7 +160,7 @@ config_section_key_stop(struct config_section_descriptor_s *csd)
 
     if(ISOK(return_code = cstr_to_dnsname_with_check(fqdn, csk->name)))
     {
-        return_code = tsig_register(fqdn, secret_buffer, secret_len, HMAC_MD5);
+        return_code = tsig_register(fqdn, secret_buffer, secret_len, hmac_digest);
     }
     
 #if CONFIG_SETTINGS_DEBUG

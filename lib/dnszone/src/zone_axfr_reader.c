@@ -124,11 +124,8 @@ zone_axfr_reader_read_record(zone_reader *zr, resource_record *entry)
                     {
                         if(ISOK(return_value = input_stream_read_fully(&zone->is, entry->rdata, rdata_len)))
                         {
-#ifdef RR_OS_RDATA
-                            return_value = output_stream_write(&entry->os_rdata, (u8*)entry->rdata, rdata_len);
-#else
                             entry->rdata_size = return_value;
-#endif
+
                             if(entry->type == TYPE_SOA)
                             {
                                 if(zone->soa_found)

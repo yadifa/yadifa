@@ -90,7 +90,7 @@ const type_table qtype[] = {
     { TYPE_MX,         TYPE_MX_NAME         },
     { TYPE_TXT,        TYPE_TXT_NAME        },
     { TYPE_RP,         TYPE_RP_NAME         },
-    { TYPE_ASFDB,      TYPE_ASFDB_NAME      },
+    { TYPE_AFSDB,      TYPE_AFSDB_NAME      },
     { TYPE_X25,        TYPE_X25_NAME        },
     { TYPE_ISDN,       TYPE_ISDN_NAME       },
     { TYPE_RT,         TYPE_RT_NAME         },
@@ -327,8 +327,8 @@ get_name_from_type(u16 t)
             return TYPE_TXT_NAME;
         case TYPE_RP:
             return TYPE_RP_NAME;
-        case TYPE_ASFDB:
-            return TYPE_ASFDB_NAME;
+        case TYPE_AFSDB:
+            return TYPE_AFSDB_NAME;
         case TYPE_X25:
             return TYPE_X25_NAME;
         case TYPE_ISDN:

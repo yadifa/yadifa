@@ -256,16 +256,54 @@ database_startup(zdb **database)
  *  CANNOT FAIL
  * 
  *  @param mesg
- *
- *  @return status of message is written in mesg->status
  */
 
-#if HAS_RRL_SUPPORT
-ya_result
-#else
 void
-#endif
 database_query(zdb *db, message_data *mesg)
+{
+    finger_print query_fp;
+    zdb_query_ex_answer ans_auth_add;
+
+    /*    ------------------------------------------------------------    */
+
+    mesg->send_length = mesg->received;
+    
+    zdb_query_ex_answer_create(&ans_auth_add);
+
+    query_fp = zdb_query_ex(db, mesg, &ans_auth_add, mesg->pool_buffer);
+
+    /**
+     * @todo : do it when it's true only
+     */
+
+    mesg->status = query_fp;
+    
+    mesg->send_length = zdb_query_message_update(mesg, &ans_auth_add);
+    mesg->referral = ans_auth_add.delegation;
+
+    zdb_query_ex_answer_destroy(&ans_auth_add);
+
+#if HAS_TSIG_SUPPORT
+    if(TSIG_ENABLED(mesg))  /* NOTE: the TSIG information is in mesg */
+    {
+        tsig_sign_answer(mesg);
+    }
+#endif
+}
+
+#if HAS_RRL_SUPPORT
+
+/** \brief Get dns answer from database
+ *
+ *  Get dns answer from database
+ * 
+ *  @param mesg
+ *
+ *  @return RRL code
+ */
+
+ya_result
+database_query_with_rrl(zdb *db, message_data *mesg)
 {
     finger_print query_fp;
     zdb_query_ex_answer ans_auth_add;
@@ -286,7 +324,6 @@ database_query(zdb *db, message_data *mesg)
     
     // RRL should be computed here
     
-#if HAS_RRL_SUPPORT
     ya_result rrl = rrl_process(mesg, &ans_auth_add);
 
     switch(rrl)
@@ -310,12 +347,6 @@ database_query(zdb *db, message_data *mesg)
             break;
         }
     }
-#else
-    
-    mesg->send_length = zdb_query_message_update(mesg, &ans_auth_add);
-    mesg->referral = ans_auth_add.delegation;
-
-#endif
     
     zdb_query_ex_answer_destroy(&ans_auth_add);
 
@@ -326,10 +357,10 @@ database_query(zdb *db, message_data *mesg)
     }
 #endif
     
-#if HAS_RRL_SUPPORT
     return rrl;
-#endif
 }
+
+#endif
 
 /****************************************************************************/
 
@@ -832,6 +863,10 @@ database_zone_refresh_alarm(void *args)
 
         if(zdb_zone_trylock(zone, ZDB_ZONE_MUTEX_REFRESH))
         {
+            u32 now = time(NULL);
+
+            soa_rdata soa;
+
             if(FAIL(return_value = zdb_zone_getsoa(zone, &soa)))
             {
                 /*
@@ -1056,8 +1091,6 @@ database_zone_refresh_maintenance(zdb *database, const u8 *origin, u32 next_alar
 
     return ret;
 }
-
-
 
 ya_result
 database_save_zone_to_disk(zone_desc_s *zone_desc)

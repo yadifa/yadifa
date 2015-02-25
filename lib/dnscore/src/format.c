@@ -1713,7 +1713,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             return SUCCESS;
         }
         case TYPE_A6:
-        case TYPE_ASFDB:
+        case TYPE_AFSDB:
         case TYPE_TSIG:
         case TYPE_IXFR:
         case TYPE_AXFR:

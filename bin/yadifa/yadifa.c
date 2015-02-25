@@ -112,22 +112,11 @@ yadifa_run()
 
     /*    ------------------------------------------------------------    */
 
-#ifdef DEBUG
-    /// @TODO must be removed in production -- gery
-    log_memdump_set_layout(LOG_MEMDUMP_LAYOUT_GERY);
-    config_print(termout);
-    log_debug("YADIFA RUN");
-
-    formatln("YADIFA --END");
-    flushout();
-#endif
-
     message_data                                                       mesg;
     struct timeval                                          query_time_send;
     struct timeval                                      query_time_received;
 
     u8                                                          go_tcp = OK;
-
 
      /*    ------------------------------------------------------------    */
 
@@ -135,11 +124,9 @@ yadifa_run()
     /* Give ID from config or randomized */
     u16 id                = dns_new_id();
     u16 qtype             = htons(g_yadifa_main_settings.qtype);
-//    u16 qclass            = htons(g_yadifa_main_settings.qclass);
     u8 *qname             = g_yadifa_main_settings.qname;
 
 
-//    u16 question_mode     = g_yadifa_main_settings.question_mode;
     u16 question_mode     = 0;
 
 
@@ -245,13 +232,12 @@ yadifa_run()
     time_now(&query_time_received);
 
 
-//    u16 protocol         = g_yadifa_main_settings.protocol;
     u16 protocol         = 0;
     if (FAIL(return_code = check_query_result(id, protocol, question_mode, &mesg, &go_tcp)))
     {
         return return_code;
     }
-//    formatln("CTRL STOP");
+
     flushout();
 
 
