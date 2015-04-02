@@ -70,6 +70,9 @@
 /* The sockaddr struct has an sa_len field */
 #undef HAS_SOCKADDR_SA_LEN
 
+/* The system supports timegm */
+#undef HAS_TIMEGM
+
 /* always on */
 #undef HAS_TSIG_SUPPORT
 

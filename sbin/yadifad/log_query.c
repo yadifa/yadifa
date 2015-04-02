@@ -171,7 +171,7 @@ log_query_bind(int socket_fd, message_data *mesg)
     class_name = get_name_from_class(mesg->qclass);
     if(class_name != NULL)
     {
-        strcpy(buffer, class_name);
+        strcpy(buffer, class_name); // the buffer is big enough
         buffer += strlen(class_name);
     }
     else
@@ -186,7 +186,7 @@ log_query_bind(int socket_fd, message_data *mesg)
     type_name = get_name_from_type(mesg->qtype);
     if(type_name != NULL)
     {
-        strcpy(buffer, type_name);
+        strcpy(buffer, type_name); // the buffer is big enough
         buffer += strlen(type_name);
     }
     else
@@ -285,7 +285,7 @@ log_query_yadifa(int socket_fd, message_data *mesg)
     class_name = get_name_from_class(mesg->qclass);
     if(class_name != NULL)
     {
-        strcpy(buffer, class_name);
+        strcpy(buffer, class_name); // the buffer is big enough
         buffer += strlen(class_name);
     }
     else
@@ -300,7 +300,7 @@ log_query_yadifa(int socket_fd, message_data *mesg)
     type_name = get_name_from_type(mesg->qtype);
     if(type_name != NULL)
     {
-        strcpy(buffer, type_name);
+        strcpy(buffer, type_name); // the buffer is big enough
         buffer += strlen(type_name);
     }
     else

@@ -85,76 +85,76 @@ zdb_listener_unchain(zdb_listener* listener)
 }
 
 void
-zdb_listener_notify_remove_type(const u8* dnsname, zdb_rr_collection* recordssets, u16 type)
+zdb_listener_notify_remove_type(const zdb_zone *zone, const u8* dnsname, zdb_rr_collection* recordssets, u16 type)
 {
-    zdb_listener* item = first;
+    zdb_listener* listener = first;
 
-    while(item != NULL)
+    while(listener != NULL)
     {
-        item->on_remove_record_type(item, dnsname, recordssets, type);
-        item = item->next;
+        listener->on_remove_record_type(listener, zone, dnsname, recordssets, type);
+        listener = listener->next;
     }
 }
 
 void
-zdb_listener_notify_add_record(dnslabel_vector_reference labels, s32 top, u16 type, zdb_ttlrdata* record)
+zdb_listener_notify_add_record(const zdb_zone *zone, dnslabel_vector_reference labels, s32 top, u16 type, zdb_ttlrdata *record)
 {
-    zdb_listener* item = first;
+    zdb_listener* listener = first;
 
-    while(item != NULL)
+    while(listener != NULL)
     {
-        item->on_add_record(item, labels, top, type, record);
-        item = item->next;
+        listener->on_add_record(listener, zone, labels, top, type, record);
+        listener = listener->next;
     }
 }
 
 void
-zdb_listener_notify_remove_record(const u8 *dnsname, u16 type, zdb_ttlrdata* record)
+zdb_listener_notify_remove_record(const zdb_zone *zone, const u8 *dnsname, u16 type, zdb_ttlrdata *record)
 {
-    zdb_listener* item = first;
+    zdb_listener* listener = first;
 
-    while(item != NULL)
+    while(listener != NULL)
     {
-        item->on_remove_record(item, dnsname, type, record);
-        item = item->next;
+        listener->on_remove_record(listener, zone, dnsname, type, record);
+        listener = listener->next;
     }
 }
 
 #if ZDB_HAS_NSEC3_SUPPORT != 0
 
 void
-zdb_listener_notify_add_nsec3(nsec3_zone_item* nsec3_item, nsec3_zone* n3, u32 ttl)
+zdb_listener_notify_add_nsec3(const zdb_zone *zone, nsec3_zone_item* nsec3_item, nsec3_zone* n3, u32 ttl)
 {
-    zdb_listener* item = first;
+    zdb_listener* listener = first;
 
-    while(item != NULL)
+    while(listener != NULL)
     {
-        item->on_add_nsec3(item, nsec3_item, n3, ttl);
-        item = item->next;
+        listener->on_add_nsec3(listener, zone, nsec3_item, n3, ttl);
+        listener = listener->next;
     }
 }
 
 void
-zdb_listener_notify_remove_nsec3(nsec3_zone_item* nsec3_item, nsec3_zone* n3, u32 ttl)
+zdb_listener_notify_remove_nsec3(const zdb_zone *zone, nsec3_zone_item* nsec3_item, nsec3_zone* n3, u32 ttl)
 {
-    zdb_listener* item = first;
+    zdb_listener* listener = first;
 
-    while(item != NULL)
+    while(listener != NULL)
     {
-        item->on_remove_nsec3(item, nsec3_item, n3, ttl);
-        item = item->next;
+        listener->on_remove_nsec3(listener, zone, nsec3_item, n3, ttl);
+        listener = listener->next;
     }
 }
 
 void
-zdb_listener_notify_update_nsec3rrsig(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata* added_rrsig_sll, nsec3_zone_item* n3item)
+zdb_listener_notify_update_nsec3rrsig(const zdb_zone *zone, zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttlrdata *added_rrsig_sll, nsec3_zone_item* n3item)
 {
-    zdb_listener* item = first;
+    zdb_listener* listener = first;
 
-    while(item != NULL)
+    while(listener != NULL)
     {
-        item->on_update_nsec3rrsig(item, removed_rrsig_sll, added_rrsig_sll, n3item);
-        item = item->next;
+        listener->on_update_nsec3rrsig(listener, zone, removed_rrsig_sll, added_rrsig_sll, n3item);
+        listener = listener->next;
     }
 }
 
@@ -163,14 +163,14 @@ zdb_listener_notify_update_nsec3rrsig(zdb_packed_ttlrdata* removed_rrsig_sll, zd
 #if ZDB_HAS_DNSSEC_SUPPORT != 0
 
 void
-zdb_listener_notify_update_rrsig(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata* added_rrsig_sll, zdb_rr_label* label, dnsname_stack* name)
+zdb_listener_notify_update_rrsig(const zdb_zone *zone, zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttlrdata *added_rrsig_sll, zdb_rr_label* label, dnsname_stack* name)
 {
-    zdb_listener* item = first;
+    zdb_listener* listener = first;
 
-    while(item != NULL)
+    while(listener != NULL)
     {
-        item->on_update_rrsig(item, removed_rrsig_sll, added_rrsig_sll, label, name);
-        item = item->next;
+        listener->on_update_rrsig(listener, zone, removed_rrsig_sll, added_rrsig_sll, label, name);
+        listener = listener->next;
     }
 }
 

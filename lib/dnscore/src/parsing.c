@@ -38,6 +38,8 @@
  * @{
  */
 
+#include "dnscore/dnscore-config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -47,6 +49,79 @@
 #include <sys/socket.h>
 
 #include "dnscore/parsing.h"
+
+#if !HAS_TIMEGM
+
+/// @note edf 20150326 -- timegm is not portable (Solaris) in the end, implementing one seemed the only choice
+
+/**
+ * This implementation is based on the formula found in:
+ * 
+ * http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap04.html#tag_04_15
+ * 4.15 Seconds Since the Epoch
+ * 
+ * It only cares on the Year, Month, Day, Hour, Minute and Second fields of struct tm (the one we are really caring about)
+ * It's a constant-time implementation.
+ * 
+ * I don't see an obvious way to make it faster expect having the year values pre-calculated for the next 30+ years
+ * (This would spare a few divs and a mult.)
+ * 
+ * If I improve it further, it may be a replacement on the timegm() dependency.
+ * 
+ */
+
+    // J   F   M    A    M    J    J    A    S    O    N    D
+    // 31  28  31   30   31   30   31   31   30   31   30   31
+
+#define MDAY_FIX(d_) ((d_)-1)
+
+static int timegm_mdays_norm[12] = {MDAY_FIX(0),MDAY_FIX( 31),MDAY_FIX( 59),MDAY_FIX( 90),MDAY_FIX( 120),MDAY_FIX( 151),MDAY_FIX( 181),MDAY_FIX( 212),MDAY_FIX( 243),MDAY_FIX( 273),MDAY_FIX( 304),MDAY_FIX( 334)}; // MDAY_FIX(365)
+
+static int timegm_mdays_leap[12] = {MDAY_FIX(0),MDAY_FIX( 31),MDAY_FIX( 60),MDAY_FIX( 91),MDAY_FIX( 121),MDAY_FIX( 152),MDAY_FIX( 182),MDAY_FIX( 213),MDAY_FIX( 244),MDAY_FIX( 274),MDAY_FIX( 305),MDAY_FIX( 335)}; // MDAY_FIX(366)
+
+static time_t timegm(struct tm *tv)
+{
+    time_t ret;
+
+    if( (tv->tm_year < 0)                   ||
+        (((u32)tv->tm_mon) > 11)            ||
+        (((u32)tv->tm_day - 1) > 31 - 1)    ||
+        (((u32)tv->tm_hour) > 60)           ||
+        (((u32)tv->tm_min) > 59)            ||
+        (((u32)tv->tm_sec) > 60) )
+    {
+        return -1;
+    } 
+
+    int yyyy = (tv->tm_year + 1900);
+
+    int yday;
+    if(((yyyy & 3) == 0) && (((yyyy % 100) != 0) || ((yyyy % 400) == 0)))
+    {
+        yday = timegm_mdays_leap[tv->tm_mon];
+    }
+    else
+    {
+        yday = timegm_mdays_norm[tv->tm_mon];
+    }
+
+    yday += tv->tm_mday;
+
+    ret =   tv->tm_sec                       +
+            tv->tm_min               *    60 +
+            tv->tm_hour              *  3600 +
+            (
+                yday                     +
+                ((tv->tm_year-69)/4)     -
+                ((tv->tm_year-1)/100)    +
+                ((tv->tm_year+299)/400)
+            ) * 86400                        +
+            (tv->tm_year-70)         * 31536000;
+
+    return ret;
+}
+
+#endif
 
 /** \brief A string will be checked
  *
@@ -233,16 +308,6 @@ parse_yyyymmddhhmmss_check_range_len(const char *src, u32 src_len, u32 *dst)
     memset(&thetime, 0xff, sizeof (thetime));
 #endif
 
-#if defined(__USE_MISC)
-    thetime.tm_gmtoff = 0;
-#endif
-
-    thetime.tm_isdst = 0;
-
-#if defined(__USE_MISC)
-    thetime.tm_zone = "GMT";
-#endif
-    
     u32 tmp_u32;
     
     if(FAIL(parse_u32_check_range_len_base10(src, 4, &tmp_u32, 1970, 2038)))
@@ -289,13 +354,7 @@ parse_yyyymmddhhmmss_check_range_len(const char *src, u32 src_len, u32 *dst)
     thetime.tm_year -= 1900;
     thetime.tm_mon--;
 
-#ifndef __FreeBSD__
-    time_t t = mktime(&thetime) - timezone;
-#elif defined(__USE_MISC)
-    time_t t = mktime(&thetime) + thetime.tm_gmtoff;
-#else
-    time_t t = mktime(&thetime);
-#endif
+    time_t t = timegm(&thetime);
 
     if(t < 0)
     {

@@ -58,16 +58,16 @@ extern "C"
 typedef struct dnssec_listener dnssec_listener;
 typedef struct dnssec_listener zdb_listener;
 
-typedef void zdb_listener_on_remove_type_callback(zdb_listener *listener, const u8 *dnsname, zdb_rr_collection *recordssets, u16 type);
-typedef void zdb_listener_on_add_record_callback(zdb_listener *listener, dnslabel_vector_reference labels, s32 top, u16 type, zdb_ttlrdata *record);
-typedef void zdb_listener_on_remove_record_callback(zdb_listener *listener, const u8 *dnsname, u16 type, zdb_ttlrdata *record);
+typedef void zdb_listener_on_remove_type_callback(zdb_listener *listener, const zdb_zone *zone, const u8 *dnsname, zdb_rr_collection *recordssets, u16 type);
+typedef void zdb_listener_on_add_record_callback(zdb_listener *listener, const zdb_zone *zone, dnslabel_vector_reference labels, s32 top, u16 type, zdb_ttlrdata *record);
+typedef void zdb_listener_on_remove_record_callback(zdb_listener *listener, const zdb_zone *zone, const u8 *dnsname, u16 type, zdb_ttlrdata *record);
 #if ZDB_HAS_NSEC3_SUPPORT!=0
-typedef void zdb_listener_on_add_nsec3_callback(zdb_listener *listener, nsec3_zone_item *nsec3_item, nsec3_zone *n3, u32 ttl);
-typedef void zdb_listener_on_remove_nsec3_callback(zdb_listener *listener, nsec3_zone_item *nsec3_item, nsec3_zone *n3, u32 ttl);
-typedef void zdb_listener_on_update_nsec3rrsig_callback(zdb_listener *listener, zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttlrdata *added_rrsig_sll, nsec3_zone_item *item);
+typedef void zdb_listener_on_add_nsec3_callback(zdb_listener *listener, const zdb_zone *zone, nsec3_zone_item *nsec3_item, nsec3_zone *n3, u32 ttl);
+typedef void zdb_listener_on_remove_nsec3_callback(zdb_listener *listener, const zdb_zone *zone, nsec3_zone_item *nsec3_item, nsec3_zone *n3, u32 ttl);
+typedef void zdb_listener_on_update_nsec3rrsig_callback(zdb_listener *listener, const zdb_zone *zone, zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttlrdata *added_rrsig_sll, nsec3_zone_item *item);
 #endif
 #if ZDB_HAS_DNSSEC_SUPPORT!=0
-typedef void zdb_listener_on_update_rrsig_callback(zdb_listener *listener, zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttlrdata *added_rrsig_sll, zdb_rr_label *label, dnsname_stack *name);
+typedef void zdb_listener_on_update_rrsig_callback(zdb_listener *listener, const zdb_zone *zone, zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttlrdata *added_rrsig_sll, zdb_rr_label *label, dnsname_stack *name);
 #endif
 
 struct dnssec_listener
@@ -89,16 +89,16 @@ struct dnssec_listener
 void zdb_listener_chain(zdb_listener *listener);
 void zdb_listener_unchain(zdb_listener *listener);
 
-void zdb_listener_notify_remove_type(const u8 *dnsname, zdb_rr_collection *recordssets, u16 type);
-void zdb_listener_notify_add_record(dnslabel_vector_reference labels, s32 top, u16 type, zdb_ttlrdata *record);
-void zdb_listener_notify_remove_record(const u8 *dnsname, u16 type, zdb_ttlrdata *record);
+void zdb_listener_notify_remove_type(const zdb_zone *zone, const u8 *dnsname, zdb_rr_collection *recordssets, u16 type);
+void zdb_listener_notify_add_record(const zdb_zone *zone, dnslabel_vector_reference labels, s32 top, u16 type, zdb_ttlrdata *record);
+void zdb_listener_notify_remove_record(const zdb_zone *zone, const u8 *dnsname, u16 type, zdb_ttlrdata *record);
 #if ZDB_HAS_NSEC3_SUPPORT!=0
-void zdb_listener_notify_add_nsec3(nsec3_zone_item *nsec3_item, nsec3_zone *n3, u32 ttl);
-void zdb_listener_notify_remove_nsec3(nsec3_zone_item *nsec3_item, nsec3_zone *n3, u32 ttl);
-void zdb_listener_notify_update_nsec3rrsig(zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttlrdata *added_rrsig_sll, nsec3_zone_item *item);
+void zdb_listener_notify_add_nsec3(const zdb_zone *zone, nsec3_zone_item *nsec3_item, nsec3_zone *n3, u32 ttl);
+void zdb_listener_notify_remove_nsec3(const zdb_zone *zone, nsec3_zone_item *nsec3_item, nsec3_zone *n3, u32 ttl);
+void zdb_listener_notify_update_nsec3rrsig(const zdb_zone *zone, zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttlrdata *added_rrsig_sll, nsec3_zone_item *item);
 #endif
 #if ZDB_HAS_DNSSEC_SUPPORT!=0
-void zdb_listener_notify_update_rrsig(zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttlrdata *added_rrsig_sll, zdb_rr_label *label, dnsname_stack *name);
+void zdb_listener_notify_update_rrsig(const zdb_zone *zone, zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttlrdata *added_rrsig_sll, zdb_rr_label *label, dnsname_stack *name);
 #endif
 
 bool zdb_listener_notify_enabled();

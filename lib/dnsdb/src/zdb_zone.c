@@ -320,7 +320,7 @@ zdb_zone_record_add(zdb_zone *zone, dnslabel_vector_reference labels, s32 labels
     unpacked_ttlrdata.rdata_pointer = &ttlrdata->rdata_start[0];
     unpacked_ttlrdata.rdata_size = ttlrdata->rdata_size;
     unpacked_ttlrdata.ttl = ttlrdata->ttl;
-    zdb_listener_notify_add_record(labels, labels_top, type, &unpacked_ttlrdata);
+    zdb_listener_notify_add_record(zone, labels, labels_top, type, &unpacked_ttlrdata);
 
 #endif
 

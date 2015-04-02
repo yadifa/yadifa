@@ -373,7 +373,7 @@ zdb_packed_ttlrdata* rrsig_find_next(const zdb_packed_ttlrdata* rrsig, u16 cover
  * @param covered_type  the type covered by the RRSIG
  */
 
-void rrsig_delete(const u8 *dname, zdb_rr_label* label, u16 covered_type);
+void rrsig_delete(const zdb_zone *zone, const u8 *dname, zdb_rr_label* label, u16 covered_type);
 
 #ifdef	__cplusplus
 }

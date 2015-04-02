@@ -447,7 +447,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
     
     dnsname_copy(origin, data->zone->origin);
 
-    strcpy(directory, data->directory);
+    strncpy(directory, data->directory, sizeof(directory));
 
     /* Sends the "Write unlocked" notification */
 

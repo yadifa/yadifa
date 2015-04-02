@@ -290,12 +290,12 @@ config_main_verify_and_update_file(const char *base_path, char **dirp)
         {
             *e = '\0';
             e++;
-            strcpy(filename, e);
+            strncpy(filename, e, sizeof(filename));
             *e = '\0';
         }
         else
         {
-            strcpy(filename, e);
+            strncpy(filename, e, sizeof(filename));
             *e = '\0';
         }
         

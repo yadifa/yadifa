@@ -428,7 +428,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
     bool compress_dname_rdata = data->compress_dname_rdata;
 
-    strcpy(data_directory, data->directory);
+    strncpy(data_directory, data->directory, sizeof(data_directory));
     dnsname_copy(data_zone_origin, data_zone->origin);
     
     /*  serial on disk is NOT same one         serial is NOT being written          it has been long enough since last write */

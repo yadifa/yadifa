@@ -62,16 +62,16 @@
 
 #define SYSLOG_MAX_LINE_SIZE 1024
 #define SYSLOG_FORMATTING_ERROR_TEXT "internal syslog formatting error"
-#define SYSLOG_FORMATTING_ERROR_TEXT_LENGTH 34
+#define SYSLOG_FORMATTING_ERROR_TEXT_LENGTH 33
 
-typedef struct syslog_data syslog_data;
-
-struct syslog_data
+struct logger_syslog_data
 {
     char* ident;
     int options;
     int facility;
 };
+
+typedef struct logger_syslog_data logger_syslog_data;
 
 static ya_result
 logger_channel_syslog_constmsg(logger_channel* chan, int level, char* text, u32 text_len, u32 date_offset)
@@ -140,7 +140,7 @@ logger_channel_syslog_flush(logger_channel* chan)
 static void
 logger_channel_syslog_close(logger_channel* chan)
 {
-    syslog_data *sd = (syslog_data*)chan->data;
+    logger_syslog_data *sd = (logger_syslog_data*)chan->data;
 
     free(sd->ident);
     free(sd);
@@ -154,7 +154,7 @@ logger_channel_syslog_close(logger_channel* chan)
 static ya_result
 logger_channel_syslog_reopen(logger_channel* chan)
 {
-    syslog_data *sd = (syslog_data*)chan->data;
+    logger_syslog_data *sd = (logger_syslog_data*)chan->data;
     closelog();
 
     openlog(sd->ident, sd->options, sd->facility);
@@ -175,8 +175,8 @@ static const logger_channel_vtbl syslog_vtbl = {
 void
 logger_channel_syslog_open(const char* ident, int options, int facility, logger_channel* chan)
 {
-    syslog_data *sd;
-    MALLOC_OR_DIE(syslog_data*, sd, sizeof (syslog_data), 0x4d5254534e414843); /* CHANSTRM */
+    logger_syslog_data *sd;
+    MALLOC_OR_DIE(logger_syslog_data*, sd, sizeof (logger_syslog_data), 0x4d5254534e414843); /* CHANSTRM */
     sd->ident = strdup(ident);
     sd->options = options;
     sd->facility = facility;

@@ -84,7 +84,7 @@ nsec3_update_rrsig_commit(zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttl
      *       I have all the information available in the zone item.
      */
 
-    zdb_listener_notify_update_nsec3rrsig(removed_rrsig_sll, added_rrsig_sll, item);
+    zdb_listener_notify_update_nsec3rrsig(zone, removed_rrsig_sll, added_rrsig_sll, item);
 
     zdb_packed_ttlrdata *sig;
     zdb_packed_ttlrdata **rrsig_sllp = &item->rrsig;
@@ -585,7 +585,7 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
 
                 if((node_prev->flags & NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD) == 0)
                 {
-                    zdb_listener_notify_remove_nsec3(node_prev, n3, min_ttl);
+                    zdb_listener_notify_remove_nsec3(zone, node_prev, n3, min_ttl);
                     node_prev->flags |= NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD;
                 }
             }
@@ -670,7 +670,7 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
 
                     if((node->flags & NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD) == 0)
                     {
-                        zdb_listener_notify_remove_nsec3(node, n3, min_ttl);
+                        zdb_listener_notify_remove_nsec3(zone, node, n3, min_ttl);
                         node->flags |= NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD;
                     }
 
@@ -905,7 +905,7 @@ nsec3_update_zone(zdb_zone* zone)
                 if((node->flags & NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD) != 0)
                 {
                     node->flags &= ~NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD;
-                    zdb_listener_notify_add_nsec3(node, n3, min_ttl);
+                    zdb_listener_notify_add_nsec3(zone, node, n3, min_ttl);
                 }
             }
 

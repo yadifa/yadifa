@@ -1526,7 +1526,7 @@ config_source_get_from_file(struct config_source_s *source, input_stream *out_st
         if(cfgerr != NULL)
         {
             strncpy(cfgerr->file, source->source.file_name.name, sizeof(cfgerr->file));
-            strcpy(cfgerr->line, "unable to open file");
+            strncpy(cfgerr->line, "unable to open file", sizeof(cfgerr->line));
             cfgerr->line_number = 0;
         }
     }

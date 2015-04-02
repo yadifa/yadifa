@@ -748,6 +748,16 @@ AC_CHECK_HEADERS([netinet6/in6.h])
 
 ])
 
+dnl timegm support
+
+AC_DEFUN([AC_TIMEGM_CHECK], [
+
+AC_MSG_CHECKING([checking for timegm])
+
+AC_TRY_LINK([#include<time.h>],[struct tm t; timegm(&t);],[AC_DEFINE_UNQUOTED([HAS_TIMEGM], [1], [The system supports timegm]) echo yes],[echo no]);
+
+])
+
 dnl pthread spinlock support
 
 AC_DEFUN([AC_PTHREAD_SPINLOCK_CHECK], [

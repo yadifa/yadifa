@@ -759,7 +759,7 @@ dnssec_key_addrecord(zdb_zone* zone, dnssec_key* key)
     unpacked_ttlrdata.rdata_size = dnskey->rdata_size;
     unpacked_ttlrdata.ttl = dnskey->ttl;
     u8 * origin_vector[1] = {zone->origin};
-    zdb_listener_notify_add_record(origin_vector, 0, TYPE_DNSKEY, &unpacked_ttlrdata);
+    zdb_listener_notify_add_record(zone, origin_vector, 0, TYPE_DNSKEY, &unpacked_ttlrdata);
 #endif
 }
 /*    ------------------------------------------------------------    */

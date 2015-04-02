@@ -178,7 +178,7 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
     zone_desc_dnssec_mode = zone_desc->dnssec_mode;
     is_drop_before_load = zone_is_drop_before_load(zone_desc);
     dnsname_copy(zone_desc_origin, zone_desc->origin);
-    strcpy(zone_desc_file_name, zone_desc-> file_name);
+    strncpy(zone_desc_file_name, zone_desc-> file_name, sizeof(zone_desc_file_name));
     
     zone_unlock(zone_desc, ZONE_LOCK_LOAD);
     
@@ -782,7 +782,7 @@ zone_source_get_best(zone_source *zsa, zone_source *zsb)
         {
             if(zsa->serial != zsb->serial)
             {
-                return serial_gt(zsa->serial, zsb->serial)?zsb:zsa; // B or A
+                return serial_gt(zsa->serial, zsb->serial)?zsa:zsb; // A or B
             }
             else
             {
@@ -880,7 +880,7 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone)
     
     if(has_file_name)
     {
-        strcpy(zone_desc_file_name, zone_desc->file_name);
+        strncpy(zone_desc_file_name, zone_desc->file_name, sizeof(zone_desc_file_name));
     }
     
     current_zone = zdb_zone_find_from_dnsname(db, zone_desc_origin, CLASS_IN);

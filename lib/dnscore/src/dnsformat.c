@@ -888,7 +888,7 @@ hostaddrlist_format_handler_method(const void *restrict val, output_stream *stre
                     }
                     else
                     {
-                        strcpy(src, strerror(errno));
+                        strncpy(src, strerror(errno), limit - src);
                     }
                     break;
                 }
@@ -904,7 +904,7 @@ hostaddrlist_format_handler_method(const void *restrict val, output_stream *stre
                     }
                     else
                     {
-                        strcpy(src, strerror(errno));
+                        strncpy(src, strerror(errno), limit - src);
                     }
                     break;
                 }

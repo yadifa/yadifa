@@ -467,8 +467,8 @@ nsec3_update_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_referenc
             // notify the removal of NSEC3 before going further
             
             nsec3_zone* n3 = nsec3_zone_from_item(zone, nsec3_item);
-            zdb_listener_notify_update_nsec3rrsig(nsec3_item->rrsig, NULL, nsec3_item);
-            zdb_listener_notify_remove_nsec3(nsec3_item, n3, 0);
+            zdb_listener_notify_update_nsec3rrsig(zone, nsec3_item->rrsig, NULL, nsec3_item);
+            zdb_listener_notify_remove_nsec3(zone, nsec3_item, n3, 0);
             nsec3_zone_item_rrsig_delete_all(nsec3_item);
             
             type_bit_maps_merge(&type_context, nsec3_item->type_bit_maps, nsec3_item->type_bit_maps_size, type_bit_maps, type_bit_maps_size);
@@ -693,7 +693,7 @@ nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference l
                 type_bit_maps_write(self->type_bit_maps, &type_context);
             }
             
-            zdb_listener_notify_add_nsec3(self, n3, zone->min_ttl);
+            zdb_listener_notify_add_nsec3(zone, self, n3, zone->min_ttl);
         }
         else
         {
@@ -720,7 +720,7 @@ nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference l
 
                 if((node->flags&NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD)==0)
                 {
-                    zdb_listener_notify_remove_nsec3(node, n3);
+                    zdb_listener_notify_remove_nsec3(zone, node, n3);
                     node->flags|=NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD;
                 }
                  */
@@ -1134,7 +1134,7 @@ nsec3_add_nsec3param(zdb_zone *zone, u8 default_hash_alg, u8 default_flags, u16 
             unpacked_ttlrdata.rdata_size = nsec3param->rdata_size;
             unpacked_ttlrdata.ttl = nsec3param->ttl;
             u8 * origin_vector[1] = {zone->origin};
-            zdb_listener_notify_add_record(origin_vector, 0, TYPE_NSEC3PARAM, &unpacked_ttlrdata);
+            zdb_listener_notify_add_record(zone, origin_vector, 0, TYPE_NSEC3PARAM, &unpacked_ttlrdata);
 #endif
         }
 
@@ -1192,7 +1192,7 @@ nsec3_remove_nsec3param(zdb_zone *zone, u8 hash_alg, u8 flags, u16 iterations, u
         *
         */
 
-        zdb_listener_notify_remove_record(zone->origin, TYPE_NSEC3PARAM, &nsec3param_record);
+        zdb_listener_notify_remove_record(zone, zone->origin, TYPE_NSEC3PARAM, &nsec3param_record);
 #endif
     }
 

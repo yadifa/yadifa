@@ -791,6 +791,8 @@ zdb_icmtl_begin(zdb_zone *zone, zdb_icmtl *icmtl, const char* folder)
     char add_name[1024];
     
     char data_path[PATH_MAX];
+
+    memcpy(data_path, (const void*)"?", 2);
     
     if(FAIL(return_code = xfr_copy_mkdir_data_path(data_path, sizeof(data_path), folder, zone->origin)))
     {
@@ -880,7 +882,7 @@ zdb_icmtl_output_stream_write_packed_ttlrdata(output_stream* os, u8* origin, u16
 static ya_result
 zdb_icmtl_close(zdb_icmtl *icmtl)
 {
-    dynupdate_icmtlhook_disable();
+    dynupdate_icmtlhook_disable(icmtl->zone->origin);
     
     output_stream_close(&icmtl->os_remove);
     output_stream_close(&icmtl->os_remove_);
@@ -1022,7 +1024,7 @@ zdb_icmtl_end(zdb_icmtl *icmtl, const char* folder)
 #endif
     }
     
-    dynupdate_icmtlhook_disable();
+    dynupdate_icmtlhook_disable(icmtl->zone->origin);
     
     /*
      * flush the streams, rewind them (because the undelying layer is a file stream)

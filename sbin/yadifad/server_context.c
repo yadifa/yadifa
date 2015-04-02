@@ -140,7 +140,7 @@ server_context_set_socket_name(u16 s, struct sockaddr *sa)
             
             if(inet_ntop(ipv4->sin_family, &ipv4->sin_addr, buffer, sizeof (buffer)) == NULL)
             {
-                strcpy(buffer, "ipv4?");
+                strcpy(buffer, "ipv4?"); // big enough
             }
             break;
         }
@@ -150,13 +150,13 @@ server_context_set_socket_name(u16 s, struct sockaddr *sa)
 
             if(inet_ntop(ipv6->sin6_family, &ipv6->sin6_addr, buffer, sizeof (buffer)) == NULL)
             {
-                strcpy(buffer, "ipv6?");
+                strcpy(buffer, "ipv6?"); // big enough
             }
             break;
         }
         default:
         {
-            strcpy(buffer, "?");
+            strcpy(buffer, "?"); // big enough
             break;
         }
     }

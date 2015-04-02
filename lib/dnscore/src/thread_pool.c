@@ -267,7 +267,7 @@ thread_pool_thread(void *args)
 
         free(task);
 
-        strcpy(desc->info, categoryname);
+        strncpy(desc->info, categoryname, sizeof(desc->info));
 
         if(counter != NULL)
         {

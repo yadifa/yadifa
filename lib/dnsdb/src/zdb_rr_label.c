@@ -586,7 +586,7 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
     /* We are at the right place for the record */
 
 #if ZDB_CHANGE_FEEDBACK_SUPPORT != 0
-    zdb_listener_notify_remove_type(args->sections[args->top], &rr_label->resource_record_set, args->type);
+    zdb_listener_notify_remove_type(args->zone, args->sections[args->top], &rr_label->resource_record_set, args->type);
 #endif
 
     ya_result err;
@@ -666,7 +666,7 @@ zdb_rr_label_delete_record(zdb_zone* zone, dnslabel_vector_reference path, s32 p
     if(path_index < 0)
     {
 #if ZDB_CHANGE_FEEDBACK_SUPPORT != 0
-        zdb_listener_notify_remove_type(path[0], &apex->resource_record_set, type);
+        zdb_listener_notify_remove_type(zone, path[0], &apex->resource_record_set, type);
 #endif
         if(ISOK(zdb_record_delete(&apex->resource_record_set, type))) /* FB done, APEX : no delegation */
         {
@@ -808,7 +808,7 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
          */
 
 #if ZDB_CHANGE_FEEDBACK_SUPPORT != 0
-        zdb_listener_notify_remove_record(args->sections[args->top], args->type, args->ttlrdata);
+        zdb_listener_notify_remove_record(args->zone, args->sections[args->top], args->type, args->ttlrdata);
 #endif
 
         if(RR_LABEL_RELEVANT(rr_label))
@@ -896,7 +896,7 @@ zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path,
         if(ISOK(zdb_record_delete_exact(&apex->resource_record_set, type, ttlrdata))) /* FB done, APEX : no delegation */
         {
 #if ZDB_CHANGE_FEEDBACK_SUPPORT != 0
-            zdb_listener_notify_remove_record(path[0], type, ttlrdata);
+            zdb_listener_notify_remove_record(zone, path[0], type, ttlrdata);
 #endif
             if(RR_LABEL_IRRELEVANT(apex))
             {

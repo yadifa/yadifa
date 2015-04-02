@@ -171,3 +171,4 @@ static inline const message_data *dns_udp_simple_message_get_answer(const dns_si
 }
 
 #endif // DNS_UDP_H
+

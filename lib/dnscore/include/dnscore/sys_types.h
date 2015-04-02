@@ -94,7 +94,20 @@
         #define __BYTE_ORDER __BIG_ENDIAN
     #endif
 #endif
-
+#elif defined __OpenBSD__
+#include <endian.h>
+#ifndef __BYTE_ORDER
+    #if defined(BYTE_ORDER)
+        #define __BIG_ENDIAN BIG_ENDIAN
+        #define __LITTLE_ENDIAN LITTLE_ENDIAN
+        #define __BYTE_ORDER BYTE_ORDER
+    #else
+        // assume big endian
+        #define __BIG_ENDIAN 4321
+        #define __LITTLE_ENDIAN 1234
+        #define __BYTE_ORDER __BIG_ENDIAN
+    #endif
+#endif
 #else
 #include <endian.h>
 #include <byteswap.h>

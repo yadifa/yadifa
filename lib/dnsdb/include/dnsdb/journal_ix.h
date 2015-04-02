@@ -50,3 +50,4 @@ ya_result journal_ix_open(journal **jh, const u8* origin, const char *workingdir
 #endif	/* JOURNAL_IX_H */
 
 /** @} */
+

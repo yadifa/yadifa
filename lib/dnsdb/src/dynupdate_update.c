@@ -413,14 +413,14 @@ dynupdate_update_nsec3_body(zdb_zone *zone, treeset_tree *lus_set)
                             treeset_avl_insert(&nsec3_upd, pred)->data = label;
                             
                             nsec3_zone* n3 = nsec3_zone_from_item(zone, pred);
-                            zdb_listener_notify_remove_nsec3(pred, n3, 0);
+                            zdb_listener_notify_remove_nsec3(zone, pred, n3, 0);
                         }
                     }
                     
                     nsec3_zone* n3 = nsec3_zone_from_item(zone, label->nsec.nsec3->self);
                     if(!new_one)
                     {
-                        zdb_listener_notify_remove_nsec3(label->nsec.nsec3->self, n3, 0);
+                        zdb_listener_notify_remove_nsec3(zone, label->nsec.nsec3->self, n3, 0);
                     }
                 }
                 else
@@ -476,8 +476,8 @@ dynupdate_update_nsec3_body(zdb_zone *zone, treeset_tree *lus_set)
         treeset_avl_insert(&nsec3_upd, pred);
         
         nsec3_zone* n3 = nsec3_zone_from_item(zone, nsec3_item);
-        zdb_listener_notify_remove_nsec3(pred, n3, 0);
-        zdb_listener_notify_remove_nsec3(nsec3_item, n3, 0);
+        zdb_listener_notify_remove_nsec3(zone, pred, n3, 0);
+        zdb_listener_notify_remove_nsec3(zone, nsec3_item, n3, 0);
                 
         /* Remove the del from the 'to update' */
         treeset_avl_delete(&nsec3_upd, nsec3_item);
@@ -509,7 +509,7 @@ dynupdate_update_nsec3_body(zdb_zone *zone, treeset_tree *lus_set)
         /* dnssec_process_rr_label(lus->label, task); */
         
         nsec3_zone* n3 = nsec3_zone_from_item(zone, nsec3_item);
-        zdb_listener_notify_add_nsec3(nsec3_item, n3, 0);
+        zdb_listener_notify_add_nsec3(zone, nsec3_item, n3, 0);
 
         nsec3_rrsig_update_item_s* query;
 
@@ -768,13 +768,13 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
             unpacked_ttlrdata.rdata_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(nsec_record);
             unpacked_ttlrdata.rdata_pointer = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_record);
 
-            zdb_listener_notify_remove_record(tmp_name, TYPE_NSEC, &unpacked_ttlrdata);
+            zdb_listener_notify_remove_record(zone, tmp_name, TYPE_NSEC, &unpacked_ttlrdata);
             
             nsec_record = nsec_record->next;
         }
         
         zdb_record_delete(&label->resource_record_set, TYPE_NSEC);
-        rrsig_delete(tmp_name, label, TYPE_NSEC);  /* Empty-terminal issue ? */
+        rrsig_delete(zone, tmp_name, label, TYPE_NSEC);  /* Empty-terminal issue ? */
 
         nsec_node *pred = nsec_avl_node_mod_prev(nsec_item);
         treeset_avl_insert(&nsec_upd, pred); /* I only need the label, I don't set the data */
@@ -821,7 +821,7 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
 
         nsec_inverse_name(name, nsec_item->inverse_relative_name);
 
-        if(nsec_update_label_record(nsec_item->label, nsec_item, next_nsec_item, name, soa.minimum))
+        if(nsec_update_label_record(zone, nsec_item->label, nsec_item, next_nsec_item, name, soa.minimum))
         {
             /*
              * NSEC are signed the same way as any record, do a simple signature here
@@ -919,8 +919,6 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
     memset(&name_path, 0xff, sizeof(name_path));
 #endif
     
-    /*ptr_vector rrsets;*/
-    
     ptr_vector nsec3param_rrset;
 
     u8* rname;
@@ -971,7 +969,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
 
                 if(FAIL(return_code = dnssec_key_load_private(algorithm, tag, flags, origin, &key)))
                 {
-                    log_err("update: unable to load private key 'K%{dnsname}+%03d+%05d': %r", zone->origin, algorithm, tag, return_code);
+                    log_warn("update: unable to load private key 'K%{dnsname}+%03d+%05d': %r", zone->origin, algorithm, tag, return_code);
                     break;
                 }
 
@@ -981,7 +979,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
         }
         else
         {
-            log_err("update: there are no private keys in the zone %{dnsname}", zone->origin);
+            log_warn("update: there are no private keys in the zone %{dnsname}", zone->origin);
 
             return_code = DNSSEC_ERROR_RRSIG_NOZONEKEYS;
         }
@@ -1223,7 +1221,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                             if(rtype != TYPE_ANY)
                             {
 #if ZDB_HAS_DNSSEC_SUPPORT
-                                rrsig_delete(rname, label, rtype);
+                                rrsig_delete(zone, rname, label, rtype);
 #endif
 
                                 if(RR_LABEL_RELEVANT(label))    /* Empty-termninal issue ! */
@@ -1312,7 +1310,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                         if(edit_status < ZDB_RR_LABEL_DELETE_NODE)
                         {
 #if ZDB_HAS_DNSSEC_SUPPORT
-                            rrsig_delete(rname, label, rtype);
+                            rrsig_delete(zone, rname, label, rtype);
 #endif
                             /*
                              * The label may only be there because it contains NSEC/NSEC3 records.
@@ -1422,7 +1420,6 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                                 /*
                                  * Ensure there are no other SOA
                                  */
-                                //soa_changed = TRUE;
 
                                 zdb_record_delete(&label->resource_record_set, TYPE_SOA);
                                 
@@ -1445,7 +1442,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                     {
 
 #if ZDB_HAS_DNSSEC_SUPPORT != 0
-                        rrsig_delete(rname, label, rtype); /* No empty-termninal issue */
+                        rrsig_delete(zone, rname, label, rtype); /* No empty-termninal issue */
 #endif
                         if((rtype == TYPE_NS) && ((label->flags & ZDB_RR_LABEL_APEX) == 0))
                         {
@@ -1497,7 +1494,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                             unpacked_ttlrdata.rdata_size = record->rdata_size;
                             unpacked_ttlrdata.ttl = record->ttl;
 
-                            zdb_listener_notify_add_record(name_path.labels, name_path.size, rtype, &unpacked_ttlrdata);
+                            zdb_listener_notify_add_record(zone, name_path.labels, name_path.size, rtype, &unpacked_ttlrdata);
                         }
 #endif
                     }
@@ -1552,7 +1549,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
         {
             rr_soa_increase_serial(&soa->rdata_start[0], soa->rdata_size, 1);
 #if ZDB_HAS_DNSSEC_SUPPORT
-            rrsig_delete(zone->origin, zone->apex, TYPE_SOA);
+            rrsig_delete(zone, zone->origin, zone->apex, TYPE_SOA);
 #endif
         }
     }

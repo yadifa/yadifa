@@ -59,6 +59,7 @@
 #include <dnsdb/journal.h>
 #include <dnsdb/zdb-zone-answer-ixfr.h>
 #include <dnsdb/zdb_icmtl.h>
+#include <dnsdb/zdb_utils.h>
 
 #include "server.h"
 #include "ixfr.h"

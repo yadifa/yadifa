@@ -953,11 +953,11 @@ notify_service(struct service_worker_s *worker)
     {
         log_warn("notify: no usable IPv6 socket bound");
         
+        logger_flush();
+        
         if(send_socket4 < 0)
         {
             log_warn("notify: no usable socket bound");
-            
-            // note: shutting down now does not makes sense
         }
     }
     
@@ -1314,6 +1314,7 @@ notify_service(struct service_worker_s *worker)
                         log_debug("notify: node %{hostaddr}[%04x] already exists, replacing", mqs->host, mqs->id);
                         
                         message_query_summary_delete(node->data);
+                        node->key = mqs;
                     }
 
                     node->data = mqs;
@@ -1488,7 +1489,7 @@ notify_slaves(u8 *origin)
     list.next = NULL;
     /* no need to set TSIG */
     
-    if(zone_is_auto_notify(zone_desc))
+    if(zone_ismaster(zone_desc) && zone_is_auto_notify(zone_desc))
     {
         // get the SOA
         zdb_packed_ttlrdata *soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);

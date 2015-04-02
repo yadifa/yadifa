@@ -1265,7 +1265,7 @@ rrsig_update_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata*
     
     // notify the journal
     
-    zdb_listener_notify_update_rrsig(removed_rrsig_sll, added_rrsig_sll, label, name);
+    zdb_listener_notify_update_rrsig(zone, removed_rrsig_sll, added_rrsig_sll, label, name);
 #endif
 
     zdb_packed_ttlrdata* sig;
@@ -1509,7 +1509,7 @@ rrsig_find_next(const zdb_packed_ttlrdata* rrsig, u16 type)
  */
 
 void
-rrsig_delete(const u8 *dname, zdb_rr_label* label, u16 type)
+rrsig_delete(const zdb_zone *zone, const u8 *dname, zdb_rr_label* label, u16 type)
 {
     /*
      * zdb_packed_ttlrdata** prev = zdb_record_findp(&label->resource_record_set, TYPE_RRSIG);
@@ -1541,7 +1541,7 @@ rrsig_delete(const u8 *dname, zdb_rr_label* label, u16 type)
                 unpacked_ttlrdata.rdata_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig);
                 unpacked_ttlrdata.rdata_pointer = ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig);
 
-                zdb_listener_notify_remove_record(dname, TYPE_RRSIG, &unpacked_ttlrdata);
+                zdb_listener_notify_remove_record(zone, dname, TYPE_RRSIG, &unpacked_ttlrdata);
             }
             
             /* */

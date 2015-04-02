@@ -334,7 +334,7 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
                         unpacked_ttlrdata.rdata_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(nsec_rec);
                         unpacked_ttlrdata.rdata_pointer = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_rec);
 
-                        zdb_listener_notify_remove_record(name, TYPE_NSEC, &unpacked_ttlrdata);
+                        zdb_listener_notify_remove_record(zone, name, TYPE_NSEC, &unpacked_ttlrdata);
 
                         nsec_rec = nsec_rec->next;
                     }
@@ -343,7 +343,7 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
 
                 zdb_record_delete(&label->resource_record_set, TYPE_NSEC);
 
-                rrsig_delete(name, label, TYPE_NSEC);
+                rrsig_delete(zone, name, label, TYPE_NSEC);
 
                 nsec_record = NULL;
             }
@@ -430,7 +430,8 @@ nsec_inverse_name(u8 *inverse_name, const u8 *name)
     dnslabel_vector labels;
 
     s32 vtop = dnsname_to_dnslabel_vector(name, labels);
-    return dnslabel_stack_to_dnsname(labels, vtop, inverse_name);
+    u32 ret = dnslabel_stack_to_dnsname(labels, vtop, inverse_name);
+    return ret;
 }
 
 /**
@@ -448,7 +449,7 @@ nsec_inverse_name(u8 *inverse_name, const u8 *name)
  */
 
 bool
-nsec_update_label_record(zdb_rr_label *label, nsec_node *node, nsec_node *next_node, u8 *name, u32 ttl)
+nsec_update_label_record(const zdb_zone *zone, zdb_rr_label *label, nsec_node *node, nsec_node *next_node, u8 *name, u32 ttl)
 {
     type_bit_maps_context tbmctx;
     u8 tmp_bitmap[256 * (1 + 1 + 32)]; /* 'max window count' * 'max window length' */
@@ -520,7 +521,7 @@ nsec_update_label_record(zdb_rr_label *label, nsec_node *node, nsec_node *next_n
                 unpacked_ttlrdata.rdata_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(nsec_rec);
                 unpacked_ttlrdata.rdata_pointer = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_rec);
 
-                zdb_listener_notify_remove_record(name, TYPE_NSEC, &unpacked_ttlrdata);
+                zdb_listener_notify_remove_record(zone, name, TYPE_NSEC, &unpacked_ttlrdata);
 
                 nsec_rec = nsec_rec->next;
             }
@@ -529,7 +530,7 @@ nsec_update_label_record(zdb_rr_label *label, nsec_node *node, nsec_node *next_n
 
         zdb_record_delete(&label->resource_record_set, TYPE_NSEC);
 
-        rrsig_delete(name, label, TYPE_NSEC);
+        rrsig_delete(zone, name, label, TYPE_NSEC);
 
         nsec_record = NULL;
     }
@@ -571,7 +572,7 @@ nsec_update_label_record(zdb_rr_label *label, nsec_node *node, nsec_node *next_n
 
             dnsname_to_dnsname_vector(name, &name_path);
 
-            zdb_listener_notify_add_record(name_path.labels, name_path.size, TYPE_NSEC, &unpacked_ttlrdata);
+            zdb_listener_notify_add_record(zone, name_path.labels, name_path.size, TYPE_NSEC, &unpacked_ttlrdata);
         }
 
         /*
@@ -675,7 +676,7 @@ nsec_update_label(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_reference
 
     dnslabel_vector_to_dnsname(labels, labels_top, name);
 
-    nsec_update_label_record(label, node, next_node, name, soa.minimum);
+    nsec_update_label_record(zone, label, node, next_node, name, soa.minimum);
 }
 
 void

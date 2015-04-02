@@ -29,6 +29,21 @@
 # 
 ################################################################################
 
+20150417:
+        YADIFA 2.0.6
+
+        This release is a public release.
+        This minor update's sole purpose is to fix YADIFA builds on OpenBSD.
+
+        Fixes:
+        - fixed a crash that could occur while sending a massive amount of notifications
+        - OpenBSD builds are fixed.
+            Tested on: OpenBSD 5.6 amd64, standard installation.
+            Configure: ./configure
+
+            Tested on: OpenBSD 5.6 amd64, with gcc 4.9 installed.
+            Configure: ./configure CC=egcc
+
 20150226:
         YADIFA 2.0.5
 
