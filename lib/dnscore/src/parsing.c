@@ -82,7 +82,7 @@ static int timegm_mdays_leap[12] = {MDAY_FIX(0),MDAY_FIX( 31),MDAY_FIX( 60),MDAY
 static time_t timegm(struct tm *tv)
 {
     time_t ret;
-
+    
     if( (tv->tm_year < 0)                   ||
         (((u32)tv->tm_mon) > 11)            ||
         (((u32)tv->tm_day - 1) > 31 - 1)    ||
@@ -91,7 +91,7 @@ static time_t timegm(struct tm *tv)
         (((u32)tv->tm_sec) > 60) )
     {
         return -1;
-    } 
+    }
 
     int yyyy = (tv->tm_year + 1900);
 
@@ -307,7 +307,7 @@ parse_yyyymmddhhmmss_check_range_len(const char *src, u32 src_len, u32 *dst)
 #ifdef DEBUG
     memset(&thetime, 0xff, sizeof (thetime));
 #endif
-
+    
     u32 tmp_u32;
     
     if(FAIL(parse_u32_check_range_len_base10(src, 4, &tmp_u32, 1970, 2038)))

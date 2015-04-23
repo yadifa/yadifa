@@ -60,7 +60,7 @@ extern "C"
  * AXFR FILE
  * 
  */
-
+    
 typedef struct resource_record resource_record;
 struct resource_record
 {
@@ -84,6 +84,7 @@ struct resource_record
 void resource_record_init(resource_record* entry);
 void resource_record_freecontent(resource_record* entry);
 void resource_record_resetcontent(resource_record* entry);
+s32  resource_record_size(resource_record* entry);
 
 struct zone_reader_vtbl;
 

@@ -189,7 +189,7 @@ typedef signed long long s64;
 #endif
 
 typedef void callback_function(void*);
-typedef ya_result result_callback_function(void*);
+typedef ya_result result_callback_function(void*, void*);
 
 /*
 AIX : __64BIT__
@@ -208,8 +208,11 @@ NT: _M_IA64
 #endif
 
 #if __SIZEOF_POINTER__ == 4
+
 typedef unsigned int intptr;
+
 #elif __SIZEOF_POINTER__ == 8
+
 #if defined(HAVE_UINT64_T)
 typedef uint64_t intptr;
 #elif defined(HAVE_LONG_LONG)
@@ -607,6 +610,10 @@ typedef u32 process_flags_t;
 #define TOSTRING(s) TOSTRING_(s)
 #define TOSTRING_(s) #s    
 #define PREPROCESSOR_INT2STR(x) #x
+#define PREPROCESSOR_EVAL(a__) a__
+#define PREPROCESSOR_CONCAT(a__,b__) a__##b__
+#define PREPROCESSOR_CONCAT_EVAL_(a__,b__) a__##b__
+#define PREPROCESSOR_CONCAT_EVAL(a__,b__) PREPROCESSOR_CONCAT_EVAL_(a__,b__)
 
 #define BOOL2INT(b_) ((b_)?1:0)
 #define BOOL2STR(b_) ((b_)?"true":"false")
@@ -621,7 +628,10 @@ typedef u32 process_flags_t;
 #define ZEROMEMORY(buffer__,size__) memset(buffer__, 0, size__)
 #define MEMCOPY(target__,source__,size__) memcpy((target__),(source__),(size__))
 
-struct type_class_ttl_rdlen /* @TODO define at a more appropriate place */
+// a magic number as 32 bits
+#define MAGIC4(b0_,b1_,b2_,b3_) NU32((((u32)b0_)<<24)|(((u32)b1_)<<16)|(((u32)b2_)<<8)|((u32)b3_))
+
+struct type_class_ttl_rdlen /* @TODO move to a more appropriate place */
 {
     u16 qtype;
     u16 qclass;

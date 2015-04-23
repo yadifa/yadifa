@@ -103,7 +103,7 @@ int service_stop(struct service_s *desc);
 int service_wait(struct service_s *desc);
 
 /**
- * Only to be called by the service itself when it noticed it has to shut down.
+ * Only to be called by the service itself when it is working.
  */
 int service_set_servicing(struct service_worker_s *worker);
 /**

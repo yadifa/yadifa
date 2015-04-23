@@ -50,6 +50,7 @@
  */
 
 #include <dnscore/sys_types.h>
+#include <dnscore/zalloc.h>
 
 /*    ------------------------------------------------------------
  *
@@ -71,6 +72,8 @@
 
 typedef struct list_dl_node_s list_dl_node_s;
 
+// 24 bytes
+
 struct list_dl_node_s
 {
     struct list_dl_node_s *next;
@@ -80,14 +83,17 @@ struct list_dl_node_s
 
 typedef struct list_dl_node_sentiel_s list_dl_node_sentiel_s;
 
+// 16 bytes
+
 struct list_dl_node_sentiel_s
 {
     struct list_dl_node_s *next;
     struct list_dl_node_s *prev;
 };
 
-
 typedef struct list_dl_s list_dl_s;
+
+// 36 bytes
 
 struct list_dl_s
 {
@@ -129,6 +135,20 @@ list_dl_iterator_next(list_dl_iterator_s *iter)
      return iter->current_node->data;
 }
 
+static inline list_dl_node_s *
+list_dl_node_alloc()
+{
+    list_dl_node_s *node;
+    ZALLOC_OR_DIE(list_dl_node_s*, node, list_dl_node_s, GENERIC_TAG);
+    return node;
+}
+
+static inline void
+list_dl_node_free(list_dl_node_s *node)
+{
+    ZFREE(node, list_dl_node_s);
+}
+
 /**
  * Initialises a list.
  * 
@@ -154,7 +174,7 @@ static inline void
 list_dl_insert(list_dl_s *list, void *data)
 {
     list_dl_node_s *node;
-    MALLOC_OR_DIE(list_dl_node_s*, node, sizeof(list_dl_node_s), GENERIC_TAG);
+    ZALLOC_OR_DIE(list_dl_node_s*, node, list_dl_node_s, GENERIC_TAG);
     node->next = list->head_sentinel.next;
     node->prev = (list_dl_node_s*)&list->head_sentinel;
     list->head_sentinel.next->prev = node;
@@ -165,6 +185,21 @@ list_dl_insert(list_dl_s *list, void *data)
 #endif
     
     node->data = data;
+    list->size++;
+}
+
+static inline void
+list_dl_insert_node(list_dl_s *list, list_dl_node_s *node)
+{
+    node->next = list->head_sentinel.next;
+    node->prev = (list_dl_node_s*)&list->head_sentinel;
+    list->head_sentinel.next->prev = node;
+    list->head_sentinel.next = node;
+    
+#ifdef DEBUG
+    assert(list->head_sentinel.next->prev == (list_dl_node_s*)&list->head_sentinel);
+#endif
+    
     list->size++;
 }
 
@@ -179,7 +214,7 @@ static inline void
 list_dl_append(list_dl_s *list, void *data)
 {
     list_dl_node_s *node;
-    MALLOC_OR_DIE(list_dl_node_s*, node, sizeof(list_dl_node_s), GENERIC_TAG);
+    ZALLOC_OR_DIE(list_dl_node_s*, node, list_dl_node_s, GENERIC_TAG);
     node->next = (list_dl_node_s*)&list->tail_sentinel;
     node->prev = list->tail_sentinel.prev;
     list->tail_sentinel.prev->next = node;
@@ -191,6 +226,43 @@ list_dl_append(list_dl_s *list, void *data)
     
     node->data = data;
     list->size++;
+}
+
+static inline void
+list_dl_append_node(list_dl_s *list, list_dl_node_s *node)
+{
+    node->next = (list_dl_node_s*)&list->tail_sentinel;
+    node->prev = list->tail_sentinel.prev;
+    list->tail_sentinel.prev->next = node;
+    list->tail_sentinel.prev = node;
+    
+#ifdef DEBUG
+    assert(list->tail_sentinel.prev->next == (list_dl_node_s*)&list->tail_sentinel);
+#endif
+    list->size++;
+}
+
+static inline void
+list_dl_append_list(list_dl_s *list, list_dl_s *list_to_add)
+{
+    if(list_to_add->size > 0)
+    {
+        list_dl_node_s *node;
+        
+        node = list_to_add->head_sentinel.next;
+        node->prev = list->tail_sentinel.prev;
+        list->tail_sentinel.prev->next = node;
+        
+        node = list_to_add->tail_sentinel.prev;
+        node->next = (list_dl_node_s*)&list->tail_sentinel;
+        list->tail_sentinel.prev = node;
+        
+        list->size += list_to_add->size;
+        
+        list_to_add->head_sentinel.next = (list_dl_node_s*)&list_to_add->tail_sentinel;
+        list_to_add->tail_sentinel.prev = (list_dl_node_s*)&list_to_add->head_sentinel;
+        list_to_add->size = 0;
+    }
 }
 
 /**
@@ -225,6 +297,8 @@ list_dl_remove_first(list_dl_s *list)
 #ifdef DEBUG
         assert(list->head_sentinel.next != (list_dl_node_s*)&list->tail_sentinel);
         assert(list->tail_sentinel.prev != (list_dl_node_s*)&list->head_sentinel);
+        assert(list->head_sentinel.next != NULL);
+        assert(list->tail_sentinel.prev != NULL);
 #endif
         
         list_dl_node_s *node = list->head_sentinel.next;
@@ -232,13 +306,40 @@ list_dl_remove_first(list_dl_s *list)
         node->next->prev = (list_dl_node_s*)&list->head_sentinel;
         list->size--;
         void *data = node->data;
-        free(node);
+        ZFREE(node, list_dl_node_s);
         
 #ifdef DEBUG
         assert(list->head_sentinel.next->prev == (list_dl_node_s*)&list->head_sentinel);
 #endif
         
         return data;
+    }
+    else
+    {
+        return NULL;
+    }
+}
+
+static inline list_dl_node_s*
+list_dl_remove_first_node(list_dl_s *list)
+{
+    if(list->size > 0)
+    {
+#ifdef DEBUG
+        assert(list->head_sentinel.next != (list_dl_node_s*)&list->tail_sentinel);
+        assert(list->tail_sentinel.prev != (list_dl_node_s*)&list->head_sentinel);
+        assert(list->head_sentinel.next != NULL);
+        assert(list->tail_sentinel.prev != NULL);
+#endif   
+        list_dl_node_s *node = list->head_sentinel.next;
+        list->head_sentinel.next = node->next;
+        node->next->prev = (list_dl_node_s*)&list->head_sentinel;
+        list->size--;
+        
+#ifdef DEBUG
+        assert(list->head_sentinel.next->prev == (list_dl_node_s*)&list->head_sentinel);
+#endif
+        return node;
     }
     else
     {
@@ -263,6 +364,8 @@ list_dl_remove_last(list_dl_s *list)
 #ifdef DEBUG
         assert(list->head_sentinel.next != (list_dl_node_s*)&list->tail_sentinel);
         assert(list->tail_sentinel.prev != (list_dl_node_s*)&list->head_sentinel);
+        assert(list->head_sentinel.next != NULL);
+        assert(list->tail_sentinel.prev != NULL);
 #endif
         
         list_dl_node_s *node = list->tail_sentinel.prev;
@@ -270,7 +373,7 @@ list_dl_remove_last(list_dl_s *list)
         node->prev->next = (list_dl_node_s*)&list->tail_sentinel;
         list->size--;
         void *data = node->data;
-        free(node);
+        ZFREE(node, list_dl_node_s);
         
 #ifdef DEBUG
         assert(list->tail_sentinel.prev->next == (list_dl_node_s*)&list->tail_sentinel);
@@ -282,6 +385,35 @@ list_dl_remove_last(list_dl_s *list)
         return NULL;
     }
 }
+
+static inline list_dl_node_s *
+list_dl_remove_last_node(list_dl_s *list)
+{
+    if(list->size > 0)
+    {
+#ifdef DEBUG
+        assert(list->head_sentinel.next != (list_dl_node_s*)&list->tail_sentinel);
+        assert(list->tail_sentinel.prev != (list_dl_node_s*)&list->head_sentinel);
+        assert(list->head_sentinel.next != NULL);
+        assert(list->tail_sentinel.prev != NULL);
+#endif
+        
+        list_dl_node_s *node = list->tail_sentinel.prev;
+        list->tail_sentinel.prev = node->prev;
+        node->prev->next = (list_dl_node_s*)&list->tail_sentinel;
+        list->size--;
+        
+#ifdef DEBUG
+        assert(list->tail_sentinel.prev->next == (list_dl_node_s*)&list->tail_sentinel);
+#endif
+        return node;
+    }
+    else
+    {
+        return NULL;
+    }
+}
+
 
 /**
  * Enqueues the item in the list, seen as a queue.
@@ -321,6 +453,28 @@ list_dl_dequeue(list_dl_s *list)
 bool list_dl_remove(list_dl_s *list, const void *data);
 
 /**
+ * Remove the first item for which the match does not returns 0.
+ * 
+ * @param list
+ * @param match a callback function called with the data and args
+ * @param args
+ * @return 
+ */
+
+bool list_dl_remove_matching(list_dl_s *list, result_callback_function *match, void *args);
+
+/**
+ * Remove all the items for which the match does not returns 0.
+ * 
+ * @param list
+ * @param match a callback function called with the data and args
+ * @param args
+ * @return 
+ */
+
+bool list_dl_remove_all_matching(list_dl_s *list, result_callback_function *match, void *args);
+
+/**
  * Remove all items from the list.
  * Deletes the nodes but not the data.
  * 
@@ -344,7 +498,7 @@ void list_dl_clear(list_dl_s *list);
  * @return a matching node or NULL
  */
 
-void *list_dl_search(list_dl_s *list, result_callback_function *comparator);
+void *list_dl_search(list_dl_s *list, result_callback_function *comparator, void *parm);
 
 /**
  * 
@@ -360,9 +514,7 @@ ya_result list_dl_indexof(list_dl_s *list, void *data);
 
 void *list_dl_get(list_dl_s *list, int index);
 
-typedef ya_result item_process_callback_function(void *data_to_process, void *caller_data);
-
-ya_result list_dl_foreach(list_dl_s *list, item_process_callback_function *callback, void *caller_data);
+ya_result list_dl_foreach(list_dl_s *list, result_callback_function *callback, void *caller_data);
 
 /**
  * Iterates through the items of the function, calling the comparator.
@@ -380,7 +532,7 @@ ya_result list_dl_foreach(list_dl_s *list, item_process_callback_function *callb
  * @return TRUE if at least one item has been deleted, FALSE otherwise.
  */
 
-bool list_dl_remove_match(list_dl_s *list, result_callback_function *comparator);
+bool list_dl_remove_match(list_dl_s *list, result_callback_function *comparator, void *parm);
 
 /**
  * 
@@ -393,6 +545,15 @@ bool list_dl_remove_match(list_dl_s *list, result_callback_function *comparator)
 static inline u32
 list_dl_size(const list_dl_s *list)
 {
+#ifdef DEBUG
+    if(list->size == 0)
+    {
+        assert(list->head_sentinel.next == (list_dl_node_s*)&list->tail_sentinel);
+        assert(list->tail_sentinel.prev == (list_dl_node_s*)&list->head_sentinel);
+        assert(list->head_sentinel.prev == NULL);
+        assert(list->tail_sentinel.next == NULL);
+    }
+#endif
     return list->size;
 }
 

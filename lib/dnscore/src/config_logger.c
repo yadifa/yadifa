@@ -298,7 +298,7 @@ config_section_handles_set_wild(struct config_section_descriptor_s *csd, const c
     if(strcasecmp("stdout", value_target) == 0)
     {
         output_stream stdout_os;
-        fd_output_stream_attach(dup(1), &stdout_os);
+        fd_output_stream_attach(&stdout_os, dup(1));
         logger_channel *stdout_channel = logger_channel_alloc();
         logger_channel_stream_open(&stdout_os, FALSE, stdout_channel);
         logger_channel_register(key, stdout_channel);
@@ -306,7 +306,7 @@ config_section_handles_set_wild(struct config_section_descriptor_s *csd, const c
     else if(strcasecmp("stderr", value_target) == 0)
     {
         output_stream stderr_os;
-        fd_output_stream_attach(dup(2), &stderr_os);
+        fd_output_stream_attach(&stderr_os, dup(2));
         logger_channel *stderr_channel = logger_channel_alloc();
         logger_channel_stream_open(&stderr_os, FALSE, stderr_channel);
         logger_channel_register(key, stderr_channel);

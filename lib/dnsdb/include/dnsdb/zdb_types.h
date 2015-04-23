@@ -45,14 +45,17 @@
 #include <dnsdb/zdb-config-features.h>
 
 #include <dnscore/dnsname.h>
-#include <dnsdb/zdb_config.h>
-#include <dnsdb/zdb_alloc.h>
-#include <dnsdb/dictionary.h>
-//#include <dnsdb/journal.h>
+#include <dnscore/zalloc.h>
 #include <dnscore/rfc.h>
 #include <dnscore/message.h>
 #include <dnscore/alarm.h>
 #include <dnscore/mutex.h>
+
+#include <dnsdb/zdb_config.h>
+#include <dnsdb/dictionary.h>
+//#include <dnsdb/journal.h>
+
+#include <dnsdb/zdb_error.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -90,7 +93,7 @@ struct zdb_packed_ttlrdata
 #define ZDB_RECORD_SIZE_FROM_RDATASIZE(rdata_size_) (sizeof(zdb_packed_ttlrdata)-1+(rdata_size_))
 #define ZDB_RECORD_SIZE(record_)                    ZDB_RECORD_SIZE_FROM_RDATASIZE((record_)->rdata_size)
 
-#if ZDB_USES_ZALLOC==0
+#if DNSCORE_HAS_ZALLOC==0
 
 #define ZDB_MEMORY_ZALLOC(cast_,data_,size_)                            \
     {                                                                   \
@@ -133,9 +136,9 @@ struct zdb_packed_ttlrdata
 
 #define ZDB_MEMORY_ZALLOC(cast_,data_,size_)                            \
     {                                                                   \
-        if(size_<=ZDB_ALLOC_PG_PAGEABLE_MAXSIZE)                        \
+        if(size_<=ZALLOC_PG_PAGEABLE_MAXSIZE)                        \
         {                                                               \
-            (data_)=(cast_)zdb_malloc(((size_)-1)>>3);                  \
+            (data_)=(cast_)zalloc_line(((size_)-1)>>3);                  \
         }                                                               \
         else                                                            \
         {                                                               \
@@ -146,9 +149,9 @@ struct zdb_packed_ttlrdata
 #define ZDB_RECORD_ZALLOC(record_,ttl_,len_,rdata_)                     \
     {                                                                   \
         u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE(len_);                  \
-        if(size<=ZDB_ALLOC_PG_PAGEABLE_MAXSIZE)                         \
+        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                         \
         {                                                               \
-            record_=(zdb_packed_ttlrdata*)zdb_malloc((size-1)>>3);      \
+            record_=(zdb_packed_ttlrdata*)zalloc_line((size-1)>>3);      \
         }                                                               \
         else                                                            \
         {                                                               \
@@ -163,9 +166,9 @@ struct zdb_packed_ttlrdata
 #define ZDB_RECORD_ZALLOC_EMPTY(record_,ttl_,len_)                      \
     {                                                                   \
         u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE(len_);                  \
-        if(size<=ZDB_ALLOC_PG_PAGEABLE_MAXSIZE)                         \
+        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                         \
         {                                                               \
-            record_=(zdb_packed_ttlrdata*)zdb_malloc((size-1)>>3);      \
+            record_=(zdb_packed_ttlrdata*)zalloc_line((size-1)>>3);      \
         }                                                               \
         else                                                            \
         {                                                               \
@@ -179,9 +182,9 @@ struct zdb_packed_ttlrdata
 #define ZDB_RECORD_CLONE(record_s_,record_d_)                           \
     {                                                                   \
         u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE((record_s_)->rdata_size);\
-        if(size<=ZDB_ALLOC_PG_PAGEABLE_MAXSIZE)                         \
+        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                         \
         {                                                               \
-            record_d_=(zdb_packed_ttlrdata*)zdb_malloc((size-1)>>3); \
+            record_d_=(zdb_packed_ttlrdata*)zalloc_line((size-1)>>3); \
         }                                                               \
         else                                                            \
         {                                                               \
@@ -196,9 +199,9 @@ struct zdb_packed_ttlrdata
 #define ZDB_RECORD_ZFREE(record_)                                       \
     {                                                                   \
         u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE((record_)->rdata_size); \
-        if(size<=ZDB_ALLOC_PG_PAGEABLE_MAXSIZE)                         \
+        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                         \
         {                                                               \
-            zdb_mfree(record_,(size-1)>>3);                             \
+            zfree_line(record_,(size-1)>>3);                             \
         }                                                               \
         else                                                            \
         {                                                               \
@@ -211,9 +214,9 @@ struct zdb_packed_ttlrdata
     if(record_ != NULL)                                                 \
     {                                                                   \
         u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE((record_)->rdata_size); \
-        if(size<=ZDB_ALLOC_PG_PAGEABLE_MAXSIZE)                         \
+        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                         \
         {                                                               \
-            zdb_mfree(record_,(size-1)>>3);                             \
+            zfree_line(record_,(size-1)>>3);                             \
         }                                                               \
         else                                                            \
         {                                                               \
@@ -506,6 +509,8 @@ typedef ya_result zdb_zone_access_filter(const message_data* /*mesg*/, const voi
 #define ALARM_KEY_ZONE_AXFR_QUERY       2
 #define ALARM_KEY_ZONE_REFRESH          3
 
+#define ZDB_ZONE_KEEP_RAW_SIZE          1
+
 struct zdb_zone
 {
     u8 *origin; /* dnsname, origin */
@@ -553,22 +558,35 @@ struct zdb_zone
     u32 sig_validity_jitter_seconds;
     u32 sig_quota;              // starts at 100, updated so a batch does not takes more than a fraction of a second
 #endif
+        
+    alarm_t alarm_handle;               // 32 bits
+    volatile s32 rc;                    // reference counter when it reaches 0, the zone and its content should be destroyed asap
+    volatile u8 lock_owner;             // the ID of who can manipulate the zone
+    volatile u8 lock_count;             // the number of owners with the current lock ID
+    volatile u8 lock_reserved_owner;    // to the next-owner mechanism (reserve an ownership change)
     
-    alarm_t alarm_handle;       // 32 bits
-    volatile u8 mutex_owner;
-    volatile u8 mutex_count;
-    volatile u8 mutex_reserved_owner;
-
 #if ZDB_RECORDS_MAX_CLASS != 1
     u16 zclass;
 #endif
     
-    mutex_t mutex;
+    mutex_t lock_mutex;
+    cond_t  lock_cond;
+    
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    stacktrace lock_trace;
+    pthread_t lock_id;
+    u64 lock_timestamp;
+#endif
 
-    /** journal is only to be accessed trough the journal_* functions, between a journal_open and a journal_close */
+#if ZDB_ZONE_KEEP_RAW_SIZE
+    volatile s64 wire_size;               // approximation of the size of a zone. updated on load and store of the zone on disk
+    volatile u64 write_time_elapsed;      // the time that was spent writing the zone in a file (ie: axfr)
+#endif
+    
+    /** journal is only to be accessed trough the journal_* functions */
     
     struct journal *journal;
-    
+        
     dnsname_vector origin_vector;
 
 }; /* 18 34 => 20 40 */
@@ -586,7 +604,7 @@ struct zdb_zone_label
     zdb_zone_label_set sub; /* labels of the sub-level                           */
     u8* name;               /* label name                                        */
 
-    zdb_zone* zone; /* zone cut starting at this level                   */
+    zdb_zone *zone; /* zone cut starting at this level                   */
 }; /* 32 56 */
 
 typedef zdb_zone_label* zdb_zone_label_pointer_array[DNSNAME_MAX_SECTIONS];
@@ -600,9 +618,10 @@ typedef struct zdb zdb;
 
 struct zdb
 {
-    zdb_zone_label* root[ZDB_RECORDS_MAX_CLASS];
+    zdb_zone_label* root;
     alarm_t alarm_handle;
     group_mutex_t mutex;
+    u16 zclass;
 };
 
 typedef zdb_ttlrdata** zdb_ttlrdata_pointer_array;

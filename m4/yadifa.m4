@@ -274,6 +274,8 @@ case "y$with_[$1]" in
         ;;
 esac
 
+dnl # CONDITIONAL
+dnl AM_CONDITIONAL([HAS_$2], [test y$with_[$1] = yyes])
 # SUBST
 AC_SUBST(HAS_$2)
 # AC_HAS_WITHOUT $1 DONE
@@ -326,6 +328,16 @@ AC_HAS_ENABLE(ctrl,CTRL,[remote control])
 
 ])
 
+dnl DYNAMIC_PROVISIONING
+
+AC_DEFUN([AC_CHECK_ENABLE_CTRL_DYNAMIC_PROVISIONING], [
+
+AC_HAS_ENABLE(ctrl_dynamic_provisioning,CTRL_DYNAMIC_PROVISIONING,[dynamic provisioning],,
+    AM_CONDITIONAL([HAS_CTRL], [true])
+    ,
+    )
+])
+
 dnl DNS_RRL
 
 AC_DEFUN([AC_CHECK_ENABLE_RRL], [
@@ -336,11 +348,17 @@ AC_HAS_DISABLE(rrl,RRL_SUPPORT,[DNS Response Rate Limiter])
 
 dnl SSL DNSCORE DNSDB DNSZONE (all defaulted to FALSE)
 
+requires_tcl=0
 requires_ssl=0
 requires_dnscore=0
 requires_dnsdb=0
 requires_dnszone=0
 requires_dnslg=0
+requires_dnstcl=0
+
+AC_DEFUN([AC_YADIFA_ENABLE_TCL], [
+	requires_tcl=1
+])
 
 AC_DEFUN([AC_YADIFA_ENABLE_SSL], [
 	requires_ssl=1
@@ -363,8 +381,9 @@ AC_DEFUN([AC_YADIFA_ENABLE_DNSZONE], [
 
 AC_DEFUN([AC_YADIFA_ENABLE_DNSLG], [
 	requires_dnslg=1
-    requires_dnscore=1
+	requires_dnscore=1
 ])
+
 
 AC_DEFUN([AC_YADIFA_ADD_LIBS], [
 
@@ -388,6 +407,16 @@ AC_SEARCH_LIBS([gethostbyname],[nsl],,[exit 1])
 AC_SEARCH_LIBS([socket],[socket],,[exit 1])
 AC_SEARCH_LIBS([dlopen],[dl],,[exit 1])
 dnl AC_GETHOSTBYNAME_CHECK
+
+if [[ $requires_tcl -eq 1 ]]
+then
+	echo "TCL is required by this setup ..."
+
+	CFLAGS="$CFLAGS -DWITHTCLINCLUDED -I${tcl_includedir}" 
+	LDFLAGS="-L${tcl_libdir} $LDFLAGS"
+
+	AC_SEARCH_LIBS(Tcl_Main, [${tcl_version}], ,[echo "could not find ${tcl_version} :: tcl_includedir=${tcl_includedir} :: tcl_libdir=${tcl_libdir}"; exit 1])
+fi
 
 dnl SSL
 
@@ -550,7 +579,7 @@ AC_MSG_CHECKING(for the DNS Looking Glass library)
 AC_ARG_WITH(dnslg, AS_HELP_STRING([--with-dnslg=DIR], [Use the dnslg from directory DIR/lib (devs only)]),
     [
 		CFLAGS="-I$with_dnslg/include $CFLAGS"
-        LDFLAGS="-L$with_dnszone/lib $LDFLAGS";
+        LDFLAGS="-L$with_dnslg/lib $LDFLAGS";
         AC_CHECK_LIB([dnslg], [dnslg_init],,[exit],[$LDSTAT -ldnscore $LDDYN -lssl])
     ],
     [
@@ -578,6 +607,7 @@ dnl Features
 
 AC_DEFUN([AC_YADIFA_FEATURES], [
 
+AC_CHECK_ENABLE_CTRL_DYNAMIC_PROVISIONING
 AC_CHECK_ENABLE_RRL
 
 dnl SENDMSG / SENDTO : send messages with sendmsg instead of sendto
@@ -607,6 +637,23 @@ dnl ==========================================================================
 
 AC_HAS_DISABLE(nsid,NSID_SUPPORT,[NSID support])
 
+dnl ACL
+dnl ==========================================================================
+
+AC_HAS_DISABLE(acl,ACL_SUPPORT,[ACL support],,
+    AC_YADIFA_ENABLE_SSL
+    ,
+    enable_tsig='no'
+    )
+
+dnl TSIG
+dnl ==========================================================================
+
+AC_HAS_DISABLE(tsig,TSIG_SUPPORT,[TSIG support],,
+    AC_YADIFA_ENABLE_SSL
+    ,
+    )
+
 dnl DYNUPDATE
 dnl ==========================================================================
 
@@ -621,12 +668,74 @@ AC_HAS_DISABLE(rrsig_management,RRSIG_MANAGEMENT_SUPPORT,[RRSIG verification and
     )
 
 
+dnl ZALLOC
+dnl ==========================================================================
+
+AC_HAS_DISABLE(zalloc,ZALLOC_SUPPORT,[zalloc memory system])
+
+dnl ZALLOC STATISTICS
+dnl =================
+
+AC_HAS_ENABLE(zalloc_statistics,ZALLOC_STATISTICS_SUPPORT,[zalloc statistics support])
+
+dnl ZALLOC DEBUG
+dnl ============
+
+AC_HAS_ENABLE(zalloc_debug,ZALLOC_DEBUG_SUPPORT,[zalloc debug support])
+
+dnl MALLOC DEBUG
+dnl ============
+
+AC_HAS_ENABLE(malloc_debug,MALLOC_DEBUG_SUPPORT,[malloc debug support])
+
+dnl BFD STACKTRACE DEBUG
+dnl ====================
+
+AC_HAS_ENABLE(bfd_debug,BFD_DEBUG_SUPPORT,[bfd debug support])
+
+case "$enable_bfd_debug" in
+    yes)
+        AC_SEARCH_LIBS([dlinfo],[dl],[],[echo no dl],)
+        AC_SEARCH_LIBS([sha1_init_ctx],[iberty],[],[echo iberty],)
+        AC_SEARCH_LIBS([bfd_init],[bfd],[],[echo no bfd;exit 1],)
+        ;;
+    no|*)
+        ;;
+esac
+
+dnl MUTEX STACKTRACE DEBUG
+dnl ======================
+
+AC_HAS_ENABLE(mutex_debug,MUTEX_DEBUG_SUPPORT,[mutex debug support])
+
+dnl LOG THREAD ID
+dnl =============
+
+AC_HAS_ENABLE(log_thread_id,LOG_THREAD_ID_ALWAYS_ON,[write the thread id in each line of log])
+
+dnl LOG PID
+dnl dnl ===
+
+AC_HAS_ENABLE(log_pid,LOG_PID_ALWAYS_ON,[write the pid in each line of log])
+        
+dnl NON-AA AXFR (non-AA AXFR as sent by MS DNS)
+dnl ==========================================================================
+
+AC_HAS_ENABLE(non_aa_axfr_support,NON_AA_AXFR_SUPPORT,[Allows AXFR answer from master without AA bit set (Microsoft DNS)])
+
+dnl logdir
+dnl ==========================================================================
+
 AC_HAS_WITH(logdir, LOGDIR, [sets the directory where to put the log files], [where to put the log files],
 logdir="$withval"
 ,
 logdir=${localstatedir}/log/yadifa
 )
 AC_SUBST(logdir)
+
+AC_SOCKADDR_SA_LEN_CHECK
+AC_SOCKADDR_IN_SIN_LEN_CHECK
+AC_SOCKADDR_IN6_SIN6_LEN_CHECK
 
 AM_CONDITIONAL([HAS_ACL_SUPPORT], [true])
 AC_DEFINE_UNQUOTED([HAS_ACL_SUPPORT], [1], [always on])
@@ -640,13 +749,14 @@ AM_CONDITIONAL([HAS_NSEC_SUPPORT], [true])
 AC_DEFINE_UNQUOTED([HAS_NSEC_SUPPORT], [1], [always on])
 AM_CONDITIONAL([HAS_MIRROR_SUPPORT], [false])
 AC_DEFINE_UNQUOTED([HAS_MIRROR_SUPPORT], [0], [always off])
-
-AC_YADIFA_ENABLE_SSL
-
-AC_SOCKADDR_SA_LEN_CHECK
-AC_SOCKADDR_IN_SIN_LEN_CHECK
-AC_SOCKADDR_IN6_SIN6_LEN_CHECK
-
+AM_CONDITIONAL([HAS_DROPALL_SUPPORT], [false])
+AC_DEFINE_UNQUOTED([HAS_DROPALL_SUPPORT], [0], [always off])
+AM_CONDITIONAL([HAS_TCL], [false])
+AC_DEFINE_UNQUOTED([HAS_TCL], [0], [always off])
+AM_CONDITIONAL([HAS_RDTSC], [false])
+AC_DEFINE_UNQUOTED([HAS_RDTSC], [0], [always off])
+AM_CONDITIONAL([HAS_RRCACHE_ENABLED], [false])
+AC_DEFINE_UNQUOTED([HAS_RRCACHE_ENABLED], [0], [always off])
 ])
 
 AC_DEFUN([AC_YADIFA_SUMMARY], [
@@ -680,7 +790,12 @@ echo NSEC .............. : $enable_nsec
 echo NSEC3 ............. : $enable_nsec3
 echo RRL ............... : $enable_rrl
 echo
-echo TCL ............... : $enable_tcl
+echo TCL ............... : $with_tcl
+if [[ "$with_tcl" = "yes" ]]; then 
+echo TCL used ............................ : $tcl_version
+echo TCL library ......................... : $tcl_libdir
+echo "TCL includes ........................ : $tcl_includedir"
+fi
 echo
 
 ])

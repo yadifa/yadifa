@@ -116,6 +116,7 @@ CONFIG_ACL(allow_control, NULL)
 
 CONFIG_FLAG32(notify_auto , S_ZONE_NOTIFY_AUTO, flags, ZONE_FLAG_NOTIFY_AUTO)
 CONFIG_FLAG32(no_master_updates , S_ZONE_NO_MASTER_UPDATES, flags, ZONE_FLAG_NO_MASTER_UPDATES)
+CONFIG_FLAG32(maintain_dnssec, S_ZONE_FLAG_MAINTAIN_DNSSEC, flags, ZONE_FLAG_MAINTAIN_DNSSEC)
 CONFIG_U32_RANGE(notify.retry_count, S_NOTIFY_RETRY_COUNT, NOTIFY_RETRY_COUNT_MIN, NOTIFY_RETRY_COUNT_MAX)
 CONFIG_U32_RANGE(notify.retry_period, S_NOTIFY_RETRY_PERIOD, NOTIFY_RETRY_PERIOD_MIN, NOTIFY_RETRY_PERIOD_MAX)
 CONFIG_U32_RANGE(notify.retry_period_increase, S_NOTIFY_RETRY_PERIOD_INCREASE, NOTIFY_RETRY_PERIOD_INCREASE_MIN, NOTIFY_RETRY_PERIOD_INCREASE_MAX)
@@ -136,6 +137,8 @@ CONFIG_ALIAS(signature.sig_jitter, sig_validity_jitter)
         
 CONFIG_ALIAS(dnssec,dnssec_mode)
 #endif
+        
+CONFIG_U32_RANGE(journal_size_kb, S_JOURNAL_SIZE_KB_DEFAULT, S_JOURNAL_SIZE_KB_MIN, S_JOURNAL_SIZE_KB_MAX)
 
 #if HAS_CTRL
 //CONFIG_U8(ctrl_flags, "0")  // SHOULD ONLY BE IN THE DYNAMIC CONTEXT
@@ -143,11 +146,12 @@ CONFIG_BYTES(dynamic_provisioning, "AAA=", sizeof(dynamic_provisioning_s))
 CONFIG_HOST_LIST(slaves, NULL)
 #endif // HAS_CTRL
 
-/* alias , aliased-real-name */
-CONFIG_ALIAS(master,masters)
-CONFIG_ALIAS(notify,notifies)
+/* CONFIG ALIAS: alias , aliased-real-name */
 CONFIG_ALIAS(also_notify,notifies)
 CONFIG_ALIAS(file,file_name)
+CONFIG_ALIAS(journal_size,journal_size_kb)
+CONFIG_ALIAS(master,masters)
+CONFIG_ALIAS(notify,notifies)
 CONFIG_END(config_section_zone_desc)
 
 #undef CONFIG_TYPE
@@ -264,8 +268,11 @@ config_section_zone_finalise(struct config_section_descriptor_s *csd)
         {
             zone_desc_s *zone_desc = (zone_desc_s*)csd->base;
             zone_free(zone_desc);
+#ifdef DEBUG
             csd->base = NULL;
+#endif
         }
+
         free(csd);
     }
     
@@ -290,13 +297,13 @@ config_section_zone_print_wild(struct config_section_descriptor_s *csd, output_s
     
     zone_set_lock(&database_zone_desc);
     
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&database_zone_desc.set, &iter);
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&database_zone_desc.set, &iter);
 
-    while(treeset_avl_iterator_hasnext(&iter))
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
-        zone_desc_s *zone_desc = (zone_desc_s *)zone_node->data;
+        ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
+        zone_desc_s *zone_desc = (zone_desc_s *)zone_node->value;
         
         config_section_struct_print(csd, zone_desc, os);
     }

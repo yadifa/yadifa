@@ -81,7 +81,7 @@ dnssec_set_xfr_path(const char* xfr_path)
 ya_result
 zdb_update_zone_signatures(zdb_zone* zone, u32 signature_count_loose_limit)
 {
-    log_debug("zdb_update_zone_signatures(%p) %{dnsname} [lock=%x]", zone, zone->origin, zone->mutex_owner);
+    log_debug("zdb_update_zone_signatures(%p) %{dnsname} [lock=%x]", zone, zone->origin, zone->lock_owner);
 
     if(dnssec_xfr_path == NULL)
     {
@@ -91,7 +91,7 @@ zdb_update_zone_signatures(zdb_zone* zone, u32 signature_count_loose_limit)
     
     if(!zdb_zone_is_dnssec(zone))
     {
-        log_debug("zdb_update_zone_signatures(%p) %{dnsname} [lock=%x]: not dnssec", zone, zone->origin, zone->mutex_owner);
+        log_debug("zdb_update_zone_signatures(%p) %{dnsname} [lock=%x]: not dnssec", zone, zone->origin, zone->lock_owner);
         return ZDB_ERROR_ZONE_IS_NOT_DNSSEC; /* @TODO set a new code for "zone is neither NSEC nor NSEC3" */
     }
     
@@ -102,7 +102,7 @@ zdb_update_zone_signatures(zdb_zone* zone, u32 signature_count_loose_limit)
 
     if(!zdb_zone_try_double_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_RRSIG_UPDATER))
     {
-        log_debug("zdb_update_zone_signatures(%p) %{dnsname} [lock=%x]: already locked", zone, zone->origin, zone->mutex_owner);
+        log_debug("zdb_update_zone_signatures(%p) %{dnsname} [lock=%x]: already locked", zone, zone->origin, zone->lock_owner);
         
         return ZDB_ERROR_ZONE_IS_ALREADY_BEING_SIGNED;
     }
@@ -184,7 +184,7 @@ zdb_update_zone_signatures(zdb_zone* zone, u32 signature_count_loose_limit)
                 
                 zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_RRSIG_UPDATER);
                 
-                log_debug("zdb_update_zone_signatures(%p) %{dnsname} [lock=%x] done", zone, zone->origin, zone->mutex_owner);
+                log_debug("zdb_update_zone_signatures(%p) %{dnsname} [lock=%x] done", zone, zone->origin, zone->lock_owner);
 
                 rrsig_updater_commit(&parms);
                 
@@ -258,14 +258,14 @@ zdb_update_zone_signatures(zdb_zone* zone, u32 signature_count_loose_limit)
             zdb_icmtl_cancel(&icmtl);
             zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_RRSIG_UPDATER);
                         
-            log_err("zdb_update_zone_signatures(%p) %{dnsname} [lock=%x] failed at signing: %r", zone, zone->origin, zone->mutex_owner, return_code);
+            log_err("zdb_update_zone_signatures(%p) %{dnsname} [lock=%x] failed at signing: %r", zone, zone->origin, zone->lock_owner, return_code);
         }
     }
     else
     {
         zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_RRSIG_UPDATER);
         
-        log_debug("zdb_update_zone_signatures(%p) %{dnsname} [lock=%x] failed at journaling: %r", zone, zone->origin, zone->mutex_owner, return_code);
+        log_debug("zdb_update_zone_signatures(%p) %{dnsname} [lock=%x] failed at journaling: %r", zone, zone->origin, zone->lock_owner, return_code);
     }
     
     rrsig_updater_finalize(&parms);

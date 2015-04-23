@@ -44,7 +44,7 @@
 #include <stdlib.h>
 #include <arpa/inet.h>
 
-#include "dnsdb-config.h"
+#include "dnsdb/dnsdb-config.h"
 
 #include "dnsdb/zdb_types.h"
 

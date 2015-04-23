@@ -47,6 +47,8 @@
 
 #include "log_statistics.h"
 
+#define SHOW_REFERRAL 0 // temporarily disabled until we are sure about the result
+
 logger_handle* g_statistics_logger;
 
 void
@@ -66,6 +68,9 @@ log_statistics_legend()
             "\tdr : dropped count \n"
             "\tst : total bytes sent (simple queries only) \n"
             "\tun : undefined opcode count \n"
+#if SHOW_REFERRAL
+            "\trf : referral count\n"
+#endif
             
             "\tax : axfr query count \n"
             "\tix : ixfr query count \n"
@@ -98,8 +103,8 @@ log_statistics_legend()
             "\n"
             "rrl:\n"
             "\n"
-            "\tslip: truncated answer count\n"
-            "\tdrop: dropped answer count\n"
+            "\tsl : truncated answer count\n"
+            "\tdr : dropped answer count\n"
 #endif            
             );
 }
@@ -115,10 +120,17 @@ log_statistics(server_statistics_t *server_statistics)
             MSG_INFO,
 
              "udp (in=%llu qr=%llu ni=%llu up=%llu "
-                  "dr=%llu st=%llu un=%llu) "
-                  
+                  "dr=%llu st=%llu un=%llu "
+#if SHOW_REFERRAL
+                  "rf=%llu"
+#endif
+                  ") "
+    
              "tcp (in=%llu qr=%llu ni=%llu up=%llu "
                   "dr=%llu st=%llu un=%llu "
+#if SHOW_REFERRAL
+                  "rf=%llu "
+#endif
                   "ax=%llu ix=%llu ov=%llu) "
                         
             "udpa (OK=%llu FE=%llu SF=%llu NE=%llu "
@@ -133,7 +145,7 @@ log_statistics(server_statistics_t *server_statistics)
                   "BS=%llu BK=%llu BT=%llu BM=%llu "
                   "BN=%llu BA=%llu TR=%llu) "
 #if HAS_RRL_SUPPORT
-            "rrl (slip=%llu drop=%llu)"
+            "rrl (sl=%llu dr=%llu)"
 #endif
             ,
             // udp
@@ -146,6 +158,9 @@ log_statistics(server_statistics_t *server_statistics)
             server_statistics->udp_dropped_count,
             server_statistics->udp_output_size_total,
             server_statistics->udp_undefined_count,
+#if SHOW_REFERRAL
+            server_statistics->udp_referrals_count,
+#endif
 
             // tcp
 
@@ -157,6 +172,9 @@ log_statistics(server_statistics_t *server_statistics)
             server_statistics->tcp_dropped_count,
             server_statistics->tcp_output_size_total,
             server_statistics->tcp_undefined_count,
+#if SHOW_REFERRAL
+            server_statistics->tcp_referrals_count,
+#endif
             
             server_statistics->tcp_axfr_count,            
             server_statistics->tcp_ixfr_count,

@@ -55,8 +55,7 @@
 #include "dnscore/config_settings.h"
 #include "dnscore/config_file_reader.h"
 #include "dnscore/chroot.h"
-#include "dnscore/buffer_input_stream.h"
-#include "dnscore/treeset.h"
+#include "dnscore/ptr_set.h"
 #include "dnscore/host_address.h"
 
 extern logger_handle *g_system_logger;
@@ -67,8 +66,8 @@ extern logger_handle *g_system_logger;
  * Used for extensions (ie: ACL)
  */
 
-static treeset_tree config_section_struct_type_handler_set = TREESET_PTR_EMPTY;
-static treeset_tree on_section_read_callback_set = TREESET_ASCIIZ_EMPTY;
+static ptr_set config_section_struct_type_handler_set = PTR_SET_PTR_EMPTY;
+static ptr_set on_section_read_callback_set = PTR_SET_ASCIIZ_EMPTY;
 
 /**
  * These two union are used to store functions ptrs as void* in the collections
@@ -133,9 +132,9 @@ typedef union code_data_ptr code_data_ptr;
 ya_result
 config_add_on_section_read_callback(const char *section_name, config_callback_function *on_section_read)
 {
-    treeset_node *node = treeset_avl_insert(&on_section_read_callback_set, (char*)section_name);
+    ptr_node *node = ptr_set_avl_insert(&on_section_read_callback_set, (char*)section_name);
     
-    if(node->data != NULL)
+    if(node->value != NULL)
     {
         return CONFIG_SECTION_CALLBACK_ALREADY_SET; // already exists
     }
@@ -144,7 +143,7 @@ config_add_on_section_read_callback(const char *section_name, config_callback_fu
     
     code_data_ptr ptr = {.function = on_section_read};
     
-    node->data = ptr.data;
+    node->value = ptr.data;
     
     return SUCCESS;
 }
@@ -157,20 +156,20 @@ config_remove_on_section_read_callback(const char *section_name, config_callback
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
     
-    treeset_node *node = treeset_avl_find(&on_section_read_callback_set, section_name);
+    ptr_node *node = ptr_set_avl_find(&on_section_read_callback_set, section_name);
     
     if(node != NULL)
     {
         code_data_ptr ptr = {.function = on_section_read};
 
-        if(node->data != ptr.data)
+        if(node->value != ptr.data)
         {
             return CONFIG_SECTION_CALLBACK_NOT_FOUND; // not the right one
         }
 
         free(node->key);
 
-        treeset_avl_delete(&on_section_read_callback_set, section_name);
+        ptr_set_avl_delete(&on_section_read_callback_set, section_name);
         
         return SUCCESS;
     }
@@ -185,11 +184,11 @@ config_fire_on_section_read_callback(const char *section_name, int index)
 {
     ya_result return_code = SUCCESS;
     
-    treeset_node *node = treeset_avl_find(&on_section_read_callback_set, section_name);
+    ptr_node *node = ptr_set_avl_find(&on_section_read_callback_set, section_name);
     
     if(node != NULL)
     {
-        code_data_ptr ptr = {.data = node->data};
+        code_data_ptr ptr = {.data = node->value};
         config_callback_function *on_section_read = ptr.function;
         
         if(on_section_read != NULL)
@@ -865,8 +864,25 @@ config_set_dnstype(const char *value, u16 *dest, anytype notused)
 
 
 
+
 ya_result
 config_set_enum_value(const char *value, u32 *dest, anytype enum_value_name_table)
+{
+    ya_result return_code;
+    u32 integer_value;
+
+    value_name_table *table = (value_name_table*)enum_value_name_table._voidp;
+
+    if(ISOK(return_code = get_value_from_casename(table, value, &integer_value)))
+    {
+        *dest = integer_value;
+    }
+
+    return return_code;
+}
+
+ya_result
+config_set_enum8_value(const char *value, u8 *dest, anytype enum_value_name_table)
 {
     ya_result return_code;
     u32 integer_value;
@@ -1128,9 +1144,10 @@ config_set_host_list(const char *value, host_address **dest, anytype settings)
             
         host_address *address;
         
-        MALLOC_OR_DIE(host_address*, address, sizeof(host_address), HOSTADDR_TAG);
-
-        address->next = NULL;
+        //MALLOC_OR_DIE(host_address*, address, sizeof(host_address), HOSTADDR_TAG);
+        //address->next = NULL;
+        address = host_address_alloc(); // sets version=0, next = NULL, tsig = NULL
+        
 #if DNSCORE_HAS_TSIG_SUPPORT
         address->tsig = tsig;
 #endif
@@ -1772,13 +1789,13 @@ config_section_struct_register_type_handler(config_set_field_function *setter, c
     config_set_field_function_as_voidp key;
     key.setter = setter;
     
-    treeset_node *node  = treeset_avl_insert(&config_section_struct_type_handler_set, key.ptr);
-    if(node->data == NULL)
+    ptr_node *node  = ptr_set_avl_insert(&config_section_struct_type_handler_set, key.ptr);
+    if(node->value == NULL)
     {
         config_section_struct_type_handler_as_voidp value;
         value.handler = handler;
     
-        node->data = value.ptr;
+        node->value = value.ptr;
         return TRUE;
     }
     else
@@ -1994,6 +2011,25 @@ config_section_struct_print(const config_section_descriptor_s *section_descripto
                     tbl++;
                 }
             }
+            else if(table->setter == (config_set_field_function*)config_set_enum8_value)
+            {
+                u8 *v = (u8*)ptr;
+                
+                value_name_table* tbl = table->function_specific._voidp;
+                
+                value = "?";
+                
+                while(tbl->data != NULL)
+                {
+                    if(tbl->id == *v)
+                    {
+                        value = tbl->data;
+                        break;
+                    }
+                    
+                    tbl++;
+                }
+            }
             else if(table->setter == (config_set_field_function*)config_set_bytes)
             {
                 u8 *v = (u8*)ptr;
@@ -2019,12 +2055,12 @@ config_section_struct_print(const config_section_descriptor_s *section_descripto
                 config_set_field_function_as_voidp key;
                 key.setter = table->setter;
     
-                treeset_node *node = treeset_avl_find(&config_section_struct_type_handler_set, key.ptr);
+                ptr_node *node = ptr_set_avl_find(&config_section_struct_type_handler_set, key.ptr);
                 
                 if(node != NULL)
                 {   
                     config_section_struct_type_handler_as_voidp alias_value;
-                    alias_value.ptr = node->data;
+                    alias_value.ptr = node->value;
                     config_section_struct_type_handler *type_handler = alias_value.handler;
                     already = type_handler(os, table->name, ptr);
                     value = NULL;
@@ -2164,6 +2200,9 @@ config_section_struct_free(const config_section_descriptor_s *section_descriptor
             else if(table->setter == (config_set_field_function*)config_set_enum_value)
             {
             }
+            else if(table->setter == (config_set_field_function*)config_set_enum8_value)
+            {
+            }
             else if(table->setter == (config_set_field_function*)config_set_bytes)
             {
             }
@@ -2172,12 +2211,12 @@ config_section_struct_free(const config_section_descriptor_s *section_descriptor
                 config_set_field_function_as_voidp key;
                 key.setter = table->setter;
     
-                treeset_node *node = treeset_avl_find(&config_section_struct_type_handler_set, key.ptr);
+                ptr_node *node = ptr_set_avl_find(&config_section_struct_type_handler_set, key.ptr);
                 
                 if(node != NULL)
                 {   
                     //config_section_struct_type_handler_as_voidp alias_value;
-                    //alias_value.ptr = node->data;
+                    //alias_value.ptr = node->value;
                     //config_section_struct_type_handler *type_handler = alias_value.handler;
                     //value = NULL;
                 }
@@ -2384,15 +2423,15 @@ config_finalise()
     
     u32_set_avl_destroy(&section_descriptor_set);
     
-    treeset_avl_iterator iter2;
-    treeset_avl_iterator_init(&on_section_read_callback_set, &iter2);
-    while(treeset_avl_iterator_hasnext(&iter2))
+    ptr_set_avl_iterator iter2;
+    ptr_set_avl_iterator_init(&on_section_read_callback_set, &iter2);
+    while(ptr_set_avl_iterator_hasnext(&iter2))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter2);
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter2);
         free(node->key);
     }
     
-    treeset_avl_destroy(&on_section_read_callback_set);
+    ptr_set_avl_destroy(&on_section_read_callback_set);
     
     return SUCCESS;
 }

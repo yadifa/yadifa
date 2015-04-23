@@ -36,10 +36,8 @@
  *  @brief
  *
  *
- *
- * @{
- *
  *----------------------------------------------------------------------------*/
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -48,11 +46,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#include "dnscore-config.h"
 #include "dnscore/rfc.h"
 #include "dnscore/ctrl-rfc.h"
 #include "dnscore/format.h"
-#include "dnscore/dnsname.h"
 #include "dnscore/base32hex.h"
 #include "dnscore/dnsformat.h"
 #include "dnscore/host_address.h"
@@ -666,6 +662,8 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                 txt = TYPE_NTFAUTO_NAME;
                 break;
 #endif
+
+/// @todo 20150219 gve -- HAS_CTRL is the correct if statement and not 1, must be changed before release
 #if 1 // HAS_CTRL
             case TYPE_CTRL_SRVCFGRELOAD:
                 len = 9;
@@ -678,6 +676,10 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
             case TYPE_CTRL_SRVSHUTDOWN:
                 len = 8;
                 txt = TYPE_CTRL_SHUTDOWN_NAME;
+                break;
+            case TYPE_CTRL_SRVQUERYLOG:
+                len = 8;
+                txt = TYPE_CTRL_SRVQUERYLOG_NAME;
                 break;
             case TYPE_CTRL_ZONECFGRELOAD:
                 len = 13;
@@ -707,7 +709,14 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                 len = 11;
                 txt = TYPE_CTRL_ZONEUNFREEZEALL_NAME;
                 break;
-#endif
+            case TYPE_CTRL_ZONESYNC:
+                 len = 4;
+                 txt = TYPE_CTRL_ZONESYNC_NAME;
+                 break;
+
+
+
+#endif // 1 HAS_CTRL
             default:
                 output_stream_write(stream, (u8 *)"TYPE", 4); /* rfc 3597 */
                 format_dec_u64((u64) ntohs(*typep), stream, 0, ' ', TRUE);
@@ -1088,14 +1097,8 @@ dnsrr_format_handler_method(const void * restrict val, output_stream *stream, s3
         return;
     }
     
-    if(rr->name != NULL)
-    {
-        dnsname_format_handler_method(rr->name, stream, padding, pad_char, left_justified, reserved_for_method_parameters);
-    }
-    else
-    {
-        output_stream_write(stream,(const u8*)"*** NULL NAME ***", 17);
-    }
+    dnsname_format_handler_method(rr->name, stream, padding, pad_char, left_justified, reserved_for_method_parameters);
+
     output_stream_write_u8(stream, (u8)pad_char);
     dnstype_format_handler_method(&rr->tctr.qtype, stream, padding, pad_char, left_justified, reserved_for_method_parameters);
     output_stream_write_u8(stream, (u8)pad_char);
@@ -1145,8 +1148,6 @@ dnsformat_class_init()
     format_registerclass(&recordwire_format_handler_descriptor);
     format_registerclass(&dnsrr_format_handler_descriptor);
 }
-
-/** @} */
 
 /*----------------------------------------------------------------------------*/
 

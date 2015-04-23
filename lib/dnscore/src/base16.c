@@ -35,11 +35,9 @@
  *  @ingroup dnscore
  *  @brief Base 16 codec
  *
- * @{
- *
  *----------------------------------------------------------------------------*/
+
 #include <stdio.h>
-#include <stdlib.h>
 
 #include "dnscore/sys_types.h"
 
@@ -69,7 +67,7 @@ base16_encode(const u8* buffer_in, u32 size_in, char* buffer_out)
 
         *buffer_out++ = __BASE16__[c >> 4];
         *buffer_out++ = __BASE16__[c & 0x0f];
-        
+
         size_in--;
     }
 
@@ -152,8 +150,6 @@ base16_decode(const char* buffer_in, u32 size_in, u8* buffer_out)
 
     return (out - buffer_out);
 }
-
-/** @} */
 
 /*----------------------------------------------------------------------------*/
 

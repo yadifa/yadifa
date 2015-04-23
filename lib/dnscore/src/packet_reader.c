@@ -45,9 +45,9 @@
 #include <arpa/inet.h>
 #include <ctype.h>
 
-#include "dnscore-config.h"
+#include "dnscore/dnscore-config.h"
 #include "dnscore/packet_reader.h"
-#include "dnscore/rfc.h"
+//#include "dnscore/rfc.h"
 #include "dnscore/tsig.h"
 
 #if HAS_CTRL

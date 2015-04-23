@@ -68,6 +68,8 @@
 
 #define MODULE_MSG_HANDLE g_server_logger
 
+#define DBUPSIGP_TAG 0x5047495350554244
+
 extern logger_handle *g_server_logger;
 extern zone_data_set database_zone_desc;
 
@@ -98,7 +100,7 @@ struct database_service_zone_resignature_parms_s
 typedef struct database_service_zone_resignature_parms_s database_service_zone_resignature_parms_s;
 
 static ya_result
-database_service_zone_resignature_alarm(void *args_)
+database_service_zone_resignature_alarm(void *args_, bool cancel)
 {
     database_service_zone_resignature_alarm_s *args = (database_service_zone_resignature_alarm_s*)args_;
     
@@ -112,16 +114,32 @@ database_service_zone_resignature_alarm(void *args_)
     //   store signatures
     //   loop until a quota has been reached
     
-    database_zone_update_signatures(args->zone_desc->origin, args->zone_desc, args->zone);
+    if(!cancel)
+    {
+        database_zone_update_signatures(args->zone_desc->origin, args->zone_desc, args->zone);
+    }
     
+    zdb_zone_release(args->zone);
+    zone_release(args->zone_desc);
+#ifdef DEBUG
+    memset(args, 0xff, sizeof(database_service_zone_resignature_alarm_s));
+#endif
     free(args);
     
     return SUCCESS; // could return anything but ALARM_REARM
 }
 
+/**
+ * Arms the trigger for the next resignature of the zone.
+ * 
+ * @param zone_desc
+ * @param zone
+ * @return 
+ */
+
 static ya_result
 database_service_zone_resignature_arm(zone_desc_s *zone_desc, zdb_zone *zone)
-{
+{   
     if(zone_desc->signature.scheduled_sig_invalid_first >= zone_desc->signature.sig_invalid_first)
     {
         u32 now = time(NULL);
@@ -134,7 +152,9 @@ database_service_zone_resignature_arm(zone_desc_s *zone_desc, zdb_zone *zone)
 
         database_service_zone_resignature_alarm_s *args;
         MALLOC_OR_DIE(database_service_zone_resignature_alarm_s*, args, sizeof(database_service_zone_resignature_alarm_s), DBUPSIGP_TAG);
+        zone_acquire(zone_desc);
         args->zone_desc = zone_desc;
+        zdb_zone_acquire(zone);
         args->zone = zone;
 
         /*
@@ -229,6 +249,60 @@ database_service_zone_resignature_init_callback(zdb_zone_process_label_callback_
     return ZDB_ZONE_PROCESS_CONTINUE;
 }
 
+
+static ya_result
+database_service_nsec3_zone_resignature_init_callback(zdb_zone_process_label_callback_parms *parms)
+{
+    struct database_service_zone_resignature_init_callback_s *args = (struct database_service_zone_resignature_init_callback_s*)parms->args;
+    
+    database_service_zone_resignature_init_callback(parms);
+
+    if(parms->rr_label != NULL && parms->rr_label->nsec.dnssec != NULL)
+    {
+        nsec3_node *item =  parms->rr_label->nsec.nsec3->self;
+        
+        if(item != NULL)
+        {
+            zdb_packed_ttlrdata *rrsig_rrset = item->rrsig;
+
+            if(rrsig_rrset != NULL)
+            {
+                do
+                {
+                    u32 expires_on = RRSIG_VALID_UNTIL(rrsig_rrset);
+                    u32 valid_from = RRSIG_VALID_SINCE(rrsig_rrset);
+#ifdef DEBUG                    
+                    u16 type_covered = RRSIG_TYPE_COVERED(rrsig_rrset);
+#endif
+                    u32 validity_period = 0;
+
+                    if(valid_from <= expires_on)
+                    {
+                        validity_period = expires_on - valid_from;
+                    }
+            
+                    yassert(type_covered == TYPE_NSEC3);
+
+                    args->total_signature_valitity_time += validity_period;
+                    args->signature_count++;
+                    args->earliest_expiration_epoch = MIN(args->earliest_expiration_epoch, expires_on);
+                    args->smallest_validity_period = MIN(args->smallest_validity_period, validity_period);
+                    args->biggest_validity_period = MAX(args->biggest_validity_period, validity_period);
+
+                    rrsig_rrset = rrsig_rrset->next;
+                }
+                while(rrsig_rrset != NULL);
+            }
+            else
+            {
+                args->missing_signatures_count++;
+            }
+        }
+    }
+
+    return ZDB_ZONE_PROCESS_CONTINUE;
+}
+
 ya_result
 database_service_zone_resignature_init(zone_desc_s *zone_desc, zdb_zone *zone)
 {
@@ -247,8 +321,17 @@ database_service_zone_resignature_init(zone_desc_s *zone_desc, zdb_zone *zone)
     args.smallest_validity_period = MAX_U32;
     args.biggest_validity_period = 0;
     
-    ya_result return_code = zdb_zone_process_all_labels_from_zone(zone, database_service_zone_resignature_init_callback, &args);
-   
+    ya_result return_code;
+    
+    if(zdb_zone_is_nsec3(zone))
+    {
+        return_code = zdb_zone_process_all_labels_from_zone(zone, database_service_nsec3_zone_resignature_init_callback, &args);
+    }
+    else
+    {
+        return_code = zdb_zone_process_all_labels_from_zone(zone, database_service_zone_resignature_init_callback, &args);
+    }
+    
     u64 now = timeus();
     
     elapsed = now - elapsed;
@@ -285,7 +368,14 @@ database_service_zone_resignature_init(zone_desc_s *zone_desc, zdb_zone *zone)
     {
         zone_desc->signature.scheduled_sig_invalid_first = MAX_S32;
         
-        return_code = database_service_zone_resignature_arm(zone_desc, zone);
+        if(zone_maintains_dnssec(zone_desc))
+        {
+            return_code = database_service_zone_resignature_arm(zone_desc, zone);
+        }
+        else
+        {
+            log_debug("%{dnsname}: signatures: DNSSEC maintenance is disabled on zone, no signature will be made", zone_desc->origin);
+        }
     }
     
     return return_code;
@@ -324,6 +414,17 @@ database_service_zone_resignature_thread(void *parms_)
     
     yassert(zone_desc != NULL);
     
+    if(!zone_maintains_dnssec(zone_desc))
+    {
+        log_warn("zone sign: %{dnsname} resignature triggered although the feature was explicitely disabled : ignoring request.", zone_desc->origin);
+        
+        zone_unlock(zone_desc, ZONE_LOCK_SIGNATURE);
+        
+        database_service_zone_resignature_parms_free(parms);
+        zone_release(zone_desc);
+        return NULL;
+    }
+    
     zone_lock(zone_desc, ZONE_LOCK_SIGNATURE);
     
     const u32 must_be_off = ZONE_STATUS_LOAD | ZONE_STATUS_LOADING | \
@@ -338,7 +439,7 @@ database_service_zone_resignature_thread(void *parms_)
     
     if((zone_desc->status_flags & must_be_off) != 0)
     {
-        log_err("zone sign: conflicting status: %08x instead of 0", (zone_desc->status_flags & must_be_off));
+        log_err("zone sign: %{dnsname} conflicting status: %08x instead of 0", zone_desc->origin, (zone_desc->status_flags & must_be_off));
     
         zone_unlock(zone_desc, ZONE_LOCK_SIGNATURE);
         
@@ -351,7 +452,7 @@ database_service_zone_resignature_thread(void *parms_)
         
     // do a bunch of signatures
 
-    zdb_zone *zone = zone_desc->loaded_zone;
+    zdb_zone *zone = zone_get_loaded_zone(zone_desc);
     
     // should have a starting point, cylcing trough the nodes
     // that way there will be no increasingly long scans
@@ -383,8 +484,12 @@ database_service_zone_resignature_thread(void *parms_)
     }
     else                        // let's just restart this asap
     {
+        zone_desc->status_flags |= ZONE_STATUS_MODIFIED;
+        
         return_code = database_service_zone_resignature_arm(zone_desc, zone);
     }
+    
+    zdb_zone_release(zone);
     
     // release
     
@@ -393,7 +498,7 @@ database_service_zone_resignature_thread(void *parms_)
     database_service_zone_resignature_parms_free(parms);
     
     zone_unlock(zone_desc, ZONE_LOCK_SIGNATURE);
-    zone_acquire(zone_desc);
+    zone_release(zone_desc);
     
     return NULL;
 }
@@ -403,7 +508,13 @@ database_service_zone_resignature(zone_desc_s *zone_desc) // one thread for all 
 {
     yassert(zone_desc != NULL);
     
-    log_debug1("database_serviec_zone_resignature(%{dnsname}@%p=%i)", zone_desc->origin, zone_desc, zone_desc->rc);
+    log_debug1("database_service_zone_resignature(%{dnsname}@%p=%i)", zone_desc->origin, zone_desc, zone_desc->rc);
+    
+    if(!zone_maintains_dnssec(zone_desc))
+    {
+        log_debug1("database_service_zone_resignature: %{dnsname} has signature maintenance disabled", zone_desc->origin);
+        return ERROR;
+    }
     
     log_debug1("database_service_zone_resignature: locking zone '%{dnsname}' for signing", zone_desc->origin);
     

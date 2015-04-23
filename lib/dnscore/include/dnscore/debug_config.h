@@ -58,13 +58,6 @@ extern "C"
  * Recommended value: 0
  *
  */
-
-#define ZDB_DEBUG_MALLOC 0
-    
-#ifndef DEBUG
-#undef ZDB_DEBUG_MALLOC
-#define ZDB_DEBUG_MALLOC 0
-#endif
     
 /**
  * Freed memory is trashed
@@ -92,7 +85,7 @@ extern "C"
  * Recommended value: 256
  */
 
-#define ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE 256
+#define ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE 8192
 
 /**
  *
@@ -142,6 +135,8 @@ extern "C"
 /**
  * DEBUG: measure timings on open/close/...
  */
+    
+#define ZDB_DEBUG_KEEP_STACKTRACE 1
     
 #define DEBUG_BENCH_FD 1
 #ifndef DEBUG

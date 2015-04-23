@@ -1,0 +1,212 @@
+'\" t
+.\" Manual page created with latex2man on Tue Apr 28 11:08:37 CEST 2015
+.\" NOTE: This file is generated, DO NOT EDIT.
+.de Vb
+.ft CW
+.nf
+..
+.de Ve
+.ft R
+
+.fi
+..
+.TH "YADIFA\-RC" "5" "2015\-04\-24" "YADIFA " "YADIFA "
+.SH NAME
+
+.PP
+yadifa.rc
+is the configuration file for \fIyadifa\fP(8)\&.
+.PP
+.SH SYNOPSIS
+
+.PP
+${HOME}/.yadifa.rc 
+.PP
+.SH DESCRIPTION
+
+.PP
+The configuration of yadifa
+has several containers: 
+.PP
+.TP
+\fB<yadifa>\fP
+ General container 
+.TP
+\fB<key>\fP
+ TSIG keys 
+.PP
+The configuration supports included files.
+.br
+example: include /home/yadifa/yadifa\-keys.conf 
+.PP
+The configuration files can be nested. 
+.PP
+The configuration consists of: 
+.PP
+.TP
+.B *
+Container, which starts with <container name> and ends with </container name> 
+.TP
+.B *
+Variable name 
+.TP
+.B *
+1 or 2 arguments 
+.TP
+.B *
+Arguments can contain 1 or more comma separated values. 
+.PP
+eg. 
+.PP
+.Vb
+<container>
+        # variable  argument
+        variable    value1  
+
+        # variable  argument1       argument2
+        variable    value1          value2
+
+        # variable  argument1
+        variable    value1,value2
+</container>
+.Ve
+.PP
+.SH EXAMPLES
+
+.PP
+Examples of containers defined for a configuration file. 
+.PP
+.TP
+.B *
+YADIFA, General 
+.RS
+.TP
+1.
+Config with Key 
+.RS
+.PP
+.Vb
+# start .yadifa.rc
+<yadifa>
+	server        "192.0.2.1 port 53"
+	tsig\-key\-name Admin\-key
+</yadifa>
+
+# end .yadifa.rc
+.Ve
+.PP
+.RE
+.RE
+.PP
+.RE
+.TP
+.B *
+KEY, TSIG\-key configuration
+.br 
+.PP
+.RS
+.TP
+1.
+Admin\-key key definition (the name is arbitrary) 
+.Vb
+<key>
+        name        Admin\-key
+        algorithm   hmac\-md5
+        secret      WorthlessKeyForExample==
+</key>
+.Ve
+.RE
+.RS
+.PP
+.RE
+.PP
+.SH FILES
+
+.PP
+.RE
+.TP
+yadifa
+ The name server remote client. 
+.TP
+$HOME/.yadifa.rc
+ default rcfile. 
+.PP
+.TP
+yadifa.rc.5
+ This man page. 
+.TP
+yadifa.8
+ Man page for yadifa\&.
+.PP
+.SH SEE ALSO
+
+.PP
+\fIyadifa\fP(8)
+.PP
+.SH NOTES
+
+.PP
+Since unquoted leading whitespace is generally ignored in the \&.yadifa.rc
+you can indent everything to taste. 
+.PP
+.SH CHANGES
+
+.PP
+Please check the file README
+from the sources. 
+.PP
+.SH VERSION
+
+.PP
+Version: 2.1.0 of 2015-04-24\&.
+.PP
+.SH MAILING LISTS
+
+.PP
+There exists a mailinglist for questions relating to any program in the yadifa package:
+.br
+.TP
+.B *
+\fByadifa\-users@mailinglists.yadifa.eu\fP
+.br
+for submitting questions/answers. 
+.PP
+.TP
+.B *
+\fBhttp://www.yadifa.eu/mailing\-list\-users\fP
+.br
+for subscription requests. 
+.PP
+If you would like to stay informed about new versions and official patches send a subscription request to 
+via: 
+.TP
+.B *
+\fBhttp://www.yadifa.eu/mailing\-list\-announcements\fP
+.PP
+(this is a readonly list). 
+.PP
+.SH LICENSE AND COPYRIGHT
+
+.PP
+.TP
+Copyright 
+(C)2012\-2015, EURid
+.br
+B\-1831 Diegem, Belgium
+.br
+\fBinfo@yadifa.eu\fP
+.PP
+.SH AUTHORS
+
+.PP
+Gery Van Emelen 
+.br
+Email: \fBGery.VanEmelen@EURid.eu\fP
+.br
+Eric Diaz Fernandez 
+.br
+Email: \fBEric.DiazFernandez@EURid.eu\fP
+.PP
+WWW: \fBhttp://www.EURid.eu\fP
+.PP
+.\" NOTE: This file is generated, DO NOT EDIT.

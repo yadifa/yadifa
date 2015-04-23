@@ -38,10 +38,15 @@ ACLOCAL_AMFLAGS = -I m4
 
 dist_noinst_DATA = VERSION
 
+I=include/dnslg
+FEATURESFILE=dnslg-config-features.h
+FEATURES=$(I)/$(FEATURESFILE)
+
 lib_LTLIBRARIES= libdnslg.la
 
-pkginclude_HEADERS = include/dnslg/config-resolver.h include/dnslg/resolv.h include/dnslg/dns.h include/dnslg/resolv-conf.h include/dnslg/config-load.h
+pkginclude_HEADERS = $(FEATURES) include/dnslg/config-resolver.h include/dnslg/resolv.h include/dnslg/dns.h include/dnslg/resolv-conf.h include/dnslg/config-load.h
 
+# NOTE: the first one on this list must always be the one used to trigger $(FEATURES)
 libdnslg_la_SOURCES = src/config-resolver.c src/resolv.c src/dns.c src/resolv-conf.c src/config-load.c
 
 libdnslg_la_LDFLAGS = -version-info 2:0:0
@@ -49,3 +54,30 @@ libdnslg_la_LDFLAGS = -version-info 2:0:0
 include ../../mk/common-settings.mk
 
 include ../../mk/common-labels.mk
+
+all: REVISION
+
+REVISION:
+	(svn info 2>/dev/null;if [ $? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
+
+src/config-resolver.c: $(FEATURES)
+
+$(FEATURES): config.log REVISION VERSION
+	echo "#pragma once" > $(FEATURES)
+VP=DNSLG
+	which printf > /dev/null 2>&1
+	if [ $$? -eq 0 ];then \
+		printf '// version %i.%i.%i.%i-%i\n' $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/') 0 $$(cat REVISION) >> $(FEATURES) ; \
+		printf '#define $(VP)_VERSION 0x%02x%02x%02x%02x%04xLL' $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/') 0 $$(cat REVISION) >> $(FEATURES) ; \
+	else \
+		echo "#define $(VP)_VERSION_(vmain_,vsub_,vminor_,vpatch_,vrevision_) ((vmain_)<<40)|((vsub_)<<32)|((vminor_)<<24)|((vpatch_)<<16)|(vrevision_)" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VMAIN_ $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1')" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VSUB_ $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\2')" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VMINOR_ $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\3')" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VPATCH_ 0 >> $(FEATURES)" ; \
+		echo "#define $(VP)_VERSION_VREVISION_ $$(cat REVISION)" >> $(FEATURES) ; \
+		echo '#define $(VP)_VERSION $(VP)_VERSION_($(VP)_VERSION_VMAIN_,$(VP)_VERSION_VSUB_,$(VP)_VERSION_VMINOR_,$(VP)_VERSION_VPATCH_,$(VP)_VERSION_VREVISION_)' >> $(FEATURES) ; \
+	fi
+	echo "// $(FEATURES)" >> $(FEATURES)
+	echo >> $(FEATURES)
+

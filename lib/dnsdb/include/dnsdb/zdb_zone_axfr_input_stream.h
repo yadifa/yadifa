@@ -51,12 +51,28 @@
 extern "C" {
 #endif
 
-/*
- * opens the file on disk and starts to stream it until it has been marked as fully written
- * used to send to slaves
+/**
+ * Opens the specified file as an AXFR image for the given zone.
+ * Will fail if the file cannot be opened.
+ * 
+ * @param is
+ * @param zone
+ * @param filepath
+ * @return 
  */
     
-ya_result zdb_zone_axfr_input_stream_open(input_stream *is, zdb_zone *zone, const char *directory);
+ya_result zdb_zone_axfr_input_stream_open_with_path(input_stream *is, zdb_zone *zone, const char *filepath);
+    
+/**
+ * Opens the file on disk and starts to stream it until it has been marked as fully written
+ * Used to send to slaves.
+ * 
+ * @param is
+ * @param zone
+ * @return 
+ */
+    
+ya_result zdb_zone_axfr_input_stream_open(input_stream *is, zdb_zone *zone);
 
 #ifdef __cplusplus
 }

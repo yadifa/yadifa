@@ -811,7 +811,7 @@ rrsig_update_records(rrsig_context_s *context, dnssec_key* key, zdb_packed_ttlrd
 
     context->sig_invalid_first = MIN(until, context->sig_invalid_first);
 
-    if(/*do_update &&*/ !type_signed)
+    if(do_update && !type_signed)
     {
         if(until < now + context->sig_validity_regeneration_seconds)
         {
@@ -1190,7 +1190,7 @@ rrsig_update_label(rrsig_context_s *context, zdb_rr_label* label)
 
                 ya_result return_code;
 
-                if(FAIL(return_code = rrsig_update_records(context, key, rr_sll, type, type != TYPE_SOA/*TRUE*/)))
+                if(FAIL(return_code = rrsig_update_records(context, key, rr_sll, type, type != TYPE_SOA)))
                 {
                     return return_code;
                 }
@@ -1397,6 +1397,8 @@ rrsig_update_commit(zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata*
 
             alarm_set(zone->alarm_handle, event);
         }
+#else
+
 #endif
 
         /**/

@@ -45,20 +45,23 @@
  * @{
  */
 
-#ifndef _ZALLOC_H
-#define	_ZALLOC_H
+#pragma once
 
 #include <pthread.h>
+#include <dnscore/dnscore-config-features.h>
+#include <dnscore/config_settings.h>
 #include <dnscore/sys_types.h>
-#include <dnsdb/zdb_config.h>
-#include <dnsdb/zdb_error.h>
 #include <dnscore/debug.h>
 
 #ifdef	__cplusplus
 extern "C" {
 #endif
 
-#if ZDB_USES_ZALLOC==0
+#ifndef DNSCORE_HAS_ZALLOC_SUPPORT
+#error "DNSCORE_HAS_ZALLOC_SUPPORT should be set to 1 or 0"
+#endif
+        
+#if !DNSCORE_HAS_ZALLOC_SUPPORT
 
 /* 8 bytes aligned */
 #define ZALLOC_OR_DIE(cast,label,object,tag) MALLOC_OR_DIE(cast,label,sizeof(object),tag)
@@ -81,7 +84,7 @@ extern "C" {
 #else
 
 /**
- * ZDB_ALLOC_PG_SIZE_COUNT tells how many memory sizes are supported, with 8 bytes increments.
+ * ZALLOC_PG_SIZE_COUNT tells how many memory sizes are supported, with 8 bytes increments.
  * Setting this up involves some computation and bigger numbers may lead to unmanagable amounts of memory.
  * The current setting (256 = 2K) should be enough for most structures.
  * Exceptions like message_data should be on stack or mallocated any maybe in a pool too.
@@ -92,18 +95,18 @@ extern "C" {
  * 
  */
    
-#define ZDB_ALLOC_PG_SIZE_COUNT         256 // 2K
-#define ZDB_ALLOC_PG_PAGEABLE_MAXSIZE   (ZDB_ALLOC_PG_SIZE_COUNT * 8) /* x 8 because we are going by 8 increments */
-#define ZDB_MALLOC_SIZE_TO_PAGE(size_)  ((s32)(((size_)-1)>>3))
-#define ZDB_ALLOC_CANHANDLE(size_)      ((s32)((size_)<=ZDB_ALLOC_PG_PAGEABLE_MAXSIZE))
+#define ZALLOC_PG_SIZE_COUNT         256 // 2K
+#define ZALLOC_PG_PAGEABLE_MAXSIZE   (ZALLOC_PG_SIZE_COUNT * 8) /* x 8 because we are going by 8 increments */
+#define ZALLOC_SIZE_TO_PAGE(size_)  ((s32)(((size_)-1)>>3))
+#define ZALLOC_CANHANDLE(size_)      (((s32)(size_))<=ZALLOC_PG_PAGEABLE_MAXSIZE)
 
-// prepares the zdb_alloc tables
+// prepares the zalloc tables
     
-int zdb_alloc_init();
+int zalloc_init();
 
 // actually does nothing, just there for symmetry
 
-void zdb_alloc_finalise();
+void zalloc_finalise();
     
 /**
  * @brief Allocates one slot in a memory set
@@ -117,7 +120,7 @@ void zdb_alloc_finalise();
  * @return a pointer to the allocated memory
  */
 
-void* zdb_malloc(u32 page_index);
+void* zalloc_line(u32 page_index);
 
 /**
  * @brief Frees one slot in a memory set
@@ -131,33 +134,30 @@ void* zdb_malloc(u32 page_index);
  *
  */
 
-void zdb_mfree(void* ptr, u32 page_index);
+void zfree_line(void* ptr, u32 page_index);
 
 /**
  * DEBUG
  */
 
-u64 zdb_mheap(u32 page);
-u64 zdb_mavail(u32 page);
+u64 zheap_line_total(u32 page);
+u64 zheap_line_avail(u32 page);
 
-#ifndef _ZALLOC_C
-extern pthread_t zalloc_owner;
-#endif
+/**
+ * zalloc_set_owner_thread made sense when it was not thread-safe.
+ * Now this does nothing
+ */
 
-void zdb_set_zowner(pthread_t owner);
+static inline void zalloc_set_owner_thread(pthread_t owner) {(void)owner;}
 
 static inline void* zalloc(s32 size)
 {
-#if ZDB_ZALLOC_THREAD_SAFE == 0
-    yassert(pthread_self() == zalloc_owner);
-#endif
-
-    u32 page = ZDB_MALLOC_SIZE_TO_PAGE(size);
+    u32 page = ZALLOC_SIZE_TO_PAGE(size);
     void* ptr;
 
-    if(page < ZDB_ALLOC_PG_SIZE_COUNT)
+    if(page < ZALLOC_PG_SIZE_COUNT)
     {
-        ptr = zdb_malloc(ZDB_MALLOC_SIZE_TO_PAGE(size));
+        ptr = zalloc_line(ZALLOC_SIZE_TO_PAGE(size));
     }
     else
     {
@@ -169,15 +169,11 @@ static inline void* zalloc(s32 size)
 
 static inline void zfree(void* ptr, s32 size)
 {
-#if ZDB_ZALLOC_THREAD_SAFE == 0
-    yassert(pthread_self() == zalloc_owner);
-#endif
-    
-    u32 page = ZDB_MALLOC_SIZE_TO_PAGE(size);
+    u32 page = ZALLOC_SIZE_TO_PAGE(size);
 
-    if(page < ZDB_ALLOC_PG_SIZE_COUNT)
+    if(page < ZALLOC_PG_SIZE_COUNT)
     {
-        zdb_mfree(ptr,ZDB_MALLOC_SIZE_TO_PAGE(size));
+        zfree_line(ptr,ZALLOC_SIZE_TO_PAGE(size));
     }
     else
     {
@@ -185,46 +181,49 @@ static inline void zfree(void* ptr, s32 size)
     }
 }
 
-#if ZDB_ZALLOC_STATISTICS!=0
-u64 zdb_mused();
-#else
-#define zdb_mused() 0
-#endif
+/**
+ * 
+ * Only works if --enable-zalloc-statistics has been set with ./configure
+ * 
+ * @return the number of bytes allocated in the zalloc memory system, or -1 if the statistics are not enabled
+ */
+
+s64 zallocatedtotal();
 
 /**
- * @brief Allocates unaligned memory of an arbitrary size using zdb_malloc and malloc
+ * @brief Allocates unaligned memory of an arbitrary size using zalloc_line and malloc
  *
- * Allocates unaligned memory of an arbitrary size using zdb_malloc and malloc
+ * Allocates unaligned memory of an arbitrary size using zalloc_line and malloc
  *
  * @param[in] size the size to allocated
  *
  * @return a pointer to the allocated memory
  */
 
-void* zdb_malloc_unaligned(u32 size);
+void* zalloc_unaligned(u32 size);
 
 /**
- * @brief Frees unaligned memory of an arbitrary size using zdb_mfree and free
+ * @brief Frees unaligned memory of an arbitrary size using zfree_line and free
  *
- * Allocates unaligned memory of an arbitrary size using zdb_malloc and malloc
+ * Allocates unaligned memory of an arbitrary size using zalloc_line and malloc
  *
  * @param[in] ptr a pointer to the memory to free
  *
  */
 
-void zdb_mfree_unaligned(void* ptr);
+void zfree_unaligned(void* ptr);
 
-#define ZALLOC_STRING_OR_DIE(cast,label,size,tag) label=(cast)zdb_malloc_unaligned(size)
-#define ZFREE_STRING(label) zdb_mfree_unaligned(label)
+#define ZALLOC_STRING_OR_DIE(cast,label,size,tag) label=(cast)zalloc_unaligned(size)
+#define ZFREE_STRING(label) zfree_unaligned(label)
 
 /* 
  * THIS SHOULD BE OPTIMIZED BY THE COMPILER AS ONE AND ONLY ONE CALL
  */
 
-#define ZALLOC(object) ((((sizeof(object) + 7) >> 3)-1) < ZDB_ALLOC_PG_SIZE_COUNT)?zdb_malloc(((sizeof(object) + 7) >> 3)-1):malloc(sizeof(object))
-#define ZFREE(ptr,object) ((((sizeof(object) + 7) >> 3)-1) < ZDB_ALLOC_PG_SIZE_COUNT)?zdb_mfree(ptr,(((sizeof(object) + 7) >> 3)-1)):free(ptr)
-#define ZALLOC_OR_DIE(cast,label,object,tag) if((label=(cast)ZALLOC(object))==NULL) {DIE(ZDB_ERROR_OUTOFMEMORY); }
-#define ZALLOC_ARRAY_OR_DIE(cast,label,size_,tag) if((label = (cast)zalloc(size_)) == NULL) {DIE(ZDB_ERROR_OUTOFMEMORY); }
+#define ZALLOC(object) ((((sizeof(object) + 7) >> 3)-1) < ZALLOC_PG_SIZE_COUNT)?zalloc_line(((sizeof(object) + 7) >> 3)-1):malloc(sizeof(object))
+#define ZFREE(ptr,object) ((((sizeof(object) + 7) >> 3)-1) < ZALLOC_PG_SIZE_COUNT)?zfree_line(ptr,(((sizeof(object) + 7) >> 3)-1)):free(ptr)
+#define ZALLOC_OR_DIE(cast,label,object,tag) if((label=(cast)ZALLOC(object))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); }
+#define ZALLOC_ARRAY_OR_DIE(cast,label,size_,tag) if((label = (cast)zalloc(size_)) == NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); }
 #define ZFREE_ARRAY(ptr,size_) zfree(ptr,size_)
 
 /**
@@ -244,26 +243,25 @@ void zdb_mfree_unaligned(void* ptr);
 
 #define ZALLOC_ARRAY_RESIZE(type_,array_,count_,newcount_)			\
 {										\
-    int zalloc_new_count = (u32)(newcount_);						\
-    if(((u32)(count_)) != zalloc_new_count)						\
-    {										\
-	if( ZDB_MALLOC_SIZE_TO_PAGE(sizeof(type_)*((u32)(count_))) !=                  \
-	    ZDB_MALLOC_SIZE_TO_PAGE(sizeof(type_)*zalloc_new_count))		\
+    u32 zalloc_new_count = (u32)(newcount_);					\
+    if(((u32)(count_)) != zalloc_new_count)			                \
+    {							                        \
+	if( ZALLOC_SIZE_TO_PAGE(sizeof(type_)*((u32)(count_))) !=               \
+	    ZALLOC_SIZE_TO_PAGE(sizeof(type_)*zalloc_new_count))		\
 	{									\
 	    type_* __tmp__;							\
 										\
 	    if(zalloc_new_count > 0)						\
 	    {									\
-		ZALLOC_ARRAY_OR_DIE(type_*,__tmp__,sizeof(type_)*zalloc_new_count, \
-				    ZALLOC_ARRAY_RESIZE_TAG);			\
-		MEMCOPY(__tmp__,(array_),sizeof(type_)*MIN(((u32)(count_)),zalloc_new_count));	\
+		ZALLOC_ARRAY_OR_DIE(type_*,__tmp__,sizeof(type_)*zalloc_new_count, ZALLOC_ARRAY_RESIZE_TAG); \
+		MEMCOPY(__tmp__,(array_),sizeof(type_)*MIN((u32)(count_),zalloc_new_count)); \
 	    }									\
 	    else								\
 	    {									\
 		__tmp__ = NULL;							\
 	    }									\
 										\
-	    ZFREE_ARRAY((array_),sizeof(type_)*((u32)(count_)));			\
+	    ZFREE_ARRAY((array_),sizeof(type_)*((u32)(count_)));		\
 	    array_ = __tmp__;							\
 	    count_ = newcount_;							\
 	}									\
@@ -272,15 +270,11 @@ void zdb_mfree_unaligned(void* ptr);
 
 #endif
 
-#if ZDB_ZALLOC_STATISTICS
 struct output_stream;
-void zdb_alloc_print_stats(struct output_stream *os);
-#endif
+void zalloc_print_stats(struct output_stream *os);
 
 #ifdef	__cplusplus
 }
 #endif
-
-#endif	/* _ZALLOC_H */
 
 /** @} */

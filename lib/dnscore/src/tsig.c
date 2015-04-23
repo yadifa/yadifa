@@ -41,7 +41,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "dnscore-config.h"
+#include "dnscore/dnscore-config.h"
 
 #include "dnscore/message.h" // DO NOT REMOVE ME
 #include "dnscore/tsig.h"
@@ -698,7 +698,7 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
 
             mesg->tsig.error = NU16(RCODE_BADKEY);
             mesg->status = FP_TSIG_BROKEN;
-            return TSIG_BADKEY;
+            return TSIG_BADKEY; // format error reading the key name
         }
 
         u8 alg = tsig_get_algorithm(algorithm);
@@ -709,7 +709,7 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
 
             mesg->tsig.error = NU16(RCODE_BADKEY);
             mesg->status = FP_TSIG_ERROR;
-            return TSIG_BADKEY;
+            return TSIG_BADKEY; // mismatched algorithm
         }
 
         /*
@@ -1501,9 +1501,10 @@ tsig_verify_tcp_last_message(struct message_data *mesg)
     log_debug("tsig_verify_tcp_last_message: message: (%p)", mesg);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->received, 32);
 #endif
-
-
-    HMAC_CTX_cleanup(&mesg->tsig.ctx);
+    if(mesg->tsig.tsig != NULL)
+    {
+        HMAC_CTX_cleanup(&mesg->tsig.ctx);
+    }
 }
 
 

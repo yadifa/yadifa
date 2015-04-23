@@ -38,7 +38,7 @@
 
 #define __DNSCORE_C__
 
-#include "dnscore-config.h"
+#include "dnscore/dnscore-config.h"
 
 #if HAS_PTHREAD_SETNAME_NP
 #ifdef DEBUG
@@ -52,6 +52,8 @@
 #include <signal.h>
 
 #include <pthread.h>
+
+#include "dnscore/zalloc.h"
 
 #include "dnscore/message.h"
 
@@ -87,7 +89,7 @@
 /*****************************************************************************/
 
 #if DNSCORE_HAS_TSIG_SUPPORT
-#if !HAS_ACL_SUPPORT
+#if !DNSCORE_HAS_ACL_SUPPORT
 #error "TSIG support is irrelevant without ACL support"
 #endif
 #endif
@@ -189,11 +191,11 @@ stdstream_init()
     output_stream tmp;
     output_stream tmp2;
 
-    fd_output_stream_attach(1, &tmp);
+    fd_output_stream_attach(&tmp, 1);
     buffer_output_stream_init(&tmp, &tmp2, TERM_BUFFER_SIZE);
     mt_output_stream_init(&tmp2, &__termout__);
 
-    fd_output_stream_attach(2, &tmp);
+    fd_output_stream_attach(&tmp, 2);
     buffer_output_stream_init(&tmp, &tmp2, TERM_BUFFER_SIZE);
     mt_output_stream_init(&tmp2, &__termerr__);
 }
@@ -279,6 +281,12 @@ dnscore_timer_thread(void * unused0)
         /* log & term output flush handling */
         stdstream_flush_both_terms();
 
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+        mutex_locked_set_monitor();
+        group_mutex_locked_set_monitor();
+        shared_group_mutex_locked_set_monitor();
+#endif
+        
         logger_flush();
 
         dnscore_timer_tick = time(NULL);
@@ -336,7 +344,16 @@ dnscore_init()
     {
         return;
     }
-
+    
+#if DNSCORE_HAS_ZALLOC_SUPPORT
+    zalloc_init();
+#endif
+    
+    output_stream_set_void(&__termout__);
+    output_stream_set_void(&__termerr__);
+    
+    stdstream_init();
+    
     dnscore_init_done = TRUE;
     dnscore_arch_checkup();
     
@@ -363,7 +380,6 @@ dnscore_init()
     
     format_class_init();
     dnsformat_class_init();
-    stdstream_init();
     logger_init();
 
     dnscore_register_errors();
@@ -415,7 +431,14 @@ dnscore_stop_timer()
     else
     {
 #ifdef DEBUG
-        log_debug("timer owned by %d (0 meaning stopped already), not touching it (I'm %d)", dnscore_timer_creator_pid, mypid);
+        if(dnscore_timer_creator_pid != 0)
+        {
+            log_debug("timer owned by %d, not touching it (I'm %d)", dnscore_timer_creator_pid, mypid);
+        }
+        else
+        {
+            log_debug("timer stopped already (I'm %d)", mypid);
+        }
 #endif
     }
     
@@ -521,14 +544,10 @@ dnscore_finalize()
      *  this will flush them.
      */
 
-     thread_pool_destroy_random_ctx();
+    thread_pool_destroy_random_ctx();
     
-#if ZDB_DEBUG_MALLOC != 0
-    debug_stat(TRUE);
-#endif
-
     stdstream_flush_both_terms();
-    
+        
 #if DNSCORE_HAS_TSIG_SUPPORT
     tsig_finalize();
 #endif
@@ -536,10 +555,37 @@ dnscore_finalize()
     error_unregister_all();
     rfc_finalize();
     format_class_finalize();
+    
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
+    debug_stat(TRUE);
+    zalloc_print_stats(&__termout__);
+#endif
+    
+    stdstream_flush_both_terms();
+    
 #endif // DNSCORE_TIDY_UP_MEMORY
-        
+    
     output_stream_close(&__termerr__);
     output_stream_close(&__termout__);
+    
+    debug_stacktrace_clear();
+}
+
+static void
+dnscore_signature_check_one(const char* name, int should, int is)
+{
+    if(is != should)
+    {
+        printf("critical: dnscore: '%s' should be of size %i but is of size %i\n", name, is, should);
+        fflush(stdout);
+        abort();
+    }
+}
+
+void dnscore_signature_check(int so_mutex_t, int so_group_mutex_t)
+{
+    dnscore_signature_check_one("mutex_t", sizeof(mutex_t), so_mutex_t);
+    dnscore_signature_check_one("group_mutex_t", sizeof(group_mutex_t), so_group_mutex_t);
 }
 
 /** @} */

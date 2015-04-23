@@ -67,8 +67,6 @@
 #define DNSKEY_FLAGS_ZSK 0x0001 // NATIVE
 #endif
 
-
-
 /*
  * Extract fields from a packed record
  *
@@ -111,6 +109,7 @@ union dnssec_key_key_types
     void* any;
     RSA* rsa;
     DSA* dsa;
+
 };
 
 typedef union dnssec_key_key_types dnssec_key_key_types;
@@ -249,7 +248,18 @@ static inline u8 ds_get_digesttype_from_rdata(const u8 *rdata)
 
 /// tool function
 
-ya_result dnskey_write_bignum_as_base64(FILE *f_, BIGNUM* num_, u8 *tmp_in_, u32 tmp_in_size, char *tmp_out_, u32 tmp_out_size);
+/**
+ * 
+ * @param f_ output file
+ * @param num_ the number to write
+ * @param tmp_in_ temporary buffer
+ * @param tmp_in_size temporary buffer size
+ * @param tmp_out_ output buffer
+ * @param tmp_out_size output buffer size
+ * @return 
+ */
+
+ya_result dnskey_write_bignum_as_base64(FILE *f_, const BIGNUM* num_, u8 *tmp_in_, u32 tmp_in_size, char *tmp_out_, u32 tmp_out_size);
 
 
 #ifdef	__cplusplus

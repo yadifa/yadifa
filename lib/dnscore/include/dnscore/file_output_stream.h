@@ -58,7 +58,7 @@ ya_result file_output_stream_open_ex(const char *filename,int flags, mode_t mode
 
 ya_result file_output_stream_create(const char *filename,mode_t mode, output_stream *stream);
 
-ya_result fd_output_stream_attach(int fd, output_stream *stream);
+ya_result fd_output_stream_attach(output_stream *stream, int fd);
 
 void      fd_output_stream_detach(output_stream *stream_);
 
@@ -67,6 +67,8 @@ ya_result fd_output_stream_get_filedescriptor(output_stream *stream);
 s64       fd_output_stream_get_size(output_stream *stream);
 
 bool      is_fd_output_stream(output_stream *stream);
+
+void      file_output_steam_advise_sequential(output_stream* stream);
 
 #ifdef	__cplusplus
 }

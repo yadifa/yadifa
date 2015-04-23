@@ -36,11 +36,9 @@
  *  @ingroup dnscore
  *  @brief Base 64 codec
  *
- * @{
- *
  *----------------------------------------------------------------------------*/
+
 #include <stdio.h>
-#include <stdlib.h>
 
 #include "dnscore/base64.h"
 
@@ -267,8 +265,6 @@ base64_decode(const char* buffer_in, u32 size_in, u8* buffer_out)
 
     return out - buffer_out;
 }
-
-/** @} */
 
 /*----------------------------------------------------------------------------*/
 

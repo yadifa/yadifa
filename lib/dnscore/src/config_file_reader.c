@@ -39,18 +39,14 @@
 
 #include "dnscore/logger.h"
 #include "dnscore/file_input_stream.h"
-#include "dnscore/bytearray_output_stream.h"
 
 #include "dnscore/typebitmap.h"
-#include "dnscore/base16.h"
-#include "dnscore/base32hex.h"
-#include "dnscore/base64.h"
-
-//#include <dnszone/dnszone.h>
 
 #include "dnscore/config_settings.h"
 
 #define CONFIG_FILE_READER_INCLUDE_DEPTH_MAX 4
+
+#define CFREADER_TAG 0x5245444145524641
 
 extern logger_handle *g_zone_logger;
 #define MODULE_MSG_HANDLE g_zone_logger
@@ -437,7 +433,7 @@ config_file_reader_parse_stream(const char* stream_name, input_stream *ins, conf
     
     // allocates and initialises a config file reader structure
     
-    MALLOC_OR_DIE(config_file_reader*, cfr, sizeof(config_file_reader), ZFREADER_TAG);
+    MALLOC_OR_DIE(config_file_reader*, cfr, sizeof(config_file_reader), CFREADER_TAG);
 
     ZEROMEMORY(cfr, sizeof (config_file_reader));
     
@@ -483,10 +479,10 @@ config_file_reader_parse_stream(const char* stream_name, input_stream *ins, conf
         
         // the csd describes the section we want to parse
         
-       cfr->section_descriptor = csd;
+        cfr->section_descriptor = csd;
        
-       // the config file reader structure is now ready : parse the stream
-       // parsing will setup fields described by the config section descriptor
+        // the config file reader structure is now ready : parse the stream
+        // parsing will setup fields described by the config section descriptor
         
         if(FAIL(return_code = config_file_reader_read(cfr)))
         {

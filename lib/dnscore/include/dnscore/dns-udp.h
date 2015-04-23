@@ -116,8 +116,8 @@ struct dns_simple_message_s
     message_data *answer;   // answer, can be shared
     
     dns_simple_message_async_node_s async_node;
-    volatile u64 sent_time_us;
-    volatile u64 received_time_us;
+    volatile s64 sent_time_us;
+    volatile s64 received_time_us;
     
     smp_int rc; // number of references for this message
     mutex_t mtx;

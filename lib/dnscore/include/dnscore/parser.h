@@ -60,8 +60,8 @@ typedef struct parser_delimiter_s parser_delimiter_s;
 #define PARSER_CHAR_TYPE_ESCAPE_CHARACTER        1
 #define PARSER_CHAR_TYPE_COMMENT_MARKER          2
 #define PARSER_CHAR_TYPE_STRING_DELIMITER        3
-#define PARSER_CHAR_TYPE_MULTILINE_DELIMITER     4 // TODO : handle closer here too
-#define PARSER_CHAR_TYPE_MULTILINE_DELIMITER_END 5 // TODO : handle closer here too
+#define PARSER_CHAR_TYPE_MULTILINE_DELIMITER     4
+#define PARSER_CHAR_TYPE_MULTILINE_DELIMITER_END 5
 #define PARSER_CHAR_TYPE_BLANK_MARKER            6
 #define PARSER_CHAR_TYPE_EOL                     7
 

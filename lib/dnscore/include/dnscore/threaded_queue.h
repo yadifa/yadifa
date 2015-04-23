@@ -47,10 +47,11 @@
  * Four implementations of the threaded queue can be used ...
  */
 
-#define THEADED_QUEUE_RINGLIST      1
-#define THEADED_QUEUE_RINGBUFFER    2
-#define THEADED_QUEUE_RINGBUFFER_CW 3
-#define THEADED_QUEUE_NBRB          4
+#define THREADED_QUEUE_RINGLIST      1
+#define THREADED_QUEUE_RINGBUFFER    2
+#define THREADED_QUEUE_RINGBUFFER_CW 3
+#define THREADED_QUEUE_NBRB          4
+#define THREADED_QUEUE_DLL_CW        5
 /*
 typedef void  threaded_queue_init_method(threaded_queue *queue, int max_size);
 typedef void  threaded_queue_finalize_method(threaded_queue *queue);
@@ -87,9 +88,14 @@ struct threaded_queue_wrapper
     void *data;
 };
 */
-#define THREADED_QUEUE_MODE THEADED_QUEUE_RINGBUFFER_CW
 
-#if THREADED_QUEUE_MODE == THEADED_QUEUE_RINGLIST
+#ifndef THREADED_QUEUE_MODE
+#define THREADED_QUEUE_MODE THREADED_QUEUE_RINGBUFFER_CW
+#else
+// THREADED_QUEUE_MODE should be set globally
+#endif
+
+#if THREADED_QUEUE_MODE == THREADED_QUEUE_RINGLIST
 #define THREADED_QUEUE ringlist
 #include <dnscore/threaded_ringlist.h>
 
@@ -113,7 +119,7 @@ typedef struct threaded_ringlist threaded_queue;
  */
 #define threaded_queue_set_maxsize(queue_, max_size_) threaded_ringlist_set_maxsize((queue_), (max_size_))
 
-#elif THREADED_QUEUE_MODE == THEADED_QUEUE_RINGBUFFER
+#elif THREADED_QUEUE_MODE == THREADED_QUEUE_RINGBUFFER
 #define THREADED_QUEUE ringbuffer
 #include <dnscore/threaded_ringbuffer.h>
 
@@ -137,7 +143,7 @@ typedef struct threaded_ringbuffer threaded_queue;
  */
 #define threaded_queue_set_maxsize(queue_, max_size_) threaded_ringbuffer_set_maxsize((queue_), (max_size_))
 
-#elif THREADED_QUEUE_MODE == THEADED_QUEUE_RINGBUFFER_CW
+#elif THREADED_QUEUE_MODE == THREADED_QUEUE_RINGBUFFER_CW
 
 #define THREADED_QUEUE ringbuffer_cw
 #include <dnscore/threaded_ringbuffer_cw.h>
@@ -164,7 +170,7 @@ typedef struct threaded_ringbuffer_cw threaded_queue;
  */
 #define threaded_queue_set_maxsize(queue_, max_size_) threaded_ringbuffer_cw_set_maxsize((queue_), (max_size_))
 
-#elif THREADED_QUEUE_MODE == THEADED_QUEUE_NBRB
+#elif THREADED_QUEUE_MODE == THREADED_QUEUE_NBRB
 
 #define THREADED_QUEUE nbrb
 #include <dnscore/threaded_nbrb.h>
@@ -190,6 +196,33 @@ typedef struct threaded_nbrb threaded_queue;
  * the content is emptied by the readers.
  */
 #define threaded_queue_set_maxsize(queue_, max_size_) threaded_nbrb_set_maxsize((queue_), (max_size_))
+
+#elif THREADED_QUEUE_MODE == THREADED_QUEUE_DLL_CW
+
+#define THREADED_QUEUE dll_cw
+#include <dnscore/threaded_dll_cw.h>
+
+typedef struct threaded_dll_cw threaded_queue;
+
+#define THREADED_QUEUE_NULL THREADED_SLL_CW_NULL
+
+#define threaded_queue_init(queue_,max_size_) threaded_dll_cw_init((queue_),(max_size_))
+#define threaded_queue_finalize(queue_) threaded_dll_cw_finalize((queue_))
+#define threaded_queue_enqueue(queue_,constant_pointer_) threaded_dll_cw_enqueue((queue_),(constant_pointer_))
+#define threaded_queue_try_enqueue(queue_,constant_pointer_) threaded_dll_cw_try_enqueue((queue_),(constant_pointer_))
+#define threaded_queue_peek(queue_) threaded_dll_cw_peek((queue_))
+#define threaded_queue_try_peek(queue_) threaded_dll_cw_try_peek((queue_))
+#define threaded_queue_dequeue(queue_) threaded_dll_cw_dequeue((queue_))
+#define threaded_queue_try_dequeue(queue_) threaded_dll_cw_try_dequeue((queue_))
+#define threaded_queue_dequeue_set(queue_, array_, size_) threaded_dll_cw_dequeue_set((queue_),(array_),(size_))
+#define threaded_queue_wait_empty(queue_) threaded_dll_cw_wait_empty((queue_))
+#define threaded_queue_size(queue_) threaded_dll_cw_size((queue_))
+/*
+ * The queue will block (write) if bigger than this.
+ * Note that if the key is already bigger it will blocked (write) until
+ * the content is emptied by the readers.
+ */
+#define threaded_queue_set_maxsize(queue_, max_size_) threaded_dll_cw_set_maxsize((queue_), (max_size_))
 
 #else
 

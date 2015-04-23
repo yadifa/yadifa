@@ -29,6 +29,11 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  *------------------------------------------------------------------------------
+ *
+ * File:   avl.h.inc
+ * Author: ericdf
+ *
+ * Created on June 5, 2009, 12:07 PM
  */
 
 #ifndef _AVL_H_INC

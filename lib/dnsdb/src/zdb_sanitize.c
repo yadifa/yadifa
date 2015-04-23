@@ -674,7 +674,7 @@ zdb_sanitize_rr_label_with_parent(zdb_zone *zone, zdb_rr_label *label, dnsname_s
     zdb_sanitize_parms_init(&parms, zone);
     zdb_sanitize_parms_update_keys(&parms);
     
-    ya_result return_code;
+    ya_result return_code = SUCCESS;
     
     /*
      * the parent is at name.size-1
@@ -693,10 +693,16 @@ zdb_sanitize_rr_label_with_parent(zdb_zone *zone, zdb_rr_label *label, dnsname_s
         
         zdb_rr_label *parent_label = zdb_rr_label_stack_find(zone->apex, name->labels, name->size-1, zone->origin_vector.size + 1);
         
-        label_stack[0] = NULL;
-        label_stack[1] = parent_label;
-        
-        return_code =  zdb_sanitize_rr_label_ext(&parms, label, name, parent_label->flags, &label_stack[1]);
+        if(parent_label != NULL)
+        {
+            label_stack[0] = NULL;
+            label_stack[1] = parent_label;
+
+            return_code =  zdb_sanitize_rr_label_ext(&parms, label, name, parent_label->flags, &label_stack[1]);
+        }
+#if DEBUG
+        zdb_rr_label_stack_find(zone->apex, name->labels, name->size-1, zone->origin_vector.size + 1);
+#endif
     }
     else
     {

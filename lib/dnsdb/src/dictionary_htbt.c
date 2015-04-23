@@ -322,7 +322,7 @@ dictionary_htbt_process(dictionary* dico, hashcode key, void* record_match_data,
                     htbt_delete(dico->ct.htbt_collection, key);
                 }
 
-                /* fall trough ... retorn op */
+                /* fall trough ... return op */
             }
 
             default:

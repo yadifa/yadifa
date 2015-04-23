@@ -118,39 +118,9 @@ extern "C"
  *
  */
 
-#if 0 /* fix */
-#else
-#define ZDB_CACHE_ENABLED 0
+#ifndef ZDB_HAS_RRCACHE_ENABLED
+#error "ZDB_HAS_RRCACHE_ENABLED has not been defined"
 #endif
-
-/**
- * Enables (1) or disables (0) the specialized memory allocator.
- *
- * It is faster and uses less memory than malloc : RECOMMENDED
- *
- * Recommended value: 1
- */
-#define ZDB_USES_ZALLOC         1
-    
-#define ZDB_ZALLOC_THREAD_SAFE  1
-
-/**
- * Debugging with ZALLOC enabled can be difficult.  This flag disables ZALLOC on debug builds.
- */
-       
-#if defined(DEBUG)
-#undef ZDB_USES_ZALLOC
-#define ZDB_USES_ZALLOC 0
-#endif
-
-/**
- *
- * Keeps some ZALLOC memory usage information.
- *
- * Recommended value: 0
- */
-
-#define ZDB_ZALLOC_STATISTICS 0
 
 /**
  * DEBUG: Ensures that the memory allocated by ZALLOC is trashed.
@@ -174,6 +144,8 @@ extern "C"
 #define ZDB_HASHTABLE_THRESHOLD 500000
 
 /**
+ * 
+ * @todo edf 20141006 -- this is becoming obsolete
  *
  * Number of classes [1..n] to support.
  * Set to 1 to support only the IN class

@@ -60,6 +60,8 @@
  *  @retval NOK
  */
 
+#define ZDB_JOURNAL_CODE 1
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -75,12 +77,12 @@
 #include <dnscore/serial.h>
 #include <dnscore/dns_resource_record.h>
 #include <dnscore/format.h>
-#include <dnscore/xfr_copy.h>
 #include <dnscore/fdtools.h>
 
 #include "dnsdb/zdb_error.h"
 #include "dnsdb/zdb_utils.h"
 #include "dnsdb/journal.h"
+#include "dnsdb/xfr_copy.h"
 
 #define JOURNAL_FORMAT_NAME "ix"
 #define VERSION_HI 0
@@ -195,8 +197,6 @@ struct journal_ix
     volatile zdb_zone            *zone;    
     volatile struct journal      *next;
     volatile struct journal      *prev;
-    
-    volatile u32                    rc;
     volatile bool                  mru;
     
     /* ******************************* */
@@ -357,7 +357,7 @@ journal_ix_append_ixfr_stream(journal *jh, input_stream *ixfr_wire_is)
     u8 mode = 0; /* 0: del, 1: add */
     
     output_stream fos;    
-    fd_output_stream_attach(jix->fd, &fos);
+    fd_output_stream_attach(&fos, jix->fd);
     output_stream bos;
     buffer_output_stream_init(&fos, &bos, 512);
     
@@ -634,7 +634,7 @@ journal_ix_get_ixfr_stream_at_serial(journal *jh, u32 serial_from, input_stream 
     jix = NULL;  
     
     input_stream fis;
-    fd_input_stream_attach(cloned_fd, &fis);
+    fd_input_stream_attach(&fis, cloned_fd);
     
     if(last_soa_rr != NULL)
     {
@@ -802,7 +802,7 @@ journal_ix_get_ixfr_stream_at_serial(journal *jh, u32 serial_from, input_stream 
         // offset is the start of the page we are looking for
         if(lseek(cloned_fd, offset, SEEK_SET) >= 0)
         {
-            fd_input_stream_attach(cloned_fd, &fis);
+            fd_input_stream_attach(&fis, cloned_fd);
             limited_input_stream_init(&fis, out_input_stream, file_size - offset);
         }
         else
@@ -951,7 +951,7 @@ journal_ix_close(journal *jh)
 }
 
 static void
-journal_ix_log_dump_method(journal *jh)
+journal_ix_log_dump(journal *jh)
 {
     journal_ix *jix = (journal_ix*)jh;
 
@@ -965,15 +965,44 @@ journal_ix_log_dump_method(journal *jh)
         origin = (const u8*)"\012NOT-LINKED";
     }
 
-    log_debug("domain='%{dnsname}' rc=%i mru=%i file='%s' fd=%i range=%u:%u lpo=%llu",
+    log_debug("domain='%{dnsname}' mru=%i file='%s' fd=%i range=%u:%u lpo=%llu",
                 origin,
-                jix->rc,
                 (jix->mru)?1:0,
                 STRNULL(jix->journal_name),
                 jix->fd,
                 jix->first_serial,
                 jix->last_serial,
                 jix->last_page_offset);
+}
+
+static ya_result
+journal_ix_get_domain(journal *jh, u8 *out_domain)
+{
+    if(jh->zone != NULL)
+    {   
+        dnsname_copy(out_domain, jh->zone->origin);
+        return SUCCESS;
+    }
+    
+    return ERROR;
+}
+
+static void
+journal_ix_destroy(journal *jh)
+{
+    free(jh);
+}
+
+static void
+journal_ix_link_zone(journal *jh, zdb_zone *zone)
+{
+    yassert(jh->zone == NULL);
+    yassert(zone->journal == NULL);
+    journal_ix *jix = (journal_ix*)jh;
+    journal_ix_writelock(jix);
+    jix->zone = zone;
+    zone->journal = jh;
+    journal_ix_writeunlock(jix);
 }
 
 struct journal_vtbl journal_ix_vtbl =
@@ -988,10 +1017,14 @@ struct journal_vtbl journal_ix_vtbl =
     journal_ix_get_serial_range,
     journal_ix_truncate_to_size,
     journal_ix_truncate_to_serial,
-    journal_ix_log_dump_method,
-    
+    journal_ix_log_dump,
+    journal_ix_get_domain,
+    journal_ix_destroy,
+    journal_ix_link_zone,
     JOURNAL_CLASS_NAME
 };
+
+static mutex_t journal_ix_mtx = MUTEX_INITIALIZER;
 
 static void
 journal_ix_writelock(journal_ix *jix)
@@ -1002,22 +1035,19 @@ journal_ix_writelock(journal_ix *jix)
 
     for(;;)
     {
-        journal_lock();
+        mutex_lock(&journal_ix_mtx);
 
         u8 f = jix->flags;
         
         if(f == LOCK_NONE)              // nobody has the lock
         {
             jix->flags = LOCK_WRITE;    // so one writer can
-            /*
-            assert(jix->rc == 0);            
-            jix->rc = 1;
-            */
-            journal_unlock();
+
+            mutex_unlock(&journal_ix_mtx);
             break;
         }
 
-        journal_unlock();
+        mutex_unlock(&journal_ix_mtx);
 
         usleep(1000);
     }
@@ -1035,13 +1065,13 @@ journal_ix_writeunlock(journal_ix *jix)
     log_debug("journal_ix_writeunlock: unlocking");
 #endif
 
-    journal_lock();
+    mutex_lock(&journal_ix_mtx);
     
     if(jix->flags == LOCK_WRITE)    // the writer has the lock (hopefully this one)
     {
         jix->flags = LOCK_NONE;     // so we can unlock
         
-        journal_unlock();
+        mutex_unlock(&journal_ix_mtx);
     
 #if DEBUG_JOURNAL != 0
         log_debug("journal_ix_writeunlock: unlocked");
@@ -1052,7 +1082,7 @@ journal_ix_writeunlock(journal_ix *jix)
         // bug
         log_err("journal: ix: write-unlock non-writer");
         
-        journal_unlock();
+        mutex_unlock(&journal_ix_mtx);
         return;
     }
 }
@@ -1065,7 +1095,7 @@ journal_ix_readlock(journal_ix *jix)
     */
     for(;;)
     {
-        journal_lock();
+        mutex_lock(&journal_ix_mtx);
 
         u8 f = jix->flags;
 
@@ -1073,11 +1103,11 @@ journal_ix_readlock(journal_ix *jix)
         {
             jix->flags = LOCK_READ;
             jix->read_lock_count++;     // count the readers
-            journal_unlock();
+            mutex_unlock(&journal_ix_mtx);
             break;
         }
 
-        journal_unlock();
+        mutex_unlock(&journal_ix_mtx);
 
         usleep(1000);
     }
@@ -1086,7 +1116,7 @@ journal_ix_readlock(journal_ix *jix)
 static void
 journal_ix_readunlock(journal_ix *jix)
 {
-    journal_lock();
+    mutex_lock(&journal_ix_mtx);
     
     if(jix->flags == LOCK_READ)     // a reader has the lock
     {
@@ -1095,11 +1125,11 @@ journal_ix_readunlock(journal_ix *jix)
             jix->flags = LOCK_NONE; // if there are no readers anymore, nobody has the lock
         }
         
-        journal_unlock();
+        mutex_unlock(&journal_ix_mtx);
     }
     else   
     {
-        journal_unlock();
+        mutex_unlock(&journal_ix_mtx);
         
         // bug
         log_err("journal: ix: read-unlock non-reader");
@@ -1253,7 +1283,7 @@ journal_ix_open(journal **jh, const u8* origin, const char *workingdir, bool cre
             input_stream fis;
             input_stream bis;
             
-            if(ISOK(return_value = fd_input_stream_attach(jix->fd, &fis)))
+            if(ISOK(return_value = fd_input_stream_attach(&fis, jix->fd)))
             {
                 buffer_input_stream_init(&fis, &bis, BUFFER_INPUT_STREAM_DEFAULT_BUFFER_SIZE);
                 s64 soa_offset = journal_ix_find_last_soa_record(&bis);

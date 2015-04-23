@@ -61,6 +61,8 @@ extern logger_handle *g_server_logger;
 #include "signals.h"
 #include "acl.h"
 
+
+
 #include "ctrl.h"
 #include "ctrl_zone.h"
 
@@ -70,11 +72,43 @@ extern logger_handle *g_server_logger;
 
 #include "notify.h"
 
-#if HAS_CTRL
+#ifdef HAS_CTRL
 
 extern zone_data_set database_zone_desc;
 
+// CH fqdn TXT command
+// freeze zone
+// unfreeze zone
+// reload zone
+// load zone
+// drop zone
+
+/**
+ * The q&d model used types for control.
+ *
+ * Do we want a script model ? A loop could make sense but I don't see a real practical use yet.
+ *
+ * for $z in (a,b,c,d){load $z}
+ * if(whatever) {notify hostname}
+ *
+ * Do we want optional encryption ? (This may be interesting).
+ *
+ * ie: one may want to send a command with a TSIG through an unsafe network.
+ *
+ * If we use TXT we can simply have:
+ *
+ * script. TXT load this;foreach(a,b,c,d){drop $};if(whateverstatus){reload whatever}
+ * key. TXT mycbckeyname
+ *
+ *
+ */
+
+
+
+
+
 /*****************************************************************************/
+
 
 static ya_result
 ctrl_query_parse_no_parameters(packet_unpack_reader_data *pr)
@@ -157,6 +191,70 @@ ctrl_query_parse_fqdn_class_view(packet_unpack_reader_data *pr, u8 *fqdn, u32 fq
         }
         
         return return_code;
+    }
+    else
+    {
+        if(cmd_tctr.rdlen == 0)
+        {
+            return 0; // nothing read
+        }
+        else
+        {
+            return ERROR; // not enough bytes
+        }
+    }
+}
+
+static ya_result
+ctrl_query_parse_byte_fqdn_class_view(packet_unpack_reader_data *pr, u8* one_byte, u8 *fqdn, u32 fqdn_size, u16 *rclass, char *view, u32 view_size)
+{
+    struct type_class_ttl_rdlen cmd_tctr;
+    packet_reader_skip_fqdn(pr);
+    packet_reader_read(pr, &cmd_tctr, 10);
+    cmd_tctr.rdlen = ntohs(cmd_tctr.rdlen);
+    
+    fqdn[0] = '\0';
+    *rclass = CLASS_IN;
+    view[0] = '\0';
+    
+    if(cmd_tctr.rdlen != 0)
+    {
+        ya_result return_code;
+        u32 from = pr->offset;
+        
+        if(ISOK(return_code = packet_reader_read(pr, one_byte, 1)))
+        {        
+            if(ISOK(return_code = packet_reader_read_fqdn(pr, fqdn, fqdn_size)))
+            {
+                cmd_tctr.rdlen -= pr->offset -from;
+
+                if(cmd_tctr.rdlen > 2)
+                {
+                    if(ISOK(return_code = packet_reader_read(pr, rclass, 2)))
+                    {
+                        cmd_tctr.rdlen -= 2;
+
+                        if(cmd_tctr.rdlen > 0)
+                        {
+                            u32 n = MIN(cmd_tctr.rdlen, view_size - 1);
+                            if(ISOK(return_code = packet_reader_read(pr, view, n)))
+                            {
+                                view[n] = '\0';
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    if(cmd_tctr.rdlen != 0)
+                    {
+                        return_code = ERROR; // the one forbidden value is 1 byte available
+                    }
+                }
+            }
+        }
+        
+        return pr->offset - from;
     }
     else
     {
@@ -328,9 +426,9 @@ ctrl_query_log_query_enable(message_data *mesg)
     packet_reader_skip(&pr, DNS_HEADER_LENGTH);
     packet_reader_skip_fqdn(&pr);
     packet_reader_read_u16(&pr, &cmd_type);
-    
+
     ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
-    
+
     u16 qc = ntohs(MESSAGE_QD(mesg->buffer));
     u16 pc = ntohs(MESSAGE_AN(mesg->buffer));
     u16 an = ntohs(MESSAGE_NS(mesg->buffer));
@@ -449,13 +547,13 @@ ctrl_query_zone_freeze_all(message_data *mesg)
     
     mesg->send_length = mesg->received;
     
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&database_zone_desc.set, &iter);
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&database_zone_desc.set, &iter);
 
-    while(treeset_avl_iterator_hasnext(&iter))
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
-        zone_desc_s *zone_desc = (zone_desc_s *)zone_node->data;
+        ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
+        zone_desc_s *zone_desc = (zone_desc_s *)zone_node->value;
 
         if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
         {
@@ -591,13 +689,13 @@ ctrl_query_zone_unfreeze_all(message_data *mesg)
     
     mesg->send_length = mesg->received;
     
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&database_zone_desc.set, &iter);
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&database_zone_desc.set, &iter);
 
-    while(treeset_avl_iterator_hasnext(&iter))
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
-        zone_desc_s *zone_desc = (zone_desc_s *)zone_node->data;
+        ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
+        zone_desc_s *zone_desc = (zone_desc_s *)zone_node->value;
 
         if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
         {
@@ -750,42 +848,34 @@ ctrl_query_zone_sync(message_data *mesg)
     {
         u8 clean;
         
-        if(ISOK(return_code = ctrl_query_parse_bytes(&pr, &clean, 1)))
+        if((return_code = ctrl_query_parse_byte_fqdn_class_view(&pr, &clean, fqdn, sizeof(fqdn), &rclass, view, sizeof(view))) > 0 )
         {
-            if(ISOK(return_code = ctrl_query_parse_fqdn_class_view(&pr, fqdn, sizeof(fqdn), &rclass, view, sizeof(view))))
+            log_info("ctrl: zone sync: clean=%hhu '%{dnsname}' %{dnsclass}", clean & 1, fqdn, &rclass);
+
+            zone_desc_s* zone_desc = zone_acquirebydnsname(fqdn);
+            tmp_status = RCODE_REFUSED;
+
+            if((zone_desc != NULL) && (rclass == zone_desc->qclass) && (view[0] == '\0'))
             {
-                log_info("ctrl: zone sync: clean=%hhu '%{dnsname}' %{dnsclass}", clean & 1, fqdn, &rclass);
-                
-                zone_desc_s* zone_desc = zone_acquirebydnsname(fqdn);
-                tmp_status = RCODE_REFUSED;
+                tmp_status = RCODE_NOTAUTH;
 
-                if((zone_desc != NULL) && (rclass == zone_desc->qclass) && (view[0] == '\0'))
+                if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
                 {
-                    tmp_status = RCODE_NOTAUTH;
+                    database_zone_save_ex(fqdn, (clean & 1) != 0);
 
-                    if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
-                    {
-                        if((clean & 1) != 0)
-                        {
-                            log_warn("ctrl: zone sync: clean feature not supported yet");
-                        }
-                        
-                        database_zone_save(fqdn);
-                        
-                        tmp_status = RCODE_NOERROR;
-                        mesg->send_length = mesg->received;
-                    }
-                    else
-                    {
-                        log_err("ctrl: zone sync: rejected by ACL");
-                    }
-
-                    zone_release(zone_desc);
+                    tmp_status = RCODE_NOERROR;
+                    mesg->send_length = mesg->received;
                 }
                 else
                 {
-                    log_err("ctrl: zone sync: zone '%{dnsname}' %{dnsclass} not found", fqdn, &rclass);
+                    log_err("ctrl: zone sync: rejected by ACL");
                 }
+
+                zone_release(zone_desc);
+            }
+            else
+            {
+                log_err("ctrl: zone sync: zone '%{dnsname}' %{dnsclass} not found", fqdn, &rclass);
             }
         }
     }
@@ -1110,6 +1200,10 @@ ctrl_query_process(message_data *mesg)
             break;
         }
         
+
+        
+
+
         default:
         {
             message_make_error(mesg, RCODE_NOTIMP); /* or do we drop ? */

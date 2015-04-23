@@ -94,6 +94,7 @@ u8
 resolver_time_get()
 {
 //    return config_resolver_settings.udp_time;
+    return 0;
 }
 
 
@@ -108,6 +109,7 @@ u8
 resolver_retry_get()
 {
  //   return config_resolver_settings.udp_retry;
+    return 0;
 }
 
 

@@ -448,7 +448,7 @@ dnskey_keyring_destroy(dnskey_keyring *ks)
 
 
 ya_result
-dnskey_write_bignum_as_base64(FILE *f_, BIGNUM* num_, u8 *tmp_in_, u32 tmp_in_size, char *tmp_out_, u32 tmp_out_size)
+dnskey_write_bignum_as_base64(FILE *f_, const BIGNUM* num_, u8 *tmp_in_, u32 tmp_in_size, char *tmp_out_, u32 tmp_out_size)
 {
     if(num_ == NULL)
     {

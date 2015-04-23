@@ -54,7 +54,7 @@
 
 #ifdef __linux__
 #ifdef __GNUC__
-#pragma message "linux + gnu: Enabling enhanced function address translation"
+// #pragma message "linux + gnu: Enabling enhanced function address translation"
 #define __USE_GNU
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -1713,6 +1713,16 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             }
 
             return SUCCESS;
+        }
+        case TYPE_CTRL_ZONERELOAD:
+        {
+            /* ONE NAME record */
+            if(rdata_size > 0)
+            {
+                osformat(os, "%{dnsname}", rdata_pointer);
+                return SUCCESS;
+            }
+            return INCORRECT_RDATA;
         }
         case TYPE_A6:
         case TYPE_AFSDB:

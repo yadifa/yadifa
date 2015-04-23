@@ -57,7 +57,7 @@ typedef enum
     XFR_ALLOW_BOTH=3,
     XFR_CURRENT_SERIAL_SET=4
 } xfr_copy_flags;
-    
+/*
 typedef struct xfr_copy_args xfr_copy_args;
 
 struct xfr_copy_args
@@ -71,7 +71,7 @@ struct xfr_copy_args
      
     xfr_copy_flags          flags;                      // what is allowed in the stream    
 };
-
+*/
 /**
  * 
  * The XFR input stream is meant to give record by record the payload of an XFR
@@ -82,7 +82,7 @@ struct xfr_copy_args
  * @return 
  */
 
-ya_result xfr_input_stream_init(xfr_copy_args* args, input_stream* out_xfr_input_stream);
+ya_result xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin, input_stream *xfr_source_stream, message_data *message, u32 current_serial, xfr_copy_flags flags);
 
 ya_result xfr_input_stream_get_type(input_stream* in_xfr_input_stream);
 

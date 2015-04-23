@@ -45,11 +45,10 @@
 #include <dnscore/dnsname.h>
 #include <dnscore/bytearray_output_stream.h>
 
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
 #include <dnscore/dnskey.h>
 #endif
 
-#include "dnsdb/journal.h"
 #include "dnsdb/zdb_zone.h"
 #include "dnsdb/zdb_zone_label.h"
 #include "dnsdb/zdb_rr_label.h"
@@ -57,21 +56,20 @@
 #include "dnsdb/zdb_icmtl.h"
 #include "dnsdb/zdb_sanitize.h"
 #include "dnsdb/zdb_utils.h"
-
 #include "dnsdb/zdb_zone_write.h"
-
 #include "dnsdb/zdb_zone_label_iterator.h"
+#include "dnsdb/zdb-zone-find.h"
 
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
 #include "dnsdb/dnssec_keystore.h"
 #include "dnsdb/dnssec.h"
 #endif
 
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
 #include "dnsdb/nsec3.h"
 #endif
 
-#if ZDB_HAS_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT
 #include "dnsdb/nsec.h"
 #endif
 
@@ -110,12 +108,15 @@ resource_record_resetcontent(resource_record* entry)
     entry->rdata_size = 0;
 }
 
+s32 resource_record_size(resource_record* entry)
+{
+    return entry->rdata_size + 10 + dnsname_len(entry->name);
+}
 
 /**
  * @brief Load a zone in the database.
  *
  * Load a zone in the database.
- * This is clearly MASTER oriented.
  *
  * @param[in] db a pointer to the database
  * @param[in] zone_data a pointer to an opened zone_reader
@@ -125,7 +126,7 @@ resource_record_resetcontent(resource_record* entry)
  *
  */
 ya_result
-zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, const char *data_path, const u8 *expected_origin, u16 flags)
+zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, const u8 *expected_origin, u16 flags)
 {
     u8* rdata;
     size_t rdata_len;
@@ -133,9 +134,10 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
     resource_record entry;
     u32 soa_min_ttl = 0;
     u32 soa_serial = 0;
-#if ZDB_HAS_DNSSEC_SUPPORT != 0    
+#if ZDB_HAS_DNSSEC_SUPPORT    
     u32 has_optout = 0;
     u32 has_optin = 0;
+    u64 wire_size = 0;
     bool nsec3_keys = FALSE;
     bool nsec_keys = FALSE;
     bool has_nsec3 = FALSE;
@@ -147,11 +149,18 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
     bool dynupdate_forbidden = FALSE;
     //bool modified = FALSE;
     
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
     nsec3_load_context nsec3_context;
 #endif
     
     char origin_ascii[MAX_DOMAIN_TEXT_LENGTH + 1];
+    
+    if(zone_pointer_out == NULL)
+    {
+        return INVALID_ARGUMENT_ERROR;
+    }
+    
+    *zone_pointer_out = NULL;
     
     /*    ------------------------------------------------------------    */
 
@@ -202,9 +211,7 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
 
     /* A */
 
-    zdb_zone_label *zone_label = zdb_zone_label_add(db, &name, zclass);
-
-    if(((flags & ZDB_ZONE_MOUNT_ON_LOAD) != 0) && (zone_label->zone != NULL))
+    if(((flags & ZDB_ZONE_MOUNT_ON_LOAD) != 0) && zdb_zone_exists(db, &name))
     {
         /* Already loaded */
 
@@ -222,7 +229,7 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
 
     dynupdate_forbidden = FALSE;
     
-#if ZDB_HAS_DNSSEC_SUPPORT != 0    
+#if ZDB_HAS_DNSSEC_SUPPORT
     has_dnskey = FALSE;
     has_nsec3 = FALSE;
     has_nsec = FALSE;
@@ -237,7 +244,7 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
 
     zdb_zone* zone;
 
-    zone = zdb_zone_create(entry.name, zclass);
+    zone = zdb_zone_create(entry.name); // comes with an RC = 1, not locked
     
     if(zone == NULL)
     {
@@ -256,7 +263,7 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
 
     /* C */
 
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
     nsec3_load_init(&nsec3_context, zone);
 #endif
 
@@ -319,7 +326,7 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
         rdata_len = zone_reader_rdata_size(entry);
         rdata = zone_reader_rdata(entry);
         
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
 
         /*
          * SPECIAL NSEC3 support !!!
@@ -344,6 +351,7 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
         else if(entry.type == TYPE_NSEC3)
         {
             bool rdata_optout = NSEC3_RDATA_IS_OPTOUT(rdata);
+            
             if(rdata_optout)
             {
                 has_optout++;
@@ -378,7 +386,7 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
             {
                 case TYPE_DNSKEY:
                 {
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
                     /*
                      * Check if we have access to the private part of the key
                      */
@@ -457,7 +465,7 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
                     zdb_zone_record_add(zone, entry_name.labels, (entry_name.size - name.size) - 1, entry.type, ttlrdata); /* class is implicit */
                     break;
                 }
-#if ZDB_HAS_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT
                 case TYPE_NSEC:
                 {
                     has_nsec = TRUE;
@@ -489,7 +497,7 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
                     zdb_zone_record_add(zone, entry_name.labels, (entry_name.size - name.size) - 1, entry.type, ttlrdata); /* class is implicit */
                     break;
                 }
-#if ZDB_HAS_NSEC3_SUPPORT == 0
+#if !ZDB_HAS_NSEC3_SUPPORT
                 case TYPE_NSEC3PARAM:
                 {
                     if(!has_nsec3param)
@@ -509,7 +517,7 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
                     break;
                 }
 #endif
-#if ZDB_HAS_NSEC_SUPPORT == 0
+#if !ZDB_HAS_NSEC_SUPPORT
                 case TYPE_NSEC:
                 {
                     if(!has_nsec)
@@ -522,12 +530,14 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
 #endif
             }
 
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
         }
 #endif
 
 zdb_zone_load_loop:
 
+        wire_size += resource_record_size(&entry);
+                    
         resource_record_resetcontent(&entry); /* "next" */
 
         /**
@@ -542,6 +552,10 @@ zdb_zone_load_loop:
         {
             if(FAIL(return_code))
             {
+                if(return_code == ERROR)
+                {
+                    return_code = UNEXPECTED_EOF;
+                }
                 log_err("zone load: reading record #%d of zone %{dnsname}: %r", loop_count, zone->origin, return_code);
             }
             break;
@@ -556,7 +570,7 @@ zdb_zone_load_loop:
 
     resource_record_freecontent(&entry); /* destroys, not "next" */
 
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
     log_debug7("zone load: has_rrsig=%i has_dnskey=%i", has_rrsig, has_dnskey);
 #endif
     
@@ -583,7 +597,7 @@ zdb_zone_load_loop:
         }
     }
 
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
 
     if(ISOK(return_code))
     {
@@ -629,12 +643,12 @@ zdb_zone_load_loop:
         {
             if(has_nsec3 && !nsec3_keys)
             {
-                log_err("zone load: zone %{dnsname} is NSEC3 but there are no NSEC3 keys available", zone->origin);
+                log_warn("zone load: zone %{dnsname} is NSEC3 but there are no NSEC3 keys available", zone->origin);
 
             }
             if(has_nsec && !nsec_keys)
             {
-                log_err("zone load: zone %{dnsname} is NSEC but there are no NSEC keys available", zone->origin);
+                log_warn("zone load: zone %{dnsname} is NSEC but there are no NSEC keys available", zone->origin);
             }
         }
     }
@@ -674,7 +688,7 @@ zdb_zone_load_loop:
         if(has_nsec3)
         {
 
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
             /**
              * @todo Check if there is both NSEC & NSEC3.  Reject if yes. (LATER On hold until NSEC is back in)
              *       compile NSEC if any
@@ -755,7 +769,7 @@ zdb_zone_load_loop:
             if(ISOK(return_code)) { nsec3_check(zone); /* this is an euristic check */ }
 #endif
 
-#else
+#else // ZDB_HAS_NSEC3_SUPPORT is 0
             log_err("zone load: zone %{dnsname} has NSEC3* record(s) but the server has been compiled without NSEC support", zone->origin);
 #endif
         }
@@ -770,7 +784,7 @@ zdb_zone_load_loop:
                 log_warn("zone load: zone %{dnsname} was set to NSEC3 but is NSEC", zone->origin);
             }
 
-#if ZDB_HAS_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT
 
             log_debug("zone load: zone %{dnsname}: NSEC post-processing.", zone->origin);
 
@@ -785,7 +799,7 @@ zdb_zone_load_loop:
     }
 #endif
 
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
     nsec3_load_destroy(&nsec3_context);
 #endif
     
@@ -793,9 +807,8 @@ zdb_zone_load_loop:
     {
         log_info("zone load: zone %{dnsname} has been loaded (%d record(s) parsed)", zone->origin, loop_count);
         
-        /**
-         * @todo remove the expired placeholder here
-         */
+        log_debug("zone load: zone %{dnsname} wire size: %i", zone->origin, wire_size);
+        zone->wire_size = wire_size;
         
         *zone_pointer_out = zone;
 
@@ -803,24 +816,14 @@ zdb_zone_load_loop:
         {
             log_info("zone load: zone %{dnsname} has been mounted", zone->origin);
             
-            zone_label->zone = zone;
+            zdb_zone *old_zone = zdb_set_zone(db, zone);
+            yassert(old_zone == NULL);
+            (void)old_zone; 
         }
     }
     else
     {
         log_err("zone load: zone %{dnsname}: error %r (%d record(s) parsed)", zone->origin, return_code, loop_count);
-        
-        /**
-         * @note: Used to call zdb_zone_label_delete(db, &name, zclass);
-         * 
-         * This is wrong.  This is a direct manipulator (a killer without business logic !)
-         * 
-         * ex:  database with it.eurid.eu & eu
-         *      if you ask to delete eu it will take the eu node and destroy EVERYTHING on it.
-         * 
-         * Intead use: zdb_zone_unload(db, &name, zclass);
-         *
-         */
         
         *zone_pointer_out = NULL;
     }
@@ -838,7 +841,7 @@ zdb_zone_load_loop:
 #ifdef DEBUG
         log_debug("zone load: replaying changes from journal");
 #endif
-        if(FAIL(return_code = zdb_icmtl_replay(zone, data_path)))
+        if(FAIL(return_code = zdb_icmtl_replay(zone)))
         {
             log_err("zone load: journal replay returned %r", return_code);
         }
@@ -1013,7 +1016,9 @@ zdb_zone_load_loop:
         
         if(FAIL(return_code))
         {
-            zdb_zone_destroy(zone);
+            zdb_zone_release(zone);
+            *zone_pointer_out = NULL;
+            //zdb_zone_destroy(zone);
         }
     }
     
@@ -1053,101 +1058,6 @@ zdb_zone_get_soa(zone_reader *zone_data, u16 *rdata_size, u8 *rdata)
             {
                 memcpy(rdata, soa_rdata, soa_rdata_len);
                 *rdata_size = soa_rdata_len;
-            }
-            else
-            {
-                return_value = ERROR;
-            }
-        }
-        else
-        {
-            return_value = ERROR;
-        }
-    }
-    
-    return return_value;
-}
-
-
-/**
- * @brief Load the zone serial.
- *
- * Load the zone serial.
- * This is meant mainly for the slave that could choose between, ie: zone file or axfr zone file
- *
- * @param[in] db a pointer to the database (not used, it's part of the signature)
- * @param[in] zone_data a pointer to an opened zone_reader at its start
- * @param[out] zone_pointer_out will contains a pointer to the loaded zone if the call is successful
- *
- * @return an error code.
- *
- */
-ya_result
-zdb_zone_read_serial(zdb *db, zone_reader *zr, const char *data_path, u32 *serialp, bool withjournal)
-{
-    ya_result return_value;
-    resource_record entry;
-    
-    resource_record_init(&entry);
-
-    if(ISOK(return_value = zone_reader_read_record(zr, &entry)))
-    {
-        if(entry.type == TYPE_SOA)
-        {
-            s32 rdata_len = zone_reader_rdata_size(entry);
-            u8 *rdata = zone_reader_rdata(entry);
-
-            for(u8 i = 2; i > 0; i--)
-            {
-                for(;;)
-                {
-                    u8 l = *rdata;
-
-                    rdata_len--;
-                    rdata++;
-
-                    if(l == 0)
-                    {
-                        break;
-                    }
-
-                    if(l > rdata_len)
-                    {
-                        break;
-                    }
-
-                    rdata += l;
-                    rdata_len -= l;
-                }
-            }
-
-            if(rdata_len == 20)
-            {
-                *serialp = ntohl(GET_U32_AT(rdata[0]));
-                
-                /*
-                 * we got a serial
-                 * 
-                 * Now, maybe, we want to know up to when it will replay
-                 */
-                
-                if(withjournal)
-                {
-
-#ifdef DEBUG
-                    log_debug("zone load: getting last serial for zone using journal");
-#endif
-                    if(ISOK(return_value = journal_last_serial(entry.name, data_path, serialp)))
-                    {
-#ifdef DEBUG
-                        log_debug("zone load: got serial");
-#endif
-                    }
-                    else
-                    {
-                        log_err("zone load: journal seek: %r", return_value);
-                    }
-                }
             }
             else
             {

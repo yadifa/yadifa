@@ -42,6 +42,8 @@
 
 #include <dnscore/format.h>
 
+#include "dnsdb/zdb.h"
+
 #include "dnsdb/dictionary.h"
 #include "dnsdb/zdb_zone.h"
 #include "dnsdb/zdb_zone_label.h"
@@ -49,6 +51,9 @@
 #include "dnsdb/zdb_dnsname.h"
 #include "dnsdb/zdb_utils.h"
 #include "dnsdb/zdb_error.h"
+
+extern logger_handle* g_database_logger;
+#define MODULE_MSG_HANDLE g_database_logger
 
 /**
  * @brief INTERNAL callback, tests for a match between a label and a node.
@@ -75,7 +80,7 @@ zdb_zone_label_create(const void *data)
 
     zone_label->next = NULL;
     dictionary_init(&zone_label->sub);
-    zone_label->name = dnslabel_dup(data);
+    zone_label->name = dnslabel_zdup(data);
 
     zone_label->zone = NULL;
 
@@ -102,7 +107,11 @@ zdb_zone_label_destroy_callback(dictionary_node * zone_label_record)
 
     ZFREE_STRING(zone_label->name);
 
-    zdb_zone_destroy(zone_label->zone);
+    if(zone_label->zone != NULL)
+    {
+        zdb_zone_release(zone_label->zone);
+        zone_label->zone = NULL;
+    }
 
     ZFREE(zone_label_record, zdb_zone_label);
 }
@@ -114,26 +123,19 @@ zdb_zone_label_destroy_callback(dictionary_node * zone_label_record)
  *
  * @param[in] db the database to explore
  * @param[in] origin the dnsname_vector mapping the label
- * @param[in] zclass the class of the zone we are looking for
  *
  * @return a pointer to the label or NULL if it does not exists in the database.
  *
  */
 
 zdb_zone_label*
-zdb_zone_label_find(zdb * db, dnsname_vector* origin, u16 zclass) // mutex checked
+zdb_zone_label_find(zdb * db, dnsname_vector* origin) // mutex checked
 {
     zdb_zone_label* zone_label;
     
-#ifdef HAS_DYNAMIC_PROVISIONING
-    group_mutex_lock(&db->mutex, ZDB_MUTEX_READER);
-#endif
-    
-#if ZDB_RECORDS_MAX_CLASS==1
-    zone_label = db->root[0]; /* the "." zone */
-#else
-    zone_label = db->root[ntohs(zclass) - 1]; /* the "." zone */
-#endif
+    yassert(group_mutex_islocked(&db->mutex));
+        
+    zone_label = db->root; /* the "." zone */
 
     dnslabel_stack_reference sections = origin->labels;
     s32 index = origin->size;
@@ -151,10 +153,6 @@ zdb_zone_label_find(zdb * db, dnsname_vector* origin, u16 zclass) // mutex check
 
         index--;
     }
-    
-#ifdef HAS_DYNAMIC_PROVISIONING
-    group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
-#endif
 
     return zone_label;
 }
@@ -166,7 +164,6 @@ zdb_zone_label_find(zdb * db, dnsname_vector* origin, u16 zclass) // mutex check
  *
  * @param[in] db the database to explore
  * @param[in] origin the dnsname_vector mapping the label
- * @param[in] zclass the class of the zone we are looking for
  *
  * @return a pointer to the label or NULL if it does not exists in the database.
  *
@@ -177,11 +174,7 @@ zdb_zone_label_find_nolock(zdb * db, dnsname_vector* origin)
 {
     zdb_zone_label* zone_label;
     
-#if ZDB_RECORDS_MAX_CLASS==1
-    zone_label = db->root[0]; /* the "." zone */
-#else
-    zone_label = db->root[ntohs(zclass) - 1]; /* the "." zone */
-#endif
+    zone_label = db->root; /* the "." zone */
 
     dnslabel_stack_reference sections = origin->labels;
     s32 index = origin->size;
@@ -204,7 +197,7 @@ zdb_zone_label_find_nolock(zdb * db, dnsname_vector* origin)
 }
 
 zdb_zone_label*
-zdb_zone_label_find_from_name(zdb* db, const char* name, u16 zclass) // mutex checked
+zdb_zone_label_find_from_name(zdb* db, const char* name) // mutex checked
 {
     dnsname_vector origin;
 
@@ -214,20 +207,24 @@ zdb_zone_label_find_from_name(zdb* db, const char* name, u16 zclass) // mutex ch
     {
         dnsname_to_dnsname_vector(dns_name, &origin);
 
-        return zdb_zone_label_find(db, &origin, zclass); // locks
+        zdb_zone_label *label = zdb_zone_label_find(db, &origin); // in zdb_zone_label_find_from_name
+        
+        return label;
     }
 
     return NULL;
 }
 
 zdb_zone_label*
-zdb_zone_label_find_from_dnsname(zdb* db, const u8* dns_name, u16 zclass) // mutex checked
+zdb_zone_label_find_from_dnsname(zdb* db, const u8* dns_name) // mutex checked
 {
     dnsname_vector origin;
 
     dnsname_to_dnsname_vector(dns_name, &origin);
 
-    return zdb_zone_label_find(db, &origin, zclass); // locks
+    zdb_zone_label *label = zdb_zone_label_find(db, &origin); // in zdb_zone_label_find_from_dnsname
+    
+    return label;
 }
 
 zdb_zone_label*
@@ -237,7 +234,9 @@ zdb_zone_label_find_from_dnsname_nolock(zdb* db, const u8* dns_name)
 
     dnsname_to_dnsname_vector(dns_name, &origin);
 
-    return zdb_zone_label_find_nolock(db, &origin); // locks
+    zdb_zone_label *label = zdb_zone_label_find_nolock(db, &origin); // in zdb_zone_label_find_from_dnsname_nolock
+    
+    return label;
 }
 
 /**
@@ -253,14 +252,36 @@ void
 zdb_zone_label_destroy(zdb_zone_label **zone_labelp)
 {
     yassert(zone_labelp != NULL);
-
+    
     zdb_zone_label* zone_label = *zone_labelp;
 
     if(zone_label != NULL)
     {
+#ifdef DEBUG
+        log_debug5("zdb_zone_label_destroy: %{dnslabel}", zone_label->name);
+#endif
+        
         dictionary_destroy(&zone_label->sub, zdb_zone_label_destroy_callback);
 
-        zdb_zone_destroy(zone_label->zone);
+        
+        zdb_zone *zone = zone_label->zone;
+        
+        if(zone != NULL)
+        {
+#ifdef DEBUG
+            log_debug5("zdb_zone_label_destroy: %{dnsname}", zone->origin);
+#endif
+            mutex_lock(&zone->lock_mutex);
+            alarm_close(zone->alarm_handle);
+            zone->alarm_handle = ALARM_HANDLE_INVALID;
+            mutex_unlock(&zone->lock_mutex);
+            
+            zdb_zone_release(zone);
+            zone_label->zone = NULL;
+        }
+        
+        //zdb_zone_destroy(zone_label->zone);
+        
         ZFREE_STRING(zone_label->name);
         ZFREE(zone_label, zdb_zone_label);
         *zone_labelp = NULL;
@@ -274,27 +295,20 @@ zdb_zone_label_destroy(zdb_zone_label **zone_labelp)
  *
  * @param[in] db a pointer to the database
  * @param[in] name a pointer to the dns name
- * @param[in] zclass the class we are looking for
  * @param[in] zone_label_stack a pointer to the stack that will hold the labels pointers
  *
  * @return the top of the stack (-1 = empty)
  */
 
 s32
-zdb_zone_label_match(zdb * db, const dnsname_vector* origin, u16 zclass,  // mutex checked
+zdb_zone_label_match(zdb * db, const dnsname_vector* origin,  // mutex checked
                      zdb_zone_label_pointer_array zone_label_stack)
 {
     zdb_zone_label* zone_label;
     
-#ifdef HAS_DYNAMIC_PROVISIONING
-    group_mutex_lock(&db->mutex, ZDB_MUTEX_READER);
-#endif
+    zdb_lock(db, ZDB_MUTEX_READER);
 
-#if ZDB_RECORDS_MAX_CLASS==1
-    zone_label = db->root[0]; /* the "." zone */
-#else
-    zone_label = db->root[ntohs(zclass) - 1]; /* the "." zone */
-#endif
+    zone_label = db->root; /* the "." zone */
 
     const_dnslabel_stack_reference sections = origin->labels;
     s32 index = origin->size;
@@ -322,39 +336,34 @@ zdb_zone_label_match(zdb * db, const dnsname_vector* origin, u16 zclass,  // mut
         index--;
     }
     
-#ifdef HAS_DYNAMIC_PROVISIONING
-    group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
-#endif
+    zdb_unlock(db, ZDB_MUTEX_READER);
 
     return sp;
 }
 
+#if OBSOLETE
+
 /**
+ * @todo get rid of this
+ * 
  * @brief Retrieve the zone label origin, adds it in the database if needed.
  *
  * Retrieve the zone label origin, adds it in the database if needed.
  *
  * @param[in] db a pointer to the database
  * @param[in] origin a pointer to the dns name
- * @param[in] zclass the class of the zone
  *
  * @return a pointer to the label
  */
 
 zdb_zone_label*
-zdb_zone_label_add(zdb * db, dnsname_vector* origin, u16 zclass) // mutex checked
+zdb_zone_label_add(zdb * db, dnsname_vector* origin) // mutex checked
 {
     zdb_zone_label* zone_label;
     
-#ifdef HAS_DYNAMIC_PROVISIONING
-    group_mutex_lock(&db->mutex, ZDB_MUTEX_WRITER);
-#endif
+    zdb_lock(db, ZDB_MUTEX_WRITER);
 
-#if ZDB_RECORDS_MAX_CLASS==1
-    zone_label = db->root[0]; /* the "." zone */
-#else
-    zone_label = db->root[ntohs(zclass) - 1]; /* the "." zone */
-#endif
+    zone_label = db->root; /* the "." zone */
 
     dnslabel_stack_reference sections = origin->labels;
     s32 index = origin->size;
@@ -370,23 +379,21 @@ zdb_zone_label_add(zdb * db, dnsname_vector* origin, u16 zclass) // mutex checke
         index--;
     }
 
-#ifdef HAS_DYNAMIC_PROVISIONING
-    group_mutex_unlock(&db->mutex, ZDB_MUTEX_WRITER);
-#endif
+    zdb_unlock(db, ZDB_MUTEX_WRITER);
     
     return zone_label;
 }
+
+#endif
 
 zdb_zone_label*
 zdb_zone_label_add_nolock(zdb * db, dnsname_vector* origin) // mutex checked
 {
     zdb_zone_label* zone_label;
+    
+    yassert(zdb_islocked(db));
 
-#if ZDB_RECORDS_MAX_CLASS==1
-    zone_label = db->root[0]; /* the "." zone */
-#else
-    zone_label = db->root[ntohs(zclass) - 1]; /* the "." zone */
-#endif
+    zone_label = db->root; /* the "." zone */
 
     dnslabel_stack_reference sections = origin->labels;
     s32 index = origin->size;
@@ -474,7 +481,12 @@ zdb_zone_label_delete_process_callback(void *a, dictionary_node * node)
                 dictionary_destroy(&zone_label->sub,
                                    zdb_zone_label_destroy_callback);
 
-                zdb_zone_destroy(zone_label->zone);
+                if(zone_label->zone != NULL)
+                {
+                    zdb_zone_release(zone_label->zone);
+                    zone_label->zone = NULL;
+                }
+                
                 ZFREE_STRING(zone_label->name);
                 ZFREE(zone_label, zdb_zone_label);
 
@@ -498,7 +510,13 @@ zdb_zone_label_delete_process_callback(void *a, dictionary_node * node)
 
     dictionary_destroy(&zone_label->sub, zdb_zone_label_destroy_callback);
 
-    zdb_zone_destroy(zone_label->zone);
+    
+    if(zone_label->zone != NULL)
+    {
+        zdb_zone_release(zone_label->zone);
+        zone_label->zone = NULL;
+    }
+    
     ZFREE_STRING(zone_label->name);
     ZFREE(zone_label, zdb_zone_label);
 
@@ -512,36 +530,23 @@ zdb_zone_label_delete_process_callback(void *a, dictionary_node * node)
  *
  * @parm[in] db a pointer to the database
  * @parm[in] name a pointer to the name
- * @parm[in] zclass the class of the zone of the label
  *
  * @return an error code
  */
 
 ya_result
-zdb_zone_label_delete(zdb * db, dnsname_vector* name, u16 zclass) // mutex checked
+zdb_zone_label_delete(zdb * db, dnsname_vector* name) // mutex checked
 {
-    yassert(db != NULL && name != NULL && name->size >= 0 && zclass > 0);
-
-    zdb_zone_label* root_label;
+    yassert(db != NULL && name != NULL && name->size >= 0);
+    yassert(zdb_islocked(db));
     
-#ifdef HAS_DYNAMIC_PROVISIONING
-    group_mutex_lock(&db->mutex, ZDB_MUTEX_WRITER);
-#endif
-
-#if ZDB_RECORDS_MAX_CLASS==1
-    root_label = db->root[0]; /* the "." zone */
-#else
-    root_label = db->root[ntohs(zclass) - 1]; /* the "." zone */
-#endif
+    zdb_zone_label* root_label;
+    root_label = db->root; /* the "." zone */
 
     if(root_label == NULL)
     {
         /* has already been destroyed */
 
-#ifdef HAS_DYNAMIC_PROVISIONING
-        group_mutex_unlock(&db->mutex, ZDB_MUTEX_WRITER);
-#endif
-        
         return ZDB_ERROR_NOSUCHCLASS;
     }
 
@@ -553,10 +558,6 @@ zdb_zone_label_delete(zdb * db, dnsname_vector* name, u16 zclass) // mutex check
 
     ya_result err = dictionary_process(&root_label->sub, hash, &args, zdb_zone_label_delete_process_callback);
     
-#ifdef HAS_DYNAMIC_PROVISIONING
-    group_mutex_unlock(&db->mutex, ZDB_MUTEX_WRITER);
-#endif
-
     if(err == COLLECTION_PROCESS_DELETENODE)
     {
         err = COLLECTION_PROCESS_STOP;
@@ -564,8 +565,6 @@ zdb_zone_label_delete(zdb * db, dnsname_vector* name, u16 zclass) // mutex check
 
     return err;
 }
-
-
 
 #ifdef DEBUG
 
@@ -603,7 +602,7 @@ zdb_zone_label_print_indented(zdb_zone_label* zone_label, output_stream *os, int
 
     while(dictionary_iterator_hasnext(&iter))
     {
-        zdb_zone_label* *sub_labelp = (zdb_zone_label* *)dictionary_iterator_next(&iter);
+        zdb_zone_label* *sub_labelp = (zdb_zone_label**)dictionary_iterator_next(&iter);
 
         zdb_zone_label_print_indented(*sub_labelp, os, indented + 1);
     }

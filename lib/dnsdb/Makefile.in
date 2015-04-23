@@ -44,6 +44,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ##############################################################################
+#
+#	YADIFA dnsdb Makefile.am script
+#
+#      	Makefile.am script
+#
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.0-public/lib/dnsdb/Makefile.am $
+#
+#       $Date: 2015-04-20 15:07:41 +0200 (Mon, 20 Apr 2015) $
+#
+#       $Revision: 4962 $
+#
+#	$Author: ericdf $
+#
+##############################################################################
 
 ################################################################################
 #
@@ -186,29 +200,59 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-@USES_SUNC_TRUE@am__append_1 = 
-@USES_SUNC_FALSE@am__append_2 = -O0
-@HAS_CC_NO_IDENT_TRUE@am__append_3 = -fno-ident
-@HAS_CC_ANSI_TRUE@am__append_4 = -ansi
-@HAS_CC_PEDANTIC_TRUE@am__append_5 = -pedantic
-@HAS_CC_WALL_TRUE@am__append_6 = -Wall
-@HAS_CC_MISSING_FIELD_INITIALIZERS_TRUE@am__append_7 = -Werror=missing-field-initializers
-@HAS_CC_STD_GNU99_TRUE@am__append_8 = -std=gnu99
-@HAS_CC_STD_C99_TRUE@@HAS_CC_STD_GNU99_FALSE@am__append_9 = -std=c99
-@HAS_CC_STD_GNU99_FALSE@@HAS_CC_XC99_TRUE@am__append_10 = -xc99
-@HAS_CC_TUNE_NATIVE_TRUE@am__append_11 = -mtune=native
-@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_12 = -m64
-@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_13 = -m64
-@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_14 = -m32
-@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_15 = -m32
+
+# DNSSEC is defined if either NSEC3 or NSEC are defined
+@HAS_DNSSEC_SUPPORT_TRUE@am__append_1 = \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/dnssec.c \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/dnssec_keystore.c \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/dnssec_process.c \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/nsec_common.c \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/rr_canonize.c \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/rrsig.c \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/rrsig_updater.c \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/zdb_update_signatures.c
+
+@HAS_NSEC3_SUPPORT_TRUE@am__append_2 = \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_collection.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_hash.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_item.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_icmtl.c  \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_load.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_name_error.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_nodata_error.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_owner.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_rrsig_updater.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_update.c \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_zone.c
+
+@HAS_NSEC_SUPPORT_TRUE@am__append_3 = \
+@HAS_NSEC_SUPPORT_TRUE@	src/nsec.c \
+@HAS_NSEC_SUPPORT_TRUE@	src/nsec_collection.c
+
+@USES_SUNC_TRUE@am__append_4 = 
+@USES_SUNC_FALSE@am__append_5 = -O0
+@HAS_CC_NO_IDENT_TRUE@am__append_6 = -fno-ident
+@HAS_CC_ANSI_TRUE@am__append_7 = -ansi
+@HAS_CC_PEDANTIC_TRUE@am__append_8 = -pedantic
+@HAS_CC_WALL_TRUE@am__append_9 = -Wall
+@HAS_CC_MISSING_FIELD_INITIALIZERS_TRUE@am__append_10 = -Werror=missing-field-initializers
+@HAS_CC_STD_GNU99_TRUE@am__append_11 = -std=gnu99
+@HAS_CC_STD_C99_TRUE@@HAS_CC_STD_GNU99_FALSE@am__append_12 = -std=c99
+@HAS_CC_STD_GNU99_FALSE@@HAS_CC_XC99_TRUE@am__append_13 = -xc99
+@HAS_CC_TUNE_NATIVE_TRUE@am__append_14 = -mtune=native
+@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_15 = -m64
+@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_16 = -m64
+@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_17 = -m32
+@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_18 = -m32
 
 #
 # DEBUG
 #
-@HAS_CC_G3_TRUE@am__append_16 = -g3
-@HAS_CC_G3_FALSE@@HAS_CC_G_TRUE@am__append_17 = -g
-@HAS_CC_DWARF4_TRUE@am__append_18 = -gdwarf-4
-@HAS_CC_DWARF3_TRUE@@HAS_CC_DWARF4_FALSE@am__append_19 = -gdwarf-3
+@HAS_CC_G3_TRUE@am__append_19 = -g3
+@HAS_CC_G3_FALSE@@HAS_CC_G_TRUE@am__append_20 = -g
+@HAS_CC_DWARF4_TRUE@am__append_21 = -gdwarf-4
+@HAS_CC_DWARF3_TRUE@@HAS_CC_DWARF4_FALSE@am__append_22 = -gdwarf-3
 
 #
 # Intel C Compiler
@@ -217,11 +261,11 @@ host_triplet = @host@
 
 #ICC
 #IPO= -ipo (need to use the intel xiar instead of ar)
-@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_20 = -DLTO -ipo
-@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_21 = -ipo
-@USES_ICC_TRUE@am__append_22 = -DUSES_ICC 
-@HAS_CC_ANSI_ALIAS_TRUE@@USES_ICC_TRUE@am__append_23 = -ansi-alias -U__STRICT_ANSI__ 
-@USES_ICC_TRUE@am__append_24 = -DMODE_DEBUG_ICC
+@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_23 = -DLTO -ipo
+@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_24 = -ipo
+@USES_ICC_TRUE@am__append_25 = -DUSES_ICC 
+@HAS_CC_ANSI_ALIAS_TRUE@@USES_ICC_TRUE@am__append_26 = -ansi-alias -U__STRICT_ANSI__ 
+@USES_ICC_TRUE@am__append_27 = -DMODE_DEBUG_ICC
 
 #
 # LLVM Clang
@@ -229,10 +273,10 @@ host_triplet = @host@
 ###############################################################################
 
 # CLANG
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_25 = -DLTO -flto
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_26 = -flto
-@USES_CLANG_TRUE@am__append_27 = -DUSES_LLVM
-@USES_CLANG_TRUE@am__append_28 = -DMODE_DEBUG_CLANG
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_28 = -DLTO -flto
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_29 = -flto
+@USES_CLANG_TRUE@am__append_30 = -DUSES_LLVM
+@USES_CLANG_TRUE@am__append_31 = -DMODE_DEBUG_CLANG
 
 # Note: add a _d suffix for debug builds ?
 
@@ -242,13 +286,13 @@ host_triplet = @host@
 ###############################################################################
 
 #GCC
-@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_29 = -mcpu=niagara
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_30 = -DLTO -flto -fwhole-program -ffat-lto-objects
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_31 = -flto -fwhole-program -ffat-lto-objects
-@USES_GCC_TRUE@am__append_32 = -DUSES_GCC
-@USES_GCC_TRUE@am__append_33 = -DMODE_DEBUG_GCC
-@USES_SUNC_TRUE@am__append_34 = -DUSES_SUNC
-@USES_SUNC_TRUE@am__append_35 = -DMODE_DEBUG_SUNC
+@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_32 = -mcpu=niagara
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_33 = -DLTO -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_34 = -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
+@USES_GCC_TRUE@am__append_35 = -DUSES_GCC
+@USES_GCC_TRUE@am__append_36 = -DMODE_DEBUG_GCC
+@USES_SUNC_TRUE@am__append_37 = -DUSES_SUNC
+@USES_SUNC_TRUE@am__append_38 = -DMODE_DEBUG_SUNC
 
 # Note: add a _d suffix for debug builds ?
 
@@ -258,16 +302,16 @@ host_triplet = @host@
 ###############################################################################
 
 # if an unknown compiler is used, it should have its own section
-@USES_UNKNOWN_TRUE@am__append_36 = -DUSES_UNKNOWN_COMPILER
-@USES_UNKNOWN_TRUE@am__append_37 = -DMODE_DEBUG_UNKNOWN
+@USES_UNKNOWN_TRUE@am__append_39 = -DUSES_UNKNOWN_COMPILER
+@USES_UNKNOWN_TRUE@am__append_40 = -DMODE_DEBUG_UNKNOWN
 
 #
 # Some BSD-based OSes need this
 #
-@IS_BSD_FAMILY_TRUE@am__append_38 = -I./include
-@IS_SOLARIS_FAMILY_TRUE@am__append_39 = -D_POSIX_PTHREAD_SEMANTICS
-@HAS_CC_RDYNAMIC_TRUE@am__append_40 = -rdynamic
-@HAS_CC_RDYNAMIC_TRUE@am__append_41 = -rdynamic
+@IS_BSD_FAMILY_TRUE@am__append_41 = -I./include
+@IS_SOLARIS_FAMILY_TRUE@am__append_42 = -D_POSIX_PTHREAD_SEMANTICS
+@HAS_CC_RDYNAMIC_TRUE@am__append_43 = -rdynamic
+@HAS_CC_RDYNAMIC_TRUE@am__append_44 = -rdynamic
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
@@ -316,32 +360,76 @@ am__uninstall_files_from_dir = { \
 am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(pkgincludedir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
 libdnsdb_la_LIBADD =
+am__libdnsdb_la_SOURCES_DIST = src/avl.c src/dictionary.c \
+	src/dictionary_btree.c src/dictionary_htbt.c \
+	src/dynupdate_check_prerequisites.c src/dynupdate_icmtlhook.c \
+	src/dynupdate_update.c src/hash.c src/hash_table_values.c \
+	src/htable.c src/htbt.c src/icmtl_input_stream.c src/journal.c \
+	src/journal_ix.c src/journal-cjf.c src/journal-cjf-idxt.c \
+	src/journal-cjf-page.c src/journal-cjf-page-cache.c \
+	src/journal-cjf-page-output-stream.c src/xfr_copy.c src/zdb.c \
+	src/zdb_error.c src/zdb_icmtl.c src/zdb_listener.c \
+	src/zdb_query_ex.c src/zdb_query_ex_wire.c src/zdb_record.c \
+	src/zdb_rr_label.c src/zdb_sanitize.c src/zdb_utils.c \
+	src/zdb_cache.c src/zdb_zone.c src/zdb-zone-arc.c \
+	src/zdb-zone-find.c src/zdb-zone-garbage.c \
+	src/zdb-zone-journal.c src/zdb-zone-lock.c \
+	src/zdb-zone-answer-axfr.c src/zdb-zone-answer-ixfr.c \
+	src/zdb_zone_axfr_input_stream.c src/zdb_zone_label.c \
+	src/zdb_zone_label_iterator.c src/zdb_zone_load.c \
+	src/zdb-zone-path-provider.c src/zdb_zone_process.c \
+	src/zdb-zone-reader-filter.c src/zdb_zone_store_axfr.c \
+	src/zdb_zone_update_ixfr.c src/zdb_zone_write_text.c \
+	src/zdb_zone_write_unbound.c src/dnssec.c \
+	src/dnssec_keystore.c src/dnssec_process.c src/nsec_common.c \
+	src/rr_canonize.c src/rrsig.c src/rrsig_updater.c \
+	src/zdb_update_signatures.c src/nsec3.c src/nsec3_collection.c \
+	src/nsec3_hash.c src/nsec3_item.c src/nsec3_icmtl.c \
+	src/nsec3_load.c src/nsec3_name_error.c \
+	src/nsec3_nodata_error.c src/nsec3_owner.c \
+	src/nsec3_rrsig_updater.c src/nsec3_update.c src/nsec3_zone.c \
+	src/nsec.c src/nsec_collection.c
 am__dirstamp = $(am__leading_dot)dirstamp
+@HAS_DNSSEC_SUPPORT_TRUE@am__objects_1 = src/dnssec.lo \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/dnssec_keystore.lo \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/dnssec_process.lo \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/nsec_common.lo src/rr_canonize.lo \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/rrsig.lo src/rrsig_updater.lo \
+@HAS_DNSSEC_SUPPORT_TRUE@	src/zdb_update_signatures.lo
+@HAS_NSEC3_SUPPORT_TRUE@am__objects_2 = src/nsec3.lo \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_collection.lo \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_hash.lo src/nsec3_item.lo \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_icmtl.lo src/nsec3_load.lo \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_name_error.lo \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_nodata_error.lo \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_owner.lo \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_rrsig_updater.lo \
+@HAS_NSEC3_SUPPORT_TRUE@	src/nsec3_update.lo src/nsec3_zone.lo
+@HAS_NSEC_SUPPORT_TRUE@am__objects_3 = src/nsec.lo \
+@HAS_NSEC_SUPPORT_TRUE@	src/nsec_collection.lo
 am_libdnsdb_la_OBJECTS = src/avl.lo src/dictionary.lo \
 	src/dictionary_btree.lo src/dictionary_htbt.lo \
 	src/dynupdate_check_prerequisites.lo \
 	src/dynupdate_icmtlhook.lo src/dynupdate_update.lo src/hash.lo \
 	src/hash_table_values.lo src/htable.lo src/htbt.lo \
 	src/icmtl_input_stream.lo src/journal.lo src/journal_ix.lo \
-	src/zdb.lo src/zdb_alloc.lo src/zdb_dnsname.lo \
-	src/zdb_error.lo src/zdb_icmtl.lo src/zdb_listener.lo \
-	src/zdb_query_ex.lo src/zdb_query_ex_wire.lo src/zdb_record.lo \
-	src/zdb_rr_label.lo src/zdb_sanitize.lo src/zdb_utils.lo \
-	src/zdb_zone.lo src/zdb-zone-answer-axfr.lo \
+	src/journal-cjf.lo src/journal-cjf-idxt.lo \
+	src/journal-cjf-page.lo src/journal-cjf-page-cache.lo \
+	src/journal-cjf-page-output-stream.lo src/xfr_copy.lo \
+	src/zdb.lo src/zdb_error.lo src/zdb_icmtl.lo \
+	src/zdb_listener.lo src/zdb_query_ex.lo \
+	src/zdb_query_ex_wire.lo src/zdb_record.lo src/zdb_rr_label.lo \
+	src/zdb_sanitize.lo src/zdb_utils.lo src/zdb_cache.lo \
+	src/zdb_zone.lo src/zdb-zone-arc.lo src/zdb-zone-find.lo \
+	src/zdb-zone-garbage.lo src/zdb-zone-journal.lo \
+	src/zdb-zone-lock.lo src/zdb-zone-answer-axfr.lo \
 	src/zdb-zone-answer-ixfr.lo src/zdb_zone_axfr_input_stream.lo \
 	src/zdb_zone_label.lo src/zdb_zone_label_iterator.lo \
-	src/zdb_zone_load.lo src/zdb_zone_process.lo \
-	src/zdb-zone-reader-filter.lo src/zdb_zone_store_axfr.lo \
-	src/zdb_zone_update_ixfr.lo src/zdb_zone_write_text.lo \
-	src/zdb_zone_write_unbound.lo src/dnssec.lo \
-	src/dnssec_keystore.lo src/dnssec_process.lo \
-	src/nsec_common.lo src/rr_canonize.lo src/rrsig.lo \
-	src/rrsig_updater.lo src/zdb_update_signatures.lo src/nsec3.lo \
-	src/nsec3_collection.lo src/nsec3_hash.lo src/nsec3_item.lo \
-	src/nsec3_icmtl.lo src/nsec3_load.lo src/nsec3_name_error.lo \
-	src/nsec3_nodata_error.lo src/nsec3_owner.lo \
-	src/nsec3_rrsig_updater.lo src/nsec3_update.lo \
-	src/nsec3_zone.lo src/nsec.lo src/nsec_collection.lo
+	src/zdb_zone_load.lo src/zdb-zone-path-provider.lo \
+	src/zdb_zone_process.lo src/zdb-zone-reader-filter.lo \
+	src/zdb_zone_store_axfr.lo src/zdb_zone_update_ixfr.lo \
+	src/zdb_zone_write_text.lo src/zdb_zone_write_unbound.lo \
+	$(am__objects_1) $(am__objects_2) $(am__objects_3)
 libdnsdb_la_OBJECTS = $(am_libdnsdb_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -385,7 +473,7 @@ am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
 SOURCES = $(libdnsdb_la_SOURCES)
-DIST_SOURCES = $(libdnsdb_la_SOURCES)
+DIST_SOURCES = $(am__libdnsdb_la_SOURCES_DIST)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -468,6 +556,8 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GREP = @GREP@
+HAS_ACL_SUPPORT = @HAS_ACL_SUPPORT@
+HAS_BFD_DEBUG_SUPPORT = @HAS_BFD_DEBUG_SUPPORT@
 HAS_BIG_ENDIAN = @HAS_BIG_ENDIAN@
 HAS_CC_ADDRESS_SANITIZER_CHECK = @HAS_CC_ADDRESS_SANITIZER_CHECK@
 HAS_CC_ANSI = @HAS_CC_ANSI@
@@ -494,14 +584,24 @@ HAS_CC_TUNE_NATIVE = @HAS_CC_TUNE_NATIVE@
 HAS_CC_WALL = @HAS_CC_WALL@
 HAS_CC_XC99 = @HAS_CC_XC99@
 HAS_CTRL = @HAS_CTRL@
+HAS_CTRL_DYNAMIC_PROVISIONING = @HAS_CTRL_DYNAMIC_PROVISIONING@
 HAS_DYNUPDATE_SUPPORT = @HAS_DYNUPDATE_SUPPORT@
 HAS_LITTLE_ENDIAN = @HAS_LITTLE_ENDIAN@
 HAS_LOGDIR = @HAS_LOGDIR@
+HAS_LOG_PID_ALWAYS_ON = @HAS_LOG_PID_ALWAYS_ON@
+HAS_LOG_THREAD_ID_ALWAYS_ON = @HAS_LOG_THREAD_ID_ALWAYS_ON@
+HAS_MALLOC_DEBUG_SUPPORT = @HAS_MALLOC_DEBUG_SUPPORT@
 HAS_MASTER_SUPPORT = @HAS_MASTER_SUPPORT@
 HAS_MESSAGES_SUPPORT = @HAS_MESSAGES_SUPPORT@
+HAS_MUTEX_DEBUG_SUPPORT = @HAS_MUTEX_DEBUG_SUPPORT@
+HAS_NON_AA_AXFR_SUPPORT = @HAS_NON_AA_AXFR_SUPPORT@
 HAS_NSID_SUPPORT = @HAS_NSID_SUPPORT@
 HAS_RRL_SUPPORT = @HAS_RRL_SUPPORT@
 HAS_RRSIG_MANAGEMENT_SUPPORT = @HAS_RRSIG_MANAGEMENT_SUPPORT@
+HAS_TSIG_SUPPORT = @HAS_TSIG_SUPPORT@
+HAS_ZALLOC_DEBUG_SUPPORT = @HAS_ZALLOC_DEBUG_SUPPORT@
+HAS_ZALLOC_STATISTICS_SUPPORT = @HAS_ZALLOC_STATISTICS_SUPPORT@
+HAS_ZALLOC_SUPPORT = @HAS_ZALLOC_SUPPORT@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -616,7 +716,6 @@ pkginclude_HEADERS = \
 	$(I)/dnssec.h \
 	$(I)/dnssec_config.h \
 	$(I)/dnssec_keystore.h \
-	$(I)/dnssec_scheduler.h \
 	$(I)/dnssec_task.h \
 	$(I)/dynupdate.h \
 	$(I)/hash.h \
@@ -625,6 +724,12 @@ pkginclude_HEADERS = \
 	$(I)/icmtl_input_stream.h \
 	$(I)/journal.h \
 	$(I)/journal_ix.h \
+	$(I)/journal-cjf.h \
+	$(I)/journal-cjf-common.h \
+	$(I)/journal-cjf-idxt.h \
+	$(I)/journal-cjf-page.h \
+	$(I)/journal-cjf-page-cache.h \
+	$(I)/journal-cjf-page-output-stream.h \
 	$(I)/nsec.h \
 	$(I)/nsec3.h \
 	$(I)/nsec3_collection.h \
@@ -644,8 +749,8 @@ pkginclude_HEADERS = \
 	$(I)/rr_canonize.h \
 	$(I)/rrsig.h \
 	$(I)/rrsig_updater.h \
+	$(I)/xfr_copy.h \
 	$(I)/zdb.h \
-	$(I)/zdb_alloc.h \
 	$(I)/zdb_config.h \
 	$(I)/zdb_dnsname.h \
 	$(I)/zdb_error.h \
@@ -656,7 +761,14 @@ pkginclude_HEADERS = \
 	$(I)/zdb_sanitize.h \
 	$(I)/zdb_types.h \
 	$(I)/zdb_utils.h \
+	$(I)/zdb_cache.h \
 	$(I)/zdb_zone.h \
+	$(I)/zdb-lock.h \
+	$(I)/zdb-zone-arc.h \
+	$(I)/zdb-zone-find.h \
+	$(I)/zdb-zone-garbage.h \
+	$(I)/zdb-zone-journal.h \
+	$(I)/zdb-zone-lock.h \
 	$(I)/zdb-zone-answer-axfr.h \
 	$(I)/zdb-zone-answer-ixfr.h \
 	$(I)/zdb_zone_axfr_input_stream.h \
@@ -664,62 +776,60 @@ pkginclude_HEADERS = \
 	$(I)/zdb_zone_label_iterator.h \
 	$(I)/zdb_zone_load.h \
 	$(I)/zdb_zone_load_interface.h \
+	$(I)/zdb-zone-path-provider.h \
 	$(I)/zdb_zone_process.h \
 	$(I)/zdb-zone-reader-filter.h \
 	$(I)/zdb_zone_write.h
 
-
-# DNSSEC is defined if either NSEC3 or NSEC are defined
 libdnsdb_la_SOURCES = src/avl.c src/dictionary.c \
 	src/dictionary_btree.c src/dictionary_htbt.c \
 	src/dynupdate_check_prerequisites.c src/dynupdate_icmtlhook.c \
 	src/dynupdate_update.c src/hash.c src/hash_table_values.c \
 	src/htable.c src/htbt.c src/icmtl_input_stream.c src/journal.c \
-	src/journal_ix.c src/zdb.c src/zdb_alloc.c src/zdb_dnsname.c \
+	src/journal_ix.c src/journal-cjf.c src/journal-cjf-idxt.c \
+	src/journal-cjf-page.c src/journal-cjf-page-cache.c \
+	src/journal-cjf-page-output-stream.c src/xfr_copy.c src/zdb.c \
 	src/zdb_error.c src/zdb_icmtl.c src/zdb_listener.c \
 	src/zdb_query_ex.c src/zdb_query_ex_wire.c src/zdb_record.c \
 	src/zdb_rr_label.c src/zdb_sanitize.c src/zdb_utils.c \
-	src/zdb_zone.c src/zdb-zone-answer-axfr.c \
-	src/zdb-zone-answer-ixfr.c src/zdb_zone_axfr_input_stream.c \
-	src/zdb_zone_label.c src/zdb_zone_label_iterator.c \
-	src/zdb_zone_load.c src/zdb_zone_process.c \
+	src/zdb_cache.c src/zdb_zone.c src/zdb-zone-arc.c \
+	src/zdb-zone-find.c src/zdb-zone-garbage.c \
+	src/zdb-zone-journal.c src/zdb-zone-lock.c \
+	src/zdb-zone-answer-axfr.c src/zdb-zone-answer-ixfr.c \
+	src/zdb_zone_axfr_input_stream.c src/zdb_zone_label.c \
+	src/zdb_zone_label_iterator.c src/zdb_zone_load.c \
+	src/zdb-zone-path-provider.c src/zdb_zone_process.c \
 	src/zdb-zone-reader-filter.c src/zdb_zone_store_axfr.c \
 	src/zdb_zone_update_ixfr.c src/zdb_zone_write_text.c \
-	src/zdb_zone_write_unbound.c src/dnssec.c \
-	src/dnssec_keystore.c src/dnssec_process.c src/nsec_common.c \
-	src/rr_canonize.c src/rrsig.c src/rrsig_updater.c \
-	src/zdb_update_signatures.c src/nsec3.c src/nsec3_collection.c \
-	src/nsec3_hash.c src/nsec3_item.c src/nsec3_icmtl.c \
-	src/nsec3_load.c src/nsec3_name_error.c \
-	src/nsec3_nodata_error.c src/nsec3_owner.c \
-	src/nsec3_rrsig_updater.c src/nsec3_update.c src/nsec3_zone.c \
-	src/nsec.c src/nsec_collection.c
-libdnsdb_la_LDFLAGS = -version-info 2:0:0
+	src/zdb_zone_write_unbound.c $(am__append_1) $(am__append_2) \
+	$(am__append_3)
+libdnsdb_la_LDFLAGS = -version-info 3:0:0
 
 #
 #
 #
 AM_CFLAGS = -D_FILE_OFFSET_BITS=64 -I$(abs_builddir) \
-	-I$(abs_srcdir)/include $(am__append_3) $(am__append_4) \
-	$(am__append_5) $(am__append_6) $(am__append_7) \
+	-I$(abs_srcdir)/include $(am__append_6) $(am__append_7) \
 	$(am__append_8) $(am__append_9) $(am__append_10) \
-	$(am__append_11) $(am__append_12) $(am__append_14) \
-	$(am__append_20) $(am__append_22) $(am__append_23) \
-	$(am__append_25) $(am__append_27) $(am__append_29) \
-	$(am__append_30) $(am__append_32) $(am__append_34) \
-	$(am__append_36) $(am__append_38) $(am__append_39) \
+	$(am__append_11) $(am__append_12) $(am__append_13) \
+	$(am__append_14) $(am__append_15) $(am__append_17) \
+	$(am__append_23) $(am__append_25) $(am__append_26) \
+	$(am__append_28) $(am__append_30) $(am__append_32) \
+	$(am__append_33) $(am__append_35) $(am__append_37) \
+	$(am__append_39) $(am__append_41) $(am__append_42) \
 	$(LOCALFLAGS) $(YCFLAGS)
-AM_LDFLAGS = $(am__append_13) $(am__append_15) $(am__append_21) \
-	$(am__append_26) $(am__append_31) $(YLDFLAGS)
-DEBUGFLAGS = $(am__append_1) $(am__append_2) $(am__append_16) \
-	$(am__append_17) $(am__append_18) $(am__append_19) \
-	$(am__append_24) $(am__append_28) $(am__append_33) \
-	$(am__append_35) $(am__append_37)
-LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"'
+AM_LDFLAGS = $(am__append_16) $(am__append_18) $(am__append_24) \
+	$(am__append_29) $(am__append_34) $(YLDFLAGS)
+DEBUGFLAGS = $(am__append_4) $(am__append_5) $(am__append_19) \
+	$(am__append_20) $(am__append_21) $(am__append_22) \
+	$(am__append_27) $(am__append_31) $(am__append_36) \
+	$(am__append_38) $(am__append_40)
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"' -D_THREAD_SAFE
 @HAS_LTO_SUPPORT_FALSE@@USES_CLANG_TRUE@AM_AR = ar
+@HAS_LTO_SUPPORT_FALSE@@USES_GCC_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@AM_AR = llvm-ar
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@AM_AR = gcc-ar
 @HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@AM_AR = xiar
-@USES_GCC_TRUE@AM_AR = ar
 
 #
 # Sun C
@@ -729,21 +839,23 @@ LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATED
 # SUNC
 @USES_SUNC_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_FALSE@@USES_CLANG_TRUE@AM_LD = ld
+@HAS_LTO_SUPPORT_FALSE@@USES_GCC_TRUE@AM_LD = ld
 @HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@AM_LD = ld.gold
-@USES_GCC_TRUE@AM_LD = ld
 @USES_ICC_TRUE@AM_LD = ld
 @USES_SUNC_TRUE@AM_LD = ld
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@AM_RANLIB = gcc-ranlib
 YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -DCMR
 YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP
 YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
 YSCFLAGS = $(YRCFLAGS)
 YRLDFLAGS = 
-YPLDFLAGS = -pg $(am__append_40)
-YDLDFLAGS = -g $(am__append_41)
+YPLDFLAGS = -pg $(am__append_43)
+YDLDFLAGS = -g $(am__append_44)
 YSLDFLAGS = $(YRLDFLAGS)
 AM_MAKEFLAGS = MODE_CFLAGS="$(AM_CFLAGS)" CC=$(CC) AR=$(AM_AR) LD=$(AM_LD)
 YCFLAGS = $(YSCFLAGS)
 YLDFLAGS = $(YNLDFLAGS)
+VP = DNSDB
 all: all-am
 
 .SUFFIXES:
@@ -859,9 +971,17 @@ src/icmtl_input_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/journal.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/journal_ix.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/journal-cjf.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/journal-cjf-idxt.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/journal-cjf-page.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/journal-cjf-page-cache.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/journal-cjf-page-output-stream.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/xfr_copy.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/zdb.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/zdb_alloc.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/zdb_dnsname.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_error.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_icmtl.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_listener.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
@@ -872,7 +992,17 @@ src/zdb_record.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_rr_label.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_sanitize.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_utils.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/zdb_cache.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_zone.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/zdb-zone-arc.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/zdb-zone-find.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/zdb-zone-garbage.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/zdb-zone-journal.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/zdb-zone-lock.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 src/zdb-zone-answer-axfr.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/zdb-zone-answer-ixfr.lo: src/$(am__dirstamp) \
@@ -884,6 +1014,8 @@ src/zdb_zone_label.lo: src/$(am__dirstamp) \
 src/zdb_zone_label_iterator.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_zone_load.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/zdb-zone-path-provider.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/zdb_zone_process.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
@@ -955,6 +1087,11 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/htable.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/htbt.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/icmtl_input_stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/journal-cjf-idxt.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/journal-cjf-page-cache.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/journal-cjf-page-output-stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/journal-cjf-page.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/journal-cjf.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/journal.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/journal_ix.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/nsec.Plo@am__quote@
@@ -975,12 +1112,18 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/rr_canonize.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/rrsig.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/rrsig_updater.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/xfr_copy.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb-zone-answer-axfr.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb-zone-answer-ixfr.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb-zone-arc.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb-zone-find.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb-zone-garbage.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb-zone-journal.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb-zone-lock.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb-zone-path-provider.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb-zone-reader-filter.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_alloc.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_dnsname.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_cache.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_error.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_icmtl.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zdb_listener.Plo@am__quote@
@@ -1437,16 +1580,48 @@ buildinfo.h: config.log
 	echo // generated file, do not modify >> buildinfo.h 2> /dev/null
 	echo \#define BUILD_OPTIONS \"$$(grep "./configure" config.log | head -1 | sed 's/.*\.\/configure *//')\" >> buildinfo.h 2> /dev/null
 
+all: REVISION
+
+REVISION:
+	(svn info 2>/dev/null;if [ $? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
+
 src/avl.c: $(FEATURES)
 
-$(FEATURES): config.log
+$(FEATURES): config.log REVISION VERSION
 	echo "#pragma once" > $(FEATURES)
-	echo "#define ZDB_HAS_RRCACHE_ENABLED 0" >> $(FEATURES)
-	echo "#define ZDB_HAS_DNSSEC_SUPPORT 1" >> $(FEATURES)
-	echo "#define ZDB_HAS_NSEC_SUPPORT 1" >> $(FEATURES)
-	echo "#define ZDB_HAS_NSEC3_SUPPORT 1" >> $(FEATURES)
-	echo "#define ZDB_HAS_ACL_SUPPORT 1" >> $(FEATURES)
-	echo "#define ZDB_HAS_TSIG_SUPPORT 1" >> $(FEATURES)
+@HAS_RRCACHE_ENABLED_TRUE@	echo "#define ZDB_HAS_RRCACHE_ENABLED 1" >> $(FEATURES)
+@HAS_RRCACHE_ENABLED_FALSE@	echo "#define ZDB_HAS_RRCACHE_ENABLED 0" >> $(FEATURES)
+@HAS_DNSSEC_SUPPORT_TRUE@	echo "#define ZDB_HAS_DNSSEC_SUPPORT 1" >> $(FEATURES)
+@HAS_DNSSEC_SUPPORT_FALSE@	echo "#define ZDB_HAS_DNSSEC_SUPPORT 0" >> $(FEATURES)
+@HAS_NSEC_SUPPORT_TRUE@	echo "#define ZDB_HAS_NSEC_SUPPORT 1" >> $(FEATURES)
+@HAS_NSEC_SUPPORT_FALSE@	echo "#define ZDB_HAS_NSEC_SUPPORT 0" >> $(FEATURES)
+@HAS_NSEC3_SUPPORT_TRUE@	echo "#define ZDB_HAS_NSEC3_SUPPORT 1" >> $(FEATURES)
+@HAS_NSEC3_SUPPORT_FALSE@	echo "#define ZDB_HAS_NSEC3_SUPPORT 0" >> $(FEATURES)
+@HAS_ACL_SUPPORT_TRUE@	echo "#define ZDB_HAS_ACL_SUPPORT 1" >> $(FEATURES)
+@HAS_ACL_SUPPORT_FALSE@	echo "#define ZDB_HAS_ACL_SUPPORT 0" >> $(FEATURES)
+@HAS_TSIG_SUPPORT_TRUE@	echo "#define ZDB_HAS_TSIG_SUPPORT 1" >> $(FEATURES)
+@HAS_TSIG_SUPPORT_FALSE@	echo "#define ZDB_HAS_TSIG_SUPPORT 0" >> $(FEATURES)
+	which printf > /dev/null 2>&1
+	if [ $$? -eq 0 ];then \
+		printf '// version %i.%i.%i.%i-%i\n' $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/') 0 $$(cat REVISION) >> $(FEATURES) ; \
+		printf '#define $(VP)_VERSION 0x%02x%02x%02x%02x%04xLL' $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/') 0 $$(cat REVISION) >> $(FEATURES) ; \
+	else \
+		echo "#define $(VP)_VERSION_(vmain_,vsub_,vminor_,vpatch_,vrevision_) ((vmain_)<<40)|((vsub_)<<32)|((vminor_)<<24)|((vpatch_)<<16)|(vrevision_)" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VMAIN_ $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1')" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VSUB_ $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\2')" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VMINOR_ $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\3')" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VPATCH_ 0 >> $(FEATURES)" ; \
+		echo "#define $(VP)_VERSION_VREVISION_ $$(cat REVISION)" >> $(FEATURES) ; \
+		echo '#define $(VP)_VERSION $(VP)_VERSION_($(VP)_VERSION_VMAIN_,$(VP)_VERSION_VSUB_,$(VP)_VERSION_VMINOR_,$(VP)_VERSION_VPATCH_,$(VP)_VERSION_VREVISION_)' >> $(FEATURES) ; \
+	fi
+	echo "// $(FEATURES)" >> $(FEATURES)
+	echo >> $(FEATURES)
+
+#if XXX
+#	echo "#define ZDB_XXX 1" >> $(FEATURES)
+#else
+#	echo "#define ZDB_XXX 0" >> $(FEATURES)
+#endif
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

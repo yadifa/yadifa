@@ -415,7 +415,19 @@ nsec3_remove_all_owners(nsec3_zone_item* item)
                     {
                         log_warn("nsec3_remove_all_owners: label %{dnslabel} has no NSEC3 (flags=%04x)", label->name, label->flags);
                     }
+                    
                     label->flags &= ~ZDB_RR_LABEL_NSEC3;
+                    
+                    /** @note edf 20150204 -- that's what's missing to avoid the empty terminal, but doing so requires both the zone and the fqdn : not possible here
+                              
+                    if(RR_LABEL_IRRELEVANT(label))
+                    {
+                        if(FAIL(err = zdb_rr_label_delete_record(zone, labels, labels_top, TYPE_ANY)))
+                        {
+                            log_err("icmtl replay: NSEC3: %r", err);
+                        }
+                    }
+                    */
                 }
 
                 item->label.owner = NULL;

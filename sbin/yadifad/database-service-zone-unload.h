@@ -42,6 +42,6 @@
 
 #include "zone_desc.h"
 
-void database_service_zone_unload(zone_desc_s *zone_desc, zdb_zone *zone, zdb_zone *replacement_zone);
+void database_service_zone_unload(zone_desc_s *zone_desc, zdb_zone *zone);
 
 /** @} */

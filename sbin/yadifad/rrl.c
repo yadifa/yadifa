@@ -112,6 +112,7 @@ CONFIG_BOOL(enabled, TOSTRING(RRL_ENABLED_DEFAULT))
 CONFIG_ACL_FILTER(exempted, RRL_EXEMPTED_DEFAULT)
 /* alias, aliased */
 CONFIG_ALIAS(exempt-clients, exempted)
+CONFIG_ALIAS(enable, enabled)
 CONFIG_END(config_rrl_desc)
 #undef CONFIG_TYPE
 
@@ -132,14 +133,14 @@ config_rrl_section_postprocess(struct config_section_descriptor_s *csd)
     
     g_rrl_settings.exempted_filter = acl_get_check_access_filter(&g_rrl_settings.exempted);
     /** @todo add range checks */
-    
+    /* ipv4_prefix_length is now unsigned
     if(g_rrl_settings.ipv4_prefix_length < 0)
     {
         log_warn("ipv4-prefix-lenght is wrong, setting to 0");
         
         g_rrl_settings.ipv4_prefix_length = 0;
     }
-    
+    */
     if(g_rrl_settings.ipv4_prefix_length > 32)
     {
         log_warn("ipv4-prefix-lenght is wrong, setting to 32");
@@ -151,13 +152,14 @@ config_rrl_section_postprocess(struct config_section_descriptor_s *csd)
     
     g_rrl_settings.ipv4_prefix_mask = htonl(mask);
     
+    /* ipv6_prefix_length is now unsigned
     if(g_rrl_settings.ipv6_prefix_length < 0)
     {
         log_warn("ipv6-prefix-lenght is wrong, setting to 0");
         
         g_rrl_settings.ipv6_prefix_length = 0;
     }
-    
+    */
     if(g_rrl_settings.ipv6_prefix_length > 128)
     {
         log_warn("ipv6-prefix-lenght is wrong, setting to 128");

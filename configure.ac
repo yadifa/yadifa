@@ -32,8 +32,16 @@ dnl
 dnl ############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 4532 $])
-AC_INIT([yadifa],m4_esyscmd([svn info 2> /dev/null |  sed -e 's/^/$/' -e 's/$/ $/' > revision.txt;echo $(cat VERSION)-$(grep -r \$Revision: revision.txt configure.ac Makefile.am sbin/* lib/* bin/* | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[info@yadifa.eu])
+AC_REVISION([$Revision: 5032 $])
+AC_INIT([yadifa],m4_esyscmd([svn info 2> /dev/null |  sed -e 's/^/$/' -e 's/$/ $/' > revision.txt;echo $(cat VERSION)-$(grep -r \$Revision: revision.txt configure.ac Makefile.am sbin/* lib/* bin/* doc/* etc/* | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[info@yadifa.eu])
+
+echo
+echo
+echo "YADIFA BUNDLE START"
+echo "-------------------"
+echo
+echo
+
 
 m4_include([m4/eurid.m4])
 m4_include([m4/yadifa.m4])
@@ -41,11 +49,23 @@ m4_include([m4/yadifa.m4])
 AC_CONFIG_AUX_DIR([.])
 AM_INIT_AUTOMAKE([subdir-objects -Wall -Werror tar-pax])
 
-AC_CONFIG_SUBDIRS([lib/dnscore lib/dnsdb lib/dnszone sbin/yadifad])
+AC_CONFIG_HEADER([config.h])
 
-AC_HAS_WITHOUT(tools, TOOLS, "build the DNS tools",,AC_CONFIG_SUBDIRS([lib/dnslg bin/yadifa]),)
+dnl DO THE LIBRARIES
+dnl
+AC_CONFIG_SUBDIRS([lib/dnscore lib/dnsdb lib/dnszone])
 
-AC_CONFIG_HEADERS([yadifa-config.h])
+AC_HAS_WITHOUT(tools, TOOLS, "build the DNS tools",,AC_CONFIG_SUBDIRS([lib/dnslg]),)
+
+dnl DO THE BINARIES
+dnl
+AC_CONFIG_SUBDIRS([sbin/yadifad])
+
+AC_HAS_WITHOUT(tools, TOOLS, "build the DNS tools",,AC_CONFIG_SUBDIRS([bin/yadifa]),)
+
+
+dnl @todo 20150119 gve -- can be removed
+dnl AC_CONFIG_HEADERS([yadifa-config.h])
 
 AC_CONFIG_MACRO_DIR([m4])
 
@@ -72,7 +92,13 @@ AC_CHECK_LTO
 
 AC_EURID_SUMMARY
 
-AC_YADIFA_SUMMARY
-
 AC_OUTPUT
 
+dnl AC_YADIFA_SUMMARY
+
+echo
+echo
+echo "YADIFA BUNDLE DONE"
+echo "------------------"
+echo
+echo

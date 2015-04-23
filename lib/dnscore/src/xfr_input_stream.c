@@ -45,15 +45,18 @@
 #include <fcntl.h>
 #include <dirent.h>
 
+#include "dnscore/xfr_input_stream.h"
+
+#include "dnscore/zalloc.h"
 #include "dnscore/packet_reader.h"
 #include "dnscore/format.h"
-#include "dnscore/xfr_copy.h"
 #include "dnscore/file_input_stream.h"
 #include "dnscore/file_output_stream.h"
 #include "dnscore/buffer_input_stream.h"
 #include "dnscore/buffer_output_stream.h"
 #include "dnscore/fdtools.h"
 #include "dnscore/pipe_stream.h"
+#include "dnscore/message.h"
 
 /* it depends if host is DARWIN or LINUX */
 #ifdef HAVE_SYS_SYSLIMITS_H
@@ -72,11 +75,14 @@ typedef struct xfr_input_stream_data xfr_input_stream_data;
 
 struct xfr_input_stream_data
 {
-    xfr_copy_args *args;
     output_stream pipe_stream_output;
     input_stream pipe_stream_input;
     input_stream source_stream;
     packet_unpack_reader_data reader;
+    
+    message_data *message;
+    const u8 *origin;
+        
     u8 *first_soa_record;
     u32 first_soa_record_size;
     
@@ -198,7 +204,7 @@ struct xfr_input_stream_data
 static ya_result
 xfr_input_stream_read_packet(xfr_input_stream_data *data)
 {
-    message_data *message = data->args->message;
+    message_data *message = data->message;
     packet_unpack_reader_data *reader = &data->reader;
     u8 *record = &message->pool_buffer[0];
     u32 record_len;
@@ -243,7 +249,7 @@ xfr_input_stream_read_packet(xfr_input_stream_data *data)
             {
                 /* handle SOA case */
 
-                if(!dnsname_equals(record, data->args->origin))
+                if(!dnsname_equals(record, data->origin))
                 {
                     data->eos = TRUE;
 
@@ -355,7 +361,7 @@ xfr_input_stream_read(input_stream *is, u8 *buffer, u32 len)
 {
     xfr_input_stream_data *data = (xfr_input_stream_data*)is->data;
     input_stream *source_stream = &data->source_stream;
-    message_data *message = data->args->message;
+    message_data *message = data->message;
 #if DNSCORE_HAS_TSIG_SUPPORT
     const tsig_item *tsig = message->tsig.tsig;
 #endif
@@ -515,17 +521,19 @@ xfr_input_stream_read(input_stream *is, u8 *buffer, u32 len)
         {
             if(FAIL(return_value = input_stream_read(&data->pipe_stream_input, buffer, len)))
             {
+#if DNSCORE_HAS_TSIG_SUPPORT
                 if(data->need_cleanup_tsig)
                 {
                     tsig_verify_tcp_last_message(message);
                     data->need_cleanup_tsig = FALSE;
                 }
+#endif
             }
         }
         else
         {
             // here, return_value == 0
-            
+#if DNSCORE_HAS_TSIG_SUPPORT
             if(tsig != NULL)
             {
                 tsig_verify_tcp_last_message(message);
@@ -544,13 +552,16 @@ xfr_input_stream_read(input_stream *is, u8 *buffer, u32 len)
                     return_value = TSIG_BADSIG;
                 }
             }
+#endif
         }
     }
     else
     {
+#if DNSCORE_HAS_TSIG_SUPPORT
         // cleanup
         tsig_verify_tcp_last_message(message);
         data->need_cleanup_tsig = FALSE;
+#endif
     }
     
     data->last_error = return_value;
@@ -603,7 +614,6 @@ xfr_input_stream_close(input_stream *is)
         data->need_cleanup_tsig = FALSE;
     }
     
-    data->args = NULL;
     output_stream_close(&data->pipe_stream_output);
     input_stream_close(&data->pipe_stream_input);
     free(data->first_soa_record);
@@ -611,8 +621,8 @@ xfr_input_stream_close(input_stream *is)
 #ifdef DEBUG
     memset(data, 0xfe, sizeof(xfr_input_stream_data));
 #endif
-   
-    free(data); 
+    
+    ZFREE(data, xfr_input_stream_data); // used to be leaked ?
     
     input_stream_set_void(is);
 }
@@ -639,11 +649,11 @@ static const input_stream_vtbl xfr_input_stream_vtbl =
  */
 
 ya_result
-xfr_input_stream_init(xfr_copy_args *args, input_stream* filtering_stream)
+xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin, input_stream *xfr_source_stream, message_data *message, u32 current_serial, xfr_copy_flags flags)
 {
-    input_stream *is = args->is;
-    const u8 *origin = args->origin;
-    message_data *message = args->message;
+    yassert(filtering_stream != NULL && origin != NULL && xfr_source_stream != NULL && message != NULL);
+    
+    input_stream *is = xfr_source_stream;
     
     packet_unpack_reader_data reader;
     u8 *buffer;
@@ -791,7 +801,7 @@ xfr_input_stream_init(xfr_copy_args *args, input_stream* filtering_stream)
     {
         case TYPE_AXFR:
         {
-            if((args->flags & XFR_ALLOW_AXFR) == 0)
+            if((flags & XFR_ALLOW_AXFR) == 0)
             {
                 return INVALID_PROTOCOL;
             }
@@ -799,7 +809,7 @@ xfr_input_stream_init(xfr_copy_args *args, input_stream* filtering_stream)
         }
         case TYPE_IXFR:
         {
-            if((args->flags & XFR_ALLOW_IXFR) == 0)
+            if((flags & XFR_ALLOW_IXFR) == 0)
             {
                 return INVALID_PROTOCOL;
             }
@@ -944,17 +954,16 @@ xfr_input_stream_init(xfr_copy_args *args, input_stream* filtering_stream)
     
     last_serial = ntohl(GET_U32_AT(*ptr));
     
-    if(last_serial == args->current_serial)
+    if(last_serial == current_serial)
     {
-        // args->out_loaded_serial = args->current_serial; /// @todo 20150116 edf -- 
+        //args->out_loaded_serial = args->current_serial;
                         
         return ZONE_ALREADY_UP_TO_DATE;
     }
 
     xfr_input_stream_data *data;    
-    MALLOC_OR_DIE(xfr_input_stream_data*, data, sizeof(xfr_input_stream_data), GENERIC_TAG);
+    ZALLOC_OR_DIE(xfr_input_stream_data*, data, xfr_input_stream_data, GENERIC_TAG);
     ZEROMEMORY(data, sizeof(xfr_input_stream_data));
-    data->args = args;
     
     /*
      * We have got the first SOA
@@ -980,6 +989,10 @@ xfr_input_stream_init(xfr_copy_args *args, input_stream* filtering_stream)
     
     pipe_stream_init(&data->pipe_stream_output, &data->pipe_stream_input, 65536);
     MEMCOPY(&data->reader, &reader, sizeof(packet_unpack_reader_data));
+    
+    data->origin = origin;
+    data->message = message;
+    
     data->ancount = ancount - 1;
     data->record_index++;
     data->last_serial = last_serial;
@@ -1025,7 +1038,7 @@ const u8*
 xfr_input_stream_get_origin(input_stream *in_xfr_input_stream)
 {
     xfr_input_stream_data *data = (xfr_input_stream_data*)in_xfr_input_stream->data;
-    return data->args->origin;
+    return data->origin;
 }
 
 ya_result

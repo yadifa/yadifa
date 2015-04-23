@@ -43,9 +43,11 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
-#include <dnsdb/zdb_types.h>
+
 #include <dnscore/output_stream.h>
 #include <dnscore/packet_reader.h>
+
+#include <dnsdb/zdb_types.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -89,7 +91,7 @@ ya_result dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u1
  */
 
 ya_result dynupdate_icmtlhook_enable(u8* origin, output_stream* os_remove, output_stream* os_add);
-ya_result dynupdate_icmtlhook_disable();
+ya_result dynupdate_icmtlhook_disable(u8* origin);
 
 
 #ifdef	__cplusplus

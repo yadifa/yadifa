@@ -34,6 +34,8 @@
 
 #include "config.h"
 
+#include <poll.h>
+
 #include <dnscore/logger.h>
 #include <dnscore/sys_error.h>
 

@@ -543,7 +543,7 @@ s64
 filesize(const char *name)
 {
     struct stat s;
-    if(stat(name, &s) >= 0)
+    if(stat(name, &s) >= 0) // MUST be stat
     {
         if(S_ISREG(s.st_mode))
         {
@@ -552,6 +552,18 @@ filesize(const char *name)
     }
     
     return (s64)ERRNO_ERROR;
+}
+
+ya_result
+file_is_link(const char *name)
+{
+    struct stat s;
+    if(lstat(name, &s) >= 0)    // MUST be lstat
+    {
+        return S_ISLNK(s.st_mode);
+    }
+    
+    return ERRNO_ERROR;
 }
 
 /**

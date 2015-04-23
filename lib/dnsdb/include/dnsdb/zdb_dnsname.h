@@ -69,7 +69,7 @@ u8* dnsname_zdup(const u8* name);
  *  @return A new instance of the label
  */
 
-u8* dnslabel_dup(const u8* name);
+u8* dnslabel_zdup(const u8* name);
 
 #ifdef	__cplusplus
 }

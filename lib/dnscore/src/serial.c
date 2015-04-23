@@ -39,7 +39,7 @@
  *
  *----------------------------------------------------------------------------*/
 
-#include "dnscore-config.h"
+//#include "dnscore/dnscore-config.h"
 
 #include "dnscore/serial.h"
 

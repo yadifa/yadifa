@@ -31,6 +31,7 @@
 *------------------------------------------------------------------------------
 *
 */
+
 /**
  *  @defgroup server Server
  *  @ingroup yadifad
@@ -51,6 +52,7 @@
 #define SERVER_ST_C_
 
 #include "config.h"
+
 #include <dnscore/logger.h>
 #include <dnscore/fdtools.h>
 #include <dnscore/tcp_io_stream.h>
@@ -60,6 +62,7 @@
 #include <dnscore/sys_get_cpu_count.h>
 
 #include <dnsdb/zdb_types.h>
+#include <dnsdb/zdb-zone-lock.h>
 
 #ifdef DEBUG
 
@@ -70,6 +73,8 @@
 
 extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
+
+#define SHOW_REFERRAL 0
 
 #include "server-mt.h"
 
@@ -546,7 +551,7 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
                     } // query class IN
                     case CLASS_CH:
                     {
-                        process_class_ch(mesg); // thread-safe
+                        class_ch_process(mesg); // thread-safe
                         local_statistics->udp_fp[mesg->status]++;
                         break;
                     } // query class CH
@@ -683,9 +688,9 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
                          &mesg->other.sa);
 
                 local_statistics->udp_fp[mesg->status]++;
-        #ifdef DEBUG
+#ifdef DEBUG
                 log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG5, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_ALL);
-        #endif
+#endif
                 /*
                  * If not FE, or if we answer FE
                  * 
@@ -756,9 +761,9 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
                          &mesg->other.sa);
 
                 local_statistics->udp_fp[mesg->status]++;
-        #ifdef DEBUG
+#ifdef DEBUG
                 log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG5, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_ALL);
-        #endif
+#endif
                 /*
                  * If not FE, or if we answer FE
                  * 
@@ -799,10 +804,10 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
                 local_statistics->udp_dropped_count++;
                 return;
             }
-        } 
-
+        }
     } // switch operation code
     
+    /** @todo still needs to verify RCODE */
 
 #ifdef DEBUG
     if(mesg->send_length < 12)
@@ -858,10 +863,14 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
                         &mesg->qtype,
                         MAKE_ERRNO_ERROR(error_code));
             
+
+            
             return /*ERROR*/;
         }
     }
     
+
+
 #endif
 
     local_statistics->udp_output_size_total += sent;
@@ -963,10 +972,6 @@ server_mt_query_loop()
     ya_result return_code;
     interface *intf;
 
-#if ZDB_USES_ZALLOC != 0
-    zdb_set_zowner(pthread_self());
-#endif
-    
     if(g_config->total_interfaces == 0)
     {
         return INVALID_STATE_ERROR;
@@ -1181,6 +1186,10 @@ server_mt_query_loop()
         rrl_cull();
 #endif
         
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+        zdb_zone_lock_set_monitor();
+#endif
+        
         /* handles statistics logging */
 
         if(log_statistics_enabled)
@@ -1208,6 +1217,9 @@ server_mt_query_loop()
                         /* server_statistics_sum.input_timeout_count += stats->input_timeout_count; */
                         
                         server_statistics_sum.udp_output_size_total += stats->udp_output_size_total;
+#if SHOW_REFERRAL
+                        server_statistics_sum.udp_referrals_count += stats->udp_referrals_count;
+#endif
                         server_statistics_sum.udp_input_count += stats->udp_input_count;
                         server_statistics_sum.udp_dropped_count += stats->udp_dropped_count;
                         server_statistics_sum.udp_queries_count += stats->udp_queries_count;
@@ -1232,8 +1244,11 @@ server_mt_query_loop()
                     server_run_loop_timeout_countdown = g_config->statistics_max_period;
                     server_statistics.loop_rate_counter = 0;
 #ifdef DEBUG
-#if ZDB_ZALLOC_STATISTICS
-                    zdb_alloc_print_stats(termout);
+#if HAS_ZALLOC_STATISTICS_SUPPORT
+                    zalloc_print_stats(termout);
+#endif
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
+                    debug_stat(FALSE); // do NOT enable the dump
 #endif
                     journal_log_status();
                     

@@ -43,10 +43,14 @@
 #ifndef _ZDB_ZONE_H
 #define	_ZDB_ZONE_H
 
-#include <dnsdb/zdb_types.h>
-#include <dnsdb/dnsrdata.h>
 #include <dnscore/input_stream.h>
 #include <dnscore/output_stream.h>
+
+#include <dnsdb/zdb_types.h>
+#include <dnsdb/dnsrdata.h>
+
+#include <dnsdb/zdb-zone-lock.h>
+#include <dnsdb/zdb-zone-arc.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -56,37 +60,19 @@ extern "C"
 #define ZDB_ZONETAG 0x454e4f5a52445a /* "ZDBZONE" */
 
 /**
- * @brief Unloads and destroys a zone.
- *
- * Unloads and destroys a zone.
- *
- * @param[in] db a pointer to the database
- * @param[in] exact_match_origin the name of the zone
- * @param[in] zclass the class of the zone
- *
- * @return an error code.
- *
- */
-
-/* Never called, keep it anyway : it will be useful */
-
-ya_result zdb_zone_unload(zdb *db, dnsname_vector* exact_match_origin, u16 zclass);
-
-/**
  * @brief Get the zone with the given name
  *
  * Get the zone with the given name
  *
  * @param[in] db a pointer to the database
  * @param[in] exact_match_origin the name of the zone
- * @param[in] zclass the class of the zone
  *
  * @return a pointer to zone or NULL if the zone is not in the database
  *
  */
 
 /* 2 USES */
-zdb_zone *zdb_zone_find(zdb *db, dnsname_vector* exact_match_origin, u16 zclass);
+zdb_zone *zdb_zone_find(zdb *db, dnsname_vector* exact_match_origin);
 
 /**
  * @brief Get the zone with the given name
@@ -95,28 +81,12 @@ zdb_zone *zdb_zone_find(zdb *db, dnsname_vector* exact_match_origin, u16 zclass)
  *
  * @param[in] db a pointer to the database
  * @param[in] name the name of the zone (dotted c-string)
- * @param[in] zclass the class of the zone
  *
  * @return a pointer to zone or NULL if the zone is not in the database
  *
  */
 
-zdb_zone *zdb_zone_find_from_name(zdb *db, const char* name, u16 class);
-
-/**
- * @brief Get the zone with the given dns name
- *
- * Get the zone with the given dns name
- *
- * @param[in] db a pointer to the database
- * @param[in] name the name of the zone (dns name)
- * @param[in] zclass the class of the zone
- *
- * @return a pointer to zone or NULL if the zone is not in the database
- *
- */
-
-zdb_zone *zdb_zone_find_from_dnsname(zdb *db, const u8 *dns_name, u16 qclass);
+zdb_zone *zdb_zone_find_from_name(zdb *db, const char* name);
 
 /**
  * @brief Adds a record to a zone
@@ -174,7 +144,7 @@ zdb_packed_ttlrdata* zdb_zone_record_find(zdb_zone *zone, dnslabel_vector_refere
 
 /* 2 USES */
 
-zdb_zone* zdb_zone_create(const u8 *origin, u16 zclass);
+zdb_zone *zdb_zone_create(const u8 *origin);
 
 /*
  * Sets a zone as invalid.
@@ -317,103 +287,7 @@ static inline bool zdb_zone_is_dnssec(const zdb_zone *zone)
 #endif    
 }
 
-/**
- * Zone locking
- * 
- * Sets the owner of a zone.
- * 
- * The owner id has a format: the msb is reserved to say that the access is
- * exclusive to only one instance of the owner.
- * The remaining bits are the id.
- * 
- * Mostly used for the simple reader and various writers.
- * 
- * A new feature needs to be added: being able to pre-lock for an owner.
- * 
- * Explanation: I want to lock for the signing process.  But that process
- * is done in two or three phases.  The first phase is read-only (thus allowing
- * the server to work normally).  But I don't want sombody else, say, a dynamic
- * update, to lock the zone in the mean time. (Which would happen when the lock
- * is transferred from the reader to the signer (at the commit phase).
- * So I'll add a secondary owner, meant to tell "I lock as a reader BUT I also
- * reserve the right for myself later".  And later a transfer can be done to
- * the secondary as soon as the last reader unlocks.
- * 
- * zdb_zone_double_lock(zone, owner, secondary owner)
- * zdb_zone_try_double_lock(zone, owner, secondary owner)
- * zdb_zone_transfer_lock(zone, secondary owner)
- * 
- * The parameter would need to be repeated to detect inconsistencies (bugs)
- * 
- * This should have no effect on the normal locking mechanism, thus ensuring
- * no loss of speed.  The only goal is to avoid a race changing the owner.
- * 
- * Having only zdb_zone_transfer_lock(zone, old owner, new owner) cannot work
- * because nothing prevents two soon-to-be writers to lock and work in tandem.
- * 
- */
-
-void zdb_zone_lock(zdb_zone *zone, u8 owner);
-
-bool zdb_zone_trylock(zdb_zone *zone, u8 owner);
-
-void zdb_zone_unlock(zdb_zone *zone, u8 owner);
-
-/**
- * Reserves the secondary owner and to locks for the owner
- * 
- * @param zone
- * @param owner
- * @param secondary_owner
- */
-
-void zdb_zone_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner);
-
-/**
- * Tries to reserve the secondary owner and to lock for the owner
- * 
- * @param zone
- * @param owner
- * @param secondary_owner
- */
-
-bool zdb_zone_try_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner);
-
-/**
- * 
- * Unlocks one owner and sets the secondary owner to nobody
- * 
- * @param zone
- * @param owner
- * @param secondary_owner
- */
-
-void zdb_zone_double_unlock(zdb_zone *zone, u8 owner, u8 secondary_owner);
-
-/**
- * 
- * Puts the secondary lock in place of the lock when the locker count reaches 1
- * Followed by a zdb_zone_unlock
- * 
- * @param zone
- * @param owner
- * @param secondary_owner
- */
-
-void zdb_zone_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner);
-
-/**
- * 
- * Exchange the primary and secondary locks when the locker count reaches 1
- * Followed by a zdb_zone_unlock
- * 
- * @param zone
- * @param owner
- * @param secondary_owner
- */
-
-void zdb_zone_exchange_locks(zdb_zone *zone, u8 owner, u8 secondary_owner);
-
+#if OBSOLETE
 /**
  * Exchange the current zone with a dummy invalid one.
  * Do nothing if the zone in place is already invalid.
@@ -421,11 +295,12 @@ void zdb_zone_exchange_locks(zdb_zone *zone, u8 owner, u8 secondary_owner);
  * 
  * @param db
  * @param origin
- * @param zclass
  * @return 
  */
 
-zdb_zone *zdb_zone_xchg_with_invalid(zdb *db, const u8 *origin, u16 zclass, u16 or_flags);
+zdb_zone *zdb_zone_xchg_with_invalid(zdb *db, const u8 *origin, u16 or_flags);
+
+#endif
 
 bool zdb_zone_isinvalid(zdb_zone *zone);
 

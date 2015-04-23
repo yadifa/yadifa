@@ -54,7 +54,7 @@ extern "C" {
 #include "config.h"
 
 #include <dnscore/rfc.h>
-#include <dnscore/treeset.h>
+#include <dnscore/ptr_set.h>
     
 #include <dnsdb/zdb_types.h>
     
@@ -83,7 +83,7 @@ extern "C" {
 
 #define     PROGRAM_NAME                PACKAGE
 #define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASEDATE                 "2015-04-17"
+#define     RELEASEDATE                 "2015-04-24"
 #define     COMPILEDATE                 __DATE__
 
     /* List of default values for the different configuration parameters */
@@ -93,10 +93,12 @@ extern "C" {
 #define     S_DATAPATH                  LOCALSTATEDIR "/zones/"
 #define     S_XFRPATH                   LOCALSTATEDIR "/zones/xfr/"
 #define     S_KEYSPATH                  LOCALSTATEDIR "/zones/keys/"        /** Keys should not be in "shared" */
-#define     S_LOGPATH                   LOGDIR                              /** defined at configure time, see: --with-logdir (default is /var/log/yadifa) */
+#define     S_LOGPATH                   LOGDIR
 #define     S_PIDFILE                   LOCALSTATEDIR "/run/" PACKAGE ".pid"
 
 #define     S_VERSION_CHAOS             PACKAGE_VERSION                  /* limit the size */ 
+#define     S_HOSTNAME_CHAOS            NULL
+#define     S_SERVERID_CHAOS            NULL
 
 #define     S_DEBUGLEVEL                "0"
 
@@ -117,6 +119,9 @@ extern "C" {
 #define     S_THREAD_COUNT_BY_ADDRESS   "-1" /* -1 for auto */
 #define     S_DNSSEC_THREAD_COUNT       "0" /* max 1024 */
 
+#define     S_ZONE_LOAD_THREAD_COUNT    "1"     // disk
+#define     S_ZONE_DOWNLOAD_THREAD_COUNT "4"    // network
+    
     /* Chroot, uid and gid */
 #define     S_CHROOT                    "0"
 #define     S_CHROOTPATH                "/"
@@ -177,12 +182,15 @@ extern "C" {
 #define     S_NOTIFY_RETRY_PERIOD          "1"          /* first after 1 minute */
 #define     S_NOTIFY_RETRY_PERIOD_INCREASE "0"          /* period increased by "0" after every try */
 
-    
 #define     S_ZONE_NOTIFY_AUTO          "1"
 #define     S_ZONE_NO_MASTER_UPDATES    "0"
+#define     S_ZONE_FLAG_MAINTAIN_DNSSEC "1"
     
 #define     S_ZONE_DNSSEC_DNSSEC        "off"
     
+#define     S_JOURNAL_SIZE_KB_DEFAULT   "8388608"
+#define     S_JOURNAL_SIZE_KB_MIN       64              // less than this is asking for trouble
+#define     S_JOURNAL_SIZE_KB_MAX       8388608         // 8*2^20 => 8GB
 
     /*    ------------------------------------------------------------    */
 
@@ -301,7 +309,7 @@ struct config_data
 
     /* General variables */
     char                                                     *data_path; /* zones */
-    char                                                      *xfr_path; /* .axfr & .ix */
+    char                                                      *xfr_path; /* full and incremental images base ... */
     char                                                   *chroot_path; /* chroot point */
     char                                                      *log_path; /* log files */
     char                                                     *keys_path; /* keys */
@@ -311,6 +319,8 @@ struct config_data
     char                                                      *pid_file; /* pid file path and name */
 
     char                                                 *version_chaos;
+    char                                                *hostname_chaos;
+    char                                                *serverid_chaos;
     char                                                   *server_port;
 
     pid_t                                                           pid;
@@ -323,6 +333,8 @@ struct config_data
     int                                              cpu_count_override;
     int                                         thread_count_by_address;
     int                                             dnssec_thread_count;
+    int                                          zone_load_thread_count;
+    int                                      zone_download_thread_count;
     int                                                 max_tcp_queries;
     int                                              tcp_query_min_rate;
 

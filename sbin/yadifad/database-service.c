@@ -60,13 +60,12 @@
 #include <dnscore/bytearray_output_stream.h>
 #include <dnscore/file_input_stream.h>
 #include <dnscore/fdtools.h>
-#include <dnscore/xfr_copy.h>
 #include <dnscore/tcp_io_stream.h>
 
 #include <dnscore/service.h>
 #include <dnscore/async.h>
 #include <dnscore/chroot.h>
-#include <dnscore/treeset.h>
+#include <dnscore/ptr_set.h>
 
 #include <dnsdb/zdb_zone_label.h>
 #include <dnsdb/zdb_zone.h>
@@ -74,10 +73,13 @@
 #include <dnsdb/zdb_zone_write.h>
 #include <dnsdb/zdb_icmtl.h>
 #include <dnsdb/zdb_utils.h>
-#include <dnsdb/journal.h>
+
 #include <dnsdb/zdb_zone_load.h>
 #include <dnsdb/dnssec_task.h>
 #include <dnsdb/zdb_zone_label.h>
+#include <dnsdb/zdb-lock.h>
+#include <dnsdb/zdb.h>
+#include <dnsdb/zdb-zone-garbage.h>
 
 #include <dnszone/zone_file_reader.h>
 #include <dnszone/zone_axfr_reader.h>
@@ -115,7 +117,19 @@ extern logger_handle *g_server_logger;
 #define DBLOADQ_TAG 0x5144414f4c4244
 
 //#define DATABASE_SERVICE_QUEUE_SIZE 0x4000
-#define DATABASE_SERVICE_QUEUE_SIZE 0x100000
+#define DATABASE_SERVICE_QUEUE_SIZE 0x1000000
+#define DATABASE_SERVICE_DOWNLOAD_QUEUE_SIZE 0x10000
+#define DATABASE_SERVICE_LOAD_QUEUE_SIZE 0x10000
+#define DATABASE_SERVICE_UNLOAD_QUEUE_SIZE 0x10000
+#define DATABASE_SERVICE_SAVE_QUEUE_SIZE 0x10000
+#define DATABASE_SERVICE_RESIGN_QUEUE_SIZE 0x10000
+
+
+#if DEBUG
+#define DATABASE_SERVICE_BENCH_MESSAGES_PER_SECOND 1
+#else
+#define DATABASE_SERVICE_BENCH_MESSAGES_PER_SECOND 0
+#endif
 
 static struct service_s database_handler = UNINITIALIZED_SERVICE;
 static async_queue_s database_handler_queue;
@@ -123,9 +137,9 @@ static bool database_handler_initialised = FALSE;
 static int database_service(struct service_worker_s *worker);
 
 /* Zone file variables */
-zone_data_set database_zone_desc = {TREESET_DNSNAME_EMPTY, MUTEX_INITIALIZER};
+zone_data_set database_zone_desc = {PTR_SET_DNSNAME_EMPTY, MUTEX_INITIALIZER};
 /* Zones meant to be merged with zones */
-zone_data_set database_dynamic_zone_desc = {TREESET_DNSNAME_EMPTY, MUTEX_INITIALIZER};
+
 
 static struct thread_pool_s *database_zone_load_thread_pool = NULL;
 static struct thread_pool_s *database_zone_save_thread_pool = NULL;
@@ -222,7 +236,7 @@ database_service_init()
     {
         if(database_zone_load_thread_pool == NULL)
         {
-            database_zone_load_thread_pool = thread_pool_init_ex(1, 4096, "db-zone-load-tp"); /// @todo configure parameters
+            database_zone_load_thread_pool = thread_pool_init_ex(g_config->zone_load_thread_count, DATABASE_SERVICE_LOAD_QUEUE_SIZE, "db-zone-load-tp"); /// @todo configure parameters
 
             if(database_zone_load_thread_pool == NULL)
             {
@@ -232,7 +246,7 @@ database_service_init()
         
         if(database_zone_save_thread_pool == NULL)
         {
-            database_zone_save_thread_pool = thread_pool_init_ex(1, 4096, "db-zone-save-tp"); /// @todo configure parameters
+            database_zone_save_thread_pool = thread_pool_init_ex(1, DATABASE_SERVICE_SAVE_QUEUE_SIZE, "db-zone-save-tp"); /// @todo configure parameters
 
             if(database_zone_save_thread_pool == NULL)
             {
@@ -242,7 +256,7 @@ database_service_init()
         
         if(database_zone_unload_thread_pool == NULL)
         {
-            database_zone_unload_thread_pool = thread_pool_init_ex(1, 4096, "db-zone-unload-tp"); /// @todo configure parameters
+            database_zone_unload_thread_pool = thread_pool_init_ex(1, DATABASE_SERVICE_UNLOAD_QUEUE_SIZE, "db-zone-unload-tp"); /// @todo configure parameters
 
             if(database_zone_unload_thread_pool == NULL)
             {
@@ -252,7 +266,7 @@ database_service_init()
         
         if(database_zone_download_thread_pool == NULL)
         {
-            database_zone_download_thread_pool = thread_pool_init_ex(4, 4096, "db-download-tp"); /// @todo configure parameters
+            database_zone_download_thread_pool = thread_pool_init_ex(g_config->zone_download_thread_count, DATABASE_SERVICE_DOWNLOAD_QUEUE_SIZE, "db-download-tp"); /// @todo configure parameters
 
             if(database_zone_download_thread_pool == NULL)
             {
@@ -263,7 +277,7 @@ database_service_init()
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
         if(database_zone_resignature_thread_pool == NULL)
         {
-            database_zone_resignature_thread_pool = thread_pool_init_ex(1, 4096, "db-resign-tp"); /// @todo configure parameters
+            database_zone_resignature_thread_pool = thread_pool_init_ex(1, DATABASE_SERVICE_RESIGN_QUEUE_SIZE, "db-resign-tp"); /// @todo configure parameters
 
             if(database_zone_resignature_thread_pool == NULL)
             {
@@ -343,6 +357,29 @@ database_service_finalise()
     
     if(database_handler_initialised)
     {
+        zone_set_lock(&database_zone_desc);
+
+        ptr_set_avl_iterator iter;
+        ptr_set_avl_iterator_init(&database_zone_desc.set, &iter);
+
+        while(ptr_set_avl_iterator_hasnext(&iter))
+        {
+            ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
+            zone_desc_s *zone_desc = (zone_desc_s *)zone_node->value;
+
+            zone_lock(zone_desc, ZONE_LOCK_UNLOAD);
+            zdb_zone *zone = zone_get_loaded_zone(zone_desc);
+            if(zone != NULL)
+            {
+                alarm_close(zone->alarm_handle);
+                zone->alarm_handle = ALARM_HANDLE_INVALID;
+                zdb_zone_release(zone);
+            }
+            zone_unlock(zone_desc, ZONE_LOCK_UNLOAD);
+        }
+
+        zone_set_unlock(&database_zone_desc);
+        
         err = database_service_stop();
         
         if(database_zone_load_thread_pool != NULL)
@@ -395,9 +432,7 @@ database_service_finalise()
         
         zone_free_all(&database_zone_desc);
         
-        log_debug("dropping dynamic zone settings");
-        
-        zone_free_all(&database_dynamic_zone_desc);
+
         
         database_handler_initialised = FALSE;
     }
@@ -417,16 +452,16 @@ database_origin_is_mounted(const u8 *origin)
     zdb *db = g_config->database;
     bool mounted = FALSE;
     
-    group_mutex_lock(&db->mutex, ZDB_MUTEX_READER);
+    zdb_lock(db, ZDB_MUTEX_READER);
     
     zdb_zone_label *zone_label = zdb_zone_label_find_from_dnsname_nolock(db, origin);
     if(zone_label != NULL)
     {
-        zdb_zone *zone = zone_label->zone;
+        zdb_zone *zone = zone_label->zone; // OK (ARC)
         mounted = zdb_zone_isvalid(zone);
     }
     
-    group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+    zdb_unlock(db, ZDB_MUTEX_READER);
     
     return mounted;
 }
@@ -450,13 +485,13 @@ database_service_set_drop_after_reload()
 {
     zone_set_lock(&database_zone_desc);
 
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&database_zone_desc.set, &iter);
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&database_zone_desc.set, &iter);
 
-    while(treeset_avl_iterator_hasnext(&iter))
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
-        zone_desc_s *zone_desc = (zone_desc_s *)zone_node->data;
+        ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
+        zone_desc_s *zone_desc = (zone_desc_s *)zone_node->value;
 
         zone_desc->status_flags |= ZONE_STATUS_DROP_AFTER_RELOAD;
     }
@@ -471,13 +506,13 @@ database_service_do_drop_after_reload()
     
     zone_set_lock(&database_zone_desc);
 
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&database_zone_desc.set, &iter);
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&database_zone_desc.set, &iter);
 
-    while(treeset_avl_iterator_hasnext(&iter))
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
-        zone_desc_s *zone_desc = (zone_desc_s *)zone_node->data;
+        ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
+        zone_desc_s *zone_desc = (zone_desc_s *)zone_node->value;
 
         if((zone_desc->status_flags & ZONE_STATUS_DROP_AFTER_RELOAD) != 0)
         {
@@ -522,7 +557,7 @@ database_service_process_command(zone_desc_s *zone_desc, zone_command_s* command
         }
         case DATABASE_SERVICE_ZONE_UNLOAD:
         {
-            database_service_zone_unload(zone_desc, command->parm.zone, NULL);
+            database_service_zone_unload(zone_desc, command->parm.zone);
             break;
         }
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
@@ -544,7 +579,21 @@ database_service_process_command(zone_desc_s *zone_desc, zone_command_s* command
         }
         case DATABASE_SERVICE_ZONE_SAVE_TEXT:
         {
-            database_service_zone_save(zone_desc); // text
+            if(ISOK(zone_lock(zone_desc, ZONE_LOCK_SAVE)))
+            {
+                if(command->parm.ptr != NULL)
+                {
+                    zone_desc->status_flags |= ZONE_STATUS_MUST_CLEAR_JOURNAL;
+                }
+                
+                zone_unlock(zone_desc, ZONE_LOCK_SAVE);
+                
+                database_service_zone_save(zone_desc); // text
+            }
+            else
+            {
+                log_err("database_service_zone_save: failed to lock zone settings for '%{dnsname}'", zone_desc->origin);
+            }
             break;
         }
         default:
@@ -558,6 +607,11 @@ static int
 database_service(struct service_worker_s *worker)
 {
     zone_desc_s *zone_desc = NULL;
+    
+#if DATABASE_SERVICE_BENCH_MESSAGES_PER_SECOND
+    u64 sbmps_epoch_us = timeus();
+    u32 sbmps_count = 0;
+#endif
     /*
      * while the program is running
      */
@@ -576,6 +630,7 @@ database_service(struct service_worker_s *worker)
 
         if(async == NULL)
         {
+            //zdb_zone_garbage_run();
             continue;
         }
         
@@ -586,6 +641,22 @@ database_service(struct service_worker_s *worker)
             log_err("database_service: NULL message");
             continue;
         }
+        
+#if DATABASE_SERVICE_BENCH_MESSAGES_PER_SECOND
+        {
+            u64 now = timeus();
+            if(now - sbmps_epoch_us >= 1000000)
+            {
+                double mps = sbmps_count;
+                mps *= 1000000.0;
+                mps /= (now - sbmps_epoch_us);
+                log_info("database_service: %12.3fmsg/s", mps);
+                sbmps_epoch_us = now;
+                sbmps_count = 0;
+            }
+            sbmps_count++;
+        }
+#endif
         
 #ifdef DEBUG
         if(message->payload.type < DATABASE_SERVICE_OPERATION_COUNT)
@@ -703,10 +774,18 @@ database_service(struct service_worker_s *worker)
                 zone_desc = zone_acquirebydnsname(message->origin);
                 if(zone_desc != NULL)
                 {
+                    // zone has been acquired for this call
+                    // references are passed to the command
                     zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_UNLOAD, message->payload.zone_unload.zone, TRUE);
+                    message->payload.zone_unload.zone = NULL;
                 }
                 else
                 {
+                    if(message->payload.zone_unload.zone != NULL)
+                    {
+                        zdb_zone_release(message->payload.zone_unload.zone);
+                        message->payload.zone_unload.zone = NULL;
+                    }
                     log_debug("cannot load '%{dnsname}' (not configured)", message->origin);
                 }
                 break;
@@ -746,7 +825,7 @@ database_service(struct service_worker_s *worker)
                 zone_desc = zone_acquirebydnsname(message->origin);
                 if(zone_desc != NULL)
                 {
-                    zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_SAVE_TEXT, NULL, FALSE);
+                    zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_SAVE_TEXT, (message->payload.zone_save.clear)?(void*)1:(void*)0, FALSE);
                 }
                 else
                 {
@@ -828,21 +907,37 @@ database_service(struct service_worker_s *worker)
                 // desc
                 zone_desc = zone_acquirebydnsname(message->origin);
                 
+                // current zone desc is the one we wanted to update the signatures on ?
+                
                 if(zone_desc == message->payload.zone_update_signatures.expected_zone_desc)
                 {
-                    if(zone_desc->loaded_zone == message->payload.zone_update_signatures.expected_zone)
+                    zone_lock(zone_desc, ZONE_LOCK_SERVICE);
+                    zdb_zone *zone = zone_get_loaded_zone(zone_desc); // RC++
+                    zone_unlock(zone_desc, ZONE_LOCK_SERVICE);
+                    
+                    if(zone != NULL)
                     {
-                        log_info("zone signature of '%{dnsname}' triggered",
-                                zone_desc->origin);
-                        zone_enqueue_command(zone_desc, DATABASE_SERVICE_UPDATE_ZONE_SIGNATURES, zone_desc->loaded_zone, FALSE);
-                    }
-                    else
-                    {
-                        log_warn("zone signature of '%{dnsname}' triggered for another instance of the zone, ignoring",
-                                zone_desc->origin);
-                                            
-                        zone_release(zone_desc);
-                        zone_desc = NULL;
+                        // zone is the one we wanted to update the signatures on ?
+                        
+                        if(zone == message->payload.zone_update_signatures.expected_zone)
+                        {
+                            log_info("zone signature of '%{dnsname}' triggered",
+                                    zone_desc->origin);
+                            zone_enqueue_command(zone_desc, DATABASE_SERVICE_UPDATE_ZONE_SIGNATURES, NULL, FALSE);
+                        }
+                        else
+                        {
+                            log_warn("zone signature of '%{dnsname}' triggered for another instance of the zone, ignoring",
+                                    zone_desc->origin);
+
+                            zone_release(zone_desc);
+                            zone_desc = NULL;
+                        }
+                        
+                        zdb_zone_release(zone);
+#ifdef DEBUG
+                        zone = NULL;
+#endif
                     }
                 }
                 else
@@ -850,10 +945,19 @@ database_service(struct service_worker_s *worker)
                     log_warn("zone signature of '%{dnsname}' triggered for another instance of the zone settings, ignoring",
                             zone_desc->origin);
                     zone_release(zone_desc);
+#ifdef DEBUG
                     zone_desc = NULL;
+#endif
                 }
                 
+                zdb_zone_release(message->payload.zone_update_signatures.expected_zone);
+#ifdef DEBUG
+                message->payload.zone_update_signatures.expected_zone = NULL;
+#endif
                 zone_release(message->payload.zone_update_signatures.expected_zone_desc);
+#ifdef DEBUG
+                message->payload.zone_update_signatures.expected_zone_desc = NULL;
+#endif
 
                 break;
             }
@@ -869,9 +973,16 @@ database_service(struct service_worker_s *worker)
                 
                 if(ISOK(message->payload.zone_loaded_event.result_code))
                 {
-                    log_info("successfully loaded the zone for %{dnsname}", message->origin);
-                    
-                    zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_MOUNT, NULL, FALSE);
+                    if(message->payload.zone_loaded_event.result_code == 1)
+                    {
+                        log_info("successfully loaded the zone for %{dnsname}", message->origin);
+
+                        zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_MOUNT, NULL, FALSE);
+                    }
+                    else
+                    {
+                        log_info("there was no need to load the zone for %{dnsname}", message->origin);
+                    }
                 }
                 else if((message->payload.zone_loaded_event.result_code == ZRE_NO_VALID_FILE_FOUND) && (zone_desc->type == ZT_SLAVE))
                 {
@@ -880,6 +991,12 @@ database_service(struct service_worker_s *worker)
                 else
                 {
                     log_err("failed to load the zone for %{dnsname}: %r", message->origin, message->payload.zone_loaded_event.result_code);
+                }
+                
+                if(message->payload.zone_loaded_event.zone != NULL)
+                {
+                    zdb_zone_release(message->payload.zone_loaded_event.zone);
+                    message->payload.zone_loaded_event.zone = NULL;
                 }
                 
                 /// @todo why ? zone_desc = zone_acquirebydnsname(message->origin);
@@ -902,11 +1019,18 @@ database_service(struct service_worker_s *worker)
                     {
                         if(zdb_zone_is_dnssec(message->payload.zone_mounted_event.zone))
                         {
-                            log_info("signature maintenance initialisation for %{dnsname}", message->origin);
+                            if(zone_maintains_dnssec(zone_desc))
+                            {
+                                log_info("signature maintenance initialisation for %{dnsname}", message->origin);
 
-                            database_service_zone_resignature_init(
-                                    message->payload.zone_mounted_event.zone_desc,
-                                    message->payload.zone_mounted_event.zone);
+                                database_service_zone_resignature_init(
+                                        message->payload.zone_mounted_event.zone_desc,
+                                        message->payload.zone_mounted_event.zone);
+                            }
+                            else
+                            {
+                                log_info("signature maintenance disabled for %{dnsname}", message->origin);
+                            }
                         }
                     }
                     else
@@ -914,22 +1038,29 @@ database_service(struct service_worker_s *worker)
 #endif
                     if(zone_desc->type == ZT_SLAVE)
                     {
-                        database_zone_refresh_maintenance(g_config->database, message->origin, 0); // means next refresh from now
+                        database_zone_refresh_maintenance(g_config->database, message->origin, 0); // means next refresh from now // database_zone_refresh_maintenance_wih_zone(zone_desc->loaded_zone, 0);
                     }
                 }
                 else
                 {
                     log_err("failed to mount the zone for %{dnsname}: %r", message->origin, message->payload.zone_mounted_event.result_code);
                 }
+                
+                if(message->payload.zone_mounted_event.zone != NULL)
+                {
+                    zdb_zone_release(message->payload.zone_mounted_event.zone);
+                    message->payload.zone_mounted_event.zone = NULL;
+                }
+#ifdef DEBUG
+                //zone_release(message->payload.zone_mounted_event.zone_desc);
+                message->payload.zone_mounted_event.zone_desc = NULL;
+#endif
+                // do not release zone_desc because we will try to push the event
                 break;
             }
             
             case DATABASE_SERVICE_ZONE_UNMOUNTED_EVENT:
             {
-                /// @todo WHAT IF THE EVENT FAILED ? WHAT ABOUT THE REMAINING OF THE QUEUE ???
-                ///       WE FORGOT TO TAKE THIS INTO ACCOUNT : THERE IS SOME SORT OF RETRY OR
-                ///       CANCEL ALL MECHANISM NEEDED ...
-                
                 // desc (both)
                 zone_desc = zone_acquirebydnsname(message->origin);
                 
@@ -943,6 +1074,7 @@ database_service(struct service_worker_s *worker)
                 }
                 
                 zone_release(message->payload.zone_unmounted_event.zone_desc);
+                message->payload.zone_unmounted_event.zone_desc = NULL;
                 break;
             }
             case DATABASE_SERVICE_ZONE_UNLOADED_EVENT:
@@ -964,6 +1096,7 @@ database_service(struct service_worker_s *worker)
                 }
                 
                 zone_release(message->payload.zone_unloaded_event.zone_desc);
+                message->payload.zone_unloaded_event.zone_desc = NULL;
                 break;
             }
             
@@ -995,6 +1128,7 @@ database_service(struct service_worker_s *worker)
                 break;
             }
         }
+        
         if(zone_desc != NULL)
         {
             if(FAIL(zone_lock(zone_desc, ZONE_LOCK_SERVICE)))
@@ -1032,6 +1166,10 @@ database_service(struct service_worker_s *worker)
                     {
                         log_debug("zone desc '%{dnsname}'@%p is marked for destruction", zone_desc->origin, zone_desc);
                     }
+                    if(!(zone_desc->status_flags & ZONE_STATUS_PROCESSING))
+                    {
+                        zone_desc->last_processor = 0;
+                    }
                     break;
                 }
             }
@@ -1039,10 +1177,10 @@ database_service(struct service_worker_s *worker)
             log_debug7("zone '%{dnsname}' is processed by %s", message->origin, database_service_operation_get_name(zone_desc->last_processor));
             
             zone_unlock(zone_desc, ZONE_LOCK_SERVICE);
-            
             zone_release(zone_desc);
-            
+#ifdef DEBUG
             zone_desc = NULL;
+#endif
         }
         
         database_load_message_free(message);
@@ -1066,16 +1204,16 @@ database_load_all_zones()
     // iterates the above process until there are no names left to load
     
     zone_set_lock(&database_zone_desc);
-    treeset_node *node = treeset_avl_get_first(&database_zone_desc.set);
+    ptr_node *node = ptr_set_avl_get_first(&database_zone_desc.set);
     
     for(;;)
     {
         u8 *name = buffer;
         const u8 *last = NULL;
         
-        for(; node != NULL; node = treeset_avl_node_next(node))
+        for(; node != NULL; node = ptr_set_avl_node_next(node))
         {
-            zone_desc_s *zone_desc = (zone_desc_s *)node->data;
+            zone_desc_s *zone_desc = (zone_desc_s *)node->value;
             int name_len = dnsname_len(zone_desc->origin);
             if(name_len > (&buffer[sizeof(buffer)] - name))
             {
@@ -1113,13 +1251,13 @@ database_load_all_zones()
         
         // get back the last name
         
-        node = treeset_avl_find(&database_zone_desc.set, last);
+        node = ptr_set_avl_find(&database_zone_desc.set, last);
         
         if(node != NULL)
         {
             // and get the one that follows
             
-            node = treeset_avl_node_next(node);
+            node = ptr_set_avl_node_next(node);
         }
     }
 }
@@ -1143,13 +1281,16 @@ database_zone_load(const u8 *origin)
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
 
 void
-database_zone_update_signatures(const u8 *origin, zone_desc_s *expected_zone_desc, const zdb_zone *expected_zone)
+database_zone_update_signatures(const u8 *origin, zone_desc_s *expected_zone_desc, zdb_zone *expected_zone)
 {
     log_debug("database_zone_update_signatures: %{dnsname}, %p, %p", origin, expected_zone_desc, expected_zone);
     
     log_debug("database_service: enqueue operation DATABASE_SERVICE_UPDATE_ZONE_SIGNATURES on %{dnsname}", origin);
     database_message *message = database_load_message_alloc(origin, DATABASE_SERVICE_UPDATE_ZONE_SIGNATURES);
+    
     zone_acquire(expected_zone_desc);
+    zdb_zone_acquire(expected_zone);
+    
     message->payload.zone_update_signatures.expected_zone_desc = expected_zone_desc;
     message->payload.zone_update_signatures.expected_zone = expected_zone;
     
@@ -1169,9 +1310,11 @@ database_zone_unload(zdb_zone *zone)
     log_debug("database_load_zone_unload: %{dnsname}", zone->origin);
     
     log_debug("database_service: enqueue operation DATABASE_SERVICE_ZONE_UNLOAD on %{dnsname}@%p", zone->origin, zone);
+    
+    zdb_zone_acquire(zone);
+    
     database_message *message = database_load_message_alloc(zone->origin, DATABASE_SERVICE_ZONE_UNLOAD);
     message->payload.zone_unload.zone = zone;
-    //message->payload.zone_unload.replacement_zone = replacement_zone;
     
     async_message_s *async = async_message_alloc();
     async->id = message->payload.type;
@@ -1211,7 +1354,7 @@ void database_zone_unfreeze(const u8 *origin)
     async_message_call(&database_handler_queue, async);
 }
 
-void database_zone_save(const u8 *origin)
+void database_zone_save_ex(const u8 *origin, bool clear)
 {
     log_debug("database_zone_save: %{dnsname}", origin);
     
@@ -1221,10 +1364,16 @@ void database_zone_save(const u8 *origin)
 
     async_message_s *async = async_message_alloc();
     async->id = message->payload.type;
+    message->payload.zone_save.clear = clear;
     async->args = message;
     async->handler = NULL;
     async->handler_args = NULL;
     async_message_call(&database_handler_queue, async);
+}
+
+void database_zone_save(const u8 *origin)
+{
+    database_zone_save_ex(origin, FALSE);
 }
 
 void
@@ -1388,7 +1537,13 @@ database_fire_zone_loaded(zone_desc_s *zone_desc, zdb_zone *zone, ya_result resu
 {
     log_debug("database_service: enqueue operation DATABASE_SERVICE_ZONE_LOADED_EVENT on %{dnsname} %p %r", zone_desc->origin, zone, result_code);
     database_message *message = database_load_message_alloc(zone_desc->origin, DATABASE_SERVICE_ZONE_LOADED_EVENT);
+    
     zone_acquire(zone_desc);
+    if(zone != NULL)
+    {
+        zdb_zone_acquire(zone);
+    }
+    
     message->payload.zone_loaded_event.zone_desc = zone_desc;
     message->payload.zone_loaded_event.zone = zone;
     message->payload.zone_loaded_event.result_code = result_code;
@@ -1406,7 +1561,13 @@ database_fire_zone_mounted(zone_desc_s *zone_desc, zdb_zone *zone, ya_result res
 {
     log_debug("database_service: enqueue operation DATABASE_SERVICE_ZONE_MOUNTED_EVENT on %{dnsname} %p %r", zone_desc->origin, zone, result_code);
     database_message *message = database_load_message_alloc(zone_desc->origin, DATABASE_SERVICE_ZONE_MOUNTED_EVENT);
+    
     zone_acquire(zone_desc);
+    if(zone != NULL)
+    {
+        zdb_zone_acquire(zone);
+    }
+    
     message->payload.zone_mounted_event.zone_desc = zone_desc;
     message->payload.zone_mounted_event.zone = zone;
     message->payload.zone_mounted_event.result_code = result_code;
@@ -1424,6 +1585,9 @@ database_fire_zone_unloaded(zdb_zone *zone, ya_result result_code)
 {
     log_debug("database_service: enqueue operation DATABASE_SERVICE_ZONE_UNLOADED_EVENT on %{dnsname} %p %r", zone->origin, zone, result_code);
     database_message *message = database_load_message_alloc(zone->origin, DATABASE_SERVICE_ZONE_UNLOADED_EVENT);
+    
+    zdb_zone_acquire(zone);
+    
     message->payload.zone_unloaded_event.zone = zone;
     message->payload.zone_unloaded_event.result_code = result_code;
     
@@ -1440,7 +1604,9 @@ database_fire_zone_unmounted(zone_desc_s *zone_desc, ya_result result_code)
 {
     log_debug("database_service: enqueue operation DATABASE_SERVICE_ZONE_UNMOUNTED_EVENT on %{dnsname} %r", zone_desc->origin, result_code);
     database_message *message = database_load_message_alloc(zone_desc->origin, DATABASE_SERVICE_ZONE_UNMOUNTED_EVENT);
+    
     zone_acquire(zone_desc);
+    
     message->payload.zone_unmounted_event.zone_desc = zone_desc;
     message->payload.zone_unmounted_event.result_code = result_code;
     
@@ -1516,31 +1682,24 @@ database_service_create_invalid_zones()
 {
     zone_set_lock(&database_zone_desc);
     
-    if(!treeset_avl_isempty(&database_zone_desc.set))
+    if(!ptr_set_avl_isempty(&database_zone_desc.set))
     {
-        dnsname_vector name;
-        treeset_avl_iterator iter;
-        treeset_avl_iterator_init(&database_zone_desc.set, &iter);
+        ptr_set_avl_iterator iter;
+        ptr_set_avl_iterator_init(&database_zone_desc.set, &iter);
 
-        while(treeset_avl_iterator_hasnext(&iter))
+        while(ptr_set_avl_iterator_hasnext(&iter))
         {
-            treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
-            zone_desc_s *zone_desc = (zone_desc_s*)zone_node->data;
+            ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
+            zone_desc_s *zone_desc = (zone_desc_s*)zone_node->value;
 
+            zdb_zone *invalid_zone = zdb_zone_create(zone_desc->origin); // RC = 1
+            zdb_zone_invalidate(invalid_zone);
             
-            dnsname_to_dnsname_vector(zone_desc->origin, &name);
+            zdb_zone *old_zone = zdb_set_zone(g_config->database, invalid_zone); // RC ++
+            yassert(old_zone == NULL);
+            (void)old_zone;
             
-            group_mutex_lock(&g_config->database->mutex, ZDB_MUTEX_WRITER);
-            
-            zdb_zone_label *zone_label = zdb_zone_label_add_nolock(g_config->database, &name);
-
-            yassert(zone_label->zone == NULL);
-
-            zdb_zone *invalid_zone = zdb_zone_create(zone_desc->origin, CLASS_IN);
-            invalid_zone->apex->flags |= ZDB_RR_LABEL_INVALID_ZONE;
-            zone_label->zone = invalid_zone;
-            
-            group_mutex_unlock(&g_config->database->mutex, ZDB_MUTEX_WRITER);
+            zdb_zone_release(invalid_zone);
         }
     }
     

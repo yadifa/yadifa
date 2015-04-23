@@ -92,7 +92,7 @@ database_service_zone_desc_unload(zone_desc_s *zone_desc)
 #ifdef DEBUG
         database_zone_desc_is_mounted(zone_desc->origin);
 #endif
-        yassert(zone_desc->loaded_zone != NULL);
+        yassert(zone_has_loaded_zone(zone_desc));
         
         zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_UNMOUNT, NULL, TRUE);
         zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_UNLOAD, NULL, TRUE); // default zone
@@ -118,7 +118,7 @@ database_service_zone_desc_unload(zone_desc_s *zone_desc)
 
         if(queue_size > 0)
         {
-            log_err("database_service_zone_desc_unload(%p) has still %u commands in the queue", queue_size);
+            log_err("database_service_zone_desc_unload(%p) has still %u commands in the queue", zone_desc, queue_size);
         }
         
         zone_unlock(zone_desc, ZONE_LOCK_DESC_UNLOAD);

@@ -32,7 +32,7 @@
 *
 */
 
-#include "dnscore-config.h"
+#include "dnscore/dnscore-config.h"
 
 #if HAS_PTHREAD_SETNAME_NP
 #ifdef DEBUG
@@ -45,7 +45,7 @@
 
 #include <pthread.h>
 
-#include "dnscore/treeset.h"
+#include "dnscore/ptr_set.h"
 #include "dnscore/logger.h"
 #include "dnscore/thread_pool.h"
 
@@ -54,7 +54,7 @@
 extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
-static int treeset_service_s_compare(const void *node_a, const void *node_b)
+static int service_ptr_set_compare(const void *node_a, const void *node_b)
 {
     
     struct service_s *a = (struct service_s *)node_a;
@@ -63,7 +63,7 @@ static int treeset_service_s_compare(const void *node_a, const void *node_b)
     return strcmp(a->name, b->name);
 }
 
-static treeset_tree service_set = {NULL, treeset_service_s_compare};
+static ptr_set service_set = {NULL, service_ptr_set_compare};
 static mutex_t service_set_mutex = MUTEX_INITIALIZER;
 
 static void*
@@ -150,12 +150,17 @@ service_thread(void *args)
 int
 service_init_ex(struct service_s *desc, service_main *entry_point, const char* name, u32 count)
 {
-    ZEROMEMORY(desc, sizeof(struct service_s));
+    if(count == 0)
+    {
+        return INVALID_ARGUMENT_ERROR;
+    }
     
+    ZEROMEMORY(desc, sizeof(struct service_s));
+        
     desc->name = (char*)name;
     
     mutex_lock(&service_set_mutex);
-    treeset_node *node = treeset_avl_find(&service_set, desc);
+    ptr_node *node = ptr_set_avl_find(&service_set, desc);
     mutex_unlock(&service_set_mutex);
     
     if(node == NULL)
@@ -177,7 +182,7 @@ service_init_ex(struct service_s *desc, service_main *entry_point, const char* n
         }
     
         mutex_lock(&service_set_mutex);
-        treeset_avl_insert(&service_set, desc);
+        ptr_set_avl_insert(&service_set, desc);
         mutex_unlock(&service_set_mutex);
         
         return SUCCESS;
@@ -211,7 +216,7 @@ service_finalize(struct service_s *desc)
     service_wait(desc);
     
     mutex_lock(&service_set_mutex);
-    treeset_avl_delete(&service_set, desc);
+    ptr_set_avl_delete(&service_set, desc);
     mutex_unlock(&service_set_mutex);
     
     for(u32 i = 0; i < desc->worker_count; i++)
@@ -547,11 +552,11 @@ service_check_all_alive()
     time_t now = time(NULL);
     
     mutex_lock(&service_set_mutex);
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&service_set, &iter);
-    while(treeset_avl_iterator_hasnext(&iter))
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&service_set, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
         struct service_s *desc = (struct service_s *)node->key;
         
         if(desc->last_seen_alive > 0)
@@ -657,12 +662,12 @@ void
 service_stop_all()
 {
     mutex_lock(&service_set_mutex);
-    treeset_avl_iterator iter;
+    ptr_set_avl_iterator iter;
     
-    treeset_avl_iterator_init(&service_set, &iter);
-    while(treeset_avl_iterator_hasnext(&iter))
+    ptr_set_avl_iterator_init(&service_set, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
         struct service_s *desc = (struct service_s *)node->key;
     
         log_debug("service_stop_all: stop '%s'", STRNULL(desc->name));
@@ -670,10 +675,10 @@ service_stop_all()
         service_stop(desc);    
     }
     
-    treeset_avl_iterator_init(&service_set, &iter);
-    while(treeset_avl_iterator_hasnext(&iter))
+    ptr_set_avl_iterator_init(&service_set, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
         struct service_s *desc = (struct service_s *)node->key;
     
         log_debug("service_stop_all: wait '%s'", STRNULL(desc->name));
@@ -688,12 +693,12 @@ void
 service_start_all()
 {
     mutex_lock(&service_set_mutex);
-    treeset_avl_iterator iter;
+    ptr_set_avl_iterator iter;
     
-    treeset_avl_iterator_init(&service_set, &iter);
-    while(treeset_avl_iterator_hasnext(&iter))
+    ptr_set_avl_iterator_init(&service_set, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
         struct service_s *desc = (struct service_s *)node->key;
     
         log_debug("service_start_all: start '%s'", STRNULL(desc->name));

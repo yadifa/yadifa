@@ -31,9 +31,8 @@ dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
 dnl ############################################################################
 
-
-
 dnl Assume it is true
+
 cpu_intel_compatible=1
 icc_enabled=0
 

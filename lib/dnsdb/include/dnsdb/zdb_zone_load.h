@@ -77,12 +77,23 @@ extern "C"
 #define ZDB_ZONE_NSEC3             0x0020
 #define ZDB_ZONE_NSEC3_OPTOUT      0x0030
 
-ya_result zdb_zone_load(zdb* db, zone_reader* zr, zdb_zone** zone_out, const char *incremental_data_path, const u8 *expected_origin, u16 flags);
+ya_result zdb_zone_load(zdb* db, zone_reader* zr, zdb_zone** zone_out, const u8 *expected_origin, u16 flags);
 
+/**
+ * @brief Load the zone SOA.
+ *
+ * Load the zone SOA record
+ * This is meant mainly for the slave that could choose between, ie: zone file or axfr zone file
+ * The SOA MUST BE the first record
+ *
+ * @param[in] db a pointer to the database
+ * @param[in] zone_data a pointer to an opened zone_reader at its start
+ * @param[out] zone_pointer_out will contains a pointer to the loaded zone if the call is successful
+ *
+ * @return an error code.
+ *
+ */
 ya_result zdb_zone_get_soa(zone_reader *zone_data, u16 *rdata_size, u8 *rdata);
-
-ya_result zdb_zone_read_serial(zdb* db, zone_reader* zr, const char *incremental_data_path, u32 *serial, bool withjournal);
-
 
 #ifdef	__cplusplus
 }

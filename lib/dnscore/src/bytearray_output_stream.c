@@ -44,6 +44,7 @@
 #include <stdlib.h>
 
 #include "dnscore/bytearray_output_stream.h"
+#include "dnscore/zalloc.h"
 
 #define BYTE_ARRAY_OUTPUT_STREAM_TAG 0x534f4142 /* BAOS */
 #define BYTE_ARRAY_OUTPUT_STREAM_DATA_TAG 0x41544144534f4142 /* BAOSDATA */
@@ -137,9 +138,9 @@ bytearray_output_stream_close(output_stream* stream)
         free(data->buffer);
     }
 
-    if((data->flags & BYTEARRAY_MALLOC_CONTEXT) != 0)
+    if((data->flags & BYTEARRAY_ZALLOC_CONTEXT) != 0)
     {
-        free(data);
+        ZFREE(data,bytearray_output_stream_data);
     }
 
     output_stream_set_void(stream);
@@ -186,9 +187,9 @@ bytearray_output_stream_init_ex(output_stream* out_stream, u8* array, u32 size, 
 {
     bytearray_output_stream_data* data;
 
-    MALLOC_OR_DIE(bytearray_output_stream_data*, data, sizeof(bytearray_output_stream_data), BYTE_ARRAY_OUTPUT_STREAM_DATA_TAG);
+    ZALLOC_OR_DIE(bytearray_output_stream_data*, data, bytearray_output_stream_data, BYTE_ARRAY_OUTPUT_STREAM_DATA_TAG);
 
-    flags |= BYTEARRAY_MALLOC_CONTEXT;
+    flags |= BYTEARRAY_ZALLOC_CONTEXT;
     
     bytearray_output_stream_init_ex_static(out_stream, array, size, flags, (bytearray_output_stream_context*)data);
 }
@@ -242,7 +243,7 @@ bytearray_output_stream_set(output_stream* stream, u8 *buffer, u32 buffer_size, 
     data->buffer = buffer;
     data->buffer_offset = buffer_size;
     data->buffer_size = buffer_size;
-    data->flags = (data->flags & BYTEARRAY_MALLOC_CONTEXT) | ((owned)?BYTEARRAY_OWNED:0);
+    data->flags = (data->flags & BYTEARRAY_ZALLOC_CONTEXT) | ((owned)?BYTEARRAY_OWNED:0);
 }
 
 /** @} */

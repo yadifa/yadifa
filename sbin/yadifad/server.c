@@ -31,6 +31,7 @@
 *------------------------------------------------------------------------------
 *
 */
+
 /**
  *  @defgroup server Server
  *  @ingroup yadifad
@@ -76,12 +77,14 @@ logger_handle *g_server_logger;
 #if HAS_CTRL
 #include "ctrl.h"
 #include "ctrl_query.h"
+
 #endif
 #if HAS_RRL_SUPPORT
 #include "rrl.h"
 #endif
 
 static struct thread_pool_s *server_tcp_thread_pool = NULL;
+struct thread_pool_s *server_disk_thread_pool = NULL;
 
 #include "server.h"
 
@@ -103,8 +106,6 @@ volatile int program_mode = SA_CONT; /** @note must be volatile */
 void
 tcp_send_message_data(message_data* mesg)
 {
-    ya_result sent;
-
     mesg->buffer_tcp_len[0]       = (mesg->send_length >> 8);
     mesg->buffer_tcp_len[1]       = (mesg->send_length);
 
@@ -125,6 +126,8 @@ tcp_send_message_data(message_data* mesg)
      * SAME AS READ : THERE HAS TO BE A RATE !
      */
 #if !HAS_DROPALL_SUPPORT
+    ya_result sent;
+    
     if(FAIL(sent = writefully_limited(mesg->sockfd, mesg->buffer_tcp_len, mesg->send_length + 2, g_config->tcp_query_min_rate_us)))
     {
         log_err("tcp write error: %r", sent);
@@ -164,6 +167,8 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
     tcp_set_nodelay(mesg->sockfd, TRUE);
     tcp_set_cork(mesg->sockfd, FALSE);
     
+    s64 tstart = (s64)timeus();
+    
     /** @note do a full read, not one that can be interrupted or deliver only a part of what we need (readfully) */
     while((next_message_size = readfully_limited(mesg->sockfd, &dns_query_len, 2, g_config->tcp_query_min_rate_us)) == 2)
     {
@@ -194,11 +199,11 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
         {
             if(ISOK(received))
             {
-                log_err("tcp: message read: received %i bytes, err=%r", received, ERRNO_ERROR);
+                log_err("tcp: message read: received %d bytes but %hd were expected", received, native_dns_query_len);
             }
             else
             {
-                log_err("tcp: message read: err=%r)", received);
+                log_err("tcp: message read: %r", ERRNO_ERROR);
             }
             
             mesg->received = 0;
@@ -299,7 +304,7 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
                         case CLASS_CH:
                         {
                             log_query(svr_sockfd, mesg);
-                            process_class_ch(mesg);
+                            class_ch_process(mesg);
                             TCPSTATS(tcp_fp[mesg->status]++);
                             tcp_send_message_data(mesg);
 
@@ -307,20 +312,7 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
                         }
                         default:
                         {
-                            /// @todo 20140521 edf -- verify unsupported class error handling
-                            /*
-                            FP_CLASS_NOTFOUND
-                            log_warn("query [%04hx] %{dnsname} %{dnstype} %{dnsclass} (%{sockaddrip}) : unsupported class",
-                                    ntohs(MESSAGE_ID(mesg->buffer)),
-                                    mesg->qname, &mesg->qtype, &mesg->qclass,
-                                    &mesg->other.sa);
-                            */
-                            /*
-                            log_warn("query [%04hx] %{dnsname} %{dnstype} %{dnsclass} (%{sockaddrip}) : unsupported operation",
-                                    ntohs(MESSAGE_ID(mesg->buffer)),
-                                    mesg->qname, &mesg->qtype, &mesg->qclass,
-                                    &mesg->other.sa);
-                            */
+
                             message_make_error(mesg, FP_NOT_SUPP_CLASS);
                             TCPSTATS(tcp_fp[FP_NOT_SUPP_CLASS]++);
                             break;
@@ -372,20 +364,7 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
                         }
                         default:
                         {
-                            /// @todo 20140521 edf -- verify unsupported class error handling
-                            /*
-                            FP_CLASS_NOTFOUND
-                            log_warn("query [%04hx] %{dnsname} %{dnstype} %{dnsclass} (%{sockaddrip}) : unsupported class",
-                                    ntohs(MESSAGE_ID(mesg->buffer)),
-                                    mesg->qname, &mesg->qtype, &mesg->qclass,
-                                    &mesg->other.sa);
-                            */
-                            /*
-                            log_warn("query [%04hx] %{dnsname} %{dnstype} %{dnsclass} (%{sockaddrip}) : unsupported operation",
-                                    ntohs(MESSAGE_ID(mesg->buffer)),
-                                    mesg->qname, &mesg->qtype, &mesg->qclass,
-                                    &mesg->other.sa);
-                            */
+
                             message_make_error(mesg, FP_NOT_SUPP_CLASS);
                             TCPSTATS(tcp_fp[FP_NOT_SUPP_CLASS]++);
                             break;
@@ -463,20 +442,7 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
                         } // update class IN
                         default:
                         {
-                            /// @todo 20140521 edf -- verify unsupported class error handling
-                            /*
-                            FP_CLASS_NOTFOUND
-                            log_warn("query [%04hx] %{dnsname} %{dnstype} %{dnsclass} (%{sockaddrip}) : unsupported class",
-                                    ntohs(MESSAGE_ID(mesg->buffer)),
-                                    mesg->qname, &mesg->qtype, &mesg->qclass,
-                                    &mesg->other.sa);
-                            */
-                            /*
-                            log_warn("query [%04hx] %{dnsname} %{dnstype} %{dnsclass} (%{sockaddrip}) : unsupported operation",
-                                    ntohs(MESSAGE_ID(mesg->buffer)),
-                                    mesg->qname, &mesg->qtype, &mesg->qclass,
-                                    &mesg->other.sa);
-                            */
+
                             message_make_error(mesg, FP_NOT_SUPP_CLASS);
                             TCPSTATS(tcp_fp[FP_NOT_SUPP_CLASS]++);
                             break;
@@ -567,9 +533,16 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
                         if(mesg->tsig.tsig == NULL)
                         {
                             message_transform_to_error(mesg);
+                            tcp_send_message_data(mesg);
                         }
-
-                        tcp_send_message_data(mesg);
+                        else
+                        {
+                            /// @todo edf 20150428 -- handle this more nicely
+                            
+                            TCPSTATS(tcp_dropped_count++);
+                            tcp_set_agressive_close(mesg->sockfd, 1);
+                            close_ex(mesg->sockfd);
+                        }
                     }
                     else
                     {
@@ -584,9 +557,6 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
 #endif // HAS_CTRL
             default:
             {
-                return_code = message_process_query(mesg);
-                mesg->status = RCODE_NOTIMP;
-
                 log_warn("unknown [%04hx] error: %r", ntohs(MESSAGE_ID(mesg->buffer)), MAKE_DNSMSG_ERROR(mesg->status));
                 
                 if( (return_code != INVALID_MESSAGE) && (((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0) || mesg->status != RCODE_FORMERR) && (MESSAGE_QR(mesg->buffer) == 0) )
@@ -616,15 +586,14 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
         {
             // If we have got an error while receiving (tcp too slow), then abort the connection
 
-            if(FAIL(received))
+            if(ISOK(received))
             {
-                log_err("tcp: received = %r", received);
-
-                tcp_set_abortive_close(mesg->sockfd);
+                tcp_set_agressive_close(mesg->sockfd, 1);
             }
             else
             {
-                tcp_set_agressive_close(mesg->sockfd, 1);
+                log_err("tcp: %{sockaddr} message #%i processing failed: %r", &mesg->other.sa, loop_count, received);
+                tcp_set_abortive_close(mesg->sockfd);
             }
         }
         else
@@ -639,7 +608,10 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
     }
     else
     {
-        log_err("tcp: connection didn't sent anything: %r", next_message_size);
+        s64 d = MAX((s64)timeus() - tstart, 0);
+        double s = d / 1000000.;
+        
+        log_err("tcp: %{sockaddr} connection didn't sent the message size after %5.3fs: %r", &mesg->other.sa, s, next_message_size);
         
         tcp_set_abortive_close(mesg->sockfd);
     }
@@ -875,6 +847,18 @@ server_run()
             return ERROR;
         }
     }
+    
+    if(server_disk_thread_pool == NULL)
+    {
+        server_disk_thread_pool = thread_pool_init_ex(4, 64, "disk-io");
+        
+        if(server_tcp_thread_pool == NULL)
+        {
+            log_warn("disk thread pool init failed");
+            
+            return ERROR;
+        }
+    }
 
     OSDEBUG(termout, "I come to serve ...\n");
 
@@ -904,6 +888,9 @@ server_run()
     
     thread_pool_destroy(server_tcp_thread_pool);
     server_tcp_thread_pool = NULL;
+    
+    thread_pool_destroy(server_disk_thread_pool);
+    server_disk_thread_pool = NULL;
     
     /* Clear config struct and close all fd's */
     server_context_clear(g_config);

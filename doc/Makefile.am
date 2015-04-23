@@ -28,9 +28,23 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#	YADIFA doc Makefile.am script
+#
+#      	Makefile.am script
+#
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.0-public/doc/Makefile.am $
+#
+#       $Date: 2015-04-28 07:58:08 +0200 (Tue, 28 Apr 2015) $
+#
+#       $Revision: 5029 $
+#
+#	$Author: geryve $
+#
+##############################################################################
 
-dist_man1_MANS = yadifad.man yadifa.man
-dist_man5_MANS = yadifad.conf.man
+dist_man8_MANS = yadifad.man yadifa.man
+dist_man5_MANS = yadifad.conf.man yadifa.rc.man
 
 ACLOCAL_AMFLAGS = -I m4
 

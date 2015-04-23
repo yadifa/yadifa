@@ -60,16 +60,24 @@
  *  @retval NOK
  */
 
+#define ZDB_JOURNAL_CODE 1
+
 #include <dnscore/dns_resource_record.h>
-#include <dnscore/xfr_copy.h>
+#include <dnscore/fdtools.h>
 
 #include "dnsdb/journal.h"
 #include "dnsdb/journal_ix.h"
+#include "dnsdb/journal-cjf.h"
 #include "dnsdb/zdb_zone.h"
 #include "dnsdb/zdb_utils.h"
+#include "dnsdb/xfr_copy.h"
+#include "dnsdb/zdb-zone-path-provider.h"
 
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
+
+//#define journal_default_open journal_ix_open
+#define journal_default_open journal_cjf_open
 
 static mutex_t journal_mutex = MUTEX_INITIALIZER;
 static journal *journal_mru_first = NULL;
@@ -81,86 +89,26 @@ static bool    journal_initialised = FALSE;
 
 static bool    journal_mru_remove(journal *jh);
 
-static char *xfr_path = LOCALSTATEDIR "/zones/xfr";
-static bool xfr_path_free = FALSE;
-
-void
-journal_set_xfr_path(const char *path)
-{
-    if(xfr_path_free)
-    {
-        free((char*)xfr_path);
-    }
-    
-    if(path == NULL)
-    {        
-        xfr_path = LOCALSTATEDIR "/xfr";
-        xfr_path_free = FALSE;
-    }
-    else
-    {
-        xfr_path = strdup(path);
-        xfr_path_free = TRUE;
-    }
-}
-
-const char*
-journal_get_xfr_path()
-{
-    return xfr_path;
-}
-
-void
-journal_lock()
-{
-    mutex_lock(&journal_mutex);
-}
-
-void
-journal_unlock()
-{
-    mutex_unlock(&journal_mutex);
-}
-
-static void
-journal_inc_reference_count(journal *jh)
-{
-    journal_lock();
-    ++jh->rc;
-    journal_unlock();
-}
-
-static bool
-journal_dec_reference_count(journal *jh)
-{
-    journal_lock();
-    
-    bool destroy = (--jh->rc == 0);
-    
-    if(destroy) // note: don't care if the RC is < 0
-    {
-        // destroy
-        
-        if(jh->zone != NULL)
-        {
-            jh->zone->journal = NULL;
-            jh->zone = NULL;
-        }
-        
-        journal_mru_remove(jh); // remove only if it is in there
-
-        jh->vtbl->close(jh);
-        
-        --journal_count;
-    }
-    journal_unlock();
-    
-    return destroy;
-}
+/**
+ * 
+ * Removes a journal from the MRU (INTERNAL)
+ * 
+ * A journal removed from the MRU is to be closed
+ * 
+ * @param jh
+ * @return TRUE if the journal was removed, FALSE if it was not in the MRU
+ */
 
 static bool
 journal_mru_remove(journal *jh)
 {
+#ifdef DEBUG
+    u8 fqdn[MAX_DOMAIN_LENGTH];
+    fqdn[0] = 0;
+    jh->vtbl->get_domain(jh, fqdn);
+    log_debug("journal: MRU: removing journal for %{dnsname}@%p", fqdn, jh);
+#endif
+    
     if(jh->mru)
     {
         if(jh->prev != NULL)
@@ -189,8 +137,6 @@ journal_mru_remove(journal *jh)
   
         --journal_mru_count;
         
-        journal_dec_reference_count(jh);
-        
         return TRUE;
     }
 #ifdef DEBUG
@@ -198,12 +144,12 @@ journal_mru_remove(journal *jh)
     {   
         if((jh->next != NULL) || (jh->prev != NULL))
         {
-            log_err("journal: MRU: %p not in MRU but kept link(s) to it!", jh);
-            logger_flush();
+            log_err("journal: MRU: %{dnsname}@%p not in MRU but kept link(s) to it!", fqdn, jh);
+            logger_flush(); // then abort()
             abort();
         }
         
-        log_debug("journal: MRU: %p not in MRU", jh);
+        log_debug("journal: MRU: %{dnsname}@%p not in MRU", fqdn, jh);
     }
 #endif
     
@@ -214,8 +160,8 @@ journal_mru_remove(journal *jh)
 
 /**
  * 
- * Puts the given journal at the head of the mru list.
- * Clears out the lru journal if needed.
+ * Puts the given journal at the head of the MRU list.
+ * Clears out the least recently used journal if needed and possible.
  * 
  * @param jh
  */
@@ -225,23 +171,25 @@ journal_mru_add(journal *jh)
 {
     // if jh is first already, stop
     
+#ifdef DEBUG
+    u8 fqdn[MAX_DOMAIN_LENGTH];
+    fqdn[0] = 0;
+    jh->vtbl->get_domain(jh, fqdn);
+#endif
+    
     if(journal_mru_first == jh)
     {
 #ifdef DEBUG
-        log_debug("journal_mru_add(%p) (%{dnsname}) : already first", jh, jh->zone->origin);
+        log_debug("journal: MRU: adding %{dnsname}@%p : already first", fqdn, jh);
 #endif
         return;
     }
     
-    // increment the reference for the MRU first, else the next remove will destroy it
-    
-    journal_inc_reference_count(jh);
-    
-    // detach from the list
+    // detach from the MRU
     
     bool was_in_mru = journal_mru_remove(jh);
     
-    // put as first
+    // insert at the head of the MRU
     
     jh->prev = NULL;
     jh->next = journal_mru_first;
@@ -277,18 +225,22 @@ journal_mru_add(journal *jh)
             // yes
            
 #ifdef DEBUG
-            log_debug("journal_mru_add(%p) (%{dnsname}) : new one (count = %u/%u)",
-                      jh, jh->zone->origin,
+            log_debug("journal: MRU: %{dnsname}@%p : added at the head (count = %u/%u)",
+                      fqdn, jh,
                       journal_mru_count, journal_mru_size);
 #endif
         }
         else
         {
 #ifdef DEBUG
-            log_debug("journal_mru_add(%p) (%{dnsname}) : new one (count = %u/%u), releasing least recently used (%{dnsname})",
-                      jh, jh->zone->origin,
+            u8 lru_fqdn[MAX_DOMAIN_LENGTH];
+            lru_fqdn[0] = 0;
+            journal_mru_last->vtbl->get_domain(journal_mru_last, lru_fqdn);
+    
+            log_debug("journal: MRU: %{dnsname}@%p : added at the head (count = %u/%u), removing %{dnsname}@%p",
+                      fqdn, jh,
                       journal_mru_count, journal_mru_size,
-                      journal_mru_last->zone->origin);
+                      lru_fqdn, journal_mru_last);
 #endif
             // no, remove the last one of the MRU
             
@@ -298,7 +250,7 @@ journal_mru_add(journal *jh)
 #ifdef DEBUG
     else
     {
-        log_debug("journal_mru_add(%p) (%{dnsname}) : old one (count = %u/%u)", jh, jh->zone->origin, journal_mru_count, journal_mru_size);
+        log_debug("journal: MRU: %{dnsname}@%p moved at the head of the MRU (count = %u/%u)", fqdn, jh, journal_mru_count, journal_mru_size);
     }
 #endif
 }
@@ -306,19 +258,47 @@ journal_mru_add(journal *jh)
 ya_result
 journal_init(u32 mru_size)
 {
-    // initialises journal open/close access mutex (avoid creation/destruction races)
-    // will be responsible for the journal file-descriptor resources allocation (closes least recently used journal when no more FDs are available)
+    log_debug("journal: initialising with an MRU of %i slots", mru_size);
     
-    mutex_init_recursive(&journal_mutex);
-    
-    if(mru_size == 0)
+    if(!journal_initialised)
     {
-        mru_size = ZDB_JOURNAL_FD_DEFAULT;
+        // initialises journal open/close access mutex (avoid creation/destruction races)
+        // will be responsible for the journal file-descriptor resources allocation (closes least recently used journal when no more FDs are available)
+
+        mutex_init_recursive(&journal_mutex);
+
+        if(mru_size == 0)
+        {
+            mru_size = ZDB_JOURNAL_FD_DEFAULT;
+        }
+
+        journal_mru_size = MAX(MIN(mru_size, ZDB_JOURNAL_FD_MAX), ZDB_JOURNAL_FD_MIN);
+        
+        log_debug("journal: intialised with an MRU of %i slots", journal_mru_size);
+
+        journal_initialised = TRUE;
+    }
+    else
+    {
+        log_debug("journal: already initialised with an MRU of %i slots", journal_mru_size);
+        
+        if(mru_size == 0)
+        {
+            mru_size = ZDB_JOURNAL_FD_DEFAULT;
+        }
+        else
+        {
+            mru_size = MAX(MIN(mru_size, ZDB_JOURNAL_FD_MAX), ZDB_JOURNAL_FD_MIN);
+        }
+        
+        if(journal_mru_size != mru_size)
+        {
+            log_err("journal: the journal MRU size was already set to %u but %u is now requested", journal_mru_size, mru_size);
+            return ERROR;
+        }
     }
     
-    journal_mru_size = MAX(MIN(mru_size, ZDB_JOURNAL_FD_MAX), ZDB_JOURNAL_FD_MIN);
-
-    journal_initialised = TRUE;
+    
 
     return SUCCESS;
 }
@@ -326,25 +306,51 @@ journal_init(u32 mru_size)
 void
 journal_finalise()
 {
+    log_debug("journal: finalising");
+            
     if(journal_initialised)
     {
         mutex_lock(&journal_mutex);
-    
-        while(journal_mru_first != NULL)
+        
+        if(journal_mru_count > 0)
         {
-            journal_mru_remove(journal_mru_first);
+            log_warn("journal: there are still %u journals in the MRU", journal_mru_count);
         }
-
+        
+        int coundown = 30;  // 3 seconds (30 * 0.1s)
+        
+        while((journal_mru_count > 0) && (--coundown > 0))
+        {
+            mutex_unlock(&journal_mutex);
+            usleep(100000); // 0.1s
+            mutex_lock(&journal_mutex);
+        }
+        
         mutex_unlock(&journal_mutex);
-        mutex_destroy(&journal_mutex);
-
-        journal_initialised = FALSE;
+        
+        if(journal_mru_count == 0)
+        {
+            mutex_destroy(&journal_mutex);
+            journal_initialised = FALSE;
+            
+            log_debug("journal: finalised");
+        }
+        else
+        {
+            log_err("journal: giving up on waiting for MRU");
+#if DEBUG
+            logger_flush();
+#endif
+        }
     }
 }
 
 /**
  * 
  * Opens the journal for a zone
+ * 
+ * Binds the journal to the zone (?)
+ * 
  * Increments the reference count to the journal
  * 
  * @param jhp
@@ -355,20 +361,17 @@ journal_finalise()
  */
 
 ya_result
-journal_open(journal **jhp, zdb_zone *zone, const char *workingdir, bool create)
+journal_open(journal **jhp, zdb_zone *zone, bool create)
 {
     journal *jh = NULL;
     ya_result return_value = SUCCESS;
     char data_path[PATH_MAX];
     
-    if((jhp == NULL) || (zone == NULL) || (workingdir == NULL))
-    {
-#ifdef DEBUG
-        log_debug("journal_open(%p,%p,%s,%i) failed (%{dnsname})", jhp, zone, (workingdir!=NULL)?workingdir:"NULL", create, (zone!=NULL)?zone->origin:(const u8*)"\004NULL");
-#endif
-        
-        return ZDB_JOURNAL_WRONG_PARAMETERS;
-    }
+    yassert((jhp != NULL) && (zone != NULL));
+    
+    // DO NOT zdb_zone_acquire(zone);
+    
+    log_debug("journal: opening journal for zone %{dnsname}@%p", zone->origin, zone);
     
     mutex_lock(&journal_mutex);
 
@@ -381,28 +384,37 @@ journal_open(journal **jhp, zdb_zone *zone, const char *workingdir, bool create)
         // The zone has no journal linked yet
         
 #ifdef DEBUG
-        log_debug("journal_open(%p,%p,%s,%i) opening journal (%{dnsname})", jhp, zone, (workingdir!=NULL)?workingdir:"NULL", create, zone->origin);
+        log_debug("journal_open(%p,%p,%i) getting journal path (%{dnsname})", jhp, zone, create, zone->origin);
 #endif
         
-        // it does not exist, so create a new one (using the IX format)
+        // it does not exist, so create a new one (using the default format)
         
-        // compute the path
-        if(FAIL(return_value = xfr_copy_get_data_path(data_path, sizeof(data_path), workingdir, zone->origin)))
+        u32 path_flags = ZDB_ZONE_PATH_PROVIDER_ZONE_PATH;
+        if(create)
+        {
+            path_flags |= ZDB_ZONE_PATH_PROVIDER_MKDIR;
+        }
+        
+        if(FAIL(return_value = zdb_zone_path_get_provider()(zone->origin, data_path, sizeof(data_path), path_flags)))
         {
             mutex_unlock(&journal_mutex);
             *jhp = NULL;
             
             return return_value;
         }
-
-        workingdir = data_path;
+        
+#ifdef DEBUG
+        log_debug("journal_open(%p,%p,%i) opening journal (%{dnsname}) in '%s'", jhp, zone, create, zone->origin, data_path);
+#endif
         
         // open the journal
         
-        if(FAIL(return_value = journal_ix_open(&jh, zone->origin, workingdir, create)))
+        if(FAIL(return_value = journal_default_open(&jh, zone->origin, data_path, create))) // followed by a link zone
         {
             mutex_unlock(&journal_mutex);
             *jhp = NULL;
+            
+            // DO NOT zdb_zone_release(zone);
             
             return return_value;
         }
@@ -412,25 +424,21 @@ journal_open(journal **jhp, zdb_zone *zone, const char *workingdir, bool create)
         
         ++journal_count;
         
-        zone->journal = jh;
-        jh->zone = zone;
+        journal_link_zone(jh, zone);
         
-        // puts the journal in the head of the queue (closing the less recently used if needed)
-        journal_mru_add(jh);
     }
 #ifdef DEBUG
     else
     {
-        log_debug("journal_open(%p,%p,%s,%i) referencing journal (%{dnsname})", jhp, zone, (workingdir!=NULL)?workingdir:"NULL", create, zone->origin);
+        log_debug("journal_open(%p,%p,%i) referencing journal (%{dnsname})", jhp, zone, create, zone->origin);
+        
+        // DO NOT zdb_zone_release(zone);
     }
 #endif
     
     // from here jh is not NULL  
-    
-    journal_inc_reference_count(jh);
             
     mutex_unlock(&journal_mutex);
-    
     *jhp = jh;
     
     return return_value;
@@ -438,7 +446,6 @@ journal_open(journal **jhp, zdb_zone *zone, const char *workingdir, bool create)
 
 /**
  * Closes the journal
- * Decrement the count of references, closes/destroys if it reaches 0
  * 
  * @param jh
  */
@@ -448,27 +455,24 @@ journal_close(journal *jh)
 {
     if(jh != NULL)
     {
-        mutex_lock(&journal_mutex);
-
-#ifdef DEBUG
-        const u8 *origin = (jh->zone != NULL)?jh->zone->origin:(const u8*)"";
-#endif
-        if(journal_dec_reference_count(jh))
+        if(jh->zone != NULL)
         {
-            // nobody has this journal opened : destroy it (or set it as candidate for destruction)
-       
-#ifdef DEBUG
-            log_debug("journal_close(%p) closed journal (%{dnsname})", jh, origin);
-#endif
-            
+            log_debug("journal: closing journal %p for zone %{dnsname}@%p", jh, jh->zone->origin, jh->zone);
         }
-#ifdef DEBUG
         else
         {
-            log_debug("journal_close(%p) de-referenced journal (%{dnsname}) (rc=%i)", jh, origin, jh->rc);
+            log_debug("journal: closing journal %p", jh);
         }
-#endif
+        
+        mutex_lock(&journal_mutex);
+        journal_mru_remove(jh);
+        jh->vtbl->close(jh); // allowed close
+        //jh->vtbl->destroy(jh);
         mutex_unlock(&journal_mutex);
+    }
+    else
+    {
+        //log_debug("journal: close called on a NULL journal");
     }
 }
 
@@ -498,18 +502,23 @@ journal_last_serial(const u8 *origin, const char *workingdir, u32 *serialp)
         return ZDB_JOURNAL_WRONG_PARAMETERS;
     }
     
-    if(FAIL(return_value = xfr_copy_get_data_path(data_path, sizeof(data_path), workingdir, origin)))
+    if(FAIL(return_value = zdb_zone_path_get_provider()(origin, data_path, sizeof(data_path), ZDB_ZONE_PATH_PROVIDER_ZONE_PATH)))
     {
         return return_value;
     }
     
     workingdir = data_path;
     
-    if(ISOK(return_value = journal_ix_open(&jh, origin, workingdir, FALSE)))
+    if(ISOK(return_value = journal_default_open(&jh, origin, workingdir, FALSE))) // open/close
     {
+        bool close_it = (jh->zone == NULL);
+        
         return_value = journal_get_last_serial(jh, serialp);
         
-        jh->vtbl->close(jh);
+        if(close_it)
+        {
+            journal_close(jh);
+        }
     }
     
     return return_value;
@@ -533,7 +542,7 @@ journal_last_serial(const u8 *origin, const char *workingdir, u32 *serialp)
  */
 
 ya_result
-journal_truncate(const u8 *origin, const char *workingdir)
+journal_truncate(const u8 *origin)
 {
     journal *jh = NULL;
     ya_result return_value;
@@ -544,19 +553,15 @@ journal_truncate(const u8 *origin, const char *workingdir)
         return ZDB_JOURNAL_WRONG_PARAMETERS;
     }
     
-    if(FAIL(return_value = xfr_copy_get_data_path(data_path, sizeof(data_path), workingdir, origin)))
+    if(FAIL(return_value = zdb_zone_path_get_provider()(origin, data_path, sizeof(data_path), ZDB_ZONE_PATH_PROVIDER_ZONE_PATH)))
     {
         return return_value;
     }
     
-    workingdir = data_path;
-    
-    if(ISOK(return_value = journal_ix_open(&jh, origin, workingdir, FALSE)))
+    if(ISOK(return_value = journal_default_open(&jh, origin, data_path, TRUE))) // no link !
     {
         return_value = journal_truncate_to_size(jh, 0);
-        
-        jh->vtbl->close(jh);
-      }
+    }
     
     return return_value;
 }
@@ -598,7 +603,7 @@ journal_last_soa(const u8 *origin, const char *workingdir, u32 *serial, u32 *ttl
     
     /* translate path */
     
-    if(FAIL(return_value = xfr_copy_get_data_path(data_path, sizeof(data_path), workingdir, origin)))
+    if(FAIL(return_value = zdb_zone_path_get_provider()(origin, data_path, sizeof(data_path), ZDB_ZONE_PATH_PROVIDER_ZONE_PATH)))
     {
         return return_value;
     }
@@ -607,46 +612,67 @@ journal_last_soa(const u8 *origin, const char *workingdir, u32 *serial, u32 *ttl
     
     /* open a new instance of the journal */
     
-    if(ISOK(return_value = journal_ix_open(&jh, origin, workingdir, FALSE)))
+    if(ISOK(return_value = journal_default_open(&jh, origin, workingdir, FALSE))) // no link ?
     {
-        jh->zone = NULL;
+        bool close_it = (jh->zone == NULL);
         
         input_stream is;
         dns_resource_record rr;
-        dns_resource_record_init(&rr);
+        
         u32 first_serial = 0;
+        u32 last_serial = 0;
         
         journal_get_first_serial(jh, &first_serial);
+        journal_get_last_serial(jh, &last_serial);
         
-        if(ISOK(return_value = journal_get_ixfr_stream_at_serial(jh, first_serial, &is, &rr)))
+        if(first_serial != last_serial)
         {
-            if(last_soa_rdata != NULL) /* one not NULL => both not NULL */
+            dns_resource_record_init(&rr);
+            
+            if(ISOK(return_value = journal_get_ixfr_stream_at_serial(jh, first_serial, &is, &rr)))
             {
-                if(*last_soa_rdata_size >= rr.rdata_size)
+                journal_mru_add(jh);
+                
+                if(last_soa_rdata != NULL) /* one not NULL => both not NULL */
                 {
-                    MEMCOPY(last_soa_rdata, rr.rdata, rr.rdata_size);
-                    *last_soa_rdata_size = rr.rdata_size;
+                    if(*last_soa_rdata_size >= rr.rdata_size)
+                    {
+                        MEMCOPY(last_soa_rdata, rr.rdata, rr.rdata_size);
+                        *last_soa_rdata_size = rr.rdata_size;
+                    }
                 }
-            }
-            else
-            {
-                return_value = ERROR;
+                else
+                {
+                    return_value = ERROR;
+                }
+
+                if(serial != NULL)
+                {
+                    if(rr.rdata_size > 0)
+                    {
+                        return_value = rr_soa_get_serial(rr.rdata, rr.rdata_size, serial);
+                    }
+                    else
+                    {
+                        log_err("jnl: %{dnsname}: empty last SOA in journal [%u;%u]", origin, first_serial, last_serial);
+                    }
+                }
+
+                if(ttl != NULL)
+                {
+                    *ttl = htonl(rr.tctr.ttl);
+                }
+                
+                input_stream_close(&is);
             }
             
-            if(serial != NULL)
-            {
-                return_value = rr_soa_get_serial(rr.rdata, rr.rdata_size, serial);
-            }
-            
-            if(ttl != NULL)
-            {
-                *ttl = htonl(rr.tctr.ttl);
-            }            
+            dns_resource_record_clear(&rr);
         }
         
-        dns_resource_record_clear(&rr);
-        input_stream_close(&is);
-        jh->vtbl->close(jh);
+        if(close_it)
+        {
+            journal_close(jh);
+        }
     }
     
     return return_value;

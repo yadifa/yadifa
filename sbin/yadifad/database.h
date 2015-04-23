@@ -53,7 +53,7 @@ extern "C" {
 #include <dnscore/message.h>
 #include <dnscore/fingerprint.h>
     
-#include <dnscore/treeset.h>
+#include <dnscore/ptr_set.h>
     
 #include <dnsdb/zdb_types.h>
 
@@ -61,6 +61,8 @@ extern "C" {
 
     /* List of database type in string form */
 #define     DB_STRING_NO            "no database"
+    
+#define     DATABASE_JOURNAL_MINIMUM_SIZE 65536
 
     void            database_init();
     void            database_finalize();

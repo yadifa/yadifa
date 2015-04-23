@@ -31,65 +31,32 @@
 *------------------------------------------------------------------------------
 *
 */
-/** @defgroup name Functions used to manipulate dns formatted names and labels
+/** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
- *  @brief Functions used to manipulate dns formatted names and labels
+ *  @brief Functions used to manipulate a zone
+ *
+ *  Functions used to manipulate a zone
  *
  * @{
  */
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
 
-#include "dnsdb/zdb_alloc.h"
-#include <dnscore/dnsname.h>
+#pragma once
 
-/** @brief Allocates and duplicates a name.
- *
- *  Allocates and duplicates a name.
- *
- *  @param[in] name a pointer to the dnsname
- *
- *  @return A new instance of the dnsname.
- */
+#include <dnsdb/zdb_zone.h>
 
+#ifdef DNSDB_BUILD
 
-u8*
-dnsname_zdup(const u8* name)
-{
-    yassert(name != NULL);
+void zdb_zone_garbage_init();
+void zdb_zone_garbage_finalize();
+void zdb_zone_garbage_collect(zdb_zone *zone);
+zdb_zone *zdb_zone_garbage_get();
 
-    u32 len = dnsname_len(name);
+#endif
 
-    u8* dup;
+void zdb_zone_garbage_run();
 
-    ZALLOC_STRING_OR_DIE(u8*, dup, len, ZDB_NAME_TAG);
-    MEMCOPY(dup, name, len); // nothing wrong here
+typedef void zdb_zone_garbage_run_cb(zdb_zone *);
 
-    return dup;
-}
-
-/** @brief Allocates and duplicates a label.
- *
- *  Allocates and duplicates a label.
- *
- *  @param[in] name a pointer to the label
- *
- *  @return A new instance of the label
- */
-
-u8*
-dnslabel_dup(const u8* name)
-{
-    yassert(name != NULL);
-
-    u32 len = name[0] + 1;
-
-    u8* dup;
-    ZALLOC_STRING_OR_DIE(u8*, dup, len, ZDB_LABEL_TAG);
-    MEMCOPY(dup, name, len);
-
-    return dup;
-}
+void zdb_zone_garbage_run_ex(zdb_zone_garbage_run_cb *destroyer);
 
 /** @} */

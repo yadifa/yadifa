@@ -38,6 +38,8 @@
  * @{
  */
 
+#define ZDB_JOURNAL_CODE 1
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -53,12 +55,14 @@
 #include <dnscore/fdtools.h>
 #include <dnscore/chroot.h>
 #include <dnsdb/dnssec.h>
+
 #include <dnsdb/journal.h>
 
 #include "confs.h"
 #include "config_error.h"
 #include "config_acl.h"
 #include "server_error.h"
+#include "process_class_ch.h"
 
 /*
  *
@@ -109,6 +113,8 @@ CONFIG_GID(      gid                         , S_GID                      )
 
  /* string used for query of version            */
 CONFIG_STRING(   version_chaos               , S_VERSION_CHAOS            )
+CONFIG_STRING(   hostname_chaos              , S_HOSTNAME_CHAOS           )
+CONFIG_STRING(   serverid_chaos              , S_SERVERID_CHAOS           )
 #if ZDB_HAS_ACL_SUPPORT
 CONFIG_ACL(      allow_query                 , S_ALLOW_QUERY              )
 CONFIG_ACL(      allow_update                , S_ALLOW_UPDATE             )
@@ -128,6 +134,8 @@ CONFIG_U32(      cpu_count_override          , S_CPU_COUNT_OVERRIDE       )
 CONFIG_U32(      thread_count_by_address     , S_THREAD_COUNT_BY_ADDRESS  )
 // how many threads for the dnssec processing)
 CONFIG_U32(      dnssec_thread_count         , S_DNSSEC_THREAD_COUNT      )
+CONFIG_U32(      zone_load_thread_count      , S_ZONE_LOAD_THREAD_COUNT      )
+CONFIG_U32(      zone_download_thread_count  , S_ZONE_DOWNLOAD_THREAD_COUNT      )
 
 /* Max number of TCP queries  */
 CONFIG_U32_RANGE(max_tcp_queries             , S_MAX_TCP_QUERIES          ,TCP_QUERIES_MIN, TCP_QUERIES_MAX)
@@ -161,6 +169,8 @@ CONFIG_U32(      axfr_retry_jitter           , S_AXFR_RETRY_JITTER        )
           /* alias, aliased */
 CONFIG_ALIAS(port, server_port)
 CONFIG_ALIAS(version, version_chaos)
+CONFIG_ALIAS(hostname, hostname_chaos)
+CONFIG_ALIAS(serverid, serverid_chaos)
 CONFIG_ALIAS(chrootpath, chroot_path)
 //CONFIG_ALIAS(basepath, chroot_path)
 CONFIG_ALIAS(configfile, config_file)
@@ -175,6 +185,9 @@ CONFIG_ALIAS(daemonize, daemon)
 CONFIG_ALIAS(axfr_maxrecordbypacket, axfr_max_record_by_packet)
 CONFIG_ALIAS(axfr_maxpacketsize, axfr_max_packet_size)
 CONFIG_ALIAS(axfr_compresspackets, axfr_compress_packets)
+CONFIG_ALIAS(user, uid)
+CONFIG_ALIAS(group, gid)
+CONFIG_ALIAS(max_tcp_connections, max_tcp_queries)
 
 CONFIG_END(config_main_desc)
 #undef CONFIG_TYPE
@@ -324,6 +337,7 @@ static ya_result
 config_main_section_postprocess(struct config_section_descriptor_s *csd)
 {
     u32 port = 0;
+    char tmp[PATH_MAX];
 
     if((g_config->config_file_dynamic == NULL) || (g_config->config_file_dynamic[0] != '/') )
     {
@@ -336,6 +350,27 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
         port = DNS_DEFAULT_PORT;
         osformatln(termerr, "config: main: wrong dns port set in main '%s', defaulted to %d", g_config->server_port, port);
     }
+    
+    if(g_config->hostname_chaos == NULL)
+    {
+#if _BSD_SOURCE || _XOPEN_SOURCE >= 500 || /* Since glibc 2.12: */ _POSIX_C_SOURCE >= 200112L 
+        if(gethostname(tmp, sizeof(tmp)) == 0)
+        {
+            g_config->hostname_chaos = strdup(tmp);
+        }
+        else
+        {
+            osformatln(termerr,"config: main: unable to get hostname: %r", ERRNO_ERROR);
+            g_config->hostname_chaos = strdup("not disclosed");
+        }
+#else
+        g_config->hostname_chaos = strdup("not disclosed");
+#endif
+    }
+    
+    class_ch_set_hostname(g_config->hostname_chaos);    
+    class_ch_set_id_server(g_config->serverid_chaos);
+    class_ch_set_version(g_config->version_chaos);
     
     host_set_default_port_value(g_config->listen, ntohs(port));
 

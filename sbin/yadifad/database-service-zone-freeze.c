@@ -86,7 +86,7 @@ database_service_zone_freeze(zone_desc_s *zone_desc)
         return;
     }
     
-    zdb_zone *zone = zone_desc->loaded_zone;
+    zdb_zone *zone = zone_get_loaded_zone(zone_desc); // ACQUIRES
     
     if(zone == NULL)
     {
@@ -113,7 +113,7 @@ database_service_zone_freeze(zone_desc_s *zone_desc)
     
     zone->apex->flags |= ZDB_RR_APEX_LABEL_FROZEN;
     
-    zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+    zdb_zone_release_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
     
     log_info("zone freeze: %{dnsname}", zone_desc->origin);
     

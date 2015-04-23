@@ -45,7 +45,7 @@
 
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/nsec3_types.h>
-#include <dnscore/treeset.h>
+#include <dnscore/ptr_set.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -93,13 +93,13 @@ void nsec3_add_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* ns
 
 struct nsec3_icmtl_replay
 {
-    treeset_tree nsec3_del;
-    treeset_tree nsec3_add;
-    treeset_tree nsec3rrsig_del;
-    treeset_tree nsec3rrsig_add;
-    treeset_tree nsec3_labels;
-    treeset_tree nsec3param_del;
-    treeset_tree nsec3param_add;
+    ptr_set nsec3_del;
+    ptr_set nsec3_add;
+    ptr_set nsec3rrsig_del;
+    ptr_set nsec3rrsig_add;
+    ptr_set nsec3_labels;
+    ptr_set nsec3param_del;
+    ptr_set nsec3param_add;
     zdb_zone *zone;
 };
 

@@ -50,8 +50,8 @@
 #include <string.h>
 
 #include <dnscore/sys_types.h>
+#include <dnscore/zalloc.h>
 #include "dnsdb/zdb_error.h"
-#include "dnsdb/zdb_alloc.h"
 
 #include <dnscore/format.h>
 

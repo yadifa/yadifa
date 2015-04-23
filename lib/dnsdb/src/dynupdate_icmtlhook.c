@@ -49,6 +49,8 @@
 #include "dnsdb/zdb_utils.h"
 #include <dnscore/logger.h>
 #include <dnscore/format.h>
+#include <dnscore/ptr_set.h>
+#include <dnscore/bytearray_output_stream.h>
 
 #include "dnsdb/zdb_listener.h"
 
@@ -71,9 +73,6 @@ extern logger_handle* g_database_logger;
 
 #define DEBUG_ICMTL_RECORDS 0
 #define USE_SET_FOR_OUTPUT 1
-
-#include <dnscore/treeset.h>
-#include <dnscore/bytearray_output_stream.h>
 
 typedef struct icmtl_dnssec_listener icmtl_dnssec_listener;
 typedef struct icmtl_dnssec_listener icmtl_zdb_listener;
@@ -100,8 +99,8 @@ struct icmtl_dnssec_listener
     output_stream os_remove;
     output_stream os_add;
     output_stream rr_tmp_stream;
-    treeset_tree rr_remove;
-    treeset_tree rr_add;
+    ptr_set rr_remove;
+    ptr_set rr_add;
     
     u8* origin;
     u32 origin_len;
@@ -112,7 +111,7 @@ icmtl_push_record_to_remove(icmtl_zdb_listener* listener)
 {
     u32 size = bytearray_output_stream_size(&listener->rr_tmp_stream);
     u8* buffer = bytearray_output_stream_buffer(&listener->rr_tmp_stream);
-    if(!treeset_avl_find(&listener->rr_remove, buffer))
+    if(!ptr_set_avl_find(&listener->rr_remove, buffer))
     {
         u8 *rr;
         ZALLOC_ARRAY_OR_DIE(u8*, rr, size, GENERIC_TAG);
@@ -122,7 +121,7 @@ icmtl_push_record_to_remove(icmtl_zdb_listener* listener)
         log_debug1("icmtl: will remove %u@%p", size, rr);
 #endif
         
-        treeset_avl_insert(&listener->rr_remove, rr)->data = rr;
+        ptr_set_avl_insert(&listener->rr_remove, rr)->value = rr;
     }
     bytearray_output_stream_reset(&listener->rr_tmp_stream);
 }
@@ -133,7 +132,7 @@ icmtl_push_record_to_add(icmtl_zdb_listener* listener)
     // T049JP0TTR6PEQMFNFIK0OUIMD4F62PS
     u32 size = bytearray_output_stream_size(&listener->rr_tmp_stream);
     u8* buffer = bytearray_output_stream_buffer(&listener->rr_tmp_stream);
-    if(!treeset_avl_find(&listener->rr_add, buffer))
+    if(!ptr_set_avl_find(&listener->rr_add, buffer))
     {
         u8 *rr;
         ZALLOC_ARRAY_OR_DIE(u8*, rr, size, GENERIC_TAG);
@@ -143,7 +142,7 @@ icmtl_push_record_to_add(icmtl_zdb_listener* listener)
         log_debug1("icmtl: will add %u@%p", size, rr);
 #endif
         
-        treeset_avl_insert(&listener->rr_add, rr)->data = rr;
+        ptr_set_avl_insert(&listener->rr_add, rr)->value = rr;
     }
     bytearray_output_stream_reset(&listener->rr_tmp_stream);
 }
@@ -345,7 +344,7 @@ output_stream_write_rrsig_wire(output_stream* os, u8* label, u32 label_len, u8* 
 
 #endif
 
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT!=0
 
 static void
 icmtl_on_add_nsec3_callback(zdb_listener *base_listener, const zdb_zone *zone, nsec3_zone_item* nsec3_item, nsec3_zone* n3, u32 ttl)
@@ -502,7 +501,7 @@ icmtl_on_update_rrsig_callback(zdb_listener *base_listener, const zdb_zone *zone
 }
 
 static mutex_t icmtl_listener_mtx = MUTEX_INITIALIZER;
-static treeset_tree icmtl_listener_set = TREESET_DNSNAME_EMPTY;
+static ptr_set icmtl_listener_set = PTR_SET_DNSNAME_EMPTY;
 
 static struct icmtl_dnssec_listener icmtl_listener =
 {
@@ -531,19 +530,19 @@ static struct icmtl_dnssec_listener icmtl_listener =
  * Initializes and hook the spy that will build the icmtl
  */
 
-static int dynupdate_icmtlhook_treeset_rr_wire_size(const u8 *wire)
+static int dynupdate_icmtlhook_ptr_set_rr_wire_size(const u8 *wire)
 {
     int fqdn_len = dnsname_len(wire);
     struct type_class_ttl_rdlen* tctr = (struct type_class_ttl_rdlen*)&wire[fqdn_len];
     return fqdn_len + 10 + ntohs(tctr->rdlen);
 }
 
-static int dynupdate_icmtlhook_treeset_rr_wire_compare(const void *node_a, const void *node_b)
+static int dynupdate_icmtlhook_ptr_set_rr_wire_compare(const void *node_a, const void *node_b)
 {
     const u8 *rr_a = (const u8 *)node_a;
     const u8 *rr_b = (const u8 *)node_b;
-    int rr_a_size = dynupdate_icmtlhook_treeset_rr_wire_size(rr_a);
-    int rr_b_size = dynupdate_icmtlhook_treeset_rr_wire_size(rr_b);
+    int rr_a_size = dynupdate_icmtlhook_ptr_set_rr_wire_size(rr_a);
+    int rr_b_size = dynupdate_icmtlhook_ptr_set_rr_wire_size(rr_b);
     
     if(rr_a_size != rr_b_size)
     {
@@ -567,8 +566,8 @@ dynupdate_icmtlhook_enable(u8* origin, output_stream* os_remove, output_stream* 
     icmtl_dnssec_listener* listener;
     
     mutex_lock(&icmtl_listener_mtx);
-    treeset_node *node = treeset_avl_insert(&icmtl_listener_set, origin);
-    if(node->data != NULL)
+    ptr_node *node = ptr_set_avl_insert(&icmtl_listener_set, origin);
+    if(node->value != NULL)
     {
         mutex_unlock(&icmtl_listener_mtx);
         return ERROR; // already set
@@ -583,15 +582,15 @@ dynupdate_icmtlhook_enable(u8* origin, output_stream* os_remove, output_stream* 
     listener->os_add.vtbl = os_add->vtbl;
     bytearray_output_stream_init_ex(&listener->rr_tmp_stream, NULL, 2048, BYTEARRAY_DYNAMIC);
     listener->rr_remove.root = NULL;
-    listener->rr_remove.compare = dynupdate_icmtlhook_treeset_rr_wire_compare;
+    listener->rr_remove.compare = dynupdate_icmtlhook_ptr_set_rr_wire_compare;
     listener->rr_add.root = NULL;
-    listener->rr_add.compare = dynupdate_icmtlhook_treeset_rr_wire_compare;
+    listener->rr_add.compare = dynupdate_icmtlhook_ptr_set_rr_wire_compare;
     listener->origin = origin;
     listener->origin_len = dnsname_len(origin);
     
     zdb_listener_chain((zdb_listener*)listener);
     
-    node->data = listener;
+    node->value = listener;
     
     mutex_unlock(&icmtl_listener_mtx);
 
@@ -604,30 +603,22 @@ dynupdate_icmtlhook_disable(u8 *origin)
     icmtl_dnssec_listener* listener = NULL;
     
     mutex_lock(&icmtl_listener_mtx);
-    treeset_node *node = treeset_avl_find(&icmtl_listener_set, origin);
-    if(node != NULL)
-    {
-        listener = (icmtl_dnssec_listener*)node->data;
-        treeset_avl_delete(&icmtl_listener_set, origin);
-    }
+    ptr_node *node = ptr_set_avl_find(&icmtl_listener_set, origin);
+    listener = (icmtl_dnssec_listener*)node->value;
+    ptr_set_avl_delete(&icmtl_listener_set, origin);
     mutex_unlock(&icmtl_listener_mtx);
-    
-    if(listener == NULL)
-    {
-        return ERROR;
-    }
     
     zdb_listener_unchain((zdb_listener*)listener);
     output_stream_close(&listener->rr_tmp_stream);
     
-    treeset_avl_iterator iter;
+    ptr_set_avl_iterator iter;
     
-    treeset_avl_iterator_init(&listener->rr_remove, &iter);
+    ptr_set_avl_iterator_init(&listener->rr_remove, &iter);
 
-    while(treeset_avl_iterator_hasnext(&iter))
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
-        int size = dynupdate_icmtlhook_treeset_rr_wire_size(node->key);
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        int size = dynupdate_icmtlhook_ptr_set_rr_wire_size(node->key);
         
 #ifdef DEBUG
         log_debug1("icmtl: removing %u@%p", size, node->key);
@@ -637,14 +628,14 @@ dynupdate_icmtlhook_disable(u8 *origin)
         ZFREE_ARRAY(node->key, size);
     }
     
-    treeset_avl_destroy(&listener->rr_remove);
+    ptr_set_avl_destroy(&listener->rr_remove);
     
-    treeset_avl_iterator_init(&listener->rr_add, &iter);
+    ptr_set_avl_iterator_init(&listener->rr_add, &iter);
     
-    while(treeset_avl_iterator_hasnext(&iter))
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
-        int size = dynupdate_icmtlhook_treeset_rr_wire_size(node->key);
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        int size = dynupdate_icmtlhook_ptr_set_rr_wire_size(node->key);
         
 #ifdef DEBUG
         log_debug1("icmtl: adding %u@%p", size, node->key);
@@ -654,7 +645,7 @@ dynupdate_icmtlhook_disable(u8 *origin)
         ZFREE_ARRAY(node->key, size);
     }
     
-    treeset_avl_destroy(&listener->rr_add);
+    ptr_set_avl_destroy(&listener->rr_add);
     
     ZFREE(listener, icmtl_dnssec_listener);
     

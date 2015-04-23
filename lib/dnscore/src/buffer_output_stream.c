@@ -172,8 +172,7 @@ buffer_output_stream_init(output_stream* filtered, output_stream* stream, int bu
     data->buffer_maxsize = buffer_size;
     data->buffer_offset = 0;
 
-    filtered->data = NULL; /* Clean the filtered BEFORE setting up the stream */
-    filtered->vtbl = NULL;
+    output_stream_set_void(filtered);
 
     stream->data = data;
     stream->vtbl = &buffer_output_stream_vtbl;
@@ -185,7 +184,7 @@ output_stream*
 buffer_output_stream_get_filtered(output_stream* bos)
 {
     buffer_output_stream_data* data = (buffer_output_stream_data*)bos->data;
-
+    yassert(bos->vtbl == &buffer_output_stream_vtbl);
     return &data->filtered;
 }
 

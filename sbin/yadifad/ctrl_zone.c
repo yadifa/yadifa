@@ -49,10 +49,12 @@
 #include <dnscore/ctrl-rfc.h>
 #include <dnscore/threaded_queue.h>
 
-#include <dnsdb/zdb_zone.h>
 #include <dnscore/format.h>
 #include <dnscore/packet_writer.h>
 #include <dnscore/packet_reader.h>
+
+#include <dnsdb/zdb_zone.h>
+#include <dnsdb/zdb-zone-find.h>
 
 extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
@@ -70,27 +72,7 @@ extern logger_handle* g_server_logger;
 
 extern zone_data_set database_zone_desc;
 
-static s32
-config_clamp_s32(s32 minval, s32 maxval, s32 val, const char *name)
-{
-    s32 oldval = val;
-    
-    if(val < minval)
-    {
-       val = minval;
-    }
-    else if(val > maxval)
-    {
-        val = maxval;
-    }
-    
-    if(val != oldval)
-    {
-        log_debug("%s = %d out of bounds [%d;%d], set to %d", name, oldval, minval, maxval, val);
-    }
-    
-    return val;
- }
+
 
 ya_result
 ctrl_zone_freeze(zone_desc_s *zone_desc, bool dolock)
@@ -102,13 +84,9 @@ ctrl_zone_freeze(zone_desc_s *zone_desc, bool dolock)
         zone_set_lock(&database_zone_desc);
     }
     
-    zdb_zone* zone;
-    dnsname_vector fqdn_vector;
-    dnsname_to_dnsname_vector(zone_desc->origin, &fqdn_vector);
-    
     return_value = MAKE_DNSMSG_ERROR(RCODE_SERVFAIL);
-    
-    if((zone = zdb_zone_find(g_config->database, &fqdn_vector, CLASS_IN)) != NULL)
+   
+    if(zdb_zone_exists_from_dnsname(g_config->database, zone_desc->origin))
     {
         return_value = SUCCESS;
         
@@ -134,13 +112,13 @@ ctrl_zone_freeze_all()
 {
     zone_set_lock(&database_zone_desc);
     
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&database_zone_desc.set, &iter);
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&database_zone_desc.set, &iter);
 
-    while(treeset_avl_iterator_hasnext(&iter))
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
-        zone_desc_s *zone_desc = (zone_desc_s *)zone_node->data;
+        ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
+        zone_desc_s *zone_desc = (zone_desc_s *)zone_node->value;
         
         ctrl_zone_freeze(zone_desc, FALSE);
     }
@@ -160,13 +138,9 @@ ctrl_zone_unfreeze(zone_desc_s *zone_desc, bool dolock)
         zone_set_lock(&database_zone_desc);
     }
     
-    zdb_zone* zone;
-    dnsname_vector fqdn_vector;
-    dnsname_to_dnsname_vector(zone_desc->origin, &fqdn_vector);
-                
     return_value = MAKE_DNSMSG_ERROR(RCODE_SERVFAIL);
 
-    if((zone = zdb_zone_find(g_config->database, &fqdn_vector, CLASS_IN)) != NULL)
+    if(zdb_zone_exists_from_dnsname(g_config->database, zone_desc->origin))
     {
         return_value = SUCCESS;
         
@@ -174,7 +148,7 @@ ctrl_zone_unfreeze(zone_desc_s *zone_desc, bool dolock)
         log_debug("ctrl: zone unfreeze for %{dnsname}", zone_desc->origin);
 #endif
         
-        database_zone_unfreeze(zone->origin);
+        database_zone_unfreeze(zone_desc->origin);
     }
     
     /* add the zone to the database */
@@ -192,13 +166,13 @@ ctrl_zone_unfreeze_all()
 {
     zone_set_lock(&database_zone_desc);
     
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&database_zone_desc.set, &iter);
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&database_zone_desc.set, &iter);
 
-    while(treeset_avl_iterator_hasnext(&iter))
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
-        zone_desc_s *zone_desc = (zone_desc_s *)zone_node->data;
+        ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
+        zone_desc_s *zone_desc = (zone_desc_s *)zone_node->value;
         
         ctrl_zone_unfreeze(zone_desc, FALSE);
     }
@@ -207,6 +181,7 @@ ctrl_zone_unfreeze_all()
     
     return SUCCESS;
 }
+
 
 #endif
 

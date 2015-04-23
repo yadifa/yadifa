@@ -126,18 +126,23 @@ struct database_message_zone_load_s
     u8 type;
 };
 
+struct database_message_zone_save_s
+{
+    u8 type;
+    bool clear;
+};
+
 struct database_message_zone_unload_s
 {
     u8 type;
     zdb_zone *zone; // to be destroyed
-    zdb_zone *replacement_zone; // to be mounted  
 };
 
 struct database_message_zone_update_signatures_s
 {
     u8 type;
     zone_desc_s *expected_zone_desc;
-    const zdb_zone *expected_zone; // to be destroyed
+    zdb_zone *expected_zone; // to be destroyed
 };
 
 struct database_message_zone_loaded_event_s
@@ -161,7 +166,7 @@ struct database_message_zone_unloaded_event_s
     u8 type;
     ya_result result_code;      // yes, I meant to put this 32 bits field before the pointers ...
     zone_desc_s *zone_desc;
-    zdb_zone *zone;             // to be mounted
+    zdb_zone *zone;             // to be unloaded
 };
 
 struct database_message_zone_unmounted_event_s
@@ -201,6 +206,7 @@ struct database_message
         struct database_message_origin_process_s origin_process;
         
         struct database_message_zone_load_s zone_load;
+        struct database_message_zone_save_s zone_save;
         struct database_message_zone_unload_s zone_unload;
         
         struct database_message_zone_update_signatures_s zone_update_signatures;
@@ -238,13 +244,15 @@ void database_zone_load(const u8 *origin);
  * The task is done in the background.
  */
 
-void database_zone_unload(/*const u8 *origin,*/zdb_zone *zone/*, zdb_zone *replacement_zone*/);
+void database_zone_unload(zdb_zone *zone);
 
 void database_zone_freeze(const u8 *origin);
 
 void database_zone_unfreeze(const u8 *origin);
 
 void database_zone_save(const u8 *origin);
+
+void database_zone_save_ex(const u8 *origin, bool clear_journal);
 
 /// @note HAS_DYNAMIC_PROVISIONING
 
@@ -468,7 +476,7 @@ const char *database_service_operation_get_name(u32 id);
  * @param expected_zone
  */
 
-void database_zone_update_signatures(const u8 *origin, zone_desc_s *expected_zone_desc, const zdb_zone *expected_zone);
+void database_zone_update_signatures(const u8 *origin, zone_desc_s *expected_zone_desc, zdb_zone *expected_zone);
 
 /**
  * 

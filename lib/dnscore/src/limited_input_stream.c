@@ -44,6 +44,7 @@
 #include <stdlib.h>
 
 #include "dnscore/limited_input_stream.h"
+#include "dnscore/zalloc.h"
 
 #define LIMITED_INPUT_STREAM_TAG 0x53494454494d494c    /* LIMITDIS */
 
@@ -86,7 +87,7 @@ limited_close(input_stream* stream)
 {
     limited_input_stream_data* data = (limited_input_stream_data*)stream->data;
     input_stream_close(&data->filtered);
-    free(data);
+    ZFREE(data, limited_input_stream_data);
 
     input_stream_set_void(stream);
 }
@@ -123,7 +124,7 @@ limited_input_stream_init(input_stream* filtered, input_stream *stream, u64 stre
 
     yassert(filtered->vtbl != NULL);
 
-    MALLOC_OR_DIE(limited_input_stream_data*, data, sizeof (limited_input_stream_data), LIMITED_INPUT_STREAM_TAG);
+    ZALLOC_OR_DIE(limited_input_stream_data*, data, limited_input_stream_data, LIMITED_INPUT_STREAM_TAG);
 
     data->filtered.data = filtered->data;
     data->filtered.vtbl = filtered->vtbl;

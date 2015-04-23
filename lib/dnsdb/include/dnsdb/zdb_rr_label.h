@@ -48,8 +48,8 @@
 extern "C" {
 #endif
 
-#define ZDB_RR_LABEL_DELETE_NODE     2          /* matches the dictionary delete node   */
-#define ZDB_RR_LABEL_DELETE_TREE     3          /*                                      */
+#define ZDB_RR_LABEL_DELETE_NODE     COLLECTION_PROCESS_DELETENODE /* = 2 matches the dictionary delete node   */
+#define ZDB_RR_LABEL_DELETE_TREE     3                             /*                                          */
 
 #define ZDB_RRLABEL_TAG 0x4c424c525242445a     /** "ZDBRRLBL" */
     
@@ -90,6 +90,8 @@ zdb_rr_label* zdb_rr_label_find_exact(zdb_rr_label* apex,dnslabel_vector_referen
 
 /* NOT USED (YET) */
 zdb_rr_label* zdb_rr_label_find(zdb_rr_label* apex, dnslabel_vector_reference sections, s32 index);
+
+zdb_rr_label* zdb_rr_label_find_from_name(zdb_rr_label* apex, const u8 *fqdn);
 
 zdb_rr_label*
 zdb_rr_label_stack_find(zdb_rr_label* apex, dnslabel_stack_reference sections, s32 pos, s32 index);
@@ -212,9 +214,6 @@ ya_result zdb_rr_label_delete_record_exact(zdb_zone* zone,dnslabel_vector_refere
  *
  * @return the matching label or NULL if it has not been found
  */
-
-/* 1 USE */
-ya_result zdb_rr_label_delete(zdb_zone* zone,dnslabel_vector_reference path,s32 path_index);
 
 static inline zdb_packed_ttlrdata* zdb_rr_label_get_rrset(zdb_rr_label *rr_label, u16 type)
 {

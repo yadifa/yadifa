@@ -50,7 +50,7 @@
 #include <dnscore/logger.h>
 #include <dnscore/format.h>
 
-#include "dnscore/treeset.h"
+#include "dnscore/ptr_set.h"
 
 #include "dnsdb/zdb_rr_label.h"
 #include "dnsdb/zdb_zone_label_iterator.h"
@@ -449,12 +449,12 @@ nsec_inverse_name(u8 *inverse_name, const u8 *name)
  */
 
 bool
-nsec_update_label_record(const zdb_zone *zone, zdb_rr_label *label, nsec_node *node, nsec_node *next_node, u8 *name, u32 ttl)
+nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *node, nsec_node *next_node, u8 *name)
 {
     type_bit_maps_context tbmctx;
     u8 tmp_bitmap[256 * (1 + 1 + 32)]; /* 'max window count' * 'max window length' */
     u32 tbm_size = type_bit_maps_initialize(&tbmctx, label, TRUE, TRUE);
-
+    u32 ttl = zone->min_ttl;
     type_bit_maps_write(tmp_bitmap, &tbmctx);
 
     /*
@@ -661,10 +661,9 @@ nsec_delete_label_node(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_refe
 void
 nsec_update_label(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_reference labels, s32 labels_top)
 {
-    soa_rdata soa;
+    //soa_rdata soa;
     u8 name[MAX_DOMAIN_LENGTH];
-
-    zdb_zone_getsoa(zone, &soa);
+    //zdb_zone_getsoa(zone, &soa);
 
     /* Create or get the node */
 
@@ -676,7 +675,7 @@ nsec_update_label(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_reference
 
     dnslabel_vector_to_dnsname(labels, labels_top, name);
 
-    nsec_update_label_record(zone, label, node, next_node, name, soa.minimum);
+    nsec_update_label_record(zone, label, node, next_node, name);
 }
 
 void
@@ -697,42 +696,33 @@ nsec_destroy_zone(zdb_zone *zone)
 
 /**/
 
-static int
-treeset_dnsname_compare(const void *a, const void *b)
-{
-    const u8 *dnsname_a = (const u8*)a;
-    const u8 *dnsname_b = (const u8*)b;
-
-    return dnsname_compare(dnsname_a,dnsname_b);
-}
-
 void
 nsec_icmtl_replay_init(nsec_icmtl_replay *replay, zdb_zone *zone)
 {
     ZEROMEMORY(replay, sizeof(nsec_icmtl_replay));
 
-    replay->nsec_add.compare = treeset_dnsname_compare;
-    replay->nsec_del.compare = treeset_dnsname_compare;
+    replay->nsec_add.compare = ptr_set_dnsname_node_compare;
+    replay->nsec_del.compare = ptr_set_dnsname_node_compare;
     replay->zone = zone;
 }
 
 static void
-nsec3_icmtl_destroy_nsec(treeset_tree *tree)
+nsec3_icmtl_destroy_nsec(ptr_set *tree)
 {
-    if(!treeset_avl_isempty(tree))
+    if(!ptr_set_avl_isempty(tree))
     {
-        treeset_avl_iterator n3p_avl_iter;
-        treeset_avl_iterator_init(tree, &n3p_avl_iter);
+        ptr_set_avl_iterator n3p_avl_iter;
+        ptr_set_avl_iterator_init(tree, &n3p_avl_iter);
 
-        while(treeset_avl_iterator_hasnext(&n3p_avl_iter))
+        while(ptr_set_avl_iterator_hasnext(&n3p_avl_iter))
         {
-            treeset_node *node = treeset_avl_iterator_next_node(&n3p_avl_iter);
+            ptr_node *node = ptr_set_avl_iterator_next_node(&n3p_avl_iter);
             free(node->key);
             node->key = NULL;
-            node->data = NULL;
+            node->value = NULL;
         }
         
-        treeset_avl_destroy(tree);
+        ptr_set_avl_destroy(tree);
     }
 }
 
@@ -748,41 +738,41 @@ nsec_icmtl_replay_destroy(nsec_icmtl_replay *replay)
 void
 nsec_icmtl_replay_nsec_del(nsec_icmtl_replay *replay, const u8* fqdn)
 {
-    treeset_node *node = treeset_avl_insert(&replay->nsec_del, (u8*)fqdn);
+    ptr_node *node = ptr_set_avl_insert(&replay->nsec_del, (u8*)fqdn);
     
     node->key = dnsname_dup(fqdn);
-    node->data = NULL;
+    node->value = NULL;
 }
 
 void
 nsec_icmtl_replay_nsec_add(nsec_icmtl_replay *replay, const u8* fqdn)
 {
-    treeset_node *node = treeset_avl_insert(&replay->nsec_add, (u8*)fqdn);
+    ptr_node *node = ptr_set_avl_insert(&replay->nsec_add, (u8*)fqdn);
 
     node->key = dnsname_dup(fqdn);
-    node->data = NULL;
+    node->value = NULL;
 }
 
 void
 nsec_icmtl_replay_execute(nsec_icmtl_replay *replay)
 {
-    if(!treeset_avl_isempty(&replay->nsec_del))
+    if(!ptr_set_avl_isempty(&replay->nsec_del))
     {
         /* stuff to delete */
 
-        treeset_avl_iterator ts_avl_iter;
-        treeset_avl_iterator_init(&replay->nsec_del, &ts_avl_iter);
+        ptr_set_avl_iterator ts_avl_iter;
+        ptr_set_avl_iterator_init(&replay->nsec_del, &ts_avl_iter);
 
-        while(treeset_avl_iterator_hasnext(&ts_avl_iter))
+        while(ptr_set_avl_iterator_hasnext(&ts_avl_iter))
         {
-            treeset_node *node = treeset_avl_iterator_next_node(&ts_avl_iter);
+            ptr_node *node = ptr_set_avl_iterator_next_node(&ts_avl_iter);
             u8 *fqdn = (u8*)node->key;
 
             log_debug("icmtl replay: NSEC: post/del %{dnsname}", fqdn);
 
-            treeset_node *add_node;
+            ptr_node *add_node;
 
-            if((add_node = treeset_avl_find(&replay->nsec_add, fqdn)) != NULL)
+            if((add_node = ptr_set_avl_find(&replay->nsec_add, fqdn)) != NULL)
             {
                 /*
                  *  del and add => nothing to do (almost)
@@ -798,7 +788,7 @@ nsec_icmtl_replay_execute(nsec_icmtl_replay *replay)
                  */
 
                 u8* add_key = add_node->key;
-                treeset_avl_delete(&replay->nsec_add, fqdn);
+                ptr_set_avl_delete(&replay->nsec_add, fqdn);
                 
                 free(add_key);
             }
@@ -829,18 +819,18 @@ nsec_icmtl_replay_execute(nsec_icmtl_replay *replay)
             free(fqdn);
         }
 
-        treeset_avl_destroy(&replay->nsec_del);
+        ptr_set_avl_destroy(&replay->nsec_del);
     }
-    if(!treeset_avl_isempty(&replay->nsec_add))
+    if(!ptr_set_avl_isempty(&replay->nsec_add))
     {
         /* stuff to add */
 
-        treeset_avl_iterator ts_avl_iter;
-        treeset_avl_iterator_init(&replay->nsec_add, &ts_avl_iter);
+        ptr_set_avl_iterator ts_avl_iter;
+        ptr_set_avl_iterator_init(&replay->nsec_add, &ts_avl_iter);
 
-        while(treeset_avl_iterator_hasnext(&ts_avl_iter))
+        while(ptr_set_avl_iterator_hasnext(&ts_avl_iter))
         {
-            treeset_node *node = treeset_avl_iterator_next_node(&ts_avl_iter);
+            ptr_node *node = ptr_set_avl_iterator_next_node(&ts_avl_iter);
             u8 *fqdn = (u8*)node->key;
 
             log_debug("icmtl replay: NSEC: add %{dnsname}", fqdn);
@@ -860,7 +850,7 @@ nsec_icmtl_replay_execute(nsec_icmtl_replay *replay)
             free(fqdn);
         }
 
-        treeset_avl_destroy(&replay->nsec_add);
+        ptr_set_avl_destroy(&replay->nsec_add);
     }
 }
 

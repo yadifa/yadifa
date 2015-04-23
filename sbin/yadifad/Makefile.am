@@ -28,8 +28,22 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#	YADIFA server Makefile.am script
+#
+#      	Makefile.am script
+#
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.0-public/sbin/yadifad/Makefile.am $
+#
+#       $Date: 2015-04-20 11:26:30 +0200 (Mon, 20 Apr 2015) $
+#
+#       $Revision: 4943 $
+#
+#	$Author: ericdf $
+#
+##############################################################################
 
-ACLOCAL_AMFLAGS = -I m4
+ACLOCAL_AMFLAGS = -I ../../m4
 
 dist_noinst_DATA = VERSION
 
@@ -99,7 +113,8 @@ noinst_HEADERS = \
 	signals.h \
 	zone.h \
 	zone_data.h \
-	zone_desc.h
+	zone_desc.h \
+	zone-source.h
 
 if HAS_CTRL
 yadifad_SOURCES +=	config_control.c \
@@ -110,6 +125,7 @@ yadifad_SOURCES +=	config_control.c \
 noinst_HEADERS +=	ctrl.h \
 	ctrl_query.h \
 	ctrl_zone.h
+
 endif
 
 if HAS_ACL_SUPPORT 

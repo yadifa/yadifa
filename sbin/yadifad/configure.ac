@@ -32,7 +32,7 @@ dnl
 dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 4725 $])
+AC_REVISION([$Revision: 4950 $])
 # 1
 # svn log 2> /dev/null|head -2|grep ^r|sed 's/.\([1-9]*\).*/\1/'
 
@@ -47,6 +47,14 @@ AC_REVISION([$Revision: 4725 $])
 
 AC_INIT([yadifad],m4_esyscmd([svn info 2> /dev/null |  sed -e 's/^/$/' -e 's/$/ $/' > revision.txt;echo $(cat VERSION)-$(grep \$Revision: * | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[bugreport@yadifa.eu])
 
+echo
+echo
+echo "YADIFAD START"
+echo "-------------"
+echo
+echo
+
+
 m4_include([../../m4/eurid.m4])
 m4_include([../../m4/yadifa.m4])
 
@@ -54,7 +62,7 @@ AC_CONFIG_AUX_DIR([.])
 AM_INIT_AUTOMAKE([-Wall -Werror tar-pax])
 AC_CONFIG_HEADER([server-config.h])
 
-AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_MACRO_DIR([../../m4])
 
 AC_DEFUN([SYSCONF], [/$prefix/PACKAGE/PACKAGE.conf])
 
@@ -145,31 +153,67 @@ AC_CHECK_FUNCS([bzero memset select socket])
 AC_CONFIG_FILES([Makefile])
 
 AC_OUTPUT
+
+dnl ----------------------------------------------------------------------------
+
+AC_MAKE_BUILDINFO
+
+
 echo
+echo "SUMMARY for YADIFAD:"
+echo "-------------------"
 echo
+echo "CC .................................. : $CC"
+echo "LD .................................. : $LD"
+echo "AR .................................. : $AR"
+echo "CFLAGS .............................. : $CFLAGS"
+echo "CPPFLAGS ............................ : $CPPFLAGS"
+echo "LDFLAGS ............................. : $LDFLAGS"
+echo "LIBS ................................ : $LIBS"
 echo
-echo "Features used:"
-echo "--------------"
+echo "ZALLOC .............................. : $enable_zalloc"
+echo "ZALLOC STATISTICS ................... : $enable_zalloc_statistics"
+echo "ZALLOC DEBUG ........................ : $enable_zalloc_debug"
+echo "ACL ................................. : $enable_acl"
+echo "TSIG ................................ : $enable_tsig"
+echo "MASTER .............................. : $enable_master"
+echo "DYNUPDATE ........................... : $enable_dynupdate"
+echo "RRSIG MANAGEMENT .................... : $enable_rrsig_management"
+echo "CTRL ................................ : $enable_ctrl"
+echo "NSEC ................................ : $enable_nsec"
+echo "NSEC3 ............................... : $enable_nsec3"
+echo "RRL ................................. : $enable_rrl"
 
 if [[ ! "${OPENSSL}" = "" ]]
 then
+	echo
 	echo "Using OpenSLL from .................. : ${OPENSSL}"
 fi
 
+dnl if [[ "$with_tcl" = "yes" ]]; then
+dnl 	echo
+dnl 	echo TCL used ............................ : $tcl_version
+dnl 	echo TCL library ......................... : $tcl_libdir
+dnl 	echo "TCL includes ........................ : $tcl_includedir"
+dnl fi
+
 case "$enable_mirror" in
 	yes)
+	echo
 	echo "MIRROR............................... : yes"
 	;;
-	*)
+*)
 	;;
 esac
 
 echo
 echo "Install prefix ...................... : $prefix"
 echo "Install sysconf ..................... : $sysconfdir"
-echo "Default log directory ............... : $logdir"
-echo
 echo
 
-AC_MAKE_BUILDINFO
+echo
+echo "YADIFAD DONE"
+echo "------------"
+echo
+echo
 

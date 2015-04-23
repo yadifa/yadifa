@@ -68,11 +68,57 @@ list_dl_remove(list_dl_s *list, const void *data)
             node->prev->next = node->next;
             node->next->prev = node->prev;
             list->size--;
-            free(node);
+            ZFREE(node, list_dl_node_s);
             return TRUE;
         }
 
         node = node->next;
+    }
+    
+    return NULL;
+}
+
+bool
+list_dl_remove_matching(list_dl_s *list, result_callback_function *match, void *args)
+{
+    list_dl_node_s *node = list->head_sentinel.next;
+
+    while(node->next != NULL)
+    {
+        ya_result ret = match(node->data, args);
+        if(ret != 0)
+        {
+            node->prev->next = node->next;
+            node->next->prev = node->prev;
+            list->size--;
+            ZFREE(node, list_dl_node_s);
+            return TRUE;
+        }
+
+        node = node->next;
+    }
+    
+    return NULL;
+}
+
+bool
+list_dl_remove_all_matching(list_dl_s *list, result_callback_function *match, void *args)
+{
+    list_dl_node_s *node = list->head_sentinel.next;
+    list_dl_node_s *node_next;
+    while((node_next = node->next) != NULL)
+    {
+
+        ya_result ret = match(node->data, args);
+        if(ret != 0)
+        {
+            node->prev->next = node->next;
+            node->next->prev = node->prev;
+            list->size--;
+            ZFREE(node, list_dl_node_s);
+        }
+
+        node = node_next;
     }
     
     return NULL;
@@ -96,7 +142,7 @@ list_dl_clear(list_dl_s *list)
         
         node = node->next;
         
-        free(tmp);
+        ZFREE(tmp, list_dl_node_s);
     }
     
     list->head_sentinel.next = (list_dl_node_s*)&list->tail_sentinel;
@@ -118,7 +164,7 @@ list_dl_clear(list_dl_s *list)
  * @return a matching node or NULL
  */
 
-void *list_dl_search(list_dl_s *list, result_callback_function *comparator)
+void *list_dl_search(list_dl_s *list, result_callback_function *comparator, void *parm)
 {
     list_dl_node_s *node = list->head_sentinel.next;
 
@@ -127,7 +173,7 @@ void *list_dl_search(list_dl_s *list, result_callback_function *comparator)
         void *data = node->data;
         node = node->next;
         
-        ya_result ret = comparator(data);
+        ya_result ret = comparator(data, parm);
         
         if((ret & COLLECTION_ITEM_STOP) != 0)
         {
@@ -198,7 +244,7 @@ list_dl_get(list_dl_s *list, s32 index)
     }
 }
 
-ya_result list_dl_foreach(list_dl_s *list, item_process_callback_function *callback, void *caller_data)
+ya_result list_dl_foreach(list_dl_s *list, result_callback_function *callback, void *caller_data)
 {
     list_dl_node_s *node = list->head_sentinel.next;
 
@@ -239,7 +285,7 @@ ya_result list_dl_foreach(list_dl_s *list, item_process_callback_function *callb
  */
 
 bool
-list_dl_remove_match(list_dl_s *list, result_callback_function *comparator)
+list_dl_remove_match(list_dl_s *list, result_callback_function *comparator, void *parm)
 {
     list_dl_node_s *node = list->head_sentinel.next;
     list_dl_node_s *node_next;
@@ -247,14 +293,14 @@ list_dl_remove_match(list_dl_s *list, result_callback_function *comparator)
     
     while((node_next = node->next) != NULL)
     {
-        ya_result ret = comparator(node->data);
+        ya_result ret = comparator(node->data, parm);
         
         if((ret & COLLECTION_ITEM_PROCESS) != 0)
         {
             node->prev->next = node->next;
             node->next->prev = node->prev;
             list->size--;
-            free(node);
+            ZFREE(node, list_dl_node_s);
             matched = true;
         }
         

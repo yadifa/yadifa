@@ -36,11 +36,9 @@
  *  @ingroup dnscore
  *  @brief Base 32 codec
  *
- * @{
- *
  *----------------------------------------------------------------------------*/
+
 #include <stdio.h>
-#include <stdlib.h>
 
 #include "dnscore/base32.h"
 
@@ -102,8 +100,6 @@ static const char __BASE32__[256] = {
  * 
  * @return output size
  */
-
-
 u32
 base32_encode(const u8* buffer_in, u32 size_in, char* buffer_out)
 {
@@ -252,7 +248,6 @@ static const u8 __DEBASE32__[256] = {
  * 
  * @return output size
  */
-
 ya_result
 base32_decode(const char* buffer_in, u32 size_in, u8* buffer_out)
 {
@@ -358,8 +353,6 @@ base32_decode(const char* buffer_in, u32 size_in, u8* buffer_out)
 
     return out - buffer_out;
 }
-
-/** @} */
 
 /*----------------------------------------------------------------------------*/
 

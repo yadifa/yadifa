@@ -58,11 +58,13 @@
 #ifndef _ZDB_H
 #define	_ZDB_H
 
+#include <dnscore/message.h>
+#include <dnscore/fingerprint.h>
+
 #include <dnsdb/zdb_config.h>
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/zdb_error.h>
-#include <dnscore/message.h>
-#include <dnscore/fingerprint.h>
+#include <dnsdb/zdb-lock.h>
 
 /* EDNS -> */
 /* <- EDNS */
@@ -117,40 +119,31 @@ void zdb_finalize();
  *
  */
 
-void zdb_create(zdb* db);
+void zdb_create(zdb *db);
 
-/** @brief Returns all the records in a zone.
- *
- *  Returns all the records in a zone.
- *
- *
- *
- *  @param[in]  db the database
- *  @param[in]  dnsname_domain the domain dnsname to search in
- *  @param[out] out a set of results
- *
- *  @return OK in case of success.
- */
-/* ya_result zdb_axfr   (zdb* db, u8* origin,zone_iterator* iterator);*/
-
-#if 1
-//#error obsolete
-/** @brief Search for a single match in the database
- *
- *  Search for a match in the database.
- *  Only the most relevant match will be returned (ONE record set)
- *
- *  @param[in]  db the database
- *  @param[in]  dnsname_name the name dnsname to search for
- *  @param[in]  class the class to match
- *  @param[in]  type the type to match
- *  @param[out] ttl_rdara_out a pointer to a pointer set of results (single linked list)
- *
- *  @return SUCCESS in case of success.
+/**
+ * 
+ * Puts a zone in the DB.
+ * 
+ * If a zone with the same name did exist, returns the old zone (to be released)
+ * and replaces it with the one given as a parameter.
+ * 
+ * This function temporarily locks the database for writing.
+ * The zone added gets its RC increased.
+ * 
+ * @param db
+ * @param zone
+ * 
+ * @return 
  */
 
-ya_result zdb_query(zdb* db, u8* dnsname_name, u16 class, u16 type, zdb_packed_ttlrdata** ttlrdara_out);
-#endif
+zdb_zone *zdb_set_zone(zdb *db, zdb_zone* zone);
+
+zdb_zone *zdb_remove_zone(zdb *db, dnsname_vector *name);
+
+zdb_zone *zdb_remove_zone_from_dnsname(zdb *db, const u8 *dnsname);
+
+
 
 static inline void zdb_query_ex_answer_create(zdb_query_ex_answer *ans_auth_add)
 {
@@ -200,8 +193,76 @@ finger_print zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_
  */
 ya_result zdb_query_message_update(message_data* message, zdb_query_ex_answer* answer_set);
 
-ya_result zdb_query_ip_records(zdb* db, const u8* name_, u16 zclass, zdb_packed_ttlrdata **ttlrdata_out_a, zdb_packed_ttlrdata **ttlrdata_out_aaaa);
+/**
+ * This function should not be used anymore. Please consider using zdb_append_ip_records instead.
+ * 
+ * @param db
+ * @param name_
+ * @param ttlrdata_out_a
+ * @param ttlrdata_out_aaaa
+ * @return 
+ */
 
+ya_result zdb_query_ip_records(zdb* db, const u8* name_, zdb_packed_ttlrdata **ttlrdata_out_a, zdb_packed_ttlrdata **ttlrdata_out_aaaa);
+
+/**
+ * 
+ * Appends all A and AAAA records found in the database for the given fqdn
+ * Given the nature of the list, what is returned is a copy.
+ * The call locks the database for reading, then each involved zone for reading.
+ * Locks are released before the function returns.
+ * 
+ * @param db database
+ * @param name_ fqdn
+ * @param target_list list
+ * @return 
+ */
+
+ya_result zdb_append_ip_records(zdb* db, const u8* name_, host_address *target_list);
+
+/**
+ * Get a label from the database.
+ * Optionally, the zone can be retrieved (zonep != NULL) and the zone can be locked by a specific owner.
+ * Note that lock without retrieval of the zone is forbidden (and will abort on debug code)
+ * The zone of the label may be locked as well.
+ * 
+ * Release the zone with: zdb_zone_release_unlock(*zonep, owner);
+ * 
+ * Note that using the returned pointer without locking the zone may have undefined results on a multi threaded environment.
+ * 
+ * @param db
+ * @param name
+ * @param zonep
+ * @param owner
+ * 
+ * @return 
+ */
+
+zdb_rr_label *zdb_get_rr_label(zdb* db, const u8* name, zdb_zone **zonep, u8 owner);
+
+/**
+ * Get an rr set from the database.
+ * The type must be specific (TYPE_ANY will return NULL)
+ * Optionally, the zone can be retrieved (zonep != NULL) and the zone can be locked by a specific owner.
+ * Note that lock without retrieval of the zone is forbidden (and will abort on debug code)
+ * The zone of the label may be locked as well.
+ * 
+ * Release the zone with: zdb_zone_release_unlock(*zonep, owner);
+ * 
+ * Note that using the returned pointer without locking the zone may have undefined results on a multi threaded environment.
+ * 
+ * @param db
+ * @param name
+ * @param type
+ * @param zonep
+ * @param owner
+ * 
+ * @return 
+ */
+
+const zdb_packed_ttlrdata *zdb_get_rr_set(zdb* db, const u8* name, u16 rtype, zdb_zone **zonep, u8 owner);
+
+#if OBSOLETE
 /** @brief Adds an entry in a zone of the database
  *
  *  Adds an entry in a zone of the database
@@ -218,7 +279,7 @@ ya_result zdb_query_ip_records(zdb* db, const u8* name_, u16 zclass, zdb_packed_
  *  @return SUCCESS in case of success.
  */
 
-ya_result zdb_add(zdb* db, u8* origin_, u8* name_, u16 zclass, u16 type, u32 ttl, u16 rdata_size, void* rdata); /* 4 match, add    1 */
+ya_result zdb_add(zdb* db, u8* origin_, u8* name_, u16 type, u32 ttl, u16 rdata_size, void* rdata); /* 4 match, add    1 */
 
 /** @brief Deletes an entry from a zone in the database
  *
@@ -236,8 +297,9 @@ ya_result zdb_add(zdb* db, u8* origin_, u8* name_, u16 zclass, u16 type, u32 ttl
  *  @return SUCCESS in case of success.
  */
 
-ya_result zdb_delete(zdb* db, u8* origin, u8* name, u16 zclass, u16 type, u32 ttl, u16 rdata_size, void* rdata); /* 5 match, delete 1 */
+ya_result zdb_delete(zdb* db, u8* origin, u8* name, u16 type, u32 ttl, u16 rdata_size, void* rdata); /* 5 match, delete 1 */
 
+#endif
 
 /** @brief Destroys the database
  *
@@ -259,7 +321,8 @@ void zdb_destroy(zdb* db);
  * @return 
  */
 
-bool zdb_is_zone_invalid(zdb *db, const u8 *origin, u16 zclass);
+bool zdb_is_zone_invalid(zdb *db, const u8 *origin);
+
 
 /** @brief DEBUG: Prints the content of the database.
  *
@@ -269,6 +332,9 @@ bool zdb_is_zone_invalid(zdb *db, const u8 *origin, u16 zclass);
  *
  */
 
+void zdb_signature_check(int so_zdb, int so_zdb_zone, int so_zdb_zone_label, int so_zdb_rr_label, int so_mutex_t);
+
+#define ZDB_API_CHECK() zdb_signature_check(sizeof(zdb),sizeof(zdb_zone),sizeof(zdb_zone_label),sizeof(zdb_rr_label),sizeof(mutex_t))
 
 
 #ifdef DEBUG

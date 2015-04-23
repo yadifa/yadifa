@@ -75,4 +75,3 @@ allocator_s libc_allocator =
 /**
  * @}
  */
-

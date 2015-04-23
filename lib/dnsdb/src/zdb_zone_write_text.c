@@ -52,6 +52,7 @@
 #include <dnscore/format.h>
 #include <dnscore/typebitmap.h>
 #include <dnscore/base32hex.h>
+#include <dnscore/fdtools.h>
 
 #include "dnsdb/zdb_zone_write.h"
 
@@ -61,6 +62,8 @@
 #include "dnsdb/zdb_utils.h"
 #include "dnsdb/zdb_zone.h"
 
+extern logger_handle* g_database_logger;
+#define MODULE_MSG_HANDLE g_database_logger
 
 #if ZDB_HAS_NSEC3_SUPPORT!=0
 #include "dnsdb/nsec3.h"
@@ -403,7 +406,7 @@ zdb_zone_write_text(const zdb_zone* zone, output_stream* fos, bool force_label)
 
                     rdata[1] = item->flags;
 
-#if DEBUG
+#if 1	/* DEBUG */
                     if(item->rc == 1)
                     {
                         if(item->rc != 0)
@@ -537,6 +540,14 @@ zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, bool for
 {
     output_stream fos;
     ya_result ret;
+    
+    if(file_is_link(output_file) > 0)
+    {
+        if(unlink(output_file) < 0)
+        {
+            log_warn("could not delete symbolic link %s: %r", output_file, ERRNO_ERROR);
+        }
+    }
 
     if(ISOK(ret = file_output_stream_create(output_file, FILE_RIGHTS, &fos)))
     {

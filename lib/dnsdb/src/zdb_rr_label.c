@@ -391,6 +391,16 @@ zdb_rr_label_find(zdb_rr_label* apex, dnslabel_vector_reference label_sections, 
 #endif
 
 zdb_rr_label*
+zdb_rr_label_find_from_name(zdb_rr_label* apex, const u8 *fqdn)
+{
+    s32 top;
+    dnslabel_vector name;
+    top = dnsname_to_dnslabel_vector(fqdn, name);
+    zdb_rr_label *label = zdb_rr_label_find(apex, name, top);
+    return label;
+}
+
+zdb_rr_label*
 zdb_rr_label_find_ext(zdb_rr_label* apex, dnslabel_vector_reference sections, s32 index_, zdb_rr_label_find_ext_data *ext)
 {
     yassert(apex != NULL && sections != NULL);

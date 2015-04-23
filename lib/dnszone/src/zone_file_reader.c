@@ -51,6 +51,7 @@
 #include "dnszone/dnszone.h"
 #include "dnszone/zone_file_reader.h"
 
+#define ZFREADER_TAG 0x524544414552465a
 #define ZONE_FILE_READER_INCLUDE_DEPTH_MAX 16
 
 extern logger_handle *g_zone_logger;
@@ -192,6 +193,27 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             case TYPE_WKS:   
             {
                 return_code = cstr_to_locase_dnsname_with_check_len_with_origin(rdata, text, text_len, origin);
+                
+                break;
+            }
+            case TYPE_AFSDB:
+            {
+                 u16 sub_type;
+                
+                if(FAIL(return_code = parser_get_u16(text, text_len, &sub_type)))
+                {
+                    break;
+                }
+                sub_type = htons(sub_type);
+                SET_U16_AT_P(rdata, sub_type);
+                rdata += 2;
+                
+                if(FAIL(return_code = parser_copy_next_fqdn_locase_with_origin(p, rdata, origin)))
+                {
+                    break;
+                }
+                
+                return_code += 2;
                 
                 break;
             }
@@ -864,6 +886,69 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 return_code += rdata - rdata_start;
                 break;
             }
+            
+            // exist out of two parts
+            // 1. mbox-dname
+            // 2. only 1 txt-dname
+            case TYPE_RP:
+            {
+                // 1.mbox-name
+                //s32 total_size;
+                
+                // return_code = "length" or "error code"
+                if(FAIL(return_code = cstr_to_locase_dnsname_with_check_len_with_origin(rdata, text, text_len, origin)))
+                {
+                    break;
+                }
+                
+                // set rdata to the next chunk
+                rdata += return_code;
+                
+                
+                // 2.txt-dname
+                
+                u8 *rdata_start = rdata;
+                
+                if(FAIL(return_code = parser_next_token(p)))
+                {
+                    break;
+                }
+                
+                text_len = return_code;
+                // only 1 txt-dname will be parsed
+                //for(;;)
+                {
+                    if(text_len > 255)
+                    {
+                        return_code = ZONEFILE_TEXT_TOO_BIG;
+                        break;
+                    }
+
+                    *rdata++ = (u8)text_len;
+                    memcpy(rdata, text, text_len);
+                    rdata += text_len;
+
+                    if(FAIL(return_code = parser_next_token(p)))
+                    {
+                        break;
+                    }
+
+                    if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
+                    {
+                        // stop
+
+                        break;
+                    }
+                    //text = parser_text(p);
+                    //text_len = parser_text_length(p);
+                }
+                
+                return_code += rdata - rdata_start;
+                
+                parser_set_eol(p);
+                
+                break;
+            }
             case TYPE_HINFO:
             {
                 u8 *rdata_start = rdata;
@@ -911,6 +996,31 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 
                 break;
             }
+#ifdef NEW_TYPES
+            case TYPE_AFSDB:
+            {
+                u16 tmp16;
+                         
+                
+                if(FAIL(return_code = parser_get_u16(text, text_len, &tmp16)))
+                {
+                    break;
+                }
+                tmp16 = htons(tmp16);
+                SET_U16_AT_P(rdata, tmp16);
+                rdata += 2;
+                
+                if(FAIL(return_code = parser_copy_next_fqdn_with_origin(p, rdata, origin)))
+                {
+                    break;
+                }
+                
+                return_code += 2;  // 2 bytes + length of FQDN
+                
+                break;
+            }
+#endif // NEW_TYPES
+            
             case TYPE_OPT:
             case TYPE_TSIG:
             case TYPE_IXFR:
@@ -923,8 +1033,6 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             case TYPE_DNAME:
             case TYPE_NULL:
             case TYPE_MINFO:
-            case TYPE_RP:
-            case TYPE_AFSDB:
             case TYPE_X25:
             case TYPE_ISDN:
             case TYPE_RT:
@@ -1098,7 +1206,8 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                     println("[EOF]");
 #endif
                     input_stream *completed_stream = parser_pop_stream(p);
-                    
+                 /// @todo EDF NOW !
+                    /*
 #if (DNSDB_USE_POSIX_ADVISE != 0) && (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
 
                     input_stream *file_stream = buffer_input_stream_get_filtered(completed_stream);
@@ -1107,6 +1216,7 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                     fdatasync(fd);
                     posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
 #endif              
+                     */
                     input_stream_close(completed_stream);
 
                     if(parser_stream_count(p) > 0)

@@ -39,6 +39,13 @@
  */
 /*----------------------------------------------------------------------------*/
 
+/* 
+ * File:   zone_axfr_reader.h
+ * Author: ericdf
+ *
+ * Created on June 16, 2011, 12:03 PM
+ */
+
 #ifndef ZONE_AXFR_READER_H
 #define	ZONE_AXFR_READER_H
 
@@ -57,15 +64,21 @@
  *  @retval     else : an error occurred
  */
 
-ya_result zone_axfr_reader_open(const char* filepath, zone_reader *dst);
+ya_result zone_axfr_reader_open(zone_reader *dst, const char *file_path);
 
 /**
  * Opens the axfr with the highest serial
  */
 
+ya_result zone_axfr_reader_open_with_fqdn(zone_reader *dst, const u8 *fqdn);
+
+#if OBSOLETE
+
 ya_result zone_axfr_reader_open_last(const char* axfrpath, u8 *origin, zone_reader *dst);
 
 ya_result zone_axfr_reader_open_with_serial(const char* data_path, u8 *origin, u32 loaded_serial, zone_reader *dst);
+
+#endif
 
 #endif	/* ZONE_AXFR_READER_H */
 

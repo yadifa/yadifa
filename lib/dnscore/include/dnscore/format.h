@@ -35,13 +35,11 @@
  *  @ingroup dnscore
  *  @brief 
  *
- *  
- *
  * @{
  *
  *----------------------------------------------------------------------------*/
-#ifndef _FORMAT_H
-#define	_FORMAT_H
+
+#pragma once
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -50,10 +48,6 @@
 #include <dnscore/output_stream.h>
 #include <dnscore/dnscore.h>
 
-#ifdef	__cplusplus
-extern "C" {
-#endif
-    
 #define OSPRINT_DUMP_LAYOUT_GROUP_MASK      0x0000ff00
 #define OSPRINT_DUMP_LAYOUT_GROUP_SHIFT     8
 #define OSPRINT_DUMP_LAYOUT_SEPARATOR_MASK  0x000000ff
@@ -273,14 +267,6 @@ struct rdata_desc_s
 };
 
 typedef struct rdata_desc_s rdata_desc;
-
-
-#ifdef	__cplusplus
-}
-#endif
-
-#endif	/* _FORMAT_H */
-/** @} */
 
 /*----------------------------------------------------------------------------*/
 

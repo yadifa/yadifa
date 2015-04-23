@@ -41,7 +41,7 @@
  *
  *----------------------------------------------------------------------------*/
 
-#include "dnscore-config.h"
+#include "dnscore/dnscore-config.h"
 
 #if HAS_PTHREAD_SETNAME_NP
 #ifdef DEBUG
@@ -103,12 +103,7 @@ struct thread_descriptor_s
 };
 
 /* The array of thread descriptors*/
-/*
-static pthread_mutex_t thread_descriptors_mutex = PTHREAD_MUTEX_INITIALIZER;
-static thread_descriptor_s** thread_descriptors = NULL;
-static u8 thread_pool_size = 0;
-static threaded_queue thread_pool_queue;
-*/
+
 static pthread_key_t pthread_pool_random_key = ~0;
 static pthread_once_t pthread_pool_random_key_once = PTHREAD_ONCE_INIT;
 
@@ -128,6 +123,7 @@ struct thread_pool_s
     threaded_queue queue;
     u8 thread_pool_size;
     u8 flags;
+
     char *pool_name;
     u32 id;
 };
@@ -137,23 +133,23 @@ typedef struct thread_pool_s thread_pool_s;
 void
 thread_pool_counter_init(thread_pool_task_counter *counter, s32 value)
 {
-    pthread_mutex_init(&counter->mutex, NULL);
+    mutex_init(&counter->mutex);
     counter->value = value;
 }
 
 void
 thread_pool_counter_destroy(thread_pool_task_counter *counter)
 {
-    pthread_mutex_destroy(&counter->mutex);
+    mutex_destroy(&counter->mutex);
 }
 
 s32
 thread_pool_counter_get_value(thread_pool_task_counter *counter)
 {
     s32 ret;
-    pthread_mutex_lock(&counter->mutex);
+    mutex_lock(&counter->mutex);
     ret = counter->value;
-    pthread_mutex_unlock(&counter->mutex);
+    mutex_unlock(&counter->mutex);
     return ret;
 }
 
@@ -161,10 +157,10 @@ s32
 thread_pool_counter_add_value(thread_pool_task_counter *counter, s32 value)
 {
     s32 ret;
-    pthread_mutex_lock(&counter->mutex);
+    mutex_lock(&counter->mutex);
     counter->value += value;
     ret = counter->value;
-    pthread_mutex_unlock(&counter->mutex);
+    mutex_unlock(&counter->mutex);
     return ret;
 }
 
@@ -199,6 +195,9 @@ thread_pool_thread(void *args)
      */
 
     thread_descriptor_s* desc = (thread_descriptor_s*)args;
+    
+
+    
     threaded_queue *queue = &desc->pool->queue;
 
 #if VERBOSE_THREAD_LOG > 1
@@ -321,6 +320,8 @@ thread_pool_thread(void *args)
     log_debug("thread: %x stopped", id);
 #endif
 
+
+    
     pthread_exit(NULL); // end of the thread from the pool
 
     return NULL;
@@ -447,6 +448,10 @@ thread_pool_init_ex(u8 thread_count, u32 queue_size, const char *pool_name)
 #endif
     
     thread_descriptor_s** thread_descriptors;
+    
+    mutex_init(&tp->mtx);
+
+    tp->thread_pool_size = thread_count;
 
     u8 i; /* thread creation loop counter */
 
@@ -468,10 +473,7 @@ thread_pool_init_ex(u8 thread_count, u32 queue_size, const char *pool_name)
         thread_descriptors[i] = td;
     }
     
-    mutex_init(&tp->mtx);
-
     tp->descriptors = thread_descriptors;
-    tp->thread_pool_size = thread_count;
     
     for(;;)
     {
@@ -583,9 +585,9 @@ thread_pool_stop(struct thread_pool_s* tp)
     u8 tps = tp->thread_pool_size;
     u8 i;
 
-    pthread_mutex_lock(&tp->mtx);
+    mutex_lock(&tp->mtx);
     td = tp->descriptors;
-    pthread_mutex_unlock(&tp->mtx);
+    mutex_unlock(&tp->mtx);
 
     if(td == NULL)
     {
@@ -768,7 +770,7 @@ thread_pool_resize(struct thread_pool_s* tp, u8 new_size)
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
     
-    pthread_mutex_lock(&tp->mtx);
+    mutex_lock(&tp->mtx);
     
     thread_descriptor_s** tds;
     u8 tps = tp->thread_pool_size;
@@ -778,7 +780,7 @@ thread_pool_resize(struct thread_pool_s* tp, u8 new_size)
     {
         // nothing to do
         
-        pthread_mutex_unlock(&tp->mtx);        
+        mutex_unlock(&tp->mtx);        
         return tps;
     }
     
@@ -827,7 +829,7 @@ thread_pool_resize(struct thread_pool_s* tp, u8 new_size)
                 tp->descriptors = thread_descriptors;
                 tp->thread_pool_size = new_size;
 
-                pthread_mutex_unlock(&tp->mtx);
+                mutex_unlock(&tp->mtx);
 
                 return new_size;
             }
@@ -926,7 +928,7 @@ thread_pool_resize(struct thread_pool_s* tp, u8 new_size)
     tp->descriptors = thread_descriptors;
     tp->thread_pool_size = new_size;
     
-    pthread_mutex_unlock(&tp->mtx);
+    mutex_unlock(&tp->mtx);
 
     return new_size;
 }
@@ -943,10 +945,10 @@ thread_pool_destroy(struct thread_pool_s* tp)
     u8 tps = tp->thread_pool_size;
     u8 i;
 
-    pthread_mutex_lock(&tp->mtx);
+    mutex_lock(&tp->mtx);
     td = tp->descriptors;
     tp->descriptors = NULL;
-    pthread_mutex_unlock(&tp->mtx);
+    mutex_unlock(&tp->mtx);
 
     if(td == NULL)
     {
@@ -1062,12 +1064,6 @@ thread_pool_destroy(struct thread_pool_s* tp)
     free(tp);
 
     return SUCCESS;
-}
-
-u8
-thread_pool_get_pool_size(struct thread_pool_s* tp)
-{
-    return tp->thread_pool_size;
 }
 
 

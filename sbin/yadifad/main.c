@@ -64,6 +64,8 @@
 #include <dnscore/service.h>
 #include <dnscore/logger-output-stream.h>
 
+// #include <dnscore/dnskey_ecdsa.h>
+
 #include <dnscore/pid.h>
 #include <dnscore/server-setup.h>
 
@@ -84,9 +86,11 @@
 #include "dynupdate_query_service.h"
 #endif
 
+#if HAS_DYNCONF_SUPPORT
+#include "dynconf.h"
+#endif
+
 #include "buildinfo.h"
-
-
 
 #define MODULE_MSG_HANDLE g_server_logger
 
@@ -102,7 +106,7 @@ void config_logger_cleardefault();
 
 int process_command_line(int argc, char **argv, config_data *config);
 
-int zdb_alloc_init();
+int zalloc_init();
 
 static void
 server_register_errors()
@@ -178,7 +182,7 @@ main_dump_info()
     log_info("got %u CPUs", sys_get_cpu_count());
     log_info("using %u UDP listeners per interface", g_config->thread_count_by_address);
     log_info("accepting up to %u TCP queries", g_config->max_tcp_queries);
-#if ZDB_USES_ZALLOC
+#if DNSCORE_HAS_ZALLOC
     log_info("self-managed memory enabled"); // ZALLOC
 #endif
 }
@@ -301,6 +305,11 @@ main_config(int argc, char *argv[])
         return ERROR;
     }
         
+#if 0 && defined(DEBUG)
+    config_print(termout);    
+    osformatln(termout, "starting logging service");
+#endif
+    
     /*
      * flushes whatever is in the buffers
      */
@@ -376,29 +385,21 @@ main_final_tests()
 static void
 main_exit()
 {
-    log_info("shutting down");
+    if(own_pid)
+    {
+        log_info("shutting down");
+    }
     
 #if HAS_DYNUPDATE_SUPPORT
     dynupdate_query_service_stop();
 #endif
     
     notify_service_stop();
-    
-    // database_shutdown(g_config->database); // note: disabled on later versions
-    
-#if ZDB_DEBUG_MALLOC != 0
-    formatln("block_count=%d", debug_get_block_count());
-    
-    flushout();
-    flusherr();
-    
-    debug_stat(true);
-#endif
-    
-    log_info("releasing pid file lock");
-   
+        
     if(own_pid)
     {
+        log_info("releasing pid file lock");
+        
         pid_file_destroy(g_config->pid_file);
     }
     
@@ -418,7 +419,7 @@ main_exit()
 
     if(server_do_clean_exit)
     {
-        database_shutdown(g_config->database); // note: at this place on later versions
+        database_shutdown(g_config->database);
         
         database_finalize();
         
@@ -428,10 +429,6 @@ main_exit()
         
         dnscore_finalize();
     }
-    
-#if ZDB_DEBUG_CHAIN_ALLOCATED_BLOCKS != 0
-    debug_stat(TRUE);
-#endif
 }
 
 /** \brief Main function of yadifa
@@ -465,7 +462,6 @@ main(int argc, char *argv[])
      */
         
     dnscore_init();
-    zdb_alloc_init();
     
     async_message_pool_init();
 
@@ -477,6 +473,10 @@ main(int argc, char *argv[])
 
     atexit(main_exit);
     
+#if HAS_DYNCONF_SUPPORT
+    //dynconf_service_init();
+    //dynconf_service_start();
+#endif    
     // configures, exit if ordered to (version/help or error)
     
     if((return_code = main_config(argc, argv)) != SUCCESS)

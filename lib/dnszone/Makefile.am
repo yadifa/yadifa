@@ -28,6 +28,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#	YADIFA dnszone Makefile.am script
+#
+#      	Makefile.am script
+#
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.0-public/lib/dnszone/Makefile.am $
+#
+#       $Date: 2015-03-06 14:58:47 +0100 (Fri, 06 Mar 2015) $
+#
+#       $Revision: 4756 $
+#
+#	$Author: ericdf $
+#
+##############################################################################
 
 srcdir =        @srcdir@
 libdir =	@libdir@
@@ -38,15 +52,45 @@ ACLOCAL_AMFLAGS = -I m4
 
 dist_noinst_DATA = VERSION
 
+I=include/dnszone
+FEATURESFILE=dnszone-config-features.h
+FEATURES=$(I)/$(FEATURESFILE)
+
 lib_LTLIBRARIES= libdnszone.la
 
 libdnszone_la_SOURCES = src/dnszone.c src/zone_axfr_reader.c src/zone_file_reader.c src/hints_file_reader.c
 	
-pkginclude_HEADERS = include/dnszone/dnszone.h include/dnszone/dnszone-config.h include/dnszone/zone_axfr_reader.h include/dnszone/zone_file_reader.h include/dnszone/hints_file_reader.h
+pkginclude_HEADERS = $(FEATURES) $(I)/dnszone.h $(I)/dnszone-config.h $(I)/zone_axfr_reader.h $(I)/zone_file_reader.h $(I)/hints_file_reader.h
 
 libdnszone_la_LDFLAGS = -version-info 2:0:0
 
 include ../../mk/common-settings.mk
 
 include ../../mk/common-labels.mk
+
+all: REVISION
+
+REVISION:
+	(svn info 2>/dev/null;if [ $? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
+
+src/dnszone.c: $(FEATURES)
+
+$(FEATURES): config.log REVISION VERSION
+	echo "#pragma once" > $(FEATURES)
+VP=DNSZONE
+	which printf > /dev/null 2>&1
+	if [ $$? -eq 0 ];then \
+		printf '// version %i.%i.%i.%i-%i\n' $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/') 0 $$(cat REVISION) >> $(FEATURES) ; \
+		printf '#define $(VP)_VERSION 0x%02x%02x%02x%02x%04xLL' $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/') 0 $$(cat REVISION) >> $(FEATURES) ; \
+	else \
+		echo "#define $(VP)_VERSION_(vmain_,vsub_,vminor_,vpatch_,vrevision_) ((vmain_)<<40)|((vsub_)<<32)|((vminor_)<<24)|((vpatch_)<<16)|(vrevision_)" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VMAIN_ $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1')" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VSUB_ $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\2')" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VMINOR_ $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\3')" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VPATCH_ 0 >> $(FEATURES)" ; \
+		echo "#define $(VP)_VERSION_VREVISION_ $$(cat REVISION)" >> $(FEATURES) ; \
+		echo '#define $(VP)_VERSION $(VP)_VERSION_($(VP)_VERSION_VMAIN_,$(VP)_VERSION_VSUB_,$(VP)_VERSION_VMINOR_,$(VP)_VERSION_VPATCH_,$(VP)_VERSION_VREVISION_)' >> $(FEATURES) ; \
+	fi
+	echo "// $(FEATURES)" >> $(FEATURES)
+	echo >> $(FEATURES)
 

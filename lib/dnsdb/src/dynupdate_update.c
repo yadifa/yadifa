@@ -47,7 +47,7 @@
 #include <dnscore/rfc.h>
 #include <dnscore/ptr_vector.h>
 #include <dnscore/threaded_queue.h>
-#include <dnscore/treeset.h>
+#include <dnscore/ptr_set.h>
 #include <dnscore/logger.h>
 #include <dnscore/dnsname.h>
 
@@ -124,7 +124,7 @@ struct label_update_status
 #if ZDB_HAS_DNSSEC_SUPPORT != 0
 
 static ya_result
-dynupdate_update_rrsig_body(zdb_zone *zone, treeset_tree *lus_set)
+dynupdate_update_rrsig_body(zdb_zone *zone, ptr_set *lus_set)
 {
     ya_result return_code;
     dnsname_stack path;
@@ -139,12 +139,12 @@ dynupdate_update_rrsig_body(zdb_zone *zone, treeset_tree *lus_set)
         return return_code;
     }
     
-    treeset_avl_iterator lus_iter;
-    treeset_avl_iterator_init(lus_set, &lus_iter);
-    while(treeset_avl_iterator_hasnext(&lus_iter))
+    ptr_set_avl_iterator lus_iter;
+    ptr_set_avl_iterator_init(lus_set, &lus_iter);
+    while(ptr_set_avl_iterator_hasnext(&lus_iter))
     {
-        treeset_node *lus_node = treeset_avl_iterator_next_node(&lus_iter);
-        label_update_status *lus = (label_update_status *)lus_node->data;
+        ptr_node *lus_node = ptr_set_avl_iterator_next_node(&lus_iter);
+        label_update_status *lus = (label_update_status *)lus_node->value;
 
         if(!lus->inversed)
         {
@@ -210,7 +210,7 @@ dynupdate_update_rrsig_body(zdb_zone *zone, treeset_tree *lus_set)
 #if ZDB_HAS_NSEC3_SUPPORT != 0
 
 static inline void
-dynupdate_update_nsec3_body_postdel(zdb_zone *zone, ptr_vector *candidates, treeset_tree *nsec3_del, zdb_rr_label *label, u8 *dname)
+dynupdate_update_nsec3_body_postdel(zdb_zone *zone, ptr_vector *candidates, ptr_set *nsec3_del, zdb_rr_label *label, u8 *dname)
 {
     if(!RR_LABEL_HASSUBORREC(label))
     {
@@ -267,7 +267,7 @@ dynupdate_update_nsec3_body_postdel(zdb_zone *zone, ptr_vector *candidates, tree
 
                 if(rr_label->nsec.nsec3 != NULL)
                 {
-                    treeset_avl_insert(nsec3_del, rr_label->nsec.nsec3->self)->data = rr_label;
+                    ptr_set_avl_insert(nsec3_del, rr_label->nsec.nsec3->self)->value = rr_label;
                 }
 
                 ptr_vector_append(candidates, dnsname_dup(dname));
@@ -277,13 +277,13 @@ dynupdate_update_nsec3_body_postdel(zdb_zone *zone, ptr_vector *candidates, tree
 }
 
 static inline void
-dynupdate_update_nsec_body_postdel(zdb_zone *zone, ptr_vector *candidates, treeset_tree *nsec_del, zdb_rr_label *label, u8 *dname)
+dynupdate_update_nsec_body_postdel(zdb_zone *zone, ptr_vector *candidates, ptr_set *nsec_del, zdb_rr_label *label, u8 *dname)
 {
     if(!RR_LABEL_HASSUBORREC(label))
     {
         if(label->nsec.nsec.node != NULL)
         {
-            treeset_avl_insert(nsec_del, label->nsec.nsec.node)->data = label;
+            ptr_set_avl_insert(nsec_del, label->nsec.nsec.node)->value = label;
         }
         
         ptr_vector_append(candidates, dnsname_dup(dname));        
@@ -340,7 +340,7 @@ dynupdate_update_nsec_body_postdel(zdb_zone *zone, ptr_vector *candidates, trees
 
                 if(rr_label->nsec.nsec.node != NULL)
                 {
-                    treeset_avl_insert(nsec_del, rr_label->nsec.nsec.node)->data = rr_label;
+                    ptr_set_avl_insert(nsec_del, rr_label->nsec.nsec.node)->value = rr_label;
                 }
 
                 ptr_vector_append(candidates, dnsname_dup(dname));
@@ -350,24 +350,24 @@ dynupdate_update_nsec_body_postdel(zdb_zone *zone, ptr_vector *candidates, trees
 }
 
 static ya_result
-dynupdate_update_nsec3_body(zdb_zone *zone, treeset_tree *lus_set)
+dynupdate_update_nsec3_body(zdb_zone *zone, ptr_set *lus_set)
 {
     bool opt_out = ((zone->apex->flags & ZDB_RR_LABEL_NSEC3_OPTOUT) != 0);
     
-    treeset_tree nsec3_del = TREESET_EMPTY;
-    treeset_tree nsec3_upd = TREESET_EMPTY;
+    ptr_set nsec3_del = PTR_SET_EMPTY;
+    ptr_set nsec3_upd = PTR_SET_EMPTY;
     ptr_vector label_del = EMPTY_PTR_VECTOR;
     
     dnsname_stack path;
 
     ya_result return_code;
         
-    treeset_avl_iterator lus_iter;
-    treeset_avl_iterator_init(lus_set, &lus_iter);
-    while(treeset_avl_iterator_hasnext(&lus_iter))
+    ptr_set_avl_iterator lus_iter;
+    ptr_set_avl_iterator_init(lus_set, &lus_iter);
+    while(ptr_set_avl_iterator_hasnext(&lus_iter))
     {
-        treeset_node *lus_node = treeset_avl_iterator_next_node(&lus_iter);
-        label_update_status *lus = (label_update_status *)lus_node->data;
+        ptr_node *lus_node = ptr_set_avl_iterator_next_node(&lus_iter);
+        label_update_status *lus = (label_update_status *)lus_node->value;
 
         dnsname_to_dnsname_stack(lus->dname, &path);
 
@@ -400,28 +400,32 @@ dynupdate_update_nsec3_body(zdb_zone *zone, treeset_tree *lus_set)
 
                     bool new_one = label->nsec.nsec3 == NULL;
 
-                    nsec3_update_label(zone, label, labels, labels_top);
-
-                    treeset_avl_insert(&nsec3_upd, label->nsec.nsec3->self)->data = label;
-
-                    if(new_one) /* if it's a new insert, the previous nsec3 will have to be updated */
+                    if(nsec3_update_label(zone, label, labels, labels_top))
                     {
-                        nsec3_zone_item *pred = nsec3_avl_node_mod_prev(label->nsec.nsec3->self);
+                        ptr_set_avl_insert(&nsec3_upd, label->nsec.nsec3->self)->value = label;
 
-                        if(pred != NULL)
+                        if(new_one) /* if it's a new insert, the previous nsec3 will have to be updated */
                         {
-                            treeset_avl_insert(&nsec3_upd, pred)->data = label;
-                            
-                            nsec3_zone* n3 = nsec3_zone_from_item(zone, pred);
-                            zdb_listener_notify_remove_nsec3(zone, pred, n3, 0);
+                            nsec3_zone_item *pred = nsec3_avl_node_mod_prev(label->nsec.nsec3->self);
+
+                            if(pred != NULL)
+                            {
+                                ptr_set_avl_insert(&nsec3_upd, pred)->value = label;
+
+                                nsec3_zone* n3 = nsec3_zone_from_item(zone, pred);
+                                zdb_listener_notify_remove_nsec3(zone, pred, n3, 0);
+                            }
                         }
+                        /*
+                        The item has already been updated, it cannot be notified here (its image is already the new one)
+                        nsec3_zone* n3 = nsec3_zone_from_item(zone, label->nsec.nsec3->self);
+                        if(!new_one)
+                        {
+                            zdb_listener_notify_remove_nsec3(zone, label->nsec.nsec3->self, n3, 0);
+                        }
+                        */
                     }
-                    
-                    nsec3_zone* n3 = nsec3_zone_from_item(zone, label->nsec.nsec3->self);
-                    if(!new_one)
-                    {
-                        zdb_listener_notify_remove_nsec3(zone, label->nsec.nsec3->self, n3, 0);
-                    }
+                    // else the NSEC3 record didn't changed
                 }
                 else
                 {
@@ -431,7 +435,7 @@ dynupdate_update_nsec3_body(zdb_zone *zone, treeset_tree *lus_set)
 
                     if(label->nsec.nsec3 != NULL)
                     {
-                        treeset_avl_insert(&nsec3_del, label->nsec.nsec3->self)->data = label;
+                        ptr_set_avl_insert(&nsec3_del, label->nsec.nsec3->self)->value = label;
                     }
                     
                     /* check if the label will need to be destroyed after the NSEC3 is removed */
@@ -445,7 +449,7 @@ dynupdate_update_nsec3_body(zdb_zone *zone, treeset_tree *lus_set)
 
                 if(label->nsec.nsec3 != NULL)
                 {
-                    treeset_avl_insert(&nsec3_del, label->nsec.nsec3->self)->data = label;
+                    ptr_set_avl_insert(&nsec3_del, label->nsec.nsec3->self)->value = label;
                 }
                 
                 dynupdate_update_nsec3_body_postdel(zone, &label_del, &nsec3_del, label, lus->dname);
@@ -462,25 +466,25 @@ dynupdate_update_nsec3_body(zdb_zone *zone, treeset_tree *lus_set)
      * Remove the nsec3 of the del set from the upd set and from the db
      */
 
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&nsec3_del, &iter);
-    while(treeset_avl_iterator_hasnext(&iter))
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&nsec3_del, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
 
         nsec3_zone_item *nsec3_item = (nsec3_zone_item*)node->key;
-        zdb_rr_label *label = (zdb_rr_label*)node->data;
+        zdb_rr_label *label = (zdb_rr_label*)node->value;
 
         nsec3_zone_item *pred = nsec3_avl_node_mod_prev(nsec3_item);
         /* Add the del's pred to the 'to update' */
-        treeset_avl_insert(&nsec3_upd, pred);
+        ptr_set_avl_insert(&nsec3_upd, pred);
         
         nsec3_zone* n3 = nsec3_zone_from_item(zone, nsec3_item);
         zdb_listener_notify_remove_nsec3(zone, pred, n3, 0);
         zdb_listener_notify_remove_nsec3(zone, nsec3_item, n3, 0);
                 
         /* Remove the del from the 'to update' */
-        treeset_avl_delete(&nsec3_upd, nsec3_item);
+        ptr_set_avl_delete(&nsec3_upd, nsec3_item);
 
         nsec3_remove_label(zone, label);
     }
@@ -498,13 +502,13 @@ dynupdate_update_nsec3_body(zdb_zone *zone, treeset_tree *lus_set)
         return return_code;
     }
 
-    treeset_avl_iterator_init(&nsec3_upd, &iter);
-    while(treeset_avl_iterator_hasnext(&iter))
+    ptr_set_avl_iterator_init(&nsec3_upd, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
 
         nsec3_zone_item *nsec3_item = (nsec3_zone_item*)node->key;
-        /*zdb_rr_label *label = (zdb_rr_label*)node->data;*/
+        /*zdb_rr_label *label = (zdb_rr_label*)node->value;*/
 
         /* dnssec_process_rr_label(lus->label, task); */
         
@@ -530,8 +534,8 @@ dynupdate_update_nsec3_body(zdb_zone *zone, treeset_tree *lus_set)
     
     nsec3_rrsig_updater_finalize(&parms);
     
-    treeset_avl_destroy(&nsec3_upd);
-    treeset_avl_destroy(&nsec3_del);
+    ptr_set_avl_destroy(&nsec3_upd);
+    ptr_set_avl_destroy(&nsec3_del);
     
     for(s32 i = 0; i <= label_del.offset; i++)
     {
@@ -636,20 +640,20 @@ static bool dynupdate_update_is_empty_nsec(zdb_rr_collection tree)
 }
 
 static ya_result
-dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
+dynupdate_update_nsec(zdb_zone* zone, ptr_set *lus_set)
 {
     dnsname_stack dname_stack;
 
-    treeset_tree nsec_del = TREESET_EMPTY;
-    treeset_tree nsec_upd = TREESET_EMPTY;
+    ptr_set nsec_del = PTR_SET_EMPTY;
+    ptr_set nsec_upd = PTR_SET_EMPTY;
     ptr_vector label_del = EMPTY_PTR_VECTOR;
 
-    treeset_avl_iterator lus_iter;
-    treeset_avl_iterator_init(lus_set, &lus_iter);
-    while(treeset_avl_iterator_hasnext(&lus_iter))
+    ptr_set_avl_iterator lus_iter;
+    ptr_set_avl_iterator_init(lus_set, &lus_iter);
+    while(ptr_set_avl_iterator_hasnext(&lus_iter))
     {
-        treeset_node *lus_node = treeset_avl_iterator_next_node(&lus_iter);
-        label_update_status *lus = (label_update_status *)lus_node->data;
+        ptr_node *lus_node = ptr_set_avl_iterator_next_node(&lus_iter);
+        label_update_status *lus = (label_update_status *)lus_node->value;
 
         dnsname_to_dnsname_stack(lus->dname, &dname_stack);
 
@@ -682,11 +686,11 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
                     log_debug("dynupdate_update_nsec: marking for update %{dnsname}", lus->dname);
 #endif
 
-                    treeset_avl_insert(&nsec_upd, label->nsec.nsec.node); /* I only need the label, I don't set the data */
+                    ptr_set_avl_insert(&nsec_upd, label->nsec.nsec.node); /* I only need the label, I don't set the data */
 
                     if(new_one)
                     {
-                        treeset_avl_insert(&nsec_upd, nsec_avl_node_mod_prev(label->nsec.nsec.node));
+                        ptr_set_avl_insert(&nsec_upd, nsec_avl_node_mod_prev(label->nsec.nsec.node));
                     }
                 }
                 else
@@ -703,7 +707,7 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
                         log_debug("dynupdate_update_nsec: marking for delete %{dnslabel}", label->name);
 #endif
 
-                        treeset_avl_insert(&nsec_del, label->nsec.nsec.node);
+                        ptr_set_avl_insert(&nsec_del, label->nsec.nsec.node);
 
                         /*
                         * If I do it now, it is possible that an insert is made after
@@ -728,7 +732,7 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
                             log_debug("dynupdate_update_nsec: marking for update %{dnslabel} (pred del)", pred->label->name);
 #endif
 
-                            treeset_avl_insert(&nsec_upd, pred); /* I only need the label, I don't set the data */
+                            ptr_set_avl_insert(&nsec_upd, pred); /* I only need the label, I don't set the data */
                         }
                     }
                 }
@@ -745,11 +749,11 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
         }
     }
 
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&nsec_del, &iter);
-    while(treeset_avl_iterator_hasnext(&iter))
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&nsec_del, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
 
         nsec_node *nsec_item = (nsec_node*)node->key;
         // Remove the record & signature & "update" set & node
@@ -777,9 +781,9 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
         rrsig_delete(zone, tmp_name, label, TYPE_NSEC);  /* Empty-terminal issue ? */
 
         nsec_node *pred = nsec_avl_node_mod_prev(nsec_item);
-        treeset_avl_insert(&nsec_upd, pred); /* I only need the label, I don't set the data */
+        ptr_set_avl_insert(&nsec_upd, pred); /* I only need the label, I don't set the data */
 
-        treeset_avl_delete(&nsec_upd, nsec_item);
+        ptr_set_avl_delete(&nsec_upd, nsec_item);
 
         if(label->resource_record_set == NULL)
         {
@@ -791,11 +795,11 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
 
             /* remove LABEL from the lus */
 
-            treeset_node *lus_node = treeset_avl_find(lus_set, label);
+            ptr_node *lus_node = ptr_set_avl_find(lus_set, label);
             if(lus_node != NULL)
             {
-                ZFREE(lus_node->data, label_update_status);
-                treeset_avl_delete(lus_set, label);
+                ZFREE(lus_node->value, label_update_status);
+                ptr_set_avl_delete(lus_set, label);
             }
         }
 
@@ -806,13 +810,10 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
      * All nsec candidates to be resigned are in nsec_upd
      */
 
-    soa_rdata soa;
-    zdb_zone_getsoa(zone, &soa);
-
-    treeset_avl_iterator_init(&nsec_upd, &iter);
-    while(treeset_avl_iterator_hasnext(&iter))
+    ptr_set_avl_iterator_init(&nsec_upd, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
 
         nsec_node *nsec_item = (nsec_node*)node->key;
         nsec_node *next_nsec_item = nsec_avl_node_mod_next(nsec_item);
@@ -821,7 +822,7 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
 
         nsec_inverse_name(name, nsec_item->inverse_relative_name);
 
-        if(nsec_update_label_record(zone, nsec_item->label, nsec_item, next_nsec_item, name, soa.minimum))
+        if(nsec_update_label_record(zone, nsec_item->label, nsec_item, next_nsec_item, name))
         {
             /*
              * NSEC are signed the same way as any record, do a simple signature here
@@ -836,9 +837,9 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
 
             nsec_item->label->flags |= ZDB_RR_LABEL_UPDATING;
 
-            treeset_node *lus_node = treeset_avl_insert(lus_set, nsec_item->label);
+            ptr_node *lus_node = ptr_set_avl_insert(lus_set, nsec_item->label);
 
-            if(lus_node->data == NULL)
+            if(lus_node->value == NULL)
             {
                 label_update_status *lus;
 
@@ -850,7 +851,7 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
                 lus->remove = FALSE;
                 lus->inversed = TRUE;
 
-                lus_node->data = lus;
+                lus_node->value = lus;
             }
         }
         else
@@ -861,8 +862,8 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
         }
     }
 
-    treeset_avl_destroy(&nsec_upd);
-    treeset_avl_destroy(&nsec_del);
+    ptr_set_avl_destroy(&nsec_upd);
+    ptr_set_avl_destroy(&nsec_del);
     
     for(s32 i = 0; i <= label_del.offset; i++)
     {
@@ -885,18 +886,29 @@ dynupdate_update_nsec(zdb_zone* zone, treeset_tree *lus_set)
 
 #endif
 
-static void label_update_status_destroy(treeset_tree* lus_setp)
+static void label_update_status_destroy(ptr_set* lus_setp)
 {
-    treeset_avl_iterator lus_iter;
-    treeset_avl_iterator_init(lus_setp, &lus_iter);
-    while(treeset_avl_iterator_hasnext(&lus_iter))
+    ptr_set_avl_iterator lus_iter;
+    ptr_set_avl_iterator_init(lus_setp, &lus_iter);
+    while(ptr_set_avl_iterator_hasnext(&lus_iter))
     {
-        treeset_node *lus_node = treeset_avl_iterator_next_node(&lus_iter);
-        label_update_status *lus = (label_update_status *)lus_node->data;
+        ptr_node *lus_node = ptr_set_avl_iterator_next_node(&lus_iter);
+        label_update_status *lus = (label_update_status *)lus_node->value;
         ZFREE(lus,label_update_status);
     }
-    treeset_avl_destroy(lus_setp);
+    ptr_set_avl_destroy(lus_setp);
 }
+
+/**
+ * 
+ * The zone has already been acquired by the caller (not async)
+ * 
+ * @param zone
+ * @param reader
+ * @param count
+ * @param dryrun
+ * @return 
+ */
 
 ya_result
 dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, bool dryrun)
@@ -941,6 +953,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
 #endif
 
     ya_result edit_status;
+    bool changes_occurred = FALSE;
     
 #if ZDB_HAS_DNSSEC_SUPPORT != 0
     bool dnssec_zone = (zone->apex->nsec.dnssec != NULL);
@@ -990,8 +1003,8 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
         }
     }
 #endif
-    treeset_tree lus_set = TREESET_EMPTY;
-    treeset_avl_iterator lus_iter;
+    ptr_set lus_set = PTR_SET_EMPTY;
+    ptr_set_avl_iterator lus_iter;
     
 #ifdef DEBUG
     memset(&lus_iter, 0xff, sizeof(lus_iter));
@@ -1212,6 +1225,8 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
 
                     if(ISOK(edit_status = zdb_rr_label_delete_record_exact(zone, name_path.labels, (name_path.size - origin_path.size) - 1, rtype, &ttlrdata_tmp)))
                     {
+                        changes_occurred = TRUE;
+                        
                         /*
                          * Don't update IXFR: It has already been done in zdb_rr_label_delete_record_exact
                          */
@@ -1228,9 +1243,9 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                                 {
                                     label->flags |= ZDB_RR_LABEL_UPDATING;
 
-                                    treeset_node *lus_node = treeset_avl_insert(&lus_set, label);
+                                    ptr_node *lus_node = ptr_set_avl_insert(&lus_set, label);
 
-                                    if(lus_node->data == NULL)
+                                    if(lus_node->value == NULL)
                                     {
                                         label_update_status *lus;
 
@@ -1242,7 +1257,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                                         lus->remove = TRUE;
                                         lus->inversed = FALSE;
 
-                                        lus_node->data = lus;
+                                        lus_node->value = lus;
                                     }
                                 }
                                 else
@@ -1256,11 +1271,11 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                         }
                         else
                         {
-                            treeset_node *lus_node = treeset_avl_find(&lus_set, label);
+                            ptr_node *lus_node = ptr_set_avl_find(&lus_set, label);
                             if(lus_node != NULL)
                             {
-                                ZFREE(lus_node->data, label_update_status);
-                                treeset_avl_delete(&lus_set, label);
+                                ZFREE(lus_node->value, label_update_status);
+                                ptr_set_avl_delete(&lus_set, label);
                             }
                         }
                     }
@@ -1303,6 +1318,8 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
 
                     if(ISOK(edit_status = zdb_rr_label_delete_record(zone, name_path.labels, (name_path.size - origin_path.size) - 1, rtype)))
                     {
+                        changes_occurred = TRUE;
+                        
                         /*
                          * NSEC, NSEC3, RRSIG
                          */
@@ -1325,9 +1342,9 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                                 
                                 label->flags |= ZDB_RR_LABEL_UPDATING;
 
-                                treeset_node *lus_node = treeset_avl_insert(&lus_set, label);
+                                ptr_node *lus_node = ptr_set_avl_insert(&lus_set, label);
                                 
-                                if(lus_node->data == NULL)
+                                if(lus_node->value == NULL)
                                 {
                                     label_update_status *lus;
 
@@ -1339,7 +1356,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                                     lus->remove = TRUE;
                                     lus->inversed = FALSE;
 
-                                    lus_node->data = lus;
+                                    lus_node->value = lus;
                                 }
                             }
                             else
@@ -1352,11 +1369,11 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                         }
                         else
                         {
-                            treeset_node *lus_node = treeset_avl_find(&lus_set, label);
+                            ptr_node *lus_node = ptr_set_avl_find(&lus_set, label);
                             if(lus_node != NULL)
                             {
-                                ZFREE(lus_node->data, label_update_status);
-                                treeset_avl_delete(&lus_set, label);
+                                ZFREE(lus_node->value, label_update_status);
+                                ptr_set_avl_delete(&lus_set, label);
                             }
                         }
                     }
@@ -1375,8 +1392,10 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                 log_debug("update: add %{dnsname} %{dnstype} ...", rname, &rtype);
 #endif
 
-                u16 flag_mask = 0; // set all the changes in a mask before applying them
-
+                u16 flag_mask = 0; /** @todo there is potential for wrongness here ...
+                                    *        why don't I store directly in the label ?
+                                    *        test dynamic updates around CNAME
+                                    */
                 bool record_accepted = TRUE;
 
                 switch(rtype)
@@ -1430,7 +1449,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                     }
                 }
 
-                label->flags |= flag_mask;
+                label->flags |= flag_mask; /** @TODO : check */
 
                 if(record_accepted)
                 {
@@ -1440,7 +1459,8 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
 
                     if(zdb_record_insert_checked(&label->resource_record_set, rtype, record)) /*  FB done (THIS IS A BOOLEAN !!!) */
                     {
-
+                        changes_occurred = TRUE;
+                        
 #if ZDB_HAS_DNSSEC_SUPPORT != 0
                         rrsig_delete(zone, rname, label, rtype); /* No empty-termninal issue */
 #endif
@@ -1456,9 +1476,9 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                         }
 #endif
 
-                        treeset_node *lus_node = treeset_avl_insert(&lus_set, label);
+                        ptr_node *lus_node = ptr_set_avl_insert(&lus_set, label);
 
-                        if(lus_node->data == NULL)
+                        if(lus_node->value == NULL)
                         {
                             label_update_status *lus;
 
@@ -1470,7 +1490,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                             lus->remove = FALSE;
                             lus->inversed = FALSE;
 
-                            lus_node->data = lus;
+                            lus_node->value = lus;
                         }
 
                         /*
@@ -1513,12 +1533,12 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
         ya_result return_value;
         dnsname_stack name_stack;        
 
-        treeset_avl_iterator_init(&lus_set, &lus_iter);
+        ptr_set_avl_iterator_init(&lus_set, &lus_iter);
         
-        while(treeset_avl_iterator_hasnext(&lus_iter))
+        while(ptr_set_avl_iterator_hasnext(&lus_iter))
         {
-            treeset_node *lus_node = treeset_avl_iterator_next_node(&lus_iter);
-            label_update_status *lus = (label_update_status *)lus_node->data;
+            ptr_node *lus_node = ptr_set_avl_iterator_next_node(&lus_iter);
+            label_update_status *lus = (label_update_status *)lus_node->value;
             
 #ifdef DEBUG
             memset(&name_stack, 0xff, sizeof(name_stack));
@@ -1543,14 +1563,17 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
                 log_err("update: sanitise reports that the zone should be dropped: %r", return_value);
             }
         }
-                    
-        zdb_packed_ttlrdata* soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);
-        if(soa != NULL)
+        
+        if(changes_occurred)
         {
-            rr_soa_increase_serial(&soa->rdata_start[0], soa->rdata_size, 1);
+            zdb_packed_ttlrdata* soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);
+            if(soa != NULL)
+            {
+                rr_soa_increase_serial(&soa->rdata_start[0], soa->rdata_size, 1);
 #if ZDB_HAS_DNSSEC_SUPPORT
-            rrsig_delete(zone, zone->origin, zone->apex, TYPE_SOA);
+                rrsig_delete(zone, zone->origin, zone->apex, TYPE_SOA);
 #endif
+            }
         }
     }
 
@@ -1558,7 +1581,7 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
 
 #if ZDB_HAS_DNSSEC_SUPPORT != 0
     
-    if( !dryrun && (zone->apex->nsec.dnssec != NULL) )
+    if( !dryrun && (zone->apex->nsec.dnssec != NULL) && changes_occurred )
     {
         /*
          * @TODO
@@ -1573,9 +1596,9 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
          *
          */
         
-        treeset_node *lus_node = treeset_avl_insert(&lus_set, zone->apex);
+        ptr_node *lus_node = ptr_set_avl_insert(&lus_set, zone->apex);
 
-        if(lus_node->data == NULL)
+        if(lus_node->value == NULL)
         {
             label_update_status *lus;
 
@@ -1587,17 +1610,17 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
             lus->remove = TRUE;
             lus->inversed = FALSE;
 
-            lus_node->data = lus;
+            lus_node->value = lus;
         }
 
 #if ZDB_HAS_NSEC_SUPPORT != 0
         if((zone->apex->flags & ZDB_RR_LABEL_NSEC) != 0)
         {
-            treeset_avl_iterator_init(&lus_set, &lus_iter);
-            while(treeset_avl_iterator_hasnext(&lus_iter))
+            ptr_set_avl_iterator_init(&lus_set, &lus_iter);
+            while(ptr_set_avl_iterator_hasnext(&lus_iter))
             {
-                treeset_node *lus_node = treeset_avl_iterator_next_node(&lus_iter);
-                label_update_status *lus = (label_update_status *)lus_node->data;
+                ptr_node *lus_node = ptr_set_avl_iterator_next_node(&lus_iter);
+                label_update_status *lus = (label_update_status *)lus_node->value;
                 lus->label->flags |= ZDB_RR_LABEL_UPDATING;
             }
 
@@ -1616,11 +1639,11 @@ dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count, b
 #if ZDB_HAS_NSEC3_SUPPORT != 0
         if(ISOK(return_value) && ((zone->apex->flags & ZDB_RR_LABEL_NSEC3) != 0))
         {
-            treeset_avl_iterator_init(&lus_set, &lus_iter);
-            while(treeset_avl_iterator_hasnext(&lus_iter))
+            ptr_set_avl_iterator_init(&lus_set, &lus_iter);
+            while(ptr_set_avl_iterator_hasnext(&lus_iter))
             {
-                treeset_node *lus_node = treeset_avl_iterator_next_node(&lus_iter);
-                label_update_status *lus = (label_update_status *)lus_node->data;
+                ptr_node *lus_node = ptr_set_avl_iterator_next_node(&lus_iter);
+                label_update_status *lus = (label_update_status *)lus_node->value;
                 lus->label->flags |= ZDB_RR_LABEL_UPDATING;
             }
 

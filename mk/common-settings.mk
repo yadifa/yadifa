@@ -36,7 +36,7 @@
 AM_CFLAGS  = -D_FILE_OFFSET_BITS=64 -I$(abs_builddir) -I$(abs_srcdir)/include
 AM_LDFLAGS =
 DEBUGFLAGS =
-LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"'
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"' -D_THREAD_SAFE
 
 if USES_SUNC
 DEBUGFLAGS +=
@@ -183,13 +183,16 @@ if HAS_CPU_NIAGARA
 AM_CFLAGS += -mcpu=niagara
 endif
 
-if HAS_LTO_SUPPORT
-AM_CFLAGS += -DLTO -flto -fwhole-program -ffat-lto-objects
-AM_LDFLAGS += -flto -fwhole-program -ffat-lto-objects
-endif
 
+if HAS_LTO_SUPPORT
+AM_CFLAGS += -DLTO -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
+AM_LDFLAGS += -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
+AM_AR = gcc-ar
+AM_RANLIB = gcc-ranlib
+else
 AM_AR = ar
 AM_LD = ld
+endif
 
 AM_CFLAGS += -DUSES_GCC
 DEBUGFLAGS += -DMODE_DEBUG_GCC

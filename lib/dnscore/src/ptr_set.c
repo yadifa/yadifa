@@ -45,11 +45,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define _TREESET_COLLECTION_C
+#define _PTR_SET_COLLECTION_C
 
 #define DEBUG_LEVEL 0
 
-#include "dnscore/treeset.h"
+#include "dnscore/ptr_set.h"
+#include "dnscore/zalloc.h"
 
 #define AVL_NODE_TAG 0x0045444F4E4c5641 /* "AVLNODE" */
 
@@ -94,14 +95,25 @@
  * A macro to initialize a node and setting the reference
  */
 #define AVL_INIT_NODE(node,reference) node->key = reference
+
+#if 0 /* fix */
+#else
+
 /*
  * A macro to allocate a new node
  */
-#define AVL_ALLOC_NODE(node,reference)                                          \
-	MALLOC_OR_DIE(AVL_NODE_TYPE*, node, sizeof(AVL_NODE_TYPE), AVL_NODE_TAG);   \
-	ZEROMEMORY(node,sizeof(AVL_NODE_TYPE));
 
-#define AVL_FREE_NODE(node) free(node)
+#define AVL_ALLOC_NODE(node,reference)                                  \
+	ZALLOC_OR_DIE(AVL_NODE_TYPE*, node, AVL_NODE_TYPE, AVL_NODE_TAG);   \
+	ZEROMEMORY(node,sizeof(AVL_NODE_TYPE));
+/*
+ * A macro to free a node
+ */
+
+#define AVL_FREE_NODE(node) ZFREE(node, AVL_NODE_TYPE)
+
+#endif
+
 /*
  * A macro to print the node
  */
@@ -139,20 +151,39 @@
 
 #include "dnscore/avl.c.inc"
 
-int treeset_ptr_node_compare(const void *node_a, const void *node_b)
+int
+ptr_set_ptr_node_compare(const void *node_a, const void *node_b)
 {
     return ((intptr)node_a) - ((intptr)node_b);
 }
 
-int treeset_asciizp_node_compare(const void *node_a, const void *node_b)
+int
+ptr_set_asciizp_node_compare(const void *node_a, const void *node_b)
 {
     return strcmp((const char*)node_a, (const char*)node_b);
 }
 
-int treeset_dnsname_node_compare(const void *node_a, const void *node_b)
+int
+ptr_set_dnsname_node_compare(const void *node_a, const void *node_b)
 {
     return dnsname_compare((const u8*)node_a, (const u8*)node_b);
 }
+
+void*
+ptr_set_avl_iterator_hasnext_next_value(ptr_set_avl_iterator *iterp)
+{
+    if(ptr_set_avl_iterator_hasnext(iterp))
+    {
+        ptr_node *node = ptr_set_avl_iterator_next_node(iterp);
+        void *ptr = node->value;
+        return ptr;
+    }
+    else
+    {
+        return NULL;
+    }
+}
+
 
 /** @} */
 

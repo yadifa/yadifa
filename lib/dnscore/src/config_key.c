@@ -137,7 +137,7 @@ config_section_key_stop(struct config_section_descriptor_s *csd)
     
     anytype table;
     table._voidp = hmac_digest_enum;
-    if(FAIL(config_set_enum_value(csk->algorithm, &hmac_digest, table)))
+    if(FAIL(config_set_enum_value(csk->algorithm, &hmac_digest, table))) // dest must be 32 bits
     {
         return CONFIG_KEY_UNSUPPORTED_ALGORITHM;
     }

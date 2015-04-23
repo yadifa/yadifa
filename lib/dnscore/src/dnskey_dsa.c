@@ -237,7 +237,7 @@ dsa_signdigest(dnssec_key *key, u8 *digest, u32 digest_len, u8 *output)
         {
             char buffer[256];
             ERR_error_string_n(ssl_err, buffer, sizeof(buffer));
-            log_err("digest verification returned an ssl error %08x %s", ssl_err, buffer);
+            log_err("digest signature returned an ssl error %08x %s", ssl_err, buffer);
         }
 
         ERR_clear_error();
@@ -568,7 +568,7 @@ ya_result dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin
         return DNSSEC_ERROR_KEYISTOOBIG;
     }
 
-    SET_U16_AT(rdata[0], htons(flags));
+    SET_U16_AT(rdata[0], htons(flags)); /// @todo 20140523 edf -- DNSKEY NATIVEFLAGS
     rdata[2] = DNSKEY_PROTOCOL_FIELD;
     rdata[3] = algorithm;
 

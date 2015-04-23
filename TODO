@@ -1,5 +1,4 @@
-
-release 2.0.0
+release 2.0.0-beta2
     * fix dynamic update removal of dnskeys
     * fix nsec3 record in a non signed zone
 
@@ -7,7 +6,6 @@ release 2.0.0-beta1
     * fix removal of all dnskeys
     * fix nsec3 record in a none signed zone
     * fix tcp: received = TCP_RATE_TOO_SLOW in yadifa client
-
 release 1.0.2
 
 release 1.0.1

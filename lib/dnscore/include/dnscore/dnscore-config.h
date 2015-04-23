@@ -10,6 +10,9 @@
 /* always on */
 #define HAS_ACL_SUPPORT 1
 
+/* bfd debug support disabled. */
+#define HAS_BFD_DEBUG_SUPPORT 0
+
 /* i386, Athlon, Opteron, Core2, i3, i5, i7, ... */
 #define HAS_CPU_AMDINTEL 1
 
@@ -19,14 +22,29 @@
 /* remote control disabled. */
 #define HAS_CTRL 0
 
+/* dynamic provisioning disabled. */
+#define HAS_CTRL_DYNAMIC_PROVISIONING 0
+
 /* always on */
 #define HAS_DNSSEC_SUPPORT 1
+
+/* always off */
+#define HAS_DROPALL_SUPPORT 0
 
 /* dynamic update support disabled. */
 #define HAS_DYNUPDATE_SUPPORT 1
 
 /* where to put the log files */
 #define HAS_LOGDIR 0
+
+/* write the pid in each line of log disabled. */
+#define HAS_LOG_PID_ALWAYS_ON 0
+
+/* write the thread id in each line of log disabled. */
+#define HAS_LOG_THREAD_ID_ALWAYS_ON 0
+
+/* malloc debug support disabled. */
+#define HAS_MALLOC_DEBUG_SUPPORT 0
 
 /* DNS master disabled. */
 #define HAS_MASTER_SUPPORT 1
@@ -40,6 +58,13 @@
 
 /* always off */
 #define HAS_MIRROR_SUPPORT 0
+
+/* mutex debug support disabled. */
+#define HAS_MUTEX_DEBUG_SUPPORT 0
+
+/* Allows AXFR answer from master without AA bit set (Microsoft DNS) disabled.
+   */
+#define HAS_NON_AA_AXFR_SUPPORT 0
 
 /* always on */
 #define HAS_NSEC3_SUPPORT 1
@@ -56,6 +81,12 @@
 /* The system supports spinlocks */
 #define HAS_PTHREAD_SPINLOCK 1
 
+/* always off */
+#define HAS_RDTSC 0
+
+/* always off */
+#define HAS_RRCACHE_ENABLED 0
+
 /* DNS Response Rate Limiter disabled. */
 #define HAS_RRL_SUPPORT 1
 
@@ -71,6 +102,9 @@
 /* The sockaddr struct has an sa_len field */
 #define HAS_SOCKADDR_SA_LEN 0
 
+/* always off */
+#define HAS_TCL 0
+
 /* The system supports timegm */
 #define HAS_TIMEGM 1
 
@@ -79,6 +113,15 @@
 
 /* where to put the log files */
 /* #undef HAS_WITH_LOGDIR */
+
+/* zalloc debug support disabled. */
+#define HAS_ZALLOC_DEBUG_SUPPORT 0
+
+/* zalloc statistics support disabled. */
+#define HAS_ZALLOC_STATISTICS_SUPPORT 0
+
+/* zalloc memory system disabled. */
+#define HAS_ZALLOC_SUPPORT 1
 
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #define HAVE_ARPA_INET_H 1
@@ -260,7 +303,7 @@
 #define PACKAGE_NAME "dnscore"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "dnscore 2.0.6-4822"
+#define PACKAGE_STRING "dnscore 2.1.0-4962"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "dnscore"
@@ -269,7 +312,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.0.6-4822"
+#define PACKAGE_VERSION "2.1.0-4962"
 
 /* Define as the return type of signal handlers (`int' or `void'). */
 #define RETSIGTYPE void
@@ -290,7 +333,7 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* Version number of package */
-#define VERSION "2.0.6-4822"
+#define VERSION "2.1.0-4962"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */

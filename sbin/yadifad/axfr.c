@@ -50,15 +50,19 @@
 #include <dnscore/buffer_output_stream.h>
 #include <dnscore/random.h>
 #include <dnscore/format.h>
-#include <dnscore/xfr_copy.h>
 #include <dnscore/host_address.h>
 #include <dnscore/fdtools.h>
 #include <dnscore/message.h>
 #include <dnscore/chroot.h>
+#include <dnscore/xfr_input_stream.h>
 
 #include <dnsdb/zdb_zone.h>
-#include <dnsdb/journal.h>
 #include <dnsdb/zdb-zone-answer-axfr.h>
+#include <dnsdb/xfr_copy.h>
+#include <dnsdb/zdb-zone-path-provider.h>
+
+#define ZDB_JOURNAL_CODE 1
+#include <dnsdb/journal.h>
 
 extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
@@ -67,18 +71,15 @@ extern logger_handle *g_server_logger;
 #include "confs.h"
 #include "server.h"
 
+extern struct thread_pool_s *server_disk_thread_pool;
 
 /**
  * 
  * Handle an AXFR query from a slave.
  *
- * @TODO: Add a limit between two AXFR snapshots (?)
- *
  * If we don't do this many slaves could call with a small interval asking a just-dynupdated snapshot.
  * If we do it the slaves will be only a few steps behind and the next notification/ixfr will bring them up to date.
- *
- * @TODO: Set the AXFR storage path
- */
+*/
 ya_result
 axfr_process(message_data *mesg)
 {
@@ -100,61 +101,65 @@ axfr_process(message_data *mesg)
 
     fqdn += dnsname_len(fqdn) + 2; /* ( 2 because of the type ) */
 
-    u16 qclass = GET_U16_AT(*fqdn);
+    //u16 qclass = GET_U16_AT(*fqdn);
     u16 rcode;
 
-    if( ((zone = zdb_zone_find(g_config->database, &fqdn_vector, qclass)) != NULL) &&
-            ZDB_ZONE_VALID(zone) )
+    if( ((zone = zdb_acquire_zone_read(g_config->database, &fqdn_vector)) != NULL) )
     {
-#if HAS_ACL_SUPPORT
-        access_control *ac = (access_control*)zone->extension;
-
-        if(!ACL_REJECTED(acl_check_access_filter(mesg, &ac->allow_transfer)))
+        if(ZDB_ZONE_VALID(zone))
         {
-#endif
-            log_info("axfr: %{dnsname}: scheduling axfr", mesg->qname);
-            
-            /*
-             * Get the zone AXFR
-             *   If not exist create it and start sending back while writing (implies two threads)
-             *   else simply send back
-             */
-            
-            // xfr_path is known, dnssec_set_xfr_path set it
-            // zone is obviously needed
-            // mesg is needed to match query, TSIG, ...
-            // zdb_zone_answer_axfr(zone, mesg, thread_pool, g_config->axfr_max_packet_size, g_config->axfr_max_record_by_packet, g_config->axfr_compress_packets);
-            // this is mostly background, so 
-
-            zdb_zone_answer_axfr(zone, mesg, NULL, NULL, g_config->xfr_path, g_config->axfr_max_packet_size, g_config->axfr_max_record_by_packet, g_config->axfr_compress_packets);
-            
-            return SUCCESS;
 #if HAS_ACL_SUPPORT
+            access_control *ac = (access_control*)zone->extension;
+
+            if(!ACL_REJECTED(acl_check_access_filter(mesg, &ac->allow_transfer)))
+            {
+#endif
+                log_info("axfr: %{dnsname}: scheduling axfr answer to %{sockaddr}", mesg->qname, &mesg->other);
+
+                /*
+                 * This is an asynchronous call
+                 * 
+                 * Get the zone AXFR
+                 *   If not exist create it and start sending back while writing (implies two threads)
+                 *   else simply send back
+                 */
+
+                // xfr_path is known, dnssec_set_xfr_path set it
+                // zone is obviously needed
+                // mesg is needed to match query, TSIG, ...
+                // zdb_zone_answer_axfr(zone, mesg, thread_pool, g_config->axfr_max_packet_size, g_config->axfr_max_record_by_packet, g_config->axfr_compress_packets);
+                // this is mostly background, so 
+
+                zdb_zone_answer_axfr(zone, mesg, NULL, server_disk_thread_pool, g_config->axfr_max_packet_size, g_config->axfr_max_record_by_packet, g_config->axfr_compress_packets);
+
+                zdb_zone_release(zone);
+
+                return SUCCESS;
+#if HAS_ACL_SUPPORT
+            }
+            else
+            {
+                /* notauth */
+
+                log_info("axfr: %{dnsname}: not authorised", mesg->qname);
+
+                rcode = FP_XFR_REFUSED;
+            }
+#endif
         }
         else
         {
-            /* notauth */
-
-            log_info("axfr: %{dnsname}: not authorised", mesg->qname);
-
-            rcode = FP_XFR_REFUSED;
+            rcode = FP_INVALID_ZONE;
         }
-#endif
+        
+        zdb_zone_release(zone);
     }
     else
     {
         /* zone not found */
 
         log_err("axfr: %{dnsname}: zone not found", mesg->qname);
-
-        if(zone == NULL)
-        {
-            rcode = FP_NOZONE_FOUND;
-        }
-        else
-        {
-            rcode = FP_INVALID_ZONE;
-        }
+        rcode = FP_NOZONE_FOUND;
     }
 
     message_make_error(mesg, rcode);
@@ -171,8 +176,6 @@ axfr_process(message_data *mesg)
 /**
  *
  * Send an AXFR query to a master and handle the answer (loads the zone).
- *
- * @TODO: Set the AXFR storage path
  */
 ya_result
 axfr_query(const host_address *servers, const u8 *origin, u32* out_loaded_serial)
@@ -198,11 +201,10 @@ axfr_query(const host_address *servers, const u8 *origin, u32* out_loaded_serial
     ya_result return_value;
 
     char data_path[PATH_MAX];
-
-    if(FAIL(return_value = xfr_copy_mkdir_data_path(data_path, sizeof(data_path), g_config->xfr_path, origin)))
+    
+    if(FAIL(return_value = zdb_zone_path_get_provider()(origin, data_path, sizeof(data_path), ZDB_ZONE_PATH_PROVIDER_AXFR_PATH|ZDB_ZONE_PATH_PROVIDER_MKDIR)))
     {
         log_err("axfr: unable to create directory '%s' for %{dnsname}: %r", data_path, origin, return_value);
-        
         return return_value;
     }
 
@@ -251,17 +253,33 @@ axfr_query(const host_address *servers, const u8 *origin, u32* out_loaded_serial
 
             /* delete ix files */
 
-            journal_truncate(origin, g_config->xfr_path);
-            
+            journal_truncate(origin);
+            zdb_zone *zone = zdb_acquire_zone_write_lock_from_fqdn(g_config->database, origin, ZDB_ZONE_MUTEX_XFR);
+            if(zone != NULL)
+            {
+                if(zone->journal != NULL)
+                {
+                    journal_close(zone->journal);
+                }
+                
+                zdb_zone_release_unlock(zone, ZDB_ZONE_MUTEX_XFR);
+            }
+                                    
+            /*
             xfr_copy_args xfr;
             xfr.is = &is;
             xfr.origin = origin;
             xfr.message = &axfr_query;
             xfr.current_serial = 0;
             xfr.flags = XFR_ALLOW_AXFR;
-            
+            */
             input_stream xfris;
-            if(ISOK(return_value = xfr_input_stream_init(&xfr, &xfris)))
+            if(ISOK(return_value = xfr_input_stream_init(&xfris,
+                                                         origin,
+                                                         &is,
+                                                         &axfr_query,
+                                                         0,
+                                                         XFR_ALLOW_AXFR)))
             {
                 if(ISOK(return_value = xfr_copy(&xfris, g_config->xfr_path)))
                 {

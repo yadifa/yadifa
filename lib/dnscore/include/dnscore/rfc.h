@@ -357,6 +357,14 @@
 #define     TYPE_TXT                        NU16(16) /* text strings                       rfc 1035 */
 
 #define     TYPE_RP                         NU16(17) /* For Responsible Person             rfc 1183 */
+/*
+ * 
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    SUBTYPE                    |    16 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                   HOSTNAME                    /    dns formated domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
 #define     TYPE_AFSDB                      NU16(18) /* CANONIZE */
 #define     TYPE_X25                        NU16(19) /*                                    rfc 1183 */
 #define     TYPE_ISDN                       NU16(20) /*                                    rfc 1183 */
@@ -582,6 +590,8 @@
 #define     DNSKEY_ALGORITHM_RSASHA1_NSEC3      7
 #define     DNSKEY_ALGORITHM_RSASHA256_NSEC3    8       /* RFC 5702 */
 #define     DNSKEY_ALGORITHM_RSASHA512_NSEC3   10       /* RFC 5702 */
+#define     DNSKEY_ALGORITHM_ECDSAP256SHA256   13       /* RFC 6605 */
+#define     DNSKEY_ALGORITHM_ECDSAP384SHA384   14       /* RFC 6605 */
 
 #define     DS_DIGEST_SHA1                  1
 #define     DS_DIGEST_SHA256                2
@@ -590,7 +600,7 @@
 
 /* -----------------------------------------------------------------*/
 
-#define     IS_TYPE_PRIVATE(t)              ((t)>=65280&&((t)<=65534))
+#define     IS_TYPE_PRIVATE(t)              ( ((t) >= 65280) && ( (t) <= 65534))
 #define     IS_TYPE_NPRIVATE(t)             ( (NU16(t) >= 65280) && ( NU16(t) <= 65534))
 
 /*    ------------------------------------------------------------

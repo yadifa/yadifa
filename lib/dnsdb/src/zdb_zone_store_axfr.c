@@ -69,6 +69,19 @@
 #include "dnsdb/zdb_utils.h"
 #include <dnscore/dnscore.h>
 
+// With this set to 1, AXFR storage on disk will be extremely slow.
+// Meant to debug network faster than disk speeds.
+// The value is expressed in ms
+//
+// Keep this to 0 except if you need it to be slow
+
+#define DEBUG_SLOW_STORAGE_MS 0 // 100
+
+#ifndef DEBUG
+#undef DEBUG_SLOW_STORAGE_MS
+#define DEBUG_SLOW_STORAGE_MS 0
+#endif
+
 /*
  *
  */
@@ -89,7 +102,7 @@ ya_result
 zdb_zone_store_axfr(zdb_zone* zone, output_stream* os)
 {
     zdb_rr_label* label;
-
+    
     u32 fqdn_len;
     ya_result err = SUCCESS;
 
@@ -131,6 +144,10 @@ zdb_zone_store_axfr(zdb_zone* zone, output_stream* os)
 
     while(zdb_zone_label_iterator_hasnext(&iter))
     {
+#if DEBUG_SLOW_STORAGE_MS > 0
+        usleep(DEBUG_SLOW_STORAGE_MS * 1000);
+#endif
+        
         fqdn_len = zdb_zone_label_iterator_nextname(&iter, fqdn);
 
         label = zdb_zone_label_iterator_next(&iter);

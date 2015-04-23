@@ -52,6 +52,7 @@
  * type     : u16* record type
  */
 
+#include <dnscore/output_stream.h>
 #ifdef	__cplusplus
 extern "C" {
 #endif

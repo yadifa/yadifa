@@ -52,7 +52,7 @@
 #include "config.h"
 
 #include <dnscore/logger.h>
-#include <dnsdb/zdb_zone.h>
+#include <dnsdb/zdb-zone-garbage.h>
 
 #include "database-service.h"
 
@@ -66,7 +66,6 @@ struct database_service_zone_unload_parms_s
 {
     zone_desc_s *zone_desc;
     zdb_zone *zone;
-    zdb_zone *replacement_zone;
 };
 
 typedef struct database_service_zone_unload_parms_s database_service_zone_unload_parms_s;
@@ -76,7 +75,6 @@ database_service_zone_unload_thread(void *parms)
 {
     database_service_zone_unload_parms_s *database_service_zone_unload_parms = (database_service_zone_unload_parms_s*)parms;
     zdb_zone *zone = database_service_zone_unload_parms->zone;
-    zdb_zone *replacement_zone = database_service_zone_unload_parms->replacement_zone;
     
     u8 origin[MAX_DOMAIN_LENGTH];
     
@@ -89,17 +87,13 @@ database_service_zone_unload_thread(void *parms)
         memcpy(origin, "\004NULL", 6);
     }
     
-    log_debug("database-service: %{dnsname}: destroying old instance of zone", origin);
-    zdb_zone_destroy(zone);
-    log_debug("database-service: %{dnsname}: old instance of zone destroyed", origin);
-   
+    log_debug("database-service: %{dnsname}: releasing old instance of zone", origin);
+    log_debug7("database-service: %{dnsname}: rc=%i", origin, zone->rc);
+    
+    zdb_zone_release(zone);
     zone = NULL;
     
-    if(replacement_zone != NULL)
-    {
-        log_debug("database-service: %{dnsname}: zone content will be replaced", origin);
-        database_fire_zone_unloaded(replacement_zone, SUCCESS);
-    }
+    zdb_zone_garbage_run();
     
     zone_release(database_service_zone_unload_parms->zone_desc);
     free(database_service_zone_unload_parms);
@@ -107,52 +101,76 @@ database_service_zone_unload_thread(void *parms)
     return NULL;
 }
 
+/**
+ * Replace a zone by another
+ * The replaced zone will be destroyed as soon as it is not referenced yet
+ * @param zone_desc
+ * @param zone the zone to unload, note that it has been acquired for the call and must be released
+ */
+
 void
-database_service_zone_unload(zone_desc_s *zone_desc, zdb_zone *zone, zdb_zone *replacement_zone)
+database_service_zone_unload(zone_desc_s *zone_desc, zdb_zone *zone)
 {
-    log_debug("database_service_zone_unload(%{dnsname}@%p=%i,%{dnsname},%{dnsname})",
+    log_debug("database_service_zone_unload(%{dnsname}@%p=%i,%{dnsname})",
             zone_desc->origin, zone_desc, zone_desc->rc,
-            (zone != NULL)?zone->origin:(const u8*)"\004NULL",
-            (replacement_zone != NULL)?replacement_zone->origin:(const u8*)"\004NULL");
+            (zone != NULL)?zone->origin:(const u8*)"\004NULL");
     
     database_service_zone_unload_parms_s *parm;
     MALLOC_OR_DIE(database_service_zone_unload_parms_s*, parm, sizeof(database_service_zone_unload_parms_s), GENERIC_TAG);
     parm->zone_desc = zone_desc;
     if(zone != NULL)
     {
-        parm->zone = zone;
-        
-        if(zone == zone_desc->loaded_zone)
+        parm->zone = zone; // zone will be released by the thread
+        zone_lock(zone_desc, ZONE_LOCK_UNLOAD);
+        if(zone == zone_desc->loaded_zone) // UNLOAD
         {
             log_warn("database_service_zone_unload: forced unload of %p = loaded_zone", zone);
             
             log_debug7("database_service_zone_unload: %{dnsname}@%p: loaded_zone@%p (was %p)",
-                zone_desc->origin,
-                zone_desc,
-                NULL,
-                zone_desc->loaded_zone);
-            
-            zone_desc->loaded_zone = NULL;
+                    zone_desc->origin,
+                    zone_desc,
+                    NULL,
+                    zone_desc->loaded_zone); // UNLOAD
+            zdb_zone_release(zone_desc->loaded_zone);
+            zone_desc->loaded_zone = NULL; // UNLOAD
         }
+        // else the zone in the descriptor has changed : don't touch it
+        zone_unlock(zone_desc, ZONE_LOCK_UNLOAD);
     }
     else
     {
-        parm->zone = zone_desc->loaded_zone;
+        zone_lock(zone_desc, ZONE_LOCK_UNLOAD);
+        parm->zone = zone_desc->loaded_zone; // UNLOAD
         
         log_debug7("database_service_zone_unload: %{dnsname}@%p: loaded_zone@%p (was %p)",
                 zone_desc->origin,
                 zone_desc,
                 NULL,
-                zone_desc->loaded_zone);
+                zone_desc->loaded_zone); // UNLOAD
         
-        zone_desc->loaded_zone = NULL;
+        if(zone_desc->loaded_zone != NULL)
+        {
+            // the zone we are about to unload will be released by the thread
+            //zdb_zone_release(zone_desc->loaded_zone);
+            zone_desc->loaded_zone = NULL; // UNLOAD
+        }
+        zone_unlock(zone_desc, ZONE_LOCK_UNLOAD);
     }
-    parm->replacement_zone = replacement_zone;
     
-    zone_acquire(zone_desc);
-    database_service_zone_unload_queue_thread(database_service_zone_unload_thread, parm, NULL, "database_service_zone_unload_thread");
-    
+    if(parm->zone != NULL)
+    {
+        zone_acquire(zone_desc);
+        database_service_zone_unload_queue_thread(database_service_zone_unload_thread, parm, NULL, "database_service_zone_unload_thread");
+    }
+    else
+    {
+        log_debug7("database_service_zone_unload: %{dnsname}@%p: nothing to unload",
+                zone_desc->origin,
+                zone_desc);                   
+    }
+    zone_lock(zone_desc, ZONE_LOCK_UNLOAD);
     zone_desc->status_flags &= ~ZONE_STATUS_PROCESSING;
+    zone_unlock(zone_desc, ZONE_LOCK_UNLOAD);
 }
 
 /**

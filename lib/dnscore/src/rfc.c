@@ -46,7 +46,7 @@
 #include <arpa/inet.h>
 #include <ctype.h>
 
-#include "dnscore-config.h"
+//#include "dnscore/dnscore-config.h"
 
 #include "dnscore/rfc.h"
 #include "dnscore/ctrl-rfc.h"
@@ -171,6 +171,7 @@ const type_table qtype[] = {
     
 #if 1//HAS_CTRL
     { TYPE_CTRL_SRVCFGRELOAD,     TYPE_CTRL_SRVCFGRELOAD_NAME     },
+    { TYPE_CTRL_SRVQUERYLOG,      TYPE_CTRL_SRVQUERYLOG_NAME      },
     { TYPE_CTRL_SRVLOGREOPEN,     TYPE_CTRL_SRVLOGREOPEN_NAME     },
     { TYPE_CTRL_SRVSHUTDOWN,      TYPE_CTRL_SHUTDOWN_NAME         },
     { TYPE_CTRL_ZONECFGRELOAD,    TYPE_CTRL_ZONECFGRELOAD_NAME    },
@@ -180,6 +181,7 @@ const type_table qtype[] = {
     { TYPE_CTRL_ZONERELOAD,       TYPE_CTRL_ZONERELOAD_NAME       },
     { TYPE_CTRL_ZONEUNFREEZE,     TYPE_CTRL_ZONEUNFREEZE_NAME     },
     { TYPE_CTRL_ZONEUNFREEZEALL,  TYPE_CTRL_ZONEUNFREEZEALL_NAME  },
+    { TYPE_CTRL_ZONESYNC,         TYPE_CTRL_ZONESYNC_NAME         },
 
 #endif  
     { 0,               NULL                 }
@@ -200,7 +202,7 @@ static char *opcode[16] =
     "?",
 
     "?",
-    "?",
+    "CTRL", /* special for yadifa client for view the result in verbose mode */
     "?",
     "?",
 

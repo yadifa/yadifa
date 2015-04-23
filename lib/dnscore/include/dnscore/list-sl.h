@@ -50,6 +50,7 @@
  */
 
 #include <dnscore/sys_types.h>
+#include <dnscore/zalloc.h>
 
 /*    ------------------------------------------------------------
  *
@@ -60,7 +61,6 @@
  * Linked list for interface data
  * 
  * (looks like a no-header no-sentinel single-linked list of strings)
- * 
  * 
  * head : the base structure of the list
  * item : the concept of what is being stored in the list
@@ -125,7 +125,7 @@ static inline void
 list_sl_insert(list_sl_s *list, void *data)
 {
     list_sl_node_s *node;
-    MALLOC_OR_DIE(list_sl_node_s*, node, sizeof(list_sl_node_s), GENERIC_TAG);
+    ZALLOC_OR_DIE(list_sl_node_s*, node, list_sl_node_s, GENERIC_TAG);
     node->next = list->first;
     node->data = data;
     list->first = node;
@@ -146,7 +146,13 @@ list_sl_add(list_sl_s *list, void *data)
 {
     list_sl_insert(list, data);
 }
-
+/*
+static inline void
+list_sl_add_list(list_sl_s *list, list_sl_s *list_to_append)
+{
+    
+}
+*/
 /**
  * Remove the first item from the list.
  * Deletes the node but not the data.
@@ -165,7 +171,7 @@ list_sl_remove_first(list_sl_s *list)
         void *data = node->data;
         list->first = node->next;
         list->size--;
-        free(node);
+        ZFREE(node,list_sl_node_s);
         return data;
     }
     else
@@ -239,7 +245,7 @@ void list_sl_clear(list_sl_s *list);
  * @return a matching node or NULL
  */
 
-void *list_sl_search(list_sl_s *list, result_callback_function *comparator);
+void *list_sl_search(list_sl_s *list, result_callback_function *comparator, void *parm);
 
 /**
  * Iterates through the items of the function, calling the comparator.
@@ -257,7 +263,7 @@ void *list_sl_search(list_sl_s *list, result_callback_function *comparator);
  * @return TRUE if at least one item has been deleted, FALSE otherwise.
  */
 
-bool list_sl_remove_match(list_sl_s *list, result_callback_function *comparator);
+bool list_sl_remove_match(list_sl_s *list, result_callback_function *comparator, void *parm);
 
 /**
  * 

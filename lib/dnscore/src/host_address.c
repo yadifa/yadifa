@@ -47,12 +47,12 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-
 #include <sys/socket.h>
 #include <netinet/in.h>
 
 #include "dnscore/host_address.h"
 #include "dnscore/tsig.h"
+#include "dnscore/zalloc.h"
 
 #define ADDRINFO_TAG 0x4f464e4952444441
 
@@ -63,7 +63,7 @@ host_address
 *host_address_alloc()
 {
     host_address *new_address;
-    MALLOC_OR_DIE(host_address*, new_address, sizeof(host_address), HOSTADDR_TAG);
+    ZALLOC_OR_DIE(host_address*, new_address, host_address, HOSTADDR_TAG);
     new_address->version = 0;
     new_address->next = NULL;
     
@@ -112,7 +112,7 @@ host_address_delete(host_address *address)
 #ifdef DEBUG
     memset(address, 0xff, sizeof(host_address));
 #endif
-    free(address);
+    ZFREE(address, host_address);
 }
 
 /**
@@ -201,7 +201,7 @@ host_address2allocated_sockaddr(struct sockaddr **sap, const host_address *addre
         {
             struct sockaddr_in *sa_in;
 
-            MALLOC_OR_DIE(struct sockaddr_in*, sa_in, sizeof(struct sockaddr_in), SOCKADD4_TAG);
+            MALLOC_OR_DIE(struct sockaddr_in*, sa_in, sizeof(struct sockaddr_in), SOCKADD4_TAG); // no ZALLOC
             ZEROMEMORY(sa_in, sizeof(struct sockaddr_in));
             memcpy(&sa_in->sin_addr.s_addr, address->ip.v4.bytes, 4);
             //sa_in->sin_addr.s_addr = htonl(sa_in->sin_addr.s_addr);
@@ -217,7 +217,7 @@ host_address2allocated_sockaddr(struct sockaddr **sap, const host_address *addre
         {
             struct sockaddr_in6 *sa_in6;
 
-            MALLOC_OR_DIE(struct sockaddr_in6*, sa_in6, sizeof(struct sockaddr_in6), SOCKADD6_TAG);
+            MALLOC_OR_DIE(struct sockaddr_in6*, sa_in6, sizeof(struct sockaddr_in6), SOCKADD6_TAG); // no ZALLOC
             ZEROMEMORY(sa_in6, sizeof(struct sockaddr_in6));
             memcpy(&sa_in6->sin6_addr, address->ip.v6.bytes, 16);
             sa_in6->sin6_port = address->port;
@@ -253,7 +253,7 @@ host_address2sockaddr(socketaddress *sap, const host_address *address)
 
             sa_in->sin_port = address->port;
             sa_in->sin_family = AF_INET;
-
+            
 #if HAS_SOCKADDR_IN_SIN_LEN != 0
             sa_in->sin_len = sizeof(struct sockaddr_in);
 #endif
@@ -264,12 +264,11 @@ host_address2sockaddr(socketaddress *sap, const host_address *address)
         {
             struct sockaddr_in6 *sa_in6 = (struct sockaddr_in6*)sap;
 
-
             ZEROMEMORY(sa_in6, sizeof(struct sockaddr_in6));
             memcpy(&sa_in6->sin6_addr, address->ip.v6.bytes, 16);
             sa_in6->sin6_port = address->port;
             sa_in6->sin6_family = AF_INET6;
-
+            
 #if HAS_SOCKADDR_IN6_SIN6_LEN != 0
             sa_in6->sin6_len = sizeof(struct sockaddr_in6);
 #endif
@@ -305,7 +304,7 @@ host_address2addrinfo(struct addrinfo **addrp, const host_address *address)
     struct addrinfo *addr;
     ya_result return_value;
 
-    MALLOC_OR_DIE(struct addrinfo*, addr, sizeof(struct addrinfo), ADDRINFO_TAG);
+    MALLOC_OR_DIE(struct addrinfo*, addr, sizeof(struct addrinfo), ADDRINFO_TAG); // no ZALLOC (yet)
 
     addr->ai_flags = AI_PASSIVE;
 
@@ -610,7 +609,7 @@ host_address_append_ipv4(host_address *address, const u8 *ipv4, u16 port)
 
     host_address *new_address;
 
-    MALLOC_OR_DIE(host_address*, new_address, sizeof(host_address), HOSTADDR_TAG);
+    ZALLOC_OR_DIE(host_address*, new_address, host_address, HOSTADDR_TAG);
     new_address->next = NULL;
 #if DNSCORE_HAS_TSIG_SUPPORT
     new_address->tsig = NULL;
@@ -645,7 +644,7 @@ host_address_append_ipv6(host_address *address, const u8 *ipv6, u16 port)
 
     host_address *new_address;
 
-    MALLOC_OR_DIE(host_address*, new_address, sizeof(host_address), HOSTADDR_TAG);
+    ZALLOC_OR_DIE(host_address*, new_address, host_address, HOSTADDR_TAG);
     new_address->next = NULL;
 #if DNSCORE_HAS_TSIG_SUPPORT
     new_address->tsig = NULL;
@@ -682,7 +681,7 @@ host_address_append_dname(host_address *address, const u8 *dname, u16 port)
 
     host_address *new_address;
 
-    MALLOC_OR_DIE(host_address*, new_address, sizeof(host_address), HOSTADDR_TAG);
+    ZALLOC_OR_DIE(host_address*, new_address, host_address, HOSTADDR_TAG);
     new_address->next = NULL;
 #if DNSCORE_HAS_TSIG_SUPPORT
     new_address->tsig = NULL;
@@ -720,7 +719,7 @@ host_address_append_host_address(host_address *address, const host_address *ha)
 
             host_address *new_address;
 
-            MALLOC_OR_DIE(host_address*, new_address, sizeof(host_address), HOSTADDR_TAG);
+            ZALLOC_OR_DIE(host_address*, new_address, host_address, HOSTADDR_TAG);
             new_address->next = NULL;
 #if DNSCORE_HAS_TSIG_SUPPORT
             new_address->tsig = ha->tsig;
@@ -752,7 +751,7 @@ host_address_append_host_address(host_address *address, const host_address *ha)
 
             host_address *new_address;
 
-            MALLOC_OR_DIE(host_address*, new_address, sizeof(host_address), HOSTADDR_TAG);
+            ZALLOC_OR_DIE(host_address*, new_address, host_address, HOSTADDR_TAG);
             new_address->next = NULL;
 #if DNSCORE_HAS_TSIG_SUPPORT
             new_address->tsig = ha->tsig;
@@ -786,7 +785,7 @@ host_address_append_host_address(host_address *address, const host_address *ha)
 
             host_address *new_address;
 
-            MALLOC_OR_DIE(host_address*, new_address, sizeof(host_address), HOSTADDR_TAG);
+            ZALLOC_OR_DIE(host_address*, new_address, host_address, HOSTADDR_TAG);
             new_address->next = NULL;
 #if DNSCORE_HAS_TSIG_SUPPORT
             new_address->tsig = ha->tsig;

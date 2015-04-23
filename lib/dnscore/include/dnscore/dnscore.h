@@ -103,6 +103,10 @@ void dnscore_shutdown();
 
 bool dnscore_shuttingdown();
 
+void dnscore_signature_check(int so_mutex_t, int so_group_mutex_t);
+
+#define DNSCORE_API_CHECK() dnscore_signature_check(sizeof(mutex_t), sizeof(group_mutex_t))
+
 #ifdef	__cplusplus
 }
 #endif

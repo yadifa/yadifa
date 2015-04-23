@@ -53,8 +53,10 @@
 
 #include <dnscore/logger.h>
 
+#include <dnsdb/zdb-lock.h>
 #include <dnsdb/zdb_zone.h>
 #include <dnsdb/zdb_zone_label.h>
+#include <dnsdb/zdb.h>
 
 #include "database-service.h"
 
@@ -89,7 +91,7 @@ database_service_zone_mount(zone_desc_s *zone_desc)
     
     zone_desc->status_flags |= ZONE_STATUS_MOUNTING;
     
-    zdb_zone *zone = zone_desc->loaded_zone;
+    zdb_zone *zone = zone_get_loaded_zone(zone_desc); // RC++, because we get to keep a reference
     
     if(zone == NULL)
     {
@@ -122,116 +124,57 @@ database_service_zone_mount(zone_desc_s *zone_desc)
 
     zdb *db = g_config->database;
 
-    group_mutex_lock(&db->mutex, ZDB_MUTEX_WRITER);
-    
 #if HAS_ACL_SUPPORT
     zone->extension = &zone_desc->ac;
     zone->query_access_filter = acl_get_query_access_filter(&zone_desc->ac.allow_query);
 #endif
     
-    zdb_zone_label *zone_label = zdb_zone_label_find_nolock(db, &zone->origin_vector);
+    //
     
-    bool send_notify_to_slaves = FALSE;
+    zdb_zone *old_zone = zdb_set_zone(db, zone); // RC++, because the zone is put into the database
     
-    if(zone_label == NULL)
+    bool send_notify_to_slaves = TRUE;
+    
+    if(old_zone != NULL)
     {
-        // no label exist yet
-        
-        log_debug2("database_service_zone_mount: no label yet");
-        
-        // add the label (will lock/unlock for a writer)
-        
-        zone_label = zdb_zone_label_add_nolock(db, &zone->origin_vector);
-        zone_label->zone = zone;
-                
-        group_mutex_unlock(&db->mutex, ZDB_MUTEX_WRITER);        
-        
-        send_notify_to_slaves = TRUE;
-    }
-    else
-    {
-        // there is a label at that location
-        
-        log_debug2("database_service_zone_mount: label exists in the database");
-        
-        zdb_zone *old_zone = zone_label->zone;
-                
-        if(old_zone != NULL)
+        if(zone != old_zone)
         {
-            if(zone != old_zone)
-            {
-                // there is already a different zone mounted
+            // there is already a different zone mounted
 
-                zdb_zone_lock(old_zone, ZDB_ZONE_MUTEX_REPLACE);
-
-                // the old zone is not invalid
-
-                log_debug2("database_service_zone_mount: changing zone from %p to %p", old_zone, zone);
-
-                // mount new zone
-                zone_label->zone = zone;
-
-                // set old zone as invalid                
-                old_zone->apex->flags |= ZDB_RR_LABEL_INVALID_ZONE;
-                zdb_zone_unlock(old_zone, ZDB_ZONE_MUTEX_REPLACE);
-
-                group_mutex_unlock(&db->mutex, ZDB_MUTEX_WRITER);
-                
-                send_notify_to_slaves = TRUE;
-
-                // destroy the old zone
-
-                database_zone_unload(/*zone_desc->origin, */old_zone/*, NULL*/);
-            }
-            else
-            {
-                group_mutex_unlock(&db->mutex, ZDB_MUTEX_WRITER);
-                
-                log_debug2("database_service_zone_mount: this instance of the zone is already mounted (%p is %p)", old_zone, zone);
-            }
-            
-            zone = NULL;
+            zdb_zone_lock(old_zone, ZDB_ZONE_MUTEX_REPLACE);
+            // set old zone as invalid                
+            old_zone->apex->flags |= ZDB_RR_LABEL_INVALID_ZONE;
+            zdb_zone_unlock(old_zone, ZDB_ZONE_MUTEX_REPLACE);
         }
         else
         {
-            // the label exists, but no zone is present
+            log_debug2("database_service_zone_mount: tried to mount a zone in place of itself (%p is %p)", old_zone, zone);
             
-            log_debug2("database_service_zone_mount: label exists without a zone, setting up new zone");
-            
-            // mount the zone
-            zone_label->zone = zone;
-            
-            group_mutex_unlock(&db->mutex, ZDB_MUTEX_WRITER);
-            
-            send_notify_to_slaves = TRUE;
-            
-            zone = NULL;
+            send_notify_to_slaves = FALSE;
         }
+        
+        zdb_zone_release(old_zone);
     }
+       
+    //
  
     if(send_notify_to_slaves)
     {
 #if HAS_MASTER_SUPPORT
         if(zone_desc->type == ZT_MASTER)
         {
-            if(send_notify_to_slaves)
-            {
-                log_debug("notifying slaves of zone %{dnsname}", zone_desc->origin);
+            log_debug("notifying slaves of zone %{dnsname}", zone_desc->origin);
 
-                notify_slaves(zone_desc->origin);
-            }
+            notify_slaves(zone_desc->origin); // RC++
         }
         else
 #endif
         if(zone_desc->type == ZT_SLAVE)
         {
-            if(send_notify_to_slaves)
-            {
-                log_debug("notifying also slaves of zone %{dnsname}", zone_desc->origin);
+            log_debug("notifying explicit slaves of zone %{dnsname}", zone_desc->origin);
 
-                notify_slaves(zone_desc->origin);
-            }
-
+            notify_slaves(zone_desc->origin); // RC++
+            
             if(((zone_desc->flags & ZONE_FLAG_NO_MASTER_UPDATES) == 0))
             {
                 if(zone_desc->masters != NULL)
@@ -253,7 +196,10 @@ database_service_zone_mount(zone_desc_s *zone_desc)
         log_debug("no need to send notify to slaves of zone %{dnsname}", zone_desc->origin);
     }
     
-    database_fire_zone_mounted(zone_desc, zone_label->zone, SUCCESS);
+    database_fire_zone_mounted(zone_desc, zone, SUCCESS); // RC++
+    
+    zdb_zone_release(zone); // RC--
+    zone = NULL;
     
     zone_desc->status_flags &= ~(ZONE_STATUS_STARTING_UP|ZONE_STATUS_MOUNTING|ZONE_STATUS_PROCESSING);
     

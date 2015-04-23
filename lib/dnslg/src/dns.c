@@ -31,7 +31,6 @@
 *------------------------------------------------------------------------------
 *
 */
-
 #include <dnscore/sys_types.h>
 #include <dnscore/random.h>
 
@@ -49,6 +48,4 @@ dns_new_id(void)
     
     return id;
 }
-
-
 

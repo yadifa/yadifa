@@ -64,17 +64,92 @@ extern logger_handle* g_server_logger;
  * The TXT CH record wire.  Only the first 10 bytes will be taken.
  */
 
-static u8 version_txt[3*8 + 3] = {
-    0xc0, 0x0c, 0x00, 0x10, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00,
-    /* |RDATA| */
-    0x00, 0x0f, 0x0e, 0x6e, 0x6f, 0x74, 0x20, 0x61, 0x64, 0x76,
-    0x65, 0x72, 0x74, 0x69, 0x73, 0x65, 0x64 };
+static u8 chaos_txt_stub[10] =
+{
+    0xc0, 0x0c, 0x00, 0x10, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00
+};
+
+static u8 *version_txt = NULL;
+static u8 *hostname_txt = NULL;
+static u8 *id_server_txt = NULL;
+
+void
+class_ch_set_hostname(const char *name)
+{
+    if(name != NULL)
+    {
+        size_t name_len = MIN(strlen(name), 255);
+        u8* tmp;
+        MALLOC_OR_DIE(u8*, tmp, 13 + name_len, GENERIC_TAG);
+        memcpy(tmp, chaos_txt_stub, 10);
+        SET_U16_AT(tmp[10], htons(name_len + 1));
+        tmp[12] = (u8)name_len;
+        memcpy(&tmp[13], name, name_len);
+        u8 *old = hostname_txt;
+        hostname_txt = tmp;
+        free(old);
+    }
+    else
+    {
+        u8 *old = hostname_txt;
+        hostname_txt = NULL;
+        free(old);
+    }
+}
+
+void
+class_ch_set_version(const char *name)
+{
+    if(name != NULL)
+    {
+        size_t name_len = MIN(strlen(name), 255);
+        u8* tmp;
+        MALLOC_OR_DIE(u8*, tmp, 13 + name_len, GENERIC_TAG);
+        memcpy(tmp, chaos_txt_stub, 10);
+        SET_U16_AT(tmp[10], htons(name_len + 1));
+        tmp[12] = (u8)name_len;
+        memcpy(&tmp[13], name, name_len);
+        u8 *old = version_txt;
+        version_txt = tmp;
+        free(old);
+    }
+    else
+    {
+        u8 *old = version_txt;
+        version_txt = NULL;
+        free(old);
+    }
+}
+
+void
+class_ch_set_id_server(const char *name)
+{
+    if(name != NULL)
+    {
+        size_t name_len = MIN(strlen(name), 255);
+        u8* tmp;
+        MALLOC_OR_DIE(u8*, tmp, 13 + name_len, GENERIC_TAG);
+        memcpy(tmp, chaos_txt_stub, 10);
+        SET_U16_AT(tmp[10], htons(name_len + 1));
+        tmp[12] = (u8)name_len;
+        memcpy(&tmp[13], name, name_len);
+        u8 *old = id_server_txt;
+        id_server_txt = tmp;
+        free(old);
+    }
+    else
+    {
+        u8 *old = id_server_txt;
+        id_server_txt = NULL;
+        free(old);
+    }
+}
 
 /*
  * The SOA CH record wire.
  */
 
-static u8 version_soa[5*8 + 7] = {
+static u8 chaos_soa[5*8 + 7] = {
     0xc0, 0x0c, 0x00, 0x06, 0x00, 0x03, 0x00, 0x01, 0x51, 0x80,
     0x00, 0x23, 0xc0, 0x0c, 0x0a, 0x68, 0x6f, 0x73, 0x74, 0x6d,
     0x61, 0x73, 0x74, 0x65, 0x72, 0xc0, 0x0c, 0x00, 0x00, 0x00,
@@ -85,19 +160,103 @@ static u8 version_soa[5*8 + 7] = {
  * The NS CH record wire.
  */
 
-static u8 version_ns[1*8 + 6] = {
+static u8 chaos_ns[1*8 + 6] = {
     0xc0, 0x0c, 0x00, 0x02, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x02, 0xc0, 0x0c };
 
-void
-process_class_ch(message_data *mesg)
+static void
+chaos_make_message(message_data *mesg, const u8* record_wire, u32 record_wire_len)
 {
-    ya_result return_value;
-
     u16 t = mesg->qtype;
     u16 an = 0;
     u16 au = 0;
     
+    /* set the flags */
+
+    MESSAGE_FLAGS_OR(mesg->buffer, QR_BITS|AA_BITS, 0);
+    MESSAGE_FLAGS_AND(mesg->buffer, QR_BITS|AA_BITS|RD_BITS, 0);
+
+    u8 *p = &mesg->buffer[mesg->received];
+
+    if(t == TYPE_TXT || t == TYPE_ANY)
+    {
+        memcpy(p, record_wire, record_wire_len);
+        
+        p += record_wire_len;
+
+        an++;
+    }
+    if(t == TYPE_SOA || t == TYPE_ANY)
+    {
+        memcpy(p, chaos_soa, sizeof(chaos_soa));
+        p += sizeof(chaos_soa);
+
+        MESSAGE_SET_AN(mesg->buffer, NETWORK_ONE_16);
+
+        an++;
+    }
+
+    memcpy(p, chaos_ns, sizeof(chaos_ns));
+    p += sizeof(chaos_ns);
+
+    if(t == TYPE_ANY || t == TYPE_NS)
+    {
+        an++;
+    }
+    else
+    {
+        au++;
+    }
+
+    MESSAGE_SET_AN(mesg->buffer, htons(an));
+    MESSAGE_SET_NS(mesg->buffer, htons(au));
+
+    if(mesg->edns)
+    {
+        u16 edns0_maxsize = g_config->edns0_max_size;
+        u32 rcode_ext = mesg->rcode_ext;
+
+        p[ 0] = 0;
+        p[ 1] = 0;
+        p[ 2] = 0x29;        
+        p[ 3] = edns0_maxsize>>8;
+        p[ 4] = edns0_maxsize;
+        p[ 5] = (mesg->status >> 4);
+        p[ 6] = rcode_ext >> 16;
+        p[ 7] = rcode_ext >> 8;
+        p[ 8] = rcode_ext;
+
+#if HAS_NSID_SUPPORT
+        if(!mesg->nsid)
+        {
+            p[ 9] = 0;
+            p[10] = 0;
+
+            p += EDNS0_RECORD_SIZE;
+        }
+        else
+        {                
+            p += EDNS0_RECORD_SIZE - 2;
+            memcpy(p, edns0_rdatasize_nsid_option_wire, edns0_rdatasize_nsid_option_wire_size);
+            p += edns0_rdatasize_nsid_option_wire_size;
+        }
+#else
+        p[ 9] = 0;
+        p[10] = 0;
+
+        p += EDNS0_RECORD_SIZE;
+#endif
+        MESSAGE_SET_AR(mesg->buffer, NETWORK_ONE_16);
+    }
+
+    mesg->send_length = p - mesg->buffer;
+}
+
+void
+class_ch_process(message_data *mesg)
+{
+    ya_result return_value;
+
     u8 qname[MAX_DOMAIN_LENGTH];
     
 #if HAS_ACL_SUPPORT
@@ -126,82 +285,17 @@ process_class_ch(message_data *mesg)
 
     /* version */
 
-    if(dnslabel_equals_ignorecase_left((const u8*)"\007version", qname))
+    if((id_server_txt != NULL) && dnsname_equals_ignorecase((const u8*)"\002id\006server", qname))
     {
-        /* set the flags */
-
-        MESSAGE_FLAGS_OR(mesg->buffer, QR_BITS|AA_BITS, 0);
-        MESSAGE_FLAGS_AND(mesg->buffer, QR_BITS|AA_BITS|RD_BITS, 0);
-
-        u8 *p = &mesg->buffer[mesg->received];
-
-        if(t == TYPE_TXT || t == TYPE_ANY)
-        {
-            memcpy(p, version_txt, 10); /* take the start only */
-            p += 10;
-
-            char * version_chaos = g_config->version_chaos;
-
-            int len = strlen(version_chaos);
-
-            SET_U16_AT(*p, htons(len + 1));
-            p += 2;
-            *p++ = (u8)len;
-            memcpy(p, version_chaos, len);
-            p += len;
-
-            an++;
-        }
-        if(t == TYPE_SOA || t == TYPE_ANY)
-        {
-            memcpy(p, version_soa, sizeof(version_soa));
-            p += sizeof(version_soa);
-
-            MESSAGE_SET_AN(mesg->buffer, NETWORK_ONE_16);
-
-            an++;
-        }
-        
-        memcpy(p, version_ns, sizeof(version_ns));
-        p += sizeof(version_ns);
-
-        if(t == TYPE_ANY || t == TYPE_NS)
-        {
-            an++;
-        }
-        else
-        {
-            au++;
-        }
-        
-        MESSAGE_SET_AN(mesg->buffer, htons(an));
-        MESSAGE_SET_NS(mesg->buffer, htons(au));
-        
-        if(mesg->edns)
-        {
-            u16 edns0_maxsize = g_config->edns0_max_size;
-            u32 rcode_ext = mesg->rcode_ext;
-            p[ 0] = 0;
-            p[ 1] = 0;
-            p[ 2] = 0x29;        
-            p[ 3] = edns0_maxsize>>8;
-            p[ 4] = edns0_maxsize;
-            p[ 5] = (mesg->status >> 4);
-            //p[ 6] = rcode_ext >> 24;
-            p[ 6] = rcode_ext >> 16;
-            p[ 7] = rcode_ext >> 8;
-            p[ 8] = rcode_ext;
-            p[ 9] = 0;
-            p[10] = 0;
-            
-            // nsid
-            
-            p += 11;
-         
-            MESSAGE_SET_AR(mesg->buffer, NETWORK_ONE_16);
-        }
-
-        mesg->send_length = p - mesg->buffer;
+        chaos_make_message(mesg, id_server_txt, 12 + ntohs(GET_U16_AT(id_server_txt[10])));
+    }
+    else if((hostname_txt != NULL) && dnslabel_equals_ignorecase_left((const u8*)"\010hostname", qname))
+    {
+        chaos_make_message(mesg, hostname_txt, 12 + ntohs(GET_U16_AT(hostname_txt[10])));
+    }
+    else if((version_txt != NULL) && dnslabel_equals_ignorecase_left((const u8*)"\007version", qname))
+    {
+        chaos_make_message(mesg, version_txt, 12 + ntohs(GET_U16_AT(version_txt[10])));
     }
     else
     {

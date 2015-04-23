@@ -44,6 +44,7 @@
 #include <stdlib.h>
 
 #include "dnscore/clone_input_output_stream.h"
+#include "dnscore/zalloc.h"
 
 #define CLONE_INPUT_OUTPUT_STREAM_TAG 0x534f49454e4f4c43 /* CLONEIOS */
 
@@ -76,7 +77,7 @@ clone_input_output_stream_close(input_stream* stream)
     clone_input_output_stream_data* data = (clone_input_output_stream_data*)stream->data;
     input_stream_close(&data->cloned);
     output_stream_close(&data->copy);
-    free(data);
+    ZFREE(data, clone_input_output_stream_data);
 
     input_stream_set_void(stream);
 }
@@ -122,7 +123,7 @@ clone_input_output_stream_init(input_stream *cis, input_stream *in_cloned, outpu
         return OBJECT_NOT_INITIALIZED;
     }
 
-    MALLOC_OR_DIE(clone_input_output_stream_data*, data, sizeof(clone_input_output_stream_data), CLONE_INPUT_OUTPUT_STREAM_TAG);
+    ZALLOC_OR_DIE(clone_input_output_stream_data*, data, clone_input_output_stream_data, CLONE_INPUT_OUTPUT_STREAM_TAG);
 
     data->cloned.data = in_cloned->data;
     data->cloned.vtbl = in_cloned->vtbl;

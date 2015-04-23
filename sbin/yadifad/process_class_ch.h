@@ -41,18 +41,18 @@
  */
 /*----------------------------------------------------------------------------*/
 
-#ifndef __PROCESS_CLASS_CH__H__
-#define __PROCESS_CLASS_CH__H__
+#pragma once
 
 #include <dnscore/message.h>
+
+void class_ch_set_hostname(const char *name);
+void class_ch_set_version(const char *name);
+void class_ch_set_id_server(const char *name);
 
 /**
  * Answers to a CH query.  Query operation assumed.
  */
 
-void
-process_class_ch(message_data *mesg);
+void class_ch_process(message_data *mesg);
 
 /** @} */
-
-#endif

@@ -274,7 +274,6 @@ log_query_yadifa(int socket_fd, message_data *mesg)
     *buffer++ = (mesg->protocol == IPPROTO_TCP)?'T':'-';
     *buffer++ = ((mesg->rcode_ext & RCODE_EXT_DNSSEC)!=0)?'D':'-';
     *buffer++ = (MESSAGE_CD(mesg->buffer) != 0)?'C':'-';
-    *buffer++ = (MESSAGE_AD(mesg->buffer) != 0)?'A':'-';
     *buffer++ = '}';
     *buffer++ = ' ';
     

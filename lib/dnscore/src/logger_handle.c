@@ -41,7 +41,7 @@
  *
  *----------------------------------------------------------------------------*/
 
-#include "dnscore-config.h"
+#include "dnscore/dnscore-config.h"
 
 #if HAS_PTHREAD_SETNAME_NP
 #ifdef DEBUG
@@ -61,18 +61,21 @@
 #include <pthread.h>
 
 #include "dnscore/logger_channel_stream.h"
-
 #include "dnscore/ptr_vector.h"
+#include "dnscore/threaded_queue.h"
+#include "dnscore/zalloc.h"
 
 #include "dnscore/file_output_stream.h"
 #include "dnscore/bytearray_output_stream.h"
+#include "dnscore/bytezarray_output_stream.h"
 
 #include "dnscore/format.h"
 #include "dnscore/dnscore.h"
 
 #include "dnscore/async.h"
 
-#include "dnscore/treeset.h"
+#include "dnscore/ptr_set.h"
+
 
 #define LOGGER_HANDLE_TAG 0x4c444e48474f4c /* LOGHNDL */
 
@@ -112,14 +115,15 @@ struct logger_handle;
 #define LOGGER_MESSAGE_TYPE_HANDLE_CLOSE                9 // close a handle
 #define LOGGER_MESSAGE_TYPE_HANDLE_NAME_ADD_CHANNEL    10 // add a channel to a handle identified by its name
 #define LOGGER_MESSAGE_TYPE_HANDLE_NAME_REMOVE_CHANNEL 11 // remove a channel from a handle identified by its name
+#define LOGGER_MESSAGE_TYPE_HANDLE_NAME_COUNT_CHANNELS 13 // return the number of channels linked to this logger
 
 struct logger_message_text_s
 {
     u8  type;                       //  0  0
     u8  level;                      // 
     u16 flags;                      // 
-    u32 text_length;                //  align 64
-    
+    u16 text_length;                //  
+    u16 text_buffer_length;         // align 64
     struct logger_handle *handle;   //  8  8
     
     u8 *text;                       // 12 16
@@ -128,8 +132,10 @@ struct logger_message_text_s
     const u8* prefix;               // 24 32
     u16 prefix_length;              // 28 40
     s16 rc;                         // 30 42   reference count for the repeats
-#ifdef DEBUG
+#if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
     pid_t pid;                      // 32 44
+#endif
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
     pthread_t thread_id;            // 36 48
 #endif
                                     // 40 56
@@ -252,6 +258,18 @@ struct logger_message_handle_remove_channel_s
     const char *channel_name;
 };
 
+struct logger_message_handle_count_channels_s
+{
+    u8 type;
+    u8 val8;
+    u16 val16;
+    u32 val32;  // align 64
+    
+    async_wait_s *aw;
+    const char *logger_name;
+    s32 *countp;
+};
+
 union logger_message
 {
     u8 type;
@@ -267,12 +285,13 @@ union logger_message
     struct logger_message_handle_close_s handle_close;
     struct logger_message_handle_add_channel_s handle_add_channel;
     struct logger_message_handle_remove_channel_s handle_remove_channel;
+    struct logger_message_handle_count_channels_s handle_count_channels;
 };
 
 typedef union logger_message logger_message;
 
 /// tree set initialised empty with a comparator for ASCIIZ char* keys
-static treeset_tree logger_channels = TREESET_ASCIIZ_EMPTY;
+static ptr_set logger_channels = PTR_SET_ASCIIZ_EMPTY;
 static ptr_vector logger_handles = EMPTY_PTR_VECTOR;
 static pthread_mutex_t logger_mutex;
 
@@ -298,7 +317,7 @@ static void logger_handle_trigger_shutdown()
     flusherr();
     logger_flush();
 
-    kill(getpid(), SIGINT);
+    abort();
 }
 
 /*******************************************************************************
@@ -310,8 +329,9 @@ static void logger_handle_trigger_shutdown()
 static inline logger_message*
 logger_message_alloc()
 {
+    /// @todo 20140523 edf -- use a better allocation mechanism
     logger_message* message;
-    MALLOC_OR_DIE(logger_message*, message, sizeof (logger_message), LOGRMSG_TAG);
+    ZALLOC_OR_DIE(logger_message*, message, logger_message, LOGRMSG_TAG);
     
 #if DEBUG_LOG_MESSAGES != 0
     smp_int_inc(&allocated_messages_count);
@@ -322,7 +342,7 @@ logger_message_alloc()
 static inline void
 logger_message_free(logger_message *message)
 {
-    free(message);
+    ZFREE(message, logger_message);
     
 #if DEBUG_LOG_MESSAGES != 0
     smp_int_dec(&allocated_messages_count);
@@ -415,18 +435,19 @@ logger_channel_alloc()
     flushout();
 #endif
 
-    MALLOC_OR_DIE(logger_channel*, chan, sizeof (logger_channel), 0x4e414843474f4c); /* LOGCHAN */
+    MALLOC_OR_DIE(logger_channel*, chan, sizeof(logger_channel), 0x4e414843474f4c); /* LOGCHAN */
 
     chan->data = NULL;
     chan->vtbl = NULL;
     
     /* dummy to avoid a NULL test */
-    logger_message* last_message;
-    MALLOC_OR_DIE(logger_message*,last_message,sizeof(logger_message), LOGRMSG_TAG);
+    logger_message* last_message = logger_message_alloc();
+    
     last_message->type = LOGGER_MESSAGE_TYPE_TEXT;
-    MALLOC_OR_DIE(u8*, last_message->text.text, 1, LOGRTEXT_TAG);
+    ZALLOC_ARRAY_OR_DIE(u8*, last_message->text.text, 1, LOGRTEXT_TAG);
     *last_message->text.text = '\0';
-    last_message->text.text_length = 0;
+    last_message->text.text_length = 1;
+    last_message->text.text_buffer_length = 1;
     last_message->text.flags = 0;
     last_message->text.rc = 1;
     
@@ -452,7 +473,7 @@ logger_channel_free(logger_channel *channel)
     
     if(--last_message->text.rc == 0)
     {
-        free(last_message->text.text);
+        ZFREE_ARRAY(last_message->text.text, last_message->text.text_buffer_length);
         logger_message_free(last_message);
     }
     
@@ -469,10 +490,10 @@ logger_service_channel_get(const char *channel_name)
 {   
     logger_channel *channel = NULL;
     
-    treeset_node *node = treeset_avl_find(&logger_channels, channel_name);
+    ptr_node *node = ptr_set_avl_find(&logger_channels, channel_name);
     if(node != NULL)
     {
-        channel = (logger_channel*)node->data;
+        channel = (logger_channel*)node->value;
     }
     
 #if DEBUG_LOG_HANDLER != 0
@@ -509,8 +530,8 @@ logger_service_channel_register(const char *channel_name, logger_channel *channe
         return LOGGER_CHANNEL_ALREADY_REGISTERED;
     }
     
-    treeset_node *node = treeset_avl_insert(&logger_channels, strdup(channel_name));
-    node->data = channel;
+    ptr_node *node = ptr_set_avl_insert(&logger_channels, strdup(channel_name));
+    node->value = channel;
     
     return SUCCESS;
 }
@@ -525,7 +546,7 @@ logger_service_channel_unregister(const char *channel_name)
         
     logger_channel *channel;
     
-    treeset_node *node = treeset_avl_find(&logger_channels, channel_name);
+    ptr_node *node = ptr_set_avl_find(&logger_channels, channel_name);
     
     if(node == NULL)
     {
@@ -536,7 +557,7 @@ logger_service_channel_unregister(const char *channel_name)
         return LOGGER_CHANNEL_NOT_REGISTERED;
     }
     
-    channel = (logger_channel*)node->data;
+    channel = (logger_channel*)node->value;
 
     if(channel->linked_handles != 0)
     {
@@ -548,7 +569,7 @@ logger_service_channel_unregister(const char *channel_name)
     }
     
     char *key = (char*)node->key;
-    treeset_avl_delete(&logger_channels, channel_name);
+    ptr_set_avl_delete(&logger_channels, channel_name);
     free(key);
         
     // remove the channel from all the handles
@@ -574,12 +595,12 @@ logger_service_channel_unregister_all()
 
     // for all channels
     
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&logger_channels, &iter);
-    while(treeset_avl_iterator_hasnext(&iter))
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&logger_channels, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
-        logger_channel *channel = (logger_channel*)node->data;
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        logger_channel *channel = (logger_channel*)node->value;
         char *channel_name = (char*)node->key;
 
 #if DEBUG_LOG_HANDLER != 0
@@ -608,14 +629,14 @@ logger_service_channel_unregister_all()
         // I can do this since iteration and destroy does not care about
         // keys nor values
         
-        node->data = NULL;
+        node->value = NULL;
         node->key = NULL;
         
         logger_channel_free(channel);
         free(channel_name);
     }
     
-    treeset_avl_destroy(&logger_channels);
+    ptr_set_avl_destroy(&logger_channels);
 }
 
 /**
@@ -845,6 +866,25 @@ logger_service_handle_remove_all_channel(logger_handle *handle)
     }
 }
 
+static ya_result
+logger_service_handle_count_channels(logger_handle *handle)
+{
+#if DEBUG_LOG_HANDLER != 0
+    osformatln(termout, "logger_service_handle_count_channels(%s@%p)", handle->name, handle);
+    flushout();
+#endif
+   
+    s32 sum = 0;
+    
+    for(u8 lvl = 0; lvl <= MSG_ALL; lvl++)
+    {
+        sum += ptr_vector_size(&handle->channels[lvl]);
+        
+    }
+    
+    return sum;
+}
+
 
 /**
  * INTERNAL: used inside the service (2)
@@ -858,12 +898,12 @@ logger_service_flush_all_channels()
     flushout();
 #endif
     
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&logger_channels, &iter);
-    while(treeset_avl_iterator_hasnext(&iter))
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&logger_channels, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
-        logger_channel *channel = (logger_channel*)node->data;
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        logger_channel *channel = (logger_channel*)node->value;
         logger_channel_flush(channel);
     }
 }
@@ -879,12 +919,12 @@ logger_service_reopen_all_channels()
     osformatln(termout, "logger_service_reopen_all_channels()");
     flushout();
 #endif
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&logger_channels, &iter);
-    while(treeset_avl_iterator_hasnext(&iter))
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&logger_channels, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
-        logger_channel *channel = (logger_channel*)node->data;
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        logger_channel *channel = (logger_channel*)node->value;
         ya_result return_code = logger_channel_reopen(channel);
         
         if(FAIL(return_code))
@@ -989,7 +1029,7 @@ logger_dispatcher_thread(void* context)
 
                 if(channel_count < 0)
                 {
-                    free(message->text.text);
+                    ZFREE_ARRAY(message->text.text, message->text.text_buffer_length);
                     logger_message_free(message);
                     continue;
                 }
@@ -1005,10 +1045,11 @@ logger_dispatcher_thread(void* context)
                             t.tm_hour, t.tm_min, t.tm_sec, message->text.tv.tv_usec);
                     baos_write(&baos, (const u8*)COLUMN_SEPARATOR, COLUMN_SEPARATOR_SIZE);
 
-#ifdef DEBUG
+#if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
                     osprint_u16(&baos, message->text.pid);
                     baos_write(&baos, (const u8*)COLUMN_SEPARATOR, COLUMN_SEPARATOR_SIZE);
-
+#endif
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
                     osprint_u32_hex(&baos, (u32)message->text.thread_id);
                     baos_write(&baos, (const u8*)COLUMN_SEPARATOR, COLUMN_SEPARATOR_SIZE);
 #endif
@@ -1080,8 +1121,10 @@ logger_dispatcher_thread(void* context)
                                     "last message repeated %d times",
                                     t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
                                     t.tm_hour, t.tm_min, t.tm_sec, message->text.tv.tv_usec,
-#ifdef DEBUG
+#if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
                                     channel->last_message->text.pid,
+#endif
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
                                     channel->last_message->text.thread_id,
 #endif
                                     channel->last_message_count);
@@ -1110,8 +1153,7 @@ logger_dispatcher_thread(void* context)
                             osformatln(termout, "message rc is 0 (%s)", channel->last_message->text.text);
                             flushout();
 #endif
-                            
-                            free(channel->last_message->text.text);
+                            ZFREE_ARRAY(channel->last_message->text.text, channel->last_message->text.text_buffer_length);
                             logger_message_free(channel->last_message);
                         }
 #if DEBUG_LOG_MESSAGES != 0
@@ -1148,7 +1190,7 @@ logger_dispatcher_thread(void* context)
                     osformatln(termout, "message has not been used (full dup): '%s'", message->text.text);
                     flushout();
 #endif
-                    free(message->text.text);
+                    ZFREE_ARRAY(message->text.text, message->text.text_buffer_length);
                     logger_message_free(message);
                 }
 
@@ -1335,7 +1377,28 @@ logger_dispatcher_thread(void* context)
                 async_wait_progress(awp, 1);
                 break;
             }
-
+            
+            case LOGGER_MESSAGE_TYPE_HANDLE_NAME_COUNT_CHANNELS:
+            {
+                logger_handle *handle;
+                async_wait_s *awp = message->handle_count_channels.aw;
+                const char *name = message->handle_count_channels.logger_name;
+                
+                handle = logger_service_handle_get(name);
+                
+                *message->handle_count_channels.countp = 0;
+                
+                if(handle != NULL)
+                {
+                    *message->handle_count_channels.countp = logger_service_handle_count_channels(handle);
+                }
+                
+                logger_message_free(message);
+                
+                async_wait_progress(awp, 1);
+                break;
+            }
+            
             default:
             {
                 osformatln(termerr, "unexpected message type %u in log queue", message->type);
@@ -1577,6 +1640,33 @@ logger_handle_remove_channel(const char *logger_name, const char *channel_name)
 
     async_wait(&aw);
     async_wait_finalize(&aw);
+}
+
+s32
+logger_handle_count_channels(const char *logger_name)
+{
+#if DEBUG_LOG_HANDLER != 0
+    osformatln(termout, "logger_handle_remove_channel(%s,%s) ", logger_name, channel_name);
+    flushout();
+#endif
+    
+    logger_message *message = logger_message_alloc();
+    s32 ret = -2;
+    async_wait_s aw;
+    
+    ZEROMEMORY(message, sizeof(logger_message));
+    async_wait_init(&aw, 1);
+    message->type = LOGGER_MESSAGE_TYPE_HANDLE_NAME_COUNT_CHANNELS;
+    message->handle_count_channels.aw = &aw;
+    message->handle_count_channels.logger_name = logger_name;
+    message->handle_count_channels.countp = &ret;
+    
+    threaded_queue_enqueue(&logger_commit_queue, message);
+
+    async_wait(&aw);
+    async_wait_finalize(&aw);
+    
+    return ret;
 }
 
 static u32 logger_queue_size = LOG_QUEUE_DEFAULT_SIZE;
@@ -2062,7 +2152,7 @@ logger_handle_vmsg(logger_handle* handle, u32 level, const char* fmt, va_list ar
      */
 
     output_stream baos;
-    bytearray_output_stream_context baos_context;
+    bytezarray_output_stream_context baos_context;
 
     /*
      * DEFAULT_MAX_LINE_SIZE is the base size.
@@ -2073,11 +2163,11 @@ logger_handle_vmsg(logger_handle* handle, u32 level, const char* fmt, va_list ar
      */
 
     /* Will use the tmp buffer, but alloc a bigger one if required. */
-    bytearray_output_stream_init_ex_static(&baos, NULL, DEFAULT_MAX_LINE_SIZE, BYTEARRAY_DYNAMIC, &baos_context);
+    bytezarray_output_stream_init_ex_static(&baos, NULL, DEFAULT_MAX_LINE_SIZE, BYTEARRAY_DYNAMIC, &baos_context);
 
     if(FAIL(vosformat(&baos, fmt, args)))
     {
-        bytearray_output_stream_reset(&baos);        
+        bytezarray_output_stream_reset(&baos);        
         osprint(&baos, "*** ERROR : MESSAGE FORMATTING FAILED ***");
     }
 
@@ -2089,11 +2179,12 @@ logger_handle_vmsg(logger_handle* handle, u32 level, const char* fmt, va_list ar
     message->text.level = level;
     message->text.flags = 0;
     
-    message->text.text_length = bytearray_output_stream_size(&baos) - 1;
+    message->text.text_length = bytezarray_output_stream_size(&baos) - 1;
+    message->text.text_buffer_length = bytezarray_output_stream_buffer_size(&baos);
     
     message->text.handle = handle;
     
-    message->text.text = bytearray_output_stream_detach(&baos);
+    message->text.text = bytezarray_output_stream_detach(&baos);
     
     gettimeofday(&message->text.tv, NULL);
     
@@ -2102,8 +2193,10 @@ logger_handle_vmsg(logger_handle* handle, u32 level, const char* fmt, va_list ar
     
     message->text.rc = 0;
    
-#ifdef DEBUG 
+#if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
     message->text.pid = getpid();
+#endif
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
     message->text.thread_id = pthread_self();
 #endif
     
@@ -2166,7 +2259,7 @@ logger_handle_msg(logger_handle* handle, u32 level, const char* fmt, ...)
      */
 
     output_stream baos;
-    bytearray_output_stream_context baos_context;
+    bytezarray_output_stream_context baos_context;
 
     /*
      * DEFAULT_MAX_LINE_SIZE is the base size.
@@ -2180,11 +2273,11 @@ logger_handle_msg(logger_handle* handle, u32 level, const char* fmt, ...)
     va_start(args, fmt);
 
     /* Will use the tmp buffer, but alloc a bigger one if required. */
-    bytearray_output_stream_init_ex_static(&baos, NULL, DEFAULT_MAX_LINE_SIZE, BYTEARRAY_DYNAMIC, &baos_context);
+    bytezarray_output_stream_init_ex_static(&baos, NULL, DEFAULT_MAX_LINE_SIZE, BYTEARRAY_DYNAMIC, &baos_context);
 
     if(FAIL(vosformat(&baos, fmt, args)))
     {
-        bytearray_output_stream_reset(&baos);        
+        bytezarray_output_stream_reset(&baos);        
         osprint(&baos, "*** ERROR : MESSAGE FORMATTING FAILED ***");
     }
 
@@ -2196,11 +2289,12 @@ logger_handle_msg(logger_handle* handle, u32 level, const char* fmt, ...)
     message->text.level = level;
     message->text.flags = 0;
     
-    message->text.text_length = bytearray_output_stream_size(&baos) - 1;
+    message->text.text_length = bytezarray_output_stream_size(&baos) - 1;
+    message->text.text_buffer_length = bytezarray_output_stream_buffer_size(&baos);
     
     message->text.handle = handle;
     
-    message->text.text = bytearray_output_stream_detach(&baos);
+    message->text.text = bytezarray_output_stream_detach(&baos);
     
     gettimeofday(&message->text.tv, NULL);
     
@@ -2209,8 +2303,10 @@ logger_handle_msg(logger_handle* handle, u32 level, const char* fmt, ...)
     
     message->text.rc = 0;
    
-#ifdef DEBUG 
+#if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
     message->text.pid = getpid();
+#endif
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
     message->text.thread_id = pthread_self();
 #endif
     
@@ -2280,9 +2376,10 @@ logger_handle_msg_text(logger_handle* handle, u32 level, const char* text, u32 t
     message->text.flags = 0;
     
     message->text.text_length = text_len;
+    message->text.text_buffer_length = text_len;
     message->text.handle = handle;
     
-    MALLOC_OR_DIE(u8*, message->text.text, text_len, LOGRTEXT_TAG);
+    ZALLOC_ARRAY_OR_DIE(u8*, message->text.text, text_len, LOGRTEXT_TAG);
     memcpy(message->text.text, text, text_len);
     
     gettimeofday(&message->text.tv, NULL);
@@ -2292,8 +2389,10 @@ logger_handle_msg_text(logger_handle* handle, u32 level, const char* text, u32 t
     
     message->text.rc = 0;
 
-#ifdef DEBUG
+#if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
     message->text.pid = getpid();
+#endif
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
     message->text.thread_id = pthread_self();
 #endif
     
@@ -2355,10 +2454,11 @@ logger_handle_msg_text_ext(logger_handle* handle, u32 level, const char* text, u
     message->text.flags = flags;
     
     message->text.text_length = text_len;
+    message->text.text_buffer_length = text_len;
     
     message->text.handle = handle;
     
-    MALLOC_OR_DIE(u8*, message->text.text, text_len, LOGRTEXT_TAG);
+    ZALLOC_ARRAY_OR_DIE(u8*, message->text.text, text_len, LOGRTEXT_TAG);
     memcpy(message->text.text, text, text_len);
     
     gettimeofday(&message->text.tv, NULL);
@@ -2368,8 +2468,10 @@ logger_handle_msg_text_ext(logger_handle* handle, u32 level, const char* text, u
     
     message->text.rc = 0;
     
-#ifdef DEBUG
+#if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
     message->text.pid = getpid();
+#endif
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
     message->text.thread_id = pthread_self();
 #endif
     

@@ -65,7 +65,7 @@
 #include <dnszone/dnszone.h>
 #include <dnszone/zone_axfr_reader.h>
 
-#include <dnscore/treeset.h>
+#include <dnscore/ptr_set.h>
 
 #include "notify.h"
 #include "zone.h"
@@ -151,8 +151,10 @@ message_query_summary_init(message_query_summary *mqs, u16 id, host_address *hos
 static void
 message_query_summary_clear(message_query_summary *mqs)
 {
+#ifdef DEBUG
+    log_debug("notify: clearing query for %{hostaddr}", mqs->host);
+#endif
     host_address_delete(mqs->host);
-    
 #ifdef DEBUG
     memset(mqs, 0xfe, sizeof(message_query_summary));
 #endif
@@ -161,8 +163,11 @@ message_query_summary_clear(message_query_summary *mqs)
 static void
 message_query_summary_delete(message_query_summary *mqs)
 {
+#ifdef DEBUG
+    log_debug("notify: deleting query for %{hostaddr}", mqs->host);
+#endif
     message_query_summary_clear(mqs);
-    free(mqs);
+    ZFREE(mqs, message_query_summary);
 }
 
 static s32
@@ -250,13 +255,13 @@ notify_slaveanswer(message_data *mesg)
         u8 rcode = MESSAGE_RCODE(mesg->buffer);
         bool aa = MESSAGE_AA(mesg->buffer)!=0;
                 
-        MALLOC_OR_DIE(notify_message*, message, sizeof(notify_message), NOTFYMSG_TAG);
+        ZALLOC_OR_DIE(notify_message*, message, notify_message, NOTFYMSG_TAG);
 
         message->origin = dnsname_dup(origin);
         message->payload.type = NOTIFY_MESSAGE_TYPE_ANSWER;
         message->payload.answer.rcode = rcode;
         message->payload.answer.aa = aa;
-        MALLOC_OR_DIE(host_address*, message->payload.answer.host, sizeof(host_address), HOSTADDR_TAG);
+        ZALLOC_OR_DIE(host_address*, message->payload.answer.host, host_address, HOSTADDR_TAG);
         host_address_set_with_sockaddr(message->payload.answer.host, sa);
         
 #if HAS_TSIG_SUPPORT
@@ -350,7 +355,7 @@ notify_masterquery_thread(void *args_)
     if(zone_desc == NULL)
     {
         log_err("notify: slave: zone %{dnsname} has been dropped", args->origin);       
-        free(args);
+        ZFREE(args, notify_masterquery_thread_args);
         
         return NULL;
     }
@@ -375,7 +380,7 @@ notify_masterquery_thread(void *args_)
 
     /* get the zone of the domain */
 
-    zdb_zone *dbzone = zdb_zone_find_from_dnsname(g_config->database, args->origin, CLASS_IN);
+    zdb_zone *dbzone = zdb_acquire_zone_read_from_fqdn(g_config->database, args->origin);
 
     if(dbzone != NULL)
     {
@@ -419,10 +424,10 @@ notify_masterquery_thread(void *args_)
                         dbzone->apex->flags &= ~ZDB_RR_LABEL_INVALID_ZONE;
                         zone_desc->refresh.refreshed_time = zone_desc->refresh.retried_time = time(NULL);
                         
-                        zdb_zone_unlock(dbzone, ZDB_ZONE_MUTEX_XFR);                         /* MUST be unlocked here because ... */
+                        zdb_zone_release_unlock(dbzone, ZDB_ZONE_MUTEX_XFR);                         /* MUST be unlocked here because ... */
                         database_zone_refresh_maintenance(g_config->database, zone_desc->origin, 0); /* ... this will try to lock */
                         
-                        free(args);
+                        ZFREE(args, notify_masterquery_thread_args);
                         
                         zone_release(zone_desc);
                         
@@ -441,7 +446,7 @@ notify_masterquery_thread(void *args_)
                 database_zone_axfr_query(zone_desc->origin);
             }
 
-            zdb_zone_unlock(dbzone, ZDB_ZONE_MUTEX_XFR);
+            zdb_zone_release_unlock(dbzone, ZDB_ZONE_MUTEX_XFR);
         }
         else
         {
@@ -449,8 +454,10 @@ notify_masterquery_thread(void *args_)
             * The zone has been locked already ? give up ...
             */
 
-            log_info("notify: slave: zone %{dnsname} is locked already (%x)", args->origin, dbzone->mutex_owner);
+            log_info("notify: slave: zone %{dnsname} is locked already (%x)", args->origin, dbzone->lock_owner);
 
+            zdb_zone_release(dbzone);
+            
             database_zone_refresh_maintenance(g_config->database, args->origin, time(NULL) + 5);
         }
     }
@@ -465,7 +472,7 @@ notify_masterquery_thread(void *args_)
         database_zone_axfr_query(zone_desc->origin);
     }   /* AXFR */
     
-    free(args);
+    ZFREE(args, notify_masterquery_thread_args);
     
     zone_release(zone_desc);
     
@@ -570,7 +577,7 @@ notify_send(host_address* ha, message_data *msgdata, u16 id, const u8 *origin, u
         else
         {
             return_code = ERROR; // wrong socket
-
+            
             // if we cannot get the reply, no point trying to send the query
             
             log_err("notify: no listening interface can receive from %{sockaddr}", &sa.sa);
@@ -614,7 +621,7 @@ notify_masterquery(zdb *database, message_data *mesg, packet_unpack_reader_data 
     
     notify_masterquery_thread_args *args;
     
-    MALLOC_OR_DIE(notify_masterquery_thread_args*, args, sizeof(notify_masterquery_thread_args), GENERIC_TAG);
+    ZALLOC_OR_DIE(notify_masterquery_thread_args*, args, notify_masterquery_thread_args, GENERIC_TAG);
     
     args->origin = dnsname_dup(mesg->qname);
     args->serial = serial;
@@ -843,10 +850,12 @@ notify_message_free(notify_message *msg)
         }
         case NOTIFY_MESSAGE_TYPE_ANSWER:
         {
+            log_debug("notify_message_free(%p) host_address_delete(%p)", msg, msg->payload.answer.host);
+            debug_log_stacktrace(g_server_logger, MSG_DEBUG7, "notify_message_free:host_address_delete");
             host_address_delete(msg->payload.answer.host);
             if(msg->payload.answer.message != NULL)
             {
-                free(msg->payload.answer.message);
+                free(msg->payload.answer.message); // message_data (free, not ZFREE)
             }
             break;
         }
@@ -854,7 +863,7 @@ notify_message_free(notify_message *msg)
 #ifdef DEBUG
     memset(msg, 0xff, sizeof(notify_message));
 #endif
-    free(msg);
+    ZFREE(msg, notify_message);
 }
 
 static int
@@ -891,10 +900,10 @@ notify_service(struct service_worker_s *worker)
 
     random_ctx rnd = thread_pool_get_random_ctx();
     
-    treeset_tree notify_zones = TREESET_EMPTY;
+    ptr_set notify_zones = PTR_SET_EMPTY;
     notify_zones.compare = notify_process_dnsname_compare;
     
-    treeset_tree current_queries = TREESET_EMPTY;
+    ptr_set current_queries = PTR_SET_EMPTY;
     current_queries.compare = message_query_summary_compare;
     u32 last_current_queries_cleanup_epoch_us = 0;
 
@@ -972,7 +981,7 @@ notify_service(struct service_worker_s *worker)
                 
             u64 tus = timeus();
 
-            if(!treeset_avl_isempty(&current_queries) && (tus > last_current_queries_cleanup_epoch_us))
+            if(!ptr_set_avl_isempty(&current_queries) && (tus > last_current_queries_cleanup_epoch_us))
             {
                 /* create a list of expired message_query_summary */
                 
@@ -985,12 +994,12 @@ notify_service(struct service_worker_s *worker)
 
                 /* find them using an iterator */
 
-                treeset_avl_iterator current_queries_iter;
-                treeset_avl_iterator_init(&current_queries, &current_queries_iter);
-                while(treeset_avl_iterator_hasnext(&current_queries_iter))
+                ptr_set_avl_iterator current_queries_iter;
+                ptr_set_avl_iterator_init(&current_queries, &current_queries_iter);
+                while(ptr_set_avl_iterator_hasnext(&current_queries_iter))
                 {
-                    treeset_node *node = treeset_avl_iterator_next_node(&current_queries_iter);
-                    message_query_summary* mqs = (message_query_summary*)node->data;
+                    ptr_node *node = ptr_set_avl_iterator_next_node(&current_queries_iter);
+                    message_query_summary* mqs = (message_query_summary*)node->value;
                     if(last_current_queries_cleanup_epoch_us > mqs->expire_epoch_us)
                     {
 #if DEBUG
@@ -1024,7 +1033,7 @@ notify_service(struct service_worker_s *worker)
                 {
                     message_query_summary* mqs = current;
                     current = current->next;
-                    treeset_avl_delete(&current_queries, mqs);
+                    ptr_set_avl_delete(&current_queries, mqs);
                     message_query_summary_delete(mqs);
                 }
             }
@@ -1106,18 +1115,18 @@ notify_service(struct service_worker_s *worker)
                      * The list has to replace the current one for message->origin (because it's starting again)
                      */
 
-                    treeset_node *node = treeset_avl_insert(&notify_zones, message->origin);
+                    ptr_node *node = ptr_set_avl_insert(&notify_zones, message->origin);
 
-                    if(node->data != NULL)
+                    if(node->value != NULL)
                     {
-                        notify_message* old_message = (notify_message*)node->data;  // get the old value
+                        notify_message* old_message = (notify_message*)node->value;  // get the old value
                         node->key = message->origin;                                // (same key but the old pointer is about to be deleted)
-                        node->data = message;                                       // set the new value
+                        node->value = message;                                       // set the new value
                         notify_message_free(old_message);                           // destroy the old value.  notify_zones does not contains it anymore
                     }
                     else
                     {
-                        node->data = message;
+                        node->value = message;
                     }
 
                     message->payload.notify.epoch = time(NULL);
@@ -1128,11 +1137,11 @@ notify_service(struct service_worker_s *worker)
                 {
                     log_info("notify: answer from slave %{hostaddr} for %{dnsname}", message->payload.answer.host, message->origin);
                     
-                    treeset_node *node = treeset_avl_find(&notify_zones, message->origin);
+                    ptr_node *node = ptr_set_avl_find(&notify_zones, message->origin);
                     
                     if(node != NULL)
                     {
-                        notify_message *msg = (notify_message*)node->data;
+                        notify_message *msg = (notify_message*)node->value;
 
                         if(msg != NULL)
                         {
@@ -1164,7 +1173,7 @@ notify_service(struct service_worker_s *worker)
                                     u16 id = MESSAGE_ID(message->payload.answer.message->buffer);
                                     message_query_summary_init(&tmp, id, ha, NULL, 0);
                                     // try to find the exact match
-                                    treeset_node* node = treeset_avl_find(&current_queries, &tmp);
+                                    ptr_node *node = ptr_set_avl_find(&current_queries, &tmp);
                                     message_query_summary_clear(&tmp);
                                     if(node == NULL)
                                     {
@@ -1177,9 +1186,9 @@ notify_service(struct service_worker_s *worker)
                                         break;
                                     }
                                     
-                                    message_query_summary *mqs = (message_query_summary*)node->data;
+                                    message_query_summary *mqs = (message_query_summary*)node->value;
                                     
-                                    assert(mqs != NULL);
+                                    yassert(mqs != NULL);
                                     
                                     // verify the signature
                                     
@@ -1198,9 +1207,9 @@ notify_service(struct service_worker_s *worker)
                                         break;
                                     }
                                     
-                                    free(message->payload.answer.message);
+                                    free(message->payload.answer.message); // message_data, free, not ZFREE
                                     message->payload.answer.message = NULL;
-                                    treeset_avl_delete(&current_queries, mqs);
+                                    ptr_set_avl_delete(&current_queries, mqs);
                                     message_query_summary_delete(mqs);
                                 } /* end of TSIG verification, with success*/
 #endif
@@ -1234,7 +1243,7 @@ notify_service(struct service_worker_s *worker)
                         
                         if(msg->payload.notify.hosts_list == NULL)
                         {
-                            treeset_avl_delete(&notify_zones, msg->origin);
+                            ptr_set_avl_delete(&notify_zones, msg->origin);
                             notify_message_free(msg);
                         }
                     }
@@ -1267,14 +1276,14 @@ notify_service(struct service_worker_s *worker)
         time_t now = time(NULL);
 
         ptr_vector todelete = EMPTY_PTR_VECTOR;
-        treeset_avl_iterator zones_iter;
-        treeset_avl_iterator_init(&notify_zones, &zones_iter);
+        ptr_set_avl_iterator zones_iter;
+        ptr_set_avl_iterator_init(&notify_zones, &zones_iter);
 
-        while(treeset_avl_iterator_hasnext(&zones_iter))
+        while(ptr_set_avl_iterator_hasnext(&zones_iter))
         {
-            treeset_node *zone_node = treeset_avl_iterator_next_node(&zones_iter);
+            ptr_node *zone_node = ptr_set_avl_iterator_next_node(&zones_iter);
 
-            notify_message *message = zone_node->data;
+            notify_message *message = zone_node->value;
 
             if(message->payload.notify.epoch > now)
             {
@@ -1298,26 +1307,26 @@ notify_service(struct service_worker_s *worker)
                 if(ISOK(err))
                 {
                     message_query_summary* mqs;
-                    MALLOC_OR_DIE(message_query_summary*, mqs, sizeof(message_query_summary), GENERIC_TAG);
+                    ZALLOC_OR_DIE(message_query_summary*, mqs, message_query_summary, GENERIC_TAG);
 
 #if HAS_TSIG_SUPPORT
                     message_query_summary_init(mqs, id, ha, msgdata->tsig.mac, msgdata->tsig.mac_size);
 #else
                     message_query_summary_init(mqs, id, ha, NULL, 0);
 #endif
-                    treeset_node *node = treeset_avl_insert(&current_queries, mqs);
+                    ptr_node *node = ptr_set_avl_insert(&current_queries, mqs);
 
-                    if(node->data != NULL)
+                    if(node->value != NULL)
                     {
                         // destroy this mqs
-                        
+#ifdef DEBUG
                         log_debug("notify: node %{hostaddr}[%04x] already exists, replacing", mqs->host, mqs->id);
-                        
-                        message_query_summary_delete(node->data);
+#endif
+                        message_query_summary_delete(node->value);
                         node->key = mqs;
                     }
 
-                    node->data = mqs;
+                    node->value = mqs;
                 }
                 else // remove it
                 {
@@ -1362,7 +1371,7 @@ notify_service(struct service_worker_s *worker)
         for(s32 idx = 0; idx <= todelete.offset; idx++)
         {
             notify_message *msg = msgs[idx];
-            treeset_avl_delete(&notify_zones, msg->origin);
+            ptr_set_avl_delete(&notify_zones, msg->origin);
             notify_message_free(msg);
         }
 
@@ -1371,25 +1380,25 @@ notify_service(struct service_worker_s *worker)
     
     service_set_stopping(worker);
     
-    treeset_avl_iterator iter;
+    ptr_set_avl_iterator iter;
     
     u32 total_count;
     u32 count;
     
     total_count = 0;
     count = 0;
-    treeset_avl_iterator_init(&notify_zones, &iter);
-    while(treeset_avl_iterator_hasnext(&iter))
+    ptr_set_avl_iterator_init(&notify_zones, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
         //host_address *ha = (host_address*)node->key;
         
-        notify_message* message = (notify_message*)node->data;  // get the old value
+        notify_message* message = (notify_message*)node->value;  // get the old value
         if(message != NULL)
         {
             notify_message_free(message);                           // destroy the message
             node->key = NULL;                                       // (same key but the old pointer is about to be deleted)
-            node->data = NULL;                                      // set the new value
+            node->value = NULL;                                      // set the new value
             count++;
         }
         total_count++;
@@ -1399,15 +1408,15 @@ notify_service(struct service_worker_s *worker)
     {
         log_err("notify: %u messages were empty", total_count - count);
     }
-    treeset_avl_destroy(&notify_zones);
+    ptr_set_avl_destroy(&notify_zones);
     
     total_count = 0;
     count = 0;
-    treeset_avl_iterator_init(&current_queries, &iter);
-    while(treeset_avl_iterator_hasnext(&iter))
+    ptr_set_avl_iterator_init(&current_queries, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
-        message_query_summary* mqs = (message_query_summary*)node->data;
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        message_query_summary* mqs = (message_query_summary*)node->value;
         if(mqs != NULL)
         {
             message_query_summary_delete(mqs);
@@ -1420,11 +1429,11 @@ notify_service(struct service_worker_s *worker)
     {
         log_err("notify: %u summaries were empty", total_count - count);
     }
-    treeset_avl_destroy(&current_queries);
+    ptr_set_avl_destroy(&current_queries);
     
     if(msgdata != NULL)
     {
-        free(msgdata);
+        free(msgdata); // message_data
     }
     
     log_info("notify: notification service stopped");
@@ -1466,10 +1475,15 @@ notify_slaves(u8 *origin)
 
     zdb *db = g_config->database;
 
-    zdb_zone *zone = zdb_zone_find_from_dnsname(db, origin, CLASS_IN);
+    zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(db, origin); // RC++
     
     if((zone == NULL) || ZDB_ZONE_INVALID(zone))
     {
+        if(zone != NULL)
+        {
+            zdb_zone_release(zone);
+        }
+        
         log_debug("notify: zone '%{dnsname}' temporarily unavailable", origin);
         
         return;
@@ -1478,6 +1492,7 @@ notify_slaves(u8 *origin)
     zone_desc_s *zone_desc = zone_acquirebydnsname(origin);
     if(zone_desc == NULL)
     {
+        zdb_zone_release(zone);
         log_err("notify: zone '%{dnsname}' is not configured", origin);
         return;
     }
@@ -1491,6 +1506,8 @@ notify_slaves(u8 *origin)
     
     if(zone_ismaster(zone_desc) && zone_is_auto_notify(zone_desc))
     {
+        zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+        
         // get the SOA
         zdb_packed_ttlrdata *soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);
         // get the NS
@@ -1518,11 +1535,19 @@ notify_slaves(u8 *origin)
             }
 
             /* valid candidate : get its IP, later */
+            
+#if 1
+            if(zdb_append_ip_records(db, ns_dname, &list) <= 0)
+            {
+                // If no IP has been found, they will have to be resolved using the system ... later
 
+                host_address_append_dname(&list, ns_dname, NU16(DNS_DEFAULT_PORT));
+            }
+#else
             zdb_packed_ttlrdata *a_records = NULL;
             zdb_packed_ttlrdata *aaaa_records = NULL;
 
-            zdb_query_ip_records(db, ns_dname, CLASS_IN, &a_records, &aaaa_records);
+            zdb_query_ip_records(db, ns_dname, &a_records, &aaaa_records);
 
             // If there is any bit set in the returned pointers ...
 
@@ -1547,7 +1572,14 @@ notify_slaves(u8 *origin)
 
                 host_address_append_dname(&list, ns_dname, NU16(DNS_DEFAULT_PORT));
             }
+#endif
         }
+        
+        zdb_zone_release_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+    }
+    else
+    {
+        zdb_zone_release(zone);
     }
 
     // at this point I have the list of every IP I could find along with names I cannot resolve.
@@ -1571,7 +1603,7 @@ notify_slaves(u8 *origin)
     {
         notify_message *message;
 
-        MALLOC_OR_DIE(notify_message*, message, sizeof(notify_message), NOTFYMSG_TAG);
+        ZALLOC_OR_DIE(notify_message*, message, notify_message, NOTFYMSG_TAG);
 
         message->origin = dnsname_dup(origin);
         message->payload.type = NOTIFY_MESSAGE_TYPE_NOTIFY;
@@ -1611,7 +1643,7 @@ notify_host_list(zone_desc_s *zone_desc, host_address *hosts, u16 zclass)
 {
     notify_message *message;
 
-    MALLOC_OR_DIE(notify_message*, message, sizeof(notify_message), NOTFYMSG_TAG);
+    ZALLOC_OR_DIE(notify_message*, message, notify_message, NOTFYMSG_TAG);
 
     message->origin = dnsname_dup(zone_desc->origin);
     message->payload.type = NOTIFY_MESSAGE_TYPE_NOTIFY;

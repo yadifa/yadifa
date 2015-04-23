@@ -45,11 +45,11 @@
  * 
  * @{
  */
-#ifndef _DNSNAME_H
-#define	_DNSNAME_H
+#pragma once
 
 #include <dnscore/sys_types.h>
 #include <dnscore/rfc.h>
+
 /**
  * The maximum number of domains-subdomains handled by the database.
  * This should not be set to a value greater than 128 (128 covers (\001 'a') * 255 )
@@ -323,6 +323,8 @@ bool dnslabel_equals(const u8* name_a, const u8* name_b);
 
 int dnsname_compare(const u8* name_a, const u8* name_b);
 
+bool dnsname_is_subdomain(const u8* subdomain, const u8* domain);
+
 /** @brief Tests if two DNS labels are (case-insensitive) equals
  *
  *  Tests if two DNS labels are (case-insensitive) equals
@@ -483,6 +485,8 @@ dnslabel_copy(u8 *target, const u8 *src)
     return len;
 }
 
+u32 dnslabel_vector_len(const_dnslabel_vector_reference name, s32 top);
+
 /* ONE use */
 
 u32 dnsname_vector_sub_to_dnsname(const dnsname_vector *name, s32 from, u8 *name_start);
@@ -578,10 +582,35 @@ s32 dnsname_stack_pop_label(dnsname_stack* name);
 
 s32 dnsname_to_dnsname_stack(const u8* dns_name, dnsname_stack* name);
 
+/** @brief Allocates and duplicates a name with ZALLOC.
+ *
+ *  Allocates and duplicates a name ZALLOC.
+ *
+ *  @param[in] name a pointer to the dnsname
+ *
+ *  @return A new instance of the dnsname.
+ */
+
+
+u8 *dnsname_zdup(const u8 *name);
+
+void dnsname_zfree(u8 *name);
+
+/** @brief Allocates and duplicates a label with ZALLOC.
+ *
+ *  Allocates and duplicates a label with ZALLOC.
+ *
+ *  @param[in] name a pointer to the label
+ *
+ *  @return A new instance of the label
+ */
+
+u8 *dnslabel_zdup(const u8 *name);
+
+void dnslabel_zfree(u8 *name);
+
 #ifdef	__cplusplus
 }
 #endif
-
-#endif	/* _NAME_H */
 
 /** @} */

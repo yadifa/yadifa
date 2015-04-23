@@ -31,6 +31,7 @@
 *------------------------------------------------------------------------------
 *
 */
+
 #include "common-config.h"
 #include <dnscore/logger.h>
 #include <dnscore/host_address.h>
@@ -39,11 +40,25 @@
 #include <dnslg/resolv.h>
 #include "query-result.h"
 
+/*----------------------------------------------------------------------------*/
+
 extern logger_handle *g_client_logger;
 #define MODULE_MSG_HANDLE g_client_logger
 
-extern resolv_s                   config_resolver_settings;
+extern resolv_s config_resolver_settings;
 
+
+/*----------------------------------------------------------------------------*/
+
+/** @brief check_query_result
+ *
+ *  @param id_sent u16
+ *  @param protocol u16
+ *  @param question_mode u16
+ *  @param mesg message_data
+ *  @param go_tcp u8 *
+ *  @return ya_result
+ */
 ya_result
 check_query_result(u16 id_sent, u16 protocol, u16 question_mode, message_data *mesg, u8 *go_tcp)
 {
@@ -65,35 +80,35 @@ check_query_result(u16 id_sent, u16 protocol, u16 question_mode, message_data *m
         return ERROR;
     }
 
-    /* Initialize flag */
+    /* initialize flag */
     *go_tcp = NOK;
 
 
-    /* Read first 4 bytes and check some stuff */
+    /* read first 4 bytes and check some stuff */
 
     packet_unpack_reader_data  pr;
 
     packet_reader_init(&pr, mesg->buffer, mesg->received);
 
-    /* 1. Check ID */
+    /* 1. check ID */
     packet_reader_read_u16(&pr, &id_returned);
 
-    if (FAIL(id_sent == id_returned))
+    if(FAIL(id_sent == id_returned))
     {
-        return NOK;     /** todo: still needs to add a nice error code */
+        return NOK;     /** @todo 2014xxxx gve --  still needs to add a nice error code */
     }
 
-    /* 2. Check for QR bit */
+    /* 2. check for QR bit */
     packet_reader_read_u16(&pr, &flags);
 
     if FAIL(((ntohs(flags) >> 8 ) & QR_BITS))
     {
         log_info(" NOANSWER: %x", ntohs(flags));
 
-        return NOK;      /** todo: still needs to add a nice error code */
+        return NOK;      /** @todo 2014xxxx gve -- still needs to add a nice error code */
     }
 
-    /* 3. Check if TCP query is needed */
+    /* 3. check if TCP query is needed */
     if  (!(question_mode & QM_FLAGS_INGORE_TC))
     {
         if (protocol & QM_PROTOCOL_TCP)
@@ -112,6 +127,13 @@ check_query_result(u16 id_sent, u16 protocol, u16 question_mode, message_data *m
 }
 
 
+/** @brief check_query_result
+ *
+ *  @param mesg message_data
+ *  @param duration long
+ *  @param view_mode_with u16
+ *  @return ya_result
+ */
 ya_result
 view_query_result(message_data *mesg, long duration, u16 view_mode_with)
 {
@@ -127,7 +149,6 @@ view_query_result(message_data *mesg, long duration, u16 view_mode_with)
     /*    ------------------------------------------------------------    */ 
 
 //    log_debug("VIEW QUERY RESULT: %x", config->view_mode);
-
 //    formatln("result view_mode: %d", view_mode_with);
 
 #undef VM_MULTILINE
@@ -140,11 +161,11 @@ view_query_result(message_data *mesg, long duration, u16 view_mode_with)
     else
     {
 #ifdef DEBUG
-            formatln("DIG");
-            osprint_dump(termout, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_LAYOUT_GERY | OSPRINT_DUMP_HEXTEXT);
-            formatln("");
+       formatln("DIG");
+       osprint_dump(termout, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_LAYOUT_GERY | OSPRINT_DUMP_HEXTEXT);
+       formatln("");
 
-            flushout();
+       flushout();
 #endif
 
         return_value = message_print_format_dig(termout, mesg->buffer, mesg->received, view_mode_with, duration);
@@ -156,7 +177,9 @@ view_query_result(message_data *mesg, long duration, u16 view_mode_with)
     }
     flushout();
 
+
     return return_value;
 }
 
+/*    ------------------------------------------------------------    */
 

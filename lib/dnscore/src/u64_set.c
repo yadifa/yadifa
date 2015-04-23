@@ -49,8 +49,9 @@
 
 #include "dnscore/dnscore.h"
 #include "dnscore/u64_set.h"
+#include "dnscore/zalloc.h"
 
-#define U32SET_TAG 0x544553323355
+#define U64SET_TAG 0x544553343655
 
 /*
  * The following macros are defining relevant fields in the node
@@ -94,15 +95,17 @@
  * A macro to initialize a node and setting the reference
  */
 #define AVL_INIT_NODE(node,reference) node->key = reference;node->value=NULL
+#if 0 /* fix */
+#else
 /*
  * A macro to allocate a new node
  */
-#define AVL_ALLOC_NODE(node,reference) MALLOC_OR_DIE(AVL_NODE_TYPE*,node,sizeof(AVL_NODE_TYPE), U32SET_TAG);
+#define AVL_ALLOC_NODE(node,reference) ZALLOC_OR_DIE(AVL_NODE_TYPE*,node,AVL_NODE_TYPE, U64SET_TAG);
 /*
  * A macro to free a node allocated by ALLOC_NODE
  */
-
-#define AVL_FREE_NODE(node) free(node)
+#define AVL_FREE_NODE(node) ZFREE(node,AVL_NODE_TYPE)
+#endif
 /*
  * A macro to print the node
  */
@@ -138,6 +141,20 @@
 #define AVL_NODE_DELETE_CALLBACK(node)
 
 #include "dnscore/avl.c.inc"
+
+void *u64_set_avl_iterator_hasnext_next_value(u64_set_avl_iterator *iterp)
+{
+    if(u64_set_avl_iterator_hasnext(iterp))
+    {
+        u64_node *node = u64_set_avl_iterator_next_node(iterp);
+        void *ptr = node->value;
+        return ptr;
+    }
+    else
+    {
+        return NULL;
+    }
+}
 
 /** @} */
 

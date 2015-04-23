@@ -53,6 +53,8 @@
 #include <openssl/bn.h>
 
 #include <dnscore/base64.h>
+#include <dnscore/format.h>
+#include <dnscore/zalloc.h>
 
 #include "dnsdb/zdb_error.h"
 #include "dnsdb/zdb_record.h"
@@ -61,11 +63,7 @@
 #include "dnsdb/dnssec_config.h"
 #include "dnsdb/dnssec_keystore.h"
 
-#include "dnsdb/zdb_alloc.h"
-
 #include "dnsdb/zdb_listener.h"
-
-#include <dnscore/format.h>
 
 #define MODULE_MSG_HANDLE g_dnssec_logger
 

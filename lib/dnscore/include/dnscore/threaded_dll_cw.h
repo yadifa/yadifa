@@ -45,54 +45,39 @@
 
 #include <pthread.h>
 
-#include <dnscore/sys_types.h>
-#include <dnscore/allocator.h>
+#include <dnscore/mutex.h>
+#include <dnscore/list-dl.h>
 
 #ifdef	__cplusplus
 extern "C" {
 #endif
 
-typedef struct threaded_sll_cw threaded_sll_cw;
-
-struct threaded_sll_cw_node
+struct threaded_dll_cw
 {
-    struct threaded_sll_cw_node *next;
-    void* data;
-};
-
-typedef struct threaded_sll_cw_node threaded_sll_cw_node;
-
-/* NOTE: The algorithm does not need these to be volatile */
-
-struct threaded_sll_cw
-{
-    struct threaded_sll_cw_node *first;
-    struct threaded_sll_cw_node *last;
-    
-    allocator_s *allocator;
-    
-    pthread_mutex_t mutex;
-    pthread_cond_t  cond_read;
-    pthread_cond_t  cond_write;
+    list_dl_s queue;
+    list_dl_node_s *pool;
+    mutex_t mutex;
+    cond_t  cond_read;
+    cond_t  cond_write;
 
     u32             max_size;
-    u32             size;
 };
 
-#define THREADED_SLL_CW_NULL {NULL, NULL,&libc_allocator,PTHREAD_MUTEX_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,4096,0}
+typedef struct threaded_dll_cw threaded_dll_cw;
 
-void  threaded_sll_cw_init(threaded_sll_cw *queue, int max_size);
-void  threaded_sll_cw_finalize(threaded_sll_cw *queue);
-void  threaded_sll_cw_enqueue(threaded_sll_cw *queue,void* constant_pointer);
-bool  threaded_sll_cw_try_enqueue(threaded_sll_cw *queue,void* constant_pointer);
-void* threaded_sll_cw_peek(threaded_sll_cw *queue);
-void* threaded_sll_cw_try_peek(threaded_sll_cw *queue);
-void* threaded_sll_cw_dequeue(threaded_sll_cw *queue);
-void* threaded_sll_cw_try_dequeue(threaded_sll_cw *queue);
-u32   threaded_sll_cw_dequeue_set(threaded_sll_cw *queue, void** array, u32 array_size);
-void  threaded_sll_cw_wait_empty(threaded_sll_cw *queue);
-int   threaded_sll_cw_size(threaded_sll_cw *queue);
-int   threaded_sll_cw_room(threaded_sll_cw *queue);
+#define THREADED_SLL_CW_NULL {{NULL,NULL},{NULL,NULL},0}, NULL, PTHREAD_MUTEX_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,MAX_U32}
+
+void  threaded_dll_cw_init(threaded_dll_cw *queue, int max_size);
+void  threaded_dll_cw_finalize(threaded_dll_cw *queue);
+void  threaded_dll_cw_enqueue(threaded_dll_cw *queue,void* constant_pointer);
+bool  threaded_dll_cw_try_enqueue(threaded_dll_cw *queue,void* constant_pointer);
+
+void* threaded_dll_cw_dequeue(threaded_dll_cw *queue);
+void* threaded_dll_cw_try_dequeue(threaded_dll_cw *queue);
+
+void  threaded_dll_cw_wait_empty(threaded_dll_cw *queue);
+int   threaded_dll_cw_size(threaded_dll_cw *queue);
+int   threaded_dll_cw_room(threaded_dll_cw *queue);
 
 /*
  * The queue will block (write) if bigger than this.
@@ -100,7 +85,7 @@ int   threaded_sll_cw_room(threaded_sll_cw *queue);
  * the content is emptied by the readers.
  */
 
-ya_result threaded_sll_cw_set_maxsize(threaded_sll_cw *queue, int max_size);
+ya_result threaded_dll_cw_set_maxsize(threaded_dll_cw *queue, int max_size);
 
 #ifdef	__cplusplus
 }

@@ -1557,7 +1557,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
     }
 #endif
 #if HAS_DYNAMIC_PROVISIONING
-    group_mutex_lock(&db->mutex, ZDB_MUTEX_READER);
+    zdb_lock(db, ZDB_MUTEX_READER);
 #endif
 #if ZDB_RECORDS_MAX_CLASS != 1
     u16 host_zclass = ntohs(zclass); /* no choice */
@@ -1588,11 +1588,9 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
      */
 
     zdb_zone_label_pointer_array zone_label_stack;
-#if ZDB_RECORDS_MAX_CLASS == 1
-    s32 top = zdb_zone_label_match(db, &name, CLASS_IN, zone_label_stack);
-#else
-    s32 top = zdb_zone_label_match(db, &name, host_zclass, zone_label_stack);
-#endif
+
+    s32 top = zdb_zone_label_match(db, &name, zone_label_stack);
+
     s32 sp = top;
 
     zdb_packed_ttlrdata* answer;
@@ -1659,14 +1657,17 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
         if(zone_label->zone != NULL)
         {
 
-            zdb_zone *zone = zone_label->zone;
+            zdb_zone *zone = zone_label->zone; /// @todo edf 20141016 -- see if locking + RC can be avoided. (locking alone probably cannot)
 
             /*
              * lock
              */
             
-            
             LOCK(zone);
+            
+#ifdef DEBUG
+            log_debug("zdb_query_ex: zone %{dnsname}, flags=%x", zone->origin, zone->apex->flags);
+#endif
             
             /*
              * We know the zone, and its extension here ...
@@ -1685,7 +1686,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
 #endif
                     UNLOCK(zone);
 #if HAS_DYNAMIC_PROVISIONING
-                    group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+                    zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
                     return FP_ACCESS_REJECTED;
                 }
@@ -1706,7 +1707,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                 
                 UNLOCK(zone);
 #if HAS_DYNAMIC_PROVISIONING
-                group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+                zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
                 
                 return FP_INVALID_ZONE;
@@ -1762,7 +1763,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                         
                         // stop there
 #if HAS_DYNAMIC_PROVISIONING
-                        group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+                        zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
                         
                         return FP_CNAME_MAXIMUM_DEPTH;
@@ -1790,7 +1791,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
 
                                 MESSAGE_HIFLAGS(mesg->buffer) |= AA_BITS;
 #if HAS_DYNAMIC_PROVISIONING
-                                group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+                                zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
                                 
                                 return FP_CNAME_LOOP;
@@ -1823,7 +1824,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
 
                         UNLOCK(zone);
 #if HAS_DYNAMIC_PROVISIONING
-                        group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+                        zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
                         
                         return fp;
@@ -1838,7 +1839,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                         
                         UNLOCK(zone);
 #if HAS_DYNAMIC_PROVISIONING
-                        group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+                        zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
                         
                         return FP_CNAME_BROKEN;
@@ -2126,7 +2127,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
 #endif
                         UNLOCK(zone);
 #if HAS_DYNAMIC_PROVISIONING
-                        group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+                        zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
                         
                         return FP_BASIC_RECORD_FOUND;
@@ -2158,7 +2159,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                         
                         UNLOCK(zone);
 #if HAS_DYNAMIC_PROVISIONING
-                        group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+                        zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
                         return (finger_print)return_value;
                     }
@@ -2321,7 +2322,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
 #endif
                             UNLOCK(zone);
 #if HAS_DYNAMIC_PROVISIONING
-                            group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+                            zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
                             
                             return FP_BASIC_RECORD_FOUND;
@@ -2345,7 +2346,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                             
                             UNLOCK(zone);
 #if HAS_DYNAMIC_PROVISIONING
-                            group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+                            zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
                             
                             return fp;
@@ -2369,7 +2370,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                         
                         UNLOCK(zone);
 #if HAS_DYNAMIC_PROVISIONING
-                        group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+                        zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
                         
                         return FP_BASIC_RECORD_FOUND;
@@ -2455,7 +2456,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                         
                         UNLOCK(zone);
 #if HAS_DYNAMIC_PROVISIONING
-                        group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+                        zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
                         
                         return FP_BASIC_LABEL_DELEGATION;
@@ -2517,7 +2518,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
         
         // ??? zone_pointer_out->apex->flags |= ZDB_RR_LABEL_MASTER_OF;
 #if HAS_DYNAMIC_PROVISIONING
-        group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+        zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
         
         return FP_NOZONE_FOUND;
@@ -2614,7 +2615,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
 #endif
                 UNLOCK(zone);
 #if HAS_DYNAMIC_PROVISIONING
-                group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+                zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
 
                 return FP_NSEC3_LABEL_NOTFOUND;
@@ -2704,7 +2705,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
 #endif            
                 UNLOCK(zone);
 #if HAS_DYNAMIC_PROVISIONING
-                group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+                zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
                 return FP_NSEC_LABEL_NOTFOUND;
             }
@@ -2718,7 +2719,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
     
         UNLOCK(zone);
 #if HAS_DYNAMIC_PROVISIONING
-        group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+        zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
     
         return FP_BASIC_LABEL_NOTFOUND;
@@ -2731,7 +2732,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
         
         UNLOCK(zone);
 #if HAS_DYNAMIC_PROVISIONING
-        group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+        zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
         
         return FP_INVALID_ZONE;

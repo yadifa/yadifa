@@ -50,7 +50,7 @@
 #endif
 
 #include <dnsdb/nsec_collection.h>
-#include <dnscore/treeset.h>
+#include <dnscore/ptr_set.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -103,7 +103,7 @@ ya_result nsec_update_zone(zdb_zone* zone, bool read_only); /* read_only a.k.a s
  * @param labels_top
  */
 
-void nsec_update_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference labels, s32 labels_top);
+void nsec_update_label(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_reference labels, s32 labels_top);
 
 /**
  * Verifies and, if needed, update the NSEC record.
@@ -119,7 +119,7 @@ void nsec_update_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_refe
  * @return
  */
 
-bool nsec_update_label_record(const zdb_zone *zone, zdb_rr_label *label, nsec_node *node, nsec_node *next_node, u8 *name, u32 ttl);
+bool nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *node, nsec_node *next_node, u8 *name);
 
 /**
  * Creates the NSEC node, link it to the label.
@@ -170,8 +170,8 @@ void nsec_destroy_zone(zdb_zone* zone);
 
 struct nsec_icmtl_replay
 {
-    treeset_tree nsec_del;
-    treeset_tree nsec_add;
+    ptr_set nsec_del;
+    ptr_set nsec_add;
     zdb_zone *zone;
 };
 

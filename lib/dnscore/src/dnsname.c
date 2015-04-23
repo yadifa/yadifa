@@ -50,10 +50,11 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "dnscore-config.h"
+#include "dnscore/dnscore-config.h"
 
 #include "dnscore/dnsname.h"
 #include "dnscore/rfc.h"
+#include "dnscore/zalloc.h"
 
 #define DNSNAMED_TAG 0x44454d414e534e44
 
@@ -1867,6 +1868,26 @@ dnsname_compare(const u8* name_a, const u8* name_b)
     }
 }
 
+bool
+dnsname_is_subdomain(const u8* subdomain, const u8* domain)
+{
+    u32 len = dnsname_len(domain);
+    u32 sub_len = dnsname_len(subdomain);
+    
+    if(sub_len >= len)
+    {
+        subdomain += sub_len - len;
+        
+        if(domain[0] == subdomain[0])
+        {
+            int ret = memcmp(subdomain, domain, len);
+            return ret == 0;
+        }
+    }
+    
+    return FALSE;
+}
+
 /** @brief Tests if two DNS names are (ignore case) equals
  *
  *  Tests if two DNS labels are (ignore case) equals
@@ -2104,6 +2125,19 @@ dnslabel_vector_dnslabel_to_dnsname(const u8 *prefix, const dnsname_vector *name
     *str++ = '\0';
 
     return (u32)(str - start);
+}
+
+u32
+dnslabel_vector_len(const_dnslabel_vector_reference name, s32 top)
+{
+    u32 ret = 1;
+    
+    for(s32 i = 0; i <= top; i++)
+    {
+        ret += name[i][0];
+    }
+    
+    return ret;
 }
 
 /* ONE use */
@@ -2469,6 +2503,67 @@ dnsname_to_dnsname_stack(const u8* dns_name, dnsname_stack* name)
     }
 
     return name->size;
+}
+
+/** @brief Allocates and duplicates a name with ZALLOC.
+ *
+ *  Allocates and duplicates a name ZALLOC.
+ *
+ *  @param[in] name a pointer to the dnsname
+ *
+ *  @return A new instance of the dnsname.
+ */
+
+
+u8*
+dnsname_zdup(const u8* name)
+{
+    yassert(name != NULL);
+
+    u32 len = dnsname_len(name);
+
+    u8* dup;
+
+    ZALLOC_STRING_OR_DIE(u8*, dup, len, ZDB_NAME_TAG);
+    MEMCOPY(dup, name, len); // nothing wrong here
+
+    return dup;
+}
+
+void
+dnsname_zfree(u8 *name)
+{
+    ZFREE_ARRAY(name, dnsname_len(name));
+}
+
+/** @brief Allocates and duplicates a label with ZALLOC.
+ *
+ *  Allocates and duplicates a label with ZALLOC.
+ *
+ *  @param[in] name a pointer to the label
+ *
+ *  @return A new instance of the label
+ */
+
+u8*
+dnslabel_zdup(const u8* name)
+{
+    yassert(name != NULL);
+
+    u32 len = name[0] + 1;
+
+    u8* dup;
+    ZALLOC_STRING_OR_DIE(u8*, dup, len, ZDB_LABEL_TAG);
+    MEMCOPY(dup, name, len);
+
+    return dup;
+}
+
+void
+dnslabel_zfree(u8 *name)
+{
+    u32 len = name[0] + 1;
+    ZFREE_ARRAY(name, len);
 }
 
 /** @} */

@@ -130,6 +130,15 @@ s64 filesize(const char *name);
 
 /**
  * 
+ *   0 : not a link
+ *   1 : a link
+ * < 0 : error
+ */
+
+ya_result file_is_link(const char *name);
+
+/**
+ * 
  * @param pathname
  * @param mode
  * @return 

@@ -42,7 +42,7 @@
 
 #include <dnscore/sys_types.h>
 
-typedef ya_result alarm_function_callback(void*);
+typedef ya_result alarm_function_callback(void*, bool cancel);
 
 /* 
  * Duplicates stays duplicated

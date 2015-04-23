@@ -32,8 +32,15 @@ dnl
 dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 4532 $])
+AC_REVISION([$Revision: 4950 $])
 AC_INIT([dnsdb],m4_esyscmd([svn info 2> /dev/null |  sed -e 's/^/$/' -e 's/$/ $/' > revision.txt;echo $(cat VERSION)-$(grep \$Revision: * | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[bugreport@yadifa.eu])
+
+echo
+echo
+echo "DNSDB START"
+echo "-----------"
+echo
+echo
 
 m4_include([../../m4/eurid.m4])
 m4_include([../../m4/yadifa.m4])
@@ -45,7 +52,7 @@ AC_CONFIG_HEADER([include/dnsdb/dnsdb-config.h])
 AC_CONFIG_MACRO_DIR([m4])
 
 
-AC_DEFUN([SYSCONF], [/$prefix/PACKAGE/PACKAGE.conf])
+dnl AC_DEFUN([SYSCONF], [/$prefix/PACKAGE/PACKAGE.conf])
 
 AC_CANONICAL_BUILD
 
@@ -125,16 +132,30 @@ AC_CHECK_FUNCS([bzero memset select socket])
 
 AC_CONFIG_FILES([Makefile])
 
-AC_YADIFA_SUMMARY
+dnl AC_YADIFA_SUMMARY
 
 AC_OUTPUT
+
+dnl ----------------------------------------------------------------------------
+
+AC_MAKE_BUILDINFO
+
 echo
-echo "Features used:"
-echo "--------------"
+echo "SUMMARY for DNSDB:"
+echo "------------------"
+echo
+echo "CC .................................. : $CC"
+echo "LD .................................. : $LD"
+echo "AR .................................. : $AR"
+echo "CFLAGS .............................. : $CFLAGS"
+echo "CPPFLAGS ............................ : $CPPFLAGS"
+echo "LDFLAGS ............................. : $LDFLAGS"
+echo "LIBS ................................ : $LIBS"
+
 if [[ ! "${OPENSSL}" = "" ]]
 then
-	echo "Using OpenSLL from .................. : ${OPENSSL}"
-fi
+	        echo "Using OpenSLL from .................. : ${OPENSSL}"
+	fi
 
 echo
 echo "Install prefix ...................... : $prefix"
@@ -144,6 +165,9 @@ echo "NSEC3 ............................... : $enable_nsec3"
 echo "TSIG ................................ : $enable_tsig"
 echo "caching ............................. : $enable_caching"
 echo
-
-AC_MAKE_BUILDINFO
+echo
+echo "DNSDB DONE"
+echo "----------"
+echo
+echo
 

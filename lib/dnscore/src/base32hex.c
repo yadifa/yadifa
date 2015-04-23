@@ -37,11 +37,9 @@
  *  @brief Base 32 hex codec
  *
  *
- * @{
- *
  *----------------------------------------------------------------------------*/
+
 #include <stdio.h>
-#include <stdlib.h>
 
 #include "dnscore/base32hex.h"
 
@@ -397,8 +395,6 @@ output_stream_write_base32hex(output_stream* os, const u8* buffer_in, u32 size_i
 
     return return_code;
 }
-
-/** @} */
 
 /*----------------------------------------------------------------------------*/
 

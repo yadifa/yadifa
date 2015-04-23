@@ -208,6 +208,8 @@ pool_release(pool_s *pool, void *p)
 void
 pool_set_size(pool_s *pool, s32 max_size)
 {
+    yassert(ptr_vector_size(&pool->pool) <= max_size);
+    
     ptr_vector_resize(&pool->pool, max_size);
     pool->max_size = max_size - 1;
 }

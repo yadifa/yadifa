@@ -47,6 +47,7 @@
 
 #include <dnscore/sys_types.h>
 #include <dnscore/random.h>
+#include <dnscore/mutex.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -84,7 +85,7 @@ typedef struct thread_pool_task_counter thread_pool_task_counter;
 
 struct thread_pool_task_counter
 {
-    pthread_mutex_t mutex;
+    mutex_t mutex;
     volatile s32 value;
 };
 
@@ -103,6 +104,8 @@ ya_result thread_pool_enqueue_call(struct thread_pool_s *tp, thread_pool_functio
 
 ya_result thread_pool_destroy(struct thread_pool_s *tp);
 
+ya_result thread_pool_wait_all_running(struct thread_pool_s *tp);
+
 /**
  * Returns the new size of the pool or an error.
  * 
@@ -112,7 +115,6 @@ ya_result thread_pool_destroy(struct thread_pool_s *tp);
  */
 
 ya_result thread_pool_resize(struct thread_pool_s* tp, u8 new_size);
-u8 thread_pool_get_pool_size(struct thread_pool_s *tp);
 
 random_ctx thread_pool_get_random_ctx();
 void thread_pool_setup_random_ctx();

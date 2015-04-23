@@ -702,7 +702,7 @@ signal_handler_init()
         return pthread_errcode;
     }
     
-    u8 handlded_signals[] =
+    u8 handled_signals[] =
     {
         SIGHUP,		/* Hangup (POSIX).  */
         SIGINT,		/* Interrupt (ANSI).  */
@@ -744,7 +744,7 @@ signal_handler_init()
 
     action.sa_sigaction = signal_handler;
     
-    for(signal_idx = 0; handlded_signals[signal_idx] != 0; signal_idx++)
+    for(signal_idx = 0; handled_signals[signal_idx] != 0; signal_idx++)
     {
         action.sa_flags = SA_SIGINFO | SA_NOCLDSTOP | SA_NOCLDWAIT;
         
@@ -765,7 +765,7 @@ signal_handler_init()
                 break;
             }
         }
-        sigaction(handlded_signals[signal_idx], &action, NULL);
+        sigaction(handled_signals[signal_idx], &action, NULL);
     }
     
     action.sa_handler = SIG_IGN;

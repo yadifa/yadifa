@@ -35,7 +35,7 @@
 #include "dnscore/message_verify_rrsig.h"
 #include "dnscore/packet_reader.h"
 #include "dnscore/format.h"
-#include "dnscore/treeset.h"
+#include "dnscore/ptr_set.h"
 
 extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
@@ -213,17 +213,17 @@ static int message_verify_rrsig_node_compare(const void *key_a, const void *key_
 }
 
 static void
-message_verify_rrsig_init(treeset_tree *section_type_fqdn)
+message_verify_rrsig_init(ptr_set *section_type_fqdn)
 {
-    treeset_avl_init(section_type_fqdn);
+    ptr_set_avl_init(section_type_fqdn);
     section_type_fqdn->compare = message_verify_rrsig_node_compare;
 }
 
 static void
-message_verify_rrsig_set_flag(treeset_tree *section_type_fqdn, const u8 *type_record_fqdn, u32 type_record_fqdn_len, u8 flag_bits)
+message_verify_rrsig_set_flag(ptr_set *section_type_fqdn, const u8 *type_record_fqdn, u32 type_record_fqdn_len, u8 flag_bits)
 {
     // create the type-fqdn entry if needed
-    treeset_node *type_fqdn_node = treeset_avl_find(section_type_fqdn, type_record_fqdn);
+    ptr_node *type_fqdn_node = ptr_set_avl_find(section_type_fqdn, type_record_fqdn);
     if(type_fqdn_node == NULL)
     {
 #ifdef DEBUG
@@ -233,33 +233,33 @@ message_verify_rrsig_set_flag(treeset_tree *section_type_fqdn, const u8 *type_re
         u8 *type_record_fqdn_copy;
         MALLOC_OR_DIE(u8*,type_record_fqdn_copy, type_record_fqdn_len, GENERIC_TAG);
         memcpy(type_record_fqdn_copy, type_record_fqdn, type_record_fqdn_len);
-        type_fqdn_node = treeset_avl_insert(section_type_fqdn, type_record_fqdn_copy);
-        type_fqdn_node->data = NULL; // has records, has verified signatures, has wrong signatures, has unknown signatures
+        type_fqdn_node = ptr_set_avl_insert(section_type_fqdn, type_record_fqdn_copy);
+        type_fqdn_node->value = NULL; // has records, has verified signatures, has wrong signatures, has unknown signatures
 
         // the next phase will scan for each of there types instead
     }
-    intptr flag = (intptr)type_fqdn_node->data;
+    intptr flag = (intptr)type_fqdn_node->value;
     
 #ifdef DEBUG
     log_debug7("message_verify_rrsig: set node %{dnsname} %{dnstype} %x => %x", type_record_fqdn + 2, type_record_fqdn, flag, flag | flag_bits);
 #endif
     
     flag |= flag_bits;
-    type_fqdn_node->data = (void*)flag;
+    type_fqdn_node->value = (void*)flag;
 }
 
 static void
 message_verify_rrsig_clear_callback(void *node)
 {
-    treeset_node *type_fqdn_node = (treeset_node*) node;
+    ptr_node *type_fqdn_node = (ptr_node*) node;
     free(type_fqdn_node->key);
 }
 
 static void
-message_verify_rrsig_clear(treeset_tree *section_type_fqdn)
+message_verify_rrsig_clear(ptr_set *section_type_fqdn)
 {
     // create the type-fqdn entry if needed
-    treeset_avl_callback_and_destroy(section_type_fqdn, message_verify_rrsig_clear_callback);
+    ptr_set_avl_callback_and_destroy(section_type_fqdn, message_verify_rrsig_clear_callback);
 }
 
 ya_result
@@ -333,7 +333,7 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
 
         u32 section_start = pr.offset;
                 
-        treeset_tree section_type_fqdn;
+        ptr_set section_type_fqdn;
         message_verify_rrsig_init(&section_type_fqdn);
         
         for(u16 count = ntohs(MESSAGE_SECTION_COUNT(mesg->buffer, section)); count > 0; --count)
@@ -436,17 +436,17 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
         
         message_verify_rrsig_type_summary_s type_info = {0, 0, 0, 0};
         
-        treeset_avl_iterator section_types_fqdn_iter;
+        ptr_set_avl_iterator section_types_fqdn_iter;
         
-        treeset_avl_iterator_init(&section_type_fqdn, &section_types_fqdn_iter);
-        while(treeset_avl_iterator_hasnext(&section_types_fqdn_iter))
+        ptr_set_avl_iterator_init(&section_type_fqdn, &section_types_fqdn_iter);
+        while(ptr_set_avl_iterator_hasnext(&section_types_fqdn_iter))
         {
-            treeset_node *types_fqdn_node = treeset_avl_iterator_next_node(&section_types_fqdn_iter);
+            ptr_node *types_fqdn_node = ptr_set_avl_iterator_next_node(&section_types_fqdn_iter);
 
             const u8 * type_fqdn = (u8*)types_fqdn_node->key;
             u16 ctype = GET_U16_AT_P(type_fqdn);
             type_fqdn += 2;
-            u8 flags = (u8)(intptr)types_fqdn_node->data; // double cast just to explicitely show what is happening
+            u8 flags = (u8)(intptr)types_fqdn_node->value; // double cast just to explicitely show what is happening
             
 #ifdef DEBUG
             log_debug6("message_verify_rrsig: %{dnsname} %{dnstype} (%x)", type_fqdn, &ctype, flags);

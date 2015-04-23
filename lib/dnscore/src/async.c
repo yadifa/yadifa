@@ -32,7 +32,7 @@
 *
 */
 #include "dnscore/dnscore.h"
-
+#include "dnscore/zalloc.h"
 #include "dnscore/async.h"
 #include "dnscore/pool.h"
 #include "dnscore/format.h"
@@ -57,13 +57,27 @@ void
 async_message_call(async_queue_s *queue, async_message_s *msg)
 {
     msg->start_time = timeus();
+    
+#if ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_DLL
+    threaded_dll_cw_enqueue(&queue->queue, msg);
+#elif ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_RINGBUFFER
+    threaded_ringbuffer_cw_enqueue(&queue->queue, msg);
+#else
     threaded_queue_enqueue(&queue->queue, msg);
+#endif
+    
 }
 
 async_message_s*
 async_message_next(async_queue_s *queue)
 {
+#if ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_DLL
+    async_message_s* async = (async_message_s*)threaded_dll_cw_try_dequeue(&queue->queue);
+#elif ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_RINGBUFFER
+    async_message_s* async = (async_message_s*)threaded_ringbuffer_cw_try_dequeue(&queue->queue);
+#else
     async_message_s* async = (async_message_s*)threaded_queue_try_dequeue(&queue->queue);
+#endif
         
     if(async == NULL)
     {
@@ -80,7 +94,13 @@ async_message_next(async_queue_s *queue)
 async_message_s*
 async_message_try_next(async_queue_s *queue)
 {
+#if ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_DLL
+    async_message_s* async = (async_message_s*)threaded_dll_cw_try_dequeue(&queue->queue);
+#elif ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_RINGBUFFER
+    async_message_s* async = (async_message_s*)threaded_ringbuffer_cw_try_dequeue(&queue->queue);
+#else
     async_message_s* async = (async_message_s*)threaded_queue_try_dequeue(&queue->queue);
+#endif
             
     return async;
 }
@@ -252,7 +272,14 @@ async_wait_finalize(async_wait_s *aw)
 void
 async_queue_init(async_queue_s *q, u32 size, u64 min_us, u64 max_us, const char* name)
 {
+#if ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_DLL
+    threaded_dll_cw_init(&q->queue, size);
+#elif ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_RINGBUFFER
+    threaded_ringbuffer_cw_init(&q->queue, size);
+#else
     threaded_queue_init(&q->queue, size);
+#endif
+    
     pace_init(&q->pace, min_us, max_us, name);    
 }
 
@@ -260,23 +287,51 @@ void
 async_queue_finalize(async_queue_s *q)
 {
     u32 n;
+#if ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_DLL
+    if((n = threaded_dll_cw_size(&q->queue)) > 0)
+    {
+        log_warn("async_dll_cw_finalize: queue still contains %u items");
+    }
+    threaded_dll_cw_finalize(&q->queue);
+#elif ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_RINGBUFFER
+    if((n = threaded_ringbuffer_cw_size(&q->queue)) > 0)
+    {
+        log_warn("async_ringbuffer_cw_finalize: queue still contains %u items");
+    }
+    threaded_ringbuffer_cw_finalize(&q->queue);
+#else
     if((n = threaded_queue_size(&q->queue)) > 0)
     {
         log_warn("async_queue_finalize: queue still contains %u items");
     }
     threaded_queue_finalize(&q->queue);
+#endif
+    
 }
 
 bool
 async_queue_emtpy(async_queue_s *q)
 {
+#if ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_DLL
+    return threaded_dll_cw_size(&q->queue) == 0;
+#elif ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_RINGBUFFER
+    return threaded_ringbuffer_cw_size(&q->queue) == 0;
+#else
     return threaded_queue_size(&q->queue) == 0;
+#endif
+    
 }
 
 u32
 async_queue_size(async_queue_s *q)
 {
+#if ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_DLL
+    return threaded_dll_cw_size(&q->queue);
+#elif ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_RINGBUFFER
+    return threaded_ringbuffer_cw_size(&q->queue);
+#else
     return threaded_queue_size(&q->queue);
+#endif
 }
 
 static void
@@ -352,7 +407,7 @@ async_message_pool_alloc(void *_ignored_)
     
     (void)_ignored_;
     
-    MALLOC_OR_DIE(async_message_s*, msg, sizeof(async_message_s), ASYNCMSG_TAG); // POOL
+    ZALLOC_OR_DIE(async_message_s*, msg, async_message_s, ASYNCMSG_TAG); // POOL
     ZEROMEMORY(msg, sizeof(async_message_s));
     return msg;
 }
@@ -363,7 +418,7 @@ async_message_pool_free(void *msg, void *_ignored_)
     (void)_ignored_;
     
     memset(msg, 0xe2, sizeof(async_message_s));
-    free(msg); // POOL
+    ZFREE(msg, async_message_s); // POOL
 }
 
 void

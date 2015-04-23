@@ -44,7 +44,7 @@
 #include <dnscore/message.h>
 #include <dnscore/host_address.h>
 
-#include <database.h>
+#include "database.h"
 
 #ifdef	__cplusplus
 extern "C"

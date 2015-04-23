@@ -43,7 +43,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "dnscore/buffer_input_stream.h"
+#include "dnscore/concat_input_stream.h"
+#include "dnscore/zalloc.h"
 
 #define CONCAT_INPUT_STREAM_TAG 0x53495441434e4f43 /* CONCATIS */
 #define CONCAT_INPUT_STREAM_NODE_TAG 0x5349444e54434e43 /* CNCTNDIS */
@@ -88,7 +89,7 @@ concat_read(input_stream* stream, u8* buffer, u32 len)
         {
             concat_input_stream_data_node *next = data->current->next;
             input_stream_close(&data->current->filtered);
-            free(data->current);
+            ZFREE(data->current, concat_input_stream_data_node);
             data->current = next;
 
             if(data->current == NULL)
@@ -120,11 +121,11 @@ concat_close(input_stream* stream)
     {
         input_stream_close(&data->current->filtered);
         concat_input_stream_data_node *next = data->current->next;
-        free(data->current);
+        ZFREE(data->current, concat_input_stream_data_node);
         data->current = next;
     }
     
-    free(data);
+    ZFREE(data, concat_input_stream_data);
 
     input_stream_set_void(stream);
 }
@@ -151,7 +152,7 @@ concat_skip(input_stream* stream, u32 len)
             {
                 concat_input_stream_data_node *next = data->current->next;
                 input_stream_close(&data->current->filtered);
-                free(data->current);
+                ZFREE(data->current, concat_input_stream_data_node);
                 data->current = next;
                 
                 if(data->current == NULL)
@@ -194,7 +195,7 @@ void concat_input_stream_init(input_stream *cis)
 {
     concat_input_stream_data* data;
 
-    MALLOC_OR_DIE(concat_input_stream_data*, data, sizeof(concat_input_stream_data), CONCAT_INPUT_STREAM_TAG);
+    ZALLOC_OR_DIE(concat_input_stream_data*, data, concat_input_stream_data, CONCAT_INPUT_STREAM_TAG);
     data->current = NULL;
     data->lastlink = &data->current;
 
@@ -213,7 +214,7 @@ void concat_input_stream_add(input_stream *cis, input_stream *added_stream)
     concat_input_stream_data* data = (concat_input_stream_data*)cis->data;
     concat_input_stream_data_node *node;
     
-    MALLOC_OR_DIE(concat_input_stream_data_node*, node, sizeof(concat_input_stream_data_node), CONCAT_INPUT_STREAM_NODE_TAG);
+    ZALLOC_OR_DIE(concat_input_stream_data_node*, node, concat_input_stream_data_node, CONCAT_INPUT_STREAM_NODE_TAG);
     node->filtered.data = added_stream->data;
     node->filtered.vtbl = added_stream->vtbl;
     node->next = NULL;

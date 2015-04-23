@@ -54,7 +54,7 @@ extern "C" {
     ya_result file_input_stream_open_ex(const char *filename, int flags, input_stream *stream);
     
     /* Create an input stream and assigns the fd to it. */
-    ya_result fd_input_stream_attach(int fd, input_stream *stream);
+    ya_result fd_input_stream_attach(input_stream *stream, int fd);
     
     void fd_input_stream_detach(input_stream *stream);
 
@@ -63,7 +63,9 @@ extern "C" {
     ya_result fd_input_stream_seek(input_stream* stream, u64 offset);
 
     bool is_fd_input_stream(input_stream* stream);
-
+    
+    void file_input_steam_advise_sequential(input_stream* stream);
+    
 #ifdef	__cplusplus
 }
 #endif

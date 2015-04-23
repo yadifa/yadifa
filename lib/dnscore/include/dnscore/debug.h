@@ -81,7 +81,7 @@ void debug_dump_ex(void* data_pointer_, size_t size_, size_t line_size, bool hex
 
 struct logger_handle;
 
-void debug_log_stacktrace(struct logger_handle *handle, u32 level, const char *prefix);
+bool debug_log_stacktrace(struct logger_handle *handle, u32 level, const char *prefix);
 
 #ifdef DEBUG
 /*
@@ -101,7 +101,11 @@ void debug_log_stacktrace(struct logger_handle *handle, u32 level, const char *p
 #define OSLDEBUG(...)
 #endif
 
-#if ZDB_DEBUG_MALLOC!=0
+#ifndef DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
+#error "bogus include sequence"
+#endif
+
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
 
 #ifndef MALLOC_OR_DIE
 #error "something fishy is happening.  MALLOC_OR_DIE has not been defined yet."
@@ -186,8 +190,6 @@ u32 debug_get_block_count();
 
 #endif
 
-#ifdef DEBUG
-
 struct debug_bench_s
 {
     struct debug_bench_s *next;
@@ -214,7 +216,17 @@ void debug_bench_commit(debug_bench_s *bench, u64 delta);
 
 void debug_bench_logdump_all();
 
-#endif
+typedef intptr* stacktrace;
+struct output_stream;
+struct logger_handle;
+stacktrace debug_stacktrace_get();
+void debug_stacktrace_log(struct logger_handle *handle, u32 level, stacktrace trace);
+void debug_stacktrace_print(struct output_stream *os, stacktrace trace);
+/**
+ * clears all stacktraces from memory
+ * should only be called at shutdown
+ */
+void debug_stacktrace_clear();
 
 #ifdef DEBUG
 

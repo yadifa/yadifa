@@ -44,7 +44,7 @@
 #include "config.h"
 
 #include <dnscore/message.h>
-#include <database.h>
+#include "database.h"
 
 #include "confs.h"
 

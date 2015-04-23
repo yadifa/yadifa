@@ -173,7 +173,7 @@ static const input_stream_vtbl file_input_stream_vtbl ={
 };
 
 ya_result
-fd_input_stream_attach(int fd, input_stream *stream_)
+fd_input_stream_attach(input_stream *stream_, int fd)
 {
     file_input_stream* stream = (file_input_stream*)stream_;
 
@@ -200,16 +200,30 @@ ya_result
 file_input_stream_open(const char *filename, input_stream *stream_)
 {
     int fd = open_ex(filename, O_RDONLY);
+    
+#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
+    if(fd >= 0)
+    {
+        posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+    }
+#endif
 
-    return fd_input_stream_attach(fd, stream_);
+    return fd_input_stream_attach(stream_, fd);
 }
 
 ya_result
 file_input_stream_open_ex(const char *filename, int flags, input_stream *stream_)
 {
     int fd = open_ex(filename, O_RDONLY | flags);
+    
+#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
+    if(fd >= 0)
+    {
+        posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+    }
+#endif
 
-    return fd_input_stream_attach(fd, stream_);
+    return fd_input_stream_attach(stream_, fd);
 }
 
 ya_result fd_input_stream_get_filedescriptor(input_stream* stream_)
@@ -253,6 +267,19 @@ is_fd_input_stream(input_stream* stream_)
     file_input_stream* stream = (file_input_stream*)stream_;
     return (stream != NULL) && (stream->vtbl == &file_input_stream_vtbl);
 }
+
+void file_input_steam_advise_sequential(input_stream* stream_)
+{
+    file_input_stream* stream = (file_input_stream*)stream_;
+    
+#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
+    if(stream->data.fd >= 0)
+    {
+        posix_fadvise(stream->data.fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+    }
+#endif
+}
+
 
 /** @} */
 

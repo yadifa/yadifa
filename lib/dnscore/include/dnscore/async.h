@@ -31,11 +31,21 @@
 *------------------------------------------------------------------------------
 *
 */
-
 #ifndef ASYNC_H
 #define	ASYNC_H
 
-#include <dnscore/threaded_queue.h>
+#define ASYNC_QUEUE_TYPE_RINGBUFFER 1
+#define ASYNC_QUEUE_TYPE_DLL        2
+
+#define ASYNC_QUEUE_TYPE ASYNC_QUEUE_TYPE_DLL
+
+#if ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_DLL
+#include <dnscore/threaded_dll_cw.h>
+#elif ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_RINGBUFFER
+#include <dnscore/threaded_ringbuffer_cw.h>
+#else
+#error "ASYNC_QUEUE_TYPE not set"
+#endif
 #include <dnscore/pace.h>
 
 #ifdef	__cplusplus
@@ -70,7 +80,14 @@ typedef struct async_wait_s async_wait_s;
 
 struct async_queue_s
 {
+#if ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_DLL
+    threaded_dll_cw queue;
+#elif ASYNC_QUEUE_TYPE == ASYNC_QUEUE_TYPE_RINGBUFFER
+    threaded_ringbuffer_cw queue;
+#else
     threaded_queue queue;
+#endif
+    
     pace_s pace;
 };
 

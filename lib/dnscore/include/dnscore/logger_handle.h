@@ -182,6 +182,7 @@ void logger_channel_close_all();
 void logger_handle_create(const char *logger_name, logger_handle **handle_holder);
 void logger_handle_add_channel(const char* logger_name, int level, const char* channel_name);
 void logger_handle_remove_channel(const char *logger_name, const char *channel_name);
+s32 logger_handle_count_channels(const char *logger_name);
 void logger_handle_close(const char *logger_name);
 
 /**

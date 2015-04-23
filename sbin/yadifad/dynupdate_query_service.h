@@ -45,7 +45,7 @@
 #define __DYNUPDATE_QUERY_SERVICE__H__
 
 #include <dnsdb/zdb_types.h>
-#include <database.h>
+#include "database.h"
 
 /*------------------------------------------------------------------------------
  * GLOBAL VARIABLES */

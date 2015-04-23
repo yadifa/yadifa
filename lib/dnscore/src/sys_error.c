@@ -191,7 +191,14 @@ error_writetext(output_stream *os, ya_result code)
 
     if((code & 0xffff0000) == ERRNO_ERROR_BASE)
     {
-        osprint(os, strerror(code & 0xffff));
+        code &= 0xffff;
+#if DEBUG
+        if(code == EINTR)
+        {
+            osprint(os, "<EINTR> "); // whoopsie
+        }
+#endif
+        osprint(os, strerror(code));
         return;
     }
 
@@ -396,6 +403,9 @@ dnscore_register_errors()
     error_register(DNSSEC_ERROR_RRSIG_NOSIGNINGKEY, "DNSSEC_ERROR_RRSIG_NOSIGNINGKEY");
     error_register(DNSSEC_ERROR_RRSIG_UNSUPPORTEDRECORD, "DNSSEC_ERROR_RRSIG_UNSUPPORTEDRECORD");
 
+    error_register(ZALLOC_ERROR_MMAPFAILED, "ZALLOC_ERROR_MMAPFAILED");
+    error_register(ZALLOC_ERROR_OUTOFMEMORY, "ZALLOC_ERROR_OUTOFMEMORY");
+    
     parser_init_error_codes();
     config_init_error_codes();
     cmdline_init_error_codes();

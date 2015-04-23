@@ -32,8 +32,16 @@ dnl
 dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 4822 $])
+AC_REVISION([$Revision: 4950 $])
 AC_INIT([dnscore],m4_esyscmd([svn info 2> /dev/null |  sed -e 's/^/$/' -e 's/$/ $/' > revision.txt;echo $(cat VERSION)-$(grep \$Revision: * | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[bugreport@yadifa.eu])
+
+echo
+echo
+echo "DNSCORE START"
+echo "-------------"
+echo
+echo
+
 
 m4_include([../../m4/eurid.m4])
 m4_include([../../m4/yadifa.m4])
@@ -147,21 +155,53 @@ AC_CHECK_FUNCS([bzero memset select socket])
 
 AC_CONFIG_FILES([Makefile])
 
-AC_YADIFA_SUMMARY
+dnl AC_YADIFA_SUMMARY
 
 AC_OUTPUT
 
+dnl ----------------------------------------------------------------------------
+
+AC_MAKE_BUILDINFO
+
 echo
-echo "Features used:"
-echo "--------------"
+echo "SUMMARY for DNSCORE:"
+echo "--------------------"
+echo
+echo "CC .................................. : $CC"
+echo "LD .................................. : $LD"
+echo "AR .................................. : $AR"
+echo "CFLAGS .............................. : $CFLAGS"
+echo "CPPFLAGS ............................ : $CPPFLAGS"
+echo "LDFLAGS ............................. : $LDFLAGS"
+echo "LIBS ................................ : $LIBS"
+echo
+echo "ZALLOC .............................. : $enable_zalloc"
+echo "ZALLOC STATISTICS ................... : $enable_zalloc_statistics"
+echo "ZALLOC DEBUG ........................ : $enable_zalloc_debug"
+echo "ACL ................................. : $enable_acl"
+echo "TSIG ................................ : $enable_tsig"
+echo "MASTER .............................. : $enable_master"
+echo "DYNUPDATE ........................... : $enable_dynupdate"
+echo "RRSIG MANAGEMENT .................... : $enable_rrsig_management"
+echo "CTRL ................................ : $enable_ctrl"
+echo "NSEC ................................ : $enable_nsec"
+echo "NSEC3 ............................... : $enable_nsec3"
+echo "RRL ................................. : $enable_rrl"
+
+echo
 if [[ ! "${OPENSSL}" = "" ]]
 then
 	echo "Using OpenSLL from .................. : ${OPENSSL}"
 fi
 
+echo
 echo "Install prefix ...................... : $prefix"
 echo "Install sysconf ..................... : $sysconfdir"
 echo
 
-AC_MAKE_BUILDINFO
+echo
+echo "DNSCORE DONE"
+echo "------------"
+echo
+echo
 

@@ -266,7 +266,7 @@ struct message_data
     u8  buffer_tcp_len[2];           /* DON'T SEPARATE THESE TWO (FIRST)  */
     u8  buffer[NETWORK_BUFFER_SIZE]; /* DON'T SEPARATE THESE TWO (SECOND) */
     u64 __reserved_force_align__4;
-    u8  pool_buffer[MESSAGE_POOL_SIZE]; /* A memory pool for the lookup's benefit @TODO: maybe this should be increased in size */
+    u8  pool_buffer[MESSAGE_POOL_SIZE]; /* A memory pool for the lookup's benefit */
 };
 
 
@@ -278,7 +278,7 @@ struct message_dnsupdate_data
     u32                                                            zttl;
     u16                                                           ztype;
     u16                                                          zclass;
-    u8 zname[MAX_DOMAIN_LENGTH];
+    u8                                         zname[MAX_DOMAIN_LENGTH];
     output_stream                           zrdata[RDATA_MAX_LENGTH +1];
     u8                                                         *zrdata2;
     u16                                                      zrdata_len;

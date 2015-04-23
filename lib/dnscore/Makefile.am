@@ -28,6 +28,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ##############################################################################
+#
+#	YADIFA dnscore Makefile.am script
+#
+#		Makefile.am script
+#
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.0-public/lib/dnscore/Makefile.am $
+#
+#	   $Date: 2015-04-20 15:07:41 +0200 (Mon, 20 Apr 2015) $
+#
+#	   $Revision: 4962 $
+#
+#	$Author: ericdf $
+#
+##############################################################################
 
 srcdir =	@srcdir@
 libdir =	@libdir@
@@ -58,6 +72,7 @@ libdnscore_la_SOURCES = \
 	src/buffer_output_stream.c \
 	src/bytearray_input_stream.c \
 	src/bytearray_output_stream.c \
+	src/bytezarray_output_stream.c \
 	src/chroot.c \
 	src/clone_input_output_stream.c \
 	src/cmdline.c \
@@ -83,6 +98,7 @@ libdnscore_la_SOURCES = \
 	src/dnskey_dsa.c \
 	src/dnskey_rsa.c \
 	src/dnsname.c \
+	src/empty-input-stream.c \
 	src/fdtools.c \
 	src/file_input_stream.c \
 	src/file_output_stream.c \
@@ -106,7 +122,6 @@ libdnscore_la_SOURCES = \
 	src/message_verify_rrsig.c \
 	src/mt_output_stream.c \
 	src/mutex.c \
-	src/network.c \
 	src/output_stream.c \
 	src/pace.c \
 	src/packet_reader.c \
@@ -116,8 +131,10 @@ libdnscore_la_SOURCES = \
 	src/pid.c \
 	src/pipe_stream.c \
 	src/pool.c \
+	src/ptr_set.c \
 	src/ptr_vector.c \
 	src/random.c \
+	src/rc.c \
 	src/rfc.c \
 	src/serial.c \
 	src/service.c \
@@ -132,14 +149,13 @@ libdnscore_la_SOURCES = \
 	src/threaded_ringbuffer.c \
 	src/threaded_ringbuffer_cw.c \
 	src/threaded_ringlist.c \
-	src/threaded_sll_cw.c \
+	src/threaded_dll_cw.c \
 	src/timeformat.c \
 	src/timems.c \
-	src/treeset.c \
 	src/typebitmap.c \
 	src/u32_set.c \
 	src/u64_set.c \
-	src/xfr_copy.c \
+	src/zalloc.c \
 	src/xfr_input_stream.c
 
 pkginclude_HEADERS = \
@@ -158,6 +174,7 @@ pkginclude_HEADERS = \
 	$(I)/buffer_output_stream.h \
 	$(I)/bytearray_input_stream.h \
 	$(I)/bytearray_output_stream.h \
+	$(I)/bytezarray_output_stream.h \
 	$(I)/chroot.h \
 	$(I)/clone_input_output_stream.h \
 	$(I)/cmdline.h \
@@ -181,6 +198,7 @@ pkginclude_HEADERS = \
 	$(I)/dnsname.h \
 	$(I)/dnsname_set.h \
 	$(I)/dnssec_errors.h \
+	$(I)/empty-input-stream.h \
 	$(I)/fdtools.h \
 	$(I)/file_input_stream.h \
 	$(I)/file_output_stream.h \
@@ -217,8 +235,10 @@ pkginclude_HEADERS = \
 	$(I)/pipe_stream.h \
 	$(I)/pool.h \
 	$(I)/print_stream.h \
+	$(I)/ptr_set.h \
 	$(I)/ptr_vector.h \
 	$(I)/random.h \
+	$(I)/rc.h \
 	$(I)/rfc.h \
 	$(I)/serial.h \
 	$(I)/server-setup.h \
@@ -235,14 +255,13 @@ pkginclude_HEADERS = \
 	$(I)/threaded_ringbuffer.h \
 	$(I)/threaded_ringbuffer_cw.h \
 	$(I)/threaded_ringlist.h \
-	$(I)/threaded_sll_cw.h \
+	$(I)/threaded_dll_cw.h \
 	$(I)/timeformat.h \
 	$(I)/timems.h \
-	$(I)/treeset.h \
 	$(I)/typebitmap.h \
 	$(I)/u32_set.h \
 	$(I)/u64_set.h \
-	$(I)/xfr_copy.h \
+	$(I)/zalloc.h \
 	$(I)/xfr_input_stream.h \
 	$(I)/zonefile_reader.h
 
@@ -261,19 +280,86 @@ pkginclude_HEADERS += $(I)/nsid.h
 libdnscore_la_SOURCES += src/nsid.c
 endif
 
-libdnscore_la_LDFLAGS = -version-info 2:0:0
+libdnscore_la_LDFLAGS = -version-info 3:0:0
 
 include ../../mk/common-settings.mk
 
 include ../../mk/common-labels.mk
 
+all: REVISION
+
+REVISION:
+	(svn info 2>/dev/null;if [ $? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
+
 src/alarm.c: $(FEATURES)
 
-$(FEATURES): config.log
+$(FEATURES): config.log REVISION VERSION
 	echo "#pragma once" > $(FEATURES)
+if HAS_TSIG_SUPPORT
 	echo "#define DNSCORE_HAS_TSIG_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define DNSCORE_HAS_TSIG_SUPPORT 0" >> $(FEATURES)
+endif
+if HAS_RDTSC
+	echo "#define DNSCORE_HAS_RDTSC 1" >> $(FEATURES)
+else
 	echo "#define DNSCORE_HAS_RDTSC 0" >> $(FEATURES)
+endif
+if HAS_ACL_SUPPORT
 	echo "#define DNSCORE_HAS_ACL_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define DNSCORE_HAS_ACL_SUPPORT 0" >> $(FEATURES)
+endif
+if HAS_NSEC3_SUPPORT
 	echo "#define DNSCORE_HAS_NSEC3_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define DNSCORE_HAS_NSEC3_SUPPORT 0" >> $(FEATURES)
+endif
+if HAS_NSEC_SUPPORT
 	echo "#define DNSCORE_HAS_NSEC_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define DNSCORE_HAS_NSEC_SUPPORT 0" >> $(FEATURES)
+endif
+if HAS_ZALLOC_SUPPORT
+	echo "#define DNSCORE_HAS_ZALLOC_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define DNSCORE_HAS_ZALLOC_SUPPORT 0" >> $(FEATURES)
+endif
+if HAS_ZALLOC_DEBUG_SUPPORT
+	echo "#define DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT 0" >> $(FEATURES)
+endif
+if HAS_ZALLOC_STATISTICS_SUPPORT
+	echo "#define DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT 0" >> $(FEATURES)
+endif
+if HAS_MALLOC_DEBUG_SUPPORT
+	echo "#define DNSCORE_HAS_MALLOC_DEBUG_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define DNSCORE_HAS_MALLOC_DEBUG_SUPPORT 0" >> $(FEATURES)
+endif
+if HAS_MUTEX_DEBUG_SUPPORT
+	echo "#define DNSCORE_HAS_MUTEX_DEBUG_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define DNSCORE_HAS_MUTEX_DEBUG_SUPPORT 0" >> $(FEATURES)
+endif
+VP=DNSCORE
+	which printf > /dev/null 2>&1
+	if [ $$? -eq 0 ];then \
+		printf '// version %i.%i.%i.%i-%i\n' $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/') 0 $$(cat REVISION) >> $(FEATURES) ; \
+		printf '#define $(VP)_VERSION 0x%02x%02x%02x%02x%04xLL' $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/') 0 $$(cat REVISION) >> $(FEATURES) ; \
+	else \
+		echo "#define $(VP)_VERSION_(vmain_,vsub_,vminor_,vpatch_,vrevision_) ((vmain_)<<40)|((vsub_)<<32)|((vminor_)<<24)|((vpatch_)<<16)|(vrevision_)" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VMAIN_ $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1')" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VSUB_ $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\2')" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VMINOR_ $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\3')" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VPATCH_ 0 >> $(FEATURES)" ; \
+		echo "#define $(VP)_VERSION_VREVISION_ $$(cat REVISION)" >> $(FEATURES) ; \
+		echo '#define $(VP)_VERSION $(VP)_VERSION_($(VP)_VERSION_VMAIN_,$(VP)_VERSION_VSUB_,$(VP)_VERSION_VMINOR_,$(VP)_VERSION_VPATCH_,$(VP)_VERSION_VREVISION_)' >> $(FEATURES) ; \
+	fi
+	echo "// $(FEATURES)" >> $(FEATURES)
+	echo >> $(FEATURES)
+
 

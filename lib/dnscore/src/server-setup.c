@@ -71,7 +71,6 @@ extern logger_handle *g_system_logger;
 
 /*------------------------------------------------------------------------------
  * FUNCTIONS */
-
     
 static inline void
 ttylog_err(const char *format, ...)
@@ -164,7 +163,7 @@ server_setup_daemon_go()
     if(pid != 0) /* parent */
     {
 #ifdef DEBUG
-        println("first level parent done");
+        formatln("first level parent done");
         flushout();
 #endif
         
@@ -231,9 +230,17 @@ server_setup_daemon_go()
      */
     
 #ifdef DEBUG
-    // Let's ensure predicting the file name is not trivial and that no overwrite would occur
+    
+    // It has been asked to fix the "tmpfile vulnerability" on DEBUG builds.
+    // Although this mode is meant for us (Gery & I), we can imagine that
+    // someone else could have some interest in it too.
+    // So the output file name now includes high-precision time and PID and
+    // will break if the file exists already.
+    // Later, the "server" part will also be modifiable by the caller.
+
     char output_file[PATH_MAX];
     snformat(output_file, sizeof(output_file), "/tmp/server-%013x-%05x.std", timeus(), getpid());
+    formatln("redirecting all to '%s'\n", output_file);
     int file_flags = O_RDWR|O_CREAT|O_EXCL; // ensure no overwrite
 #else
     const char *output_file  = "/dev/null";
@@ -246,15 +253,11 @@ server_setup_daemon_go()
     flusherr();
 
     int tmpfd; 
-    if((tmpfd = open_create_ex(output_file, O_RDWR|O_CREAT, 0660)) < 0)
+    if((tmpfd = open_create_ex(output_file, file_flags, 0660)) < 0)
     {
         log_err("stdin: %s '%s'", strerror(errno), output_file);
         exit(EXIT_FAILURE);
     }
-
-#ifdef DEBUG
-    formatln("redirected stdout/stderr to '%s'", output_file);
-#endif
 
     for(int i = 0; i <= 2; i++)
     {

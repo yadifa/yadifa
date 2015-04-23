@@ -587,6 +587,8 @@ nsec3_rrsig_updater_finalize(nsec3_rrsig_updater_parms *parms)
     {
         smp_int_destroy(&parms->remaining_quota);
     }
+    
+    dnssec_process_finalize(&parms->task);
 }
 
 /** @} */

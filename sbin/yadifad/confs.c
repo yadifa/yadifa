@@ -157,7 +157,7 @@ config_logger_setdefault()
     output_stream stdout_os;
     logger_channel *stdout_channel;
 
-    fd_output_stream_attach(dup(1), &stdout_os);
+    fd_output_stream_attach(&stdout_os, dup(1));
     stdout_channel = logger_channel_alloc();
     logger_channel_stream_open(&stdout_os, FALSE, stdout_channel);
     logger_channel_register(default_channel, stdout_channel);
@@ -195,6 +195,7 @@ yadifad_print_usage()
           "\t\t--uid/-u userid             : overrides the uid setting\n"
           "\t\t--gid/-g groupid            : overrides the gid setting\n"
           "\t\t--port/-P port              : overrides the server-port setting\n"
+          "\n"
 
           "\n"
           "\t\t--version/-V                : view version\n"
@@ -485,6 +486,16 @@ yadifad_config_finalise()
     ya_result return_code = SUCCESS;
     
     config_set_source(CONFIG_SOURCE_DEFAULT);
+
+    // disable loggers without any channel output
+    
+    for(const struct logger_name_handle_s *name_handle = logger_name_handles; name_handle->name != NULL; name_handle++)
+    {
+        if(logger_handle_count_channels(name_handle->name) == 0)
+        {
+            logger_handle_close(name_handle->name);
+        }
+    }
 
     return return_code;
 }

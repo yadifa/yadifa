@@ -10,22 +10,30 @@
         chroot                      off
 
         # The path where all the log files will be written
-        logpath                     "/var/log/yadifa"
+        logpath                     "/var/log/yadifad"
 
         # The location of the pid file
         pidfile                     "/var/run/yadifad.pid"    
 
         # The path where all zone files will be written
-        datapath                    "/var/zones"
+        datapath                    "/var/lib/yadifad"
 
         # The path where the DNSSEC keys are found
-        keyspath                    "/var/zones/keys"
+        keyspath                    "/var/lib/yadifa/keys"
 
         # The path where the transfer and journaling files will be written (AXFR & IXFR)
-        xfrpath                     "/var/zones/xfr"
+        xfrpath                     "/var/cache/yadifa/xfr"
 
+
+        # A string returned by a query of hostname. CH TXT (note if you leave this out, the real hostname will be given back)
+        hostname                    "server-yadifad"
+		     
+        # An ID returned by a query to id.server. CH TXT
+        serverid                     "yadifad-01"
+                             
         # The version returned by a query to version.yadifa. CH TXT
-        version                     "2.0.4"
+       	version                      "2.1.0"
+                             
 
         # Set the maximum UDP packet size.  Cannot be less than 512.  Cannot be more than 65535.  Typical choice is 4096.
         edns0-max-size              4096
@@ -35,10 +43,10 @@
         max-tcp-queries             100
 
         # The user id to use (an integer can be used)
-        uid                         root
+        user                         root
 
         # The group id to use (an integer can be used)
-        gid                         root
+        group                        root
 
         # The DNS port.  Any DNS query will be made using that port unless a specific value is used.
         port                        53
@@ -60,7 +68,7 @@
         # with very old name servers
         # axfr-maxrecordbypacket    0
 
-        # Global Access Controlrules.
+        # Global Access Control List rules.
         #
         # Rules can be defined on network ranges, TSIG signatures, and ACL rules
 
@@ -76,7 +84,61 @@
         # notify of a change in the master
         allow-notify                none
 
+        # If YADIFA has the controller enabled, allow control only for these clients (none by default)
+        allow-control               controller
 </main>
+
+# If YADIFA has NSID support (default)
+
+<nsid>
+        ascii "yadifad example NSID"
+        # alternatively, an hexadecimal format can be used
+        # hex 79616469666164206578616d706c65204e5349440a
+</nsid>
+
+# If YADIFA has the controller enabled (needs to have been configured at build using --enable-ctrl)
+
+<control>
+        # enable the controller
+        enabled true
+</control>
+
+# If YADIFA has been compiled with the Response Rate Limiter (default)
+
+<rrl>
+        # enable the RRL
+        enabled true
+    
+        # don't actually limit the response rate, only log what the filter would do
+        log_only false
+    
+        # how many responses per second are allowed for a (masked with the prefix) client
+        responses_per_second 5
+    
+        # how many errors per second are allowed for a (masked with the prefix) client
+        errors_per_second 5
+    
+        # window of time in which the rates are measured, expressed in seconds
+        window 15
+    
+        # every "slip" dropped answers, a truncated answer may randomly be given so the client can ask again using TCP
+        slip 2
+    
+        # the minimum size of the table storing (masked with the prefix) clients
+        min_table_size 1024
+    
+        # the maximum size of the table storing (masked with the prefix) clients
+        max_table_size 16384
+    
+        # IPv4 clients are masked with this prefix
+        ipv4_prefix_length 24
+    
+        # IPv6 clients are masked with this prefix
+        ipv6_prefix_length 56
+    
+        # the list of IP/networks (Access Control List) not impacted by the RRL
+        exempted none
+</rrl>
 
 #
 # Logging output channels configurations
@@ -146,11 +208,15 @@
 #
 # Access Control List definitions
 #
+# Meant to be used in access lists parameters (allow-*)
+# arbitrary-name comma-separated-list
+#
 
 <acl>
         transferer  key master-slave
         admins      192.0.2.0/24, 2001:db8::74
         master      192.0.2.53
+        controller  key abroad-admin-key
 </acl>
 
 #

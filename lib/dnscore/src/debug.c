@@ -46,8 +46,17 @@
 #include <unistd.h>
 #include <sys/mman.h>
 
+#include "dnscore/dnscore-config.h"
+
 #if defined(__linux__) || defined(__APPLE__)
 #include <execinfo.h>
+#if HAS_BFD_DEBUG_SUPPORT
+#include <bfd.h>
+#ifndef DMGL_PARAMS
+#define DMGL_PARAMS      (1 << 0)       /* Include function args */
+#define DMGL_ANSI        (1 << 1)       /* Include const, volatile, etc */
+#endif
+#endif
 #endif
 
 #include "dnscore/sys_types.h"
@@ -55,6 +64,9 @@
 #include "dnscore/debug.h"
 #include "dnscore/mutex.h"
 #include "dnscore/logger.h"
+#include "dnscore/ptr_set.h"
+#include "dnscore/u64_set.h"
+#include "dnscore/list-sl.h"
 
 #undef malloc
 #undef free
@@ -70,9 +82,6 @@
 #define ZDB_DEBUG_STACKTRACE 0
 #endif
 
-#undef ZDB_DEBUG_STACKTRACE
-#define ZDB_DEBUG_STACKTRACE 0
-
 #ifdef	__cplusplus
 extern "C" output_stream __termout__;
 extern "C" output_stream __termerr__;
@@ -83,7 +92,6 @@ extern output_stream __termerr__;
 
 extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
-
 
 
 
@@ -127,9 +135,8 @@ struct db_header
 #define HEADER_SIZE_CHAIN 0
 #endif
 
-#if ZDB_DEBUG_STACKTRACE != 0
-    void** trace;
-    char** trace_strings;
+#if ZDB_DEBUG_STACKTRACE
+    intptr* _trace;
 #endif
 };
 
@@ -145,10 +152,559 @@ static db_header db_mem_first = {
     0,
 #endif
 #if ZDB_DEBUG_CHAIN_ALLOCATED_BLOCKS!=0
-    &db_mem_first, &db_mem_first
+    &db_mem_first, &db_mem_first,
+#endif
+#if ZDB_DEBUG_STACKTRACE
+    NULL,
 #endif
 };
 #endif
+
+#if HAS_BFD_DEBUG_SUPPORT
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// Line numbers in stacktraces
+//
+//////////////////////////////////////////////////////////////////////////////
+
+/// @note edf: from http://en.wikibooks.org/wiki/Linux_Applications_Debugging_Techniques/The_call_stack
+
+struct bfd_node
+{
+    bfd* _bfd;
+    asymbol **_symbols;
+    asection *_text;
+    u32 _symbols_count;
+    bool _has_symbols;
+};
+
+typedef struct bfd_node bfd_node;
+
+static pthread_mutex_t bfd_mtx = PTHREAD_MUTEX_INITIALIZER;
+static bool bfd_initialised = FALSE;
+static ptr_set bfd_collection = PTR_SET_ASCIIZ_EMPTY;
+static char *proc_self_exe = NULL;
+
+static char *
+debug_get_self_exe()
+{
+    char path[PATH_MAX];
+    ssize_t n = readlink("/proc/self/exe", path, sizeof(path));
+    if(n > 0)
+    {
+        path[n] = '\0';
+        char *ret = strdup(path);
+        return ret;
+    }
+    
+    return NULL;
+}
+/*
+static char *
+debug_get_real_file(const char *file)
+{
+    char path[PATH_MAX];
+    ssize_t n = readlink(file, path, sizeof(path));
+    if(n > 0)
+    {
+        path[n] = '\0';
+        char *ret;
+        
+        if(strcmp(file, path) == 0)
+        {
+            ret = file;
+        }
+        else
+        {
+            ret = strdup(path);
+        }
+        
+        return ret;
+    }
+    
+    return NULL;
+}
+*/
+struct bfd_data
+{
+    bfd_node *bfdn;
+	bfd_vma pc;
+	bfd_boolean found;
+	const char *filename;
+	const char *function;
+	unsigned int line;
+};
+
+
+
+static void
+debug_bfd_flags_format(const void *value, output_stream *os, s32 padding, char pad_char, bool left_justified, void* reserved_for_method_parameters)
+{
+    u64 flags = (u64)value;
+    output_stream_write(os, "{ ", 2);
+    if(flags & HAS_RELOC)
+    {
+        output_stream_write(os, "RELOC ", 6);
+    }
+    if(flags & EXEC_P)
+    {
+        output_stream_write(os, "EXEC ", 5);
+    }
+    if(flags & HAS_LINENO)
+    {
+        output_stream_write(os, "LINENO ", 7);
+    }
+    if(flags & HAS_DEBUG)
+    {
+        output_stream_write(os, "DEBUG ", 6);
+    }
+    if(flags & HAS_SYMS)
+    {
+        output_stream_write(os, "SYMS ", 5);
+    }
+    if(flags & HAS_LOCALS)
+    {
+        output_stream_write(os, "LOCALS ", 6);
+    }
+    if(flags & DYNAMIC)
+    {
+        output_stream_write(os, "DYNAMIC ", 8);
+    }
+    output_stream_write(os, "}", 1);
+}
+
+static const char debug_bfd_symbol_flags_format_letter[24] =
+{
+    'l','g','D','f',
+    '?','k','K','w',
+    's','o','!','C',
+    'W','I','F','d',
+    'O','R','T','e',
+    'E','S','u','U'
+};
+
+static void
+debug_bfd_symbol_flags_format(const void *value, output_stream *os, s32 padding, char pad_char, bool left_justified, void* reserved_for_method_parameters)
+{
+    char *p;
+    char tmp[24];
+    
+    (void)padding;
+    (void)pad_char;
+    (void)left_justified;
+    (void)reserved_for_method_parameters;
+    u32 flags = (u32)(intptr)value;
+    if(flags != 0)
+    {
+        p = tmp;
+        for(int i = 0; i < 24; i++)
+        {
+            if((flags & (1 << i)) != 0)
+            {
+                *p++ = debug_bfd_symbol_flags_format_letter[i];
+            }
+        }
+        output_stream_write(os, tmp, p - tmp);
+    }
+    else
+    {
+        tmp[0] = '-';
+        output_stream_write(os, tmp, 1);
+    }
+}
+
+static void
+debug_bfd_symbol_flag_help()
+{
+    log_debug(
+"- : no flags\n"
+"l : local     The symbol has local scope; <<static>> in <<C>>. The value is the offset into the section of the data.\n"
+"g : global    The symbol has global scope; initialized data in <<C>>. The value is the offset into the section of the data.\n"
+"D : debugging The symbol is a debugging record. The value has an arbitrary meaning, unless BSF_DEBUGGING_RELOC is also set.\n"
+"f : function  The symbol denotes a function entry point.  Used in ELF, perhaps others someday.\n"
+
+"s : section   Points to a section.\n"
+
+"d : dynamic   Symbol is from dynamic linking information.\n"
+"O : object    The symbol denotes a data object.  Used in ELF, and perhaps others someday.\n"
+
+    );
+}
+
+static bool
+debug_bfd_resolve_address(void *address, const char *binary_file_path, const char **out_file, const char **out_function, u32 *out_line)
+{   
+    if(binary_file_path == NULL)
+    {
+        if(proc_self_exe == NULL)
+        {
+            proc_self_exe = debug_get_self_exe();
+            
+            if(proc_self_exe == NULL)
+            {
+                return FALSE;
+            }
+        }
+        
+        binary_file_path = proc_self_exe;
+    }
+    
+    pthread_mutex_lock(&bfd_mtx);
+    
+    if(!bfd_initialised)
+    {
+        bfd_init();
+        bfd_initialised = TRUE;
+        debug_bfd_symbol_flag_help();        
+    }
+    
+    ptr_node *node = ptr_set_avl_insert(&bfd_collection, (char*)binary_file_path);
+    
+    bfd_node *bfdn = (bfd_node*)node->value;
+    
+    if(bfdn == NULL)
+    {
+        bfd* b = bfd_openr(binary_file_path, 0);
+        
+        if(b != NULL)
+        {
+            if(bfd_check_format(b, bfd_archive))
+            {
+                bfd_close(b);
+                return FALSE;
+            }
+            
+            char **matching = NULL;
+ 
+            if(!bfd_check_format_matches(b, bfd_object, &matching))
+            {
+                free(matching);
+                bfd_close(b);
+                return FALSE;
+            }
+            
+            bfdn = (bfd_node*)malloc(sizeof(bfd_node));
+            ZEROMEMORY(bfdn, sizeof(bfd_node));
+            bfdn->_bfd = b;
+            
+            u32 flags = bfd_get_file_flags(b);
+            
+            format_writer bfd_flags_writer = {debug_bfd_flags_format, (void*)(intptr)flags};
+            
+            log_debug("bfd: %s: %w", binary_file_path, &bfd_flags_writer);
+            
+            format_writer bfd_symbol_flags_writer = {debug_bfd_symbol_flags_format, 0};
+            
+            if( (bfdn->_has_symbols = (flags & HAS_SYMS)) )
+            {
+                u32 tab_n = bfd_get_symtab_upper_bound(b);
+                u32 dyntab_n = bfd_get_dynamic_symtab_upper_bound(b);
+
+                bool dynamic = (flags & DYNAMIC);
+                u32 n = (dynamic)?dyntab_n:tab_n;
+
+                bfdn->_symbols = (asymbol**)malloc(n);
+                if(!dynamic)
+                {
+                    bfdn->_symbols_count = bfd_canonicalize_symtab(b, bfdn->_symbols);
+                }
+                else
+                {
+                    bfdn->_symbols_count = bfd_canonicalize_dynamic_symtab(b, bfdn->_symbols);
+                }
+                bfdn->_text = bfd_get_section_by_name(b, ".text");
+                
+                asymbol** sympa = bfdn->_symbols;
+                for(u32 i = 0; i < bfdn->_symbols_count; i++)
+                {
+                    asymbol *sym = sympa[i];
+                    bfd_symbol_flags_writer.value = (void*)(intptr)sym->flags;
+                    log_debug1("bfd: %s %w %p", sym->name, &bfd_symbol_flags_writer, sym->value);
+                }
+            }
+            
+            node->key = strdup(binary_file_path);
+            node->value = bfdn;
+        }
+        else
+        {
+            ptr_set_avl_delete(&bfd_collection, binary_file_path);
+        }
+    }
+    
+    pthread_mutex_unlock(&bfd_mtx);
+    
+    bool ret = FALSE;
+    
+    if(bfdn != NULL)
+    {
+
+        intptr offset = (intptr)address;
+        if(offset >= bfdn->_text->vma)
+        {
+            offset -= bfdn->_text->vma;
+            pthread_mutex_lock(&bfd_mtx);
+            ret = bfd_find_nearest_line(bfdn->_bfd, bfdn->_text, bfdn->_symbols, offset, out_file, out_function, out_line);
+#if DEBUG
+            if(!ret)
+            {
+                log_debug("bfd: line not found ...");
+            }
+#endif
+            pthread_mutex_unlock(&bfd_mtx);
+        }
+        else
+        {
+            *out_line = 0;
+        }
+    }
+    
+    return ret;
+}
+
+static void
+debug_bfd_clear_delete(void *node_)
+{
+    ptr_node *node = (ptr_node*)node_;
+    bfd_node *bfd = (bfd_node*)node->value;
+    if(bfd != NULL)
+    {
+        free(bfd->_symbols);
+        bfd_close(bfd->_bfd);
+        free(bfd);
+    }
+    free(node->key);
+}
+
+static
+void debug_bfd_clear()
+{
+    pthread_mutex_lock(&bfd_mtx);
+    ptr_set_avl_callback_and_destroy(&bfd_collection, debug_bfd_clear_delete);
+    pthread_mutex_unlock(&bfd_mtx);
+}
+
+#endif
+
+typedef u64_set stacktrace_set;
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// STACKTRACE
+//
+//////////////////////////////////////////////////////////////////////////////
+
+
+static stacktrace_set stacktraces_list_set = U64_SET_EMPTY;
+static pthread_mutex_t stacktraces_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static ya_result 
+debug_stacktraces_list_set_search(void* data, void* parm)
+{
+    stacktrace trace_a = (stacktrace)data;
+    stacktrace trace_b = (stacktrace)parm;
+
+    if(data == NULL || parm == NULL)
+    {
+        return COLLECTION_ITEM_STOP;
+    }
+
+    for(;;)
+    {
+        if(*trace_a != *trace_b)
+        {
+            break;
+        }
+        if((*trace_a|*trace_b) == 0)
+        {
+            return COLLECTION_ITEM_PROCESS_THEN_STOP;
+        }
+        trace_a++;
+        trace_b++;
+    }
+
+    return COLLECTION_ITEM_STOP;            
+}
+
+stacktrace
+debug_stacktrace_get()
+{
+#ifdef __linux__
+    void* buffer[1024];
+
+    int n = backtrace(buffer, sizeof (buffer) / sizeof (void*));
+
+    // backtrace to key
+    
+    stacktrace sp = (stacktrace)buffer;
+    u64 key = 0;
+    for(int i = 0; i < n; i++)
+    {
+        key += sp[i] << ( n & 65535 );
+    }
+    
+    pthread_mutex_lock(&stacktraces_mutex);
+    
+    stacktrace trace;
+    u64_node *node = u64_set_avl_insert(&stacktraces_list_set, key);
+    if(node->value == NULL)
+    {
+        list_sl_s *sll;
+        sll = (list_sl_s*)malloc(sizeof(list_sl_s));
+        list_sl_init(sll);
+        node->value = sll;
+        trace = (stacktrace)malloc((n + 2) * sizeof(intptr));
+        memcpy(trace, buffer, n * sizeof (void*));
+        trace[n] = 0;
+        list_sl_insert(sll, trace);
+        trace[n+1] = (intptr)backtrace_symbols(buffer, n);
+    }
+    else
+    {
+        list_sl_s *sll;
+        sll = (list_sl_s *)node->value;
+        trace = (stacktrace)list_sl_search(sll, debug_stacktraces_list_set_search, buffer);
+        if(trace == NULL)
+        {
+            trace = (stacktrace)malloc((n + 2) * sizeof(intptr));
+            memcpy(trace, buffer, n * sizeof (void*));
+            trace[n] = 0;
+            list_sl_insert(sll, trace);
+            trace[n+1] = (intptr)backtrace_symbols(buffer, n);
+        }
+    }
+    
+    pthread_mutex_unlock(&stacktraces_mutex);
+    
+    return trace;
+#else
+    return NULL;
+#endif
+}
+
+/**
+ * clears all stacktraces from memory
+ * should only be called at shutdown
+ */
+
+static void
+debug_stacktrace_clear_delete(void *node_)
+{
+    u64_node *node = (u64_node*)node_;
+    list_sl_s *sll = (list_sl_s *)node->value;
+    if(sll != NULL)
+    {
+        stacktrace trace;
+        while((trace = (stacktrace)list_sl_pop(sll)) != NULL)
+        {
+            int n = 0;
+            while(trace[n] != 0)
+            {
+                ++n;
+            }
+
+            char **trace_strings = (char**)trace[n + 1];
+            free(trace_strings);
+            free(trace);
+        }
+    }
+}
+
+void
+debug_stacktrace_clear()
+{
+    pthread_mutex_lock(&stacktraces_mutex);
+    u64_set_avl_callback_and_destroy(&stacktraces_list_set, debug_stacktrace_clear_delete);
+    pthread_mutex_unlock(&stacktraces_mutex);
+#if HAS_BFD_DEBUG_SUPPORT 
+    debug_bfd_clear();
+#endif
+}
+
+void
+debug_stacktrace_log(logger_handle* handle, u32 level, stacktrace trace)
+{
+#ifdef __linux__
+    int n = 0;
+
+    if(trace != NULL)
+    {
+        while(trace[n] != 0)
+        {
+            ++n;
+        }
+    
+        char **trace_strings = (char**)trace[n + 1];
+        for(int i = 0; i < n; i++)
+        {
+            void *address = (void*)trace[i];
+            const char *text = (trace_strings != NULL) ? trace_strings[i] : "???";
+        
+#if HAS_BFD_DEBUG_SUPPORT
+            char *parenthesis = strchr(text, '(');
+            if(parenthesis != NULL)
+            {
+                u32 n = parenthesis - text;
+
+                assert(n < PATH_MAX);
+
+                char binary[PATH_MAX];            
+                memcpy(binary, text, n);
+                binary[n] = '\0';
+
+                const char *file;
+                const char *function;
+                u32 line;
+
+                debug_bfd_resolve_address(address, binary, &file, &function, &line);
+
+                if((file != NULL) && (*file != '\0'))
+                {                    
+                    logger_handle_msg(handle, level, "%p: %s (%s:%i)", address, function, file, line);
+                }
+                else
+                {
+                    logger_handle_msg(handle, level, "%p: %s", address, text);
+                }
+            }
+            else
+            {
+#endif
+                logger_handle_msg(handle, level, "%p %s", address, text);
+#if HAS_BFD_DEBUG_SUPPORT     
+           }
+#endif
+        }
+    }
+#else
+    logger_handle_msg(handle, level, "backtrace not supported");
+#endif
+}
+
+void
+debug_stacktrace_print(output_stream *os, stacktrace trace)
+{
+#ifdef __linux__
+    int n = 0;
+
+    if(trace != NULL)
+    {
+        while(trace[n] != 0)
+        {
+            ++n;
+        }
+    }
+
+    char **trace_strings = (char**)trace[n + 1];
+    for(int i = 0; i < n; i++)
+    {
+        osformatln(os, "%p %s", (void*)trace[i], (trace_strings != NULL) ? trace_strings[i] : "???");
+    }
+#else
+    osformatln(os, "backtrace not supported");
+#endif
+}
 
 #define REAL_SIZE(rs_size_) MALLOC_REALSIZE((rs_size_)+HEADER_SIZE)
 
@@ -226,11 +782,16 @@ debug_dump_ex(void* data_pointer_, size_t size_, size_t line_size, bool hex, boo
 
 #if defined(__linux__)
 
-void
+bool
 debug_log_stacktrace(logger_handle *handle, u32 level, const char *prefix)
 {
     void* addresses[1024];
+#if HAS_BFD_DEBUG_SUPPORT
+    char binary[PATH_MAX];
+#endif
 
+#if defined(__linux__)
+    
     int n = backtrace(addresses, sizeof (addresses) / sizeof (void*));
     
     if(n > 0)
@@ -239,38 +800,69 @@ debug_log_stacktrace(logger_handle *handle, u32 level, const char *prefix)
     
         if(symbols != NULL)
         {
-            for(int i = 0; i < n; i++)
+            for(int i = 1; i < n; i++)
             {
-                logger_handle_msg(handle, level, "%s: %p: %s", prefix, addresses[i], symbols[i]);
+                char *parenthesis = strchr(symbols[i], '(');
+                if(parenthesis != NULL)
+                {
+#if HAS_BFD_DEBUG_SUPPORT
+                    u32 n = parenthesis - symbols[i];
+                    memcpy(binary, symbols[i], n);
+                    binary[n] = '\0';
+                    
+                    const char *func = "?";
+                    const char *file = "?";
+                    u32 line = ~0;
+                    
+                    debug_bfd_resolve_address(addresses[i], binary, &file, &func, &line);                                       
+                    
+                    if((file != NULL) && (*file != '\0'))
+                    {                    
+                        logger_handle_msg(handle, level, "%s: %p: %s (%s:%i)", prefix, addresses[i], func, file, line);
+                    }
+                    else
+                    {
+                        logger_handle_msg(handle, level, "%s: %p: %s", prefix, addresses[i], symbols[i]);
+                    }
+#else
+                    logger_handle_msg(handle, level, "%s: %p: %s", prefix, addresses[i], symbols[i]);
+#endif
+                }
             }
 
             free(symbols);
         }
         else
         {
-            for(int i = 0; i < n; i++)
+            for(int i = 1; i < n; i++)
             {
                 logger_handle_msg(handle, level, "%s: %p: ?", prefix, addresses[i]);
             }
         }
     }
     else
+#endif // linux only
     {
         logger_handle_msg(handle, level, "%s: ?: ?", prefix);
     }
+    
+    return TRUE;
 }
 
 #else
 
-void
+bool
 debug_log_stacktrace(logger_handle *handle, u32 level, const char *prefix)
 {
     (void)handle;
     (void)level;
     (void)prefix;
+    return TRUE;
 }
 
 #endif
+
+
 
 void*
 debug_malloc(
@@ -317,16 +909,8 @@ debug_malloc(
 
     pthread_mutex_lock(&alloc_mutex);
 
-#if ZDB_DEBUG_STACKTRACE != 0
-    void* buffer[1024];
-
-    int n = backtrace(buffer, sizeof (buffer) / sizeof (void*));
-
-    ptr->trace = malloc((n + 1) * sizeof (void*));
-    memcpy(ptr->trace, buffer, n * sizeof (void*));
-    ptr->trace[n] = NULL;
-
-    ptr->trace_strings = backtrace_symbols(buffer, n);
+#if ZDB_DEBUG_STACKTRACE
+    ptr->_trace = debug_stacktrace_get();
 #endif
 
     ptr->magic = DB_MALLOC_MAGIC;
@@ -482,11 +1066,6 @@ debug_free(void* ptr_, const char* file, int line)
         }
     }
 
-#if ZDB_DEBUG_STACKTRACE != 0
-    free(ptr->trace);
-    free(ptr->trace_strings);
-#endif
-
     pthread_mutex_lock(&alloc_mutex);
 
 #if ZDB_DEBUG_CHAIN_ALLOCATED_BLOCKS!=0
@@ -569,7 +1148,7 @@ debug_strdup(const char* str)
 {
     int l = strlen(str) + 1;
     char* out;
-    MALLOC_OR_DIE(char*, out, l, ZDB_STRDUP_TAG); /* ZALLOC IMPOSSIBLE */
+    MALLOC_OR_DIE(char*, out, l, ZDB_STRDUP_TAG); /* ZALLOC IMPOSSIBLE, MUST KEEP MALLOC_OR_DIE */
     MEMCOPY(out, str, l);
     return out;
 }
@@ -627,28 +1206,28 @@ debug_stat(bool dump)
     formatln("DB: MEM: Blocks=%llu", db_current_blocks);
     formatln("DB: MEM: Monitoring Overhead=%llu (%i)", (u64)(db_current_blocks * HEADER_SIZE), (int)HEADER_SIZE);
 
-#if ZDB_DEBUG_ENHANCED_STATISTICS!=0
+#if ZDB_DEBUG_ENHANCED_STATISTICS
 
-    println("DB: MEM: Block sizes:");
+    println("DB: MEM: Block sizes: ([size/8]={current / peak}");
 
     int i;
 
     for(i = 0; i < (ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3); i++)
     {
-        format("[%3i]={%8llu / %8llu} ;", (i + 1) << 3, db_alloc_count_by_size[i], db_alloc_peak_by_size[i]);
+        format("[%4i]={%8llu / %8llu} ;", (i + 1) << 3, db_alloc_count_by_size[i], db_alloc_peak_by_size[i]);
 
-        if((i & 1) == 1)
+        if((i & 3) == 3)
         {
             println("");
         }
     }
 
-    formatln("[+++]={%8llu / %8llu}",
+    formatln("[++++]={%8llu / %8llu}",
              db_alloc_count_by_size[ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3],
              db_alloc_peak_by_size[ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3]);
 #endif
 
-#if ZDB_DEBUG_CHAIN_ALLOCATED_BLOCKS!=0
+#if ZDB_DEBUG_CHAIN_ALLOCATED_BLOCKS
     if(dump)
     {
         db_header *ptr;
@@ -727,24 +1306,35 @@ debug_stat(bool dump)
         
         while(ptr != &db_mem_first)
         {
-            formatln("%04x %16p [%08x]", index, (void*)& ptr[1], ptr->size);
+            formatln("block #%04x %16p [%08x]", index, (void*)& ptr[1], ptr->size);
 
-#if ZDB_DEBUG_TAG_BLOCKS!=0
+#if ZDB_DEBUG_TAG_BLOCKS
             debug_dump((u8*) & ptr->tag, 8, 8, FALSE, TRUE);
             formatln(" | ");
 #endif
 
-#if ZDB_DEBUG_STACKTRACE != 0
-            for(int sp = 0; ptr->trace[sp] != NULL; sp++)
+#if ZDB_DEBUG_STACKTRACE
+            int n = 0;
+            intptr *st = ptr->_trace;
+            if(st != NULL)
             {
-                formatln("%p %s", ptr->trace[sp], (ptr->trace_strings != NULL) ? ptr->trace_strings[sp] : "???");
+                while(st[n] != 0)
+                {
+                    ++n;
+                }
+            }
+            
+            char **trace_strings = (char**)st[n + 1];
+            for(int i = 0; i < n; i++)
+            {
+                formatln("%p %s", (void*)st[i], (trace_strings != NULL) ? trace_strings[i] : "???");
             }
 #endif
 
-#if ZDB_DEBUG_SERIALNUMBERIZE_BLOCKS!=0
+#if ZDB_DEBUG_SERIALNUMBERIZE_BLOCKS
             formatln("#%08llx | ", ptr->serial);
 #endif
-            osprint_dump(termout, & ptr[1], ptr->size, 32, OSPRINT_DUMP_ALL);
+            osprint_dump(termout, & ptr[1], MIN(ptr->size, 128), 32, OSPRINT_DUMP_ALL);
 
             formatln("\n");
             ptr = ptr->next;
@@ -814,13 +1404,13 @@ debug_mallocated(void* ptr)
 
 #ifdef DEBUG
 
-static mutex_t debug_bench_mtx = MUTEX_INITIALIZER;
+static pthread_mutex_t debug_bench_mtx = PTHREAD_MUTEX_INITIALIZER;
 static debug_bench_s *debug_bench_first = NULL;
 
 void
 debug_bench_register(debug_bench_s *bench, const char *name)
 {
-    mutex_lock(&debug_bench_mtx);
+    pthread_mutex_lock(&debug_bench_mtx);
     
     debug_bench_s *b = debug_bench_first;
     while((b != bench) && (b != NULL))
@@ -842,22 +1432,23 @@ debug_bench_register(debug_bench_s *bench, const char *name)
     {
         log_debug("debug_bench_register(%p,%s): duplicate", bench, name);
     }
-    mutex_unlock(&debug_bench_mtx);
+    pthread_mutex_unlock(&debug_bench_mtx);
 }
 
 void
 debug_bench_commit(debug_bench_s *bench, u64 delta)
 {
-    mutex_lock(&debug_bench_mtx);
+    pthread_mutex_lock(&debug_bench_mtx);
     bench->time_min = MIN(bench->time_min, delta);
     bench->time_max = MAX(bench->time_max, delta);
     bench->time_total += delta;
     bench->time_count++;
-    mutex_unlock(&debug_bench_mtx);
+    pthread_mutex_unlock(&debug_bench_mtx);
 }
 
 void debug_bench_logdump_all()
 {
+    pthread_mutex_lock(&debug_bench_mtx);
     debug_bench_s *p = debug_bench_first;
     while(p != NULL)
     {
@@ -871,6 +1462,7 @@ void debug_bench_logdump_all()
         log_info("bench: %12s: [%9.6fs:%9.6fs] total=%9.6fs mean=%9.6fs rate=%-12.3f/s calls=%9u", p->name, min, max, total, total / count, count / total, count);
         p = p->next;
     }
+    pthread_mutex_unlock(&debug_bench_mtx);
 }
 
 #endif
@@ -886,7 +1478,8 @@ void debug_unicity_init(debug_unicity *dus)
     dus->counter = 0;
 }
 
-void debug_unicity_acquire(debug_unicity *dus)
+void
+debug_unicity_acquire(debug_unicity *dus)
 {
     assert(dus != NULL);
 
@@ -896,7 +1489,8 @@ void debug_unicity_acquire(debug_unicity *dus)
     pthread_mutex_unlock(&dus->mutex);
 }
 
-void debug_unicity_release(debug_unicity *dus)
+void
+debug_unicity_release(debug_unicity *dus)
 {
     assert(dus != NULL);
 
@@ -907,9 +1501,10 @@ void debug_unicity_release(debug_unicity *dus)
 }
 
 
-void debug_vg(const void* b, int len)
+void
+debug_vg(const void *b, int len)
 {
-    const char* s = (const char*)b;
+    const char *s = (const char*)b;
     for(int i = 0; i < len; i++)
     {
         if((s[i] >= ' ') && (s[i] < 127))

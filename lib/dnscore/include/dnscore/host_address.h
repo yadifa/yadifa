@@ -139,6 +139,8 @@ struct host_address
     u8 version;
 };
 
+#define HOST_ADDRESS_EMPTY {NULL, NULL, .ip.v4.value=0, 0, HOST_ADDRESS_NONE}
+
 host_address *host_address_alloc();
 
 host_address *host_address_copy(const host_address *address);

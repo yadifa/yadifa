@@ -56,8 +56,6 @@
 
 #include <dnscore/fdtools.h>
 
-#include <dnsdb/journal.h>
-
 #include "server_context.h"
 
 #include "server.h"
@@ -240,7 +238,7 @@ server_context_clear(config_data *config)
         close_ex(intf->udp.sockfd);
         close_ex(intf->tcp.sockfd);
 
-#if ZDB_DEBUG_MALLOC == 0               // cannot free the memory this way with debug_malloc on (freeaddrinfo needs a hook)
+#if !DNSCORE_HAS_MALLOC_DEBUG_SUPPORT // cannot free the memory this way with debug_malloc on (freeaddrinfo needs a hook)
         freeaddrinfo(intf->udp.addr);
         freeaddrinfo(intf->tcp.addr);
 #endif
@@ -340,7 +338,7 @@ config_update_network(config_data *config)
             }
         }
 
-        if(FAIL(setsockopt(intf->udp.sockfd,SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on))))
+        if(FAIL(setsockopt(intf->udp.sockfd, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on))))
         {
             return_value = ERRNO_ERROR;
             ttylog_err("failed to reuse address %{sockaddr}: %r", intf->udp.addr->ai_addr, return_value);

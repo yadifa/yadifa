@@ -43,7 +43,7 @@
 #include <unistd.h>
 #include <stddef.h>
 
-#include "dnscore-config.h"
+#include "dnscore/dnscore-config.h"
 
 #include "dnscore/message.h"
 #include "dnscore/logger.h"
@@ -196,6 +196,8 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
                 /**
                  * Handle EDNS
                  *
+                 * @todo 20140523 edf -- improve the EDNS handling
+                 * @todo 20140523 edf -- handle extended RCODE (supposed to be 0, but could be set to something else : FORMERR)
                  */
 
                 if((tctr.ttl & NU32(0x00ff0000)) == 0) /* ensure version is 0 */
@@ -612,6 +614,7 @@ message_process_answer_additionals(message_data *mesg, u8* s, u16 ar_count)
 #define NOTIFY_MESSAGE_HEADER_RESULT   ( ((u64) 1LL) << 16 )
    
 #else
+
 #define MESSAGE_HEADER_MASK     (( (u64) 0LL )                      |  \
         ( ((u64) ( QR_BITS | AA_BITS | RA_BITS | TC_BITS )) << 16 ) |  \
         ( ((u64) ( RA_BITS | RCODE_BITS )) << 24 )                  |  \
@@ -813,6 +816,7 @@ message_process_query(message_data *mesg)
         }
     }
 
+    /* cut the trash here */
 
 
     /* At this point the TSIG has been computed and removed */
@@ -1903,6 +1907,8 @@ message_query_tcp_with_timeout(message_data *mesg, host_address *address,  u8 to
     mesg->buffer_tcp_len[0] = mesg->send_length >> 8;
     mesg->buffer_tcp_len[1] = mesg->send_length;
 
+
+
 #if DEBUG
     formatln("message_query_tcp_with_timeout A %{hostaddr}", address);
 #endif
@@ -1947,6 +1953,8 @@ message_query_tcp_with_timeout(message_data *mesg, host_address *address,  u8 to
             }
         }
 
+
+
         output_stream_close(&os);
         output_stream_close(&is);
 
@@ -1976,11 +1984,9 @@ message_query_udp(message_data *mesg, host_address *server)
 ya_result
 message_query_udp_with_time_out_and_retries(message_data *mesg, host_address *server, int seconds, int useconds, u8 retries, u8 flags)
 {
-    ya_result                        return_value = SUCCESS;
-
+    ya_result return_value = SUCCESS;
     random_ctx rndctx = thread_pool_get_random_ctx();
-    u16                                                  id;
-
+    u16 id;
 
     for(u8 countdown = retries; countdown > 0; )
     {
@@ -2033,8 +2039,13 @@ message_query_udp_with_time_out_and_retries(message_data *mesg, host_address *se
         countdown--;
 
         usleep_ex(10000);  /* 10 ms */
+        
+        /*
+        if (flags & CHANGE_NAME_SERVER)
+        {
+        }
+        */
     }
-
 
     return return_value;
 }
@@ -2051,6 +2062,7 @@ message_query_udp_with_time_out(message_data *mesg, host_address *server, int se
 
     /*    ------------------------------------------------------------    */ 
 
+
     
     if(ISOK(return_value = host_address2sockaddr(&sa, server)))
     {
@@ -2064,6 +2076,7 @@ message_query_udp_with_time_out(message_data *mesg, host_address *server, int se
             tcp_set_recvtimeout(s, seconds, useconds); /* half a second for UDP is a lot ... */
 
             mesg->received = 0;
+
 #ifdef DEBUG
             log_debug("sending %d bytes to %{sockaddr} (%i)", mesg->send_length, &sa, sa_len);
             log_memdump_ex(g_system_logger, MSG_DEBUG5, mesg->buffer, mesg->send_length, 16, OSPRINT_DUMP_HEXTEXT);
@@ -2076,6 +2089,7 @@ message_query_udp_with_time_out(message_data *mesg, host_address *server, int se
                 while((n = recvfrom(s, mesg->buffer, sizeof(mesg->buffer), 0, &ans_sa.sa, &ans_sa_len)) >= 0)
                 {
                     /* check that the sender is the one we spoke to */
+
 #ifdef DEBUG
                     log_memdump_ex(g_system_logger, MSG_DEBUG5, mesg->buffer, n, 16, OSPRINT_DUMP_HEXTEXT);
 #endif
@@ -2087,6 +2101,7 @@ message_query_udp_with_time_out(message_data *mesg, host_address *server, int se
                         break;
                     }
                 }
+
                 
                 if(n < 0)
                 {
@@ -2098,6 +2113,7 @@ message_query_udp_with_time_out(message_data *mesg, host_address *server, int se
             else
             {
                 return_value = (n < 0)?ERRNO_ERROR:ERROR;
+
             }
             
             close_ex(s);

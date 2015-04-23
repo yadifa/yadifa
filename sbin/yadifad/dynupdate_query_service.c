@@ -59,8 +59,6 @@
 #include <dnscore/thread_pool.h>
 #include <dnsdb/zdb_types.h>
 
-#include "server_context.h"
-
 #include "database.h"
 #include "server.h"
 
@@ -227,6 +225,8 @@ dynupdate_query_service_thread(void *args)
                         &mesg->qtype,
                         MAKE_ERRNO_ERROR(error_code));
                     
+
+
                     free(parms);
                     free(mesg);
 

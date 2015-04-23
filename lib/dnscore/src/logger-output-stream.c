@@ -44,6 +44,7 @@
 #include <string.h>
 
 #include "dnscore/logger_handle.h"
+#include "dnscore/zalloc.h"
 
 /*
  * This structure is supposed to match the output_stream one
@@ -163,7 +164,7 @@ logger_output_stream_close(output_stream* stream_)
     logger_output_stream* stream = (logger_output_stream*)stream_;
     
     free(stream->data->line);
-    free(stream->data);
+    ZFREE(stream->data, logger_output_stream_data);
 
     output_stream_set_void(stream_);
 }
@@ -185,7 +186,7 @@ logger_output_stream_open(output_stream* stream, logger_handle *handle, u16 leve
     }
     
     logger_output_stream_data *data;
-    MALLOC_OR_DIE(logger_output_stream_data*, data, sizeof(logger_output_stream_data), GENERIC_TAG);
+    ZALLOC_OR_DIE(logger_output_stream_data*, data, logger_output_stream_data, GENERIC_TAG);
     data->handle = handle;
     data->level = level;
     MALLOC_OR_DIE(char*, data->line, max_line_len, GENERIC_TAG);

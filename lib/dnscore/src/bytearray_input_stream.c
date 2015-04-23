@@ -44,6 +44,7 @@
 #include <stdlib.h>
 
 #include "dnscore/bytearray_input_stream.h"
+#include "dnscore/zalloc.h"
 
 #define BYTE_ARRAY_INPUT_STREAM_TAG         0x53494142          // BAIS
 #define BYTE_ARRAY_INPUT_STREAM_DATA_TAG    0x4154414453494142  // BAISDATA
@@ -123,7 +124,7 @@ bytearray_close(input_stream* stream)
 {
     bytearray_input_stream_data* data = (bytearray_input_stream_data*)stream->data;
 
-    free(data);
+    ZFREE(data,bytearray_input_stream_data);
 
     input_stream_set_void(stream);
 }
@@ -140,7 +141,7 @@ bytearray_input_stream_init(const u8* array, u32 size, input_stream* out_stream,
 {
     bytearray_input_stream_data* data;
 
-    MALLOC_OR_DIE(bytearray_input_stream_data*, data, sizeof (bytearray_input_stream_data), BYTE_ARRAY_INPUT_STREAM_DATA_TAG);
+    ZALLOC_OR_DIE(bytearray_input_stream_data*, data, bytearray_input_stream_data, BYTE_ARRAY_INPUT_STREAM_DATA_TAG);
 
     data->buffer = array;
     data->offset = 0;

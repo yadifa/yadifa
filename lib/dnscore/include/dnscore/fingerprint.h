@@ -107,10 +107,7 @@ enum finger_print
                                                          * query
                                                          */
 
-    FP_XFR_REFUSED              = RCODE_NOTAUTH,        /* Not used yet. Quoted in a TODO in the message processing
-                                                         * on the AXFR/IXFR
-                                                         * Need to check if it's not already done at another place
-                                                         * (closer to the XFR processing)
+    FP_XFR_REFUSED              = RCODE_NOTAUTH,        /* The transfer (AXFR/IXFR) has been refused by ACL
                                                          */
     
     FP_XFR_UP_TO_DATE           = RCODE_NOERROR,        /* no XFR necessary */

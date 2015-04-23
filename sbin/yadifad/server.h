@@ -154,6 +154,8 @@ void tcp_send_message_data(message_data* mesg);
 
 void server_process_tcp(zdb *database, tcp *tcp_itf);
 
+void log_msghdr(logger_handle* hndl, u32 level, struct msghdr *hdr);
+
 /*    ------------------------------------------------------------    */
 
 #endif /* SERVER_H_ */

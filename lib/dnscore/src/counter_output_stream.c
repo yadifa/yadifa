@@ -46,7 +46,7 @@
 #include "dnscore/counter_output_stream.h"
 
 static ya_result
-counter_write(output_stream* stream, const u8* counter_, u32 len)
+counter_write(output_stream* stream, const u8* buffer, u32 len)
 {
     counter_output_stream_data* data = (counter_output_stream_data*)stream->data;
 
@@ -54,7 +54,7 @@ counter_write(output_stream* stream, const u8* counter_, u32 len)
 
     if(ISOK(data->result))
     {
-        data->result = output_stream_write(data->filtered, counter_, len);
+        data->result = output_stream_write(data->filtered, buffer, len);
 
         if(ISOK(data->result))
         {

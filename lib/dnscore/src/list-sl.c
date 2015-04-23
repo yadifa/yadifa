@@ -121,13 +121,13 @@ list_sl_clear(list_sl_s *list)
  * @return a matching node or NULL
  */
 
-void *list_sl_search(list_sl_s *list, result_callback_function *comparator)
+void *list_sl_search(list_sl_s *list, result_callback_function *comparator, void *parm)
 {
     list_sl_node_s *node = list->first;
 
     while(node->next != NULL)
     {
-        ya_result ret = comparator(node->data);
+        ya_result ret = comparator(node->data, parm);
         
         if((ret & COLLECTION_ITEM_STOP) != 0)
         {
@@ -163,7 +163,7 @@ void *list_sl_search(list_sl_s *list, result_callback_function *comparator)
  */
 
 bool
-list_sl_remove_match(list_sl_s *list, result_callback_function *comparator)
+list_sl_remove_match(list_sl_s *list, result_callback_function *comparator, void *parm)
 {
     list_sl_node_s **nodep = &list->first;
     list_sl_node_s *node = list->first;
@@ -172,7 +172,7 @@ list_sl_remove_match(list_sl_s *list, result_callback_function *comparator)
 
     while(node->next != NULL)
     {
-        ya_result ret = comparator(node->data);
+        ya_result ret = comparator(node->data, parm);
         
         if((ret & COLLECTION_ITEM_PROCESS) != 0)
         {

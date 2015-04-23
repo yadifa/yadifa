@@ -34,7 +34,7 @@
 
 //#include <pthread.h>
 
-#include "dnscore-config.h"
+//#include "dnscore/dnscore-config.h"
 
 #include <netinet/in.h>
 #include <signal.h>
@@ -44,7 +44,7 @@
 #include "dnscore/random.h"
 #include "dnscore/message.h"
 #include "dnscore/tcp_io_stream.h"
-#include "dnscore/treeset.h"
+#include "dnscore/ptr_set.h"
 #include "dnscore/pool.h"
 #include "dnscore/service.h"
 #include "dnscore/async.h"
@@ -220,7 +220,7 @@ rate_wait(rate_s *r, u32 bytes_to_add)
 
 static int dns_udp_send_simple_message_node_compare(const void *key_a, const void *key_b);
 
-static treeset_tree message_collection = { NULL, dns_udp_send_simple_message_node_compare};
+static ptr_set message_collection = { NULL, dns_udp_send_simple_message_node_compare};
 static mutex_t message_collection_mtx;
 static rate_s dns_udp_send_rate;
 
@@ -307,7 +307,7 @@ message_data_pool_free(void *p, void *_ignored_)
 static void
 dns_udp_handler_message_collection_free_node_callback(void *n)
 {
-    treeset_node *node = (treeset_node *)n;
+    ptr_node *node = (ptr_node *)n;
 
     dns_simple_message_s *simple_message = (dns_simple_message_s*)node->key;
     dns_udp_simple_message_release(simple_message);
@@ -668,7 +668,7 @@ dns_udp_handler_finalize()
     
     async_queue_finalize(&dns_udp_send_handler_queue);
     
-    treeset_avl_callback_and_destroy(&message_collection, dns_udp_handler_message_collection_free_node_callback);
+    ptr_set_avl_callback_and_destroy(&message_collection, dns_udp_handler_message_collection_free_node_callback);
     
     pool_finalize(&dns_simple_message_async_node_pool);
     pool_finalize(&dns_simple_message_pool);
@@ -742,6 +742,8 @@ dns_udp_allocate_message_data(struct service_worker_s *worker)
 static void
 dns_udp_simple_message_answer_call_handlers(dns_simple_message_s *simple_message)
 {
+    s64 start = timeus();
+
     dns_simple_message_async_node_s *node = simple_message->async_node.next;
     while(node != NULL)
     {
@@ -777,6 +779,11 @@ dns_udp_simple_message_answer_call_handlers(dns_simple_message_s *simple_message
 
     // there is no need to retain, the reference from the collection has not been decreased yet
     simple_message->async_node.async->handler(simple_message->async_node.async);
+
+    s64 end = timeus();
+    double dps = end - start;
+    dps /= 1000000.0;
+    log_debug("receive: handler processing took %6.3fs", dps);
 }
 
 #if HAS_TC_FALLBACK_TO_TCP_SUPPORT
@@ -799,7 +806,7 @@ dns_udp_tcp_query_thread(void *args)
     dns_simple_message_s *simple_message = (dns_simple_message_s *)parms->simple_message;
     struct service_worker_s *worker = (struct service_worker_s *)parms->worker;
     
-    free(parms);
+    ZFREE(parms, dns_udp_tcp_query_thread_params);
     
     ya_result ret;
         
@@ -839,15 +846,19 @@ dns_udp_tcp_query_thread(void *args)
 
                 log_notice("send: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) using TCP", simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server, simple_message->status);
 
+                simple_message->received_time_us = timeus();
+                s64 dt = MAX(simple_message->received_time_us - simple_message->sent_time_us, 0);
+                double dts = dt;
+                dts/=1000000.0;
+                
                 ret = message_query_tcp_with_timeout(mesg, simple_message->name_server, dns_udp_settings->timeout / 1000000);
 
                 if(ISOK(ret))
                 {
-                    log_notice("receive: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) using TCP", simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server, simple_message->status);
+                    log_notice("receive: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) [%6.3fs] using TCP", simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server, simple_message->status, dts);
 
                     simple_message->status &= ~DNS_SIMPLE_MESSAGE_STATUS_COLLECTED;
                     simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_RECEIVED;
-                    simple_message->received_time_us = timeus();
                     simple_message->answer = mesg;
                     mesg = NULL;
 
@@ -862,7 +873,11 @@ dns_udp_tcp_query_thread(void *args)
                 {
                     if(--retries >= 0)
                     {
-                        log_err("send: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) using TCP failed: %r, retrying", simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server, simple_message->status, ret);
+                        log_warn("send: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) [%6.3fs] using TCP failed: %r, retrying", simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server, simple_message->status, dts, ret);
+                    }
+                    else
+                    {
+                        log_err("send: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) [%6.3fs] using TCP failed: %r, no retries left", simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server, simple_message->status, dts, ret);
                     }
                 }
             }
@@ -920,7 +935,7 @@ static void
 dns_udp_tcp_query(dns_simple_message_s *simple_message, struct service_worker_s *worker)
 {
     dns_udp_tcp_query_thread_params *parms;
-    MALLOC_OR_DIE(dns_udp_tcp_query_thread_params*, parms, sizeof(dns_udp_tcp_query_thread_params), GENERIC_TAG);
+    ZALLOC_OR_DIE(dns_udp_tcp_query_thread_params*, parms, dns_udp_tcp_query_thread_params, GENERIC_TAG);
     parms->simple_message = simple_message;
     parms->worker = worker;
     thread_pool_enqueue_call(tcp_query_thread_pool, dns_udp_tcp_query_thread, parms, NULL, "dns-udp-tcp");
@@ -1332,20 +1347,20 @@ dns_udp_send_simple_message_process(async_message_s *domain_message, random_ctx 
     // lock the collection
     mutex_lock(&message_collection_mtx);
     
-    treeset_node *node = treeset_avl_insert(&message_collection, simple_message);
+    ptr_node *node = ptr_set_avl_insert(&message_collection, simple_message);
     
     simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_COLLECTED;
     simple_message->status &= ~DNS_SIMPLE_MESSAGE_STATUS_QUEUED;
     
     int return_code;
     
-    if(node->data == NULL)
+    if(node->value == NULL)
     {
         // newly inserted
         // put in pending collection
         // RC already increased
                 
-        node->data = domain_message;
+        node->value = domain_message;
         
         mutex_unlock(&message_collection_mtx);
                 
@@ -1460,10 +1475,10 @@ dns_udp_send_simple_message_process(async_message_s *domain_message, random_ctx 
 
         mutex_lock(&message_collection_mtx);
         // ensure that the node still exists
-        treeset_node *node = treeset_avl_insert(&message_collection, simple_message);
+        ptr_node *node = ptr_set_avl_insert(&message_collection, simple_message);
         if(node != NULL)
         {
-            treeset_avl_delete(&message_collection, simple_message);
+            ptr_set_avl_delete(&message_collection, simple_message);
             // one RC can be released for the collection
             simple_message->status &= ~DNS_SIMPLE_MESSAGE_STATUS_COLLECTED;
             dns_udp_simple_message_release(simple_message);
@@ -1757,7 +1772,7 @@ dns_udp_receive_service(struct service_worker_s *worker)
                 
                     mutex_lock(&message_collection_mtx);
         
-                    treeset_node *node = treeset_avl_find(&message_collection, &message);
+                    ptr_node *node = ptr_set_avl_find(&message_collection, &message);
                     
                     if(node != NULL)
                     {
@@ -1769,7 +1784,7 @@ dns_udp_receive_service(struct service_worker_s *worker)
                                         
                         dns_udp_simple_message_lock(simple_message);
 
-                        treeset_avl_delete(&message_collection, simple_message);
+                        ptr_set_avl_delete(&message_collection, simple_message);
                         
                         // the message is not in the timeout collection anymore
                         // it should contain an answer, or an error, ... or a message with the TC bit on
@@ -1792,15 +1807,18 @@ dns_udp_receive_service(struct service_worker_s *worker)
                             log_warn("receive: message RC is not 1 (%i)", simple_message->rc.value);
                         }
 #endif
+                        simple_message->received_time_us = timeus();
+                        s64 dt = MAX(simple_message->received_time_us - simple_message->sent_time_us, 0);
+                        double dts = dt;
+                        dts/=1000000.0;
                         
 #if HAS_TC_FALLBACK_TO_TCP_SUPPORT
                         if(!truncated)
                         {
 #endif
-                            simple_message->received_time_us = timeus();
                             simple_message->answer = mesg;
 
-                            log_notice("receive: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x)", message.fqdn, &message.qtype, &message.qclass, message.name_server, simple_message->status);
+                            log_notice("receive: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) [%6.3fs]", message.fqdn, &message.qtype, &message.qclass, message.name_server, simple_message->status, dts);
 
                             dns_udp_simple_message_answer_call_handlers(simple_message);
                             
@@ -1815,6 +1833,8 @@ dns_udp_receive_service(struct service_worker_s *worker)
                         {
                             // the message has been truncated
                             // it should be queried again using TCP
+                            
+                            log_notice("receive: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) [%6.3fs]: truncated", message.fqdn, &message.qtype, &message.qclass, message.name_server, simple_message->status, dts);
                             
                             dns_udp_tcp_query(simple_message, worker);
                         }
@@ -1865,7 +1885,7 @@ dns_udp_receive_service(struct service_worker_s *worker)
         }
     }
     
-    if(mesg != NULL)
+        if(mesg != NULL)
     {
         memset(mesg, 0xd6, sizeof(message_data));
         pool_release(&message_data_pool, mesg);
@@ -1903,11 +1923,11 @@ dns_udp_timeout_service(struct service_worker_s *worker)
         
         mutex_lock(&message_collection_mtx);
         
-        treeset_avl_iterator iter;
-        treeset_avl_iterator_init(&message_collection, &iter);
-        while(treeset_avl_iterator_hasnext(&iter))
+        ptr_set_avl_iterator iter;
+        ptr_set_avl_iterator_init(&message_collection, &iter);
+        while(ptr_set_avl_iterator_hasnext(&iter))
         {
-            treeset_node *node = treeset_avl_iterator_next_node(&iter);
+            ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
             dns_simple_message_s *simple_message = (dns_simple_message_s *)node->key;
             
             messages_count++;
@@ -1963,7 +1983,7 @@ dns_udp_timeout_service(struct service_worker_s *worker)
         {
             dns_simple_message_s *simple_message = (dns_simple_message_s *)todelete.data[i];
             
-            treeset_avl_delete(&message_collection, simple_message);
+            ptr_set_avl_delete(&message_collection, simple_message);
             // release because it has been removed from one collection
             dns_udp_simple_message_release(simple_message);
             
@@ -2009,11 +2029,11 @@ dns_udp_timeout_service(struct service_worker_s *worker)
 
                 yassert(now >= simple_message->sent_time_us);
 
-                double tos = now - simple_message->sent_time_us;
-                tos /= 1000000.0;
-                log_notice("received: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) timed-out (%6.3fs)",
+                double dts = now - simple_message->sent_time_us;
+                dts /= 1000000.0;
+                log_notice("receive: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) timed-out [%6.3fs]",
                         simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server, simple_message->status,
-                           tos);
+                           dts);
 
                 dns_simple_message_async_node_s *node = simple_message->async_node.next;
                 while(node != NULL)

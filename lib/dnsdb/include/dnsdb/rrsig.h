@@ -241,6 +241,8 @@ struct rrsig_context_s
     u8 rrsig_header[2+1+1+4+4+4+2+MAX_DOMAIN_LENGTH];
 };
 
+#define ZDB_RRSIGUPQ_TAG                0x5150554749535252	/* RRSIGUPQ */
+
 struct rrsig_update_item_s
 {
     /// The zone being updated

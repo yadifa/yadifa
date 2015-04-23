@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man on Mon Jul 14 14:27:45 CEST 2014
+.\" Manual page created with latex2man
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFAD" "8" "2014\-12\-08" "YADIFA " "YADIFA "
+.TH "YADIFAD" "8" "2015\-04\-24" "YADIFA " "YADIFA "
 .SH NAME
 yadifad \- an authoritative Internet domain name server. 
 .PP
@@ -61,84 +61,43 @@ NOTIFY
 .br
 yadifad
 works only with 1 CLASS:
-.PP
-.TP
-1.
-IN (Internet class)
-.PP
-yadifad
-supports following TYPES:
-.PP
-.TP
-1.
-A 
-.TP
-2.
-AAAA 
-.TP
-3.
-CNAME 
-.TP
-4.
-DNSKEY 
-.TP
-5.
-DS 
-.TP
-6.
-HINFO 
-.TP
-7.
-MX 
-.TP
-8.
-NAPTR 
-.TP
-9.
-NS 
-.TP
-10.
-NSEC 
-.TP
-11.
-NSEC3 
-.TP
-12.
-NSEC3PARAM 
-.TP
-13.
-PTR 
-.TP
-14.
-RRSIG 
-.TP
-15.
-SOA 
-.TP
-16.
-SRV 
-.TP
-17.
-SSHFP 
-.TP
-18.
-TLSA 
-.TP
-19.
-TXT 
-.PP
-.br
+
+.nf
+.ta 3i 4.5i
+Class       Value   Definition
+IN          1       (Internet class)
+
+yadifad supports following TYPES:
+
+Type        Value   Defining RFC
+
+A           1       1035
+AAAA        28      3596
+CNAME       5       1035
+DNSKEY      48      4034
+DS          43      4034
+HINFO       12      1035
+MX          15      1035
+NAPTR       35      3403
+NS          2       1035
+NSEC        47      4034
+NSEC3       50      5155
+NSEC3PARAM  51      5155
+PTR         12      1035
+RRSIG       46      4034
+SOA         6       1035
+SRV         33      2782
+SSHFP       44      4255
+TLSA        52      6698
+TXT         16      1035
+
 Other tyes and pseudo resource records: 
-.PP
-.TP
-1.
-AXFR 
-.TP
-2.
-IXFR 
-.TP
-3.
-OPT 
+
+*           255     1035
+AXFR        252     1035
+IXFR        251     1035
+OPT         41      6891
+
 .PP
 .SH OPTIONS
 
@@ -148,7 +107,7 @@ OPT
  Another config file will be used. 
 .TP
 [\fB\-\-daemon|\-d\fP]
- Starts the name server in daemon mode (default) 
+ Starts the name server in daemon mode. 
 .TP
 [\fB\-\-uid|\-u\fP\fI uid\fP]
  Starts the name server with the given uid. 
@@ -171,7 +130,7 @@ SIGHUP
 reloads the zone and key sections in the configuration file and reloads the zone file(s) with incremented serial number, and close all log files and reopens them. 
 .TP
 SIGINT 
-shutdowns the server 
+shuts down the server 
 .TP
 SIGTERM 
 (see SIGINT) 
@@ -208,13 +167,13 @@ requires OpenSSL version 0.9.8 or later.
 .PP
 .SH CHANGES
 
-Please check the ChangeLog
+Please check the README
 file from the source code. 
 .PP
 .SH VERSION
 
 .PP
-Version: 2.0.4 of 2014-12-08\&.
+Version: 2.1.0 of 2015-04-24\&.
 .PP
 .SH MAILING LISTS
 
@@ -246,7 +205,7 @@ via:
 .PP
 .TP
 Copyright 
-(C)2012, EURid vzw/asbl
+(C)2012-2015, EURid vzw/asbl
 .br
 B\-1831 Diegem, Belgium
 .br

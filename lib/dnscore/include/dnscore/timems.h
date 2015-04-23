@@ -43,6 +43,7 @@
 #ifndef _TIMEMS_H
 #define	_TIMEMS_H
 
+#include <unistd.h>
 #include <dnscore/sys_types.h>
 
 #ifdef	__cplusplus

@@ -40,8 +40,7 @@
  * @{
  */
 
-#ifndef _TREESET_COLLECTION_H
-#define	_TREESET_COLLECTION_H
+#pragma once
 
 #ifdef	__cplusplus
 extern "C"
@@ -58,33 +57,33 @@ extern "C"
  * A structure to hold both children with direct access
  */
 
-typedef int treeset_node_compare(const void *node_a, const void *node_b);
+typedef int ptr_node_compare(const void *node_a, const void *node_b);
 
-typedef struct treeset_tree treeset_tree;
-typedef struct treeset_node treeset_node;
+typedef struct ptr_set ptr_set;
+typedef struct ptr_node ptr_node;
 
-struct treeset_tree
+struct ptr_set
 {
-    struct treeset_node         *root;
-    treeset_node_compare     *compare;
+    struct ptr_node         *root;
+    ptr_node_compare     *compare;
 };
 
-struct treeset_children
+struct ptr_set_children
 {
-    struct treeset_node* left;
-    struct treeset_node* right;
+    struct ptr_node* left;
+    struct ptr_node* right;
 };
 
 /*
  * An union to have access to the children with direct or indexed access
  */
 
-typedef union treeset_children_union treeset_children_union;
+typedef union ptr_set_children_union ptr_set_children_union;
 
-union treeset_children_union
+union ptr_set_children_union
 {
-    struct treeset_children lr;
-    struct treeset_node * child[2];
+    struct ptr_set_children lr;
+    struct ptr_node * child[2];
 };
 
 /*
@@ -92,19 +91,19 @@ union treeset_children_union
  * This means that the digest size is a constant in the whole tree
  */
 
-struct treeset_node
+struct ptr_node
 {
-    union treeset_children_union children;
+    union ptr_set_children_union children;  // 16
     /**/
-    struct treeset_node* parent;
+    struct ptr_node* parent;            //  8
     /**/
     void    *key;   /* ie: nsec3 item */
-    void    *data;  /* ie: label linked to the nsec3 item */
+    void    *value;  /* ie: label linked to the nsec3 item */
     
     s8 balance;
 };
 
-#define TREESET_NODE_SIZE(node) sizeof(treeset_node)
+#define PTR_SET_NODE_SIZE(node) sizeof(ptr_node)
 
 /*
  * AVL definition part begins here
@@ -124,22 +123,22 @@ struct treeset_node
 /*
  * The previx that will be put in front of each function name
  */
-#define AVL_PREFIX	treeset_
+#define AVL_PREFIX	ptr_set_
 
 /*
  * The type that hold the node
  */
-#define AVL_NODE_TYPE   treeset_node
+#define AVL_NODE_TYPE   ptr_node
 
 /*
  * The type that hold the tree (should be AVL_NODE_TYPE*)
  */
-#define AVL_TREE_TYPE   treeset_tree
+#define AVL_TREE_TYPE   ptr_set
 
 /*
  * The type that hold the tree (should be AVL_NODE_TYPE*)
  */
-#define AVL_CONST_TREE_TYPE const treeset_tree
+#define AVL_CONST_TREE_TYPE const ptr_set
 
 /*
  *
@@ -176,7 +175,7 @@ extern "C"
  *
  */
 
-#ifndef _TREESET_COLLECTION_C
+#ifndef _PTR_SET_COLLECTION_C
 
 #undef AVL_MAX_DEPTH
 #undef AVL_PREFIX
@@ -188,27 +187,30 @@ extern "C"
 #undef AVL_HAS_PARENT_POINTER
 #undef _AVL_H_INC
 
-#endif	/* _TREESET_COLLECTION_C */
+#endif	/* _PTR_SET_COLLECTION_C */
 
 #ifdef	__cplusplus
 }
 #endif
 
-#define treeset_default_node_compare treeset_ptr_node_compare
-int treeset_ptr_node_compare(const void *node_a, const void *node_b);
-int treeset_asciizp_node_compare(const void *node_a, const void *node_b);
-int treeset_dnsname_node_compare(const void *node_a, const void *node_b);
+#define ptr_set_default_node_compare ptr_set_ptr_node_compare
+int ptr_set_ptr_node_compare(const void *node_a, const void *node_b);
+int ptr_set_asciizp_node_compare(const void *node_a, const void *node_b);
+int ptr_set_dnsname_node_compare(const void *node_a, const void *node_b);
 
-#define TREESET_EMPTY {NULL, treeset_default_node_compare}
-#define TREESET_ASCIIZ_EMPTY {NULL, treeset_asciizp_node_compare}
-#define TREESET_DNSNAME_EMPTY {NULL, treeset_dnsname_node_compare}
-#define TREESET_PTR_EMPTY {NULL, treeset_ptr_node_compare}
+#define PTR_SET_EMPTY {NULL, ptr_set_default_node_compare}
+#define PTR_SET_ASCIIZ_EMPTY {NULL, ptr_set_asciizp_node_compare}
+#define PTR_SET_DNSNAME_EMPTY {NULL, ptr_set_dnsname_node_compare}
+#define PTR_SET_PTR_EMPTY {NULL, ptr_set_ptr_node_compare}
+
+void *ptr_set_avl_iterator_hasnext_next_value(ptr_set_avl_iterator *iterp);
+
+#define FOREACH_PTR_SET(cast__,var__,ptr_set__) ptr_set_avl_iterator PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__); ptr_set_avl_iterator_init((ptr_set__), &PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__)); for(cast__ var__;((var__) = (cast__)ptr_set_avl_iterator_hasnext_next_value(&PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__))) != NULL;)
+//#define FOREACH_PTR_SET_KEY_VALUE(castk__,vark__,castv__,varv__,ptr_set__) ptr_set_avl_iterator PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__); ptr_set_avl_iterator_init((ptr_set__), &PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__)); for(varv__ varv__;((varc__) = (cast__)ptr_set_avl_iterator_hasnext_next_key_value(&PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__))) != NULL;)
 
 /*
  * AVL definition part ends here
  */
-
-#endif	/* _TREESET_COLLECTION_H */
 
 /** @} */
 

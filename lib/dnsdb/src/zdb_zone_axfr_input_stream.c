@@ -36,9 +36,10 @@
 
 #include "dnscore/file_input_stream.h"
 #include "dnscore/format.h"
-#include "dnscore/xfr_copy.h"
 #include "dnsdb/zdb_types.h"
 #include "dnsdb/zdb_zone_axfr_input_stream.h"
+
+#include "dnsdb/zdb-zone-path-provider.h"
 
 /** @defgroup 
  *  @ingroup 
@@ -57,7 +58,6 @@ extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
 #define AXFRIS_TAG  0x534952465841
-#define AXFR_FORMAT "%s/%{dnsname}%08x.axfr"
 
 /*------------------------------------------------------------------------------
  * STATIC PROTOTYPES */
@@ -185,24 +185,43 @@ static input_stream_vtbl zdb_zone_axfr_input_stream_vtbl =
 };
 
 ya_result
-zdb_zone_axfr_input_stream_open(input_stream *is, zdb_zone *zone, const char *directory)
+zdb_zone_axfr_input_stream_open_with_path(input_stream *is, zdb_zone *zone, const char *filepath)
+{
+    ya_result ret;
+    u32 serial;
+    //u32 timestamp;
+    
+    serial    = zone->axfr_serial;
+    //timestamp = zone->axfr_timestamp; 
+    
+    if(ISOK(ret = file_input_stream_open(filepath, is)))
+    {
+        zdb_zone_axfr_input_stream_data* data;
+        MALLOC_OR_DIE(zdb_zone_axfr_input_stream_data*, data, sizeof(zdb_zone_axfr_input_stream_data), AXFRIS_TAG);
+        data->filtered.data = is->data;
+        data->filtered.vtbl = is->vtbl;
+        data->serial = serial;
+        data->zone = zone;
+
+        is->data = data;
+        is->vtbl = &zdb_zone_axfr_input_stream_vtbl;
+    }
+    
+    return ret;
+}
+
+ya_result
+zdb_zone_axfr_input_stream_open(input_stream *is, zdb_zone *zone)
 {
     ya_result ret;
     u32 serial;
     u32 timestamp;
     char path[PATH_MAX];
-    char data_path[PATH_MAX];
 
     serial    = zone->axfr_serial;
-    timestamp = zone->axfr_timestamp;
-
-    if(FAIL(ret = xfr_copy_mkdir_data_path(data_path, sizeof(data_path), directory, zone->origin)))
-    {
-        log_err("axfr: unable to create directory '%s' for %{dnsname}: %r", data_path, zone->origin, ret);
+    timestamp = zone->axfr_timestamp;    
         
-        return ret;
-    }
-
+        
     while(timestamp == 0)
     {
        /* 
@@ -210,7 +229,10 @@ zdb_zone_axfr_input_stream_open(input_stream *is, zdb_zone *zone, const char *di
         * in the event of a success, a stream waiting for the completion of the file will be returned
         */
 
-        if(ISOK(ret = snformat(path, sizeof (path), AXFR_FORMAT ".part", data_path, zone->origin, serial)))
+        if(ISOK(ret = zdb_zone_path_get_provider()(
+            zone->origin, 
+            path, sizeof(path) - 6,
+            ZDB_ZONE_PATH_PROVIDER_AXFR_FILE|ZDB_ZONE_PATH_PROVIDER_MKDIR)))
         {
             memcpy(&path[ret], ".part", 6);
 
@@ -245,7 +267,11 @@ zdb_zone_axfr_input_stream_open(input_stream *is, zdb_zone *zone, const char *di
      * already written : try to open the axfr file
      * in the event of a success, a simple file input stream will be returned
      */
-    if(ISOK(ret = snformat(path, sizeof (path), AXFR_FORMAT, data_path, zone->origin, serial)))
+
+    if(ISOK(ret = zdb_zone_path_get_provider()(
+        zone->origin, 
+        path, sizeof(path) - 6,
+        ZDB_ZONE_PATH_PROVIDER_AXFR_FILE|ZDB_ZONE_PATH_PROVIDER_MKDIR)))
     {
         ret = file_input_stream_open(path, is);
     }

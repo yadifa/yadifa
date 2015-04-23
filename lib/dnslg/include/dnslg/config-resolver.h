@@ -34,6 +34,7 @@
 #pragma once
 
 #include <dnscore/sys_types.h>
+#include <dnscore/host_address.h>
 //#include <dnscore/ptr_vector.h>
 
 #ifndef CONFIG_RESOLVER_C

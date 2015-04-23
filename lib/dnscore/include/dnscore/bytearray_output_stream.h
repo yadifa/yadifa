@@ -40,8 +40,7 @@
  * @{
  *
  *----------------------------------------------------------------------------*/
-#ifndef _BYTEARRAY_OUTPUT_STREAM_H
-#define	_BYTEARRAY_OUTPUT_STREAM_H
+#pragma once
 
 #include <dnscore/output_stream.h>
 
@@ -66,7 +65,7 @@ extern "C" {
      * YOU MOSTLY WILL NOT USE THAT FLAG
      */
     
-    #define BYTEARRAY_MALLOC_CONTEXT    4
+    #define BYTEARRAY_ZALLOC_CONTEXT    4
 
     typedef char bytearray_output_stream_context[sizeof(void*) + 9];
 
@@ -91,7 +90,6 @@ extern "C" {
 }
 #endif
 
-#endif	/* _BYTEARRAY_OUTPUT_STREAM_H */
 /** @} */
 
 /*----------------------------------------------------------------------------*/

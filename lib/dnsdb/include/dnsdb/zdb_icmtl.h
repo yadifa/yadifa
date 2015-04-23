@@ -194,7 +194,7 @@ struct zdb_icmtl_replay_args
 };
 */
 
-ya_result zdb_icmtl_replay(zdb_zone *zone, const char *directory);
+ya_result zdb_icmtl_replay(zdb_zone *zone);
 
 /**
  * Quick-check for the last available serial for an origin and return it. (It's based on file names)

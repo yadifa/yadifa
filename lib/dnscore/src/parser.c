@@ -481,7 +481,7 @@ parser_next_token(parser_s *parser)
                         } // end switch char type
                     } // end for needle
 
-    parser_next_token_end_of_token_found: ;
+                    parser_next_token_end_of_token_found: ;
 
                     // at this point we have a full token (maybe still escaped)
 

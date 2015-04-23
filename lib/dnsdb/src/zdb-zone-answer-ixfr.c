@@ -57,9 +57,8 @@
 #include <dnscore/packet_writer.h>
 #include <dnscore/rfc.h>
 #include <dnscore/serial.h>
-#include <dnscore/xfr_copy.h>
 
-#include "dnsdb/journal.h"
+#include "dnsdb/zdb-zone-journal.h"
 #include "dnsdb/zdb_icmtl.h"
 #include "dnsdb/zdb_record.h"
 #include "dnsdb/zdb_utils.h"
@@ -92,7 +91,7 @@ typedef struct zdb_zone_answer_ixfr_args zdb_zone_answer_ixfr_args;
 struct zdb_zone_answer_ixfr_args
 {
     zdb_zone *zone;
-    char *directory;
+    //char *directory;
     message_data *mesg;
     struct thread_pool_s *disk_tp;
     ya_result return_code;
@@ -111,7 +110,7 @@ zdb_zone_answer_ixfr_thread_exit(zdb_zone_answer_ixfr_args* data)
     {
         free(data->mesg);
     }
-    free(data->directory);
+    //free(data->directory);
     free(data);
 }
 
@@ -180,7 +179,7 @@ zdb_zone_answer_ixfr_send_message(output_stream *tcpos, packet_writer *pw, messa
      */
 
 #ifdef DEBUG
-    log_debug("zone write ixfr: sending message for %{dnsname}", mesg->qname);
+    log_debug("zone write ixfr: sending message for %{dnsname} to %{sockaddr}", mesg->qname, &mesg->other);
 #endif
     
     if(mesg->edns) // Dig does a TCP query with EDNS0
@@ -214,7 +213,7 @@ zdb_zone_answer_ixfr_send_message(output_stream *tcpos, packet_writer *pw, messa
     pw->packet_offset = mesg->send_length; /** @todo: I need to put this in a packet_writer function */
     if(FAIL(return_code = write_tcp_packet(pw, tcpos)))
     {
-        log_err("zone write ixfr: error sending IXFR packet: %r", return_code);
+        log_err("zone write ixfr: error sending IXFR packet to %{sockaddr}: %r", &mesg->other, return_code);
     }
 
     return return_code;
@@ -289,8 +288,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
      */
 
     u8 origin[MAX_DOMAIN_LENGTH];
-    char directory[MAX_PATH];
-
+    
     /*
      */
 
@@ -375,14 +373,17 @@ zdb_zone_answer_ixfr_thread(void* data_)
 
     MESSAGE_HIFLAGS(mesg->buffer) |= AA_BITS|QR_BITS;
     MESSAGE_SET_NS(mesg->buffer, 0);
-
-    journal *jh;
     
-    if(FAIL(return_value = journal_open(&jh, data->zone, data->directory, FALSE))) // does close
+    dns_resource_record rr;
+    dns_resource_record_init(&rr);
+    
+    if(FAIL(return_value = zdb_zone_journal_get_ixfr_stream_at_serial(data->zone, serial, &fis, &rr)))
     {
         log_err("zone write ixfr: unable to open journal for %{dnsname}: %r", data->zone->origin, return_value);
         
-        zdb_zone_answer_axfr(data->zone, mesg, NULL, data->disk_tp, data->directory, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
+        dns_resource_record_clear(&rr);
+        
+        zdb_zone_answer_axfr(data->zone, mesg, NULL, data->disk_tp, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
         
         data->return_code = return_value;
 
@@ -391,18 +392,11 @@ zdb_zone_answer_ixfr_thread(void* data_)
         return NULL;
     }
     
-    dns_resource_record rr;
-    dns_resource_record_init(&rr);
-    
-    return_value = journal_get_ixfr_stream_at_serial(jh, serial, &fis, &rr);
-    
-    journal_close(jh);
-    
     if(FAIL(return_value) || (sizeof(target_soa_rdata_buffer) < rr.rdata_size))
     {
         log_err("zone write ixfr: unable to read journal from serial %d for %{dnsname}: %r", serial, data->zone->origin, return_value);
         
-        zdb_zone_answer_axfr(data->zone, mesg, NULL, data->disk_tp, data->directory, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
+        zdb_zone_answer_axfr(data->zone, mesg, NULL, data->disk_tp, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
         
         dns_resource_record_clear(&rr);
         
@@ -447,8 +441,6 @@ zdb_zone_answer_ixfr_thread(void* data_)
     
     dnsname_copy(origin, data->zone->origin);
 
-    strncpy(directory, data->directory, sizeof(directory));
-
     /* Sends the "Write unlocked" notification */
 
     log_info("zone write ixfr: releasing implicit write lock %{dnsname} %d", data->zone->origin, serial);
@@ -468,7 +460,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
 
     /* attach the tcp descriptor and put a buffer filter in front of the input and the output*/
 
-    fd_output_stream_attach(tcpfd, &tcpos);
+    fd_output_stream_attach(&tcpos, tcpfd);
 
     buffer_input_stream_init(&fis, &fis, FILE_BUFFER_SIZE);
     buffer_output_stream_init(&tcpos, &tcpos, TCP_BUFFER_SIZE);
@@ -726,7 +718,7 @@ zdb_zone_answer_ixfr(zdb_zone* zone, message_data *mesg, struct thread_pool_s *n
     
     MALLOC_OR_DIE(zdb_zone_answer_ixfr_args*, args, sizeof(zdb_zone_answer_ixfr_args), GENERIC_TAG);
     args->zone = zone;
-    args->directory = strdup(journal_get_xfr_path());
+    //args->directory = "/tmp"; // strdup(journal_get_xfr_path());
 
     message_data *mesg_clone;
 

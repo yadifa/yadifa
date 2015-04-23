@@ -50,4 +50,3 @@ void poll_free();
 void poll_alloc(nfds_t count);
 bool poll_add(int fd);
 int poll_update();
-

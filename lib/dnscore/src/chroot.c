@@ -44,7 +44,7 @@
 
 #include "dnscore/chroot.h"
 #include "dnscore/logger.h"
-#include "dnscore/treeset.h"
+#include "dnscore/ptr_set.h"
 #include "dnscore/mutex.h"
 
 #define MODULE_MSG_HANDLE g_system_logger
@@ -64,7 +64,7 @@ struct chroot_managed_path_s
 
 typedef struct chroot_managed_path_s chroot_managed_path_s;
 
-static treeset_tree chroot_managed_path_set = TREESET_PTR_EMPTY;
+static ptr_set chroot_managed_path_set = PTR_SET_PTR_EMPTY;
 static mutex_t choot_managed_path_set_mtx = MUTEX_INITIALIZER;
 
 /**
@@ -118,15 +118,15 @@ chroot_manage_path(char **managed_location, const char *path, bool chroot_relati
     
     mutex_lock(&choot_managed_path_set_mtx);
     
-    treeset_node *node = treeset_avl_insert(&chroot_managed_path_set, managed_location);
-    if(node->data == NULL)
+    ptr_node *node = ptr_set_avl_insert(&chroot_managed_path_set, managed_location);
+    if(node->value == NULL)
     {
         chroot_managed_path_s *cmp;
         MALLOC_OR_DIE(chroot_managed_path_s*, cmp, sizeof(chroot_managed_path_s), GENERIC_TAG);
         cmp->managed_location = managed_location;
         cmp->prefixed_path = strdup(prefixed_path);
         cmp->chrooted = FALSE;
-        node->data = cmp;
+        node->value = cmp;
 
         mutex_unlock(&choot_managed_path_set_mtx);
         
@@ -145,11 +145,11 @@ chroot_unmanage_path(char **managed_location)
 {
     mutex_lock(&choot_managed_path_set_mtx);
     
-    treeset_node *node = treeset_avl_find(&chroot_managed_path_set, managed_location);
+    ptr_node *node = ptr_set_avl_find(&chroot_managed_path_set, managed_location);
     if(node != NULL)
     {
-        chroot_managed_path_s *cmp = (chroot_managed_path_s*)node->data;
-        treeset_avl_delete(&chroot_managed_path_set, managed_location);
+        chroot_managed_path_s *cmp = (chroot_managed_path_s*)node->value;
+        ptr_set_avl_delete(&chroot_managed_path_set, managed_location);
         free(cmp);
         
         mutex_unlock(&choot_managed_path_set_mtx);
@@ -271,12 +271,12 @@ chroot_jail()
     
     mutex_lock(&choot_managed_path_set_mtx);
      
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&chroot_managed_path_set, &iter);
-    while(treeset_avl_iterator_hasnext(&iter))
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&chroot_managed_path_set, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
-        chroot_managed_path_s *cmp = (chroot_managed_path_s*)node->data;
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        chroot_managed_path_s *cmp = (chroot_managed_path_s*)node->value;
         if(!cmp->chrooted)
         {
             char *new_path = strdup(cmp->prefixed_path);

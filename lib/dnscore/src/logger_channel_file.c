@@ -63,7 +63,7 @@
  * The new logger model does not requires MT protection on the channels
  */
 
-#define FILE_CHANNEL_BUFFER_SIZE 65536
+#define FILE_CHANNEL_BUFFER_SIZE 65536   /// @todo 20140523 edf -- make this configurable
 
 typedef struct file_data file_data;
 
@@ -273,11 +273,27 @@ logger_channel_file_reopen(logger_channel* chan)
     
     gettimeofday(&tv, NULL);
     localtime_r(&tv.tv_sec, &t);
+    
+    logger_channel_file_msg(chan, LOG_NOTICE,
 
-    logger_channel_file_msg(chan, LOG_NOTICE, "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | N | reopening '%s'",
+#if defined(DEBUG) || (HAS_LOG_PID_ALWAYS_ON && HAS_LOG_THREAD_ID_ALWAYS_ON)
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | N | reopening '%s'",
+#elif HAS_LOG_PID_ALWAYS_ON
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %8s | N | reopening '%s'",
+#elif HAS_LOG_THREAD_ID_ALWAYS_ON
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %08x | %8s | N | reopening '%s'",
+#else
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %8s | N | reopening '%s'",
+#endif
                             t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
                             t.tm_hour, t.tm_min, t.tm_sec, tv.tv_usec,
-                            getpid(), pthread_self(),  "system",
+#if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
+                            getpid(),
+#endif
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
+                            pthread_self(),
+#endif
+                            "system",
                             sd->file_name);
     
     logger_channel_file_flush(chan);
@@ -285,8 +301,8 @@ logger_channel_file_reopen(logger_channel* chan)
     output_stream* fos = buffer_output_stream_get_filtered(&sd->os);
     
     /* exchange the file descriptors */
-    fd_output_stream_attach(fd, fos);
-    fd_output_stream_attach(sd->fd, &errlog_os);
+    fd_output_stream_attach(fos, fd);
+    fd_output_stream_attach(&errlog_os, sd->fd);
     sd->fd = fd;
     
     output_stream_close(&errlog_os);
@@ -296,10 +312,25 @@ logger_channel_file_reopen(logger_channel* chan)
     gettimeofday(&tv, NULL);
     localtime_r(&tv.tv_sec, &t);
 
-    logger_channel_file_msg(chan, LOG_NOTICE, "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | N | reopened '%s'",
+    logger_channel_file_msg(chan, LOG_NOTICE,
+#if defined(DEBUG) || (HAS_LOG_PID_ALWAYS_ON && HAS_LOG_THREAD_ID_ALWAYS_ON)
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | N | reopened '%s'",
+#elif HAS_LOG_PID_ALWAYS_ON
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %8s | N | reopened '%s'",
+#elif HAS_LOG_THREAD_ID_ALWAYS_ON
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %08x | %8s | N | reopened '%s'",
+#else
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %8s | N | reopened '%s'",
+#endif
                             t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
                             t.tm_hour, t.tm_min, t.tm_sec, tv.tv_usec,
-                            getpid(), pthread_self(),  "system",
+#if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
+                            getpid(),
+#endif
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
+                            pthread_self(),
+#endif
+                            "system",
                             sd->file_name);
     logger_channel_file_flush(chan);
         

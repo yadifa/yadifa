@@ -32,44 +32,49 @@
 *
 */
 
+/** @defgroup yadifa
+ *  @ingroup ###
+ *  @brief yadifa
+ */
+
 #include <ctype.h>
 
 #include <dnscore/logger_handle.h>
 #include <dnscore/cmdline.h>
 #include <dnscore/config-cmdline.h>
 #include <dnscore/config_settings.h>
-#include <dnscore/rfc.h>
+//#include <dnscore/rfc.h>
 #include <dnscore/ctrl-rfc.h>
 #include <dnscore/string_set.h>
 
 #include <dnslg/config-resolver.h>
 
-#include "server-config.h"
-#include "yadifa-config.h"
+// automatic created include file
+#include "client-config.h"
 
+
+#include "yadifa-config.h"
 #include "common-config.h"
 
-/*------------------------------------------------------------------------------
- * DEFINES */
+/*----------------------------------------------------------------------------*/
 
-#define     DEF_VAL_CLASS                           "CTRL"
-#define     DEF_VAL_TYPE                            "A"
+ /*    ------------------------------------------------------------    */
 
-/*------------------------------------------------------------------------------
- * LOGGER */
+#define DEF_VAL_CLASS                                              "CTRL"
+#define DEF_VAL_TYPE                                                  "A"
 
+/*----------------------------------------------------------------------------*/
 
 extern logger_handle *g_client_logger;
-
 #define MODULE_MSG_HANDLE g_client_logger
+
 
 //extern config_resolver_settings_s g_resolver_settings;
 
-
 struct logger_name_handle_s
 {
-    const char *name;
-    logger_handle **handlep;
+    const char                                                    *name;
+    logger_handle                                             **handlep;
 };
 
 static const struct logger_name_handle_s logger_name_handles[] =
@@ -79,27 +84,25 @@ static const struct logger_name_handle_s logger_name_handles[] =
 };
 
 
-/*------------------------------------------------------------------------------
- * CONFIG */
+/*----------------------------------------------------------------------------*/
 
 /// main container
 #define CONFIG_TYPE config_main_settings_s
 CONFIG_BEGIN(config_main_desc)
 
-CONFIG_HOST_LIST_EX( server,       DEF_VAL_SERVER,       CONFIG_HOST_LIST_FLAGS_DEFAULT, 1        )
-CONFIG_DNS_CLASS(    qclass,       DEF_VAL_CLASS                                                  )
-CONFIG_DNS_TYPE(     qtype,        DEF_VAL_TYPE                                                   )
-CONFIG_FQDN(         qname,        "."                                                            )
-CONFIG_FQDN( tsig_key_name,        "ctrl-key"                                                     )
-CONFIG_BOOL(         clean,        "off"                                                          )
-CONFIG_U8(           log_level,    0                                                              )
+CONFIG_HOST_LIST_EX( server,        DEF_VAL_SERVER,       CONFIG_HOST_LIST_FLAGS_DEFAULT, 1        )
+CONFIG_DNS_CLASS(    qclass,        DEF_VAL_CLASS                                                  )
+CONFIG_DNS_TYPE(     qtype,         DEF_VAL_TYPE                                                   )
+CONFIG_FQDN(         qname,         "."                                                            )
+CONFIG_FQDN(         tsig_key_name, "ctrl-key"                                                     )
+CONFIG_BOOL(         enable,        "on"                                                           )
+CONFIG_BOOL(         clean,         "off"                                                          )
 
-CONFIG_FLAG16(       json,         CONFIG_FLAG_OFF,      view_mode,      VM_JSON                  )
-CONFIG_FLAG16(       multiline,    CONFIG_FLAG_OFF,      view_mode,      VM_MULTILINE             )
-CONFIG_FLAG16(       parse,        CONFIG_FLAG_OFF,      view_mode,      VM_PARSE_FRIENDLY        )
-CONFIG_FLAG16(       short,        CONFIG_FLAG_OFF,      view_mode,      VM_SHORT                 )
-CONFIG_FLAG16(       xml,          CONFIG_FLAG_OFF,      view_mode,      VM_XML                   )
-CONFIG_FLAG16(       wire,         CONFIG_FLAG_OFF,      view_mode,      VM_WIRE                  )
+
+
+CONFIG_BOOL(         verbose,       "off"                                                          )
+
+
 
 CONFIG_END(config_main_desc)
 #undef CONFIG_TYPE
@@ -110,8 +113,7 @@ config_main_settings_s g_yadifa_main_settings;
 //extern config_resolver_settings_s g_resolver_settings;
 
 
-/*------------------------------------------------------------------------------
- * COMMAND LINE */
+/*----------------------------------------------------------------------------*/
 
 // configuration specific to the command line
 
@@ -128,14 +130,19 @@ CMDLINE_OPT(      "qname",           'q', "qname"                      )
 CMDLINE_OPT(      "server",          's', "server"                     )
 CMDLINE_OPT(      "type",            't', "qtype"                      )
 CMDLINE_OPT(      "key-name",        'K', "tsig_key_name"              )
-        
+
+
+
+CMDLINE_BOOL(     "enable",           0,  "enable"                     )
+CMDLINE_BOOL_NOT( "disable",          0,  "enable"                     )
+CMDLINE_BOOL(     "verbose",          0,  "verbose"                    )
+
 CMDLINE_BOOL(     "json",             0,  "json"                       )
 CMDLINE_BOOL(     "multiline",        0,  "multiline"                  )
 CMDLINE_BOOL(     "parse",            0,  "parse"                      )
 CMDLINE_BOOL(     "short",            0,  "short"                      )
 CMDLINE_BOOL(     "xml",              0,  "xml"                        )
 CMDLINE_BOOL(     "wire",             0,  "wire"                       )
-
 
 // resolver section
 CMDLINE_RESOLVER(yadifa_cmdline)
@@ -146,8 +153,9 @@ CMDLINE_VERSION_HELP(yadifa_cmdline)
 CMDLINE_END(yadifa_cmdline)
 
 typedef value_name_table ctrl_type_table;
-static string_node* ctrl_type_set = NULL;
+static string_node *ctrl_type_set = NULL;
 
+/** @todo 20150219 gve -- check for HAS_CTRL instead of 1 as if statement */
 const ctrl_type_table ctrl_type[] = {
 #if 1
     { TYPE_CTRL_SRVCFGRELOAD,     TYPE_CTRL_SRVCFGRELOAD_NAME     },
@@ -168,9 +176,13 @@ const ctrl_type_table ctrl_type[] = {
 };
 
 
-/*------------------------------------------------------------------------------
- * GENERAL FUNCTIONS */
+/*----------------------------------------------------------------------------*/
 
+/** @brief ctrl_rfc_init
+ *  
+ *  @param -- nothing --
+ *  @return -- nothing --
+ */     
 void
 ctrl_rfc_init()
 {
@@ -187,6 +199,14 @@ ctrl_rfc_init()
 }
 
 
+/** @brief get_ctrl_type_from_name
+ *  
+ *  @param src const char *
+ *  @param dst u16 *
+ *  @retval dst ctrl type
+ *  @return ctrl type
+ *  @return UNKNOWN_DNS_TYPE
+ */     
 int
 get_ctrl_type_from_name(const char *src, u16 *dst)
 {
@@ -205,6 +225,16 @@ get_ctrl_type_from_name(const char *src, u16 *dst)
 }
 
 
+/** @brief get_ctrl_type_from_case_name
+ *  @discussion this is the same function as get_ctrl_type_from_name
+ *  except that the src will be uppercase checked
+ *  
+ *  @param src const char *
+ *  @param dst u16 *
+ *  @retval dst ctrl type
+ *  @return ctrl type
+ *  @return UNKNOWN_DNS_TYPE
+ */     
 int
 get_ctrl_type_from_case_name(const char *src, u16 *dst)
 {
@@ -227,12 +257,11 @@ get_ctrl_type_from_case_name(const char *src, u16 *dst)
 
 
 
-/** \brief  Prints the help page when asked with -h or -V or a incorrect command
+/** @brief  yadifa_print_usage prints the help page when asked with -h or -V or a incorrect command
  *          line
  *
- *  @param NONE
- *
- *  @return NONE
+ *  @param -- nothing --
+ *  @return -- nothing --
  */
 static void
 yadifa_print_usage(void)
@@ -246,10 +275,12 @@ yadifa_print_usage(void)
             "\t\t                            : e.g. \"192.0.2.1 port 53\"\n"
             "\t\t                            : note: the quotes are needed\n"
             "\t\t@<host>                     : <host> is the same as for [-s <host>]\n"
-                                             
 
 
 
+        );
+    puts("\n"
+            "\t\t--verbose/-v                : verbose output\n"
             "\n"
             "\t\t--version/-V                : view version\n"
             "\t\t--help/-h                   : show this help text\n"
@@ -257,18 +288,14 @@ yadifa_print_usage(void)
             "\n"
             "\tcommands:\n"
             "\t\tfreeze <zone>               : suspends updates to a zone.\n"
-            "\t\tfreezeall                   : suspends updates to all zones.\n"
-//            "\t\t                            : note: without <zone> all zones are suspended.\n"
+            "\t\t                            : note: without <zone> all zones are suspended.\n"
             "\t\tunfreeze <zone>             : enable updates to a zone.\n"
-            "\t\tunfreezeall                 : enable updates to all zones.\n"
-//            "\t\t                            : note: without <zone> all zones are enabled for updates.\n"
-            "\t\tcfgreload                   : it will reload:\n"
-            "\t\t                            :      - configuration of zone files\n"
-            "\t\t                            :      - zone files\n"
-            "\t\t                            :      - keys\n"
-//           "\t\tsync                        : \n"     // @todo 20140829 gve -- needs to be implemented
-//            "\t\tquerylog <level>            : \n"
-            "\t\tlogreopen                   : reopen the logs\n"
+            "\t\t                            : note: without <zone> all zones are enabled for updates.\n"
+            "\t\treload                      : \n"
+            "\t\tcfgreload                   : \n"
+            "\t\tsync                        : \n"
+            "\t\tquerylog <level>            : \n"
+            "\t\tlogreopen                   : \n"
             "\t\tshutdown                    : shutdowns the server\n"
 
             "\n"
@@ -286,6 +313,11 @@ yadifa_print_usage(void)
 }
 
 
+/** @brief  yadifa_print_authors prints the authors who wrote yadifa
+ *
+ *  @param -- nothing --
+ *  @return -- nothing --
+ */
 static void
 yadifa_print_authors()
 {
@@ -302,6 +334,11 @@ yadifa_print_authors()
 }
 
 
+/** @brief  yadifa_print_version prints the authors who wrote yadifa
+ *
+ *  @param level int
+ *  @return -- nothing --
+ */
 static void
 yadifa_print_version(int level)
 {
@@ -324,9 +361,48 @@ yadifa_print_version(int level)
 }
 
 
-/*------------------------------------------------------------------------------
- * FUNCTIONS */
+/*----------------------------------------------------------------------------*/
 
+/** @brief  yadifa_config_finalise
+ *
+ *  @param -- nothing --
+ *  @return ya_result
+ */
+ya_result
+yadifa_config_finalise()
+{
+    config_error_s                                                   cfgerr;
+    ya_result                                                   return_code;
+
+    /*    ------------------------------------------------------------    */
+
+    config_set_source(CONFIG_SOURCE_DEFAULT);
+
+    if(ISOK(return_code = config_set_default(&cfgerr)))
+    {
+        config_postprocess();
+    }
+    else
+    {
+        formatln("defaults: internal error: %s:%u : '%s': %r", cfgerr.file, cfgerr.line_number, cfgerr.line, return_code);
+    }
+
+
+    /* set all the server ports to the default value if they are 0 */
+    host_set_default_port_value(g_yadifa_main_settings.server, htons(DEF_VAL_SERVER_PORT)); /** @todo 20140701 gve -- put a nice define */
+
+
+    return return_code;
+}
+
+
+/** @brief  yadifa_config_cmdline_callback
+*
+*  @param desc const struct cmdline_desc_s *
+*  @param arg_name const char *
+*  @param callback_owned void *
+*  @return ya_result
+*/
 static ya_result
 yadifa_config_cmdline_callback(const struct cmdline_desc_s *desc, const char *arg_name, void *callback_owned)
 {
@@ -341,7 +417,7 @@ yadifa_config_cmdline_callback(const struct cmdline_desc_s *desc, const char *ar
 
     if(arg_name[0] == '@')
     {
-//        formatln("ARG: %s\n", arg_name);
+        formatln("ARG: %s\n", arg_name);
         flushout();
         //
         config_section_descriptor_s *desc = config_section_get_descriptor("yadifa");
@@ -350,7 +426,7 @@ yadifa_config_cmdline_callback(const struct cmdline_desc_s *desc, const char *ar
         {
             if(ISOK(return_code = config_value_set(desc, "server", &arg_name[1])))
             {
-                // values >= MUST be 0 or CMDLINE_ARG_STOP_PROCESSING_FLAG_OPTIONS
+                /* values >= MUST be 0 or CMDLINE_ARG_STOP_PROCESSING_FLAG_OPTIONS */
                 return_code = 0;
             }
         }
@@ -369,36 +445,12 @@ yadifa_config_cmdline_callback(const struct cmdline_desc_s *desc, const char *ar
 }
 
 
-ya_result
-yadifa_config_finalise()
-{
-    config_error_s                                                   cfgerr;
-    ya_result                                                   return_code;
-
-
-    /*    ------------------------------------------------------------    */
-
-
-    config_set_source(CONFIG_SOURCE_DEFAULT);
-
-    if(ISOK(return_code = config_set_default(&cfgerr)))
-    {
-        config_postprocess();
-    }
-    else
-    {
-        formatln("defaults: internal error: %s:%u : '%s': %r", cfgerr.file, cfgerr.line_number, cfgerr.line, return_code);
-    }
-
-
-    // set all the server ports to the default value if they are 0
-    host_set_default_port_value(g_yadifa_main_settings.server, htons(DEF_VAL_SERVER_PORT)); /// @todo 20140701 gve -- put a nice define
-
-
-    return return_code;
-}
-
-
+/** @brief  yadifa_config_cmdline
+ *
+ *  @param argc int
+ *  @param argv char **
+ *  @return ya_result
+ */
 ya_result
 yadifa_config_cmdline(int argc, char **argv)
 {
@@ -406,9 +458,7 @@ yadifa_config_cmdline(int argc, char **argv)
     config_error_s                                                   cfgerr;
     ya_result                                                   return_code;
 
-
     /*    ------------------------------------------------------------    */
-
 
     config_set_source(CONFIG_SOURCE_HIGHEST);
 
@@ -417,10 +467,9 @@ yadifa_config_cmdline(int argc, char **argv)
 #ifdef DEBUG
         formatln("cmdline_parse failed: %r", return_code);
         flushout();
-#endif
+#endif // DEBUG
         return return_code;
     }
-
 
     config_set_source(CONFIG_SOURCE_CMDLINE);
 
@@ -441,7 +490,7 @@ yadifa_config_cmdline(int argc, char **argv)
 
     return_code = 0;
 
-    // check if cmd '--verion'
+    /* check if cmd '--verion' */
     if(cmdline_version_get() > 0)
     {
         yadifa_print_version(cmdline_version_get());
@@ -449,8 +498,7 @@ yadifa_config_cmdline(int argc, char **argv)
         return_code++;
     }
 
-
-    // check if cmd '--help'
+    /* check if cmd '--help' */
     if(cmdline_help_get())
     {
         yadifa_print_usage();
@@ -462,36 +510,37 @@ yadifa_config_cmdline(int argc, char **argv)
 }
 
 
+/** @brief yadifa_config_init
+ *
+ *  @param -- nothing --
+ *  @return ya_result
+ */
 ya_result
 yadifa_config_init()
 {
     ya_result                                                   return_code;
 
-
     /*    ------------------------------------------------------------    */
 
-
-
-    // 1. log handling. Is this really needed?  /// @todo 20140701 gve -- revisiting maybe this can be removed or put in some kind of option
+    /** @todo 20140701 gve -- revisiting maybe this can be removed or put in some kind of option */
+    /* 1. log handling. Is this really needed? */ 
     for(const struct logger_name_handle_s *name_handle = logger_name_handles; name_handle->name != NULL; name_handle++)
     {
         logger_handle_create(name_handle->name, name_handle->handlep);
     }
 
 
-    // get the list of command line 'command aliases' (e.g. halt for shutdown)
-    // and put them in a avl
 
 
 
-    /// 2. @todo 20140701 gve -- does nothing at the moment, maybe it will be used later
+    /** 2. @todo 20140701 gve -- does nothing at the moment, maybe it will be used later */
     if(FAIL(return_code = config_init()))
     {
         return return_code;
     }
 
 
-    // 3. register command line options: version and help
+    /* 3. register command line options: version and help */
     config_set_source(CONFIG_SOURCE_CMDLINE);
 
     if(FAIL(return_code = config_register_cmdline(6)))
@@ -500,9 +549,9 @@ yadifa_config_init()
     }
 
 
-    // 4. register main options: qname, qclass, qtype, ...
-    //
-    // init and register main settings container
+    /* 4. register main options: qname, qclass, qtype, ...
+     *
+     * init and register main settings container */
     ZEROMEMORY(&g_yadifa_main_settings, sizeof(g_yadifa_main_settings));
     if(FAIL(return_code = config_register_struct("yadifa", config_main_desc, &g_yadifa_main_settings, 5)))
     {
@@ -514,11 +563,12 @@ yadifa_config_init()
         return return_code;
     }
 
-#if DEBUG /// @todo 20140701 gve -- remove before tagged
-    formatln("DONE REGISTER YADIFA");
-#endif // DEBUG
-
 
     return return_code;
 }
+
+
+
+
+/*    ------------------------------------------------------------    */
 

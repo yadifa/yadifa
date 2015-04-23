@@ -188,6 +188,10 @@ extern "C"
     
     
 #define U64_SET_EMPTY {NULL}
+    
+void *u64_set_avl_iterator_hasnext_next_value(u64_set_avl_iterator *iterp);
+    
+#define FOREACH_U64_SET(cast__,var__,u64_set__) u64_set_avl_iterator PREPROCESSOR_CONCAT_EVAL(foreach_u64_set_iter,__LINE__); u64_set_avl_iterator_init((u64_set__), &PREPROCESSOR_CONCAT_EVAL(foreach_u64_set_iter,__LINE__)); for(cast__ var__;((var__) = (cast__)u64_set_avl_iterator_hasnext_next_value(&PREPROCESSOR_CONCAT_EVAL(foreach_u64_set_iter,__LINE__))) != NULL;)
 
 #ifdef	__cplusplus
 }

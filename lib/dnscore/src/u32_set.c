@@ -48,6 +48,7 @@
 #define DEBUG_LEVEL 0
 
 #include "dnscore/u32_set.h"
+#include "dnscore/zalloc.h"
 
 #define U32SET_TAG 0x544553323355
 
@@ -93,15 +94,18 @@
  * A macro to initialize a node and setting the reference
  */
 #define AVL_INIT_NODE(node,reference) node->key = reference;node->value=NULL
+
+#if 0 /* fix */
+#else
 /*
  * A macro to allocate a new node
  */
-#define AVL_ALLOC_NODE(node,reference) MALLOC_OR_DIE(AVL_NODE_TYPE*,node,sizeof(AVL_NODE_TYPE), U32SET_TAG);
+#define AVL_ALLOC_NODE(node,reference) ZALLOC_OR_DIE(AVL_NODE_TYPE*,node,AVL_NODE_TYPE, U32SET_TAG);
 /*
  * A macro to free a node allocated by ALLOC_NODE
  */
-
-#define AVL_FREE_NODE(node) free(node)
+#define AVL_FREE_NODE(node) ZFREE(node,AVL_NODE_TYPE)
+#endif
 /*
  * A macro to print the node
  */

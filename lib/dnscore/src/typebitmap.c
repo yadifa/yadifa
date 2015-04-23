@@ -41,7 +41,7 @@
  *
  *----------------------------------------------------------------------------*/
 
-#include "dnscore-config.h"
+//#include "dnscore/dnscore-config.h"
 
 #include "dnscore/rfc.h"
 #include "dnscore/typebitmap.h"

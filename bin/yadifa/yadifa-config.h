@@ -33,26 +33,47 @@
 */
 #pragma once
 
+/** @defgroup yadifa
+ *  @ingroup ###
+ *  @brief yadifa
+ */
+
 #include <dnscore/sys_error.h>
 
 
 typedef struct config_main_settings_s config_main_settings_s;
+
 struct config_main_settings_s
 {
     host_address                                                    *server;
     u8                                                               *qname;
     u8                                                       *tsig_key_name;
-    u8                                                            log_level;
+//    u8                                                                *file;
+
 
     /*    ------------------------------------------------------------    */
 
     int16_t                                                          qclass;
     int16_t                                                           qtype;
-    u16                                                           view_mode;
+
     bool                                                              clean;
+
+    /** @todo 20150219 gve -- #if HAS_TCL must be set, before release */
+//#if HAS_TCL
+    bool                                                        interactive;
+//#endif // HAS_TCL
+    bool                                                            verbose;
+    bool                                                             enable;
+
 };
 
+
+/*----------------------------------------------------------------------------*/
 
 ya_result yadifa_config_init();
 ya_result yadifa_config_cmdline(int argc, char **argv);
 ya_result yadifa_config_finalise();
+bool yadifa_is_interactive(void);
+
+/*    ------------------------------------------------------------    */
+

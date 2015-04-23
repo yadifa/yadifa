@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man on Mon Jul 14 14:33:06 CEST 2014
+.\" Manual page created with latex2man on Wed Apr 29 16:29:43 CEST 2015
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -10,19 +10,22 @@
 
 .fi
 ..
-.TH "YADIFA" "8" "2014\-07\-01" "YADIFA " "YADIFA "
+.TH "YADIFA" "8" "2015\-04\-24" "YADIFA " "YADIFA "
 .SH NAME
-yadifa \- utility for controlling \fIyadifad\fP(8)\&
+
+.PP
+YADIFA
+is an utility for controlling YADIFAD 
 .PP
 .SH SYNOPSIS
 
 .PP
 yadifa
 [\fB\-s\fP\fI host\fP]
-[\fB@host\fP]
 [\fB\-V\fP]
 [\fB\-h\fP]
-\fBcommand\fP
+[\fB\-t command\fP]
+[\fB\-q zone\fP]
 .PP
 .SH DESCRIPTION
 
@@ -48,6 +51,7 @@ HMAC\-SHA1
 .TP
 [\fB\-\-server|\-s\fP\fI host\fP]
  Host is the remote server to operate. 
+If used with a different port: e.g.: \&./yadifa \-\-server "192.0.2.1 port 5353" 
 .PP
 .TP
 [\fB\-V\fP]
@@ -56,102 +60,42 @@ HMAC\-SHA1
 [\fB\-\-help|\-h\fP]
  Show a help text 
 .PP
-\fBNote\fP
-.br
-If there is ambiguity between the zone and the command: 
-.TP
-[\fB\-t\fP\fI command\fP]
- ommand part without the zone or level information 
-.TP
-[\fB\-q\fP\fI zone\fP]
- zone 
-.TP
-[\fB\-\-level|\-l\fP\fI level\fP]
- level (0\-15) used with certain commands. 
-.PP
 .SH COMMANDS
 
 .TP
-[\fBfreeze \fP[\fIzone\fP]]
+[\fB\-t freeze \fP[\fI\-q zone\fP]]
  disables updates to a zone. 
-If no zone is specified, all zones are implied. 
 .TP
-[\fBunfreeze \fP[\fIzone\fP]]
+[\fB\-t freezeall\fP]
+ disables updates to all zones. 
+.TP
+[\fB\-t unfreeze \fP[\fI\-q zone\fP]]
  enables updates to a zone. 
-If no zone is specified, all zones are implied. 
+.TP
+[\fB\-t unfreezeall\fP]
+ enables updates to all zones. 
 .PP
 .TP
-[\fBreload \fP[\fIzone\fP]]
+[\fB\-t reload \fP[\fI\-q zone\fP]]
  triggers the loading of the zone file(s) if the serial number is incremented. 
 If no zone is specified, all zones are implied. 
 .TP
-[\fBcfgreload \fP[\fIzone\fP]]
+[\fB\-t cfgreload \fP[\fI\-q zone\fP]]
  reload the zone and key sections in the configuration file and reload the zone file(s) with increased serial number. 
 If a zone is specified only that zone section is reloaded. 
 .TP
-[\fBsync \fP[\fIclean\fP]]
+[\fB\-t sync \fP[\fI\-q zone\fP]]
  write the zone to disk and optionally removes the journal. 
-If no zone is specified, all zones are implied. 
+If no zone is specified, all zones are implied. The extra [\-\-clean] option will remove the journal. 
 .TP
-[\fBquerylog \fP\fIlevel\fP]
- sets the log level to the given value (0\-15). 
-.PP
-\fBLevels\fP
+[\fB\-t querylog \fP\fI\-\-enable|\-\-disable\fP]
+ sets the log for queries on or off. 
 .TP
-0.
-EMERG system is unusable 
-.TP
-1.
-ALERT action must be taken immediately 
-.TP
-2.
-CRIT critical conditions 
-.TP
-3.
-ERR error conditions 
-.TP
-4.
-WARNING warning conditions 
-.TP
-5.
-NOTICE normal, but significant, condition 
-.TP
-6.
-INFO informative message 
-.TP
-7.
-DEBUG debug\-level message 
-.TP
-8.
-DEBUG1 debug\-level message 
-.TP
-9
-DEBUG2 debug\-level message 
-.TP
-10.
-DEBUG3 debug\-level message 
-.TP
-11.
-DEBUG4 debug\-level message 
-.TP
-12.
-DEBUG5 debug\-level message 
-.TP
-13.
-DEBUG6 debug\-level message 
-.TP
-13.
-DEBUG7 debug\-level message 
-.TP
-15.
-ALL all message levels 
-.PP
-.TP
-[\fBlogreopen\fP]
+[\fB\-t logreopen\fP]
  close all log files and reopens them. 
 .TP
-[\fBshutdown\fP]
- shut downs the server. 
+[\fB\-t shutdown\fP]
+ shuts down the server. 
 .PP
 .SH FILES
 
@@ -192,7 +136,7 @@ file from the sources code.
 .SH VERSION
 
 .PP
-Version: 2.0.4 of 2014-12-08\&.
+Version: 2.1.0 of 2015-04-24\&.
 .PP
 .SH MAILINGLIST
 
@@ -223,7 +167,7 @@ via:
 .PP
 .TP
 Copyright 
-(C)2012, EURid
+(C)2012\-2015, EURid
 .br
 B\-1831 Diegem, Belgium
 .br

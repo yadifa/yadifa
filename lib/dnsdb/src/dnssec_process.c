@@ -37,6 +37,10 @@
  *
  * @{
  */
+/**
+ * @todo Test, debug then do the optimizations. (LATER)
+ *
+ */
 
 #define RRSIGN_TASKS_C
 
@@ -49,7 +53,6 @@
 #include <strings.h>
 
 #include <pthread.h>
-//#include <sys/timeb.h>
 
 #include <arpa/inet.h>
 
@@ -113,7 +116,7 @@ dnssec_process_begin(dnssec_task_s *task)
     
     if(task->pool != NULL)
     {
-        processor_threads_count = thread_pool_get_pool_size(task->pool);
+        processor_threads_count = thread_pool_get_size(task->pool);
     
         if(processor_threads_count < 2)
         {
@@ -129,7 +132,7 @@ dnssec_process_begin(dnssec_task_s *task)
             return INVALID_STATE_ERROR;
         }
         
-        processor_threads_count = thread_pool_get_pool_size(dnssec_process_default_pool);
+        processor_threads_count = thread_pool_get_size(dnssec_process_default_pool);
         
         pool = dnssec_process_default_pool;
     }
@@ -291,7 +294,7 @@ dnssec_process_set_default_pool(struct thread_pool_s *pool)
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
     
-    s32 processor_threads_count = thread_pool_get_pool_size(pool);
+    s32 processor_threads_count = thread_pool_get_size(pool);
     
     if(processor_threads_count >= 2)
     {
@@ -405,7 +408,7 @@ dnssec_process_zone_nsec3_body(dnssec_task_s *task, void *not_used)
 {
     (void)not_used;
     
-    zdb_zone *zone = task->zone;
+    zdb_zone *zone = task->zone; // from a task, used by zdb_update_signature, its caller acquired the zone
 
 #if DNSSEC_DEBUGLEVEL>2
     log_debug("dnssec_process_zone_nsec3_body: begin %{dnsname} (%s)", &zone->origin, task->descriptor_name);

@@ -91,6 +91,7 @@ extern "C" {
                                                              * edf: I added this so I would not hammer
                                                              *      the root servers when doing tests
                                                              */
+#define     ZONE_FLAG_MAINTAIN_DNSSEC              8
 
 // status flags
 // iIclLMUdDzZaAsSeERxX#---T---ur/!
@@ -121,7 +122,7 @@ extern "C" {
                                                                  */
 #define     ZONE_STATUS_FROZEN                  0x00100000      /* f zone is read only <-> READONLY ? */
 #define     ZONE_STATUS_TEMPLATE_SOURCE_FILE    0x00200000
-#define     ZONE_STATUS_RESERVED_00____NOT_USED 0x00400000
+#define     ZONE_STATUS_MUST_CLEAR_JOURNAL      0x00400000
 #define     ZONE_STATUS_RESERVED_01____NOT_USED 0x00800000
 #define     ZONE_STATUS_DOWNLOADED              0x01000000      /* T the file is on disk, soon to be loaded */
 #define     ZONE_STATUS_UNREGISTERING           0x10000000      /* u */
@@ -274,24 +275,26 @@ struct zone_desc_s
     host_address                                                *notifies;      // may change
 #if ZDB_HAS_ACL_SUPPORT
     // Restrited list of ip address allowed to query */
-    access_control                                                     ac;      // may change
+    access_control                                                     ac;      // may change (content is made of pointers)
 #endif
     // zone notify settings
-    zone_notify_s                                                  notify;      // may change
+    zone_notify_s                                                  notify;      // may change (3 * 32 bits)
 #if HAS_DNSSEC_SUPPORT
     
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
     // zone signature settings
-    zone_signature_s                                            signature;      // may change
+    zone_signature_s                                            signature;      // may change (5 * 32 bits)
 #endif
     
     u32                                                       dnssec_mode;      // needs to be u32 (config descriptor requirement)
 #endif
     // zone refresh status
-    zone_refresh_s                                                refresh;      // internal
+    zone_refresh_s                                                refresh;      // internal (3 * 32 bits)
     volatile u32                                             status_flags;      // internal
     volatile u32                                           last_processor;      // internal, diagnostic
     u32                                                             flags;      // may change ? (notify auto, drop before load, ...)
+    u32                                                   journal_size_kb;      // may change, expressed in kb, 0 "choose", 2^32-1 "
+    u32                                                     stored_serial;      // serial of the last stored full zone image
     /* Type of zone file (master, slave, stub, unknown) */
     zone_type                                                        type;
     u16                                                            qclass;      // cannot change, most likely CLASS_IN
@@ -302,7 +305,7 @@ struct zone_desc_s
     dynamic_provisioning_s dynamic_provisioning;                                // proprietary
     host_address *slaves;                                                       // proprietary
     
-    zdb_zone                                                *loaded_zone;       // internal
+    zdb_zone                                                *loaded_zone;       // internal, keeps an RC, has to be increased by users grabbing it (mutex required)
     ///
     /* marks */
     mutex_t                                                         lock;

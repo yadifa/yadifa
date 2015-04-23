@@ -9,6 +9,9 @@
 /* always on */
 #undef HAS_ACL_SUPPORT
 
+/* bfd debug support disabled. */
+#undef HAS_BFD_DEBUG_SUPPORT
+
 /* i386, Athlon, Opteron, Core2, i3, i5, i7, ... */
 #undef HAS_CPU_AMDINTEL
 
@@ -18,14 +21,29 @@
 /* remote control disabled. */
 #undef HAS_CTRL
 
+/* dynamic provisioning disabled. */
+#undef HAS_CTRL_DYNAMIC_PROVISIONING
+
 /* always on */
 #undef HAS_DNSSEC_SUPPORT
+
+/* always off */
+#undef HAS_DROPALL_SUPPORT
 
 /* dynamic update support disabled. */
 #undef HAS_DYNUPDATE_SUPPORT
 
 /* where to put the log files */
 #undef HAS_LOGDIR
+
+/* write the pid in each line of log disabled. */
+#undef HAS_LOG_PID_ALWAYS_ON
+
+/* write the thread id in each line of log disabled. */
+#undef HAS_LOG_THREAD_ID_ALWAYS_ON
+
+/* malloc debug support disabled. */
+#undef HAS_MALLOC_DEBUG_SUPPORT
 
 /* DNS master disabled. */
 #undef HAS_MASTER_SUPPORT
@@ -39,6 +57,13 @@
 
 /* always off */
 #undef HAS_MIRROR_SUPPORT
+
+/* mutex debug support disabled. */
+#undef HAS_MUTEX_DEBUG_SUPPORT
+
+/* Allows AXFR answer from master without AA bit set (Microsoft DNS) disabled.
+   */
+#undef HAS_NON_AA_AXFR_SUPPORT
 
 /* always on */
 #undef HAS_NSEC3_SUPPORT
@@ -55,6 +80,12 @@
 /* The system supports spinlocks */
 #undef HAS_PTHREAD_SPINLOCK
 
+/* always off */
+#undef HAS_RDTSC
+
+/* always off */
+#undef HAS_RRCACHE_ENABLED
+
 /* DNS Response Rate Limiter disabled. */
 #undef HAS_RRL_SUPPORT
 
@@ -70,11 +101,23 @@
 /* The sockaddr struct has an sa_len field */
 #undef HAS_SOCKADDR_SA_LEN
 
+/* always off */
+#undef HAS_TCL
+
 /* always on */
 #undef HAS_TSIG_SUPPORT
 
 /* where to put the log files */
 #undef HAS_WITH_LOGDIR
+
+/* zalloc debug support disabled. */
+#undef HAS_ZALLOC_DEBUG_SUPPORT
+
+/* zalloc statistics support disabled. */
+#undef HAS_ZALLOC_STATISTICS_SUPPORT
+
+/* zalloc memory system disabled. */
+#undef HAS_ZALLOC_SUPPORT
 
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #undef HAVE_ARPA_INET_H

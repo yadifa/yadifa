@@ -245,8 +245,8 @@ bin_PROGRAMS = yadifa$(EXEEXT)
 
 #GCC
 @HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_29 = -mcpu=niagara
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_30 = -DLTO -flto -fwhole-program -ffat-lto-objects
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_31 = -flto -fwhole-program -ffat-lto-objects
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_30 = -DLTO -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_31 = -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
 @USES_GCC_TRUE@am__append_32 = -DUSES_GCC
 @USES_GCC_TRUE@am__append_33 = -DMODE_DEBUG_GCC
 @USES_SUNC_TRUE@am__append_34 = -DUSES_SUNC
@@ -285,13 +285,14 @@ DIST_COMMON = $(srcdir)/Makefile.am $(top_srcdir)/configure \
 am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
  configure.lineno config.status.lineno
 mkinstalldirs = $(install_sh) -d
-CONFIG_HEADER = server-config.h
+CONFIG_HEADER = client-config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
 am_yadifa_OBJECTS = main.$(OBJEXT) query-result.$(OBJEXT) \
-	yadifa.$(OBJEXT) yadifa-config.$(OBJEXT)
+	yadifa.$(OBJEXT) yadifa-config.$(OBJEXT) yazu.$(OBJEXT) \
+	yazu-config.$(OBJEXT)
 yadifa_OBJECTS = $(am_yadifa_OBJECTS)
 yadifa_LDADD = $(LDADD)
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -342,7 +343,7 @@ am__can_run_installinfo = \
 DATA = $(dist_noinst_DATA)
 HEADERS = $(noinst_HEADERS)
 am__tagged_files = $(HEADERS) $(SOURCES) $(TAGS_FILES) \
-	$(LISP)server-config.h.in
+	$(LISP)client-config.h.in
 # Read a list of newline-separated strings from the standard input,
 # and print each of them once, without duplicates.  Input order is
 # *not* preserved.
@@ -365,7 +366,7 @@ CSCOPE = cscope
 AM_RECURSIVE_TARGETS = cscope
 am__DIST_COMMON = $(srcdir)/../../mk/common-labels.mk \
 	$(srcdir)/../../mk/common-settings.mk $(srcdir)/Makefile.in \
-	$(srcdir)/server-config.h.in AUTHORS COPYING ChangeLog INSTALL \
+	$(srcdir)/client-config.h.in AUTHORS COPYING ChangeLog INSTALL \
 	NEWS README compile config.guess config.sub depcomp install-sh \
 	ltmain.sh missing
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -416,6 +417,8 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GREP = @GREP@
+HAS_ACL_SUPPORT = @HAS_ACL_SUPPORT@
+HAS_BFD_DEBUG_SUPPORT = @HAS_BFD_DEBUG_SUPPORT@
 HAS_BIG_ENDIAN = @HAS_BIG_ENDIAN@
 HAS_CC_ADDRESS_SANITIZER_CHECK = @HAS_CC_ADDRESS_SANITIZER_CHECK@
 HAS_CC_ANSI = @HAS_CC_ANSI@
@@ -442,14 +445,24 @@ HAS_CC_TUNE_NATIVE = @HAS_CC_TUNE_NATIVE@
 HAS_CC_WALL = @HAS_CC_WALL@
 HAS_CC_XC99 = @HAS_CC_XC99@
 HAS_CTRL = @HAS_CTRL@
+HAS_CTRL_DYNAMIC_PROVISIONING = @HAS_CTRL_DYNAMIC_PROVISIONING@
 HAS_DYNUPDATE_SUPPORT = @HAS_DYNUPDATE_SUPPORT@
 HAS_LITTLE_ENDIAN = @HAS_LITTLE_ENDIAN@
 HAS_LOGDIR = @HAS_LOGDIR@
+HAS_LOG_PID_ALWAYS_ON = @HAS_LOG_PID_ALWAYS_ON@
+HAS_LOG_THREAD_ID_ALWAYS_ON = @HAS_LOG_THREAD_ID_ALWAYS_ON@
+HAS_MALLOC_DEBUG_SUPPORT = @HAS_MALLOC_DEBUG_SUPPORT@
 HAS_MASTER_SUPPORT = @HAS_MASTER_SUPPORT@
 HAS_MESSAGES_SUPPORT = @HAS_MESSAGES_SUPPORT@
+HAS_MUTEX_DEBUG_SUPPORT = @HAS_MUTEX_DEBUG_SUPPORT@
+HAS_NON_AA_AXFR_SUPPORT = @HAS_NON_AA_AXFR_SUPPORT@
 HAS_NSID_SUPPORT = @HAS_NSID_SUPPORT@
 HAS_RRL_SUPPORT = @HAS_RRL_SUPPORT@
 HAS_RRSIG_MANAGEMENT_SUPPORT = @HAS_RRSIG_MANAGEMENT_SUPPORT@
+HAS_TSIG_SUPPORT = @HAS_TSIG_SUPPORT@
+HAS_ZALLOC_DEBUG_SUPPORT = @HAS_ZALLOC_DEBUG_SUPPORT@
+HAS_ZALLOC_STATISTICS_SUPPORT = @HAS_ZALLOC_STATISTICS_SUPPORT@
+HAS_ZALLOC_SUPPORT = @HAS_ZALLOC_SUPPORT@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -549,9 +562,15 @@ top_srcdir = @top_srcdir@
 #CPU_FLAGS=
 ACLOCAL_AMFLAGS = -I m4
 dist_noinst_DATA = VERSION
-yadifa_SOURCES = main.c query-result.c yadifa.c yadifa-config.c
+yadifa_SOURCES = main.c query-result.c yadifa.c yadifa-config.c yazu.c \
+	yazu-config.c
+
+# this will probably be removed afterwards
+#yadifa_SOURCES += dnssec-test.c
+
+# this will probably be removed afterwards
 noinst_HEADERS = common-config.h query-result.h yadifa.h \
-	yadifa-config.h
+	yadifa-config.h yazu.h yazu-config.h dnssec-test.h
 
 #
 #
@@ -572,11 +591,12 @@ DEBUGFLAGS = $(am__append_1) $(am__append_2) $(am__append_16) \
 	$(am__append_17) $(am__append_18) $(am__append_19) \
 	$(am__append_24) $(am__append_28) $(am__append_33) \
 	$(am__append_35) $(am__append_37)
-LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"'
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"' -D_THREAD_SAFE
 @HAS_LTO_SUPPORT_FALSE@@USES_CLANG_TRUE@AM_AR = ar
+@HAS_LTO_SUPPORT_FALSE@@USES_GCC_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@AM_AR = llvm-ar
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@AM_AR = gcc-ar
 @HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@AM_AR = xiar
-@USES_GCC_TRUE@AM_AR = ar
 
 #
 # Sun C
@@ -586,10 +606,11 @@ LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATED
 # SUNC
 @USES_SUNC_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_FALSE@@USES_CLANG_TRUE@AM_LD = ld
+@HAS_LTO_SUPPORT_FALSE@@USES_GCC_TRUE@AM_LD = ld
 @HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@AM_LD = ld.gold
-@USES_GCC_TRUE@AM_LD = ld
 @USES_ICC_TRUE@AM_LD = ld
 @USES_SUNC_TRUE@AM_LD = ld
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@AM_RANLIB = gcc-ranlib
 YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -DCMR
 YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP
 YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
@@ -601,7 +622,7 @@ YSLDFLAGS = $(YRLDFLAGS)
 AM_MAKEFLAGS = MODE_CFLAGS="$(AM_CFLAGS)" CC=$(CC) AR=$(AM_AR) LD=$(AM_LD)
 YCFLAGS = $(YSCFLAGS)
 YLDFLAGS = $(YNLDFLAGS)
-all: server-config.h
+all: client-config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-am
 
 .SUFFIXES:
@@ -641,20 +662,20 @@ $(ACLOCAL_M4):  $(am__aclocal_m4_deps)
 	$(am__cd) $(srcdir) && $(ACLOCAL) $(ACLOCAL_AMFLAGS)
 $(am__aclocal_m4_deps):
 
-server-config.h: stamp-h1
+client-config.h: stamp-h1
 	@test -f $@ || rm -f stamp-h1
 	@test -f $@ || $(MAKE) $(AM_MAKEFLAGS) stamp-h1
 
-stamp-h1: $(srcdir)/server-config.h.in $(top_builddir)/config.status
+stamp-h1: $(srcdir)/client-config.h.in $(top_builddir)/config.status
 	@rm -f stamp-h1
-	cd $(top_builddir) && $(SHELL) ./config.status server-config.h
-$(srcdir)/server-config.h.in:  $(am__configure_deps) 
+	cd $(top_builddir) && $(SHELL) ./config.status client-config.h
+$(srcdir)/client-config.h.in:  $(am__configure_deps) 
 	($(am__cd) $(top_srcdir) && $(AUTOHEADER))
 	rm -f stamp-h1
 	touch $@
 
 distclean-hdr:
-	-rm -f server-config.h stamp-h1
+	-rm -f client-config.h stamp-h1
 install-binPROGRAMS: $(bin_PROGRAMS)
 	@$(NORMAL_INSTALL)
 	@list='$(bin_PROGRAMS)'; test -n "$(bindir)" || list=; \
@@ -719,6 +740,8 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/query-result.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/yadifa-config.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/yadifa.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/yazu-config.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/yazu.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -974,7 +997,7 @@ distcleancheck: distclean
 	       exit 1; } >&2
 check-am: all-am
 check: check-am
-all-am: Makefile $(PROGRAMS) $(DATA) $(HEADERS) server-config.h
+all-am: Makefile $(PROGRAMS) $(DATA) $(HEADERS) client-config.h
 installdirs:
 	for dir in "$(DESTDIR)$(bindir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \

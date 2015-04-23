@@ -42,10 +42,10 @@
  *----------------------------------------------------------------------------*/
 
 #include <stdlib.h>
-#include <arpa/inet.h>
-#include <ctype.h>
+//#include <arpa/inet.h>
+//#include <ctype.h>
 
-#include "dnscore-config.h"
+//#include "dnscore/dnscore-config.h"
 
 #define DNSCORE_NSID_C
 

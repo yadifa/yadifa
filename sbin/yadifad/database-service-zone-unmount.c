@@ -51,8 +51,10 @@
 
 #include <dnscore/logger.h>
 
+#include <dnsdb/zdb.h>
 #include <dnsdb/zdb_zone.h>
 #include <dnsdb/zdb_zone_label.h>
+#include <dnsdb/zdb-lock.h>
 
 #include "database-service.h"
 
@@ -103,8 +105,6 @@ database_service_zone_unmount(zone_desc_s *zone_desc)
 
     zdb *db;
 
-    dnsname_vector origin_vector;
-
     notify_clear(zone_desc->origin);
     /// @todo signature maintenance clear, ie: dnssec_maintenance_clear(zone_desc->origin);
     /// @todo retry clearn, ie: retry_clear(zone_desc->origin);
@@ -115,63 +115,21 @@ database_service_zone_unmount(zone_desc_s *zone_desc)
 
     db = g_config->database;
 
-    group_mutex_lock(&db->mutex, ZDB_MUTEX_WRITER);
-        
-    dnsname_to_dnsname_vector(origin, &origin_vector);
+    zdb_zone *old_zone = zdb_remove_zone_from_dnsname(db, origin);
     
-    zdb_zone_label *zone_label = zdb_zone_label_find_nolock(db, &origin_vector);
-
-    if(zone_label != NULL)
+    if(old_zone != NULL)
     {
-        // there is a label at that location
+        log_debug2("database_service_zone_unmount: zone %{dnsname} @%p removed from the database", origin, old_zone);
         
-        log_debug2("database_service_zone_unmount: label exists with a zone");
+        database_zone_unload(old_zone); // RC should mostly be one at this point
         
-        zdb_zone *old_zone = zone_label->zone;
-                
-        if(old_zone != NULL)
-        {
-            // there is already a zone mounted
-            
-            zdb_zone_lock(old_zone, ZDB_ZONE_MUTEX_DESTROY);
-            
-            // the old zone is not invalid
-
-            log_debug2("database_service_zone_unmount: removing zone@%p", old_zone);
-            
-            // mount new zone
-            zone_label->zone = NULL;
-
-            // set old zone as invalid                
-            old_zone->apex->flags |= ZDB_RR_LABEL_INVALID_ZONE;
-            zdb_zone_unlock(old_zone, ZDB_ZONE_MUTEX_DESTROY);
-
-            group_mutex_unlock(&db->mutex, ZDB_MUTEX_WRITER);
-
-            // destroy the old zone
-
-            database_zone_unload(old_zone);
-        }
-        else
-        {
-            // the label exists, but no zone is present
-            
-            log_debug2("database_service_zone_unmount: label exists without a zone");
-            
-            group_mutex_unlock(&db->mutex, ZDB_MUTEX_WRITER);
-        }
+        zdb_zone_release(old_zone); // it's now the responsibility of database_zone_unload to drop the zone
     }
     else
     {
-        // no label exist
-        
-        log_debug2("database_service_zone_unmount: no label");
-        
-        // add the label (will lock/unlock for a writer)
-        
-        group_mutex_unlock(&db->mutex, ZDB_MUTEX_WRITER);        
+        log_debug2("database_service_zone_unmount: zone %{dnsname} not found in the database", origin);
     }
-    
+        
     zone_desc->status_flags &= ~(ZONE_STATUS_STARTING_UP|ZONE_STATUS_UNMOUNTING|ZONE_STATUS_PROCESSING);
     
     log_debug1("database_service_zone_unmount: unlocking zone '%{dnsname}' for unmounting", origin);

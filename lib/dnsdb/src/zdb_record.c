@@ -504,7 +504,7 @@ zdb_record_getsoa(const zdb_packed_ttlrdata* soa, soa_rdata* soa_out)
 zdb_ttlrdata* zdb_ttlrdata_clone(const zdb_ttlrdata* source)
 {
     zdb_ttlrdata *rec;
-    MALLOC_OR_DIE(zdb_ttlrdata*, rec, sizeof(zdb_ttlrdata), TTLRDATA_TAG);
+    MALLOC_OR_DIE(zdb_ttlrdata*, rec, sizeof(zdb_ttlrdata), TTLRDATA_TAG); /// @todo edf 20141001 -- maybe merge the two allocs into one
     rec->next = NULL;
     rec->ttl = source->ttl;
     rec->rdata_size = source->rdata_size;

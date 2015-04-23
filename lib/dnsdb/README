@@ -29,7 +29,25 @@
 # 
 ################################################################################
 
-20150417:
+20150424:
+        YADIFA 2.1.0
+
+        New journal file format:
+      
+            This new format addresses a few issues like having maximum journal file and
+            a relatively constant random access time even for very big sizes.
+
+        The internal messaging queue has been changed to address huge amount of zones.
+
+        New CHaos queries supported:
+            hostname
+            id.server
+
+        Known issues:
+        _ building successfully with LTO may require to append both AR=gcc-ar and RANLIB=gcc-ranlib to the ./configure command
+
+
+20150403:
         YADIFA 2.0.6
 
         This release is a public release.

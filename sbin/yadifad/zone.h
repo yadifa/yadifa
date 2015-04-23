@@ -49,16 +49,19 @@
 #include <dnscore/dnsname.h>
 #include <dnscore/rfc.h>
 #include <dnscore/mutex.h>
-#include <dnscore/treeset.h>
+#include <dnscore/ptr_set.h>
 
 typedef struct zone_data_set zone_data_set;
 
 struct zone_data_set
 {
-    treeset_tree set;
+    ptr_set set;
     mutex_t lock;
 };
 
+#if HAS_CTRL
+#include "ctrl.h"
+#endif
 #include "zone_desc.h"
 
 /*    ------------------------------------------------------------
@@ -191,6 +194,7 @@ zone_desc_s *zone_getafterdnsname(const u8 *name);
 zone_desc_s *zone_acquirebydnsname(const u8 *name);
 
 
+
 /*
  * functions used for removing a zone_desc
  */
@@ -216,6 +220,9 @@ bool zone_isdynamicupdating(zone_desc_s *zone_desc);
 bool zone_canbeedited(zone_desc_s *zone_desc);
 bool zone_ismaster(zone_desc_s *zone_desc);
 
+zdb_zone *zone_get_loaded_zone(zone_desc_s *zone_desc);
+zdb_zone *zone_set_loaded_zone(zone_desc_s *zone_desc, zdb_zone *zone);
+bool zone_has_loaded_zone(zone_desc_s *zone_desc);
 /*
  * This will mark a zone as being obsolete.
  * It means that we are about to delete it.
@@ -265,6 +272,12 @@ void zone_setdefaults(zone_desc_s *zone_desc);
 
 // 0 : no merge, 1 : merge, < 0 : error
 ya_result zone_setwithzone(zone_desc_s *zone_desc, zone_desc_s *src);
+
+static inline bool
+zone_maintains_dnssec(zone_desc_s *zone_desc)
+{
+    return (zone_desc->flags & ZONE_FLAG_MAINTAIN_DNSSEC) != 0;
+}
 
 static inline bool
 zone_is_auto_notify(zone_desc_s *zone_desc)

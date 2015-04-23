@@ -261,6 +261,7 @@ typedef struct config_section_descriptor_s config_section_descriptor_s;
 //#define CONFIG_ACL_FILTER(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_acl_item, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
 #define CONFIG_LIST_ITEM(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_add_list_item, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
 #define CONFIG_ENUM(fieldname_,defaultvalue_,enumtable_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_enum_value, defaultvalue_, {(intptr)enumtable_}, CONFIG_TABLE_SOURCE_NONE},
+#define CONFIG_ENUM8(fieldname_,defaultvalue_,enumtable_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_enum8_value, defaultvalue_, {(intptr)enumtable_}, CONFIG_TABLE_SOURCE_NONE},
 #define CONFIG_HOST_LIST(fieldname_,defaultvalue_) {#fieldname_, offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_host_list, defaultvalue_,{._8u8={CONFIG_HOST_LIST_FLAGS_DEFAULT,255,0,0,0,0,0,0}}, CONFIG_TABLE_SOURCE_NONE},
 #define CONFIG_HOST_LIST_EX(fieldname_,defaultvalue_,flags_,host_list_max_) {#fieldname_, offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_host_list, defaultvalue_,{._8u8={(flags_),(host_list_max_),0,0,0,0,0,0}}, CONFIG_TABLE_SOURCE_NONE},
 #define CONFIG_BYTES(fieldname_,defaultvalue_,maxsize_) {#fieldname_, offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_bytes, defaultvalue_, {maxsize_}, CONFIG_TABLE_SOURCE_NONE},
@@ -296,6 +297,7 @@ ya_result config_set_gid_t(const char *value, gid_t *dest, anytype notused);
 ya_result config_set_dnstype(const char *value, u16 *dest, anytype notused);
 ya_result config_set_dnsclass(const char *value, u16 *dest, anytype notused);
 ya_result config_set_enum_value(const char *value, u32 *dest, anytype enum_value_name_table);
+ya_result config_set_enum8_value(const char *value, u8 *dest, anytype enum_value_name_table);
 ya_result config_set_host_list(const char *value, host_address **dest, anytype notused);
 ya_result config_set_bytes(const char *value, void *dest, anytype sizeoftarget);
 

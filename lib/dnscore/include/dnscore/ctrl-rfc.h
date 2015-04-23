@@ -87,19 +87,22 @@
 #if 1//HAS_CTRL
 #define     TYPE_CTRL_SHUTDOWN_NAME         "SHUTDOWN"
 #define     TYPE_CTRL_ZONERELOAD_NAME       "RELOAD"
-#define     TYPE_CTRL_LOGREOPEN_NAME        "LOGREOPEN"    /// @todo 20140528 gve -- needs to be remove (twice declared)
+#define     TYPE_CTRL_LOGREOPEN_NAME        "LOGREOPEN"     /// @todo 20140528 gve -- needs to be remove (twice declared)
+#define     TYPE_CTRL_SRVQUERYLOG_NAME      "QUERYLOG"
+
 
 #define     TYPE_CTRL_ZONEFREEZE_NAME       "FREEZE"
 #define     TYPE_CTRL_ZONEUNFREEZE_NAME     "UNFREEZE"
 #define     TYPE_CTRL_ZONEFREEZEALL_NAME    "FREEZEALL"     // NI
 #define     TYPE_CTRL_ZONEUNFREEZEALL_NAME  "UNFREEZEALL"   // NI
+#define     TYPE_CTRL_ZONESYNC_NAME         "SYNC"
 
-#define     TYPE_CTRL_SRVLOGREOPEN_NAME     "LOGREOPEN"
+#define     TYPE_CTRL_SRVLOGREOPEN_NAME     "LOGREOPEN"     /// @TODO 20150217 gve -- needs to be remove (twice declared)
 #define     TYPE_CTRL_SRVCFGRELOAD_NAME     "CFGRELOAD"
 
 #if 1//HAS_DYNAMIC_PROVISIONING
 #define     TYPE_CTRL_CFGMERGE_NAME         "CFGMERGE"
-#define     TYPE_CTRL_CFGSAVE_NAME          "CFGSAVE"     // NI
+#define     TYPE_CTRL_CFGSAVE_NAME          "CFGSAVE"       // NI
 #define     TYPE_CTRL_CFGDROP_NAME          "CFGDROP"       // NI
 #define     TYPE_CTRL_CFGMERGEALL_NAME      "CFGMERGEALL"
 //#define     TYPE_CTRL_CFGSAVEALL_NAME       "CFGSAVEALL"

@@ -63,6 +63,17 @@ static bool tcp_cork = FALSE;
  * AF_UNSPEC ( = 0)
  */
 
+/**
+ * 
+ * Resolves the host address
+ * 
+ * @param host
+ * @param port
+ * @param sa
+ * @param familly
+ * @return 
+ */
+
 ya_result
 gethostaddr(const char* host, u16 port, struct sockaddr *sa, int familly)
 {
@@ -110,7 +121,7 @@ gethostaddr(const char* host, u16 port, struct sockaddr *sa, int familly)
         {
             struct sockaddr_in6 *sai6 = (struct sockaddr_in6 *)sa;
             memcpy(sai6, next->ai_addr, next->ai_addrlen);
-            
+
             sai6->sin6_port = htons(port);
 #if HAS_SOCKADDR_IN6_SIN6_LEN
             sai6->sin6_len = sizeof(struct sockaddr_in6);
@@ -201,8 +212,8 @@ tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream
     
     /* can only fail if fd < 0, which is never the case here */
     
-    fd_input_stream_attach(fd, istream_);
-    fd_output_stream_attach(fd, ostream_);
+    fd_input_stream_attach(istream_, fd);
+    fd_output_stream_attach(ostream_, fd);
 
     tcp_set_sendtimeout(fd, ssec, susec);
     tcp_set_recvtimeout(fd, rsec, rusec);

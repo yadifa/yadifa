@@ -179,9 +179,9 @@ ya_result
 resolv_add_hostaddress(resolver_s *resolv, host_address *address)
 {
 
-//    host_address **nameserver;
-//
-    return OK;
+    host_address **nameserver;
+
+    return 0;
 }
 
 
@@ -349,7 +349,7 @@ ya_result
 resolv_host_address_list(host_address *src, host_address *dst)
 {
     ya_result                                            return_code = TRUE;
-//    char                                   fqdn[MAX_DOMAIN_TEXT_LENGTH + 1];
+    char                                   fqdn[MAX_DOMAIN_TEXT_LENGTH + 1];
 //    s32                                                            fqdn_len;
 
     /*    ------------------------------------------------------------    */

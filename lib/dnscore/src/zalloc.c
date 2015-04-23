@@ -38,6 +38,8 @@
  * @{
  */
 
+#include "dnscore/dnscore-config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -45,53 +47,47 @@
 
 #define _ZALLOC_C
 
-pthread_t zalloc_owner;
-
 #include <dnscore/sys_types.h>
 #include <dnscore/mutex.h>
 #include <dnscore/logger.h>
 #include <dnscore/format.h>
+#include <dnscore/zalloc.h>
 
-#include "dnsdb/zdb_error.h"
-#include "dnsdb/zdb_alloc.h"
+extern logger_handle* g_system_logger;
+#define MODULE_MSG_HANDLE g_system_logger
 
-extern logger_handle* g_database_logger;
-#define MODULE_MSG_HANDLE g_database_logger
-
-#if ZDB_ZALLOC_THREAD_SAFE == 0
-#error "ZDB_ZALLOC_THREAD_SAFE used to be experimental. Now it MUST be set to 1."
+#if HAS_ZALLOC_DEBUG_SUPPORT
+#define ZALLOC_DEBUG                 1
+#define ZDB_DEBUG_ZALLOC_TRASHMEMORY 1
+#else
+#define ZALLOC_DEBUG                 0
+#define ZDB_DEBUG_ZALLOC_TRASHMEMORY 0
 #endif
+
+#if HAS_ZALLOC_STATISTICS_SUPPORT
+#define ZALLOC_STATISTICS            1
+#else
+#define ZALLOC_STATISTICS            0
+#endif
+
 
 /*
  *
  */
 
-#if ZDB_USES_ZALLOC!=0
+#if DNSCORE_HAS_ZALLOC_SUPPORT
 
 #define ZMALLOC_TAG 0x434f4c4c414d5a
 
-//#define ZDB_ALLOC_MMAP_BLOC_SIZE  0x20000  // 128K : for small usages
-//#define ZDB_ALLOC_MMAP_BLOC_SIZE  0x300000 //   3M : not enough to be in a 4M page, still a lot
-#define ZDB_ALLOC_MMAP_BLOC_SIZE 0x1000000 //  16M : enough for lots of records, but too much for smaller setups
+//#define ZALLOC_MMAP_BLOC_SIZE  0x20000  // 128K : for small usages
+//#define ZALLOC_MMAP_BLOC_SIZE  0x300000 //   3M : not enough to be in a 4M page, still a lot
+#define ZALLOC_MMAP_BLOC_SIZE 0x1000000 //  16M : enough for lots of records, but too much for smaller setups
                                            //        except if the LAZY define is set ...
 
-#define ZDB_ALLOC_LAZY 1        // this should be much better with lazy enabled
+#define ZALLOC_LAZY 1        /// @note edf -- do NOT disable this
 
-#if ZDB_ALLOC_LAZY == 0
-#pragma message("ZDB_ALLOC_LAZY there is no reason beside testing to disable the ZDB_ALLOC_LAZY algorithm.")
-#endif
-
-void
-zdb_set_zowner(pthread_t owner)
-{
-    zalloc_owner = owner;
-}
-
-#define ZDB_ZALLOC_DEBUG 1
-
-#ifndef DEBUG
-#undef ZDB_ZALLOC_DEBUG
-#define ZDB_ZALLOC_DEBUG 1
+#if !ZALLOC_LAZY
+#pragma message("zalloc: there is no reason to disable the ZALLOC_LAZY variant beside for testing.")
 #endif
 
 #ifndef MAP_ANONYMOUS
@@ -141,39 +137,42 @@ static u32 lcm(u32 a, u32 b)
  *
  */
 
-static u32 page_size[ZDB_ALLOC_PG_SIZE_COUNT];
-static void* line_sll[ZDB_ALLOC_PG_SIZE_COUNT];
-static s32 line_count[ZDB_ALLOC_PG_SIZE_COUNT];
-static s32 heap_total[ZDB_ALLOC_PG_SIZE_COUNT];
-#if ZDB_ALLOC_LAZY
-static u8* lazy_next[ZDB_ALLOC_PG_SIZE_COUNT];
-static u32 lazy_count[ZDB_ALLOC_PG_SIZE_COUNT];
-static u32 smallest_size[ZDB_ALLOC_PG_SIZE_COUNT];
+#ifndef ZALLOC_DEBUG
+#define ADJUSTED_ALLOC_PG_SIZE_COUNT ZALLOC_PG_SIZE_COUNT
+#else
+#define ADJUSTED_ALLOC_PG_SIZE_COUNT (ZALLOC_PG_SIZE_COUNT + 1)
 #endif
 
-#if ZDB_ZALLOC_THREAD_SAFE != 0
-static mutex_t line_mutex[ZDB_ALLOC_PG_SIZE_COUNT];
-
+static u32 page_size[ADJUSTED_ALLOC_PG_SIZE_COUNT];
+static void* line_sll[ADJUSTED_ALLOC_PG_SIZE_COUNT];
+static s32 line_count[ADJUSTED_ALLOC_PG_SIZE_COUNT];
+static s32 heap_total[ADJUSTED_ALLOC_PG_SIZE_COUNT];
+#if ZALLOC_LAZY
+static u8* lazy_next[ADJUSTED_ALLOC_PG_SIZE_COUNT];
+static u32 lazy_count[ADJUSTED_ALLOC_PG_SIZE_COUNT];
+static u32 smallest_size[ADJUSTED_ALLOC_PG_SIZE_COUNT];
 #endif
 
-#if ZDB_ZALLOC_STATISTICS!=0
+static pthread_mutex_t line_mutex[ADJUSTED_ALLOC_PG_SIZE_COUNT];
+
+#if ZALLOC_STATISTICS
 static volatile u64 zalloc_memory_allocated = 0;
 static volatile u32 mmap_count = 0;
 static mutex_t zalloc_statistics_mtx = MUTEX_INITIALIZER;
 #endif
 
 static int system_page_size = 0;
-static volatile bool zdb_alloc_init_done = FALSE;
+static volatile bool zalloc_init_done = FALSE;
 
 int
-zdb_alloc_init()
+zalloc_init()
 {
-    if(zdb_alloc_init_done)
+    if(zalloc_init_done)
     {
         return SUCCESS;
     }
     
-    zdb_alloc_init_done = TRUE;
+    zalloc_init_done = TRUE;
     
     // lcm is in this file
     
@@ -181,29 +180,29 @@ zdb_alloc_init()
     
     yassert(system_page_size > 0);
 
-    for(u32 i = 0; i < ZDB_ALLOC_PG_SIZE_COUNT; i++)
+    for(u32 i = 0; i < ADJUSTED_ALLOC_PG_SIZE_COUNT; i++)
     {
         u32 lcm_page_chunk = lcm(system_page_size, (i + 1) * 8);
-        u32 chosen_size = ((ZDB_ALLOC_MMAP_BLOC_SIZE + lcm_page_chunk - 1) / lcm_page_chunk) * lcm_page_chunk;
+        u32 chosen_size = ((ZALLOC_MMAP_BLOC_SIZE + lcm_page_chunk - 1) / lcm_page_chunk) * lcm_page_chunk;
         
         page_size[i] = chosen_size;
         line_sll[i] = NULL;
         line_count[i] = 0;
         heap_total[i] = 0;
         
-#if ZDB_ALLOC_LAZY
+#if ZALLOC_LAZY
         lazy_next[i] = NULL;
         lazy_count[i] = 0;
         smallest_size[i] = lcm_page_chunk;
 #endif
-        mutex_init(&line_mutex[i]);
+        pthread_mutex_init(&line_mutex[i], NULL);
     }
     
     return SUCCESS;
 }
 
 void
-zdb_alloc_finalise()
+zalloc_finalise()
 {
 }
 
@@ -214,18 +213,18 @@ zdb_alloc_finalise()
  *
  * page2 has a lazy initialisation feature supposed to be enabled at compile time (can be off for testing & debugging)
  *
- * zalloc_page2 is as nice with the memory than zalloc_page with --enable-tiny-footprint set in ./configure but can handle
+ * zalloc_lines is as nice with the memory than zalloc_lines with --enable-tiny-footprint set in ./configure but can handle
  * much more memory (the 3.8M test is not a problem)
  */
 
 static void
-zdb_alloc_page(u32 page_index)
+zalloc_lines(u32 page_index)
 {
     page map_pointer;
     
     u32 chunk_size = (page_index + 1) << 3; // size of one bloc
     
-#if ZDB_ALLOC_LAZY
+#if ZALLOC_LAZY
     if(lazy_next[page_index] == NULL)
     {
 #endif
@@ -233,16 +232,16 @@ zdb_alloc_page(u32 page_index)
 
         map_pointer = (page)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 
-#if ZDB_ZALLOC_STATISTICS
-        mutex_lock(&zalloc_statistics_mtx);
+#if ZALLOC_STATISTICS
+        pthread_mutex_lock(&zalloc_statistics_mtx);
         mmap_count++;
-        mutex_unlock(&zalloc_statistics_mtx);
+        pthread_mutex_unlock(&zalloc_statistics_mtx);
 #endif
     
         if(map_pointer == MAP_FAILED)
         {
-            osformatln(termerr, "zdb_alloc_page(%u,%u) mmap failed with %r", size, chunk_size, ERRNO_ERROR);
-            DIE(ZDB_ERROR_MMAPFAILED);
+            osformatln(termerr, "zalloc_lines(%u,%u) mmap failed with %r", size, chunk_size, ERRNO_ERROR);
+            DIE(ZALLOC_ERROR_MMAPFAILED);
         }
 
 #ifdef MADV_NOHUGEPAGE
@@ -251,9 +250,14 @@ zdb_alloc_page(u32 page_index)
             int err = errno;
             if(err != EINVAL)
             {
-                osformatln(termerr, "zdb_alloc_page(%u,%u) madvise failed with %r", size, chunk_size, MAKE_ERRNO_ERROR(err));
+                osformatln(termerr, "zalloc_lines(%u,%u) madvise(%p,%x,%i) failed with %r", size, chunk_size, map_pointer, size, MADV_NOHUGEPAGE, ERRNO_ERROR);
             }
-            // else it means it's simply not supported
+#ifdef DEBUG
+            else
+            {
+                osformatln(termout, "zalloc_lines(%u,%u) madvise(%p,%x,%i) failed with %r", size, chunk_size, map_pointer, size, MADV_NOHUGEPAGE, ERRNO_ERROR);
+            }
+#endif
         }
 #endif
         /*
@@ -262,7 +266,7 @@ zdb_alloc_page(u32 page_index)
          * when the page is filled, I fill another one.
          */
         
-#if ZDB_ALLOC_LAZY
+#if ZALLOC_LAZY
         // give the page to the (supposedly empty) lazy handling
     
         lazy_count[page_index] = size / smallest_size[page_index];
@@ -326,21 +330,19 @@ zdb_alloc_page(u32 page_index)
  */
 
 void*
-zdb_malloc(u32 page_index)
+zalloc_line(u32 page_index)
 {
-    yassert(page_index < ZDB_ALLOC_PG_SIZE_COUNT);
+    yassert(page_index < ZALLOC_PG_SIZE_COUNT);
 
-#if ZDB_ZALLOC_DEBUG!=0
+#if ZALLOC_DEBUG
     page_index++;               // debug requires 8 more bytes
 #endif
     
-#if ZDB_ZALLOC_THREAD_SAFE != 0
-    mutex_lock(&line_mutex[page_index]);
-#endif
+    pthread_mutex_lock(&line_mutex[page_index]);
 
     if(line_count[page_index] == 0)
     {
-        zdb_alloc_page(page_index);
+        zalloc_lines(page_index);
     }
 
     line_count[page_index]--;
@@ -352,25 +354,24 @@ zdb_malloc(u32 page_index)
 
     *ret = NULL; /* erases ZALLOC pointer */
 
-#if ZDB_ZALLOC_DEBUG!=0
+#if ZALLOC_DEBUG
     u64* hdr = (u64*)ret;       // the allocated memory is at hdr
-    *hdr = page_index - 1;      // the allocated slot number (offset by DEBUG)
+    *hdr = (page_index - 1) | 0x2a110c0000000000LL;      // the allocated slot number (offset by DEBUG)
+    
     ret = (void**)(hdr + 1);    // the address returned (without the DEBUG header)
 #endif
 
-#if ZDB_DEBUG_ZALLOC_TRASHMEMORY!=0
+#if ZDB_DEBUG_ZALLOC_TRASHMEMORY
     memset(ret, 0xac, ((page_index + 1) << 3) - sizeof(u64));
 #endif
 
-#if ZDB_ZALLOC_STATISTICS!=0
-    mutex_lock(&zalloc_statistics_mtx);
+#if ZALLOC_STATISTICS
+    pthread_mutex_lock(&zalloc_statistics_mtx);
     zalloc_memory_allocated += (page_index + 1) << 3;
-    mutex_unlock(&zalloc_statistics_mtx);
+    pthread_mutex_unlock(&zalloc_statistics_mtx);
 #endif
     
-#if ZDB_ZALLOC_THREAD_SAFE != 0
-    mutex_unlock(&line_mutex[page_index]);
-#endif
+    pthread_mutex_unlock(&line_mutex[page_index]);
 
     return ret;
 }
@@ -387,26 +388,52 @@ zdb_malloc(u32 page_index)
  *
  */
 
-void
-zdb_mfree(void* ptr, u32 page_index)
+static void
+zfree_line_report(int page_index)
 {
-    yassert(page_index < ZDB_ALLOC_PG_SIZE_COUNT);
+    log_err("zfree_line: page #%d count (%d) > total (%d)", page_index, line_count[page_index], heap_total[page_index]);
+    logger_flush();
+    s32 count = line_count[page_index];
+    if(count > 0)
+    {
+        void** ret = line_sll[page_index];
+        
+        for(s32 i = 0; i < count; i++)
+        {
+            log_err("[%3x][%6x] %p", page_index, i, ret);
+            ret = (void**)*ret;
+        }
+        
+        logger_flush();
+    }
+}
+
+void
+zfree_line(void* ptr, u32 page_index)
+{
+    yassert(page_index < ZALLOC_PG_SIZE_COUNT);
     
     if(ptr != NULL)
     {
-#if ZDB_ZALLOC_DEBUG!=0
+#if ZALLOC_DEBUG
         page_index++;
 #endif
         
-#if ZDB_ZALLOC_THREAD_SAFE != 0
-        mutex_lock(&line_mutex[page_index]);
-#endif
+        pthread_mutex_lock(&line_mutex[page_index]);
         
-#if ZDB_ZALLOC_DEBUG!=0
+#if ZALLOC_DEBUG
         u64* hdr = (u64*)ptr;
         hdr--;
+        
+        u64 magic = *hdr;
+        
+        if((magic & 0xffffffff00000000LL) != 0x2a110c0000000000LL)
+        {
+            abort();
+        }
+        magic &= 0xffffffffLL;
 
-        if(*hdr != page_index - 1)
+        if(magic != page_index - 1)
         {
             abort();
         }
@@ -414,14 +441,14 @@ zdb_mfree(void* ptr, u32 page_index)
         ptr = hdr;
 #endif
 
-#if ZDB_DEBUG_ZALLOC_TRASHMEMORY!=0
+#if ZDB_DEBUG_ZALLOC_TRASHMEMORY
         memset(ptr, 0xfe, (page_index + 1) << 3);
 #endif
 
-#if ZDB_ZALLOC_STATISTICS!=0
-        mutex_lock(&zalloc_statistics_mtx);
+#if ZALLOC_STATISTICS
+        pthread_mutex_lock(&zalloc_statistics_mtx);
         zalloc_memory_allocated -= (page_index + 1) << 3;
-        mutex_unlock(&zalloc_statistics_mtx);
+        pthread_mutex_unlock(&zalloc_statistics_mtx);
 #endif
 
         void** ret = (void**)ptr;
@@ -432,38 +459,27 @@ zdb_mfree(void* ptr, u32 page_index)
 
         if(line_count[page_index] > heap_total[page_index])
         {
-            log_err("zdb_mfree: page #%d count (%d) > total (%d)", page_index, line_count[page_index], heap_total[page_index]);
+            zfree_line_report(page_index);
         }
         
-#if ZDB_ZALLOC_THREAD_SAFE != 0
-        mutex_unlock(&line_mutex[page_index]);
-#endif
+        pthread_mutex_unlock(&line_mutex[page_index]);
     }
 }
-
-#ifdef zdb_mused
-#undef zdb_mused
-#endif
 
 /**
  * DEBUG
  */
 
 u64
-zdb_mheap(u32 page_index)
+zheap_line_total(u32 page_index)
 {
-    if(page_index < ZDB_ALLOC_PG_SIZE_COUNT)
+    if(page_index < ADJUSTED_ALLOC_PG_SIZE_COUNT)
     {
-        
-#if ZDB_ZALLOC_THREAD_SAFE != 0
-        mutex_lock(&line_mutex[page_index]);
-#endif
+        pthread_mutex_lock(&line_mutex[page_index]);
 
         u64 return_value = heap_total[page_index];
         
-#if ZDB_ZALLOC_THREAD_SAFE != 0
-        mutex_unlock(&line_mutex[page_index]);
-#endif
+        pthread_mutex_unlock(&line_mutex[page_index]);
         
         return return_value;
         
@@ -473,19 +489,15 @@ zdb_mheap(u32 page_index)
 }
 
 u64
-zdb_mavail(u32 page_index)
+zheap_line_avail(u32 page_index)
 {
-    if(page_index < ZDB_ALLOC_PG_SIZE_COUNT)
+    if(page_index < ADJUSTED_ALLOC_PG_SIZE_COUNT)
     {
-#if ZDB_ZALLOC_THREAD_SAFE != 0
-        mutex_lock(&line_mutex[page_index]);
-#endif
+        pthread_mutex_lock(&line_mutex[page_index]);
         
         u64 return_value = line_count[page_index];
         
-#if ZDB_ZALLOC_THREAD_SAFE != 0
-        mutex_unlock(&line_mutex[page_index]);
-#endif
+        pthread_mutex_unlock(&line_mutex[page_index]);
         
         return return_value;
 
@@ -494,24 +506,24 @@ zdb_mavail(u32 page_index)
     return 0;
 }
 
-u64
-zdb_mused()
+s64
+zallocatedtotal()
 {
-#if ZDB_ZALLOC_STATISTICS!=0
+#if ZALLOC_STATISTICS
     
     u64 return_value = zalloc_memory_allocated;
 
     return return_value;
     
 #else
-    return 0;
+    return -1;
 #endif
 }
 
 /**
- * @brief Allocates unaligned memory of an arbitrary size using zdb_malloc and malloc
+ * @brief Allocates unaligned memory of an arbitrary size using zalloc_line and malloc
  *
- * Allocates unaligned memory of an arbitrary size using zdb_malloc and malloc
+ * Allocates unaligned memory of an arbitrary size using zalloc_line and malloc
  *
  * @param[in] size the size to allocated
  *
@@ -519,7 +531,7 @@ zdb_mused()
  */
 
 void*
-zdb_malloc_unaligned(u32 size)
+zalloc_unaligned(u32 size)
 {
     yassert(size > 0);
 
@@ -528,12 +540,12 @@ zdb_malloc_unaligned(u32 size)
     if(size <= 254)
     {
         u8 page_index = (size - 1) >> 3;
-        p = (u8*)zdb_malloc(page_index);
+        p = (u8*)zalloc_line(page_index);
         *p = page_index;
     }
     else
     {
-#if ZDB_DEBUG_MALLOC == 0
+#if !DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
         p = (u8*)malloc(size);
 #else
         
@@ -543,15 +555,15 @@ zdb_malloc_unaligned(u32 size)
         p = (u8*)debug_malloc(size, __FILE__, __LINE__, ZMALLOC_TAG);
 #endif
         
-#endif // ZDB_DEBUG_MALLOC
+#endif // DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
                 
         if(p == NULL)
         {
-            DIE(ZDB_ERROR_OUTOFMEMORY);
+            DIE(ZALLOC_ERROR_OUTOFMEMORY);
         }
         
         *p = 0xff;
-#if ZDB_DEBUG_ZALLOC_TRASHMEMORY!=0
+#if ZDB_DEBUG_ZALLOC_TRASHMEMORY
         memset(p + 1, 0xca, size);
 #endif
     }
@@ -560,16 +572,16 @@ zdb_malloc_unaligned(u32 size)
 }
 
 /**
- * @brief Frees unaligned memory of an arbitrary size using zdb_mfree and free
+ * @brief Frees unaligned memory of an arbitrary size using zfree_line and free
  *
- * Allocates unaligned memory of an arbitrary size using zdb_malloc and malloc
+ * Allocates unaligned memory of an arbitrary size using zalloc_line and malloc
  *
  * @param[in] ptr a pointer to the memory to free
  *
  */
 
 void
-zdb_mfree_unaligned(void* ptr)
+zfree_unaligned(void* ptr)
 {
     if(ptr != NULL)
     {
@@ -577,7 +589,7 @@ zdb_mfree_unaligned(void* ptr)
         u8 idx = *--p;
         if(idx <= 254)
         {
-            zdb_mfree(p, idx);
+            zfree_line(p, idx);
         }
         else
         {
@@ -587,16 +599,16 @@ zdb_mfree_unaligned(void* ptr)
 }
 
 void
-zdb_alloc_print_stats(output_stream *os)
+zalloc_print_stats(output_stream *os)
 {
-#if ZDB_ZALLOC_STATISTICS
-    osformatln(os, "zdb alloc: page-sizes=%u (max %u bytes) allocated=%llu bytes mmap=%u", ZDB_ALLOC_PG_SIZE_COUNT, (ZDB_ALLOC_PG_SIZE_COUNT << 3), zalloc_memory_allocated, mmap_count);
+#if ZALLOC_STATISTICS
+    osformatln(os, "zdb alloc: page-sizes=%u (max %u bytes) allocated=%llu bytes mmap=%u", ADJUSTED_ALLOC_PG_SIZE_COUNT, (ADJUSTED_ALLOC_PG_SIZE_COUNT << 3), zalloc_memory_allocated, mmap_count);
     
-    if(zdb_alloc_init_done)
+    if(zalloc_init_done)
     {
         osprintln(os, "[ size ] blocsize -remain- -total-- -alloc-- --bytes--");
         
-        for(int i = 0; i < ZDB_ALLOC_PG_SIZE_COUNT; i++)
+        for(int i = 0; i < ADJUSTED_ALLOC_PG_SIZE_COUNT; i++)
         {
             osformatln(os, "[%6i] %-8u %-8u %-8u %-8u %-9u", (i + 1) << 3, page_size[i], line_count[i], heap_total[i], heap_total[i] - line_count[i], (heap_total[i] - line_count[i]) * (i + 1) << 3);
         }
@@ -608,9 +620,34 @@ zdb_alloc_print_stats(output_stream *os)
 
 #else
 
-int zdb_alloc_init()
+/**
+ * ZALLOC NOT BUILT-IN : DOES NOTHING WORTH MENTIONNING
+ */
+
+int
+zalloc_init()
 {
     return FEATURE_NOT_IMPLEMENTED_ERROR;
+}
+
+/**
+ * ZALLOC NOT BUILT-IN : DOES NOTHING WORTH MENTIONNING
+ */
+
+s64
+zallocatedtotal()
+{
+    return -1;
+}
+
+/**
+ * ZALLOC NOT BUILT-IN : DOES NOTHING WORTH MENTIONNING
+ */
+
+void
+zalloc_print_stats(output_stream *os)
+{
+    (void)os;
 }
 
 #endif

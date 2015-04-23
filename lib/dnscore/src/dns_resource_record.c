@@ -40,10 +40,10 @@
  * @{
  */
 
-#include "dnscore-config.h"
+#include "dnscore/dnscore-config.h"
 
 #include <arpa/inet.h>
-#include "dnscore/dns_resource_record.h"
+#include <dnscore/dns_resource_record.h>
 
 void
 dns_resource_record_init(dns_resource_record *rr)
@@ -62,6 +62,9 @@ dns_resource_record_clear(dns_resource_record *rr)
 {
     if(rr->rdata != NULL)
     {
+#if DEBUG
+        memset(rr->rdata, 0xfe, rr->rdata_size);
+#endif
         free(rr->rdata);
         rr->rdata = NULL;
         rr->rdata_size = 0;
@@ -114,9 +117,14 @@ dns_resource_record_read(dns_resource_record *rr, input_stream *is)
         u32 rdata_size = rr->rdata_size;
         u32 buffer_size = MIN((rdata_size + 255) & 0xff00, 0xffff);
         
+#if DEBUG
+        memset(rr->rdata, 0xfe, rr->rdata_buffer_size);
+#endif
+        
         rr->rdata_buffer_size = buffer_size;
         
         MALLOC_OR_DIE(u8*, tmp, rr->rdata_buffer_size, GENERIC_TAG);
+
         free(rr->rdata);
         rr->rdata = tmp;
     }
@@ -125,6 +133,10 @@ dns_resource_record_read(dns_resource_record *rr, input_stream *is)
     {
         return return_value;
     }
+    
+#if DEBUG
+    memset(&rr->rdata[rr->rdata_size], 0xee, rr->rdata_buffer_size - rr->rdata_size);
+#endif
     
     return rr->name_len + 10 + rr->rdata_size; /* total bytes read */
 }

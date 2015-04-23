@@ -37,8 +37,7 @@
 #include <dnscore/input_stream.h>
 #include <dnscore/config_settings.h>
 #include <dnscore/bytearray_input_stream.h>
-
-#include "dnslg/resolv-conf.h"
+#include <dnslg/resolv-conf.h>
 
 ya_result
 config_load_rc(const char *file_path)

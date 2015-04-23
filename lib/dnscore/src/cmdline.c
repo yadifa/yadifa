@@ -33,14 +33,40 @@
 */
 #include "dnscore/bytearray_input_stream.h"
 #include "dnscore/bytearray_output_stream.h"
-#include "dnscore/treeset.h"
+#include "dnscore/ptr_set.h"
 #include "dnscore/format.h"
 
 #include "dnscore/cmdline.h"
 
-static treeset_tree g_cmdline_sections = TREESET_ASCIIZ_EMPTY;
+static ptr_set g_cmdline_sections = PTR_SET_ASCIIZ_EMPTY;
 static bool cmdline_init_error_codes_done = FALSE;
 
+/*
+#if 0
+v = value;
+t = translate;
+
+ya_result
+cmdline_tsigkey_translate(output_stream *os, const char *text, const char *section_name)
+{
+
+
+}
+CMDLINE(0, "main");
+    v, 'd', "daemon",     "on" ,  "daemon"   /// (on/off)
+CMDLINE(0, "zone");
+    v,  0,  "nodaemon",   "off" , "daemon" /// (on/off)
+CMDLINE(0, "main");
+    v, 't', "thread-count, NULL , "thread-count"
+{0, "key"}
+{t, "key", 'y', cmdline_tsigkey_translate}
+
+
+daemon || d    ===  on /off;
+i
+thread-count || t , "10"
+#endif
+*/
 ya_result
 cmdline_process_argument(const cmdline_desc_s *desc, const char *section_name, const char *arg)
 {
@@ -51,23 +77,23 @@ cmdline_process_argument(const cmdline_desc_s *desc, const char *section_name, c
         return CMDLINE_OPT_EXPECTS_ARGUMENT;
     }
 
-    treeset_node *node;
+    ptr_node *node;
 
-    node = treeset_avl_insert(&g_cmdline_sections, (char*)section_name);
+    node = ptr_set_avl_insert(&g_cmdline_sections, (char*)section_name);
 
     output_stream *os; 
 
-    if(node->data == NULL)
+    if(node->value == NULL)
     {
         MALLOC_OR_DIE(output_stream*, os, sizeof(output_stream), GENERIC_TAG);
         bytearray_output_stream_init(os, NULL, 0);
 
         osformatln(os, "<%s>", section_name);
 
-        node->data = os;
+        node->value = os;
     }
 
-    os = (output_stream *)node->data;
+    os = (output_stream *)node->value;
 
     switch(desc->flags)
     {
@@ -311,12 +337,12 @@ cmdline_parse(const cmdline_desc_s *table, int argc, char **argv, cmdline_filter
     output_stream complete_config_os;
     bytearray_output_stream_init(&complete_config_os, NULL, 0);
 
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&g_cmdline_sections, &iter);
-    while(treeset_avl_iterator_hasnext(&iter))
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&g_cmdline_sections, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *node = treeset_avl_iterator_next_node(&iter);
-        output_stream *os = (output_stream *)node->data;
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        output_stream *os = (output_stream *)node->value;
         const char *section_name = (const char *)node->key;
 
         osformatln(os, "</%s>", section_name);
@@ -327,10 +353,10 @@ cmdline_parse(const cmdline_desc_s *table, int argc, char **argv, cmdline_filter
         output_stream_write(&complete_config_os, buffer, buffer_size);
 
         output_stream_close(os);
-        node->data = NULL;
+        node->value = NULL;
     }
 
-    treeset_avl_destroy(&g_cmdline_sections);
+    ptr_set_avl_destroy(&g_cmdline_sections);
 
     u32 buffer_size = bytearray_output_stream_size(&complete_config_os);
     u8 *buffer      = bytearray_output_stream_detach(&complete_config_os);

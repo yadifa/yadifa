@@ -232,7 +232,7 @@ nsec3_zone_item_to_zdb_packed_ttlrdata(const nsec3_zone* n3,
     u32 origin_len = dnsname_len(origin);
     MEMCOPY(&out_owner[1 + b32_len], origin, origin_len);
 
-    nsec3->rdata_start[1] = item->flags&1; /* Opt-Out or Opt-In */
+    nsec3->rdata_start[1] = item->flags & 1; /* Opt-Out or Opt-In */
 
     *out_nsec3_rrsig = item->rrsig;
     

@@ -88,7 +88,7 @@ file_write(output_stream* stream_, const u8* buffer, u32 len)
             {
                 continue;
             }
-
+            
             if(err == EAGAIN) /// @todo edf 20150218 -- OSX 10.9.4 generates this on unexpected streams
             {
                 continue;
@@ -163,6 +163,10 @@ file_output_stream_open_ex(const char* filename, int flags, mode_t mode, output_
     {
         return ERRNO_ERROR;
     }
+    
+#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
+    posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+#endif
 
     file_output_stream* stream = (file_output_stream*)stream_;
     stream->data.fd = fd;
@@ -173,7 +177,7 @@ file_output_stream_open_ex(const char* filename, int flags, mode_t mode, output_
 }
 
 ya_result
-fd_output_stream_attach(int fd, output_stream* stream_)
+fd_output_stream_attach(output_stream* stream_, int fd)
 {
     yassert(sizeof(void*) >= sizeof(int));
 
@@ -223,6 +227,18 @@ s64 fd_output_stream_get_size(output_stream* stream_)
     }
     
     return (s64)ERRNO_ERROR;
+}
+
+void file_output_steam_advise_sequential(output_stream* stream_)
+{
+    file_output_stream* stream = (file_output_stream*)stream_;
+    
+#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
+    if(stream->data.fd >= 0)
+    {
+        posix_fadvise(stream->data.fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+    }
+#endif
 }
 
 /** @} */

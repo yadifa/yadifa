@@ -33,8 +33,17 @@
 */
 #pragma once
 
+/** @defgroup yadifa
+ *  @ingroup ###
+ *  @brief yadifa
+ */
+
 #include <dnscore/message.h>
 
-ya_result check_query_result(u16 id_sent, u16 protocol, u16 question_mode, message_data *mesg, u8 *go_tcp);
 
+/*----------------------------------------------------------------------------*/
+
+ya_result check_query_result(u16 id_sent, u16 protocol, u16 question_mode, message_data *mesg, u8 *go_tcp);
 ya_result view_query_result(message_data *mesg, long duration, u16 view_mode_with);
+
+/*    ------------------------------------------------------------    */

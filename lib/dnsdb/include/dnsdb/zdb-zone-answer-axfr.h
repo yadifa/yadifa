@@ -60,7 +60,7 @@
  * @param compress_packets
  */
 
-void zdb_zone_answer_axfr(zdb_zone *zone, message_data *mesg, struct thread_pool_s *network_tp, struct thread_pool_s *disk_tp, const char *xfr_path,
+void zdb_zone_answer_axfr(zdb_zone *zone, message_data *mesg, struct thread_pool_s *network_tp, struct thread_pool_s *disk_tp,
         u16 max_packet_size, u16 max_record_by_packet, bool compress_packets);
 
 /** @} */

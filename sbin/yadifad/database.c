@@ -49,6 +49,7 @@
  *
  * USE INCLUDES */
 
+
 #include "config.h"
 
 #include <dnscore/packet_reader.h>
@@ -59,24 +60,28 @@
 #include <dnscore/alarm.h>
 #include <dnscore/chroot.h>
 #include <dnscore/timeformat.h>
-
+#include <dnscore/fdtools.h>
 #include <dnscore/threaded_ringbuffer.h>
 
 #include <dnsdb/dnssec.h>
 
 #include <dnsdb/zdb.h>
 #include <dnsdb/zdb_zone.h>
+#include <dnsdb/zdb-zone-arc.h>
 #include <dnsdb/zdb_icmtl.h>
 #if HAS_DYNUPDATE_SUPPORT
 #include <dnsdb/dynupdate.h>
 #endif
 #include <dnsdb/zdb_zone_label.h>
 #include <dnsdb/zdb_zone_load.h>
-#include <dnsdb/journal.h>
+
+#include <dnsdb/xfr_copy.h>
+#include <dnsdb/zdb-zone-path-provider.h>
 
 #include <dnszone/dnszone.h>
 #include <dnszone/zone_file_reader.h>
 #include <dnszone/zone_axfr_reader.h>
+
 
 #include "server.h"
 #include "database.h"
@@ -95,7 +100,6 @@
 #endif
 
 #define DBSCHEDP_TAG 0x5044454843534244
-#define DBUPSIGP_TAG 0x5047495350554244
 #define DBREFALP_TAG 0x504c414645524244
 
 #define MODULE_MSG_HANDLE g_server_logger
@@ -112,6 +116,240 @@ extern zone_data_set database_zone_desc;
 
 /*------------------------------------------------------------------------------
  * FUNCTIONS */
+
+static zdb_zone_path_provider_callback *database_zone_path_next_provider = NULL;
+static zdb_zone_info_provider_callback *database_info_next_provider = NULL;
+
+/**
+ * The hash function that gives a number from an ASCIIZ string
+ * 
+ * @param p ASCIIZ string
+ * 
+ * @return the hash
+ */
+
+static u32
+database_zone_path_provider_name_hash(const u8 *p)
+{
+    u32 h = 0;
+    u32 c;
+    u8 s = 0;
+    do
+    {
+        c = toupper(*p++);
+        c &= 0x3f;
+        h += c << (s & 15);
+        h += 97;
+        s += 13;
+    }
+    while(c != 0);
+    
+    return h;
+}
+
+/**
+ * 
+ * Returns the hashed folder path for a zone.
+ * 
+ * @param data_path             the target buffer for the data path
+ * @param data_path_size        the target buffer size
+ * @param base_data_path        the base folder
+ * @param origin                the origin of the zone
+ * 
+ * @return 
+ */
+
+static ya_result
+database_zone_path_provider_get_hashed_name(char *data_path, u32 data_path_size, const char *base_data_path, const u8 *origin)
+{
+    u32 h = database_zone_path_provider_name_hash(origin);
+    
+    return snformat(data_path, data_path_size, "%s/%02x/%02x", base_data_path, h & 0xff, (h >> 8) & 0xff);
+}
+
+
+static ya_result
+database_zone_path_provider(const u8* domain_fqdn, char *path_buffer, u32 path_buffer_size, u32 flags)
+{
+    ya_result ret = ERROR;
+    
+#ifdef DEBUG
+    char *original_path_buffer = path_buffer;
+    u32 original_flags = flags;
+    original_path_buffer[0] = '\0';
+#endif
+    char *suffix = "";
+    if((flags & ZDB_ZONE_PATH_PROVIDER_RNDSUFFIX) != 0)
+    {
+        flags &= ~ZDB_ZONE_PATH_PROVIDER_RNDSUFFIX;
+        suffix = ".part";
+    }
+    
+    zone_desc_s *zone_desc = zone_acquirebydnsname(domain_fqdn);
+    if(zone_desc != NULL)
+    {
+        switch(flags & ~ZDB_ZONE_PATH_PROVIDER_MKDIR)
+        {
+            case ZDB_ZONE_PATH_PROVIDER_ZONE_PATH:
+            {
+                if(ISOK(ret = snformat(path_buffer, path_buffer_size, "%s%s", g_config->data_path, zone_desc->file_name)))
+                {
+                    int n = ret;
+                    while(n > 0)
+                    {
+                        if(path_buffer[n] == '/')
+                        {
+                            path_buffer[n] = '\0';
+                            break;
+                        }
+
+                        n--;
+                    }
+                    
+                    if((flags & ZDB_ZONE_PATH_PROVIDER_MKDIR) != 0)
+                    {
+                        ret = mkdir_ex(path_buffer, 0750, 0);
+                        flags &= ~ZDB_ZONE_PATH_PROVIDER_MKDIR;
+                    }
+
+                }
+                break;
+            }
+            case ZDB_ZONE_PATH_PROVIDER_ZONE_FILE:
+            {
+                if(ISOK(ret = snformat(path_buffer, path_buffer_size, "%s%s%s", g_config->data_path, zone_desc->file_name, suffix)))
+                {
+                    if((flags & ZDB_ZONE_PATH_PROVIDER_MKDIR) != 0)
+                    {
+                        ret = mkdir_ex(path_buffer, 0750, MKDIR_EX_PATH_TO_FILE);
+                        flags &= ~ZDB_ZONE_PATH_PROVIDER_MKDIR;
+                    }
+                }
+                
+                break;
+            }
+            case ZDB_ZONE_PATH_PROVIDER_AXFR_PATH:
+            {
+                if(ISOK(ret = database_zone_path_provider_get_hashed_name(path_buffer, path_buffer_size, g_config->xfr_path, domain_fqdn)))
+                {
+                    if((flags & ZDB_ZONE_PATH_PROVIDER_MKDIR) != 0)
+                    {
+                        ret = mkdir_ex(path_buffer, 0750, 0);
+                        flags &= ~ZDB_ZONE_PATH_PROVIDER_MKDIR;
+                    }
+                }
+                
+                break;
+            }
+            case ZDB_ZONE_PATH_PROVIDER_AXFR_FILE:
+            {
+                if(ISOK(ret = database_zone_path_provider_get_hashed_name(path_buffer, path_buffer_size, g_config->xfr_path, domain_fqdn)))
+                {
+                    if((flags & ZDB_ZONE_PATH_PROVIDER_MKDIR) != 0)
+                    {
+                        ret = mkdir_ex(path_buffer, 0750, 0);
+                        flags &= ~ZDB_ZONE_PATH_PROVIDER_MKDIR;
+                    }
+                    
+                    s32 path_size = ret;
+                    
+                    path_buffer += ret;
+                    path_buffer_size -= ret;
+                    
+                    if(ISOK(ret = snformat(path_buffer, path_buffer_size, "/%{dnsname}.axfr%s", domain_fqdn, suffix)))
+                    {
+                        ret += path_size;
+                    }
+                }
+                
+                break;
+            }
+            default:
+            {
+                ret = database_zone_path_next_provider(domain_fqdn, path_buffer, path_buffer_size, flags);
+                break;
+            }
+        }
+        
+        zone_release(zone_desc);
+    }
+    
+#ifdef DEBUG
+    log_debug("path-provider: %{dnsname}: %02x: path='%s': %r", domain_fqdn, original_flags, original_path_buffer, ret);
+#endif
+    
+    return ret;
+}
+
+static ya_result
+database_info_provider(const u8 *origin, zdb_zone_info_provider_data *data, u32 flags)
+{
+    ya_result ret = ERROR;
+    switch(flags)
+    {
+        case ZDB_ZONE_INFO_PROVIDER_STORED_SERIAL:
+        {
+            // get the zone desc and check
+            
+            zone_desc_s *zone_desc = zone_acquirebydnsname(origin);
+            if(zone_desc != NULL)
+            {
+                data->_u32 = zone_desc->stored_serial;
+                zone_release(zone_desc);
+                ret = SUCCESS;
+            }
+            break;
+        }
+        case ZDB_ZONE_INFO_PROVIDER_MAX_JOURNAL_SIZE:
+        {
+            // get the zone desc and check
+            
+            zone_desc_s *zone_desc = zone_acquirebydnsname(origin);
+            if(zone_desc != NULL)
+            {
+                yassert(zone_desc->journal_size_kb <= 8388608);
+                u64 max_size = zone_desc->journal_size_kb;
+                zone_release(zone_desc);
+                max_size *= 1024;
+                if(max_size > MAX_U32)
+                {
+                    max_size = MAX_U32;
+                }
+                data->_u32 = (u32)max_size;
+                ret = SUCCESS;
+            }
+            
+            break;
+        }
+        case ZDB_ZONE_INFO_PROVIDER_ZONE_TYPE:
+        {
+            // get the zone desc and check
+            
+            zone_desc_s *zone_desc = zone_acquirebydnsname(origin);
+            if(zone_desc != NULL)
+            {
+                data->_u8 = (u8)zone_desc->type;
+                zone_release(zone_desc);
+                ret = SUCCESS;
+            }
+            
+            break;
+        }
+        case ZDB_ZONE_INFO_PROVIDER_STORE_NOW:
+        {
+            database_zone_save(origin); // wait ?
+            ret = SUCCESS;
+            break;
+        }
+        default:
+        {
+            ret = database_info_next_provider(origin, data, flags);
+            break;
+        }
+    }
+    
+    return ret;
+}
 
 static dnslib_fingerprint server_getfingerprint()
 {
@@ -155,16 +393,24 @@ database_init()
     zdb_init();
     dnszone_init();
     dnscore_reset_timer();
+    
+    database_zone_path_next_provider = zdb_zone_path_get_provider();
+    zdb_zone_path_set_provider(database_zone_path_provider);
+    
+    database_info_next_provider = zdb_zone_info_get_provider();
+    zdb_zone_info_set_provider(database_info_provider);
 }
 
 void
 database_finalize()
 {
+    zdb_zone_path_set_provider(NULL);
+    zdb_zone_info_set_provider(NULL);
     zdb_finalize();
 }
 
-/** @brief Remove the zones from the database, but do not remove the database
- *  file
+/** @brief Remove the zones from the database,
+ *  but do not remove the database file
  *
  *  @param[in] database
  *  @param[in] zone
@@ -178,21 +424,23 @@ database_clear_zones(zdb *database, zone_data_set *dset)
     
     zone_set_lock(dset);
 
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&dset->set, &iter);
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&dset->set, &iter);
 
-    while(treeset_avl_iterator_hasnext(&iter))
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
-        zone_desc_s *zone_desc = (zone_desc_s*)zone_node->data;
+        ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
+        zone_desc_s *zone_desc = (zone_desc_s*)zone_node->value;
 
         dnsname_to_dnsname_vector(zone_desc->origin, &fqdn_vector);
         
-        zdb_zone *myzone = zdb_zone_find(database, &fqdn_vector, zone_desc->qclass);
+        /// @todo edf 20141006 -- verify zone_desc->qclass
+        
+        zdb_zone *myzone = zdb_remove_zone(database, &fqdn_vector);
 
         if(myzone != NULL)
         {
-            zdb_zone_destroy(myzone);
+            zdb_zone_release(myzone);
         }
     }
     
@@ -415,7 +663,9 @@ database_update(zdb *database, message_data *mesg)
 
                 dnsname_to_dnsname_vector(mesg->qname, &name);
 
-                zone = zdb_zone_find((zdb *)database, &name, mesg->qclass);
+                /// @todo edf 20141006 -- verify class mesg->qclass
+                
+                zone = zdb_acquire_zone_read_double_lock(database, &name, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
 
                 if(zone != NULL && !ZDB_ZONE_INVALID(zone))
                 {
@@ -434,13 +684,15 @@ database_update(zdb *database, message_data *mesg)
                         {
                             /* notauth */
 
-                            log_info("database: update: not authorised");
-                            
-                            mesg->status = FP_ACCESS_REJECTED;
+                            zdb_zone_release_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
                             
                             zone_unlock(zone_desc, ZONE_LOCK_DYNUPDATE);
                             
                             zone_release(zone_desc);
+                            
+                            log_info("database: update: not authorised");
+                            
+                            mesg->status = FP_ACCESS_REJECTED;
                             
                             return (finger_print)ACL_UPDATE_REJECTED;
                         }
@@ -454,46 +706,58 @@ database_update(zdb *database, message_data *mesg)
                         
                         if(zdb_zone_is_dnssec(zone))
                         {
-                            /*
-                             * Fetch all private keys
-                             */
-                            
-                            log_debug("database: update: checking DNSKEY availability");
-                            
-                            const zdb_packed_ttlrdata *dnskey = zdb_zone_get_dnskey_rrset(zone);
-                                                        
-                            if(dnskey != NULL)
+                            if(zone_maintains_dnssec(zone_desc))
                             {
-                                char origin[MAX_DOMAIN_LENGTH];
-                                
-                                dnsname_to_cstr(origin, zone->origin);
-                            
-                                do
+                                /*
+                                 * Fetch all private keys
+                                 */
+
+                                log_debug("database: update: checking DNSKEY availability");
+
+                                const zdb_packed_ttlrdata *dnskey = zdb_zone_get_dnskey_rrset(zone);
+
+                                if(dnskey != NULL)
                                 {
-                                    u16 flags = DNSKEY_FLAGS(*dnskey);
-                                    //u8  protocol = DNSKEY_PROTOCOL(*dnskey);
-                                    u8  algorithm = DNSKEY_ALGORITHM(*dnskey);
-                                    u16 tag = DNSKEY_TAG(*dnskey);                  // note: expensive
-                                    dnssec_key *key = NULL;
+                                    char origin[MAX_DOMAIN_LENGTH];
 
-                                    if(FAIL(return_code = dnssec_key_load_private(algorithm, tag, flags, origin, &key)))
+                                    dnsname_to_cstr(origin, zone->origin);
+
+                                    do
                                     {
-                                        log_err("database: update: unable to load private key 'K%{dnsname}+%03d+%05d': %r", zone->origin, algorithm, tag, return_code);
-                                        break;
-                                    }
+                                        u16 flags = DNSKEY_FLAGS(*dnskey);
+                                        //u8  protocol = DNSKEY_PROTOCOL(*dnskey);
+                                        u8  algorithm = DNSKEY_ALGORITHM(*dnskey);
+                                        u16 tag = DNSKEY_TAG(*dnskey);                  // note: expensive
+                                        dnssec_key *key = NULL;
 
-                                    dnskey = dnskey->next;
+                                        if(FAIL(return_code = dnssec_key_load_private(algorithm, tag, flags, origin, &key)))
+                                        {
+                                            log_err("database: update: unable to load private key 'K%{dnsname}+%03d+%05d': %r", zone->origin, algorithm, tag, return_code);
+                                            break;
+                                        }
+
+                                        dnskey = dnskey->next;
+                                    }
+                                    while(dnskey != NULL);
                                 }
-                                while(dnskey != NULL);
+                                else
+                                {
+                                    log_err("database: update: there are no private keys in the zone %{dnsname}", zone->origin);
+
+                                    return_code = DNSSEC_ERROR_RRSIG_NOZONEKEYS;
+                                }
                             }
                             else
                             {
-                                log_err("database: update: there are no private keys in the zone %{dnsname}", zone->origin);
-                                
-                                return_code = DNSSEC_ERROR_RRSIG_NOZONEKEYS;
-                            }
-                        }
+                                log_warn("database: update: cannot update %{dnsname} because DNSSEC maintenance has been disabled on the zone", zone->origin);
 
+                                return_code = SERVER_ERROR_CODE(RCODE_SERVFAIL);
+                                
+                                mesg->status = (finger_print)RCODE_SERVFAIL;
+                            }
+
+                        }
+                        /// @todo edf 20150127 -- if at least one key has been loaded, it should continue
                         if(ISOK(return_code))   // 
                         {
                             /* The reader is positioned after the header : read the QR section */
@@ -509,14 +773,16 @@ database_update(zdb *database, message_data *mesg)
                                 
                                 /* The reader is positioned after the QR section, read AN section */
 
+                                /// @todo edf 20141008 -- this lock is too early, it should be moved just before the actual run
+                                
                                 u64 start = timeus();
                                 u64 now;
-                                u64 locktimeout = 2000000; // 2 seconds
+                                u64 locktimeout = 2000000; /// @todo edf 20141008 -- 2 seconds, make this configurable
                                 bool locked;
                                 
                                 do
                                 {
-                                    if((locked = zdb_zone_trylock(zone, ZDB_ZONE_MUTEX_DYNUPDATE)))
+                                    if((locked = zdb_zone_try_transfer_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE)))
                                     {
                                         break;
                                     }
@@ -527,6 +793,10 @@ database_update(zdb *database, message_data *mesg)
                                 
                                 if(locked)
                                 {
+                                    // from this point, the zone is single-locked
+                                    
+                                    bool need_to_notify_slaves = FALSE;
+                                    
                                     log_debug("database: update: processing %d prerequisites", count);
 
                                     if(ISOK(return_code = dynupdate_check_prerequisites(zone, &reader, count)))
@@ -541,7 +811,7 @@ database_update(zdb *database, message_data *mesg)
 
                                         log_debug("database: update: dryrun of %d updates", count);
 
-                                        if(ISOK(return_code = dynupdate_update(zone, &reader, count, DYNUPDATE_UPDATE_DRYRUN)))
+                                        if(ISOK(return_code = dynupdate_update(zone, &reader, count, DYNUPDATE_UPDATE_DRYRUN))) // ARC
                                         {
                                             /*
                                              * Really run the update for the section
@@ -561,7 +831,7 @@ database_update(zdb *database, message_data *mesg)
                                             {
                                                 log_debug("database: update: run of %d updates", count);
 
-                                                ya_result len = dynupdate_update(zone, &reader, count, DYNUPDATE_UPDATE_RUN);
+                                                ya_result len = dynupdate_update(zone, &reader, count, DYNUPDATE_UPDATE_RUN); // ARC
 
                                                 if(ISOK(len))
                                                 {
@@ -579,9 +849,10 @@ database_update(zdb *database, message_data *mesg)
                                                 
                                                 len = zdb_icmtl_end(&icmtl, g_config->xfr_path);
 
-                                                if(len != 0)
+                                                if(len > 0)
                                                 {
                                                     zone_desc->status_flags |= ZONE_STATUS_MODIFIED;
+                                                    need_to_notify_slaves = TRUE;
                                                 }
                                                 
                                                 log_debug("database: update: closed journal page");
@@ -613,8 +884,6 @@ database_update(zdb *database, message_data *mesg)
                                                  */
 
                                                 mesg->status = FP_MESG_OK; /* @TODO handle error codes too */
-
-                                                notify_slaves(zone->origin);
                                             }
                                             else
                                             {
@@ -644,9 +913,20 @@ database_update(zdb *database, message_data *mesg)
                                     
                                     zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_DYNUPDATE);
                                     
+                                    if(need_to_notify_slaves)
+                                    {
+                                        notify_slaves(zone->origin);
+                                    }
+                                    
+                                    zdb_zone_release(zone);
+                                    
                                 } // lock timeout
                                 else
                                 {
+                                    // we are still double-locked
+                                    
+                                    zdb_zone_release_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
+                                    
                                     log_warn("database: update: timeout trying to lock the zone %{dnsname}", mesg->qname);
                                     
                                     mesg->status = (finger_print)RCODE_SERVFAIL;
@@ -655,6 +935,8 @@ database_update(zdb *database, message_data *mesg)
                             else
                             {
                                 mesg->status = (finger_print)RCODE_FORMERR;
+                                
+                                zdb_zone_release_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
                             }
                         }
                         else
@@ -664,6 +946,8 @@ database_update(zdb *database, message_data *mesg)
                              */
                             
                             mesg->status = FP_CANNOT_DYNUPDATE;
+                            
+                            zdb_zone_release_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
                         }
                     }
                     else
@@ -673,10 +957,15 @@ database_update(zdb *database, message_data *mesg)
                          */
 
                         mesg->status = FP_CANNOT_DYNUPDATE;
+                        
+                        zdb_zone_release_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
                     }
                 }
                 else
                 {
+                    // zone is null or invalid
+                    // if not null, it is double-locked for ZDB_ZONE_MUTEX_SIMPLEREADER and ZDB_ZONE_MUTEX_DYNUPDATE
+                    
                     /**
                      * 2136:
                      *
@@ -692,6 +981,7 @@ database_update(zdb *database, message_data *mesg)
                     }
                     else
                     {
+                        zdb_zone_release_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
                         mesg->status = FP_INVALID_ZONE;
                     }
                 }
@@ -822,16 +1112,24 @@ database_shutdown(zdb *database)
     database_finalize();
     g_config->database = NULL;
     
-        
-    journal_finalise();
-
     return OK;
 }
 
 static ya_result
-database_zone_refresh_alarm(void *args)
+database_zone_refresh_alarm(void *args, bool cancel)
 {
     database_zone_refresh_alarm_args *sszra = (database_zone_refresh_alarm_args*)args;
+    
+    if(cancel)
+    {        
+        free((char*)sszra->origin);
+#ifdef DEBUG
+        memset(sszra, 0xff, sizeof(database_zone_refresh_alarm_args));
+#endif
+        free(sszra);
+        return SUCCESS;
+    }
+    
     const u8 *origin = sszra->origin;
     zdb *db = g_config->database;
     zdb_zone *zone;
@@ -852,8 +1150,8 @@ database_zone_refresh_alarm(void *args)
         
         return ERROR;
     }
-
-    zone = zdb_zone_find_from_name(db, zone_desc->domain, CLASS_IN);
+    
+    zone = zdb_acquire_zone_read_from_fqdn(db, zone_desc->origin);
     
     if(zone != NULL)
     {
@@ -863,12 +1161,10 @@ database_zone_refresh_alarm(void *args)
 
         if(zdb_zone_trylock(zone, ZDB_ZONE_MUTEX_REFRESH))
         {
-            u32 now = time(NULL);
-
-            soa_rdata soa;
-
             if(FAIL(return_value = zdb_zone_getsoa(zone, &soa)))
             {
+                zdb_zone_release(zone);
+                
                 /*
                  * No SOA ? It's critical
                  */
@@ -969,6 +1265,8 @@ database_zone_refresh_alarm(void *args)
             log_info("database: refresh: zone %{dnsname}: has already been locked, will retry layer", origin);
             next_alarm_epoch = time(NULL) + 2;
         }
+        
+        zdb_zone_release(zone);
     }
     else
     {
@@ -1083,12 +1381,17 @@ database_zone_refresh_maintenance_wih_zone(zdb_zone* zone, u32 next_alarm_epoch)
 ya_result
 database_zone_refresh_maintenance(zdb *database, const u8 *origin, u32 next_alarm_epoch)
 {
+    ya_result ret;
+    
     log_debug("database: refresh: database_zone_refresh_maintenance for zone %{dnsname} at %u", origin, next_alarm_epoch);
 
-    zdb_zone *zone = zdb_zone_find_from_dnsname(database, origin, CLASS_IN);
-
-    ya_result ret = database_zone_refresh_maintenance_wih_zone(zone, next_alarm_epoch);
-
+    zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(database, origin);
+    if(zone != NULL)
+    {
+        ret = database_zone_refresh_maintenance_wih_zone(zone, next_alarm_epoch);
+        zdb_zone_release(zone);
+    }
+    
     return ret;
 }
 
@@ -1121,14 +1424,14 @@ database_save_all_zones_to_disk()
     
     zone_set_lock(&database_zone_desc);
     
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&database_zone_desc.set, &iter);
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&database_zone_desc.set, &iter);
 
-    while(treeset_avl_iterator_hasnext(&iter))
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
+        ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
         
-        zone_desc_s *zone_desc = (zone_desc_s*)zone_node->data;
+        zone_desc_s *zone_desc = (zone_desc_s*)zone_node->value;
         
         if(zone_is_obsolete(zone_desc))
         {
@@ -1152,14 +1455,14 @@ database_are_all_zones_saved_to_disk()
     
     zone_set_lock(&database_zone_desc);
     
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&database_zone_desc.set, &iter);
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&database_zone_desc.set, &iter);
 
-    while(treeset_avl_iterator_hasnext(&iter))
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
+        ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
 
-        zone_desc_s *zone_desc = (zone_desc_s*)zone_node->data;
+        zone_desc_s *zone_desc = (zone_desc_s*)zone_node->value;
 
         if(zone_is_obsolete(zone_desc))
         {
@@ -1193,14 +1496,14 @@ database_disable_all_zone_save_to_disk()
 {
     zone_set_lock(&database_zone_desc);
     
-    treeset_avl_iterator iter;
-    treeset_avl_iterator_init(&database_zone_desc.set, &iter);
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&database_zone_desc.set, &iter);
 
-    while(treeset_avl_iterator_hasnext(&iter))
+    while(ptr_set_avl_iterator_hasnext(&iter))
     {
-        treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
+        ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
         
-        zone_desc_s *zone_desc = (zone_desc_s*)zone_node->data;
+        zone_desc_s *zone_desc = (zone_desc_s*)zone_node->value;
         
         if(zone_is_obsolete(zone_desc))
         {

@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man on Wed Jul  9 14:15:09 CEST 2014
+.\" Manual page created with latex2man on Wed Apr 29 16:25:14 CEST 2015
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -10,15 +10,17 @@
 
 .fi
 ..
-.TH "YADIFAD\-CONF" "5" "2014\-12\-08" "YADIFA " "YADIFA "
+.TH "YADIFAD\-CONF" "5" "2015\-04\-24" "YADIFA " "YADIFA "
 .SH NAME
 
-yadifad.conf \- configuration file for \fIyadifad\fP(8)\&.
+.PP
+yadifad.conf
+is the configuration file for \fIyadifad\fP(8)\&.
 .PP
 .SH SYNOPSIS
 
 .PP
-/etc/yadifad.conf 
+${PREFIX}/etc/yadifad.conf 
 .PP
 .SH DESCRIPTION
 
@@ -46,14 +48,14 @@ Access lists.
 .PP
 The configuration supports included files.
 .br
-example: include /var/lib/yadifa/master/yadifad\-2.conf 
+example: include /usr/local/var/zones/master/yadifad\-2.conf 
 .PP
 The configuration files can be nested. 
 .PP
 The configuration consists of: 
 .TP
 .B *
-Container, which starts with <container name> and ends with </container name> 
+Container, which starts with <contai/er name> and ends with </container name> 
 .TP
 .B *
 Variable name 
@@ -93,7 +95,7 @@ Config with includes
 .PP
 .Vb
 # start yadifad.conf <main> container
-        include /etc/yadifa/yadifad\-main.conf
+        include /usr/local\-dev/etc/yadifad\-main.conf
 # end yadifad.conf <main> container
 .Ve
 .PP
@@ -110,22 +112,31 @@ Main without includes
         chroot                  off
 
         # The path of the log files
-        logpath                 "/var/log/yadifa"
+        logpath                 "/usr/local/var/log"
 
         # The location of the pid file
-        pidfile                 "/var/run/yadifad.pid"
+        pidfile                 "/usr/local/var/run/yadifad.pid"
 
         # The path of the zone files
-        datapath                "/var/lib/yadifa"
+        datapath                "/usr/local/var/zones"
 
         # The path of the DNSSEC keys
-        keyspath                "/var/lib/yadifa/keys"
+        keyspath                "/usr/local/var/zones/keys"
 
         # The path of the transfer and journaling files (AXFR & IXFR)
-        xfrpath                 "/var/lib/yadifa/xfr"
+        xfrpath                 "/usr/local/var/zones/xfr"
+
+        # A string returned by a query of hostname. CH TXT (note if you leave this out, the real hostname will be given back)
+        hostname                "server\-yadifad"
+
+        # An ID returned by a query to id.server. CH TXT
+        serverid                "yadifad\-01"
 
         # The version returned by a query to version.yadifa. CH TXT
-        version                 "2.0.4"
+        version                 "2.1.0"
+
+        # Enable EDNS0 support (?)
+        edns0                   on
 
         # Set the maximum UDP packet size.  Packetsize annot be less than 512.  or more than 65535.  A typical choice is 4096.
         edns0\-max\-size          4096
@@ -422,12 +433,102 @@ Example with syslog
 .RE
 .RE
 .PP
+The defined loggers are: 
+.PP
+.RS
+.RE
+.TP
+system 
+contains low level messages about the system such as memory allocation, threading, IOs, timers and cryptography, \&.\&.\&. 
+.TP
+database 
+It contains messages about most lower\-level operations in the DNS database. ie: journal, updates, zone loading and sanitization, DNS message query resolution, \&.\&.\&.) 
+.TP
+dnssec 
+contains messages about lower\-level dnssec operations in the DNS database. ie: status, maintenance, verification, \&.\&.\&. 
+.TP
+server 
+contains messages about operations in the DNS server. ie: start up, shutdown, configuration, transfers, various services status (database management, network management, DNS notification management, dynamic update management, resource rate limiting, \&.\&.\&.) 
+.TP
+zone 
+contains messages about the loading of a zone from a source (file parsing, transferred binary zone reading, \&.\&.\&.) 
+.TP
+stats 
+contains the statistics of the server. 
+.TP
+queries 
+contains the queries on the server. 
+Queries can be logged with the BIND and/or with the YADIFA format.
+.br
+.br
+\fBBIND format:\fP
+.br
+.br
+client sender\-ip#port: query: fqdn class type +SETDC (listen\-ip)
+.br
+.br
+\fBYADIFA format:\fP
+.br
+.br
+query [ id ] {+SETDC} fqdn class type (sender\-ip#port)
+.br 
+.br
+where: 
+.RS
+.TP
+id 
+is the query message id 
+.TP
++ 
+means the message has the Recursion Desired flag set 
+.TP
+S 
+means the message is signed with a TSIG 
+.TP
+E 
+means the message is EDNS 
+.TP
+T 
+means the message was sent using TCP instead of UDP 
+.TP
+D 
+means the message has the DNSSEC OK flag set 
+.TP
+C 
+means the message has the Checking Disabled flag set 
+.TP
+fqdn 
+is the queried FQDN 
+.TP
+class 
+is the queried class 
+.TP
+type 
+is the queried type 
+.TP
+sender\-ip 
+is the IP of the client that sent the query 
+.TP
+port 
+is the port of the client that sent the query 
+.TP
+listen\-ip 
+is the listen network interface that received the message 
+.RE
+.RS
+.PP
+Note that on YADIFA any unset flag is replaced by a \&'\-\&', on BIND only the \&'+\&' follows that rule. 
+.RE
+.RE
+.PP
+System operators will mostly be interested in the info and above messages of queries and stats, as well as the error and above messages of the other loggers. 
+.PP
 .RE
 .PP
 .SH SEE ALSO
 
 .PP
-\fIyadifad\fP(1)
+\fIyadifad\fP(8)
 .PP
 .SH NOTES
 
@@ -437,13 +538,14 @@ you can indent everything to taste.
 .PP
 .SH CHANGES
 
-Please check the file ChangeLog
-from the sources 
+.PP
+Please check the file README
+from the sources. 
 .PP
 .SH VERSION
 
 .PP
-Version: 2.0.4 of 2014-12-08\&.
+Version: 2.1.0 of 2015-04-24\&.
 .PP
 .SH MAILING LISTS
 
@@ -476,7 +578,7 @@ via:
 .PP
 .TP
 Copyright 
-(C)2012, EURid
+(C)2012\-2015, EURid
 .br
 B\-1831 Diegem, Belgium
 .br

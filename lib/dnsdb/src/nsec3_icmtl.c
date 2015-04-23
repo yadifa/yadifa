@@ -48,6 +48,7 @@
 #include <dnscore/logger.h>
 #include <dnscore/format.h>
 #include <dnscore/base32hex.h>
+#include <dnscore/ptr_set.h>
 
 #include "dnsdb/zdb_record.h"
 #include "dnsdb/zdb_rr_label.h"
@@ -397,16 +398,7 @@ nsec3_add_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec3_r
 /**/
 
 static int
-treeset_dnsname_compare(const void *a, const void *b)
-{
-    u8 *dnsname_a = (u8*)a;
-    u8 *dnsname_b = (u8*)b;
-
-    return dnsname_compare(dnsname_a,dnsname_b);
-}
-
-static int
-treeset_nsec3param_compare(const void *a, const void *b)
+nsec3_icmtl_ptr_set_nsec3param_compare(const void *a, const void *b)
 {
     u8 *nsec3_rdata_a = (u8*)a;
     u8 *nsec3_rdata_b = (u8*)b;
@@ -418,31 +410,31 @@ void nsec3_icmtl_replay_init(nsec3_icmtl_replay *replay, zdb_zone *zone)
 {
     ZEROMEMORY(replay, sizeof(nsec3_icmtl_replay));
     
-    replay->nsec3_add.compare = treeset_dnsname_compare;
-    replay->nsec3_del.compare = treeset_dnsname_compare;
-    replay->nsec3rrsig_add.compare = treeset_dnsname_compare;
-    replay->nsec3rrsig_del.compare = treeset_dnsname_compare;
-    replay->nsec3_labels.compare = treeset_dnsname_compare;
-    replay->nsec3param_add.compare = treeset_nsec3param_compare;
-    replay->nsec3param_del.compare = treeset_nsec3param_compare;
+    replay->nsec3_add.compare = ptr_set_dnsname_node_compare;
+    replay->nsec3_del.compare = ptr_set_dnsname_node_compare;
+    replay->nsec3rrsig_add.compare = ptr_set_dnsname_node_compare;
+    replay->nsec3rrsig_del.compare = ptr_set_dnsname_node_compare;
+    replay->nsec3_labels.compare = ptr_set_dnsname_node_compare;
+    replay->nsec3param_add.compare = nsec3_icmtl_ptr_set_nsec3param_compare;
+    replay->nsec3param_del.compare = nsec3_icmtl_ptr_set_nsec3param_compare;
     replay->zone = zone;
 }
 
 static void
-nsec3_icmtl_destroy_nsec3(treeset_tree *tree)
+nsec3_icmtl_destroy_nsec3(ptr_set *tree)
 {
-    if(!treeset_avl_isempty(tree))
+    if(!ptr_set_avl_isempty(tree))
     {
         /* stuff to delete */
 
-        treeset_avl_iterator ts_avl_iter;
-        treeset_avl_iterator_init(tree, &ts_avl_iter);
+        ptr_set_avl_iterator ts_avl_iter;
+        ptr_set_avl_iterator_init(tree, &ts_avl_iter);
 
-        while(treeset_avl_iterator_hasnext(&ts_avl_iter))
+        while(ptr_set_avl_iterator_hasnext(&ts_avl_iter))
         {
-            treeset_node *node = treeset_avl_iterator_next_node(&ts_avl_iter);
+            ptr_node *node = ptr_set_avl_iterator_next_node(&ts_avl_iter);
             u8 *fqdn = (u8*)node->key;
-            zdb_ttlrdata *ttlrdata = (zdb_ttlrdata*)node->data;
+            zdb_ttlrdata *ttlrdata = (zdb_ttlrdata*)node->value;
             
             free(fqdn);
             
@@ -452,25 +444,25 @@ nsec3_icmtl_destroy_nsec3(treeset_tree *tree)
             }
         }
         
-        treeset_avl_destroy(tree);
+        ptr_set_avl_destroy(tree);
     }
 }
 
 static void
-nsec3_icmtl_destroy_nsec3rrsig_add(treeset_tree *tree)
+nsec3_icmtl_destroy_nsec3rrsig_add(ptr_set *tree)
 {
-    if(!treeset_avl_isempty(tree))
+    if(!ptr_set_avl_isempty(tree))
     {
         /* stuff to delete */
 
-        treeset_avl_iterator ts_avl_iter;
-        treeset_avl_iterator_init(tree, &ts_avl_iter);
+        ptr_set_avl_iterator ts_avl_iter;
+        ptr_set_avl_iterator_init(tree, &ts_avl_iter);
 
-        while(treeset_avl_iterator_hasnext(&ts_avl_iter))
+        while(ptr_set_avl_iterator_hasnext(&ts_avl_iter))
         {
-            treeset_node *node = treeset_avl_iterator_next_node(&ts_avl_iter);
+            ptr_node *node = ptr_set_avl_iterator_next_node(&ts_avl_iter);
             u8 *fqdn = (u8*)node->key;
-            zdb_ttlrdata *ttlrdata = (zdb_ttlrdata*)node->data;
+            zdb_ttlrdata *ttlrdata = (zdb_ttlrdata*)node->value;
             
             free(fqdn);
             
@@ -482,25 +474,25 @@ nsec3_icmtl_destroy_nsec3rrsig_add(treeset_tree *tree)
             }
         }
         
-        treeset_avl_destroy(tree);
+        ptr_set_avl_destroy(tree);
     }
 }
 
 static void
-nsec3_icmtl_destroy_nsec3rrsig_del(treeset_tree *tree)
+nsec3_icmtl_destroy_nsec3rrsig_del(ptr_set *tree)
 {
-    if(!treeset_avl_isempty(tree))
+    if(!ptr_set_avl_isempty(tree))
     {
         /* stuff to delete */
 
-        treeset_avl_iterator ts_avl_iter;
-        treeset_avl_iterator_init(tree, &ts_avl_iter);
+        ptr_set_avl_iterator ts_avl_iter;
+        ptr_set_avl_iterator_init(tree, &ts_avl_iter);
 
-        while(treeset_avl_iterator_hasnext(&ts_avl_iter))
+        while(ptr_set_avl_iterator_hasnext(&ts_avl_iter))
         {
-            treeset_node *node = treeset_avl_iterator_next_node(&ts_avl_iter);
+            ptr_node *node = ptr_set_avl_iterator_next_node(&ts_avl_iter);
             u8 *fqdn = (u8*)node->key;
-            zdb_ttlrdata *ttlrdata = (zdb_ttlrdata*)node->data;
+            zdb_ttlrdata *ttlrdata = (zdb_ttlrdata*)node->value;
             
             free(fqdn);
             
@@ -512,22 +504,22 @@ nsec3_icmtl_destroy_nsec3rrsig_del(treeset_tree *tree)
             }
         }
         
-        treeset_avl_destroy(tree);
+        ptr_set_avl_destroy(tree);
     }
 }
 
 static void
-nsec3_icmtl_destroy_nsec3param(treeset_tree *tree)
+nsec3_icmtl_destroy_nsec3param(ptr_set *tree)
 {
-    if(!treeset_avl_isempty(tree))
+    if(!ptr_set_avl_isempty(tree))
     {
-        treeset_avl_iterator n3p_avl_iter;
-        treeset_avl_iterator_init(tree, &n3p_avl_iter);
+        ptr_set_avl_iterator n3p_avl_iter;
+        ptr_set_avl_iterator_init(tree, &n3p_avl_iter);
 
-        while(treeset_avl_iterator_hasnext(&n3p_avl_iter))
+        while(ptr_set_avl_iterator_hasnext(&n3p_avl_iter))
         {
-            treeset_node *node = treeset_avl_iterator_next_node(&n3p_avl_iter);
-            zdb_ttlrdata* nsec3param = (zdb_ttlrdata*)node->data;
+            ptr_node *node = ptr_set_avl_iterator_next_node(&n3p_avl_iter);
+            zdb_ttlrdata* nsec3param = (zdb_ttlrdata*)node->value;
                         
             if(nsec3param != NULL)
             {
@@ -535,10 +527,10 @@ nsec3_icmtl_destroy_nsec3param(treeset_tree *tree)
             }
             
             node->key = NULL;
-            node->data = NULL;
+            node->value = NULL;
         }
         
-        treeset_avl_destroy(tree);
+        ptr_set_avl_destroy(tree);
     }
 }
 
@@ -561,25 +553,25 @@ void nsec3_icmtl_replay_nsec3param_del(nsec3_icmtl_replay *replay, const zdb_ttl
 {
     assert(ttlrdata->next == NULL);
     
-    treeset_node *node = treeset_avl_find(&replay->nsec3param_del, ttlrdata->rdata_pointer);
+    ptr_node *node = ptr_set_avl_find(&replay->nsec3param_del, ttlrdata->rdata_pointer);
     
     if(node == NULL)
     {
         zdb_ttlrdata* clone = zdb_ttlrdata_clone(ttlrdata);
         
-        treeset_node *node = treeset_avl_insert(&replay->nsec3param_del, clone->rdata_pointer);
-        node->data = clone;
+        ptr_node *node = ptr_set_avl_insert(&replay->nsec3param_del, clone->rdata_pointer);
+        node->value = clone;
         
         /* If the node was previously added, don't add it anymore */
         
-        treeset_node *added_node = treeset_avl_find(&replay->nsec3param_add, ttlrdata->rdata_pointer);
+        ptr_node *added_node = ptr_set_avl_find(&replay->nsec3param_add, ttlrdata->rdata_pointer);
         
         if(added_node != NULL)
         {
-            treeset_avl_delete(&replay->nsec3param_add, ttlrdata->rdata_pointer);
+            ptr_set_avl_delete(&replay->nsec3param_add, ttlrdata->rdata_pointer);
 
-            zdb_ttlrdata* nsec3param = (zdb_ttlrdata*)added_node->data;
-            treeset_avl_delete(&replay->nsec3param_add, nsec3param->rdata_pointer);
+            zdb_ttlrdata* nsec3param = (zdb_ttlrdata*)added_node->value;
+            ptr_set_avl_delete(&replay->nsec3param_add, nsec3param->rdata_pointer);
             zdb_ttlrdata_delete(nsec3param);
         }
     }
@@ -589,25 +581,25 @@ void nsec3_icmtl_replay_nsec3param_add(nsec3_icmtl_replay *replay, const zdb_ttl
 {
     assert(ttlrdata->next == NULL);
     
-    treeset_node *node = treeset_avl_find(&replay->nsec3param_add, ttlrdata->rdata_pointer);
+    ptr_node *node = ptr_set_avl_find(&replay->nsec3param_add, ttlrdata->rdata_pointer);
     
     if(node == NULL)
     {
         zdb_ttlrdata* clone = zdb_ttlrdata_clone(ttlrdata);
         
-        treeset_node *node = treeset_avl_insert(&replay->nsec3param_add, clone->rdata_pointer);
-        node->data = clone;
+        ptr_node *node = ptr_set_avl_insert(&replay->nsec3param_add, clone->rdata_pointer);
+        node->value = clone;
         
         /* If the node was previously deleted, don't delete it anymore */
         
-        treeset_node *added_node = treeset_avl_find(&replay->nsec3param_del, ttlrdata->rdata_pointer);
+        ptr_node *added_node = ptr_set_avl_find(&replay->nsec3param_del, ttlrdata->rdata_pointer);
         
         if(added_node != NULL)
         {
-            treeset_avl_delete(&replay->nsec3param_del, ttlrdata->rdata_pointer);
+            ptr_set_avl_delete(&replay->nsec3param_del, ttlrdata->rdata_pointer);
 
-            zdb_ttlrdata* nsec3param = (zdb_ttlrdata*)added_node->data;
-            treeset_avl_delete(&replay->nsec3param_del, nsec3param->rdata_pointer);
+            zdb_ttlrdata* nsec3param = (zdb_ttlrdata*)added_node->value;
+            ptr_set_avl_delete(&replay->nsec3param_del, nsec3param->rdata_pointer);
             zdb_ttlrdata_delete(nsec3param);
         }
     }
@@ -617,16 +609,16 @@ void nsec3_icmtl_replay_nsec3_del(nsec3_icmtl_replay *replay, const u8* fqdn, co
 {
     assert(ttlrdata->next == NULL);
     
-    treeset_node *node = treeset_avl_insert(&replay->nsec3_del, (u8*)fqdn);
-    if(node->data == NULL)
+    ptr_node *node = ptr_set_avl_insert(&replay->nsec3_del, (u8*)fqdn);
+    if(node->value == NULL)
     {
         node->key = dnsname_dup(fqdn);
-        node->data = zdb_ttlrdata_clone(ttlrdata);
+        node->value = zdb_ttlrdata_clone(ttlrdata);
     }
     else
     {
-        zdb_ttlrdata_delete(node->data);
-        node->data = zdb_ttlrdata_clone(ttlrdata);
+        zdb_ttlrdata_delete(node->value);
+        node->value = zdb_ttlrdata_clone(ttlrdata);
     }
 }
 
@@ -634,16 +626,16 @@ void nsec3_icmtl_replay_nsec3_add(nsec3_icmtl_replay *replay, const u8* fqdn, co
 {
     assert(ttlrdata->next == NULL);
     
-    treeset_node *node = treeset_avl_insert(&replay->nsec3_add, (u8*)fqdn);
-    if(node->data == NULL)
+    ptr_node *node = ptr_set_avl_insert(&replay->nsec3_add, (u8*)fqdn);
+    if(node->value == NULL)
     {
         node->key = dnsname_dup(fqdn);
-        node->data = zdb_ttlrdata_clone(ttlrdata);
+        node->value = zdb_ttlrdata_clone(ttlrdata);
     }
     else
     {
-        zdb_ttlrdata_delete(node->data);
-        node->data = zdb_ttlrdata_clone(ttlrdata);
+        zdb_ttlrdata_delete(node->value);
+        node->value = zdb_ttlrdata_clone(ttlrdata);
     }
 }
 
@@ -651,18 +643,18 @@ void nsec3_icmtl_replay_nsec3_rrsig_del(nsec3_icmtl_replay *replay, const u8* fq
 {
     assert(ttlrdata->next == NULL);
 
-    treeset_node *node = treeset_avl_insert(&replay->nsec3rrsig_del, (u8*)fqdn);
-    if(node->data == NULL)
+    ptr_node *node = ptr_set_avl_insert(&replay->nsec3rrsig_del, (u8*)fqdn);
+    if(node->value == NULL)
     {
         node->key = dnsname_dup(fqdn);
-        node->data = zdb_ttlrdata_clone(ttlrdata);
+        node->value = zdb_ttlrdata_clone(ttlrdata);
     }
     else
     {
         //zdb_ttlrdata_delete(node->data);
         zdb_ttlrdata *newone = zdb_ttlrdata_clone(ttlrdata);
-        newone->next = (zdb_ttlrdata*)node->data;
-        node->data = newone;
+        newone->next = (zdb_ttlrdata*)node->value;
+        node->value = newone;
     }
 }
 
@@ -672,19 +664,19 @@ void nsec3_icmtl_replay_nsec3_rrsig_del(nsec3_icmtl_replay *replay, const u8* fq
 
 void nsec3_icmtl_replay_nsec3_rrsig_add(nsec3_icmtl_replay *replay, const u8* fqdn, zdb_packed_ttlrdata *packed_ttlrdata)
 {
-    treeset_node *node = treeset_avl_insert(&replay->nsec3rrsig_add, (u8*)fqdn);
+    ptr_node *node = ptr_set_avl_insert(&replay->nsec3rrsig_add, (u8*)fqdn);
     
-    if(node->data == NULL)
+    if(node->value == NULL)
     {
         node->key = dnsname_dup(fqdn);
-        node->data = packed_ttlrdata;
+        node->value = packed_ttlrdata;
     }
     else
     {
         //zdb_ttlrdata_delete(node->data);
 
-        zdb_packed_ttlrdata **nsec3_rrsig_ptr = (zdb_packed_ttlrdata **)&node->data;
-        zdb_packed_ttlrdata *nsec3_rrsig = (zdb_packed_ttlrdata *)node->data;
+        zdb_packed_ttlrdata **nsec3_rrsig_ptr = (zdb_packed_ttlrdata **)&node->value;
+        zdb_packed_ttlrdata *nsec3_rrsig = (zdb_packed_ttlrdata *)node->value;
 
         while(nsec3_rrsig != NULL)
         {
@@ -723,15 +715,15 @@ nsec3_icmtl_replay_label_add(nsec3_icmtl_replay *replay, const u8 *fqdn, dnslabe
         if( ((flags & ZDB_RR_LABEL_APEX) != 0) ||
             (((flags & ZDB_RR_LABEL_DELEGATION) != 0) && (zdb_record_find(&rr_label->resource_record_set, TYPE_DS) != NULL) ) )
         {
-            treeset_node *node = treeset_avl_insert(&replay->nsec3_labels, (u8*)fqdn);
+            ptr_node *node = ptr_set_avl_insert(&replay->nsec3_labels, (u8*)fqdn);
 
-            if(node->data == NULL)
+            if(node->value == NULL)
             {
 #ifdef DEBUG
                 log_debug("journal: NSEC3: queue: %{dnsname} for NSEC3 update", fqdn);
 #endif
                 node->key = dnsname_dup(fqdn);
-                node->data = rr_label;
+                node->value = rr_label;
             }
         }
     }
@@ -742,15 +734,15 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
 {
     bool nsec3param_added = FALSE;
     
-    if(!treeset_avl_isempty(&replay->nsec3param_add))
+    if(!ptr_set_avl_isempty(&replay->nsec3param_add))
     {
-        treeset_avl_iterator n3p_avl_iter;
-        treeset_avl_iterator_init(&replay->nsec3param_add, &n3p_avl_iter);
+        ptr_set_avl_iterator n3p_avl_iter;
+        ptr_set_avl_iterator_init(&replay->nsec3param_add, &n3p_avl_iter);
 
-        while(treeset_avl_iterator_hasnext(&n3p_avl_iter))
+        while(ptr_set_avl_iterator_hasnext(&n3p_avl_iter))
         {
-            treeset_node *node = treeset_avl_iterator_next_node(&n3p_avl_iter);
-            zdb_ttlrdata* nsec3param = (zdb_ttlrdata*)node->data;
+            ptr_node *node = ptr_set_avl_iterator_next_node(&n3p_avl_iter);
+            zdb_ttlrdata* nsec3param = (zdb_ttlrdata*)node->value;
             
             nsec3_zone* n3 = nsec3_zone_get_from_rdata(replay->zone, nsec3param->rdata_size, nsec3param->rdata_pointer);
             
@@ -773,31 +765,31 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             zdb_ttlrdata_delete(nsec3param);
             
             node->key = NULL;
-            node->data = NULL;
+            node->value = NULL;
         }
         
-        treeset_avl_destroy(&replay->nsec3param_add);
+        ptr_set_avl_destroy(&replay->nsec3param_add);
     }
     
-    if(!treeset_avl_isempty(&replay->nsec3_del))
+    if(!ptr_set_avl_isempty(&replay->nsec3_del))
     {
         /* stuff to delete */
 
-        treeset_avl_iterator ts_avl_iter;
-        treeset_avl_iterator_init(&replay->nsec3_del, &ts_avl_iter);
+        ptr_set_avl_iterator ts_avl_iter;
+        ptr_set_avl_iterator_init(&replay->nsec3_del, &ts_avl_iter);
 
-        while(treeset_avl_iterator_hasnext(&ts_avl_iter))
+        while(ptr_set_avl_iterator_hasnext(&ts_avl_iter))
         {
-            treeset_node *node = treeset_avl_iterator_next_node(&ts_avl_iter);
+            ptr_node *node = ptr_set_avl_iterator_next_node(&ts_avl_iter);
             u8 *fqdn = (u8*)node->key;
-            zdb_ttlrdata *ttlrdata = (zdb_ttlrdata*)node->data;
+            zdb_ttlrdata *ttlrdata = (zdb_ttlrdata*)node->value;
 
 #ifdef DEBUG
             log_debug("journal: NSEC3: post/del %{dnsname}", fqdn);
 #endif
-            treeset_node *add_node;
+            ptr_node *add_node;
 
-            if((add_node = treeset_avl_find(&replay->nsec3_add, fqdn)) != NULL)
+            if((add_node = ptr_set_avl_find(&replay->nsec3_add, fqdn)) != NULL)
             {
                 /* replace */
 
@@ -808,7 +800,7 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
                 log_debug("journal: NSEC3: - %{typerdatadesc}", &type_len_rdata);
 #endif
 
-                zdb_ttlrdata *add_ttlrdata = (zdb_ttlrdata *)add_node->data;
+                zdb_ttlrdata *add_ttlrdata = (zdb_ttlrdata *)add_node->value;
 
 #ifdef DEBUG
                 rdata_desc add_type_len_rdata = {TYPE_NSEC3, add_ttlrdata->rdata_size, add_ttlrdata->rdata_pointer };
@@ -830,7 +822,7 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
                     nsec3_zone_item_update_bitmap(add_item, add_ttlrdata->rdata_pointer, add_ttlrdata->rdata_size);
 
                     u8* add_key = add_node->key;
-                    treeset_avl_delete(&replay->nsec3_add, fqdn);
+                    ptr_set_avl_delete(&replay->nsec3_add, fqdn);
                     zdb_ttlrdata_delete(add_ttlrdata);
                     free(add_key);
                 }
@@ -872,28 +864,28 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             free(fqdn);
             
             node->key = NULL;
-            node->data = NULL;
+            node->value = NULL;
         }
 
-        treeset_avl_destroy(&replay->nsec3_del);
+        ptr_set_avl_destroy(&replay->nsec3_del);
     }
-    if(!treeset_avl_isempty(&replay->nsec3_add))
+    if(!ptr_set_avl_isempty(&replay->nsec3_add))
     {
         /* stuff to add */
 
-        treeset_avl_iterator ts_avl_iter;
-        treeset_avl_iterator_init(&replay->nsec3_add, &ts_avl_iter);
+        ptr_set_avl_iterator ts_avl_iter;
+        ptr_set_avl_iterator_init(&replay->nsec3_add, &ts_avl_iter);
 
-        while(treeset_avl_iterator_hasnext(&ts_avl_iter))
+        while(ptr_set_avl_iterator_hasnext(&ts_avl_iter))
         {
-            treeset_node *node = treeset_avl_iterator_next_node(&ts_avl_iter);
+            ptr_node *node = ptr_set_avl_iterator_next_node(&ts_avl_iter);
             u8 *fqdn = (u8*)node->key;
 
 #ifdef DEBUG
             log_debug("journal: NSEC3: post/add %{dnsname}", fqdn);
 #endif
 
-            zdb_ttlrdata *ttlrdata = (zdb_ttlrdata*)node->data;
+            zdb_ttlrdata *ttlrdata = (zdb_ttlrdata*)node->value;
 
 #ifdef DEBUG
             log_debug("journal: NSEC3: add %{dnsname}", fqdn);
@@ -953,28 +945,28 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             free(fqdn);
             
             node->key = NULL;
-            node->data = NULL;
+            node->value = NULL;
         }
 
-        treeset_avl_destroy(&replay->nsec3_add);
+        ptr_set_avl_destroy(&replay->nsec3_add);
     }
-    if(!treeset_avl_isempty(&replay->nsec3rrsig_del))
+    if(!ptr_set_avl_isempty(&replay->nsec3rrsig_del))
     {
         /* stuff to add */
 
-        treeset_avl_iterator ts_avl_iter;
-        treeset_avl_iterator_init(&replay->nsec3rrsig_del, &ts_avl_iter);
+        ptr_set_avl_iterator ts_avl_iter;
+        ptr_set_avl_iterator_init(&replay->nsec3rrsig_del, &ts_avl_iter);
 
-        while(treeset_avl_iterator_hasnext(&ts_avl_iter))
+        while(ptr_set_avl_iterator_hasnext(&ts_avl_iter))
         {
-            treeset_node *node = treeset_avl_iterator_next_node(&ts_avl_iter);
+            ptr_node *node = ptr_set_avl_iterator_next_node(&ts_avl_iter);
             u8 *fqdn = (u8*)node->key;
             
 #ifdef DEBUG
             log_debug("journal: NSEC3: post/add %{dnsname}", fqdn);
 #endif
 
-            zdb_ttlrdata *nsec3_rrsig = (zdb_ttlrdata*)node->data;
+            zdb_ttlrdata *nsec3_rrsig = (zdb_ttlrdata*)node->value;
 
 #ifdef DEBUG
             log_debug("journal: NSEC3: add %{dnsname}", fqdn);
@@ -998,28 +990,28 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             free(fqdn);
             
             node->key = NULL;
-            node->data = NULL;
+            node->value = NULL;
         }
 
-        treeset_avl_destroy(&replay->nsec3rrsig_del);
+        ptr_set_avl_destroy(&replay->nsec3rrsig_del);
     }
-    if(!treeset_avl_isempty(&replay->nsec3rrsig_add))
+    if(!ptr_set_avl_isempty(&replay->nsec3rrsig_add))
     {
         /* stuff to add */
 
-        treeset_avl_iterator ts_avl_iter;
-        treeset_avl_iterator_init(&replay->nsec3rrsig_add, &ts_avl_iter);
+        ptr_set_avl_iterator ts_avl_iter;
+        ptr_set_avl_iterator_init(&replay->nsec3rrsig_add, &ts_avl_iter);
 
-        while(treeset_avl_iterator_hasnext(&ts_avl_iter))
+        while(ptr_set_avl_iterator_hasnext(&ts_avl_iter))
         {
-            treeset_node *node = treeset_avl_iterator_next_node(&ts_avl_iter);
+            ptr_node *node = ptr_set_avl_iterator_next_node(&ts_avl_iter);
             u8 *fqdn = (u8*)node->key;
 
 #ifdef DEBUG
             log_debug("journal: NSEC3: post/add %{dnsname}", fqdn);
 #endif
 
-            zdb_packed_ttlrdata *nsec3_rrsig = (zdb_packed_ttlrdata*)node->data;
+            zdb_packed_ttlrdata *nsec3_rrsig = (zdb_packed_ttlrdata*)node->value;
 
 #ifdef DEBUG
             log_debug("journal: NSEC3: add %{dnsname}", fqdn);
@@ -1046,23 +1038,23 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             free(fqdn);
             
             node->key = NULL;
-            node->data = NULL;
+            node->value = NULL;
         }
 
-        treeset_avl_destroy(&replay->nsec3rrsig_add);
+        ptr_set_avl_destroy(&replay->nsec3rrsig_add);
     }
-    if(!treeset_avl_isempty(&replay->nsec3_labels))
+    if(!ptr_set_avl_isempty(&replay->nsec3_labels))
     {
         /* labels to update */
 
-        treeset_avl_iterator ts_avl_iter;
-        treeset_avl_iterator_init(&replay->nsec3_labels, &ts_avl_iter);
+        ptr_set_avl_iterator ts_avl_iter;
+        ptr_set_avl_iterator_init(&replay->nsec3_labels, &ts_avl_iter);
 
-        while(treeset_avl_iterator_hasnext(&ts_avl_iter))
+        while(ptr_set_avl_iterator_hasnext(&ts_avl_iter))
         {
-            treeset_node *node = treeset_avl_iterator_next_node(&ts_avl_iter);
+            ptr_node *node = ptr_set_avl_iterator_next_node(&ts_avl_iter);
             u8 *fqdn = (u8*)node->key;
-            zdb_rr_label *rr_label = (zdb_rr_label*)node->data;
+            zdb_rr_label *rr_label = (zdb_rr_label*)node->value;
 
 #ifdef DEBUG
             log_debug("journal: NSEC3: lbl %{dnsname} (%{dnslabel})", fqdn, rr_label->name);
@@ -1080,10 +1072,10 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             free(fqdn);
             
             node->key = NULL;
-            node->data = NULL;
+            node->value = NULL;
         }
 
-        treeset_avl_destroy(&replay->nsec3_labels);
+        ptr_set_avl_destroy(&replay->nsec3_labels);
     }
     
     /**/
@@ -1112,15 +1104,15 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
         }
     }
     
-    if(!treeset_avl_isempty(&replay->nsec3param_del))
+    if(!ptr_set_avl_isempty(&replay->nsec3param_del))
     {
-        treeset_avl_iterator n3p_avl_iter;
-        treeset_avl_iterator_init(&replay->nsec3param_del, &n3p_avl_iter);
+        ptr_set_avl_iterator n3p_avl_iter;
+        ptr_set_avl_iterator_init(&replay->nsec3param_del, &n3p_avl_iter);
 
-        while(treeset_avl_iterator_hasnext(&n3p_avl_iter))
+        while(ptr_set_avl_iterator_hasnext(&n3p_avl_iter))
         {
-            treeset_node *node = treeset_avl_iterator_next_node(&n3p_avl_iter);
-            zdb_ttlrdata* nsec3param = (zdb_ttlrdata*)node->data;
+            ptr_node *node = ptr_set_avl_iterator_next_node(&n3p_avl_iter);
+            zdb_ttlrdata* nsec3param = (zdb_ttlrdata*)node->value;
             
             nsec3_zone* n3 = nsec3_zone_get_from_rdata(replay->zone, nsec3param->rdata_size, nsec3param->rdata_pointer);
             
@@ -1134,10 +1126,10 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             zdb_ttlrdata_delete(nsec3param);
             
             node->key = NULL;
-            node->data = NULL;
+            node->value = NULL;
         }
         
-        treeset_avl_destroy(&replay->nsec3param_del);
+        ptr_set_avl_destroy(&replay->nsec3param_del);
     }    
     
     return SUCCESS;

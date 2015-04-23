@@ -49,10 +49,12 @@
 #include <dnscore/sys_types.h>
 #include <dnscore/dnssec_errors.h>
 
+#include "dnsdb/zdb.h"
 #include "dnsdb/zdb_types.h"
 #include "dnsdb/zdb_zone.h"
 #include "dnsdb/zdb_zone_label.h"
 #include "dnsdb/zdb_utils.h"
+#include "dnsdb/zdb-zone-arc.h"
 
 #include <dnscore/input_stream.h>
 
@@ -160,17 +162,19 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
         return err;
     }
 
-    zdb_zone_label* zone_label = zdb_zone_label_find(db, &name, rclass);
-
-    if((zone_label == NULL) || (zone_label->zone == NULL))
+#if 0 /* fix */
+#else
+    zdb_zone *zone = zdb_acquire_zone_read(db, &name);
+    
+    if(zone == NULL)
     {
         /* Not loaded */
         ZDB_RECORD_ZFREE(soa_ttlrdata);
         
         return ZDB_ERROR_GENERAL;
     }
-
-    zdb_zone* zone = zone_label->zone;
+    
+#endif
 
     u32 serial_current;
 
@@ -196,6 +200,8 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
 
     if(FAIL(err = input_stream_read_rr_header(is, rname, sizeof (rname), &rtype, &rclass, &rttl, &rdata_size)))
     {
+        zdb_zone_release(zone);
+        
         ZDB_RECORD_ZFREE(soa_ttlrdata);
         free(tmp_ttlrdata);
         return err;
@@ -203,6 +209,8 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
 
     if(rtype != TYPE_SOA)
     {
+        zdb_zone_release(zone);
+        
         ZDB_RECORD_ZFREE(soa_ttlrdata);
         free(tmp_ttlrdata);
         return ZDB_ERROR_GENERAL;
@@ -567,7 +575,7 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
 #if ZDB_HAS_NSEC3_SUPPORT != 0
         /**
          * Check if there is both NSEC & NSEC3.  Reject if yes.
-         *       compile NSEC if any
+         *   compile NSEC if any
          *	 compile NSEC3 if any
          *
          * @todo: I'm only doing NSEC3 here. Do NSEC as well.
@@ -582,15 +590,19 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
 
         if(ISOK(err))
         {
+            zdb_zone_release(zone);
+            
             nsec3_load_destroy(&nsec3_context);
 #endif
-            zone_label->zone = zone;
+            /// @todo edf 20141008 -- why is this done here ? The zone comes from the label already : zone_label->zone = zone;
 
             return err;
 #if ZDB_HAS_NSEC3_SUPPORT != 0
         }
 #endif
     }
+    
+    zdb_zone_release(zone);
 
 #if ZDB_HAS_NSEC3_SUPPORT != 0
     nsec3_load_destroy(&nsec3_context);
@@ -602,7 +614,14 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
      *         zdb_zone_destroy(zone);
      */
 
-    zdb_zone_unload(db, &name, zdb_zone_getclass(zone));
+    // zdb_zone_getclass(zone)
+
+    zdb_zone *old_zone = zdb_remove_zone(db, &name);
+    
+    if(old_zone != NULL)
+    {
+        zdb_zone_release(old_zone);
+    }
 
     return err;
 }

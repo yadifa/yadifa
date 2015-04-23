@@ -49,7 +49,7 @@
 #include <arpa/inet.h>
 #include <time.h>
 
-#include "dnscore-config.h"
+//#include "dnscore/dnscore-config.h"
 #include "dnscore/rfc.h"
 #include "dnscore/ctrl-rfc.h"
 #include "dnscore/format.h"
@@ -57,7 +57,6 @@
 #include "dnscore/base32hex.h"
 #include "dnscore/dnsformat.h"
 #include "dnscore/host_address.h"
-#include "dnscore/dns_resource_record.h"
 
 #define NULL_STRING_SUBSTITUTE (u8*)"(NULL)"
 #define NULL_STRING_SUBSTITUTE_LEN 6 /*(sizeof(NULL_STRING_SUBSTITUTE)-1)*/

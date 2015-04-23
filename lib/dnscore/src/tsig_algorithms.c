@@ -41,7 +41,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "dnscore-config.h"
+#include "dnscore/dnscore-config.h"
 
 #include "dnscore/sys_types.h"
 

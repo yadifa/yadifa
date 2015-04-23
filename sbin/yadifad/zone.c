@@ -95,6 +95,7 @@
 /* Zone file variables */
 extern zone_data_set database_zone_desc;
 
+
 static mutex_t zone_desc_rc_mtx = MUTEX_INITIALIZER;
 
 #ifdef DEBUG
@@ -237,9 +238,18 @@ void
 zone_acquire(zone_desc_s *zone_desc)
 {    
     mutex_lock(&zone_desc_rc_mtx);
+#ifdef DEBUG
+    s32 old_rc = zone_desc->rc;
+#endif
     s32 rc = ++zone_desc->rc;
     mutex_unlock(&zone_desc_rc_mtx);
     log_debug6("acquire: %{dnsname}@%p rc=%i", zone_desc->origin, zone_desc, rc);
+#ifdef DEBUG
+    char prefix[80];
+    snformat(prefix, sizeof(prefix), "acquire: %{dnsname}@%p", zone_desc->origin, zone_desc);
+    log_debug7("%s: RC from %i to %i", prefix, old_rc, rc);
+    debug_log_stacktrace(g_server_logger, MSG_DEBUG7, prefix);
+#endif
 }
 
 
@@ -282,14 +292,32 @@ zone_free(zone_desc_s *zone_desc)
     if(zone_desc != NULL)
     {
         mutex_lock(&zone_desc_rc_mtx);
+#ifdef DEBUG
+        s32 old_rc = zone_desc->rc;
+#endif
         s32 rc = --zone_desc->rc;
         mutex_unlock(&zone_desc_rc_mtx);
         
         log_debug6("release: %{dnsname}@%p rc=%i", zone_desc->origin, zone_desc, rc);
         
+#ifdef DEBUG
+        char prefix[80];
+        snformat(prefix, sizeof(prefix), "release: %{dnsname}@%p", zone_desc->origin, zone_desc);
+        log_debug7("%s: RC from %i to %i", prefix, old_rc, rc);
+        debug_log_stacktrace(g_server_logger, MSG_DEBUG7, prefix);
+#endif
+        
         if(rc <= 0)
         {
             log_debug7("zone_free(%p): '%s' (%i)", zone_desc, zone_desc->domain, rc);
+            
+            if(zone_desc->loaded_zone != NULL)
+            {
+                alarm_close(zone_desc->loaded_zone->alarm_handle);
+                zone_desc->loaded_zone->alarm_handle = ALARM_HANDLE_INVALID;
+                zdb_zone_release(zone_desc->loaded_zone);
+                zone_desc->loaded_zone = NULL;
+            }
             
 #ifdef DEBUG
             log_debug7("zone_free(%p): '%s' #%llu %llu", zone_desc, zone_desc->domain, zone_desc->instance_id, zone_desc->instance_time_us);
@@ -313,7 +341,7 @@ zone_free(zone_desc_s *zone_desc)
             free(zone_desc->domain);
             free(zone_desc->file_name);
             free(zone_desc->origin);
-
+            
             pthread_cond_destroy(&zone_desc->lock_cond);
             mutex_destroy(&zone_desc->lock);
 
@@ -332,13 +360,13 @@ zone_remove_all_matching(zone_data_set *dset, zone_data_matching_callback *match
     {
         zone_set_lock(dset);
         ptr_vector candidates = EMPTY_PTR_VECTOR;
-        treeset_avl_iterator iter;
-        treeset_avl_iterator_init(&dset->set, &iter);
+        ptr_set_avl_iterator iter;
+        ptr_set_avl_iterator_init(&dset->set, &iter);
         
-        while(treeset_avl_iterator_hasnext(&iter))
+        while(ptr_set_avl_iterator_hasnext(&iter))
         {
-            treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
-            zone_desc_s *zone_desc = (zone_desc_s*)zone_node->data;
+            ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
+            zone_desc_s *zone_desc = (zone_desc_s*)zone_node->value;
 
             if(zone_desc != NULL)
             {
@@ -352,7 +380,7 @@ zone_remove_all_matching(zone_data_set *dset, zone_data_matching_callback *match
         for(s32 i = 0; i <= candidates.offset; i++)
         {
             zone_desc_s *zone_desc = (zone_desc_s*)candidates.data[i];
-            treeset_avl_delete(&dset->set, zone_desc->origin);
+            ptr_set_avl_delete(&dset->set, zone_desc->origin);
             zone_free(zone_desc);
         }
         
@@ -379,48 +407,41 @@ zone_free_all(zone_data_set *dset)
     {
         zone_set_lock(dset);
         
-        treeset_avl_iterator iter;
-        treeset_avl_iterator_init(&dset->set, &iter);
+        ptr_set_avl_iterator iter;
+        ptr_set_avl_iterator_init(&dset->set, &iter);
         
-        while(treeset_avl_iterator_hasnext(&iter))
+        while(ptr_set_avl_iterator_hasnext(&iter))
         {
-            treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
-            zone_desc_s *zone_desc = (zone_desc_s*)zone_node->data;
+            ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
+            zone_desc_s *zone_desc = (zone_desc_s*)zone_node->value;
 
             if(zone_desc != NULL)
-            {/*
-                if(ISOK(zone_wait_unlocked(zone_desc))) // NOT USED
-                {
-                    if(ISOK(zone_lock(zone_desc, ZONE_LOCK_UNREGISTER)))
-                    {*/
-                        // in theory, here, status should be idle
+            {
 #ifdef DEBUG
-                        mutex_lock(&zone_desc_rc_mtx);
-                        s32 rc = zone_desc->rc;
-                        mutex_unlock(&zone_desc_rc_mtx);
-                        
-                        if(rc != 1)
-                        {
-                            if(rc > 0)
-                            {
-                                log_debug5("zone: warning, zone %{dnsname} has RC=%i", zone_desc->origin, rc);
-                            }
-                            else
-                            {
-                                log_debug5("zone: warning, zone ? has RC=%i", rc);
-                            }
-                        }
-#endif
-                        
-                        zone_free(zone_desc);
-                        
-                        /*
+                // status should be idle
+                
+                mutex_lock(&zone_desc_rc_mtx);
+                s32 rc = zone_desc->rc;
+                mutex_unlock(&zone_desc_rc_mtx);
+
+                if(rc != 1)
+                {
+                    if(rc > 0)
+                    {
+                        log_debug5("zone: warning, zone %{dnsname} has RC=%i", zone_desc->origin, rc);
                     }
-                }*/
+                    else
+                    {
+                        log_debug5("zone: warning, zone ? has RC=%i", rc);
+                    }
+                }
+#endif
+                   
+                zone_free(zone_desc);
             }
         }
 
-        treeset_avl_destroy(&dset->set);
+        ptr_set_avl_destroy(&dset->set);
         
         zone_set_unlock(dset);
     }
@@ -618,13 +639,13 @@ zone_register(zone_data_set *dset, zone_desc_s *zone_desc)
     
     zone_set_lock(dset);
     
-    treeset_node *zone_desc_node = treeset_avl_find(&dset->set, zone_desc->origin);
+    ptr_node *zone_desc_node = ptr_set_avl_find(&dset->set, zone_desc->origin);
     
     if(zone_desc_node != NULL)
     {
         // already known
         
-        zone_desc_s *current_zone_desc = (zone_desc_s*)zone_desc_node->data;
+        zone_desc_s *current_zone_desc = (zone_desc_s*)zone_desc_node->value;
         
         s32 zone_desc_match_bitmap = ~0;
         
@@ -659,7 +680,7 @@ zone_register(zone_data_set *dset, zone_desc_s *zone_desc)
             
             log_err("zone: %{dnsname} has been set differently (bitmap=%08x) (ignoring)", zone_desc->origin, zone_desc_match_bitmap);
                         
-            // zone_desc_node->data = zone_desc; /// @todo this is wrong
+            // zone_desc_node->value = zone_desc; /// @todo this is wrong
             
             zone_set_unlock(dset);
             
@@ -699,13 +720,13 @@ zone_register(zone_data_set *dset, zone_desc_s *zone_desc)
 
     ya_result return_value;
 
-    treeset_node *node = treeset_avl_insert(&dset->set, zone_desc->origin);
+    ptr_node *node = ptr_set_avl_insert(&dset->set, zone_desc->origin);
 
-    if(node->data == NULL)
+    if(node->value == NULL)
     {
         //log_info("zone: the zone %{dnsname} has been registered", zone_desc->origin);
 
-        node->data = zone_desc;
+        node->value = zone_desc;
 
         return_value = SUCCESS;
     }
@@ -738,17 +759,17 @@ zone_unregister(zone_data_set *dset, const u8 *origin)
 
     zone_set_lock(dset);
     
-    treeset_node *node = treeset_avl_find(&dset->set, origin);
+    ptr_node *node = ptr_set_avl_find(&dset->set, origin);
     
     if(node != NULL)
     {
-        zone_desc = (zone_desc_s*)node->data;
+        zone_desc = (zone_desc_s*)node->value;
 
         if(zone_desc != NULL)
         {
             if(ISOK(zone_wait_unlocked(zone_desc)))
             {
-                treeset_avl_delete(&dset->set, origin);
+                ptr_set_avl_delete(&dset->set, origin);
             }
         }
     }
@@ -785,15 +806,15 @@ zone_getafterdnsname(const u8 *name)
     
     zone_set_lock(&database_zone_desc);
     
-    treeset_node *zone_node = treeset_avl_find(&database_zone_desc.set, name);
+    ptr_node *zone_node = ptr_set_avl_find(&database_zone_desc.set, name);
 
     if(zone_node != NULL)
     {
-        zone_node = treeset_avl_node_next(zone_node);
+        zone_node = ptr_set_avl_node_next(zone_node);
         
         if(zone_node != NULL)
         {
-            zone_desc = (zone_desc_s*)zone_node->data;
+            zone_desc = (zone_desc_s*)zone_node->value;
             zone_acquire(zone_desc);
         }
     }
@@ -810,11 +831,11 @@ zone_acquirebydnsname(const u8 *name)
     
     zone_set_lock(&database_zone_desc);
     
-    treeset_node *zone_node = treeset_avl_find(&database_zone_desc.set, name);
+    ptr_node *zone_node = ptr_set_avl_find(&database_zone_desc.set, name);
 
     if(zone_node != NULL)
     {
-        zone_desc = (zone_desc_s*)zone_node->data;
+        zone_desc = (zone_desc_s*)zone_node->value;
         zone_acquire(zone_desc);
     }
     
@@ -822,6 +843,8 @@ zone_acquirebydnsname(const u8 *name)
     
     return zone_desc;
 }
+
+
 
 void
 zone_setmodified(zone_desc_s *zone_desc, bool v)
@@ -1011,7 +1034,7 @@ zone_wait_unlocked(zone_desc_s *zone_desc)
     {
         do
         {
-            pthread_cond_wait(&zone_desc->lock_cond, &zone_desc->lock);
+            cond_wait(&zone_desc->lock_cond, &zone_desc->lock);
         }
         while((zone_desc->lock_owner_count | zone_desc->lock_wait_count) != 0);
     }
@@ -1079,7 +1102,7 @@ zone_lock(zone_desc_s *zone_desc, u8 owner_id)
             
             do
             {
-                pthread_cond_wait(&zone_desc->lock_cond, &zone_desc->lock);
+                cond_wait(&zone_desc->lock_cond, &zone_desc->lock);
             }
             while((zone_desc->lock_owner != ZONE_LOCK_NOBODY) && (zone_desc->lock_owner != owner_id));
 
@@ -1611,15 +1634,15 @@ zone_desc_log_all(logger_handle* handle, u32 level, zone_data_set *dset, const c
 {
     zone_set_lock(dset);
     
-    if(!treeset_avl_isempty(&dset->set))
+    if(!ptr_set_avl_isempty(&dset->set))
     {        
-        treeset_avl_iterator iter;
-        treeset_avl_iterator_init(&dset->set, &iter);
+        ptr_set_avl_iterator iter;
+        ptr_set_avl_iterator_init(&dset->set, &iter);
 
-        while(treeset_avl_iterator_hasnext(&iter))
+        while(ptr_set_avl_iterator_hasnext(&iter))
         {
-            treeset_node *zone_node = treeset_avl_iterator_next_node(&iter);
-            zone_desc_s *zone_desc = (zone_desc_s*)zone_node->data;
+            ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
+            zone_desc_s *zone_desc = (zone_desc_s*)zone_node->value;
 
             zone_desc_log(handle, level, zone_desc, text);
         }
@@ -1675,7 +1698,7 @@ zone_dnssec_to_name(u32 dnssec_flags)
 }
 
 void
-zone_enqueue_command(zone_desc_s *zone_desc, u32 id, void* parm, bool has_priority)
+zone_enqueue_command(zone_desc_s *zone_desc, u32 id, void* parm, bool has_priority) /// @todo edf 20141016 -- test all callers RCs
 {
     if(!has_priority && ((zone_desc->status_flags & ZONE_STATUS_MARKED_FOR_DESTRUCTION) != 0))
     {
@@ -1706,7 +1729,6 @@ zone_dequeue_command(zone_desc_s *zone_desc)
         log_debug("zone_desc: dequeue command %{dnsname}@%p=%i - %s",
                 zone_desc->origin, zone_desc, zone_desc->rc, database_service_operation_get_name(cmd->id));
 #endif
-
     }
 #ifdef DEBUG
     else
@@ -1723,6 +1745,43 @@ void
 zone_command_free(zone_command_s *cmd)
 {
     ZFREE(cmd, zone_command_s);
+}
+
+zdb_zone *
+zone_get_loaded_zone(zone_desc_s *zone_desc)
+{
+    yassert(zone_islocked(zone_desc));
+    
+    zdb_zone *zone = zone_desc->loaded_zone; // OK
+    if(zone != NULL)
+    {
+        zdb_zone_acquire(zone);
+    }
+    return zone;
+}
+
+zdb_zone *
+zone_set_loaded_zone(zone_desc_s *zone_desc, zdb_zone *zone)
+{
+    yassert(zone_islocked(zone_desc));
+    
+    zdb_zone *old_zone = zone_desc->loaded_zone; // OK
+    if(zone != NULL)
+    {
+        zdb_zone_acquire(zone);
+    }
+    zone_desc->loaded_zone = zone; // OK
+    
+    return old_zone;    
+}
+
+bool
+zone_has_loaded_zone(zone_desc_s *zone_desc)
+{
+    yassert(zone_islocked(zone_desc));
+    
+    zdb_zone *zone = zone_desc->loaded_zone; // OK
+    return zone != NULL;
 }
 
 /** @} */

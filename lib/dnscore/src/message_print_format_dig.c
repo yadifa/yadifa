@@ -31,14 +31,17 @@
 *------------------------------------------------------------------------------
 *
 */
+/** @defgroup dnscore System core functions
+ *  @brief System core functions
+ *
+ * @{ */
+
 #include <stddef.h>
 #include <unistd.h>
 
 #include "dnscore/counter_output_stream.h"
 #include "dnscore/format.h"
-#include "dnscore/logger.h"
 #include "dnscore/message.h"
-#include "dnscore/rfc.h"
 
 
 #define     VM_WITH_ADDITIONAL                  0x01
@@ -78,69 +81,6 @@ static char* message_count_update_names[4] =
 
 ya_result
 message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u16 length, u16 view_mode_with)
-{
-    ya_result                                              return_value = 0;
-    
-    /*
-     * There is no padding support for formats on complex types (padding is ignored)
-     * Doing it would be relatively expensive for it's best doing it manually when needed (afaik: only here)
-     */
-    
-    counter_output_stream_data                                     counters;
-    output_stream                                                       cos;
-    counter_output_stream_init(os_, &cos, &counters);
-
-    output_stream                                                *os = &cos;    
-
-    packet_unpack_reader_data                                          purd;
-
-//    u8                          record_wire[MAX_DOMAIN_LENGTH + 10 + 65535];
-
-    /*    ------------------------------------------------------------    */    
-
-    /* Init packet reader with buffer. length and offset in the buffer */
-    purd.packet      = buffer;
-    purd.packet_size = length;
-    purd.offset      = DNS_HEADER_LENGTH;
-
-    /* 1. GET ID */
-    u16 id           = MESSAGE_ID(buffer);
-
-
-    /* 2. GET OPCODE AND RCODE */
-    u8 opcode        = MESSAGE_OP(buffer);
-    opcode         >>= OPCODE_SHIFT;
-
-    u8 rcode         = MESSAGE_RCODE(buffer);
-
-//    const char *opcode_txt = get_opcode(opcode);
-    const char *status_txt = get_rcode(rcode);
-
-
-    /* 3. GET VALUES OF THE SECTIONS */
-    u16 count[4];
-    count[0] = ntohs(MESSAGE_QD(buffer));
-    count[1] = ntohs(MESSAGE_AN(buffer));
-    count[2] = ntohs(MESSAGE_NS(buffer));
-    count[3] = ntohs(MESSAGE_AR(buffer));
-    
-
-    /* 4. GET THE NAMES FOR THE PRESENTATION */
-//    char **count_name   = (opcode != OPCODE_UPDATE)? message_count_names   : message_count_update_names;
-//    char **section_name = (opcode != OPCODE_UPDATE)? message_section_names : message_section_update_names;
-
-
-    /* 5. FILL THE STREAM */
-
-    /* fill the information of the header of a DNS packet */
-    osformat(os, ";; ->>HEADER<<- status: %s, id: %hd\n", status_txt, id);
-
-    return return_value;
-}
-
-
-ya_result
-message_print_format_dig_buffer_ex(output_stream *os_, const u8 *buffer, u16 length, u16 view_mode_with)
 {
     ya_result                                                  return_value;
     
@@ -303,7 +243,7 @@ message_print_format_dig_buffer_ex(output_stream *os_, const u8 *buffer, u16 len
             u8 *rdata      = rname + dnsname_len(rname);
             u16 rtype      = GET_U16_AT(rdata[0]);
             u16 rclass     = GET_U16_AT(rdata[2]);
-            u16 rttl       = ntohl(GET_U32_AT(rdata[4]));
+            u32 rttl       = ntohl(GET_U32_AT(rdata[4]));
             u16 rdata_size = ntohs(GET_U16_AT(rdata[8]));
 
             /** @todo: test that rdata_size matches the record size */
@@ -372,38 +312,10 @@ message_print_format_dig(output_stream *os, const u8 *buffer, u16 length, u16 vi
 
     /*    ------------------------------------------------------------    */ 
 
-    if(FAIL(return_value = message_print_format_dig_buffer(os, buffer, length, view_mode_with)))
-    {
-        return return_value;
-    }
-
-    time(&timep);
-
-    osformat(os, ";; Query time: %ld msec\n", time_duration);
-
-    /** @todo: still need to implemented the server viewable line */
-//    osformat(os, ";; SERVER: %{hostaddr}(%{hostaddr})\n", config->server, config->server);
-
-    osformat(os, ";; WHEN: %s", ctime(&timep));
-    osformat(os, ";; MSG SIZE rcvd: %ld\n", length);
-    osformat(os, "\n");
-
-    return OK;
-}
-
-ya_result
-message_print_format_dig_ex(output_stream *os, const u8 *buffer, u16 length, u16 view_mode_with, long time_duration)
-{
-    ya_result                                                  return_value;
-
-    time_t                                                            timep;
-
-    /*    ------------------------------------------------------------    */ 
-
     osformat(os, ";; global options: \n");
     osformat(os, ";; Got answer:\n");
 
-    if(FAIL(return_value = message_print_format_dig_buffer_ex(os, buffer, length, view_mode_with)))
+    if(FAIL(return_value = message_print_format_dig_buffer(os, buffer, length, view_mode_with)))
     {
         return return_value;
     }

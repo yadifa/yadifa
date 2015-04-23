@@ -28,6 +28,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ##############################################################################
+#
+#	YADIFA dnsdb Makefile.am script
+#
+#      	Makefile.am script
+#
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.0-public/lib/dnsdb/Makefile.am $
+#
+#       $Date: 2015-04-20 15:07:41 +0200 (Mon, 20 Apr 2015) $
+#
+#       $Revision: 4962 $
+#
+#	$Author: ericdf $
+#
+##############################################################################
 
 srcdir = @srcdir@
 libdir = @libdir@
@@ -58,7 +72,6 @@ pkginclude_HEADERS = \
 	$(I)/dnssec.h \
 	$(I)/dnssec_config.h \
 	$(I)/dnssec_keystore.h \
-	$(I)/dnssec_scheduler.h \
 	$(I)/dnssec_task.h \
 	$(I)/dynupdate.h \
 	$(I)/hash.h \
@@ -67,6 +80,12 @@ pkginclude_HEADERS = \
 	$(I)/icmtl_input_stream.h \
 	$(I)/journal.h \
 	$(I)/journal_ix.h \
+	$(I)/journal-cjf.h \
+	$(I)/journal-cjf-common.h \
+	$(I)/journal-cjf-idxt.h \
+	$(I)/journal-cjf-page.h \
+	$(I)/journal-cjf-page-cache.h \
+	$(I)/journal-cjf-page-output-stream.h \
 	$(I)/nsec.h \
 	$(I)/nsec3.h \
 	$(I)/nsec3_collection.h \
@@ -86,8 +105,8 @@ pkginclude_HEADERS = \
 	$(I)/rr_canonize.h \
 	$(I)/rrsig.h \
 	$(I)/rrsig_updater.h \
+	$(I)/xfr_copy.h \
 	$(I)/zdb.h \
-	$(I)/zdb_alloc.h \
 	$(I)/zdb_config.h \
 	$(I)/zdb_dnsname.h \
 	$(I)/zdb_error.h \
@@ -98,7 +117,14 @@ pkginclude_HEADERS = \
 	$(I)/zdb_sanitize.h \
 	$(I)/zdb_types.h \
 	$(I)/zdb_utils.h \
+	$(I)/zdb_cache.h \
 	$(I)/zdb_zone.h \
+	$(I)/zdb-lock.h \
+	$(I)/zdb-zone-arc.h \
+	$(I)/zdb-zone-find.h \
+	$(I)/zdb-zone-garbage.h \
+	$(I)/zdb-zone-journal.h \
+	$(I)/zdb-zone-lock.h \
 	$(I)/zdb-zone-answer-axfr.h \
 	$(I)/zdb-zone-answer-ixfr.h \
 	$(I)/zdb_zone_axfr_input_stream.h \
@@ -106,6 +132,7 @@ pkginclude_HEADERS = \
 	$(I)/zdb_zone_label_iterator.h \
 	$(I)/zdb_zone_load.h \
 	$(I)/zdb_zone_load_interface.h \
+	$(I)/zdb-zone-path-provider.h \
 	$(I)/zdb_zone_process.h \
 	$(I)/zdb-zone-reader-filter.h \
 	$(I)/zdb_zone_write.h
@@ -125,9 +152,13 @@ libdnsdb_la_SOURCES = \
 	src/icmtl_input_stream.c \
 	src/journal.c \
 	src/journal_ix.c \
+	src/journal-cjf.c \
+	src/journal-cjf-idxt.c \
+	src/journal-cjf-page.c \
+	src/journal-cjf-page-cache.c \
+	src/journal-cjf-page-output-stream.c \
+	src/xfr_copy.c \
 	src/zdb.c \
-	src/zdb_alloc.c \
-	src/zdb_dnsname.c \
 	src/zdb_error.c \
 	src/zdb_icmtl.c \
 	src/zdb_listener.c \
@@ -137,13 +168,20 @@ libdnsdb_la_SOURCES = \
 	src/zdb_rr_label.c \
 	src/zdb_sanitize.c \
 	src/zdb_utils.c \
+	src/zdb_cache.c \
 	src/zdb_zone.c \
+	src/zdb-zone-arc.c \
+	src/zdb-zone-find.c \
+	src/zdb-zone-garbage.c \
+	src/zdb-zone-journal.c \
+	src/zdb-zone-lock.c \
 	src/zdb-zone-answer-axfr.c \
 	src/zdb-zone-answer-ixfr.c \
 	src/zdb_zone_axfr_input_stream.c \
 	src/zdb_zone_label.c \
 	src/zdb_zone_label_iterator.c \
 	src/zdb_zone_load.c \
+	src/zdb-zone-path-provider.c \
 	src/zdb_zone_process.c \
 	src/zdb-zone-reader-filter.c \
 	src/zdb_zone_store_axfr.c \
@@ -153,6 +191,7 @@ libdnsdb_la_SOURCES = \
 
 # DNSSEC is defined if either NSEC3 or NSEC are defined
 			
+if HAS_DNSSEC_SUPPORT
 libdnsdb_la_SOURCES += \
 	src/dnssec.c \
 	src/dnssec_keystore.c \
@@ -162,7 +201,9 @@ libdnsdb_la_SOURCES += \
 	src/rrsig.c \
 	src/rrsig_updater.c \
 	src/zdb_update_signatures.c
+endif
 			
+if HAS_NSEC3_SUPPORT
 libdnsdb_la_SOURCES += \
 	src/nsec3.c \
 	src/nsec3_collection.c \
@@ -176,25 +217,79 @@ libdnsdb_la_SOURCES += \
 	src/nsec3_rrsig_updater.c \
 	src/nsec3_update.c \
 	src/nsec3_zone.c
+endif
 
+if HAS_NSEC_SUPPORT
 libdnsdb_la_SOURCES += \
 	src/nsec.c \
 	src/nsec_collection.c
+endif
 
-libdnsdb_la_LDFLAGS = -version-info 2:0:0
+libdnsdb_la_LDFLAGS = -version-info 3:0:0
 
 include ../../mk/common-settings.mk
 
 include ../../mk/common-labels.mk
 
+all: REVISION
+
+REVISION:
+	(svn info 2>/dev/null;if [ $? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
+
 src/avl.c: $(FEATURES)
 
-$(FEATURES): config.log
+$(FEATURES): config.log REVISION VERSION
 	echo "#pragma once" > $(FEATURES)
+if HAS_RRCACHE_ENABLED
+	echo "#define ZDB_HAS_RRCACHE_ENABLED 1" >> $(FEATURES)
+else
 	echo "#define ZDB_HAS_RRCACHE_ENABLED 0" >> $(FEATURES)
+endif
+if HAS_DNSSEC_SUPPORT
 	echo "#define ZDB_HAS_DNSSEC_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define ZDB_HAS_DNSSEC_SUPPORT 0" >> $(FEATURES)
+endif
+if HAS_NSEC_SUPPORT
 	echo "#define ZDB_HAS_NSEC_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define ZDB_HAS_NSEC_SUPPORT 0" >> $(FEATURES)
+endif
+if HAS_NSEC3_SUPPORT
 	echo "#define ZDB_HAS_NSEC3_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define ZDB_HAS_NSEC3_SUPPORT 0" >> $(FEATURES)
+endif
+if HAS_ACL_SUPPORT
 	echo "#define ZDB_HAS_ACL_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define ZDB_HAS_ACL_SUPPORT 0" >> $(FEATURES)
+endif
+if HAS_TSIG_SUPPORT
 	echo "#define ZDB_HAS_TSIG_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define ZDB_HAS_TSIG_SUPPORT 0" >> $(FEATURES)
+endif
+VP=DNSDB
+	which printf > /dev/null 2>&1
+	if [ $$? -eq 0 ];then \
+		printf '// version %i.%i.%i.%i-%i\n' $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/') 0 $$(cat REVISION) >> $(FEATURES) ; \
+		printf '#define $(VP)_VERSION 0x%02x%02x%02x%02x%04xLL' $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/') 0 $$(cat REVISION) >> $(FEATURES) ; \
+	else \
+		echo "#define $(VP)_VERSION_(vmain_,vsub_,vminor_,vpatch_,vrevision_) ((vmain_)<<40)|((vsub_)<<32)|((vminor_)<<24)|((vpatch_)<<16)|(vrevision_)" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VMAIN_ $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1')" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VSUB_ $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\2')" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VMINOR_ $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\3')" >> $(FEATURES) ; \
+		echo "#define $(VP)_VERSION_VPATCH_ 0 >> $(FEATURES)" ; \
+		echo "#define $(VP)_VERSION_VREVISION_ $$(cat REVISION)" >> $(FEATURES) ; \
+		echo '#define $(VP)_VERSION $(VP)_VERSION_($(VP)_VERSION_VMAIN_,$(VP)_VERSION_VSUB_,$(VP)_VERSION_VMINOR_,$(VP)_VERSION_VPATCH_,$(VP)_VERSION_VREVISION_)' >> $(FEATURES) ; \
+	fi
+	echo "// $(FEATURES)" >> $(FEATURES)
+	echo >> $(FEATURES)
+
+#if XXX
+#	echo "#define ZDB_XXX 1" >> $(FEATURES)
+#else
+#	echo "#define ZDB_XXX 0" >> $(FEATURES)
+#endif
 

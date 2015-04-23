@@ -490,7 +490,7 @@ ya_result rsa_initinstance(RSA* rsa, u8 algorithm, u16 flags, const char* origin
         return DNSSEC_ERROR_KEYISTOOBIG;
     }
 
-    SET_U16_AT(rdata[0], htons(flags));
+    SET_U16_AT(rdata[0], htons(flags)); /// @todo 20140523 edf -- DNSKEY NATIVEFLAGS
     rdata[2] = DNSKEY_PROTOCOL_FIELD;
     rdata[3] = algorithm;
 

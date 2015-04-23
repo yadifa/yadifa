@@ -59,7 +59,8 @@
 #include <dnscore/buffer_input_stream.h>
 #include <dnscore/file_input_stream.h>
 #include <dnscore/serial.h>
-#include <dnscore/xfr_copy.h>
+
+#include "dnsdb/zdb-zone-path-provider.h"
 
 #include "dnszone/zone_axfr_reader.h"
 
@@ -222,13 +223,13 @@ static zone_reader_vtbl zone_axfr_reader_vtbl =
     "zone_axfr_reader"
 };
 
-ya_result zone_axfr_reader_open(const char* axfrpath, zone_reader *dst)
+ya_result zone_axfr_reader_open(zone_reader *dst, const char *file_path)
 {
     zone_axfr_reader *zone;
     ya_result return_value;
     
     input_stream is;
-    if(FAIL(return_value = file_input_stream_open(axfrpath, &is)))
+    if(FAIL(return_value = file_input_stream_open(file_path, &is)))
     {
             return return_value;
     }
@@ -242,7 +243,7 @@ ya_result zone_axfr_reader_open(const char* axfrpath, zone_reader *dst)
 
     buffer_input_stream_init(&is, &zone->is, 4096);
 
-    zone->file_path = strdup(axfrpath);
+    zone->file_path = strdup(file_path);
     zone->soa_found = FALSE;
 
     dst->data = zone;
@@ -251,206 +252,23 @@ ya_result zone_axfr_reader_open(const char* axfrpath, zone_reader *dst)
     return SUCCESS;
 }
 
-static void
-zone_axfr_delete(const char* axfrpath, const u8 *origin, u32 serial)
-{
-    char file_path[1024];
-    
-    snformat(file_path, sizeof(file_path), "%s/%{dnsname}%08x.axfr", axfrpath, origin, serial); // all uses of this function have serial set
-
-    if(unlink(file_path) >= 0)
-    {
-        log_info("zone axfr: deleted obsolete axfr file '%s'", file_path);
-    }
-    else
-    {
-        log_warn("zone axfr: unable to delete obsolete axfr file '%s': %r", file_path, ERRNO_ERROR);
-    }
-}
-
-/**
- * Opens the axfr with the highest serial
- */
 
 ya_result
-zone_axfr_reader_open_last(const char* axfrpath, u8 *origin, zone_reader *dst)
+zone_axfr_reader_open_with_fqdn(zone_reader *dst, const u8 *origin)
 {
-    struct dirent entry;
-    struct dirent *result;
-    DIR* dir;
-    u32 serial;
-    ya_result return_code;
-    bool got_one = FALSE;
-    char fqdn[MAX_DOMAIN_LENGTH + 1];
-    char file_path[1024];
-
-    /* returns the number of bytes = strlen(x) + 1 */
+    ya_result ret;
     
-    char data_path[PATH_MAX];
+    char file_path[PATH_MAX];
     
-    if(FAIL(return_code = xfr_copy_mkdir_data_path(data_path, sizeof(data_path), axfrpath, origin)))
+    if(ISOK(ret = zdb_zone_path_get_provider()(
+                origin, 
+                file_path, sizeof(file_path) - 6,
+                ZDB_ZONE_PATH_PROVIDER_AXFR_FILE|ZDB_ZONE_PATH_PROVIDER_MKDIR)))
     {
-        log_err("axfr: unable to create directory '%s' for %{dnsname}: %r", data_path, origin, return_code);
+        log_debug("opening '%s' for reading", file_path);
         
-        return return_code;
+        ret = zone_axfr_reader_open(dst, file_path);
     }
     
-    axfrpath = data_path;
-
-    dir = opendir(axfrpath);
-
-    if(dir != NULL)
-    {
-        return_code = ZRE_AXFR_FILE_NOT_FOUND;
-        
-        s32 fqdn_len = dnsname_to_cstr(fqdn, origin);
-
-        for(;;)
-        {
-            readdir_r(dir, &entry, &result);
-
-            if(result == NULL)
-            {
-                break;
-            }
-
-            if(memcmp(result->d_name, fqdn, fqdn_len) == 0)
-            {
-                const char* serial_txt = &result->d_name[fqdn_len];
-                size_t serial_len = strlen(serial_txt);
-                
-                if((serial_len == 8 + 6 - 1) && (memcmp(&serial_txt[8],".axfr",6) == 0))
-                {
-                    u32 tmp;
-                    int converted = sscanf(serial_txt, "%08x.axfr", &tmp);
-                        
-                    if(converted == 1)
-                    {
-                        /*
-                         * our first one, or a better one that the previous one
-                         * 
-                         * got_one = FALSE on first iteration, so serial is initialised for the next iteration. (false positive from GCC)
-                         */
-                        
-                        if( !got_one || (got_one && serial_gt(tmp, serial)))
-                        {
-                            if(got_one)
-                            {
-                                /* the previous one is obsolete */
-
-                                zone_axfr_delete(axfrpath, origin, serial); // serial IS initialised
-                            }
-
-                            serial = tmp;
-
-                            got_one = TRUE;
-
-                            return_code = SUCCESS;
-                        }
-                        else    /* we got one already and it has a higher serial */
-                        {
-                            zone_axfr_delete(axfrpath, origin, tmp); // tmp (serial) IS initialised
-                        }
-                    }
-                }
-            }
-        }
-        
-        closedir(dir);
-    }
-    else
-    {
-        return_code = ERROR;
-    }
-
-    if(got_one)
-    {
-        snformat(file_path, sizeof(file_path), "%s/%{dnsname}%08x.axfr", axfrpath, origin, serial);
-
-        return_code = zone_axfr_reader_open(file_path, dst);
-    }
-
-    return return_code;
-}
-
-ya_result
-zone_axfr_reader_open_with_serial(const char* xfr_path, u8 *origin, u32 loaded_serial, zone_reader *dst)
-{
-    ya_result return_code;
-    
-    struct dirent entry;
-    struct dirent *result;
-    DIR* dir;
-    
-    char file_name[1024];    
-    char data_path[PATH_MAX];
-    
-    if(FAIL(return_code = xfr_copy_get_data_path(data_path, sizeof(data_path), xfr_path, origin)))
-    {
-        return return_code;
-    }
-    
-    xfr_path = data_path;
-    
-    dir = opendir(xfr_path);
-
-    if(dir != NULL)
-    {
-        char fqdn[MAX_DOMAIN_LENGTH + 1];
-        return_code = ERROR;
-        
-        s32 fqdn_len = dnsname_to_cstr(fqdn, origin);
-
-        for(;;)
-        {
-            readdir_r(dir, &entry, &result);
-
-            if(result == NULL)
-            {
-                break;
-            }
-
-            if(memcmp(result->d_name, fqdn, fqdn_len) == 0)
-            {
-                const char* serial_txt = &result->d_name[fqdn_len];
-                size_t serial_len = strlen(serial_txt);
-                
-                if((serial_len == 8 + 6 - 1) && (memcmp(&serial_txt[8],".axfr",6) == 0))
-                {
-                    u32 tmp;
-                    int converted = sscanf(serial_txt, "%08x.axfr", &tmp);
-
-                    if(converted == 1)
-                    {
-                        /*
-                         * our first one, or a better one that the previous one
-                         */
-
-                        if(tmp != loaded_serial)
-                        {
-                            if(serial_lt(tmp, loaded_serial))
-                            {
-                                /* the previous one is obsolete */
-
-                                zone_axfr_delete(xfr_path, origin, tmp); // tmp (serial) IS initialised
-                            }
-                            else
-                            {
-                                log_warn("zone axfr: found axfr file for zone %{dnsname} with bigger serial %x in '%s'", origin, tmp, xfr_path);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        closedir(dir);
-    }
-    
-    if(ISOK(return_code = snformat(file_name, sizeof(file_name), "%s/%{dnsname}%08x.axfr", data_path, origin, loaded_serial)))
-    {
-        return_code = zone_axfr_reader_open(file_name, dst);
-    }
-    
-    return return_code;
+    return ret;
 }

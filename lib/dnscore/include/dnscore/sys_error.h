@@ -148,6 +148,8 @@ typedef int32_t ya_result;
 #define COLLECTION_DUPLICATE_ENTRY              CORE_ERROR_CODE(21)
 #define INVALID_PATH                            CORE_ERROR_CODE(22)
 #define PID_LOCKED                              CORE_ERROR_CODE(23)
+#define ZALLOC_ERROR_MMAPFAILED                 CORE_ERROR_CODE(24)
+#define ZALLOC_ERROR_OUTOFMEMORY                CORE_ERROR_CODE(25)
 
 #define PARSEB16_ERROR                          CORE_ERROR_CODE(0x1001)
 #define PARSEB32_ERROR                          CORE_ERROR_CODE(0x1002)

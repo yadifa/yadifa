@@ -55,6 +55,9 @@
 #include <dnsdb/zdb_zone.h>
 #include <dnsdb/zdb_zone_label.h>
 #include <dnsdb/zdb_zone_write.h>
+#include <dnsdb/zdb-lock.h>
+#define ZDB_JOURNAL_CODE 1
+#include <dnsdb/journal.h>
 
 #include "zone.h"
 #include "server.h"
@@ -85,6 +88,11 @@ database_service_zone_save_thread(void *params)
                        ZONE_STATUS_UNREGISTERING;
     
     zone_lock(zone_desc, ZONE_LOCK_SAVE);
+    
+    if(zone_desc->status_flags & ZONE_STATUS_MUST_CLEAR_JOURNAL)
+    {
+        zone_desc->status_flags |= ZONE_STATUS_MODIFIED;
+    }
     
     if((zone_desc->status_flags & ZONE_STATUS_MODIFIED) == 0) // a "journal" should set modified, or should it be tested here ?
     {
@@ -125,15 +133,10 @@ database_service_zone_save_thread(void *params)
     zone_desc->status_flags |= ZONE_STATUS_SAVING_ZONE_FILE;
     
     zdb *db = g_config->database;
-    
-    group_mutex_lock(&db->mutex, ZDB_MUTEX_READER);
-    
-    zdb_zone_label *zone_label = zdb_zone_label_find_from_dnsname_nolock(db, zone_desc->origin);
-    
-    if(zone_label != NULL)
+
+    zdb_zone *zone = zdb_acquire_zone_read_lock_from_fqdn(db, zone_desc->origin, ZDB_ZONE_MUTEX_SIMPLEREADER); // ACQUIRES
+    if(zone != NULL)
     {
-        zdb_zone *zone = zone_label->zone;
-        
         if(zdb_zone_isvalid(zone))
         {
             char file_name[PATH_MAX];    
@@ -145,16 +148,33 @@ database_service_zone_save_thread(void *params)
             
             if(ISOK(return_code))
             {
+                zdb_zone_getserial(zone, &zone_desc->stored_serial);
                 zone_desc->status_flags &= ~ZONE_STATUS_MODIFIED;
+                
+                bool clear_journal = zone_desc->status_flags & ZONE_STATUS_MUST_CLEAR_JOURNAL;
+                
+                if(clear_journal)
+                {
+                    journal_truncate(zone_desc->origin);
+                    zone_desc->status_flags &= ~ZONE_STATUS_MUST_CLEAR_JOURNAL;
+                }
+                
+                log_debug("zone save: %{dnsname} saved zone to file '%s'", zone_desc->origin, file_name);
             }
             else
             {
                 log_err("zone save: %{dnsname} failed to save as '%s': %r", zone_desc->origin, file_name, return_code);
             }
         }
+        else
+        {
+            log_err("zone save: %{dnsname} cannot be saved because its current instance in the database is marked as invalid", zone_desc->origin);
+        }
+        
+        zdb_zone_release_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
     }
     
-    group_mutex_unlock(&db->mutex, ZDB_MUTEX_READER);
+    // zdb_unlock(db, ZDB_MUTEX_READER);
     
     zone_desc->status_flags &= ~(ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
     
