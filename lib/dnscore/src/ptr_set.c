@@ -123,6 +123,8 @@
  * It must be of type REFERENCE_TYPE
  */
 #define AVL_REFERENCE(node) (node)->key
+#define AVL_REFERENCE_IS_POINTER TRUE
+#define AVL_REFERENCE_IS_CONST FALSE
 /*
  * A macro to compare two references
  * Returns TRUE if and only if the references are equal.
@@ -167,6 +169,46 @@ int
 ptr_set_dnsname_node_compare(const void *node_a, const void *node_b)
 {
     return dnsname_compare((const u8*)node_a, (const u8*)node_b);
+}
+
+int
+ptr_set_nullable_asciizp_node_compare(const void *node_a, const void *node_b)
+{
+    if(node_a != NULL)
+    {
+        if(node_b != NULL)
+        {
+            return strcmp((const char*)node_a, (const char*)node_b);
+        }
+        else
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        return (node_b == NULL)?0:1;
+    }
+}
+
+int
+ptr_set_nullable_dnsname_node_compare(const void *node_a, const void *node_b)
+{
+    if(node_a != NULL)
+    {
+        if(node_b != NULL)
+        {
+            return dnsname_compare((const u8*)node_a, (const u8*)node_b);
+        }
+        else
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        return (node_b == NULL)?0:1;
+    }
 }
 
 void*

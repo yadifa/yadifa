@@ -291,8 +291,7 @@ CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
 am_yadifa_OBJECTS = main.$(OBJEXT) query-result.$(OBJEXT) \
-	yadifa.$(OBJEXT) yadifa-config.$(OBJEXT) yazu.$(OBJEXT) \
-	yazu-config.$(OBJEXT)
+	yadifa.$(OBJEXT) yadifa-config.$(OBJEXT)
 yadifa_OBJECTS = $(am_yadifa_OBJECTS)
 yadifa_LDADD = $(LDADD)
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -562,15 +561,14 @@ top_srcdir = @top_srcdir@
 #CPU_FLAGS=
 ACLOCAL_AMFLAGS = -I m4
 dist_noinst_DATA = VERSION
-yadifa_SOURCES = main.c query-result.c yadifa.c yadifa-config.c yazu.c \
-	yazu-config.c
+yadifa_SOURCES = main.c query-result.c yadifa.c yadifa-config.c
 
 # this will probably be removed afterwards
 #yadifa_SOURCES += dnssec-test.c
 
 # this will probably be removed afterwards
 noinst_HEADERS = common-config.h query-result.h yadifa.h \
-	yadifa-config.h yazu.h yazu-config.h dnssec-test.h
+	yadifa-config.h dnssec-test.h
 
 #
 #
@@ -740,8 +738,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/query-result.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/yadifa-config.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/yadifa.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/yazu-config.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/yazu.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<

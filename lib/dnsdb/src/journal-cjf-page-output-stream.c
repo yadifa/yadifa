@@ -365,6 +365,7 @@ journal_cjf_page_output_stream_reopen(output_stream *out_os, journal_cjf *jnl)
         
         log_debug2("cjf: continuing next PAGE stream at position %u (%08x)", jnl->last_page.records_limit, jnl->last_page.records_limit);
         
+        journal_cjf_page_output_stream_data *data = (journal_cjf_page_output_stream_data*)out_os->data;
         yassert(data->size == 0);
     }
     else
@@ -387,7 +388,7 @@ journal_cjf_page_output_stream_reopen(output_stream *out_os, journal_cjf *jnl)
         
         journal_cjf_page_output_stream_data *data;
         ZALLOC_OR_DIE(journal_cjf_page_output_stream_data*, data, journal_cjf_page_output_stream_data, GENERIC_TAG);
-        ZEROMEMORY(data, sizeof(journal_cjf_page_output_stream_data));
+        ZEROMEMORY(data, sizeof(journal_cjf_page_output_stream_data)); // false positive: data cannot be NULL
         fd_output_stream_attach(&data->filtered, jnl->fd);
         buffer_output_stream_init(&data->filtered, &data->filtered, 512);
         data->jnl = jnl;

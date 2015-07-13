@@ -67,7 +67,7 @@ extern "C"
  * Self explanatory but not mandatory, defaulted to TRUE
  */
 
-// #define AVL_REFERENCE_ISPOINTER TRUE
+// #define AVL_REFERENCE_IS_POINTER TRUE
 
 #ifndef AVL_REFERENCE_TYPE
     #error Expected define: AVL_REFERENCE_TYPE type
@@ -82,12 +82,20 @@ extern "C"
     // #define AVL_TREE_ROOT(x) (*x)
 #endif
 
-#ifdef AVL_REFERENCE_IS_CONST
+#ifndef AVL_REFERENCE_IS_CONST
+    #error Expected define: AVL_REFERENCE_IS_CONST
+#endif
+
+#ifndef AVL_REFERENCE_IS_POINTER
+    #error Expected define: AVL_REFERENCE_IS_POINTER
+#endif
+    
+#if AVL_REFERENCE_IS_CONST
 #undef AVL_REFERENCE_MODIFIER
 #undef AVL_REFERENCE_CONST
 #define AVL_REFERENCE_MODIFIER
 #define AVL_REFERENCE_CONST
-#else
+#else // there is no "const" in AVL_REFERENCE_TYPE
 #define AVL_REFERENCE_CONST const
 #endif
 /*
@@ -220,6 +228,8 @@ AVL_NODE_TYPE* AVL_PREFIXED(avl_node_mod_prev)(const AVL_NODE_TYPE* node);
 
 int AVL_PREFIXED(avl_check)(AVL_TREE_TYPE *tree);
 void AVL_PREFIXED(avl_dump)(AVL_TREE_TYPE *tree);
+
+#undef AVL_REFERENCE_CONST
 
 #ifdef	__cplusplus
 }

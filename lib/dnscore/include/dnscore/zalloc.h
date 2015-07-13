@@ -64,14 +64,14 @@ extern "C" {
 #if !DNSCORE_HAS_ZALLOC_SUPPORT
 
 /* 8 bytes aligned */
-#define ZALLOC_OR_DIE(cast,label,object,tag) MALLOC_OR_DIE(cast,label,sizeof(object),tag)
+#define ZALLOC_OR_DIE(cast,label,object,tag) MALLOC_OR_DIE(cast,label,sizeof(object),tag);assert((label) != NULL)
 #define ZFREE(label,object) free(label)
 
-#define ZALLOC_ARRAY_OR_DIE(cast,label,size,tag) MALLOC_OR_DIE(cast,label,size,tag)
+#define ZALLOC_ARRAY_OR_DIE(cast,label,size,tag) MALLOC_OR_DIE(cast,label,size,tag);assert((label) != NULL)
 #define ZFREE_ARRAY(ptr,size_) (void)(size_);free(ptr)
 
 /* not aligned, max size 256 */
-#define ZALLOC_STRING_OR_DIE(cast,label,size,tag) MALLOC_OR_DIE(cast,label,size,tag)
+#define ZALLOC_STRING_OR_DIE(cast,label,size,tag) MALLOC_OR_DIE(cast,label,size,tag);assert((label) != NULL)
 #define ZFREE_STRING(label) free(label)
 
 #define ZALLOC_ARRAY_RESIZE(type_,array_,count_,newcount_)		    \
@@ -222,8 +222,8 @@ void zfree_unaligned(void* ptr);
 
 #define ZALLOC(object) ((((sizeof(object) + 7) >> 3)-1) < ZALLOC_PG_SIZE_COUNT)?zalloc_line(((sizeof(object) + 7) >> 3)-1):malloc(sizeof(object))
 #define ZFREE(ptr,object) ((((sizeof(object) + 7) >> 3)-1) < ZALLOC_PG_SIZE_COUNT)?zfree_line(ptr,(((sizeof(object) + 7) >> 3)-1)):free(ptr)
-#define ZALLOC_OR_DIE(cast,label,object,tag) if((label=(cast)ZALLOC(object))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); }
-#define ZALLOC_ARRAY_OR_DIE(cast,label,size_,tag) if((label = (cast)zalloc(size_)) == NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); }
+#define ZALLOC_OR_DIE(cast,label,object,tag) if((label=(cast)ZALLOC(object))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label) != NULL)
+#define ZALLOC_ARRAY_OR_DIE(cast,label,size_,tag) if((label = (cast)zalloc(size_)) == NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label) != NULL)
 #define ZFREE_ARRAY(ptr,size_) zfree(ptr,size_)
 
 /**
@@ -266,6 +266,7 @@ void zfree_unaligned(void* ptr);
 	    count_ = newcount_;							\
 	}									\
     }										\
+    assert(array_ != NULL);                                                     \
 }
 
 #endif

@@ -212,11 +212,20 @@ void
 async_wait_progress(async_wait_s *aw, s32 count)
 {
     pthread_mutex_lock(&aw->mutex);
-    aw->wait_count -= count;
-
-    pthread_cond_broadcast(&aw->cond_wait);
-    pthread_mutex_unlock(&aw->mutex);
-
+    if(aw->wait_count - count >= 0)
+    {
+        aw->wait_count -= count;
+        pthread_cond_broadcast(&aw->cond_wait);
+        pthread_mutex_unlock(&aw->mutex);
+    }
+    else
+    {
+        log_err("async_wait_progress: count=%i, trying to add %i", aw->wait_count, count);
+        
+        aw->wait_count = 0;
+        pthread_cond_broadcast(&aw->cond_wait);
+        pthread_mutex_unlock(&aw->mutex);
+    }
 }
 
 void
@@ -408,7 +417,7 @@ async_message_pool_alloc(void *_ignored_)
     (void)_ignored_;
     
     ZALLOC_OR_DIE(async_message_s*, msg, async_message_s, ASYNCMSG_TAG); // POOL
-    ZEROMEMORY(msg, sizeof(async_message_s));
+    ZEROMEMORY(msg, sizeof(async_message_s)); // false positive: msg cannot be NULL
     return msg;
 }
 

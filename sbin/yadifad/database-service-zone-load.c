@@ -690,7 +690,21 @@ database_get_ixfr_answer_type(const u8 *zone_desc_origin, const host_address *zo
 
                 if(rtype != TYPE_SOA)
                 {
-                    break;
+                    if(answer_idx == 0)
+                    {
+                        // not an XFR
+                        log_err("zone load: master did not answer with an XFR", return_value);
+                        return_value = ANSWER_NOT_ACCEPTABLE;
+                        break;
+                    }
+                    
+                    if(answer_idx == 1)
+                    {
+                        // not an IXFR (but most likely an AXFR)
+                        log_err("zone load: master did not answer with an IXFR", return_value);
+                        return_value = ANSWER_NOT_ACCEPTABLE;
+                        break;
+                    }
                 }
 
                 p += 8;
@@ -716,7 +730,7 @@ database_get_ixfr_answer_type(const u8 *zone_desc_origin, const host_address *zo
                 break;
             }
         }
-        while(answer_idx < 2);
+        while((answer_idx < 2) && ISOK(return_value));
         
         input_stream_close(&is);
         output_stream_close(&os);

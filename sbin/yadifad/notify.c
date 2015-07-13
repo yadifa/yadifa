@@ -143,8 +143,12 @@ message_query_summary_init(message_query_summary *mqs, u16 id, host_address *hos
     mqs->tries = MESSAGE_QUERY_TRIES;
     
 #if HAS_TSIG_SUPPORT
-    mqs->mac_size = mac_size;
-    memcpy(mqs->mac, mac, mac_size);
+    if(mac_size > 0)
+    {
+        yassert(mac != NULL);
+        mqs->mac_size = mac_size;
+        memcpy(mqs->mac, mac, mac_size);
+    }
 #endif
 }
 
@@ -1235,16 +1239,16 @@ notify_service(struct service_worker_s *worker)
                             {
                                 log_err("notify: unexpected answer from %{hostaddr} for %{dnsname}", message->payload.answer.host, message->origin);
                             }
+                            if(msg->payload.notify.hosts_list == NULL)
+                            {
+                                ptr_set_avl_delete(&notify_zones, msg->origin);
+                                notify_message_free(msg);
+                            }
                         }
-                        else
+                        else // msg = NULL
                         {
                             log_err("notify: unexpected answer by %{hostaddr} for %{dnsname}", message->payload.answer.host, message->origin);
-                        }
-                        
-                        if(msg->payload.notify.hosts_list == NULL)
-                        {
-                            ptr_set_avl_delete(&notify_zones, msg->origin);
-                            notify_message_free(msg);
+                            ptr_set_avl_delete(&notify_zones, message->origin);
                         }
                     }
                     else

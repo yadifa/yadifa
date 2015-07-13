@@ -620,6 +620,15 @@ database_service(struct service_worker_s *worker)
     
     while(service_shouldrun(worker) || !async_queue_emtpy(&database_handler_queue))
     {
+        if(!zdb_zone_garbage_empty())
+        {
+            // do a zdb_zone_garbage_run in the background
+            if(thread_pool_queue_size(database_zone_unload_thread_pool) == 0)
+            {
+                database_service_run_garbage_collector();
+            }
+        }
+        
         /*
          * dequeue command
          */
@@ -630,7 +639,6 @@ database_service(struct service_worker_s *worker)
 
         if(async == NULL)
         {
-            //zdb_zone_garbage_run();
             continue;
         }
         
@@ -1659,6 +1667,20 @@ void
 database_service_zone_unload_queue_thread(thread_pool_function func, void *parm, thread_pool_task_counter *counter, const char* categoryname)
 {
     thread_pool_enqueue_call(database_zone_unload_thread_pool, func, parm, counter, categoryname);
+}
+
+static void*
+database_service_run_garbage_collector_thread(void *parms_)
+{
+    (void)parms_;
+    zdb_zone_garbage_run();
+    return NULL;
+}
+
+void
+database_service_run_garbage_collector()
+{
+    thread_pool_enqueue_call(database_zone_unload_thread_pool, database_service_run_garbage_collector_thread, NULL, NULL, "garbage");
 }
 
 void

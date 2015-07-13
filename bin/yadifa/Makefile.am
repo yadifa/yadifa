@@ -43,9 +43,6 @@ yadifa_SOURCES += yadifa.c             yadifa-config.c
 noinst_HEADERS  = common-config.h query-result.h
 noinst_HEADERS += yadifa.h             yadifa-config.h
 
-yadifa_SOURCES += yazu.c               yazu-config.c
-noinst_HEADERS += yazu.h               yazu-config.h
-
 # this will probably be removed afterwards
 #yadifa_SOURCES += dnssec-test.c
 

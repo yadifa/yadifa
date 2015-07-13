@@ -82,6 +82,8 @@ zdb_zone_garbage_finalize()
 {
     if(zdb_zone_garbage_initialised)
     {
+        log_debug("zdb_zone_garbage_finalize: releasing zones ");
+        
         zdb_zone_garbage_run();
         
 #ifdef DEBUG 
@@ -148,6 +150,12 @@ zdb_zone_garbage_get()
         log_warn("zdb_zone_garbage_get: collector disabled");
         return NULL;
     }
+}
+
+bool
+zdb_zone_garbage_empty()
+{
+    return threaded_dll_cw_size(&zone_garbage_queue) == 0;
 }
 
 void

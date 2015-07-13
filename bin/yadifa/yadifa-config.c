@@ -38,6 +38,7 @@
  */
 
 #include <ctype.h>
+#include <sys/stat.h>
 
 #include <dnscore/logger_handle.h>
 #include <dnscore/cmdline.h>
@@ -97,6 +98,7 @@ CONFIG_FQDN(         qname,         "."                                         
 CONFIG_FQDN(         tsig_key_name, "ctrl-key"                                                     )
 CONFIG_BOOL(         enable,        "on"                                                           )
 CONFIG_BOOL(         clean,         "off"                                                          )
+CONFIG_STRING(       config_file,   ""                                                             )
 
 
 
@@ -269,7 +271,7 @@ yadifa_print_usage(void)
     puts("\n"
             "Usage: yadifa [-c config] [-s server] [-v] command\n\n"
             "\toptions:\n"
-//            "\t\t--config/-c <config_file>   : use <config_file> as configuration\n"
+            "\t\t--config/-c <config_file>   : use <config_file> as configuration\n"
             "\t\t--server/-s <host>          : <host> can be an ip address or\n"
             "\t\t                            : an ip address with portnumber\n"
             "\t\t                            : e.g. \"192.0.2.1 port 53\"\n"
@@ -322,7 +324,7 @@ static void
 yadifa_print_authors()
 {
     print("\n"
-            "\t\tYADIFAD authors:\n"
+            "\t\tYADIFA authors:\n"
             "\t\t---------------\n"
             "\t\t\n"
             "\t\tGery Van Emelen\n"
@@ -565,6 +567,38 @@ yadifa_config_init()
 
 
     return return_code;
+}
+
+
+char *
+yadifa_config_file_get()
+{
+    struct stat fileinfo;
+
+    if(g_yadifa_main_settings.config_file != NULL)
+    {
+        if(strlen(g_yadifa_main_settings.config_file) > 0)
+        {
+            if(stat(g_yadifa_main_settings.config_file, &fileinfo) < 0)
+            {
+                formatln("error: %s has error: %lu", g_yadifa_main_settings.config_file, ERRNO_ERROR);
+
+                exit ERRNO_ERROR;
+            }
+
+            /* Is it a regular file */
+            if(!S_ISREG(fileinfo.st_mode))
+            {
+                formatln("error: %s is not a regular file", g_yadifa_main_settings.config_file);
+
+                exit CONFIG_NOT_A_REGULAR_FILE;
+            }
+
+            return g_yadifa_main_settings.config_file;
+        }
+    }
+
+    return NULL;
 }
 
 

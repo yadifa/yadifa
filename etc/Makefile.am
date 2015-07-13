@@ -33,7 +33,7 @@
 #
 #      	Makefile.am script
 #
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.0-public/etc/Makefile.am $
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.1-public/etc/Makefile.am $
 #
 #	$Date: 2014-12-11 11:24:53 +0100 (Thu, 11 Dec 2014) $
 #

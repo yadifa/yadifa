@@ -70,15 +70,8 @@ dief(ya_result error_code, const char* format, ...)
     vfprintf(stderr, format, args); /* Keep native */
     va_end(args);
     fflush(NULL);
-    exit(EXIT_FAILURE);
+    abort();
 }
-
-/*
-#define ERROR_TABLE_SIZE_INCREMENT 32
-static value_name_table* error_table = NULL;
-static u32 error_table_count = 0;
-static u32 error_table_size = 0;
-*/
 
 static u32_node *error_set = NULL;
 

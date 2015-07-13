@@ -49,11 +49,11 @@
 #
 #		Makefile.am script
 #
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.0-public/lib/dnscore/Makefile.am $
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.1-public/lib/dnscore/Makefile.am $
 #
-#	   $Date: 2015-04-20 15:07:41 +0200 (Mon, 20 Apr 2015) $
+#	   $Date: 2015-07-14 09:28:28 +0200 (Tue, 14 Jul 2015) $
 #
-#	   $Revision: 4962 $
+#	   $Revision: 5301 $
 #
 #	$Author: ericdf $
 #
@@ -481,11 +481,10 @@ am__pkginclude_HEADERS_DIST = $(I)/$(FEATURESFILE) $(I)/alarm.h \
 	$(I)/dnsname_set.h $(I)/dnssec_errors.h \
 	$(I)/empty-input-stream.h $(I)/fdtools.h \
 	$(I)/file_input_stream.h $(I)/file_output_stream.h \
-	$(I)/filter_input_stream.h $(I)/fingerprint.h $(I)/format.h \
-	$(I)/host_address.h $(I)/hsdllist.h $(I)/identity.h \
-	$(I)/input_stream.h $(I)/io_stream.h \
-	$(I)/limited_input_stream.h $(I)/list-dl.h $(I)/list-sl.h \
-	$(I)/logger.h $(I)/logger_channel_file.h \
+	$(I)/fingerprint.h $(I)/format.h $(I)/host_address.h \
+	$(I)/hsdllist.h $(I)/identity.h $(I)/input_stream.h \
+	$(I)/io_stream.h $(I)/limited_input_stream.h $(I)/list-dl.h \
+	$(I)/list-sl.h $(I)/logger.h $(I)/logger_channel_file.h \
 	$(I)/logger_channel_stream.h $(I)/logger_channel_syslog.h \
 	$(I)/logger_handle.h $(I)/logger-output-stream.h \
 	$(I)/message.h $(I)/message_dnsupdate.h \
@@ -779,11 +778,10 @@ pkginclude_HEADERS = $(FEATURES) $(I)/alarm.h $(I)/allocator.h \
 	$(I)/dnsname_set.h $(I)/dnssec_errors.h \
 	$(I)/empty-input-stream.h $(I)/fdtools.h \
 	$(I)/file_input_stream.h $(I)/file_output_stream.h \
-	$(I)/filter_input_stream.h $(I)/fingerprint.h $(I)/format.h \
-	$(I)/host_address.h $(I)/hsdllist.h $(I)/identity.h \
-	$(I)/input_stream.h $(I)/io_stream.h \
-	$(I)/limited_input_stream.h $(I)/list-dl.h $(I)/list-sl.h \
-	$(I)/logger.h $(I)/logger_channel_file.h \
+	$(I)/fingerprint.h $(I)/format.h $(I)/host_address.h \
+	$(I)/hsdllist.h $(I)/identity.h $(I)/input_stream.h \
+	$(I)/io_stream.h $(I)/limited_input_stream.h $(I)/list-dl.h \
+	$(I)/list-sl.h $(I)/logger.h $(I)/logger_channel_file.h \
 	$(I)/logger_channel_stream.h $(I)/logger_channel_syslog.h \
 	$(I)/logger_handle.h $(I)/logger-output-stream.h \
 	$(I)/message.h $(I)/message_dnsupdate.h \
@@ -1648,7 +1646,7 @@ buildinfo.h: config.log
 all: REVISION
 
 REVISION:
-	(svn info 2>/dev/null;if [ $? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
+	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
 src/alarm.c: $(FEATURES)
 

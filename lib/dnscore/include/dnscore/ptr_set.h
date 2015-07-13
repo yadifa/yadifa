@@ -148,6 +148,8 @@ struct ptr_node
  * The type used for comparing the nodes.
  */
 #define AVL_REFERENCE_TYPE void*
+#define AVL_REFERENCE_IS_POINTER TRUE
+#define AVL_REFERENCE_IS_CONST FALSE
 
 /*
  * The node has got a pointer to its parent
@@ -185,6 +187,8 @@ extern "C"
 #undef AVL_TREE_ROOT
 #undef AVL_REFERENCE_TYPE
 #undef AVL_HAS_PARENT_POINTER
+#undef AVL_REFERENCE_IS_POINTER
+#undef AVL_REFERENCE_IS_CONST
 #undef _AVL_H_INC
 
 #endif	/* _PTR_SET_COLLECTION_C */
@@ -194,19 +198,38 @@ extern "C"
 #endif
 
 #define ptr_set_default_node_compare ptr_set_ptr_node_compare
+
+// key = ptr
+
 int ptr_set_ptr_node_compare(const void *node_a, const void *node_b);
+
+// key = asciiz (cannot be NULL)
+
 int ptr_set_asciizp_node_compare(const void *node_a, const void *node_b);
+
+// key = fqdn (cannot be NULL)
+
 int ptr_set_dnsname_node_compare(const void *node_a, const void *node_b);
+
+// key = asciiz (can be NULL)
+
+int ptr_set_nullable_asciizp_node_compare(const void *node_a, const void *node_b);
+
+// key = fqdn (can be NULL)
+
+int ptr_set_nullable_dnsname_node_compare(const void *node_a, const void *node_b);
 
 #define PTR_SET_EMPTY {NULL, ptr_set_default_node_compare}
 #define PTR_SET_ASCIIZ_EMPTY {NULL, ptr_set_asciizp_node_compare}
 #define PTR_SET_DNSNAME_EMPTY {NULL, ptr_set_dnsname_node_compare}
+#define PTR_SET_NULLABLE_ASCIIZ_EMPTY {NULL, ptr_set_nullable_asciizp_node_compare}
+#define PTR_SET_NULLABLE_DNSNAME_EMPTY {NULL, ptr_set_nullable_dnsname_node_compare}
 #define PTR_SET_PTR_EMPTY {NULL, ptr_set_ptr_node_compare}
+#define PTR_SET_CUSTOM(comparator___) {NULL, (comparator___)}
 
 void *ptr_set_avl_iterator_hasnext_next_value(ptr_set_avl_iterator *iterp);
 
 #define FOREACH_PTR_SET(cast__,var__,ptr_set__) ptr_set_avl_iterator PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__); ptr_set_avl_iterator_init((ptr_set__), &PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__)); for(cast__ var__;((var__) = (cast__)ptr_set_avl_iterator_hasnext_next_value(&PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__))) != NULL;)
-//#define FOREACH_PTR_SET_KEY_VALUE(castk__,vark__,castv__,varv__,ptr_set__) ptr_set_avl_iterator PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__); ptr_set_avl_iterator_init((ptr_set__), &PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__)); for(varv__ varv__;((varc__) = (cast__)ptr_set_avl_iterator_hasnext_next_key_value(&PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__))) != NULL;)
 
 /*
  * AVL definition part ends here

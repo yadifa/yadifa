@@ -50,15 +50,8 @@
 
 #include "yadifa.h"
 #include "yadifa-config.h"
-#include "yazu.h"
-#include "yazu-config.h"
 
 #undef HAS_TCL
-
-
-
-
-
 
 /*----------------------------------------------------------------------------*/
 
@@ -81,12 +74,15 @@ void config_logger_cleardefault();
 ya_result (*generic_config_init)(void);
 ya_result (*generic_config_cmdline)(int , char **);
 ya_result (*generic_config_finalise)(void);
+char *    (*generic_config_file_get)(void);
+
 int (*generic_run)(void);
 
 #define GENERIC_COMMAND_BEGIN(name__,command__)  if(! strcmp(program_name, name__)){\
                                  generic_config_init=&command__ ## _config_init;\
                                  generic_config_cmdline=&command__ ## _config_cmdline;\
                                  generic_config_finalise=&command__ ## _config_finalise;\
+                                 generic_config_file_get=&command__ ## _config_file_get;\
                                  generic_run=&command__ ## _run;}
 
 #define GENERIC_COMMAND(name__,command__) else GENERIC_COMMAND_BEGIN(name__,command__)
@@ -94,6 +90,7 @@ int (*generic_run)(void);
 #define GENERIC_COMMAND_END(command__)  else{generic_config_init=&command__ ## _config_init;\
                                         generic_config_cmdline=&command__ ## _config_cmdline;\
                                         generic_config_finalise=&command__ ## _config_finalise;\
+                                        generic_config_file_get=&command__ ## _config_file_get;\
                                         generic_run=&command__ ## _run;}
 
 
@@ -137,7 +134,7 @@ get_rc_file(const char *program_name)
         ssize_t program_name_length = strlen(program_name);
 
         /* allocate memory and create the config */
-        MALLOC_OR_DIE(char*, rc_file, 1 + home_env_length + 1 + program_name_length + 3, GENERIC_TAG);
+        MALLOC_OR_DIE(char*, rc_file, 1 + home_env_length + 2 + program_name_length + 3, GENERIC_TAG);
 
         rc_file[0] = '\0';
 
@@ -308,14 +305,28 @@ main(int argc, char *argv[])
 
     }
 
-    /* load the config of rc file */
-    if(FAIL(return_code = config_load_rc(rc_file)))
+    /* if there's a config file, use that one otherwise use the 'rc' file */
+    char *config_file;
+    if (NULL == (config_file = generic_config_file_get()))
     {
-        dnscore_finalize();
+        /* load the config of rc file */
+        if (FAIL(return_code = config_load_rc(rc_file)))
+        {
+            dnscore_finalize();
 
-        return EXIT_FAILURE;
+            return EXIT_FAILURE;
+        }
     }
+    else
+    {
+        /* load the config of rc file */
+        if (FAIL(return_code = config_load_rc(config_file)))
+        {
+            dnscore_finalize();
 
+            return EXIT_FAILURE;
+        }
+    }
 
 
     if(FAIL(return_code = generic_config_finalise()))

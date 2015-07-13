@@ -488,4 +488,6 @@ void database_service_create_invalid_zones();
 
 bool database_service_is_running();
 
+void database_service_run_garbage_collector();
+
 /** @} */

@@ -59,6 +59,7 @@
 #include "dnscore/logger.h"
 #include "dnscore/format.h"
 #include "dnscore/u32_set.h"
+#include "dnscore/zalloc.h"
 
 #include "dnscore/mutex.h"
 
@@ -185,6 +186,13 @@ pthread_pool_random_key_init()
     }
 }
 
+int
+thread_pool_queue_size(thread_pool_s *tp)
+{
+    int size = threaded_queue_size(&tp->queue);
+    return size;
+}
+
 static void*
 thread_pool_thread(void *args)
 {
@@ -264,7 +272,7 @@ thread_pool_thread(void *args)
         void* parm = task->parm;
         const char* categoryname = task->categoryname;
 
-        free(task);
+        ZFREE(task, threaded_queue_task);
 
         strncpy(desc->info, categoryname, sizeof(desc->info));
 
@@ -555,7 +563,7 @@ thread_pool_enqueue_call(struct thread_pool_s* tp, thread_pool_function func, vo
 #endif
     
     threaded_queue_task* task;
-    MALLOC_OR_DIE(threaded_queue_task*, task, sizeof (threaded_queue_task), THREADPOOL_TAG);
+    ZALLOC_OR_DIE(threaded_queue_task*, task, threaded_queue_task, THREADPOOL_TAG);
 
     task->function = func;
     task->parm = parm;

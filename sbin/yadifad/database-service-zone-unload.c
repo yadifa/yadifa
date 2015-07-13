@@ -114,13 +114,12 @@ database_service_zone_unload(zone_desc_s *zone_desc, zdb_zone *zone)
     log_debug("database_service_zone_unload(%{dnsname}@%p=%i,%{dnsname})",
             zone_desc->origin, zone_desc, zone_desc->rc,
             (zone != NULL)?zone->origin:(const u8*)"\004NULL");
-    
-    database_service_zone_unload_parms_s *parm;
-    MALLOC_OR_DIE(database_service_zone_unload_parms_s*, parm, sizeof(database_service_zone_unload_parms_s), GENERIC_TAG);
-    parm->zone_desc = zone_desc;
+
+    zdb_zone *work_zone = NULL;
+
     if(zone != NULL)
     {
-        parm->zone = zone; // zone will be released by the thread
+        work_zone = zone; // zone will be released by the thread
         zone_lock(zone_desc, ZONE_LOCK_UNLOAD);
         if(zone == zone_desc->loaded_zone) // UNLOAD
         {
@@ -140,7 +139,7 @@ database_service_zone_unload(zone_desc_s *zone_desc, zdb_zone *zone)
     else
     {
         zone_lock(zone_desc, ZONE_LOCK_UNLOAD);
-        parm->zone = zone_desc->loaded_zone; // UNLOAD
+        work_zone = zone_desc->loaded_zone; // UNLOAD
         
         log_debug7("database_service_zone_unload: %{dnsname}@%p: loaded_zone@%p (was %p)",
                 zone_desc->origin,
@@ -157,8 +156,13 @@ database_service_zone_unload(zone_desc_s *zone_desc, zdb_zone *zone)
         zone_unlock(zone_desc, ZONE_LOCK_UNLOAD);
     }
     
-    if(parm->zone != NULL)
+    if(work_zone != NULL)
     {
+        database_service_zone_unload_parms_s *parm;
+        MALLOC_OR_DIE(database_service_zone_unload_parms_s*, parm, sizeof(database_service_zone_unload_parms_s), GENERIC_TAG);
+        parm->zone_desc = zone_desc;
+        parm->zone = work_zone;
+    
         zone_acquire(zone_desc);
         database_service_zone_unload_queue_thread(database_service_zone_unload_thread, parm, NULL, "database_service_zone_unload_thread");
     }

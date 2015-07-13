@@ -66,7 +66,11 @@
 #define yassert(x)
 #else
 void log_assert__(bool b, const char *txt, const char *file, int line);
-#define yassert(cond__) log_assert__((cond__), #cond__, __FILE__, __LINE__);assert((cond__))
+#if !__clang_analyzer__
+    #define yassert(cond__) log_assert__((cond__), #cond__, __FILE__, __LINE__);assert((cond__))
+#else
+    #define yassert(cond__) assert(cond__)
+#endif
 #endif
 
 #ifdef	__cplusplus

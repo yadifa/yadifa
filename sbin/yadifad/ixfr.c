@@ -404,7 +404,7 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
             switch(xfr_input_stream_get_type(&xfris))
             {
                 case TYPE_AXFR:
-                    log_info("ixfr: server %{hostaddr} answered with AXFR", servers);
+                    log_info("ixfr: %{dnsname} server %{hostaddr} answered with AXFR", zone->origin, servers);
                     
                 case TYPE_ANY:
                 {
@@ -416,7 +416,7 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
 
                     zdb_zone_journal_delete(zone);
                     
-                    log_info("ixfr: loading AXFR stream from server %{hostaddr}", servers);
+                    log_info("ixfr: %{dnsname}: loading AXFR stream from server %{hostaddr}", zone->origin, servers);
                     
                     if(ISOK(return_value = xfr_copy(&xfris, g_config->xfr_path)))
                     {
@@ -427,50 +427,57 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
                     }
                     else
                     {
-                        log_debug("ixfr: AXFR stream copy failed: %r", return_value);
+                        log_debug("ixfr: %{dnsname}: AXFR stream copy failed: %r", zone->origin, return_value);
                     }
                     
                     break;
                 }
                 case TYPE_IXFR:
                 {
-                    log_info("ixfr: loading IXFR stream from server %{hostaddr} into the journal", servers);
+                    log_info("ixfr: %{dnsname}: loading IXFR stream from server %{hostaddr} into the journal", zone->origin, servers);
                     
                     return_value = zdb_zone_journal_append_ixfr_stream(zone, &xfris);
                     
-                    zdb_zone_journal_get_serial_range(zone, NULL, out_loaded_serial);
+                    u32 ixfr_from_serial;
+                    
+                    zdb_zone_journal_get_serial_range(zone, &ixfr_from_serial, out_loaded_serial);
                     
                     u32 expected_serial = xfr_input_stream_get_serial(&xfris);
                     
 #ifdef DEBUG
-                    log_debug("ixfr: journal_append_ixfr_stream returned %r", return_value);
+                    log_debug("ixfr: %{dnsname}: journal_append_ixfr_stream returned %r", zone->origin, return_value);
 #endif
                     if(ISOK(return_value))
                     {
                         zdb_zone_lock(zone, ZDB_ZONE_MUTEX_LOAD);
                         
-                        ya_result err;
+                        ya_result ret;
                         
-                        if(FAIL(err = zdb_icmtl_replay(zone)))
+                        log_info("ixfr: %{dnsname}: replaying journal (%u;%u)", zone->origin, ixfr_from_serial, *out_loaded_serial);
+                        
+                        if(ISOK(ret = zdb_icmtl_replay(zone)))
                         {
-                            return_value = err;
+                            log_info("ixfr: %{dnsname}: journal replayed", zone->origin);
+                        }
+                        else
+                        {
+                            return_value = ret;
                             log_err("zone load: journal replay returned %r", return_value);
                         }
                         
                         zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_LOAD);
                         
-                        if(serial_lt(*out_loaded_serial, expected_serial))
+                        if(ISOK(ret) && serial_lt(*out_loaded_serial, expected_serial))
                         {
                             // should redo an IXFR asap
-                            if(ISOK(err))
-                            {
-                                database_service_zone_ixfr_query(zone->origin);
-                            }
+                            
+                            log_info("ixfr: %{dnsname}: loaded serial %u below expected serial: querying IXFR again", zone->origin, *out_loaded_serial, expected_serial);
+                            database_service_zone_ixfr_query(zone->origin);
                         }
                     }
                     else
                     {
-                        log_err("ixfr: the loading IXFR stream from server %{hostaddr} into the journal failed with: %r", servers, return_value);
+                        log_err("ixfr: %{dnsname}: the loading IXFR stream from server %{hostaddr} into the journal failed with: %r", zone->origin, servers, return_value);
                     }
                     
                     break;
@@ -486,7 +493,7 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
             
             if(ISOK(return_value))
             {
-                log_debug("ixfr: notifying implicit and explicit slaves of %{dnsname}", zone->origin);
+                log_debug("ixfr: %{dnsname}: notifying implicit and explicit slaves", zone->origin);
                 notify_slaves(zone->origin);
             }
         }
@@ -498,7 +505,7 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
             }
             else
             {
-                log_info("ixfr: transfer from master failed for zone %{dnsname}: %r", zone->origin, return_value);
+                log_info("ixfr: %{dnsname}: transfer from master failed: %r", zone->origin, return_value);
             }
         }
 

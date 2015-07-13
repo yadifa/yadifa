@@ -140,6 +140,7 @@ typedef string_node* string_set;
 #define AVL_REFERENCE_TYPE const char*
 
 #define AVL_REFERENCE_IS_CONST TRUE
+#define AVL_REFERENCE_IS_POINTER TRUE
 
 /*
  * The node has got a pointer to its parent
@@ -179,6 +180,8 @@ extern "C"
 #undef AVL_TREE_ROOT
 #undef AVL_REFERENCE_TYPE
 #undef AVL_HAS_PARENT_POINTER
+#undef AVL_REFERENCE_IS_CONST
+#undef AVL_REFERENCE_IS_POINTER
 
 #undef _AVL_H_INC
 

@@ -317,8 +317,8 @@ am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(pkgincludedir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
 libdnslg_la_LIBADD =
 am__dirstamp = $(am__leading_dot)dirstamp
-am_libdnslg_la_OBJECTS = src/config-resolver.lo src/resolv.lo \
-	src/dns.lo src/resolv-conf.lo src/config-load.lo
+am_libdnslg_la_OBJECTS = src/config-resolver.lo src/dns.lo \
+	src/resolv-conf.lo src/config-load.lo
 libdnslg_la_OBJECTS = $(am_libdnslg_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -592,10 +592,10 @@ I = include/dnslg
 FEATURESFILE = dnslg-config-features.h
 FEATURES = $(I)/$(FEATURESFILE)
 lib_LTLIBRARIES = libdnslg.la
-pkginclude_HEADERS = $(FEATURES) include/dnslg/config-resolver.h include/dnslg/resolv.h include/dnslg/dns.h include/dnslg/resolv-conf.h include/dnslg/config-load.h
+pkginclude_HEADERS = $(FEATURES) include/dnslg/config-resolver.h include/dnslg/resolv-conf.h include/dnslg/dns.h include/dnslg/config-load.h
 
 # NOTE: the first one on this list must always be the one used to trigger $(FEATURES)
-libdnslg_la_SOURCES = src/config-resolver.c src/resolv.c src/dns.c src/resolv-conf.c src/config-load.c
+libdnslg_la_SOURCES = src/config-resolver.c src/dns.c src/resolv-conf.c src/config-load.c
 libdnslg_la_LDFLAGS = -version-info 2:0:0
 
 #
@@ -745,7 +745,6 @@ src/$(DEPDIR)/$(am__dirstamp):
 	@: > src/$(DEPDIR)/$(am__dirstamp)
 src/config-resolver.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/resolv.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/dns.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/resolv-conf.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/config-load.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
@@ -765,7 +764,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/config-resolver.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dns.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/resolv-conf.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/resolv.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -1205,7 +1203,7 @@ buildinfo.h: config.log
 all: REVISION
 
 REVISION:
-	(svn info 2>/dev/null;if [ $? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
+	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
 src/config-resolver.c: $(FEATURES)
 

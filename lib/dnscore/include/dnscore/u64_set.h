@@ -138,12 +138,12 @@ typedef AVL_TREE_TYPE u64_set;
  * Self explanatory
  */
 
-#define AVL_REFERENCE_ISPOINTER FALSE
-
 /*
  * The type used for comparing the nodes.
  */
 #define AVL_REFERENCE_TYPE u64
+#define AVL_REFERENCE_IS_POINTER FALSE
+#define AVL_REFERENCE_IS_CONST FALSE
 
 /*
  * The node has got a pointer to its parent
@@ -181,7 +181,9 @@ extern "C"
 #undef AVL_TREE_ROOT
 #undef AVL_REFERENCE_TYPE
 #undef AVL_HAS_PARENT_POINTER
-
+#undef AVL_REFERENCE_IS_POINTER
+#undef AVL_REFERENCE_IS_CONST
+    
 #undef _AVL_H_INC
 
 #endif	/* _U64_SET_C */

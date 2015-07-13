@@ -500,8 +500,8 @@ static inline void SET_U64_AT_P(void* p, u64 v)
 
 #define MAX_U8  ((u8)0xff)
 #define MAX_U16 ((u16)0xffff)
-#define MAX_U32 ((u32)0xffffffffL)
-#define MAX_U64 ((u64)0xffffffffffffffffLL)
+#define MAX_U32 ((u32)0xffffffffUL)
+#define MAX_U64 ((u64)0xffffffffffffffffULL)
 
 #define MAX_S8  ((s8)0x7f)
 #define MAX_S16 ((s16)0x7fff)

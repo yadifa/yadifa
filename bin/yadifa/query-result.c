@@ -37,7 +37,6 @@
 #include <dnscore/host_address.h>
 #include <dnslg/config-resolver.h>
 #include <dnslg/dns.h>
-#include <dnslg/resolv.h>
 #include "query-result.h"
 
 /*----------------------------------------------------------------------------*/

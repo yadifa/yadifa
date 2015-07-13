@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man on Wed Apr 29 16:29:43 CEST 2015
+.\" Manual page created with latex2man on Don Jul 23 10:59:01 CEST 2015
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -47,7 +47,7 @@ HMAC\-SHA1
 
 .TP
 [\fB\-\-config|\-c\fP\fI configfile\fP]
- Another config file will be used. 
+ Another config file will be used. (default: ${HOME}/.yadifa.rc) 
 .TP
 [\fB\-\-server|\-s\fP\fI host\fP]
  Host is the remote server to operate. 
@@ -136,7 +136,7 @@ file from the sources code.
 .SH VERSION
 
 .PP
-Version: 2.1.0 of 2015-04-24\&.
+Version: 2.1.1 of 2015-07-23\&.
 .PP
 .SH MAILINGLIST
 

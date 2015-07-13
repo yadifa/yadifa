@@ -132,53 +132,60 @@ config_rrl_section_postprocess(struct config_section_descriptor_s *csd)
     g_rrl_settings.window_ticks = g_rrl_settings.window * ONE_SECOND_TICKS;
     
     g_rrl_settings.exempted_filter = acl_get_check_access_filter(&g_rrl_settings.exempted);
-    /** @todo add range checks */
-    /* ipv4_prefix_length is now unsigned
-    if(g_rrl_settings.ipv4_prefix_length < 0)
+
+    if(g_rrl_settings.ipv4_prefix_length == 0)
     {
-        log_warn("ipv4-prefix-lenght is wrong, setting to 0");
-        
-        g_rrl_settings.ipv4_prefix_length = 0;
+        log_warn("ipv4-prefix-lenght set to 0, setting to recommended value: " TOSTRING(RRL_IPV4_PREFIX_LENGTH_DEFAULT));
+        g_rrl_settings.ipv4_prefix_length = RRL_IPV4_PREFIX_LENGTH_DEFAULT;
     }
-    */
-    if(g_rrl_settings.ipv4_prefix_length > 32)
+        
+    if(g_rrl_settings.ipv4_prefix_length < 32)
+    {
+        u32 mask = MAX_U32 << (32 - g_rrl_settings.ipv4_prefix_length);
+        g_rrl_settings.ipv4_prefix_mask = htonl(mask);
+    }
+    else
     {
         log_warn("ipv4-prefix-lenght is wrong, setting to 32");
         
         g_rrl_settings.ipv4_prefix_length = 32;
+        g_rrl_settings.ipv4_prefix_mask = MAX_U32;
     }
     
     u32 mask = MAX_U32 << (32 - g_rrl_settings.ipv4_prefix_length);
     
     g_rrl_settings.ipv4_prefix_mask = htonl(mask);
     
-    /* ipv6_prefix_length is now unsigned
-    if(g_rrl_settings.ipv6_prefix_length < 0)
+    u64 mask_h, mask_l;
+    
+    if(g_rrl_settings.ipv6_prefix_length == 0)
     {
-        log_warn("ipv6-prefix-lenght is wrong, setting to 0");
-        
-        g_rrl_settings.ipv6_prefix_length = 0;
+        log_warn("ipv6-prefix-lenght set to 0, setting to recommended value: " TOSTRING(RRL_IPV6_PREFIX_LENGTH_DEFAULT));
+        g_rrl_settings.ipv6_prefix_length = RRL_IPV6_PREFIX_LENGTH_DEFAULT;
     }
-    */
-    if(g_rrl_settings.ipv6_prefix_length > 128)
+    
+    if(g_rrl_settings.ipv6_prefix_length < 128) // [1;127]
+    {
+        if(g_rrl_settings.ipv6_prefix_length <= 64) // [1;64]
+        {
+            mask_h = MAX_U64 << (64 - g_rrl_settings.ipv6_prefix_length); // shift [63; 0]
+            mask_l = 0;
+        }
+        else // [65;127]
+        {
+            mask_h = MAX_U64;
+            mask_l = MAX_U64 << (128 - g_rrl_settings.ipv6_prefix_length); // shift [63; 1]
+        }
+    }
+    else
     {
         log_warn("ipv6-prefix-lenght is wrong, setting to 128");
         
         g_rrl_settings.ipv6_prefix_length = 128;
+        mask_h = MAX_U64;
+        mask_l = MAX_U64;
     }
         
-    u64 mask_h, mask_l;
-    if(g_rrl_settings.ipv6_prefix_length <= 64)
-    {
-        mask_h = MAX_U64 << (64 - g_rrl_settings.ipv6_prefix_length);
-        mask_l = 0;
-    }
-    else
-    {
-        mask_h = MAX_U64;
-        mask_l = MAX_U64 << (g_rrl_settings.ipv6_prefix_length - 64);
-    }
-    
     g_rrl_settings.ipv6_prefix_mask_high = htobe64(mask_h);
     g_rrl_settings.ipv6_prefix_mask_low = htobe64(mask_l);
     
@@ -516,6 +523,8 @@ typedef AVL_TREE_TYPE rrl_set_s;
  * The type used for comparing the nodes.
  */
 #define AVL_REFERENCE_TYPE u8*
+#define AVL_REFERENCE_IS_POINTER TRUE
+#define AVL_REFERENCE_IS_CONST FALSE
 
 /*
  * The node has got a pointer to its parent

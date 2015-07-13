@@ -78,7 +78,7 @@
  * Self explanatory
  */
 
-#define AVL_REFERENCE_ISPOINTER FALSE
+#define AVL_REFERENCE_IS_POINTER FALSE
 
 /*
  * The type used for comparing the nodes.

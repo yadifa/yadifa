@@ -33,11 +33,11 @@
 #
 #		Makefile.am script
 #
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.0-public/lib/dnscore/Makefile.am $
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.1-public/lib/dnscore/Makefile.am $
 #
-#	   $Date: 2015-04-20 15:07:41 +0200 (Mon, 20 Apr 2015) $
+#	   $Date: 2015-07-14 09:28:28 +0200 (Tue, 14 Jul 2015) $
 #
-#	   $Revision: 4962 $
+#	   $Revision: 5301 $
 #
 #	$Author: ericdf $
 #
@@ -202,7 +202,6 @@ pkginclude_HEADERS = \
 	$(I)/fdtools.h \
 	$(I)/file_input_stream.h \
 	$(I)/file_output_stream.h \
-	$(I)/filter_input_stream.h \
 	$(I)/fingerprint.h \
 	$(I)/format.h \
 	$(I)/host_address.h \
@@ -289,7 +288,7 @@ include ../../mk/common-labels.mk
 all: REVISION
 
 REVISION:
-	(svn info 2>/dev/null;if [ $? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
+	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
 src/alarm.c: $(FEATURES)
 

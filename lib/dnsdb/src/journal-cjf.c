@@ -1179,7 +1179,7 @@ journal_cjf_append_ixfr_stream_slave(journal *jh, input_stream *ixfr_wire_is)
             previous_journal_serial = stream_serial_del;
         }
         else
-        {        
+        {
             // if the serial we are about to delete from is not the last serial, AND if we are not in a starting state (empty journal)
             if(stream_serial_del != previous_journal_serial) // false positive: previous_journal_serial is initialised (!journal_was_empty)
             {
@@ -1187,18 +1187,92 @@ journal_cjf_append_ixfr_stream_slave(journal *jh, input_stream *ixfr_wire_is)
 
                 if(serial_lt(stream_serial_del, previous_journal_serial))
                 {
-                    log_err("cjf: %s,%i: serial of stream (%i) is inside the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
+                    log_info("cjf: %s,%i: serial of stream (%i) is inside the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
+                    
+                    // SKIP ? the SOA has already been read
+                    // read until next SOA
+                    // then read again until next SOA and evaluate again if we are at the right point.
+                    // at some point we may find the right starting point, or finally give up
+                                        
+                    for(int soa_found = 0;;)
+                    {
+                        // read next redcord
+                        
+                        if((record_size = dns_resource_record_read(&rr, ixfr_wire_is)) <= 0)
+                        {
+                            /* FAIL or EOF */                
+#ifdef DEBUG
+                            log_debug1("journal: %s,%i: skipping old changes: EOF: no more resource records from input", jnl->journal_file_name, jnl->fd);
+#endif
+                            ret = record_size;
+                            break; // breaks the for
+                        }
+                        
+                        if(rr.tctr.qtype == TYPE_SOA)
+                        {
+                            // we got another SOA
+                            
+                            if(++soa_found == 2)
+                            {
+                                // we are at the third one
+                                
+                                if(FAIL(ret = rr_soa_get_serial(rr.rdata, rr.rdata_size, &stream_serial_del)))
+                                {
+                                    log_err("cjf: %s,%i: skipping old changes: could not get serial from SOA record: %r", jnl->journal_file_name, jnl->fd, ret);
+                                    break; // breaks the for
+                                }
+                                
+                                // if the serial is still below : skip further
+                                
+                                if(serial_lt(stream_serial_del, previous_journal_serial))
+                                {
+                                    log_info("cjf: %s,%i: skipping old changes: serial of stream (%i) is inside the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
+                                    soa_found = 0;
+                                    continue;
+                                }
+                                
+                                // if it is equal, we can proceed reading the stream into the journal
+                                
+                                if(stream_serial_del == previous_journal_serial)
+                                {
+                                    ret = SUCCESS;
+                                }
+                                else // else it's broken
+                                {
+                                    log_err("cjf: %s,%i: serial of stream (%i) is outside the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
+                                    ret = ZDB_JOURNAL_IXFR_SERIAL_OUT_OF_KNOWN_RANGE;
+                                }
+                                
+                                break; // breaks the for
+                            }
+                            // else we have found the second SOA and still need to find the end or the next SOA to try to recover from this
+                        }
+                        // else we don't care
+                    } // end for soa_found
                 }
                 else
                 {
                     log_err("cjf: %s,%i: serial of stream (%i) is outside the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
+                    ret = ZDB_JOURNAL_IXFR_SERIAL_OUT_OF_KNOWN_RANGE;
                 }
 
+                // at this point, we either have
+                // _ a success value in ret with record_size > 0 (and then we continue)
+                // _ a success value in ret with record_size <= 0 (and then we are at the end of the stream)
+                // _ an error value in ret with record_size > 0 (and the stream is not usable)
+                
+                if(FAIL(ret) || (record_size <= 0))
+                {
 #ifdef DEBUG
-                logger_flush();
+                    logger_flush();
 #endif
-                ret = ZDB_JOURNAL_IXFR_SERIAL_OUT_OF_KNOWN_RANGE;
-                break;
+                    journal_cjf_page_output_stream_cancel(&os);
+                    
+                    break; // breaks the do{}while();
+                }
+                
+                // rr contains the current (next) SOA
+                // record_size contains the size of that SOA
             }
         }
         
@@ -1399,7 +1473,7 @@ journal_cjf_append_ixfr_stream_slave(journal *jh, input_stream *ixfr_wire_is)
 #endif
                 break;
             }
-        }
+        } // end for
 
         if((soa_count >= 2) && ISOK(ret))
         {
@@ -1732,6 +1806,8 @@ journal_cjf_get_ixfr_stream_at_serial(journal *jh, u32 serial_from, input_stream
         
         if(FAIL(ret))
         {
+            journal_cjf_readunlock(jnl);
+            
             log_err("cjf: %s,%i: unable to read the SOA at position %u: %r", jnl->journal_file_name, jnl->fd, jnl->last_soa_offset, ret);
             ZFREE(data, journal_cjf_input_stream_data);
             return ret;
@@ -1803,15 +1879,17 @@ journal_cjf_get_first_serial(journal *jh, u32 *serial)
     
     journal_cjf_readlock(jnl);
     
+    u32 value = jnl->serial_begin;
+    
     if(serial != NULL)
     {
-        *serial = jnl->serial_begin;
+        *serial = value;
         ret = SUCCESS;
     }
     
     journal_cjf_readunlock(jnl);
     
-    log_debug("cjf: %s,%i: get first serial: %i", jnl->journal_file_name, jnl->fd, *serial);
+    log_debug("cjf: %s,%i: get first serial: %i", jnl->journal_file_name, jnl->fd, value);
     
     return ret;
 }
@@ -1824,15 +1902,17 @@ journal_cjf_get_last_serial(journal *jh, u32 *serial)
     
     journal_cjf_readlock(jnl);
     
+    u32 value = jnl->serial_end;
+    
     if(serial != NULL)
     {
-        *serial = jnl->serial_end;
+        *serial = value;
         ret = SUCCESS;
     }
     
     journal_cjf_readunlock(jnl);
     
-    log_debug("cjf: %s,%i: get last serial: %i", jnl->journal_file_name, jnl->fd, *serial);
+    log_debug("cjf: %s,%i: get last serial: %i", jnl->journal_file_name, jnl->fd, value);
     
     return ret;
 }
@@ -1882,6 +1962,7 @@ journal_cjf_truncate_to_size(journal *jh, u32 size_)
         jnl->file_maximum_size = MAX_U32;
         if(jnl->zone != NULL)
         {
+            jnl->file_maximum_size = jnl->zone->wire_size >> 1;
             zdb_zone_info_get_zone_max_journal_size(jnl->zone->origin, &jnl->file_maximum_size);
         }
 
@@ -2019,6 +2100,7 @@ journal_cjf_link_zone(journal *jh, zdb_zone *zone)
         if(jh->zone->journal == jh)
         {
             log_debug("cjf: %s,%i: updating maximum journal size", jnl->journal_file_name, jnl->fd);
+            jnl->file_maximum_size = jnl->zone->wire_size >> 1;
             zdb_zone_info_get_zone_max_journal_size(jnl->zone->origin, &jnl->file_maximum_size);
             return;
         }
@@ -2028,7 +2110,7 @@ journal_cjf_link_zone(journal *jh, zdb_zone *zone)
             logger_flush();
             abort();
         }
-    }
+    } //jh->zone may be null
     
     if(zone->journal != NULL)
     {
@@ -2036,12 +2118,13 @@ journal_cjf_link_zone(journal *jh, zdb_zone *zone)
         {
             log_debug("cjf: %s,%i: updating incomplete link", jnl->journal_file_name, jnl->fd);
             jh->zone = zone;
+            jnl->file_maximum_size = jnl->zone->wire_size >> 1;
             zdb_zone_info_get_zone_max_journal_size(jnl->zone->origin, &jnl->file_maximum_size);
             return;
         }
         else
         {
-            log_err("cjf: %s,%i: zone already points to another journal (%p instead of to %p)", jnl->journal_file_name, jnl->fd, jh->zone->journal, jh);
+            log_err("cjf: %s,%i: zone already points to another journal (%p instead of to %p)", jnl->journal_file_name, jnl->fd, zone->journal, jh);
             logger_flush();
             abort();
         }
@@ -2051,6 +2134,7 @@ journal_cjf_link_zone(journal *jh, zdb_zone *zone)
     
     jnl->zone = zone;
     zone->journal = jh;
+    jnl->file_maximum_size = jnl->zone->wire_size >> 1;
     zdb_zone_info_get_zone_max_journal_size(jnl->zone->origin, &jnl->file_maximum_size);
     
 
@@ -2385,6 +2469,7 @@ journal_cjf_open(journal **jh, const u8* origin, const char *workingdir, bool cr
 
                 if(jnl->zone != NULL)
                 {
+                    jnl->file_maximum_size = jnl->zone->wire_size >> 1;
                     zdb_zone_info_get_zone_max_journal_size(jnl->zone->origin, &jnl->file_maximum_size);
                 }
 

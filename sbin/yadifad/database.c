@@ -1381,7 +1381,7 @@ database_zone_refresh_maintenance_wih_zone(zdb_zone* zone, u32 next_alarm_epoch)
 ya_result
 database_zone_refresh_maintenance(zdb *database, const u8 *origin, u32 next_alarm_epoch)
 {
-    ya_result ret;
+    ya_result ret = SUCCESS; // no zone, no issue doing maintenance (note that this return value is never used)
     
     log_debug("database: refresh: database_zone_refresh_maintenance for zone %{dnsname} at %u", origin, next_alarm_epoch);
 

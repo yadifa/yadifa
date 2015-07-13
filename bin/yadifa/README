@@ -29,6 +29,20 @@
 # 
 ################################################################################
 
+20150714:
+        YADIFA 2.1.1
+
+        The yadifa command line has a new option: --config|-c file : read the specific configuration file instead of ~/.yadifa.rc
+
+        Issues detected on the NSEC3 database have now been upgraded from debug to info/warning
+
+        Fixes:
+        - fixed an issue where, on some cases; the garbage collector for the zones was not triggering for a long time.
+        - fixed an issue in the Makefile (courtesy of DENIC)
+        - fixed an issue where a few bytes could be leaked in some rare cases when failing to unload a zone
+        - fixed an issue in RRL where some values of IPv6 prefix
+        - fixed an issue accepting some answers on IXFR transfers
+
 20150424:
         YADIFA 2.1.0
 

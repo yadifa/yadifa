@@ -48,6 +48,7 @@ struct config_main_settings_s
     host_address                                                    *server;
     u8                                                               *qname;
     u8                                                       *tsig_key_name;
+    char                                                       *config_file;
 //    u8                                                                *file;
 
 
@@ -73,6 +74,8 @@ struct config_main_settings_s
 ya_result yadifa_config_init();
 ya_result yadifa_config_cmdline(int argc, char **argv);
 ya_result yadifa_config_finalise();
+char* yadifa_config_file_get();
+
 bool yadifa_is_interactive(void);
 
 /*    ------------------------------------------------------------    */

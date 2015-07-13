@@ -44,10 +44,10 @@ FEATURES=$(I)/$(FEATURESFILE)
 
 lib_LTLIBRARIES= libdnslg.la
 
-pkginclude_HEADERS = $(FEATURES) include/dnslg/config-resolver.h include/dnslg/resolv.h include/dnslg/dns.h include/dnslg/resolv-conf.h include/dnslg/config-load.h
+pkginclude_HEADERS = $(FEATURES) include/dnslg/config-resolver.h include/dnslg/resolv-conf.h include/dnslg/dns.h include/dnslg/config-load.h
 
 # NOTE: the first one on this list must always be the one used to trigger $(FEATURES)
-libdnslg_la_SOURCES = src/config-resolver.c src/resolv.c src/dns.c src/resolv-conf.c src/config-load.c
+libdnslg_la_SOURCES = src/config-resolver.c src/dns.c src/resolv-conf.c src/config-load.c
 
 libdnslg_la_LDFLAGS = -version-info 2:0:0
 
@@ -58,7 +58,7 @@ include ../../mk/common-labels.mk
 all: REVISION
 
 REVISION:
-	(svn info 2>/dev/null;if [ $? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
+	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
 src/config-resolver.c: $(FEATURES)
 

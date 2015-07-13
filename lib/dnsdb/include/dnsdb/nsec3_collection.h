@@ -202,6 +202,8 @@ struct nsec3_node
  * The type used for comparing the nodes.
  */
 #define AVL_REFERENCE_TYPE u8*
+#define AVL_REFERENCE_IS_CONST FALSE
+#define AVL_REFERENCE_IS_POINTER TRUE
 
 /*
  * The node has got a pointer to its parent
@@ -241,6 +243,8 @@ AVL_NODE_TYPE* AVL_PREFIXED(avl_find_interval_start)(AVL_TREE_TYPE* tree, AVL_RE
 #undef AVL_TREE_ROOT
 #undef AVL_REFERENCE_TYPE
 #undef AVL_HAS_PARENT_POINTER
+#undef AVL_REFERENCE_IS_CONST
+#undef AVL_REFERENCE_IS_POINTER
 
 #undef _AVL_H_INC
 

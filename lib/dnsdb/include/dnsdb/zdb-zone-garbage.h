@@ -55,6 +55,8 @@ zdb_zone *zdb_zone_garbage_get();
 
 void zdb_zone_garbage_run();
 
+bool zdb_zone_garbage_empty();
+
 typedef void zdb_zone_garbage_run_cb(zdb_zone *);
 
 void zdb_zone_garbage_run_ex(zdb_zone_garbage_run_cb *destroyer);

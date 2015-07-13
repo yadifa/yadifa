@@ -109,6 +109,7 @@
 #define AVL_REFERENCE_TYPE const u8*
 
 #define AVL_REFERENCE_IS_CONST TRUE
+#define AVL_REFERENCE_IS_POINTER TRUE
 
 /*
  * The node has got a pointer to its parent

@@ -122,6 +122,16 @@ void thread_pool_destroy_random_ctx();
 
 u8 thread_pool_get_size(struct thread_pool_s *tp);
 
+/**
+ * 
+ * Returns the current size of the thread pool
+ * 
+ * @param tp
+ * @return 
+ */
+
+int thread_pool_queue_size(struct thread_pool_s *tp);
+
 // before and after a fork
 
 ya_result thread_pool_stop_all();

@@ -562,9 +562,22 @@ nsec3_load_compile(nsec3_load_context *context)
                  * Didn't matched: The signature, if any, will be wrong
                  */
 
-#ifdef DEBUG
+#if 1
+                /*
+                 * This code will print what NSEC3 was computed by YADIFA and what NSEC3 was provided by the zone file.
+                 *
+                 * The rejects are NSEC3 records whose names where expected but with a different content.
+                 * Typically it's because there is an unexpected record from the zone in the NSEC3 chain that implies a different "next" value in previous rdata.
+                 * That happened when a bug in named generated a NSEC3 record for '.' when it was not expected (the named code was fixed in a following release)
+                 * But if it was the case, the "discarded" count would be > 0.
+                 * What remains is an issue with the types bit mask for the covered domain, or maybe an OPT-OUT/OPT-IN mix that would give a bad reaction (but unlikely).
+                 * Since .de has more records types than .eu, the bitmask is most probable cause.
+                 *
+                 * The output will be on the debug channel.
+                 */
+
                 rdata_desc nsec3_desc = {TYPE_NSEC3, cr->rdata_size, cr->rdata};
-                log_debug("nsec3: %{digest32h} %{typerdatadesc} rejected (do not agree with rdata value).", item->digest, &nsec3_desc);
+                log_warn("nsec3: %{digest32h} %{typerdatadesc} rejected (do not agree with rdata value).", item->digest, &nsec3_desc);
 
                 zdb_packed_ttlrdata *nsec3_ttlrdata;
                 const zdb_packed_ttlrdata *nsec3_ttlrdata_rrsig;
@@ -588,10 +601,10 @@ nsec3_load_compile(nsec3_load_context *context)
                 if(nsec3_ttlrdata != NULL)
                 {
                     rdata_desc nsec3_desc = {TYPE_NSEC3, nsec3_ttlrdata->rdata_size, &nsec3_ttlrdata->rdata_start[0]};
-                    log_debug("nsec3: computed: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
+                    log_warn("nsec3: computed: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
                     nsec3_desc.len = cr->rdata_size;
                     nsec3_desc.rdata = cr->rdata;
-                    log_debug("nsec3: received: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
+                    log_warn("nsec3: received: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
                 }
                 
 #endif
@@ -606,9 +619,13 @@ nsec3_load_compile(nsec3_load_context *context)
         }
         else
         {
-#ifdef DEBUG
+#if 1
+            /*
+             * Threre are no discarded NSEC3 records in the investigated issue, but in case the issue evolves, this information may help.
+             */
+
             rdata_desc nsec3_desc = {TYPE_NSEC3, cr->rdata_size, cr->rdata};
-            log_debug("nsec3: discarded: %{digest32h} %{typerdatadesc}", cr->digest, &nsec3_desc);
+            log_warn("nsec3: discarded: %{digest32h} %{typerdatadesc}", cr->digest, &nsec3_desc);
 #endif
             
             nsec3_discarded++;
@@ -624,7 +641,7 @@ nsec3_load_compile(nsec3_load_context *context)
         nsec3s->data[i] = NULL;
     }
 
-    log_debug("nsec3: accept: %u reject: %u discard: %u", nsec3_accepted, nsec3_rejected, nsec3_discarded);
+    log_info("nsec3: accept: %u reject: %u discard: %u", nsec3_accepted, nsec3_rejected, nsec3_discarded);
 
     /*
      * The caller needs to destroy the context
