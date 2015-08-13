@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man on Don Jul 23 10:48:00 CEST 2015
+.\" Manual page created with latex2man on Fri Aug 14 14:28:38 CEST 2015
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFAD\-CONF" "5" "2015\-07\-23" "YADIFA " "YADIFA "
+.TH "YADIFAD\-CONF" "5" "2015\-08\-14" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -133,7 +133,7 @@ Main without includes
         serverid                "yadifad\-01"
 
         # The version returned by a query to version.yadifa. CH TXT
-        version                 "2.1.1"
+        version                 "2.1.2"
 
         # Enable EDNS0 support (?)
         edns0                   on
@@ -545,7 +545,7 @@ from the sources.
 .SH VERSION
 
 .PP
-Version: 2.1.1 of 2015-07-23\&.
+Version: 2.1.2 of 2015-08-14\&.
 .PP
 .SH MAILING LISTS
 

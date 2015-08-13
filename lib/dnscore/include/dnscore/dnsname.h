@@ -422,7 +422,17 @@ bool dnsname_is_charspace(u8 c);
  * 
  */
 
-bool dnslabel_verify_charspace(u8 *label);
+bool dnslabel_verify_charspace(const u8 *label);
+
+/**
+ * dns name DNS charset test
+ *
+ * @param name_wire
+ * @return TRUE if each char in the name is in the DNS charset
+ *
+ */
+
+bool dnsname_verify_charspace(const u8 *name_wire);
 
 /**
  * label DNS charset test and set to lower case

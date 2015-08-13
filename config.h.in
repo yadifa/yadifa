@@ -30,6 +30,10 @@
 /* dynamic update support disabled. */
 #undef HAS_DYNUPDATE_SUPPORT
 
+/* YADIFA will now accept ASCII7 characters in DNS names (not recommended)
+   disabled. */
+#undef HAS_FULL_ASCII7
+
 /* where to put the log files */
 #undef HAS_LOGDIR
 

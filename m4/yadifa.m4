@@ -717,6 +717,11 @@ dnl LOG PID
 dnl dnl ===
 
 AC_HAS_ENABLE(log_pid,LOG_PID_ALWAYS_ON,[write the pid in each line of log])
+
+dnl ASCII 7
+dnl dnl =======
+
+AC_HAS_ENABLE(full_ascii7,FULL_ASCII7,[YADIFA will now accept ASCII7 characters in DNS names (not recommended)])
         
 dnl NON-AA AXFR (non-AA AXFR as sent by MS DNS)
 dnl ==========================================================================

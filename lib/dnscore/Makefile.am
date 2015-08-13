@@ -33,9 +33,9 @@
 #
 #		Makefile.am script
 #
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.1-public/lib/dnscore/Makefile.am $
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.2-public/lib/dnscore/Makefile.am $
 #
-#	   $Date: 2015-07-14 09:28:28 +0200 (Tue, 14 Jul 2015) $
+#	   $Date: 2015-07-14 09:28:28 +0200 (Die, 14 Jul 2015) $
 #
 #	   $Revision: 5301 $
 #

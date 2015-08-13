@@ -676,7 +676,9 @@ xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin, input_st
     bool last_message_had_tsig;
     bool need_cleanup_tsig = FALSE;
 
+#if DNSCORE_HAS_TSIG_SUPPORT
     u8 old_mac[64];
+#endif
     
     /*
      * ensure the stream will be unusable if the initialisation fails
@@ -1016,7 +1018,7 @@ xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin, input_st
      * In order to know what the type is, read the first packet.
      */
     
-    return_value = xfr_input_stream_read_packet(data);  /** @TODO CHECK CRASH HERE */
+    return_value = xfr_input_stream_read_packet(data);
     
     if(FAIL(return_value))
     {

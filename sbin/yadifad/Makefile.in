@@ -49,7 +49,7 @@
 #
 #      	Makefile.am script
 #
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.1-public/sbin/yadifad/Makefile.am $
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.2-public/sbin/yadifad/Makefile.am $
 #
 #       $Date: 2015-04-20 11:26:30 +0200 (Mon, 20 Apr 2015) $
 #
@@ -535,6 +535,7 @@ HAS_CC_XC99 = @HAS_CC_XC99@
 HAS_CTRL = @HAS_CTRL@
 HAS_CTRL_DYNAMIC_PROVISIONING = @HAS_CTRL_DYNAMIC_PROVISIONING@
 HAS_DYNUPDATE_SUPPORT = @HAS_DYNUPDATE_SUPPORT@
+HAS_FULL_ASCII7 = @HAS_FULL_ASCII7@
 HAS_LITTLE_ENDIAN = @HAS_LITTLE_ENDIAN@
 HAS_LOGDIR = @HAS_LOGDIR@
 HAS_LOG_PID_ALWAYS_ON = @HAS_LOG_PID_ALWAYS_ON@

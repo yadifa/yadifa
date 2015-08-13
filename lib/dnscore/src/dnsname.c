@@ -113,6 +113,9 @@ static bool cstr_to_dnsname_terminators[256] =
  *   zero -> out of space
  *
  */
+
+#if !HAS_FULL_ASCII7
+
 static s8 cstr_to_dnsname_map[256] =
 {
    -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 00 (HEX) */
@@ -153,6 +156,50 @@ static s8 cstr_to_dnsname_map_nostar[256] =
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 };
 
+#else
+
+static s8 cstr_to_dnsname_map[256] =
+{
+   -1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 00 (HEX) */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 10 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,-1, 1, /* 20 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 30 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 40 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 50 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 60 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 70 */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 80 */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 90 */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+
+static s8 cstr_to_dnsname_map_nostar[256] =
+{
+   -1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 00 (HEX) */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 10 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,-1, 1, /* 20 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 30 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 40 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 50 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 60 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 70 */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 80 */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 90 */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+
+#endif // ASCII7 charset instead of strict DNS
+
 /**
  * This is a set for rname in the SOA TYPE
  *
@@ -168,7 +215,9 @@ static s8 cstr_to_dnsname_map_nostar[256] =
  *
  */
 
-static s8 cstr_to_dnsrname_map[256] =
+#if !HAS_FULL_ASCII7
+
+static const s8 cstr_to_dnsrname_map[256] =
 {
    -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 00 (HEX) */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 10 */
@@ -187,6 +236,30 @@ static s8 cstr_to_dnsrname_map[256] =
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 };
+
+#else
+
+static const s8 cstr_to_dnsrname_map[256] =
+{
+   -1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 00 (HEX) */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 10 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,-1, 1, /* 20 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 30 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 40 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, /* 50 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 60 */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* 70 */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 80 */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 90 */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+
+#endif
 
 /**
  * char DNS charset test
@@ -211,7 +284,7 @@ dnsname_is_charspace(u8 c)
  */
 
 bool
-dnslabel_verify_charspace(u8 *label)
+dnslabel_verify_charspace(const u8 *label)
 {
     u8 n = *label;    
 
@@ -220,7 +293,7 @@ dnslabel_verify_charspace(u8 *label)
         return FALSE;
     }
 
-    u8 * const limit = &label[n];
+    const u8 *const limit = &label[n];
 
     while(++label < limit)
     {
@@ -234,6 +307,48 @@ dnslabel_verify_charspace(u8 *label)
 
     return TRUE;
 }
+
+/**
+ * dns name DNS charset test
+ *
+ * @param name_wire
+ * @return TRUE if each char in the name is in the DNS charset
+ *
+ */
+
+bool
+dnsname_verify_charspace(const u8 *name_wire)
+{
+    u8 n;
+
+    for(;;)
+    {
+        n = *name_wire;
+
+        if(n == 0)
+        {
+            return TRUE;
+        }
+
+        if(n > MAX_LABEL_LENGTH)
+        {
+            return FALSE;
+        }
+
+        const u8 *const limit = &name_wire[n];
+
+        while(++name_wire <= limit)
+        {
+            u8 c = *name_wire;
+
+            if(cstr_to_dnsname_map[c] != 1)
+            {
+                return FALSE;
+            }
+        }
+    }
+}
+
 
 /**
  * label DNS charset test and set to lower case
@@ -274,7 +389,7 @@ dnslabel_locase_verify_charspace(u8 *label)
  * dns name DNS charset test and set to lower case
  * 
  * @param name_wire
- * @return TRUE iff each char in the name in in the DNS charset
+ * @return TRUE iff each char in the name is in the DNS charset
  * 
  */
 
@@ -2524,7 +2639,7 @@ dnsname_zdup(const u8* name)
 
     u8* dup;
 
-    ZALLOC_STRING_OR_DIE(u8*, dup, len, ZDB_NAME_TAG);
+    ZALLOC_ARRAY_OR_DIE(u8*, dup, len, ZDB_NAME_TAG);
     MEMCOPY(dup, name, len); // nothing wrong here
 
     return dup;
@@ -2553,7 +2668,7 @@ dnslabel_zdup(const u8* name)
     u32 len = name[0] + 1;
 
     u8* dup;
-    ZALLOC_STRING_OR_DIE(u8*, dup, len, ZDB_LABEL_TAG);
+    ZALLOC_ARRAY_OR_DIE(u8*, dup, len, ZDB_LABEL_TAG);
     MEMCOPY(dup, name, len);
 
     return dup;

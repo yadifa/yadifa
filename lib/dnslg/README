@@ -29,6 +29,16 @@
 # 
 ################################################################################
 
+20150814:
+        YADIFA 2.1.2
+
+        The ./configure script has a new option: --enable-full-ascii7
+        This changes the behaviour of DNS name validation to accept all the ASCII7 characters instead of only the DNS-space ones.
+        Enabling this option is not recommended.
+
+        Fixes:
+        - fixes an issue where the hmac-shaX identification string sent with a TSIG had the suffix ".sig-alg.reg.int".
+
 20150714:
         YADIFA 2.1.1
 

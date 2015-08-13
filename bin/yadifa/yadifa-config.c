@@ -271,7 +271,7 @@ yadifa_print_usage(void)
     puts("\n"
             "Usage: yadifa [-c config] [-s server] [-v] command\n\n"
             "\toptions:\n"
-            "\t\t--config/-c <config_file>   : use <config_file> as configuration\n"
+//            "\t\t--config/-c <config_file>   : use <config_file> as configuration\n"
             "\t\t--server/-s <host>          : <host> can be an ip address or\n"
             "\t\t                            : an ip address with portnumber\n"
             "\t\t                            : e.g. \"192.0.2.1 port 53\"\n"
@@ -324,7 +324,7 @@ static void
 yadifa_print_authors()
 {
     print("\n"
-            "\t\tYADIFA authors:\n"
+            "\t\tYADIFAD authors:\n"
             "\t\t---------------\n"
             "\t\t\n"
             "\t\tGery Van Emelen\n"

@@ -34,6 +34,10 @@
 /* dynamic update support disabled. */
 #define HAS_DYNUPDATE_SUPPORT 1
 
+/* YADIFA will now accept ASCII7 characters in DNS names (not recommended)
+   disabled. */
+#define HAS_FULL_ASCII7 0
+
 /* where to put the log files */
 #define HAS_LOGDIR 0
 
@@ -300,7 +304,7 @@
 #define PACKAGE_NAME "dnszone"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "dnszone 2.1.1-5300"
+#define PACKAGE_STRING "dnszone 2.1.2-5300"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "dnszone"
@@ -309,7 +313,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.1.1-5300"
+#define PACKAGE_VERSION "2.1.2-5300"
 
 /* Define as the return type of signal handlers (`int' or `void'). */
 #define RETSIGTYPE void
@@ -330,7 +334,7 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* Version number of package */
-#define VERSION "2.1.1-5300"
+#define VERSION "2.1.2-5300"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */

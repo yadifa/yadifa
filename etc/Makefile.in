@@ -49,9 +49,9 @@
 #
 #      	Makefile.am script
 #
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.1-public/etc/Makefile.am $
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.2-public/etc/Makefile.am $
 #
-#	$Date: 2014-12-11 11:24:53 +0100 (Thu, 11 Dec 2014) $
+#	$Date: 2014-12-11 11:24:53 +0100 (Don, 11 Dez 2014) $
 #
 #	$Revision: 4563 $
 #
@@ -274,6 +274,7 @@ HAS_CC_XC99 = @HAS_CC_XC99@
 HAS_CTRL = @HAS_CTRL@
 HAS_CTRL_DYNAMIC_PROVISIONING = @HAS_CTRL_DYNAMIC_PROVISIONING@
 HAS_DYNUPDATE_SUPPORT = @HAS_DYNUPDATE_SUPPORT@
+HAS_FULL_ASCII7 = @HAS_FULL_ASCII7@
 HAS_LITTLE_ENDIAN = @HAS_LITTLE_ENDIAN@
 HAS_LOGDIR = @HAS_LOGDIR@
 HAS_LOG_PID_ALWAYS_ON = @HAS_LOG_PID_ALWAYS_ON@

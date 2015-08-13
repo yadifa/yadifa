@@ -99,38 +99,9 @@ tsig_finalize_algorithms()
 u8
 tsig_get_algorithm(const u8 *name)
 {
-#if 1
     string_node *node = string_set_avl_find(&hmac_algorithms, (char*)name);
 
     return (node != NULL) ? node->value : HMAC_UNKNOWN;
-#else
-    /* Here is an example of an hard-coded one: I should complete it and bench ... */
-    u32 len = dnsname_len(name);
-    if(len >= 24)
-    {
-        if(memcmp(name, "hmac-", 5) == 0)
-        {
-            if(memcmp(&name[5], "md5.sig-alg.reg.int", 20) == 0)
-            {
-                return HMAC_MD5;
-            }
-            if(memcmp(&name[5], "sha", 3) == 0)
-            {
-                if(memcmp(&name[8], "1.sig-alg.reg.int", 18) == 0)
-                {
-                    return HMAC_SHA1;
-                }
-                if(memcmp(&name[8], "224.sig-alg.reg.int", 20) == 0)
-                {
-                    return HMAC_SHA224;
-                }
-                ...
-            }
-        }
-    }
-
-    return HMAC_UNKNOWN;
-#endif
 }
 
 const u8*
@@ -141,15 +112,15 @@ tsig_get_algorithm_name(u8 algorithm)
         case HMAC_MD5:
             return (u8*)"\010hmac-md5\007sig-alg\003reg\003int";
         case HMAC_SHA1:
-            return (u8*)"\011hmac-sha1\007sig-alg\003reg\003int";
+            return (u8*)"\011hmac-sha1";
         case HMAC_SHA224:
-            return (u8*)"\013hmac-sha224\007sig-alg\003reg\003int";
+            return (u8*)"\013hmac-sha224";
         case HMAC_SHA256:
-            return (u8*)"\013hmac-sha256\007sig-alg\003reg\003int";
+            return (u8*)"\013hmac-sha256";
         case HMAC_SHA384:
-            return (u8*)"\013hmac-sha384\007sig-alg\003reg\003int";
+            return (u8*)"\013hmac-sha384";
         case HMAC_SHA512:
-            return (u8*)"\013hmac-sha512\007sig-alg\003reg\003int";
+            return (u8*)"\013hmac-sha512";
         default:
             return (u8*)"\004null"; /* UNKNOWN */
     }
