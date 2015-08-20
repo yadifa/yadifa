@@ -521,6 +521,10 @@ static inline void SET_U64_AT_P(void* p, u64 v)
 #define __bswap_16 _OSSwapInt16
 #define __bswap_32 _OSSwapInt32
 #define __bswap_64 _OSSwapInt64
+#elif defined __sun 
+#define __bswap_16 __builtin_bswap16
+#define __bswap_32 __builtin_bswap32
+#define __bswap_64 __builtin_bswap64
 #endif
 
 /* Conversion interfaces.  */

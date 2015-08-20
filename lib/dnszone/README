@@ -29,6 +29,14 @@
 # 
 ################################################################################
 
+20150821:
+        YADIFA 2.1.3
+
+        Fixes:
+        - fixed an issue that could lead to a crash at startup
+        - fixed an issue where parsing a TYPE#### record would stop the parser prematurely
+
+
 20150814:
         YADIFA 2.1.2
 

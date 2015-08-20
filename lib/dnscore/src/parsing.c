@@ -85,7 +85,7 @@ static time_t timegm(struct tm *tv)
     
     if( (tv->tm_year < 0)                   ||
         (((u32)tv->tm_mon) > 11)            ||
-        (((u32)tv->tm_day - 1) > 31 - 1)    ||
+        (((u32)tv->tm_mday - 1) > 31 - 1)   ||
         (((u32)tv->tm_hour) > 60)           ||
         (((u32)tv->tm_min) > 59)            ||
         (((u32)tv->tm_sec) > 60) )
@@ -218,7 +218,7 @@ parse_u32_check_range_len_base10(const char *src, u32 src_len, u32 *dst, u32 min
     
     *dst = (u32)output_value;
 
-    return output_value;
+    return SUCCESS;
 }
 
 ya_result

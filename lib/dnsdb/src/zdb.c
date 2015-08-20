@@ -68,7 +68,6 @@ extern logger_handle* g_database_logger;
 #include "dnsdb/zdb_rr_label.h"
 #include "dnsdb/zdb_record.h"
 #include "dnsdb/zdb_utils.h"
-#include "dnsdb/zdb_dnsname.h"
 #include "dnsdb/dictionary.h"
 #include "dnsdb/journal.h"
 #include "dnsdb/zdb-zone-garbage.h"

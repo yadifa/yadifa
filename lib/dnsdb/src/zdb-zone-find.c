@@ -63,7 +63,6 @@
 #include "dnsdb/zdb_utils.h"
 #include "dnsdb/zdb_error.h"
 
-#include "dnsdb/zdb_dnsname.h"
 #include "dnsdb/dnsrdata.h"
 
 #include "dnsdb/zdb_listener.h"

@@ -54,7 +54,6 @@
 #include "dnsdb/zdb_zone_label.h"
 #include "dnsdb/zdb_rr_label.h"
 #include "dnsdb/zdb_record.h"
-#include "dnsdb/zdb_dnsname.h"
 #include "dnsdb/dictionary.h"
 #if ZDB_HAS_NSEC_SUPPORT != 0
 #include "dnsdb/nsec.h"

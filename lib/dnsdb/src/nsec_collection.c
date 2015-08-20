@@ -51,7 +51,6 @@
 
 #include <dnscore/dnscore.h>
 #include "dnsdb/nsec_collection.h"
-#include "dnsdb/zdb_dnsname.h"
 
 /*
  * The following macros are defining relevant fields in the node

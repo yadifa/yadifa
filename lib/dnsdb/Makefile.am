@@ -33,11 +33,11 @@
 #
 #      	Makefile.am script
 #
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.2-public/lib/dnsdb/Makefile.am $
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.3-public/lib/dnsdb/Makefile.am $
 #
-#       $Date: 2015-07-14 09:04:32 +0200 (Die, 14 Jul 2015) $
+#       $Date: 2015-08-21 11:46:35 +0200 (Fri, 21 Aug 2015) $
 #
-#       $Revision: 5300 $
+#       $Revision: 5444 $
 #
 #	$Author: ericdf $
 #
@@ -108,7 +108,6 @@ pkginclude_HEADERS = \
 	$(I)/xfr_copy.h \
 	$(I)/zdb.h \
 	$(I)/zdb_config.h \
-	$(I)/zdb_dnsname.h \
 	$(I)/zdb_error.h \
 	$(I)/zdb_icmtl.h \
 	$(I)/zdb_listener.h \

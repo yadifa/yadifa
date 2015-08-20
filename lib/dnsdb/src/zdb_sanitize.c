@@ -55,8 +55,6 @@
 #include "dnsdb/zdb_utils.h"
 #include "dnsdb/zdb_error.h"
 
-#include "dnsdb/zdb_dnsname.h"
-
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 

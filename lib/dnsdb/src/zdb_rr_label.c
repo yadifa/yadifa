@@ -49,7 +49,6 @@
 #include "dnsdb/zdb_rr_label.h"
 #include "dnsdb/zdb_utils.h"
 #include "dnsdb/zdb_error.h"
-#include "dnsdb/zdb_dnsname.h"
 
 #include "dnsdb/zdb_listener.h"
 

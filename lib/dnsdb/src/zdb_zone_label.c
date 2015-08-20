@@ -48,7 +48,6 @@
 #include "dnsdb/zdb_zone.h"
 #include "dnsdb/zdb_zone_label.h"
 #include "dnsdb/zdb_record.h"
-#include "dnsdb/zdb_dnsname.h"
 #include "dnsdb/zdb_utils.h"
 #include "dnsdb/zdb_error.h"
 
@@ -104,8 +103,7 @@ zdb_zone_label_destroy_callback(dictionary_node * zone_label_record)
     /* detach is made by destroy */
 
     dictionary_destroy(&zone_label->sub, zdb_zone_label_destroy_callback);
-
-    ZFREE_STRING(zone_label->name);
+    dnslabel_zfree(zone_label->name);
 
     if(zone_label->zone != NULL)
     {
@@ -282,7 +280,7 @@ zdb_zone_label_destroy(zdb_zone_label **zone_labelp)
         
         //zdb_zone_destroy(zone_label->zone);
         
-        ZFREE_STRING(zone_label->name);
+        dnslabel_zfree(zone_label->name);
         ZFREE(zone_label, zdb_zone_label);
         *zone_labelp = NULL;
     }
@@ -487,7 +485,7 @@ zdb_zone_label_delete_process_callback(void *a, dictionary_node * node)
                     zone_label->zone = NULL;
                 }
                 
-                ZFREE_STRING(zone_label->name);
+                dnslabel_zfree(zone_label->name);
                 ZFREE(zone_label, zdb_zone_label);
 
                 return COLLECTION_PROCESS_DELETENODE;
@@ -517,7 +515,7 @@ zdb_zone_label_delete_process_callback(void *a, dictionary_node * node)
         zone_label->zone = NULL;
     }
     
-    ZFREE_STRING(zone_label->name);
+    dnslabel_zfree(zone_label->name);
     ZFREE(zone_label, zdb_zone_label);
 
     return COLLECTION_PROCESS_DELETENODE;

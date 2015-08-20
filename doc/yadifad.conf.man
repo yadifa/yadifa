@@ -14,8 +14,7 @@
 .SH NAME
 
 .PP
-yadifad.conf
-is the configuration file for \fIyadifad\fP(8)\&.
+yadifad.conf \- configuration file for \fIyadifad\fP(8)\&.
 .PP
 .SH SYNOPSIS
 
@@ -48,14 +47,14 @@ Access lists.
 .PP
 The configuration supports included files.
 .br
-example: include /usr/local/var/zones/master/yadifad\-2.conf 
+example: include /etc/yadifa/conf.d/local.conf 
 .PP
 The configuration files can be nested. 
 .PP
 The configuration consists of: 
 .TP
 .B *
-Container, which starts with <contai/er name> and ends with </container name> 
+Container, which starts with <container name> and ends with </container name> 
 .TP
 .B *
 Variable name 
@@ -95,7 +94,7 @@ Config with includes
 .PP
 .Vb
 # start yadifad.conf <main> container
-        include /usr/local\-dev/etc/yadifad\-main.conf
+        include /etc/yadifa/conf.d/local.conf
 # end yadifad.conf <main> container
 .Ve
 .PP
@@ -112,33 +111,33 @@ Main without includes
         chroot                  off
 
         # The path of the log files
-        logpath                 "/usr/local/var/log"
+        logpath                 "/var/log/yadifa"
 
         # The location of the pid file
-        pidfile                 "/usr/local/var/run/yadifad.pid"
+        pidfile                 "/var/run/yadifa/yadifad.pid"
 
         # The path of the zone files
-        datapath                "/usr/local/var/zones"
+        datapath                "/var/lib/yadifa"
 
         # The path of the DNSSEC keys
-        keyspath                "/usr/local/var/zones/keys"
+        keyspath                "/var/lib/yadifa/keys"
 
         # The path of the transfer and journaling files (AXFR & IXFR)
-        xfrpath                 "/usr/local/var/zones/xfr"
+        xfrpath                 "/var/lib/yadifa/xfr"
 
-        # A string returned by a query of hostname. CH TXT (note if you leave this out, the real hostname will be given back)
+        # A string returned by a query of hostname. CH TXT 
+        # note: if you leave this out, the real hostname will be given back
         hostname                "server\-yadifad"
 
         # An ID returned by a query to id.server. CH TXT
         serverid                "yadifad\-01"
 
         # The version returned by a query to version.yadifa. CH TXT
-        version                 "2.1.2"
+        version                 "2.1.3"
 
-        # Enable EDNS0 support (?)
-        edns0                   on
-
-        # Set the maximum UDP packet size.  Packetsize annot be less than 512.  or more than 65535.  A typical choice is 4096.
+        # Set the maximum UDP packet size.  
+        # note: the packetsize cannot be less than 512 or more than 65535.
+        #       Typical choice is 4096.
         edns0\-max\-size          4096
 
         # The maximum number of parallel TCP queries.
@@ -197,6 +196,10 @@ Main without includes
         #
         # allow\-notify any
         allow\-notify            master,admins
+
+        # If YADIFA has the controller enabled, allow control only for these
+        # clients (none by default)
+        allow\-control           localhost
 
 </main>
 .Ve
@@ -260,6 +263,7 @@ Master\-slave key use
     transferer  key master\-slave
     admins      192.0.2.0/24, 2001:db8::74
     master      192.0.2.53
+    localhost   127.0.0.0/8, ::1
 </acl>
 .Ve
 .PP
@@ -539,13 +543,13 @@ you can indent everything to taste.
 .SH CHANGES
 
 .PP
-Please check the file README
+Please check the file ChangeLog
 from the sources. 
 .PP
 .SH VERSION
 
 .PP
-Version: 2.1.2 of 2015-08-14\&.
+Version: 2.1.3 of 2015-08-14\&.
 .PP
 .SH MAILING LISTS
 

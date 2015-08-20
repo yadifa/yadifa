@@ -63,7 +63,6 @@
 #include "dnsdb/zdb_utils.h"
 #include "dnsdb/zdb_error.h"
 
-#include "dnsdb/zdb_dnsname.h"
 #include "dnsdb/dnsrdata.h"
 
 #include "dnsdb/zdb_listener.h"
@@ -463,7 +462,7 @@ zdb_zone_destroy(zdb_zone *zone)
         
         u32 zone_footprint = zdb_zone_get_struct_size(zone->origin);
         
-        ZFREE_STRING(zone->origin);
+        dnsname_zfree(zone->origin);
 
 #ifdef DEBUG
         zone->origin = NULL;

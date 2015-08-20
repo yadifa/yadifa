@@ -1001,10 +1001,11 @@ parser_type_bit_maps_initialize(parser_s *p, type_bit_maps_context* context)
         {
             const char *text = parser_text(p);
             u32 text_len = parser_text_length(p);
-
-            if(FAIL(return_code = get_type_from_case_name_len(text, text_len, &type)))
+            
+            ya_result ret; // MUST use another return variable than return_code
+            if(FAIL(ret = get_type_from_case_name_len(text, text_len, &type)))
             {
-                return return_code;
+                return ret;
             }
 
             type = ntohs(type); /* types are now stored in NETWORK order */

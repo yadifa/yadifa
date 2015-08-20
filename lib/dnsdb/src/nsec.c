@@ -54,7 +54,6 @@
 
 #include "dnsdb/zdb_rr_label.h"
 #include "dnsdb/zdb_zone_label_iterator.h"
-#include "dnsdb/zdb_dnsname.h"
 #include "dnsdb/zdb_record.h"
 #include "dnsdb/zdb_listener.h"
 
