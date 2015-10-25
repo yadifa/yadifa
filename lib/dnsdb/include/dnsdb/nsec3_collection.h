@@ -40,8 +40,7 @@
  * @{
  */
 
-#ifndef _NSEC3_COLLECTION_H
-#define	_NSEC3_COLLECTION_H
+#pragma once
 
 #include <dnsdb/nsec3_types.h>
 
@@ -258,9 +257,5 @@ AVL_NODE_TYPE* AVL_PREFIXED(avl_find_interval_start)(AVL_TREE_TYPE* tree, AVL_RE
  * AVL definition part ends here
  */
 
-#endif	/* _NSEC3_COLLECTION_H */
-
 /** @} */
-
-/*----------------------------------------------------------------------------*/
 

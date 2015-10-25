@@ -318,29 +318,6 @@ dnssec_keystore_destroy()
     pthread_mutex_unlock(&keystore_mutex);
 }
 
-bool
-dnssec_key_equals(dnssec_key* a, dnssec_key* b)
-{
-    if(a == b)
-    {
-        return TRUE;
-    }
-
-    if((a->tag == b->tag) && (a->flags == b->flags) && (a->algorithm == b->algorithm))
-    {
-        /* Compare the origin */
-
-        if(strcmp(a->origin, b->origin) == 0)
-        {
-            /* Compare the content of the key */
-            
-            return a->vtbl->dnssec_key_equals(a, b);
-        }
-    }
-
-    return FALSE;
-}
-
 /** Generates a private key, store in the keystore
  *  The caller is supposed to create a resource record with this key and add
  *  it to the owner.
@@ -471,7 +448,7 @@ dnssec_key_load_private(u8 algorithm, u16 tag, u16 flags, const char* origin, dn
     
     *out_key = NULL;
     
-    if(key != NULL && ! key->is_private)
+    if(key != NULL && !dnssec_key_is_private(key))
     {
         has_public_key = TRUE;
         key = NULL;
@@ -557,7 +534,7 @@ dnssec_key_store_private(dnssec_key* key)
 {
     char path[MAX_PATH];
 
-    if(key == NULL || key->key.any == NULL || key->origin == NULL || !key->is_private)
+    if(key == NULL || key->key.any == NULL || key->origin == NULL || !dnssec_key_is_private(key))
     {
         return DNSSEC_ERROR_INCOMPLETEKEY;
     }

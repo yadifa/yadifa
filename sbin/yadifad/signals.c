@@ -60,6 +60,8 @@
 
 #if defined(__linux__)
 #include <execinfo.h>
+#elif defined(__sun)
+#include <ucontext.h>
 #endif
 
 #include <dnscore/logger.h>
@@ -577,6 +579,33 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     }
                     else
                     {
+                        log_err(filepath);
+                    }
+#elif defined(__sun)
+                    filepath[0] = '\0';
+                    signal_strcat(filepath, "got signal ");
+                    signal_int2str(number, signo);
+                    signal_strcat(filepath, number);
+                    
+                    signal_strcat(filepath, "\n");
+                    if(source == 0) // 0 -> output to file, else to the logger if it's on
+                    {
+                        writefully(fd, filepath, len);
+                        printstack(fd);
+                        close_ex(fd);
+                    }
+                    else
+                    {
+                        signal_strcat(filepath, "stack trace dumped in ");
+                        signal_strcat(filepath, g_config->log_path);
+                        signal_strcat(filepath, "/");
+                        signal_strcat(filepath, "sig-");
+                        signal_int2str(number, signo);
+                        signal_strcat(filepath, number);
+                        signal_strcat(filepath, "-");
+                        signal_int2str(number, getpid());
+                        signal_strcat(filepath, number);
+                    
                         log_err(filepath);
                     }
 #else

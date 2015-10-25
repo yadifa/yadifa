@@ -39,8 +39,8 @@
  *
  * @{
  */
-#ifndef _NSEC3_H
-#define	_NSEC3_H
+
+#pragma once
 
 #include <dnscore/dnsname.h>
 
@@ -68,7 +68,7 @@
 /**
  * Used to be like this (NSEC3_INCLUDE_ZONE_PATH 1) with older bind
  * Not anymore in 9.7.1 (probably since 9.7.x)
- * Set this to 1 to comply with that old bind issue.
+ * Set this to 1 to comply with that old bind issue. (not recommended)
  * 
  */
 
@@ -86,7 +86,7 @@ extern "C"
 #endif
 
     /* The biggest allowed label is 63 bytes. Let's assume 64. =>
-     * Since the digest is base32hex encoded, is unencoded size is max (64/8)*5 = 40 bytes.
+     * Since the digest is base32hex encoded, is un-encoded size is max (64/8)*5 = 40 bytes.
      * This covers more than a SHA-256 (32 bytes), but it (40) should be the upper bound.
      */
 
@@ -100,11 +100,11 @@ extern "C"
     /* Adds an NSEC3PARAM in a zone (no dups), adds the struct too  */
     ya_result nsec3_add_nsec3param(zdb_zone* zone, u8 default_hash_alg, u8 default_flags, u16 default_iterations, u8 default_salt_len, u8* default_salt);
 
-    /* Remvoes an NSEC3PARAM from a zone, along with the struct.  nsec3_remove_nsec3param_by_record does almost the same. (ixfr) */
+    /* Removes an NSEC3PARAM from a zone, along with the struct.  nsec3_remove_nsec3param_by_record does almost the same. (ixfr) */
     ya_result nsec3_remove_nsec3param(zdb_zone* zone, u8 hash_alg, u8 flags, u16 iterations, u8 salt_len, const u8* salt);
 
-    void nsec3_update_label_update_record(zdb_zone* zone, zdb_rr_label* label, u16 type);
 
+    
     /**
      * Update the NSEC3 record on a label.
      * If there is no such record, calls nsec3_add_label
@@ -120,14 +120,35 @@ extern "C"
 
     bool nsec3_update_label(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_reference labels, s32 labels_top);
 
+    /*
+     * Adds NSEC3 records to a label.  This is NOT an update.
+     * We assume that the labels are not a fqdn bigger than MAX_DOMAIN_LENGTH
+     */
+    
     void nsec3_add_label(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_reference labels, s32 labels_top);
     
+    /**
+     * Unlinks the label from the NSEC3
+     *
+     * Destroy everything NSEC3 from the label
+     *
+     * @param zone
+     * @param label
+     */
+
     void nsec3_remove_label(zdb_zone* zone, zdb_rr_label* label);
 
     /**
+     * 
+     * Links a label to already existing nsec3 items
+     * 
      * This function is for when a label has been added "without intelligence".
      * It will find if the function has got a matching NSEC3 record (by digest)
      * If so, it will link to it.
+     * 
+     * @param zone
+     * @param label
+     * @param fqdn
      */
 
     void nsec3_label_link(zdb_zone* zone, zdb_rr_label* label, const u8 *fqdn);
@@ -179,20 +200,39 @@ extern "C"
                         const nsec3_zone_item **wild_closest_provable_encloser_nsec3p
                         );
 
+    /**
+     * 
+     * @param item
+     * @param param_index
+     * @return 
+     */
+    
     bool nsec3_check_item(nsec3_zone_item *item, u32 param_index);
+    
+    /**
+     * Verifies the coherence of the nsec3 database of a zone
+     * 
+     * @param zone
+     * 
+     */
 
     bool nsec3_check(zdb_zone *zone);
-
-    void nsec3_compute_digest_from_fqdn(const nsec3_zone *n3, const u8 *fqdn, u8 *out_digest);
+       
+    /**
+     * For generates the digest label name of an fqdn for a specified NSEC3PARAM chain
+     * 
+     * @param n3 the NSEC3PARAM chain
+     * @param fqdn the name to digest
+     * @param fqdn_len the size of the name of the digest
+     * @param out_digest the resulting digest in a Pascal kind of format (1 byte lenght, then the bytes)
+     * 
+     * 1 use (zdb_zone_load)
+     */
+    
+    void nsec3_compute_digest_from_fqdn_with_len(const nsec3_zone *n3, const u8 *fqdn, u32 fqdn_len, u8 *digest, bool isstar);
     
 #ifdef	__cplusplus
 }
 #endif
 
-#endif	/* _NSEC3_H */
-
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-
-

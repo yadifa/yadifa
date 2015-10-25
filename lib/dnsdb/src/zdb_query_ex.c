@@ -932,7 +932,7 @@ zdb_query_ex_append_nsec3_nodata(const zdb_zone *zone, const zdb_rr_label *rr_la
                                &nsec3_owner, &nsec3, &nsec3_rrsig,
                                &closest_nsec3_owner, &closest_nsec3, &closest_nsec3_rrsig);
         }
-        else
+        else // type is DS
         {   
             closest_nsec3 = NULL;
             closest_nsec3_rrsig = NULL;

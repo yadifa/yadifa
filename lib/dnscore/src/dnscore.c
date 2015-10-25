@@ -94,6 +94,20 @@
 #endif
 #endif
 
+#ifndef __DATE__
+#define __DATE__ "date?"
+#endif
+
+#ifndef __TIME__
+#define __TIME__ "time?"
+#endif
+
+#ifdef DEBUG
+const char *dnscore_lib = "dnscore " __DATE__ " " __TIME__ " debug";
+#else
+const char *dnscore_lib = "dnscore " __DATE__ " " __TIME__ " release";
+#endif
+
 static const char* ARCH_RECOMPILE_WARNING = "Please recompile with the correct settings.";
 static const char* ARCH_CHECK_SIZE_WARNING = "PANIC: %s does not match the size requirements (%i instead of %i).\n";
 static const char* ARCH_CHECK_SIGN_WARNING = "PANIC: %s does not match the sign requirements.\n";
@@ -203,35 +217,32 @@ stdstream_init()
 static void
 stdtream_detach_fd(output_stream *os)
 {
+    /*
+     * Ensure that the stream that will be detached is one of the valid ones
+     */
     output_stream_flush(os);
-    if(!is_mt_output_stream(os))
-    {
-        log_err("unexpected stream in term");
-        exit(EXIT_FAILURE);
-    }
-    os = mt_output_stream_get_filtered(os);
-    if(!is_buffer_output_stream(os))
-    {
-        log_err("unexpected stream in term");
-        exit(EXIT_FAILURE);
-    }
-    os = buffer_output_stream_get_filtered(os);
     if(!is_fd_output_stream(os))
     {
-        log_err("unexpected stream in term");
-        exit(EXIT_FAILURE);
+        if(!is_mt_output_stream(os))
+        {
+            log_err("unexpected stream in term");
+            exit(EXIT_FAILURE);
+        }
+        os = mt_output_stream_get_filtered(os);
+        if(!is_buffer_output_stream(os))
+        {
+            log_err("unexpected stream in term");
+            exit(EXIT_FAILURE);
+        }
+        os = buffer_output_stream_get_filtered(os);
+        if(!is_fd_output_stream(os))
+        {
+            log_err("unexpected stream in term");
+            exit(EXIT_FAILURE);
+        }
+        output_stream_flush(os);
     }
-    output_stream_flush(os);
     fd_output_stream_detach(os);
-}
-
-void
-stdtream_detach_fd_and_close()
-{
-    stdtream_detach_fd(&__termout__);
-    output_stream_close(&__termout__);
-    stdtream_detach_fd(&__termerr__);
-    output_stream_close(&__termerr__);
 }
 
 static void
@@ -239,6 +250,64 @@ stdstream_flush_both_terms()
 {
     output_stream_flush(&__termout__);
     output_stream_flush(&__termerr__);
+}
+
+/**
+ * Detaches the fd at the bottom of the mt(buffer(file(fd))) stream ... if it can.
+ * Closes the stream.
+ * 
+ * @param os
+ * @return 1 if an seemingly valid fd has been found and detached.  0 otherwise.
+ */
+
+ya_result
+stdtream_detach_fd_and_close_output_stream(output_stream *os)
+{
+    output_stream *wos = os;
+    ya_result ret = 0;
+    
+    output_stream_flush(wos);
+    
+    if(is_mt_output_stream(wos))
+    {
+        wos = mt_output_stream_get_filtered(wos);
+    }
+    if(is_buffer_output_stream(wos))
+    {
+        wos = buffer_output_stream_get_filtered(wos);
+    }
+    if(is_fd_output_stream(wos))
+    {
+        stdtream_detach_fd(wos);
+        ret = 1;
+    }
+    output_stream_close(os);
+    return ret;
+}
+
+void
+stdtream_detach_fd_and_close()
+{
+    stdtream_detach_fd_and_close_output_stream(&__termout__);
+    stdtream_detach_fd_and_close_output_stream(&__termerr__);
+}
+
+bool
+stdstream_is_tty(output_stream *os)
+{
+    if(is_mt_output_stream(os))
+    {
+        os = mt_output_stream_get_filtered(os);
+    }
+    
+    if(is_buffer_output_stream(os))
+    {
+        os = buffer_output_stream_get_filtered(os);
+    }
+    
+    bool ret = is_fd_output_stream(os);
+    
+    return ret;
 }
 
 void rfc_init();
@@ -476,7 +545,7 @@ void log_assert__(bool b, const char *txt, const char *file, int line)
     {
         if(logger_is_running() && (g_system_logger != NULL))
         {
-            logger_handle_exit_level(MAX_U32);
+            //logger_handle_exit_level(MAX_U32);
             log_crit("assert: at %s:%d: %s", file, line, txt); /* this is in zassert */
             logger_flush();
         }
@@ -530,8 +599,10 @@ dnscore_finalize()
     dnscore_stop_timer();               // timer uses logger
     dnscore_wait_timer_stopped();
     
-    config_finalise();
+    alarm_finalise();
     
+    config_finalise();
+        
     async_message_pool_finalize();
 
     stdstream_flush_both_terms();

@@ -30,6 +30,22 @@
  *
  *------------------------------------------------------------------------------
  *
+ *
+ *      SVN Program:
+ *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.4-public/lib/dnscore/include/dnscore/avl.c.inc $
+ *
+ *      Creation Date:
+ *              2009-01-07
+ *
+ *      Last Update:
+ *              $Date: 2015-09-29 08:21:13 +0200 (Die, 29 Sep 2015) $
+ *              $Revision: 5544 $
+ *
+ *      Last Change:
+ *              $Author: ericdf $
+ *
+ *------------------------------------------------------------------------------
+ *
  * DOCUMENTATION */
 /** @defgroup collections Generic collections functions
  *  @ingroup dnscore
@@ -152,7 +168,7 @@ static s8 AVL_BALANCE_TO_DIR_[5] = {DIR_LEFT, DIR_LEFT, DIR_CRASH, DIR_RIGHT, DI
                     flushout();                                 \
                     flusherr();                                 \
                     puts("assertion failed on a " TOSTRING(AVL_NODE_TYPE));fflush(NULL);      \
-                    exit(253);                                  \
+                    abort();                                    \
                 }                                               \
         }                                                       \
     }
@@ -1454,6 +1470,8 @@ AVL_PREFIXED(avl_node_mod_prev)(const AVL_NODE_TYPE* node)
         {
             prev = AVL_RIGHT_CHILD(prev);
         }
+        
+        // at this point prev cannot be NULL
     }
     else
     {
@@ -1477,19 +1495,29 @@ AVL_PREFIXED(avl_node_mod_prev)(const AVL_NODE_TYPE* node)
                 {
                     prev = (AVL_NODE_TYPE*)node; // node is not the starting point anymore, so casting to not-const is ok
                 }
+                
+                // prev is not NULL
 
                 break;
             }
+            
+            // prev is not NULL
 
             if(AVL_RIGHT_CHILD(prev) == node)
             {
+                // prev is not NULL
+                
                 break;
             }
 
             node = prev;
         }
+        
+        // prev cannot be NULL
     }
-
+    
+    // not NULL
+    
     return prev;
 }
 

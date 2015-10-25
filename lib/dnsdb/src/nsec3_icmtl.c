@@ -149,7 +149,7 @@ nsec3_remove_nsec3(zdb_zone* zone, zdb_packed_ttlrdata* nsec3param)
 }
 
 void
-nsec3_remove_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec3_rdata)
+nsec3_remove_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec3_rdata, u16 nsec3_rdata_size)
 {
     nsec3_zone* n3 = zone->nsec.nsec3;
 
@@ -184,7 +184,10 @@ nsec3_remove_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec
                     if(item->sc > 0)
                     {
                         nsec3_zone_item* prev = nsec3_avl_node_mod_prev(item);
-                        if(prev != NULL)
+                        
+                        yassert(prev != NULL);
+                        
+                        if(prev != item)
                         {
                             nsec3_move_all_star(item, prev);
                         }
@@ -217,7 +220,7 @@ nsec3_remove_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec
 }
 
 void
-nsec3_remove_nsec3_by_digest(zdb_zone* zone, const u8 *nsec3_digest, const u8* nsec3_rdata)
+nsec3_remove_nsec3_by_digest(zdb_zone* zone, const u8 *nsec3_digest, const u8* nsec3_rdata, u16 nsec3_rdata_size)
 {
     nsec3_zone* n3 = zone->nsec.nsec3;
 
@@ -273,7 +276,7 @@ nsec3_remove_nsec3_by_digest(zdb_zone* zone, const u8 *nsec3_digest, const u8* n
 
 
 nsec3_zone_item*
-nsec3_get_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec3_rdata)
+nsec3_get_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec3_rdata, u16 nsec3_rdata_size)
 {
     nsec3_zone* n3 = zone->nsec.nsec3;
 
@@ -553,6 +556,11 @@ void nsec3_icmtl_replay_nsec3param_del(nsec3_icmtl_replay *replay, const zdb_ttl
 {
     assert(ttlrdata->next == NULL);
     
+#if DEBUG
+    rdata_desc nsec3param_rdata = { TYPE_NSEC3PARAM, ttlrdata->rdata_size, ttlrdata->rdata_pointer};    
+    log_debug("journal: %{dnsname}: will del %{typerdatadesc}", replay->zone->origin, &nsec3param_rdata);
+#endif
+    
     ptr_node *node = ptr_set_avl_find(&replay->nsec3param_del, ttlrdata->rdata_pointer);
     
     if(node == NULL)
@@ -568,9 +576,20 @@ void nsec3_icmtl_replay_nsec3param_del(nsec3_icmtl_replay *replay, const zdb_ttl
         
         if(added_node != NULL)
         {
+#if DEBUG
+            log_debug("journal: %{dnsname}: would not add %{typerdatadesc} anymore", replay->zone->origin, &nsec3param_rdata);
+#endif
+            
             ptr_set_avl_delete(&replay->nsec3param_add, ttlrdata->rdata_pointer);
 
             zdb_ttlrdata* nsec3param = (zdb_ttlrdata*)added_node->value;
+            
+#if DEBUG
+            nsec3param_rdata.len = nsec3param->rdata_size;
+            nsec3param_rdata.rdata = nsec3param->rdata_pointer;
+            log_debug("journal: %{dnsname}: would not add %{typerdatadesc} anymore", replay->zone->origin, &nsec3param_rdata);
+#endif
+            
             ptr_set_avl_delete(&replay->nsec3param_add, nsec3param->rdata_pointer);
             zdb_ttlrdata_delete(nsec3param);
         }
@@ -581,6 +600,11 @@ void nsec3_icmtl_replay_nsec3param_add(nsec3_icmtl_replay *replay, const zdb_ttl
 {
     assert(ttlrdata->next == NULL);
     
+#if DEBUG
+    rdata_desc nsec3param_rdata = { TYPE_NSEC3PARAM, ttlrdata->rdata_size, ttlrdata->rdata_pointer};    
+    log_debug("journal: %{dnsname}: will add %{typerdatadesc}", replay->zone->origin, &nsec3param_rdata);
+#endif
+    
     ptr_node *node = ptr_set_avl_find(&replay->nsec3param_add, ttlrdata->rdata_pointer);
     
     if(node == NULL)
@@ -590,15 +614,22 @@ void nsec3_icmtl_replay_nsec3param_add(nsec3_icmtl_replay *replay, const zdb_ttl
         ptr_node *node = ptr_set_avl_insert(&replay->nsec3param_add, clone->rdata_pointer);
         node->value = clone;
         
-        /* If the node was previously deleted, don't delete it anymore */
+        /* If the node was previously marked as deleted, don't delete it anymore */
         
         ptr_node *added_node = ptr_set_avl_find(&replay->nsec3param_del, ttlrdata->rdata_pointer);
         
         if(added_node != NULL)
         {
-            ptr_set_avl_delete(&replay->nsec3param_del, ttlrdata->rdata_pointer);
-
             zdb_ttlrdata* nsec3param = (zdb_ttlrdata*)added_node->value;
+            
+#if DEBUG
+            log_debug("journal: %{dnsname}: would not delete %{typerdatadesc} anymore", replay->zone->origin, &nsec3param_rdata);
+            nsec3param_rdata.len = nsec3param->rdata_size;
+            nsec3param_rdata.rdata = nsec3param->rdata_pointer;
+            log_debug("journal: %{dnsname}: would not delete %{typerdatadesc} anymore", replay->zone->origin, &nsec3param_rdata);
+#endif
+            
+            ptr_set_avl_delete(&replay->nsec3param_del, ttlrdata->rdata_pointer);
             ptr_set_avl_delete(&replay->nsec3param_del, nsec3param->rdata_pointer);
             zdb_ttlrdata_delete(nsec3param);
         }
@@ -608,6 +639,7 @@ void nsec3_icmtl_replay_nsec3param_add(nsec3_icmtl_replay *replay, const zdb_ttl
 void nsec3_icmtl_replay_nsec3_del(nsec3_icmtl_replay *replay, const u8* fqdn, const zdb_ttlrdata *ttlrdata)
 {
     assert(ttlrdata->next == NULL);
+
     
     ptr_node *node = ptr_set_avl_insert(&replay->nsec3_del, (u8*)fqdn);
     if(node->value == NULL)
@@ -625,8 +657,19 @@ void nsec3_icmtl_replay_nsec3_del(nsec3_icmtl_replay *replay, const u8* fqdn, co
 void nsec3_icmtl_replay_nsec3_add(nsec3_icmtl_replay *replay, const u8* fqdn, const zdb_ttlrdata *ttlrdata)
 {
     assert(ttlrdata->next == NULL);
+
     
-    ptr_node *node = ptr_set_avl_insert(&replay->nsec3_add, (u8*)fqdn);
+    ptr_node *node;
+    
+    node = ptr_set_avl_find(&replay->nsec3param_add, ttlrdata->rdata_pointer);
+    if(node == NULL)
+    {
+//        log_debug1("nsec3_icmtl_replay_nsec3_add(%p, %{dnsname}, %{typerdatadesc}) : no NSEC3PARAM for this NSEC3 : deducing new chain", replay, fqdn, &rdata);
+        nsec3_icmtl_replay_nsec3param_add(replay, ttlrdata);
+//        log_debug1("nsec3_icmtl_replay_nsec3_add(%p, %{dnsname}, %{typerdatadesc}) : resuming", replay, fqdn, &rdata);
+    }
+    
+    node = ptr_set_avl_insert(&replay->nsec3_add, (u8*)fqdn);
     if(node->value == NULL)
     {
         node->key = dnsname_dup(fqdn);
@@ -642,8 +685,50 @@ void nsec3_icmtl_replay_nsec3_add(nsec3_icmtl_replay *replay, const u8* fqdn, co
 void nsec3_icmtl_replay_nsec3_rrsig_del(nsec3_icmtl_replay *replay, const u8* fqdn, const zdb_ttlrdata *ttlrdata)
 {
     assert(ttlrdata->next == NULL);
+    
 
-    ptr_node *node = ptr_set_avl_insert(&replay->nsec3rrsig_del, (u8*)fqdn);
+
+    ptr_node *node;
+
+    // ensure we are not working for no good reason
+    
+    node = ptr_set_avl_find(&replay->nsec3rrsig_add, (u8*)fqdn);
+    
+    if(node != NULL)
+    {
+        // there are signatures for this fqdn
+        
+        // if the one we are about to add is also deleted, let's cancel them both
+        
+        zdb_packed_ttlrdata **nsec3_rrsig_ptr = (zdb_packed_ttlrdata **)&node->value;
+        zdb_packed_ttlrdata *nsec3_rrsig = (zdb_packed_ttlrdata *)node->value;
+
+        while(nsec3_rrsig != NULL)
+        {
+            if((nsec3_rrsig->rdata_size == ttlrdata->rdata_size) && (RRSIG_KEY_NATIVETAG(nsec3_rrsig) == GET_U16_AT(((u8*)ttlrdata->rdata_pointer)[16])))
+            {
+                /* got a match ? */
+                
+                if(memcmp(&nsec3_rrsig->rdata_start[0], ttlrdata->rdata_pointer, nsec3_rrsig->rdata_size) == 0)
+                {
+
+                    // got a match ! delete the addition and forget the removal
+                    *nsec3_rrsig_ptr = nsec3_rrsig->next;
+                    ZDB_RECORD_ZFREE(nsec3_rrsig);
+                    
+                    return;
+                }
+            }
+            
+            nsec3_rrsig_ptr = &nsec3_rrsig->next;
+            nsec3_rrsig = nsec3_rrsig->next;
+        }
+    }
+    
+    // done checking for jobs cancelling each-other
+    
+    node = ptr_set_avl_insert(&replay->nsec3rrsig_del, (u8*)fqdn);
+    
     if(node->value == NULL)
     {
         node->key = dnsname_dup(fqdn);
@@ -651,7 +736,8 @@ void nsec3_icmtl_replay_nsec3_rrsig_del(nsec3_icmtl_replay *replay, const u8* fq
     }
     else
     {
-        //zdb_ttlrdata_delete(node->data);
+        // insert in front
+        
         zdb_ttlrdata *newone = zdb_ttlrdata_clone(ttlrdata);
         newone->next = (zdb_ttlrdata*)node->value;
         node->value = newone;
@@ -664,16 +750,53 @@ void nsec3_icmtl_replay_nsec3_rrsig_del(nsec3_icmtl_replay *replay, const u8* fq
 
 void nsec3_icmtl_replay_nsec3_rrsig_add(nsec3_icmtl_replay *replay, const u8* fqdn, zdb_packed_ttlrdata *packed_ttlrdata)
 {
-    ptr_node *node = ptr_set_avl_insert(&replay->nsec3rrsig_add, (u8*)fqdn);
+
+    
+    ptr_node *node;
+    
+    node = ptr_set_avl_find(&replay->nsec3rrsig_del, (u8*)fqdn);
+    
+    if(node != NULL)
+    {
+        zdb_ttlrdata **ttlrdata_ptr = (zdb_ttlrdata**)&node->value;
+        zdb_ttlrdata *ttlrdata = (zdb_ttlrdata*)node->value;
+        while(ttlrdata != NULL)
+        {
+            if((ttlrdata->rdata_size == packed_ttlrdata->rdata_size) && ((GET_U16_AT(((u8*)ttlrdata->rdata_pointer)[16])) == RRSIG_KEY_NATIVETAG(packed_ttlrdata)))
+            {
+                /* got a match ? */
+                
+                if(memcmp(ttlrdata->rdata_pointer, &packed_ttlrdata->rdata_start[0], packed_ttlrdata->rdata_size) == 0)
+                {
+
+                    // got a match ! delete the addition and forget the removal
+                    
+                    *ttlrdata_ptr = ttlrdata->next;
+                    zdb_ttlrdata_delete(ttlrdata);
+                    
+                    ZDB_RECORD_ZFREE(packed_ttlrdata);
+                    
+                    return;
+                }
+            }
+            
+            ttlrdata_ptr = &ttlrdata->next;
+            ttlrdata = ttlrdata->next;
+        }
+    }
+    
+    node = ptr_set_avl_insert(&replay->nsec3rrsig_add, (u8*)fqdn);
     
     if(node->value == NULL)
     {
+        // new entry
+        
         node->key = dnsname_dup(fqdn);
         node->value = packed_ttlrdata;
     }
     else
     {
-        //zdb_ttlrdata_delete(node->data);
+        // already had this entry: append at the end
 
         zdb_packed_ttlrdata **nsec3_rrsig_ptr = (zdb_packed_ttlrdata **)&node->value;
         zdb_packed_ttlrdata *nsec3_rrsig = (zdb_packed_ttlrdata *)node->value;
@@ -704,6 +827,8 @@ void nsec3_icmtl_replay_nsec3_rrsig_add(nsec3_icmtl_replay *replay, const u8* fq
 void
 nsec3_icmtl_replay_label_add(nsec3_icmtl_replay *replay, const u8 *fqdn, dnslabel_vector_reference labels, s32 label_top)
 {
+
+    
     zdb_rr_label *rr_label = zdb_rr_label_add(replay->zone, labels, label_top);
 
     u16 flags = rr_label->flags;
@@ -725,6 +850,7 @@ nsec3_icmtl_replay_label_add(nsec3_icmtl_replay *replay, const u8 *fqdn, dnslabe
                 node->key = dnsname_dup(fqdn);
                 node->value = rr_label;
             }
+
         }
     }
 }
@@ -732,7 +858,11 @@ nsec3_icmtl_replay_label_add(nsec3_icmtl_replay *replay, const u8 *fqdn, dnslabe
 ya_result
 nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
 {
+
+    
     bool nsec3param_added = FALSE;
+    
+
     
     if(!ptr_set_avl_isempty(&replay->nsec3param_add))
     {
@@ -745,6 +875,8 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             zdb_ttlrdata* nsec3param = (zdb_ttlrdata*)node->value;
             
             nsec3_zone* n3 = nsec3_zone_get_from_rdata(replay->zone, nsec3param->rdata_size, nsec3param->rdata_pointer);
+            
+
             
             if(n3 == NULL)
             {
@@ -770,6 +902,8 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
         
         ptr_set_avl_destroy(&replay->nsec3param_add);
     }
+    
+
     
     if(!ptr_set_avl_isempty(&replay->nsec3_del))
     {
@@ -829,7 +963,7 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
                 else
                 {
                     log_err("journal: NSEC3: %{dnsname} has not been found in the NSEC3 database (del/add)", fqdn);
-                    
+
                     return ZDB_JOURNAL_NSEC3_LABEL_NOT_FOUND_IN_DB;
                 }
             }
@@ -848,7 +982,7 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
 
                 if(add_item != NULL)
                 {
-                    nsec3_remove_nsec3_by_name(replay->zone, fqdn, ttlrdata->rdata_pointer);
+                    nsec3_remove_nsec3_by_name(replay->zone, fqdn, ttlrdata->rdata_pointer, ttlrdata->rdata_size);
                 }
                 else
                 {
@@ -869,6 +1003,9 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
 
         ptr_set_avl_destroy(&replay->nsec3_del);
     }
+    
+
+    
     if(!ptr_set_avl_isempty(&replay->nsec3_add))
     {
         /* stuff to add */
@@ -935,10 +1072,10 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
                     rdata_desc type_len_rdata = {TYPE_NSEC3, nsec3->rdata_size, nsec3->rdata_start };
                     log_debug("journal: NSEC3: ? %{typerdatadesc}", &type_len_rdata);
 #endif                    
-                    nsec3_remove_nsec3_by_digest(replay->zone, add_item->digest, ttlrdata->rdata_pointer);
+                    nsec3_remove_nsec3_by_digest(replay->zone, add_item->digest, ttlrdata->rdata_pointer, ttlrdata->rdata_size);
                 }
             }
-            
+            // only adds the NSEC3, does not link with the label
             nsec3_add_nsec3_by_name(replay->zone, fqdn, ttlrdata->rdata_pointer, ttlrdata->rdata_size);
 
             zdb_ttlrdata_delete(ttlrdata);
@@ -950,6 +1087,9 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
 
         ptr_set_avl_destroy(&replay->nsec3_add);
     }
+    
+
+    
     if(!ptr_set_avl_isempty(&replay->nsec3rrsig_del))
     {
         /* stuff to add */
@@ -995,6 +1135,9 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
 
         ptr_set_avl_destroy(&replay->nsec3rrsig_del);
     }
+    
+
+    
     if(!ptr_set_avl_isempty(&replay->nsec3rrsig_add))
     {
         /* stuff to add */
@@ -1043,6 +1186,9 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
 
         ptr_set_avl_destroy(&replay->nsec3rrsig_add);
     }
+    
+
+    
     if(!ptr_set_avl_isempty(&replay->nsec3_labels))
     {
         /* labels to update */
@@ -1082,6 +1228,7 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
     
     if(nsec3param_added)
     {
+
         /*
          * ALL the labels of the zone have to be linked again.
          */
@@ -1104,6 +1251,8 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
         }
     }
     
+
+    
     if(!ptr_set_avl_isempty(&replay->nsec3param_del))
     {
         ptr_set_avl_iterator n3p_avl_iter;
@@ -1115,8 +1264,10 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             zdb_ttlrdata* nsec3param = (zdb_ttlrdata*)node->value;
             
             nsec3_zone* n3 = nsec3_zone_get_from_rdata(replay->zone, nsec3param->rdata_size, nsec3param->rdata_pointer);
+
+
             
-            if(n3 == NULL)
+            if(n3 != NULL)
             {
                 nsec3_zone_destroy(replay->zone, n3);
                 

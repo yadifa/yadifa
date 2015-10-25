@@ -54,9 +54,10 @@
 #include <dnscore/parsing.h>
 #include <dnscore/fdtools.h>
 #include <dnscore/chroot.h>
-#include <dnsdb/dnssec.h>
 
 #include <dnsdb/journal.h>
+#include <dnsdb/dnssec.h>
+#include <dnsdb/dnssec_keystore.h>
 
 #include "confs.h"
 #include "config_error.h"

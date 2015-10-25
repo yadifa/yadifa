@@ -86,6 +86,18 @@ extern "C" {
     
     void bytearray_output_stream_set(output_stream* out_stream, u8 *buffer, u32 buffer_size, bool owned);
 
+    /**
+     
+     * @param out_stream
+     * @param by
+     * @return the actual rewind_count
+     */
+    
+    u32 bytearray_output_stream_rewind(output_stream* out_stream, u32 rewind_count);
+    
+    u8* bytearray_output_stream_zdup(output_stream* out_stream);
+    u8* bytearray_output_stream_dup(output_stream* out_stream);
+    
 #ifdef	__cplusplus
 }
 #endif

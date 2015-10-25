@@ -281,7 +281,7 @@ parse_s32_check_range_len_base10(const char *src, u32 src_len, s32 *dst, s32 min
     
     *dst = (s32)output_value;
 
-    return output_value;
+    return SUCCESS;
 }
 
 /** \brief Converts a string to an epoch

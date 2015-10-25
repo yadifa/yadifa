@@ -320,18 +320,7 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
 
             // from this point *zone cannot be read
 
-#if 0
-            /// @todo invalidate zone if "drop-before-load"
-            
-            if(!zdb_zone_isinvalid(db, zone_desc_origin, zone_desc->qclass))
-            {
-                log_debug("database_load_zone: requesting to invalidate the zone '%{dnsname}'", origin);
 
-                database_invalidate_zone(db, zone_desc, TRUE);
-                zone_unlock(zone_desc, ZONE_LOCK_LOAD);
-                return ;
-            }
-#endif
             // at this point, the file is about to be loaded.  It is the right time to test the drop-before-load flag
 
             if(is_drop_before_load)
@@ -416,7 +405,12 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // r
     {
         if(!zone_file_soa_serial_set)
         {
-            if(ISOK(return_value = zdb_zone_getserial(zone_pointer_out, &zone_file_soa_serial)))
+            // there is no need to lock, but this is cheap and it silents some error reporting from zdb_zone_getserial
+            zdb_zone_lock(zone_pointer_out, ZDB_ZONE_MUTEX_LOAD);
+            return_value = zdb_zone_getserial(zone_pointer_out, &zone_file_soa_serial);
+            zdb_zone_unlock(zone_pointer_out, ZDB_ZONE_MUTEX_LOAD);
+                    
+            if(ISOK(return_value))
             {
                 //log_err("zone load: could not get the zone serial from the loaded zone '%s': %r", zone_desc->domain, return_value);
                 zone_file_soa_serial_set = TRUE;
@@ -945,7 +939,16 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // re
             }
             else
             {
-                log_err("zone load: '%{dnsname}': could not get SOA from '%s': %r", zone_desc_origin, file_name, return_value);
+                const char *message = zone_reader_get_last_error_message(&zr);
+                
+                if(message == NULL)
+                {
+                    log_err("zone load: '%{dnsname}': could not get SOA from '%s': %r", zone_desc_origin, file_name, return_value);
+                }
+                else
+                {
+                    log_err("zone load: '%{dnsname}': could not get SOA from '%s': %s: %r", zone_desc_origin, file_name, message, return_value);
+                }
             }
 
             zone_reader_close(&zr);
@@ -991,7 +994,16 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, zdb_zone **zone) // re
         }
         else
         {
-            log_err("zone load: '%{dnsname}': could not get SOA from AXFR file: %r", zone_desc_origin, return_value);
+            const char *message = zone_reader_get_last_error_message(&zr);
+                
+            if(message == NULL)
+            {
+                log_err("zone load: '%{dnsname}': could not get SOA from AXFR file: %r", zone_desc_origin, return_value);
+            }
+            else
+            {
+                log_err("zone load: '%{dnsname}': could not get SOA from AXFR file: %s: %r", zone_desc_origin, message, return_value);
+            }
         }
 
         zone_reader_close(&zr);

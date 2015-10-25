@@ -264,6 +264,11 @@ static inline s32 ptr_vector_size(const ptr_vector *v)
     return v->offset + 1;
 }
 
+static inline s32 ptr_vector_last_index(const ptr_vector *v)
+{
+    return v->offset;
+}
+
 static inline s32 ptr_vector_capacity(const ptr_vector *v)
 {
     return v->size;
@@ -280,6 +285,40 @@ static inline void ptr_vector_end_swap(ptr_vector *pv,s32 idx)
     pv->data[idx] = pv->data[pv->offset];
     pv->data[pv->offset] = tmp;
 }
+
+/**
+ * Inserts a value at position, pushing items from this position up
+ * Potentially very slow.
+ * 
+ * @param pv
+ * @param idx
+ */
+
+void ptr_vector_insert_at(ptr_vector *pv, s32 idx, void *val);
+
+/**
+ * Inserts multiple values at position, pushing items from this position up
+ * Potentially very slow.
+ * 
+ * @param pv
+ * @param idx
+ * @param valp  an array of pointers that will be inserted
+ * @param n the size of the array of pointers
+ */
+
+void ptr_vector_insert_array_at(ptr_vector *pv, s32 idx, void **valp, u32 n);
+
+/**
+ * 
+ * Removes a value at position, pulling items above this position down
+ * Potentially very slow
+ * 
+ * @param pv
+ * @param idx
+ * @return the removed value
+ */
+
+void* ptr_vector_remove_at(ptr_vector *pv, s32 idx);
 
 #ifdef	__cplusplus
 }

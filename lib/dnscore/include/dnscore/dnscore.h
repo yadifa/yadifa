@@ -105,6 +105,16 @@ bool dnscore_shuttingdown();
 
 void dnscore_signature_check(int so_mutex_t, int so_group_mutex_t);
 
+/**
+ * Will try to find a FD in MT(BUFFER(FILE(fd)))
+ * Returns true if it has been found (valid or invalid)
+ * 
+ * @param os
+ * @return true iff there is an fd at the bottom.
+ */
+
+bool stdstream_is_tty(output_stream *os);
+
 #define DNSCORE_API_CHECK() dnscore_signature_check(sizeof(mutex_t), sizeof(group_mutex_t))
 
 #ifdef	__cplusplus

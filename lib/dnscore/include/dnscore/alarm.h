@@ -96,6 +96,7 @@ struct alarm_event_node
 typedef struct alarm_event_node alarm_event_node;
 
 void alarm_init();
+void alarm_finalise();
 
 /**
  * Alarm events MUST be allocated through this.

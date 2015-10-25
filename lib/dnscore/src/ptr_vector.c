@@ -69,7 +69,14 @@ void
 ptr_vector_init_ex(ptr_vector* v, s32 initial_capacity)
 {
     v->size = initial_capacity;
-    MALLOC_OR_DIE(void**, v->data, v->size * sizeof (void*), PTR_VECTOR_TAG);
+    if(initial_capacity > 0)
+    {
+        MALLOC_OR_DIE(void**, v->data, v->size * sizeof (void*), PTR_VECTOR_TAG);
+    }
+    else
+    {
+        v->data = NULL;
+    }
     v->offset = -1;
 }
 
@@ -342,7 +349,7 @@ ptr_vector_index_of(const ptr_vector* v, const void* what, ptr_vector_search_cal
 }
 
 /**
- * Look in the vector for an item using a key and a comparison function
+ * Look in the SORTED vector for an item using a key and a comparison function
  * The callback needs to tell equal (0) smaller (<0) or bigger (>0)
  * 
  * @param v         a pointer to the ptr_vector structure
@@ -398,6 +405,84 @@ ptr_vector_search(const ptr_vector* v, const void* what, ptr_vector_search_callb
     }
 
     return NULL;
+}
+
+/**
+ * Inserts a value at position, pushing items from this position up
+ * Potentially very slow.
+ * 
+ * @param pv
+ * @param idx
+ */
+
+void
+ptr_vector_insert_at(ptr_vector *pv, s32 idx, void *val)
+{
+    if(idx <= pv->offset)
+    {
+        ptr_vector_ensures(pv, pv->offset + 1);
+        memmove(&pv->data[idx + 1], &pv->data[idx], (pv->offset - idx) * sizeof(void*));
+        pv->data[idx] = val;
+    }
+    else
+    {
+        ptr_vector_ensures(pv, idx + 1);
+        memset(&pv->data[pv->offset + 1], 0, &pv->data[idx] - &pv->data[pv->offset + 1]);
+        pv->data[idx] = val;
+        pv->offset = idx;
+    }
+}
+
+/**
+ * Inserts multiple values at position, pushing items from this position up
+ * Potentially very slow.
+ * 
+ * @param pv
+ * @param idx
+ * @param valp  an array of pointers that will be inserted
+ * @param n the size of the array of pointers
+ */
+
+void
+ptr_vector_insert_array_at(ptr_vector *pv, s32 idx, void **valp, u32 n)
+{
+    if(idx <= pv->offset)
+    {
+        ptr_vector_ensures(pv, pv->offset + n);
+        memmove(&pv->data[idx + n], &pv->data[idx], (pv->offset - idx + n) * sizeof(void*));
+        memcpy(&pv->data[idx], valp, n);
+    }
+    else
+    {
+        ptr_vector_ensures(pv, idx + n);
+        memset(&pv->data[pv->offset + n], 0, &pv->data[idx] - &pv->data[pv->offset + n]);
+        memcpy(&pv->data[idx], valp, n);
+        pv->offset = idx + n - 1;
+    }
+}
+
+/**
+ * 
+ * Removes a value at position, pulling items above this position down
+ * Potentially very slow
+ * 
+ * @param pv
+ * @param idx
+ * @return the removed value
+ */
+
+void*
+ptr_vector_remove_at(ptr_vector *pv, s32 idx)
+{
+    void *data = pv->data[idx];
+    
+    if(idx <= pv->offset)
+    {
+        memmove(&pv->data[idx], &pv->data[idx + 1], (pv->offset - idx) * sizeof(void*));
+        --pv->offset;
+    }
+    
+    return data;
 }
 
 /** @} */

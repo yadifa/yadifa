@@ -246,6 +246,52 @@ bytearray_output_stream_set(output_stream* stream, u8 *buffer, u32 buffer_size, 
     data->flags = (data->flags & BYTEARRAY_ZALLOC_CONTEXT) | ((owned)?BYTEARRAY_OWNED:0);
 }
 
+    /**
+     
+     * @param out_stream
+     * @param by
+     * @return the actual rewind_count
+     */
+    
+u32
+bytearray_output_stream_rewind(output_stream* out_stream, u32 rewind_count)
+{
+    bytearray_output_stream_data* data = (bytearray_output_stream_data*)out_stream->data;
+    if(rewind_count < data->buffer_offset)
+    {
+        data->buffer_offset -= rewind_count;
+    }
+    else
+    {
+        rewind_count = data->buffer_offset;
+        data->buffer_offset = 0;
+    }
+    
+    return rewind_count;
+}
+
+u8*
+bytearray_output_stream_zdup(output_stream* out_stream)
+{
+    bytearray_output_stream_data* data = (bytearray_output_stream_data*)out_stream->data;
+    u8 *ret;
+    u32 n = MAX(data->buffer_offset, 1); // because allocating 0 bytes can be an hassle
+    ZALLOC_ARRAY_OR_DIE(u8*, ret, n, GENERIC_TAG);
+    memcpy(ret, data->buffer, n);
+    return ret;
+}
+
+u8*
+bytearray_output_stream_dup(output_stream* out_stream)
+{
+    bytearray_output_stream_data* data = (bytearray_output_stream_data*)out_stream->data;
+    u8 *ret;
+    u32 n = MAX(data->buffer_offset, 1); // because allocating 0 bytes can be an hassle
+    MALLOC_OR_DIE(u8*, ret, n, GENERIC_TAG);
+    memcpy(ret, data->buffer, n);
+    return ret;
+}
+
 /** @} */
 
 /*----------------------------------------------------------------------------*/

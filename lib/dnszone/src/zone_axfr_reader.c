@@ -54,7 +54,6 @@
 #include <unistd.h>
 #include <stddef.h>
 
-#include <dnscore/format.h>
 #include <dnscore/logger.h>
 #include <dnscore/buffer_input_stream.h>
 #include <dnscore/file_input_stream.h>
@@ -212,6 +211,14 @@ zone_axfr_reader_handle_error(zone_reader *zr, ya_result error_code)
     }
 }
 
+static const char*
+zone_axfr_reader_get_last_error_message(zone_reader *zr)
+{
+    // not supported yet
+    (void)zr;
+    return NULL;
+}
+
 static zone_reader_vtbl zone_axfr_reader_vtbl =
 {
     zone_axfr_reader_read_record,
@@ -220,6 +227,7 @@ static zone_reader_vtbl zone_axfr_reader_vtbl =
     zone_axfr_reader_close,
     zone_axfr_reader_handle_error,
     zone_axfr_reader_canwriteback,
+    zone_axfr_reader_get_last_error_message,
     "zone_axfr_reader"
 };
 

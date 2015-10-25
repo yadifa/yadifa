@@ -77,4 +77,12 @@ static inline bool zdb_islocked(zdb *db)
     return r;
 }
 
+static inline bool zdb_islocked_by(zdb *db, u8 owner)
+{
+    mutex_lock(&db->mutex.mutex);
+    bool r = (db->mutex.owner == (owner & 0x7f));
+    mutex_unlock(&db->mutex.mutex);
+    return r;
+}
+
 /** @} */

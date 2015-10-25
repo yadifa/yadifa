@@ -169,7 +169,6 @@ list_sl_remove_match(list_sl_s *list, result_callback_function *comparator, void
     list_sl_node_s *node = list->first;
     bool matched = FALSE;
     
-
     while(node->next != NULL)
     {
         ya_result ret = comparator(node->data, parm);

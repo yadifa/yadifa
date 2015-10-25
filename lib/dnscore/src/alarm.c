@@ -112,6 +112,17 @@ alarm_event_list_init(alarm_event_list *head)
     ZEROMEMORY(head->first, sizeof(alarm_event_node));
 }
 
+static void
+alarm_event_list_finalize(alarm_event_list *head)
+{
+    if(head->first != NULL && head->first == head->last)
+    {
+        alarm_event_free(head->first);
+        head->first = NULL;
+        head->last = NULL;
+    }
+}
+
 static bool
 alarm_event_list_isempty(alarm_event_list *head)
 {
@@ -343,14 +354,41 @@ alarm_time_create(u32 epoch)
 void
 alarm_init()
 {
-    ptr_vector_resize(&alarm_handles, 64);
+    if(ptr_vector_size(&alarm_handles) == 0)
+    {
+        ptr_vector_resize(&alarm_handles, 64);
 
-    alarm_event_list_init(&time_list.events); /* init: NO LOCK */
+        alarm_event_list_init(&time_list.events); /* init: NO LOCK */
+    }
 }
 
 void
 alarm_finalise()
 {
+    pthread_mutex_lock(&alarm_mutex);
+#ifdef DEBUG
+    alarm_pthread_mutex_locked = TRUE;
+#endif
+    
+    if(ptr_vector_size(&alarm_handles) > 0)
+    {
+        if(alarm_event_list_isempty(&time_list.events))
+        {
+            alarm_event_list_finalize(&time_list.events);
+        }
+        else
+        {
+            log_debug("alarm: event list not empty");
+        }
+
+        ptr_vector_destroy(&alarm_handles);
+    }
+
+    pthread_mutex_unlock(&alarm_mutex);
+#ifdef DEBUG
+    alarm_pthread_mutex_locked = FALSE;
+#endif
+    
 }
 
 alarm_t

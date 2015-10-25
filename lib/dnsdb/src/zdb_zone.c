@@ -53,6 +53,8 @@
 #include <dnscore/logger.h>
 #include <dnscore/threaded_dll_cw.h>
 
+#include "dnsdb/dnsdb-config.h"
+
 #include "dnsdb/zdb.h"
 
 #include "dnsdb/zdb_zone.h"
@@ -85,7 +87,7 @@
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
-#ifdef DEBUG
+#if HAS_TRACK_ZONES_DEBUG_SUPPORT
 smp_int g_zone_instanciated_count = SMP_INT_INITIALIZER;
 ptr_set g_zone_instanciated_set = PTR_SET_PTR_EMPTY;
 #endif
@@ -271,11 +273,11 @@ zdb_zone_create(const u8* origin)
     u32 zone_footprint = zdb_zone_get_struct_size(origin);
     ZALLOC_ARRAY_OR_DIE(zdb_zone*, zone, zone_footprint, ZDB_ZONETAG);
     
-#ifdef DEBUG
+#if HAS_TRACK_ZONES_DEBUG_SUPPORT
     smp_int_inc(&g_zone_instanciated_count);
-    mutex_lock(&g_zone_instanciated_count.mutex);
+    pthread_mutex_lock(&g_zone_instanciated_count.mutex);
     ptr_node *node = ptr_set_avl_insert(&g_zone_instanciated_set, zone);
-    mutex_unlock(&g_zone_instanciated_count.mutex);
+    pthread_mutex_unlock(&g_zone_instanciated_count.mutex);
     node->value = NULL;
 #endif
    
@@ -398,17 +400,18 @@ zdb_zone_destroy(zdb_zone *zone)
         
         if(rc != 0)
         {
+            logger_flush();
             abort();
         }
         
         log_debug5("zdb_zone_destroy zone@%p", zone);
         
-#ifdef DEBUG
-        mutex_lock(&g_zone_instanciated_count.mutex);
+#if HAS_TRACK_ZONES_DEBUG_SUPPORT
+        pthread_mutex_lock(&g_zone_instanciated_count.mutex);
         bool known_zone = (ptr_set_avl_find(&g_zone_instanciated_set, zone) != NULL);
         yassert(known_zone);
         ptr_set_avl_delete(&g_zone_instanciated_set, zone);
-        mutex_unlock(&g_zone_instanciated_count.mutex);
+        pthread_mutex_unlock(&g_zone_instanciated_count.mutex);
         smp_int_dec(&g_zone_instanciated_count);
         yassert(smp_int_get(&g_zone_instanciated_count) >= 0);
 #endif

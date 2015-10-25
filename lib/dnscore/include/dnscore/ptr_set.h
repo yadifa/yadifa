@@ -211,6 +211,10 @@ int ptr_set_asciizp_node_compare(const void *node_a, const void *node_b);
 
 int ptr_set_dnsname_node_compare(const void *node_a, const void *node_b);
 
+// key = fqdn (cannot be NULL)
+
+int ptr_set_dnslabel_node_compare(const void *node_a, const void *node_b);
+
 // key = asciiz (can be NULL)
 
 int ptr_set_nullable_asciizp_node_compare(const void *node_a, const void *node_b);
@@ -219,6 +223,8 @@ int ptr_set_nullable_asciizp_node_compare(const void *node_a, const void *node_b
 
 int ptr_set_nullable_dnsname_node_compare(const void *node_a, const void *node_b);
 
+int ptr_set_host_address_node_compare(const void *node_a, const void *node_b);
+
 #define PTR_SET_EMPTY {NULL, ptr_set_default_node_compare}
 #define PTR_SET_ASCIIZ_EMPTY {NULL, ptr_set_asciizp_node_compare}
 #define PTR_SET_DNSNAME_EMPTY {NULL, ptr_set_dnsname_node_compare}
@@ -226,6 +232,7 @@ int ptr_set_nullable_dnsname_node_compare(const void *node_a, const void *node_b
 #define PTR_SET_NULLABLE_DNSNAME_EMPTY {NULL, ptr_set_nullable_dnsname_node_compare}
 #define PTR_SET_PTR_EMPTY {NULL, ptr_set_ptr_node_compare}
 #define PTR_SET_CUSTOM(comparator___) {NULL, (comparator___)}
+#define PTR_SET_HOST_ADDRESS_EMPTY {NULL, ptr_set_host_address_node_compare}
 
 void *ptr_set_avl_iterator_hasnext_next_value(ptr_set_avl_iterator *iterp);
 

@@ -50,6 +50,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <limits.h>
 
 #include "dnscore/file_input_stream.h"
 #include "dnscore/fdtools.h"
@@ -92,7 +93,7 @@ file_read(input_stream* stream_, u8* buffer, u32 len)
 {
 #ifdef SSIZE_MAX
 #if SSIZE_MAX < 0xffffffffU
-#pragma message "POTENTIAL UNSPECIFIED RESULT IF len IS BIGGER THAN SSIZE_MAX"
+#pragma message "POTENTIAL UNSPECIFIED RESULT IF len IS BIGGER THAN SSIZE_MAX=" TOSTRING(SSIZE_MAX) " LONG_MAX=" TOSTRING(LONG_MAX)
 #endif
 #endif
 

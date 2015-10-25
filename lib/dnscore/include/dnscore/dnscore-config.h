@@ -307,7 +307,7 @@
 #define PACKAGE_NAME "dnscore"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "dnscore 2.1.3-5301"
+#define PACKAGE_STRING "dnscore 2.1.4-4950"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "dnscore"
@@ -316,7 +316,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.1.3-5301"
+#define PACKAGE_VERSION "2.1.4-4950"
 
 /* Define as the return type of signal handlers (`int' or `void'). */
 #define RETSIGTYPE void
@@ -337,7 +337,7 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* Version number of package */
-#define VERSION "2.1.3-5301"
+#define VERSION "2.1.4-4950"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */

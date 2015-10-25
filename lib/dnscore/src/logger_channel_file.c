@@ -160,7 +160,7 @@ logger_channel_file_append(const char *fullpath, uid_t uid, gid_t gid, u16 mode,
     output_stream buffered_errlog_os;
     ya_result return_code;
 
-    if(FAIL(return_code = file_output_stream_open_ex(fullpath,
+    if(FAIL(return_code = file_output_stream_open_ex_nolog(fullpath,
                     O_CREAT|O_APPEND|O_RDWR,
                     mode,
                     &errlog_os)))
@@ -220,7 +220,7 @@ logger_channel_file_reopen(logger_channel* chan)
     
     output_stream errlog_os;
 
-    if(FAIL(return_code = file_output_stream_open_ex(sd->file_name,
+    if(FAIL(return_code = file_output_stream_open_ex_nolog(sd->file_name,
                     O_CREAT|O_APPEND|O_RDWR,
                     sd->mode,
                     &errlog_os)))
@@ -305,7 +305,7 @@ logger_channel_file_reopen(logger_channel* chan)
     fd_output_stream_attach(&errlog_os, sd->fd);
     sd->fd = fd;
     
-    output_stream_close(&errlog_os);
+    file_output_stream_close_nolog(&errlog_os); // and NOT output_stream_close(&errlog_os);
     
     logger_channel_file_flush(chan);
     

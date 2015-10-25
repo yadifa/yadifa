@@ -43,6 +43,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
+#include <ctype.h>
 
 #include <openssl/bn.h>
 #include <openssl/err.h>
@@ -56,6 +57,7 @@
 #include "dnscore/logger.h"
 #include "dnscore/dnskey_rsa.h"
 #include "dnscore/dnssec_errors.h"
+#include "dnscore/parser.h"
 
 #define MODULE_MSG_HANDLE g_system_logger
 
@@ -93,7 +95,6 @@ rsa_getnid(u8 algorithm)
         {
             return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
         }
-            
     }
 }
 
@@ -125,7 +126,7 @@ rsa_dnskey_key_scan(FILE *f)
         }
 
         *tmp_in = '\0';
-        while(*++tmp_in == ' ');
+        while(isblank(*++tmp_in));
         size_t tmp_in_len = strcspn(tmp_in, " \t\r\n");
         tmp_in[tmp_in_len] = '\0';
 
@@ -503,7 +504,7 @@ ya_result rsa_initinstance(RSA* rsa, u8 algorithm, u16 flags, const char* origin
      *        are not taken in account
      */
 
-    u16 tag = dnskey_getkeytag(rdata, rdata_size + 4);
+    u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size + 4);
 
     dnssec_key* key = dnskey_newemptyinstance(algorithm, flags, origin);
 
@@ -511,15 +512,19 @@ ya_result rsa_initinstance(RSA* rsa, u8 algorithm, u16 flags, const char* origin
     key->vtbl = &rsa_vtbl;
     key->tag = tag;
     key->nid = nid;
-    key->is_private = (rsa->q != NULL) && (rsa->p != NULL);
+
+    if((rsa->q != NULL) && (rsa->p != NULL))
+    {
+        key->status |= DNSKEY_KEY_IS_PRIVATE;
+    }
 
     *out_key = key;
     
     return SUCCESS;
 }
 
-
-ya_result rsa_loadprivate(FILE* private, u8 algorithm, u16 flags, const char* origin, dnssec_key** out_key)
+ya_result
+rsa_loadprivate(FILE* private, u8 algorithm, u16 flags, const char* origin, dnssec_key **out_key)
 {
     *out_key = NULL;
     
@@ -562,7 +567,148 @@ ya_result rsa_loadprivate(FILE* private, u8 algorithm, u16 flags, const char* or
 }
 
 ya_result
-rsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key** out_key)
+rsa_private_parse_field(dnssec_key *key, parser_s *p)
+{
+    if(key == NULL)
+    {
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
+    }
+    
+    if(key->nid != 0)
+    {
+        // already set
+        return INVALID_STATE_ERROR;
+    }
+    
+    switch(key->algorithm)
+    {
+        case DNSKEY_ALGORITHM_RSASHA1:
+        case DNSKEY_ALGORITHM_RSASHA1_NSEC3:
+        case DNSKEY_ALGORITHM_RSASHA256_NSEC3:
+        case DNSKEY_ALGORITHM_RSASHA512_NSEC3:
+            break;
+        default:
+            return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
+            break;
+    }
+    
+    ya_result ret = ERROR;
+    
+    if(key->key.rsa == NULL)
+    {
+        key->key.rsa = RSA_new();
+        key->vtbl = &rsa_vtbl;
+    }
+    
+    RSA *rsa = key->key.rsa;
+    u32 label_len = parser_text_length(p);
+    const char *label = parser_text(p);
+    bool parsed_it = FALSE;
+    u8 tmp_out[DNSSEC_MAXIMUM_KEY_SIZE_BYTES];
+    
+    for(const struct structdescriptor *sd = struct_RSA; sd->name != NULL; sd++)
+    {
+        if(memcmp(label, sd->name, label_len) == 0)
+        {
+            BIGNUM **valuep = (BIGNUM**)&(((u8*)rsa)[sd->address]);
+
+            if(*valuep != NULL)
+            {
+                log_warn("field %s has already been initialized", sd->name);
+                return SUCCESS;
+            }
+            
+            if(FAIL(ret = parser_next_word(p)))
+            {
+                return ret;
+            }
+
+            u32 word_len = parser_text_length(p);
+            const char *word = parser_text(p);
+            
+            ya_result n = base64_decode(word, word_len, tmp_out);
+
+            if(FAIL(n))
+            {
+                log_err("unable to decode field %s", sd->name);
+                return n;
+            }
+
+            *valuep = BN_bin2bn(tmp_out, n, NULL);
+            
+            if(*valuep == NULL)
+            {
+                log_err("unable to get big number from field %s", sd->name);
+                return DNSSEC_ERROR_BNISNULL;
+            }
+            
+            parsed_it = TRUE;
+            
+            break;
+        }
+    } /* for each possible field */
+    
+    if(!parsed_it)
+    {
+        log_warn("cannot parse: '%s'", label);
+        return SUCCESS; // unknown keyword (currently : ignore)
+    }
+    
+    if((rsa->n != NULL)    &&
+       (rsa->e != NULL)    &&
+       /*(rsa->p != NULL)    &&
+       (rsa->q != NULL)    &&*/
+       (rsa->dmp1 != NULL) &&
+       (rsa->dmq1 != NULL) &&
+       (rsa->iqmp != NULL))
+    {
+        yassert(key->nid == 0);
+        
+        int nid;
+        
+        if(FAIL(nid = rsa_getnid(key->algorithm)))
+        {
+            return nid;
+        }
+        
+        u32 rdata_size = rsa_public_getsize(rsa);
+        u8 *rdata = tmp_out;
+        if(rdata_size > DNSSEC_MAXIMUM_KEY_SIZE_BYTES)
+        {
+            return DNSSEC_ERROR_KEYISTOOBIG;
+        }
+
+        SET_U16_AT(rdata[0], htons(key->flags));
+        rdata[2] = DNSKEY_PROTOCOL_FIELD;
+        rdata[3] = key->algorithm;
+
+        if(rsa_public_store(rsa, &rdata[4]) != rdata_size)
+        {
+            return DNSSEC_ERROR_UNEXPECTEDKEYSIZE; /* Computed size != real size */
+        }
+
+        /* Note : + 4 because of the flags,protocol & algorithm bytes
+         *        are not taken in account
+         */
+
+        u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size + 4);
+
+        key->tag = tag;
+        key->nid = nid;
+        
+        key->status |= DNSKEY_KEY_IS_VALID;
+    }
+    
+    if(((key->status & DNSKEY_KEY_IS_VALID) != 0) && (rsa->q != NULL) && (rsa->p != NULL))
+    {
+        key->status |= DNSKEY_KEY_IS_PRIVATE;
+    }
+        
+    return ret;
+}
+
+ya_result
+rsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key **out_key)
 {
     *out_key = NULL;
             

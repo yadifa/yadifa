@@ -68,55 +68,6 @@
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
-/**
- * Fixes an issue with the dirent not always set as expected.
- *
- * The type can be set to DT_UNKNOWN instead of file or directory.
- * In that case the function will call stats to get the type.
- */
-
-u8
-dirent_get_file_type(const char* folder, struct dirent *entry)
-{
-    u8 d_type;
-
-#ifdef _DIRENT_HAVE_D_TYPE
-    d_type = entry->d_type;
-#else
-    d_type = DT_UNKNOWN;
-#endif
-    
-    /*
-     * If the FS OR the OS does not supports d_type :
-     */
-
-    if(d_type == DT_UNKNOWN)
-    {
-        struct stat file_stat;
-        
-        char d_name[PATH_MAX];
-        snprintf(d_name, sizeof(d_name), "%s/%s", folder, entry->d_name);
-
-        while(stat(d_name, &file_stat) < 0)
-        {
-            int e = errno;
-
-            if(e != EINTR)
-            {
-                log_err("stat(%s): %r", d_name, ERRNO_ERROR);
-                break;
-            }
-        }
-
-        if(S_ISREG(file_stat.st_mode))
-        {
-            d_type = DT_REG;
-        }
-    }
-
-    return d_type;
-}
-
 static ya_result
 xfr_copy_create_file(output_stream *xfrs, char *file_path, u32 file_path_len, const char* data_path, const u8 *origin, u32 serial) // should be temp
 {

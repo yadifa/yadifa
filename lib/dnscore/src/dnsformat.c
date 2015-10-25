@@ -544,6 +544,7 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                 len = 6;
                 txt = TYPE_TALINK_NAME;
                 break;
+
             case TYPE_SPF:
                 len = 3;
                 txt = TYPE_SPF_NAME;
@@ -552,6 +553,7 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                 len = 5;
                 txt = TYPE_UINFO_NAME;
                 break;
+
             case TYPE_UID:
                 len = 3;
                 txt = TYPE_UID_NAME;
@@ -561,8 +563,32 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                 txt = TYPE_GID_NAME;
                 break;
             case TYPE_UNSPEC:
-                len = 5;
+                len = 6;
                 txt = TYPE_UNSPEC_NAME;
+                break;
+            case TYPE_NID:
+                len = 3;
+                txt = TYPE_NID_NAME;
+                break;
+            case TYPE_L32:
+                len = 3;
+                txt = TYPE_L32_NAME;
+                break;
+            case TYPE_L64:
+                len = 3;
+                txt = TYPE_L64_NAME;
+                break;
+            case TYPE_LP:
+                len = 2;
+                txt = TYPE_LP_NAME;
+                break;
+            case TYPE_EUI48:
+                len = 5;
+                txt = TYPE_EUI48_NAME;
+                break;
+            case TYPE_EUI64:
+                len = 5;
+                txt = TYPE_EUI64_NAME;
                 break;
             case TYPE_TKEY:
                 len = 4;

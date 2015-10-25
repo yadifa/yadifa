@@ -113,6 +113,10 @@
 #include <byteswap.h>
 #endif
 
+#define VERSION_2_0_0 0x020000000000LL
+#define VERSION_2_1_0 0x020100000000LL
+#define VERSION_2_2_0 0x020200000000LL
+
 #include <dnscore/dnscore-config-features.h>
 #include <dnscore/sys_error.h>
 
@@ -521,7 +525,7 @@ static inline void SET_U64_AT_P(void* p, u64 v)
 #define __bswap_16 _OSSwapInt16
 #define __bswap_32 _OSSwapInt32
 #define __bswap_64 _OSSwapInt64
-#elif defined __sun 
+#elif defined __sun && defined(__GNUC__)
 #define __bswap_16 __builtin_bswap16
 #define __bswap_32 __builtin_bswap32
 #define __bswap_64 __builtin_bswap64

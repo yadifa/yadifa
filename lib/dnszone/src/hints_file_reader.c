@@ -53,7 +53,6 @@
 #include <fcntl.h>
 #include <arpa/inet.h>		/* or netinet/in.h */
 
-#include <dnscore/format.h>
 #include <dnscore/logger.h>
 #include <dnscore/buffer_input_stream.h>
 #include <dnscore/file_input_stream.h>
@@ -166,6 +165,12 @@ hints_file_reader_handle_error(zone_reader *zr, ya_result error_code)
     /* nop */
 }
 
+static const char*
+hints_file_reader_get_last_error_message(zone_reader *zr)
+{
+    return NULL;
+}
+
 static zone_reader_vtbl hints_file_reader_vtbl =
 {
     hints_file_reader_read_record,
@@ -174,6 +179,7 @@ static zone_reader_vtbl hints_file_reader_vtbl =
     hints_file_reader_close,
     hints_file_reader_handle_error,
     hints_file_reader_canwriteback,
+    hints_file_reader_get_last_error_message,
     "hints_file_reader"
 };
 

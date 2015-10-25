@@ -558,14 +558,24 @@ config_set_password(const char *value, char **dest, anytype notused)
 {
     if(*dest != NULL)
     {
-        free(*dest);
+        if(strcmp(*dest, value) != 0)
+        {
+            size_t n = strlen(*dest);
+            for(int i = 0; i < n; i++)
+            {
+                *dest[i] = rand();
+            }
+            free(*dest);
+            *dest = strdup(value);
+        }
     }
-
-    *dest = strdup(value);
-
-    return OK;
+    else
+    {
+        *dest = strdup(value);
+    }
+    
+    return SUCCESS;
 }
-
 
 /** @brief String parser
  *

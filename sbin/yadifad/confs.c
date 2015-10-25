@@ -53,7 +53,6 @@
 
 #if HAS_DNSSEC_SUPPORT != 0
 #include <dnsdb/dnssec.h>
-#include <dnsdb/dnssec_keystore.h>
 #endif
 
 #include <dnscore/base64.h>

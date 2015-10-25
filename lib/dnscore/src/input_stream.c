@@ -333,6 +333,7 @@ static void input_stream_void_close(input_stream* stream)
 {
     log_err("tried to close a closed stream");
 #ifdef DEBUG
+    logger_flush();
     abort();
 #endif
 }

@@ -83,7 +83,7 @@ extern "C" {
 
 #define     PROGRAM_NAME                PACKAGE
 #define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASEDATE                 "2015-09-07"
+#define     RELEASEDATE                 "2015-10-16"
 #define     COMPILEDATE                 __DATE__
 
     /* List of default values for the different configuration parameters */
@@ -188,8 +188,8 @@ extern "C" {
     
 #define     S_ZONE_DNSSEC_DNSSEC        "off"
     
-#define     S_JOURNAL_SIZE_KB_DEFAULT   "8388608"
-#define     S_JOURNAL_SIZE_KB_MIN       64              // less than this is asking for trouble
+#define     S_JOURNAL_SIZE_KB_DEFAULT   "0"
+#define     S_JOURNAL_SIZE_KB_MIN       0               // less than this is asking for trouble
 #define     S_JOURNAL_SIZE_KB_MAX       8388608         // 8*2^20 => 8GB
 
     /*    ------------------------------------------------------------    */

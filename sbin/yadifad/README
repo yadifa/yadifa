@@ -1,6 +1,6 @@
 ################################################################################
 # 
-#  Copyright (c) 2011, EURid. All rights reserved.
+#  Copyright (c) 2012-15, EURid. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 #  Redistribution and use in source and binary forms, with or without 
@@ -28,6 +28,21 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 ################################################################################
+
+20151026:
+        YADIFA 2.1.4
+
+        The zone reader error reporting has been improved.
+        Stacktrace support added for Solaris.
+
+        Known issue:
+        - Adding and or removing NSEC3PARAM dynamically is not properly handled.
+
+        Fixes:
+        - fixed an issue where an NSEC3 answer proving a * query would lead to a crash
+        - fixed an issue where a private key may be not recognised as such
+        - fixed an issue where dynamic update prerequisite check would fail a valid match
+        - fixed an issue where zone signature maintenance would only start if all private keys were available.
 
 20150821:
         YADIFA 2.1.3

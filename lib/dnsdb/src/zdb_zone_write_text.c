@@ -406,7 +406,7 @@ zdb_zone_write_text(const zdb_zone* zone, output_stream* fos, bool force_label)
 
                     rdata[1] = item->flags;
 
-#if 1	/* DEBUG */
+#if DEBUG
                     if(item->rc == 1)
                     {
                         if(item->rc != 0)

@@ -67,6 +67,7 @@ const char* journal_get_xfr_path();
 #define ZDB_ZONE_PATH_PROVIDER_AXFR_FILE 4   // want the full path of the directory for the image of the zone (AXFR)
 #define ZDB_ZONE_PATH_PROVIDER_IXFR_PATH 5   // want the full path of the file for the incremental of the zone (IXFR/journal)
 #define ZDB_ZONE_PATH_PROVIDER_IXFR_FILE 6   // want the full path of the file for the incremental of the zone (IXFR/journal)
+#define ZDB_ZONE_PATH_PROVIDER_DNSKEY_PATH 7 // want the full path containing the DNSKEY keypairs for the zone (smart signing, key management)
 #define ZDB_ZONE_PATH_PROVIDER_RNDSUFFIX 64  // appends a suffix to the file name (.SUFFIX), useful for temporary files/files being build
 #define ZDB_ZONE_PATH_PROVIDER_MKDIR     128 // create the path before returning
 

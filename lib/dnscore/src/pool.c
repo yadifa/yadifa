@@ -66,32 +66,44 @@ pool_init(pool_s *pool, pool_allocate_callback *allocate_, pool_free_callback *f
 }
 
 void
-pool_log_stats(pool_s *pool)
+pool_log_stats_ex(pool_s *pool, logger_handle* handle, u32 level)
 {
     if(pool != NULL)
     {
-        log_debug("pool '%s' handled %llu allocations and %llu releases; pooled %i maxed at %i; using %u peaked at %u",
+        logger_handle_msg(handle, level, "pool '%s' handled %llu allocations and %llu releases; pooled %i maxed at %i; using %u peaked at %u",
                 pool->name, pool->allocated_count, pool->released_count,
                 pool->pool.offset + 1, pool->max_size,
                 pool->current_count, pool->peak_count);
     }
     else
     {
-        log_err("pool is NULL");
+        logger_handle_msg(handle, MSG_ERR, "pool is NULL");
     }
 }
 
 void
-pool_log_all_stats()
+pool_log_stats(pool_s *pool)
+{
+    pool_log_stats_ex(pool, MODULE_MSG_HANDLE, MSG_DEBUG);
+}
+
+void
+pool_log_all_stats_ex(logger_handle* handle, u32 level)
 {
     mutex_lock(&pool_chain_mtx);
     pool_s *p = pool_chain;
     while(p != NULL)
     {
-        pool_log_stats(p);
+        pool_log_stats_ex(p, handle, level);
         p = p->next;
     }
     mutex_unlock(&pool_chain_mtx);
+}
+
+void
+pool_log_all_stats()
+{
+    pool_log_all_stats_ex(MODULE_MSG_HANDLE, MSG_DEBUG);
 }
 
 void

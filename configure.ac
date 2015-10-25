@@ -32,7 +32,7 @@ dnl
 dnl ############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 5032 $])
+AC_REVISION([$Revision: 5542 $])
 AC_INIT([yadifa],m4_esyscmd([svn info 2> /dev/null |  sed -e 's/^/$/' -e 's/$/ $/' > revision.txt;echo $(cat VERSION)-$(grep -r \$Revision: revision.txt configure.ac Makefile.am sbin/* lib/* bin/* doc/* etc/* | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[info@yadifa.eu])
 
 echo

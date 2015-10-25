@@ -391,7 +391,7 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
                      * Check if we have access to the private part of the key
                      */
 
-                    u16 tag = dnskey_getkeytag(rdata, rdata_len);
+                    u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_len);
                     u16 key_flags = ntohs(GET_U16_AT(rdata[0]));
                     u8 algorithm = rdata[3];
 
@@ -889,8 +889,9 @@ zdb_zone_load_loop:
 
                 if((depth = nsec3_avl_check(&n3->items)) < 0)
                 {
-                    puts("oops"); /* debug-only block */
-                    exit(-1);
+                    log_err("nsec3_avl_check failure");
+                    logger_flush();
+                    abort();
                 }
 
                 n3 = n3->next;
@@ -995,7 +996,7 @@ zdb_zone_load_loop:
                         {
                             u8 digest[MAX_DIGEST_LENGTH];
 
-                            nsec3_compute_digest_from_fqdn(n3, fqdn, digest);
+                            nsec3_compute_digest_from_fqdn_with_len(n3, fqdn, dnsname_len(fqdn), digest, FALSE);
 
                             log_debug2("zone load: HEURISTIC DEBUG NOTE: NSEC3:        check %{digest32h}", digest);
 

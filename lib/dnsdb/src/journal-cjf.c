@@ -539,10 +539,19 @@ journal_cjf_read_soa_record(dns_resource_record *rr, input_stream *ixfr_wire_is)
  * Only checks that the first SOA serial is the current last serial
  * Should also check that the stream is complete before adding it.
  * 
+ * @todo edf 20150127 -- In order to trigger the zone write, this function should: ...
+ * 
  * _ get the current written serial (AXFR/TXT), there must be a bridge between that serial an the journal
  * _ get how much room is available after that serial
  * _ if the available room is less or equal to half the maximum size of the journal,
  *   trigger a write to disk and proceed
+ * 
+ * @note edf 20150309 -- the problem is this:
+ *          for a master, the journal is being written as the records are stored into the database
+ *          for a slave, the journal is first stored, then read.  A slave should not truncate an update.
+ *          (and if we ever do it, it means that we will have to ensure that the calling part knows the final SOA is wrong)
+ * 
+ * @note edf 20150326 -- both master and slaves are working (on my tests). This part is ready for real life testing.
  * 
  */
 
@@ -641,6 +650,7 @@ journal_cjf_append_ixfr_stream_master(journal *jh, input_stream *ixfr_wire_is)
     }
     
     // the journal can only be used by the writer
+    /// @todo edf 20150323 -- lock parts of the journal
     
     journal_cjf_writelock(jnl);
     
@@ -685,7 +695,7 @@ journal_cjf_append_ixfr_stream_master(journal *jh, input_stream *ixfr_wire_is)
             {
                 // complain about it
 
-                if(serial_lt(stream_serial_del, previous_journal_serial))
+                if(serial_lt(stream_serial_del, previous_journal_serial)) // !journal_was_empty -> previous_journal_serial set to  jnl->serial_end
                 {
                     log_err("cjf: %s,%i: serial of stream (%i) is inside the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
                 }
@@ -745,7 +755,7 @@ journal_cjf_append_ixfr_stream_master(journal *jh, input_stream *ixfr_wire_is)
                     {
                         log_debug("cjf: %s,%i: half the space has been reached, requesting zone write and forcing page change", jnl->journal_file_name, jnl->fd);
 
-                        zdb_zone_info_store_zone(jnl->zone->origin);
+                        zdb_zone_info_store_zone(jnl->zone->origin); /// @todo edf 20150219 -- stop storing in this PAGE
 
                         jnl->last_page.file_offset_limit = jnl->last_page.records_limit; // this will tell the PAGE is full
                         jnl->last_page.size = jnl->last_page.count;
@@ -1146,6 +1156,7 @@ journal_cjf_append_ixfr_stream_slave(journal *jh, input_stream *ixfr_wire_is)
     }
     
     // the journal can only be used by the writer
+    /// @todo edf 20150323 -- lock parts of the journal
     
     journal_cjf_writelock(jnl);
     
@@ -1184,8 +1195,14 @@ journal_cjf_append_ixfr_stream_slave(journal *jh, input_stream *ixfr_wire_is)
             if(stream_serial_del != previous_journal_serial) // false positive: previous_journal_serial is initialised (!journal_was_empty)
             {
                 // complain about it
+                
+                /// @note 20150610 edf -- This is where the update glitch prevents updating.
+                ///                       It is important to note that we are already in the main digestion loop.
+                ///                       This was meant to detect a hole in the stream.
+                ///                       But this also prevents a journal in the range [0..N] to accept an update in the range [N-i..N+j]
+                ///                       The fix should be: if we are not beyond our current limit (N) then we should skip SOA--SOA++ until we are.
 
-                if(serial_lt(stream_serial_del, previous_journal_serial))
+                if(serial_lt(stream_serial_del, previous_journal_serial))  // !journal_was_empty -> previous_journal_serial set to  jnl->serial_end
                 {
                     log_info("cjf: %s,%i: serial of stream (%i) is inside the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
                     
@@ -1266,6 +1283,7 @@ journal_cjf_append_ixfr_stream_slave(journal *jh, input_stream *ixfr_wire_is)
 #ifdef DEBUG
                     logger_flush();
 #endif
+
                     journal_cjf_page_output_stream_cancel(&os);
                     
                     break; // breaks the do{}while();
@@ -1651,7 +1669,7 @@ journal_cjf_input_stream_read(input_stream* stream, u8 *buffer, u32 len)
             (void)stream_limit_offset;
             
             yassert(stream_limit_offset != 0);
-            yassert(stream_limit_offset > page_offset);
+            yassert(stream_limit_offset > page_offset); /// @todo edf 20150115 -- fix this when a cycle occurs
  
             data->available = page_header.stream_end_offset - stream_offset;
             data->page_next = page_header.next_page_offset;
@@ -1785,7 +1803,7 @@ journal_cjf_get_ixfr_stream_at_serial(journal *jh, u32 serial_from, input_stream
     journal_cjf_input_stream_data *data;
     ZALLOC_OR_DIE(journal_cjf_input_stream_data*, data, journal_cjf_input_stream_data, GENERIC_TAG);
     data->jnl = jnl;
-    data->fd = jnl_open_file(jnl, FALSE);
+    data->fd = jnl_open_file(jnl, FALSE); /// @todo edf -- open the file, put the pointer at the right place and ret + 1, available = x
     
     data->serial_from = serial_from;
     

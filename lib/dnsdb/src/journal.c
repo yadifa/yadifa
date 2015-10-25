@@ -389,6 +389,9 @@ journal_open(journal **jhp, zdb_zone *zone, bool create)
         
         // it does not exist, so create a new one (using the default format)
         
+        /// @todo edf 20141128 -- get rid of the hashing function here : this has to be pushed to the journal file format
+        ///                       but first, the journal must be able to know where the zone file is (so it could put the journal next to it)
+        
         u32 path_flags = ZDB_ZONE_PATH_PROVIDER_ZONE_PATH;
         if(create)
         {

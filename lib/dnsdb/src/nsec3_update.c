@@ -54,12 +54,10 @@
 
 #include "dnsdb/nsec3_update.h"
 #include "dnsdb/nsec_common.h"
-
 #include "dnsdb/nsec3_owner.h"
-
 #include "dnsdb/rrsig.h"
-
 #include "dnsdb/zdb_listener.h"
+#include "dnsdb/zdb_zone.h"
 
 #define MODULE_MSG_HANDLE g_dnssec_logger
 
@@ -315,7 +313,7 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
     
     /* build the current name */
     
-#if NSEC3_UPDATE_ZONE_DEBUG != 0
+#if NSEC3_UPDATE_ZONE_DEBUG
     u8 debug_name[MAX_DOMAIN_LENGTH];
     {   
         u8 *p = debug_name;
@@ -356,12 +354,9 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
         {
             /**
              * Delegation.
-             *
-             * @todo: should we mark the NSEC3 record about this (opt-out) (?)
-             *
              */
             
-#if NSEC3_UPDATE_ZONE_DEBUG != 0
+#if NSEC3_UPDATE_ZONE_DEBUG
             log_debug("nsec3_update_label_nsec3_nodes_recursive(%3d, %{dnsname}) : delegation", label_stack_level, debug_name);
 #endif
             
@@ -378,13 +373,19 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
              * After processing this node, the brother will be processed.
              */
         }
+        else if(ZDB_LABEL_UNDERDELEGATION(label))
+        {
+            nsec3_covered = FALSE;
+            force_rrsig = FALSE;
+            skip_children = TRUE;
+        }
         else
         {
             /* An empty non-terminal must only be signed if it does not end on a non-secure delegation */
             
             bool notempty = !zdb_record_isempty(&label->resource_record_set);
             
-#if NSEC3_UPDATE_ZONE_DEBUG != 0
+#if NSEC3_UPDATE_ZONE_DEBUG
             log_debug("nsec3_update_label_nsec3_nodes_recursive(%3d, %{dnsname}) : %s", label_stack_level, debug_name, (notempty)?"not empty":"empty");
 #endif
             
@@ -403,7 +404,7 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
 
         nsec3_covered = TRUE;
         
-#if NSEC3_UPDATE_ZONE_DEBUG != 0
+#if NSEC3_UPDATE_ZONE_DEBUG
         log_debug("nsec3_update_label_nsec3_nodes_recursive(%3d, %{dnsname}) : apex", label_stack_level, debug_name);
 #endif
     }
@@ -438,14 +439,14 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
     {
         // n3 = n3->next;
         
-#if NSEC3_UPDATE_ZONE_DEBUG != 0
+#if NSEC3_UPDATE_ZONE_DEBUG
         log_debug("nsec3_update_label_nsec3_nodes_recursive(%3d, %{dnsname}) : exit", label_stack_level, debug_name);
 #endif
         
         return FALSE;
     }
     
-#if NSEC3_UPDATE_ZONE_DEBUG != 0
+#if NSEC3_UPDATE_ZONE_DEBUG
     log_debug("nsec3_update_label_nsec3_nodes_recursive(%3d, %{dnsname}) : add", label_stack_level, debug_name);
 #endif
     
@@ -478,31 +479,34 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
     nsec3_label_extension* n3ext = label->nsec.nsec3;
 
     /*
-        * n3ext will be NULL if the zone is marked as loading and labels are
-        * added after the NSEC3PARAM
-        *
-        * (loading is an optimisation that I'm setting up)
-        */
+     * n3ext will be NULL if the zone is marked as loading and labels are
+     * added after the NSEC3PARAM
+     *
+     * (loading is an optimisation that I'm setting up)
+     */
 
     /*
-        * Create all missing NSEC3 extensions for the label
-        */
+     * Create all missing NSEC3 extensions for the label
+     * Each NSEC3PARAM is the head of an NSEC3 chain
+     * They are stored in a linked list in the zone
+     * Each label that is nsec3 covered has a non-null nsec3 label extension that is a linked list to reference nsec3 items
+     * The position in the NSEC3PARAM list must match the position in the nsec3 label extension list
+     * 
+     * New nodes are append at the end of the list
+     * The internal resolver will only ever use the first item of the list
+     */
 
     if(n3ext == NULL)
     {
-        /**
-            * @todo: put some order between dynupdate and zone-load
-            */
-
         nsec3_label_extension* n3ext_first = NULL;
 
         do
         {
-            ZALLOC_OR_DIE(nsec3_label_extension*, n3ext, nsec3_label_extension, NSEC3_LABELEXT_TAG);
+            ZALLOC_OR_DIE(nsec3_label_extension*, n3ext, nsec3_label_extension, NSEC3_LABELEXT_TAG); // in nsec3_update_label_nsec3_nodes_recursive
 
             n3ext->self = NULL;
             n3ext->star = NULL;
-            n3ext->next = n3ext_first;
+            n3ext->next = n3ext_first; // add this (potentially empty) node in the nsec3 chain
 
             n3ext_first = n3ext;
 
@@ -639,10 +643,15 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
 
                 u8* tmp_type_bit_maps;
 
+#if DNSCORE_HAS_ZALLOC_SUPPORT
                 /* LOCK */
                 ZALLOC_ARRAY_OR_DIE(u8*, tmp_type_bit_maps, type_bit_maps_size, NSEC3_TYPEBITMAPS_TAG);
                 /* UNLOCK */
-
+#else
+                // zalloc can allocate 0 bytes (8 are allocated)
+                // malloc cannot (undefined)
+                ZALLOC_ARRAY_OR_DIE(u8*, tmp_type_bit_maps, MAX(type_bit_maps_size,1), NSEC3_TYPEBITMAPS_TAG);
+#endif
                 type_bit_maps_write(tmp_type_bit_maps, type_context);
 
                 if(type_bit_maps_merge(type_context, node->type_bit_maps, node->type_bit_maps_size, tmp_type_bit_maps, type_bit_maps_size))
@@ -728,7 +737,7 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
     }
     while(n3 != NULL);
     
-#if NSEC3_UPDATE_ZONE_DEBUG != 0
+#if NSEC3_UPDATE_ZONE_DEBUG
     log_debug("nsec3_update_label_nsec3_nodes_recursive(%3d, %{dnsname}) : NSEC3", label_stack_level, debug_name);
 #endif
     

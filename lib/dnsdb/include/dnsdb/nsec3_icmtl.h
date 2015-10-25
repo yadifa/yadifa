@@ -77,11 +77,11 @@ void nsec3_remove_nsec3param_by_record(zdb_zone* zone, zdb_packed_ttlrdata* nsec
 
 void nsec3_remove_nsec3(zdb_zone* zone, zdb_packed_ttlrdata* nsec3);
 
-void nsec3_remove_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8 *nsec3_rdata);
+void nsec3_remove_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8 *nsec3_rdata, u16 nsec3_rdata_size); // the size here is needed for debugging
 
-void nsec3_remove_nsec3_by_digest(zdb_zone* zone, const u8 *nsec3_digest, const u8* nsec3_rdata);
+void nsec3_remove_nsec3_by_digest(zdb_zone* zone, const u8 *nsec3_digest, const u8* nsec3_rdata, u16 nsec3_rdata_size);
 
-nsec3_zone_item *nsec3_get_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec3_rdata);
+nsec3_zone_item *nsec3_get_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec3_rdata, u16 nsec3_rdata_size);
 
 /*
  * Remove the RRSIG of an NSEC3 (icmtl)

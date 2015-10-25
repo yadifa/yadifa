@@ -47,6 +47,8 @@
 
 #include "dnsdb/nsec3_types.h"
 #include "dnsdb/nsec3_item.h"
+#include "dnsdb/nsec3_name_error.h"
+#include "dnsdb/zdb_zone.h"
 
 #include "dnsdb/rrsig.h"
 
@@ -54,12 +56,10 @@
 
 extern logger_handle *g_dnssec_logger;
 
-/*
- * Retrieve NSEC3 name error records
- */
-
 /**
  * @note Name Error Responses
+ * 
+ * Retrieve NSEC3 name error records
  *
  * To prove the nonexistence of QNAME, a closest encloser proof and an
  * NSEC3 RR covering the (nonexistent) wildcard RR at the closest
@@ -70,7 +70,31 @@ extern logger_handle *g_dnssec_logger;
  * For example, if "gamma.example." is the closest provable encloser to
  * QNAME, then an NSEC3 RR covering "*.gamma.example." is included in
  * the authority section of the response.
+ *
+ *
  * 
+ * Z-Allocates and creates an NSEC3 record from an nsec3_zone_item
+ *
+ * This record is temporary.
+ *
+ * The function is supposed to be called by nsec3_name_error & nsec3_nodata_error
+ * Said functions are called by the query function
+ *
+ * The record is supposed to be destroyed after usage (ie: at destroy query answer)
+ * 
+ * @param zone
+ * @param qname
+ * @param apex_index
+ * @param pool
+ * @param out_next_closer_nsec3_owner_p
+ * @param out_encloser_nsec3
+ * @param out_encloser_nsec3_rrsig
+ * @param out_closest_encloser_nsec3_owner_p
+ * @param out_closest_encloser_nsec3
+ * @param out_closest_encloser_nsec3_rrsig
+ * @param out_wild_closest_encloser_nsec3_owner_p
+ * @param out_wild_closest_encloser_nsec3
+ * @param out_wild_closest_encloser_nsec3_rrsig
  */
 
 void
@@ -89,10 +113,26 @@ nsec3_name_error(const zdb_zone* zone, const dnsname_vector *qname, u32 apex_ind
                  zdb_packed_ttlrdata** out_wild_closest_encloser_nsec3,
                  const zdb_packed_ttlrdata** out_wild_closest_encloser_nsec3_rrsig
                  )
-{    
+{   
     const nsec3_zone_item *encloser_nsec3;
     const nsec3_zone_item *closest_provable_encloser_nsec3;
     const nsec3_zone_item *wild_closest_provable_encloser_nsec3;
+    
+    yassert(out_next_closer_nsec3_owner_p != NULL && out_encloser_nsec3 != NULL && out_encloser_nsec3_rrsig != NULL);
+    yassert(out_closest_encloser_nsec3_owner_p != NULL && out_closest_encloser_nsec3 != NULL && out_closest_encloser_nsec3_rrsig != NULL);
+    yassert(out_wild_closest_encloser_nsec3_owner_p != NULL && out_wild_closest_encloser_nsec3 != NULL && out_wild_closest_encloser_nsec3_rrsig != NULL);
+
+    *out_next_closer_nsec3_owner_p = NULL;
+    *out_encloser_nsec3 = NULL;
+    *out_encloser_nsec3_rrsig = NULL;
+    
+    *out_closest_encloser_nsec3_owner_p = NULL;
+    *out_closest_encloser_nsec3 = NULL;
+    *out_closest_encloser_nsec3_rrsig = NULL;
+    
+    *out_wild_closest_encloser_nsec3_owner_p = NULL;
+    *out_wild_closest_encloser_nsec3 = NULL;
+    *out_wild_closest_encloser_nsec3_rrsig = NULL;
 
     nsec3_closest_encloser_proof(zone, qname, apex_index,
                                  &encloser_nsec3,
@@ -119,15 +159,18 @@ nsec3_name_error(const zdb_zone* zone, const dnsname_vector *qname, u32 apex_ind
         min_ttl
     };
 
-    nsec3_zone_item_to_new_zdb_packed_ttlrdata(
-            &nsec3_parms,
-            out_next_closer_nsec3_owner_p,
-            out_encloser_nsec3,
-            out_encloser_nsec3_rrsig);
-
+    if(encloser_nsec3 != NULL)
+    {
+        nsec3_zone_item_to_new_zdb_packed_ttlrdata(
+                &nsec3_parms,
+                out_next_closer_nsec3_owner_p,
+                out_encloser_nsec3,
+                out_encloser_nsec3_rrsig);
+    }
+    
     *out_closest_encloser_nsec3 = NULL;
     
-    if(closest_provable_encloser_nsec3 != encloser_nsec3)
+    if((closest_provable_encloser_nsec3 != encloser_nsec3) && (closest_provable_encloser_nsec3 != NULL))
     {
         nsec3_parms.item = closest_provable_encloser_nsec3;
         nsec3_zone_item_to_new_zdb_packed_ttlrdata(

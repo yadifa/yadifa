@@ -77,8 +77,8 @@ typedef struct journal_cjf_idxt_tbl_header journal_cjf_idxt_tbl_header;
 
 struct journal_cjf_idxt_tbl_item
 {
-    u32 last_serial;
-    u32 file_offset;
+    u32 last_serial;    // last serial for this item
+    u32 file_offset;    // position of the item
 };
 
 typedef struct journal_cjf_idxt_tbl_item journal_cjf_idxt_tbl_item;

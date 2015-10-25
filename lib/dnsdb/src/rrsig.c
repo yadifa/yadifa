@@ -65,6 +65,7 @@
 #include "dnsdb/zdb_record.h"
 #include "dnsdb/zdb_zone.h"
 #include "dnsdb/zdb_rr_label.h"
+#include "dnsdb/dnssec_keystore.h"
 
 
 #define MODULE_MSG_HANDLE g_dnssec_logger
@@ -706,7 +707,7 @@ rrsig_verify_signature(rrsig_context_s *context, dnssec_key* key, zdb_packed_ttl
 ya_result
 rrsig_update_records(rrsig_context_s *context, dnssec_key* key, zdb_packed_ttlrdata* rr_sll, u16 type, bool do_update)
 {
-    do_update &= key->is_private;
+    do_update &= dnssec_key_is_private(key);
 
     /*******************************************************************
      * COMPUTE THE DIGEST (Always needed)

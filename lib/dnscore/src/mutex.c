@@ -49,9 +49,6 @@
 
 #include "dnscore/mutex.h"
 
-#define MUTEX_LOCKED_TOO_MUCH_TIME_US 5000000
-#define MUTEX_WAITED_TOO_MUCH_TIME_US 2000000
-
 #define MODULE_MSG_HANDLE		g_system_logger
 extern logger_handle *g_system_logger;
 
@@ -148,7 +145,7 @@ mutex_locked_set_monitor()
         u64 ts = mtx->timestamp;
         stacktrace trace = mtx->trace;
         pthread_t id = mtx->id;
-        if(ts < now)
+        if((ts != 0) && (ts < now))
         {
             u64 dt = now - ts;
             if(dt > MUTEX_LOCKED_TOO_MUCH_TIME_US)
@@ -241,7 +238,7 @@ group_mutex_locked_set_monitor()
         u64 ts = mtx->timestamp;
         stacktrace trace = mtx->trace;
         pthread_t id = mtx->id;
-        if(ts < now)
+        if((ts != 0) && (ts < now))
         {
             u64 dt = now - ts;
             if(dt > MUTEX_LOCKED_TOO_MUCH_TIME_US)
@@ -333,7 +330,7 @@ shared_group_mutex_locked_set_monitor()
         u64 ts = mtx->timestamp;
         stacktrace trace = mtx->trace;
         pthread_t id = mtx->id;
-        if(ts < now)
+        if((ts != 0) && (ts < now))
         {
             u64 dt = now - ts;
             if(dt > MUTEX_LOCKED_TOO_MUCH_TIME_US)
@@ -390,6 +387,20 @@ group_mutex_lock(group_mutex_t *mtx, u8 owner)
     log_debug7("group_mutex: locking mutex@%p for %x", mtx, owner);
 #endif
     s64 start = timeus();
+    
+    pthread_t tid = pthread_self();
+    
+    if(tid == mtx->id)
+    {
+        logger_handle_msg(g_system_logger,MSG_ERR, "group_mutex_lock(%p): double lock from the same thread on a non-recursive mutex", mtx);
+        debug_log_stacktrace(g_system_logger, MSG_ERR, "group_mutex_lock");
+        logger_handle_msg(g_system_logger,MSG_ERR, "group_mutex_lock(%p): already locked by", mtx);
+        debug_stacktrace_log(g_system_logger, MSG_ERR, mtx->trace);
+        
+        logger_flush();
+        abort();
+    }
+    
 #endif
 
     mutex_lock(&mtx->mutex);
@@ -414,12 +425,32 @@ group_mutex_lock(group_mutex_t *mtx, u8 owner)
             break;
         }
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
-        s64 d = timeus() - start;
+        s64 now = timeus();
+        s64 d = now - start;
+        pthread_t culprit = mtx->id;
+        stacktrace trace = mtx->trace;
+        s64 ts = mtx->timestamp;
+        
         if(d > MUTEX_WAITED_TOO_MUCH_TIME_US)
         {
-            log_warn("group_mutex: waited for %llius already ...", d);
-            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "group_mutex:");
+            log_warn("group_mutex(%p): waited for %llius already ...", mtx, d);
+            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "group_mutex");
+        
+
+            if(culprit != 0)
+            {
+                if(trace != NULL && ts != 0)
+                {
+                    log_warn("group_mutex(%p): the mutex has been locked for %llius already by %p", mtx, now - ts, culprit);
+                    debug_stacktrace_log(g_system_logger, MSG_WARNING, trace);
+                }
+                else
+                {
+                    log_warn("shared_group_mutex(%p): the mutex was locked by %p", mtx, now - ts, culprit);
+                }
+            }
         }
+        
         cond_timedwait(&mtx->cond, &mtx->mutex, MUTEX_WAITED_TOO_MUCH_TIME_US);
 #else
         cond_wait(&mtx->cond, &mtx->mutex);
@@ -430,7 +461,7 @@ group_mutex_lock(group_mutex_t *mtx, u8 owner)
     
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
     mtx->trace = debug_stacktrace_get();
-    mtx->id = pthread_self();
+    mtx->id = tid;
     mtx->timestamp = timeus();
 
     group_mutex_locked_set_add(mtx);
@@ -505,8 +536,32 @@ group_mutex_unlock(group_mutex_t *mtx, u8 owner)
 
     mutex_lock(&mtx->mutex);
 
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    if((mtx->owner != (owner & 0x7f)) || (mtx->count == 0))
+    {
+        if(mtx->count > 0)
+        {
+            s64 now = timeus();
+
+            log_err("group_mutex(%p): the mutex has been locked by %p/%x for %llius (count = %i) but is being unlocked by %p/%i",
+                mtx,
+                mtx->id, mtx->owner, now - mtx->timestamp, mtx->count,
+                pthread_self(), owner);
+        }
+        else
+        {
+            log_err("group_mutex(%p): the mutex is not locked but is being unlocked by %p/%x",
+                mtx, pthread_self(), owner);
+        }
+
+        debug_log_stacktrace(g_system_logger, MSG_ERR, "group_mutex_unlock");
+
+        abort();
+    }
+#else
     yassert(mtx->owner == (owner & 0x7f));
     yassert(mtx->count != 0);
+#endif
 
     mtx->count--;
 
@@ -570,10 +625,35 @@ group_mutex_destroy(group_mutex_t* mtx)
 #endif
 #endif
     
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    mutex_lock(&mtx->mutex);
+    bool locked = (mtx->count > 0);
+    mutex_unlock(&mtx->mutex);
+    if(locked)
+    {
+        s64 now = timeus();
+
+        log_err("group_mutex(%p): the mutex is locked by %p/%x for %llius (count = %i) but is being destroyed by %p",
+            mtx,
+            mtx->id, mtx->owner, now - mtx->timestamp, mtx->count,
+            pthread_self());
+        debug_log_stacktrace(g_system_logger, MSG_ERR, "group_mutex_destroy");
+    }
+#else
+    yassert(mtx->count == 0);
+#endif
+    
+    group_mutex_lock(mtx, GROUP_MUTEX_DESTROY);
+    group_mutex_unlock(mtx, GROUP_MUTEX_DESTROY);
+    
     cond_notify(&mtx->cond);
     cond_finalize(&mtx->cond);
-    group_mutex_lock(mtx, GROUP_MUTEX_DESTROY);
     mutex_destroy(&mtx->mutex);
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    mtx->trace = (stacktrace)~0;
+    mtx->id = (pthread_t)~0;
+    mtx->timestamp = ~0;
+#endif
 }
 
 void
@@ -584,6 +664,7 @@ mutex_init_recursive(mutex_t *mtx)
     ZEROMEMORY(mtx, sizeof(mutex_t));
 
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    mtx->recursive = TRUE;
     mtx->_MTXs[0] = 'M';
     mtx->_MTXs[1] = 'T';
     mtx->_MTXs[2] = 'X';
@@ -639,6 +720,7 @@ mutex_init(mutex_t *mtx)
     
     ZEROMEMORY(mtx, sizeof(mutex_t));
 
+    mtx->recursive = FALSE;
     mtx->_MTXs[0] = 'M';
     mtx->_MTXs[1] = 'T';
     mtx->_MTXs[2] = 'X';
@@ -675,6 +757,86 @@ mutex_init(mutex_t *mtx)
 #endif
 }
 
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+
+void mutex_lock(mutex_t *mtx)
+{
+    if(mutex_ultraverbose)
+    {
+        logger_handle_msg(g_system_logger,MSG_DEBUG7, "mutex_lock(%p)", mtx);
+    }
+    
+    pthread_t tid = pthread_self();
+    
+    if(tid == mtx->id && !mtx->recursive)
+    {
+        logger_handle_msg(g_system_logger,MSG_ERR, "mutex_lock(%p): double lock from the same thread on a non-recursive mutex", mtx);
+        debug_log_stacktrace(g_system_logger, MSG_ERR, "mutex_lock");
+        logger_handle_msg(g_system_logger,MSG_ERR, "mutex_lock(%p): already locked by", mtx);
+        debug_stacktrace_log(g_system_logger, MSG_ERR, mtx->trace);
+        logger_flush();
+        abort();
+    }
+    
+    s64 start = timeus();
+    
+    for(;;)
+    {
+        s64 timeout = timeus() + MUTEX_WAITED_TOO_MUCH_TIME_US;
+        struct timespec lts;
+        int err;
+        
+        lts.tv_sec = timeout / 1000000;
+        lts.tv_nsec = (timeout % 1000000) * 1000;
+    
+        if((err = pthread_mutex_timedlock(&mtx->mtx, &lts)) == 0)
+        {
+            break;
+        }
+        
+        if(err == ETIMEDOUT)
+        {
+            s64 now = timeus();
+            s64 d = now - start;
+            pthread_t culprit = mtx->id;
+            stacktrace trace = mtx->trace;
+            s64 ts = mtx->timestamp;
+            log_warn("mutex_lock(%p): waited for %llius already ...", mtx, d);
+            debug_log_stacktrace(g_system_logger, MSG_WARNING, "mutex");
+            if(culprit != 0)
+            {
+                if(trace != NULL && ts != 0)
+                {
+                    log_warn("mutex_lock(%p): the mutex has been locked for %llius already by %p", mtx, now - ts, culprit);
+                    debug_stacktrace_log(g_system_logger, MSG_WARNING, trace);
+                }
+                else
+                {
+                    log_warn("mutex_lock(%p): the mutex was locked by %p", mtx, now - ts, culprit);
+                }
+            }
+            continue;
+        }
+        
+        logger_handle_msg(g_system_logger,MSG_ERR, "mutex_lock(%p): %r", mtx, MAKE_ERRNO_ERROR(err));
+        logger_flush();
+        abort();
+    }
+    
+
+    mtx->trace = debug_stacktrace_get();
+    mtx->id = tid;
+    mtx->timestamp = timeus();
+    
+    mutex_locked_set_add(mtx);
+    
+    if(mutex_ultraverbose)
+    {
+        logger_handle_msg(g_system_logger,MSG_DEBUG7, "mutex_lock(%p): locked", mtx);
+    }
+}
+#endif
+
 void
 mutex_destroy(mutex_t *mtx)
 {
@@ -692,6 +854,10 @@ mutex_destroy(mutex_t *mtx)
     {
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
         int err = pthread_mutex_destroy(&mtx->mtx);
+        mtx->trace = (stacktrace)~0;
+        mtx->id = (pthread_t)~0;
+        mtx->timestamp = ~0;
+        mtx->_MTXs[0]='m';
 #else
         int err = pthread_mutex_destroy(mtx);
 #endif
@@ -817,12 +983,22 @@ shared_group_mutex_lock(shared_group_mutex_t *mtx, u8 owner)
     s64 start = timeus();
 #endif
 
-    mutex_lock(&mtx->shared_mutex->mutex);
-    
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    pthread_t tid = pthread_self();
     bool add;
+    if(tid == mtx->id)
+    {
+        logger_handle_msg(g_system_logger,MSG_ERR, "shared_group_mutex(%p): double lock from the same thread on a non-recursive mutex", mtx);
+        debug_log_stacktrace(g_system_logger, MSG_ERR, "shared_group_mutex");
+        logger_handle_msg(g_system_logger,MSG_ERR, "shared_group_mutex(%p): already locked by", mtx);
+        debug_stacktrace_log(g_system_logger, MSG_ERR, mtx->trace);
+        logger_flush();
+        abort();
+    }
 #endif
     
+    mutex_lock(&mtx->shared_mutex->mutex);
+        
     for(;;)
     {
 		/*
@@ -849,12 +1025,32 @@ shared_group_mutex_lock(shared_group_mutex_t *mtx, u8 owner)
         }
 
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
-        s64 d = timeus() - start;
+        s64 now = timeus();
+        s64 d = now - start;
+        pthread_t culprit = mtx->id;
+        stacktrace trace = mtx->trace;
+        s64 ts = mtx->timestamp;
+        
         if(d > MUTEX_WAITED_TOO_MUCH_TIME_US)
         {
-            log_warn("shared_group_mutex: waited for %llius already ...", d);
-            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "shared_group_mutex:");
+            log_warn("shared_group_mutex(%p): waited for %llius already ...", mtx, d);
+            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "shared_group_mutex");
+        
+
+            if(culprit != 0)
+            {
+                if(trace != NULL && ts != 0)
+                {
+                    log_warn("shared_group_mutex(%p): the mutex has been locked for %llius already by %p", mtx, now - ts, culprit);
+                    debug_stacktrace_log(g_system_logger, MSG_WARNING, trace);
+                }
+                else
+                {
+                    log_warn("shared_group_mutex(%p): the mutex was locked by %p", mtx, now - ts, culprit);
+                }
+            }
         }
+            
         cond_timedwait(&mtx->shared_mutex->cond, &mtx->shared_mutex->mutex, MUTEX_WAITED_TOO_MUCH_TIME_US);
 #else
         cond_wait(&mtx->shared_mutex->cond, &mtx->shared_mutex->mutex);
@@ -865,7 +1061,7 @@ shared_group_mutex_lock(shared_group_mutex_t *mtx, u8 owner)
     
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
     mtx->trace = debug_stacktrace_get();
-    mtx->id = pthread_self();
+    mtx->id = tid;
     mtx->timestamp = timeus();
     
     if(add)
@@ -1017,9 +1213,9 @@ shared_group_mutex_destroy(shared_group_mutex_t* mtx)
 #endif
     
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
-    mtx->trace = NULL;
-    mtx->id = 0;
-    mtx->timestamp = 0;
+    mtx->trace = (stacktrace)~0;
+    mtx->id = (pthread_t)~0;
+    mtx->timestamp = ~0;
 #endif
     
     mutex_lock(&mtx->shared_mutex->mutex);

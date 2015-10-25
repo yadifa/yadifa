@@ -35,7 +35,7 @@
 #define __MESSAGE_VERIFY_H__
 
 #include <dnscore/message.h>
-#include <dnscore/dnskey.h>
+#include <dnscore/dnskey-keyring.h>
 
 #define MESSAGE_VERIFY_RRSIG_NOTSIGNED  1
 #define MESSAGE_VERIFY_RRSIG_WRONG      2

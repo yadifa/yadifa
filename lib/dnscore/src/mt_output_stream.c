@@ -59,110 +59,110 @@ struct mt_output_stream_data
     volatile s32 locked;
 };
 
-static ya_result 
-mt_write(output_stream* stream, const u8* buffer, u32 len)
+static ya_result
+mt_write(output_stream *stream, const u8 *buffer, u32 len)
 {
-    mt_output_stream_data* data = (mt_output_stream_data*) stream->data;
+    mt_output_stream_data *data = (mt_output_stream_data *) stream->data;
 
     mutex_lock(&data->mutex);
-    
+
     data->locked++;
-    
+
     while(data->locked > 1)
     {
         cond_wait(&data->cond, &data->mutex);
     }
-    
+
     ya_result ret = output_stream_write(&data->filtered, buffer, len);
-    
+
     data->locked--;
-    
+
     cond_notify(&data->cond);
     mutex_unlock(&data->mutex);
 
     return ret;
 }
 
-static ya_result 
-mt_flush(output_stream* stream)
+static ya_result
+mt_flush(output_stream *stream)
 {
-    mt_output_stream_data* data = (mt_output_stream_data*) stream->data;
-    
+    mt_output_stream_data *data = (mt_output_stream_data *) stream->data;
+
     mutex_lock(&data->mutex);
-    
+
     data->locked++;
-    
+
     while(data->locked > 1)
     {
         cond_wait(&data->cond, &data->mutex);
     }
-    
+
     ya_result ret = output_stream_flush(&data->filtered);
-    
+
     data->locked--;
-    
+
     cond_notify(&data->cond);
     mutex_unlock(&data->mutex);
 
     return ret;
 }
 
-static void 
-mt_close(output_stream* stream)
+static void
+mt_close(output_stream *stream)
 {
-    mt_output_stream_data* data = (mt_output_stream_data*) stream->data;
-    
+    mt_output_stream_data *data = (mt_output_stream_data *) stream->data;
+
     mutex_lock(&data->mutex);
-        
+
     data->locked++;
-    
+
     while(data->locked > 1)
     {
         cond_wait(&data->cond, &data->mutex);
     }
-    
+
     output_stream_set_void(stream);
-    
+
     output_stream_close(&data->filtered);
-    
+
     data->locked--;
-    
+
     cond_notify(&data->cond);
     mutex_unlock(&data->mutex);
-    
+
     cond_finalize(&data->cond);
     mutex_destroy(&data->mutex);
-    
+
     free(data);
 }
 
 static const output_stream_vtbl mt_output_stream_vtbl =
-{    
-    mt_write,
-    mt_flush,
-    mt_close,
-    "mt_output_stream",
-};
+        {
+                mt_write,
+                mt_flush,
+                mt_close,
+                "mt_output_stream",
+        };
 
 ya_result
-mt_output_stream_init(output_stream* filtered, output_stream* stream)
+mt_output_stream_init(output_stream *filtered, output_stream *stream)
 {
-    mt_output_stream_data* data;
+    mt_output_stream_data *data;
 
     if(filtered->vtbl == NULL)
     {
-		return INVALID_STATE_ERROR;
+        return INVALID_STATE_ERROR;
     }
 
-    MALLOC_OR_DIE(mt_output_stream_data*, data, sizeof (mt_output_stream_data), MT_OUTPUT_STREAM_TAG);
+    MALLOC_OR_DIE(mt_output_stream_data*, data, sizeof(mt_output_stream_data), MT_OUTPUT_STREAM_TAG);
 
     data->filtered.data = filtered->data;
     data->filtered.vtbl = filtered->vtbl;
 
-    filtered->data = NULL;		    /* Clean the filtered BEFORE setting up the stream */
+    filtered->data = NULL;            /* Clean the filtered BEFORE setting up the stream */
     filtered->vtbl = NULL;
 
-	mutex_init(&data->mutex);
+    mutex_init(&data->mutex);
     cond_init(&data->cond);
     data->locked = 0;
 
@@ -172,16 +172,16 @@ mt_output_stream_init(output_stream* filtered, output_stream* stream)
     return SUCCESS;
 }
 
-output_stream*
-mt_output_stream_get_filtered(output_stream* bos)
+output_stream *
+mt_output_stream_get_filtered(output_stream *bos)
 {
-    mt_output_stream_data* data = (mt_output_stream_data*)bos->data;
+    mt_output_stream_data *data = (mt_output_stream_data *) bos->data;
 
     return &data->filtered;
 }
 
 bool
-is_mt_output_stream(output_stream* bos)
+is_mt_output_stream(const output_stream* bos)
 {
     return bos->vtbl == &mt_output_stream_vtbl;
 }

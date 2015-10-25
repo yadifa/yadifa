@@ -304,7 +304,7 @@ zdb_zone_label_match(zdb * db, const dnsname_vector* origin,  // mutex checked
 {
     zdb_zone_label* zone_label;
     
-    zdb_lock(db, ZDB_MUTEX_READER);
+    yassert(zdb_islocked_by(db, ZDB_MUTEX_READER));
 
     zone_label = db->root; /* the "." zone */
 
@@ -334,8 +334,6 @@ zdb_zone_label_match(zdb * db, const dnsname_vector* origin,  // mutex checked
         index--;
     }
     
-    zdb_unlock(db, ZDB_MUTEX_READER);
-
     return sp;
 }
 

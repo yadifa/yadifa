@@ -203,6 +203,42 @@ ya_result formatln(const char* fmt,...);
 int vsnformat(char* out_, size_t out_size, const char* fmt, va_list args);
 int snformat(char* out, size_t out_size, const char* fmt, ...);
 
+/**
+ * This formatter will return an allocated (malloc) string as a result of the format
+ * 
+ * @param outp
+ * @param out_size
+ * @param fmt
+ * @param args
+ * @return 
+ */
+
+int vasnformat(char** outp, size_t out_size, const char* fmt, va_list args);
+
+/**
+ * This formatter will return an allocated (malloc) string as a result of the format
+ * 
+ * @param outp
+ * @param out_size
+ * @param fmt
+ * @param ...
+ * @return 
+ */
+
+int asnformat(char** outp, size_t out_size, const char* fmt, ...);
+
+/**
+ * This formatter will return an allocated (malloc) string as a result of the format
+ * 
+ * @param outp
+
+ * @param fmt
+ * @param ...
+ * @return 
+ */
+
+int asformat(char** outp, const char* fmt, ...);
+
 /* Used by extensions */
 
 void format_dec_u64(u64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified);

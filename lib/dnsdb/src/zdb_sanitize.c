@@ -93,7 +93,7 @@ zdb_sanitize_parms_update_keys(zdb_sanitize_parms *parms)
         const u8 *dnskey_rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(dnskey_rrset);
         u32 dnskey_rdata_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(dnskey_rrset);
         
-        u16 keytag = dnskey_getkeytag(dnskey_rdata, dnskey_rdata_size);
+        u16 keytag = dnskey_get_key_tag_from_rdata(dnskey_rdata, dnskey_rdata_size);
 
         u32_set_avl_insert(&parms->dnskey_set, keytag);
         

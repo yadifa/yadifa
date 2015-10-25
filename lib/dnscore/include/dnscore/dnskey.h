@@ -80,7 +80,7 @@
  * Computes the key tag from a packed record
  */
 
-#define DNSKEY_TAG(x__)        (dnskey_getkeytag(&(x__).rdata_start[0],(x__).rdata_size))
+#define DNSKEY_TAG(x__)        (dnskey_get_key_tag_from_rdata(&(x__).rdata_start[0],(x__).rdata_size))
 
 #ifdef	__cplusplus
 extern "C"
@@ -104,7 +104,7 @@ typedef struct dnssec_key_vtbl dnssec_key_vtbl;
 typedef struct dnssec_key_contextmethods dnssec_key_contextmethods;
 
 
-union dnssec_key_key_types
+union dnssec_key_data
 {
     void* any;
     RSA* rsa;
@@ -112,9 +112,15 @@ union dnssec_key_key_types
 
 };
 
-typedef union dnssec_key_key_types dnssec_key_key_types;
+typedef union dnssec_key_data dnssec_key_data;
 
 typedef struct dnssec_key dnssec_key;
+
+#define DNSKEY_KEY_IS_PRIVATE       1
+#define DNSKEY_KEY_TAG_SET          2 // not always needed
+#define DNSKEY_KEY_IS_FROM_DISK     4 // for generated keys
+#define DNSKEY_KEY_IS_MARKED        8 // for marking a key (key manager update algorithm)
+#define DNSKEY_KEY_IS_VALID        16 // the key is public with all its fields set
 
 /* Hash should be tag<<8 | algorithm */
 struct dnssec_key
@@ -122,16 +128,23 @@ struct dnssec_key
     struct dnssec_key* next;
     const dnssec_key_vtbl* vtbl;
     char* origin;
-    u8* owner_name;		/* = zone origin */
+    u8* owner_name;		// = zone origin
 
-    dnssec_key_key_types key;	/* RSA* or DSA* */
-    int	    nid;		/* NID_sha1, NID_md5 */
-
+    dnssec_key_data key;	// RSA* or DSA*
+    s64     timestamp;          // The time the key has been loaded from disk (to avoid reloading)
+    int	    nid;		// NID_sha1, NID_md5
+    
+    u32 epoch_created;
+    u32 epoch_publish;          // if not published yet, at that time, it needs to be added in the zone
+    u32 epoch_activate;         // if not activated yet, at that time, it needs to be used for signatures
+    u32 epoch_revoke;           // not handled yet
+    u32 epoch_inactive;         // if active, at that time, it needs to stop being used for signatures
+    u32 epoch_delete;           // if still in the zone, at that time, it needs to be removed from the zone
+    
     u16 flags;
     u16 tag;
     u8 algorithm;
-    bool is_private;    /* Because I'll probably allow to put public keys here, later ... */
-
+    int status;
     /*
      * Later, add a list of (wannabe) signers and for each of these
      * if said signature has been verified, not verified or is wrong
@@ -171,12 +184,56 @@ struct dnssec_key_vtbl
 
 dnssec_key *dnskey_newemptyinstance(u8 algorithm,u16 flags,const char *origin);
 
+/**
+ * Generate a (public) key using the RDATA
+ * 
+ * @param rdata
+ * @param rdata_size
+ * @param origin
+ * @param out_key
+ * @return 
+ */
+
 ya_result dnskey_new_from_rdata(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key **out_key);
 
 void dnskey_free(dnssec_key *key);
 
+u16 dnssec_key_get_tag(dnssec_key *key);
+u8 dnssec_key_get_algorithm(dnssec_key *key);
+const u8 *dnssec_key_get_domain(dnssec_key *key);
+bool dnssec_key_is_private(dnssec_key *key);
+
+/**
+ * Adds/Remove a key from a key chain.
+ * The 'next' field of the key is used.
+ * A key can only be in one chain at a time.
+ * This is meant to be used in the keystore.
+ * 
+ * @param keyp
+ */
+
+void dnskey_key_add_in_chain(dnssec_key *key, dnssec_key **keyp);
+
+/**
+ * Adds/Remove a key from a key chain.
+ * The 'next' field of the key is used.
+ * A key can only be in one chain at a time.
+ * This is meant to be used in the keystore.
+ * 
+ * @param keyp
+ */
+
+void dnskey_key_remove_from_chain(dnssec_key *key, dnssec_key **keyp);
+
 /** Key tag */
-u16 dnskey_getkeytag(const u8* dnskey_rdata,u32 dnskey_rdata_size);
+u16 dnskey_get_key_tag_from_rdata(const u8* dnskey_rdata,u32 dnskey_rdata_size);
+
+// For compatibility with <= 2.1.4
+static inline u16 dnskey_getkeytag(const u8* dnskey_rdata,u32 dnskey_rdata_size)
+{
+    u16 ret = dnskey_get_key_tag_from_rdata(dnskey_rdata, dnskey_rdata_size);
+    return ret;
+}
 
 static inline u16 dnskey_get_flags_from_rdata(const u8* dnskey_rdata)
 {
@@ -194,33 +251,107 @@ static inline u8 dnskey_get_algorithm_from_rdata(const u8* dnskey_rdata)
 }
 
 /** Key tag */
-unsigned int dnskey_getkeytag_reference(unsigned char key[],  /* the RDATA part of the DNSKEY RR */
-                                        unsigned int keysize  /* the RDLENGTH */
-                                       );
+unsigned int dnskey_get_key_tag_from_rdata_reference(unsigned char key[],  /* the RDATA part of the DNSKEY RR */
+                                                     unsigned int keysize  /* the RDLENGTH */
+                                                    );
 
-ya_result dnskey_digest_init(digest_s *ctx, u8 algorithm);
+/**
+ * Generate the RDATA of a DS records using the RDATA from a DSNKEY record
+ * 
+ * @param digest_type the type of DS
+ * @param dnskey_fqdn the domain of the record
+ * @param dnskey_rdata the rdata of the DNSKEY
+ * @param dnskey_rdata_size the size of the rdata of the DNSKEY
+ * @param out_rdata the output buffer that has to be the right size (known given digest_type)
+ * @return 
+ */
 
 ya_result dnskey_generate_ds_rdata(u8 digest_type, const u8 *dnskey_fqdn, const u8 *dnskey_rdata,u16 dnskey_rdata_size, u8 *out_rdata);
 
-/*----------------------------------------------------------------------------*/
+/**
+ * 
+ * Compares two keys for equality
+ * 
+ * @param a
+ * @param b
+ * @return 
+ */
 
-struct dnskey_keyring
-{
-    mutex_t mtx;
-    u32_set tag_to_key;
-};
+bool dnssec_key_equals(dnssec_key* a, dnssec_key* b);
 
-typedef struct dnskey_keyring dnskey_keyring;
+///////////////////////////////////////////////////////////////////////////////
 
-#define EMPTY_DNSKEY_KEYRING {MUTEX_INITIALIZER, U32_SET_EMPTY };
+ya_result dnskey_digest_init(digest_s *ctx, u8 algorithm);
 
-ya_result       dnskey_keyring_init(dnskey_keyring *ks);
-ya_result	dnskey_keyring_add(dnskey_keyring *ks, dnssec_key* key);
-dnssec_key*	dnskey_keyring_get(dnskey_keyring *ks, u8 algorithm, u16 tag, const u8 *domain);
-dnssec_key*	dnskey_keyring_remove(dnskey_keyring *ks, u8 algorithm, u16 tag, const u8 *domain);
-void		dnskey_keyring_destroy(dnskey_keyring *ks);
+/**
+ * 
+ * @param f_ output file
+ * @param num_ the number to write
+ * @param tmp_in_ temporary buffer
+ * @param tmp_in_size temporary buffer size
+ * @param tmp_out_ output buffer
+ * @param tmp_out_size output buffer size
+ * @return 
+ */
 
+ya_result dnskey_write_bignum_as_base64(FILE *f_, const BIGNUM* num_, u8 *tmp_in_, u32 tmp_in_size, char *tmp_out_, u32 tmp_out_size);
 
+/**
+ * Returns the most relevant publication time.
+ * 
+ * publish > activate > created > now
+ * 
+ * @param key
+ * @return 
+ */
+
+u32 dnskey_get_publish_epoch(dnssec_key *key);
+
+/**
+ * Returns the most relevant activation time.
+ * 
+ * activate > publish > created > now
+ * 
+ * @param key
+ * @return 
+ */
+
+u32 dnskey_get_activate_epoch(dnssec_key *key);
+
+/**
+ * Returns the most relevant revocation time.
+ * 
+ * revoke > never
+ * 
+ * @param key
+ * @return 
+ */
+
+u32 dnskey_get_revoke_epoch(dnssec_key *key);
+
+/**
+ * Returns the most relevant inactivation time.
+ * 
+ * inactive > delete > never
+ * 
+ * @param key
+ * @return 
+ */
+
+u32 dnskey_get_inactive_epoch(dnssec_key *key);
+
+/**
+ * Returns the most relevant delete time.
+ * 
+ * delete > inactive > never
+ * 
+ * @param key
+ * @return 
+ */
+
+u32 dnskey_get_delete_epoch(dnssec_key *key);
+
+///////////////////////////////////////////////////////////////////////////////
 
 static inline u16 ds_get_wire_keytag_from_rdata(const u8 *rdata)
 {
@@ -246,21 +377,7 @@ static inline u8 ds_get_digesttype_from_rdata(const u8 *rdata)
     return ds_digesttype;
 }
 
-/// tool function
-
-/**
- * 
- * @param f_ output file
- * @param num_ the number to write
- * @param tmp_in_ temporary buffer
- * @param tmp_in_size temporary buffer size
- * @param tmp_out_ output buffer
- * @param tmp_out_size output buffer size
- * @return 
- */
-
-ya_result dnskey_write_bignum_as_base64(FILE *f_, const BIGNUM* num_, u8 *tmp_in_, u32 tmp_in_size, char *tmp_out_, u32 tmp_out_size);
-
+///////////////////////////////////////////////////////////////////////////////
 
 #ifdef	__cplusplus
 }

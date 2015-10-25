@@ -53,6 +53,20 @@
 #include "dnszone/dnszone.h"
 #include "dnszone/zone_file_reader.h"
 
+#ifndef __DATE__
+#define __DATE__ "date?"
+#endif
+
+#ifndef __TIME__
+#define __TIME__ "time?"
+#endif
+
+#ifdef DEBUG
+const char *dnszone_lib = "dnszone " __DATE__ " " __TIME__ " debug";
+#else
+const char *dnszone_lib = "dnszone " __DATE__ " " __TIME__ " release";
+#endif
+
 dnslib_fingerprint
 dnszone_getfingerprint()
 {

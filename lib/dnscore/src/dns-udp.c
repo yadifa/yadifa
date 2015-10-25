@@ -32,10 +32,6 @@
 *
 */
 
-//#include <pthread.h>
-
-//#include "dnscore/dnscore-config.h"
-
 #include <netinet/in.h>
 #include <signal.h>
 
@@ -223,6 +219,8 @@ static int dns_udp_send_simple_message_node_compare(const void *key_a, const voi
 static ptr_set message_collection = { NULL, dns_udp_send_simple_message_node_compare};
 static mutex_t message_collection_mtx;
 static rate_s dns_udp_send_rate;
+static volatile s64 message_collection_keys = 0;
+static volatile s64 message_collection_size = 0;
 
 static const dns_udp_settings_s default_dns_udp_settings =
 {
@@ -569,13 +567,7 @@ dns_udp_handler_stop()
         if(dns_udp_socket[i] != ~0)
         {
             log_debug1("dns_udp_handler_stop: closing socket %i", dns_udp_socket[i]);
-            
-            if(shutdown(dns_udp_socket[i], SHUT_RDWR) < 0)
-            {
-                err4 = ERRNO_ERROR;
-                log_err("dns_udp_handler_stop: unable to shutdown socket %i: %r", dns_udp_socket[i], ERRNO_ERROR);
-            }
-            
+
             close_ex(dns_udp_socket[i]);
             dns_udp_socket[i] = ~0;
         }
@@ -584,7 +576,7 @@ dns_udp_handler_stop()
     log_debug("closed %i sockets", dns_udp_socket_count);
         
     // cleans-up whatever is waiting ...
-    // but there is some issue here.  the program suck on the async_wait,
+    // but there is some issue here.  the program stuck on the async_wait,
     // probably because the data was already freed (race?)
     
     if(dns_udp_high_priority != NULL)
@@ -592,11 +584,44 @@ dns_udp_handler_stop()
         for(int i = 0; i < dns_udp_socket_count; i++)
         {
             list_dl_s *list = &dns_udp_high_priority[i];
-            async_wait_s *aw;
-            while((aw = (async_wait_s*)list_dl_remove_first(list)) != NULL)
+            async_message_s *async;
+            while((async = (async_message_s*)list_dl_remove_first(list)) != NULL)
             {
-                aw->error_code = ERROR;
-                async_wait_progress(aw, 1);
+                dns_simple_message_s *simple_message = (dns_simple_message_s*)async->args;
+                
+                simple_message->sent_time_us = MAX_S64;
+                simple_message->worker_index = i;
+                simple_message->source_port = 0;
+
+                // pre-increase the RC because of this new reference (into the DB)
+                // dns_udp_simple_message_retain(simple_message);
+                
+                async->error_code = DNS_UDP_CANCEL;
+                
+                //dns_udp_simple_message_answer_call_handlers(simple_message);
+                
+                log_debug("send: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) is cancelled", simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server, simple_message->status);
+
+                simple_message->received_time_us = MAX_U64;
+
+                dns_simple_message_async_node_s *node = simple_message->async_node.next;
+                while(node != NULL)
+                {
+                    // the handler MUST release one reference
+                    dns_udp_simple_message_retain(simple_message);
+                    node->async->error_code = DNS_UDP_CANCEL;
+                    node->async->handler(node->async);
+                    node = node->next;
+                }
+
+                // there is no need to retain, the reference from the collection has not been decreased yet
+                simple_message->async_node.async->error_code = DNS_UDP_CANCEL;
+                simple_message->async_node.async->handler(simple_message->async_node.async);
+
+                simple_message = NULL;
+
+                //async->handler(async);
+                //async_wait_progress(aw, 1);
             }
         }
     }
@@ -620,6 +645,8 @@ dns_udp_handler_stop()
     {
         dns_udp_socket_count = 0;
     }
+    
+    dns_udp_cancel_all_queries();
         
     return err;
 }
@@ -669,6 +696,9 @@ dns_udp_handler_finalize()
     async_queue_finalize(&dns_udp_send_handler_queue);
     
     ptr_set_avl_callback_and_destroy(&message_collection, dns_udp_handler_message_collection_free_node_callback);
+
+    message_collection_keys = 0;
+    message_collection_size = 0;
     
     pool_finalize(&dns_simple_message_async_node_pool);
     pool_finalize(&dns_simple_message_pool);
@@ -738,6 +768,15 @@ dns_udp_allocate_message_data(struct service_worker_s *worker)
         sleep(1);
     }
 }
+
+/**
+ * Calls the handlers of the aggregated queries on a message.
+ * 
+ * First calls the handlers for the list of aggregated.
+ * Then calls the handler for original one.
+ * 
+ * @param simple_message
+ */
 
 static void
 dns_udp_simple_message_answer_call_handlers(dns_simple_message_s *simple_message)
@@ -960,6 +999,7 @@ dns_udp_send_simple_message(const host_address* name_server, const u8 *fqdn, u16
     simple_message->answer = NULL;
     simple_message->async_node.async = domain_message;
     simple_message->async_node.next = NULL;
+    simple_message->queued_time_us = timeus();
     simple_message->sent_time_us = MAX_S64;
     simple_message->received_time_us = 0;
     simple_message->qtype = qtype;
@@ -970,7 +1010,7 @@ dns_udp_send_simple_message(const host_address* name_server, const u8 *fqdn, u16
     simple_message->status = DNS_SIMPLE_MESSAGE_STATUS_QUEUED;
     simple_message->recurse = FALSE;
     
-    mutex_init(&simple_message->mtx);
+    group_mutex_init(&simple_message->mtx);
 #if DNS_SIMPLE_MESSAGE_HAS_WAIT_COND
     pthread_cond_init(&simple_message->mtx_cond, NULL);
 #endif
@@ -1010,7 +1050,8 @@ dns_udp_send_recursive_message(const host_address* name_server, const u8 *fqdn, 
     simple_message->answer = NULL;
     simple_message->async_node.async = domain_message;
     simple_message->async_node.next = NULL;
-    simple_message->sent_time_us = 0;
+    simple_message->queued_time_us = timeus();
+    simple_message->sent_time_us = MAX_S64;
     simple_message->received_time_us = 0;
     simple_message->qtype = qtype;
     simple_message->qclass = qclass;
@@ -1020,7 +1061,7 @@ dns_udp_send_recursive_message(const host_address* name_server, const u8 *fqdn, 
     simple_message->status = DNS_SIMPLE_MESSAGE_STATUS_QUEUED;
     simple_message->recurse = TRUE;
     
-    mutex_init(&simple_message->mtx);
+    group_mutex_init(&simple_message->mtx);
 #if DNS_SIMPLE_MESSAGE_HAS_WAIT_COND
     pthread_cond_init(&simple_message->mtx_cond, NULL);
 #endif
@@ -1112,14 +1153,12 @@ dns_udp_send_simple_message_sync(const host_address* name_server, const u8 *fqdn
     return err;
 }
 
-#ifdef DNS_SIMPLE_MESSAGE_CAN_BE_LOCKED
-
 bool
 dns_udp_simple_message_trylock(dns_simple_message_s *message)
 {
     log_debug7("dns_udp_simple_message_lock(%p) try locking (#%i)", message, message->rc.value);
     
-    if(mutex_trylock(&message->mtx))
+    if(group_mutex_trylock(&message->mtx, GROUP_MUTEX_WRITE))
     {
         if(message->owner == 0)
         {
@@ -1145,7 +1184,7 @@ dns_udp_simple_message_lock(dns_simple_message_s *message)
 {
     log_debug7("dns_udp_simple_message_lock(%p) locking", message);
     
-    mutex_lock(&message->mtx);
+    group_mutex_lock(&message->mtx, GROUP_MUTEX_WRITE);
     
 #if DNS_SIMPLE_MESSAGE_HAS_WAIT_COND
     while( message->owner != 0 )
@@ -1170,12 +1209,10 @@ dns_udp_simple_message_unlock(dns_simple_message_s *message)
     pthread_cond_broadcast(&message->mtx_cond);
 #endif
         
-    mutex_unlock(&message->mtx);
+    group_mutex_unlock(&message->mtx, GROUP_MUTEX_WRITE);
         
     log_debug7("dns_udp_simple_message_lock(%p) unlocked", message);
 }
-
-#endif
 
 void
 dns_udp_simple_message_retain(dns_simple_message_s *simple_message)
@@ -1245,7 +1282,7 @@ dns_udp_simple_message_release(dns_simple_message_s *simple_message)
         if(simple_message->async_node.async != NULL)
         {
             async_message_release(simple_message->async_node.async);
-
+            //--message_collection_size; this one is with keys
             simple_message->async_node.async = NULL;
         }
         
@@ -1256,17 +1293,16 @@ dns_udp_simple_message_release(dns_simple_message_s *simple_message)
             if(node->async != NULL)
             {
                 async_message_release(node->async);
+                --message_collection_size;
                 node->async = NULL;
             }
             
             dns_simple_message_async_node_s *prev = node;
             
             node = node->next;
-
 #ifdef DEBUG
             memset(prev, 0xd7, sizeof(dns_simple_message_async_node_s));
 #endif
-            
             pool_release(&dns_simple_message_async_node_pool, prev);
         }
         
@@ -1287,7 +1323,7 @@ dns_udp_simple_message_release(dns_simple_message_s *simple_message)
             usleep(10);
         }
 #endif
-        mutex_destroy(&simple_message->mtx);
+        group_mutex_destroy(&simple_message->mtx);
 
         smp_int_destroy(&simple_message->rc);
 
@@ -1315,6 +1351,68 @@ dns_udp_simple_message_release(dns_simple_message_s *simple_message)
     }
 }
 
+static void
+dns_udp_aggregate_simple_messages(dns_simple_message_s *head, dns_simple_message_s *tail)
+{
+    dns_simple_message_async_node_s *node = (dns_simple_message_async_node_s*)pool_alloc(&dns_simple_message_async_node_pool);
+    
+    dns_udp_simple_message_lock(head);
+    dns_udp_simple_message_lock(tail);
+
+    log_debug6("dns_udp_aggregate_simple_messages(%p, %p) head %p->%p", head, tail, &head->async_node, head->async_node.next);
+
+    // prepare the container to match the simple message's
+    // append the current list to the new node (should be only one item)
+    node->next = tail->async_node.next;        //
+    node->async = tail->async_node.async;
+    tail->async_node.next = NULL;
+    tail->async_node.async = NULL;
+    node->async->args = head;                   // change the linked message to the first one
+
+    log_debug6("dns_udp_aggregate_simple_messages(%p, %p) edit %p->%p", head, tail, node, node->next);
+
+    // update the first_message for the whole list (every time ?)
+    dns_simple_message_async_node_s *sm_last_node = node;
+    while(sm_last_node->next != NULL)
+    {
+        sm_last_node = sm_last_node->next;
+        log_debug6("dns_udp_aggregate_simple_messages(%p, %p) edit %p->%p. Updating message as %p (was %p)", head, tail, sm_last_node, sm_last_node->next, sm_last_node->async->args, head);
+        sm_last_node->async->args = head;                      // change the linked message to the first one
+    }
+
+    // last node of the list, append the original list to the current list
+
+    sm_last_node->next = head->async_node.next;
+    head->async_node.next = node;
+
+    // the list is ready
+
+#ifdef DEBUG
+    while(node != NULL)
+    {
+        log_debug6("dns_udp_aggregate_simple_messages(%p, %p) node %p=>%p", head, tail, node, node->next);
+        node = node->next;
+    }
+#endif
+
+    head->status |= DNS_SIMPLE_MESSAGE_STATUS_AGGREGATED;
+    
+    // added
+
+    sendto_packets_aggregated++;
+
+    log_debug5("added message@%p to message@%p: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} %s (%x)",
+            tail, head, head->fqdn, &head->qtype, &head->qclass, head->name_server, (head->recurse)?"rd":"",
+            head->status);
+    
+    // adding a query grants a new retry
+    
+    ++head->retries_left;
+    
+    dns_udp_simple_message_unlock(tail); // unlock B
+    dns_udp_simple_message_unlock(head);
+}
+
 static int
 dns_udp_send_simple_message_process(async_message_s *domain_message, random_ctx rndctx, u16 source_port, int s, u32 worker_index)
 {
@@ -1340,30 +1438,36 @@ dns_udp_send_simple_message_process(async_message_s *domain_message, random_ctx 
 
     // pre-increase the RC because of this new reference (into the DB)
     dns_udp_simple_message_retain(simple_message);
-    /// @note: at this point the RC of simple_message is 2
+    /// @note: at this point, in a normal usage, the RC of simple_message should be 2
     
-    // lock the simple message
-    dns_udp_simple_message_lock(simple_message);
     // lock the collection
-    mutex_lock(&message_collection_mtx);
+    mutex_lock(&message_collection_mtx); // lock A
+
+    // lock the simple message
+    dns_udp_simple_message_lock(simple_message); // lock B
     
     ptr_node *node = ptr_set_avl_insert(&message_collection, simple_message);
     
     simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_COLLECTED;
     simple_message->status &= ~DNS_SIMPLE_MESSAGE_STATUS_QUEUED;
     
+    dns_udp_simple_message_unlock(simple_message);
+    
     int return_code;
     
     if(node->value == NULL)
     {
+        ++message_collection_keys;
+        
         // newly inserted
         // put in pending collection
         // RC already increased
-                
+        
         node->value = domain_message;
         
-        mutex_unlock(&message_collection_mtx);
-                
+        mutex_unlock(&message_collection_mtx); // unlock A
+        
+        dns_udp_simple_message_lock(simple_message);
         log_debug5("set message@%p: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} %s (%x)",
                 domain_message, simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server, (simple_message->recurse)?"rd":"",
                 simple_message->status);
@@ -1389,7 +1493,11 @@ dns_udp_send_simple_message_process(async_message_s *domain_message, random_ctx 
         socketaddress sa;
         socklen_t sa_len = sizeof(sa.sa6);
         
-        if(ISOK(return_code = host_address2sockaddr(&sa, simple_message->name_server)))
+        return_code = host_address2sockaddr(&sa, simple_message->name_server);
+        
+        dns_udp_simple_message_unlock(simple_message);
+        
+        if(ISOK(return_code))
         {
             for(;;)
             {
@@ -1400,15 +1508,14 @@ dns_udp_send_simple_message_process(async_message_s *domain_message, random_ctx 
                 
                 if((return_code = sendto(s, mesg.buffer, mesg.send_length, 0, &sa.sa, sa_len)) == mesg.send_length)
                 {
-                    simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_SENT;
+                    dns_udp_simple_message_lock(simple_message);
+                    simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_SENT;                    
                     
                     log_notice("sent: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x)", simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server, simple_message->status);
                     
                     simple_message->sent_time_us = timeus();
-                    
-#if DNS_SIMPLE_MESSAGE_CAN_BE_LOCKED
-                    dns_udp_simple_message_unlock(simple_message);
-#endif
+                    dns_udp_simple_message_unlock(simple_message); // unlock B
+
                     // one RC can be released
                     dns_udp_simple_message_release(simple_message);
                     
@@ -1442,7 +1549,7 @@ dns_udp_send_simple_message_process(async_message_s *domain_message, random_ctx 
 
                         mutex_unlock(&sendto_statistics_mtx);
 
-                        log_debug("sent: %d b/s (%d/%d q/s)", st, sq, sqa);
+                        log_debug("sent: total=%db/s (packets=%d/aggregated=%d/s)", st, sq, sqa);
                     }
                     
                     // </statistics>
@@ -1466,6 +1573,8 @@ dns_udp_send_simple_message_process(async_message_s *domain_message, random_ctx 
         }
         
         // error occurred while sending the message
+        
+        dns_udp_simple_message_lock(simple_message);
     
         simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_FAILURE;
 
@@ -1473,14 +1582,19 @@ dns_udp_send_simple_message_process(async_message_s *domain_message, random_ctx 
                 simple_message->fqdn, &simple_message->qtype, &simple_message->qclass,
                 simple_message->name_server, simple_message->status, return_code);
 
+        dns_udp_simple_message_unlock(simple_message);
+        
         mutex_lock(&message_collection_mtx);
         // ensure that the node still exists
-        ptr_node *node = ptr_set_avl_insert(&message_collection, simple_message);
+        ptr_node *node = ptr_set_avl_find(&message_collection, simple_message);
         if(node != NULL)
         {
             ptr_set_avl_delete(&message_collection, simple_message);
+            --message_collection_keys;
             // one RC can be released for the collection
+            dns_udp_simple_message_lock(simple_message);
             simple_message->status &= ~DNS_SIMPLE_MESSAGE_STATUS_COLLECTED;
+            dns_udp_simple_message_unlock(simple_message);
             dns_udp_simple_message_release(simple_message);
         }
         else
@@ -1490,9 +1604,6 @@ dns_udp_send_simple_message_process(async_message_s *domain_message, random_ctx 
         }
         mutex_unlock(&message_collection_mtx);
 
-#if DNS_SIMPLE_MESSAGE_CAN_BE_LOCKED
-        dns_udp_simple_message_unlock(simple_message);
-#endif
         /// @note RC = 1
         // the handler NEEDS to do the final release
 
@@ -1505,64 +1616,16 @@ dns_udp_send_simple_message_process(async_message_s *domain_message, random_ctx 
     {
         // append the async callback to the dns_simple_message structure
         
-        // a container for the new message node
-        dns_simple_message_async_node_s *simple_message_node = (dns_simple_message_async_node_s*)pool_alloc(&dns_simple_message_async_node_pool);
         // the first message for this query, it will reference the new message
-        dns_simple_message_s *first_message = (dns_simple_message_s *)node->key;
+        dns_simple_message_s *old_message = (dns_simple_message_s *)node->key;
         
-        // else it could be destroyed just after the unlock of the collection
-        dns_udp_simple_message_retain(first_message);
-        dns_udp_simple_message_lock(first_message);
+        // aggregate /append simple_message to first_message
         
-        log_debug6("dns_udp_send_simple_message_process(%p) head %p->%p", simple_message, &first_message->async_node, first_message->async_node.next);
-        
-        // prepare the container to match the simple message's
-        simple_message_node->next = simple_message->async_node.next;        //
-        simple_message->async_node.next = NULL;
-        simple_message_node->async = simple_message->async_node.async;
-        simple_message->async_node.async = NULL;
-        simple_message_node->async->args = first_message;                   // change the linked message to the first one
-        
-        log_debug6("dns_udp_send_simple_message_process(%p) edit %p->%p", simple_message, simple_message_node, simple_message_node->next);
-        
-        // append the whole list at once
-        dns_simple_message_async_node_s *sm_last_node = simple_message_node;
-        while(sm_last_node->next != NULL)
-        {
-            sm_last_node = sm_last_node->next;
-            log_debug6("dns_udp_send_simple_message_process(%p) edit %p->%p", simple_message, sm_last_node, sm_last_node->next);
-            sm_last_node->async->args = first_message;          // change the linked message to the first one
-        }
-        
-        sm_last_node->next = first_message->async_node.next;
-        first_message->async_node.next = simple_message_node;
-        
-        
-#ifdef DEBUG
-        while(simple_message_node != NULL)
-        {
-            log_debug6("dns_udp_send_simple_message_process(%p) node %p=>%p", simple_message, simple_message_node, simple_message_node->next);
-            simple_message_node = simple_message_node->next;
-        }
-#endif
-        
-        first_message->status |= DNS_SIMPLE_MESSAGE_STATUS_AGGREGATED;
-        dns_udp_simple_message_unlock(first_message); /// @todo 20140526 edf -- update the timeout
+        dns_udp_aggregate_simple_messages(old_message, simple_message);
+        ++message_collection_size;
         
         mutex_unlock(&message_collection_mtx);
         
-        dns_udp_simple_message_unlock(simple_message);
-                
-        // added
-        
-        sendto_packets_aggregated++;
-        
-        log_debug5("add message@%p to message@%p: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} %s (%x)",
-                domain_message, first_message, first_message->fqdn, &first_message->qtype, &first_message->qclass, first_message->name_server, (first_message->recurse)?"rd":"",
-                first_message->status);
-        
-        // the local reference can be released
-        dns_udp_simple_message_release(first_message);
         // one RC can be released from the collection
         dns_udp_simple_message_release(simple_message);
         // one RC can be released from this reference
@@ -1592,7 +1655,7 @@ dns_udp_send_service(struct service_worker_s *worker)
     
     const u16 source_port = sin6.sin6_port;
 
-    while(service_shouldrun(worker) || !async_queue_emtpy(&dns_udp_send_handler_queue))
+    while(service_shouldrun(worker))
     {
         // timeout high priority list.
         
@@ -1785,6 +1848,7 @@ dns_udp_receive_service(struct service_worker_s *worker)
                         dns_udp_simple_message_lock(simple_message);
 
                         ptr_set_avl_delete(&message_collection, simple_message);
+                        --message_collection_keys;
                         
                         // the message is not in the timeout collection anymore
                         // it should contain an answer, or an error, ... or a message with the TC bit on
@@ -1885,7 +1949,7 @@ dns_udp_receive_service(struct service_worker_s *worker)
         }
     }
     
-        if(mesg != NULL)
+    if(mesg != NULL)
     {
         memset(mesg, 0xd6, sizeof(message_data));
         pool_release(&message_data_pool, mesg);
@@ -1896,6 +1960,77 @@ dns_udp_receive_service(struct service_worker_s *worker)
     log_debug("receive: service stopped (%u/%u)", worker->worker_index + 1, worker->service->worker_count);
     
     return 0;
+}
+
+static void
+dns_udp_timeout_service_cull(ptr_vector *todeletep)
+{
+    int messages_count = 0;
+    int failed_tries = 0;
+
+    mutex_lock(&message_collection_mtx);
+
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&message_collection, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
+    {
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        dns_simple_message_s *simple_message = (dns_simple_message_s *)node->key;
+
+        messages_count++;
+
+        if(dns_udp_simple_message_trylock(simple_message))
+        {
+            u64 now = timeus();
+
+            if(simple_message->sent_time_us != MAX_S64)
+            {
+#ifdef DEBUG
+                if(now <  simple_message->sent_time_us)
+                {
+                    log_debug("message was sent %llu in the future! (sent at %llu, now is %llu, really %llu)", simple_message->sent_time_us - now, simple_message->sent_time_us, now, timeus());
+                }
+#endif
+
+                if(now - simple_message->sent_time_us > dns_udp_settings->timeout) // older than 3s ? => remove
+                {
+                    // timed out
+
+                    // retain because the reference is now in two collection
+                    dns_udp_simple_message_retain(simple_message);
+
+                    simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_TIMEDOUT;
+                    ptr_vector_append(todeletep, simple_message);
+                }
+            }
+            // else this message has not been sent yet
+            
+            dns_udp_simple_message_unlock(simple_message);
+        }
+        else
+        {
+            failed_tries++;
+        }
+    }
+
+    if(failed_tries > 0)
+    {
+        log_warn("timeout: failed to lock %i messages (on a total of %i)", failed_tries, messages_count);
+    }
+
+    for(int i = 0; i <= ptr_vector_last_index(todeletep); i++)
+    {
+        dns_simple_message_s *simple_message = (dns_simple_message_s *)ptr_vector_get(todeletep, i);
+
+        ptr_set_avl_delete(&message_collection, simple_message);
+        // release because it has been removed from one collection
+        --message_collection_keys;
+        dns_udp_simple_message_release(simple_message);
+
+        simple_message->status &= ~DNS_SIMPLE_MESSAGE_STATUS_COLLECTED;
+    }
+
+    mutex_unlock(&message_collection_mtx);
 }
 
 static int
@@ -1916,87 +2051,13 @@ dns_udp_timeout_service(struct service_worker_s *worker)
         
         ptr_vector_empties(&todelete);
         
+        dns_udp_timeout_service_cull(&todelete);
+        
         u64 now = timeus();
-        
-        int messages_count = 0;
-        int failed_tries = 0;
-        
-        mutex_lock(&message_collection_mtx);
-        
-        ptr_set_avl_iterator iter;
-        ptr_set_avl_iterator_init(&message_collection, &iter);
-        while(ptr_set_avl_iterator_hasnext(&iter))
+
+        for(int i = 0; i <= ptr_vector_last_index(&todelete); i++)
         {
-            ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
-            dns_simple_message_s *simple_message = (dns_simple_message_s *)node->key;
-            
-            messages_count++;
-           
-            if(dns_udp_simple_message_trylock(simple_message))
-            {
-                now = timeus();
-
-                if(simple_message->sent_time_us != MAX_S64)
-                {
-#ifdef DEBUG
-                    if(now <  simple_message->sent_time_us)
-                    {
-                        log_debug("message was sent %llu in the future! (sent at %llu, now is %llu, really %llu)", simple_message->sent_time_us - now, simple_message->sent_time_us, now, timeus());
-                    }
-#endif
-
-                    if(now - simple_message->sent_time_us > dns_udp_settings->timeout) // older than 3s ? => remove
-                    {
-                        // timed out
-
-                        // retain because the reference is now in two collection
-                        dns_udp_simple_message_retain(simple_message);
-
-                        simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_TIMEDOUT;
-                        ptr_vector_append(&todelete, simple_message);
-                    }
-                }
-#ifdef DEBUG
-                else
-                {
-                    if(now - simple_message->sent_time_us > dns_udp_settings->timeout)
-                    {
-                        log_warn("timeout: message would have wrongly been timed-out");
-                    }
-                }
-#endif
-                
-                dns_udp_simple_message_unlock(simple_message);
-            }
-            else
-            {
-                failed_tries++;
-            }
-        }
-        
-        if(failed_tries > 0)
-        {
-            log_warn("timeout: failed to lock %i messages (on a total of %i)", failed_tries, messages_count);
-        }
-        
-        for(int i = 0; i <= todelete.offset; i++)
-        {
-            dns_simple_message_s *simple_message = (dns_simple_message_s *)todelete.data[i];
-            
-            ptr_set_avl_delete(&message_collection, simple_message);
-            // release because it has been removed from one collection
-            dns_udp_simple_message_release(simple_message);
-            
-            simple_message->status &= ~DNS_SIMPLE_MESSAGE_STATUS_COLLECTED;
-        }
-        
-        mutex_unlock(&message_collection_mtx);
-        
-        now = timeus();
-
-        for(int i = 0; i <= todelete.offset; i++)
-        {
-            dns_simple_message_s *simple_message = (dns_simple_message_s *)todelete.data[i];
+            dns_simple_message_s *simple_message = (dns_simple_message_s *)ptr_vector_get(&todelete, i);
             
             log_debug("timeout: [r=%i] %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) (sent at %llu, now is %llu)", simple_message->retries_left, simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server, simple_message->status, simple_message->sent_time_us, now);
 
@@ -2059,4 +2120,137 @@ dns_udp_timeout_service(struct service_worker_s *worker)
     log_debug("dns_udp_timeout_service stopped");
     
     return 0;
+}
+
+void
+dns_udp_cancel_all_queries()
+{
+    int messages_count = 0;
+    int failed_tries = 0;
+    
+    ptr_vector todelete = EMPTY_PTR_VECTOR;
+
+    u64 now = timeus();
+    
+    mutex_lock(&message_collection_mtx);
+
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&message_collection, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
+    {
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        dns_simple_message_s *simple_message = (dns_simple_message_s *)node->key;
+
+        messages_count++;
+
+        if(dns_udp_simple_message_trylock(simple_message))
+        {
+            now = timeus();
+
+            if(simple_message->sent_time_us != MAX_S64)
+            {
+#ifdef DEBUG
+                if(now <  simple_message->sent_time_us)
+                {
+                    log_debug("message was sent %llu in the future! (sent at %llu, now is %llu, really %llu)", simple_message->sent_time_us - now, simple_message->sent_time_us, now, timeus());
+                }
+#endif
+
+                if(now - simple_message->sent_time_us > dns_udp_settings->timeout) // older than 3s ? => remove
+                {
+                    // timed out
+
+                    // retain because the reference is now in two collection
+                    dns_udp_simple_message_retain(simple_message);
+
+                    simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_TIMEDOUT|DNS_SIMPLE_MESSAGE_STATUS_INVALID;
+                    ptr_vector_append(&todelete, simple_message);
+                }
+            }
+#ifdef DEBUG
+            else
+            {
+                if(now - simple_message->sent_time_us > dns_udp_settings->timeout)
+                {
+                    log_warn("timeout: message would have wrongly been timed-out");
+                }
+            }
+#endif
+
+            dns_udp_simple_message_unlock(simple_message);
+        }
+        else
+        {
+            failed_tries++;
+        }
+    }
+
+    if(failed_tries > 0)
+    {
+        log_warn("timeout: failed to lock %i messages (on a total of %i)", failed_tries, messages_count);
+    }
+
+    for(int i = 0; i <= ptr_vector_last_index(&todelete); i++)
+    {
+        dns_simple_message_s *simple_message = (dns_simple_message_s *)ptr_vector_get(&todelete, i);
+
+        ptr_set_avl_delete(&message_collection, simple_message);
+        --message_collection_keys;
+        // release because it has been removed from one collection
+        dns_udp_simple_message_release(simple_message);
+
+        simple_message->status &= ~DNS_SIMPLE_MESSAGE_STATUS_COLLECTED;
+    }
+
+    mutex_unlock(&message_collection_mtx);
+    
+    for(int i = 0; i <= ptr_vector_last_index(&todelete); i++)
+    {
+        dns_simple_message_s *simple_message = (dns_simple_message_s *)ptr_vector_get(&todelete, i);
+
+        log_debug("cancel: [r=%i] %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) (sent at %llu, now is %llu)", simple_message->retries_left, simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server, simple_message->status, simple_message->sent_time_us, now);
+        
+        simple_message->received_time_us = MAX_U64;
+
+        yassert(now >= simple_message->sent_time_us);
+
+        double dts = now - simple_message->sent_time_us;
+        dts /= 1000000.0;
+        log_notice("cancel: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) cancelled [%6.3fs]",
+                simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server, simple_message->status,
+                dts);
+
+        dns_simple_message_async_node_s *node = simple_message->async_node.next;
+        while(node != NULL)
+        {
+            // the handler MUST release one reference
+            dns_udp_simple_message_retain(simple_message);
+            node->async->error_code = DNS_UDP_CANCEL;
+            node->async->handler(node->async);
+            node = node->next;
+        }
+
+        // there is no need to retain, the reference from the collection has not been decreased yet
+        simple_message->async_node.async->error_code = DNS_UDP_CANCEL;
+        simple_message->async_node.async->handler(simple_message->async_node.async);
+    }
+}
+
+u32
+dns_udp_send_queue_size()
+{
+    u32 ret = async_queue_size(&dns_udp_send_handler_queue);
+    return ret;
+}
+
+u32
+dns_udp_pending_queries_count()
+{
+    return message_collection_keys;
+}
+
+u32
+dns_udp_pending_feedback_count()
+{
+    return message_collection_keys + message_collection_size;
 }

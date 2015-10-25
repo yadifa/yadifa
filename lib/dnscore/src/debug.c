@@ -323,12 +323,9 @@ debug_bfd_symbol_flag_help()
 "g : global    The symbol has global scope; initialized data in <<C>>. The value is the offset into the section of the data.\n"
 "D : debugging The symbol is a debugging record. The value has an arbitrary meaning, unless BSF_DEBUGGING_RELOC is also set.\n"
 "f : function  The symbol denotes a function entry point.  Used in ELF, perhaps others someday.\n"
-
 "s : section   Points to a section.\n"
-
 "d : dynamic   Symbol is from dynamic linking information.\n"
 "O : object    The symbol denotes a data object.  Used in ELF, and perhaps others someday.\n"
-
     );
 }
 

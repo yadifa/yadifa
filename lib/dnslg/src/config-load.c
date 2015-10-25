@@ -42,6 +42,7 @@
 ya_result
 config_load_rc(const char *file_path)
 {
+    input_stream                                                  config_is;
     config_error_s                                                   cfgerr;
     ya_result                                                   return_code;
 
@@ -58,6 +59,8 @@ config_load_rc(const char *file_path)
         {
             formatln("%s: parsing error: %s:%u : '%s': %r", "resolver", cfgerr.file, cfgerr.line_number, cfgerr.line, return_code);
             flushout();
+
+            input_stream_close(&config_is);
 
             return return_code;
         }

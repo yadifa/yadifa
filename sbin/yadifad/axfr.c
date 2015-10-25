@@ -49,7 +49,6 @@
 #include <dnscore/tcp_io_stream.h>
 #include <dnscore/buffer_output_stream.h>
 #include <dnscore/random.h>
-#include <dnscore/format.h>
 #include <dnscore/host_address.h>
 #include <dnscore/fdtools.h>
 #include <dnscore/message.h>
@@ -99,9 +98,6 @@ axfr_process(message_data *mesg)
 
     dnsname_to_dnsname_vector(fqdn, &fqdn_vector);
 
-    fqdn += dnsname_len(fqdn) + 2; /* ( 2 because of the type ) */
-
-    //u16 qclass = GET_U16_AT(*fqdn);
     u16 rcode;
 
     if( ((zone = zdb_acquire_zone_read(g_config->database, &fqdn_vector)) != NULL) )
@@ -292,6 +288,8 @@ axfr_query(const host_address *servers, const u8 *origin, u32* out_loaded_serial
                 {
                     log_debug("axfr: %{dnsname}: AXFR stream copy failed: %r", origin, return_value);
                 }
+                
+                input_stream_close(&xfris);
             }
             else
             {

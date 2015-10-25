@@ -67,6 +67,8 @@ extern "C" {
 
 void message_dnsupdate_data_append_message_dnsupdate_data(message_dnsupdate_data *entry, message_dnsupdate_data *new_entry); 
 
+void message_dnsupdate_data_create(message_dnsupdate_data* entry,  u32 zttl, u16 ztype, u16 zclass, const u8 *zname, u16 zrdata_len, char *zrdata);
+
 #endif
 
 #ifdef __cplusplus

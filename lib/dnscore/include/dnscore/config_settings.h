@@ -267,7 +267,7 @@ typedef struct config_section_descriptor_s config_section_descriptor_s;
 #define CONFIG_BYTES(fieldname_,defaultvalue_,maxsize_) {#fieldname_, offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_bytes, defaultvalue_, {maxsize_}, CONFIG_TABLE_SOURCE_NONE},
 //#define CONFIG_DNSSEC(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_dnssec, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
     
-#define CONFIG_ALIAS(fieldname_, aliasname_) {#fieldname_, 0, NULL, #aliasname_, {._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
+#define CONFIG_ALIAS(fieldname_, aliasedname_) {#fieldname_, 0, NULL, #aliasedname_, {._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
     /*#define CONFIG_CATEGORY(fieldname_, category_) {#fieldname_, 0, NULL, NULL, #category},*/
 
 #define CONFIG_END(name_) {NULL,0,NULL,NULL, {._intptr=0}, CONFIG_TABLE_SOURCE_NONE} }; // name_

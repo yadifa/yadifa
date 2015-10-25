@@ -88,6 +88,8 @@ message_verify_rrsig_compute_digest(const u8 *owner, u16 rtype, u16 rclass,
     {
         return RRSIG_OUTPUT_DIGEST_SIZE_TOO_BIG;
     }
+    
+    out_digest_size = digest_get_size(&ctx);
 
     /*
      * Type covered | algorithm | labels | original_ttl | exp | inception | tag | origin
@@ -141,7 +143,7 @@ message_verify_rrsig_compute_digest(const u8 *owner, u16 rtype, u16 rclass,
     log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG5, digest_out, out_digest_size, 32, OSPRINT_DUMP_HEX);
 #endif
     
-    return digest_get_size(&ctx);
+    return out_digest_size;
 }
 
 static int
@@ -516,6 +518,8 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
                 {
                     ptr_vector_free_empties(&rrset, message_verify_rrsig_free_rrset);
                     ptr_vector_destroy(&rrset);
+                    
+                    message_verify_rrsig_clear(&section_type_fqdn);
 
                     return return_code; // impossible at this point
                 }
@@ -668,6 +672,9 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
             // ends the section loop
             //section = 4;
             // breaks the current loop
+            
+            message_verify_rrsig_clear(&section_type_fqdn);
+            
             break;
         }
         

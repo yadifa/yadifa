@@ -113,4 +113,3 @@ ya_result packet_reader_read_remote_server(packet_unpack_reader_data *reader, u1
 /** @} */
 
 /*----------------------------------------------------------------------------*/
-

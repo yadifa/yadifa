@@ -143,7 +143,21 @@ zdb_zone *zdb_remove_zone(zdb *db, dnsname_vector *name);
 
 zdb_zone *zdb_remove_zone_from_dnsname(zdb *db, const u8 *dnsname);
 
+/** @brief Search for a single match in the database
+ *
+ *  Search for a match in the database.
+ *  Only the most relevant match will be returned (ONE record set)
+ *
+ *  @param[in]  db the database
+ *  @param[in]  dnsname_name the name dnsname to search for
+ *  @param[in]  class the class to match
+ *  @param[in]  type the type to match
+ *  @param[out] ttl_rdara_out a pointer to a pointer set of results (single linked list)
+ *
+ *  @return SUCCESS in case of success.
+ */
 
+ya_result zdb_query(zdb* db, const u8 *dnsname_name, u16 type, zdb_packed_ttlrdata** ttlrdara_out);
 
 static inline void zdb_query_ex_answer_create(zdb_query_ex_answer *ans_auth_add)
 {

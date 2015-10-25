@@ -72,6 +72,10 @@ extern "C"
 #define MUTEX_USE_SPINLOCK 0 // keep it that way
 #endif
 
+// these two are for error reporting in debug builds
+#define MUTEX_LOCKED_TOO_MUCH_TIME_US 5000000
+#define MUTEX_WAITED_TOO_MUCH_TIME_US 2000000
+    
 // DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
     
 #if !MUTEX_USE_SPINLOCK // do not use SPINLOCK
@@ -93,12 +97,13 @@ struct mutex_t
     volatile stacktrace trace;
     volatile pthread_t id;
     volatile u64 timestamp;
+    bool recursive;
     char _MTXs[4];
 };
 
 typedef struct mutex_t mutex_t;
 
-#define MUTEX_INITIALIZER {PTHREAD_MUTEX_INITIALIZER, 0, 0, 0, {'M', 'T', 'X', sizeof(mutex_t)}}
+#define MUTEX_INITIALIZER {PTHREAD_MUTEX_INITIALIZER, 0, 0, 0, FALSE, {'M', 'T', 'X', sizeof(mutex_t)}}
 
 extern logger_handle *g_system_logger;
 extern volatile bool mutex_ultraverbose;
@@ -107,33 +112,7 @@ void mutex_locked_set_add(mutex_t *mtx);
 void mutex_locked_set_del(mutex_t *mtx);
 void mutex_locked_set_monitor();
 
-static inline void mutex_lock(mutex_t *mtx)
-{
-    if(mutex_ultraverbose)
-    {
-        logger_handle_msg(g_system_logger,MSG_DEBUG7, "mutex_lock(%p)", mtx);
-    }
-    
-    int err = pthread_mutex_lock(&mtx->mtx);
-    
-    if(err != 0)
-    {
-        logger_handle_msg(g_system_logger,MSG_ERR, "mutex_lock(%p): %r", mtx, MAKE_ERRNO_ERROR(err));
-        logger_flush();
-        abort();
-    }
-
-    mtx->trace = debug_stacktrace_get();
-    mtx->id = pthread_self();
-    mtx->timestamp = timeus();
-    
-    mutex_locked_set_add(mtx);
-    
-    if(mutex_ultraverbose)
-    {
-        logger_handle_msg(g_system_logger,MSG_DEBUG7, "mutex_lock(%p): locked", mtx);
-    }
-}
+void mutex_lock(mutex_t *mtx);
 
 static inline bool mutex_trylock(mutex_t *mtx)
 {
@@ -288,77 +267,77 @@ static inline void cond_finalize(cond_t *cond)
 
 struct smp_int
 {
-    mutex_t mutex;
+    pthread_mutex_t mutex;
     volatile int value;
 };
 
-#define SMP_INT_INITIALIZER {MUTEX_INITIALIZER,0}
+#define SMP_INT_INITIALIZER {PTHREAD_MUTEX_INITIALIZER,0}
 
 typedef struct smp_int smp_int;
 
 static inline void smp_int_init(smp_int *v)
 {
-    mutex_init(&v->mutex);
+    pthread_mutex_init(&v->mutex, NULL);
     v->value = 0;
 }
 
 static inline void smp_int_init_set(smp_int *v, int value)
 {
-    mutex_init(&v->mutex);
+    pthread_mutex_init(&v->mutex, NULL);
     v->value = value;
 }
 
 static inline void smp_int_set(smp_int *v, int i)
 {
-    mutex_lock(&v->mutex);
+    pthread_mutex_lock(&v->mutex);
     v->value = i;
-    mutex_unlock(&v->mutex);
+    pthread_mutex_unlock(&v->mutex);
 }
 
 
 static inline void smp_int_inc(smp_int *v)
 {
-    mutex_lock(&v->mutex);
+    pthread_mutex_lock(&v->mutex);
     v->value++;
-    mutex_unlock(&v->mutex);
+    pthread_mutex_unlock(&v->mutex);
 }
 
 static inline void smp_int_add(smp_int *v, int value)
 {
-    mutex_lock(&v->mutex);
+    pthread_mutex_lock(&v->mutex);
     v->value += value;
-    mutex_unlock(&v->mutex);
+    pthread_mutex_unlock(&v->mutex);
 }
 
 static inline int smp_int_inc_get(smp_int *v)
 {
     u32 ret;
-    mutex_lock(&v->mutex);
+    pthread_mutex_lock(&v->mutex);
     ret = ++v->value;
-    mutex_unlock(&v->mutex);
+    pthread_mutex_unlock(&v->mutex);
     return ret;
 }
 
 static inline void smp_int_dec(smp_int *v)
 {
-    mutex_lock(&v->mutex);
+    pthread_mutex_lock(&v->mutex);
     v->value--;
-    mutex_unlock(&v->mutex);
+    pthread_mutex_unlock(&v->mutex);
 }
 
 static inline void smp_int_sub(smp_int *v, int value)
 {
-    mutex_lock(&v->mutex);
+    pthread_mutex_lock(&v->mutex);
     v->value -= value;
-    mutex_unlock(&v->mutex);
+    pthread_mutex_unlock(&v->mutex);
 }
 
 static inline int smp_int_dec_get(smp_int *v)
 {
     int ret;
-    mutex_lock(&v->mutex);
+    pthread_mutex_lock(&v->mutex);
     ret = --v->value;
-    mutex_unlock(&v->mutex);
+    pthread_mutex_unlock(&v->mutex);
     return ret;
 }
 
@@ -366,7 +345,7 @@ static inline bool smp_int_setifequal(smp_int *v, int from, int to)
 {
     bool didit = FALSE;
     
-    mutex_lock(&v->mutex);
+    pthread_mutex_lock(&v->mutex);
     
     if(v->value == from)
     {
@@ -374,7 +353,7 @@ static inline bool smp_int_setifequal(smp_int *v, int from, int to)
         didit = TRUE;
     }
     
-    mutex_unlock(&v->mutex);
+    pthread_mutex_unlock(&v->mutex);
     
     return didit;
 }
@@ -382,15 +361,15 @@ static inline bool smp_int_setifequal(smp_int *v, int from, int to)
 static inline int smp_int_get(smp_int *v)
 {
     int ret;
-    mutex_lock(&v->mutex);
+    pthread_mutex_lock(&v->mutex);
     ret = v->value;
-    mutex_unlock(&v->mutex);
+    pthread_mutex_unlock(&v->mutex);
     return ret;
 }
 
 static inline void smp_int_destroy(smp_int *v)
 {
-    mutex_destroy(&v->mutex);
+    pthread_mutex_destroy(&v->mutex);
 }
 
 /**

@@ -77,6 +77,7 @@
 
 #include <dnsdb/xfr_copy.h>
 #include <dnsdb/zdb-zone-path-provider.h>
+#include <dnsdb/dnssec_keystore.h>
 
 #include <dnszone/dnszone.h>
 #include <dnszone/zone_file_reader.h>
@@ -264,6 +265,11 @@ database_zone_path_provider(const u8* domain_fqdn, char *path_buffer, u32 path_b
                 
                 break;
             }
+            case ZDB_ZONE_PATH_PROVIDER_DNSKEY_PATH:
+            {
+                ret = snformat(path_buffer, path_buffer_size, "%s/", g_config->keys_path);
+                break;
+            }
             default:
             {
                 ret = database_zone_path_next_provider(domain_fqdn, path_buffer, path_buffer_size, flags);
@@ -309,13 +315,54 @@ database_info_provider(const u8 *origin, zdb_zone_info_provider_data *data, u32 
             {
                 yassert(zone_desc->journal_size_kb <= 8388608);
                 u64 max_size = zone_desc->journal_size_kb;
+
+
+                if(max_size > 0)
+                {
+                    // the size has been set by the admin
+                    
+                    max_size *= 1024;
+                }
+                else if(data->_u64 != 0)
+                {
+                    // the caller gave the half the wire size of the zone
+                    
+                    max_size = data->_u64;
+                }
+                else
+                {
+                    // nothing has been set, we have to look for the current mounted zone for its wire size
+                    
+                    zone_lock(zone_desc, ZONE_LOCK_LOAD);
+                    zdb_zone *zone = zone_get_loaded_zone(zone_desc);
+                    zone_unlock(zone_desc, ZONE_LOCK_LOAD);
+                    if(zone != NULL)
+                    {
+                        max_size = zone->wire_size >> 1;
+                        zdb_zone_release(zone);
+                    }
+                    else
+                    {
+                        // no zone found, return the default size
+                        max_size = DATABASE_JOURNAL_MINIMUM_SIZE;
+                    }
+                }
+                
                 zone_release(zone_desc);
-                max_size *= 1024;
-                if(max_size > MAX_U32)
+                
+                if(max_size < DATABASE_JOURNAL_MINIMUM_SIZE)
+                {
+                    max_size = DATABASE_JOURNAL_MINIMUM_SIZE;
+                }
+                
+                if(max_size > MAX_U32) // current limitation
                 {
                     max_size = MAX_U32;
                 }
-                data->_u32 = (u32)max_size;
+                
+                log_debug("database: %{dnsname} journal size set to %uKB", origin, max_size >> 10);
+                
+                data->_u64 = max_size;
                 ret = SUCCESS;
             }
             
@@ -781,7 +828,7 @@ database_update(zdb *database, message_data *mesg)
                                 bool locked;
                                 
                                 do
-                                {
+                                {   // zone was double-locked, now only locked for dynupdate
                                     if((locked = zdb_zone_try_transfer_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE)))
                                     {
                                         break;
@@ -1381,7 +1428,7 @@ database_zone_refresh_maintenance_wih_zone(zdb_zone* zone, u32 next_alarm_epoch)
 ya_result
 database_zone_refresh_maintenance(zdb *database, const u8 *origin, u32 next_alarm_epoch)
 {
-    ya_result ret = SUCCESS; // no zone, no issue doing maintenance (note that this return value is never used)
+    ya_result ret = SUCCESS; // no zone, no issue doing maintenance
     
     log_debug("database: refresh: database_zone_refresh_maintenance for zone %{dnsname} at %u", origin, next_alarm_epoch);
 

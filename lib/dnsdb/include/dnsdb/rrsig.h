@@ -45,6 +45,7 @@
 
 #include <dnscore/threaded_queue.h>
 #include <dnscore/ptr_vector.h>
+#include <dnscore/dnskey.h>
 
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/dnssec_task.h>

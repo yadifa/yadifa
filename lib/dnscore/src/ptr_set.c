@@ -171,6 +171,18 @@ ptr_set_dnsname_node_compare(const void *node_a, const void *node_b)
     return dnsname_compare((const u8*)node_a, (const u8*)node_b);
 }
 
+// key = fqdn (cannot be NULL)
+
+int
+ptr_set_dnslabel_node_compare(const void *node_a, const void *node_b)
+{
+    
+    const u8 *a = (const u8*)node_a;
+    const u8 *b = (const u8*)node_b;
+    int n = MIN(*a, *b) + 1;
+    return memcmp(a, b, n);
+}
+
 int
 ptr_set_nullable_asciizp_node_compare(const void *node_a, const void *node_b)
 {
@@ -199,6 +211,26 @@ ptr_set_nullable_dnsname_node_compare(const void *node_a, const void *node_b)
         if(node_b != NULL)
         {
             return dnsname_compare((const u8*)node_a, (const u8*)node_b);
+        }
+        else
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        return (node_b == NULL)?0:1;
+    }
+}
+
+int
+ptr_set_host_address_node_compare(const void *node_a, const void *node_b)
+{
+    if(node_a != NULL)
+    {
+        if(node_b != NULL)
+        {
+            return host_address_compare((const host_address*)node_a, (const host_address*)node_b);
         }
         else
         {

@@ -271,7 +271,7 @@ database_service_nsec3_zone_resignature_init_callback(zdb_zone_process_label_cal
                 {
                     u32 expires_on = RRSIG_VALID_UNTIL(rrsig_rrset);
                     u32 valid_from = RRSIG_VALID_SINCE(rrsig_rrset);
-#ifdef DEBUG                    
+#ifdef DEBUG
                     u16 type_covered = RRSIG_TYPE_COVERED(rrsig_rrset);
 #endif
                     u32 validity_period = 0;
@@ -281,8 +281,9 @@ database_service_nsec3_zone_resignature_init_callback(zdb_zone_process_label_cal
                         validity_period = expires_on - valid_from;
                     }
             
+#ifdef DEBUG
                     yassert(type_covered == TYPE_NSEC3);
-
+#endif
                     args->total_signature_valitity_time += validity_period;
                     args->signature_count++;
                     args->earliest_expiration_epoch = MIN(args->earliest_expiration_epoch, expires_on);

@@ -47,7 +47,7 @@
 #include <dnscore/thread_pool.h>
 
 #include <dnsdb/zdb_types.h>
-#include <dnsdb/dnssec_keystore.h>
+//#include <dnsdb/dnssec-keystore.h>
 #include <dnsdb/nsec3_item.h>
 
 #ifdef	__cplusplus

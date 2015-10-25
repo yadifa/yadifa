@@ -118,6 +118,14 @@ zone_reader_filter_handle_error(zone_reader *zr, ya_result error_code)
     zone_reader_handle_error(data->zr, error_code);
 }
 
+static const char*
+zone_reader_filter_get_last_error_message(zone_reader *zr)
+{
+    zone_file_reader_filter_data *data = (zone_file_reader_filter_data*)zr->data;
+    const char *ret = zone_reader_get_last_error_message(data->zr);
+    return ret;
+}
+
 static zone_reader_vtbl zone_reader_filter_vtbl =
 {
     zone_reader_filter_read_record,
@@ -126,6 +134,7 @@ static zone_reader_vtbl zone_reader_filter_vtbl =
     zone_reader_filter_close,
     zone_reader_filter_handle_error,
     zone_reader_filter_canwriteback,
+    zone_reader_filter_get_last_error_message,
     "zone_reader_filter"
 };
 

@@ -49,26 +49,33 @@
 extern "C" {
 #endif
 
-ya_result file_output_stream_open(const char *filename, output_stream *stream);
+ya_result file_output_stream_open(const char *filename, output_stream *os);
 
 /**
  * man 2 open
  */
-ya_result file_output_stream_open_ex(const char *filename,int flags, mode_t mode, output_stream *stream);
+ya_result file_output_stream_open_ex(const char *filename,int flags, mode_t mode, output_stream *os);
+
+/*
+* This version of open_create_ex does NOT log anything, which is very important sometimes in the logger thread
+*/
+ya_result file_output_stream_open_ex_nolog(const char *filename,int flags, mode_t mode, output_stream *os);
+
+void file_output_stream_close_nolog(output_stream* os);
 
 ya_result file_output_stream_create(const char *filename,mode_t mode, output_stream *stream);
 
-ya_result fd_output_stream_attach(output_stream *stream, int fd);
+ya_result fd_output_stream_attach(output_stream *os, int fd);
 
-void      fd_output_stream_detach(output_stream *stream_);
+void      fd_output_stream_detach(output_stream *os);
 
-ya_result fd_output_stream_get_filedescriptor(output_stream *stream);
+ya_result fd_output_stream_get_filedescriptor(output_stream *os);
 
-s64       fd_output_stream_get_size(output_stream *stream);
+s64       fd_output_stream_get_size(output_stream *os);
 
-bool      is_fd_output_stream(output_stream *stream);
+bool      is_fd_output_stream(output_stream *os);
 
-void      file_output_steam_advise_sequential(output_stream* stream);
+void      file_output_steam_advise_sequential(output_stream* os);
 
 #ifdef	__cplusplus
 }

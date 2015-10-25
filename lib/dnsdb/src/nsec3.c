@@ -83,328 +83,11 @@
 #define MODULE_MSG_HANDLE g_dnssec_logger
 extern logger_handle *g_dnssec_logger;
 
-/*
- * Updates an nsec3 record
- * made for dynamic updates
- */
+static group_mutex_t nsec3_owners_readers_write_locks = GROUP_MUTEX_INITIALIZER;
 
-void
-nsec3_update_label_update_record(zdb_zone *zone, zdb_rr_label* label, u16 type)
-{
-    /*
-     * For each NSEC3 param (and there better be at least one)
-     *
-     * Get the types bitmap.
-     * Compute if the type is supposed to be enabled or not
-     * If the type bitmaps has to be changed
-     *	    Update the type bitmap
-     *	    Schedule for a signature
-     */
 
-    /*
-     * These two slots are for the owner label but have to be stored in
-     * (and owned by) the NSEC3 item.
-     */
 
-    yassert(type != TYPE_ANY);
 
-    if((zone->apex->flags & ZDB_RR_LABEL_NSEC3) == 0)
-    {
-        return;
-    }
-
-    nsec3_label_extension* next_n3_ext = label->nsec.nsec3;
-
-    yassert(next_n3_ext != NULL);
-
-    do
-    {
-        nsec3_zone_item* self = next_n3_ext->self;
-
-        bool enabled;
-
-        if(self != NULL)
-        {
-            if(self->rc == 1)
-            {
-                enabled = (zdb_record_find(&self->label.owner->resource_record_set, type) != NULL);
-            }
-            else
-            {
-                /* This handles the HIGHLY unlikely case of digest collisions */
-
-                enabled = FALSE;
-                
-                for(u16 idx = 0; idx < self->rc; idx++)
-                {
-                    enabled |= (zdb_record_find(&self->label.owners[idx]->resource_record_set, type) != NULL);
-                    /*
-                     * Yes: I could test and stop at the first "enabled" set to TRUE.
-                     * It does not matter.  A digest collision is almost stochastically impossible.
-                     *
-                     * => Smaller is better.
-                     */
-                }
-            }
-
-            /* Check it the type status in the bitmap matches enabled */
-
-            if(type_bit_maps_gettypestatus(self->type_bit_maps, self->type_bit_maps_size, type) != enabled)
-            {
-                /*
-                 * The type status has been changed.
-                 *
-                 * The fastest way from here is to work on the existing bitmap and switch the bit
-                 */
-
-                u8* packed_type_bitmap = self->type_bit_maps;
-                u32 size = self->type_bit_maps_size;
-
-                u8 window_index = (type >> 8);
-                s32 byte_offset = (type >> 3) & 0x1f;
-
-                /* Skip to the right window */
-
-                while(size > 2)
-                {
-                    u8 current_index = *packed_type_bitmap++;
-                    u8 current_size = *packed_type_bitmap++;
-
-                    if(current_index >= window_index)
-                    {
-                        if(current_index == window_index)
-                        {
-                            /*
-                             * Here, we will be able to know the new size of the window
-                             * And thus to allocate a new array if required
-                             */
-
-                            if(enabled)
-                            {
-                                if(byte_offset > current_size)
-                                {
-                                    /* Stretch
-                                     *
-                                     * The increase is byte_offset - current_size
-                                     *
-                                     */
-
-                                    u32 delta_size = byte_offset + 1 - current_size;
-
-                                    u32 new_type_bit_maps_size = self->type_bit_maps_size + delta_size;
-
-                                    /*
-                                     * Allocate a new buffer
-                                     */
-
-                                    u8* new_type_bit_maps;
-
-                                    ZALLOC_ARRAY_OR_DIE(u8*, new_type_bit_maps, new_type_bit_maps_size, NSEC3_TYPEBITMAPS_TAG);
-
-                                    /* Copy the previous windows along with this window type */
-
-                                    u32 prev_offset = packed_type_bitmap - self->type_bit_maps - 1;
-
-                                    u8* p = new_type_bit_maps;
-
-                                    MEMCOPY(p, self->type_bit_maps, prev_offset);
-
-                                    p += prev_offset;
-
-                                    /* Set the window size */
-
-                                    *p++ = byte_offset + 1;
-
-                                    /* Append the previous bitmap of the current window */
-
-                                    MEMCOPY(p, packed_type_bitmap, current_size);
-
-                                    p += current_size;
-
-                                    ZEROMEMORY(p, delta_size - 1);
-
-                                    p += delta_size - 1;
-
-                                    /* Append the byte with the type enabled */
-
-                                    *p++ = (0x80 >> (type & 7));
-
-                                    /* Append the remaining windows */
-
-                                    packed_type_bitmap += current_size;
-
-                                    MEMCOPY(p, packed_type_bitmap, size - 2 - current_size);
-
-                                    /* Free the current buffer */
-
-                                    ZFREE_ARRAY(self->type_bit_maps, self->type_bit_maps_size);
-
-                                    /* Set the new buffer */
-
-                                    self->type_bit_maps = new_type_bit_maps;
-                                    self->type_bit_maps_size = new_type_bit_maps_size;
-                                }
-                                else
-                                {
-                                    /* Just enable the type */
-
-                                    packed_type_bitmap[byte_offset] |= (0x80 >> (type & 7));
-                                }
-
-                                /* This is a trick so I know I don't have to append
-                                 * a new window after this loops ends
-                                 */
-
-                                enabled = FALSE;
-                            }
-                            else
-                            {
-                                /**
-                                 * @note 20140523 edf -- check speed.
-                                 *
-                                 * & (ff7f >> (type & 7)) <=> & ~(0x80 >> (type & 7))
-                                 *
-                                 * What's the faster one ?
-                                 *
-                                 * The left one seems promising because he does one operation less,
-                                 * but the right one is done with bytes only, it means there should
-                                 * be no 32 => 8 operation.  Although on an x86/AMD64 it requires
-                                 * no operation.
-                                 *
-                                 */
-
-                                /* Disables the type AND checks if the byte is set to 0 */
-
-                                if((packed_type_bitmap[byte_offset] &= ~(0x80 >> (type & 7))) == 0)
-                                {
-                                    /* If the change is made on the last byte,
-                                     * the size of the window MUST be decreased to
-                                     * the last non-zero byte.
-                                     *
-                                     * Also if the whole window becomes empty, it
-                                     * has to be removed.
-                                     */
-
-                                    if(byte_offset + 1 == current_size)
-                                    {
-                                        /*
-                                         * Squeeze
-                                         *
-                                         * The decrease is at least current_size - byte_offset
-                                         *
-                                         */
-
-                                        int new_byte_offset = byte_offset;
-
-                                        while((--new_byte_offset > 0) && (packed_type_bitmap[new_byte_offset] == 0));
-
-                                        size -= byte_offset - new_byte_offset;
-                                        byte_offset = new_byte_offset;
-
-                                        if(byte_offset < 0)
-                                        {
-                                            /* Destroy the window
-                                             *
-                                             * Let p be the current pointer.
-                                             *
-                                             * Copy the (size - current_size) remaining bytes at
-                                             * p[current_size] to p[-2]
-                                             *
-                                             * NOTE: A "realloc" should be done.
-                                             * But since the real buffer size (granularity) could be the same
-                                             * for both buffers, the squeeze would be the best one to do it.
-                                             *
-                                             *
-                                             */
-
-                                            MEMCOPY(&packed_type_bitmap[-2], &packed_type_bitmap[current_size], size - 2 - current_size);
-
-                                            ZALLOC_ARRAY_RESIZE(u8, self->type_bit_maps, self->type_bit_maps_size, self->type_bit_maps_size - 2 - current_size);
-                                        }
-                                        else
-                                        {
-                                            /* Just resize the window
-                                             *
-                                             * Let p be the current pointer.
-                                             * Let d the size decrease of the window
-                                             *
-                                             * Set the new size of the window
-                                             *
-                                             * Copy the (size - d) remaining bytes at
-                                             * p[current_size] to p[byte_offset + 1]
-                                             *
-                                             * NOTE: A "realloc" should be done.
-                                             * But since the real buffer size (granularity) could be the same
-                                             * for both buffers, the squeeze would be the best one to do it.
-                                             *
-                                             *
-                                             */
-
-                                            /* I need the new window size */
-
-                                            byte_offset++;
-
-                                            packed_type_bitmap[-1] = byte_offset;
-
-                                            u32 delta_size = current_size - (byte_offset);
-
-                                            MEMCOPY(&packed_type_bitmap[byte_offset], &packed_type_bitmap[current_size], size - delta_size);
-
-                                            ZALLOC_ARRAY_RESIZE(u8, self->type_bit_maps, self->type_bit_maps_size, self->type_bit_maps_size - delta_size);
-                                        }
-
-                                    } /* endif : squeeze required */
-
-                                } /* endif : clearing the bit has set the byte to 0 */
-
-                            } /* endif : enabled / disabled */
-
-                        } /* endif : found the window*/
-
-                        break;
-                    }
-
-                    size -= 2;
-
-                    size -= current_size;
-                    packed_type_bitmap += current_size;
-                } /* while size (while there are bytes in this window */
-
-                /* Note: I also force "enabled" to false as a trick so I know I don't have to append
-                 * a new window after this loops ends
-                 */
-
-                if(enabled)
-                {
-                    /*
-                     * Append a new window.
-                     *
-                     */
-
-                    u8* new_buffer;
-                    u32 new_size = self->type_bit_maps_size + 2 + (byte_offset + 1);
-
-                    ZALLOC_ARRAY_OR_DIE(u8*, new_buffer, new_size, NSEC3_TYPEBITMAPS_TAG);
-                    MEMCOPY(new_buffer, self->type_bit_maps, self->type_bit_maps_size);
-                    new_buffer[self->type_bit_maps_size ] = window_index;
-                    new_buffer[self->type_bit_maps_size + 1] = (byte_offset + 1);
-                    ZEROMEMORY(&new_buffer[self->type_bit_maps_size + 2], byte_offset);
-                    new_buffer[new_size - 1] = (0x80 >> (type & 7));
-
-                    ZFREE_ARRAY(self->type_bit_maps, self->type_bit_maps_size);
-
-                    self->type_bit_maps = new_buffer;
-                    self->type_bit_maps_size = new_size;
-                }
-            }
-        }
-        
-        /* Loop to the next NSEC3PARAM NSEC3 set */
-
-        next_n3_ext = next_n3_ext->next;
-    }
-    while(next_n3_ext != NULL);
-}
 
 bool
 nsec3_update_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference labels, s32 labels_top)
@@ -434,7 +117,7 @@ nsec3_update_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_referenc
     if(nsec3_item == NULL)
     {
         yassert((label->nsec.nsec3->self == NULL) && (label->nsec.nsec3->star == NULL) && (label->nsec.nsec3->next == NULL));
-        ZFREE(label->nsec.nsec3, nsec3_label_extension);
+        ZFREE(label->nsec.nsec3, nsec3_label_extension); // there is no nsec3 label extension item linked to this
         label->nsec.nsec3 = NULL;
         
         nsec3_add_label(zone, label, labels, labels_top);
@@ -575,7 +258,7 @@ nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference l
         force_rrsig = FALSE;
     }
     else
-    {   
+    {
         /* opt-in */
         
         if(!opt_out)
@@ -601,20 +284,14 @@ nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference l
      */
 
     u16 type_bit_maps_size = type_bit_maps_initialize(&type_context, label, FALSE, force_rrsig);
-
     nsec3_zone* n3 = zone->nsec.nsec3;
-    
     nsec3_label_extension* next_n3_ext = NULL;
 
     yassert(n3 != NULL);
 
     do
     {
-        digest[0] = nsec3_hash_len(NSEC3_ZONE_ALGORITHM(n3));
-
-        nsec3_hash_function* digestname = nsec3_hash_get_function(NSEC3_ZONE_ALGORITHM(n3));
-
-        digestname(&name[2], name_len, NSEC3_ZONE_SALT(n3), NSEC3_ZONE_SALT_LEN(n3), nsec3_zone_get_iterations(n3), &digest[1], FALSE);
+        nsec3_compute_digest_from_fqdn_with_len(n3, &name[2], name_len, digest, FALSE);
 
         log_debug("nsec3_add_label: %{dnsname}: NSEC3 name is %{digest32h}", &name[2], digest);
 
@@ -639,7 +316,6 @@ nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference l
         {
             ZDB_RECORD_ZFREE(self_prev->rrsig);
             self_prev->rrsig = NULL;
-
         }
 
         /*
@@ -660,7 +336,6 @@ nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference l
         /*
          *  self -> rc++
          *  self -> owner += label (list + 1 item)
-         *
          */
 
 #ifdef DEBUG
@@ -758,7 +433,7 @@ nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference l
         {
             yassert(label->nsec.nsec3 == NULL);
 
-            ZALLOC_OR_DIE(nsec3_label_extension*, next_n3_ext, nsec3_label_extension, NSEC3_LABELEXT_TAG);
+            ZALLOC_OR_DIE(nsec3_label_extension*, next_n3_ext, nsec3_label_extension, NSEC3_LABELEXT_TAG); // in nsec3_add_label
 
 #ifdef DEBUG
             memset(next_n3_ext, 0xac, sizeof(nsec3_label_extension));
@@ -770,7 +445,7 @@ nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference l
         {
             yassert(next_n3_ext->next == NULL);
 
-            ZALLOC_OR_DIE(nsec3_label_extension*, next_n3_ext->next, nsec3_label_extension, NSEC3_LABELEXT_TAG);
+            ZALLOC_OR_DIE(nsec3_label_extension*, next_n3_ext->next, nsec3_label_extension, NSEC3_LABELEXT_TAG); // in nsec3_add_label
 
 #ifdef DEBUG
             memset(next_n3_ext->next, 0xca, sizeof(nsec3_label_extension));
@@ -790,7 +465,8 @@ nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference l
 
         /** @todo self needs to be signed */
 
-        digestname(name, name_len + 2, NSEC3_ZONE_SALT(n3), NSEC3_ZONE_SALT_LEN(n3), nsec3_zone_get_iterations(n3), &digest[1], FALSE);
+        nsec3_compute_digest_from_fqdn_with_len(n3, name, name_len + 2, digest, FALSE);
+        //digestname(name, name_len + 2, NSEC3_ZONE_SALT(n3), NSEC3_ZONE_SALT_LEN(n3), nsec3_zone_get_iterations(n3), &digest[1], FALSE);
 
         nsec3_zone_item* star = nsec3_avl_find_interval_start(&n3->items, digest);
 
@@ -807,36 +483,60 @@ nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference l
 }
 
 /**
- * This function is for when a label has been added "without intelligence".
- * It will find if the function has got a matching NSEC3 record (by digest)
+ * used by nsec3_label_link
+ * 
+ * It will find if the label has got a matching NSEC3 record (by digest)
  * If so, it will link to it.
  */
 
 static nsec3_zone_item *
 nsec3_label_link_seeknode(nsec3_zone* n3, const u8 *fqdn, s32 fqdn_len, u8 *digest)
 {
-    nsec3_hash_function* digestname = nsec3_hash_get_function(NSEC3_ZONE_ALGORITHM(n3));
-
-    digest[0] = nsec3_hash_len(NSEC3_ZONE_ALGORITHM(n3));
-    digestname(fqdn, fqdn_len, NSEC3_ZONE_SALT(n3), NSEC3_ZONE_SALT_LEN(n3), nsec3_zone_get_iterations(n3), &digest[1], FALSE);
+    nsec3_compute_digest_from_fqdn_with_len(n3, fqdn, fqdn_len, digest, FALSE);
+    
+#if DEBUG
+    log_debug("nsec3: seeking node for %{dnsname} with %{digest32h}", fqdn, digest);
+#endif
 
     nsec3_zone_item *self = nsec3_avl_find(&n3->items, digest);
 
     return self;
 }
 
+/**
+ * used by nsec3_label_link
+ * 
+ * It will find if the *.label has got a matching NSEC3 record (by digest)
+ * If so, it will link to it.
+ */
+
 static nsec3_zone_item *
 nsec3_label_link_seekstar(nsec3_zone* n3, const u8 *fqdn, s32 fqdn_len, u8 *digest)
 {
-    nsec3_hash_function* digestname = nsec3_hash_get_function(NSEC3_ZONE_ALGORITHM(n3));
-
-    digest[0] = nsec3_hash_len(NSEC3_ZONE_ALGORITHM(n3));
-    digestname(fqdn, fqdn_len, NSEC3_ZONE_SALT(n3), NSEC3_ZONE_SALT_LEN(n3), nsec3_zone_get_iterations(n3), &digest[1], TRUE);
+    nsec3_compute_digest_from_fqdn_with_len(n3, fqdn, fqdn_len, digest, TRUE);
+    
+#if DEBUG
+    log_debug("nsec3: seeking star for %{dnsname} with %{digest32h}", fqdn, digest);
+#endif
 
     nsec3_zone_item* star = nsec3_avl_find_interval_start(&n3->items, digest);
 
     return star;
 }
+
+/**
+  * 
+  * Links a label to already existing nsec3 items
+  * 
+  * This function is for when a label has been added "without intelligence".
+  * It will find if the function has got a matching NSEC3 record (by digest)
+  * If so, it will link to it.
+  * 
+  * @param zone
+  * @param label
+  * @param fqdn
+  *
+  */
  
 void
 nsec3_label_link(zdb_zone *zone, zdb_rr_label* label, const u8 *fqdn)
@@ -877,37 +577,36 @@ nsec3_label_link(zdb_zone *zone, zdb_rr_label* label, const u8 *fqdn)
                 /* no associated node */
 
                 log_debug("nsec3_label_link: %{dnsname} => %{digest32h}: no NSEC3", fqdn, digest);
-
-                break;
             }
             
             /**/
 
-            ZALLOC_OR_DIE(nsec3_label_extension*, *n3lep, nsec3_label_extension, NSEC3_LABELEXT_TAG);
+            ZALLOC_OR_DIE(nsec3_label_extension*, *n3lep, nsec3_label_extension, NSEC3_LABELEXT_TAG); // in nsec3_label_link
             n3le = *n3lep;            
-    #ifdef DEBUG
-            memset(n3le, 0xac, sizeof(nsec3_label_extension));
-    #endif          
-            n3le->next = NULL;
+            memset(n3le, 0, sizeof(nsec3_label_extension));
+            //n3le->next = NULL;
             
-            /**/
+            if(self != NULL)
+            {
+                /**/
 
-            nsec3_add_owner(self, label);
-            n3le->self = self;
+                nsec3_add_owner(self, label);
+                n3le->self = self;
 
-            /**/
-            
-            nsec3_zone_item* star = nsec3_label_link_seekstar(n3, fqdn, fqdn_len, digest);
-            nsec3_add_star(star, label);
-            n3le->star = star;
-            
-            /**/
+                /**/
 
-            add_count++;
+                nsec3_zone_item* star = nsec3_label_link_seekstar(n3, fqdn, fqdn_len, digest);
+                nsec3_add_star(star, label);
+                n3le->star = star;
+
+                /**/
+                
+                linked = TRUE;
+
+                add_count++;
+            }
 
             n3lep = &n3le->next;
-            
-            linked = TRUE;
         }
         else
         {
@@ -951,10 +650,13 @@ nsec3_label_link(zdb_zone *zone, zdb_rr_label* label, const u8 *fqdn)
     }
 }
 
-/*
- * Unlink the label from the NSEC3
+/**
+ * Unlinks the label from the NSEC3
  *
  * Destroy everything NSEC3 from the label
+ *
+ * @param zone
+ * @param label
  */
 
 void
@@ -1010,6 +712,8 @@ nsec3_remove_label(zdb_zone *zone, zdb_rr_label* label)
                 if(item->sc > 0)
                 {
                     nsec3_zone_item* prev = nsec3_avl_node_mod_prev(item);
+                    
+                    yassert(prev != NULL);
 
                     /*
                      * Take all the star nodes from item
@@ -1019,7 +723,14 @@ nsec3_remove_label(zdb_zone *zone, zdb_rr_label* label)
                      * Add all the star nodes of item to prev, in one go
                      */
 
-                    nsec3_move_all_star(item, prev);
+                    if(prev != item)
+                    {
+                        nsec3_move_all_star(item, prev);
+                    }
+                    else
+                    {
+                        nsec3_remove_all_star(item);
+                    }
                 }
 
                 yassert(item->rc == 0 && item-> sc == 0 && label->nsec.nsec3->self == NULL);
@@ -1045,7 +756,7 @@ nsec3_remove_label(zdb_zone *zone, zdb_rr_label* label)
 
         n3le = n3le->next;
 
-        ZFREE(n3le_tmp, nsec3_label_extension);
+        ZFREE(n3le_tmp, nsec3_label_extension); // free the nsec3 label extension of the label being removed
     }
     while(n3le != NULL);
 
@@ -1311,6 +1022,16 @@ dnssec_label_zlabel_match(const void *label, const dictionary_node *node)
     return dnslabel_equals(rr_label->name, label);
 }
 
+/**
+ * 
+ * Finds what is the closest provable encloser for a label in a zone
+ * 
+ * @param apex
+ * @param sections
+ * @param sections_topp
+ * @return 
+ */
+
 const zdb_rr_label*
 nsec3_get_closest_provable_encloser(const zdb_rr_label *apex, const_dnslabel_vector_reference sections, s32 *sections_topp)
 {
@@ -1331,7 +1052,7 @@ nsec3_get_closest_provable_encloser(const zdb_rr_label *apex, const_dnslabel_vec
 
     while(index >= 0)
     {
-        u8* label = sections[index];
+        const u8* label = sections[index];
         hashcode hash = hash_dnslabel(label);
 
         rr_label = (zdb_rr_label*) dictionary_find(&rr_label->sub, hash, label, dnssec_label_zlabel_match);
@@ -1354,6 +1075,20 @@ nsec3_get_closest_provable_encloser(const zdb_rr_label *apex, const_dnslabel_vec
     return provable;
 }
 
+/**
+ * Computes the closest closer proof for a name in a zone
+ * Results are returned in 3 pointers
+ * The last one of them can be set NULL if the information is not needed.
+ * 
+ * @param zone
+ * @param qname the fqdn of the query
+ * @param apex_index the index of the apex in qname
+ * @param encloser_nsec3p will point to the encloser
+ * @param closest_provable_encloser_nsec3p will point to the closest provable encloser
+ * @param wild_closest_provable_encloser_nsec3p will point to the *.closest provable encloser
+ * 
+ */
+
 void
 nsec3_closest_encloser_proof(
                         const zdb_zone *zone,
@@ -1367,6 +1102,10 @@ nsec3_closest_encloser_proof(
     u8 encloser[MAX_DOMAIN_LENGTH];
     u8 digest[64 + 1];
     digest[0] = 20;
+    
+    yassert(encloser_nsec3p != NULL);
+    yassert(closest_provable_encloser_nsec3p != NULL);
+    // wild_closest_provable_encloser_nsec3p can be NULL 
 
     const_dnslabel_vector_reference qname_sections = qname->labels;
     s32 closest_encloser_index_limit = qname->size - apex_index + 1; /* not "+1'" because it starts at the apex */
@@ -1397,13 +1136,15 @@ nsec3_closest_encloser_proof(
         u8 salt_len = NSEC3_ZONE_SALT_LEN(n3);
         u8* salt = NSEC3_ZONE_SALT(n3);
 
-        nsec3_hash_function* digestname = nsec3_hash_get_function(NSEC3_ZONE_ALGORITHM(n3));
+        nsec3_hash_function* digestname = nsec3_hash_get_function(NSEC3_ZONE_ALGORITHM(n3)); /// @note edf 20150917 -- do not use nsec3_compute_digest_from_fqdn_with_len
 
-        /** @note log_* cannot be used here */
+        /** @note log_* cannot be used here (except yassert because if that one logs it will abort anyway ...) */
 
-        if(encloser_nsec3p != NULL)
+        // encloser_nsec3p
+        
+        if(closest_encloser_index_limit > 0) // if the closest encloser is itself, we should not be here
         {
-            yassert((closest_provable_encloser_label != NULL) && (closest_encloser_index_limit > 0));
+            yassert(closest_provable_encloser_label != NULL); 
 
             nsec3_zone_item* encloser_nsec3;
             dnsname_vector_sub_to_dnsname(qname, closest_encloser_index_limit - 1, encloser);
@@ -1413,24 +1154,43 @@ nsec3_closest_encloser_proof(
             *encloser_nsec3p = encloser_nsec3;
             //OSDEBUG("nsec3_closest_encloser_proof: next encloser %{dnsname}: %{digest32h}", encloser, encloser_nsec3->digest);
         }
-
-        if(closest_provable_encloser_nsec3p != NULL)
+        else
         {
-            dnsname_vector_sub_to_dnsname(qname, closest_encloser_index_limit  , closest_provable_encloser);
-
-            nsec3_zone_item* closest_provable_encloser_nsec3;
-            if((closest_provable_encloser_nsec3 = closest_provable_encloser_label->nsec.nsec3->self) == NULL)
-            {
-                digestname(closest_provable_encloser, dnsname_len(closest_provable_encloser), salt, salt_len, iterations, &digest[1], FALSE);
-                closest_provable_encloser_nsec3 = nsec3_avl_find(&n3->items, digest);
-
-                nsec3_add_owner(closest_provable_encloser_nsec3, closest_provable_encloser_label);
-                closest_provable_encloser_label->nsec.nsec3->self = closest_provable_encloser_nsec3; /* @TODO check multiples */
-            }
-            *closest_provable_encloser_nsec3p = closest_provable_encloser_nsec3;
-            //OSDEBUG("nsec3_closest_encloser_proof: closest_provable_encloser %{dnsname}: %{digest32h}",closest_provable_encloser,closest_provable_encloser_nsec3->digest);
+            *encloser_nsec3p = NULL;
         }
 
+        // closest_provable_encloser_nsec3p
+
+        dnsname_vector_sub_to_dnsname(qname, closest_encloser_index_limit  , closest_provable_encloser);
+
+        nsec3_zone_item* closest_provable_encloser_nsec3;
+        if((closest_provable_encloser_nsec3 = closest_provable_encloser_label->nsec.nsec3->self) == NULL)
+        {
+            /*
+             * @note edf 20150910 -- IMPORTANT: at this point, the database is locked for the readers.
+             *                       Calling nsec3_add_owner betrays this.
+             *                       Re-locking as writer may lead to starvation.
+             *                       All that's needed is to ensure that no two nsec3_add_owner calls are made at the same time from here.
+             *                       Two (not very pretty) ways that should have minimal impact: a global mutex OR a global mutex and a set.
+             *                       nsec3_add_owner is at most a couple ZALLOC and a few assignations.  The mutex seems a good compromise.
+             */
+            digestname(closest_provable_encloser, dnsname_len(closest_provable_encloser), salt, salt_len, iterations, &digest[1], FALSE);
+            if((closest_provable_encloser_nsec3 = nsec3_avl_find(&n3->items, digest)) != NULL)
+            {          
+                group_mutex_lock(&nsec3_owners_readers_write_locks, GROUP_MUTEX_WRITE);
+                if(closest_provable_encloser_label->nsec.nsec3->self == NULL)
+                {
+                    nsec3_add_owner(closest_provable_encloser_nsec3, closest_provable_encloser_label);
+                    closest_provable_encloser_label->nsec.nsec3->self = closest_provable_encloser_nsec3; /* @TODO check multiples */
+                }
+                group_mutex_unlock(&nsec3_owners_readers_write_locks, GROUP_MUTEX_WRITE);
+            }
+        }
+        *closest_provable_encloser_nsec3p = closest_provable_encloser_nsec3;
+        //OSDEBUG("nsec3_closest_encloser_proof: closest_provable_encloser %{dnsname}: %{digest32h}",closest_provable_encloser,closest_provable_encloser_nsec3->digest);
+
+        // wild_closest_provable_encloser_nsec3p
+        
         if(wild_closest_provable_encloser_nsec3p != NULL)
         {
             if(closest_provable_encloser_nsec3p == NULL)
@@ -1442,22 +1202,39 @@ nsec3_closest_encloser_proof(
 
             if((wild_closest_provable_encloser_nsec3 = closest_provable_encloser_label->nsec.nsec3->star) == NULL)
             {
+                /*
+                 * @note edf 20150910 -- IMPORTANT: at this point, the database is locked for the readers.
+                 *                       Calling nsec3_add_owner betrays this.
+                 *                       Re-locking as writer may lead to starvation.
+                 *                       All that's needed is to ensure that no two nsec3_add_owner calls are made at the same time from here.
+                 *                       Two (not very pretty) ways that should have minimal impact: a global mutex OR a global mutex and a set.
+                 *                       nsec3_add_owner is at most a couple ZALLOC and a few assignations.  The mutex seems a good compromise.
+                 */
                 digestname(closest_provable_encloser, dnsname_len(closest_provable_encloser), salt, salt_len, iterations, &digest[1], TRUE);
-                wild_closest_provable_encloser_nsec3 = nsec3_avl_find_interval_start(&n3->items, digest);
-
-                nsec3_add_star(wild_closest_provable_encloser_nsec3, closest_provable_encloser_label);
-                closest_provable_encloser_label->nsec.nsec3->star = wild_closest_provable_encloser_nsec3; /* @TODO check multiples */
-            }
+                if((wild_closest_provable_encloser_nsec3 = nsec3_avl_find_interval_start(&n3->items, digest)) != NULL)
+                {
+                    group_mutex_lock(&nsec3_owners_readers_write_locks, GROUP_MUTEX_WRITE);
+                    if(closest_provable_encloser_label->nsec.nsec3->star == NULL)
+                    {
+                        nsec3_add_star(wild_closest_provable_encloser_nsec3, closest_provable_encloser_label);
+                        closest_provable_encloser_label->nsec.nsec3->star = wild_closest_provable_encloser_nsec3; /* @TODO check multiples */
+                    }
+                    group_mutex_unlock(&nsec3_owners_readers_write_locks, GROUP_MUTEX_WRITE);
+                }
+            }                
 
             *wild_closest_provable_encloser_nsec3p = wild_closest_provable_encloser_nsec3;
             //OSDEBUG("nsec3_closest_encloser_proof: *.closest_provable_encloser *.%{dnsname}: %{digest32h}",closest_provable_encloser,wild_closest_provable_encloser_nsec3->digest);
         }
     }
-    else
+    else // the closest is the item itself ...
     {
         *encloser_nsec3p = zone->apex->nsec.nsec3->self;
         *closest_provable_encloser_nsec3p = zone->apex->nsec.nsec3->self;
-        *wild_closest_provable_encloser_nsec3p = zone->apex->nsec.nsec3->self;
+        if(wild_closest_provable_encloser_nsec3p != NULL)
+        {
+            *wild_closest_provable_encloser_nsec3p = zone->apex->nsec.nsec3->self;
+        }
     }
 }
 
@@ -1501,6 +1278,11 @@ nsec3_check_item(nsec3_zone_item *item, u32 param_index_base)
         zdb_rr_label *label = nsec3_owner_get(item, i);
 
         yassert(label != NULL && label->nsec.nsec3 != NULL);
+        
+        if(ZDB_LABEL_UNDERDELEGATION(label))
+        {
+            log_debug("nsec3_check: %{digest32h} label nsec3 reference under a delegation (%{dnslabel})", item->digest, label);
+        }
 
         nsec3_label_extension *n3le = label->nsec.nsec3;
 
@@ -1519,8 +1301,11 @@ nsec3_check_item(nsec3_zone_item *item, u32 param_index_base)
         yassert(n3le != NULL);
 
 
-
+        // the nsec3 structure reference to the item linked to the label does not links back to the item
+#if 0 /* fix */
+#else
         yassert(n3le->self == item);
+#endif
     }
 
     n = nsec3_star_count(item);
@@ -1535,6 +1320,11 @@ nsec3_check_item(nsec3_zone_item *item, u32 param_index_base)
         }
 
         yassert(label != NULL && label->nsec.nsec3 != NULL);
+        
+        if(ZDB_LABEL_UNDERDELEGATION(label))
+        {
+            log_debug("nsec3_check: %{digest32h} *.label nsec3 reference under a delegation (%{dnslabel})", item->digest, label);
+        }
 
         nsec3_label_extension *n3le = label->nsec.nsec3;
 
@@ -1556,17 +1346,26 @@ nsec3_check_item(nsec3_zone_item *item, u32 param_index_base)
 
         if(n3le->star != item)
         {
-            log_debug("nsec3_check: %{digest32h} (#self=%d/#star=%d) failing %{dnsname} expected %{digest32h}", item->digest, item->rc, item->sc, label->name, n3le->star->digest);
+            if(n3le->star != NULL)
+            {
+                log_debug("nsec3_check: %{digest32h} (#self=%d/#star=%d) failing %{dnslabel} expected %{digest32h}", item->digest, item->rc, item->sc, label->name, n3le->star->digest);
+            }
+            else
+            {
+                log_debug("nsec3_check: %{digest32h} (#self=%d/#star=%d) *.%{dnslabel} is NULL", item->digest, item->rc, item->sc, label->name, n3le->star->digest);
+            }
         }
 
         if(n3le->self == NULL)
         {
-            log_debug("nsec3_check: %{digest32h} (#self=%d/#star=%d) failing %{dnsname}: no self", item->digest, item->rc, item->sc, label->name);
+            log_debug("nsec3_check: %{digest32h} (#self=%d/#star=%d) failing %{dnslabel}: no self", item->digest, item->rc, item->sc, label->name);
         }
-
+        
+#if 0 /* fix */
+#else
         yassert(n3le->star == item);
-
         yassert(n3le->self != NULL);
+#endif
     }
 
     return TRUE;
@@ -1575,13 +1374,13 @@ nsec3_check_item(nsec3_zone_item *item, u32 param_index_base)
 bool
 nsec3_check(zdb_zone *zone)
 {
-    log_debug("nesc3_check: %{dnsname}", zone->origin);
+    log_debug("nsec3_check: %{dnsname}", zone->origin);
     
     const nsec3_zone *n3 = zone->nsec.nsec3;
 
     if(n3 == NULL)
     {
-        log_debug("nesc3_check: %{dnsname} : no NSEC3", zone->origin);
+        log_debug("nsec3_check: %{dnsname} : no NSEC3", zone->origin);
         
         return TRUE;
     }
@@ -1608,24 +1407,24 @@ nsec3_check(zdb_zone *zone)
         n3 = n3->next;
     }
     
-    log_debug("nesc3_check: %{dnsname} : done", zone->origin);
+    log_debug("nsec3_check: %{dnsname} : done", zone->origin);
 
     return TRUE;
 }
 
 void
-nsec3_compute_digest_from_fqdn(const nsec3_zone *n3, const u8 *fqdn, u8 *digest)
+nsec3_compute_digest_from_fqdn_with_len(const nsec3_zone *n3, const u8 *fqdn, u32 fqdn_len, u8 *digest, bool isstar)
 {
     digest[0] = nsec3_hash_len(NSEC3_ZONE_ALGORITHM(n3));
     
     nsec3_hash_get_function(NSEC3_ZONE_ALGORITHM(n3))(
                                     fqdn,
-                                    dnsname_len(fqdn),
+                                    fqdn_len,
                                     NSEC3_ZONE_SALT(n3),
                                     NSEC3_ZONE_SALT_LEN(n3),
                                     nsec3_zone_get_iterations(n3),
                                     &digest[1],
-                                    FALSE);
+                                    isstar);
 }
 
 /** @} */

@@ -90,8 +90,6 @@ journal_cjf_page_get_stream_offset_from_serial(journal_cjf *jnl, int idx, u32 se
     
     //this is the wrong idx
 
-
-    
     return ERROR;
 }
 

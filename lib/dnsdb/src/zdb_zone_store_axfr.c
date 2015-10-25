@@ -65,7 +65,6 @@
 
 #include <dnscore/rfc.h>
 
-#include <dnscore/format.h>
 #include "dnsdb/zdb_utils.h"
 #include <dnscore/dnscore.h>
 

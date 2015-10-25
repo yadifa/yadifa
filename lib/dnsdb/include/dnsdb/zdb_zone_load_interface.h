@@ -99,7 +99,8 @@ typedef ya_result zone_reader_read_record_method(zone_reader *, resource_record 
 typedef ya_result zone_reader_unread_record_method(zone_reader *, resource_record *);
 typedef ya_result zone_reader_free_record_method(zone_reader *, resource_record *);
 typedef void zone_reader_close_method(zone_reader *);
-typedef void zone_reader_handle_error_method(zone_reader *zr, ya_result error_code);
+typedef void zone_reader_handle_error_method(zone_reader *zr, ya_result error_code); // used for cleaning up after an error (AXFR feedback)
+typedef const char* zone_reader_get_last_error_message_method(zone_reader *zr);
 typedef bool zone_reader_canwriteback_method(zone_reader *);
 
 typedef struct zone_reader_vtbl zone_reader_vtbl;
@@ -111,6 +112,7 @@ struct zone_reader_vtbl
     zone_reader_close_method *close;
     zone_reader_handle_error_method *handle_error;
     zone_reader_canwriteback_method *can_write_back;
+    zone_reader_get_last_error_message_method *get_last_error_message;
     const char* __class__;
 };
 
@@ -119,7 +121,7 @@ struct zone_reader_vtbl
 #define zone_reader_handle_error(zr__,rr__) (zr__)->vtbl->handle_error((zr__),(rr__))
 #define zone_reader_close(zr__) (zr__)->vtbl->close((zr__))
 #define zone_reader_canwriteback(zr__) (zr__)->vtbl->can_write_back((zr__))
-
+#define zone_reader_get_last_error_message(zr__) (zr__)->vtbl->get_last_error_message((zr__))
 #define zone_reader_unread_record(zr__,rr__) (zr__)->vtbl->unread_record((zr__),(rr__))
 
 #define zone_reader_rdata(zr__)      ((zr__).rdata)

@@ -57,6 +57,7 @@
 #include "dnsdb/rrsig_updater.h"
 #include "dnsdb/nsec3_rrsig_updater.h"
 #include "dnsdb/zdb_record.h"
+#include "dnsdb/dnssec_keystore.h"
 
 #define UZSARGS_TAG 0x53475241535a55
 
@@ -136,7 +137,7 @@ zdb_update_zone_signatures(zdb_zone* zone, u32 signature_count_loose_limit)
         const u8 *rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(dnskey_rrset);
         const u16 rdata_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(dnskey_rrset);
         
-        u16 tag = dnskey_getkeytag(rdata, rdata_size);
+        u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size);
         u16 key_flags = GET_U16_AT(rdata[0]);
         u8 algorithm = rdata[3];
         

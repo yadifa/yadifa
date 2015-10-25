@@ -96,7 +96,7 @@ zdb_rr_label_free(zdb_zone* zone, zdb_rr_label* label)
             yassert(label->nsec.nsec3->self == NULL);
             yassert(label->nsec.nsec3->star == NULL);
 
-            ZFREE(label->nsec.nsec3, nsec3_label_extension);
+            ZFREE(label->nsec.nsec3, nsec3_label_extension); // free the nsec3 label extension of the label being freed
         }
     }
 #endif

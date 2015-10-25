@@ -47,6 +47,7 @@
 
 #include <dnscore/sys_types.h>
 #include <dnscore/dnskey.h>
+#include <dnscore/parser.h>
 
 #ifdef	__cplusplus
 extern "C" {
@@ -57,6 +58,8 @@ ya_result rsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dn
 ya_result rsa_loadprivate(FILE* private, u8 algorithm,u16 flags,const char* origin, dnssec_key** out_key);
 ya_result rsa_initinstance(RSA* rsa, u8 algorithm,u16 flags,const char* origin, dnssec_key** out_key);
 ya_result rsa_newinstance(u32 size, u8 algorithm,u16 flags,const char* origin, dnssec_key** out_key);
+
+ya_result rsa_private_parse_field(dnssec_key *key, parser_s *p);
 
 #ifdef	__cplusplus
 }

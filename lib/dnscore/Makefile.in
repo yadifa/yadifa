@@ -16,7 +16,7 @@
 
 ################################################################################
 #
-# Copyright (c) 2011, EURid. All rights reserved.
+# Copyright (c) 2011-2015, EURid. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without 
@@ -46,16 +46,6 @@
 ##############################################################################
 #
 #	YADIFA dnscore Makefile.am script
-#
-#		Makefile.am script
-#
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.3-public/lib/dnscore/Makefile.am $
-#
-#	   $Date: 2015-07-14 09:28:28 +0200 (Tue, 14 Jul 2015) $
-#
-#	   $Revision: 5301 $
-#
-#	$Author: ericdf $
 #
 ##############################################################################
 
@@ -349,10 +339,11 @@ am__libdnscore_la_SOURCES_DIST = src/alarm.c src/allocator.c \
 	src/counter_output_stream.c src/debug.c src/digest_sha0.c \
 	src/digest_sha1.c src/digest_sha256.c src/digest_sha384.c \
 	src/digest_sha512.c src/dns-udp.c src/dns_resource_record.c \
-	src/dnscore.c src/dnsformat.c src/dnskey.c src/dnskey_dsa.c \
-	src/dnskey_rsa.c src/dnsname.c src/empty-input-stream.c \
-	src/fdtools.c src/file_input_stream.c src/file_output_stream.c \
-	src/format.c src/host_address.c src/hsdllist.c src/identity.c \
+	src/dnscore.c src/dnsformat.c src/dnskey.c \
+	src/dnskey-keyring.c src/dnskey_dsa.c src/dnskey_rsa.c \
+	src/dnsname.c src/empty-input-stream.c src/fdtools.c \
+	src/file_input_stream.c src/file_output_stream.c src/format.c \
+	src/host_address.c src/hsdllist.c src/identity.c \
 	src/input_stream.c src/limited_input_stream.c src/list-dl.c \
 	src/list-sl.c src/logger.c src/logger_channel_file.c \
 	src/logger_channel_stream.c src/logger_channel_syslog.c \
@@ -389,11 +380,11 @@ am_libdnscore_la_OBJECTS = src/alarm.lo src/allocator.lo src/async.lo \
 	src/digest_sha0.lo src/digest_sha1.lo src/digest_sha256.lo \
 	src/digest_sha384.lo src/digest_sha512.lo src/dns-udp.lo \
 	src/dns_resource_record.lo src/dnscore.lo src/dnsformat.lo \
-	src/dnskey.lo src/dnskey_dsa.lo src/dnskey_rsa.lo \
-	src/dnsname.lo src/empty-input-stream.lo src/fdtools.lo \
-	src/file_input_stream.lo src/file_output_stream.lo \
-	src/format.lo src/host_address.lo src/hsdllist.lo \
-	src/identity.lo src/input_stream.lo \
+	src/dnskey.lo src/dnskey-keyring.lo src/dnskey_dsa.lo \
+	src/dnskey_rsa.lo src/dnsname.lo src/empty-input-stream.lo \
+	src/fdtools.lo src/file_input_stream.lo \
+	src/file_output_stream.lo src/format.lo src/host_address.lo \
+	src/hsdllist.lo src/identity.lo src/input_stream.lo \
 	src/limited_input_stream.lo src/list-dl.lo src/list-sl.lo \
 	src/logger.lo src/logger_channel_file.lo \
 	src/logger_channel_stream.lo src/logger_channel_syslog.lo \
@@ -477,8 +468,8 @@ am__pkginclude_HEADERS_DIST = $(I)/$(FEATURESFILE) $(I)/alarm.h \
 	$(I)/debug_config.h $(I)/digest.h $(I)/dns-udp.h \
 	$(I)/dns_resource_record.h $(I)/dnscore-config.h \
 	$(I)/dnscore.h $(I)/dnsformat.h $(I)/dnskey.h \
-	$(I)/dnskey_dsa.h $(I)/dnskey_rsa.h $(I)/dnsname.h \
-	$(I)/dnsname_set.h $(I)/dnssec_errors.h \
+	$(I)/dnskey_dsa.h $(I)/dnskey_rsa.h $(I)/dnskey-keyring.h \
+	$(I)/dnsname.h $(I)/dnsname_set.h $(I)/dnssec_errors.h \
 	$(I)/empty-input-stream.h $(I)/fdtools.h \
 	$(I)/file_input_stream.h $(I)/file_output_stream.h \
 	$(I)/fingerprint.h $(I)/format.h $(I)/host_address.h \
@@ -740,10 +731,11 @@ libdnscore_la_SOURCES = src/alarm.c src/allocator.c src/async.c \
 	src/counter_output_stream.c src/debug.c src/digest_sha0.c \
 	src/digest_sha1.c src/digest_sha256.c src/digest_sha384.c \
 	src/digest_sha512.c src/dns-udp.c src/dns_resource_record.c \
-	src/dnscore.c src/dnsformat.c src/dnskey.c src/dnskey_dsa.c \
-	src/dnskey_rsa.c src/dnsname.c src/empty-input-stream.c \
-	src/fdtools.c src/file_input_stream.c src/file_output_stream.c \
-	src/format.c src/host_address.c src/hsdllist.c src/identity.c \
+	src/dnscore.c src/dnsformat.c src/dnskey.c \
+	src/dnskey-keyring.c src/dnskey_dsa.c src/dnskey_rsa.c \
+	src/dnsname.c src/empty-input-stream.c src/fdtools.c \
+	src/file_input_stream.c src/file_output_stream.c src/format.c \
+	src/host_address.c src/hsdllist.c src/identity.c \
 	src/input_stream.c src/limited_input_stream.c src/list-dl.c \
 	src/list-sl.c src/logger.c src/logger_channel_file.c \
 	src/logger_channel_stream.c src/logger_channel_syslog.c \
@@ -775,8 +767,8 @@ pkginclude_HEADERS = $(FEATURES) $(I)/alarm.h $(I)/allocator.h \
 	$(I)/debug_config.h $(I)/digest.h $(I)/dns-udp.h \
 	$(I)/dns_resource_record.h $(I)/dnscore-config.h \
 	$(I)/dnscore.h $(I)/dnsformat.h $(I)/dnskey.h \
-	$(I)/dnskey_dsa.h $(I)/dnskey_rsa.h $(I)/dnsname.h \
-	$(I)/dnsname_set.h $(I)/dnssec_errors.h \
+	$(I)/dnskey_dsa.h $(I)/dnskey_rsa.h $(I)/dnskey-keyring.h \
+	$(I)/dnsname.h $(I)/dnsname_set.h $(I)/dnssec_errors.h \
 	$(I)/empty-input-stream.h $(I)/fdtools.h \
 	$(I)/file_input_stream.h $(I)/file_output_stream.h \
 	$(I)/fingerprint.h $(I)/format.h $(I)/host_address.h \
@@ -1002,6 +994,8 @@ src/dns_resource_record.lo: src/$(am__dirstamp) \
 src/dnscore.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/dnsformat.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/dnskey.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/dnskey-keyring.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 src/dnskey_dsa.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/dnskey_rsa.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/dnsname.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
@@ -1141,6 +1135,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dns_resource_record.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnscore.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnsformat.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey-keyring.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey_dsa.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey_rsa.Plo@am__quote@

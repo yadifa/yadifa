@@ -399,6 +399,7 @@ journal_cjf_idxt_update_last_serial(journal_cjf *jnl, u32 last_serial)
 
 /**
  * Appends an PAGE table after the current one
+ * @todo edf update the current PAGE next pointer
  * 
  * @param jcs
  * @param size_hint
@@ -586,9 +587,31 @@ journal_cjf_idxt_fix_size(journal_cjf *jnl)
     yassert(jnl->idxt.size > 0);
     yassert(jnl->idxt.size >= jnl->idxt.count);
     
-    log_debug2("cjf: fixing IDXT size to %u", jnl->idxt.count);
+    log_debug2("cjf: fixing IDXT size from %u to %u", jnl->idxt.size, jnl->idxt.count);
     
-    jnl->idxt.size = jnl->idxt.count;
+    if(jnl->idxt.size < jnl->idxt.count)
+    {
+        // shrink the table
+        
+        log_debug_jnl(jnl, "cjf: journal_cjf_idxt_fix_size: BEFORE");
+        
+        journal_cjf_idxt_tbl_item *tmp;
+        MALLOC_OR_DIE(journal_cjf_idxt_tbl_item*, tmp, sizeof(journal_cjf_idxt_tbl_item) * (jnl->idxt.count), GENERIC_TAG);
+
+        for(s16 idx = 0; idx < jnl->idxt.count; idx++)
+        {
+            tmp[idx] = jnl->idxt.entries[(jnl->idxt.first + idx) % jnl->idxt.size];
+        }
+
+        free(jnl->idxt.entries);
+        jnl->idxt.entries = tmp;
+        jnl->idxt.first = 0;
+
+        jnl->idxt.size = jnl->idxt.count;
+        
+        log_debug_jnl(jnl, "cjf: journal_cjf_idxt_fix_size: AFTER");
+    }
+    // else jnl->idxt.size ==    jnl->idxt.count
 }
 
 /**

@@ -42,13 +42,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/mman.h>
 #include <pthread.h>
 
 #define _ZALLOC_C
 
 #include <dnscore/sys_types.h>
-#include <dnscore/mutex.h>
 #include <dnscore/logger.h>
 #include <dnscore/format.h>
 #include <dnscore/zalloc.h>
@@ -400,8 +400,19 @@ zfree_line_report(int page_index)
         
         for(s32 i = 0; i < count; i++)
         {
-            log_err("[%3x][%6x] %p", page_index, i, ret);
-            ret = (void**)*ret;
+            if(ret != NULL)
+            {
+                log_err("[%3x][%6x] %p", page_index, i, ret);
+                void **old = ret;
+                (void) old;
+                ret = (void**)*ret;
+                // do not: *old = NULL;
+            }
+            else
+            {
+                log_err("[%3x][%6x] NULL", page_index, i);
+                ret = (void**)*ret;
+            }
         }
         
         logger_flush();

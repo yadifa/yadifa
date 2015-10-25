@@ -41,7 +41,20 @@
 #ifndef _FDTOOLS_H
 #define	_FDTOOLS_H
 
+#include <dirent.h>
 #include <dnscore/sys_types.h>
+
+#ifndef _DIRENT_HAVE_D_TYPE
+#ifndef DT_UNKNOWN
+#define DT_UNKNOWN  0
+#endif
+#ifndef DT_REG 
+#define DT_REG      8
+#endif
+#ifndef DT_DIR
+#define DT_DIR     10
+#endif
+#endif
 
 #ifdef	__cplusplus
 extern "C"
@@ -108,6 +121,17 @@ ya_result open_ex(const char *pathname, int flags);
 ya_result open_create_ex(const char *pathname, int flags, mode_t mode);
 
 /**
+ * Opens a file, create if it does not exist. (see man 2 open with O_CREAT)
+ * Handles EINTR and other retry errors.
+ * This version of open_create_ex does NOT log anything, which is very important sometimes in the logger thread
+ * 
+ * @param fd
+ * @return 
+ */
+
+ya_result open_create_ex_nolog(const char *pathname, int flags, mode_t mode);
+
+/**
  * Closes a file descriptor (see man 2 close)
  * Handles EINTR and other retry errors.
  * At return the file will be closed or not closable.
@@ -147,6 +171,23 @@ ya_result file_is_link(const char *name);
 #define MKDIR_EX_PATH_TO_FILE 1 // ie: pathname points to a file, so skip the file part
 
 int mkdir_ex(const char *pathname, mode_t mode, u32 flags);
+
+/**
+ * Fixes an issue with the dirent not always set as expected.
+ *
+ * The type can be set to DT_UNKNOWN instead of file or directory.
+ * In that case the function will call stats to get the type.
+ */
+
+u8 dirent_get_file_type(const char* folder, struct dirent *entry);
+
+#define READDIR_CALLBACK_CONTINUE 0
+#define READDIR_CALLBACK_ENTER    1
+#define READDIR_CALLBACK_EXIT     2
+
+typedef ya_result readdir_callback(const char *basedir, const char* file, u8 filetype, void *args);
+
+ya_result readdir_forall(const char *basedir, readdir_callback *func, void *args);
 
 #ifdef	__cplusplus
 }

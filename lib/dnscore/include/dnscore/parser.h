@@ -316,7 +316,6 @@ parser_next_word(parser_s *p)
             {
                 return PARSER_REACHED_END_OF_FILE;
             }
-            
         }
     }
 }
@@ -540,7 +539,7 @@ parser_get_u32(const char *text, u32 text_len, u32 *out_value)
 static inline ya_result
 parser_get_s32(const char *text, u32 text_len, s32 *out_value)
 {
-    ya_result return_code = parse_s32_check_range_len_base10(text, text_len, out_value, 0, MAX_S32);
+    ya_result return_code = parse_s32_check_range_len_base10(text, text_len, out_value, MIN_S32, MAX_S32);
 
     return return_code;
 }
@@ -555,7 +554,23 @@ parser_copy_next_s32(parser_s *p, s32 *out_value)
         const char *text = parser_text(p);
         u32 text_len = parser_text_length(p);
 
-        return_code = parse_s32_check_range_len_base10(text, text_len, out_value, 0, MAX_S32);
+        return_code = parse_s32_check_range_len_base10(text, text_len, out_value, MIN_S32, MAX_S32);
+    }
+    
+    return return_code;
+}
+
+static inline ya_result
+parser_copy_next_u32(parser_s *p, u32 *out_value)
+{
+    ya_result return_code = parser_next_word(p);
+    
+    if(ISOK(return_code))
+    {
+        const char *text = parser_text(p);
+        u32 text_len = parser_text_length(p);
+
+        return_code = parse_u32_check_range_len_base10(text, text_len, out_value, 0, MAX_U32);
     }
     
     return return_code;

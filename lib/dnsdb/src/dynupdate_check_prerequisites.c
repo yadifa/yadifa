@@ -147,7 +147,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
     {
         ya_result return_value;
         
-        if(FAIL(return_value = packet_reader_read_zone_record(reader, wire, sizeof(wire))))
+        if(FAIL(return_value = packet_reader_read_record(reader, wire, sizeof(wire))))
         {
             free_rrsets(&rrsets);
             return SERVER_ERROR_CODE(RCODE_FORMERR);
@@ -240,7 +240,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
         else if(rclass == zdb_zone_getclass(zone))
         {
             name_type_rdata* item;
-            MALLOC_OR_DIE(name_type_rdata*, item, sizeof (name_type_rdata), ZDB_DYNUPDATE_TAG);
+            MALLOC_OR_DIE(name_type_rdata*, item, sizeof(name_type_rdata), ZDB_DYNUPDATE_TAG);
             item->rname = rname;
             item->rdata = rdata;
             item->rtype = rtype;
@@ -266,7 +266,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
      *
      */
 
-    if(rrsets.offset >= 0)
+    if(ptr_vector_size(&rrsets) > 0)
     {
         zdb_rr_label* label = NULL;
         zdb_packed_ttlrdata* rr_sll = NULL;
@@ -276,10 +276,11 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
         s32 required_matches = 0;
 
         name_type_rdata** itemp;
-        s32 count = rrsets.offset; /* count - 1 actually */
+        s32 record_count = ptr_vector_last_index(&rrsets);
+        
         itemp = (name_type_rdata**)rrsets.data;
 
-        while(count >= 0)
+        while(record_count-- >= 0)
         {
             name_type_rdata* item = *itemp++;
 

@@ -1907,25 +1907,13 @@ message_query_tcp_with_timeout(message_data *mesg, host_address *address,  u8 to
     mesg->buffer_tcp_len[0] = mesg->send_length >> 8;
     mesg->buffer_tcp_len[1] = mesg->send_length;
 
-
-
-#if DEBUG
-    formatln("message_query_tcp_with_timeout A %{hostaddr}", address);
-#endif
     input_stream is;
     output_stream os;
 
     if(ISOK(return_value = tcp_input_output_stream_connect_host_address(address, &is, &os, to_sec)))
     {       
-#if DEBUG
-            formatln("message_query_tcp_with_timeout B");
-#endif
-
         if(ISOK(return_value = output_stream_write(&os, &mesg->buffer_tcp_len[0], mesg->send_length + 2)))
         { 
-#if DEBUG
-            formatln("message_query_tcp_with_timeout C");
-#endif
             output_stream_flush(&os);
 
             int fd = fd_input_stream_get_filedescriptor(&is);
@@ -2062,8 +2050,6 @@ message_query_udp_with_time_out(message_data *mesg, host_address *server, int se
 
     /*    ------------------------------------------------------------    */ 
 
-
-    
     if(ISOK(return_value = host_address2sockaddr(&sa, server)))
     {
         int s;
@@ -2077,10 +2063,6 @@ message_query_udp_with_time_out(message_data *mesg, host_address *server, int se
 
             mesg->received = 0;
 
-#ifdef DEBUG
-            log_debug("sending %d bytes to %{sockaddr} (%i)", mesg->send_length, &sa, sa_len);
-            log_memdump_ex(g_system_logger, MSG_DEBUG5, mesg->buffer, mesg->send_length, 16, OSPRINT_DUMP_HEXTEXT);
-#endif
             if((n = sendto(s, mesg->buffer, mesg->send_length, 0, &sa.sa, sa_len)) == mesg->send_length)
             {
                 socketaddress ans_sa;
@@ -2102,7 +2084,6 @@ message_query_udp_with_time_out(message_data *mesg, host_address *server, int se
                     }
                 }
 
-                
                 if(n < 0)
                 {
                     return_value = ERRNO_ERROR;
@@ -2113,7 +2094,6 @@ message_query_udp_with_time_out(message_data *mesg, host_address *server, int se
             else
             {
                 return_value = (n < 0)?ERRNO_ERROR:ERROR;
-
             }
             
             close_ex(s);

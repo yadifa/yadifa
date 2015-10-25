@@ -147,14 +147,9 @@ config_rrl_section_postprocess(struct config_section_descriptor_s *csd)
     else
     {
         log_warn("ipv4-prefix-lenght is wrong, setting to 32");
-        
         g_rrl_settings.ipv4_prefix_length = 32;
         g_rrl_settings.ipv4_prefix_mask = MAX_U32;
     }
-    
-    u32 mask = MAX_U32 << (32 - g_rrl_settings.ipv4_prefix_length);
-    
-    g_rrl_settings.ipv4_prefix_mask = htonl(mask);
     
     u64 mask_h, mask_l;
     

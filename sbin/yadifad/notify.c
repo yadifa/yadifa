@@ -689,7 +689,7 @@ notify_process_masterquery_in(zdb *database, message_data *mesg, packet_unpack_r
                     return SUCCESS;
                 }
             }
-            else if(zone_desc->type == ZT_MASTER)
+            else
             {
                 log_warn("notify: slave: notification from %{sockaddr}: not in the master list for zone %{dnsname}",
                         &mesg->other.sa, mesg->qname);
@@ -698,11 +698,6 @@ notify_process_masterquery_in(zdb *database, message_data *mesg, packet_unpack_r
                 mesg->send_length = mesg->received;
                 return_value = NOTIFY_QUERY_FROM_UNKNOWN;
             }
-            else
-            {
-                return_value = SUCCESS;
-            }
-            
         }   /* type = SLAVE */
         else
         {
@@ -1239,7 +1234,7 @@ notify_service(struct service_worker_s *worker)
                             {
                                 log_err("notify: unexpected answer from %{hostaddr} for %{dnsname}", message->payload.answer.host, message->origin);
                             }
-                            if(msg->payload.notify.hosts_list == NULL)
+                            if(msg->payload.notify.hosts_list == NULL) /// @todo 20150616 edf -- there was a clear NULL dereference. test the fix
                             {
                                 ptr_set_avl_delete(&notify_zones, msg->origin);
                                 notify_message_free(msg);
@@ -1248,7 +1243,7 @@ notify_service(struct service_worker_s *worker)
                         else // msg = NULL
                         {
                             log_err("notify: unexpected answer by %{hostaddr} for %{dnsname}", message->payload.answer.host, message->origin);
-                            ptr_set_avl_delete(&notify_zones, message->origin);
+                            ptr_set_avl_delete(&notify_zones, message->origin); /// @todo 20150616 edf -- there was a clear NULL reference. test the fix
                         }
                     }
                     else

@@ -976,8 +976,6 @@ server_mt_query_loop()
     {
         return INVALID_STATE_ERROR;
     }
-        
-
 
     fd_set read_set;
     fd_set read_set_init;

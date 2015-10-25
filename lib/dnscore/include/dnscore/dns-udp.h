@@ -42,8 +42,9 @@
 
 // error codes
 
-#define DNS_UDP_TIMEOUT 0x81000001
-#define DNS_UDP_INTERNAL 0x81000002
+#define DNS_UDP_TIMEOUT         0x81000001
+#define DNS_UDP_INTERNAL        0x81000002
+#define DNS_UDP_CANCEL          0x81000003
 
 //
 
@@ -57,7 +58,7 @@
 #define DNS_UDP_SEND_RATE_MIN  512       // 512B/s
 #define DNS_UDP_SEND_RATE_MAX  100000000 // 100MB/s
 
-#define DNS_UDP_SEND_QUEUE     200000    // 100000 messages
+#define DNS_UDP_SEND_QUEUE     200000    // 200000 messages
 
 #define DNS_UDP_SEND_QUEUE_MIN 1
 #define DNS_UDP_SEND_QUEUE_MAX 0x1000000 // 16.7M messages
@@ -70,7 +71,6 @@
 #define DNS_UDP_RETRY_COUNT_MIN  0
 #define DNS_UDP_RETRY_COUNT_MAX  16
 
-#define DNS_SIMPLE_MESSAGE_CAN_BE_LOCKED 1
 #define DNS_SIMPLE_MESSAGE_HAS_WAIT_COND 0
 
 #define DNS_SIMPLE_MESSAGE_FLAGS_DNSSEC MESSAGE_EDNS0_DNSSEC
@@ -116,14 +116,12 @@ struct dns_simple_message_s
     message_data *answer;   // answer, can be shared
     
     dns_simple_message_async_node_s async_node;
+    volatile s64 queued_time_us;
     volatile s64 sent_time_us;
     volatile s64 received_time_us;
     
     smp_int rc; // number of references for this message
-    mutex_t mtx;
-#if DNS_SIMPLE_MESSAGE_HAS_WAIT_COND
-    pthread_cond_t mtx_cond;
-#endif
+    group_mutex_t mtx;
     volatile pthread_t owner;
     
     u32 worker_index;
@@ -153,6 +151,14 @@ int dns_udp_handler_start();
 int dns_udp_handler_stop();
 int dns_udp_handler_finalize();
 
+/**
+ * Cancels all pending queries.
+ * Their handlers will be called with the error message DNS_UDP_CANCEL
+ * The purpose is cleaning up before shutdown.
+ */
+
+void dns_udp_cancel_all_queries();
+
 int dns_udp_send_simple_message(const host_address* name_server, const u8 *fqdn, u16 qtype, u16 qclass, u16 flags, async_done_callback *cb, void* cbargs);
 int dns_udp_send_recursive_message(const host_address* name_server, const u8 *fqdn, u16 qtype, u16 qclass, u16 flags, async_done_callback *cb, void* cbargs);
 int dns_udp_send_simple_message_sync(const host_address* name_server, const u8 *fqdn, u16 qtype, u16 qclass,u16 flags, dns_simple_message_s **to_release);
@@ -169,6 +175,10 @@ static inline const message_data *dns_udp_simple_message_get_answer(const dns_si
 {
     return simple_message->answer;
 }
+
+u32 dns_udp_send_queue_size();
+u32 dns_udp_pending_queries_count();
+u32 dns_udp_pending_feedback_count();
 
 #endif // DNS_UDP_H
 

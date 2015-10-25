@@ -64,6 +64,7 @@
 
 #include "dnsdb/rrsig_updater.h"
 #include "dnsdb/nsec3_rrsig_updater.h"
+#include "dnsdb/zdb_zone.h"
 
 #define MODULE_MSG_HANDLE g_dnssec_logger
 
@@ -76,7 +77,6 @@
  *****************************************************************************/
 
 #define NSEC3_RRSIG_TTLRDATA_TAG	0x5254474953334e /* RRSIGTR */
-
 
 static ya_result
 nsec3_rrsig_updater_thread_init(dnssec_task_s *task)
@@ -548,7 +548,7 @@ nsec3_rrsig_updater_process_zone(nsec3_rrsig_updater_parms *parms)
 void
 nsec3_rrsig_updater_commit(nsec3_rrsig_updater_parms *parms)
 {
-    log_debug1("rrsig_updater_commit(%p)", parms);
+    log_debug1("nsec3_rrsig_updater_commit(%p)", parms);
             
     dnssec_task_s *task = &parms->task;
     
@@ -578,7 +578,7 @@ nsec3_rrsig_updater_commit(nsec3_rrsig_updater_parms *parms)
 void
 nsec3_rrsig_updater_finalize(nsec3_rrsig_updater_parms *parms)
 {
-    log_debug("rrsig_updater_finalize: good: %u expired: %u wrong: %u",
+    log_debug("nsec3_rrsig_updater_finalize: good: %u expired: %u wrong: %u",
             parms->good_signatures,
             parms->expired_signatures,
             parms->wrong_signatures);

@@ -62,6 +62,8 @@
 #include "dnsdb/nsec.h"
 #include "dnsdb/nsec_common.h"
 
+#include "dnsdb/zdb_zone.h"
+
 /*
    Note : (rfc 4034)
 
@@ -177,40 +179,51 @@ ya_result
 nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
 {
     nsec_node *nsec_tree = NULL;
+    nsec_node *first_node;
+    nsec_node *node;
+    u8 *prev_name;
+    u8 *name;
     soa_rdata soa;
     u32 missing_nsec_records = 0;
     u32 sibling_count = 0;
     u32 nsec_under_delegation = 0;
-    
-    u8 name[MAX_DOMAIN_LENGTH];
+    ya_result return_code;
+    u8 name_buffer[2][MAX_DOMAIN_LENGTH];
     u8 inverse_name[MAX_DOMAIN_LENGTH];
     u8 tmp_bitmap[256 * (1 + 1 + 32)]; /* 'max window count' * 'max window length' */
-
-    ya_result return_code;
 
     if(FAIL(return_code = zdb_zone_getsoa(zone, &soa)))
     {
         return return_code;
     }
     
+#ifdef DEBUG
+    memset(name_buffer, 0xde, sizeof(name_buffer));
+#endif
+    
+    name = name_buffer[0];
+    prev_name = name_buffer[1];
+    
     zdb_zone_label_iterator label_iterator;
     zdb_zone_label_iterator_init(zone, &label_iterator);
 
     while(zdb_zone_label_iterator_hasnext(&label_iterator))
     {
-#ifdef DEBUG
-        memset(name, 0xde, sizeof(name));
-#endif
         zdb_zone_label_iterator_nextname(&label_iterator, name);
         zdb_rr_label* label = zdb_zone_label_iterator_next(&label_iterator);
 
         if(zdb_rr_label_is_glue(label) || (label->resource_record_set == NULL))
         {
+            // we are under a delegation or on an empty (non-terminal) 
+            // there should not be an NSEC record here
+            
             zdb_packed_ttlrdata *nsec_record;
 
             if((nsec_record = zdb_record_find(&label->resource_record_set, TYPE_NSEC)) != NULL)
             {
                 nsec_under_delegation++;
+                
+                log_err("nsec: %{dnsname}: unexpected NSEC record under a delegation", name);
             }
             
             continue;
@@ -227,11 +240,8 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
      * Now that we have the NSEC chain
      */
 
-    nsec_node *first_node;
-    nsec_node *node;
-
     type_bit_maps_context tbmctx;
-
+    
     nsec_avl_iterator nsec_iter;
     nsec_avl_iterator_init(&nsec_tree, &nsec_iter);
 
@@ -264,6 +274,10 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
 
             u32 tbm_size = type_bit_maps_initialize(&tbmctx, label, TRUE, TRUE);
             type_bit_maps_write(tmp_bitmap, &tbmctx);
+            
+            u8 *tmp_name = prev_name;
+            prev_name = name;
+            name = tmp_name;
 
             nsec_inverse_name(name, next_node->inverse_relative_name);
 
@@ -283,14 +297,13 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
 
                 if(nsec_record->next == NULL) // should only be one record => delete all if not the case (the rrsig is lost anyway)
                 {
-                    u8 *rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_record);
-                    u16 size = ZDB_PACKEDRECORD_PTR_RDATASIZE(nsec_record);
-
-                    u16 dname_len = dnsname_len(rdata);
+                    const u8 *rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_record);
+                    const u16 size = ZDB_PACKEDRECORD_PTR_RDATASIZE(nsec_record);
+                    const u16 dname_len = dnsname_len(rdata);
 
                     if(dname_len < size)
                     {
-                        u8* type_bitmap = &rdata[dname_len];
+                        const u8 *type_bitmap = &rdata[dname_len];
 
                         /*
                          * check the type bitmap
@@ -311,40 +324,66 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
                                 node = next_node;
                                 continue;
                             }
+                            else // else the "next fqdn" do not match (this is irrecoverable for a slave)
+                            {
+                                rdata_desc nsec_desc = {TYPE_NSEC, size, rdata};
+                                log_debug("nsec: %{dnsname}: src: %{dnsname} %{typerdatadesc} next field do not match expected value (%{dnsname})", zone->origin, prev_name, &nsec_desc, name);
+                            }
                         }
+                        else // else the type bitmap do not match (this is wrong)
+                        {
+                            rdata_desc nsec_desc = {TYPE_NSEC, size, rdata};
+                            log_debug("nsec: %{dnsname}: src: %{dnsname} %{typerdatadesc} types map do not match expected value", zone->origin, prev_name, &nsec_desc);
+                        }
+                    }
+                    else // else the "next fqdn" do not match (early test, this is irrecoverable for a slave)
+                    {
+                        rdata_desc nsec_desc = {TYPE_NSEC, size, rdata};
+                        log_debug("nsec: %{dnsname}: src: %{dnsname} %{typerdatadesc} next field do not match expected value (%{dnsname})", zone->origin, prev_name, &nsec_desc, name);
                     }
                 }
                 else
                 {
                     sibling_count++;
+                    
+                    log_warn("nsec: %{dnsname}: %{dnsname}: multiple NSEC records where only one is expected", zone->origin, prev_name);
                 }
                 
                 // wrong NSEC RRSET
                 
-                if(zdb_listener_notify_enabled())
+                zdb_packed_ttlrdata *nsec_rec = nsec_record;
+
+                do
                 {
-                    zdb_packed_ttlrdata *nsec_rec = nsec_record;
+                    zdb_ttlrdata unpacked_ttlrdata;
 
-                    do
+                    unpacked_ttlrdata.ttl = nsec_rec->ttl;
+                    unpacked_ttlrdata.rdata_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(nsec_rec);
+                    unpacked_ttlrdata.rdata_pointer = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_rec);
+
+                    rdata_desc nsec_desc = {TYPE_NSEC, unpacked_ttlrdata.rdata_size, unpacked_ttlrdata.rdata_pointer};
+
+                    if(!read_only)
                     {
-                        zdb_ttlrdata unpacked_ttlrdata;
-
-                        unpacked_ttlrdata.ttl = nsec_rec->ttl;
-                        unpacked_ttlrdata.rdata_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(nsec_rec);
-                        unpacked_ttlrdata.rdata_pointer = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_rec);
+                        log_warn("nsec: %{dnsname}: del: %{dnsname} %{typerdatadesc}", zone->origin, prev_name, &nsec_desc);
 
                         zdb_listener_notify_remove_record(zone, name, TYPE_NSEC, &unpacked_ttlrdata);
-
-                        nsec_rec = nsec_rec->next;
                     }
-                    while(nsec_rec != NULL);
+                    else
+                    {
+                        log_err("nsec: %{dnsname}: got: %{dnsname} %{typerdatadesc}", zone->origin, prev_name, &nsec_desc);
+                    }
+
+                    nsec_rec = nsec_rec->next;
                 }
-
-                zdb_record_delete(&label->resource_record_set, TYPE_NSEC);
-
-                rrsig_delete(zone, name, label, TYPE_NSEC);
-
-                nsec_record = NULL;
+                while(nsec_rec != NULL);
+                
+                if(!read_only)
+                {
+                    zdb_record_delete(&label->resource_record_set, TYPE_NSEC);
+                    rrsig_delete(zone, name, label, TYPE_NSEC);
+                    nsec_record = NULL;
+                }
             }
 
             /*
@@ -354,23 +393,26 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
             
             if(nsec_record == NULL)
             {
+                missing_nsec_records++;
+                
+                zdb_packed_ttlrdata *nsec_record;
+
+                u16 dname_len = nsec_inverse_name(name, next_node->inverse_relative_name);
+                u16 rdata_size = dname_len + tbm_size;
+
+                ZDB_RECORD_ZALLOC_EMPTY(nsec_record, soa.minimum, rdata_size);
+                u8* rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_record);
+                memcpy(rdata, name, dname_len);
+                rdata += dname_len;
+                memcpy(rdata, tmp_bitmap, tbm_size);
+                
+                rdata_desc nsec_desc = {TYPE_NSEC, ZDB_PACKEDRECORD_PTR_RDATASIZE(nsec_record), ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_record)};
+                
                 if(!read_only)
-                {
-                    zdb_packed_ttlrdata *nsec_record;
-
-                    u16 dname_len = nsec_inverse_name(name, next_node->inverse_relative_name);
-                    u16 rdata_size = dname_len + tbm_size;
-
-                    ZDB_RECORD_ZALLOC_EMPTY(nsec_record, soa.minimum, rdata_size);
-
-                    u8* rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_record);
-
-                    memcpy(rdata, name, dname_len);
-                    rdata += dname_len;
-
-                    memcpy(rdata, tmp_bitmap, tbm_size);
-
+                {                    
                     zdb_record_insert(&label->resource_record_set, TYPE_NSEC, nsec_record);
+
+                    log_warn("nsec: %{dnsname}: add: %{dnsname} %{typerdatadesc}", zone->origin, prev_name, &nsec_desc);
 
                     /*
                      * Schedule a signature
@@ -378,7 +420,8 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
                 }
                 else
                 {
-                    missing_nsec_records++;
+                    log_warn("nsec: %{dnsname}: need: %{dnsname} %{typerdatadesc}", zone->origin, prev_name, &nsec_desc);
+                    ZDB_RECORD_ZFREE(nsec_record);
                 }
             }
 
@@ -804,14 +847,21 @@ nsec_icmtl_replay_execute(nsec_icmtl_replay *replay)
                 ya_result err;
                 zdb_rr_label* label = zdb_rr_label_find_exact(replay->zone->apex, labels, labels_top);
 
-                nsec_delete_label_node(replay->zone, label, labels, labels_top);
-                
-                if(RR_LABEL_IRRELEVANT(label))
+                if(label != NULL)
                 {
-                    if(FAIL(err = zdb_rr_label_delete_record(replay->zone, labels, labels_top, TYPE_ANY)))
+                    nsec_delete_label_node(replay->zone, label, labels, labels_top);
+
+                    if(RR_LABEL_IRRELEVANT(label))
                     {
-                        log_err("icmtl replay: NSEC: %r", err);
+                        if(FAIL(err = zdb_rr_label_delete_record(replay->zone, labels, labels_top, TYPE_ANY)))
+                        {
+                            log_err("icmtl replay: NSEC: %r", err);
+                        }
                     }
+                }
+                else
+                {
+                    log_err("icmtl replay: NSEC: %{dnsname} not found in zone !", fqdn);
                 }
             }
 
@@ -843,8 +893,14 @@ nsec_icmtl_replay_execute(nsec_icmtl_replay *replay)
             s32 labels_top = dnsname_to_dnslabel_vector(fqdn, labels);
 
             zdb_rr_label* label = zdb_rr_label_find_exact(replay->zone->apex, labels, labels_top - replay->zone->origin_vector.size - 1);
-
-            nsec_update_label_node(replay->zone, label, labels, labels_top);
+            if(label != NULL)
+            {
+                nsec_update_label_node(replay->zone, label, labels, labels_top);
+            }
+            else
+            {
+                log_err("icmtl replay: NSEC: %{dnsname} not found in zone !!", fqdn);;
+            }
 
             free(fqdn);
         }

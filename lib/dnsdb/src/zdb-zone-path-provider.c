@@ -177,6 +177,11 @@ zdb_zone_path_provider_default(const u8* domain_fqdn, char *path_buffer, u32 pat
             ret = snformat(path_buffer, path_buffer_size, "%s", dir_path);
             break;
         }
+        case ZDB_ZONE_PATH_PROVIDER_DNSKEY_PATH:
+        {
+            ret = snformat(path_buffer, path_buffer_size, "%s/keys", dir_path);
+            break;
+        }
         default:
         {
             ret = ERROR;    // no handled flags have been used
@@ -260,10 +265,18 @@ zdb_zone_info_get_zone_max_journal_size(const u8 *origin, u32 *size)
     yassert(origin != NULL);
     yassert(size != NULL);
     zdb_zone_info_provider_data data;
+    data._u64 = *size;      // known wire size / 2
     ya_result ret;
     if(ISOK(ret = zdb_zone_info_get_provider()(origin, &data, ZDB_ZONE_INFO_PROVIDER_MAX_JOURNAL_SIZE)))
     {
-        *size = data._u32;
+        if(data._u64 > MAX_U32)
+        {
+            data._u64 = MAX_U32;
+        }
+        
+        /// @note THX: here, if data._u64 is < 256*1024, then set to 256*1024 .
+        
+        *size = data._u64;
     }
     return ret;    
 }
@@ -296,6 +309,8 @@ zdb_zone_info_store_zone(const u8 *origin)
 ya_result
 zdb_zone_info_store_zone_and_wait_for_serial(const u8 *origin, u32 minimum_serial)
 {
+    // This mechanism should be improved : the zone should be unlocked, frozen, saved, unfrozen, re-locked
+    
     yassert(origin != NULL);
     ya_result ret;
     
@@ -303,16 +318,33 @@ zdb_zone_info_store_zone_and_wait_for_serial(const u8 *origin, u32 minimum_seria
     
     if(ISOK(ret))
     {
+        u64 start = timeus();
+        
         for(;;)
         {
             u32 serial;
             if(FAIL(ret = zdb_zone_info_get_stored_serial(origin, &serial)))
             {
-                break;
+                return ret;
             }
             if(serial_ge(serial, minimum_serial))
             {
-                break;
+                return SUCCESS;
+            }
+            
+            u64 now = timeus();
+            
+            if(now < start)
+            {
+                start = now; //clock modified
+            }
+            
+            if(now - start > 1000000)
+            {
+                if(FAIL(ret = zdb_zone_info_get_provider()(origin, NULL, ZDB_ZONE_INFO_PROVIDER_STORE_NOW)))
+                {
+                    return ret;
+                }
             }
             
             usleep(500000);

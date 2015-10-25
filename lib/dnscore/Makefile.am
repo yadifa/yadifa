@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2011, EURid. All rights reserved.
+# Copyright (c) 2011-2015, EURid. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without 
@@ -30,16 +30,6 @@
 ##############################################################################
 #
 #	YADIFA dnscore Makefile.am script
-#
-#		Makefile.am script
-#
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.3-public/lib/dnscore/Makefile.am $
-#
-#	   $Date: 2015-07-14 09:28:28 +0200 (Tue, 14 Jul 2015) $
-#
-#	   $Revision: 5301 $
-#
-#	$Author: ericdf $
 #
 ##############################################################################
 
@@ -95,6 +85,7 @@ libdnscore_la_SOURCES = \
 	src/dnscore.c \
 	src/dnsformat.c \
 	src/dnskey.c \
+	src/dnskey-keyring.c \
 	src/dnskey_dsa.c \
 	src/dnskey_rsa.c \
 	src/dnsname.c \
@@ -195,6 +186,7 @@ pkginclude_HEADERS = \
 	$(I)/dnskey.h \
 	$(I)/dnskey_dsa.h \
 	$(I)/dnskey_rsa.h \
+	$(I)/dnskey-keyring.h \
 	$(I)/dnsname.h \
 	$(I)/dnsname_set.h \
 	$(I)/dnssec_errors.h \

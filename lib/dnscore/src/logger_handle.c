@@ -79,6 +79,9 @@
 
 #define LOGGER_HANDLE_TAG 0x4c444e48474f4c /* LOGHNDL */
 
+// If the logger thread queues a log message, and the log queue is full (ie: because the disk is full) a dead-lock may ensue.
+// So queued-logging is to be avoided in the logger thread
+// That being said, DEBUG_LOG_HANDLER and DEBUG_LOG_MESSAGES may trigger this issue as it is a debug, dev-only, feature.
 
 #define DEBUG_LOG_HANDLER 0
 #define DEBUG_LOG_MESSAGES 0
@@ -316,7 +319,6 @@ static void logger_handle_trigger_shutdown()
 {
     flusherr();
     logger_flush();
-
     abort();
 }
 
@@ -885,7 +887,6 @@ logger_service_handle_count_channels(logger_handle *handle)
     return sum;
 }
 
-
 /**
  * INTERNAL: used inside the service (2)
  */
@@ -1131,16 +1132,32 @@ logger_dispatcher_thread(void* context)
 
                             if(ISOK(return_code))
                             {
-                                if(FAIL(return_code = logger_channel_msg(channel, level, repeat_text, return_code, 29)))
+                                /// @todo 20150713 edf -- verify that generated code is not slower than an 'if'
+                                
+                                while(FAIL(return_code = logger_channel_msg(channel, level, repeat_text, return_code, 29)))
                                 {
-                                    osformatln(termerr, "message write failed on channel: %r", return_code);
-                                    flusherr();
+                                    if(stdstream_is_tty(termerr))
+                                    {
+                                        osformatln(termerr, "message write failed on channel: %r", return_code);
+                                        flusherr();
+                                    }
+                                    
+                                    if(dnscore_shuttingdown())
+                                    {
+                                        // message will be lost
+                                        break;
+                                    }
+                                    
+                                    sleep(1);
                                 }
                             }
                             else
                             {
-                                osformatln(termerr, "message formatting failed on channel: %r", return_code);
-                                flusherr();
+                                if(stdstream_is_tty(termerr))
+                                {
+                                    osformatln(termerr, "message formatting failed on channel: %r", return_code);
+                                    flusherr();
+                                }
                             }
                         }
 
@@ -1173,10 +1190,21 @@ logger_dispatcher_thread(void* context)
                         flushout();
 #endif
 
-                        if(FAIL(return_code = logger_channel_msg(channel, level, buffer, size, date_header_len)))
+                        while(FAIL(return_code = logger_channel_msg(channel, level, buffer, size, date_header_len)))
                         {
-                            osformatln(termerr, "message write failed on channel: %r", return_code);
-                            flusherr();
+                            if(stdstream_is_tty(termerr))
+                            {
+                                osformatln(termerr, "message write failed on channel: %r", return_code);
+                                flusherr();
+                            }
+                            
+                            if(dnscore_shuttingdown())
+                            {
+                                // message will be lost
+                                break;
+                            }
+
+                            sleep(1);
                         }
                     }
 
@@ -1401,9 +1429,12 @@ logger_dispatcher_thread(void* context)
             
             default:
             {
-                osformatln(termerr, "unexpected message type %u in log queue", message->type);
-                flusherr();
-                            
+                if(stdstream_is_tty(termerr))
+                {
+                    osformatln(termerr, "unexpected message type %u in log queue", message->type);
+                    flusherr();
+                }
+                
                 break;
             }
         }

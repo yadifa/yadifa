@@ -82,6 +82,20 @@ extern logger_handle* g_database_logger;
 
 #define ZDB_SSLMUTEX_TAG 0x584554554d4c5353
 
+#ifndef __DATE__
+#define __DATE__ "date?"
+#endif
+
+#ifndef __TIME__
+#define __TIME__ "time?"
+#endif
+
+#ifdef DEBUG
+const char *dnsdb_lib = "dnsdb " __DATE__ " " __TIME__ " debug";
+#else
+const char *dnsdb_lib = "dnsdb " __DATE__ " " __TIME__ " release";
+#endif
+
 static pthread_mutex_t *ssl_mutex = NULL;
 static int ssl_mutex_count = 0;
 
@@ -356,10 +370,6 @@ zdb_remove_zone_from_dnsname(zdb *db, const u8 *fqdn)
     return zone;
 }
 
-#if 1
-
-//#error obsolete
-
 /** @brief Search for a match in the database
  *
  *  Search for a match in the database.
@@ -375,10 +385,14 @@ zdb_remove_zone_from_dnsname(zdb *db, const u8 *fqdn)
  */
 
 ya_result
-zdb_query(zdb* db, u8* name_, u16 zclass, u16 type, zdb_packed_ttlrdata** ttlrdata_out)
+zdb_query(zdb* db, const u8 *name_, u16 type, zdb_packed_ttlrdata** ttlrdata_out)
 {
     yassert(ttlrdata_out != NULL);
 
+#ifdef HAS_DYNAMIC_PROVISIONING
+    zdb_lock(db, ZDB_MUTEX_READER); // zdb_query
+#endif
+    
     dnsname_vector name;
     DEBUG_RESET_dnsname(name);
 
@@ -408,6 +422,11 @@ zdb_query(zdb* db, u8* name_, u16 zclass, u16 type, zdb_packed_ttlrdata** ttlrda
                 /* *ttlrdata_out for the answer */
                 /* zone_label->zone for the authority section */
                 /* subsequent searchs for the additional */
+                
+
+#ifdef HAS_DYNAMIC_PROVISIONING
+                zdb_unlock(db, ZDB_MUTEX_READER); // zdb_query
+#endif                
 
                 return SUCCESS;
             }
@@ -417,11 +436,13 @@ zdb_query(zdb* db, u8* name_, u16 zclass, u16 type, zdb_packed_ttlrdata** ttlrda
     }
 
 
+    
+#ifdef HAS_DYNAMIC_PROVISIONING
+    zdb_unlock(db, ZDB_MUTEX_READER); // zdb_query
+#endif
 
     return ZDB_ERROR_KEY_NOTFOUND;
 }
-
-#endif
 
 /** @brief Search for a match in the database
  *

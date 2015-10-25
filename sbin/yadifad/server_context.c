@@ -51,7 +51,6 @@
 #include <dnscore/sys_types.h>
 #include <dnscore/rfc.h>
 #include <dnscore/thread_pool.h>
-#include <dnscore/format.h>
 #include <dnscore/ptr_vector.h>
 
 #include <dnscore/fdtools.h>

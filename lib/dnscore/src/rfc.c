@@ -73,85 +73,82 @@ const class_table qclass[] = {
 
 
 const type_table qtype[] = {
-    { TYPE_A,          TYPE_A_NAME          },
-    { TYPE_NS,         TYPE_NS_NAME         },
-    { TYPE_MD,         TYPE_MD_NAME         },
-    { TYPE_MF,         TYPE_MF_NAME         },
-    { TYPE_CNAME,      TYPE_CNAME_NAME      },
-    { TYPE_SOA,        TYPE_SOA_NAME        },
-    { TYPE_MB,         TYPE_MB_NAME         },
-    { TYPE_MG,         TYPE_MG_NAME         },
-    { TYPE_MR,         TYPE_MR_NAME         },
-    { TYPE_NULL,       TYPE_NULL_NAME       },
-    { TYPE_WKS,        TYPE_WKS_NAME        },
-    { TYPE_PTR,        TYPE_PTR_NAME        },
-    { TYPE_HINFO,      TYPE_HINFO_NAME      },
-    { TYPE_MINFO,      TYPE_MINFO_NAME      },
-    { TYPE_MX,         TYPE_MX_NAME         },
-    { TYPE_TXT,        TYPE_TXT_NAME        },
-    { TYPE_RP,         TYPE_RP_NAME         },
-    { TYPE_AFSDB,      TYPE_AFSDB_NAME      },
-    { TYPE_X25,        TYPE_X25_NAME        },
-    { TYPE_ISDN,       TYPE_ISDN_NAME       },
-    { TYPE_RT,         TYPE_RT_NAME         },
-    { TYPE_NSAP,       TYPE_NSAP_NAME       },
-    { TYPE_NSAP_PTR,   TYPE_NSAP_PTR_NAME   },
-    { TYPE_SIG,        TYPE_SIG_NAME        },
-    { TYPE_KEY,        TYPE_KEY_NAME        },
-    { TYPE_PX,         TYPE_PX_NAME         },
-    { TYPE_GPOS,       TYPE_GPOS_NAME       },
-    { TYPE_AAAA,       TYPE_AAAA_NAME       },
-    { TYPE_LOC,        TYPE_LOC_NAME        },
-    { TYPE_NXT,        TYPE_NXT_NAME        },
-    { TYPE_EID,        TYPE_EID_NAME        },
-    { TYPE_NIMLOC,     TYPE_NIMLOC_NAME     },
-    { TYPE_SRV,        TYPE_SRV_NAME        },
-    { TYPE_ATMA,       TYPE_ATMA_NAME       },
-    { TYPE_NAPTR,      TYPE_NAPTR_NAME      },
-    { TYPE_KX,         TYPE_KX_NAME         },
-    { TYPE_CERT,       TYPE_CERT_NAME       },
-    { TYPE_A6,         TYPE_A6_NAME         },
-    { TYPE_DNAME,      TYPE_DNAME_NAME      },     
-    { TYPE_SINK,       TYPE_SINK_NAME       },
-    { TYPE_OPT,        TYPE_OPT_NAME        },
-    { TYPE_APL,        TYPE_APL_NAME        },
-    { TYPE_DS,         TYPE_DS_NAME         },
-    { TYPE_SSHFP,      TYPE_SSHFP_NAME      },
-    { TYPE_IPSECKEY,   TYPE_IPSECKEY_NAME   },
-    { TYPE_RRSIG,      TYPE_RRSIG_NAME      },
-    { TYPE_NSEC,       TYPE_NSEC_NAME       },
-    { TYPE_DNSKEY,     TYPE_DNSKEY_NAME     },
-    { TYPE_DHCID,      TYPE_DHCID_NAME      },
-    { TYPE_NSEC3,      TYPE_NSEC3_NAME      },
-    { TYPE_NSEC3PARAM, TYPE_NSEC3PARAM_NAME },
-    { TYPE_TLSA,       TYPE_TLSA_NAME       },
-    { TYPE_HIP,        TYPE_HIP_NAME        },
-    { TYPE_NINFO,      TYPE_NINFO_NAME      },
-    { TYPE_RKEY,       TYPE_RKEY_NAME       },
-    { TYPE_TALINK,     TYPE_TALINK_NAME     },
-    { TYPE_CDS,        TYPE_CDS_NAME        },
-    { TYPE_SPF,        TYPE_SPF_NAME        },
-    { TYPE_UINFO,      TYPE_UINFO_NAME      },
-    { TYPE_UID,        TYPE_UID_NAME        },
-    { TYPE_GID,        TYPE_GID_NAME        },
-    { TYPE_UNSPEC,     TYPE_UNSPEC_NAME     },
-    { TYPE_NID,        TYPE_NID_NAME        },
-    { TYPE_L32,        TYPE_L32_NAME        },
-    { TYPE_L64,        TYPE_L64_NAME        },
-    { TYPE_LP,         TYPE_LP_NAME         },
-    { TYPE_EUI48,      TYPE_EUI48_NAME      },
-    { TYPE_EUI64,      TYPE_EUI64_NAME      },
-    { TYPE_TKEY,       TYPE_TKEY_NAME       },
-    { TYPE_TSIG,       TYPE_TSIG_NAME       },
-    { TYPE_IXFR,       TYPE_IXFR_NAME       },
-    { TYPE_AXFR,       TYPE_AXFR_NAME       },
-    { TYPE_MAILB,      TYPE_MAILB_NAME      },
-    { TYPE_MAILA,      TYPE_MAILA_NAME      },
-    { TYPE_ANY,        TYPE_ANY_NAME        },
-    { TYPE_URI,        TYPE_URI_NAME        },
-    { TYPE_CAA,        TYPE_CAA_NAME        },
-    { TYPE_TA,         TYPE_TA_NAME         },
-    { TYPE_DLV,        TYPE_DLV_NAME        },
+    { TYPE_A,          TYPE_A_NAME          }, // 1
+    { TYPE_NS,         TYPE_NS_NAME         }, // 2
+    { TYPE_MD,         TYPE_MD_NAME         }, // 3
+    { TYPE_MF,         TYPE_MF_NAME         }, // 4
+    { TYPE_CNAME,      TYPE_CNAME_NAME      }, // 5
+    { TYPE_SOA,        TYPE_SOA_NAME        }, // 6
+    { TYPE_MB,         TYPE_MB_NAME         }, // 7
+    { TYPE_MG,         TYPE_MG_NAME         }, // 8
+    { TYPE_MR,         TYPE_MR_NAME         }, // 9
+    { TYPE_NULL,       TYPE_NULL_NAME       }, // 10
+    { TYPE_WKS,        TYPE_WKS_NAME        }, // 11 
+    { TYPE_PTR,        TYPE_PTR_NAME        }, // 12
+    { TYPE_HINFO,      TYPE_HINFO_NAME      }, // 13
+    { TYPE_MINFO,      TYPE_MINFO_NAME      }, // 14
+    { TYPE_MX,         TYPE_MX_NAME         }, // 15
+    { TYPE_TXT,        TYPE_TXT_NAME        }, // 16 
+    { TYPE_RP,         TYPE_RP_NAME         }, // 17
+    { TYPE_AFSDB,      TYPE_AFSDB_NAME      }, // 18
+    { TYPE_X25,        TYPE_X25_NAME        }, // 19
+    { TYPE_ISDN,       TYPE_ISDN_NAME       }, // 20
+    { TYPE_RT,         TYPE_RT_NAME         }, // 21
+    { TYPE_NSAP,       TYPE_NSAP_NAME       }, // 22
+    { TYPE_NSAP_PTR,   TYPE_NSAP_PTR_NAME   }, // 23
+    { TYPE_SIG,        TYPE_SIG_NAME        }, // 24
+    { TYPE_KEY,        TYPE_KEY_NAME        }, // 25
+    { TYPE_PX,         TYPE_PX_NAME         }, // 26
+    { TYPE_GPOS,       TYPE_GPOS_NAME       }, // 27
+    { TYPE_AAAA,       TYPE_AAAA_NAME       }, // 28
+    { TYPE_LOC,        TYPE_LOC_NAME        }, // 29
+    { TYPE_NXT,        TYPE_NXT_NAME        }, // 30
+    { TYPE_EID,        TYPE_EID_NAME        }, // 31
+    { TYPE_NIMLOC,     TYPE_NIMLOC_NAME     }, // 32
+    { TYPE_SRV,        TYPE_SRV_NAME        }, // 33
+    { TYPE_ATMA,       TYPE_ATMA_NAME       }, // 34
+    { TYPE_NAPTR,      TYPE_NAPTR_NAME      }, // 35
+    { TYPE_KX,         TYPE_KX_NAME         }, // 36
+    { TYPE_CERT,       TYPE_CERT_NAME       }, // 37
+    { TYPE_A6,         TYPE_A6_NAME         }, // 38
+    { TYPE_DNAME,      TYPE_DNAME_NAME      }, // 39
+    { TYPE_SINK,       TYPE_SINK_NAME       }, // 40
+    { TYPE_OPT,        TYPE_OPT_NAME        }, // 41
+    { TYPE_APL,        TYPE_APL_NAME        }, // 42
+    { TYPE_DS,         TYPE_DS_NAME         }, // 43
+    { TYPE_SSHFP,      TYPE_SSHFP_NAME      }, // 44
+    { TYPE_IPSECKEY,   TYPE_IPSECKEY_NAME   }, // 45
+    { TYPE_RRSIG,      TYPE_RRSIG_NAME      }, // 46
+    { TYPE_NSEC,       TYPE_NSEC_NAME       }, // 47
+    { TYPE_DNSKEY,     TYPE_DNSKEY_NAME     }, // 48
+    { TYPE_DHCID,      TYPE_DHCID_NAME      }, // 49
+    { TYPE_NSEC3,      TYPE_NSEC3_NAME      }, // 50
+    { TYPE_NSEC3PARAM, TYPE_NSEC3PARAM_NAME }, // 51
+    { TYPE_TLSA,       TYPE_TLSA_NAME       }, // 52
+    { TYPE_HIP,        TYPE_HIP_NAME        }, // 55
+    { TYPE_NINFO,      TYPE_NINFO_NAME      }, // 56
+    { TYPE_RKEY,       TYPE_RKEY_NAME       }, // 57
+    { TYPE_TALINK,     TYPE_TALINK_NAME     }, // 58
+    { TYPE_CDS,        TYPE_CDS_NAME        }, // 59
+    { TYPE_SPF,        TYPE_SPF_NAME        }, // 99
+    { TYPE_UINFO,      TYPE_UINFO_NAME      }, // 100
+    { TYPE_NID,        TYPE_NID_NAME        }, // 104
+    { TYPE_L32,        TYPE_L32_NAME        }, // 105
+    { TYPE_L64,        TYPE_L64_NAME        }, // 106
+    { TYPE_LP,         TYPE_LP_NAME         }, // 107
+    { TYPE_EUI48,      TYPE_EUI48_NAME      }, // 108
+    { TYPE_EUI64,      TYPE_EUI64_NAME      }, // 109
+    { TYPE_TKEY,       TYPE_TKEY_NAME       }, // 249
+    { TYPE_TSIG,       TYPE_TSIG_NAME       }, // 250
+    { TYPE_IXFR,       TYPE_IXFR_NAME       }, // 251
+    { TYPE_AXFR,       TYPE_AXFR_NAME       }, // 252
+    { TYPE_MAILB,      TYPE_MAILB_NAME      }, // 253
+    { TYPE_MAILA,      TYPE_MAILA_NAME      }, // 254
+    { TYPE_ANY,        TYPE_ANY_NAME        }, // 255
+    { TYPE_URI,        TYPE_URI_NAME        }, // 256
+    { TYPE_CAA,        TYPE_CAA_NAME        }, // 257
+    { TYPE_TA,         TYPE_TA_NAME         }, // 32768
+    { TYPE_DLV,        TYPE_DLV_NAME        }, // 32769
     
 #if HAS_DYNAMIC_PROVISIONING
     { TYPE_ZONE_TYPE,           TYPE_ZONE_TYPE_NAME         },
@@ -233,15 +230,20 @@ static char *rcode[32] =
     "?",
     "?",
 
-    "BADVERS",                //   16      /* Bad OPT Version                    rfc 2671 */
-    
+    "BADVERS",                //   16      /* Bad OPT Version         rfc 2671 / rfc 6891 */
+
+#if 0 /* fix */
+#else // THX
+
     "-",
     "-",
     "-",
-    
+
     "-",
     "-",
     "-",
+
+#endif // THX
     "-",
     
     "-",
@@ -411,12 +413,6 @@ get_name_from_type(u16 t)
             return TYPE_SPF_NAME;
         case TYPE_UINFO:
             return TYPE_UINFO_NAME;
-        case TYPE_UID:
-            return TYPE_UID_NAME;
-        case TYPE_GID:
-            return TYPE_GID_NAME;
-        case TYPE_UNSPEC:
-            return TYPE_UNSPEC_NAME;
         case TYPE_TKEY:
             return TYPE_TKEY_NAME;
         case TYPE_TSIG:

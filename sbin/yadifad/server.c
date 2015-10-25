@@ -52,7 +52,6 @@
 #include "config.h"
 
 #include <dnscore/logger.h>
-#include <dnscore/format.h>
 #include <dnscore/fdtools.h>
 #include <dnscore/tcp_io_stream.h>
 #include <dnscore/thread_pool.h>
@@ -92,10 +91,6 @@ server_statistics_t server_statistics;
 static bool server_statistics_initialised = FALSE;
 
 volatile int program_mode = SA_CONT; /** @note must be volatile */
-
-
-
-
 
 /*******************************************************************************************************************
  *

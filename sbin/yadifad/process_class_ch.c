@@ -46,7 +46,6 @@
 #include <poll.h>
 
 #include <dnscore/logger.h>
-#include <dnscore/format.h>
 #include <dnscore/thread_pool.h>
 #include <dnscore/fdtools.h>
 

@@ -72,7 +72,7 @@ struct file_output_stream
 static ya_result
 file_write(output_stream* stream_, const u8* buffer, u32 len)
 {
-    file_output_stream* stream = (file_output_stream*)stream_;
+    const file_output_stream* stream = (file_output_stream*)stream_;
 
     const u8* start = buffer;
 
@@ -91,6 +91,16 @@ file_write(output_stream* stream_, const u8* buffer, u32 len)
             
             if(err == EAGAIN) /// @todo edf 20150218 -- OSX 10.9.4 generates this on unexpected streams
             {
+#if __FreeBSD__ || __OpenBSD__ || __APPLE__
+                int oldflags = fcntl (stream->data.fd, F_GETFL, 0);
+                if(oldflags < 0)
+                {
+                    // maybe ?
+                    err = errno;
+                    break;
+                }
+#endif
+                
                 continue;
             }
 
@@ -174,6 +184,45 @@ file_output_stream_open_ex(const char* filename, int flags, mode_t mode, output_
     stream->vtbl = &file_output_stream_vtbl;
 
     return SUCCESS;
+}
+
+ya_result
+file_output_stream_open_ex_nolog(const char* filename, int flags, mode_t mode, output_stream* stream_)
+{
+    yassert(sizeof (void*) >= sizeof (int));
+
+    int fd = open_create_ex_nolog(filename, flags, mode);
+
+    if(fd < 0)
+    {
+        return ERRNO_ERROR;
+    }
+    
+#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
+    posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+#endif
+
+    file_output_stream* stream = (file_output_stream*)stream_;
+    stream->data.fd = fd;
+
+    stream->vtbl = &file_output_stream_vtbl;
+
+    return SUCCESS;
+}
+
+void
+file_output_stream_close_nolog(output_stream* stream_)
+{
+    file_output_stream* stream = (file_output_stream*)stream_;
+    
+    /* don't, it's only for a test that I did this assert((stream->data.fd < 0)||(stream->data.fd >2)); */
+    
+    if(stream->data.fd != -1)   /* harmless close but still ... */
+    {
+        close_ex(stream->data.fd);
+    }
+
+    output_stream_set_void(stream_);
 }
 
 ya_result

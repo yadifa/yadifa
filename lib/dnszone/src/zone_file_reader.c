@@ -71,6 +71,9 @@ static const char * const zrf_comment_markers = ";#";
 static const char * const zrf_blank_makers = "\040\t\r";
 static const char * const zfr_escape_characters = "\\";
 
+#define ZONE_FILE_READER_MESSAGE_STATIC     0
+#define ZONE_FILE_READER_MESSAGE_ALLOCATED  1
+
 typedef struct zone_file_reader zone_file_reader;
 struct zone_file_reader
 {
@@ -88,13 +91,36 @@ struct zone_file_reader
     u8   domain[MAX_DOMAIN_LENGTH];
     u8   origin[MAX_DOMAIN_LENGTH];
     char dot_origin[MAX_DOMAIN_LENGTH + 1];
-    char text_buffer[512];
+    //char text_buffer[512];
     u8 rdata[RDATA_MAX_LENGTH];    
     
     input_stream includes[ZONE_FILE_READER_INCLUDE_DEPTH_MAX];
     u8 includes_count;
+    //
+    ya_result error_message_code;
+    u8 error_message_allocated; // 0: static 1: malloc
+    char *error_message_buffer; // It's not aligned but this is an exception :
+                                // _ This is a rarely used structure (don't care too much about a hole)
+                                // _ This is an hopefully rarely used field (best case: "never" (besides setting it up to NULL))
+                                // _ Putting it among the more popular fields will likely increase misses
 };
 
+static void
+zone_file_reader_free_error_message(zone_file_reader *zfr)
+{
+    if(zfr->error_message_allocated == ZONE_FILE_READER_MESSAGE_ALLOCATED)
+    {
+        free(zfr->error_message_buffer);
+    }
+}
+/*
+static void
+zone_file_reader_clear_error_message(zone_file_reader *zfr)
+{
+    zone_file_reader_free_error_message(zfr);
+    zfr->error_message_buffer = NULL;
+}
+*/
 static inline ya_result
 zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_size, const u8 *origin)
 {
@@ -103,7 +129,6 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
     ya_result return_code;
     char text_buffer[1024];
     type_bit_maps_context tbmctx;
-    
     if(FAIL(return_code = parser_copy_next_word(p, text_buffer, sizeof(text_buffer))))
     {
         return return_code;
@@ -190,33 +215,12 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             case TYPE_MB:   /** NOTE: obsolete */
             case TYPE_MG:   /** NOTE: obsolete */
             case TYPE_MR:   /** NOTE: obsolete */
-            case TYPE_WKS:   
             {
                 return_code = cstr_to_locase_dnsname_with_check_len_with_origin(rdata, text, text_len, origin);
                 
                 break;
             }
-            case TYPE_AFSDB:
-            {
-                 u16 sub_type;
-                
-                if(FAIL(return_code = parser_get_u16(text, text_len, &sub_type)))
-                {
-                    break;
-                }
-                sub_type = htons(sub_type);
-                SET_U16_AT_P(rdata, sub_type);
-                rdata += 2;
-                
-                if(FAIL(return_code = parser_copy_next_fqdn_locase_with_origin(p, rdata, origin)))
-                {
-                    break;
-                }
-                
-                return_code += 2;
-                
-                break;
-            }
+            case TYPE_AFSDB: // As THX pointed out, this is the same format as MX
             case TYPE_MX:
             {
                 u16 preference;
@@ -996,31 +1000,6 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 
                 break;
             }
-#ifdef NEW_TYPES
-            case TYPE_AFSDB:
-            {
-                u16 tmp16;
-                         
-                
-                if(FAIL(return_code = parser_get_u16(text, text_len, &tmp16)))
-                {
-                    break;
-                }
-                tmp16 = htons(tmp16);
-                SET_U16_AT_P(rdata, tmp16);
-                rdata += 2;
-                
-                if(FAIL(return_code = parser_copy_next_fqdn_with_origin(p, rdata, origin)))
-                {
-                    break;
-                }
-                
-                return_code += 2;  // 2 bytes + length of FQDN
-                
-                break;
-            }
-#endif // NEW_TYPES
-            
             case TYPE_OPT:
             case TYPE_TSIG:
             case TYPE_IXFR:
@@ -1077,6 +1056,7 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             case TYPE_CAA:
             case TYPE_DLV:
             case TYPE_TA:
+            case TYPE_WKS:   
             {
                 return_code = ZONEFILE_UNSUPPORTED_TYPE;    /** unsupported type, TYPE## */
                 break;
@@ -1249,6 +1229,14 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                     {
                         if(FAIL(return_code = parser_next_word(p)))
                         {
+                            entry->name[0] = '\0';
+                            entry->type = TYPE_NONE;
+                            entry->class = CLASS_NONE;
+                            entry->rdata_size = 0;
+                            //
+                            zone_file_reader_free_error_message(zfr);
+                            zfr->error_message_code = return_code;
+                            zfr->error_message_buffer = "failed to parse $ORIGIN";
                             return return_code;
                         }
 
@@ -1260,6 +1248,14 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                         
                         if(FAIL(return_code = cstr_to_locase_dnsname_with_check_len(zfr->origin, &zfr->dot_origin[1], zfr->dot_origin_size - 1)))
                         {
+                            entry->name[0] = '\0';
+                            entry->type = TYPE_NONE;
+                            entry->class = CLASS_NONE;
+                            entry->rdata_size = 0;
+                            //
+                            zone_file_reader_free_error_message(zfr);
+                            zfr->error_message_code = return_code;
+                            zfr->error_message_buffer = "failed to parse $ORIGIN";
                             return return_code;
                         }
                     }
@@ -1267,6 +1263,14 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                     {
                         if(FAIL(return_code = parser_copy_next_ttl(p, &zfr->zttl)))
                         {
+                            entry->name[0] = '\0';
+                            entry->type = TYPE_NONE;
+                            entry->class = CLASS_NONE;
+                            entry->rdata_size = 0;
+                            //
+                            zone_file_reader_free_error_message(zfr);
+                            zfr->error_message_code = return_code;
+                            zfr->error_message_buffer = "failed to parse $TTL";
                             return return_code;
                         }
                     }
@@ -1276,6 +1280,14 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
     
                         if(FAIL(return_code = parser_copy_next_word(p, file_name, sizeof(file_name))))
                         {
+                            entry->name[0] = '\0';
+                            entry->type = TYPE_NONE;
+                            entry->class = CLASS_NONE;
+                            entry->rdata_size = 0;
+                            //
+                            zone_file_reader_free_error_message(zfr);
+                            zfr->error_message_code = return_code;
+                            zfr->error_message_buffer = "failed to parse $INCLUDE";
                             return return_code;
                         }
                         
@@ -1297,17 +1309,41 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                             }
                             else
                             {
+                                entry->name[0] = '\0';
+                                entry->type = TYPE_NONE;
+                                entry->class = CLASS_NONE;
+                                entry->rdata_size = 0;
+                                //
+                                zone_file_reader_free_error_message(zfr);
+                                zfr->error_message_code = err;
+                                if(ISOK(asformat(&zfr->error_message_buffer,  "failed to open file %s", file_name)))
+                                {
+                                    zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
+                                }
+                                
                                 return err;
                             }
                         }
                         else
                         {
                             return_code = ZONEFILE_EXPECTED_FILE_PATH;
+                            //
+                            zone_file_reader_free_error_message(zfr);
+                            zfr->error_message_code = return_code;
+                            zfr->error_message_buffer = "expected file path after $INCLUDE";
                             return return_code;
                         }
                     }
                     else if(parse_word_match(text, text_len, "$GENERATE", 9))
                     {
+                        entry->name[0] = '\0';
+                        entry->type = TYPE_NONE;
+                        entry->class = CLASS_NONE;
+                        entry->rdata_size = 0;
+                        //
+                        zone_file_reader_free_error_message(zfr);
+                        zfr->error_message_code = ZONEFILE_FEATURE_NOT_SUPPORTED;
+                        zfr->error_message_buffer = "$GENERATE not supported";
                         return ZONEFILE_FEATURE_NOT_SUPPORTED;
                     }
                     else if(parse_word_match(text, text_len, "$CLASS", 6))
@@ -1345,47 +1381,47 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                         {
                             if(text[text_len - 1] != '.')
                             {
-                                /*
-                                memcpy(zfr->text_buffer, text, text_len);
-                                memcpy(&zfr->text_buffer[text_len], zfr->dot_origin, zfr->dot_origin_size);
-                                text_len += zfr->dot_origin_size;
-                                text = zfr->text_buffer;
-                                */
                                 if(FAIL(return_code = charp_to_locase_dnsname_with_check(domain, text, text_len)))
                                 {
+                                    entry->type = TYPE_NONE;
+                                    entry->class = CLASS_NONE;
+                                    entry->rdata_size = 0;
+                                    //
+                                    zone_file_reader_free_error_message(zfr);
+                                    zfr->error_message_code = return_code;
+                                    MALLOC_OR_DIE(char*, zfr->error_message_buffer, text_len + 1, GENERIC_TAG);
+                                    memcpy(zfr->error_message_buffer, text, text_len);
+                                    zfr->error_message_buffer[text_len] = '\0';
+                                    zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
+                                    
                                     return return_code;
                                 }
                                 
-                                if(FAIL(return_code = dnsname_copy(&domain[return_code - 1], zfr->origin)))
-                                {
-                                    return return_code;
-                                }
+                                return_code = dnsname_copy(&domain[return_code - 1], zfr->origin); /// @note: cannot fail
                             }
                             else
                             {
                                 if(FAIL(return_code = charp_to_locase_dnsname(domain, text, text_len)))
                                 {
+                                    entry->type = TYPE_NONE;
+                                    entry->class = CLASS_NONE;
+                                    entry->rdata_size = 0;
+                                    //
+                                    zone_file_reader_free_error_message(zfr);
+                                    zfr->error_message_code = return_code;
+                                    MALLOC_OR_DIE(char*, zfr->error_message_buffer, text_len + 1, GENERIC_TAG);
+                                    memcpy(zfr->error_message_buffer, text, text_len);
+                                    zfr->error_message_buffer[text_len] = '\0';
+                                    zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
+                                    
                                     return return_code;
                                 }
                             }
                         }
-                        else
+                        else // label is @
                         {
-                            /*
-                            if(FAIL(return_code = charp_to_dnsname(domain, &zfr->dot_origin[1], zfr->dot_origin_size - 1)))
-                            {
-                                return return_code;
-                            }
-                            */
-                            if(FAIL(return_code = dnsname_copy(domain, zfr->origin)))
-                            {
-                                return return_code;
-                            }
-
-                            if(FAIL(return_code = dnsname_to_cstr(&zfr->dot_origin[1], zfr->origin)))
-                            {
-                                return return_code;
-                            }
+                            dnsname_copy(domain, zfr->origin); /// @note: cannot fail
+                            dnsname_to_cstr(&zfr->dot_origin[1], zfr->origin); /// @note: cannot fail
                             
                             zfr->dot_origin_size = return_code + 1;
                             zfr->template_source = TRUE;
@@ -1418,6 +1454,16 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                     
                     if(FAIL(return_code = parser_copy_next_type(p, &rtype)))
                     {
+                        entry->type = TYPE_NONE;
+                        entry->class = CLASS_NONE;
+                        entry->rdata_size = 0;
+                        //
+                        zone_file_reader_free_error_message(zfr);
+                        zfr->error_message_code = return_code;
+                        if(ISOK(asformat(&zfr->error_message_buffer,  "could not parse type for %{dnsname}", entry->name)))
+                        {
+                            zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
+                        }
                         return return_code;
                     }
                     
@@ -1425,16 +1471,29 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
 
                     if(rtype == TYPE_SOA)
                     {
+                        entry->class = rclass;
+                        
                         if(rclass == CLASS_NONE)
                         {
+                            entry->rdata_size = 0;
+                            //
+                            zone_file_reader_free_error_message(zfr);
+                            zfr->error_message_code = ZONEFILE_SOA_WITHOUT_CLASS;
+                            zfr->error_message_buffer = "no class set on the SOA record";
                             return ZONEFILE_SOA_WITHOUT_CLASS;
                         }
-
-                        entry->class = rclass;
                     }
 
                     if(FAIL(return_code = zone_file_reader_copy_rdata_inline(p, rtype, entry->rdata, sizeof(entry->rdata), zfr->origin)))
                     {
+                        entry->rdata_size = 0;
+                        //
+                        zone_file_reader_free_error_message(zfr);
+                        zfr->error_message_code = return_code;
+                        if(ISOK(asformat(&zfr->error_message_buffer,  "could not parse rdata for %{dnsname} %{dnsclass} %{dnstype}", entry->name, &entry->class, &entry->type)))
+                        {
+                            zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
+                        }
                         return return_code;
                     }
 
@@ -1496,7 +1555,7 @@ zone_file_reader_close(zone_reader *zr)
     fdatasync(fd);
     posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
 #endif
-*/    
+*/
     resource_record *rr = zfr->unread_next;
     while(rr != NULL)
     {
@@ -1504,6 +1563,8 @@ zone_file_reader_close(zone_reader *zr)
         rr = rr->next;
         free(tmp);
     }
+    
+    zone_file_reader_free_error_message(zfr);
     
     free(zfr);
     
@@ -1526,6 +1587,12 @@ zone_file_reader_handle_error(zone_reader *zr, ya_result error_code)
     /* nop */
 }
 
+static const char*
+zone_file_reader_get_last_error_message(zone_reader *zr)
+{
+    zone_file_reader *zfr = (zone_file_reader*)zr->data;
+    return zfr->error_message_buffer;
+}
 
 static zone_reader_vtbl zone_file_reader_vtbl =
 {
@@ -1535,6 +1602,7 @@ static zone_reader_vtbl zone_file_reader_vtbl =
     zone_file_reader_close,
     zone_file_reader_handle_error,
     zone_file_reader_canwriteback,
+    zone_file_reader_get_last_error_message,
     "zone_file_reader_v2"
 };
 

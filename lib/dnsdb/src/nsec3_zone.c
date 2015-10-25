@@ -87,10 +87,13 @@ nsec3_zone_rdata_compare(const u8* a_rdata, const u8* b_rdata)
 
             if(c == 0)
             {
-                c = a_rdata[4];
+                c = a_rdata[4]; // size of the hash
                 c -= b_rdata[4];
 
-                c = memcmp(&a_rdata[5], &b_rdata[5], c);
+                if(c == 0) // if both sizes are equal
+                {
+                    c = memcmp(&a_rdata[5], &b_rdata[5], a_rdata[4]);
+                }
             }
         }
     }
@@ -178,6 +181,8 @@ nsec3_zone_item_empties_recursively(nsec3_zone_item* item)
 void
 nsec3_zone_destroy(zdb_zone* zone, nsec3_zone* n3)
 {
+    int n3_index = 0;
+    
     /*
      *
      * Check for existence of n3 into zone
@@ -205,6 +210,7 @@ nsec3_zone_destroy(zdb_zone* zone, nsec3_zone* n3)
     {
         while(first->next != n3)
         {
+            ++n3_index;
             first = first->next;
         }
 
@@ -212,6 +218,49 @@ nsec3_zone_destroy(zdb_zone* zone, nsec3_zone* n3)
     }
 
     ZFREE_ARRAY(n3, sizeof (nsec3_zone) - 1 + NSEC3PARAM_MINIMUM_LENGTH + n3->rdata[4]);
+    
+    // Every single label must have its chain updated
+    
+    zdb_zone_label_iterator label_iterator;
+    
+    zdb_zone_label_iterator_init(zone, &label_iterator);
+    
+    if(n3_index == 0)
+    {
+        while(zdb_zone_label_iterator_hasnext(&label_iterator))
+        {
+            zdb_rr_label* label = zdb_zone_label_iterator_next(&label_iterator);
+            if(label->flags & ZDB_RR_LABEL_NSEC3)
+            {
+                yassert(!ZDB_LABEL_UNDERDELEGATION(label));
+                struct nsec3_label_extension *n3_ext = label->nsec.nsec3;
+                label->nsec.nsec3 = n3_ext->next;
+                yassert(n3_ext->self == NULL && n3_ext->star == NULL);
+                ZFREE(n3_ext, nsec3_label_extension);
+            }
+        }
+    }
+    else
+    {
+        while(zdb_zone_label_iterator_hasnext(&label_iterator))
+        {
+            zdb_rr_label* label = zdb_zone_label_iterator_next(&label_iterator);
+            if(label->flags & ZDB_RR_LABEL_NSEC3)
+            {
+                yassert(!ZDB_LABEL_UNDERDELEGATION(label));
+                struct nsec3_label_extension **n3_extp = &label->nsec.nsec3->next;
+                struct nsec3_label_extension *n3_ext = *n3_extp;
+                for(int i = 1; i < n3_index; ++i)
+                {
+                    n3_extp = &n3_ext->next;
+                    n3_ext = *n3_extp;
+                }
+                *n3_extp = n3_ext->next;
+                yassert(n3_ext->self == NULL && n3_ext->star == NULL);
+                ZFREE(n3_ext, nsec3_label_extension);
+            }
+        }
+    }
 }
 
 /*
@@ -233,7 +282,11 @@ nsec3_insert_empty_nsec3(zdb_zone* zone, u32 index)
 
         yassert((label->flags & ZDB_RR_LABEL_NSEC) == 0);
 
-        label->flags |= ZDB_RR_LABEL_NSEC3;
+        //label->flags |= ZDB_RR_LABEL_NSEC3;
+        if(!(label->flags & ZDB_RR_LABEL_NSEC3))
+        {
+            continue;
+        }
         
         /*
          * if label->nsec.nsec3 is NULL and index > 0 => oops
@@ -253,9 +306,10 @@ nsec3_insert_empty_nsec3(zdb_zone* zone, u32 index)
             {
                 nsec3_label_extension* n3ext;
                 
-                ZALLOC_OR_DIE(nsec3_label_extension*, n3ext, nsec3_label_extension, NSEC3_LABELEXT_TAG);                
+                ZALLOC_OR_DIE(nsec3_label_extension*, n3ext, nsec3_label_extension, NSEC3_LABELEXT_TAG); // in nsec3_insert_empty_nsec3
                 n3ext->self = NULL;
                 n3ext->star = NULL;
+                n3ext->next = NULL;
 
                 *current = n3ext;
             }
@@ -266,7 +320,7 @@ nsec3_insert_empty_nsec3(zdb_zone* zone, u32 index)
 
         nsec3_label_extension* n3ext;
 
-        ZALLOC_OR_DIE(nsec3_label_extension*, n3ext, nsec3_label_extension, NSEC3_LABELEXT_TAG);
+        ZALLOC_OR_DIE(nsec3_label_extension*, n3ext, nsec3_label_extension, NSEC3_LABELEXT_TAG); // in nsec3_insert_empty_nsec3
 
         n3ext->self = NULL;
         n3ext->star = NULL;

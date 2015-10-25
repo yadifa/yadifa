@@ -42,6 +42,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <dirent.h>
 
 #include "dnscore/fdtools.h"
 #include "dnscore/timems.h"
@@ -495,6 +496,34 @@ open_create_ex(const char *pathname, int flags, mode_t mode)
 }
 
 /**
+ * Opens a file, create if it does not exist. (see man 2 open with O_CREAT)
+ * Handles EINTR and other retry errors.
+ * This version of open_create_ex does NOT log anything, which is very important sometimes in the logger thread
+ * 
+ * @param fd
+ * @return 
+ */
+
+ya_result
+open_create_ex_nolog(const char *pathname, int flags, mode_t mode)
+{
+    int fd;
+    while((fd = open(pathname, flags, mode)) < 0)
+    {
+        int err = errno;
+
+        if(err != EINTR)
+        {
+            // do NOT set this to an error code other than -1
+            //fd = MAKE_ERRNO_ERROR(err);
+            break;
+        }
+    }
+    
+    return fd;
+}
+
+/**
  * Closes a file descriptor (see man 2 close)
  * Handles EINTR and other retry errors.
  * At return the file will be closed or not closable.
@@ -536,6 +565,34 @@ close_ex(int fd)
     log_debug6("close_ex(%i): %r", fd, return_value);
 #endif
     
+    return return_value;
+}
+
+/**
+ * Closes a file descriptor (see man 2 close)
+ * Handles EINTR and other retry errors.
+ * At return the file will be closed or not closable.
+ * 
+ * @param fd
+ * @return 
+ */
+
+ya_result
+close_ex_nolog(int fd)
+{
+    ya_result return_value = SUCCESS;
+    
+    while(close(fd) < 0)
+    {
+        int err = errno;
+
+        if(err != EINTR)
+        {
+            return_value = MAKE_ERRNO_ERROR(err);
+            break;
+        }
+    }
+  
     return return_value;
 }
 
@@ -660,6 +717,135 @@ mkdir_ex(const char *pathname, mode_t mode, u32 flags)
         t = &t[n];
         s = &s[n];
     }
+}
+
+/**
+ * Fixes an issue with the dirent not always set as expected.
+ *
+ * The type can be set to DT_UNKNOWN instead of file or directory.
+ * In that case the function will call stats to get the type.
+ */
+
+u8
+dirent_get_file_type(const char* folder, struct dirent *entry)
+{
+    u8 d_type;
+
+#ifdef _DIRENT_HAVE_D_TYPE
+    d_type = entry->d_type;
+#else
+    d_type = DT_UNKNOWN;
+#endif
+    
+    /*
+     * If the FS OR the OS does not supports d_type :
+     */
+
+    if(d_type == DT_UNKNOWN)
+    {
+        struct stat file_stat;
+        
+        char d_name[PATH_MAX];
+        snprintf(d_name, sizeof(d_name), "%s/%s", folder, entry->d_name);
+
+        while(stat(d_name, &file_stat) < 0)
+        {
+            int e = errno;
+
+            if(e != EINTR)
+            {
+                log_err("stat(%s): %r", d_name, ERRNO_ERROR);
+                break;
+            }
+        }
+
+        if(S_ISREG(file_stat.st_mode))
+        {
+            d_type = DT_REG;
+        }
+        else if(S_ISDIR(file_stat.st_mode))
+        {
+            d_type = DT_DIR;
+        }
+    }
+
+    return d_type;
+}
+
+// typedef ya_result readdir_callback(const char *basedir, const char* file, u8 filetype, void *args);
+
+ya_result
+readdir_forall(const char *basedir, readdir_callback *func, void *args)
+{
+    DIR *dir;
+    ya_result ret;
+    struct dirent entry;
+    struct dirent *result;
+    
+    dir = opendir(basedir);
+    
+    if(dir == NULL)
+    {
+        return ERRNO_ERROR;
+    }
+    
+    for(;;)
+    {    
+        readdir_r(dir, &entry, &result);
+
+        if(result == NULL)
+        {
+            ret = SUCCESS;
+
+            break;
+        }
+
+        u8 d_type = dirent_get_file_type(basedir, result);
+        
+        if(FAIL(ret = func(basedir, result->d_name, d_type, args)))
+        {
+            return ret;
+        }
+        
+        switch(ret)
+        {
+            case READDIR_CALLBACK_CONTINUE:
+            {
+                break;
+            }
+            case READDIR_CALLBACK_ENTER:
+            {
+                if(d_type == DT_DIR)
+                {
+                    char path[PATH_MAX];
+                    
+                    snprintf(path, sizeof(path), "%s/%s", basedir, result->d_name);
+                    
+                    if(FAIL(ret = readdir_forall(path, func, args)))
+                    {
+                        return ret;
+                    }
+                    
+                    if(ret == READDIR_CALLBACK_EXIT)
+                    {
+                        return ret;
+                    }
+                }
+                break;
+            }
+            case READDIR_CALLBACK_EXIT:
+            {
+                return ret;
+            }
+            default:
+            {
+                // unhandled code
+                break;
+            }
+        }
+    }
+
+    return ret;
 }
 
 /** @} */

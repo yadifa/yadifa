@@ -274,6 +274,8 @@ journal_cjf_page_cache_cull()
 {
     yassert(group_mutex_islocked(&page_cache_mtx));
     
+    /// @todo edf 20150113 -- make a rule that culls a cache entry at the end of the MRU
+    
     if(list_dl_size(&page_cache_mru) > journal_cfj_page_mru_size)
     {
         // get the tail one
@@ -287,6 +289,9 @@ journal_cjf_page_cache_cull()
 static journal_cjf_page_cache_item *
 journal_cjf_page_cache_new(int fd, u32 file_offset)
 {
+    /// @todo edf 20150113 -- make a rule that culls a cache entry at the end of the MRU
+    /// @todo edf 20150114 -- use a pool
+    
     journal_cjf_page_cache_item *sci;
     
     MALLOC_OR_DIE(journal_cjf_page_cache_item*, sci, sizeof(journal_cjf_page_cache_item), GENERIC_TAG);
@@ -726,6 +731,7 @@ journal_cjf_page_cache_close(int fd)
     if(fd_node != NULL)
     {
         journal_cjf_page_cache_items_close((u64_set*)&fd_node->value);
+        // @todo edf 20150113 -- close the content
         // destroy the u64_set content
         // delete the fd_node
         u32_set_avl_delete(&page_cache_item_by_fd, (u32)fd);

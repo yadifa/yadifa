@@ -31,51 +31,32 @@
 *------------------------------------------------------------------------------
 *
 */
+/** @defgroup dnskey DNSSEC keyring functions
+ *  @ingroup dnsdbdnssec
+ *  @brief 
+ *
+ *
+ * @{
+ */
 
-#ifndef POOL_H
-#define POOL_H
+#pragma once
 
-#include <dnscore/ptr_vector.h>
-#include <dnscore/mutex.h>
+#include <dnscore/dnskey.h>
 
-struct pool_s;
-
-typedef void *pool_allocate_callback(void *args);
-typedef void pool_free_callback(void *ptr, void* args);            // for destruction
-
-struct pool_s
+struct dnskey_keyring
 {
-    ptr_vector pool;
-    pool_allocate_callback *allocate_method;
-    pool_free_callback *free_method;
     mutex_t mtx;
-    void *allocate_args;
-    volatile u64 allocated_count;
-    volatile u64 released_count;
-    const char* name;
-    s32 max_size;       // do not retain more than this, stored as "max_size - 1"
-    volatile s32 current_count;
-    volatile s32 peak_count;
-    
-    struct pool_s *next;
-    bool hard_limit;
-    bool maxed;
+    u32_set tag_to_key;
 };
 
-typedef struct pool_s pool_s;
+typedef struct dnskey_keyring dnskey_keyring;
 
-void pool_init(pool_s *pool, pool_allocate_callback *allocate, pool_free_callback *free, void *allocate_args, const char* name);
-void pool_finalize(pool_s *pool);
+#define EMPTY_DNSKEY_KEYRING {MUTEX_INITIALIZER, U32_SET_EMPTY };
 
-void pool_log_stats(pool_s *pool);
-void pool_log_all_stats();
+ya_result   dnskey_keyring_init(dnskey_keyring *ks);
+ya_result   dnskey_keyring_add(dnskey_keyring *ks, dnssec_key* key);
+dnssec_key *dnskey_keyring_get(dnskey_keyring *ks, u8 algorithm, u16 tag, const u8 *domain);
+dnssec_key *dnskey_keyring_remove(dnskey_keyring *ks, u8 algorithm, u16 tag, const u8 *domain);
+void	    dnskey_keyring_destroy(dnskey_keyring *ks);
 
-void pool_log_stats_ex(pool_s *pool, logger_handle* handle, u32 level);
-void pool_log_all_stats_ex(logger_handle* handle, u32 level);
-
-void *pool_alloc(pool_s *pool);
-void pool_release(pool_s *pool, void *p);
-
-void pool_set_size(pool_s *pool, s32 max_size);
-
-#endif
+/** @} */

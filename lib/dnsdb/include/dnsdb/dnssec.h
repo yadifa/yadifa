@@ -50,7 +50,7 @@
 #include <dnsdb/dnssec_config.h>
 #include <dnsdb/rrsig.h>
 
-#include <dnsdb/dnssec_keystore.h>
+//#include <dnsdb/dnssec-keystore.h>
 
 /**
  * @todo NOTE: WARNING: IF THE MIN_TTL CHANGES IN THE SOA we MUST resign the NSEC* stuff.

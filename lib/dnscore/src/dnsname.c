@@ -100,7 +100,6 @@ static bool cstr_to_dnsname_terminators[256] =
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
 };
 
-
 /**
  *  0: out of space
  *  1: in space
@@ -116,8 +115,13 @@ static bool cstr_to_dnsname_terminators[256] =
 
 #if !HAS_FULL_ASCII7
 
+/*
+ * The list of characters that are valid in a zone: * - _ 0..9 A..Z a..z
+ *
+ */
+
 static s8 cstr_to_dnsname_map[256] =
-{
+{// 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
    -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 00 (HEX) */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 10 */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1,-1, 0, /* 20 */
@@ -136,8 +140,12 @@ static s8 cstr_to_dnsname_map[256] =
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 };
 
+/*
+ * The list of characters that are valid in a zone: - _ 0..9 A..Z a..z 
+ */
+
 static s8 cstr_to_dnsname_map_nostar[256] =
-{
+{// 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
    -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 00 (HEX) */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 10 */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,-1, 0, /* 20 */

@@ -180,384 +180,963 @@
 
 /* EDNS0 */
 
-#define     RCODE_EXT_DNSSEC                0x00800000 /* Network-order, DNSSEC requested */
+#define     RCODE_EXT_DNSSEC                0x00800000  /* Network-order, DNSSEC requested */
 
 #define     TYPE_NONE                           0
-
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                            ADDRESS                            |    32 bit address
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    ADDRESS                    |    32 bit address
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_A                          NU16(1) /* a host address                     rfc 1035 */
-
+#define     TYPE_A                          NU16(1)     /* a host address                   rfc 1035 */
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                            NSDNAME                            /    dns formated domain name
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                    NSDNAME                    /    dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_NS                         NU16(2) /* an authoritative name server       rfc 1035 */
-
+#define     TYPE_NS                         NU16(2)     /* an authoritative name server     rfc 1035 */
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                            MADNAME                            /    dns formated domain name
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                    MADNAME                    /    dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_MD                         NU16(3) /* CANONIZE - OBSOLETE                rfc 882 */
-
+#define     TYPE_MD                         NU16(3)     /* mail destination - OBSOLETE      rfc 1035 rfc 882 */
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                            MADNAME                            /    dns formated domain name
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                    MADNAME                    /    dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_MF                         NU16(4) /* CANONIZE - OBSOLETE                rfc 882 */
-
+#define     TYPE_MF                         NU16(4)     /* mail forwarder - OBSOLETE        rfc 1035 rfc 882 */
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                             CNAME                             /    dns formated domain name
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                     CNAME                     /    dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_CNAME                      NU16(5) /* the canonical name of a alias      rfc 1035 */
-
+#define     TYPE_CNAME                      NU16(5)     /* the canonical name of a alias    rfc 1035 */
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                             MNAME                             /    dns formated domain name
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                             RNAME                             /    dns formated domain name with
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+    local-part. Can have '\'before .
-   |                            SERIAL                             |    32 bit
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                            REFRESH                            |    32 bit
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                             RETRY                             |    32 bit
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                            EXPIRE                             |    32 bit
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                            MINIMUM                            |    32 bit
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                     MNAME                     /    dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                     RNAME                     /    dns formatted domain name with local-part.
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+    Can have '\' before '.'
+   |                    SERIAL                     |    32 bit 
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    REFRESH                    |    32 bit 
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                     RETRY                     |    32 bit 
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    EXPIRE                     |    32 bit 
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    MINIMUM                    |    32 bit 
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_SOA                        NU16(6) /* start of a zone of authority       rfc 1035 */
-
+#define     TYPE_SOA                        NU16(6)     /* start of a zone of authority     rfc 1035 */
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                            MADNAME                            /    dns formated domain name
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                    MADNAME                    /    dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_MB                         NU16(7) /* CANONIZE - OBSOLETE */
-
+#define     TYPE_MB                         NU16(7)     /* mailbox domain name - EXPERIMENTAL   rfc 1035 */
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                            MMGNAME                            /    dns formated domain name
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                    MMGNAME                    /    dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_MG                         NU16(8) /* CANONIZE - OBSOLETE */
-
+#define     TYPE_MG                         NU16(8)     /* mail group member - EXPERIMENTAL rfc 1035 */
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                            NEWNAME                            /    dns formated domain name
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                    NEWNAME                    /    dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_MR                         NU16(9) /* CANONIZE - OBSOLETE */
-
+#define     TYPE_MR                         NU16(9)     /* mail rename domain name - EXPERIMENTAL   rfc 1035 */
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                            <anything>                         / 
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                  <ANYTHING>                   /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_NULL                       NU16(10) /* */
-
+#define     TYPE_NULL                       NU16(10)    /* a null RR - EXPERIMENTAL         rfc 1035 */
 /*
-     1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                            ADDRESS                            |    32 bit address
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |    PROTOCOL   |                                               |
-   +-+-+-+-+-+-+-+-+                                               |
-   |                                                               |
-   /                           <BIT MAP>                           /
-   /                                                               /
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-
-    where:
-
-    ADDRESS   - An 32 bit ARPA Internet address
-
-    PROTOCOL  - An 8 bit IP protocol number
-
-    <BIT MAP> - A variable length bit map.  The bit map must be a
-    multiple of 8 bits long.
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    ADDRESS                    |    32 bit address ARPA Internet address
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |       PROTOCOL        |                       |    PROTOCOL: 8 bit IP protocol number
+   +--+--+--+--+--+--+--+--+                       |
+   /                   <BIT MAP>                   /    BIT MAP: variable length bit map. The bit map
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+    must be a multiple of 8 bits long.
 */
-#define     TYPE_WKS                        NU16(11)
-
+#define     TYPE_WKS                        NU16(11)    /* a well known service description rfc 1035 */
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                            PTRNAME                            /    dns formated domain name
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   */
-#define     TYPE_PTR                        NU16(12) /* a domain name pointer              rfc 1035 */
-
-/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-   /                      CPU                      /    c-string
-   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-   /                       OS                      /    c-string
+   /                   PTRNAME                     /    dns formatted domain name
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_HINFO                      NU16(13) /* host information                   rfc 1035 */
-
+#define     TYPE_PTR                        NU16(12)    /* a domain name pointer            rfc 1035 */
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                         RMAILBX                               /
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                         EMAILBX                               /
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                      CPU                      /    character-string
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                       OS                      /    character-string
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_MINFO                      NU16(14) /* mailbox or mail list information   rfc 1035 */
-
+#define     TYPE_HINFO                      NU16(13)    /* host information                 rfc 1035 */
 /*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                   RMAILBX                     /    character-string
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                   EMAILBX                     /    character-string
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_MINFO                      NU16(14)    /* mailbox or mail list information rfc 1035 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    |                  PREFERENCE                   |    16 bit
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-   /                   EXCHANGE                    /    dns formated domain name
+   /                   EXCHANGE                    /    dns formatted domain name
    /                                               /
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_MX                         NU16(15) /* mail exchange                      rfc 1035 */
-
+#define     TYPE_MX                         NU16(15)    /* mail exchange                    rfc 1035 */
 /*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-   /                   TXT-DATA                    /    one or more c-strings
+   /                   TXT-DATA                    /    one or more <character string>s (pascal string)
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_TXT                        NU16(16) /* text strings                       rfc 1035 */
-
-#define     TYPE_RP                         NU16(17) /* For Responsible Person             rfc 1183 */
+#define     TYPE_TXT                        NU16(16)    /* text strings                     rfc 1035 */
 /*
- * 
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                  MBOX-DNAME                   /    dns formatted domain name local-part. Can have '\'before .
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                   TXT-DNAME                   /    dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ */
+#define     TYPE_RP                         NU16(17)    /* For Responsible Person           rfc 1183 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    |                    SUBTYPE                    |    16 bit
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-   /                   HOSTNAME                    /    dns formated domain name
+   /                   HOSTNAME                    /    dns formatted domain name
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_AFSDB                      NU16(18) /* CANONIZE */
-#define     TYPE_X25                        NU16(19) /*                                    rfc 1183 */
-#define     TYPE_ISDN                       NU16(20) /*                                    rfc 1183 */
-#define     TYPE_RT                         NU16(21) /*                                    rfc 1183 */
-#define     TYPE_NSAP                       NU16(22) /*                                    rfc 1706 */
-#define     TYPE_NSAP_PTR                   NU16(23) /*                                    rfc 1348 */
-#define     TYPE_SIG                        NU16(24) /* for security signature             rfc 2535 rfc 3755 rfc 4034 */
-#define     TYPE_KEY                        NU16(25) /* for security key                   rfc 2535 rfc 3755 rfc 4034 */
-#define     TYPE_PX                         NU16(26) /*                                    rfc 2136 */
-#define     TYPE_GPOS                       NU16(27) /*                                    rfc 1712 */
-
+#define     TYPE_AFSDB                      NU16(18)    /* AFS Data Base location           rfc 1183 rfc 5864 */
 /*
-   1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                            ADDRESS                            |    32 bit address
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                            ADDRESS                            |    32 bit address
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                            ADDRESS                            |    32 bit address
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                            ADDRESS                            |    32 bit address
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                   PSDN-ADDRESS                /    pascal string (numeric only)
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_AAAA                       NU16(28) /* IP6 Address                             rfc 3596 */
-#define     TYPE_LOC                        NU16(29) /* Location information                    rfc 1876 */
-#define     TYPE_NXT                        NU16(30) /* Location information                    rfc 2535 */
-#define     TYPE_EID                        NU16(31) /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
-#define     TYPE_NIMLOC                     NU16(32) /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
-
-#define     TYPE_SRV                        NU16(33) /* Server selection                        rfc 2782 */
-
-#define     TYPE_ATMA                       NU16(34) /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
-
+#define     TYPE_X25                        NU16(19)    /* X.25 PSDN address                rfc 1183 */
 /*
-    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-    |                     order                     |    16 bit unsigned integer
-    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-    |                   preference                  |    16 bit unsigned integer
-    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-    /                     flags                     /   character-string (a-z0-9) can be empty
-    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-    /                   services                    /   character-string (a-z0-9) can be empty
-    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-    /                    regexp                     /   character-string
-    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-    /                  replacement                  /   <domain name>
-    /                                               /
-    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-    */
-#define     TYPE_NAPTR                      NU16(35)      /*                                    rfc 3403 */
-#define     TYPE_KX                         NU16(36)      /*                                    rfc 2230 */
-#define     TYPE_CERT                       NU16(37)      /*                           rfc 2538 rfc 4398 */
-#define     TYPE_A6                         NU16(38)      /* A6                        rfc 2874 rfc 3226 */
-
-/*
-   1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                            DNAME                              /    dns formated domain name
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                   ISDN-ADDRESS                /    pascal string (IA5 allowed)
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                        SA                     /    pascal string (numeric BCD) (OPTIONAL)
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_DNAME                      NU16(39)      /* CANONIZE                           rfc 2672 */
-#define     TYPE_SINK                       NU16(40) /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
-#define     TYPE_OPT                        NU16(41)      /* edns0 flag                         rfc 2671 */
-#define     TYPE_APL                        NU16(42)      /*                                    rfc 3123 */
-
+#define     TYPE_ISDN                       NU16(20)    /* ISDN address                     rfc 1183 */
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |           Key Tag             |  Algorithm    |  Digest Type  |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                                                               /
-   /                            Digest                             /
-   /                                                               /
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                  PREFERENCE                   |    16 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /               INTERMEDIATE-HOST               /    dns formatted domain name
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */ 
+#define     TYPE_RT                         NU16(21)    /* Route Through                    rfc 1183 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                   NSAP (in hex)               /    binary encoding of NSAP in hex
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_DS                         NU16(43)      /* Delegation Signer                  rfc 3658 */
-
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |   algorithm   |    fp type    |                               /
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               /
-   /                                                               /
-   /                          fingerprint                          /
-   /                                                               /
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-*/
-#define     TYPE_SSHFP                      NU16(44)      /* SSH Key Fingerprint                rfc 4255 */
-  
-#define     TYPE_IPSECKEY                   NU16(45)      /* IPSECKEY                           rfc 4025 */
+          |--------------|
+          | <-- IDP -->  |
+          |--------------|-------------------------------------|
+          | AFI |  IDI   |            <-- DSP -->              |
+          |-----|--------|-------------------------------------|
+          | 47  |  0005  | DFI | AA |Rsvd | RD |Area | ID |Sel |
+          |-----|--------|-----|----|-----|----|-----|----|----|
+   octets |  1  |   2    |  1  | 3  |  2  | 2  |  2  | 6  | 1  |
+          |-----|--------|-----|----|-----|----|-----|----|----|
 
-/*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |        Type Covered           |  Algorithm    |     Labels    |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                         Original TTL                          |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                      Signature Expiration                     |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                      Signature Inception                      |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |            Key Tag            |                               /
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+         Signer's Name         /
-   /                                                               /
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                                                               /
-   /                            Signature                          /
-   /                                                               /
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                IDP    Initial Domain Part
+                AFI    Authority and Format Identifier
+                IDI    Initial Domain Identifier
+                DSP    Domain Specific Part
+                DFI    DSP Format Identifier
+                AA     Administrative Authority
+                Rsvd   Reserved
+                RD     Routing Domain Identifier
+                Area   Area Identifier
+                ID     System Identifier
+                SEL    NSAP Selector
    */
-#define     TYPE_RRSIG                      NU16(46)      /* RRSIG                              rfc 4034 */
+#define     TYPE_NSAP                       NU16(22)    /* NSAP address, NSAP style A record    rfc 1706 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                   PTRNAME                     /    dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_NSAP_PTR                   NU16(23)    /* domain name pointer, NSAP style  rfc 1348 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                  TYPE COVERED                 |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |      ALGORITHM        |        LABELS         |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   ORIGINAL TTL                |    32 bit
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                 SIGNATURE EXPIRATION          |    32 bit
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                 SIGNATURE INCEPTION           |    32 bit
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                     KEY TAG                   |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                  SIGNER'S NAME                / 
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               /
+   /                    SIGNATURE                  /
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_SIG                        NU16(24)    /* for security signature           rfc 4034 rfc 3755 rfc 2535 rfc 2536 rfc 2537 rfc 2931 rfc 3110 rfc 3008 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   FLAGS                       |    16 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |        PROTOCOL       |       ALGORITHM       |    PROTOCOL: 8 bit, ALGORITHM: 8 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               /
+   /                   PUBLIC KEY                  /
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+/* flags
+                                             1   1   1   1   1   1
+     0   1   2   3   4   5   6   7   8   9   0   1   2   3   4   5
+   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+   |  A/C  | Z | XT| Z | Z | NAMTYP| Z | Z | Z | Z |      SIG      |
+   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+   */
+#define     TYPE_KEY                        NU16(25)    /* for security key                 rfc 4034 rfc 3755 rfc 2535 rfc 2536 rfc 2537 rfc 2539 rfc 3008 rfc 3110 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                  PREFERENCE                   |    16 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                    MAP822                     /    dns formatted domain name
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                    MAPX400                    /    dns formatted domain name
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_PX                         NU16(26)    /* X.400 mail mapping information   rfc 2163 */
+/*
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                 LONGITUDE                     /    c-string (representing a real number)
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                  LATITUDE                     /    c-string (representing a real number)
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                  ALTITUDE                     /    c-string (representing a real number)
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_GPOS                       NU16(27)    /* Geographical Position            rfc 1712 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    ADDRESS                    |    32 bit address address
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    ADDRESS                    |    32 bit address address
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    ADDRESS                    |    32 bit address address
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    ADDRESS                    |    32 bit address address
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_AAAA                       NU16(28)    /* IP6 Address                      rfc 3596 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |        VERSION        |         SIZE          |    VERSION: 8 bit int, SIZE: 8 bit int
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |       HORIZ PRE       |       VERT PRE        |    HORIZ PRE: 8 bit int, VERT PRE: 8 bit int
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   LATITUDE                    |    32 bit integer
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   LONGITUDE                   |    32 bit integer
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   ALTITUDE                    |    32 bit integer
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_LOC                        NU16(29)    /* Location information             rfc 1876 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /               NEXT DOMAIN NAME                /    dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                 TYPE BIT MAPS                 /
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_NXT                        NU16(30)    /* Next Domain - OBSOLETE           rfc 3755 rfc 2535 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /             ENDPOINT IDENTIFIER               /    string of octets. (Binary encoding of the Identifier,
+   /                                               /    meaningful only to the system utilizing it)
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_EID                        NU16(31)    /* Endpoint Identifier              @note undocumented see draft-ietf-nimrod-dns-01.txt */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                 NIMROD LOCATOR                /    variable string of octets. (Binary encoding of the Locator
+   /                                               /    specified in the Nimrod protocol)
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_NIMLOC                     NU16(32)    /* Nimrod Locator                   @note undocumented see draft-ietf-nimrod-dns-01.txt */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                  PRIORITY                     |   16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   WEIGHT                      |   16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    PORT                       |   16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                   TARGET                      /   dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_SRV                        NU16(33)    /* Server selection                 rfc 2782 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |          FORMAT       |                       |    FORMAT: 8 bit 
+   +--+--+--+--+--+--+--+--+                       |    ADDRESS: c-string
+   /                    ADDRESS                    /
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ */
+#define     TYPE_ATMA                       NU16(34)    /* ATM Address                      @note undocumented see ATM Name System V2.0 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                     ORDER                     |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   PREFERENCE                  |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                     FLAGS                     /   character-string (a-z0-9) can be empty
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                   SERVICES                    /   character-string (a-z0-9) can be empty
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                    REGEXP                     /   character-string
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                  REPLACEMENT                  /   <domain name>
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_NAPTR                      NU16(35)    /* Naming Authority Pointer         rfc 2915 rfc 2168 rfc 3403 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                  PREFERENCE                   |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                   EXCHANGER                   /    dns formatted domain name
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_KX                         NU16(36)    /* Key Exchanger                    rfc 2230 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                     TYPE                      |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    KEY TAG                    |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |       ALGORITHM       |                       /
+   +--+--+--+--+--+--+--+--+                       /
+   /                                               /
+   /               CERTIFICATE OR CRL              /
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */   
+#define     TYPE_CERT                       NU16(37)    /* CERT                             rfc 4398 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |         PREFIX        |                       /    8 bit unsigned integer
+   +--+--+--+--+--+--+--+--+                       / 
+   /                                               /
+   /                 ADDRESS SUFFIX                /    0..16 octets
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                   PREFIX NAME                 /    uncompressed domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_A6                         NU16(38)    /* A6                               rfc 3226 rfc 2874 rfc 6563 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                      DNAME                    /    dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_DNAME                      NU16(39)    /* DNAME                            rfc 6672 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |         CODING        |       SUBCODING       |    CODING: 8 bit, SUBCODING: 8 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                                               /    c-string
+   /                     DATA                      /
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_SINK                       NU16(40)    /* SINK                             @note undocumented see The Kitchen Sink Resource Record */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                  OPTION-CODE                  |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                 OPTION-LENGTH                 |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                                               |
+   /                  OPTION-DATA                  /
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */ 
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |     EXTENDED-RCODE    |       VERSION         |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                       Z                       |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_OPT                        NU16(41)    /* edns0 flag                       rfc 6891 rfc 3225 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                ADDRESSFAMILY                  |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |        PREFIX      | N|       AFDLENGTH       |    PREFIX: 8 bit unsigned binary coded, N: 1 bit,
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+    ADFLENGTH: 7 bit unsigned 
+   /                                               /
+   /                   AFDPART                     /    address family dependent
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_APL                        NU16(42)    /* APL                              rfc 3123 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    KEY TAG                    |    16 bit 
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |       ALGORITHM       |       DIGEST TYPE     |    ALGORITHM: 8 bit, DIGEST TYPE: 8 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               /
+   /                      DIGEST                   /    digest dependent
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_DS                         NU16(43)    /* Delegation Signer                rfc 4034 rfc 3658 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |       ALGORITHM       |        FP TYPE        |    ALGORITHM: 8 bit, FP TYPE: 8 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               /
+   /                  FINGERPRINT                  /    
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_SSHFP                      NU16(44)    /* SSH Key Fingerprint              rfc 4255 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |       PRECEDENCE      |     GATEWAY TYPE      |    PRECEDENCE: 8 bit, GATEWAY TYPE: 8 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |        ALGORITHM      |                       |    ALGORITHM: 8 bit
+   +--+--+--+--+--+--+--+--+                       |
+   |                   GATEWAY                     |    GATEWAY: 32 bit IPv4 / 128 bit IPv6 / uncompressed domain name
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               /
+   /                    PUBLIC KEY                 /
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_IPSECKEY                   NU16(45)    /* IPSECKEY                         rfc 4025 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                  TYPE COVERED                 |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |      ALGORITHM        |        LABELS         |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   ORIGINAL TTL                |    32 bit
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                 SIGNATURE EXPIRATION          |    32 bit
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                 SIGNATURE INCEPTION           |    32 bit
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                     KEY TAG                   |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                  SIGNER'S NAME                / 
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               /
+   /                    SIGNATURE                  /
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_RRSIG                      NU16(46)    /* RRSIG                            rfc 4034 rfc 3755 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /              NEXT DOMAIN NAME                 /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /               TYPE NIT MAPS                   /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_NSEC                       NU16(47)    /* NSEC                             rfc 4034 rfc 3755 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   FLAGS                       |    16 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |        PROTOCOL       |       ALGORITHM       |    PROTOCOL: 8 bit, ALGORITHM: 8 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               /
+   /                   PUBLIC KEY                  /
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_DNSKEY                     NU16(48)    /* DNSKEY                           rfc 4034 rfc 3755 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |               IDENTIFIER TYPE                 |    16 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |      DIGEST TYPE      |                       /    8 bit
+   +--+--+--+--+--+--+--+--+                       /
+   /                    DIGEST                     /    dependent on the digest type
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_DHCID                      NU16(49)    /* DHCID                            rfc 4701 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |     HASH ALGORITHM    |         FLAGS         |    HASH ALGORITHM: 8 bit, FLAGS: 8 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   ITERATIONS                  |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |      SALT LENGTH      |                       /    8 bit unsigned integer
+   +--+--+--+--+--+--+--+--+                       /
+   /                     SALT                      /    Can be zero length
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |      HASH LENGTH      |                       /    8 bit unsigned integer
+   +--+--+--+--+--+--+--+--+                       /
+   /            NEXT HASHED OWNER NAME             /    unmodified binary hash value.
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                 TYPE BIT MAPS                 /
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+/* Flags
+    0 1 2 3 4 5 6 7
+   +-+-+-+-+-+-+-+-+
+   |             |O|
+   +-+-+-+-+-+-+-+-+
+                  ^ 
+               OPT-OUT flag
+   */
+#define     TYPE_NSEC3                      NU16(50)    /* NSEC3                            rfc 5155 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |     HASH ALGORITHM    |         FLAGS         |    HASH ALGORITHM: 8 bit, FLAGS: 8 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   ITERATIONS                  |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |      SALT LENGTH      |                       /    8 bit unsigned integer
+   +--+--+--+--+--+--+--+--+                       /
+   /                     SALT                      /    Can be zero length
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_NSEC3PARAM                 NU16(51)    /* NSEC3PARAM                       rfc 5155 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |   CERTIFICATE USAGE   |        SELECTOR       |    CERTIFICATE USAGE: 8 bit, SELECTOR: 8 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /      MATCHING TYPE    |                       /
+   +--+--+--+--+--+--+--+--+                       /
+   /                                               /
+   /          CERTIFICATE ASSOCIATION DATA         /
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_TLSA                       NU16(52)    /* TLSA                             rfc 6698 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |        HIT LENGTH     |     PK ALGORITHM      |    HIT LENGTH: 8 bit unsigned integer, 
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+    PK ALGORITHM: 8 bit unsigned integer
+   |                   PK LENGTH                   |    PK LENTH: 16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               /
+   /                      HIT                      /    binary value in network order
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               /
+   /                  PUBLIC KEY                   /    dependent on the type
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               /
+   /                RENDEZVOUS SERVERS             /    dns formatted domain name
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_HIP                        NU16(55)    /* Host Identity Protocol           rfc 5205 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                 NINFO-DATA                    /    one or more c-strings
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_NINFO                      NU16(56)    /* NINFO                            @note undocumented see draft-reid-dnsext-zs-01.txt */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   FLAGS                       |    16 bit: (value 0)
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |        PROTOCOL       |       ALGORITHM       |    PROTOCOL: 8 bit (value 1), ALGORITHM: 8 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               /
+   /                   PUBLIC KEY                  /
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_RKEY                       NU16(57)    /* RKEY                             @note undocumented see draft-reid-dnsext-rkey-00.txt */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /             TALINK START/PREVIOUS             /    dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /               TALINK NEXT/END                 /    dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_TALINK                     NU16(58)    /* Trust Anchor LINK                @note undocumented see talink-completed-template */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    KEY TAG                    |    16 bit 
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |       ALGORITHM       |       DIGEST TYPE     |    ALGORITHM: 8 bit, DIGEST TYPE: 8 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               /
+   /                      DIGEST                   /    digest dependent
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_CDS                        NU16(59)    /* Child DS                         rfc 7344 */
 
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                      Next Domain Name                         /
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                       Type Bit Maps                           /
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                   SPF-DATA                    /    one or more c-strings
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_NSEC                       NU16(47)      /* NSEC                               rfc 3755 */
+#define     TYPE_SPF                        NU16(99)    /* SPF                                rfc7208 */
+
+#define     TYPE_UINFO                      NU16(100)   /* IANA-Reserved */
+#define     TYPE_UID                        NU16(101)   /* IANA-Reserved */
+#define     TYPE_GID                        NU16(102)   /* IANA-Reserved */
+#define     TYPE_UNSPEC                     NU16(103)   /* IANA-Reserved */
 
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |              Flags            |    Protocol   |   Algorithm   |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                                                               /
-   /                            Public Key                         /
-   /                                                               /
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                  PREFERENCE                   |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                                               |
+   |                    NODEID                     |    64 bit
+   |                                               |
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_DNSKEY                     NU16(48)      /* DNSKEY                             rfc 3755 4034  */
-
-#define     TYPE_DHCID                      NU16(49)      /* DHCID                              rfc 4701 */
-#define     TYPE_NSEC3                      NU16(50)      /*                                    rfc 5155 */
-#define     TYPE_NSEC3PARAM                 NU16(51)      /*                                    rfc 5155 */
-#define     TYPE_TLSA                       NU16(52)      /*                                    rfc 6698 */
-
-#define     TYPE_HIP                        NU16(55)      /*                                    rfc 5205 */
-#define     TYPE_NINFO                      NU16(56)  /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
-#define     TYPE_RKEY                       NU16(57)  /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
-#define     TYPE_TALINK                     NU16(58)  /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
-
-#define     TYPE_CDS                        NU16(59)      /* Child DS                           IANA approved */
-
-#define     TYPE_SPF                        NU16(99)      /* SPF                                rfc 4408 */
-
-#define     TYPE_UINFO                      NU16(100)
-#define     TYPE_UID                        NU16(101)
-#define     TYPE_GID                        NU16(102)
-#define     TYPE_UNSPEC                     NU16(103)
-
-#define     TYPE_NID                        NU16(104)     /*                                    rfc 6742 */
-#define     TYPE_L32                        NU16(105)     /*                                    rfc 6742 */
-#define     TYPE_L64                        NU16(106)     /*                                    rfc 6742 */
-#define     TYPE_LP                         NU16(107)     /*                                    rfc 6742 */
-
-#define     TYPE_EUI48                      NU16(108)     /*                                    rfc 7043 */
-#define     TYPE_EUI64                      NU16(109)     /*                                    rfc 7043 */
-
-#define     TYPE_TKEY                       NU16(249)     /* Transaction Key                    rfc 2930 */
-#define     TYPE_TSIG                       NU16(250)     /* Transaction Signature              rfc 2845 */
-#define     TYPE_IXFR                       NU16(251)     /* Incremental Transfer               rfc 1995 */
-#define     TYPE_AXFR                       NU16(252)     /* Transfer of an entire zone         rfc 1035 */
-#define     TYPE_MAILB                      NU16(253)     /* A request for mailbox-related records (MB, MG or MR) rfc 1035 */
-#define     TYPE_MAILA                      NU16(254)     /* A request for mail agent RRs (Obsolete - see MX) rfc 1035 */
-#define     TYPE_ANY                        NU16(255)     /* a request for all records          rfc 1035 */
-#define     TYPE_URI                        NU16(256)    /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
-#define     TYPE_CAA                        NU16(257)    /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
-
-#define     TYPE_TA                         NU16(32768)  /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
+#define     TYPE_NID                        NU16(104)   /* NODE ID                          rfc 6742 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                  PREFERENCE                   |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   LOCATOR32                   |    32 bit unsigned integer
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_L32                        NU16(105)   /* LOCATOR 32                       rfc 6742 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                  PREFERENCE                   |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                                               |
+   |                   LOCATOR64                   |    64 bit unsigned integer
+   |                                               |
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_L64                        NU16(106)   /* LOCATOR 64                       rfc 6742 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                  PREFERENCE                   |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                     FQDN                      /    dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_LP                         NU16(107)   /* LOCATOR POINTER                  rfc 6742 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                                               |
+   |                EUI-48 ADDRESS                 |    48 bit (MUST be represented as six two-digit hexadecimal
+   |                                               |            numbers separated by hyphens)
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ */
+#define     TYPE_EUI48                      NU16(108)   /* EUI-48 address                   rfc 7043 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                                               |
+   |                EUI-64 ADDRESS                 |    64 bit (MUST be represented as six two-digit hexadecimal
+   |                                               |            numbers separated by hyphens)
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ */
+#define     TYPE_EUI64                      NU16(109)   /* EUI-64 address                   rfc 7043 */
 
 /*
-    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |           Key Tag             |  Algorithm    |  Digest Type  |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   /                                                               /
-   /                            Digest                             /
-   /                                                               /
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                  ALGORITHM                    /    algorithm in dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                  INCEPTION                    |    32 bit unsigned integer
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                  EXPIRATION                   |    32 bit unsigned integer
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                     MODE                      |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                     ERROR                     |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    KEY SIZE                   |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                    KEY DATA                   /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   OTHER SIZE                  |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                   OTHER DATA                  /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
-#define     TYPE_DLV                        NU16(32769)   /*                                     rfc 4431 */
+#define     TYPE_TKEY                       NU16(249)   /* Transaction Key                  rfc 2930 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                  ALGORITHM                    /    algorithm in dns formatted domain name
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                                               |
+   |                  INCEPTION                    |    48 bit unsigned integer
+   |                                               |
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                     FUDGE                     |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    MAC SIZE                   |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                      MAC                      /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                  ORIGINAL ID                  |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                     ERROR                     |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   OTHER SIZE                  |    16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                   OTHER DATA                  /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_TSIG                       NU16(250)   /* Transaction Signature            rfc 2845 */
+#define     TYPE_IXFR                       NU16(251)   /* Incremental Transfer             rfc 1995 */
+#define     TYPE_AXFR                       NU16(252)   /* Transfer of an entire zone       rfc 1035 rfc 5936 */
+#define     TYPE_MAILB                      NU16(253)   /* A request for mailbox-related records (MB, MG or MR) rfc 1035 */
+#define     TYPE_MAILA                      NU16(254)   /* A request for mail agent RRs (Obsolete - see MX) rfc 1035 */
+#define     TYPE_ANY                        NU16(255)   /* a request for all records        rfc 1035 rfc 6895 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                  PRIORITY                     |   16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   WEIGHT                      |   16 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               /
+   /                   TARGET                      /
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_URI                        NU16(256)   /* URI                              @note undocumented see draft-faltstrom-uri-14 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |         FLAGS         |       TAG LENGTH      |    FLAGS: 8 bit, TAG LENGTH: 8 bit unsigned integer
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                      TAG                      /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                     VALUE                     /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_CAA                        NU16(257)   /* Certification Authority Authorization rfc 6844 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    KEY TAG                    |    16 bit 
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |       ALGORITHM       |       DIGEST TYPE     |    ALGORITHM: 8 bit, DIGEST TYPE: 8 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               /
+   /                      DIGEST                   /    digest dependent
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_TA                         NU16(32768) /* DNSSEC Trust Authorities         @note undocumented see Deploying DNSSEC Without a Signed Root */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    KEY TAG                    |    16 bit 
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |       ALGORITHM       |       DIGEST TYPE     |    ALGORITHM: 8 bit, DIGEST TYPE: 8 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               /
+   /                      DIGEST                   /    digest dependent
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_DLV                        NU16(32769) /* DNSSEC Lookaside Validation      rfc 4431 */
 
 #define     TYPE_PRIVATE_FIRST              NU16(65280)
 #define     TYPE_PRIVATE_LAST               NU16(65534)
@@ -569,6 +1148,14 @@
 #define     CLASS_CH                        NU16(3)       /* the CHAOS class                   rfc 1025 */
 #define     CLASS_HS                        NU16(4)       /* Hesiod                            rfc 1025 */
 #define     CLASS_CTRL                      NU16(0x2A)    /* @note Yadifa controller class */
+
+#if HAS_WHOIS
+#define     CLASS_WHOIS                     NU16(0x2B)    /* @note WHOIS class */
+#endif  // HAS_WHOIS
+#if HAS_DNSQ
+#define     CLASS_DNSQ                      NU16(0x2C)    /* @note DNSQuality class */
+#endif  // HAS_DNSQ
+
 #define     CLASS_NONE                      NU16(254)     /* rfc 2136                          rfc 2136 */
 #define     CLASS_ANY                       NU16(255)     /* rfc 1035  QCLASS ONLY             rfc 1025 */
 
@@ -719,7 +1306,7 @@ extern const class_table qclass[];
 #define     TYPE_NINFO_NAME                 "NINFO"     /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
 #define     TYPE_RKEY_NAME                  "RKEY"      /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
 #define     TYPE_TALINK_NAME                "TALINK"    /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
-#define     TYPE_CDS_NAME                   "CDS"       /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
+#define     TYPE_CDS_NAME                   "CDS"
 #define     TYPE_SPF_NAME                   "SPF"
 #define     TYPE_UINFO_NAME                 "UINFO"
 #define     TYPE_UID_NAME                   "UID"

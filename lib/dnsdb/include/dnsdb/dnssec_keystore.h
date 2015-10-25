@@ -49,7 +49,6 @@
 #include <dnscore/sys_types.h>
 #include <dnscore/dnskey.h>
 
-//#include <dnsdb/btree.h>
 #include <dnsdb/zdb_zone.h>
 
 #if ZDB_HAS_DNSSEC_SUPPORT == 0

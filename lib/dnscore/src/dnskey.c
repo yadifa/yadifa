@@ -84,7 +84,7 @@ The least significant byte will have the add carry bit carried to the most signi
  */
 
 u16
-dnskey_getkeytag(const u8* dnskey_rdata, u32 dnskey_rdata_size)
+dnskey_get_key_tag_from_rdata(const u8* dnskey_rdata, u32 dnskey_rdata_size)
 {
     u32 sum = 0;
     u32 sumh = 0;
@@ -105,7 +105,7 @@ dnskey_getkeytag(const u8* dnskey_rdata, u32 dnskey_rdata_size)
 }
 
 unsigned int
-dnskey_getkeytag_reference(unsigned char key[], /* the RDATA part of the DNSKEY RR */
+dnskey_get_key_tag_from_rdata_reference(unsigned char key[], /* the RDATA part of the DNSKEY RR */
                            unsigned int keysize /* the RDLENGTH */
                            )
 {
@@ -166,7 +166,7 @@ dnskey_generate_ds_rdata(u8 digest_type, const u8 *dnskey_fqdn, const u8 *dnskey
     
     digest_size = digest_get_size(&ctx);
         
-    u16 tag = dnskey_getkeytag(dnskey_rdata, dnskey_rdata_size);
+    u16 tag = dnskey_get_key_tag_from_rdata(dnskey_rdata, dnskey_rdata_size);
     u8 algorithm = dnskey_rdata[3];
     
     digest_update(&ctx, dnskey_fqdn, dnsname_len(dnskey_fqdn));
@@ -232,7 +232,6 @@ origin_dup_sanitize(const char* origin)
     return ret;
 }
 
-
 /*
  * Creates an empty key, it will then have to be initialized with a "real" key
  */
@@ -244,8 +243,8 @@ dnskey_newemptyinstance(u8 algorithm, u16 flags, const char *origin)
 
     dnssec_key* key;
     MALLOC_OR_DIE(dnssec_key*, key, sizeof(dnssec_key), ZDB_DNSKEY_TAG);
-    key->next = NULL;
-
+    ZEROMEMORY(key, sizeof(dnssec_key));
+    
     key->origin = origin_dup_sanitize(origin);
 
     /* origin is allocated with ZALLOC using ZALLOC_STRING_OR_DIE
@@ -255,6 +254,13 @@ dnskey_newemptyinstance(u8 algorithm, u16 flags, const char *origin)
     MALLOC_OR_DIE(u8*, key->owner_name, cstr_get_dnsname_len(key->origin), ZDB_DNSKEY_NAME_TAG);
     cstr_to_dnsname(key->owner_name, key->origin);
 
+    key->epoch_created = MAX_U32;
+    key->epoch_publish = MAX_U32;
+    key->epoch_activate = MAX_U32;
+    key->epoch_revoke = MAX_U32;
+    key->epoch_inactive = MAX_U32;
+    key->epoch_delete = MAX_U32;
+    
     key->flags = flags;
     key->algorithm = algorithm;
 
@@ -275,8 +281,7 @@ dnskey_new_from_rdata(const u8 *rdata, u16 rdata_size, const char *origin, dnsse
     
     //u16 flags = ntohs(GET_U16_AT(rdata[0]));
     u8 algorithm = rdata[3];
-    //u16 tag = dnskey_getkeytag(rdata, rdata_size);
-    
+
     ya_result return_value;
     
     *out_key = NULL;
@@ -302,7 +307,6 @@ dnskey_new_from_rdata(const u8 *rdata, u16 rdata_size, const char *origin, dnsse
     
     return return_value;
 }
-
 void
 dnskey_free(dnssec_key *key)
 {
@@ -310,11 +314,14 @@ dnskey_free(dnssec_key *key)
     if(key->next != NULL)
     {
         // log_err("dnskey_free(%p): a key should be detached from its list before destruction", key);
+        logger_flush();
         abort();
     }
 #endif
-    
-    key->vtbl->dnskey_key_free(key);
+    if(key->vtbl != NULL)
+    {
+        key->vtbl->dnskey_key_free(key);
+    }
     free(key->origin);
     free(key->owner_name);
 #ifdef DEBUG
@@ -322,130 +329,6 @@ dnskey_free(dnssec_key *key)
 #endif
     free(key);
 }
-
-/*----------------------------------------------------------------------------*/
-
-ya_result
-dnskey_keyring_init(dnskey_keyring *ks)
-{
-    u32_set_avl_init(&ks->tag_to_key);
-    mutex_init(&ks->mtx);
-    return SUCCESS;
-}
-
-ya_result
-dnskey_keyring_add(dnskey_keyring *ks, dnssec_key* key)
-{
-    u32 hash = key->algorithm;
-    hash <<= 16;
-    hash |= key->tag;
-    
-    mutex_lock(&ks->mtx);
-    u32_node *node = u32_set_avl_insert(&ks->tag_to_key, hash);
-    
-    if(node->value == NULL)
-    {
-        node->value = key;
-        
-        mutex_unlock(&ks->mtx);
-        
-        return SUCCESS;
-    }
-    else
-    {
-        mutex_unlock(&ks->mtx);
-        
-        return DNSSEC_ERROR_KEYRING_ALGOTAG_COLLISION;
-    }
-}
-
-dnssec_key*
-dnskey_keyring_get(dnskey_keyring *ks, u8 algorithm, u16 tag, const u8 *domain)
-{
-    u32 hash = algorithm;
-    hash <<= 16;
-    hash |= tag;
-    
-    mutex_lock(&ks->mtx);
-    
-    u32_node *node = u32_set_avl_find(&ks->tag_to_key, hash);
-    
-    if(node != NULL)
-    {
-        dnssec_key *key = (dnssec_key*)node->value;
-        
-        mutex_unlock(&ks->mtx);
-
-        if((key != NULL) && dnsname_equals(key->owner_name, domain))
-        {
-            return key;
-        }
-    }
-    else
-    {
-        mutex_unlock(&ks->mtx);
-    }
-    
-    return NULL;
-}
-
-dnssec_key*
-dnskey_keyring_remove(dnskey_keyring *ks, u8 algorithm, u16 tag, const u8 *domain)
-{
-    u32 hash = algorithm;
-    hash <<= 16;
-    hash |= tag;
-    
-    mutex_unlock(&ks->mtx);
-    
-    u32_node *node = u32_set_avl_find(&ks->tag_to_key, hash);
-    
-    if(node != NULL)
-    {    
-        dnssec_key *key = (dnssec_key*)node->value;
-        
-        mutex_unlock(&ks->mtx);
-
-        if((key != NULL) && dnsname_equals(key->owner_name, domain))
-        {
-            u32_set_avl_delete(&ks->tag_to_key, hash);
-            
-            return key;
-        }
-    }
-    else
-    {
-        mutex_unlock(&ks->mtx);
-    }
-    
-    return NULL;
-}
-
-static void
-dnskey_keyring_destroy_callback(void *node_keyp)
-{
-    u32_node *node = (u32_node*)node_keyp;
-    dnssec_key *key = (dnssec_key*)node->value;
-    dnssec_key *key_next;
-    while(key != NULL)
-    {
-        key_next = key->next;
-        key->next = NULL;
-        dnskey_free(key);
-        key = key_next;
-    }
-}
-
-void
-dnskey_keyring_destroy(dnskey_keyring *ks)
-{
-    mutex_lock(&ks->mtx);
-    u32_set_avl_callback_and_destroy(&ks->tag_to_key, dnskey_keyring_destroy_callback);
-    mutex_unlock(&ks->mtx);
-    
-    mutex_destroy(&ks->mtx);
-}
-
 
 ya_result
 dnskey_write_bignum_as_base64(FILE *f_, const BIGNUM* num_, u8 *tmp_in_, u32 tmp_in_size, char *tmp_out_, u32 tmp_out_size)
@@ -472,7 +355,292 @@ dnskey_write_bignum_as_base64(FILE *f_, const BIGNUM* num_, u8 *tmp_in_, u32 tmp
     return SUCCESS;
 }
 
+/**
+ * Returns the most relevant publication time.
+ * 
+ * publish > activate > created > now
+ * 
+ * @param key
+ * @return 
+ */
+
+u32
+dnskey_get_publish_epoch(dnssec_key *key)
+{
+    u32 ret = 0;
+    
+    if(key->epoch_publish != 0)
+    {
+        ret = key->epoch_publish;
+    }
+    else if(key->epoch_activate != 0)
+    {
+        ret = key->epoch_activate;
+    }
+    else if(key->epoch_created != 0)
+    {
+        ret = key->epoch_created;
+    }
+    else
+    {
+        ret = time(NULL);
+    }
+    
+    return ret;
+}
+
+/**
+ * Returns the most relevant activation time.
+ * 
+ * activate > publish > created > now
+ * 
+ * @param key
+ * @return 
+ */
+
+u32
+dnskey_get_activate_epoch(dnssec_key *key)
+{
+    u32 ret = 0;
+    
+    if(key->epoch_activate != 0)
+    {
+        ret = key->epoch_activate;
+    }
+    else if(key->epoch_publish != 0)
+    {
+        ret = key->epoch_publish;
+    }
+    else if(key->epoch_created != 0)
+    {
+        ret = key->epoch_created;
+    }
+    else
+    {
+        ret = time(NULL);
+    }
+    
+    return ret;
+}
+
+/**
+ * Returns the most relevant revocation time.
+ * 
+ * revoke > never
+ * 
+ * @param key
+ * @return 
+ */
+
+u32
+dnskey_get_revoke_epoch(dnssec_key *key)
+{
+    u32 ret = 0;
+    
+    if(key->epoch_revoke != 0)
+    {
+        ret = key->epoch_revoke;
+    }
+    else
+    {
+        ret = MAX_U32;
+    }
+    
+    return ret;
+}
+
+/**
+ * Returns the most relevant inactivation time.
+ * 
+ * inactive > delete > never
+ * 
+ * @param key
+ * @return 
+ */
+
+u32
+dnskey_get_inactive_epoch(dnssec_key *key)
+{
+    u32 ret = 0;
+    
+    if(key->epoch_inactive != 0)
+    {
+        ret = key->epoch_inactive;
+    }
+    else if(key->epoch_delete != 0)
+    {
+        ret = key->epoch_delete;
+    }
+    else
+    {
+        ret = MAX_U32;
+    }
+    
+    return ret;
+}
+
+/**
+ * Returns the most relevant delete time.
+ * 
+ * delete > inactive > never
+ * 
+ * @param key
+ * @return 
+ */
+
+u32
+dnskey_get_delete_epoch(dnssec_key *key)
+{
+    u32 ret = 0;
+    
+    if(key->epoch_delete != 0)
+    {
+        ret = key->epoch_delete;
+    }
+    else if(key->epoch_inactive != 0)
+    {
+        ret = key->epoch_inactive;
+    }
+    else
+    {
+        ret = MAX_U32;
+    }
+    
+    return ret;
+}
+
+/**
+ * 
+ * Compares two keys for equality
+ * 
+ * @param a
+ * @param b
+ * @return 
+ */
+
+bool
+dnssec_key_equals(dnssec_key* a, dnssec_key* b)
+{
+    if(a == b)
+    {
+        return TRUE;
+    }
+
+    if((a->tag == b->tag) && (a->flags == b->flags) && (a->algorithm == b->algorithm))
+    {
+        /* Compare the origin */
+
+        if(strcmp(a->origin, b->origin) == 0)
+        {
+            /* Compare the content of the key */
+            
+            return a->vtbl->dnssec_key_equals(a, b);
+        }
+    }
+
+    return FALSE;
+}
+
+u16
+dnssec_key_get_tag(dnssec_key *key)
+{
+    if((key->status & DNSKEY_KEY_TAG_SET) == 0)
+    {
+        u8 rdata[2048];
+
+        u32 rdata_size = key->vtbl->dnskey_key_writerdata(key, rdata/*, sizeof(rdata)*/);
+        u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size);
+
+        key->tag = tag;
+        key->status |= DNSKEY_KEY_TAG_SET;
+    }
+    
+    return key->tag;
+}
+
+u8
+dnssec_key_get_algorithm(dnssec_key *key)
+{
+    return key->algorithm;
+}
+
+const u8 *
+dnssec_key_get_domain(dnssec_key *key)
+{
+    return key->owner_name;
+}
+
+bool
+dnssec_key_is_private(dnssec_key *key)
+{
+    return (key->status & DNSKEY_KEY_IS_PRIVATE) != 0;
+}
+
+/**
+ * Adds/Remove a key from a key chain.
+ * The 'next' field of the key is used.
+ * A key can only be in one chain at a time.
+ * This is meant to be used in the keystore.
+ * 
+ * @param keyp
+ */
+
+void
+dnskey_key_add_in_chain(dnssec_key *key, dnssec_key **prevp)
+{
+    u16 key_tag = dnssec_key_get_tag(key);
+
+    while(*prevp != NULL)
+    {
+        if(dnssec_key_get_tag(*prevp) > key_tag)
+        {
+            key->next = *prevp;
+            *prevp = key;
+            return;
+        }
+
+        prevp = &((*prevp)->next);
+    }
+
+    // append
+
+    *prevp = key;
+    key->next = NULL;
+}
+
+/**
+ * Adds/Remove a key from a key chain.
+ * The 'next' field of the key is used.
+ * A key can only be in one chain at a time.
+ * This is meant to be used in the keystore.
+ * 
+ * @param keyp
+ */
+
+void
+dnskey_key_remove_from_chain(dnssec_key *key, dnssec_key **prevp)
+{   
+    u16 key_tag = dnssec_key_get_tag(key);
+
+    while(*prevp != NULL)
+    {
+        u16 tag;
+        if((tag = dnssec_key_get_tag(*prevp)) >= key_tag)
+        {
+            if(tag == key_tag)
+            {
+                *prevp = (*prevp)->next;
+                // now (and only now) the next field can (and must) be cleared
+                key->next = NULL;
+            }
+
+            break;
+        }
+
+        prevp = &((*prevp)->next);
+    }
+}
+
 /** @} */
 
 /*----------------------------------------------------------------------------*/
-

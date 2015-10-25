@@ -47,8 +47,10 @@
 
 #include "dnsdb/nsec3_types.h"
 #include "dnsdb/nsec3_item.h"
+#include "dnsdb/nsec3_name_error.h"
 
 #include "dnsdb/rrsig.h"
+#include "dnsdb/zdb_zone.h"
 
 /*
  * It is assumed that zone is NSEC3.
@@ -63,18 +65,22 @@
  * set in its Type Bit Maps field.
  */
 
-
 void
 nsec3_nodata_error(const zdb_zone *zone, const zdb_rr_label* owner,
                    const dnsname_vector *qname, s32 apex_index,
                    u8 * restrict * pool,
+                   
                    u8 **out_owner_nsec3_owner,
                    zdb_packed_ttlrdata** out_owner_nsec3,
                    const zdb_packed_ttlrdata** out_owner_nsec3_rrsig,
+                   
                    u8 **out_closest_encloser_nsec3_owner,
                    zdb_packed_ttlrdata** out_closest_encloser_nsec3,
                    const zdb_packed_ttlrdata** out_closest_encloser_nsec3_rrsig)
 {   
+    yassert(out_owner_nsec3_owner != NULL && out_owner_nsec3 != NULL && out_owner_nsec3_rrsig != NULL);
+    yassert(out_closest_encloser_nsec3_owner != NULL && out_closest_encloser_nsec3 != NULL && out_closest_encloser_nsec3_rrsig != NULL);
+    
     const nsec3_zone_item *owner_nsec3;
 
     nsec3_zone* n3 = zone->nsec.nsec3;
@@ -92,7 +98,7 @@ nsec3_nodata_error(const zdb_zone *zone, const zdb_rr_label* owner,
         min_ttl
     };
 
-    if((owner->nsec.dnssec) == NULL)
+    if(owner->nsec.dnssec == NULL)
     {
         nsec3_closest_encloser_proof(zone, qname, apex_index,
                                     &owner_nsec3,
@@ -141,23 +147,33 @@ nsec3_nodata_error(const zdb_zone *zone, const zdb_rr_label* owner,
 void nsec3_wild_nodata_error(const zdb_zone *zone, const zdb_rr_label *owner,
                              const dnsname_vector *qname, u32 apex_index,
                              u8 * restrict * pool,
+                             
                              u8 **out_next_closer_nsec3_owner_p,
                              zdb_packed_ttlrdata** out_encloser_nsec3,
                              const zdb_packed_ttlrdata** out_encloser_nsec3_rrsig,
+                             
                              u8 **out_closest_encloser_nsec3_owner_p,
                              zdb_packed_ttlrdata** out_closest_encloser_nsec3,
                              const zdb_packed_ttlrdata** out_closest_encloser_nsec3_rrsig,
+                             
                              u8 **out_wild_closest_encloser_nsec3_owner_p,
                              zdb_packed_ttlrdata** out_wild_closest_encloser_nsec3,
-                             const zdb_packed_ttlrdata** out_wild_closest_encloser_nsec3_rrsig
-                             )
-{    
+                             const zdb_packed_ttlrdata** out_wild_closest_encloser_nsec3_rrsig)
+{   
+    yassert(out_next_closer_nsec3_owner_p != NULL && out_encloser_nsec3 != NULL && out_encloser_nsec3_rrsig != NULL);
+    yassert(out_closest_encloser_nsec3_owner_p != NULL && out_closest_encloser_nsec3 != NULL && out_closest_encloser_nsec3_rrsig != NULL);
+    yassert(out_wild_closest_encloser_nsec3_owner_p != NULL && out_wild_closest_encloser_nsec3 != NULL && out_wild_closest_encloser_nsec3_rrsig != NULL);
+    
     nsec3_name_error(zone, qname, apex_index, pool,
+                     
                      out_next_closer_nsec3_owner_p,
-                     out_encloser_nsec3, out_encloser_nsec3_rrsig,
+                     out_encloser_nsec3,
+                     out_encloser_nsec3_rrsig,
+                     
                      out_closest_encloser_nsec3_owner_p,
                      out_closest_encloser_nsec3,
                      out_closest_encloser_nsec3_rrsig,
+                     
                      out_wild_closest_encloser_nsec3_owner_p,
                      out_wild_closest_encloser_nsec3,
                      out_wild_closest_encloser_nsec3_rrsig);

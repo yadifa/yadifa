@@ -364,9 +364,10 @@ journal_cjf_page_output_stream_reopen(output_stream *out_os, journal_cjf *jnl)
         }
         
         log_debug2("cjf: continuing next PAGE stream at position %u (%08x)", jnl->last_page.records_limit, jnl->last_page.records_limit);
-        
+#if DEBUG
         journal_cjf_page_output_stream_data *data = (journal_cjf_page_output_stream_data*)out_os->data;
         yassert(data->size == 0);
+#endif // DEBUG
     }
     else
     {
@@ -421,3 +422,4 @@ journal_cfj_page_output_stream_get_current_offset(output_stream *stream)
     journal_cjf_page_output_stream_data* data = (journal_cjf_page_output_stream_data*)stream->data;
     return data->start_offset + data->size;
 }
+

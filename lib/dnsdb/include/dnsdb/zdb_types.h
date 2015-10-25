@@ -362,26 +362,44 @@ union nsec_label_union
  * RR_LABEL flags
  */
 
-// 5ff7
-// unused : a008
+// dff7
+// unused : 2008
+
+#define ZDB_RR_LABEL_RESERVED_0     0x0008
+#define ZDB_RR_LABEL_RESERVED_1     0x2000
 
 /*
- * For the apex, marks a label as being the apex
- *
+ * For any label : marks that one owns a '*' label
  */
-
-#define ZDB_RR_LABEL_APEX           0x0080
-
-/*
- * For any label, marks it as having been updated (for DNSSEC post processing in a dynamic update)
- */
-#define ZDB_RR_LABEL_UPDATING       0x0040
+#define ZDB_RR_LABEL_GOT_WILD       0x0010
 
 /*
  * For any label but the apex : marks it as being a delegation (contains an NS record)
  */
 
 #define ZDB_RR_LABEL_DELEGATION     0x0020
+
+/*
+ * Forbid updates to the apex
+ */
+#define ZDB_RR_APEX_LABEL_FROZEN    0x0040
+/**
+ * For the apex, marks the zone as being loaded
+ * (no NSEC3/RRSIG must be computed while the flag is on)
+ */
+#define ZDB_RR_APEX_LABEL_LOADING   0x0040
+
+/*
+ * For any label, marks it as having been updated (for DNSSEC post processing in a dynamic update)
+ */
+
+#define ZDB_RR_LABEL_UPDATING       0x0040
+
+/*
+ * For the apex, marks a label as being the apex
+ */
+
+#define ZDB_RR_LABEL_APEX           0x0080
 
 /*
  * Explicitly mark a label as owner of a (single) CNAME
@@ -413,12 +431,7 @@ union nsec_label_union
 
 #define ZDB_RR_LABEL_VIRTUAL        0x4000
 
-/*
- * For any label : marks that one owns a '*' label
- */
-#define ZDB_RR_LABEL_GOT_WILD       0x0010
-
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
 /*
  * This flag means that the label has a valid NSEC structure
  *
@@ -433,9 +446,13 @@ union nsec_label_union
  */
 #define ZDB_RR_LABEL_NSEC3          0x0002
 
-#define ZDB_RR_LABEL_NSEC3_OPTOUT   0x1000
-
 #define ZDB_RR_LABEL_DNSSEC_EDIT    0x0004
+
+/*
+ * The zone is (NSEC3) + OPTOUT (NSEC3 should also be set)
+ */
+
+#define ZDB_RR_LABEL_NSEC3_OPTOUT   0x1000
 
 #endif
 
@@ -444,24 +461,6 @@ union nsec_label_union
  */
 
 #define ZDB_RR_LABEL_MARK           0x8000
-
-/*
- * Forbid updates to the apex
- */
-#define ZDB_RR_APEX_LABEL_FROZEN    0x0040
-/**
- * For the apex, marks the zone as being loaded
- * (no NSEC3/RRSIG must be computed while the flag is on)
- */
-#define ZDB_RR_APEX_LABEL_LOADING   0x0040
-
-/*
- * This lock is set while a threaded read or a writer wants to edit the zone.
- * Beside the owner, no threaded operation no write can occur while it is on.
- */
-//#define ZDB_RR_APEX_LABEL_LOCKED    0x0008
-
-//#define ZDB_ZONE_FLAGS_LOCKED       0x0001
 
 #define ZDB_ZONE_VALID(__z__) ((((__z__)->apex->flags)&ZDB_RR_LABEL_INVALID_ZONE) == 0)
 #define ZDB_ZONE_INVALID(__z__) ((((__z__)->apex->flags)&ZDB_RR_LABEL_INVALID_ZONE) != 0)
@@ -511,6 +510,8 @@ typedef ya_result zdb_zone_access_filter(const message_data* /*mesg*/, const voi
 
 #define ZDB_ZONE_KEEP_RAW_SIZE          1
 
+struct dnskey_keyring;
+
 struct zdb_zone
 {
     u8 *origin; /* dnsname, origin */
@@ -528,6 +529,7 @@ struct zdb_zone
                          */
     
 #if ZDB_HAS_DNSSEC_SUPPORT != 0
+    struct dnskey_keyring *keyring;
     u8 *sig_last_processed_node;
 #endif
     
@@ -596,7 +598,6 @@ struct zdb_zone
 typedef dictionary zdb_zone_label_set;
 
 typedef struct zdb_zone_label zdb_zone_label;
-
 
 struct zdb_zone_label
 {

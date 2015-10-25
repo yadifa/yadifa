@@ -1123,6 +1123,86 @@ vsnformat(char* out, size_t out_size, const char* fmt, va_list args)
     return ret;
 }
 
+/**
+ * This formatter will return an allocated (malloc) string as a result of the format
+ * 
+ * @param outp
+ * @param out_size
+ * @param fmt
+ * @param args
+ * @return 
+ */
+
+int
+vasnformat(char** outp, size_t out_size, const char* fmt, va_list args)
+{
+    output_stream baos;
+    bytearray_output_stream_context baos_context;
+
+    bytearray_output_stream_init_ex_static(&baos, NULL, out_size, 0, &baos_context);
+
+    int ret = vosformat(&baos, fmt, args);
+
+    if(ISOK(ret) && ((out_size == 0) || (ret < out_size)))
+    {
+        output_stream_write_u8(&baos, 0);
+        *outp =(char*)bytearray_output_stream_dup(&baos);
+    }
+    else
+    {
+        *outp = NULL;
+    }
+
+    output_stream_close(&baos);
+
+    return ret;
+}
+
+/**
+ * This formatter will return an allocated (malloc) string as a result of the format
+ * 
+ * @param outp
+ * @param out_size
+ * @param fmt
+ * @param ...
+ * @return 
+ */
+
+int
+asnformat(char** outp, size_t out_size, const char* fmt, ...)
+{
+    int ret;
+    va_list args;
+    va_start(args, fmt);
+    ret = vasnformat(outp, out_size, fmt, args);
+    va_end(args);
+
+    return ret;
+}
+
+
+/**
+ * This formatter will return an allocated (malloc) string as a result of the format
+ * 
+ * @param outp
+
+ * @param fmt
+ * @param ...
+ * @return 
+ */
+
+int
+asformat(char** outp, const char* fmt, ...)
+{
+    int ret;
+    va_list args;
+    va_start(args, fmt);
+    ret = vasnformat(outp, 0, fmt, args);
+    va_end(args);
+
+    return ret;
+}
+
 int
 snformat(char* out, size_t out_size, const char* fmt, ...)
 {
@@ -1306,6 +1386,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             }
             return INCORRECT_RDATA;
         }
+
         case TYPE_AAAA:
         {
             u16* rdata_u16 = (u16*)rdata_pointer;
@@ -1322,10 +1403,15 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             return INCORRECT_RDATA;
         }
         case TYPE_MX:
+
+
+
+
+
             osformat(os, "%hd ", ntohs(GET_U16_AT(*rdata_pointer)));
             rdata_pointer += 2;
             rdata_size -= 2;
-            /* NO BREAK HERE, I WANT TO FALLTROUGH */;
+            /* NO BREAK HERE, I WANT TO FALLTHROUGH */;
         case TYPE_NS:
         case TYPE_CNAME:
         case TYPE_DNAME:
@@ -1335,6 +1421,9 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         case TYPE_MF:
         case TYPE_MG:
         case TYPE_MR:
+
+
+
         {
             /* ONE NAME record */
             if(rdata_size > 0)
@@ -1344,10 +1433,31 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             }
             return INCORRECT_RDATA;
         }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         case TYPE_HINFO:
         case TYPE_MINFO:
         {
-            /* TWO Pascal String records */
+            /* Two Pascal String records */
 
             /*
              * <character-string> is a single length octet followed by that number
@@ -1375,6 +1485,9 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
             return SUCCESS;
         }
+
+
+
         case TYPE_SOA:
         {
             osformat(os, "%{dnsname} ", rdata_pointer);
@@ -1385,42 +1498,42 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             if(rdata_size > 0)
             {
                 rdata_pointer += len;
-                
+
                 const u8 *label = rdata_pointer;
                 u8 label_len = *label;
-                
+
                 static u8 dot = (u8)'.';
                 static u8 escape = (u8)'\\';
 
                 if(label_len > 0)
                 {
                     label++;
-                    
+
                     do
-                    {                        
+                    {
                         do
                         {
                             if(!dnsname_is_charspace(*label))
                             {
                                 output_stream_write(os, &escape, 1);
                             }
-                            
+
                             output_stream_write(os, label++, 1);
                         }
                         while(--label_len > 0);
-                        
+
                         output_stream_write(os, &dot, 1);
 
                         label_len = *label++;
                     }
                     while(label_len > 0);
-                    
+
                     len = label - rdata_pointer;
                 }
                 else
                 {
                     output_stream_write(os, &dot, 1);
-                    
+
                     len = 1;
                 }
 
@@ -1522,7 +1635,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             rdata_size -= len;
 
             ya_result return_code;
-            
+
             if(ISOK(return_code = osprint_type_bitmap(os, rdata_pointer, rdata_size)))
             {
                 return SUCCESS;
@@ -1563,7 +1676,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
                 len = *rdata_pointer++;
 
                 rdata_size -= 1 + len;
-                
+
                 ya_result return_code;
 
                 if(FAIL(return_code = output_stream_write_base32hex(os, rdata_pointer, len)))
@@ -1583,13 +1696,13 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         case TYPE_TLSA:
         {
             osformat(os, "%hhd %hhd %hhd ", rdata_pointer[0], rdata_pointer[1], rdata_pointer[2]);
-            
+
             return osprint_base16(os, &rdata_pointer[3], rdata_size - 3);
         }
         case TYPE_SSHFP:
         {
             osformat(os, "%hhd %hhd ", rdata_pointer[0], rdata_pointer[1]);
-            
+
             return osprint_base16(os, &rdata_pointer[2], rdata_size - 2);
         }
         case TYPE_SRV:
@@ -1598,15 +1711,15 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             u16 weight = GET_U16_AT(rdata_pointer[2]);
             u16 port = GET_U16_AT(rdata_pointer[4]);
             const u8 *fqdn = (const u8*)&rdata_pointer[6];
-            
+
             return osformat(os, "%hd %hd %hd %{dnsname}", priority, weight, port, fqdn);
         }
         case TYPE_ZONE_TYPE:
         {
             u8 zone_type = rdata_pointer[0];
-            
+
             char *txt;
-            
+
             switch(zone_type)
             {
                 case ZT_HINT:
@@ -1635,7 +1748,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
                     break;
                 }
             }
-            
+
             return osprint(os, txt);
         }
         case TYPE_ZONE_MASTER:
@@ -1644,51 +1757,51 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         {
             u8 flags = rdata_pointer[0];
             const u8 *src = &rdata_pointer[1];
-            
+
             ya_result total = 0;
-            
+
             switch(flags & 0x0f)
             {
                 case 4:
                 {
                     // 4 bytes
-                    
+
                     total += osformat(os, "%d.%d.%d.%d", src[0], src[1], src[2], src[3]);
-                    
+
                     src += 4;
-                    
+
                     break;
                 }
                 case 6:
                 {
                     // 16 bytes
-                    
+
                     char ip6txt[INET6_ADDRSTRLEN];
 
                     inet_ntop(AF_INET6, &src, ip6txt, sizeof(ip6txt));
 
                     total += osprint(os, ip6txt);
-                    
+
                     src += 16;
-                    
+
                     break;
                 }
             }
-            
+
             if((flags & REMOTE_SERVER_FLAGS_PORT_MASK) != 0)
             {
                 u16 port = GET_U16_AT(*src);
-                
+
                 total += osformat(os, " %hd", port);
-                
+
                 src += 2;
             }
-            
+
             if((flags & REMOTE_SERVER_FLAGS_KEY_MASK) != 0)
             {
                 total += osformat(os, " %{dnsname}", src);
             }
-            
+
             return total;
         }
         case TYPE_TXT:

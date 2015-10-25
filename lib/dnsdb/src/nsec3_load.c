@@ -53,6 +53,7 @@
 #include "dnsdb/nsec3_load.h"
 #include "dnsdb/nsec3_zone.h"
 #include "dnsdb/nsec3_update.h"
+#include "dnsdb/zdb_zone.h"
 
 #include <dnscore/base32hex.h>
 
@@ -688,6 +689,8 @@ nsec3_load_forced(nsec3_load_context *context)
      */
 
     zdb_zone* zone = context->zone;
+    u32 min_ttl = 900;
+    zdb_zone_getminttl(zone, &min_ttl);
     s32 i;
 
     /*

@@ -535,7 +535,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
             buffer += err;
             break;
         }
-            /*
+        /*
         case TYPE_HINFO:
         case TYPE_MINFO:
         case TYPE_DS:
@@ -545,7 +545,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
         case TYPE_NSEC3:
         case TYPE_NSEC3PARAM:
         case TYPE_LOC:
-            */
+        */
         default:
         {
             if(FAIL(err = packet_reader_read(reader, buffer, size)))

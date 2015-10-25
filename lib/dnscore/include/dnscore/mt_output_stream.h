@@ -58,7 +58,7 @@ ya_result mt_output_stream_init(output_stream *in_filtered, output_stream *out_s
 
 output_stream *mt_output_stream_get_filtered(output_stream *bos);
 
-bool is_mt_output_stream(output_stream *bos);
+bool is_mt_output_stream(const output_stream *bos);
 
 #ifdef	__cplusplus
 }

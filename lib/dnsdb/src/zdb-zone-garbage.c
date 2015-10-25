@@ -43,21 +43,22 @@
 #include <dnscore/logger.h>
 #include <dnscore/threaded_dll_cw.h>
 
-#ifdef DEBUG
-#include <dnscore/ptr_set.h>
-#endif
-
+#include "dnsdb/dnsdb-config.h"
 #include "dnsdb/zdb_zone.h"
 #include "dnsdb/zdb-zone-garbage.h"
 #define ZDB_JOURNAL_CODE 1 // to be allowed to close it
 #include "dnsdb/journal.h"
+
+#if HAS_TRACK_ZONES_DEBUG_SUPPORT
+#include <dnscore/ptr_set.h>
+#endif
 
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
 static threaded_dll_cw zone_garbage_queue;
 
-#ifdef DEBUG
+#if HAS_TRACK_ZONES_DEBUG_SUPPORT
 extern smp_int g_zone_instanciated_count;
 extern ptr_set g_zone_instanciated_set;
 #endif
@@ -86,7 +87,7 @@ zdb_zone_garbage_finalize()
         
         zdb_zone_garbage_run();
         
-#ifdef DEBUG 
+#if HAS_TRACK_ZONES_DEBUG_SUPPORT
         int count;
         if((count = smp_int_get(&g_zone_instanciated_count)) > 0)
         {            

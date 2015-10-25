@@ -57,7 +57,6 @@
 #include <arpa/inet.h>
 
 #include <dnscore/dnsname.h>
-#include <dnscore/format.h>
 
 #include <dnscore/thread_pool.h>
 
@@ -140,7 +139,7 @@ dnssec_process_begin(dnssec_task_s *task)
     processor_threads_count--;
 
 #if DNSSEC_DEBUGLEVEL>1
-    formatln("processor_threads_count = %i", processor_threads_count);
+    log_debug("processor_threads_count = %i", processor_threads_count);
 #endif
 
     /*
