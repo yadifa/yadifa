@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -51,6 +51,8 @@
 
 #pragma once
 
+#include <dnsdb/rrsig.h>
+
 struct nsec3_rrsig_updater_result_process_item_s
 {
     struct nsec3_rrsig_updater_result_process_item_s *next;
@@ -96,5 +98,7 @@ ya_result nsec3_rrsig_updater_process_zone(nsec3_rrsig_updater_parms *parms);
 void nsec3_rrsig_updater_commit(nsec3_rrsig_updater_parms *parms);
 
 void nsec3_rrsig_updater_finalize(nsec3_rrsig_updater_parms *parms);
+
+ya_result nsec3_rrsig_generate_signatures(rrsig_context_s *context, nsec3_zone* n3, struct nsec3_node* item, struct nsec3_node* next);
 
 /** @} */

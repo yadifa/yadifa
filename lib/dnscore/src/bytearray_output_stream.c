@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -40,6 +40,7 @@
  * @{
  *
  *----------------------------------------------------------------------------*/
+#include "dnscore/dnscore-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -93,8 +94,7 @@ bytearray_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
             }
             while(newsize < data->buffer_size + len);
 
-            MALLOC_OR_DIE(u8*, newbuffer, newsize, BYTE_ARRAY_OUTPUT_STREAM_TAG);
-
+            MALLOC_OR_DIE(u8*, newbuffer, newsize, BYTE_ARRAY_OUTPUT_STREAM_BUFF_TAG);
             MEMCOPY(newbuffer, data->buffer, data->buffer_offset);
 
             if((data->flags & BYTEARRAY_OWNED) != 0)

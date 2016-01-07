@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -42,6 +42,7 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
+#include "dnsdb/dnsdb-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -51,13 +52,14 @@
 
 #include "dnsdb/zdb_types.h"
 #include "dnsdb/zdb_icmtl.h"
+#include "dnsdb/dnssec_keystore.h"
 
 #include "dnsdb/dnssec.h"
 #include "dnsdb/dnssec_task.h"
 #include "dnsdb/rrsig_updater.h"
 #include "dnsdb/nsec3_rrsig_updater.h"
 #include "dnsdb/zdb_record.h"
-#include "dnsdb/dnssec_keystore.h"
+#include "dnsdb/zdb_zone.h"
 
 #define UZSARGS_TAG 0x53475241535a55
 
@@ -80,7 +82,7 @@ dnssec_set_xfr_path(const char* xfr_path)
 }
 
 ya_result
-zdb_update_zone_signatures(zdb_zone* zone, u32 signature_count_loose_limit)
+zdb_update_zone_signatures(zdb_zone* zone, u32 signature_count_loose_limit, bool present_signatures_are_verified)
 {
     log_debug("zdb_update_zone_signatures(%p) %{dnsname} [lock=%x]", zone, zone->origin, zone->lock_owner);
 
@@ -113,7 +115,7 @@ zdb_update_zone_signatures(zdb_zone* zone, u32 signature_count_loose_limit)
     rrsig_updater_parms parms;
     ZEROMEMORY(&parms, sizeof(rrsig_updater_parms));
     parms.quota = signature_count_loose_limit;
-    parms.signatures_are_verified = TRUE; // no need to verify again
+    parms.signatures_are_verified = present_signatures_are_verified;
     rrsig_updater_init(&parms, zone);
     
     // ensure that at least one ZDK DNSKEY private key is present, else no point
@@ -138,7 +140,7 @@ zdb_update_zone_signatures(zdb_zone* zone, u32 signature_count_loose_limit)
         const u16 rdata_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(dnskey_rrset);
         
         u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size);
-        u16 key_flags = GET_U16_AT(rdata[0]);
+        u16 key_flags = DNSKEY_FLAGS_FROM_RDATA(rdata); // native
         u8 algorithm = rdata[3];
         
         switch(algorithm)
@@ -172,7 +174,7 @@ zdb_update_zone_signatures(zdb_zone* zone, u32 signature_count_loose_limit)
         dnskey_rrset = dnskey_rrset->next;
     }
     
-    if(has_zsk && ISOK(return_code = zdb_icmtl_begin(zone, &icmtl, dnssec_xfr_path)))
+    if(has_zsk && ISOK(return_code = zdb_icmtl_begin(&icmtl, zone)))
     {
         // zone should be locked for readers
         
@@ -217,7 +219,7 @@ zdb_update_zone_signatures(zdb_zone* zone, u32 signature_count_loose_limit)
                 }
             }
             
-            zdb_icmtl_end(&icmtl, dnssec_xfr_path);
+            zdb_icmtl_end(&icmtl);
             
             zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_RRSIG_UPDATER);
             

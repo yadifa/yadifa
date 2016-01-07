@@ -1,6 +1,6 @@
 ################################################################################
 # 
-#  Copyright (c) 2012-15, EURid. All rights reserved.
+#  Copyright (c) 2011-2016, EURid. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 #  Redistribution and use in source and binary forms, with or without 
@@ -28,6 +28,22 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 ################################################################################
+
+20160108:
+        YADIFA 2.1.5
+
+        Dynamic updates do not use temporary files anymore which improves their general performance.
+        The statistics now shows the referrals.
+
+        Fixes:
+        - fixed an issue where getting a huge incremental transfer would prevent the server from answering queries while applying the changes.
+        - fixed an issue serving IXFR that would occur when a incremental change step was bigger than 64KB
+        - fixed an issue for Solaris with the memory aligment fix not active everywhere
+        - fixed an issue on the Solaris build settings
+        - fixed an issue where sometimes yadifad would not find a configuration file given as a parameter with a relative path
+        - fixed an issue where a wild-card would not be properly returned with an AXFR
+        - fixed an issue where dynamically updating a zone at a speed such that the zone file would need to be written multiple times on disk
+          before finishing the previous write could lead to a deadlock
 
 20151026:
         YADIFA 2.1.4

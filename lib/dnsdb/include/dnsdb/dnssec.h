@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -50,8 +50,6 @@
 #include <dnsdb/dnssec_config.h>
 #include <dnsdb/rrsig.h>
 
-//#include <dnsdb/dnssec-keystore.h>
-
 /**
  * @todo NOTE: WARNING: IF THE MIN_TTL CHANGES IN THE SOA we MUST resign the NSEC* stuff.
  */
@@ -83,9 +81,7 @@ ENGINE* dnssec_loadengine(const char *engine_name);
 void dnssec_unloadengine(ENGINE *engine);
 
 ya_result zdb_update_zone_signatures_alarm(void *zone);     /* zdb_zone* */
-ya_result zdb_update_zone_signatures(zdb_zone *zone, u32 signature_count_loose_limit);
-
-
+ya_result zdb_update_zone_signatures(zdb_zone *zone, u32 signature_count_loose_limit, bool present_signatures_are_verified);
 
 /// @note MUST BE SET
 

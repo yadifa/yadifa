@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -51,6 +51,7 @@
 
 #define SERVER_ST_C_
 
+#include "server-config.h"
 #include "config.h"
 
 #include <dnscore/logger.h>
@@ -1022,9 +1023,10 @@ server_mt_query_loop()
     
     s32 cpu_count = sys_get_cpu_count();
     
-    if(reader_by_fd >= cpu_count)
+    
+    if(reader_by_fd > cpu_count)
     {
-        log_warn("server-mt: using too many threads per address is counter-productive on highly loaded systems (%d >= %d)", reader_by_fd, cpu_count);
+        log_warn("server-mt: using too many threads per address is counter-productive on highly loaded systems (%d > %d)", reader_by_fd, cpu_count);
     }
     
     /*

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -43,19 +43,17 @@
 #ifndef _THREADED_RINGLIST_H
 #define	_THREADED_RINGLIST_H
 
+#include <pthread.h>
+#include <dnscore/sys_types.h>
+
 #ifdef MUTEX_USE_SPINLOCK
 #error "Cascaded MUTEX_USE_SPINLOCK definition.  Please remove the potential definition mistmatch (#undef ?)"
 #endif
 
-#if HAS_PTHREAD_SPINLOCK == 1
-#define MUTEX_USE_SPINLOCK 1
-#else
 #define MUTEX_USE_SPINLOCK 0
-#endif
-
-#include <dnscore/mutex.h>
 
 #include <dnscore/sys_types.h>
+#include <dnscore/mutex.h>
 
 #ifdef	__cplusplus
 extern "C" {

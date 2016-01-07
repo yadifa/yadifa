@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2011, EURid. All rights reserved.
+# Copyright (c) 2011-2016, EURid. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without 
@@ -33,10 +33,11 @@
 # ALL
 #
 
-AM_CFLAGS  = -D_FILE_OFFSET_BITS=64 -I$(abs_builddir) -I$(abs_srcdir)/include
+AM_CFLAGS  = -D_THREAD_SAFE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -I$(abs_builddir) -I$(abs_srcdir)/include
+
 AM_LDFLAGS =
 DEBUGFLAGS =
-LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"' -D_THREAD_SAFE
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"'
 
 if USES_SUNC
 DEBUGFLAGS +=
@@ -57,7 +58,7 @@ AM_CFLAGS += -pedantic
 endif
 
 if HAS_CC_WALL
-AM_CFLAGS += -Wall
+AM_CFLAGS += -Wall -Wno-unknown-pragmas
 endif
 
 if HAS_CC_MISSING_FIELD_INITIALIZERS
@@ -260,6 +261,11 @@ YDLDFLAGS = -g
 if HAS_CC_RDYNAMIC
 YPLDFLAGS += -rdynamic
 YDLDFLAGS += -rdynamic
+endif
+
+if USES_CLANG
+# workaround a bug where clang does not handle properly profiling and optimizations
+YPCFLAGS += -mno-omit-leaf-frame-pointer -fno-omit-frame-pointer
 endif
 
 YSLDFLAGS = $(YRLDFLAGS)

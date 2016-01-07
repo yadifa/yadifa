@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -42,6 +42,7 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
+#include "dnsdb/dnsdb-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -52,7 +53,6 @@
 #include <dnscore/sys_types.h>
 #include <dnscore/logger.h>
 #include <dnscore/dnsname.h>
-#include <dnscore/format.h>
 #include <dnscore/random.h>
 #include <dnscore/dnskey.h>
 #include <dnscore/thread_pool.h>
@@ -266,7 +266,7 @@ rrsig_context_initialize(rrsig_context_s *context, const zdb_zone *zone, const c
 
     if(zdb_zone_is_nsec3(zone))
     {
-        if((zone->apex->flags & ZDB_RR_LABEL_NSEC3_OPTOUT) == 0)
+        if(zdb_zone_is_nsec3_optin(zone))
         {
             context->nsec_flags = RRSIG_CONTEXT_NSEC3;
         }
@@ -752,6 +752,8 @@ rrsig_update_records(rrsig_context_s *context, dnssec_key* key, zdb_packed_ttlrd
     bool deleted_already = FALSE;
 
     u32 until = 0;
+    
+    dnssec_key_get_tag(key); // updates the tag field if needed
 
     while(rrsig != NULL)
     {

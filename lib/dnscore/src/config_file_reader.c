@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -34,6 +34,7 @@
 
 #define DO_PRINT 0
 
+#include "dnscore/dnscore-config.h"
 #include "dnscore/config_file_reader.h"
 #include "dnscore/parser.h"
 
@@ -546,7 +547,7 @@ config_file_reader_open(const char* fullpath, config_section_descriptor_s *csd, 
         return return_value;
     }
     
-#if (DNSDB_USE_POSIX_ADVISE != 0) && (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
+#if (DNSDB_USE_POSIX_ADVISE != 0) && (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
     int fd = fd_input_stream_get_filedescriptor(&ins);
     posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
 #endif

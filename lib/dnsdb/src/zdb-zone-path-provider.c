@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -40,6 +40,7 @@
  * @{
  *
  *----------------------------------------------------------------------------*/
+#include "dnsdb/dnsdb-config.h"
 #include <ctype.h>
 #include <dnscore/format.h>
 #include <dnscore/fdtools.h>
@@ -296,25 +297,38 @@ zdb_zone_info_get_zone_type(const u8 *origin, u8 *zt)
 }
 
 ya_result
-zdb_zone_info_store_zone(const u8 *origin)
+zdb_zone_info_background_store_zone(const u8 *origin)
 {
     yassert(origin != NULL);
     ya_result ret;
     
-    ret = zdb_zone_info_get_provider()(origin, NULL, ZDB_ZONE_INFO_PROVIDER_STORE_NOW);
+    ret = zdb_zone_info_get_provider()(origin, NULL, ZDB_ZONE_INFO_PROVIDER_STORE_TRIGGER);
     
     return ret;    
 }
 
 ya_result
-zdb_zone_info_store_zone_and_wait_for_serial(const u8 *origin, u32 minimum_serial)
+zdb_zone_info_store_locked_zone(const u8 *origin)
+{
+    yassert(origin != NULL);
+    ya_result ret;
+    
+    zdb_zone_info_provider_data already_locked_by;
+    already_locked_by._u8 = 0;
+    ret = zdb_zone_info_get_provider()(origin, &already_locked_by, ZDB_ZONE_INFO_PROVIDER_STORE_NOW);
+    
+    return ret;    
+}
+
+ya_result
+zdb_zone_info_background_store_zone_and_wait_for_serial(const u8 *origin, u32 minimum_serial)
 {
     // This mechanism should be improved : the zone should be unlocked, frozen, saved, unfrozen, re-locked
     
     yassert(origin != NULL);
     ya_result ret;
     
-    ret = zdb_zone_info_get_provider()(origin, NULL, ZDB_ZONE_INFO_PROVIDER_STORE_NOW);
+    ret = zdb_zone_info_get_provider()(origin, NULL, ZDB_ZONE_INFO_PROVIDER_STORE_TRIGGER);
     
     if(ISOK(ret))
     {
@@ -341,7 +355,11 @@ zdb_zone_info_store_zone_and_wait_for_serial(const u8 *origin, u32 minimum_seria
             
             if(now - start > 1000000)
             {
-                if(FAIL(ret = zdb_zone_info_get_provider()(origin, NULL, ZDB_ZONE_INFO_PROVIDER_STORE_NOW)))
+                zdb_zone_info_provider_data already_locked_by;
+                
+                already_locked_by._u8 = 0;
+                        
+                if(FAIL(ret = zdb_zone_info_get_provider()(origin, &already_locked_by, ZDB_ZONE_INFO_PROVIDER_STORE_TRIGGER)))
                 {
                     return ret;
                 }

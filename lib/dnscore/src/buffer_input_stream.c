@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -40,6 +40,7 @@
  * @{
  *
  *----------------------------------------------------------------------------*/
+#include "dnscore/dnscore-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -61,7 +62,7 @@ struct buffer_input_stream_data
 };
 
 static ya_result
-buffer_read(input_stream* stream, u8* buffer, u32 len)
+buffer_input_stream_read(input_stream* stream, u8* buffer, u32 len)
 {
     buffer_input_stream_data* data = (buffer_input_stream_data*)stream->data;
     u8* src = data->buffer;
@@ -126,7 +127,7 @@ buffer_read(input_stream* stream, u8* buffer, u32 len)
 }
 
 static void
-buffer_close(input_stream* stream)
+buffer_input_stream_close(input_stream* stream)
 {
     buffer_input_stream_data* data = (buffer_input_stream_data*)stream->data;
     input_stream_close(&data->filtered);
@@ -136,7 +137,7 @@ buffer_close(input_stream* stream)
 }
 
 static ya_result
-buffer_skip(input_stream* stream, u32 len)
+buffer_input_stream_skip(input_stream* stream, u32 len)
 {
     ya_result return_code;
     u32 total_len = len;
@@ -164,9 +165,9 @@ buffer_skip(input_stream* stream, u32 len)
 
 static const input_stream_vtbl buffer_input_stream_vtbl =
 {
-    buffer_read,
-    buffer_skip,
-    buffer_close,
+    buffer_input_stream_read,
+    buffer_input_stream_skip,
+    buffer_input_stream_close,
     "buffer_input_stream"
 };
 

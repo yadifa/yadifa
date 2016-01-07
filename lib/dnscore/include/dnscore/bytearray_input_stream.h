@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -48,8 +48,10 @@
 #ifdef	__cplusplus
 extern "C" {
 #endif
+    
+    void bytearray_input_stream_init_const(input_stream* out_stream, const u8* array, u32 size);
 
-    void bytearray_input_stream_init(const u8* array, u32 size, input_stream* out_stream, bool owned);
+    void bytearray_input_stream_init(u8* array, u32 size, input_stream* out_stream, bool owned);
     
     void bytearray_input_stream_reset(input_stream* stream);
     

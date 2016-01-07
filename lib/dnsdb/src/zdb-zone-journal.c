@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -44,6 +44,7 @@
 
 #define ZDB_JOURNAL_CODE 1
 
+#include "dnsdb/dnsdb-config.h"
 #include "dnsdb/zdb-zone-journal.h"
 #include "dnsdb/journal.h"
 

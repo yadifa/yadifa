@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -40,6 +40,7 @@
  * @{
  *
  *----------------------------------------------------------------------------*/
+#include "dnscore/dnscore-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -174,7 +175,7 @@ file_output_stream_open_ex(const char* filename, int flags, mode_t mode, output_
         return ERRNO_ERROR;
     }
     
-#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
+#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
     posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
 #endif
 
@@ -198,7 +199,7 @@ file_output_stream_open_ex_nolog(const char* filename, int flags, mode_t mode, o
         return ERRNO_ERROR;
     }
     
-#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
+#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
     posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
 #endif
 
@@ -282,7 +283,7 @@ void file_output_steam_advise_sequential(output_stream* stream_)
 {
     file_output_stream* stream = (file_output_stream*)stream_;
     
-#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
+#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
     if(stream->data.fd >= 0)
     {
         posix_fadvise(stream->data.fd, 0, 0, POSIX_FADV_SEQUENTIAL);

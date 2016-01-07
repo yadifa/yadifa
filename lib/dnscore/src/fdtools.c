@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -38,6 +38,7 @@
  * @{
  */
 
+#include "dnscore/dnscore-config.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -433,7 +434,6 @@ open_ex(const char *pathname, int flags)
 
         if(err != EINTR)
         {
-            //fd = MAKE_ERRNO_ERROR(err);
             break;
         }
     }

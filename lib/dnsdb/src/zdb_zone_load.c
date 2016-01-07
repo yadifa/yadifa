@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -40,6 +40,7 @@
  * @{
  */
 
+#include "dnsdb/dnsdb-config.h"
 #include <dnscore/format.h>
 #include <dnscore/logger.h>
 #include <dnscore/dnsname.h>
@@ -126,7 +127,7 @@ s32 resource_record_size(resource_record* entry)
  *
  */
 ya_result
-zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, const u8 *expected_origin, u16 flags)
+zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *expected_origin, u16 flags)
 {
     u8* rdata;
     size_t rdata_len;
@@ -166,11 +167,19 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
 
     resource_record_init(&entry);
 
-    if(FAIL(return_code = zone_reader_read_record(zone_data, &entry)))
+    if(FAIL(return_code = zone_reader_read_record(zr, &entry)))
     {
         resource_record_freecontent(&entry); /* destroys */
 
-        log_err("zone load: loading %{dnsname} failed on first record", expected_origin);
+        const char *message = zone_reader_get_last_error_message(zr);
+        if(message == NULL)
+        {
+            log_err("zone load: reading zone %{dnsname}: %r", expected_origin, return_code);
+        }
+        else
+        {
+            log_err("zone load: reading zone %{dnsname}: %s: %r", expected_origin, message, return_code);
+        }
 
         return return_code;
     }
@@ -305,8 +314,8 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
 
         while(a_i >= 0)
         {
-            u8* a = name.labels[a_i--];
-            u8* b = entry_name.labels[b_i--];
+            const u8* a = name.labels[a_i--];
+            const u8* b = entry_name.labels[b_i--];
 
             if(!dnslabel_equals(a, b))
             {
@@ -392,7 +401,7 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
                      */
 
                     u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_len);
-                    u16 key_flags = ntohs(GET_U16_AT(rdata[0]));
+                    u16 key_flags = GET_U16_AT(rdata[0]);
                     u8 algorithm = rdata[3];
 
                     switch(algorithm)
@@ -431,7 +440,7 @@ zdb_zone_load(zdb *db, zone_reader *zone_data, zdb_zone **zone_pointer_out, cons
                         }
                         else
                         {
-                            log_warn("zone load: unable to load private key K%{dnsname}+%03d+%05hd: %r", zone->origin, algorithm, tag, return_code);
+                            log_warn("zone load: unable to load the private key K%{dnsname}+%03d+%05hd: %r", zone->origin, algorithm, tag, return_code);
                         }
                     }
 
@@ -548,7 +557,7 @@ zdb_zone_load_loop:
          * error code:	failure
          */
 
-        if(OK != (return_code = zone_reader_read_record(zone_data, &entry)))
+        if(OK != (return_code = zone_reader_read_record(zr, &entry)))
         {
             if(FAIL(return_code))
             {
@@ -556,7 +565,17 @@ zdb_zone_load_loop:
                 {
                     return_code = UNEXPECTED_EOF;
                 }
-                log_err("zone load: reading record #%d of zone %{dnsname}: %r", loop_count, zone->origin, return_code);
+                
+                const char *message = zone_reader_get_last_error_message(zr);
+                
+                if(message == NULL)
+                {
+                    log_err("zone load: reading record #%d of zone %{dnsname}: %r", loop_count, zone->origin, return_code);
+                }
+                else
+                {
+                    log_err("zone load: reading record #%d of zone %{dnsname}: %s: %r", loop_count, zone->origin, message, return_code);
+                }
             }
             break;
         }
@@ -841,7 +860,11 @@ zdb_zone_load_loop:
 #ifdef DEBUG
         log_debug("zone load: replaying changes from journal");
 #endif
-        if(FAIL(return_code = zdb_icmtl_replay(zone)))
+        zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_LOAD);
+        return_code = zdb_icmtl_replay(zone);
+        zdb_zone_lock(zone, ZDB_ZONE_MUTEX_LOAD);
+        
+        if(FAIL(return_code))
         {
             log_err("zone load: journal replay returned %r", return_code);
         }

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -61,6 +61,7 @@ typedef struct dnssec_listener zdb_listener;
 typedef void zdb_listener_on_remove_type_callback(zdb_listener *listener, const zdb_zone *zone, const u8 *dnsname, zdb_rr_collection *recordssets, u16 type);
 typedef void zdb_listener_on_add_record_callback(zdb_listener *listener, const zdb_zone *zone, dnslabel_vector_reference labels, s32 top, u16 type, zdb_ttlrdata *record);
 typedef void zdb_listener_on_remove_record_callback(zdb_listener *listener, const zdb_zone *zone, const u8 *dnsname, u16 type, zdb_ttlrdata *record);
+typedef bool zdb_listener_has_changes_callback(zdb_listener *listener, const zdb_zone *zone);
 #if ZDB_HAS_NSEC3_SUPPORT!=0
 typedef void zdb_listener_on_add_nsec3_callback(zdb_listener *listener, const zdb_zone *zone, nsec3_zone_item *nsec3_item, nsec3_zone *n3, u32 ttl);
 typedef void zdb_listener_on_remove_nsec3_callback(zdb_listener *listener, const zdb_zone *zone, nsec3_zone_item *nsec3_item, nsec3_zone *n3, u32 ttl);
@@ -75,6 +76,7 @@ struct dnssec_listener
     zdb_listener_on_remove_type_callback *on_remove_record_type;
     zdb_listener_on_add_record_callback *on_add_record;
     zdb_listener_on_remove_record_callback *on_remove_record;
+    zdb_listener_has_changes_callback *has_changes;
 #if ZDB_HAS_NSEC3_SUPPORT!=0
     zdb_listener_on_add_nsec3_callback *on_add_nsec3;
     zdb_listener_on_remove_nsec3_callback *on_remove_nsec3;
@@ -92,6 +94,15 @@ void zdb_listener_unchain(zdb_listener *listener);
 void zdb_listener_notify_remove_type(const zdb_zone *zone, const u8 *dnsname, zdb_rr_collection *recordssets, u16 type);
 void zdb_listener_notify_add_record(const zdb_zone *zone, dnslabel_vector_reference labels, s32 top, u16 type, zdb_ttlrdata *record);
 void zdb_listener_notify_remove_record(const zdb_zone *zone, const u8 *dnsname, u16 type, zdb_ttlrdata *record);
+
+/**
+ * Returns true iff any of the listener(s) has recorded a change in the zone.
+ * 
+ * @return true iff any of the listener(s) has recorded a change in the zone
+ */
+
+bool zdb_listener_notify_has_changes(const zdb_zone *zone);
+
 #if ZDB_HAS_NSEC3_SUPPORT!=0
 void zdb_listener_notify_add_nsec3(const zdb_zone *zone, nsec3_zone_item *nsec3_item, nsec3_zone *n3, u32 ttl);
 void zdb_listener_notify_remove_nsec3(const zdb_zone *zone, nsec3_zone_item *nsec3_item, nsec3_zone *n3, u32 ttl);

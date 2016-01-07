@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -234,6 +234,7 @@ ya_result zdb_query_ip_records(zdb* db, const u8* name_, zdb_packed_ttlrdata **t
 
 ya_result zdb_append_ip_records(zdb* db, const u8* name_, host_address *target_list);
 
+#if 0
 /**
  * Get a label from the database.
  * Optionally, the zone can be retrieved (zonep != NULL) and the zone can be locked by a specific owner.
@@ -275,7 +276,7 @@ zdb_rr_label *zdb_get_rr_label(zdb* db, const u8* name, zdb_zone **zonep, u8 own
  */
 
 const zdb_packed_ttlrdata *zdb_get_rr_set(zdb* db, const u8* name, u16 rtype, zdb_zone **zonep, u8 owner);
-
+#endif
 #if OBSOLETE
 /** @brief Adds an entry in a zone of the database
  *

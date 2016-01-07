@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -127,19 +127,6 @@ struct zdb_icmtl
 };
 
 /**
- *
- * Opens the relevant incremental file for the given zone.
- *
- * @param icmtl
- * @param folder
- * @param serial
- * @param target_os
- * @return
- */
-
-ya_result zdb_icmtl_open_ix_OBSOLETE(const u8 *origin, const char* folder, u32 serial, input_stream* target_is, u32 *serial_limit, char** out_file_name);
-
-/**
  * Reads the ix stream until the SOA of the remove part is bigger than or equal to serial
  *
  */
@@ -159,13 +146,13 @@ ya_result zdb_icmtl_skip_rdata(input_steam *is, u32 len);
  * Enables incremental changes recording in the zone
  */
 
-ya_result zdb_icmtl_begin(zdb_zone *zone, zdb_icmtl *icmtl, const char *folder);
+ya_result zdb_icmtl_begin(zdb_icmtl *icmtl, zdb_zone *zone);
 
 /**
  * Disables incremental changes recording in the zone and records them into a file
  */
 
-ya_result zdb_icmtl_end(zdb_icmtl* icmtl, const char *folder);
+ya_result zdb_icmtl_end(zdb_icmtl* icmtl);
 
 /**
  * Disables incremental changes recording in the zone and discards recorded changes
@@ -200,7 +187,7 @@ ya_result zdb_icmtl_replay(zdb_zone *zone);
  * Quick-check for the last available serial for an origin and return it. (It's based on file names)
  */
 
-ya_result zdb_icmtl_get_last_serial_from(zdb_zone *zone, const char *directory, u32 *last_serial);
+ya_result zdb_icmtl_get_last_serial_from(zdb_zone *zone, u32 *last_serial);
 
 /**
  * Loads the first "DEL" soa matching that serial

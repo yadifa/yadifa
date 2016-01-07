@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -91,7 +91,8 @@ ya_result dynupdate_update(zdb_zone* zone, packet_unpack_reader_data *reader, u1
  */
 
 ya_result dynupdate_icmtlhook_enable(u8* origin, output_stream* os_remove, output_stream* os_add);
-ya_result dynupdate_icmtlhook_disable(u8* origin);
+ya_result dynupdate_icmtlhook_enable_wait(u8* origin, output_stream* os_remove, output_stream* os_add);
+ya_result dynupdate_icmtlhook_disable(const u8* origin);
 
 
 #ifdef	__cplusplus

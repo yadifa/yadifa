@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -40,6 +40,7 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
+#include "dnscore/dnscore-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
@@ -63,6 +64,8 @@
 #include "dnscore/dnskey.h"
 
 #define MODULE_MSG_HANDLE g_system_logger
+
+/// @note 20151118 edf -- names MUST end with ':'
 
 static const struct structdescriptor struct_DSA[] ={
     {"Prime(p)", offsetof(DSA, p), STRUCTDESCRIPTOR_BN},
@@ -445,9 +448,17 @@ dsa_public_store(DSA* dsa, u8* output_buffer)
 }
 
 static u32
-dsa_dnskey_public_store(dnssec_key* key, u8* output_buffer)
+dsa_dnskey_public_store(dnssec_key *key, u8 *rdata)
 {
-    return dsa_public_store(key->key.dsa, output_buffer);
+    u32 len;
+    
+    SET_U16_AT(rdata[0], key->flags);
+    rdata[2] = DNSKEY_PROTOCOL_FIELD;
+    rdata[3] = key->algorithm;
+    
+    len = dsa_public_store(key->key.dsa, &rdata[4]) + 4;
+    
+    return len;
 }
 
 static u32
@@ -469,7 +480,7 @@ dsa_public_getsize(DSA* dsa)
 static u32
 dsa_dnskey_public_getsize(dnssec_key* key)
 {
-    return dsa_public_getsize(key->key.dsa);
+    return dsa_public_getsize(key->key.dsa) + 4;
 }
 
 static void
@@ -491,7 +502,15 @@ dsa_equals(dnssec_key* key_a,dnssec_key* key_b)
         return TRUE;
     }
     
-    if((key_a->tag == key_b->tag) && (key_a->flags == key_b->flags) && (key_a->algorithm == key_b->algorithm))
+    if(dnssec_key_tag_field_set(key_a) && dnssec_key_tag_field_set(key_b))
+    {
+       if(key_a->tag != key_b->tag)
+       {
+           return FALSE;
+       }
+    }
+    
+    if((key_a->flags == key_b->flags) && (key_a->algorithm == key_b->algorithm))
     {
         if(strcmp(key_a->origin, key_b->origin) == 0)
         {
@@ -568,7 +587,7 @@ ya_result dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin
         return DNSSEC_ERROR_KEYISTOOBIG;
     }
 
-    SET_U16_AT(rdata[0], htons(flags)); /// @todo 20140523 edf -- DNSKEY NATIVEFLAGS
+    SET_U16_AT(rdata[0], flags); // NATIVEFLAGS
     rdata[2] = DNSKEY_PROTOCOL_FIELD;
     rdata[3] = algorithm;
 
@@ -679,13 +698,9 @@ dsa_private_parse_field(dnssec_key *key, parser_s *p)
         {
             BIGNUM **valuep = (BIGNUM**)&(((u8*)dsa)[sd->address]);
 
-            if(*valuep != NULL)
-            {
-                log_warn("field %s has already been initialized", sd->name);
-                return SUCCESS;
-            }
+            ret = parser_next_word(p);
             
-            if(FAIL(ret = parser_next_word(p)))
+            if((*valuep != NULL) || FAIL(ret))
             {
                 return ret;
             }
@@ -740,7 +755,7 @@ dsa_private_parse_field(dnssec_key *key, parser_s *p)
             return DNSSEC_ERROR_KEYISTOOBIG;
         }
 
-        SET_U16_AT(rdata[0], htons(key->flags));
+        SET_U16_AT(rdata[0], key->flags);
         rdata[2] = DNSKEY_PROTOCOL_FIELD;
         rdata[3] = key->algorithm;
 

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -51,6 +51,7 @@
 
 #define DATABASE_SERVICE_C 1
 
+#include "server-config.h"
 #include "config.h"
 
 #include <dnscore/format.h>

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -250,9 +250,35 @@ void database_zone_freeze(const u8 *origin);
 
 void database_zone_unfreeze(const u8 *origin);
 
+/**
+ * Enqueues the storage of a zone
+ * 
+ * @param origin
+ */
+
 void database_zone_save(const u8 *origin);
 
+/**
+ * Enqueues the storage of a zone, optionally clearing its journal
+ * 
+ * @param origin
+ */
+
 void database_zone_save_ex(const u8 *origin, bool clear_journal);
+
+/**
+ * Saves a zone in the current thread using the provided locks (0 meaning: do not try to lock)
+ * Not locking puts the responsibility of the lock to the caller as having this code running
+ * without any lock whatsoever on the descriptor/zone will give undefined results, a.k.a : crash.
+ * 
+ * @param zone_desc
+ * @param desclockowner
+ * @param zonelockowner
+ * @param save_unmodified
+ * @return 
+ */
+
+ya_result database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonelockowner, bool save_unmodified);
 
 /// @note HAS_DYNAMIC_PROVISIONING
 

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -42,6 +42,7 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
+#include "dnsdb/dnsdb-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
@@ -151,8 +152,6 @@ zdb_zone_store_axfr(zdb_zone* zone, output_stream* os)
 
         label = zdb_zone_label_iterator_next(&iter);
         
-        bool wild = (label->flags & ZDB_RR_LABEL_GOT_WILD) != 0;
-
         btree_iterator_init(label->resource_record_set, &type_iter);
 
         while(btree_iterator_hasnext(&type_iter))
@@ -173,15 +172,6 @@ zdb_zone_store_axfr(zdb_zone* zone, output_stream* os)
                 rec.rttl = htonl(rr_sll->ttl);
                 rec.rsize = htons(rr_sll->rdata_size);
                 
-                if(wild)
-                {
-    
-                    if(FAIL(err = output_stream_write(os, wild_wire, sizeof(wild_wire))))
-                    {
-                        return err;
-                    }
-                }
-
                 if(FAIL(err = output_stream_write(os, fqdn, fqdn_len)))
                 {
                     return err;

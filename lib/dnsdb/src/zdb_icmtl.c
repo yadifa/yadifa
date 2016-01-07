@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -43,6 +43,7 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
+#include "dnsdb/dnsdb-config.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <arpa/inet.h>
@@ -75,6 +76,14 @@
 #include "dnscore/ptr_set.h"
 #include "dnsdb/zdb-zone-journal.h"
 #include "dnsdb/zdb-zone-path-provider.h"
+#include "dnsdb/zdb_listener.h"
+
+#define ZDB_ICMTL_REPLAY_GATHER 0
+#define ZDB_ICMTL_REPLAY_COMMIT 1
+#define ZDB_ICMTL_REPLAY_COMMIT_AND_STOP 3
+#define ZDB_ICMTL_REPLAY_STOP 4
+#define ZDB_ICMTL_REPLAY_SHUTDOWN_POLL_PERIOD 1000
+#define ZDB_ICMTL_REPLAY_BUFFER_SIZE 4096
 
 #if ZDB_HAS_DNSSEC_SUPPORT != 0
 #include "dnsdb/nsec.h"
@@ -91,6 +100,8 @@ extern logger_handle* g_database_logger;
 #define ICMTL_FILE_MODE      0600
 #define ICMTL_SOA_INCREMENT  1
 
+#define ICMTL_TMP_FILE_ENABLED 0
+
 #define ICMTL_REMOVE_TMP_FILE_FORMAT  "%s/%{dnsname}%08x.ir.tmp"
 #define ICMTL_ADD_TMP_FILE_FORMAT     "%s/%{dnsname}%08x.ia.tmp"
 
@@ -100,134 +111,38 @@ extern logger_handle* g_database_logger;
 #define ICMTL_DUMP_JOURNAL_RECORDS  0
 #endif
 
-static u32 icmtl_index_base = 0;
+static smp_int icmtl_index_base = SMP_INT_INITIALIZER;
 
 /*
  * With this, I can ensure (in DEBUG builds) that there are no conflicting calls to the (badly named, mea culpa)
  * icmtl mechanism that registers changes to the DB (so the ICMTL protocol can use it).
  * 
  * This means than every writer uses this at some point, so what we actually detect is the conflicting writers.
- * 
  */
-
-UNICITY_DEFINE(icmtl)
-
 
 
 static ya_result
-zdb_icmtl_unlink_file(const char* name)
+zdb_icmtl_replay_commit(zdb_zone *zone, input_stream *is, u32 *current_serialp)
 {
-    ya_result err = SUCCESS;
-    
-    if(unlink(name) < 0)
-    {
-     
-        err = ERRNO_ERROR;
-        
-        log_err("journal: unable to delete '%s' : %r", name, err);
-    }
-    
-    return err;
-}
-
-/*
- * Replay the incremental stream
- */
-
-ya_result
-zdb_icmtl_replay(zdb_zone *zone)
-{
-    ya_result return_value;
-    u32 serial;
-    s32 changes = 0;
-    zdb_ttlrdata ttlrdata;
-    dnslabel_vector labels;
-
-    if(FAIL(return_value = zdb_zone_getserial(zone, &serial)))
-    {
-        log_err("journal: %{dnsname}: error reading serial for zone: %r",zone->origin, return_value);
-        
-        return return_value;
-    }
-
-    const bool is_nsec3 = zdb_zone_is_nsec3(zone);
-
-    const bool is_nsec = zdb_zone_is_nsec(zone);
-    
-    input_stream is;
-    
-#if ICMTL_DUMP_JOURNAL_RECORDS
-    log_debug("journal: zdb_icmtl_replay(%{dnsname})", zone->origin);
-    logger_flush();
-#endif
-    
-    u32 first_serial;
-    u32 last_serial;
-        
-    if(FAIL(return_value = zdb_zone_journal_get_serial_range(zone, &first_serial, &last_serial)))
-    {
-        if(return_value == ZDB_ERROR_ICMTL_NOTFOUND)
-        {
-            return_value = SUCCESS;
-        }
-        else
-        {
-            log_err("journal: %{dnsname}: error opening journal for zone: %r", zone->origin, return_value);
-        }
-        
-        return return_value;
-    }
-    
-    log_debug("journal: %{dnsname}: zone serial is %i, journal covers serials from %i to %i", zone->origin, serial, first_serial, last_serial);
-    
-    if(last_serial == serial)
-    {
-        log_debug("journal: %{dnsname}: nothing to read from the journal", zone->origin);
-        return 0;
-    }
-    
-    if(serial_lt(serial, first_serial))
-    {
-        log_warn("journal: %{dnsname}: first serial from the journal is after the zone", zone->origin);
-        // should invalidate the journal
-        zdb_zone_journal_delete(zone);
-        return 0;
-    }
-    
-    if(serial_gt(serial, last_serial))
-    {
-        log_warn("journal: %{dnsname}: last serial from the journal is before the zone", zone->origin);
-        // should invalidate the journal
-        zdb_zone_journal_delete(zone);
-        return 0;
-    }
-    
-    if(FAIL(return_value = zdb_zone_journal_get_ixfr_stream_at_serial(zone, serial, &is, NULL)))
-    {
-        log_err("journal: %{dnsname}: error reading journal from serial %d: %r",zone->origin, serial, return_value);
-
-        return return_value;
-    }
-    
-    log_info("journal: %{dnsname}: replaying from serial %u",zone->origin, serial);
-           
-    buffer_input_stream_init(&is, &is, 4096);
-
-    /* 
-     * At this point : the next record, if it exists AND is not an SOA , has to be deleted
-     * 
-     */
-    
-    bool did_remove_soa = FALSE;
-
-    log_info("journal: %{dnsname}: applying changes", zone->origin);
-
+    ya_result ret;
     /*
      * 0: DELETE, 1: ADD
      * The mode is switched every time an SOA is found.
      */
+
+    const bool is_nsec3 = zdb_zone_is_nsec3(zone);
+    const bool is_nsec = zdb_zone_is_nsec(zone);
     
-    u8 mode = 1;
+    u8 mode = 1; // the first SOA will switch the mode to delete
+    s32 changes = 0;
+    
+    zdb_ttlrdata ttlrdata;
+    dns_resource_record rr;
+    dns_resource_record_init(&rr);
+    const u8 *fqdn = rr.name;
+    dnslabel_vector labels;
+
+    ttlrdata.next = NULL;
 
     /*
      * The plan for NSEC3 :
@@ -255,55 +170,41 @@ zdb_icmtl_replay(zdb_zone *zone)
 #endif
     
     ptr_set downed_fqdn = PTR_SET_DNSNAME_EMPTY;
-    
-    dns_resource_record rr;
-    dns_resource_record_init(&rr);
-    
     const bool keep_downed_fqdn = is_nsec3;
-    
-    u8 *fqdn = rr.name;
 
-    ttlrdata.next = NULL;
+    /* 
+     * At this point : the next record, if it exists AND is not an SOA , has to be deleted
+     * 
+     */
+    
+    bool did_remove_soa = FALSE;
 
-    u16 shutdown_test_countdown = 1000;
-    
-    u32 current_serial = serial;
-    
+    // something has to be committed
+
     for(;;)
     {
-        if(--shutdown_test_countdown == 0)
-        {
-            if(dnscore_shuttingdown())
-            {
-                changes = STOPPED_BY_APPLICATION_SHUTDOWN;
-                break;
-            }
-            
-            shutdown_test_countdown = 1000;
-        }
-        
         /*
          * read the full record
          * 
          * == 0 : no record (EOF)
          *  < 0 : failed
          */
-        
-        if((return_value = dns_resource_record_read(&rr, &is)) <= 0)
+
+        if((ret = dns_resource_record_read(&rr, is)) <= 0)
         {
-            if(ISOK(return_value))
+            if(ISOK(ret))
             {
                 log_info("journal: reached the end of the journal file");
             }
             else
             {
-                log_err("journal: broken journal: %r", return_value);
+                log_err("journal: broken journal: %r", ret);
                 logger_flush(); // broken journal (bad, keep me)
             }
-            
+
             break;
         }
-        
+
         ttlrdata.ttl = ntohl(rr.tctr.ttl);
         ttlrdata.rdata_pointer = rr.rdata;
         ttlrdata.rdata_size = rr.rdata_size;
@@ -320,26 +221,26 @@ zdb_icmtl_replay(zdb_zone *zone)
             {
                 /* ADD */
 
-#if ZDB_HAS_NSEC3_SUPPORT != 0                
+#if ZDB_HAS_NSEC3_SUPPORT
                 if(is_nsec3)
                 {
-                    return_value = nsec3_icmtl_replay_execute(&nsec3replay);
-                    
-                    if(FAIL(return_value))
+                    ret = nsec3_icmtl_replay_execute(&nsec3replay);
+
+                    if(FAIL(ret))
                     {
                         dns_resource_record_clear(&rr);
-                        input_stream_close(&is);
-                        
+                        // DO NOT: input_stream_close(is);
+
                         nsec3_icmtl_replay_destroy(&nsec3replay);
-#if ZDB_HAS_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT
                         nsec_icmtl_replay_destroy(&nsecreplay);
 #endif            
-                        return return_value;
+                        return ret;
                     }
                 }
                 else
 #endif
-#if ZDB_HAS_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT
                 if(is_nsec)
                 {
                     nsec_icmtl_replay_execute(&nsecreplay);
@@ -347,26 +248,26 @@ zdb_icmtl_replay(zdb_zone *zone)
 #endif
             }
         }
-        
+
         if(!did_remove_soa)
         {
             log_info("journal: %{dnsname}: removing obsolete SOA", zone->origin);
 
-            if(FAIL(return_value = zdb_record_delete(&zone->apex->resource_record_set, TYPE_SOA)))
+            if(FAIL(ret = zdb_record_delete(&zone->apex->resource_record_set, TYPE_SOA)))
             {
                 /**
                 * complain
                 */
 
-                log_err("journal: removing current SOA gave an error: %r", return_value);
+                log_err("journal: removing current SOA gave an error: %r", ret);
 
                 /* That's VERY bad ... */
 
-                changes = return_value;
+                changes = ret;
 
                 break;
             }
-            
+
             did_remove_soa = TRUE;
         }
 
@@ -395,13 +296,13 @@ zdb_icmtl_replay(zdb_zone *zone)
                     logger_flush();
 #endif
                     nsec3_icmtl_replay_nsec3param_del(&nsec3replay, &ttlrdata);
-                    
+
                     break;
                 }
                 case TYPE_NSEC3:
                 {
 //                    nsec3_zone_item *item = nsec3_get_nsec3_by_name(zone, fqdn, tmprdata);
-                    
+
                     log_debug("journal: NSEC3: queue %{dnsname} for delete", fqdn);
 
                     nsec3_icmtl_replay_nsec3_del(&nsec3replay, fqdn, &ttlrdata);
@@ -412,9 +313,9 @@ zdb_icmtl_replay(zdb_zone *zone)
 #if ZDB_HAS_NSEC_SUPPORT != 0
                 case TYPE_NSEC:
                 {
-                    if(FAIL(return_value = zdb_rr_label_delete_record_exact(zone, labels, (top - zone->origin_vector.size) - 1, rr.tctr.qtype, &ttlrdata)))
+                    if(FAIL(ret = zdb_rr_label_delete_record_exact(zone, labels, (top - zone->origin_vector.size) - 1, rr.tctr.qtype, &ttlrdata)))
                     {
-                        log_err("journal: NSEC: %r", return_value);
+                        log_err("journal: NSEC: %r", ret);
                     }
 
                     if(is_nsec)
@@ -425,7 +326,7 @@ zdb_icmtl_replay(zdb_zone *zone)
 
                         nsec_icmtl_replay_nsec_del(&nsecreplay, fqdn);
                     }
-                   
+
                     break;
                 }
 #endif
@@ -433,26 +334,26 @@ zdb_icmtl_replay(zdb_zone *zone)
                 {
                     rdata_desc rdata = {TYPE_SOA, ttlrdata.rdata_size, ttlrdata.rdata_pointer};
                     log_info("journal: SOA: del %{dnsname} %{typerdatadesc}", fqdn, &rdata);
-                    
+
                     s32 m1 = (top - zone->origin_vector.size) - 1;
-                    
+
                     if(m1 == -1)
                     {
-                        if(FAIL(return_value = zdb_record_delete_exact(&zone->apex->resource_record_set, TYPE_SOA, &ttlrdata))) /* FB done, APEX : no delegation */
+                        if(FAIL(ret = zdb_record_delete_exact(&zone->apex->resource_record_set, TYPE_SOA, &ttlrdata))) /* FB done, APEX : no delegation */
                         {
                             if(!did_remove_soa)
                             {
-                                log_err("journal: SOA: %r", return_value);
+                                log_err("journal: SOA: %r", ret);
                             }
                         }
                     }
                     else
                     {
-                        if(FAIL(return_value = zdb_rr_label_delete_record_exact(zone, labels, (top - zone->origin_vector.size) - 1, rr.tctr.qtype, &ttlrdata)))
+                        if(FAIL(ret = zdb_rr_label_delete_record_exact(zone, labels, (top - zone->origin_vector.size) - 1, rr.tctr.qtype, &ttlrdata)))
                         {
                             if(!did_remove_soa)
                             {
-                                log_err("journal: SOA: (2) %r", return_value);
+                                log_err("journal: SOA: (2) %r", ret);
                             }
                         }
                     }
@@ -471,7 +372,7 @@ zdb_icmtl_replay(zdb_zone *zone)
 
                         break;
                     }
-                    
+
                     // THERE IS A FALLTROUGH TO default: HERE.  IT MUST BE PRESERVED.
                 }
 #endif
@@ -484,11 +385,11 @@ zdb_icmtl_replay(zdb_zone *zone)
                             ptr_set_avl_insert(&downed_fqdn, dnsname_dup(fqdn));
                         }
                     }
-                    
-                    if(FAIL(return_value = zdb_rr_label_delete_record_exact(zone, labels, (top - zone->origin_vector.size) - 1, rr.tctr.qtype, &ttlrdata)))
+
+                    if(FAIL(ret = zdb_rr_label_delete_record_exact(zone, labels, (top - zone->origin_vector.size) - 1, rr.tctr.qtype, &ttlrdata)))
                     {
                         log_err("journal: del %{dnsrr}", &rr);
-                        log_err("journal: %{dnstype}: %r", &rr.tctr.qtype, return_value);
+                        log_err("journal: %{dnstype}: %r", &rr.tctr.qtype, ret);
                     }
                 }
             }
@@ -507,28 +408,28 @@ zdb_icmtl_replay(zdb_zone *zone)
                     /*
                      * The "change" could be the NSEC3PARAM flag changing ?
                      */
-                    
+
                     if(is_nsec)
                     {
                         log_err("journal: NSEC3PARAM changes on the NSEC %{dnsname} zone", fqdn);
-                        
+
                         nsec3_icmtl_replay_destroy(&nsec3replay);
                         nsec_icmtl_replay_destroy(&nsecreplay);
-                        
+
                         dns_resource_record_clear(&rr);
-                        
+
                         return ZDB_JOURNAL_NSEC3_ADDED_IN_NSEC;
                     }
 
                     if(NSEC3_RDATA_ALGORITHM(ttlrdata.rdata_pointer) != DNSSEC_DIGEST_TYPE_SHA1)
                     {
                         log_err("journal: NSEC3PARAM algorithm %d is not supported", NSEC3_RDATA_ALGORITHM(ttlrdata.rdata_pointer));
-                        
+
                         nsec3_icmtl_replay_destroy(&nsec3replay);
                         nsec_icmtl_replay_destroy(&nsecreplay);
-                        
+
                         dns_resource_record_clear(&rr);
-                        
+
                         return ZDB_JOURNAL_NSEC3_HASH_NOT_SUPPORTED;
                     }
 #if ICMTL_DUMP_JOURNAL_RECORDS
@@ -537,7 +438,7 @@ zdb_icmtl_replay(zdb_zone *zone)
                     logger_flush();
 #endif
                     nsec3_icmtl_replay_nsec3param_add(&nsec3replay, &ttlrdata);
-                    
+
                     break;
                 }
                 case TYPE_NSEC3:
@@ -545,31 +446,31 @@ zdb_icmtl_replay(zdb_zone *zone)
                     if(is_nsec)
                     {
                         log_err("journal: NSEC3 changes on the dnssec1 %{dnsname} zone", fqdn);
-                        
+
                         nsec3_icmtl_replay_destroy(&nsec3replay);
                         nsec_icmtl_replay_destroy(&nsecreplay);
-                        
+
                         dns_resource_record_clear(&rr);
-                        
+
                         return ERROR;
                     }
-                    
+
                     log_debug("journal: NSEC3: queue %{dnsname} for add", fqdn);
 
                     if(NSEC3_RDATA_ALGORITHM(ttlrdata.rdata_pointer) != DNSSEC_DIGEST_TYPE_SHA1)
                     {
                         log_err("journal: NSEC3 algorithm %d is not supported", NSEC3_RDATA_ALGORITHM(ttlrdata.rdata_pointer));
-                        
+
                         nsec3_icmtl_replay_destroy(&nsec3replay);
                         nsec_icmtl_replay_destroy(&nsecreplay);
-                        
+
                         dns_resource_record_clear(&rr);
-                        
+
                         return ERROR;
                     }
 
                     nsec3_icmtl_replay_nsec3_add(&nsec3replay, fqdn, &ttlrdata);
-                
+
                     break;
                 }
 #endif
@@ -579,15 +480,15 @@ zdb_icmtl_replay(zdb_zone *zone)
                     if(is_nsec3)
                     {
                         log_err("journal: NSEC changes on the dnssec3 %{dnsname} zone", fqdn);
-                        
+
                         nsec3_icmtl_replay_destroy(&nsec3replay);
                         nsec_icmtl_replay_destroy(&nsecreplay);
-                        
+
                         dns_resource_record_clear(&rr);
-                        
+
                         return ERROR;
                     }
-                    
+
                     zdb_packed_ttlrdata *packed_ttlrdata;
 
                     ZDB_RECORD_ZALLOC_EMPTY(packed_ttlrdata, ttlrdata.ttl, rr.rdata_size);
@@ -610,7 +511,7 @@ zdb_icmtl_replay(zdb_zone *zone)
 
                         nsec_icmtl_replay_nsec_add(&nsecreplay, fqdn);
                     }
-                    
+
                     break;
                 }
 #endif
@@ -621,20 +522,20 @@ zdb_icmtl_replay(zdb_zone *zone)
                     ZDB_RECORD_ZALLOC_EMPTY(packed_ttlrdata, ttlrdata.ttl, rr.rdata_size);
                     packed_ttlrdata->next = NULL;
                     MEMCOPY(ZDB_PACKEDRECORD_PTR_RDATAPTR(packed_ttlrdata), rr.rdata, rr.rdata_size);
-                    
+
 #if ICMTL_DUMP_JOURNAL_RECORDS
                     rdata_desc type_len_rdata = {rr.tctr.qtype, rr.rdata_size, ZDB_PACKEDRECORD_PTR_RDATAPTR(packed_ttlrdata) };
                     log_debug("journal: add %{dnsname} %{typerdatadesc}", fqdn, &type_len_rdata);
                     logger_flush();
 #endif
-                    
+
 #if ZDB_HAS_NSEC3_SUPPORT != 0
                     if(is_nsec3)
                     {
                         /*
                          * If it's a signature AND if we are on an nsec3 zone AND the type covered is NSEC3 THEN it should be put on hold.
                          */
-      
+
                         if(rr.tctr.qtype == TYPE_RRSIG)
                         {
                             u8 *rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(packed_ttlrdata);
@@ -642,7 +543,6 @@ zdb_icmtl_replay(zdb_zone *zone)
                             if(RRSIG_RDATA_TO_TYPE_COVERED(*rdata) == TYPE_NSEC3)
                             {
                                 nsec3_icmtl_replay_nsec3_rrsig_add(&nsec3replay, fqdn, packed_ttlrdata);
-
                                 break;
                             }
                         }
@@ -650,7 +550,7 @@ zdb_icmtl_replay(zdb_zone *zone)
 #endif
                     if(rr.tctr.qtype == TYPE_SOA)
                     {
-                        rr_soa_get_serial(ZDB_PACKEDRECORD_PTR_RDATAPTR(packed_ttlrdata), ZDB_PACKEDRECORD_PTR_RDATASIZE(packed_ttlrdata), &current_serial);
+                        rr_soa_get_serial(ZDB_PACKEDRECORD_PTR_RDATAPTR(packed_ttlrdata), ZDB_PACKEDRECORD_PTR_RDATASIZE(packed_ttlrdata), current_serialp);
                         rdata_desc rdata = {TYPE_SOA, ZDB_PACKEDRECORD_PTR_RDATASIZE(packed_ttlrdata), ZDB_PACKEDRECORD_PTR_RDATAPTR(packed_ttlrdata)};
                         log_info("journal: SOA: add %{dnsname} %{typerdatadesc}", fqdn, &rdata);
                     }
@@ -670,11 +570,11 @@ zdb_icmtl_replay(zdb_zone *zone)
 
         changes++;
     }
-    
+
     /*
      * Yes, I know.  If 2^32 changes (add batch + del batch) occurs then it will be seen as an error ...
      */
-            
+
     if(ISOK(changes))
     {
 #if ZDB_HAS_NSEC3_SUPPORT != 0
@@ -700,8 +600,6 @@ zdb_icmtl_replay(zdb_zone *zone)
 #endif
     
     dns_resource_record_clear(&rr);
-
-    input_stream_close(&is);
     
     if(keep_downed_fqdn)
     {
@@ -736,8 +634,241 @@ zdb_icmtl_replay(zdb_zone *zone)
         ptr_set_avl_destroy(&downed_fqdn);
     }
     
+    return changes;
+}
+
+/*
+ * Replay the incremental stream
+ */
+
+ya_result
+zdb_icmtl_replay(zdb_zone *zone)
+{
+    ya_result return_value;
+    u32 serial;
+    
+    zdb_zone_double_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
+
+    return_value = zdb_zone_getserial(zone, &serial);
+    
+    if(FAIL(return_value))
+    {
+        zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
+        
+        log_err("journal: %{dnsname}: error reading serial for zone: %r",zone->origin, return_value);
+        
+        return return_value;
+    }
+
+    input_stream is;
+    
+#if ICMTL_DUMP_JOURNAL_RECORDS
+    log_debug("journal: zdb_icmtl_replay(%{dnsname})", zone->origin);
+    logger_flush();
+#endif
+    
+    u32 first_serial;
+    u32 last_serial;
+        
+    if(FAIL(return_value = zdb_zone_journal_get_serial_range(zone, &first_serial, &last_serial)))
+    {
+        zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
+        
+        if(return_value == ZDB_ERROR_ICMTL_NOTFOUND)
+        {
+            return_value = SUCCESS;
+        }
+        else
+        {
+            log_err("journal: %{dnsname}: error opening journal for zone: %r", zone->origin, return_value);
+        }
+                
+        return return_value;
+    }
+    
+    log_debug("journal: %{dnsname}: zone serial is %i, journal covers serials from %i to %i", zone->origin, serial, first_serial, last_serial);
+    
+    if(last_serial == serial)
+    {
+        zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
+        
+        log_debug("journal: %{dnsname}: nothing to read from the journal", zone->origin);
+        return 0;
+    }
+    
+    if(serial_lt(serial, first_serial))
+    {
+        zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
+        
+        log_warn("journal: %{dnsname}: first serial from the journal is after the zone", zone->origin);
+        // should invalidate the journal
+        zdb_zone_journal_delete(zone);
+        return 0;
+    }
+    
+    if(serial_gt(serial, last_serial))
+    {
+        zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
+        
+        log_warn("journal: %{dnsname}: last serial from the journal is before the zone", zone->origin);
+        // should invalidate the journal
+        zdb_zone_journal_delete(zone);
+        return 0;
+    }
+    
+    if(FAIL(return_value = zdb_zone_journal_get_ixfr_stream_at_serial(zone, serial, &is, NULL)))
+    {
+        zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
+        
+        log_err("journal: %{dnsname}: error reading journal from serial %d: %r",zone->origin, serial, return_value);
+
+        return return_value;
+    }
+    
+    log_info("journal: %{dnsname}: replaying from serial %u",zone->origin, serial);
+
+    buffer_input_stream_init(&is, &is, ZDB_ICMTL_REPLAY_BUFFER_SIZE);    
+
+    u16 shutdown_test_countdown = ZDB_ICMTL_REPLAY_SHUTDOWN_POLL_PERIOD;
+    
+    u32 current_serial = serial;
+    
+    /*
+     * Read all records from [ SOA ... SOA ... [ SOA in memory
+     */
+    
+    output_stream baos;
+    input_stream bais;
+    dns_resource_record rr;
+    
+    int baos_rr_count = 0;
+    int baos_soa_count = 0;
+
+    bytearray_output_stream_init_ex(&baos, NULL, ZDB_ICMTL_REPLAY_BUFFER_SIZE, BYTEARRAY_DYNAMIC);
+    dns_resource_record_init(&rr);    
+           
+    // 0: gather, 1: commit, 2: commit & stop
+    
+    for(int replay_state = ZDB_ICMTL_REPLAY_GATHER; replay_state != ZDB_ICMTL_REPLAY_COMMIT_AND_STOP;)
+    {
+        // ensure it's not supposed to shutdown (every few iterations)
+        
+        if(--shutdown_test_countdown <= 0)
+        {
+            if(dnscore_shuttingdown())
+            {
+                return_value = STOPPED_BY_APPLICATION_SHUTDOWN;
+                break;
+            }
+            
+            shutdown_test_countdown = ZDB_ICMTL_REPLAY_SHUTDOWN_POLL_PERIOD;
+        }
+        
+        // read the next record
+        
+        if((return_value = dns_resource_record_read(&rr, &is)) <= 0)
+        {
+            if(ISOK(return_value))
+            {
+                log_info("journal: reached the end of the journal file");
+                replay_state = ZDB_ICMTL_REPLAY_COMMIT_AND_STOP;
+            }
+            else
+            {
+                log_err("journal: broken journal: %r", return_value);
+                logger_flush(); // broken journal (flush is slow, but this is bad, so : keep it)
+                replay_state = ZDB_ICMTL_REPLAY_STOP;
+            }
+        }
+        else // first record must be an SOA (or it's wrong)        
+        if(baos_rr_count == 0) // first record ?
+        {
+            if(rr.tctr.qtype != TYPE_SOA) // must be SOA
+            {
+                // expected an SOA
+                return_value = ERROR;
+                break;
+            }
+            
+            ++baos_soa_count; // 0 -> 1 // this is not mandatory but clearer to read
+        }
+        else // the page ends with an SOA or end of stream
+        if(rr.tctr.qtype == TYPE_SOA)
+        {
+            if(baos_soa_count == 2)
+            {
+                // this record is the start of the next stream, keep it for the next iteration
+                replay_state = ZDB_ICMTL_REPLAY_COMMIT;
+            }
+            
+            ++baos_soa_count;
+        }
+        
+        ++baos_rr_count;
+        
+        if((replay_state & ZDB_ICMTL_REPLAY_COMMIT) != 0)
+        {
+            log_info("journal: %{dnsname}: commiting changes", zone->origin);
+            u64 ts_start = timeus();
+            zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
+            bytearray_input_stream_init_const(&bais, bytearray_output_stream_buffer(&baos), bytearray_output_stream_size(&baos));
+            zdb_icmtl_replay_commit(zone, &bais, &current_serial);
+            zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_LOAD, ZDB_ZONE_MUTEX_SIMPLEREADER);
+            input_stream_close(&bais);
+            u64 ts_stop = timeus();
+            if(ts_stop < ts_start) // time change
+            {
+                ts_stop = ts_start;
+            }
+            
+            u64 ts_delta = ts_stop - ts_start;
+            
+            if(ts_delta < 1000)
+            {            
+                log_info("journal: %{dnsname}: commited changes (%lluus)", zone->origin, ts_delta);
+            }
+            else if(ts_delta < 1000000)
+            {
+                double ts_delta_s = ts_delta;
+                ts_delta_s /= 1000.0;
+                log_info("journal: %{dnsname}: commited changes (%5.2fms)", zone->origin, ts_delta_s);
+            }
+            else
+            {
+                double ts_delta_s = ts_delta;
+                ts_delta_s /= 1000000.0;
+                log_info("journal: %{dnsname}: commited changes (%5.2fs)", zone->origin, ts_delta_s);
+            }
+                    
+            // the current page has been processed
+            
+            if(replay_state == ZDB_ICMTL_REPLAY_COMMIT_AND_STOP)
+            {
+                // no more page to read
+                break;
+            }
+            
+            // reset the state for the next page
+            // note: the next written record will be the last read SOA
+                        
+            baos_rr_count = 1;
+            baos_soa_count = 1;
+            replay_state = ZDB_ICMTL_REPLAY_GATHER;
+            bytearray_output_stream_reset(&baos);
+                       
+        } // end if replay_state != ZDB_ICMTL_REPLAY_GATHER
+                
+        dns_resource_record_write(&rr, &baos);
+    }
+   
+    input_stream_close(&is);
+    output_stream_close(&baos);
+    dns_resource_record_clear(&rr);
+    
     if(FAIL(return_value = zdb_zone_getserial(zone, &serial)))
     {
+        zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
+        
         log_err("journal: %{dnsname}: error reading confirmation serial for zone: %r",zone->origin, return_value);
                 
         return return_value;
@@ -749,6 +880,8 @@ zdb_icmtl_replay(zdb_zone *zone)
     }
 
     log_info("journal: %{dnsname}: done", zone->origin);
+    
+    zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
 
 #if ICMTL_DUMP_JOURNAL_RECORDS
     if(is_nsec)
@@ -758,11 +891,11 @@ zdb_icmtl_replay(zdb_zone *zone)
     }
 #endif
 
-    return changes;
+    return return_value;
 }
 
 ya_result
-zdb_icmtl_get_last_serial_from(zdb_zone *zone, const char *directory, u32 *last_serial)
+zdb_icmtl_get_last_serial_from(zdb_zone *zone, u32 *last_serial)
 {
     ya_result return_value;
     
@@ -772,99 +905,61 @@ zdb_icmtl_get_last_serial_from(zdb_zone *zone, const char *directory, u32 *last_
 }
 
 ya_result
-zdb_icmtl_begin(zdb_zone *zone, zdb_icmtl *icmtl, const char* folder)
+zdb_icmtl_begin(zdb_icmtl *icmtl, zdb_zone *zone)
 {
+#if ICMTL_TMP_FILE_ENABLED
+    const char* folder;
+#endif
+    
     ya_result return_code;
 
-    UNICITY_ACQUIRE(icmtl);
 
-    char remove_name[1024];
-    char add_name[1024];
-    
-    char data_path[PATH_MAX];
-    
-    memcpy(data_path, (const void*)"?", 2);
-    
-    if(FAIL(return_code = zdb_zone_path_get_provider()(zone->origin, data_path, sizeof(data_path), ZDB_ZONE_PATH_PROVIDER_ZONE_PATH|ZDB_ZONE_PATH_PROVIDER_MKDIR)))
+    if(smp_int_get(&icmtl_index_base) == 0)
     {
-        log_err("journal: unable to create directory '%s' for %{dnsname}: %r", data_path, zone->origin, return_code);
-        return return_code;
-    }
-    
-    folder = data_path;
-
-    if(icmtl_index_base == 0)
-    {
-        icmtl_index_base = time(NULL);
+        smp_int_set(&icmtl_index_base, time(NULL));
     }
 
-    icmtl->patch_index = icmtl_index_base++;
+    icmtl->patch_index = smp_int_inc_get(&icmtl_index_base);
 
-    if(ISOK(return_code = snformat(remove_name, sizeof(remove_name), ICMTL_REMOVE_TMP_FILE_FORMAT, folder, zone->origin, icmtl->patch_index)))
+    bytearray_output_stream_init_ex(&icmtl->os_add_, NULL, 65536, BYTEARRAY_DYNAMIC);
+    counter_output_stream_init(&icmtl->os_add_, &icmtl->os_add, &icmtl->os_add_stats);
+    bytearray_output_stream_init_ex(&icmtl->os_remove_, NULL, 65536, BYTEARRAY_DYNAMIC);
+    counter_output_stream_init(&icmtl->os_remove_, &icmtl->os_remove, &icmtl->os_remove_stats);
+    
+    if(ISOK(return_code = dynupdate_icmtlhook_enable_wait(zone->origin, &icmtl->os_remove, &icmtl->os_add)))
     {
-        if(ISOK(return_code = file_output_stream_create(remove_name, ICMTL_FILE_MODE, &icmtl->os_remove_)))
+        icmtl->zone = zone;
+
+        /* After this call, the database can be edited. */
+
+        zdb_packed_ttlrdata* soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);    
+
+        if(soa != NULL)
         {
-            zdb_icmtl_unlink_file(remove_name);
-            
-            buffer_output_stream_init(&icmtl->os_remove_, &icmtl->os_remove_, ICMTL_BUFFER_SIZE);
-            counter_output_stream_init(&icmtl->os_remove_, &icmtl->os_remove, &icmtl->os_remove_stats);
+            icmtl->soa_ttl = soa->ttl;                    
+            icmtl->soa_rdata_size  = ZDB_PACKEDRECORD_PTR_RDATASIZE(soa);
+            memcpy(icmtl->soa_rdata, ZDB_PACKEDRECORD_PTR_RDATAPTR(soa), ZDB_PACKEDRECORD_PTR_RDATASIZE(soa));
+        }
+        else
+        {
+            output_stream_close(&icmtl->os_remove);
+            output_stream_close(&icmtl->os_add);
 
-            if(ISOK(return_code = snformat(add_name, sizeof(add_name), ICMTL_ADD_TMP_FILE_FORMAT, folder, zone->origin, icmtl->patch_index)))
-            {
-                if(ISOK(return_code = file_output_stream_create(add_name, ICMTL_FILE_MODE, &icmtl->os_add_)))
-                {
-                    zdb_icmtl_unlink_file(add_name);
-                    
-                    buffer_output_stream_init(&icmtl->os_add_, &icmtl->os_add_, ICMTL_BUFFER_SIZE);
-                    counter_output_stream_init(&icmtl->os_add_, &icmtl->os_add, &icmtl->os_add_stats);
+            log_err("journal: no soa found at %{dnsname}", zone->origin);
 
-                    if(ISOK(dynupdate_icmtlhook_enable(zone->origin, &icmtl->os_remove, &icmtl->os_add)))
-                    {
-                        icmtl->zone = zone;
-
-                        /* After this call, the database can be edited. */
-
-                        zdb_packed_ttlrdata* soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);    
-
-                        if(soa != NULL)
-                        {
-                            icmtl->soa_ttl = soa->ttl;                    
-                            icmtl->soa_rdata_size  = ZDB_PACKEDRECORD_PTR_RDATASIZE(soa);
-                            memcpy(icmtl->soa_rdata, ZDB_PACKEDRECORD_PTR_RDATAPTR(soa), ZDB_PACKEDRECORD_PTR_RDATASIZE(soa));
-                        }
-                        else
-                        {
-                            output_stream_close(&icmtl->os_remove);
-                            output_stream_close(&icmtl->os_add);
-
-                            log_err("journal: no soa found at %{dnsname}", zone->origin);
-
-                            return_code = ZDB_ERROR_NOSOAATAPEX;
-                        }
-                    }
-                    else
-                    {
-                        output_stream_close(&icmtl->os_remove);
-                        output_stream_close(&icmtl->os_add);
-                        
-                        log_warn("journal: already editing zone %{dnsname}", zone->origin);
-                        
-                        return_code = ZDB_ERROR_ICMTL_STATUS_INVALID;
-                    }
-                }
-                else
-                {
-                    output_stream_close(&icmtl->os_remove);
-                }
-            }
+            return_code = ZDB_ERROR_NOSOAATAPEX;
         }
     }
-
-    if(FAIL(return_code))
+    else
     {
-        UNICITY_RELEASE(icmtl);
-    }
+        output_stream_close(&icmtl->os_remove);
+        output_stream_close(&icmtl->os_add);
 
+        log_warn("journal: already editing zone %{dnsname}", zone->origin);
+
+        return_code = ZDB_ERROR_ICMTL_STATUS_INVALID;
+    }
+    
     return return_code;
 }
 
@@ -889,8 +984,6 @@ zdb_icmtl_close(zdb_icmtl *icmtl)
     output_stream_close(&icmtl->os_add);
     output_stream_close(&icmtl->os_add_);
     
-    UNICITY_RELEASE(icmtl);
-    
     return SUCCESS;
 }
 
@@ -903,7 +996,7 @@ zdb_icmtl_cancel(zdb_icmtl *icmtl)
 }
 
 ya_result
-zdb_icmtl_end(zdb_icmtl *icmtl, const char* folder)
+zdb_icmtl_end(zdb_icmtl *icmtl)
 {
     ya_result return_value;
 
@@ -934,7 +1027,7 @@ zdb_icmtl_end(zdb_icmtl *icmtl, const char* folder)
     // soa changed => no
     // no bytes written => no
     
-    u32 written = icmtl->os_add_stats.written_count + icmtl->os_remove_stats.written_count;
+    bool written_on = zdb_listener_notify_has_changes(icmtl->zone);
     
     bool must_increment_serial;
     
@@ -944,7 +1037,7 @@ zdb_icmtl_end(zdb_icmtl *icmtl, const char* folder)
     }
     else
     {
-        if(written == 0)
+        if(!written_on)
         {
             zdb_icmtl_close(icmtl);
 
@@ -958,7 +1051,7 @@ zdb_icmtl_end(zdb_icmtl *icmtl, const char* folder)
     {
         rr_soa_increase_serial(&soa->rdata_start[0], soa->rdata_size, ICMTL_SOA_INCREMENT);
 
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
         /* Build new signatures */
 
         if(icmtl->zone->apex->nsec.dnssec != NULL)
@@ -1024,32 +1117,20 @@ zdb_icmtl_end(zdb_icmtl *icmtl, const char* folder)
 #endif
     }
     
+    // Disable cannot be done before
+    
     dynupdate_icmtlhook_disable(icmtl->zone->origin);
     
-    /*
-     * flush the streams, rewind them (because the undelying layer is a file stream)
-     * this is faster an allow to delete the file just after creation
-     */
-    
-    output_stream_flush(&icmtl->os_remove);
-    output_stream_flush(&icmtl->os_add);
-    
-    output_stream *fos_remove = buffer_output_stream_get_filtered(&icmtl->os_remove_);
-    output_stream *fos_add = buffer_output_stream_get_filtered(&icmtl->os_add_);
-
-    input_stream remove_rr_is;    
-    int fd_remove = fd_output_stream_get_filedescriptor(fos_remove);
-    fd_output_stream_detach(fos_remove); /* take from inside the buffer stream, so it's OK */
-    lseek(fd_remove, 0, SEEK_SET);
-    fd_input_stream_attach(&remove_rr_is, fd_remove);
+    input_stream remove_rr_is;
+    bytearray_input_stream_init(bytearray_output_stream_buffer(&icmtl->os_remove_), bytearray_output_stream_size(&icmtl->os_remove_), &remove_rr_is, TRUE);
+    bytearray_output_stream_detach(&icmtl->os_remove_);
     output_stream_close(&icmtl->os_remove_);
-    
+    output_stream_close(&icmtl->os_remove);    
     input_stream add_rr_is;
-    int fd_add = fd_output_stream_get_filedescriptor(fos_add);
-    fd_output_stream_detach(fos_add); /* take from inside the buffer stream, so it's OK */
-    lseek(fd_add, 0, SEEK_SET);
-    fd_input_stream_attach(&add_rr_is, fd_add);
+    bytearray_input_stream_init(bytearray_output_stream_buffer(&icmtl->os_add_), bytearray_output_stream_size(&icmtl->os_add_), &add_rr_is, TRUE);
+    bytearray_output_stream_detach(&icmtl->os_add_);
     output_stream_close(&icmtl->os_add_);
+    output_stream_close(&icmtl->os_add);    
     
     /* current SOA */
     
@@ -1093,8 +1174,6 @@ zdb_icmtl_end(zdb_icmtl *icmtl, const char* folder)
     return_value = zdb_zone_journal_append_ixfr_stream(icmtl->zone, &cis);
     
     input_stream_close(&cis);
-
-    UNICITY_RELEASE(icmtl);
 
     return return_value;
 }

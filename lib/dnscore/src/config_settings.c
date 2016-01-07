@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -38,6 +38,7 @@
  * @{
  */
 
+#include "dnscore/dnscore-config.h"
 #include <unistd.h>
 #include <sys/types.h>
 #include <pwd.h>
@@ -1500,7 +1501,7 @@ config_read_from_buffer(const char *buffer, u32 buffer_len, const char *buffer_n
         
         input_stream ins;
     
-        bytearray_input_stream_init((const u8*)buffer, buffer_len, &ins, FALSE);
+        bytearray_input_stream_init_const(&ins, (const u8*)buffer, buffer_len);
         
         err = config_file_reader_parse_stream(buffer_name, &ins, section_descriptor, cfgerr);
         
@@ -1528,7 +1529,7 @@ static ya_result
 config_source_get_from_buffer(struct config_source_s *source, input_stream *out_stream, config_error_s *cfgerr)
 {
     (void)cfgerr;
-    bytearray_input_stream_init((const u8*)source->source.buffer.text, source->source.buffer.size, out_stream, FALSE);
+    bytearray_input_stream_init_const(out_stream, (const u8*)source->source.buffer.text, source->source.buffer.size);
     return SUCCESS;
 }
 

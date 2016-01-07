@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -72,7 +72,9 @@
  *
  */
 
-#define DNSKEY_FLAGS(x__)      (ntohs(GET_U16_AT((x__).rdata_start[0]))) /// @todo 20140523 edf -- optimisation : NATIVEFLAGS
+#define DNSKEY_FLAGS_FROM_RDATA(x__) (GET_U16_AT((x__)[0]))
+
+#define DNSKEY_FLAGS(x__)      (GET_U16_AT((x__).rdata_start[0]))
 #define DNSKEY_PROTOCOL(x__)   ((x__).rdata_start[2])
 #define DNSKEY_ALGORITHM(x__)  ((x__).rdata_start[3])
 
@@ -131,7 +133,7 @@ struct dnssec_key
     u8* owner_name;		// = zone origin
 
     dnssec_key_data key;	// RSA* or DSA*
-    s64     timestamp;          // The time the key has been loaded from disk (to avoid reloading)
+    s64     timestamp;          // the file modification time of the private key (to avoid reloading)
     int	    nid;		// NID_sha1, NID_md5
     
     u32 epoch_created;
@@ -197,6 +199,22 @@ dnssec_key *dnskey_newemptyinstance(u8 algorithm,u16 flags,const char *origin);
 ya_result dnskey_new_from_rdata(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key **out_key);
 
 void dnskey_free(dnssec_key *key);
+
+/**
+ * 
+ * Compares two keys for equality
+ * Uses the tag, flags, algorithm and origin.
+ * 
+ * @param a
+ * @param b
+ * 
+ * @return TRUE iff the keys are the same.
+ */
+
+static inline bool dnssec_key_tag_field_set(const dnssec_key *key)
+{
+    return (key->status & DNSKEY_KEY_TAG_SET) != 0;
+}
 
 u16 dnssec_key_get_tag(dnssec_key *key);
 u8 dnssec_key_get_algorithm(dnssec_key *key);

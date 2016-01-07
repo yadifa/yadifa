@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -38,6 +38,7 @@
  * @{
  */
 
+#include "dnscore/dnscore-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -59,7 +60,7 @@
 static string_node *hmac_algorithms = NULL;
 
 static void
-string_set_insert(const char *name, u32 value)
+tsig_string_set_insert(const char *name, u32 value)
 {
     string_node *node;
     u8 fqdn[MAX_DOMAIN_LENGTH];
@@ -73,12 +74,12 @@ string_set_insert(const char *name, u32 value)
 void
 tsig_register_algorithms()
 {
-    string_set_insert("hmac-md5.sig-alg.reg.int", HMAC_MD5);
-    string_set_insert("hmac-sha1.sig-alg.reg.int", HMAC_SHA1);
-    string_set_insert("hmac-sha224.sig-alg.reg.int", HMAC_SHA224);
-    string_set_insert("hmac-sha256.sig-alg.reg.int", HMAC_SHA256);
-    string_set_insert("hmac-sha384.sig-alg.reg.int", HMAC_SHA384);
-    string_set_insert("hmac-sha512.sig-alg.reg.int", HMAC_SHA512);
+    tsig_string_set_insert("hmac-md5.sig-alg.reg.int", HMAC_MD5);
+    tsig_string_set_insert("hmac-sha1", HMAC_SHA1);
+    tsig_string_set_insert("hmac-sha224", HMAC_SHA224);
+    tsig_string_set_insert("hmac-sha256", HMAC_SHA256);
+    tsig_string_set_insert("hmac-sha384", HMAC_SHA384);
+    tsig_string_set_insert("hmac-sha512", HMAC_SHA512);
 }
 
 void

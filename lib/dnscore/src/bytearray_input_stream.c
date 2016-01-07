@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -40,6 +40,7 @@
  * @{
  *
  *----------------------------------------------------------------------------*/
+#include "dnscore/dnscore-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -62,7 +63,7 @@ struct bytearray_input_stream_data
 };
 
 static ya_result
-bytearray_read(input_stream* stream, u8 *buffer, u32 len)
+bytearray_input_stream_read(input_stream* stream, u8 *buffer, u32 len)
 {
     if(len == 0)
     {
@@ -93,7 +94,7 @@ bytearray_read(input_stream* stream, u8 *buffer, u32 len)
 }
 
 static ya_result
-bytearray_skip(input_stream* stream, u32 len)
+bytearray_input_stream_skip(input_stream* stream, u32 len)
 {
     if(len == 0)
     {
@@ -120,24 +121,29 @@ bytearray_skip(input_stream* stream, u32 len)
 }
 
 static void
-bytearray_close(input_stream* stream)
+bytearray_input_stream_close(input_stream* stream)
 {
     bytearray_input_stream_data* data = (bytearray_input_stream_data*)stream->data;
 
+    if(data->own_buffer)
+    {
+        free((void*)data->buffer);
+    }
+        
     ZFREE(data,bytearray_input_stream_data);
 
     input_stream_set_void(stream);
 }
 
 static const input_stream_vtbl bytearray_input_stream_vtbl = {
-    bytearray_read,
-    bytearray_skip,
-    bytearray_close,
+    bytearray_input_stream_read,
+    bytearray_input_stream_skip,
+    bytearray_input_stream_close,
     "bytearray_input_stream",
 };
 
 void
-bytearray_input_stream_init(const u8* array, u32 size, input_stream* out_stream, bool owned)
+bytearray_input_stream_init_const(input_stream* out_stream, const u8* array, u32 size)
 {
     bytearray_input_stream_data* data;
 
@@ -146,6 +152,31 @@ bytearray_input_stream_init(const u8* array, u32 size, input_stream* out_stream,
     data->buffer = array;
     data->offset = 0;
     data->size = size;
+    data->own_buffer = FALSE;
+    
+#if DEBUG && EDF
+    log_debug5("bais@%p: init: set %d@%p (const)", out_stream, size, array);
+#endif
+
+    out_stream->data = data;
+    out_stream->vtbl = &bytearray_input_stream_vtbl;
+}
+
+void
+bytearray_input_stream_init(u8* array, u32 size, input_stream* out_stream, bool owned)
+{
+    bytearray_input_stream_data* data;
+
+    ZALLOC_OR_DIE(bytearray_input_stream_data*, data, bytearray_input_stream_data, BYTE_ARRAY_INPUT_STREAM_DATA_TAG);
+
+    data->buffer = array;
+    data->offset = 0;
+    data->size = size;
+    data->own_buffer = owned;
+    
+#if DEBUG && EDF
+    log_debug5("bais@%p: init: set %d@%p (%x)", out_stream, size, array, owned);
+#endif
 
     out_stream->data = data;
     out_stream->vtbl = &bytearray_input_stream_vtbl;

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -41,6 +41,7 @@
  *
  *----------------------------------------------------------------------------*/
 
+#include "server-config.h"
 #include "config.h"
 
 #include <stdio.h>
@@ -358,7 +359,8 @@ notify_masterquery_thread(void *args_)
     
     if(zone_desc == NULL)
     {
-        log_err("notify: slave: zone %{dnsname} has been dropped", args->origin);       
+        log_err("notify: slave: zone %{dnsname} has been dropped", args->origin);
+        dnsname_zfree(args->origin);
         ZFREE(args, notify_masterquery_thread_args);
         
         return NULL;
@@ -431,6 +433,7 @@ notify_masterquery_thread(void *args_)
                         zdb_zone_release_unlock(dbzone, ZDB_ZONE_MUTEX_XFR);                         /* MUST be unlocked here because ... */
                         database_zone_refresh_maintenance(g_config->database, zone_desc->origin, 0); /* ... this will try to lock */
                         
+                        dnsname_zfree(args->origin);
                         ZFREE(args, notify_masterquery_thread_args);
                         
                         zone_release(zone_desc);
@@ -476,6 +479,7 @@ notify_masterquery_thread(void *args_)
         database_zone_axfr_query(zone_desc->origin);
     }   /* AXFR */
     
+    dnsname_zfree(args->origin);
     ZFREE(args, notify_masterquery_thread_args);
     
     zone_release(zone_desc);
@@ -627,7 +631,7 @@ notify_masterquery(zdb *database, message_data *mesg, packet_unpack_reader_data 
     
     ZALLOC_OR_DIE(notify_masterquery_thread_args*, args, notify_masterquery_thread_args, GENERIC_TAG);
     
-    args->origin = dnsname_dup(mesg->qname);
+    args->origin = dnsname_zdup(mesg->qname);
     args->serial = serial;
     args->serial_set = serial_set;
     
@@ -1042,7 +1046,7 @@ notify_service(struct service_worker_s *worker)
         {
             /* current_queries tree cleanup */
             
-            async_message_s* async = async_message_next(&notify_handler_queue);
+            async_message_s *async = async_message_next(&notify_handler_queue);
 
             if(async == NULL)   /* if no message is in the queue, proceed to next step */
             {
@@ -1118,9 +1122,9 @@ notify_service(struct service_worker_s *worker)
 
                     if(node->value != NULL)
                     {
-                        notify_message* old_message = (notify_message*)node->value;  // get the old value
+                        notify_message* old_message = (notify_message*)node->value; // get the old value
                         node->key = message->origin;                                // (same key but the old pointer is about to be deleted)
-                        node->value = message;                                       // set the new value
+                        node->value = message;                                      // set the new value
                         notify_message_free(old_message);                           // destroy the old value.  notify_zones does not contains it anymore
                     }
                     else
@@ -1161,7 +1165,6 @@ notify_service(struct service_worker_s *worker)
                             if(host_address_list_contains_host(msg->payload.notify.hosts_list, message->payload.answer.host))
                             {
                                 host_address *ha;
-                                
 #if HAS_TSIG_SUPPORT
                                 ha = message->payload.answer.host;
                                 
@@ -1212,7 +1215,6 @@ notify_service(struct service_worker_s *worker)
                                     message_query_summary_delete(mqs);
                                 } /* end of TSIG verification, with success*/
 #endif
-                                
                                 ha = host_address_remove_host_address(&msg->payload.notify.hosts_list, message->payload.answer.host);
                                 host_address_delete(ha);
 

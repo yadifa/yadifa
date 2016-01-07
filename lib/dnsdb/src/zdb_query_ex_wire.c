@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -40,6 +40,7 @@
  * @{
  */
 
+#include "dnsdb/dnsdb-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
@@ -79,7 +80,7 @@ extern logger_handle* g_database_logger;
  */
 
 static bool
-write_label(zdb_resourcerecord* rr, u32* countp, packet_writer* pc)
+zdb_query_message_update_write_label(zdb_resourcerecord* rr, u32* countp, packet_writer* pc)
 {
     u32 count = 0;
     bool fully_written = TRUE;
@@ -242,7 +243,7 @@ zdb_query_message_update(message_data* message, zdb_query_ex_answer* answer_set)
 
     // write_label handles truncation
     
-    fully_written = write_label(answer_set->answer, &count, &pc);
+    fully_written = zdb_query_message_update_write_label(answer_set->answer, &count, &pc);
     header->ancount = htons(count);
     header->nscount = 0;
     header->arcount = 0;
@@ -251,13 +252,13 @@ zdb_query_message_update(message_data* message, zdb_query_ex_answer* answer_set)
     {
         if((message->process_flags & PROCESS_FL_AUTHORITY_AUTH) != 0)
         {
-            fully_written = write_label(answer_set->authority, &count, &pc);
+            fully_written = zdb_query_message_update_write_label(answer_set->authority, &count, &pc);
             header->nscount = htons(count);
         }
 
         if(fully_written && ((message->process_flags & PROCESS_FL_ADDITIONAL_AUTH) != 0))
         {
-            /* fully_written = */ write_label(answer_set->additional, &count, &pc);
+            /* fully_written = */ zdb_query_message_update_write_label(answer_set->additional, &count, &pc);
             header->arcount = htons(count);
         }
     }

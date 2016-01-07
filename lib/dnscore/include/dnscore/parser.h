@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -299,7 +299,10 @@ parser_next_word(parser_s *p)
     
     for(;;)
     {
-        return_code = parser_next_token(p);
+        if(FAIL(return_code = parser_next_token(p)))
+        {
+            return return_code;
+        }
         
         if(return_code & PARSER_WORD)
         {

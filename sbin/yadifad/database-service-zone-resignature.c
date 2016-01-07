@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -49,6 +49,7 @@
  *
  * USE INCLUDES */
 
+#include "server-config.h"
 #include "config.h"
 
 #include <dnscore/logger.h>
@@ -163,7 +164,7 @@ database_service_zone_resignature_arm(zone_desc_s *zone_desc, zdb_zone *zone)
          */
 
         alarm_event_node *event = alarm_event_alloc();
-        event->epoch = zone_desc->signature.sig_invalid_first;
+        event->epoch = MAX(zone_desc->signature.sig_invalid_first, time(NULL) - 5);
         event->function = database_service_zone_resignature_alarm;
         event->args = args;
         event->key = ALARM_KEY_ZONE_SIGNATURE_UPDATE;
@@ -187,58 +188,106 @@ database_service_zone_resignature_init_callback(zdb_zone_process_label_callback_
 {
     struct database_service_zone_resignature_init_callback_s *args = (struct database_service_zone_resignature_init_callback_s*)parms->args;
     
-
+    if(!zdb_rr_label_has_records(parms->rr_label)) // no records on this label
+    {
+        if(!zdb_rr_label_has_records(parms->rr_label)) log_debug("no records", parms->rr_label->resource_record_set);
+        return ZDB_ZONE_PROCESS_CONTINUE;
+    }
+    
     zdb_packed_ttlrdata*  rrsig_rrset = zdb_rr_label_get_rrset(parms->rr_label, TYPE_RRSIG);
     
     if(rrsig_rrset != NULL)
     {
-        do
+        // for all types, check there is a valid signature for it
+        
+        // iterate through types
+        // look in the signatures which one are covering them
+        // proceed
+        
+        bool has_DS = zdb_rr_label_get_rrset(parms->rr_label, TYPE_DS) != NULL;
+        
+        btree_iterator types_iter;
+        btree_iterator_init(parms->rr_label->resource_record_set, &types_iter);
+        while(btree_iterator_hasnext(&types_iter))
         {
-            u32 expires_on = RRSIG_VALID_UNTIL(rrsig_rrset);
-            u32 valid_from = RRSIG_VALID_SINCE(rrsig_rrset);
-            u16 type_covered = RRSIG_TYPE_COVERED(rrsig_rrset);
+            btree_node *node = btree_iterator_next_node(&types_iter);
 
-            u32 validity_period = 0;
+            u16 type = node->hash; /** @note : NATIVETYPE */
             
-            if(valid_from <= expires_on)
+            if(type == TYPE_RRSIG)
             {
-                validity_period = expires_on - valid_from;
+                continue;
             }
 
-            if(type_covered != TYPE_DNSKEY)
+            // is there a signature covering this ?
+         
+            bool type_is_covered = FALSE;
+            
+            for(zdb_packed_ttlrdata *rrsig_rr = rrsig_rrset; rrsig_rr != NULL; rrsig_rr = rrsig_rr->next)
             {
+                u16 type_covered = RRSIG_TYPE_COVERED(rrsig_rr);
+                
+                if(type_covered != type)
+                {
+                    continue;
+                }
+                
+                type_is_covered = TRUE;
+                
+                u32 expires_on = RRSIG_VALID_UNTIL(rrsig_rr);
+                u32 valid_from = RRSIG_VALID_SINCE(rrsig_rr);
+
+                u32 validity_period = 0;
+
+                if(valid_from <= expires_on)
+                {
+                    validity_period = expires_on - valid_from;
+                }
+
                 args->total_signature_valitity_time += validity_period;
                 args->signature_count++;
                 args->earliest_expiration_epoch = MIN(args->earliest_expiration_epoch, expires_on);
                 args->smallest_validity_period = MIN(args->smallest_validity_period, validity_period);
                 args->biggest_validity_period = MAX(args->biggest_validity_period, validity_period);
             }
-            else
+            
+            if(!type_is_covered) // no signature is covering the current type
             {
-                
-            }
+                if(!ZDB_LABEL_ATORUNDERDELEGATION(parms->rr_label)) // we are not at or under a delegation
+                {
+                    // a signature is expected on this RRSET
 
-            rrsig_rrset = rrsig_rrset->next;
-        }
-        while(rrsig_rrset != NULL);
+                    args->missing_signatures_count++;
+                }
+                else // we are at or under a delegation ...
+                {
+                    if(ZDB_LABEL_ATDELEGATION(parms->rr_label))
+                    {
+                        // the presence of a DS calls for a signature (of the DS)
+                        if(zdb_zone_is_nsec3_optin(parms->zone) || !(type == TYPE_NS && has_DS)) // if the type is NS and there is a DS (signed or not, not the current problem) the signature is not needed
+                        {
+                            args->missing_signatures_count++;
+                        }
+                    } // under a delegation, there should be no signature
+                }
+            }
+            // else it does not matter
+        } // for all types in the label
     }
-    else
+    else // there are no signatures on the label
     {
-        if(!ZDB_LABEL_ATORUNDERDELEGATION(parms->rr_label))
+        if(!ZDB_LABEL_ATORUNDERDELEGATION(parms->rr_label)) // we are not at or under a delegation
         {
             // a signature is expected
             
-            if(RR_LABEL_HASRECORDS(parms->rr_label))
-            {
-                args->missing_signatures_count++;
-            }
+            args->missing_signatures_count++;
         }
         else // we are at or under a delegation
         {
             if(ZDB_LABEL_ATDELEGATION(parms->rr_label))
             {
-                // the presence of a DS calls for a signature
-                if(zdb_rr_label_get_rrset(parms->rr_label, TYPE_DS) != NULL)
+                // opt-in or the presence of a DS calls for a signature
+                if(zdb_zone_is_nsec3_optin(parms->zone) || (zdb_rr_label_get_rrset(parms->rr_label, TYPE_DS) != NULL))
                 {
                     args->missing_signatures_count++;
                 }
@@ -362,7 +411,14 @@ database_service_zone_resignature_init(zone_desc_s *zone_desc, zdb_zone *zone)
     else
     {
         log_debug("%{dnsname}: signatures: next one will be made as soon as possible", zone_desc->origin);
-        zone_desc->signature.sig_invalid_first = now - 1; // do it already (0 would work too, of course)
+        if(args.missing_signatures_count == 0)
+        {
+            zone_desc->signature.sig_invalid_first = now - 1; // do it already
+        }
+        else
+        {
+            zone_desc->signature.sig_invalid_first = ZONE_SIGNATURE_INVALID_FIRST_ASSUME_BROKEN; // missing signatures means we absolutely
+        }                                                                                        // cannot trust the current signatures values
     }
     
     if(ISOK(return_code))
@@ -417,7 +473,7 @@ database_service_zone_resignature_thread(void *parms_)
     
     if(!zone_maintains_dnssec(zone_desc))
     {
-        log_warn("zone sign: %{dnsname} resignature triggered although the feature was explicitely disabled : ignoring request.", zone_desc->origin);
+        log_warn("zone sign: %{dnsname} resignature triggered although the feature was explicitly disabled : ignoring request.", zone_desc->origin);
         
         zone_unlock(zone_desc, ZONE_LOCK_SIGNATURE);
         
@@ -458,7 +514,7 @@ database_service_zone_resignature_thread(void *parms_)
     // should have a starting point, cylcing trough the nodes
     // that way there will be no increasingly long scans
     
-    if(FAIL(return_code = zdb_update_zone_signatures(zone, zone->sig_quota)))
+    if(FAIL(return_code = zdb_update_zone_signatures(zone, zone->sig_quota, zone_desc->signature.sig_invalid_first != ZONE_SIGNATURE_INVALID_FIRST_ASSUME_BROKEN)))
     {
         switch(return_code)
         {

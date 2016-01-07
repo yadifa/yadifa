@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -51,6 +51,8 @@
 
 #include <dnsdb/zdb-zone-lock.h>
 #include <dnsdb/zdb-zone-arc.h>
+
+#include "nsec3_types.h"
 
 #ifdef	__cplusplus
 extern "C"
@@ -269,6 +271,30 @@ static inline bool zdb_zone_is_nsec3(const zdb_zone* zone)
 #endif
 }
 
+static inline bool zdb_zone_is_nsec3_optout(const zdb_zone* zone)
+{
+    return ((zone->apex->flags & ZDB_RR_LABEL_NSEC3_OPTOUT) != 0);
+}
+
+static inline bool zdb_zone_is_nsec3_optin(const zdb_zone* zone)
+{
+    return ((zone->apex->flags & ZDB_RR_LABEL_NSEC3_OPTOUT) == 0);
+}
+
+static inline nsec3_zone* zdb_zone_get_nsec3chain(const zdb_zone* zone, s8 idx)
+{
+#if ZDB_HAS_NSEC3_SUPPORT != 0
+    nsec3_zone *n3 = zone->nsec.nsec3;;
+    while(n3 != NULL && --idx >= 0)
+    {
+        n3 = n3->next;
+    }
+    return n3;
+#else
+    return NULL;
+#endif
+}
+
 static inline bool zdb_zone_is_nsec(const zdb_zone *zone)
 {
 #if ZDB_HAS_NSEC_SUPPORT != 0
@@ -287,20 +313,6 @@ static inline bool zdb_zone_is_dnssec(const zdb_zone *zone)
 #endif    
 }
 
-#if OBSOLETE
-/**
- * Exchange the current zone with a dummy invalid one.
- * Do nothing if the zone in place is already invalid.
- * Returns the previous zone.
- * 
- * @param db
- * @param origin
- * @return 
- */
-
-zdb_zone *zdb_zone_xchg_with_invalid(zdb *db, const u8 *origin, u16 or_flags);
-
-#endif
 
 bool zdb_zone_isinvalid(zdb_zone *zone);
 

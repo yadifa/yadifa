@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -54,7 +54,7 @@ extern "C"
 typedef struct packet_dictionary_node packet_dictionary_node;
 
 
-struct packet_dictionary_node
+struct packet_dictionary_node // 16 / 28
 {
     packet_dictionary_node* next;
     packet_dictionary_node* child;
@@ -64,18 +64,17 @@ struct packet_dictionary_node
 
 typedef struct packet_writer packet_writer;
 
-
 struct packet_writer
 {
-    packet_dictionary_node* head;
-    packet_dictionary_node* pool_head;
+    packet_dictionary_node* head;       //     4  8
+    packet_dictionary_node* pool_head;  //     8 16
     
-    u8* packet;
+    u8* packet;                         //    12 24 
 
-    u32 packet_offset;
-    u32 packet_limit;
+    u32 packet_offset;                  //    16 28
+    u32 packet_limit;                   //    20 32
 
-    packet_dictionary_node pool[4096];
+    packet_dictionary_node pool[4096];  // 65556 114720 or 131104 (depending on struct alignment)
 };
 
 /**

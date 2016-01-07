@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -40,6 +40,7 @@
  * @{
  *
  *----------------------------------------------------------------------------*/
+#include "dnscore/dnscore-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -60,7 +61,7 @@ struct buffer_output_stream_data
 };
 
 static ya_result
-buffer_write(output_stream* stream, const u8* buffer, u32 len)
+buffer_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
 {
     buffer_output_stream_data* data = (buffer_output_stream_data*)stream->data;
     u8* src = data->buffer;
@@ -116,7 +117,7 @@ buffer_write(output_stream* stream, const u8* buffer, u32 len)
 }
 
 static ya_result
-buffer_flush(output_stream* stream)
+buffer_output_stream_flush(output_stream* stream)
 {
     buffer_output_stream_data* data = (buffer_output_stream_data*)stream->data;
 
@@ -136,9 +137,9 @@ buffer_flush(output_stream* stream)
 }
 
 static void
-buffer_close(output_stream* stream)
+buffer_output_stream_close(output_stream* stream)
 {
-    buffer_flush(stream);
+    buffer_output_stream_flush(stream);
 
     buffer_output_stream_data* data = (buffer_output_stream_data*)stream->data;
     output_stream_close(&data->filtered);
@@ -148,9 +149,9 @@ buffer_close(output_stream* stream)
 }
 
 static const output_stream_vtbl buffer_output_stream_vtbl ={
-    buffer_write,
-    buffer_flush,
-    buffer_close,
+    buffer_output_stream_write,
+    buffer_output_stream_flush,
+    buffer_output_stream_close,
     "buffer_output_stream",
 };
 

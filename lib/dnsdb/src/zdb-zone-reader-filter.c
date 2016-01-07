@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -40,6 +40,7 @@
  * @{
  */
 
+#include "dnsdb/dnsdb-config.h"
 #include "dnsdb/zdb-zone-reader-filter.h"
 
 struct zone_file_reader_filter_data
@@ -107,7 +108,8 @@ static bool
 zone_reader_filter_canwriteback(zone_reader *zr)
 {
     zone_file_reader_filter_data *data = (zone_file_reader_filter_data*)zr->data;
-    bool b = zone_reader_filter_canwriteback(data->zr);
+    yassert(zr != data->zr);
+    bool b = zone_reader_filter_canwriteback(data->zr); // false positive for infinite recursion
     return b;
 }
 

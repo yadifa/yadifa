@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -40,6 +40,7 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
+#include "dnsdb/dnsdb-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
@@ -1013,7 +1014,7 @@ dynupdate_update(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, b
     ya_result edit_status;
     bool changes_occurred = FALSE;
     
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
     bool dnssec_zone = (zone->apex->nsec.dnssec != NULL);
     
     if(dnssec_zone)
@@ -1046,11 +1047,11 @@ dynupdate_update(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, b
                     log_warn("update: unable to load the private key 'K%{dnsname}+%03d+%05d': %r", zone->origin, algorithm, tag, return_code);
                 }
 
-                if(flags == 257)
+                if(flags == DNSKEY_FLAGS_KSK)
                 {
                     ++ksk_count;
                 }
-                else if(flags == 256)
+                else if(flags == DNSKEY_FLAGS_ZSK)
                 {
                     ++zsk_count;
                 }
@@ -1080,6 +1081,8 @@ dynupdate_update(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, b
 #endif
 
 #if ZDB_HAS_DNSSEC_SUPPORT != 0
+    // generates an array of the current nsec3param in the zone
+    
     ptr_vector_init(&nsec3param_rrset);
     
     zdb_packed_ttlrdata *n3prrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_NSEC3PARAM);
@@ -1175,8 +1178,8 @@ dynupdate_update(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, b
 
             return SERVER_ERROR_CODE(RCODE_REFUSED);
         }
-        
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+
+#if ZDB_HAS_DNSSEC_SUPPORT
         // If the record is an NSEC3PARAM at the APEX
         if((rtype == TYPE_NSEC3PARAM) && dnsname_equals_ignorecase(zone->origin, rname))
         {
@@ -1289,7 +1292,6 @@ dynupdate_update(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, b
             
             if(!dryrun)
             {
-
 #ifdef DEBUG
                 log_debug("update: delete %{dnsname} %{dnstype} ...", rname, &rtype);
 #endif

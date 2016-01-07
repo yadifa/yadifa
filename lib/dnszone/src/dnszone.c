@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -37,6 +37,8 @@
  *
  * @{
  */
+
+#include "dnszone/dnszone-config.h"
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -31,6 +31,8 @@
 *------------------------------------------------------------------------------
 *
 */
+
+#include "dnszone/dnszone-config.h"
 
 #include <fcntl.h>
 #include <stddef.h>
@@ -1805,10 +1807,10 @@ zone_file_reader_copy_rdata(const char *text, u16 rtype, u8 *rdata, u32 rdata_si
     {
         input_stream text_is;
 
-        bytearray_input_stream_init((const u8*)text, n, &text_is, FALSE);
+        bytearray_input_stream_init_const(&text_is, (const u8*)text, n);
         
         if(ISOK(return_code = parser_push_stream(&parser, &text_is)))
-        {        
+        {
             return_code = zone_file_reader_copy_rdata_inline(&parser, rtype, rdata, rdata_size, origin);
         }
         

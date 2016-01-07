@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -64,6 +64,7 @@
 
 #define JOURNAL_CJF_BASE 1
 
+#include "dnsdb/dnsdb-config.h"
 #include "dnsdb/journal-cjf-page.h"
 #include "dnsdb/journal-cjf-page-cache.h"
 #include "dnsdb/journal-cjf-page-output-stream.h"
@@ -452,7 +453,7 @@ journal_cjf_remove_first_page(journal_cjf *jnl)
             if(serial_le(stored_serial, jnl->serial_begin))
             {
                 log_debug("cjf: %s,%i: journal page %u will be lost, flushing zone first", jnl->journal_file_name, jnl->fd, jnl->journal_file_name, jnl->serial_begin);
-                zdb_zone_info_store_zone(jnl->zone->origin);
+                zdb_zone_info_background_store_zone(jnl->zone->origin);
             }
         }
     }
@@ -539,6 +540,15 @@ journal_cjf_read_soa_record(dns_resource_record *rr, input_stream *ixfr_wire_is)
  * Only checks that the first SOA serial is the current last serial
  * Should also check that the stream is complete before adding it.
  * 
+ * @note edf 20160112 -- In order to handle enhancements:
+ * 
+ * The zone of the journal SHOULD be locked
+ * The zone of the journal MUST have locks in either of these states:
+ * _ not locked
+ * _ locked by a simple reader
+ * _ doubly locked with the simple reader as owner or alternative owner
+ * Any other case will be rejected.
+ * 
  * @todo edf 20150127 -- In order to trigger the zone write, this function should: ...
  * 
  * _ get the current written serial (AXFR/TXT), there must be a bridge between that serial an the journal
@@ -575,6 +585,22 @@ journal_cjf_append_ixfr_stream_master(journal *jh, input_stream *ixfr_wire_is)
     stream_serial_del = ~0;
 #endif
     
+    // ensure the zone locks are usable
+    {
+        zdb_zone *zone = (zdb_zone*)jnl->zone;
+        u8 owner = zone->lock_owner;
+        u8 reserved_owner = zone->lock_reserved_owner;
+        if(
+                !(
+                (owner == ZDB_ZONE_MUTEX_SIMPLEREADER) ||
+                (owner == ZDB_ZONE_MUTEX_NOBODY) ||
+                (reserved_owner == ZDB_ZONE_MUTEX_SIMPLEREADER)
+                )
+            )
+        {
+            return ERROR;
+        }
+    }
 
     // current record
 #if SLAVE_ONLY    
@@ -755,7 +781,7 @@ journal_cjf_append_ixfr_stream_master(journal *jh, input_stream *ixfr_wire_is)
                     {
                         log_debug("cjf: %s,%i: half the space has been reached, requesting zone write and forcing page change", jnl->journal_file_name, jnl->fd);
 
-                        zdb_zone_info_store_zone(jnl->zone->origin); /// @todo edf 20150219 -- stop storing in this PAGE
+                        zdb_zone_info_background_store_zone(jnl->zone->origin); /// @todo edf 20150219 -- stop storing in this PAGE
 
                         jnl->last_page.file_offset_limit = jnl->last_page.records_limit; // this will tell the PAGE is full
                         jnl->last_page.size = jnl->last_page.count;
@@ -860,20 +886,70 @@ journal_cjf_append_ixfr_stream_master(journal *jh, input_stream *ixfr_wire_is)
                     {
                         log_warn("cjf: %s,%i: journal size is too small compared to the rate of updates", jnl->journal_file_name, jnl->fd);
 
-                        if(ISOK(ret = zdb_zone_info_store_zone_and_wait_for_serial(jnl->zone->origin, previous_journal_serial)))
+                        zdb_zone *zone = (zdb_zone*)jnl->zone;
+                        
+                        // the zone at this point is supposed to be locked
+                        // either simply with a simple reader
+                        // either doubly with something and a simple reader
+                        // if simply : do nothing
+                        // if doubly : with the simple reader : exchange them
+                        //             with anything else : it cannot ever work
+                        
+                        u8 owner = zone->lock_owner;
+                        u8 reserved_owner = zone->lock_reserved_owner;
+                        if(owner == ZDB_ZONE_MUTEX_SIMPLEREADER)
+                        {
+                            ret = zdb_zone_info_store_locked_zone(jnl->zone->origin);
+                        }
+                        else if(owner == ZDB_ZONE_MUTEX_NOBODY)
+                        {
+                            zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+                            ret = zdb_zone_info_store_locked_zone(jnl->zone->origin);
+                            zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+                        }
+                        else if(reserved_owner == ZDB_ZONE_MUTEX_SIMPLEREADER)
+                        {   
+                            zdb_zone_exchange_locks(zone, owner, ZDB_ZONE_MUTEX_SIMPLEREADER);
+                            ret = zdb_zone_info_store_locked_zone(jnl->zone->origin);
+                            zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, owner);
+                        }
+                        else
+                        {
+                            ret = ERROR;
+                        }
+                        
+                        if(ISOK(ret))
                         {
                             // and recompute ...
 
                             if(ISOK(ret = zdb_zone_info_get_stored_serial(jnl->zone->origin, &zone_stored_serial)))
                             {
-                                // get the offset of the PAGE that works from that serial
-                                if(ISOK(ret = journal_cjf_idxt_get_page_offset_from_serial(jnl, zone_stored_serial, &zone_stored_serial_page_offset)))
-                                {
-                                    log_debug("cjf: %s,%i: zone stored with serial %i, journal page offset %i", jnl->journal_file_name, jnl->fd, zone_stored_serial, zone_stored_serial_page_offset);
+                                if(serial_ge(jnl->serial_end, zone_stored_serial))
+                                {                                
+                                    // get the offset of the PAGE that works from that serial
+                                    if(ISOK(ret = journal_cjf_idxt_get_page_offset_from_serial(jnl, zone_stored_serial, &zone_stored_serial_page_offset)))
+                                    {
+                                        log_debug("cjf: %s,%i: zone stored with serial %i, journal page offset %i", jnl->journal_file_name, jnl->fd, zone_stored_serial, zone_stored_serial_page_offset);
+                                    }
+                                    else
+                                    {
+                                        log_err("cjf: %s,%i: could not find the serial in the journal: %r", jnl->journal_file_name, jnl->fd, ret);
+                                    }
                                 }
                                 else
                                 {
-                                    log_err("cjf: %s,%i: could not find the serial in the journal: %r", jnl->journal_file_name, jnl->fd, ret);
+                                    // the journal is older than the zone
+                                    // zone_stored_serial_page_offset = last_page_offset
+                                    
+                                    if(ISOK(ret = journal_cjf_idxt_get_page_offset_from_serial(jnl, jnl->serial_end, &zone_stored_serial_page_offset)))
+                                    {
+                                        log_debug("cjf: %s,%i: last journal page offset %i", jnl->journal_file_name, jnl->fd, zone_stored_serial_page_offset);
+                                    }
+                                    else
+                                    {
+                                        // should not be possible
+                                        log_err("cjf: %s,%i: could not find page for the serial in the journal: %r", jnl->journal_file_name, jnl->fd, ret);
+                                    }
                                 }
                             }
                             else

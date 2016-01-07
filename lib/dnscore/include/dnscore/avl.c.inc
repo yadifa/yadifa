@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011, EURid. All rights reserved.
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -32,17 +32,17 @@
  *
  *
  *      SVN Program:
- *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.4-public/lib/dnscore/include/dnscore/avl.c.inc $
+ *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.5-public/lib/dnscore/include/dnscore/avl.c.inc $
  *
  *      Creation Date:
  *              2009-01-07
  *
  *      Last Update:
- *              $Date: 2015-09-29 08:21:13 +0200 (Die, 29 Sep 2015) $
- *              $Revision: 5544 $
+ *              $Date: 2016-01-21 11:33:18 +0100 (Thu, 21 Jan 2016) $
+ *              $Revision: 5792 $
  *
  *      Last Change:
- *              $Author: ericdf $
+ *              $Author: timh $
  *
  *------------------------------------------------------------------------------
  *

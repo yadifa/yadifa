@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -43,6 +43,7 @@
 
 #define JOURNAL_CJF_BASE 1
 
+#include "dnsdb/dnsdb-config.h"
 #include "dnsdb/journal-cjf-page-cache.h"
 #include "dnsdb/journal-cjf-idxt.h"
 #include "dnsdb/journal-cjf-common.h"
@@ -405,7 +406,7 @@ journal_cjf_idxt_update_last_serial(journal_cjf *jnl, u32 last_serial)
  * @param size_hint
  */
 
-void
+static void
 journal_cjf_idxt_append_page_nogrow(journal_cjf *jnl)
 {
     yassert(jnl->idxt.size > 0);
@@ -435,17 +436,22 @@ journal_cjf_idxt_append_page_nogrow(journal_cjf *jnl)
     }
     else
     {
+        // there is no room left thus we will replace the first page (increasing the first slot position)
         // overwrite of the start of the cyclic data, update the journal
         
-        log_debug2("cjf: append PAGE at [%i] offset %u (%08x), losing first PAGE", jnl->idxt.count, page->records_limit, page->records_limit);
+        /*
+         * No grow happens when the file is too big and we are about to loop
+         */
+        
+        u32 first_page_offset = journal_cjf_idxt_get_file_offset(jnl, 0);
+        
+        log_debug2("cjf: append PAGE at [%i] offset %u (%08x), losing first PAGE", jnl->idxt.count, first_page_offset, first_page_offset);
         
         entry = &jnl->idxt.entries[(jnl->idxt.first) % jnl->idxt.size];
         
         yassert(jnl->first_page_offset == entry->file_offset);        
         
         // removes first page, adjusts current PAGE offset_limit
-        
-        u32 first_page_offset = journal_cjf_idxt_get_file_offset(jnl, 0);
         
         journal_cjf_remove_first_page(jnl); // will decrease the count and move the first
         
@@ -587,31 +593,32 @@ journal_cjf_idxt_fix_size(journal_cjf *jnl)
     yassert(jnl->idxt.size > 0);
     yassert(jnl->idxt.size >= jnl->idxt.count);
     
-    log_debug2("cjf: fixing IDXT size from %u to %u", jnl->idxt.size, jnl->idxt.count);
-    
-    if(jnl->idxt.size < jnl->idxt.count)
-    {
-        // shrink the table
-        
-        log_debug_jnl(jnl, "cjf: journal_cjf_idxt_fix_size: BEFORE");
-        
+    if(jnl->idxt.size != jnl->idxt.count)
+    {    
+        log_debug2("cjf: fixing IDXT size from %u to %u", jnl->idxt.size, jnl->idxt.count);
+
         journal_cjf_idxt_tbl_item *tmp;
         MALLOC_OR_DIE(journal_cjf_idxt_tbl_item*, tmp, sizeof(journal_cjf_idxt_tbl_item) * (jnl->idxt.count), GENERIC_TAG);
 
-        for(s16 idx = 0; idx < jnl->idxt.count; idx++)
+        for(s16 i = 0; i < jnl->idxt.count; ++i)
         {
-            tmp[idx] = jnl->idxt.entries[(jnl->idxt.first + idx) % jnl->idxt.size];
+            tmp[i] = jnl->idxt.entries[(jnl->idxt.first + i) % jnl->idxt.size];
         }
 
+#if DEBUG
+        memset(jnl->idxt.entries, 0xfe, sizeof(journal_cjf_idxt_tbl_item) * jnl->idxt.size);
+#endif
         free(jnl->idxt.entries);
-        jnl->idxt.entries = tmp;
-        jnl->idxt.first = 0;
 
+        jnl->idxt.entries = tmp;
+
+        jnl->idxt.first = 0;
         jnl->idxt.size = jnl->idxt.count;
-        
-        log_debug_jnl(jnl, "cjf: journal_cjf_idxt_fix_size: AFTER");
     }
-    // else jnl->idxt.size ==    jnl->idxt.count
+    else
+    {
+        log_debug2("cjf: fixing IDXT size to %u (nothing to do)", jnl->idxt.count);
+    }
 }
 
 /**
@@ -671,7 +678,11 @@ journal_cjf_idxt_append_page(journal_cjf *jnl)
         // if it is expected to go beyond the maximum size with the next update, prevent the growth of the idtx table
         // if we don't have at least two PAGE, then continue to grow the IDXT
         
-        if((jnl->idxt.count > 1) && (jnl->last_page.records_limit  + CJF_SECTION_INDEX_SIZE + CJF_PAGE_ARBITRARY_UPDATE_SIZE > jnl->file_maximum_size))
+        const bool has_at_least_two_pages = (jnl->idxt.count > 1);
+        
+        const bool too_close_to_the_file_size_limit = (jnl->last_page.records_limit  + CJF_SECTION_INDEX_SIZE + CJF_PAGE_ARBITRARY_UPDATE_SIZE > jnl->file_maximum_size);
+        
+        if(has_at_least_two_pages && too_close_to_the_file_size_limit)
         {
             journal_cjf_idxt_fix_size(jnl);
         }

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -50,6 +50,7 @@
  * USE INCLUDES */
 
 
+#include "server-config.h"
 #include "config.h"
 
 #include <dnscore/packet_reader.h>
@@ -267,7 +268,21 @@ database_zone_path_provider(const u8* domain_fqdn, char *path_buffer, u32 path_b
             }
             case ZDB_ZONE_PATH_PROVIDER_DNSKEY_PATH:
             {
-                ret = snformat(path_buffer, path_buffer_size, "%s/", g_config->keys_path);
+                if(zone_desc->keys_path != NULL)
+                {
+                    if(zone_desc->keys_path[0] != '/')
+                    {
+                        ret = snformat(path_buffer, path_buffer_size, "%s/%s", g_config->data_path, zone_desc->keys_path);
+                    }
+                    else
+                    {
+                        ret = snformat(path_buffer, path_buffer_size, "%s", zone_desc->keys_path);
+                    }
+                }
+                else
+                {
+                    ret = snformat(path_buffer, path_buffer_size, "%s/", g_config->keys_path);
+                }
                 break;
             }
             default:
@@ -382,10 +397,23 @@ database_info_provider(const u8 *origin, zdb_zone_info_provider_data *data, u32 
             
             break;
         }
+        case ZDB_ZONE_INFO_PROVIDER_STORE_TRIGGER:
+        {
+            database_zone_save(origin);
+            ret = SUCCESS;
+            break;
+        }
         case ZDB_ZONE_INFO_PROVIDER_STORE_NOW:
         {
-            database_zone_save(origin); // wait ?
-            ret = SUCCESS;
+            zone_desc_s *zone_desc = zone_acquirebydnsname(origin);
+            if(zone_desc != NULL)
+            {
+                ret = database_service_zone_save_ex(zone_desc, 0, data->_u8, TRUE);
+            }
+            else
+            {
+                ret = ERROR;
+            }
             break;
         }
         default:
@@ -762,7 +790,10 @@ database_update(zdb *database, message_data *mesg)
                                 log_debug("database: update: checking DNSKEY availability");
 
                                 const zdb_packed_ttlrdata *dnskey = zdb_zone_get_dnskey_rrset(zone);
-
+                                
+                                int ksk_count = 0;
+                                int zsk_count = 0;
+                                
                                 if(dnskey != NULL)
                                 {
                                     char origin[MAX_DOMAIN_LENGTH];
@@ -779,13 +810,38 @@ database_update(zdb *database, message_data *mesg)
 
                                         if(FAIL(return_code = dnssec_key_load_private(algorithm, tag, flags, origin, &key)))
                                         {
-                                            log_err("database: update: unable to load private key 'K%{dnsname}+%03d+%05d': %r", zone->origin, algorithm, tag, return_code);
-                                            break;
+                                            log_warn("database: update: unable to load the private key 'K%{dnsname}+%03d+%05d': %r", zone->origin, algorithm, tag, return_code);
+                                        }
+                                        
+                                        if(flags == DNSKEY_FLAGS_KSK)
+                                        {
+                                            ++ksk_count;
+                                        }
+                                        else if(flags == DNSKEY_FLAGS_ZSK)
+                                        {
+                                            ++zsk_count;
+                                        }
+                                        else
+                                        {
+                                            // the key is of no use
                                         }
 
                                         dnskey = dnskey->next;
                                     }
                                     while(dnskey != NULL);
+                                    
+                                    return_code = zsk_count;
+                                    
+                                    if(zsk_count == 0)
+                                    {
+                                        log_err("database: update: unable to load any of the ZSK private keys of zone %{dnsname}", zone->origin);
+                                        return_code = DNSSEC_ERROR_RRSIG_NOUSABLEKEYS;
+                                    }
+                                    
+                                    if(ksk_count == 0)
+                                    {
+                                        log_warn("database: update: unable to load any of the KSK private keys of zone %{dnsname}", zone->origin);
+                                    }
                                 }
                                 else
                                 {
@@ -802,10 +858,9 @@ database_update(zdb *database, message_data *mesg)
                                 
                                 mesg->status = (finger_print)RCODE_SERVFAIL;
                             }
-
                         }
-                        /// @todo edf 20150127 -- if at least one key has been loaded, it should continue
-                        if(ISOK(return_code))   // 
+                                                /// @todo edf 20150127 -- if at least one key has been loaded, it should continue
+                        if(ISOK(return_code))   ///
                         {
                             /* The reader is positioned after the header : read the QR section */
                             
@@ -822,6 +877,10 @@ database_update(zdb *database, message_data *mesg)
 
                                 /// @todo edf 20141008 -- this lock is too early, it should be moved just before the actual run
                                 
+#if 1
+                                zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
+                                bool locked = TRUE;
+#else
                                 u64 start = timeus();
                                 u64 now;
                                 u64 locktimeout = 2000000; /// @todo edf 20141008 -- 2 seconds, make this configurable
@@ -837,6 +896,7 @@ database_update(zdb *database, message_data *mesg)
                                     now = timeus();
                                 }
                                 while(now - start < locktimeout);
+#endif
                                 
                                 if(locked)
                                 {
@@ -874,7 +934,7 @@ database_update(zdb *database, message_data *mesg)
 
                                             zdb_icmtl icmtl;
 
-                                            if(ISOK(return_code = zdb_icmtl_begin(zone, &icmtl, g_config->xfr_path)))
+                                            if(ISOK(return_code = zdb_icmtl_begin(&icmtl, zone)))
                                             {
                                                 log_debug("database: update: run of %d updates", count);
 
@@ -894,7 +954,7 @@ database_update(zdb *database, message_data *mesg)
                                                 }
 
                                                 
-                                                len = zdb_icmtl_end(&icmtl, g_config->xfr_path);
+                                                len = zdb_icmtl_end(&icmtl);
 
                                                 if(len > 0)
                                                 {
@@ -958,8 +1018,12 @@ database_update(zdb *database, message_data *mesg)
                                         mesg->status = (finger_print)RCODE_SERVFAIL;
                                     }
                                     
+#if 1
+                                    zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_DYNUPDATE, ZDB_ZONE_MUTEX_SIMPLEREADER);
+                                    zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
+#else                               
                                     zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_DYNUPDATE);
-                                    
+#endif                               
                                     if(need_to_notify_slaves)
                                     {
                                         notify_slaves(zone->origin);

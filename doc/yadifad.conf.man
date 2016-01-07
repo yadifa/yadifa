@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man on Fri Aug 14 14:28:38 CEST 2015
+.\" Manual page created with latex2man on Thu Jan  7 12:10:08 CET 2016
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -10,11 +10,12 @@
 
 .fi
 ..
-.TH "YADIFAD\-CONF" "5" "2015\-10\-16" "YADIFA " "YADIFA "
+.TH "YADIFAD\-CONF" "5" "2016\-01\-21" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
-yadifad.conf \- configuration file for \fIyadifad\fP(8)\&.
+yadifad.conf
+\- configuration file for \fIyadifad\fP(8)\&.
 .PP
 .SH SYNOPSIS
 
@@ -30,6 +31,18 @@ has several containers:
 \fB<main>\fP
  General container 
 .TP
+<key> 
+TSIG keys 
+.TP
+<acl> 
+Access lists 
+.TP
+<nsid> 
+NameServer IDentifier 
+.TP
+<rrl> 
+Response Rate Limiting directives 
+.TP
 <zone> 
 Description of the domain name in specific attributes 
 .TP
@@ -37,13 +50,7 @@ Description of the domain name in specific attributes
 Description of the logger outputs 
 .TP
 <loggers> 
-Description of the loggers 
-.TP
-<key> 
-TSIG keys 
-.TP
-<acl> 
-Access lists. 
+Description of the loggers. 
 .PP
 The configuration supports included files.
 .br
@@ -69,12 +76,12 @@ eg.
 .PP
 .Vb
 <container>
-        # variable  argument
-        variable    value1  
-        # variable  argument1       argument2
-        variable    value1          value2
-        # variable  argument1
-        variable    value1,value2
+# variable  argument
+variable    value1  
+# variable  argument1       argument2
+variable    value1          value2
+# variable  argument1
+variable    value1,value2
 </container>
 .Ve
 .PP
@@ -94,7 +101,7 @@ Config with includes
 .PP
 .Vb
 # start yadifad.conf <main> container
-        include /etc/yadifa/conf.d/local.conf
+include /etc/yadifa/conf.d/local.conf
 # end yadifad.conf <main> container
 .Ve
 .PP
@@ -102,109 +109,133 @@ Config with includes
 .TP
 2.
 Main without includes 
+.RS
+.PP
 .Vb
 <main>
-        # Detach from the console
-        daemon                  off
+    # Detach from the console (alias: daemonize)
+    daemon                  off
 
-        # Jail the application
-        chroot                  off
+    # Jail the application
+    chroot                  off
 
-        # The path of the log files
-        logpath                 "/var/log/yadifa"
+    # The path of the log files (alias: chroot\-path)
+    chrootpath              "/chroot/yadifad"
 
-        # The location of the pid file
-        pidfile                 "/var/run/yadifa/yadifad.pid"
+    # The path of the log files (alias: log\-path)
+    logpath                 "/var/log/yadifa"
 
-        # The path of the zone files
-        datapath                "/var/lib/yadifa"
+    # The location of the pid file (alias: pid\-file)
+    pidfile                 "/var/run/yadifa/yadifad.pid"
 
-        # The path of the DNSSEC keys
-        keyspath                "/var/lib/yadifa/keys"
+    # The path of the zone files (alias: data\-path)
+    datapath                "/var/lib/yadifa"
 
-        # The path of the transfer and journaling files (AXFR & IXFR)
-        xfrpath                 "/var/lib/yadifa/xfr"
+    # The path of the DNSSEC keys (alias: keys\-path)
+    keyspath                "/var/lib/yadifa/keys"
 
-        # A string returned by a query of hostname. CH TXT 
-        # note: if you leave this out, the real hostname will be given back
-        hostname                "server\-yadifad"
+    # The path of the transfer and journaling files (AXFR & IXFR) (alias: xfr\-path)
+    xfrpath                 "/var/lib/yadifa/xfr"
 
-        # An ID returned by a query to id.server. CH TXT
-        serverid                "yadifad\-01"
+    # A string returned by a query of hostname. CH TXT 
+    # note: if you leave this out, the real hostname will be given back (alias: hostname\-chaos)
+    hostname                "server\-yadifad"
 
-        # The version returned by a query to version.yadifa. CH TXT
-        version                 "2.1.4"
+    # An ID returned by a query to id.server. CH TXT (alias: serverid\-chaos)
+    serverid                "yadifad\-01"
 
-        # Set the maximum UDP packet size.  
-        # note: the packetsize cannot be less than 512 or more than 65535.
-        #       Typical choice is 4096.
-        edns0\-max\-size          4096
+    # The version returned by a query to version.yadifa. CH TXT (alias: version\-chaos)
+    version                 "2.1.5"
 
-        # The maximum number of parallel TCP queries.
-        max\-tcp\-queries         100
+    # Set the maximum UDP packet size.  
+    # note: the packetsize cannot be less than 512 or more than 65535.
+    #       Typical choice is 4096.
+    edns0\-max\-size          4096
 
-        # The user id to use
-        uid                     yadifa
+    # The maximum number of parallel TCP queries (max\-tcp\-connections)
+    max\-tcp\-queries         100
 
-        # The group id to use
-        gid                     yadifa
+    # The minimum data rate for a TCP query (in bytes per second)
+    tcp\-query\-min\-rate      512
 
-        # The DNS port \- any DNS query will use that port unless a specific value is used
-        port                    53
+    # The user id to use (alias: user)
+    uid                     yadifa
 
-        # The interfaces to listen to.
-        # listen        0.0.0.0
-        listen                  127.0.0.1, 192.0.2.2, 192.0.2.130 port 8053, 2001:db8::2
+    # The group id to use (alias: group)
+    gid                     yadifa
 
-        # Enable the collection and logging of statistics
-        statistics              on
+    # The DNS port \- any DNS query will use that port unless a specific value is used (alias: server\-port)
+    port                    53
 
-        # Drop queries with erroneous content
-        #
-        # answer\-formerr\-packets on
-        answer\-formerr\-packets  off
+    # The interfaces to listen to.
+    # listen        0.0.0.0
+    listen                  127.0.0.1, 192.0.2.2, 192.0.2.130 port 8053, 2001:db8::2
 
-        # Maximum number of records in an AXFR packet. Set to 1 for compatibility
-        # with very old name servers
-        axfr\-maxrecordbypacket  0
+    # Type of querylog to use
+    #   0: none
+    #   1: yadifa
+    #   2: bind
+    #   3: both yadifa and bind
+    queries\-log\-type        1
 
-        # Global Access Control rules
-        #
-        # Rules can be defined on network ranges, TSIG signatures, and ACL rules
+    # Enable the collection and logging of statistics
+    statistics              on
 
-        # simple queries:
-        #
-        # allow\-query any
-        allow\-query             !192.0.2.251,any
+    # Maximum number of seconds between two statistics lines
+    statistics\-max\-period   60
 
-        # dynamic update of a zone
-        #
-        # allow\-update none
-        allow\-update            admins
+    # Drop queries with erroneous content
+    #
+    # answer\-formerr\-packets on
+    answer\-formerr\-packets  off
 
-        # dynamic update of a slave (forwarded to the master)
-        #
-        # allow\-update\-forwarding   none
-        allow\-update\-forwarding admins,key abroad\-admin\-key
+    # Maximum number of records in an AXFR packet. Set to 1 for compatibility
+    # with very old name servers (alias: axfr\-max\-record\-by\-packet)
+    axfr\-maxrecordbypacket  0
 
-        # transfer of a zone (AXFR or IXFR)
-        #
-        # allow\-transfer any
-        allow\-transfer          transferer
+    # Global Access Control rules
+    #
+    # Rules can be defined on network ranges, TSIG signatures, and ACL rules
 
-        # notify of a change in the master
-        #
-        # allow\-notify any
-        allow\-notify            master,admins
+    # simple queries:
+    #
+    # allow\-query any
+    allow\-query             !192.0.2.251,any
 
-        # If YADIFA has the controller enabled, allow control only for these
-        # clients (none by default)
-        allow\-control           localhost
+    # dynamic update of a zone
+    #
+    # allow\-update none
+    allow\-update            admins
+
+    # dynamic update of a slave (forwarded to the master)
+    #
+    # allow\-update\-forwarding   none
+    allow\-update\-forwarding admins,key abroad\-admin\-key
+
+    # transfer of a zone (AXFR or IXFR)
+    #
+    # allow\-transfer any
+    allow\-transfer          transferer
+
+    # notify of a change in the master
+    #
+    # allow\-notify any
+    allow\-notify            master,admins
+
+    # If YADIFA has the controller enabled, allow control only for these
+    # clients (none by default)
+    allow\-control           localhost
+
+    # overwrite the amount of CPUs detected by yadifad
+    cpu\-count\-override 3
+
+    # set the number of threads to serve queries
+    thread\-count\-by\-address 2
 
 </main>
 .Ve
 .RE
-.RS
+.RE
 .PP
 .RE
 .TP
@@ -222,9 +253,9 @@ Admin\-key key definition (the name is arbitrary)
 .PP
 .Vb
 <key>
-        name        abroad\-admin\-key
-        algorithm   hmac\-md5
-        secret      WorthlessKeyForExample==
+	name        abroad\-admin\-key
+	algorithm   hmac\-md5
+	secret      WorthlessKeyForExample==
 </key>
 .Ve
 .PP
@@ -236,9 +267,9 @@ Master\-slave key definition
 .PP
 .Vb
 <key>
-        name        master\-slave
-        algorithm   hmac\-md5
-        secret      MasterAndSlavesTSIGKey==
+	name        master\-slave
+	algorithm   hmac\-md5
+	secret      MasterAndSlavesTSIGKey==
 </key>
 .Ve
 .RE
@@ -260,10 +291,10 @@ Master\-slave key use
 .PP
 .Vb
 <acl>
-    transferer  key master\-slave
-    admins      192.0.2.0/24, 2001:db8::74
-    master      192.0.2.53
-    localhost   127.0.0.0/8, ::1
+	transferer  key master\-slave
+	admins      192.0.2.0/24, 2001:db8::74
+	master      192.0.2.53
+	localhost   127.0.0.0/8, ::1
 </acl>
 .Ve
 .PP
@@ -271,6 +302,74 @@ Master\-slave key use
 .RE
 .PP
 .RE
+.TP
+.B *
+NSID
+.br 
+DNS NameServer IDentifier
+.br
+.PP
+.RS
+.TP
+1.
+Example with ascii 
+.RS
+.PP
+.Vb
+<nsid>
+	ascii belgium\-brussels\-01
+</nsid>
+.Ve
+.PP
+.RE
+.TP
+2.
+Example with hex 
+.RS
+.PP
+.Vb
+<nsid>
+	hex 00320201
+</nsid>
+.Ve
+.RE
+.RE
+.PP
+.RE
+.TP
+.B *
+RRL
+.br 
+Response Rate Limiting 
+.PP
+.Vb
+        <rrl>
+            # Number of identical responses per second before responses are being limited
+            responses\-per\-second 5
+
+            # Number of errors per second before reponses are being limited
+            errors\-per\-second 5
+
+            # Random slip parameter
+            slip 10
+
+            # If enabled, the rate limits are only logged and not enforced
+            log\-only off
+
+            # Mask applied to group the IPv4 clients
+            ipv4\-prefix\-length 24
+
+            # Mask applied to group the IPv6 clients
+            ipv6\-prefix\-length 56
+
+            # Rate limits are not subject to the following clients (aka whitelist)
+            exempt\-clients none
+
+            # Enable or disable the rate limit capabilities
+            enabled yes
+        </rrl>
+.Ve
+.PP
 .TP
 .B *
 Zone 
@@ -283,17 +382,27 @@ Master domain zone config
 .PP
 .Vb
 <zone>
-        # This server is master for that zone (mandatory)
-        type        master
+	# This server is master for the zone (mandatory)
+	type            master
 
-        # The domain name (mandatory)
-        domain      mydomain.eu
+	# The domain name (mandatory)
+	domain          mydomain.eu
 
-        # The zone file, relative to 'datapath'  (mandatory for a master)
-        file        master/mydomain.eu
+	# The zone file, relative to 'datapath'  (mandatory for a master) (alias: file\-name)
+	file            master/mydomain.eu
 
-        # List of servers also notified of a change (beside the ones in the zone file)
-        also\-notify 192.0.2.84, 192.0.2.149
+	# List of servers also notified of a change (beside the ones in the zone file) (alias: notifies, notify)
+	also\-notify     192.0.2.84, 192.0.2.149
+
+	# Set the size of the journal file in KB (alias: journal\-size\-kb)
+	journal\-size    8192 
+
+	# Allow dynupdate for these ACL entries
+	allow\-update    admins
+
+	# Allow AXFR/IXFR for these ACL entries
+	allow\-transfer  transferer
+
 </zone>
 .Ve
 .PP
@@ -305,17 +414,20 @@ Slave domain zone config
 .PP
 .Vb
 <zone>
-        # This server is slave for that zone (mandatory)
-        type        slave
+	# This server is slave for that zone (mandatory)
+	type            slave
 
-        # The domain name (mandatory)
-        domain      myotherdomain.eu
+	# The domain name (mandatory)
+	domain          myotherdomain.eu
 
-        # The address of the master (mandatory for a slave, forbidden for a master)
-        masters     191.0.2.53 port 4053 key master\-slave
+	# The address of the master (mandatory for a slave, forbidden for a master) (alias: master)
+	masters         191.0.2.53 port 4053 key master\-slave
 
-        # The zone file, relative to 'datapath'.
-        file        slaves/myotherdomain.eu
+	# The zone file, relative to 'datapath'.
+	file            slaves/myotherdomain.eu
+
+	# Accept notifes from these ACL entries
+	allow\-notify    master
 </zone>
 .Ve
 .PP
@@ -348,17 +460,17 @@ Example: YADIFA running as daemon channel definition.
 .PP
 .Vb
 <channels>
-#   name        stream\-name     arguments
-    database    database.log    0644
-    dnssec      dnssec.log      0644
-    server      server.log      0644
-    statistics  statistics.log  0644
-    system      system.log      0644
-    queries     queries.log     0644
-    zone        zone.log        0644
-    all         all.log         0644
+	#   name        stream\-name     arguments
+	database    database.log    0644
+	dnssec      dnssec.log      0644
+	server      server.log      0644
+	statistics  statistics.log  0644
+	system      system.log      0644
+	queries     queries.log     0644
+	zone        zone.log        0644
+	all         all.log         0644
 
-    syslog      syslog          user
+	syslog      syslog          user
 </channels>
 .Ve
 .PP
@@ -372,11 +484,11 @@ This example shows the "stderr" and "stdout" which can also be used in the first
 .PP
 .Vb
 <channels>
-#   name        stream\-name     arguments
-    syslog      syslog          user
+	#   name        stream\-name     arguments
+	syslog      syslog          user
 
-    stderr      STDERR
-    stdout      STDOUT
+	stderr      STDERR
+	stdout      STDOUT
 </channels>
 .Ve
 .PP
@@ -405,14 +517,14 @@ Example without syslog
 .PP
 .Vb
 <loggers>
-#   bundle          debuglevel                          channels
-    database        ALL                                 database,all
-    dnssec          warning                             dnssec,all
-    server          INFO,WARNING,ERR,CRIT,ALERT,EMERG   server,all
-    statistics      *                                   statistics
-    system          *                                   system,all
-    queries         *                                   queries
-    zone            *                                   zone,all
+	#   bundle          debuglevel                          channels
+	database        ALL                                 database,all
+	dnssec          warning                             dnssec,all
+	server          INFO,WARNING,ERR,CRIT,ALERT,EMERG   server,all
+	statistics      *                                   statistics
+	system          *                                   system,all
+	queries         *                                   queries
+	zone            *                                   zone,all
 </loggers>
 .Ve
 .PP
@@ -424,14 +536,14 @@ Example with syslog
 .PP
 .Vb
 <loggers>
-#   bundle          debuglevel                          channels
-    database        ALL                                 database,syslog
-    dnssec          warning                             dnssec,syslog
-    server          INFO,WARNING,ERR,CRIT,ALERT,EMERG   server,syslog
-    stats           *                                   statistics, syslog
-    system          *                                   system,syslog
-    queries         *                                   queries,syslog
-    zone            *                                   zone,syslog
+	#   bundle          debuglevel                          channels
+	database        ALL                                 database,syslog
+	dnssec          warning                             dnssec,syslog
+	server          INFO,WARNING,ERR,CRIT,ALERT,EMERG   server,syslog
+	stats           *                                   statistics, syslog
+	system          *                                   system,syslog
+	queries         *                                   queries,syslog
+	zone            *                                   zone,syslog
 </loggers>
 .Ve
 .RE
@@ -549,7 +661,7 @@ from the sources.
 .SH VERSION
 
 .PP
-Version: 2.1.4 of 2015-10-16\&.
+Version: 2.1.5 of 2016-01-21\&.
 .PP
 .SH MAILING LISTS
 
@@ -582,7 +694,7 @@ via:
 .PP
 .TP
 Copyright 
-(C)2012\-2015, EURid
+(C) 2011\-2016, EURid
 .br
 B\-1831 Diegem, Belgium
 .br

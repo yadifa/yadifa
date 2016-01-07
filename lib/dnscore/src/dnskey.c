@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -43,6 +43,7 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
+#include "dnscore/dnscore-config.h"
 #include <arpa/inet.h>
 #include <ctype.h>
 
@@ -548,7 +549,7 @@ dnssec_key_get_tag(dnssec_key *key)
     {
         u8 rdata[2048];
 
-        u32 rdata_size = key->vtbl->dnskey_key_writerdata(key, rdata/*, sizeof(rdata)*/);
+        u32 rdata_size = key->vtbl->dnskey_key_writerdata(key, rdata);
         u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size);
 
         key->tag = tag;

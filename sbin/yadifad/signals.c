@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -58,7 +58,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(__gnu_hurd__)
 #include <execinfo.h>
 #elif defined(__sun)
 #include <ucontext.h>
@@ -443,11 +443,11 @@ signal_handler(int signo, siginfo_t* info, void* context)
                 char number[32];
                     
                 sigsegv_trytrace = FALSE;
-                    
+                
                 for(int source = 0; source <= 1; source++)
                 {
                     char *eol = (source == 0)?"\n":"";
-                    int fd;
+                    int fd = -1; /// @note edf: set to -1 to shut-up false positive "uninitialised"
                     int len;
                     
                     filepath[0] = '\0';
@@ -458,7 +458,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     signal_strcat(filepath, number);
                     signal_strcat(filepath, "-");
                     signal_int2str(number, getpid());
-                    len = signal_strcat(filepath, number);
+                    signal_strcat(filepath, number);                   
                     
                     if(source == 0)
                     {
@@ -476,6 +476,8 @@ signal_handler(int signo, siginfo_t* info, void* context)
                         }
                     }
                     
+                    len = signal_strcat(filepath, eol);  
+                    
                     if(source == 0)
                     {
                         writefully(fd, filepath, len);
@@ -486,7 +488,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                         log_err(filepath);
                     }
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(__gnu_hurd__)
                     void* buffer[MAXTRACE];
                     char** strings;
                     int n = backtrace(buffer, MAXTRACE);
@@ -501,8 +503,6 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     signal_int2str(number, now);
                     signal_strcat(filepath, number);
                     signal_strcat(filepath, " for address ");
-                    
-                    /// @note: EDF: on many Linux versions, si_addr contains 0 for non-rt signals
                     
                     signal_ptr2str(number, info->si_addr);
                     signal_strcat(filepath, number);
@@ -575,7 +575,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     if(source == 0)
                     {
                         writefully(fd, filepath, len);
-                        close_ex(fd); // fd IS initialised : (source == 0) => fd set
+                        fsync(fd); // fd IS initialised : (source == 0) => fd set
                     }
                     else
                     {
@@ -587,12 +587,12 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     signal_int2str(number, signo);
                     signal_strcat(filepath, number);
                     
-                    signal_strcat(filepath, "\n");
+                    signal_strcat(filepath, eol);
                     if(source == 0) // 0 -> output to file, else to the logger if it's on
                     {
                         writefully(fd, filepath, len);
                         printstack(fd);
-                        close_ex(fd);
+                        fsync(fd);
                     }
                     else
                     {
@@ -618,13 +618,18 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     if(source == 0)
                     {
                         writefully(fd, filepath, len);
-                        close_ex(fd);
+                        fsync(fd);
                     }
                     else
                     {
                         log_err(filepath);
                     }
 #endif
+                    if(source == 0)
+                    {
+                        close_ex(fd);
+                    }
+                    
                 } // for both sources
 
                     /**
@@ -633,7 +638,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                      *
                      */
             } // if sigsegv_trytrace
-
+            
             /* There COULD be some relevant information in the logger */
             /* try to flush it */
 
@@ -775,7 +780,11 @@ signal_handler_init()
     
     for(signal_idx = 0; handled_signals[signal_idx] != 0; signal_idx++)
     {
+#ifdef SA_NOCLDWAIT
         action.sa_flags = SA_SIGINFO | SA_NOCLDSTOP | SA_NOCLDWAIT;
+#else /// @note 20151119 edf -- quick fix for Debian Hurd i386, and any other system missing SA_NOCLDWAIT
+        action.sa_flags = SA_SIGINFO | SA_NOCLDSTOP;
+#endif
         
         switch(signal_idx)
         {

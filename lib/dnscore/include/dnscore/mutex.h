@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -71,6 +71,10 @@ extern "C"
 #ifndef MUTEX_USE_SPINLOCK
 #define MUTEX_USE_SPINLOCK 0 // keep it that way
 #endif
+    
+#if MUTEX_USE_SPINLOCK && DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#error "Cannot mix spinlock and mutex debug support"
+#endif
 
 // these two are for error reporting in debug builds
 #define MUTEX_LOCKED_TOO_MUCH_TIME_US 5000000
@@ -79,7 +83,7 @@ extern "C"
 // DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
     
 #if !MUTEX_USE_SPINLOCK // do not use SPINLOCK
-
+    
 #if !DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
 typedef pthread_mutex_t mutex_t;
 

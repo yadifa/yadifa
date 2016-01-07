@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -40,6 +40,7 @@
 #define SERVER_C_
 #define MODULE_MSG_HANDLE g_client_logger
 
+#include "client-config.h"
 #include <unistd.h>
 #include <sys/time.h>
 

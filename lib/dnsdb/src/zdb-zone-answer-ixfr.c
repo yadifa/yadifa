@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -40,6 +40,7 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
+#include "dnsdb/dnsdb-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -68,13 +69,28 @@
 
 #include "dnsdb/zdb-zone-answer-axfr.h"
 
+#define TCP_BUFFER_SIZE     4096
+#define FILE_BUFFER_SIZE    4096
+
+#define RECORD_MODE_DELETE  0
+#define RECORD_MODE_ADD     1
+
+#define ZAIXFRRB_TAG 0x425252465849415a
+
+/*
+ * Typically it goes 4 3 [2,1]+ 0
+ */
+
 #define MODULE_MSG_HANDLE g_database_logger
+extern logger_handle* g_database_logger;
 
 #define TCP_BUFFER_SIZE     4096
 #define FILE_BUFFER_SIZE    4096
 
 #define RECORD_MODE_DELETE  0
 #define RECORD_MODE_ADD     1
+
+#define ZAIXFRRB_TAG 0x425252465849415a
 
 /*
  * Typically it goes 4 3 [2,1]+ 0
@@ -87,6 +103,8 @@ extern logger_handle* g_database_logger;
 #endif
 
 typedef struct zdb_zone_answer_ixfr_args zdb_zone_answer_ixfr_args;
+
+#define ZAIXFRA_TAG 0x4152465849415a
 
 struct zdb_zone_answer_ixfr_args
 {
@@ -241,16 +259,12 @@ zdb_zone_answer_ixfr_thread(void* data_)
     
     /* The packet writer */
 
-    packet_writer pw;
-
     /* Current SOA */
 
     u32 current_soa_rdata_size;
     //u16 target_soa_rdata_size = MAX_SOA_RDATA_LENGTH;
     
     struct type_class_ttl_rdlen current_soa_tctrl;    
-    u8 current_soa_rdata_buffer[MAX_SOA_RDATA_LENGTH];    
-    u8 target_soa_rdata_buffer[MAX_SOA_RDATA_LENGTH];
 
     /*
      */
@@ -259,6 +273,11 @@ zdb_zone_answer_ixfr_thread(void* data_)
     struct type_class_ttl_rdlen tctrl;
     u32 qname_size;
     u32 rdata_size;
+    
+    packet_writer pw;
+    
+    u8 current_soa_rdata_buffer[MAX_SOA_RDATA_LENGTH];    
+    u8 target_soa_rdata_buffer[MAX_SOA_RDATA_LENGTH];
     u8 fqdn[MAX_DOMAIN_LENGTH];
 
     /*
@@ -268,20 +287,13 @@ zdb_zone_answer_ixfr_thread(void* data_)
     
     u32 serial = 0;
     u16 an_record_count = 0;
-    u8  record_mode;
-    
+
     u32 packet_size_limit;
     u32 packet_size_trigger;
 
 #if ZDB_HAS_TSIG_SUPPORT
     tsig_tcp_message_position pos = TSIG_START;
 #endif
-    /*
-     */
-
-    u32 last_valid_serial = ~0;
-    u32 last_valid_offset = DNS_HEADER_LENGTH;
-    u16 last_valid_count = 0;
 
     /*
      * relevant data for when data is not usable anymore
@@ -419,7 +431,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
     
     /* fis points to the IX stream */
     
-    MALLOC_OR_DIE(u8*, rdata_buffer, RDATA_MAX_LENGTH, GENERIC_TAG);    /* rdata max size */
+    MALLOC_OR_DIE(u8*, rdata_buffer, RDATA_MAX_LENGTH, ZAIXFRRB_TAG);    /* rdata max size */
 
     /***********************************************************************/
     
@@ -432,7 +444,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
 
     packet_size_limit = DNSPACKET_MAX_LENGTH;
     
-    packet_size_trigger = packet_size_limit / 2;
+    packet_size_trigger = packet_size_limit / 2; // so, ~32KB, also : guarantees that there will be room for SOA & TSIG
 
     mesg->size_limit = packet_size_limit;
 
@@ -479,192 +491,33 @@ zdb_zone_answer_ixfr_thread(void* data_)
 
     an_record_count = 1 /*2*/;
 
-    record_mode = RECORD_MODE_ADD;
+    bool end_of_stream = FALSE;
     
-    u32 closed_packet_limit = pw.packet_limit - (dnsname_len(origin) + 8 + current_soa_rdata_size);
-
     for(;;)
     {
-        /* read the next record, could be factorised using the record reader from inisde journal_ix */
-        
         if(FAIL(return_value = zdb_zone_answer_ixfr_read_record(&fis, fqdn, &qname_size, &tctrl, rdata_buffer, &rdata_size)))
         {
-            /*
-             * Critical error.
-             */
+            // critical error.
 
             log_err("zone write ixfr: read record #%d failed %{dnsname} %d: %r", an_record_count, origin, serial, return_value);
-
             break;
         }
-
-        if(return_value > 0)
+        
+        u32 record_lenght = return_value;
+        
+#if 0
+        // DEBUG
         {
-            if(pw.packet_offset + return_value <= closed_packet_limit)
-            {
-                if(tctrl.qtype == TYPE_SOA)
-                {
-                    if(record_mode != RECORD_MODE_DELETE)
-                    {
-                        record_mode = RECORD_MODE_DELETE;
-
-                        rr_soa_get_serial(rdata_buffer, rdata_size, &last_valid_serial);
-                        last_valid_offset = pw.packet_offset;
-                        last_valid_count  = an_record_count;
-
-                        /*
-                         * Check if we already got (beyond) the "being nice" limit
-                         */
-
-                        if(pw.packet_offset >= packet_size_trigger)
-                        {
-                            /*
-                             * Yes : flush
-                             */
-
-                            /*
-                             * End
-                             */
-
-                            MESSAGE_SET_AN(mesg->buffer, htons(an_record_count));
-                            mesg->send_length = pw.packet_offset;
-
-#if ZDB_HAS_TSIG_SUPPORT
-                            if(FAIL(return_value = zdb_zone_answer_ixfr_send_message(&tcpos, &pw, mesg, pos)))
-#else
-                            if(FAIL(return_value = zdb_zone_answer_ixfr_send_message(&tcpos, &pw, mesg)))
-#endif
-                            {
-                                log_err("zone write ixfr: send message failed %{dnsname}: %r", origin, return_value);
-
-                                break;
-                            }
-
-#if ZDB_HAS_TSIG_SUPPORT
-                            pos = TSIG_MIDDLE;
-#endif
-                            packet_writer_init(&pw, mesg->buffer, mesg->received, packet_size_limit - 780);
-
-                            /*
-                             * Init
-                             */
-
-                            an_record_count = 0;
-                        }
-                    }
-                    else
-                    {
-                        record_mode = RECORD_MODE_ADD;
-                    }
-                }
-
-                /* Add the record */
-
-                packet_writer_add_fqdn(&pw, (const u8*)fqdn);
-                packet_writer_add_bytes(&pw, (const u8*)&tctrl, 8);
-                packet_writer_add_rdata(&pw, tctrl.qtype, rdata_buffer, rdata_size);
-
-                an_record_count++;
-            }
-            else
-            {
-                /*
-                 * packet would overflow with this record
-                 * cut to the last valid status of the packet
-                 *
-                 * SAVE WHAT HAS ALREADY BEEN WRITTEN
-                 * 
-                 */
-
-                serial = last_valid_serial;
-                pw.packet_offset = last_valid_offset;
-                an_record_count = last_valid_count;
-
-                /*
-                 * End
-                 */
-
-                packet_writer_add_fqdn(&pw, (const u8*)origin);
-                packet_writer_add_bytes(&pw, (const u8*)&current_soa_tctrl, 8);
-                packet_writer_add_rdata(&pw, TYPE_SOA, current_soa_rdata_buffer, current_soa_rdata_size);
-
-                an_record_count++;
-
-                MESSAGE_SET_AN(mesg->buffer, htons(an_record_count));
-                mesg->send_length = pw.packet_offset;
-
-#if ZDB_HAS_TSIG_SUPPORT
-                if(FAIL(return_value = zdb_zone_answer_ixfr_send_message(&tcpos, &pw, mesg, pos)))
-#else
-                if(FAIL(return_value = zdb_zone_answer_ixfr_send_message(&tcpos, &pw, mesg)))
-#endif
-                {
-                    log_err("zone write ixfr: send message failed %{dnsname}: %r", origin, return_value);
-
-                    break;
-                }
-
-#if ZDB_HAS_TSIG_SUPPORT
-                pos = TSIG_MIDDLE;
-#endif
-
-                input_stream_close(&fis);
-                /*
-                if(FAIL(return_value = zdb_icmtl_open_ix_get_soa(origin, directory, serial, &fis, &tctrl, rdata_buffer, &rdata_size)))
-                {
-                    log_err("zone write ixfr: path '" ICMTL_WIRE_FILE_FORMAT "': %r", directory, origin, return_value);
-
-                    break;
-                }
-                */
-                buffer_input_stream_init(&fis, &fis, FILE_BUFFER_SIZE);
-
-                packet_writer_init(&pw, mesg->buffer, mesg->received, packet_size_limit - 780);
-
-                /*
-                 * Init
-                 */
-
-                packet_writer_add_fqdn(&pw, (const u8*)origin);
-                packet_writer_add_bytes(&pw, (const u8*)&current_soa_tctrl, 8);
-                packet_writer_add_rdata(&pw, TYPE_SOA, current_soa_rdata_buffer, current_soa_rdata_size);
-
-                /*
-                 * Begin
-                 */
-
-                packet_writer_add_fqdn(&pw, (const u8*)origin);
-                packet_writer_add_bytes(&pw, (const u8*)&tctrl, 8);
-                packet_writer_add_rdata(&pw, tctrl.qtype, rdata_buffer, rdata_size);
-
-                an_record_count = 2;
-
-                /*
-                 * Loop up and redo the job from where we did cut
-                 */
-            }
+            rdata_desc rr_desc = {tctrl.qtype, rdata_size, rdata_buffer};                            
+            log_debug("zone write ixfr: %{dnsname}: peek: (%3i) %{dnsname} %{typerdatadesc}", origin, record_lenght, fqdn, &rr_desc);
         }
-        else
+#endif
+        
+        if(record_lenght == 0)
         {
-            /*
-             * EOF
-             *
-             * We have to add the end soa and send the paquet.
-             * Then we are done.
-             */
-
-            /*
-             * End
-             */
-
-            packet_writer_add_fqdn(&pw, (const u8*)origin);
-            packet_writer_add_bytes(&pw, (const u8*)&current_soa_tctrl, 8);
-            packet_writer_add_rdata(&pw, TYPE_SOA, current_soa_rdata_buffer, current_soa_rdata_size);
-
-            an_record_count++;
-
-            MESSAGE_SET_AN(mesg->buffer, htons(an_record_count));
-            mesg->send_length = pw.packet_offset;
+#if DEBUG
+            log_debug("zone write ixfr: %{dnsname}: end of stream", origin);
+#endif
 
 #if ZDB_HAS_TSIG_SUPPORT
             if(pos != TSIG_START)
@@ -675,18 +528,67 @@ zdb_zone_answer_ixfr_thread(void* data_)
             {
                 pos = TSIG_WHOLE;
             }
+#endif
+            // Last SOA
+            // There is no need to check for remaining space as packet_size_trigger guarantees there is still room
+
+            packet_writer_add_fqdn(&pw, (const u8*)origin);
+            packet_writer_add_bytes(&pw, (const u8*)&current_soa_tctrl, 8); /* not 10 ? */
+            packet_writer_add_rdata(&pw, TYPE_SOA, current_soa_rdata_buffer, current_soa_rdata_size);
+
+            ++an_record_count;
+            
+            end_of_stream = TRUE;
+        }
+        else if(record_lenght > MAX_U16) // technically possible: a record too big to fit in an update (not likely)
+        {
+            // this is technically possible with an RDATA of 64K
+            log_err("zone write ixfr: %{dnsname}: ignoring record of size %u", origin, record_lenght);
+            rdata_desc rr_desc = {tctrl.qtype, rdata_size, rdata_buffer};                            
+            log_err("zone write ixfr: %{dnsname}: record is: %{dnsname} %{typerdatadesc}", origin, return_value, fqdn, &rr_desc);
+            continue;
+        }
+        
+        // if the record puts us above the trigger, or if there is no more record to read, send the message
+        
+        if(pw.packet_offset + record_lenght >= packet_size_trigger || end_of_stream)
+        {
+            // flush
+
+            MESSAGE_SET_AN(mesg->buffer, htons(an_record_count));
+            mesg->send_length = pw.packet_offset;
+
+#if ZDB_HAS_TSIG_SUPPORT
             if(FAIL(return_value = zdb_zone_answer_ixfr_send_message(&tcpos, &pw, mesg, pos)))
 #else
             if(FAIL(return_value = zdb_zone_answer_ixfr_send_message(&tcpos, &pw, mesg)))
 #endif
             {
                 log_err("zone write ixfr: send message failed %{dnsname}: %r", origin, return_value);
+
+                break;
             }
 
-            break;
+#if ZDB_HAS_TSIG_SUPPORT
+            pos = TSIG_MIDDLE;
+#endif
+            packet_writer_init(&pw, mesg->buffer, mesg->received, packet_size_limit - 780);
+
+            an_record_count = 0;
+            
+            if(end_of_stream)
+            {
+                break;
+            }
         }
+
+        packet_writer_add_fqdn(&pw, (const u8*)fqdn);
+        packet_writer_add_bytes(&pw, (const u8*)&tctrl, 8);
+        packet_writer_add_rdata(&pw, tctrl.qtype, rdata_buffer, rdata_size);
+        
+        ++an_record_count;
     }
-    
+        
     if(ISOK(return_value))
     {
         log_info("zone write ixfr: %{dnsname} ixfr stream sent", origin);
@@ -709,6 +611,20 @@ zdb_zone_answer_ixfr_thread(void* data_)
     return NULL;
 }
 
+/**
+ * 
+ * Replies an (I)XFR stream to a slave.
+ * 
+ * @param zone The zone 
+ * @param mesg The original query
+ * @param network_tp The network thread pool to use
+ * @param disk_tp The disk thread pool to use
+ * @param packet_size_limit the maximum size of a packet/message in the stream
+ * @param packet_records_limit The maximum number of records in a single message (1 for very old servers)
+ * @param compress_dname_rdata Allow fqdn compression
+ * 
+ */
+
 void
 zdb_zone_answer_ixfr(zdb_zone* zone, message_data *mesg, struct thread_pool_s *network_tp, struct thread_pool_s *disk_tp, u32 packet_size_limit, u32 packet_records_limit, bool compress_dname_rdata)
 {
@@ -716,7 +632,7 @@ zdb_zone_answer_ixfr(zdb_zone* zone, message_data *mesg, struct thread_pool_s *n
         
     log_info("zone write ixfr: queueing %{dnsname}", zone->origin);
     
-    MALLOC_OR_DIE(zdb_zone_answer_ixfr_args*, args, sizeof(zdb_zone_answer_ixfr_args), GENERIC_TAG);
+    MALLOC_OR_DIE(zdb_zone_answer_ixfr_args*, args, sizeof(zdb_zone_answer_ixfr_args), ZAIXFRA_TAG);
     args->zone = zone;
     //args->directory = "/tmp"; // strdup(journal_get_xfr_path());
 

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -38,6 +38,7 @@
  * @{
  */
 
+#include "server-config.h"
 #include "config.h"
 
 #include <stdio.h>
@@ -128,6 +129,8 @@ ixfr_process(message_data *mesg)
                 {                
                     if(serial_lt(query_serial, zone_serial))
                     {
+                        // reply with the relevant XFR stream
+                        
                         zdb_zone_answer_ixfr(zone, mesg, NULL, NULL, g_config->axfr_max_packet_size, g_config->axfr_max_record_by_packet, g_config->axfr_compress_packets);
                         
                         return SUCCESS;
@@ -435,7 +438,6 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
                 case TYPE_IXFR:
                 {
                     log_info("ixfr: %{dnsname}: loading IXFR stream from server %{hostaddr} into the journal", zone->origin, servers);
-                    
                     return_value = zdb_zone_journal_append_ixfr_stream(zone, &xfris);
                     
                     u32 ixfr_from_serial;
@@ -449,12 +451,9 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
 #endif
                     if(ISOK(return_value))
                     {
-                        zdb_zone_lock(zone, ZDB_ZONE_MUTEX_LOAD);
-                        
                         ya_result ret;
                         
                         log_info("ixfr: %{dnsname}: replaying journal (%u;%u)", zone->origin, ixfr_from_serial, *out_loaded_serial);
-                        
                         if(ISOK(ret = zdb_icmtl_replay(zone)))
                         {
                             log_info("ixfr: %{dnsname}: journal replayed", zone->origin);
@@ -464,8 +463,6 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
                             return_value = ret;
                             log_err("zone load: journal replay returned %r", return_value);
                         }
-                        
-                        zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_LOAD);
                         
                         if(ISOK(ret) && serial_lt(*out_loaded_serial, expected_serial))
                         {

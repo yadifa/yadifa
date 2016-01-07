@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -1166,8 +1166,13 @@
 
 /* -----------------------------------------------------------------*/
 
+#ifdef WORDS_BIGENDIAN
 #define     DNSKEY_FLAG_KEYSIGNINGKEY       0x0001
 #define     DNSKEY_FLAG_ZONEKEY             0x0100
+#else
+#define     DNSKEY_FLAG_KEYSIGNINGKEY       0x0100
+#define     DNSKEY_FLAG_ZONEKEY             0x0001
+#endif
 
 #define     DNSKEY_PROTOCOL_FIELD               3       /* MUST be this */
 

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -262,7 +262,12 @@ static inline bool zdb_rr_label_is_glue(zdb_rr_label* label)
 #endif
 
 /* 0 USES */
-#define RR_LABEL_HASRECORDS(rr_label_) btree_isempty(&(rr_label_)->resource_record_set)
+
+static inline bool zdb_rr_label_has_records(zdb_rr_label *rr_label)
+{
+    bool ret = btree_notempty(rr_label->resource_record_set);
+    return ret;
+}
 
 #ifdef DEBUG
 

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -40,12 +40,9 @@
  * @{
  */
 
+#include "dnsdb/dnsdb-config.h"
 #include <unistd.h>
 #include <arpa/inet.h>
-
-#ifdef DEBUG
-#include <dnscore/format.h>
-#endif
 
 #include <dnscore/mutex.h>
 
@@ -235,7 +232,7 @@ zdb_zone_lock(zdb_zone *zone, u8 owner)
         if(d > MUTEX_WAITED_TOO_MUCH_TIME_US)
         {
             log_warn("zdb_zone_lock(%{dnsname},%x) : waited for %llius already ...", zone->origin, owner, d);
-            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "zdb_zone_double_lock:");
+            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "zdb_zone_lock:");
         }
         cond_timedwait(&zone->lock_cond, mutex, MUTEX_WAITED_TOO_MUCH_TIME_US);
 #else
@@ -552,7 +549,7 @@ zdb_zone_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
         if(d > MUTEX_WAITED_TOO_MUCH_TIME_US)
         {
             log_warn("zdb_zone_transfer_lock(%{dnsname},%x,%x) : waited for %llius already ...", zone->origin, owner, secondary_owner, d);
-            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "zdb_zone_double_lock:");
+            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "zdb_zone_transfer_lock:");
         }
 #endif
         
@@ -566,6 +563,11 @@ zdb_zone_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 #if ZONE_MUTEX_LOG
     log_debug7("transferred lock for zone %{dnsname}@%p from %x to %x (#%i)", zone->origin, zone, owner, secondary_owner, zone->lock_count);
 #endif
+    
+    if((secondary_owner & 0x80) == 0)
+    {
+        cond_notify(&zone->lock_cond);
+    }
 
     mutex_unlock(&zone->lock_mutex);
     
@@ -608,6 +610,12 @@ zdb_zone_try_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
     {
         zone->lock_owner = secondary_owner & 0x7f;
         zone->lock_reserved_owner = ZDB_ZONE_MUTEX_NOBODY;
+        
+        if((secondary_owner & 0x80) == 0)
+        {
+            cond_notify(&zone->lock_cond);
+        }
+        
         mutex_unlock(&zone->lock_mutex);
         
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
@@ -663,7 +671,7 @@ zdb_zone_exchange_locks(zdb_zone *zone, u8 owner, u8 secondary_owner)
         if(d > MUTEX_WAITED_TOO_MUCH_TIME_US)
         {
             log_warn("zdb_zone_transfer_lock(%{dnsname},%x,%x) : waited for %llius already ...", zone->origin, owner, secondary_owner, d);
-            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "zdb_zone_double_lock:");
+            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "zdb_zone_transfer_lock:");
         }
 #endif
         
@@ -677,6 +685,11 @@ zdb_zone_exchange_locks(zdb_zone *zone, u8 owner, u8 secondary_owner)
 #if ZONE_MUTEX_LOG
     log_debug7("exchanged locks for zone %{dnsname}@%p from %x to %x (#%i)", zone->origin, zone, owner, secondary_owner, zone->lock_count);
 #endif
+    
+    if((secondary_owner & 0x80) == 0)
+    {
+        cond_notify(&zone->lock_cond);
+    }
 
     mutex_unlock(&zone->lock_mutex);
     

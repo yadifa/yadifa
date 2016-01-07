@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -159,6 +159,8 @@ dnssec_keystore_add(dnssec_key* key)
 
     pthread_mutex_lock(&keystore_mutex);
 
+    dnssec_key_get_tag(key);    // update the tag field
+    
     dnssec_key** head = (dnssec_key**)btree_insert(&g_keystore, KEY_HASH(key));
 
     /* head will NEVER be NULL */
@@ -515,7 +517,11 @@ dnssec_key_load_private(u8 algorithm, u16 tag, u16 flags, const char* origin, dn
                 dnssec_keystore_remove(algorithm, tag, flags, origin);
             }
             
-            dnssec_keystore_add(key);
+            if(FAIL(return_value = dnssec_keystore_add(key)))
+            {
+                dnskey_free(key); // something is wrong here ...
+                key = NULL;
+            }
             
             *out_key = key;
         }
@@ -696,15 +702,12 @@ dnssec_key_addrecord(zdb_zone* zone, dnssec_key* key)
 {
     zdb_packed_ttlrdata* dnskey;
 
-    u32 rdata_size = key->vtbl->dnskey_key_rdatasize(key) + 4;
+    u32 rdata_size = key->vtbl->dnskey_key_rdatasize(key);
 
     ZDB_RECORD_ZALLOC_EMPTY(dnskey, 86400, rdata_size);
     u8* rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(dnskey);
 
-    SET_U16_AT(rdata[0], htons(key->flags)); /// @todo 20140523 edf -- DNSKEY NATIVEFLAGS
-    rdata[2] = DNSKEY_PROTOCOL_FIELD;
-    rdata[3] = key->algorithm;
-    key->vtbl->dnskey_key_writerdata(key, &rdata[4]);
+    key->vtbl->dnskey_key_writerdata(key, rdata);
 
     /*
      * The DNSKEY record is done

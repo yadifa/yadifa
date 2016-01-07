@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -42,6 +42,7 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
+#include "dnsdb/dnsdb-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -118,6 +119,22 @@ zdb_listener_notify_remove_record(const zdb_zone *zone, const u8 *dnsname, u16 t
         listener->on_remove_record(listener, zone, dnsname, type, record);
         listener = listener->next;
     }
+}
+
+bool
+zdb_listener_notify_has_changes(const zdb_zone *zone)
+{
+    zdb_listener* listener = first;
+
+    while(listener != NULL)
+    {
+        if(listener->has_changes(listener, zone))
+        {
+            return TRUE;
+        }
+        listener = listener->next;
+    }
+    return FALSE;
 }
 
 #if ZDB_HAS_NSEC3_SUPPORT != 0

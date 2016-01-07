@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -46,6 +46,7 @@
 #endif
 
 
+#include "dnscore/dnscore-config.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -91,12 +92,6 @@ static inline void file_input_stream_debug_bench_register()
 static ya_result
 file_read(input_stream* stream_, u8* buffer, u32 len)
 {
-#ifdef SSIZE_MAX
-#if SSIZE_MAX < 0xffffffffU
-#pragma message "POTENTIAL UNSPECIFIED RESULT IF len IS BIGGER THAN SSIZE_MAX=" TOSTRING(SSIZE_MAX) " LONG_MAX=" TOSTRING(LONG_MAX)
-#endif
-#endif
-
 #if DEBUG_BENCH_FD
     file_input_stream_debug_bench_register();
     u64 bench = debug_bench_start(&debug_read);
@@ -108,8 +103,11 @@ file_read(input_stream* stream_, u8* buffer, u32 len)
 
     while(len > 0)
     {
+#if defined(SSIZE_MAX) && (SSIZE_MAX < 0xffffffffU)
+        ssize_t ret = read(stream->data.fd, buffer, MIN(len, SSIZE_MAX));
+#else
         ssize_t ret = read(stream->data.fd, buffer, len);
-
+#endif
         if(ret < 0)
         {
             int err = errno;
@@ -202,7 +200,7 @@ file_input_stream_open(const char *filename, input_stream *stream_)
 {
     int fd = open_ex(filename, O_RDONLY);
     
-#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
+#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
     if(fd >= 0)
     {
         posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
@@ -217,7 +215,7 @@ file_input_stream_open_ex(const char *filename, int flags, input_stream *stream_
 {
     int fd = open_ex(filename, O_RDONLY | flags);
     
-#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
+#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
     if(fd >= 0)
     {
         posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
@@ -273,7 +271,7 @@ void file_input_steam_advise_sequential(input_stream* stream_)
 {
     file_input_stream* stream = (file_input_stream*)stream_;
     
-#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
+#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu_hurd__)
     if(stream->data.fd >= 0)
     {
         posix_fadvise(stream->data.fd, 0, 0, POSIX_FADV_SEQUENTIAL);

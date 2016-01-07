@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -116,7 +116,8 @@ typedef ya_result zdb_zone_info_provider_callback(const u8 *origin, zdb_zone_inf
 #define ZDB_ZONE_INFO_PROVIDER_MAX_JOURNAL_SIZE    0x101 // u32
 #define ZDB_ZONE_INFO_PROVIDER_ZONE_TYPE           0x102 // u8 (ZT_MASTER, ZT_SLAVE, ...)
 
-#define ZDB_ZONE_INFO_PROVIDER_STORE_NOW           0x10000 
+#define ZDB_ZONE_INFO_PROVIDER_STORE_TRIGGER       0x10000 // NULL, enqueues the storage of the zone
+#define ZDB_ZONE_INFO_PROVIDER_STORE_NOW           0x10001 // ?, stores the zone now, in this thread
 
 void zdb_zone_info_set_provider(zdb_zone_info_provider_callback *data);
 zdb_zone_info_provider_callback *zdb_zone_info_get_provider();
@@ -127,8 +128,10 @@ ya_result zdb_zone_info_get_zone_max_journal_size(const u8 *origin, u32 *size);
 
 ya_result zdb_zone_info_get_zone_type(const u8 *origin, u8 *zt);
 
-ya_result zdb_zone_info_store_zone(const u8 *origin);
+ya_result zdb_zone_info_store_locked_zone(const u8 *origin);
 
-ya_result zdb_zone_info_store_zone_and_wait_for_serial(const u8 *origin, u32 minimum_serial);
+ya_result zdb_zone_info_background_store_zone(const u8 *origin);
+
+ya_result zdb_zone_info_background_store_zone_and_wait_for_serial(const u8 *origin, u32 minimum_serial);
 
 /** @} */

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -38,6 +38,7 @@
  * @{
  */
 
+#include "dnscore/dnscore-config.h"
 #include "dnscore/logger.h"
 #include "dnscore/alarm.h"
 #include "dnscore/mutex.h"
@@ -265,6 +266,9 @@ alarm_event_remove(alarm_event_list *hndl, alarm_event_list *time, alarm_event_n
     else
     {
         time->first = node->time_next;
+        // scan-build false positive : time cannot be null because the call
+        // that provides the value only gives a null for non-existing nodes
+        // AND the call is made using an existing node (not null).
     }
 
     node->time_next->time_prev = node->time_prev;
@@ -326,6 +330,7 @@ static alarm_time_node *
 alarm_time_create(u32 epoch)
 {
     assert(alarm_pthread_mutex_locked);
+    assert(epoch > 0);
     assert(epoch != MAX_U32);
     
     alarm_time_node *prev = &time_list;

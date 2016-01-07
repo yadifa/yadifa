@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -43,12 +43,12 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
+#include "dnsdb/dnsdb-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "dnsdb/zdb_utils.h"
 #include <dnscore/logger.h>
-#include <dnscore/format.h>
 #include <dnscore/ptr_set.h>
 #include <dnscore/bytearray_output_stream.h>
 
@@ -83,7 +83,7 @@ struct icmtl_dnssec_listener
     zdb_listener_on_remove_type_callback* on_remove_record_type;
     zdb_listener_on_add_record_callback* on_add_record;
     zdb_listener_on_remove_record_callback* on_remove_record;
-
+    zdb_listener_has_changes_callback* has_changes;
 #if ZDB_HAS_NSEC3_SUPPORT!=0
     zdb_listener_on_add_nsec3_callback* on_add_nsec3;
     zdb_listener_on_remove_nsec3_callback* on_remove_nsec3;
@@ -96,18 +96,30 @@ struct icmtl_dnssec_listener
     zdb_listener* next;
 
     /* Proprietary */
+    
+#if !USE_SET_FOR_OUTPUT
     output_stream os_remove;
     output_stream os_add;
+#else
+    output_stream ostream_remove;
+    output_stream ostream_add;
     output_stream rr_tmp_stream;
     ptr_set rr_remove;
     ptr_set rr_add;
+#endif
     
     u8* origin;
     u32 origin_len;
 };
 
+/**
+ * This function puts a zallocated copy of the rr_tmp_stream in the listener in the set for removal
+ * 
+ * @param listener
+ */
+
 static void
-icmtl_push_record_to_remove(icmtl_zdb_listener* listener)
+icmtl_push_stream_record_to_remove(icmtl_zdb_listener* listener)
 {
     u32 size = bytearray_output_stream_size(&listener->rr_tmp_stream);
     u8* buffer = bytearray_output_stream_buffer(&listener->rr_tmp_stream);
@@ -120,14 +132,19 @@ icmtl_push_record_to_remove(icmtl_zdb_listener* listener)
 #ifdef DEBUG
         log_debug1("icmtl: will remove %u@%p", size, rr);
 #endif
-        
         ptr_set_avl_insert(&listener->rr_remove, rr)->value = rr;
     }
     bytearray_output_stream_reset(&listener->rr_tmp_stream);
 }
 
+/**
+ * This function puts a zallocated copy of the rr_tmp_stream in the listener in the set for adding
+ * 
+ * @param listener
+ */
+
 static void
-icmtl_push_record_to_add(icmtl_zdb_listener* listener)
+icmtl_push_stream_record_to_add(icmtl_zdb_listener* listener)
 {
     // T049JP0TTR6PEQMFNFIK0OUIMD4F62PS
     u32 size = bytearray_output_stream_size(&listener->rr_tmp_stream);
@@ -196,12 +213,19 @@ icmtl_on_remove_record_type_callback(zdb_listener *base_listener, const zdb_zone
             ttlrdata.rdata_pointer = &rr_sll->rdata_start[0];
             ttlrdata.rdata_size = rr_sll->rdata_size;
             ttlrdata.ttl = rr_sll->ttl;
-                        
+            
+#if USE_SET_FOR_OUTPUT
+            output_stream_write_wire_dnsname(&listener->rr_tmp_stream,
+                                     dnsname,
+                                     type,
+                                     &ttlrdata);
+            icmtl_push_stream_record_to_remove(listener);
+#else
             output_stream_write_wire_dnsname(&listener->os_remove,
                                      dnsname,
                                      type,
                                      &ttlrdata);
-
+#endif
             rr_sll = rr_sll->next;
         }
     }
@@ -222,12 +246,19 @@ icmtl_on_remove_record_type_callback(zdb_listener *base_listener, const zdb_zone
                 ttlrdata.rdata_pointer = &rr_sll->rdata_start[0];
                 ttlrdata.rdata_size = rr_sll->rdata_size;
                 ttlrdata.ttl = rr_sll->ttl;
-                
+
+#if USE_SET_FOR_OUTPUT
+                output_stream_write_wire_dnsname(&listener->rr_tmp_stream,
+                                         dnsname,
+                                         node_type,
+                                         &ttlrdata);
+                icmtl_push_stream_record_to_remove(listener);
+#else
                 output_stream_write_wire_dnsname(&listener->os_remove,
                                          dnsname,
                                          node_type,
                                          &ttlrdata);
-
+#endif
                 rr_sll = rr_sll->next;
             }
         }
@@ -248,13 +279,21 @@ icmtl_on_add_record_callback(zdb_listener *base_listener, const zdb_zone *zone, 
     rdata_desc rdatadesc = {type, record->rdata_size, record->rdata_pointer};
     u8 label[MAX_DOMAIN_LENGTH + 1];
     dnslabel_vector_to_dnsname(labels, top, label);
-    log_debug("incremental: add %{dnsname} %d IN %{typerdatadesc}", label, record->ttl, &rdatadesc);
+    log_debug("icmtl: add %{dnsname} %d IN %{typerdatadesc}", label, record->ttl, &rdatadesc);
 #endif
-    
+
+#if USE_SET_FOR_OUTPUT
+    output_stream_write_wire(&listener->rr_tmp_stream,
+                 labels, top,
+                 type,
+                 record);
+    icmtl_push_stream_record_to_add(listener);
+#else
     output_stream_write_wire(&listener->os_add,
                              labels, top,
                              type,
                              record);
+#endif
 }
 
 static void
@@ -269,13 +308,34 @@ icmtl_on_remove_record_callback(zdb_listener *base_listener, const zdb_zone *zon
     
 #if DEBUG_ICMTL_RECORDS
     rdata_desc rdatadesc = {type, record->rdata_size, record->rdata_pointer};
-    log_debug("incremental: del %{dnsname} %d IN %{typerdatadesc}", dnsname, record->ttl, &rdatadesc);
+    log_debug("icmtl: del %{dnsname} %d IN %{typerdatadesc}", dnsname, record->ttl, &rdatadesc);
 #endif
     
+#if USE_SET_FOR_OUTPUT
+    output_stream_write_wire_dnsname(&listener->rr_tmp_stream,
+                dnsname,
+                type,
+                record);
+    icmtl_push_stream_record_to_remove(listener);
+#else
     output_stream_write_wire_dnsname(&listener->os_remove,
                              dnsname,
                              type,
                              record);
+#endif
+}
+
+static bool
+icmtl_has_changes_callback(zdb_listener *base_listener, const zdb_zone *zone)
+{
+    icmtl_zdb_listener* listener = (icmtl_zdb_listener*)base_listener;
+
+    if(!icmtl_is_my_zone(listener, zone))
+    {
+        return FALSE;
+    }
+    
+    return !(ptr_set_avl_isempty(&listener->rr_add) && ptr_set_avl_isempty(&listener->rr_remove));
 }
 
 #if !USE_SET_FOR_OUTPUT
@@ -299,11 +359,11 @@ output_stream_write_rrsig_list_wire(output_stream* os, u8* label, u32 label_len,
 
         if(origin != NULL)
         {
-            log_debug("incremental: %{dnslabel}%{dnsname} %d IN %{typerdatadesc}", label, origin, sig_sll->ttl, &rdatadesc);
+            log_debug("icmtl: %{dnslabel}%{dnsname} %d IN %{typerdatadesc}", label, origin, sig_sll->ttl, &rdatadesc);
         }
         else
         {
-            log_debug("incremental: %{dnsname} %d IN %{typerdatadesc}", label, sig_sll->ttl, &rdatadesc);
+            log_debug("icmtl: %{dnsname} %d IN %{typerdatadesc}", label, sig_sll->ttl, &rdatadesc);
         }
 #endif
         
@@ -332,11 +392,11 @@ output_stream_write_rrsig_wire(output_stream* os, u8* label, u32 label_len, u8* 
 
         if(origin != NULL)
         {
-            log_debug("incremental: %{dnslabel}%{dnsname} %d IN %{typerdatadesc}", label, origin, sig_sll->ttl, &rdatadesc);
+            log_debug("icmtl: %{dnslabel}%{dnsname} %d IN %{typerdatadesc}", label, origin, sig_sll->ttl, &rdatadesc);
         }
         else
         {
-            log_debug("incremental: %{dnsname} %d IN %{typerdatadesc}", label, sig_sll->ttl, &rdatadesc);
+            log_debug("icmtl: %{dnsname} %d IN %{typerdatadesc}", label, sig_sll->ttl, &rdatadesc);
         }
 #endif
     }
@@ -350,7 +410,7 @@ static void
 icmtl_on_add_nsec3_callback(zdb_listener *base_listener, const zdb_zone *zone, nsec3_zone_item* nsec3_item, nsec3_zone* n3, u32 ttl)
 {
 #if DEBUG_ICMTL_RECORDS
-    log_debug("incremental: add NSEC3");
+    log_debug("icmtl: add NSEC3");
 #endif
 
     icmtl_zdb_listener* listener = (icmtl_zdb_listener*)base_listener;
@@ -366,7 +426,7 @@ icmtl_on_add_nsec3_callback(zdb_listener *base_listener, const zdb_zone *zone, n
                                      nsec3_item,
                                      listener->origin,
                                      ttl);
-    icmtl_push_record_to_add(listener);
+    icmtl_push_stream_record_to_add(listener);
 #else    
     nsec3_zone_item_to_output_stream(&listener->os_add,
                                      n3,
@@ -380,7 +440,7 @@ static void
 icmtl_on_remove_nsec3_callback(zdb_listener *base_listener, const zdb_zone *zone, nsec3_zone_item* nsec3_item, nsec3_zone* n3, u32 ttl)
 {
 #if DEBUG_ICMTL_RECORDS
-    log_debug("incremental: del NSEC3");
+    log_debug("icmtl: del NSEC3");
 #endif
 
     icmtl_zdb_listener* listener = (icmtl_zdb_listener*)base_listener;
@@ -396,7 +456,7 @@ icmtl_on_remove_nsec3_callback(zdb_listener *base_listener, const zdb_zone *zone
                                      nsec3_item,
                                      listener->origin,
                                      ttl);
-    icmtl_push_record_to_remove(listener);
+    icmtl_push_stream_record_to_remove(listener);
 #else  
     nsec3_zone_item_to_output_stream(&listener->os_remove,
                                      n3,
@@ -421,14 +481,14 @@ icmtl_on_update_nsec3rrsig_callback(zdb_listener *base_listener, const zdb_zone 
     u32 label_len = nsec3_zone_item_get_label(item, label, sizeof (label));
 
 #if DEBUG_ICMTL_RECORDS
-    log_debug("incremental: del RRSIG: (NSEC3)");
+    log_debug("icmtl: del RRSIG: (NSEC3)");
 #endif
     
 #if USE_SET_FOR_OUTPUT
     while(removed_rrsig_sll != NULL)
     {
         output_stream_write_rrsig_wire(&listener->rr_tmp_stream, label, label_len, listener->origin, listener->origin_len, removed_rrsig_sll);
-        icmtl_push_record_to_remove(listener);
+        icmtl_push_stream_record_to_remove(listener);
         removed_rrsig_sll = removed_rrsig_sll->next;
     }
 #else
@@ -438,14 +498,14 @@ icmtl_on_update_nsec3rrsig_callback(zdb_listener *base_listener, const zdb_zone 
     
     
 #if DEBUG_ICMTL_RECORDS
-    log_debug("incremental: add RRSIG: (NSEC3)");
+    log_debug("icmtl: add RRSIG: (NSEC3)");
 #endif
     
 #if USE_SET_FOR_OUTPUT
     while(added_rrsig_sll != NULL)
     {
         output_stream_write_rrsig_wire(&listener->rr_tmp_stream, label, label_len, listener->origin, listener->origin_len, added_rrsig_sll);
-        icmtl_push_record_to_add(listener);
+        icmtl_push_stream_record_to_add(listener);
         added_rrsig_sll = added_rrsig_sll->next;
     }
 #else
@@ -470,14 +530,14 @@ icmtl_on_update_rrsig_callback(zdb_listener *base_listener, const zdb_zone *zone
     u32 fqdn_len = dnsname_stack_to_dnsname(name, fqdn);
 
 #if DEBUG_ICMTL_RECORDS
-    log_debug("incremental: del RRSIG:");
+    log_debug("icmtl: del RRSIG:");
 #endif
     
 #if USE_SET_FOR_OUTPUT
     while(removed_rrsig_sll != NULL)
     {
         output_stream_write_rrsig_wire(&listener->rr_tmp_stream, fqdn, fqdn_len, NULL, 0, removed_rrsig_sll);
-        icmtl_push_record_to_remove(listener);
+        icmtl_push_stream_record_to_remove(listener);
         removed_rrsig_sll = removed_rrsig_sll->next;
     }
 #else
@@ -485,14 +545,14 @@ icmtl_on_update_rrsig_callback(zdb_listener *base_listener, const zdb_zone *zone
 #endif
     
 #if DEBUG_ICMTL_RECORDS
-    log_debug("incremental: add RRSIG:");
+    log_debug("icmtl: add RRSIG:");
 #endif
     
 #if USE_SET_FOR_OUTPUT
     while(added_rrsig_sll != NULL)
     {
         output_stream_write_rrsig_wire(&listener->rr_tmp_stream, fqdn, fqdn_len, NULL, 0, added_rrsig_sll);
-        icmtl_push_record_to_add(listener);
+        icmtl_push_stream_record_to_add(listener);
         added_rrsig_sll = added_rrsig_sll->next;
     }
 #else
@@ -508,6 +568,7 @@ static struct icmtl_dnssec_listener icmtl_listener =
     icmtl_on_remove_record_type_callback,
     icmtl_on_add_record_callback,
     icmtl_on_remove_record_callback,
+    icmtl_has_changes_callback,
 #if ZDB_HAS_NSEC3_SUPPORT != 0
     icmtl_on_add_nsec3_callback,
     icmtl_on_remove_nsec3_callback,
@@ -517,11 +578,16 @@ static struct icmtl_dnssec_listener icmtl_listener =
     icmtl_on_update_rrsig_callback,
 #endif
     NULL,
+#if !USE_SET_FOR_OUTPUT
+    {NULL,NULL},
+    {NULL,NULL},
+#else
     {NULL,NULL},
     {NULL,NULL},
     {NULL,NULL},
     {NULL,NULL},
     {NULL,NULL},
+#endif
     NULL,
     0
 };
@@ -560,7 +626,7 @@ dynupdate_icmtlhook_enable(u8* origin, output_stream* os_remove, output_stream* 
     yassert(icmtl_listener.next == NULL);
 
 #ifdef DEBUG
-    log_debug("incremental: enabled %{dnsname} for updates", origin);
+    log_debug("icmtl: enabled %{dnsname} for updates", origin);
 #endif
     
     icmtl_dnssec_listener* listener;
@@ -576,15 +642,19 @@ dynupdate_icmtlhook_enable(u8* origin, output_stream* os_remove, output_stream* 
     ZALLOC_OR_DIE(icmtl_dnssec_listener*, listener, icmtl_dnssec_listener, GENERIC_TAG);
     memcpy(listener, &icmtl_listener, sizeof(icmtl_dnssec_listener));
 
+#if !USE_SET_FOR_OUTPUT
     listener->os_remove.data = os_remove->data;
     listener->os_remove.vtbl = os_remove->vtbl;
     listener->os_add.data = os_add->data;
     listener->os_add.vtbl = os_add->vtbl;
+#else 
     bytearray_output_stream_init_ex(&listener->rr_tmp_stream, NULL, 2048, BYTEARRAY_DYNAMIC);
     listener->rr_remove.root = NULL;
     listener->rr_remove.compare = dynupdate_icmtlhook_ptr_set_rr_wire_compare;
     listener->rr_add.root = NULL;
     listener->rr_add.compare = dynupdate_icmtlhook_ptr_set_rr_wire_compare;
+#endif
+    
     listener->origin = origin;
     listener->origin_len = dnsname_len(origin);
     
@@ -598,7 +668,69 @@ dynupdate_icmtlhook_enable(u8* origin, output_stream* os_remove, output_stream* 
 }
 
 ya_result
-dynupdate_icmtlhook_disable(u8 *origin)
+dynupdate_icmtlhook_enable_wait(u8* origin, output_stream* os_remove, output_stream* os_add)
+{
+    yassert(icmtl_listener.next == NULL);
+
+#ifdef DEBUG
+    log_debug("icmtl: enabling %{dnsname} for updates", origin);
+#endif
+    
+    icmtl_dnssec_listener* listener;
+    ptr_node *node;
+    
+    for(;;)
+    {
+        mutex_lock(&icmtl_listener_mtx);
+        node = ptr_set_avl_insert(&icmtl_listener_set, origin);
+        if(node->value == NULL)
+        {
+            break;
+        }
+        mutex_unlock(&icmtl_listener_mtx);
+        node = NULL;
+        sleep(1);
+    }
+
+    ZALLOC_OR_DIE(icmtl_dnssec_listener*, listener, icmtl_dnssec_listener, GENERIC_TAG);
+    // This sets the "vtbl".  This is done a bit differently than the streams.
+    // The original reason was to patch the listener calls in some cases (for speed).
+    memcpy(listener, &icmtl_listener, sizeof(icmtl_dnssec_listener));
+
+#if !USE_SET_FOR_OUTPUT
+    listener->os_remove.data = os_remove->data;
+    listener->os_remove.vtbl = os_remove->vtbl;
+    listener->os_add.data = os_add->data;
+    listener->os_add.vtbl = os_add->vtbl;
+#else
+    
+    listener->ostream_remove.data = os_remove->data;
+    listener->ostream_remove.vtbl = os_remove->vtbl;
+    listener->ostream_add.data = os_add->data;
+    listener->ostream_add.vtbl = os_add->vtbl;
+    
+    bytearray_output_stream_init_ex(&listener->rr_tmp_stream, NULL, 2048, BYTEARRAY_DYNAMIC);
+    
+    listener->rr_remove.root = NULL;
+    listener->rr_remove.compare = dynupdate_icmtlhook_ptr_set_rr_wire_compare;
+    listener->rr_add.root = NULL;
+    listener->rr_add.compare = dynupdate_icmtlhook_ptr_set_rr_wire_compare;
+#endif
+    
+    listener->origin = origin;
+    listener->origin_len = dnsname_len(origin);
+
+    zdb_listener_chain((zdb_listener*)listener);
+
+    node->value = listener;
+
+    mutex_unlock(&icmtl_listener_mtx);
+
+    return SUCCESS;
+}
+
+ya_result
+dynupdate_icmtlhook_disable(const u8 *origin)
 {
     icmtl_dnssec_listener* listener = NULL;
     
@@ -618,14 +750,18 @@ dynupdate_icmtlhook_disable(u8 *origin)
     while(ptr_set_avl_iterator_hasnext(&iter))
     {
         ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
-        int size = dynupdate_icmtlhook_ptr_set_rr_wire_size(node->key);
-        
+        int size = dynupdate_icmtlhook_ptr_set_rr_wire_size(node->key);  
 #ifdef DEBUG
         log_debug1("icmtl: removing %u@%p", size, node->key);
 #endif
         
+#if USE_SET_FOR_OUTPUT
+        output_stream_write(&listener->ostream_remove, node->key, size);
+        ZFREE_ARRAY(node->key, size);
+#else
         output_stream_write(&listener->os_remove, node->key, size);
         ZFREE_ARRAY(node->key, size);
+#endif
     }
     
     ptr_set_avl_destroy(&listener->rr_remove);
@@ -640,9 +776,13 @@ dynupdate_icmtlhook_disable(u8 *origin)
 #ifdef DEBUG
         log_debug1("icmtl: adding %u@%p", size, node->key);
 #endif
-        
+#if USE_SET_FOR_OUTPUT
+        output_stream_write(&listener->ostream_add, node->key, size);
+        ZFREE_ARRAY(node->key, size);
+#else
         output_stream_write(&listener->os_add, node->key, size);
         ZFREE_ARRAY(node->key, size);
+#endif
     }
     
     ptr_set_avl_destroy(&listener->rr_add);
@@ -650,7 +790,7 @@ dynupdate_icmtlhook_disable(u8 *origin)
     ZFREE(listener, icmtl_dnssec_listener);
     
 #ifdef DEBUG
-    log_debug("incremental: disabled %{dnsname} for updates", icmtl_listener.origin);
+    log_debug("icmtl: disabled %{dnsname} for updates", origin);
 #endif
     
     return SUCCESS;
@@ -659,5 +799,3 @@ dynupdate_icmtlhook_disable(u8 *origin)
 /*    ------------------------------------------------------------    */
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -210,6 +210,8 @@ struct zone_notify_s
 
 #if HAS_RRSIG_MANAGEMENT_SUPPORT && HAS_DNSSEC_SUPPORT
 
+#define ZONE_SIGNATURE_INVALID_FIRST_ASSUME_BROKEN 0
+
 typedef struct zone_signature_s zone_signature_s;
 
 struct zone_signature_s
@@ -269,6 +271,8 @@ struct zone_desc_s
     char                                                          *domain;      // cannot change
     // name of the file on disk
     char                                                       *file_name;      // may change
+    // path where to find the keys
+    char                                                       *keys_path;      // can be NULL
     // The list of the masters (for a slave)
     host_address                                                 *masters;      // may change
     // If master which are the servers to notify for updates IXFR or AXFR

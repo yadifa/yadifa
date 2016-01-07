@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -42,6 +42,7 @@
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
+#include "dnsdb/dnsdb-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -569,6 +570,10 @@ rrsig_updater_filter_label_rrsig(dnssec_task_s *task, zdb_rr_label *rr_label)
         {
             return TRUE;
         }
+    }
+    else
+    {
+        return TRUE;
     }
     
     return FALSE;

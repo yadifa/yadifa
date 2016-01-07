@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -41,6 +41,7 @@
  *
  *----------------------------------------------------------------------------*/
 
+#include "dnscore/dnscore-config.h"
 #include "dnscore/logger.h"
 #include "dnscore/service.h"
 #include "dnscore/config_settings.h"
@@ -279,8 +280,6 @@ server_setup_daemon_go()
     logger_output_stream_open(&__termout__, g_system_logger, LOG_INFO, 512);
     logger_output_stream_open(&__termerr__, g_system_logger, LOG_ERR, 512);
     
-    chdir("/"); /* chroot */
-
     log_info("daemonized");
     
     logger_flush();

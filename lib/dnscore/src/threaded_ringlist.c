@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011, EURid. All rights reserved.
+* Copyright (c) 2011-2016, EURid. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -40,18 +40,20 @@
  * @{
  *
  *----------------------------------------------------------------------------*/
-#include "dnscore/threaded_ringlist.h"
-
-#if HAS_PTHREAD_SPINLOCKS == 1
-#define MUTEX_USE_SPINLOCK 1
-#else
-#define MUTEX_USE_SPINLOCK 0
-#endif
-
-#include "dnscore/mutex.h"
+#include "dnscore/dnscore-config.h"
 
 #include <stdlib.h>
 #include <unistd.h>
+
+#include "dnscore/threaded_ringlist.h"
+
+#ifndef DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#error "DNSCORE_HAS_MUTEX_DEBUG_SUPPORT not defined"
+#endif
+
+#define MUTEX_USE_SPINLOCK 0
+
+#include "dnscore/mutex.h"
 
 #define THREADED_QUEUE_TAG	    0x455545555154	/* TQUEUE */
 
