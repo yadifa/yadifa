@@ -75,8 +75,6 @@
 extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
 
-#define SHOW_REFERRAL 0
-
 #include "server-mt.h"
 
 #include "server_context.h"
@@ -1217,9 +1215,7 @@ server_mt_query_loop()
                         /* server_statistics_sum.input_timeout_count += stats->input_timeout_count; */
                         
                         server_statistics_sum.udp_output_size_total += stats->udp_output_size_total;
-#if SHOW_REFERRAL
                         server_statistics_sum.udp_referrals_count += stats->udp_referrals_count;
-#endif
                         server_statistics_sum.udp_input_count += stats->udp_input_count;
                         server_statistics_sum.udp_dropped_count += stats->udp_dropped_count;
                         server_statistics_sum.udp_queries_count += stats->udp_queries_count;

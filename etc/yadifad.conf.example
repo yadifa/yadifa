@@ -13,7 +13,7 @@
         logpath                     "/var/log/yadifad"
 
         # The location of the pid file
-        pidfile                     "/var/run/yadifad.pid"    
+        pidfile                     "/var/run/yadifad.pid"
 
         # The path where all zone files will be written
         datapath                    "/var/lib/yadifad"
@@ -24,16 +24,14 @@
         # The path where the transfer and journaling files will be written (AXFR & IXFR)
         xfrpath                     "/var/cache/yadifa/xfr"
 
-
         # A string returned by a query of hostname. CH TXT (note if you leave this out, the real hostname will be given back)
         hostname                    "server-yadifad"
-		     
+
         # An ID returned by a query to id.server. CH TXT
         serverid                     "yadifad-01"
-                             
+
         # The version returned by a query to version.yadifa. CH TXT
-       	version                      "2.1.5"
-                             
+        version                      "2.1.6"
 
         # Set the maximum UDP packet size.  Cannot be less than 512.  Cannot be more than 65535.  Typical choice is 4096.
         edns0-max-size              4096
@@ -59,7 +57,6 @@
 
         # Choose the query log format (0 for none, 1 for YADIFA, 2 for BIND compatible, 3 for YADIFA and BIND)
         queries-log-type            1
-
 
         # Drop queries with erroneous content
         # answer-formerr-packets    on
@@ -89,7 +86,6 @@
 </main>
 
 # If YADIFA has NSID support (default)
-
 <nsid>
         ascii "yadifad example NSID"
         # alternatively, an hexadecimal format can be used
@@ -97,45 +93,43 @@
 </nsid>
 
 # If YADIFA has the controller enabled (needs to have been configured at build using --enable-ctrl)
-
 <control>
         # enable the controller
         enabled true
 </control>
 
 # If YADIFA has been compiled with the Response Rate Limiter (default)
-
 <rrl>
         # enable the RRL
         enabled true
-    
+
         # don't actually limit the response rate, only log what the filter would do
         log_only false
-    
+
         # how many responses per second are allowed for a (masked with the prefix) client
         responses_per_second 5
-    
+
         # how many errors per second are allowed for a (masked with the prefix) client
         errors_per_second 5
-    
+
         # window of time in which the rates are measured, expressed in seconds
         window 15
-    
+
         # every "slip" dropped answers, a truncated answer may randomly be given so the client can ask again using TCP
         slip 2
-    
+
         # the minimum size of the table storing (masked with the prefix) clients
         min_table_size 1024
-    
+
         # the maximum size of the table storing (masked with the prefix) clients
         max_table_size 16384
-    
+
         # IPv4 clients are masked with this prefix
         ipv4_prefix_length 24
-    
+
         # IPv6 clients are masked with this prefix
         ipv6_prefix_length 56
-    
+
         # the list of IP/networks (Access Control List) not impacted by the RRL
         exempted none
 </rrl>
@@ -221,7 +215,7 @@
 
 #
 # Master domain zone config
-# 
+#
 
 <zone>
         type                    master
@@ -260,13 +254,13 @@
 </zone>
 
 <zone>
-# This server is master for that zone (mandatory)
+        # This server is master for that zone (mandatory)
         type        master
 
-# The domain name (mandatory)
+        # The domain name (mandatory)
         domain      somedomain.eu.
 
-# The zone file, relative to 'datapath'.  (mandatory for a master)
+        # The zone file, relative to 'datapath'.  (mandatory for a master)
         file        masters/somedomain.eu.zone
 </zone>
 

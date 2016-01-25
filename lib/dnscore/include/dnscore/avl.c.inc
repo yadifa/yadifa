@@ -32,7 +32,7 @@
  *
  *
  *      SVN Program:
- *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.5-public/lib/dnscore/include/dnscore/avl.c.inc $
+ *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.6-public/lib/dnscore/include/dnscore/avl.c.inc $
  *
  *      Creation Date:
  *              2009-01-07

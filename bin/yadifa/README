@@ -29,6 +29,12 @@
 # 
 ################################################################################
 
+20160126:
+        YADIFA 2.1.6
+
+        Fixes:
+        - fixed an issue where the referral would not be measured for UDP on a optimised build.
+
 20160108:
         YADIFA 2.1.5
 
@@ -38,7 +44,7 @@
         Fixes:
         - fixed an issue where getting a huge incremental transfer would prevent the server from answering queries while applying the changes.
         - fixed an issue serving IXFR that would occur when a incremental change step was bigger than 64KB
-        - fixed an issue for Solaris with the memory aligment fix not active everywhere
+        - fixed an issue for Solaris with the memory alignment fix not active everywhere
         - fixed an issue on the Solaris build settings
         - fixed an issue where sometimes yadifad would not find a configuration file given as a parameter with a relative path
         - fixed an issue where a wild-card would not be properly returned with an AXFR
@@ -152,7 +158,7 @@
 
         Improved build mechanism.
             It has been tested to work automatically on Linux, FreeBSD, OSX, SunOS.
-            RedHat familly builds will use -O2 as maximum optimisations.
+            RedHat family builds will use -O2 as maximum optimisations.
 
             Note that some optional features are now enabled by default but can be disabled.
 

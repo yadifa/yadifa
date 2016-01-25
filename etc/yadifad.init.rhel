@@ -34,9 +34,9 @@
 [ -r /etc/sysconfig/network ] && . /etc/sysconfig/network
 
 start() {
-    [ "$EUID" != "0" ] && exit 4
-    [ "${NETWORKING}" = "no" ] && exit 1
-    [ -f /usr/sbin/yadifad ] || exit 5
+        [ "$EUID" != "0" ] && exit 4
+        [ "${NETWORKING}" = "no" ] && exit 1
+        [ -f /usr/sbin/yadifad ] || exit 5
 
         # Start daemon
         echo -n $"Starting yadifad: "
@@ -47,63 +47,64 @@ start() {
 }
 
 stop() {
-    [ "$EUID" != "0" ] && exit 4
+        [ "$EUID" != "0" ] && exit 4
 
         # Stop daemon
         echo -n $"Shutting down yadifad: "
         if [ -n "`pidfileofproc yadifad`" ] ; then
-        killproc /usr/sbin/yadifad
-    else
-        failure $"Shutting down yadifad"
-    fi
-    RETVAL=$?
+            killproc /usr/sbin/yadifad
+        else
+            failure $"Shutting down yadifad"
+        fi
+        RETVAL=$?
         echo
         [ $RETVAL = 0 ] && rm -f /var/lock/subsys/yadifad
 }
 
 restart() {
-    stop
-    start
+        stop
+        start
 }
 
 reload() {
-    [ "$EUID" != "0" ] && exit 4
+        [ "$EUID" != "0" ] && exit 4
 
         # Reload daemon
         echo -n $"Reloading yadifad: "
         if [ -n "`pidfileofproc yadifad`" ] ; then
-        killproc /usr/sbin/yadifad -HUP
-    else
-        failure $"Reloading yadifad"
-    fi
-    RETVAL=$?
+            killproc /usr/sbin/yadifad -HUP
+        else
+            failure $"Reloading yadifad"
+        fi
+        RETVAL=$?
         echo
 }
 
 # See how we were called
 case "$1" in
   start)
-    start
-    ;;
+        start
+        ;;
   stop)
-    stop
-    ;;
+        stop
+        ;;
   restart)
-    restart
-    ;;
+        restart
+        ;;
   reload)
-    reload
-    ;;
+        reload
+        ;;
   condrestart|try-restart)
-    status yadifad > /dev/null || exit 0
-    restart
-    ;;
+        status yadifad > /dev/null || exit 0
+        restart
+        ;;
   status)
-    status yadifad
-    ;;
+        status yadifad
+        ;;
   *)
-    echo $"Usage: $0 {start|stop|restart|reload|status|condrestart|try-restart}"
-    exit 2
+        echo $"Usage: $0 {start|stop|restart|reload|status|condrestart|try-restart}"
+        exit 2
 esac
 
 exit $RETVAL
+

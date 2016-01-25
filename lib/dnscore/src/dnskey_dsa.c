@@ -723,6 +723,8 @@ dsa_private_parse_field(dnssec_key *key, parser_s *p)
                 log_err("unable to get big number from field %s", sd->name);
                 return DNSSEC_ERROR_BNISNULL;
             }
+
+            parsed_it = TRUE;
             
             break;
         }

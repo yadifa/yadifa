@@ -32,7 +32,7 @@ dnl
 dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 5802 $])
+AC_REVISION([$Revision: 5826 $])
 # 1
 # svn log 2> /dev/null|head -2|grep ^r|sed 's/.\([1-9]*\).*/\1/'
 

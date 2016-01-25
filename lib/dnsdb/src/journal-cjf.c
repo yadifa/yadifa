@@ -2116,10 +2116,8 @@ journal_cjf_close(journal *jh)
     zdb_zone *zone;
     if((zone = (zdb_zone*)jnl->zone) != NULL)
     {
-        //zdb_zone_lock(zone, ZDB_ZONE_MUTEX_LOAD);
         yassert(zone->journal == jh);
         zone->journal = NULL;
-        //zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_LOAD);
     }
     
     shared_group_mutex_unlock(&jnl->mtx, 0x83);
