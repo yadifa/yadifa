@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFAD" "8" "2016\-02\-04" "YADIFA " "YADIFA "
+.TH "YADIFAD" "8" "2016\-07\-15" "YADIFA " "YADIFA "
 .SH NAME
 yadifad \- an authoritative Internet domain name server. 
 .PP
@@ -173,7 +173,7 @@ file from the source code.
 .SH VERSION
 
 .PP
-Version: 2.1.6 of 2016-02-04\&.
+Version: 2.2.0 of 2016-07-15\&.
 .PP
 .SH MAILING LISTS
 

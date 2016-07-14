@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup rrsig RRSIG functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -45,7 +45,6 @@
 
 #include <dnscore/threaded_queue.h>
 #include <dnscore/ptr_vector.h>
-#include <dnscore/dnskey.h>
 
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/dnssec_task.h>
@@ -97,13 +96,13 @@
  * Extract fields from a packed record
  */
 
-#define RRSIG_TYPE_COVERED(x__)	    (GET_U16_AT((x__)->rdata_start[0]))       /** @todo : NATIVETYPE */
+#define RRSIG_TYPE_COVERED(x__)	    (GET_U16_AT((x__)->rdata_start[0]))       /** @note : NATIVETYPE */
 #define RRSIG_ALGORITHM(x__)	    ((x__)->rdata_start[2])
 #define RRSIG_LABELS(x__)           ((x__)->rdata_start[3])
 #define RRSIG_ORIGINAL_TTL(x__)	    (ntohl(GET_U32_AT((x__)->rdata_start[4])))
 #define RRSIG_VALID_UNTIL(x__)	    (ntohl(GET_U32_AT((x__)->rdata_start[8])))
 #define RRSIG_VALID_SINCE(x__)	    (ntohl(GET_U32_AT((x__)->rdata_start[12])))
-#define RRSIG_KEY_TAG(x__)          (ntohs(GET_U16_AT((x__)->rdata_start[16]))) /** @todo : NATIVETAG (LOOK FOR ALL OF THEM) */
+#define RRSIG_KEY_TAG(x__)          (ntohs(GET_U16_AT((x__)->rdata_start[16]))) /** @note : NATIVETAG (LOOK FOR ALL OF THEM) */
 #define RRSIG_KEY_NATIVETAG(x__)    (GET_U16_AT((x__)->rdata_start[16]))
 #define RRSIG_SIGNER_NAME(x__)	    (&(x__)->rdata_start[18])
 
@@ -119,6 +118,7 @@ extern "C" {
 
 typedef struct rrsig_context_s rrsig_context_s;
 
+#define RRSIGCTX_TAG 0x5854434749535252
 
 struct rrsig_context_s
 {
@@ -144,7 +144,7 @@ struct rrsig_context_s
 
     zdb_packed_ttlrdata *removed_rrsig_sll;
     
-    zdb_packed_ttlrdata *canonised_rrset;
+    const zdb_packed_ttlrdata *canonised_rrset;
     
     dnssec_task_s *task;
 
@@ -179,6 +179,7 @@ struct rrsig_context_s
     u32 sig_validity_interval_seconds;
     u32 sig_jitter_seconds;
     u32 sig_invalid_first;
+    u32 sig_pre_validate_seconds;   // the amounts of seconds before "now" the signature will be made valid (1h)
 
     /**/
 
@@ -203,10 +204,14 @@ struct rrsig_context_s
     u8  label_depth;
     u8  flags;
     u8  nsec_flags;
-    bool do_verify_signatures;  // once the signatures are in, there is no point doing it again
-                                // if we do them, they are right
-                                // if the master do them, he is right
-                                // the only time they should be verified is at load time
+    bool must_verify_signatures;    // once the signatures are in, there is no point doing it again
+                                    // if we do them, they are right
+                                    // if the master do them, he is right
+                                    // the only time they should be verified is at load time
+    
+    bool signatures_are_invalid;    // signatures verification will immediately see them as wrong.
+                                    // must_verify_signatures must be set to TRUE for this to be used. 
+    bool rr_dnsname_processing_apex;
     /**/
 
     /*
@@ -216,8 +221,6 @@ struct rrsig_context_s
      */
 
     dnsname_stack rr_dnsname;
-
-    bool rr_dnsname_processing_apex;
 
     /*
      * Will contain the label + type + class + ttl
@@ -269,6 +272,18 @@ struct rrsig_update_item_s
 
 typedef struct rrsig_update_item_s rrsig_update_item_s;
 
+static inline rrsig_update_item_s* rrsig_update_item_alloc()
+{
+    rrsig_update_item_s *ret;
+    ZALLOC_OR_DIE(rrsig_update_item_s*, ret, rrsig_update_item_s, ZDB_RRSIGUPQ_TAG);
+    return ret;
+}
+
+static inline void rrsig_update_item_free(rrsig_update_item_s *rui)
+{
+    ZFREE(rui, rrsig_update_item_s);
+}
+
 #if ZDB_HAS_NSEC3_SUPPORT != 0
 
 struct nsec3_rrsig_update_item_s
@@ -293,6 +308,17 @@ struct nsec3_rrsig_update_item_s
 typedef struct nsec3_rrsig_update_item_s nsec3_rrsig_update_item_s;
 
 #endif
+
+/**
+ * 
+ * @param context the signature context to be initialised
+ * @param zone the zone that will be signed
+ * @param engine_name the engine name (this parameter will be removed soon for a global setup)
+ * @param sign_from the time to sign from
+ * @param quota for multi-threaded operation, the amount of signature to target (this is not meant to be accurate)
+ * 
+ * @return an error code if the initialisation failed
+ */
 
 ya_result rrsig_context_initialize(rrsig_context_s *context, const zdb_zone *zone, const char *engine_name, u32 sign_from, smp_int *quota);
 
@@ -319,23 +345,65 @@ static inline s32 rrsig_context_get_quota(rrsig_context_s *context)
     }
 }
 
-void rrsig_context_set_key(rrsig_context_s *context, dnssec_key* key);
+/**
+ * Updates the current algorithm and tag of a context using the given key
+ * Meant to modify the current pre-computed header of the signature
+ * 
+ * @param context
+ * @param key
+ */
+
+void rrsig_context_set_current_key(rrsig_context_s *context, const dnssec_key* key);
 
 /*
  * Adds/Removes a label in the path in order to process it
  */
 
-void rrsig_context_push_name_rrsigsll(rrsig_context_s *context, u8* name, zdb_packed_ttlrdata* rrsig_sll);
+void rrsig_context_push_name_rrsigsll(rrsig_context_s *context, const u8 *name, zdb_packed_ttlrdata* rrsig_sll);
 
 /* Calls rrsig_update_context_push_name_rrsigsll using the label's fields */
 void rrsig_context_push_label(rrsig_context_s *context, zdb_rr_label* label);
 void rrsig_context_pop_label(rrsig_context_s *context);
 
-/** @todo: check is it a dup of rrsig_update_records ? */
-ya_result rrsig_update_label_rrset(rrsig_context_s *context, zdb_rr_label* label, u16 type);
+/**
+ * Adds the signature to the "to-be-deleted" set of the context.
+ * 
+ * @param context
+ * @param rrsig
+ */
 
-ya_result rrsig_update_records(rrsig_context_s *context, dnssec_key* key, zdb_packed_ttlrdata* rr_sll, u16 type, bool do_update);
-ya_result rrsig_update_label(rrsig_context_s *context, zdb_rr_label* label);
+void rrsig_context_append_delete_signature(rrsig_context_s *context, zdb_packed_ttlrdata *rrsig);
+
+/**
+ * Compute (the need for) updates by a DNSKEY over an RR set of a given type.
+ * Updates timings of resignature in the context.
+ * 
+ * If a public key is given instead of a private key, do_update is assumed FALSE
+ * 
+ * @param context the signature context
+ * @param key the signing key (can be public only)
+ * @param rr_sll the rrset records
+ * @param type the rrset type
+ * @param do_update if TRUE, generated and pushes updates in the context, else only update timings
+ * 
+ * @return the number of signatures computed
+ */
+
+ya_result rrsig_update_rrset_with_key(rrsig_context_s *context, const zdb_packed_ttlrdata *rr_sll, u16 type, const dnssec_key* key, bool do_update);
+
+/**
+ * Computes the updates of an rrset of a given type (cannot be TYPE_ANY, obviously)
+ * Changes are stored into the context and still needs to be committed.
+ * 
+ * @param context the signature context
+ * @param records_sll the rrset records
+ * @param rrset_type the rrset type
+ * @param delegation the signature is on a delegation (result of ZDB_LABEL_ATDELEGATION(label))
+ * 
+ * @return an error code or the number of signatures that have been made
+ */
+
+ya_result rrsig_update_rrset(rrsig_context_s *context, const zdb_packed_ttlrdata *records_sll, u16 rrset_type, bool delegation);
 
 /*
  * Takes the result of an update and commits it to the label
@@ -377,6 +445,19 @@ zdb_packed_ttlrdata* rrsig_find_next(const zdb_packed_ttlrdata* rrsig, u16 cover
  */
 
 void rrsig_delete(const zdb_zone *zone, const u8 *dname, zdb_rr_label* label, u16 covered_type);
+
+/**
+ * 
+ * Signs an RRSET using a context.  This is done single-threaded.
+ * 
+ * @param context
+ * @param fqdn
+ * @param rtype
+ * @param rrset
+ * @return 
+ */
+
+ya_result rrsig_generate_signatures(rrsig_context_s *context, const u8 *fqdn, u16 rtype, const zdb_packed_ttlrdata *rrset, zdb_packed_ttlrdata **out_rrsig_sll);
 
 #ifdef	__cplusplus
 }

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnsdbixfr IXFR answers
  *  @ingroup dnsdb
  *  @brief
@@ -98,8 +98,8 @@ extern logger_handle* g_database_logger;
 
 extern logger_handle* g_database_logger;
 
-#ifndef MAX_PATH
-#define MAX_PATH 4096
+#ifndef PATH_MAX
+#error "PATH_MAX not defined"
 #endif
 
 typedef struct zdb_zone_answer_ixfr_args zdb_zone_answer_ixfr_args;
@@ -204,20 +204,20 @@ zdb_zone_answer_ixfr_send_message(output_stream *tcpos, packet_writer *pw, messa
     {
         /* 00 00 29 SS SS rr vv 80 00 00 00 */
 
-        memset(&pw->packet[pw->packet_offset], 0, EDNS0_RECORD_SIZE);
-        pw->packet_offset += 2;
-        pw->packet[pw->packet_offset++] = 0x29;
+        memset(packet_writer_get_next_u8_ptr(pw), 0, EDNS0_RECORD_SIZE);
+        packet_writer_forward(pw, 2);
+        packet_writer_add_u8(pw, 0x29);
         packet_writer_add_u16(pw, htons(edns0_maxsize));
         packet_writer_add_u32(pw, mesg->rcode_ext);
-        pw->packet_offset += 2;
+        packet_writer_forward(pw, 2);
     }
 
-    mesg->send_length = pw->packet_offset; /** @todo: I need to put this in a packet_writer function */
+    mesg->send_length = packet_writer_get_offset(pw); /** @todo 20101221 edf -- I need to put this in a packet_writer function */
         
 #if ZDB_HAS_TSIG_SUPPORT
     if(TSIG_ENABLED(mesg))
     {
-        mesg->ar_start = &pw->packet[pw->packet_offset];
+        mesg->ar_start = packet_writer_get_next_u8_ptr(pw);
 
         if(FAIL(return_code = tsig_sign_tcp_message(mesg, pos)))
         {
@@ -228,10 +228,10 @@ zdb_zone_answer_ixfr_send_message(output_stream *tcpos, packet_writer *pw, messa
     }
 #endif
     
-    pw->packet_offset = mesg->send_length; /** @todo: I need to put this in a packet_writer function */
+    packet_writer_set_offset(pw, mesg->send_length);
     if(FAIL(return_code = write_tcp_packet(pw, tcpos)))
     {
-        log_err("zone write ixfr: error sending IXFR packet to %{sockaddr}: %r", &mesg->other, return_code);
+        log_err("zone write ixfr: error sending IXFR packet to %{sockaddr}: %r", &mesg->other.sa, return_code);
     }
 
     return return_code;
@@ -304,13 +304,13 @@ zdb_zone_answer_ixfr_thread(void* data_)
     /*
      */
 
-    log_info("zone write ixfr: sending %{dnsname} journal file", data->zone->origin);
+    log_info("zone write ixfr: %{dnsname}: sending journal file", data->zone->origin);
     
     /***********************************************************************/
 
     if(data->mesg->sockfd < 0)
     {
-        log_err("zone write ixfr: no tcp: %{dnsname} %d", data->zone->origin, data->from_serial);
+        log_err("zone write ixfr: %{dnsname}: no TCP socket set for operation", data->zone->origin);
 
         data->return_code = ERROR;
 
@@ -327,7 +327,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
     
     if(soa == NULL)
     {
-        /** @todo error other than "does not exists" : SERVFAIL */
+        /** @todo 20101214 edf -- error other than "does not exists" : SERVFAIL */
 
         /**
          * @note This does an exit with error.
@@ -337,7 +337,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
 
         zdb_zone_answer_ixfr_thread_exit(data);
         
-        log_crit("zone write ixfr: startup: no SOA"); /* will ultimately lead to the end of the program */
+        log_crit("zone write ixfr: %{dnsname}: no SOA in zone", data->zone->origin); /* will ultimately lead to the end of the program */
         
         return NULL;        
     }
@@ -381,7 +381,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
     packet_reader_read(&purd, (u8*)&serial, 4);
     serial = ntohl(serial);
     
-    log_debug("zone write ixfr: client requested from serial %08x (%d)", serial, serial);
+    log_debug("zone write ixfr: %{dnsname}: %{sockaddr}: client requested changes from serial %08x (%d)", data->zone->origin, &mesg->other.sa, serial, serial);
 
     MESSAGE_HIFLAGS(mesg->buffer) |= AA_BITS|QR_BITS;
     MESSAGE_SET_NS(mesg->buffer, 0);
@@ -391,7 +391,16 @@ zdb_zone_answer_ixfr_thread(void* data_)
     
     if(FAIL(return_value = zdb_zone_journal_get_ixfr_stream_at_serial(data->zone, serial, &fis, &rr)))
     {
-        log_err("zone write ixfr: unable to open journal for %{dnsname}: %r", data->zone->origin, return_value);
+        if(return_value == ZDB_JOURNAL_SERIAL_OUT_OF_KNOWN_RANGE)
+        {
+            u32 from, to;
+            zdb_zone_journal_get_serial_range(data->zone, &from, &to);
+            log_info("zone write ixfr: %{dnsname}: %{sockaddr}: host asked for serial %d out of the journal range [%d; %d]", data->zone->origin, &mesg->other.sa, serial, from, to);
+        }
+        else
+        {
+            log_err("zone write ixfr: %{dnsname}: %{sockaddr}: unable to open journal: %r", data->zone->origin, &mesg->other.sa, return_value);
+        }
         
         dns_resource_record_clear(&rr);
         
@@ -406,7 +415,9 @@ zdb_zone_answer_ixfr_thread(void* data_)
     
     if(FAIL(return_value) || (sizeof(target_soa_rdata_buffer) < rr.rdata_size))
     {
-        log_err("zone write ixfr: unable to read journal from serial %d for %{dnsname}: %r", serial, data->zone->origin, return_value);
+        u32 from, to;
+        zdb_zone_journal_get_serial_range(data->zone, &from, &to);
+        log_warn("zone write ixfr: %{dnsname}: %{sockaddr}: unable to read journal from serial %d [%d; %d]", data->zone->origin, &mesg->other.sa, serial, from, to);
         
         zdb_zone_answer_axfr(data->zone, mesg, NULL, data->disk_tp, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
         
@@ -455,7 +466,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
 
     /* Sends the "Write unlocked" notification */
 
-    log_info("zone write ixfr: releasing implicit write lock %{dnsname} %d", data->zone->origin, serial);
+    log_info("zone write ixfr: %{dnsname}: %{sockaddr}: releasing implicit write lock", origin, &mesg->other);
 
     data->mesg = NULL; // still need the message.  do not destroy it
     data->return_code = SUCCESS;
@@ -468,7 +479,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
 
     /***********************************************************************/
 
-    log_info("zone write ixfr: sending journal %{dnsname} %d", origin, serial);
+    log_info("zone write ixfr: %{dnsname}: %{sockaddr}: sending journal from serial %d", origin, &mesg->other.sa, serial);
 
     /* attach the tcp descriptor and put a buffer filter in front of the input and the output*/
 
@@ -499,24 +510,18 @@ zdb_zone_answer_ixfr_thread(void* data_)
         {
             // critical error.
 
-            log_err("zone write ixfr: read record #%d failed %{dnsname} %d: %r", an_record_count, origin, serial, return_value);
+            log_err("zone write ixfr: %{dnsname}: %{sockaddr}: read record #%d failed: %r", origin, &mesg->other.sa, an_record_count, return_value);
             break;
         }
         
         u32 record_lenght = return_value;
         
-#if 0
-        // DEBUG
-        {
-            rdata_desc rr_desc = {tctrl.qtype, rdata_size, rdata_buffer};                            
-            log_debug("zone write ixfr: %{dnsname}: peek: (%3i) %{dnsname} %{typerdatadesc}", origin, record_lenght, fqdn, &rr_desc);
-        }
-#endif
+
         
         if(record_lenght == 0)
         {
-#if DEBUG
-            log_debug("zone write ixfr: %{dnsname}: end of stream", origin);
+#ifdef DEBUG
+            log_debug("zone write ixfr: %{dnsname}: %{sockaddr}: end of stream", origin, &mesg->other);
 #endif
 
 #if ZDB_HAS_TSIG_SUPPORT
@@ -543,9 +548,9 @@ zdb_zone_answer_ixfr_thread(void* data_)
         else if(record_lenght > MAX_U16) // technically possible: a record too big to fit in an update (not likely)
         {
             // this is technically possible with an RDATA of 64K
-            log_err("zone write ixfr: %{dnsname}: ignoring record of size %u", origin, record_lenght);
+            log_err("zone write ixfr: %{dnsname}: %{sockaddr}: ignoring record of size %u", origin, &mesg->other.sa, record_lenght);
             rdata_desc rr_desc = {tctrl.qtype, rdata_size, rdata_buffer};                            
-            log_err("zone write ixfr: %{dnsname}: record is: %{dnsname} %{typerdatadesc}", origin, return_value, fqdn, &rr_desc);
+            log_err("zone write ixfr: %{dnsname}: %{sockaddr}: record is: %{dnsname} %{typerdatadesc}", origin, &mesg->other.sa, return_value, fqdn, &rr_desc);
             continue;
         }
         
@@ -556,7 +561,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
             // flush
 
             MESSAGE_SET_AN(mesg->buffer, htons(an_record_count));
-            mesg->send_length = pw.packet_offset;
+            mesg->send_length = packet_writer_get_offset(&pw);
 
 #if ZDB_HAS_TSIG_SUPPORT
             if(FAIL(return_value = zdb_zone_answer_ixfr_send_message(&tcpos, &pw, mesg, pos)))
@@ -564,7 +569,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
             if(FAIL(return_value = zdb_zone_answer_ixfr_send_message(&tcpos, &pw, mesg)))
 #endif
             {
-                log_err("zone write ixfr: send message failed %{dnsname}: %r", origin, return_value);
+                log_err("zone write ixfr: %{dnsname}: %{sockaddr}: send message failed: %r", origin, &mesg->other.sa, return_value);
 
                 break;
             }
@@ -591,11 +596,11 @@ zdb_zone_answer_ixfr_thread(void* data_)
         
     if(ISOK(return_value))
     {
-        log_info("zone write ixfr: %{dnsname} ixfr stream sent", origin);
+        log_info("zone write ixfr: %{dnsname}: %{sockaddr}: ixfr stream sent", origin, &mesg->other);
     }
     else
     {
-        log_err("zone write ixfr: %{dnsname} ixfr stream not sent", origin);
+        log_err("zone write ixfr: %{dnsname}: %{sockaddr}: ixfr stream not sent", origin, &mesg->other);
     }
 
     output_stream_close(&tcpos);
@@ -630,7 +635,7 @@ zdb_zone_answer_ixfr(zdb_zone* zone, message_data *mesg, struct thread_pool_s *n
 {
     zdb_zone_answer_ixfr_args* args;
         
-    log_info("zone write ixfr: queueing %{dnsname}", zone->origin);
+    log_info("zone write ixfr: %{dnsname}: %{sockaddr}: queueing answer", zone->origin, &mesg->other.sa);
     
     MALLOC_OR_DIE(zdb_zone_answer_ixfr_args*, args, sizeof(zdb_zone_answer_ixfr_args), ZAIXFRA_TAG);
     args->zone = zone;

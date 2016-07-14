@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup 
  *  @ingroup yadifad
  *  @brief 
@@ -91,6 +91,7 @@ extern logger_handle *g_server_logger;
 
 #define NOTIFY_MESSAGE_TYPE_NOTIFY  1
 #define NOTIFY_MESSAGE_TYPE_ANSWER  2
+#define NOTIFY_MESSAGE_TYPE_DOMAIN  3
 
 #define MESSAGE_QUERY_TIMEOUT 5
 #define MESSAGE_QUERY_TRIES   1
@@ -107,6 +108,8 @@ static async_queue_s notify_handler_queue;
 static volatile bool notify_service_initialised = FALSE;
 
 typedef struct message_query_summary message_query_summary;
+
+#define MSGQSUMR_TAG 0x524d55535147534d
 
 struct message_query_summary
 {
@@ -195,6 +198,11 @@ message_query_summary_compare(const void* va, const void* vb)
 
 typedef struct notify_message notify_message;
 
+struct notify_message_domain
+{
+    u8 type;
+};
+
 struct notify_message_notify
 {
     u8 type;
@@ -229,8 +237,11 @@ struct notify_message
         u8 type;
         struct notify_message_notify notify;
         struct notify_message_answer answer;
+        struct notify_message_domain domain;
     } payload;
 };
+
+static bool notify_slaves_convert_domain_to_notify(notify_message *message);
 
 /*------------------------------------------------------------------------------
  * STATIC PROTOTYPES */
@@ -262,7 +273,7 @@ notify_slaveanswer(message_data *mesg)
                 
         ZALLOC_OR_DIE(notify_message*, message, notify_message, NOTFYMSG_TAG);
 
-        message->origin = dnsname_dup(origin);
+        message->origin = dnsname_zdup(origin);
         message->payload.type = NOTIFY_MESSAGE_TYPE_ANSWER;
         message->payload.answer.rcode = rcode;
         message->payload.answer.aa = aa;
@@ -337,6 +348,8 @@ notify_masterquery_read_soa(u8 *origin, packet_unpack_reader_data *reader, u32 *
     return FALSE;
 }
 
+#define NTFYMQTA_TAG 0x4154514d5946544e
+
 struct notify_masterquery_thread_args
 {
     u8 *origin;
@@ -359,7 +372,7 @@ notify_masterquery_thread(void *args_)
     
     if(zone_desc == NULL)
     {
-        log_err("notify: slave: zone %{dnsname} has been dropped", args->origin);
+        log_err("notify: slave: %{dnsname}: zone not configured", args->origin);
         dnsname_zfree(args->origin);
         ZFREE(args, notify_masterquery_thread_args);
         
@@ -368,9 +381,13 @@ notify_masterquery_thread(void *args_)
     
     /* do an SOA query to the master to retrieve the serial (wait) */
     
+    zone_lock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
+    host_address *zone_desc_masters = host_address_copy_list(zone_desc->masters);
+    zone_unlock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
+    
     if(!args->serial_set)
     {
-        if(ISOK(return_value = message_query_serial(args->origin, zone_desc->masters, &args->serial)))
+        if(ISOK(return_value = message_query_serial(args->origin, zone_desc_masters, &args->serial))) // multi-master
         {
             args->serial_set = TRUE;
         }
@@ -378,9 +395,13 @@ notify_masterquery_thread(void *args_)
         {
             /* we didn't got the serial */
             
-            log_debug("notify: slave: %{dnsname} SOA query to the master failed: %r", args->origin, return_value);
+            log_debug("notify: slave: %{dnsname}: SOA query to the master at %{hostaddr} failed: %r", args->origin, zone_desc->masters, return_value);
+            
+            /// @todo 20160607 edf -- after some time, decide to switch the master : (drop the zone?), load it anew
         }
     }
+    
+    host_address_delete_list(zone_desc_masters);
     
     u32 current_serial;
 
@@ -411,13 +432,13 @@ notify_masterquery_thread(void *args_)
                     {
                         /* do nothing at all */
                         
-                        log_warn("notify: slave: serial number on this slave is higher (%u) than on the notifier (%u)", current_serial, args->serial);
+                        log_warn("notify: slave: %{dnsname}: serial number on this slave is higher (%u) than on the notifier (%u)", zone_desc->origin, current_serial, args->serial);
                     }
                     else if(serial_gt(args->serial, current_serial))
                     {
                         /* download (and apply) the incremental change  */
 
-                        log_info("notify: slave: scheduling an IXFR for %{dnsname}", zone_desc->origin);
+                        log_info("notify: slave: %{dnsname}: scheduling an IXFR from %u", zone_desc->origin, current_serial);
                         
                         database_zone_ixfr_query(zone_desc->origin);
                     }
@@ -425,7 +446,7 @@ notify_masterquery_thread(void *args_)
                     {
                         /* nothing to do but mark the zone as being refreshed */
 
-                        log_info("notify: slave: already the last version");
+                        log_info("notify: slave: %{dnsname}: already the last version (%u)", zone_desc->origin, current_serial);
 
                         dbzone->apex->flags &= ~ZDB_RR_LABEL_INVALID_ZONE;
                         zone_desc->refresh.refreshed_time = zone_desc->refresh.retried_time = time(NULL);
@@ -443,7 +464,7 @@ notify_masterquery_thread(void *args_)
                 }
                 else
                 {
-                    log_warn("notify: slave: the serial of the master has not been obtained");
+                    log_warn("notify: slave: %{dnsname}: the serial of the master has not been obtained", zone_desc->origin);
 
                     database_zone_ixfr_query(zone_desc->origin);
                 }
@@ -461,7 +482,7 @@ notify_masterquery_thread(void *args_)
             * The zone has been locked already ? give up ...
             */
 
-            log_info("notify: slave: zone %{dnsname} is locked already (%x)", args->origin, dbzone->lock_owner);
+            log_info("notify: slave: %{dnsname}: already locked (%x)", args->origin, dbzone->lock_owner);
 
             zdb_zone_release(dbzone);
             
@@ -474,7 +495,7 @@ notify_masterquery_thread(void *args_)
          * Ask for an AXFR of the zone
          */
 
-        log_info("notify: slave: scheduling an AXFR for %{dnsname}", zone_desc->origin);
+        log_info("notify: slave: %{dnsname}: scheduling an AXFR", zone_desc->origin);
 
         database_zone_axfr_query(zone_desc->origin);
     }   /* AXFR */
@@ -491,7 +512,7 @@ notify_masterquery_thread(void *args_)
  * The purely network part of the sending of a notify udp packet
  * 
  * @param ha        destination, TSIG supported
- * @param msgdata   a message to be used for message construciton
+ * @param msgdata   a message to be used for message construction
  * @param id        the message id
  * @param origin    origin
  * @param ntype     type
@@ -506,7 +527,7 @@ notify_send(host_address* ha, message_data *msgdata, u16 id, const u8 *origin, u
     
     ya_result return_code;
                
-    /** @todo check if adding the SOA helps bind to update faster */
+    /** @todo 20130506 edf -- check if adding the SOA helps bind to update faster */
 
     message_make_notify(msgdata, id, origin, ntype, nclass);
     
@@ -515,7 +536,7 @@ notify_send(host_address* ha, message_data *msgdata, u16 id, const u8 *origin, u
     {
         if(FAIL(return_code = message_sign_query(msgdata, ha->tsig)))
         {
-            log_err("notify: unable to sign message for %{sockaddr} with key %{dnsname}: %r", &sa, ha->tsig->name, return_code);
+            log_err("notify: %{dnsname}: unable to sign message for %{sockaddr} with key %{dnsname}: %r", origin, &sa, ha->tsig->name, return_code);
             
             return return_code;
         }
@@ -531,9 +552,9 @@ notify_send(host_address* ha, message_data *msgdata, u16 id, const u8 *origin, u
 #endif
             
 #ifndef DEBUG
-            log_info("notify: notifying %{sockaddr} about %{dnsname}", &sa.sa, origin);
+            log_info("notify: %{dnsname}: notifying %{sockaddr}", origin, &sa.sa);
 #else
-            log_info("notify: notifying %{sockaddr} about %{dnsname} (%{dnstype} %{dnsclass})", &sa.sa, origin, &ntype, &nclass);
+            log_info("notify: %{dnsname}: notifying %{sockaddr} with %{dnstype} %{dnsclass}", origin, &sa.sa, &ntype, &nclass);
 #endif
             
 #if HAS_TSIG_SUPPORT
@@ -541,9 +562,9 @@ notify_send(host_address* ha, message_data *msgdata, u16 id, const u8 *origin, u
         else
         {
 #ifndef DEBUG
-            log_info("notify: notifying %{sockaddr} (key=%{dnsname}) about %{dnsname}", &sa.sa, ha->tsig->name, origin);
+            log_info("notify: %{dnsname}: notifying %{sockaddr} (key=%{dnsname})", origin, &sa.sa, ha->tsig->name);
 #else
-            log_info("notify: notifying %{sockaddr} (key=%{dnsname}) about %{dnsname} (%{dnstype} %{dnsclass})", &sa.sa, ha->tsig->name, origin, &ntype, &nclass);
+            log_info("notify: %{dnsname}: notifying %{sockaddr} (key=%{dnsname}) with (%{dnstype} %{dnsclass})", origin, &sa.sa, ha->tsig->name, &ntype, &nclass);
 #endif
         }  
 #endif
@@ -569,17 +590,17 @@ notify_send(host_address* ha, message_data *msgdata, u16 id, const u8 *origin, u
 
         if(s >= 0)
         {
-#if DEBUG
+#ifdef DEBUG
             log_debug("notify_send: sendto(%d, %p, %d, %d, %{sockaddr}, %d)", s, msgdata->buffer, msgdata->send_length, 0, (struct sockaddr*)&sa.sa, addrlen);
             log_memdump_ex(g_server_logger, MSG_DEBUG5, msgdata->buffer, msgdata->send_length, 16, OSPRINT_DUMP_HEXTEXT);
 #endif
             if(ISOK(return_code = sendto(s, msgdata->buffer, msgdata->send_length, 0, &sa.sa, addrlen)))
             {
-                log_debug("notify: sent %i bytes to %{sockaddr}", msgdata->send_length, &sa.sa);
+                log_debug("notify: %{dnsname}: sent %i bytes to %{sockaddr}", origin, msgdata->send_length, &sa.sa);
             }
             else
             {
-                log_err("notify: unable to send notify to %{sockaddr}: %r", &sa.sa, ERRNO_ERROR);
+                log_err("notify: %{dnsname}: failed to send notify to %{sockaddr}: %r", origin, &sa.sa, ERRNO_ERROR);
             }
         }
         else
@@ -588,12 +609,12 @@ notify_send(host_address* ha, message_data *msgdata, u16 id, const u8 *origin, u
             
             // if we cannot get the reply, no point trying to send the query
             
-            log_err("notify: no listening interface can receive from %{sockaddr}", &sa.sa);
+            log_err("notify: %{dnsname}: no listening interface can receive from %{sockaddr}", origin, &sa.sa);
         }
     }
     else
     {
-        log_err("notify: unable to convert '%{hostaddr}' to an address", ha);
+        log_err("notify: %{dnsname}: unable to convert '%{hostaddr}' to an address", origin, ha);
     }
     
     return return_code;
@@ -615,7 +636,7 @@ notify_send(host_address* ha, message_data *msgdata, u16 id, const u8 *origin, u
  */
 
 static ya_result
-notify_masterquery(zdb *database, message_data *mesg, packet_unpack_reader_data *reader)
+notify_masterquery(message_data *mesg, packet_unpack_reader_data *reader)
 {
     ya_result return_value;
         
@@ -629,7 +650,7 @@ notify_masterquery(zdb *database, message_data *mesg, packet_unpack_reader_data 
     
     notify_masterquery_thread_args *args;
     
-    ZALLOC_OR_DIE(notify_masterquery_thread_args*, args, notify_masterquery_thread_args, GENERIC_TAG);
+    ZALLOC_OR_DIE(notify_masterquery_thread_args*, args, notify_masterquery_thread_args, NTFYMQTA_TAG);
     
     args->origin = dnsname_zdup(mesg->qname);
     args->serial = serial;
@@ -641,10 +662,10 @@ notify_masterquery(zdb *database, message_data *mesg, packet_unpack_reader_data 
 }
 
 static ya_result
-notify_process_masterquery_in(zdb *database, message_data *mesg, packet_unpack_reader_data *reader)
+notify_process_masterquery_in(message_data *mesg, packet_unpack_reader_data *reader)
 {
     zone_desc_s *zone_desc;
-    ya_result return_value;
+    ya_result return_value = SUCCESS;
     
     zone_desc = zone_acquirebydnsname(mesg->qname);
 
@@ -654,14 +675,14 @@ notify_process_masterquery_in(zdb *database, message_data *mesg, packet_unpack_r
 
         if(zone_desc->type == ZT_SLAVE)
         {
-            log_info("notify: notification query for slave zone %{dnsname} %{dnsclass}", mesg->qname, &mesg->qclass);
+            log_info("notify: slave: %{dnsname}: %{sockaddr} sent a notification query, class  %{dnsclass}", mesg->qname, &mesg->other.sa, &mesg->qclass);
 
 #if ZDB_HAS_ACL_SUPPORT
             if(ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_notify)))
             {
                 /* notauth */
 
-                log_warn("notify: not authorised");
+                log_warn("notify: slave: %{dnsname}: %{sockaddr}: not authorised", mesg->qname, &mesg->other.sa);
 
                 mesg->status = FP_NOTIFY_REJECTED;
                 mesg->send_length = mesg->received;
@@ -672,11 +693,12 @@ notify_process_masterquery_in(zdb *database, message_data *mesg, packet_unpack_r
             }
 #endif
             
+#if OBSOLETE
             if(host_address_list_contains_ip(zone_desc->masters, &mesg->other))
             {
                 if(zone_isidle(zone_desc) && !zone_isfrozen(zone_desc) && !zone_is_obsolete(zone_desc))
                 {
-                    return_value = notify_masterquery(database, mesg, reader); // thread-safe
+                    return_value = notify_masterquery(mesg, reader); // thread-safe
                     
                     zone_release(zone_desc);
                     
@@ -702,6 +724,16 @@ notify_process_masterquery_in(zdb *database, message_data *mesg, packet_unpack_r
                 mesg->send_length = mesg->received;
                 return_value = NOTIFY_QUERY_FROM_UNKNOWN;
             }
+#else
+            if(!zone_isfrozen(zone_desc))
+            {
+                return_value = notify_masterquery(mesg, reader); // thread-safe
+            }
+            else
+            {
+                log_info("notify: slave: %{dnsname}: %{sockaddr}: zone is frozen", mesg->qname, &mesg->other.sa);
+            }
+#endif
         }   /* type = SLAVE */
         else
         {
@@ -709,7 +741,7 @@ notify_process_masterquery_in(zdb *database, message_data *mesg, packet_unpack_r
 
             // note: a slave can also be a master ... do not cut this
             
-            log_warn("notify: notification query for master zone %{dnsname}", mesg->qname);
+            log_warn("notify: %{dnsname}: %{sockaddr}: host sent a notification query for master zone ", mesg->qname, &mesg->other.sa);
 
             mesg->status = FP_SLAVE_NOTIFIES_MASTER;
             mesg->send_length = mesg->received;
@@ -718,7 +750,7 @@ notify_process_masterquery_in(zdb *database, message_data *mesg, packet_unpack_r
     }
     else
     {
-        log_warn("notify: notification query for unknown zone %{dnsname} %{dnsclass}", mesg->qname, &mesg->qclass);
+        log_warn("notify: %{dnsname}: %{sockaddr}: host sent a notification query for an unknown zone", mesg->qname, &mesg->other.sa);
 
         MESSAGE_HIFLAGS(mesg->buffer) |= QR_BITS;
         mesg->status = FP_NOTIFY_UNKNOWN_ZONE;
@@ -743,7 +775,7 @@ notify_process_masterquery_in(zdb *database, message_data *mesg, packet_unpack_r
  */
 
 ya_result
-notify_process(zdb *database, message_data *mesg)
+notify_process(message_data *mesg)
 {
     ya_result return_value = ERROR;
 
@@ -762,7 +794,7 @@ notify_process(zdb *database, message_data *mesg)
          * Else we discard.
          */
         
-        log_debug1("notify: notification answer");
+        log_debug1("notify: %{dnsname}: %{sockaddr}: notification answer", mesg->qname, &mesg->other.sa);
         
         notify_slaveanswer(mesg);  // thread-safe
         
@@ -776,7 +808,7 @@ notify_process(zdb *database, message_data *mesg)
          * Else we discard.
          */
 
-        log_debug1("notify: notification query");
+        log_debug1("notify: %{dnsname}: %{sockaddr}: notification query", mesg->qname, &mesg->other.sa);
 
         packet_unpack_reader_data reader;
         packet_reader_init(&reader, mesg->buffer, mesg->received);
@@ -802,7 +834,7 @@ notify_process(zdb *database, message_data *mesg)
                              * Master sent an notify for the IN class
                              */
                             
-                            notify_process_masterquery_in(database, mesg, &reader);
+                            notify_process_masterquery_in(mesg, &reader);
                             message_transform_to_error(mesg);
                             break;
                         }
@@ -826,7 +858,7 @@ notify_process(zdb *database, message_data *mesg)
         }
 #endif
 
-        return return_value; /** @todo give a specific error code */
+        return return_value; /** @todo 20110616 edf -- give a specific error code */
     }
 }
 
@@ -840,7 +872,7 @@ notify_message_free(notify_message *msg)
     
     if(msg->origin != NULL)
     {
-        free(msg->origin);
+        dnsname_zfree(msg->origin);
         msg->origin = NULL;
     }
     
@@ -853,13 +885,19 @@ notify_message_free(notify_message *msg)
         }
         case NOTIFY_MESSAGE_TYPE_ANSWER:
         {
+#ifdef DEBUG
             log_debug("notify_message_free(%p) host_address_delete(%p)", msg, msg->payload.answer.host);
             debug_log_stacktrace(g_server_logger, MSG_DEBUG7, "notify_message_free:host_address_delete");
+#endif
             host_address_delete(msg->payload.answer.host);
             if(msg->payload.answer.message != NULL)
             {
                 free(msg->payload.answer.message); // message_data (free, not ZFREE)
             }
+            break;
+        }
+        case NOTIFY_MESSAGE_TYPE_DOMAIN:
+        {
             break;
         }
     }
@@ -911,57 +949,85 @@ notify_service(struct service_worker_s *worker)
     u32 last_current_queries_cleanup_epoch_us = 0;
 
     /**
-     * @todo the idea here is to get the right interface.
+     * @todo 20111216 edf -- the idea here is to get the right interface.
      *       This loop breaking at the first result is of course wrong.
      */
 
     const addressv6 localhost6 = {.bytes = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1}};
+    socketaddress *sa4 = NULL;
+    socketaddress *sa6 = NULL;
+    
+    bool send_socket4_is_localhost = FALSE;
 
-    for(interface *intf = g_config->interfaces; intf < g_config->interfaces_limit; intf++)
+    for(int i = 0; i < server_context.udp_interface_count; ++i)
     {
-        if(( send_socket4 < 0) && (intf->udp.addr->ai_family == AF_INET))
+        int ai_family = server_context.udp_interface[i]->ai_family;
+        
+        if((( send_socket4 < 0) || send_socket4_is_localhost) && (ai_family == AF_INET))
         {
-            socketaddress *sa = (socketaddress*)intf->udp.addr->ai_addr;
+            socketaddress *sa = (socketaddress*)server_context.udp_interface[i]->ai_addr;
             
             u32 ipv4 = (u32)sa->sa4.sin_addr.s_addr;
             
-            // avoid bad ones
+            // avoid bad ones : filter out addresses that are not likely to be routed out
             
-            if( ((ipv4 & NU32(0xff000000)) != NU32(0x7f000000) ) && // 127.0.0.0/8
+            if(
                 ((ipv4 & NU32(0xf0000000)) != NU32(0xe0000000) ) && // 224.0.0.0/4
                 ((ipv4 & NU32(0xffffffff)) != NU32(0xffffffff) ) )  // 255.255.255.255/32
             {
-                send_socket4 = intf->udp.sockfd;
+                int sockfd_index = i;
+                
+                if(server_context.reuse)
+                {
+                    sockfd_index *= server_context.udp_unit_per_interface;
+                }
+                
+                // if the socket is localhost, mark it so it can be overwritten by a non-localhost
+                send_socket4_is_localhost = ((ipv4 & NU32(0xff000000)) == NU32(0x7f000000) ); // 127.0.0.0/8
+                
+                send_socket4 = server_context.udp_socket[sockfd_index];
+                sa4 = sa;
             }
             else
             {
-                log_info("%{sockaddr} cannot be used for notification", sa);
+                log_info("notify: %{sockaddr} cannot be used for notification", sa);
             }
         }
                 
-        if(( send_socket6 < 0) && (intf->udp.addr->ai_family == AF_INET6))
+        if(( send_socket6 < 0) && (ai_family == AF_INET6))
         {
-            socketaddress *sa = (socketaddress*)intf->udp.addr->ai_addr;
+            socketaddress *sa = (socketaddress*)server_context.udp_interface[i]->ai_addr;
             addressv6 ipv6;
             memcpy(&ipv6, &sa->sa6.sin6_addr, 16);
-            if((memcmp(&ipv6, &localhost6, 16) != 0) // ::1/128
-              )
+            if(memcmp(&ipv6, &localhost6, 16) != 0) // ::1/128
             {
-                send_socket6 = intf->udp.sockfd;
+                int sockfd_index = i;
+                if(server_context.reuse) sockfd_index *= server_context.udp_unit_per_interface;
+                
+                send_socket6 = server_context.udp_socket[sockfd_index];
+                sa6 = sa;
             }
             else
             {
-                log_info("%{sockaddr} cannot be used for notification", sa);
+                log_info("notify: %{sockaddr} cannot be used for notification", sa);
             }
         }
     }
 
-    if((send_socket4 < 0))
+    if((send_socket4 >= 0))
+    {
+        log_info("notify: IPv4 notifications will be sent through %{sockaddr}", &sa4->sa);
+    }
+    else
     {
         log_warn("notify: no usable IPv4 socket bound");
     }
     
-    if((send_socket6 < 0))
+    if((send_socket6 >= 0))
+    {
+        log_info("notify: IPv6 notifications will be sent through %{sockaddr}", &sa6->sa);
+    }
+    else
     {
         log_warn("notify: no usable IPv6 socket bound");
         
@@ -1005,7 +1071,7 @@ notify_service(struct service_worker_s *worker)
                     message_query_summary* mqs = (message_query_summary*)node->value;
                     if(last_current_queries_cleanup_epoch_us > mqs->expire_epoch_us)
                     {
-#if DEBUG
+#ifdef DEBUG
                         double expired_since = last_current_queries_cleanup_epoch_us - mqs->expire_epoch_us;
                         expired_since /= 1000000.0;
                         log_debug("notify: query (%hx) to %{hostaddr} expired %f seconds ago", mqs->id, mqs->host, expired_since);
@@ -1017,7 +1083,7 @@ notify_service(struct service_worker_s *worker)
                         }
                         else
                         {
-#if DEBUG
+#ifdef DEBUG
                             log_debug("notify: query (%hx) to %{hostaddr} got %hhi tries left (NOT IMPLEMENTED)", mqs->id, mqs->host, mqs->tries);
 #endif                  
                             mqs->expire_epoch_us = tus + MESSAGE_QUERY_TIMEOUT_US;
@@ -1064,12 +1130,21 @@ notify_service(struct service_worker_s *worker)
 
             switch(message->payload.type)
             {
+                case NOTIFY_MESSAGE_TYPE_DOMAIN:
+                {
+                    if(!notify_slaves_convert_domain_to_notify(message))
+                    {
+                        // failed
+                        break;
+                    }
+                    // fallthrough
+                }
                 case NOTIFY_MESSAGE_TYPE_NOTIFY:
                 {
 #ifndef DEBUG
-                    log_info("notify: notifying slaves for %{dnsname}", message->origin);
+                    log_info("notify: %{dnsname}: notifying slaves", message->origin);
 #else
-                    log_info("notify: notifying slaves for %{dnsname} (%{dnstype} %{dnsclass})", message->origin, &message->payload.notify.ztype, &message->payload.notify.zclass);
+                    log_info("notify: %{dnsname}: notifying slaves with %{dnstype} %{dnsclass}", message->origin, &message->payload.notify.ztype, &message->payload.notify.zclass);
 #endif
                     host_address **ha_prev = &message->payload.notify.hosts_list;
                     host_address *ha = *ha_prev;
@@ -1091,7 +1166,7 @@ notify_service(struct service_worker_s *worker)
                             }
                             else
                             {
-                                log_warn("notify: unable to resolve %{dnsname}", ha->ip.dname.dname);
+                                log_warn("notify: %{dnsname}: unable to resolve %{dnsname}", message->origin, ha->ip.dname.dname);
                             }
 
                             *ha_prev = ha->next;
@@ -1111,7 +1186,7 @@ notify_service(struct service_worker_s *worker)
                      */
 
                     /*
-                     * @todo remove myself
+                     * @todo 20111216 edf -- remove myself
                      */
 
                     /**
@@ -1138,7 +1213,7 @@ notify_service(struct service_worker_s *worker)
                 }
                 case NOTIFY_MESSAGE_TYPE_ANSWER:
                 {
-                    log_info("notify: answer from slave %{hostaddr} for %{dnsname}", message->payload.answer.host, message->origin);
+                    log_info("notify: %{dnsname}: answer from slave at %{hostaddr}", message->origin, message->payload.answer.host);
                     
                     ptr_node *node = ptr_set_avl_find(&notify_zones, message->origin);
                     
@@ -1153,7 +1228,7 @@ notify_service(struct service_worker_s *worker)
                              */
                             
                             /**
-                             * @todo VERIFY THE TSIG HERE
+                             * @todo 20121130 edf -- VERIFY THE TSIG HERE
                              * 
                              * The possible TSIG in the message has to be verified here
                              */
@@ -1180,8 +1255,9 @@ notify_service(struct service_worker_s *worker)
                                     if(node == NULL)
                                     {
                                         /* most likely a timeout */
-                                        log_err("notify: answer from %{hostaddr} for %{dnsname}: matching query has not been found",
-                                                message->payload.answer.host, message->origin);
+                                        
+                                        log_err("notify: %{dnsname}: %{hostaddr}: unexpected answer: could not find a matching query for notification answer with id %04hx",
+                                                message->origin, message->payload.answer.host, id);
                                         // delete message
                                         notify_message_free(message);
 
@@ -1201,8 +1277,8 @@ notify_service(struct service_worker_s *worker)
                                     {
                                         // if everything is good, then proceed
                                         
-                                        log_err("notify: answer from %{hostaddr} for %{dnsname}: signature verification failed: %r",
-                                                    message->payload.answer.host, message->origin, return_value);
+                                        log_err("notify: %{dnsname}: %{hostaddr}: TSIG signature verification failed: %r",
+                                                message->origin, message->payload.answer.host, return_value);
                                         // delete message
                                         notify_message_free(message);
                                         
@@ -1222,20 +1298,21 @@ notify_service(struct service_worker_s *worker)
                                 {
                                     if(!message->payload.answer.aa)
                                     {
-                                        log_err("notify: answer from %{hostaddr} for %{dnsname}: no AA",
-                                                    message->payload.answer.host, message->origin);
+                                        log_err("notify: %{dnsname}: %{hostaddr}: no AA in answer",
+                                                    message->origin, message->payload.answer.host);
                                     }
                                 }
                                 else
                                 {
-                                    log_err("notify: error from %{hostaddr} for %{dnsname}: %r",
-                                                message->payload.answer.host, message->origin, MAKE_DNSMSG_ERROR(message->payload.answer.rcode));
+                                    log_err("notify: %{dnsname}: %{hostaddr}: answered with error %r",
+                                                message->origin, message->payload.answer.host, MAKE_DNSMSG_ERROR(message->payload.answer.rcode));
                                 }
                             }
                             else
                             {
-                                log_err("notify: unexpected answer from %{hostaddr} for %{dnsname}", message->payload.answer.host, message->origin);
+                                log_err("notify: %{dnsname}: %{hostaddr}: unexpected answer: host is not on the currently notified list", message->origin, message->payload.answer.host);
                             }
+                            
                             if(msg->payload.notify.hosts_list == NULL) /// @todo 20150616 edf -- there was a clear NULL dereference. test the fix
                             {
                                 ptr_set_avl_delete(&notify_zones, msg->origin);
@@ -1244,13 +1321,13 @@ notify_service(struct service_worker_s *worker)
                         }
                         else // msg = NULL
                         {
-                            log_err("notify: unexpected answer by %{hostaddr} for %{dnsname}", message->payload.answer.host, message->origin);
+                            log_err("notify: %{dnsname}: %{hostaddr}: unexpected answer", message->origin, message->payload.answer.host);
                             ptr_set_avl_delete(&notify_zones, message->origin); /// @todo 20150616 edf -- there was a clear NULL reference. test the fix
                         }
                     }
                     else
                     {
-                        log_err("notify: unexpected answer by %{hostaddr} for %{dnsname}", message->payload.answer.host, message->origin);
+                        log_err("notify: %{dnsname}: %{hostaddr}: unexpected answer: no pending notifications for the zone", message->origin, message->payload.answer.host);
                     }
                     
                     // delete message
@@ -1308,7 +1385,7 @@ notify_service(struct service_worker_s *worker)
                 if(ISOK(err))
                 {
                     message_query_summary* mqs;
-                    ZALLOC_OR_DIE(message_query_summary*, mqs, message_query_summary, GENERIC_TAG);
+                    ZALLOC_OR_DIE(message_query_summary*, mqs, message_query_summary, MSGQSUMR_TAG);
 
 #if HAS_TSIG_SUPPORT
                     message_query_summary_init(mqs, id, ha, msgdata->tsig.mac, msgdata->tsig.mac_size);
@@ -1455,11 +1532,38 @@ notify_service(struct service_worker_s *worker)
  */
 
 void
-notify_slaves(u8 *origin)
+notify_slaves(const u8 *origin)
 {
     if(!notify_service_initialised)
     {
         return;
+    }
+    
+    notify_message *message;
+    ZALLOC_OR_DIE(notify_message*, message, notify_message, NOTFYMSG_TAG);
+
+    message->origin = dnsname_zdup(origin);
+    message->payload.domain.type = NOTIFY_MESSAGE_TYPE_DOMAIN;
+
+    async_message_s *async = async_message_alloc();
+    async->id = 0;
+    async->args = message;
+    async->handler = NULL;
+    async->handler_args = NULL;
+    async_message_call(&notify_handler_queue, async);
+}
+
+/**
+ * 
+ * @param origin
+ */
+
+static bool
+notify_slaves_convert_domain_to_notify(notify_message *message)
+{
+    if(!notify_service_initialised)
+    {
+        return FALSE;
     }
 
     /*
@@ -1476,7 +1580,7 @@ notify_slaves(u8 *origin)
 
     zdb *db = g_config->database;
 
-    zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(db, origin); // RC++
+    zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(db, message->origin); // RC++
     
     if((zone == NULL) || ZDB_ZONE_INVALID(zone))
     {
@@ -1485,17 +1589,17 @@ notify_slaves(u8 *origin)
             zdb_zone_release(zone);
         }
         
-        log_debug("notify: zone '%{dnsname}' temporarily unavailable", origin);
+        log_debug("notify: %{dnsname}: zone temporarily unavailable", message->origin);
         
-        return;
+        return FALSE;
     }
     
-    zone_desc_s *zone_desc = zone_acquirebydnsname(origin);
+    zone_desc_s *zone_desc = zone_acquirebydnsname(message->origin);
     if(zone_desc == NULL)
     {
         zdb_zone_release(zone);
-        log_err("notify: zone '%{dnsname}' is not configured", origin);
-        return;
+        log_err("notify: %{dnsname}: zone not configured", message->origin);
+        return FALSE;
     }
     
     host_address list;
@@ -1602,11 +1706,7 @@ notify_slaves(u8 *origin)
 
     if(list.next != NULL)
     {
-        notify_message *message;
 
-        ZALLOC_OR_DIE(notify_message*, message, notify_message, NOTFYMSG_TAG);
-
-        message->origin = dnsname_dup(origin);
         message->payload.type = NOTIFY_MESSAGE_TYPE_NOTIFY;
         message->payload.notify.hosts_list = list.next;
         message->payload.notify.repeat_countdown = zone_desc->notify.retry_count; /* 10 times */
@@ -1615,15 +1715,11 @@ notify_slaves(u8 *origin)
         message->payload.notify.ztype = TYPE_SOA;
         message->payload.notify.zclass = CLASS_IN;
 
-        async_message_s *async = async_message_alloc();
-        async->id = 0;
-        async->args = message;
-        async->handler = NULL;
-        async->handler_args = NULL;
-        async_message_call(&notify_handler_queue, async);
     }
     
     zone_release(zone_desc);
+    
+    return message->payload.type == NOTIFY_MESSAGE_TYPE_NOTIFY;
 }
 
 
@@ -1634,9 +1730,10 @@ notify_slaves(u8 *origin)
  */
 
 void
-notify_clear(u8 *origin)
+notify_clear(const u8 *origin)
 {
-    /// @todo IMPLEMENT IT
+    (void)origin;
+
 }
 
 void
@@ -1646,7 +1743,7 @@ notify_host_list(zone_desc_s *zone_desc, host_address *hosts, u16 zclass)
 
     ZALLOC_OR_DIE(notify_message*, message, notify_message, NOTFYMSG_TAG);
 
-    message->origin = dnsname_dup(zone_desc->origin);
+    message->origin = dnsname_zdup(zone_desc->origin);
     message->payload.type = NOTIFY_MESSAGE_TYPE_NOTIFY;
     message->payload.notify.hosts_list = hosts;
     message->payload.notify.repeat_countdown = zone_desc->notify.retry_count; /* 10 times */
@@ -1760,4 +1857,3 @@ notify_service_finalise()
 /** @} */
 
 /*----------------------------------------------------------------------------*/
-

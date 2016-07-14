@@ -1,63 +1,81 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
-/** @defgroup zmalloc The database specialized allocation function
- *  @ingroup dnsdb
- *  @brief The database specialized allocation function
  *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+/** @defgroup zalloc very fast, no-overhead specialised memory allocation functions
+ *  @ingroup dnscore
+ *  @brief no-overhead specialised allocation functions
+ *
+ * These memory allocations are using memory mapping to allocate blocks.
+ * 
+ * One difficulty is that to free a block, its size has to be known first.
+ * Which is not an issue for most of our uses.
+ * 
+ * One drawback is that once allocated, the memory is never released to the system
+ * (but is still available to be allocated again by the program)
+ * 
+ * Much faster than malloc, and no overhead.
+ * 
+ * Allocated memory is always aligned to at least 64 bits
+ * 
+ * The granularity of the size of a block is 8 bytes
+ * 
+ * The base alignment is always 4096 + real size of the block
+ *  *
  * @{
  */
 
 #include "dnscore/dnscore-config.h"
-#include "dnscore/dnscore-config.h"
 
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/mman.h>
-#include <pthread.h>
 
 #define _ZALLOC_C
 
-#include <dnscore/sys_types.h>
-#include <dnscore/logger.h>
-#include <dnscore/format.h>
-#include <dnscore/zalloc.h>
+#include "dnscore/sys_types.h"
+#include "dnscore/logger.h"
+#include "dnscore/format.h"
+#include "dnscore/zalloc.h"
 
 extern logger_handle* g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
 #if HAS_ZALLOC_DEBUG_SUPPORT
+
+#include "dnscore/ptr_set_debug.h"
+
 #define ZALLOC_DEBUG                 1
 #define ZDB_DEBUG_ZALLOC_TRASHMEMORY 1
 #else
@@ -71,7 +89,6 @@ extern logger_handle* g_system_logger;
 #define ZALLOC_STATISTICS            0
 #endif
 
-
 /*
  *
  */
@@ -82,8 +99,13 @@ extern logger_handle* g_system_logger;
 
 //#define ZALLOC_MMAP_BLOC_SIZE  0x20000  // 128K : for small usages
 //#define ZALLOC_MMAP_BLOC_SIZE  0x300000 //   3M : not enough to be in a 4M page, still a lot
+
+// This setting should stay as it is.
+// The one exception is for hardware 
+#ifndef ZALLOC_MMAP_BLOC_SIZE
 #define ZALLOC_MMAP_BLOC_SIZE 0x1000000 //  16M : enough for lots of records, but too much for smaller setups
                                            //        except if the LAZY define is set ...
+#endif
 
 #define ZALLOC_LAZY 1        /// @note edf -- do NOT disable this
 
@@ -165,6 +187,35 @@ static mutex_t zalloc_statistics_mtx = MUTEX_INITIALIZER;
 static int system_page_size = 0;
 static volatile bool zalloc_init_done = FALSE;
 
+#if HAS_ZALLOC_DEBUG_SUPPORT
+
+struct zalloc_range_s
+{
+    intptr from;
+    intptr to;
+};
+typedef struct zalloc_range_s zalloc_range_s;
+
+static int
+zalloc_ptr_set_debug_range_compare(const void *node_a, const void *node_b)
+{
+    zalloc_range_s *ra = (zalloc_range_s*)node_a;
+    zalloc_range_s *rb = (zalloc_range_s*)node_b;
+    if(ra->to < rb->from)
+    {
+        return 1;
+    }
+    if(rb->to < ra->from)
+    {
+        return -1;
+    }
+    return 0;
+}
+
+ptr_set_debug zalloc_pages_set = { NULL, zalloc_ptr_set_debug_range_compare};
+pthread_mutex_t zalloc_pages_set_mtx = PTHREAD_MUTEX_INITIALIZER;
+#endif
+
 int
 zalloc_init()
 {
@@ -178,6 +229,13 @@ zalloc_init()
     // lcm is in this file
     
     system_page_size = getpagesize();
+    
+    if(system_page_size > ZALLOC_MMAP_BLOC_SIZE)
+    {
+        fprintf(stderr, "System page size bigger than the internal allocation size (%d > %d)\n", system_page_size, ZALLOC_MMAP_BLOC_SIZE);
+        fprintf(stderr, "Please reduce the page size to a smaller value or rebuild disabling the internal allocation using --disable-zalloc\n");
+        exit(-1);
+    }
     
     yassert(system_page_size > 0);
 
@@ -232,7 +290,17 @@ zalloc_lines(u32 page_index)
         u32 size = page_size[page_index];
 
         map_pointer = (page)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-
+        
+#if HAS_ZALLOC_DEBUG_SUPPORT
+        zalloc_range_s *range = malloc(sizeof(zalloc_range_s));
+        range->from = (intptr)map_pointer;
+        range->to = range->from + size - 1;
+        pthread_mutex_lock(&zalloc_pages_set_mtx);
+        ptr_node_debug *node = ptr_set_debug_avl_insert(&zalloc_pages_set, range);
+        node->value = (void*)(intptr)page_index;
+        pthread_mutex_unlock(&zalloc_pages_set_mtx);
+#endif
+       
 #if ZALLOC_STATISTICS
         pthread_mutex_lock(&zalloc_statistics_mtx);
         mmap_count++;
@@ -412,12 +480,16 @@ zfree_line_report(int page_index)
             else
             {
                 log_err("[%3x][%6x] NULL", page_index, i);
-                ret = (void**)*ret;
+                break;
             }
         }
         
         logger_flush();
     }
+#ifndef NDEBUG
+    bool zalloc_memory_allocations_have_been_corrupted = FALSE;
+    assert(zalloc_memory_allocations_have_been_corrupted);
+#endif
 }
 
 void
@@ -436,6 +508,24 @@ zfree_line(void* ptr, u32 page_index)
 #if ZALLOC_DEBUG
         u64* hdr = (u64*)ptr;
         hdr--;
+        
+#if HAS_ZALLOC_DEBUG_SUPPORT
+        zalloc_range_s range = {(intptr)hdr,(intptr)hdr};
+        ptr_node_debug *node;
+        pthread_mutex_lock(&zalloc_pages_set_mtx);
+        node = ptr_set_debug_avl_find(&zalloc_pages_set, &range);
+        pthread_mutex_unlock(&zalloc_pages_set_mtx);
+        
+        if(node == NULL)
+        {
+            abort(); // memory not part of the zalloc pages
+        }
+        
+        if(node->value != (void*)(intptr)page_index)
+        {
+            abort(); // memory not of the right size
+        }
+#endif
         
         u64 magic = *hdr;
         
@@ -631,6 +721,26 @@ zalloc_print_stats(output_stream *os)
 }
 
 #else
+
+void*
+malloc_string_or_die(size_t len, u64 tag)
+{
+    u8 *ret;
+    MALLOC_OR_DIE(u8*,ret,len + 1,tag);
+    *ret = (u8)MIN(255,len);
+    ++ret;
+    (void)tag;
+    return ret;    
+}
+
+void
+mfree_string(void *ptr_)
+{
+    u8 *ptr = (u8*)ptr_;
+    --ptr;
+    yassert((((intptr)ptr)&1) == 0);
+    free(ptr);
+}
 
 /**
  * ZALLOC NOT BUILT-IN : DOES NOTHING WORTH MENTIONNING

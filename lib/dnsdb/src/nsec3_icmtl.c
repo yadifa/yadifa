@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -47,7 +47,6 @@
 #include <stdlib.h>
 
 #include <dnscore/logger.h>
-#include <dnscore/format.h>
 #include <dnscore/base32hex.h>
 #include <dnscore/ptr_set.h>
 
@@ -69,6 +68,97 @@
 
 extern logger_handle *g_dnssec_logger;
 
+
+
+/**
+ * Returns TRUE if the rdata is a match for an NSEC3PARAM record in the collection.
+ * Meant to be used with the NSEC3 chains.
+ * 
+ * @param collection
+ * @param nsec3param_rdata
+ * @return 
+ */    
+
+bool
+nsec3_has_nsec3param(zdb_rr_collection *collection, const u8 *nsec3param_rdata)
+{
+    zdb_packed_ttlrdata *nsec3param = zdb_record_find(collection, TYPE_NSEC3PARAM);
+    while(nsec3param != NULL)
+    {
+        if(nsec3param_compare_by_rdata(ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec3param), nsec3param_rdata) == 0)
+        {
+            // match
+            return TRUE;
+        }
+        
+        nsec3param = nsec3param->next;
+    }
+    
+    return FALSE;
+}
+
+static void
+nsec3_add_nsec3paramdel(zdb_rr_collection *collection, const zdb_ttlrdata *nsec3param)
+{
+    zdb_packed_ttlrdata *nsec3paramdel;
+    ZDB_RECORD_ZALLOC(nsec3paramdel, 0, nsec3param->rdata_size, nsec3param->rdata_pointer);
+    zdb_record_insert_checked(collection, TYPE_NSEC3PARAMDEL, nsec3paramdel);
+}
+
+bool
+nsec3_remove_nsec3paramdel(zdb_rr_collection *collection, const u8 *nsec3param_rdata)
+{
+    zdb_packed_ttlrdata *nsec3paramdel = zdb_record_find(collection, TYPE_NSEC3PARAMDEL);
+    while(nsec3paramdel != NULL)
+    {
+        if(nsec3param_compare_by_rdata(ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec3paramdel), nsec3param_rdata) == 0)
+        {
+            // match
+            const zdb_ttlrdata ttlrdata = {NULL, 0, NSEC3PARAM_RDATA_SIZE_FROM_RDATA(nsec3param_rdata), 0, (u8*)nsec3param_rdata};
+            zdb_record_delete_exact(collection, TYPE_NSEC3PARAMDEL, &ttlrdata); // potentially unsafe if the callers uses the record (unlikely and not done at the moment)
+            return TRUE;
+        }
+        
+        nsec3paramdel = nsec3paramdel->next;
+    }
+    
+    return FALSE;
+}
+
+static bool
+nsec3_has_nsec3paramdel(const zdb_rr_collection *collection, const zdb_ttlrdata *nsec3)
+{
+    zdb_packed_ttlrdata *nsec3paramdel = zdb_record_find(collection, TYPE_NSEC3PARAMDEL);
+    while(nsec3paramdel != NULL)
+    {
+        if(nsec3param_compare_by_rdata(ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec3paramdel), nsec3->rdata_pointer) == 0)
+        {
+            return TRUE;
+        }
+        
+        nsec3paramdel = nsec3paramdel->next;
+    }
+    
+    return FALSE;
+}
+
+static bool
+nsec3_has_nsec3param_chain(const zdb_zone *zone, const zdb_ttlrdata *nsec3)
+{
+    nsec3_zone *n3 = zone->nsec.nsec3;
+    while(n3 != NULL)
+    {
+        if(nsec3param_compare_by_rdata(n3->rdata, nsec3->rdata_pointer) == 0)
+        {
+            return TRUE;
+        }
+        
+        n3 = n3->next;
+    }
+    
+    return FALSE;
+}
+
 /*
  * Finds the nsec3param's alter-ego and removes all the nsec3 records associated to it.
  * (icmtl)
@@ -78,11 +168,13 @@ extern logger_handle *g_dnssec_logger;
 void
 nsec3_remove_nsec3param_by_record(zdb_zone* zone, zdb_packed_ttlrdata* nsec3param)
 {
+
+    
     nsec3_zone* n3 = zone->nsec.nsec3;
 
     while(n3 != NULL)
     {
-        if(nsec3_zone_rdata_compare(n3->rdata, nsec3param->rdata_start) == 0)
+        if(nsec3param_compare_by_rdata(n3->rdata, nsec3param->rdata_start) == 0)
         {
             nsec3_zone_destroy(zone, n3);
 
@@ -96,11 +188,13 @@ nsec3_remove_nsec3param_by_record(zdb_zone* zone, zdb_packed_ttlrdata* nsec3para
 void
 nsec3_add_nsec3param_by_record(zdb_zone* zone, zdb_packed_ttlrdata* nsec3param)
 {
+
+    
     nsec3_zone* n3 = zone->nsec.nsec3;
 
     while(n3 != NULL)
     {
-        if(nsec3_zone_rdata_compare(n3->rdata, nsec3param->rdata_start) == 0)
+        if(nsec3param_compare_by_rdata(n3->rdata, nsec3param->rdata_start) == 0)
         {
             // already exists
 
@@ -118,11 +212,13 @@ nsec3_add_nsec3param_by_record(zdb_zone* zone, zdb_packed_ttlrdata* nsec3param)
 void
 nsec3_remove_nsec3(zdb_zone* zone, zdb_packed_ttlrdata* nsec3param)
 {
+
+    
     nsec3_zone* n3 = zone->nsec.nsec3;
 
     while(n3 != NULL)
     {
-        if(nsec3_zone_rdata_compare(n3->rdata, nsec3param->rdata_start) == 0)
+        if(nsec3param_compare_by_rdata(n3->rdata, nsec3param->rdata_start) == 0)
         {
             u8 digest[256];
 
@@ -151,12 +247,14 @@ nsec3_remove_nsec3(zdb_zone* zone, zdb_packed_ttlrdata* nsec3param)
 
 void
 nsec3_remove_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec3_rdata, u16 nsec3_rdata_size)
-{
+{   
+
+    
     nsec3_zone* n3 = zone->nsec.nsec3;
 
     while(n3 != NULL)
     {
-        if(nsec3_zone_rdata_compare(n3->rdata, nsec3_rdata) == 0)
+        if(nsec3param_compare_by_rdata(n3->rdata, nsec3_rdata) == 0)
         {
             u8 digest[256];
 
@@ -170,25 +268,27 @@ nsec3_remove_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec
             {
                 digest[0] = digest_len;
 
-                nsec3_zone_item* item = nsec3_avl_find(&n3->items, digest);
+                nsec3_zone_item *item = nsec3_avl_find(&n3->items, digest);
 
                 if(item != NULL)
                 {
                     log_debug("nsec3_remove_nsec3_by_name: destroying %{digest32h}", item->digest);
 
 					/*
-					GOT IT : AN NSEC3 RECORD IS REMOVED BY IXFR BUT THE LABEL HAS NOT BEEN CHANGED
-					I PRESUME IT IS BECAUSE THE AXFR CHAIN IS CHANGED
-					I NEED A REPLACE FUNCTION, I NEED TO SORT THE IXFR NSEC(3) OPERATIONS
-					*/
+					 * GOT IT : AN NSEC3 RECORD IS REMOVED BY IXFR BUT THE LABEL HAS NOT BEEN CHANGED
+					 * I PRESUME IT IS BECAUSE THE AXFR CHAIN IS CHANGED
+					 * I NEED A REPLACE FUNCTION, I NEED TO SORT THE IXFR NSEC(3) OPERATIONS
+					 */
 
                     if(item->sc > 0)
                     {
-                        nsec3_zone_item* prev = nsec3_avl_node_mod_prev(item);
+                        nsec3_zone_item *prev = nsec3_avl_node_mod_prev(item);
+                        
+                        log_debug("nsec3_remove_nsec3_by_name: prev of %{digest32h} is %{digest32h}", item->digest, prev->digest);
                         
                         yassert(prev != NULL);
                         
-                        if(prev != item)
+                        if(prev != item) // because it can be the last item
                         {
                             nsec3_move_all_star(item, prev);
                         }
@@ -223,17 +323,19 @@ nsec3_remove_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec
 void
 nsec3_remove_nsec3_by_digest(zdb_zone* zone, const u8 *nsec3_digest, const u8* nsec3_rdata, u16 nsec3_rdata_size)
 {
+
+    
     nsec3_zone* n3 = zone->nsec.nsec3;
 
     while(n3 != NULL)
     {
-        if(nsec3_zone_rdata_compare(n3->rdata, nsec3_rdata) == 0)
+        if(nsec3param_compare_by_rdata(n3->rdata, nsec3_rdata) == 0)
         {
             nsec3_zone_item* item = nsec3_avl_find(&n3->items, nsec3_digest);
 
             if(item != NULL)
             {
-                log_debug("nsec3_remove_nsec3_by_name: destroying %{digest32h}", item->digest);
+                log_debug("nsec3_remove_nsec3_by_digest: destroying %{digest32h}", item->digest);
 
                 /*
                 GOT IT : AN NSEC3 RECORD IS REMOVED BY IXFR BUT THE LABEL HAS NOT BEEN CHANGED
@@ -275,43 +377,6 @@ nsec3_remove_nsec3_by_digest(zdb_zone* zone, const u8 *nsec3_digest, const u8* n
     }
 }
 
-
-nsec3_zone_item*
-nsec3_get_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec3_rdata, u16 nsec3_rdata_size)
-{
-    nsec3_zone* n3 = zone->nsec.nsec3;
-
-    while(n3 != NULL)
-    {
-        if(nsec3_zone_rdata_compare(n3->rdata, nsec3_rdata) == 0)
-        {
-            u8 digest[256];
-
-#ifdef DEBUG
-            memset(digest, 0xd1, sizeof(digest));
-#endif
-
-            ya_result digest_len = base32hex_decode((char*)&nsec3_label[1], nsec3_label[0], &digest[1]);
-
-            if(ISOK(digest_len))
-            {
-                digest[0] = digest_len;
-
-                nsec3_zone_item* item = nsec3_avl_find(&n3->items, digest);
-
-                return item;
-            }
-
-            break;
-        }
-
-        n3 = n3->next;
-    }
-
-    return NULL;
-}
-
-
 /*
  * Remove the RRSIG of an NSEC3 (icmtl)
  */
@@ -319,11 +384,13 @@ nsec3_get_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec3_r
 void
 nsec3_remove_rrsig(zdb_zone* zone, zdb_packed_ttlrdata* nsec3param)
 {
+
+    
     nsec3_zone* n3 = zone->nsec.nsec3;
 
     while(n3 != NULL)
     {
-        if(nsec3_zone_rdata_compare(n3->rdata, nsec3param->rdata_start) == 0)
+        if(nsec3param_compare_by_rdata(n3->rdata, nsec3param->rdata_start) == 0)
         {
             u8 digest[256];
 
@@ -351,11 +418,13 @@ nsec3_remove_rrsig(zdb_zone* zone, zdb_packed_ttlrdata* nsec3param)
 void
 nsec3_add_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec3_rdata, u16 nsec3_rdata_size)
 {
+
+    
     nsec3_zone* n3 = zone->nsec.nsec3;
 
     while(n3 != NULL)
     {
-        if(nsec3_zone_rdata_compare(n3->rdata, nsec3_rdata) == 0)
+        if(nsec3param_compare_by_rdata(n3->rdata, nsec3_rdata) == 0)
         {
             u8 digest[256];
 
@@ -369,27 +438,32 @@ nsec3_add_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec3_r
             {
                 digest[0] = digest_len;
 
+#ifndef NDEBUG
                 nsec3_zone_item* item = nsec3_avl_find(&n3->items, digest);
+                assert(item == NULL);
+#endif  
+                nsec3_zone_item *self = nsec3_avl_insert(&n3->items, digest);
 
-                if(item == NULL)
-                {
-                    nsec3_zone_item *self = nsec3_avl_insert(&n3->items, (u8*)digest);
-                    
-                    self->flags = nsec3_rdata[1];
-                    /*
-                    self->rc = 0;
-                    self->sc = 0;
+                self->flags = nsec3_rdata[1];
+                /*
+                self->rc = 0;
+                self->sc = 0;
 
-                    self->type_bit_maps = NULL;
-                    self->type_bit_maps_size = 0;
-                    */
-                    nsec3_zone_item_update_bitmap(self, nsec3_rdata, nsec3_rdata_size);
-                }
-                else
-                {
-                    /* exists already */
-                    assert(FALSE);
-                }
+                self->type_bit_maps = NULL;
+                self->type_bit_maps_size = 0;
+                */
+                nsec3_zone_item_update_bitmap(self, nsec3_rdata, nsec3_rdata_size);
+                
+                /// @note 20150910 edf -- Some of the *.label links from the predecessor may be invalid
+                ///                       Brief explanation of the architecture:
+                ///                       Every nsec3-covered labels points to all its nsec3 items/records (one by nsec3param chain)
+                ///                       But it also points into the nsec3 record that would cover *.label.parents
+                ///                       This helps being very fast for a lot of NSEC3-error answers.
+                ///                       Only, the information about the hash is not kept (expensive), so instead destroy the *.link and
+                ///                       rebuild when needed (relatively slowly) in the query.
+                
+                nsec3_zone_item *self_prev = nsec3_avl_node_mod_prev(self);
+                nsec3_remove_all_star(self_prev);
             }
 
             break;
@@ -407,7 +481,7 @@ nsec3_icmtl_ptr_set_nsec3param_compare(const void *a, const void *b)
     u8 *nsec3_rdata_a = (u8*)a;
     u8 *nsec3_rdata_b = (u8*)b;
 
-    return nsec3_zone_rdata_compare(nsec3_rdata_a, nsec3_rdata_b);
+    return nsec3param_compare_by_rdata(nsec3_rdata_a, nsec3_rdata_b);
 }
 
 void nsec3_icmtl_replay_init(nsec3_icmtl_replay *replay, zdb_zone *zone)
@@ -421,6 +495,11 @@ void nsec3_icmtl_replay_init(nsec3_icmtl_replay *replay, zdb_zone *zone)
     replay->nsec3_labels.compare = ptr_set_dnsname_node_compare;
     replay->nsec3param_add.compare = nsec3_icmtl_ptr_set_nsec3param_compare;
     replay->nsec3param_del.compare = nsec3_icmtl_ptr_set_nsec3param_compare;
+    
+    replay->nsec3paramadd_add.compare = nsec3_icmtl_ptr_set_nsec3param_compare;
+    replay->nsec3add_add.compare = ptr_set_dnsname_node_compare;
+    replay->nsec3add_del.compare = ptr_set_dnsname_node_compare;
+    
     replay->zone = zone;
 }
 
@@ -557,7 +636,7 @@ void nsec3_icmtl_replay_nsec3param_del(nsec3_icmtl_replay *replay, const zdb_ttl
 {
     assert(ttlrdata->next == NULL);
     
-#if DEBUG
+#ifdef DEBUG
     rdata_desc nsec3param_rdata = { TYPE_NSEC3PARAM, ttlrdata->rdata_size, ttlrdata->rdata_pointer};    
     log_debug("journal: %{dnsname}: will del %{typerdatadesc}", replay->zone->origin, &nsec3param_rdata);
 #endif
@@ -577,7 +656,7 @@ void nsec3_icmtl_replay_nsec3param_del(nsec3_icmtl_replay *replay, const zdb_ttl
         
         if(added_node != NULL)
         {
-#if DEBUG
+#ifdef DEBUG
             log_debug("journal: %{dnsname}: would not add %{typerdatadesc} anymore", replay->zone->origin, &nsec3param_rdata);
 #endif
             
@@ -585,7 +664,7 @@ void nsec3_icmtl_replay_nsec3param_del(nsec3_icmtl_replay *replay, const zdb_ttl
 
             zdb_ttlrdata* nsec3param = (zdb_ttlrdata*)added_node->value;
             
-#if DEBUG
+#ifdef DEBUG
             nsec3param_rdata.len = nsec3param->rdata_size;
             nsec3param_rdata.rdata = nsec3param->rdata_pointer;
             log_debug("journal: %{dnsname}: would not add %{typerdatadesc} anymore", replay->zone->origin, &nsec3param_rdata);
@@ -601,7 +680,7 @@ void nsec3_icmtl_replay_nsec3param_add(nsec3_icmtl_replay *replay, const zdb_ttl
 {
     assert(ttlrdata->next == NULL);
     
-#if DEBUG
+#ifdef DEBUG
     rdata_desc nsec3param_rdata = { TYPE_NSEC3PARAM, ttlrdata->rdata_size, ttlrdata->rdata_pointer};    
     log_debug("journal: %{dnsname}: will add %{typerdatadesc}", replay->zone->origin, &nsec3param_rdata);
 #endif
@@ -610,8 +689,8 @@ void nsec3_icmtl_replay_nsec3param_add(nsec3_icmtl_replay *replay, const zdb_ttl
     
     if(node == NULL)
     {
-        zdb_ttlrdata* clone = zdb_ttlrdata_clone(ttlrdata);
-        
+        zdb_ttlrdata *clone = zdb_ttlrdata_clone_resized(ttlrdata, NSEC3PARAM_RDATA_SIZE_FROM_RDATA(ttlrdata->rdata_pointer));
+        nsec3param_set_flags(clone->rdata_pointer, 0); // clear the potential opt-out flag
         ptr_node *node = ptr_set_avl_insert(&replay->nsec3param_add, clone->rdata_pointer);
         node->value = clone;
         
@@ -622,14 +701,60 @@ void nsec3_icmtl_replay_nsec3param_add(nsec3_icmtl_replay *replay, const zdb_ttl
         if(added_node != NULL)
         {
             zdb_ttlrdata* nsec3param = (zdb_ttlrdata*)added_node->value;
-            
-#if DEBUG
+#ifdef DEBUG
             log_debug("journal: %{dnsname}: would not delete %{typerdatadesc} anymore", replay->zone->origin, &nsec3param_rdata);
             nsec3param_rdata.len = nsec3param->rdata_size;
             nsec3param_rdata.rdata = nsec3param->rdata_pointer;
             log_debug("journal: %{dnsname}: would not delete %{typerdatadesc} anymore", replay->zone->origin, &nsec3param_rdata);
 #endif
-            
+            ptr_set_avl_delete(&replay->nsec3param_del, ttlrdata->rdata_pointer);
+            ptr_set_avl_delete(&replay->nsec3param_del, nsec3param->rdata_pointer);
+            zdb_ttlrdata_delete(nsec3param);
+        }
+    }
+}
+
+void nsec3_icmtl_replay_nsec3paramadd_del(nsec3_icmtl_replay *replay, const zdb_ttlrdata *ttlrdata)
+{
+}
+
+void nsec3_icmtl_replay_nsec3paramadd_add(nsec3_icmtl_replay *replay, const zdb_ttlrdata *ttlrdata)
+{
+    assert(ttlrdata->next == NULL);
+    
+#ifdef DEBUG
+    rdata_desc nsec3param_rdata = { TYPE_NSEC3PARAM, ttlrdata->rdata_size, ttlrdata->rdata_pointer};    
+    log_debug("journal: %{dnsname}: will add %{typerdatadesc} placeholder", replay->zone->origin, &nsec3param_rdata);
+#endif
+    
+    /// @note must be done "find->insert" instead of the usually more efficient "insert" because ...
+    
+    // if the node does not exist, then I have to insert it.
+    // the key is the data of the pointer (not the pointer itself)
+    // the pointer should not be already in the database
+    
+    ptr_node *node = ptr_set_avl_find(&replay->nsec3paramadd_add, ttlrdata->rdata_pointer);
+    
+    if(node == NULL)
+    {
+        zdb_ttlrdata *clone = zdb_ttlrdata_clone(ttlrdata);
+        
+        ptr_node *node = ptr_set_avl_insert(&replay->nsec3paramadd_add, clone->rdata_pointer);
+        node->value = clone;
+        
+        /* If the node was previously marked as deleted, don't delete it anymore */
+        
+        ptr_node *added_node = ptr_set_avl_find(&replay->nsec3param_del, ttlrdata->rdata_pointer);
+        
+        if(added_node != NULL)
+        {
+            zdb_ttlrdata *nsec3param = (zdb_ttlrdata*)added_node->value;
+#ifdef DEBUG
+            log_debug("journal: %{dnsname}: would not delete %{typerdatadesc} anymore", replay->zone->origin, &nsec3param_rdata);
+            nsec3param_rdata.len = nsec3param->rdata_size;
+            nsec3param_rdata.rdata = nsec3param->rdata_pointer;
+            log_debug("journal: %{dnsname}: would not delete %{typerdatadesc} anymore", replay->zone->origin, &nsec3param_rdata);
+#endif
             ptr_set_avl_delete(&replay->nsec3param_del, ttlrdata->rdata_pointer);
             ptr_set_avl_delete(&replay->nsec3param_del, nsec3param->rdata_pointer);
             zdb_ttlrdata_delete(nsec3param);
@@ -662,13 +787,22 @@ void nsec3_icmtl_replay_nsec3_add(nsec3_icmtl_replay *replay, const u8* fqdn, co
     
     ptr_node *node;
     
-    node = ptr_set_avl_find(&replay->nsec3param_add, ttlrdata->rdata_pointer);
-    if(node == NULL)
-    {
-//        log_debug1("nsec3_icmtl_replay_nsec3_add(%p, %{dnsname}, %{typerdatadesc}) : no NSEC3PARAM for this NSEC3 : deducing new chain", replay, fqdn, &rdata);
-        nsec3_icmtl_replay_nsec3param_add(replay, ttlrdata);
-//        log_debug1("nsec3_icmtl_replay_nsec3_add(%p, %{dnsname}, %{typerdatadesc}) : resuming", replay, fqdn, &rdata);
+    // if there is no NSEC3PARAM chain already
+    // if there is no NSEC3PARAM DELETE record already ...
+    if(!nsec3_has_nsec3paramdel(&replay->zone->apex->resource_record_set, ttlrdata) &&
+       !nsec3_has_nsec3param_chain(replay->zone, ttlrdata))
+    {       
+        node = ptr_set_avl_find(&replay->nsec3param_add, ttlrdata->rdata_pointer);
+        if(node == NULL)
+        {
+        
+
+            nsec3_icmtl_replay_nsec3param_add(replay, ttlrdata);
+
+        }
     }
+    
+    replay->optout |= NSEC3_RDATA_IS_OPTOUT(ttlrdata->rdata_pointer);
     
     node = ptr_set_avl_insert(&replay->nsec3_add, (u8*)fqdn);
     if(node->value == NULL)
@@ -834,7 +968,7 @@ nsec3_icmtl_replay_label_add(nsec3_icmtl_replay *replay, const u8 *fqdn, dnslabe
 
     u16 flags = rr_label->flags;
 
-    if((flags & ZDB_RR_LABEL_UNDERDELEGATION) == 0) /** @todo !zdb_rr_label_is_glue(label) */
+    if((flags & ZDB_RR_LABEL_UNDERDELEGATION) == 0) /** @todo 20111208 edf -- !zdb_rr_label_is_glue(label) */
     {
         /* APEX or NS+DS */
 
@@ -863,13 +997,16 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
     
     bool nsec3param_added = FALSE;
     
+    int cleared_nsec3_zone_post_check_count = 0;
+    nsec3_zone *cleared_nsec3_zone_post_check[16]; // arbitrary maximum number of nsec3 chains
+    
 
     
     if(!ptr_set_avl_isempty(&replay->nsec3param_add))
     {
         ptr_set_avl_iterator n3p_avl_iter;
         ptr_set_avl_iterator_init(&replay->nsec3param_add, &n3p_avl_iter);
-
+        
         while(ptr_set_avl_iterator_hasnext(&n3p_avl_iter))
         {
             ptr_node *node = ptr_set_avl_iterator_next_node(&n3p_avl_iter);
@@ -890,7 +1027,12 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
                 zdb_record_insert(&replay->zone->apex->resource_record_set, TYPE_NSEC3PARAM, packed_ttlrdata);
                 
                 nsec3_zone_add_from_rdata(replay->zone, nsec3param->rdata_size, nsec3param->rdata_pointer);
-                //nsec3_load_chain_init(nsec3param->rdata_pointer, nsec3param->rdata_size);
+                
+                replay->zone->apex->flags |= ZDB_RR_LABEL_NSEC3;
+                if(replay->optout)
+                {
+                    replay->zone->apex->flags |= ZDB_RR_LABEL_NSEC3_OPTOUT;
+                }
                 
                 nsec3param_added = TRUE;
             }
@@ -907,7 +1049,7 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
 
     
     if(!ptr_set_avl_isempty(&replay->nsec3_del))
-    {
+    {        
         /* stuff to delete */
 
         ptr_set_avl_iterator ts_avl_iter;
@@ -934,14 +1076,11 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
                 rdata_desc type_len_rdata = {TYPE_NSEC3, ttlrdata->rdata_size, ttlrdata->rdata_pointer };
                 log_debug("journal: NSEC3: - %{typerdatadesc}", &type_len_rdata);
 #endif
-
                 zdb_ttlrdata *add_ttlrdata = (zdb_ttlrdata *)add_node->value;
-
 #ifdef DEBUG
                 rdata_desc add_type_len_rdata = {TYPE_NSEC3, add_ttlrdata->rdata_size, add_ttlrdata->rdata_pointer };
                 log_debug("journal: NSEC3: + %{typerdatadesc}", &add_type_len_rdata);
 #endif
-
                 /*
                  * The node may need an update of the type bitmap
                  * After all changes (del/upd/add) all the added records should be matched again (check)
@@ -978,12 +1117,40 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
 #endif
 
                 /* delete */
+                
+                // if the last NSEC3 of an NSEC3PARAM chain has been removed, it needs to be known for doing a test and fix later
+                
+                nsec3_zone *n3 = nsec3_zone_get_from_rdata(replay->zone, ttlrdata->rdata_size, ttlrdata->rdata_pointer);
+    
+                nsec3_zone_item *del_item = NULL;
 
-                nsec3_zone_item *add_item = nsec3_zone_item_find_by_record(replay->zone, fqdn, ttlrdata->rdata_size, ttlrdata->rdata_pointer);
+                if(n3 != NULL)
+                {
+                    del_item = nsec3_zone_item_find_by_name(n3, fqdn);
+                }
 
-                if(add_item != NULL)
+                if(del_item != NULL)
                 {
                     nsec3_remove_nsec3_by_name(replay->zone, fqdn, ttlrdata->rdata_pointer, ttlrdata->rdata_size);
+                    
+                    if(nsec3_avl_isempty(&n3->items))
+                    {
+                        // this n3 will have to be tested
+                        bool cleared_nsec3_zone_post_check_already_in = FALSE;
+                        for(int i = 0; i < cleared_nsec3_zone_post_check_count; ++i)
+                        {
+                            if(cleared_nsec3_zone_post_check[i] == n3)
+                            {
+                                cleared_nsec3_zone_post_check_already_in = TRUE;
+                                break;
+                            }
+                        }
+                        
+                        if(!cleared_nsec3_zone_post_check_already_in)
+                        {
+                            cleared_nsec3_zone_post_check[cleared_nsec3_zone_post_check_count++] = n3;
+                        }
+                    }
                 }
                 else
                 {
@@ -1076,7 +1243,17 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
                     nsec3_remove_nsec3_by_digest(replay->zone, add_item->digest, ttlrdata->rdata_pointer, ttlrdata->rdata_size);
                 }
             }
+
             // only adds the NSEC3, does not link with the label
+            
+            /// @note 20150909 edf -- Brief reminder of what is happening: when this record is being fed, there is no information as to its owner.
+            ///                       finding it may require to scan the whole database for an nsec3-covered label
+            ///                       without a nsec3 item (record) linked.
+            ///                       The only alternative is to keep the link empty and do the link when an opportunity presents itself.
+            ///                       For an example, if a query on a label needs access to the record, and it's nsec3 covered, and the item
+            ///                       is not linked, then and then only its hash will be computed, the item found (except if the database is corrupted)
+            ///                       and the link will be established.
+            
             nsec3_add_nsec3_by_name(replay->zone, fqdn, ttlrdata->rdata_pointer, ttlrdata->rdata_size);
 
             zdb_ttlrdata_delete(ttlrdata);
@@ -1213,7 +1390,9 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
 
             if(rr_label->nsec.nsec3 == NULL)
             {
+
                 nsec3_label_link(replay->zone, rr_label, fqdn);
+
             }
             
             free(fqdn);
@@ -1239,15 +1418,12 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
         u8 fqdn[MAX_DOMAIN_LENGTH];
         
         
-        zdb_zone_label_iterator_init(replay->zone, &label_iterator);
+        zdb_zone_label_iterator_init(&label_iterator, replay->zone);
 
         while(zdb_zone_label_iterator_hasnext(&label_iterator))
         {
-            
             zdb_zone_label_iterator_nextname(&label_iterator, fqdn);
-
             zdb_rr_label* label = zdb_zone_label_iterator_next(&label_iterator);
-         
             nsec3_label_link(replay->zone, label, fqdn);
         }
     }
@@ -1267,22 +1443,81 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             nsec3_zone* n3 = nsec3_zone_get_from_rdata(replay->zone, nsec3param->rdata_size, nsec3param->rdata_pointer);
 
 
-            
+
             if(n3 != NULL)
             {
-                nsec3_zone_destroy(replay->zone, n3);
+                //nsec3_zone_destroy(replay->zone, n3);
+
+                while(zdb_record_delete_exact(&replay->zone->apex->resource_record_set, TYPE_NSEC3PARAM, nsec3param) != ZDB_ERROR_KEY_NOTFOUND) // safe use (source is the journal)
+                {
+                    // again ...
+
+                }
                 
-                zdb_record_delete_exact(&replay->zone->apex->resource_record_set, TYPE_NSEC3PARAM, nsec3param);
+                // put a placeholder record to remember we are destroying the chain
+                
+                nsec3_add_nsec3paramdel(&replay->zone->apex->resource_record_set, nsec3param);
             }
-            
+   
             zdb_ttlrdata_delete(nsec3param);
+            
+            // if we remove the nsec3 chain now, the bind-style smooth update will break
+            //
+            nsec3_zone_destroy(replay->zone, n3);
             
             node->key = NULL;
             node->value = NULL;
         }
         
         ptr_set_avl_destroy(&replay->nsec3param_del);
-    }    
+    }
+    
+    // for all nsec3_zone with their last item removed on this call, check the nsec3param exists
+    // if not, remove it
+    
+    {
+        for(int i = 0; i < cleared_nsec3_zone_post_check_count; ++i)
+        {
+            nsec3_zone *n3 = cleared_nsec3_zone_post_check[i];
+
+            bool nsec3_zone_obsolete = TRUE;
+            
+            if(nsec3_avl_isempty(&n3->items))
+            {
+                // find the nsec3param in the zone
+                int n3_salt_len = NSEC3PARAM_RDATA_SIZE_FROM_RDATA(n3->rdata);
+                zdb_packed_ttlrdata* nsec3param = zdb_record_find(&replay->zone->apex->resource_record_set, TYPE_NSEC3PARAM);
+                while(nsec3param != NULL)
+                {
+                    int nsec3param_salt_len = NSEC3PARAM_RDATA_SIZE_FROM_RDATA(ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec3param));
+                    if(n3_salt_len == nsec3param_salt_len)
+                    {
+                        if(memcmp(n3->rdata, ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec3param), n3_salt_len) == 0)
+                        {
+                            // hit
+                            nsec3_zone_obsolete = FALSE;
+                            break;
+                        }
+                    }
+                    
+                    nsec3param = nsec3param->next;
+                }
+            }
+            
+            if(nsec3_zone_obsolete)
+            {
+                bool done = nsec3_zone_detach(replay->zone, n3);
+                if(done)
+                {
+                    nsec3_zone_free(n3);
+                }
+                else
+                {
+                    log_err("journal: %{dnsname} empty NSEC3PARAM chain marked to be removed but does not exists in the zone", replay->zone->origin);
+                }
+            }
+        }
+    }
     
     return SUCCESS;
 }

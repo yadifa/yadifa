@@ -75,6 +75,18 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Settings common to all makefiles
+#
+################################################################################
 
 #
 # ALL
@@ -108,6 +120,18 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Labels common to all makefiles
 #
 ################################################################################
 
@@ -186,29 +210,34 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-@USES_SUNC_TRUE@am__append_1 = 
-@USES_SUNC_FALSE@am__append_2 = -O0
-@HAS_CC_NO_IDENT_TRUE@am__append_3 = -fno-ident
-@HAS_CC_ANSI_TRUE@am__append_4 = -ansi
-@HAS_CC_PEDANTIC_TRUE@am__append_5 = -pedantic
-@HAS_CC_WALL_TRUE@am__append_6 = -Wall -Wno-unknown-pragmas
-@HAS_CC_MISSING_FIELD_INITIALIZERS_TRUE@am__append_7 = -Werror=missing-field-initializers
-@HAS_CC_STD_GNU99_TRUE@am__append_8 = -std=gnu99
-@HAS_CC_STD_C99_TRUE@@HAS_CC_STD_GNU99_FALSE@am__append_9 = -std=c99
-@HAS_CC_STD_GNU99_FALSE@@HAS_CC_XC99_TRUE@am__append_10 = -xc99
-@HAS_CC_TUNE_NATIVE_TRUE@am__append_11 = -mtune=native
-@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_12 = -m64
-@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_13 = -m64
-@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_14 = -m32
-@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_15 = -m32
+@HAS_DNSQ_TRUE@am__append_1 = -DHAS_DNSQ
+@HAS_GERY_TRUE@am__append_2 = -DGERY
+@HAS_EDF_TRUE@am__append_3 = -DEDF
+@HAS_THX_TRUE@am__append_4 = -DTHX
+@USES_SUNC_TRUE@am__append_5 = 
+@USES_SUNC_FALSE@am__append_6 = -O0
+@IS_DARWIN_OS_TRUE@am__append_7 = -Wno-deprecated
+@HAS_CC_NO_IDENT_TRUE@am__append_8 = -fno-ident
+@HAS_CC_ANSI_TRUE@am__append_9 = -ansi
+@HAS_CC_PEDANTIC_TRUE@am__append_10 = -pedantic
+@HAS_CC_WALL_TRUE@am__append_11 = -Wall -Wno-unknown-pragmas
+@HAS_CC_MISSING_FIELD_INITIALIZERS_TRUE@am__append_12 = -Werror=missing-field-initializers
+@HAS_CC_STD_GNU99_TRUE@am__append_13 = -std=gnu99
+@HAS_CC_STD_C99_TRUE@@HAS_CC_STD_GNU99_FALSE@am__append_14 = -std=c99
+@HAS_CC_STD_GNU99_FALSE@@HAS_CC_XC99_TRUE@am__append_15 = -xc99
+@HAS_CC_TUNE_NATIVE_TRUE@am__append_16 = -mtune=native
+@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_17 = -m64
+@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_18 = -m64
+@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_19 = -m32
+@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_20 = -m32
 
 #
 # DEBUG
 #
-@HAS_CC_G3_TRUE@am__append_16 = -g3
-@HAS_CC_G3_FALSE@@HAS_CC_G_TRUE@am__append_17 = -g
-@HAS_CC_DWARF4_TRUE@am__append_18 = -gdwarf-4
-@HAS_CC_DWARF3_TRUE@@HAS_CC_DWARF4_FALSE@am__append_19 = -gdwarf-3
+@HAS_CC_G3_TRUE@am__append_21 = -g3
+@HAS_CC_G3_FALSE@@HAS_CC_G_TRUE@am__append_22 = -g
+@HAS_CC_DWARF4_TRUE@am__append_23 = -gdwarf-4
+@HAS_CC_DWARF3_TRUE@@HAS_CC_DWARF4_FALSE@am__append_24 = -gdwarf-3
 
 #
 # Intel C Compiler
@@ -217,11 +246,11 @@ host_triplet = @host@
 
 #ICC
 #IPO= -ipo (need to use the intel xiar instead of ar)
-@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_20 = -DLTO -ipo
-@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_21 = -ipo
-@USES_ICC_TRUE@am__append_22 = -DUSES_ICC 
-@HAS_CC_ANSI_ALIAS_TRUE@@USES_ICC_TRUE@am__append_23 = -ansi-alias -U__STRICT_ANSI__ 
-@USES_ICC_TRUE@am__append_24 = -DMODE_DEBUG_ICC
+@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_25 = -DLTO -ipo
+@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_26 = -ipo
+@USES_ICC_TRUE@am__append_27 = -DUSES_ICC 
+@HAS_CC_ANSI_ALIAS_TRUE@@USES_ICC_TRUE@am__append_28 = -ansi-alias -U__STRICT_ANSI__ 
+@USES_ICC_TRUE@am__append_29 = -DMODE_DEBUG_ICC
 
 #
 # LLVM Clang
@@ -229,10 +258,10 @@ host_triplet = @host@
 ###############################################################################
 
 # CLANG
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_25 = -DLTO -flto
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_26 = -flto
-@USES_CLANG_TRUE@am__append_27 = -DUSES_LLVM
-@USES_CLANG_TRUE@am__append_28 = -DMODE_DEBUG_CLANG
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_30 = -DLTO -flto
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_31 = -flto
+@USES_CLANG_TRUE@am__append_32 = -DUSES_LLVM
+@USES_CLANG_TRUE@am__append_33 = -DMODE_DEBUG_CLANG
 
 # Note: add a _d suffix for debug builds ?
 
@@ -242,13 +271,13 @@ host_triplet = @host@
 ###############################################################################
 
 #GCC
-@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_29 = -mcpu=niagara
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_30 = -DLTO -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_31 = -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
-@USES_GCC_TRUE@am__append_32 = -DUSES_GCC
-@USES_GCC_TRUE@am__append_33 = -DMODE_DEBUG_GCC
-@USES_SUNC_TRUE@am__append_34 = -DUSES_SUNC
-@USES_SUNC_TRUE@am__append_35 = -DMODE_DEBUG_SUNC
+@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_34 = -mcpu=niagara
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_35 = -DLTO -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_36 = -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
+@USES_GCC_TRUE@am__append_37 = -DUSES_GCC
+@USES_GCC_TRUE@am__append_38 = -DMODE_DEBUG_GCC
+@USES_SUNC_TRUE@am__append_39 = -DUSES_SUNC
+@USES_SUNC_TRUE@am__append_40 = -DMODE_DEBUG_SUNC
 
 # Note: add a _d suffix for debug builds ?
 
@@ -258,19 +287,19 @@ host_triplet = @host@
 ###############################################################################
 
 # if an unknown compiler is used, it should have its own section
-@USES_UNKNOWN_TRUE@am__append_36 = -DUSES_UNKNOWN_COMPILER
-@USES_UNKNOWN_TRUE@am__append_37 = -DMODE_DEBUG_UNKNOWN
+@USES_UNKNOWN_TRUE@am__append_41 = -DUSES_UNKNOWN_COMPILER
+@USES_UNKNOWN_TRUE@am__append_42 = -DMODE_DEBUG_UNKNOWN
 
 #
 # Some BSD-based OSes need this
 #
-@IS_BSD_FAMILY_TRUE@am__append_38 = -I./include
-@IS_SOLARIS_FAMILY_TRUE@am__append_39 = -D_POSIX_PTHREAD_SEMANTICS
-@HAS_CC_RDYNAMIC_TRUE@am__append_40 = -rdynamic
-@HAS_CC_RDYNAMIC_TRUE@am__append_41 = -rdynamic
+@IS_BSD_FAMILY_TRUE@am__append_43 = -I./include
+@IS_SOLARIS_FAMILY_TRUE@am__append_44 = -D_POSIX_PTHREAD_SEMANTICS
+@HAS_CC_RDYNAMIC_TRUE@am__append_45 = -rdynamic
+@HAS_CC_RDYNAMIC_TRUE@am__append_46 = -rdynamic
 
 # workaround a bug where clang does not handle properly profiling and optimizations
-@USES_CLANG_TRUE@am__append_42 = -mno-omit-leaf-frame-pointer -fno-omit-frame-pointer
+@USES_CLANG_TRUE@am__append_47 = -mno-omit-leaf-frame-pointer -fno-omit-frame-pointer
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
@@ -320,8 +349,8 @@ am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(pkgincludedir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
 libdnslg_la_LIBADD =
 am__dirstamp = $(am__leading_dot)dirstamp
-am_libdnslg_la_OBJECTS = src/config-resolver.lo src/dns.lo \
-	src/resolv-conf.lo src/config-load.lo
+am_libdnslg_la_OBJECTS = src/config-load.lo src/config-resolver.lo \
+	src/dns.lo src/resolv-conf.lo src/resolv.lo
 libdnslg_la_OBJECTS = $(am_libdnslg_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -448,7 +477,6 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GREP = @GREP@
-HAS_ACL_SUPPORT = @HAS_ACL_SUPPORT@
 HAS_BFD_DEBUG_SUPPORT = @HAS_BFD_DEBUG_SUPPORT@
 HAS_BIG_ENDIAN = @HAS_BIG_ENDIAN@
 HAS_CC_ADDRESS_SANITIZER_CHECK = @HAS_CC_ADDRESS_SANITIZER_CHECK@
@@ -477,21 +505,31 @@ HAS_CC_WALL = @HAS_CC_WALL@
 HAS_CC_XC99 = @HAS_CC_XC99@
 HAS_CTRL = @HAS_CTRL@
 HAS_CTRL_DYNAMIC_PROVISIONING = @HAS_CTRL_DYNAMIC_PROVISIONING@
+HAS_DNSQ = @HAS_DNSQ@
+HAS_DROPALL_SUPPORT = @HAS_DROPALL_SUPPORT@
+HAS_DYNCONF_SUPPORT = @HAS_DYNCONF_SUPPORT@
 HAS_DYNUPDATE_SUPPORT = @HAS_DYNUPDATE_SUPPORT@
+HAS_EDF = @HAS_EDF@
+HAS_EXPERIMENTAL = @HAS_EXPERIMENTAL@
 HAS_FULL_ASCII7 = @HAS_FULL_ASCII7@
+HAS_GERY = @HAS_GERY@
 HAS_LITTLE_ENDIAN = @HAS_LITTLE_ENDIAN@
 HAS_LOGDIR = @HAS_LOGDIR@
 HAS_LOG_PID_ALWAYS_ON = @HAS_LOG_PID_ALWAYS_ON@
 HAS_LOG_THREAD_ID_ALWAYS_ON = @HAS_LOG_THREAD_ID_ALWAYS_ON@
 HAS_MALLOC_DEBUG_SUPPORT = @HAS_MALLOC_DEBUG_SUPPORT@
 HAS_MASTER_SUPPORT = @HAS_MASTER_SUPPORT@
+HAS_MEMALIGN_ISSUES = @HAS_MEMALIGN_ISSUES@
 HAS_MESSAGES_SUPPORT = @HAS_MESSAGES_SUPPORT@
+HAS_MIRROR_SUPPORT = @HAS_MIRROR_SUPPORT@
 HAS_MUTEX_DEBUG_SUPPORT = @HAS_MUTEX_DEBUG_SUPPORT@
 HAS_NON_AA_AXFR_SUPPORT = @HAS_NON_AA_AXFR_SUPPORT@
 HAS_NSID_SUPPORT = @HAS_NSID_SUPPORT@
+HAS_RDTSC = @HAS_RDTSC@
 HAS_RRL_SUPPORT = @HAS_RRL_SUPPORT@
 HAS_RRSIG_MANAGEMENT_SUPPORT = @HAS_RRSIG_MANAGEMENT_SUPPORT@
-HAS_TSIG_SUPPORT = @HAS_TSIG_SUPPORT@
+HAS_THX = @HAS_THX@
+HAS_TRACK_ZONES_DEBUG_SUPPORT = @HAS_TRACK_ZONES_DEBUG_SUPPORT@
 HAS_ZALLOC_DEBUG_SUPPORT = @HAS_ZALLOC_DEBUG_SUPPORT@
 HAS_ZALLOC_STATISTICS_SUPPORT = @HAS_ZALLOC_STATISTICS_SUPPORT@
 HAS_ZALLOC_SUPPORT = @HAS_ZALLOC_SUPPORT@
@@ -501,6 +539,7 @@ INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 IS_BSD_FAMILY = @IS_BSD_FAMILY@
+IS_DARWIN_GE14 = @IS_DARWIN_GE14@
 IS_DARWIN_OS = @IS_DARWIN_OS@
 IS_LINUX_FAMILY = @IS_LINUX_FAMILY@
 IS_SOLARIS_FAMILY = @IS_SOLARIS_FAMILY@
@@ -592,36 +631,53 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I m4
 dist_noinst_DATA = VERSION
+lib_LTLIBRARIES = libdnslg.la
 I = include/dnslg
 FEATURESFILE = dnslg-config-features.h
 FEATURES = $(I)/$(FEATURESFILE)
-lib_LTLIBRARIES = libdnslg.la
-pkginclude_HEADERS = $(FEATURES) include/dnslg/config-resolver.h include/dnslg/resolv-conf.h include/dnslg/dns.h include/dnslg/config-load.h
+
+# alphabetically please
 
 # NOTE: the first one on this list must always be the one used to trigger $(FEATURES)
-libdnslg_la_SOURCES = src/config-resolver.c src/dns.c src/resolv-conf.c src/config-load.c
+pkginclude_HEADERS = \
+		     $(FEATURES) \
+		     include/dnslg/config-load.h \
+		     include/dnslg/config-resolver.h \
+		     include/dnslg/dns.h \
+		     include/dnslg/resolv-conf.h \
+		     include/dnslg/resolv.h
+
+libdnslg_la_SOURCES = \
+		      src/config-load.c \
+		      src/config-resolver.c \
+		      src/dns.c \
+		      src/resolv-conf.c \
+		      src/resolv.c
+
 libdnslg_la_LDFLAGS = -version-info 2:0:0
 
 #
 #
 #
 AM_CFLAGS = -D_THREAD_SAFE -D_REENTRANT -D_FILE_OFFSET_BITS=64 \
-	-I$(abs_builddir) -I$(abs_srcdir)/include $(am__append_3) \
-	$(am__append_4) $(am__append_5) $(am__append_6) \
+	-I$(abs_builddir) -I$(abs_srcdir)/include $(am__append_1) \
+	$(am__append_2) $(am__append_3) $(am__append_4) \
 	$(am__append_7) $(am__append_8) $(am__append_9) \
 	$(am__append_10) $(am__append_11) $(am__append_12) \
-	$(am__append_14) $(am__append_20) $(am__append_22) \
-	$(am__append_23) $(am__append_25) $(am__append_27) \
-	$(am__append_29) $(am__append_30) $(am__append_32) \
-	$(am__append_34) $(am__append_36) $(am__append_38) \
-	$(am__append_39) $(LOCALFLAGS) $(YCFLAGS)
-AM_LDFLAGS = $(am__append_13) $(am__append_15) $(am__append_21) \
-	$(am__append_26) $(am__append_31) $(YLDFLAGS)
-DEBUGFLAGS = $(am__append_1) $(am__append_2) $(am__append_16) \
-	$(am__append_17) $(am__append_18) $(am__append_19) \
-	$(am__append_24) $(am__append_28) $(am__append_33) \
-	$(am__append_35) $(am__append_37)
-LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"'
+	$(am__append_13) $(am__append_14) $(am__append_15) \
+	$(am__append_16) $(am__append_17) $(am__append_19) \
+	$(am__append_25) $(am__append_27) $(am__append_28) \
+	$(am__append_30) $(am__append_32) $(am__append_34) \
+	$(am__append_35) $(am__append_37) $(am__append_39) \
+	$(am__append_41) $(am__append_43) $(am__append_44) \
+	$(LOCALFLAGS) $(YCFLAGS)
+AM_LDFLAGS = $(am__append_18) $(am__append_20) $(am__append_26) \
+	$(am__append_31) $(am__append_36) $(YLDFLAGS)
+DEBUGFLAGS = $(am__append_5) $(am__append_6) $(am__append_21) \
+	$(am__append_22) $(am__append_23) $(am__append_24) \
+	$(am__append_29) $(am__append_33) $(am__append_38) \
+	$(am__append_40) $(am__append_42)
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"' -DTCLDIR='"$(tcldir)"'
 @HAS_LTO_SUPPORT_FALSE@@USES_CLANG_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_FALSE@@USES_GCC_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@AM_AR = llvm-ar
@@ -641,13 +697,13 @@ LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATED
 @USES_ICC_TRUE@AM_LD = ld
 @USES_SUNC_TRUE@AM_LD = ld
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@AM_RANLIB = gcc-ranlib
-YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -DCMR
-YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP $(am__append_42)
+YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -g -DCMR
+YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP $(am__append_47)
 YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
 YSCFLAGS = $(YRCFLAGS)
-YRLDFLAGS = 
-YPLDFLAGS = -pg $(am__append_40)
-YDLDFLAGS = -g $(am__append_41)
+YRLDFLAGS = -g
+YPLDFLAGS = -pg $(am__append_45)
+YDLDFLAGS = -g $(am__append_46)
 YSLDFLAGS = $(YRLDFLAGS)
 AM_MAKEFLAGS = MODE_CFLAGS="$(AM_CFLAGS)" CC=$(CC) AR=$(AM_AR) LD=$(AM_LD)
 YCFLAGS = $(YSCFLAGS)
@@ -747,11 +803,12 @@ src/$(am__dirstamp):
 src/$(DEPDIR)/$(am__dirstamp):
 	@$(MKDIR_P) src/$(DEPDIR)
 	@: > src/$(DEPDIR)/$(am__dirstamp)
+src/config-load.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/config-resolver.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/dns.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/resolv-conf.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/config-load.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/resolv.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 
 libdnslg.la: $(libdnslg_la_OBJECTS) $(libdnslg_la_DEPENDENCIES) $(EXTRA_libdnslg_la_DEPENDENCIES) 
 	$(AM_V_CCLD)$(libdnslg_la_LINK) -rpath $(libdir) $(libdnslg_la_OBJECTS) $(libdnslg_la_LIBADD) $(LIBS)
@@ -768,6 +825,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/config-resolver.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dns.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/resolv-conf.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/resolv.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -1216,6 +1274,8 @@ REVISION:
 	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
 src/config-resolver.c: $(FEATURES)
+
+features: $(FEATURES)
 
 $(FEATURES): config.log REVISION VERSION
 	echo "#pragma once" > $(FEATURES)

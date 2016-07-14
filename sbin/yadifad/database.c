@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup server
  *  @ingroup yadifad
  *  @brief database functions
@@ -64,7 +64,9 @@
 #include <dnscore/fdtools.h>
 #include <dnscore/threaded_ringbuffer.h>
 
+#if ZDB_HAS_DNSSEC_SUPPORT
 #include <dnsdb/dnssec.h>
+#endif
 
 #include <dnsdb/zdb.h>
 #include <dnsdb/zdb_zone.h>
@@ -78,7 +80,6 @@
 
 #include <dnsdb/xfr_copy.h>
 #include <dnsdb/zdb-zone-path-provider.h>
-#include <dnsdb/dnssec_keystore.h>
 
 #include <dnszone/dnszone.h>
 #include <dnszone/zone_file_reader.h>
@@ -88,6 +89,9 @@
 #include "server.h"
 #include "database.h"
 #include "database-service.h"
+#if HAS_RRSIG_MANAGEMENT_SUPPORT && HAS_DNSSEC_SUPPORT
+#include "database-service-zone-resignature.h"
+#endif
 
 #include "server_error.h"
 #include "config_error.h"
@@ -426,26 +430,6 @@ database_info_provider(const u8 *origin, zdb_zone_info_provider_data *data, u32 
     return ret;
 }
 
-static dnslib_fingerprint server_getfingerprint()
-{
-    dnslib_fingerprint ret = (dnslib_fingerprint)(0
-#if HAS_TSIG_SUPPORT != 0
-    | DNSLIB_TSIG
-#endif
-#if HAS_ACL_SUPPORT != 0
-    | DNSLIB_ACL
-#endif
-#if HAS_NSEC_SUPPORT != 0
-    | DNSLIB_NSEC
-#endif
-#if HAS_NSEC3_SUPPORT != 0
-    | DNSLIB_NSEC3
-#endif
-    );
-
-    return ret;
-}
-
 /**
  * Initialises the database.
  * Ensures the libraries features are matched.
@@ -455,16 +439,6 @@ static dnslib_fingerprint server_getfingerprint()
 void
 database_init()
 {
-    dnslib_fingerprint dbfp = dnsdb_getfingerprint();
-    dnslib_fingerprint svrfp = server_getfingerprint();
-
-    if(dbfp != svrfp)
-    {
-        fprintf(stderr,"mismatched fingerprint\n");
-        log_err("mismatched fingerprint");
-        exit(EXIT_FAILURE);
-    }
-    
     zdb_init();
     dnszone_init();
     dnscore_reset_timer();
@@ -481,6 +455,7 @@ database_finalize()
 {
     zdb_zone_path_set_provider(NULL);
     zdb_zone_info_set_provider(NULL);
+
     zdb_finalize();
 }
 
@@ -509,7 +484,7 @@ database_clear_zones(zdb *database, zone_data_set *dset)
 
         dnsname_to_dnsname_vector(zone_desc->origin, &fqdn_vector);
         
-        /// @todo edf 20141006 -- verify zone_desc->qclass
+        /// @todo 20141006 edf -- verify zone_desc->qclass
         
         zdb_zone *myzone = zdb_remove_zone(database, &fqdn_vector);
 
@@ -554,7 +529,7 @@ database_startup(zdb **database)
     
     database_init(); /* Inits the db, starts the threads of the pool, resets the timer */
 
-    MALLOC_OR_DIE(zdb*, db, sizeof (zdb), GENERIC_TAG);
+    MALLOC_OR_DIE(zdb*, db, sizeof(zdb), ZDBCLASS_TAG);
     zdb_create(db);
     
     // add all the registered zones as invalid
@@ -562,7 +537,11 @@ database_startup(zdb **database)
     *database = db;
     
     database_service_create_invalid_zones();
-       
+    
+#if HAS_DNSSEC_SUPPORT
+    dnssec_keystore_reload();
+#endif
+    
     if(ISOK(return_code = database_service_start()))
     {
         database_load_all_zones();
@@ -584,28 +563,11 @@ database_startup(zdb **database)
 void
 database_query(zdb *db, message_data *mesg)
 {
-    finger_print query_fp;
-    zdb_query_ex_answer ans_auth_add;
-
-    /*    ------------------------------------------------------------    */
-
-    mesg->send_length = mesg->received;
+#if 0 /* fix */
+#else
+    zdb_query_and_update(db, mesg, mesg->pool_buffer);
+#endif
     
-    zdb_query_ex_answer_create(&ans_auth_add);
-
-    query_fp = zdb_query_ex(db, mesg, &ans_auth_add, mesg->pool_buffer);
-
-    /**
-     * @todo : do it when it's true only
-     */
-
-    mesg->status = query_fp;
-    
-    mesg->send_length = zdb_query_message_update(mesg, &ans_auth_add);
-    mesg->referral = ans_auth_add.delegation;
-
-    zdb_query_ex_answer_destroy(&ans_auth_add);
-
 #if HAS_TSIG_SUPPORT
     if(TSIG_ENABLED(mesg))  /* NOTE: the TSIG information is in mesg */
     {
@@ -628,51 +590,11 @@ database_query(zdb *db, message_data *mesg)
 ya_result
 database_query_with_rrl(zdb *db, message_data *mesg)
 {
-    finger_print query_fp;
-    zdb_query_ex_answer ans_auth_add;
-
-    /*    ------------------------------------------------------------    */
-
-    mesg->send_length = mesg->received;
+#if 0 /* fix */
+#else
+    ya_result rrl = zdb_query_and_update_with_rrl(db, mesg, mesg->pool_buffer, rrl_process);
+#endif
     
-    zdb_query_ex_answer_create(&ans_auth_add);
-
-    query_fp = zdb_query_ex(db, mesg, &ans_auth_add, mesg->pool_buffer);
-
-    /**
-     * @todo : do it when it's true only
-     */
-
-    mesg->status = query_fp;
-    
-    // RRL should be computed here
-    
-    ya_result rrl = rrl_process(mesg, &ans_auth_add);
-
-    switch(rrl)
-    {
-        case RRL_PROCEED:
-        {
-            mesg->send_length = zdb_query_message_update(mesg, &ans_auth_add);
-            mesg->referral = ans_auth_add.delegation;
-            break;
-        }
-        case RRL_SLIP:
-        {
-            log_debug("rrl: slip");
-            mesg->referral = ans_auth_add.delegation;
-            break;
-        }
-        case RRL_DROP:
-        {
-            // DON'T PROCEED AT ALL
-            log_debug("rrl: drop");
-            break;
-        }
-    }
-    
-    zdb_query_ex_answer_destroy(&ans_auth_add);
-
 #if HAS_TSIG_SUPPORT
     if(TSIG_ENABLED(mesg))  /* NOTE: the TSIG information is in mesg */
     {
@@ -690,7 +612,81 @@ database_query_with_rrl(zdb *db, message_data *mesg)
 
 #if HAS_DYNUPDATE_SUPPORT
 
-/** @todo  icmtl, checks, fp, soa, ...
+#if ZDB_HAS_DNSSEC_SUPPORT
+ya_result
+database_zone_ensure_private_keys(zone_desc_s *zone_desc, zdb_zone *zone)
+{                     
+    ya_result return_code;
+    
+    /*
+     * Fetch all private keys
+     */
+
+    log_debug("database: update: checking DNSKEY availability");
+
+    const zdb_packed_ttlrdata *dnskey_rrset = zdb_zone_get_dnskey_rrset(zone);
+
+    int ksk_count = 0;
+    int zsk_count = 0;
+
+    if(dnskey_rrset != NULL)
+    {
+        do
+        {
+            u16 flags = DNSKEY_FLAGS(*dnskey_rrset);
+            //u8  protocol = DNSKEY_PROTOCOL(*dnskey_rrset);
+            u8  algorithm = DNSKEY_ALGORITHM(*dnskey_rrset);
+            u16 tag = DNSKEY_TAG(*dnskey_rrset);                  // note: expensive
+            dnssec_key *key = NULL;
+
+            if(FAIL(return_code = dnssec_keystore_load_private_key_from_parameters(algorithm, tag, flags, zone->origin, &key)))
+            {
+                log_warn("database: update: unable to load the private key 'K%{dnsname}+%03d+%05d': %r", zone->origin, algorithm, tag, return_code);
+            }
+
+            if(flags == DNSKEY_FLAGS_KSK)
+            {
+                ++ksk_count;
+            }
+            else if(flags == DNSKEY_FLAGS_ZSK)
+            {
+                ++zsk_count;
+            }
+            else
+            {
+                // the key is of no use
+            }
+
+            dnskey_rrset = dnskey_rrset->next;
+        }
+        while(dnskey_rrset != NULL);
+
+        return_code = zsk_count;
+
+        if(zsk_count == 0)
+        {
+            log_err("database: update: unable to load any of the ZSK private keys of zone %{dnsname}", zone->origin);
+            return_code = DNSSEC_ERROR_RRSIG_NOUSABLEKEYS;
+        }
+
+        if(ksk_count == 0)
+        {
+            log_warn("database: update: unable to load any of the KSK private keys of zone %{dnsname}", zone->origin);
+        }
+    }
+    else
+    {
+        log_err("database: update: there are no private keys in the zone %{dnsname}", zone->origin);
+
+        return_code = DNSSEC_ERROR_RRSIG_NOZONEKEYS;
+    }
+
+    return return_code;
+}
+#endif
+
+
+/** @todo 20101119 edf --  icmtl, checks, fp, soa, ...
  *   - dynupdate_icmtlhook_enable must be called if there are some slave name severs
  *   - check the functions, which is not tested yet
  *   - fingerprint instead of ya_result for return_code
@@ -738,7 +734,7 @@ database_update(zdb *database, message_data *mesg)
 
                 dnsname_to_dnsname_vector(mesg->qname, &name);
 
-                /// @todo edf 20141006 -- verify class mesg->qclass
+                /// @todo 20141006 edf -- verify class mesg->qclass
                 
                 zone = zdb_acquire_zone_read_double_lock(database, &name, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
 
@@ -779,75 +775,20 @@ database_update(zdb *database, message_data *mesg)
                         
                         return_code = SUCCESS;
                         
+#if ZDB_HAS_DNSSEC_SUPPORT
                         if(zdb_zone_is_dnssec(zone))
                         {
                             if(zone_maintains_dnssec(zone_desc))
                             {
-                                /*
-                                 * Fetch all private keys
-                                 */
-
-                                log_debug("database: update: checking DNSKEY availability");
-
-                                const zdb_packed_ttlrdata *dnskey = zdb_zone_get_dnskey_rrset(zone);
-                                
-                                int ksk_count = 0;
-                                int zsk_count = 0;
-                                
-                                if(dnskey != NULL)
+                                if(FAIL(return_code = database_zone_ensure_private_keys(zone_desc, zone)))
                                 {
-                                    char origin[MAX_DOMAIN_LENGTH];
-
-                                    dnsname_to_cstr(origin, zone->origin);
-
-                                    do
-                                    {
-                                        u16 flags = DNSKEY_FLAGS(*dnskey);
-                                        //u8  protocol = DNSKEY_PROTOCOL(*dnskey);
-                                        u8  algorithm = DNSKEY_ALGORITHM(*dnskey);
-                                        u16 tag = DNSKEY_TAG(*dnskey);                  // note: expensive
-                                        dnssec_key *key = NULL;
-
-                                        if(FAIL(return_code = dnssec_key_load_private(algorithm, tag, flags, origin, &key)))
-                                        {
-                                            log_warn("database: update: unable to load the private key 'K%{dnsname}+%03d+%05d': %r", zone->origin, algorithm, tag, return_code);
-                                        }
-                                        
-                                        if(flags == DNSKEY_FLAGS_KSK)
-                                        {
-                                            ++ksk_count;
-                                        }
-                                        else if(flags == DNSKEY_FLAGS_ZSK)
-                                        {
-                                            ++zsk_count;
-                                        }
-                                        else
-                                        {
-                                            // the key is of no use
-                                        }
-
-                                        dnskey = dnskey->next;
-                                    }
-                                    while(dnskey != NULL);
+                                    log_info("database: update: %{dnsname} loading keys from keystore", zone->origin);
                                     
-                                    return_code = zsk_count;
+                                    dnssec_keystore_reload_domain(zone->origin);
+                                    zdb_zone_update_keystore_keys_from_zone(zone);
+                                    database_service_zone_dnskey_set_alarms(zone);
                                     
-                                    if(zsk_count == 0)
-                                    {
-                                        log_err("database: update: unable to load any of the ZSK private keys of zone %{dnsname}", zone->origin);
-                                        return_code = DNSSEC_ERROR_RRSIG_NOUSABLEKEYS;
-                                    }
-                                    
-                                    if(ksk_count == 0)
-                                    {
-                                        log_warn("database: update: unable to load any of the KSK private keys of zone %{dnsname}", zone->origin);
-                                    }
-                                }
-                                else
-                                {
-                                    log_err("database: update: there are no private keys in the zone %{dnsname}", zone->origin);
-
-                                    return_code = DNSSEC_ERROR_RRSIG_NOZONEKEYS;
+                                    return_code = database_zone_ensure_private_keys(zone_desc, zone);
                                 }
                             }
                             else
@@ -859,7 +800,8 @@ database_update(zdb *database, message_data *mesg)
                                 mesg->status = (finger_print)RCODE_SERVFAIL;
                             }
                         }
-                                                /// @todo edf 20150127 -- if at least one key has been loaded, it should continue
+#endif
+                                                /// @todo 20150127 edf -- if at least one key has been loaded, it should continue
                         if(ISOK(return_code))   ///
                         {
                             /* The reader is positioned after the header : read the QR section */
@@ -875,7 +817,7 @@ database_update(zdb *database, message_data *mesg)
                                 
                                 /* The reader is positioned after the QR section, read AN section */
 
-                                /// @todo edf 20141008 -- this lock is too early, it should be moved just before the actual run
+                                /// @todo 20141008 edf -- this lock is too early, it should be moved just before the actual run
                                 
 #if 1
                                 zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
@@ -883,7 +825,7 @@ database_update(zdb *database, message_data *mesg)
 #else
                                 u64 start = timeus();
                                 u64 now;
-                                u64 locktimeout = 2000000; /// @todo edf 20141008 -- 2 seconds, make this configurable
+                                u64 locktimeout = 2000000; /// @todo 20141008 edf -- 2 seconds, make this configurable
                                 bool locked;
                                 
                                 do
@@ -927,7 +869,7 @@ database_update(zdb *database, message_data *mesg)
                                             reader.offset = reader_up_offset;
 
                                             /**
-                                             * @todo At this point it should not fail anymore.
+                                             * @todo 20121219 edf -- At this point it should not fail anymore.
                                              */
 
                                             log_debug("database: update: opening journal page");
@@ -942,10 +884,7 @@ database_update(zdb *database, message_data *mesg)
 
                                                 if(ISOK(len))
                                                 {
-                                                    //mesg->send_length = mesg->received;
 
-                                                    /** @TODO I have to be able to cancel the icmtl if it failed */
-                                                    
                                                     log_info("database: update: update of zone '%{dnsname}' succeeded", zone->origin);
                                                 }
                                                 else
@@ -966,7 +905,7 @@ database_update(zdb *database, message_data *mesg)
 
                                                 /**
                                                  * 
-                                                 * @todo postponed after 1.0.0
+                                                 * @todo 20140430 edf -- postponed after 1.0.0
                                                  * 
                                                  * The journal file may exceed limits ...
                                                  * 
@@ -990,7 +929,7 @@ database_update(zdb *database, message_data *mesg)
                                                  * 
                                                  */
 
-                                                mesg->status = FP_MESG_OK; /* @TODO handle error codes too */
+                                                mesg->status = FP_MESG_OK; /* @todo 20121219 edf -- handle error codes too */
                                             }
                                             else
                                             {
@@ -1100,7 +1039,7 @@ database_update(zdb *database, message_data *mesg)
                 break;
             }
             /**
-             * @todo : dynamic update forwarding ...
+             * @todo 20120106 edf -- : dynamic update forwarding ...
              */
             case ZT_SLAVE:
             {
@@ -1188,7 +1127,7 @@ database_update(zdb *database, message_data *mesg)
 #if HAS_TSIG_SUPPORT
     if(TSIG_ENABLED(mesg))
     {
-        log_debug("database: update: signing reply");
+        log_debug("database: %{dnsname}: update: signing reply", mesg->qname);
         
         tsig_sign_answer(mesg);
     }
@@ -1226,6 +1165,40 @@ database_shutdown(zdb *database)
     return OK;
 }
 
+/**
+ * @todo 20160623 edf -- This may be pointless as the reaction to notify is doing all the work already.
+ * 
+ * @param zone_desc
+ * @return 
+ */
+
+static ya_result
+database_zone_refresh_next_master(zone_desc_s *zone_desc)
+{
+    if(zone_desc->masters != NULL && zone_desc->masters->next != NULL)
+    {
+        ya_result ret = 2;
+        zone_lock(zone_desc, ZONE_LOCK_SERVICE);
+        host_address *head = zone_desc->masters;
+        host_address *move_to_end = head;
+        host_address *node = head->next;
+        while(node->next != NULL)
+        {
+            ++ret;
+            node = node->next;
+        }
+        node->next = move_to_end;
+        move_to_end->next = NULL;
+        zone_desc->masters = head;
+        zone_unlock(zone_desc, ZONE_LOCK_SERVICE);
+        return ret;
+    }
+    else
+    {
+        return 1;
+    }
+}
+
 static ya_result
 database_zone_refresh_alarm(void *args, bool cancel)
 {
@@ -1249,13 +1222,13 @@ database_zone_refresh_alarm(void *args, bool cancel)
     u32 next_alarm_epoch = 0;
     soa_rdata soa;
 
-    log_info("database: refresh: zone %{dnsname}", origin);
+    log_info("database: refresh: %{dnsname}", origin);
 
     zone_desc_s *zone_desc = zone_acquirebydnsname(origin);
 
     if(zone_desc == NULL)
     {
-        log_err("database: refresh: zone %{dnsname}: not found", origin);
+        log_err("database: refresh: %{dnsname}: zone not found", origin);
         free((char*)sszra->origin);
         free(sszra);
         
@@ -1282,7 +1255,7 @@ database_zone_refresh_alarm(void *args, bool cancel)
 
                 free(sszra);
 
-                log_quit("database: refresh: zone %{dnsname}: get soa: %r", origin, return_value);
+                log_quit("database: refresh: %{dnsname}: get SOA: %r", origin, return_value);
                 
                 return ERROR;
             }
@@ -1293,14 +1266,12 @@ database_zone_refresh_alarm(void *args, bool cancel)
             u32 rf = zone_desc->refresh.refreshed_time;
             u32 rt = zone_desc->refresh.retried_time;
             u32 un = zone_desc->refresh.zone_update_next_time;
-            EPOCH_DEF(rf);
-            EPOCH_DEF(rt);
-            EPOCH_DEF(un);
-            log_debug("database: refresh: zone %{dnsname}: refreshed=%w retried=%w next=%w refresh=%i retry=%i expire=%i",
+            
+            log_debug("database: refresh: %{dnsname}: refreshed=%T retried=%T next=%T refresh=%i retry=%i expire=%i",
                     origin,
-                    EPOCH_REF(rf),
-                    EPOCH_REF(rt),
-                    EPOCH_REF(un),
+                    rf,
+                    rt,
+                    un,
                     soa.refresh,
                     soa.retry,
                     soa.expire
@@ -1318,7 +1289,7 @@ database_zone_refresh_alarm(void *args, bool cancel)
                 {
                      // then do a refresh
 
-                    log_info("database: refresh: zone %{dnsname}: refresh", origin);
+                    log_info("database: refresh: %{dnsname}: refresh", origin);
 
                     zone_desc->refresh.retried_time = zone_desc->refresh.refreshed_time + 1;
 
@@ -1331,7 +1302,7 @@ database_zone_refresh_alarm(void *args, bool cancel)
                 {
                     // next time we will check for the refresh status will be now + refresh ...
                     
-                    log_info("database: refresh: zone %{dnsname}: refresh in %d seconds", origin, zone_desc->refresh.refreshed_time + soa.refresh - now);
+                    log_info("database: refresh: %{dnsname}: refresh in %d seconds", origin, zone_desc->refresh.refreshed_time + soa.refresh - now);
                     
                     next_alarm_epoch = zone_desc->refresh.refreshed_time + soa.refresh;
                 }
@@ -1350,22 +1321,35 @@ database_zone_refresh_alarm(void *args, bool cancel)
                     {
                         // then do a retry ...
 
-                        log_info("database: refresh: zone %{dnsname}: retry", origin);
+                        log_info("database: refresh: %{dnsname}: retry", origin);
 
                         database_zone_ixfr_query(zone_desc->origin);
                     }
                     else
                     {
-                        log_debug("database: refresh: zone %{dnsname}: not retry time yet", origin);
+                        log_debug("database: refresh: %{dnsname}: it's not time to retry yet", origin);
                     }
                 }
                 else
                 {
                     // else the zone is not authoritative anymore
 
-                    log_warn("database: refresh: zone %{dnsname}: expired", origin);
+                    log_warn("database: refresh: %{dnsname}: zone has expired", origin);
                     
-                    zone->apex->flags |= ZDB_RR_LABEL_INVALID_ZONE;
+                    // if it's a multi-master setup, go to the next one in the list
+                    // else mark the zone as being invalid
+                    
+                    if(database_zone_refresh_next_master(zone_desc) > 1)
+                    {
+                        next_alarm_epoch = time(NULL);
+                        log_warn("database: refresh: %{dnsname}: master has changed to %{hostaddr}", origin, zone_desc->masters);
+
+                        database_zone_refresh_maintenance(db, origin, next_alarm_epoch);
+                    }
+                    else
+                    {
+                        zone->apex->flags |= ZDB_RR_LABEL_INVALID_ZONE;
+                    }
                 }
             }
 
@@ -1373,7 +1357,7 @@ database_zone_refresh_alarm(void *args, bool cancel)
         }
         else
         {
-            log_info("database: refresh: zone %{dnsname}: has already been locked, will retry layer", origin);
+            log_info("database: refresh: %{dnsname}: zone has already been locked, will retry layer", origin);
             next_alarm_epoch = time(NULL) + 2;
         }
         
@@ -1381,7 +1365,7 @@ database_zone_refresh_alarm(void *args, bool cancel)
     }
     else
     {
-        log_err("database: refresh: zone %{dnsname}: not mounted", origin);
+        log_err("database: refresh: %{dnsname}: zone is not mounted", origin);
     }
 
     if(next_alarm_epoch != 0)
@@ -1389,15 +1373,14 @@ database_zone_refresh_alarm(void *args, bool cancel)
         /*
          * The alarm rang but nothing has been done
          */
-        
-        EPOCH_DEF(next_alarm_epoch);        
-        log_warn("database: refresh: zone %{dnsname}: re-arming the alarm for %w", origin, EPOCH_REF(next_alarm_epoch));
+         
+        log_warn("database: refresh: %{dnsname}: re-arming the alarm for %T", origin, next_alarm_epoch);
 
         database_zone_refresh_maintenance(db, origin, next_alarm_epoch);
     }
     else
     {
-        log_warn("database: refresh: zone %{dnsname}: alarm will not be re-armed", origin);
+        log_warn("database: refresh: %{dnsname}: alarm will not be re-armed", origin);
     }
 
     free((char*)sszra->origin);
@@ -1458,14 +1441,14 @@ database_zone_refresh_maintenance_wih_zone(zdb_zone* zone, u32 next_alarm_epoch)
 
         sszra->origin = dnsname_dup(zone->origin);
 
-        alarm_event_node *event = alarm_event_alloc();
-        event->epoch = next_alarm_epoch;
-        event->function = database_zone_refresh_alarm;
-        event->args = sszra;
-        event->key = ALARM_KEY_ZONE_REFRESH;
-        event->flags = ALARM_DUP_REMOVE_LATEST;
-        event->text = "database_zone_refresh_alarm";
-
+        alarm_event_node *event = alarm_event_new(
+                        next_alarm_epoch,
+                        ALARM_KEY_ZONE_REFRESH,
+                        database_zone_refresh_alarm,
+                        sszra,
+                        ALARM_DUP_REMOVE_LATEST,
+                        "database-zone-refresh-alarm");
+        
         alarm_set(zone->alarm_handle, event);
 
         zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_REFRESH);
@@ -1494,7 +1477,7 @@ database_zone_refresh_maintenance(zdb *database, const u8 *origin, u32 next_alar
 {
     ya_result ret = SUCCESS; // no zone, no issue doing maintenance
     
-    log_debug("database: refresh: database_zone_refresh_maintenance for zone %{dnsname} at %u", origin, next_alarm_epoch);
+    log_debug("database: refresh %{dnsname}: refresh maintenance for zone at %T", origin, next_alarm_epoch);
 
     zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(database, origin);
     if(zone != NULL)

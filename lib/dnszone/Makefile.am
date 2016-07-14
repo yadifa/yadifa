@@ -28,10 +28,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
-#
-#	YADIFA dnszone Makefile.am script
-#
-##############################################################################
 
 srcdir =        @srcdir@
 libdir =	@libdir@
@@ -42,15 +38,28 @@ ACLOCAL_AMFLAGS = -I m4
 
 dist_noinst_DATA = VERSION
 
+lib_LTLIBRARIES= libdnszone.la
+
 I=include/dnszone
+
 FEATURESFILE=dnszone-config-features.h
 FEATURES=$(I)/$(FEATURESFILE)
 
-lib_LTLIBRARIES= libdnszone.la
+# alphabetically please
 
-libdnszone_la_SOURCES = src/dnszone.c src/zone_axfr_reader.c src/zone_file_reader.c src/hints_file_reader.c
+libdnszone_la_SOURCES = \
+			src/dnszone.c \
+			src/hints_file_reader.c \
+			src/zone_axfr_reader.c \
+			src/zone_file_reader.c
 	
-pkginclude_HEADERS = $(FEATURES) $(I)/dnszone.h $(I)/dnszone-config.h $(I)/zone_axfr_reader.h $(I)/zone_file_reader.h $(I)/hints_file_reader.h
+pkginclude_HEADERS = \
+		     $(FEATURES) \
+		     $(I)/dnszone-config.h \
+		     $(I)/dnszone.h \
+		     $(I)/hints_file_reader.h \
+		     $(I)/zone_axfr_reader.h \
+		     $(I)/zone_file_reader.h
 
 libdnszone_la_LDFLAGS = -version-info 2:0:0
 
@@ -64,6 +73,8 @@ REVISION:
 	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
 src/dnszone.c: $(FEATURES)
+
+features: $(FEATURES)
 
 $(FEATURES): config.log REVISION VERSION
 	echo "#pragma once" > $(FEATURES)

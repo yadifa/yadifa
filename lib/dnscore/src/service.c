@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 #include "dnscore/dnscore-config.h"
 #include "dnscore/dnscore-config.h"
@@ -72,13 +72,7 @@ service_thread(void *args)
 {
     struct service_worker_s *worker = (struct service_worker_s *)args;
     
-    if(worker == NULL)
-    {
-        log_err("service: with NULL entry point");
-        
-        pthread_exit(NULL);
-        return NULL;
-    }
+    yassert(worker != NULL);
 
     sigset_t set;
     sigemptyset(&set);
@@ -97,9 +91,13 @@ service_thread(void *args)
     {
         log_debug("service: %s starting", desc->name);
 
-#ifdef HAS_PTHREAD_SETNAME_NP
+#if HAS_PTHREAD_SETNAME_NP
 #ifdef DEBUG
+#if __APPLE__
+        pthread_setname_np(desc->name);
+#else
         pthread_setname_np(pthread_self(), desc->name);
+#endif // __APPLE__
 #endif
 #endif
         
@@ -108,18 +106,26 @@ service_thread(void *args)
     {
         log_debug("service: %s starting (%i/%i)", desc->name, worker->worker_index + 1, worker->service->worker_count);
 
-#ifdef HAS_PTHREAD_SETNAME_NP        
+#if HAS_PTHREAD_SETNAME_NP        
 #ifdef DEBUG
         // 16 is the size limit for this, cfr man page
         if(strlen(desc->name) >= 16)
         {
+#if __APPLE__
+            pthread_setname_np(desc->name);
+#else
             pthread_setname_np(pthread_self(), desc->name);
+#endif // __APPLE__
         }
         else
         {
             char tmp_name[16];
             snformat(tmp_name, sizeof(tmp_name), "%s:%d", desc->name, worker->worker_index + 1);
+#if __APPLE__
+            pthread_setname_np(tmp_name);
+#else
             pthread_setname_np(pthread_self(), tmp_name);
+#endif // __APPLE__
         }
 #endif
 #endif
@@ -144,9 +150,94 @@ service_thread(void *args)
     
     thread_pool_destroy_random_ctx();
     
+    mutex_lock(&worker->service->wait_lock);
+    cond_notify(&worker->service->wait_cond);
+    mutex_unlock(&worker->service->wait_lock);
+    
     pthread_exit(NULL);
     return NULL;
 }
+
+static void*
+service_on_main_thread(void *args)
+{
+    struct service_worker_s *worker = (struct service_worker_s *)args;
+    
+    if(worker == NULL)
+    {
+        log_err("service: with NULL entry point");
+        
+        mutex_lock(&worker->service->wait_lock);
+        cond_notify(&worker->service->wait_cond);
+        mutex_unlock(&worker->service->wait_lock);
+
+        return NULL;
+    }
+
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGQUIT);
+    sigaddset(&set, SIGTERM);
+    sigaddset(&set, SIGINT);
+    sigaddset(&set, SIGSTOP);
+    sigaddset(&set, SIGCONT);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+    
+    struct service_s *desc = (struct service_s *)worker->service;
+        
+    thread_pool_setup_random_ctx();
+    
+    yassert(worker->service->worker_count == 1);
+
+    log_debug("service: %s starting", desc->name);
+
+#if HAS_PTHREAD_SETNAME_NP
+#ifdef DEBUG
+#if __APPLE__
+    pthread_setname_np(desc->name);
+#else
+    pthread_setname_np(pthread_self(), desc->name);
+#endif // __APPLE__
+#endif
+#endif
+    
+    if(desc->entry_point != NULL)
+    {
+        worker->return_code = desc->entry_point(worker);
+        
+        log_debug("service: %s terminated with: %r", desc->name, worker->return_code);
+        
+        mutex_lock(&worker->lock);
+        worker->flags = SERVICE_OFF;
+        mutex_unlock(&worker->lock);
+    }
+    else
+    {
+        worker->return_code = SERVICE_WITHOUT_ENTRY_POINT;
+        
+        log_debug("service: NULL entry point", worker->return_code);
+    }
+    
+    thread_pool_destroy_random_ctx();
+    
+    mutex_lock(&worker->service->wait_lock);
+    cond_notify(&worker->service->wait_cond);
+    mutex_unlock(&worker->service->wait_lock);
+
+    return NULL;
+}
+
+/**
+ * Initialises service with an entry point, a name, and a number of workers
+ * Each worker will know its index (from 0 to count-1).
+ * No threads are started yet after this call.
+ * 
+ * @param desc the service
+ * @param entry_point the function of the service, it must be of the type service_main
+ * @param name the name of the service
+ * @param count the number of workers for the service
+ * @return an error code
+ */
 
 int
 service_init_ex(struct service_s *desc, service_main *entry_point, const char* name, u32 count)
@@ -157,7 +248,10 @@ service_init_ex(struct service_s *desc, service_main *entry_point, const char* n
     }
     
     ZEROMEMORY(desc, sizeof(struct service_s));
-        
+    
+    mutex_init(&desc->wait_lock);
+    cond_init(&desc->wait_cond);
+    
     desc->name = (char*)name;
     
     mutex_lock(&service_set_mutex);
@@ -170,7 +264,7 @@ service_init_ex(struct service_s *desc, service_main *entry_point, const char* n
         
         desc->entry_point = entry_point;
         desc->name = strdup(name);
-        MALLOC_OR_DIE(struct service_worker_s*, desc->worker, sizeof(struct service_worker_s) * count, GENERIC_TAG); // DON'T POOL
+        MALLOC_OR_DIE(struct service_worker_s*, desc->worker, sizeof(struct service_worker_s) * count, SRVCWRKR_TAG); // DON'T POOL
         desc->worker_count = count;
         for(u32 i = 0; i < count; i++)
         {
@@ -197,11 +291,32 @@ service_init_ex(struct service_s *desc, service_main *entry_point, const char* n
     }
 }
 
+/**
+ * Initialises service with an entry point, a name, and one worker
+ * No threads are started yet after this call.
+ * 
+ * This is basically calling service_init_ex(desc, entry_point, name, 1);
+ * 
+ * @param desc the service
+ * @param entry_point the function of the service, it must be of the type service_main
+ * @param name the name of the service
+ * @return an error code
+ */
+
 int
 service_init(struct service_s *desc, service_main *entry_point, const char* name)
 {
-    return service_init_ex(desc, entry_point, name, 1);
+    int ret = service_init_ex(desc, entry_point, name, 1);
+    return ret;
 }
+
+/**
+ * Stops then waits for all workers of the service.
+ * Then destroy the service and release its content.
+ * 
+ * @param desc the service
+ * @return an error code
+ */
 
 int
 service_finalize(struct service_s *desc)
@@ -229,11 +344,24 @@ service_finalize(struct service_s *desc)
     desc->worker = NULL;
     desc->worker_count = 0;
     desc->entry_point = NULL;
+    
+    cond_finalize(&desc->wait_cond);
+    mutex_destroy(&desc->wait_lock);
+    
     free(desc->name);
     desc->name = NULL;
     
     return SUCCESS;
 }
+
+/**
+ * Starts all workers of the service
+ * If a worker is already running, it is left alone with undefined results.
+ * A service should be fully stopped and waited on before being started again.
+ * 
+ * @param desc the service
+ * @return an error code
+ */
 
 int
 service_start(struct service_s *desc)
@@ -262,7 +390,7 @@ service_start(struct service_s *desc)
             worker->return_code = SERVICE_ALREADY_RUNNING;
             mutex_unlock(&worker->lock);
 
-            log_warn("service_start: worker #%u already up and running", i);
+            log_warn("service_start: %s worker #%u already up and running", desc->name, i);
             
             // service worker already up, ignore
             continue;            
@@ -307,6 +435,78 @@ service_start(struct service_s *desc)
     return success;
 }
 
+/**
+ * Starts a service and waits for its end.
+ * This is meant for services with only one thread.
+ * If used with such a service, no new thread will be started and the service
+ * will be run on the current thread.
+ * It is useful when you have a model where the main thread of the program
+ * could change behaviour with an option.
+ * ie: the server service (nudge nudge, wink wink ...)
+ * 
+ * @param desc
+ * @return 
+ */
+
+int
+service_start_and_wait(struct service_s *desc)
+{
+    int ret;
+    if(desc->worker_count != 1)
+    {
+        ret = service_start(desc);
+        if(ISOK(ret))
+        {
+            ret = service_wait(desc);
+        }
+    }
+    else
+    {
+        log_debug("service: %s start", desc->name);
+
+        u32 now = time(NULL);
+        desc->last_seen_alive = now;
+
+        struct service_worker_s *worker = &desc->worker[0];
+
+        mutex_lock(&worker->lock);
+        if(worker->flags == SERVICE_OFF)
+        {
+            worker->flags = SERVICE_START;
+
+            mutex_unlock(&worker->lock);
+            
+            service_on_main_thread(worker);
+            
+            ret = SUCCESS;
+        }
+        else
+        {
+            worker->return_code = SERVICE_ALREADY_RUNNING;
+            mutex_unlock(&worker->lock);
+
+            log_warn("service_start: %s worker #%u already up and running", desc->name);
+
+            // service worker already up : cannot main-thread run it
+            ret = service_wait(desc);
+        }
+    }
+    
+    return ret;
+}
+
+/**
+ * Set the status of all workers of the service to "STOP" and sends SIGUSR1 to
+ * each of them.
+ * 
+ * The signal is meant to interrupt blocking IOs and the worker should notice
+ * it 'in time' and finish.
+ * 
+ * @param desc the service
+ * 
+ * @return an error code
+ */
+
 int
 service_stop(struct service_s *desc)
 {
@@ -339,11 +539,19 @@ service_stop(struct service_s *desc)
     return err;
 }
 
+/**
+ * Waits for all threads of the service to be stopped.
+ * 
+ * @param desc the service descriptor
+ * @return 
+ */
+
 int
 service_wait(struct service_s *desc)
 {
     log_debug("service: %s wait", desc->name);
     
+    mutex_lock(&desc->wait_lock);
     for(;;)
     {
         u32 running = desc->worker_count;
@@ -372,7 +580,12 @@ service_wait(struct service_s *desc)
                 }
                 else
                 {
-                    pthread_kill(worker->tid, SIGINT);
+                    // if the worker is meant to stop but is not stopping yet, then signal it
+                    
+                    if((worker->flags & (SERVICE_STOP|SERVICE_STOPPING)) == SERVICE_STOP)
+                    {
+                        pthread_kill(worker->tid, SIGINT);
+                    }
                 }
             }
         }
@@ -382,10 +595,11 @@ service_wait(struct service_s *desc)
             break;
         }
         
-        usleep(10000);
+        cond_wait(&desc->wait_cond, &desc->wait_lock);
 
         log_debug("service: %s wait ... (%u/%u running)", desc->name, running, desc->worker_count);
     }
+    mutex_unlock(&desc->wait_lock);
     
     for(u32 i = 0; i < desc->worker_count; i++)
     {
@@ -437,6 +651,13 @@ service_wait(struct service_s *desc)
     return 0;
 }
 
+/**
+ * Returns TRUE if all the workers of the service have notified they had started
+ * 
+ * @param desc the service
+ * @return TRUE iff all the workers of the service have notified they started
+ */
+
 bool
 service_servicing(struct service_s *desc)
 {
@@ -457,6 +678,13 @@ service_servicing(struct service_s *desc)
     return TRUE;
 }
 
+/**
+ * Only to be called by the worker of the service itself when it has started.
+ * Calling it is not mandatory but give more accuracy to the status of the service.
+ * 
+ * @param worker the worker calling this function
+ */
+
 int
 service_set_servicing(struct service_worker_s *worker)
 {
@@ -474,6 +702,13 @@ service_set_servicing(struct service_worker_s *worker)
     
     return err;
 }
+
+/**
+ * Returns TRUE if none of the workers of the service are running
+ * 
+ * @param desc the service
+ * @return TRUE iff none of the workers of the service are running
+ */
 
 bool
 service_stopped(struct service_s *desc)
@@ -495,6 +730,13 @@ service_stopped(struct service_s *desc)
     return TRUE;
 }
 
+/**
+ * Only to be called by the worker of the service itself when it is stopping.
+ * Calling it is not mandatory but give more accuracy to the status of the service.
+ * 
+ * @param worker the worker calling this function
+ */
+
 int
 service_set_stopping(struct service_worker_s *worker)
 {
@@ -514,6 +756,15 @@ service_set_stopping(struct service_worker_s *worker)
     return err;
 }
 
+/**
+ * Waits until all workers have notified they were servicing.
+ * Calling this on a service that does not call service_set_servicing will
+ * potentially wait forever (or until the program is shutting down).
+ * 
+ * @param desc the service
+ * @return an error code
+ */
+
 ya_result
 service_wait_servicing(struct service_s *desc)
 {
@@ -525,6 +776,11 @@ service_wait_servicing(struct service_s *desc)
         }
         else
         {
+            if(dnscore_shuttingdown())
+            {
+                return STOPPED_BY_APPLICATION_SHUTDOWN;
+            }
+            
             sleep(1);
         }
     }
@@ -589,6 +845,35 @@ service_check_all_alive()
     mutex_unlock(&service_set_mutex);
     
     return SUCCESS;
+}
+
+/**
+ * Appends all services references to the array.
+ * 
+ * Services are supposed to be defined statically.
+ * Their reference will never point to an unmapped space.
+ * 
+ * @param services a pointer to the ptr_vector to append the services to
+ * @return the number of services added to the vector
+ */
+
+int
+service_get_all(ptr_vector *services)
+{
+    int ret = 0;
+    mutex_lock(&service_set_mutex);
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&service_set, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
+    {
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        struct service_s *desc = (struct service_s *)node->key;
+        
+        ptr_vector_append(services, desc);
+        ++ret;
+    }
+    
+    return ret;
 }
 
 struct service_worker_s*

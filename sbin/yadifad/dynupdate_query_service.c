@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -97,14 +97,12 @@ static volatile bool dynupdate_query_service_thread_run = FALSE;
 
 typedef struct dynupdate_query_service_args dynupdate_query_service_args;
 
+#define DYNUPQSA_TAG 0x41535150554e5944
+
 struct dynupdate_query_service_args
 {
     zdb            *db;
     message_data   *mesg;
-#if UDP_USE_MESSAGES != 0
-    struct iovec    udp_iovec;
-    struct msghdr   udp_msghdr;
-#endif
     u32             timestamp;
 };
 
@@ -117,12 +115,20 @@ dynupdate_query_service_thread(void *args)
 
 #if HAS_PTHREAD_SETNAME_NP
 #ifdef DEBUG
+#if __APPLE__
+    pthread_setname_np("dynupdate-query");
+#else
     pthread_setname_np(pthread_self(), "dynupdate-query");
+#endif // __APPLE__
 #endif
 #endif
     
     for(;;)
     {
+#if UDP_USE_MESSAGES
+dynupdate_query_service_thread_main_loop:
+#endif
+
         if(dnscore_shuttingdown())
         {
             break;
@@ -153,7 +159,7 @@ dynupdate_query_service_thread(void *args)
         
         u32 now = time(NULL);
         
-        if((now - parms->timestamp) <= 3) /** @todo set this as a configuration parameter (dynupdate-processing-timeout or something) */
+        if((now - parms->timestamp) <= 3) /** @todo 20121106 edf -- set this as a configuration parameter (dynupdate-processing-timeout or something) */
         {
             /* process */
 
@@ -190,7 +196,7 @@ dynupdate_query_service_thread(void *args)
             log_memdump_ex(g_server_logger, MSG_DEBUG5, mesg->buffer, mesg->send_length, 16, OSPRINT_DUMP_HEXTEXT);
 #endif
             
-#if UDP_USE_MESSAGES == 0
+#if !UDP_USE_MESSAGES
             while((sent = sendto(mesg->sockfd, mesg->buffer, mesg->send_length, 0, (struct sockaddr*)&mesg->other.sa, mesg->addr_len)) < 0)
             {
                 int error_code = errno;
@@ -207,12 +213,21 @@ dynupdate_query_service_thread(void *args)
                 }
             }
 #else
-            parms->udp_iovec.iov_len = mesg->send_length;
+            struct iovec    udp_iovec;
+            struct msghdr   udp_msghdr;
+            
+            udp_iovec.iov_base = &mesg->buffer;
+            udp_iovec.iov_len = mesg->send_length;
+
+            udp_msghdr.msg_name = &mesg->other.sa;
+            udp_msghdr.msg_namelen = mesg->addr_len;
+            udp_msghdr.msg_iov = &udp_iovec;
+            udp_msghdr.msg_iovlen = 1;
 
 #ifdef DEBUG
-            log_debug("sendmsg(%d, %p, %d", mesg->sockfd, &parms->udp_msghdr, 0);
+            log_debug("sendmsg(%d, %p, %d", mesg->sockfd, &udp_msghdr, 0);
 #endif
-            while( (sent = sendmsg(mesg->sockfd, &parms->udp_msghdr, 0)) < 0)
+            while( (sent = sendmsg(mesg->sockfd, &udp_msghdr, 0)) < 0)
             {
                 int error_code = errno;
 
@@ -231,7 +246,19 @@ dynupdate_query_service_thread(void *args)
                     free(parms);
                     free(mesg);
 
-                    return NULL/*ERROR*/;
+                    /**********************************************************
+                     * GOTO !
+                     * 
+                     * This one is meant to break both loops to avoid the test
+                     * following this while {}
+                     * 
+                     *********************************************************/
+                    
+                    goto dynupdate_query_service_thread_main_loop; 
+                    
+                    /**********************************************************
+                     * GOTO !
+                     *********************************************************/
                 }
             }
 #endif
@@ -249,9 +276,7 @@ dynupdate_query_service_thread(void *args)
 #endif
 
         }
-#if UDP_USE_MESSAGES != 0
-        free(parms->udp_msghdr.msg_control);
-#endif
+
         free(parms);
         free(mesg);
     }
@@ -335,7 +360,7 @@ dynupdate_query_service_stop()
 }
 
 ya_result
-dynupdate_query_service_enqueue(zdb *db, message_data *msg, struct msghdr *udp_msghdr)
+dynupdate_query_service_enqueue(zdb *db, message_data *msg)
 {
     if(dynupdate_query_service_thread_id == 0)
     {
@@ -346,6 +371,7 @@ dynupdate_query_service_enqueue(zdb *db, message_data *msg, struct msghdr *udp_m
     MALLOC_OR_DIE(message_data*, mesg_clone, sizeof(message_data), MESGDATA_TAG);
     memcpy(mesg_clone, msg, sizeof(message_data));
     // ensure the original message cannot be used anymore
+    
 #if HAS_TSIG_SUPPORT
     msg->tsig.tsig = NULL;
 #endif
@@ -353,32 +379,10 @@ dynupdate_query_service_enqueue(zdb *db, message_data *msg, struct msghdr *udp_m
     msg->send_length = 0;
     
     struct dynupdate_query_service_args *parms;
-    MALLOC_OR_DIE(struct dynupdate_query_service_args *, parms, sizeof(dynupdate_query_service_args), GENERIC_TAG);
+    MALLOC_OR_DIE(struct dynupdate_query_service_args *, parms, sizeof(dynupdate_query_service_args), DYNUPQSA_TAG);
     parms->db = db;
     parms->mesg = mesg_clone;
-    
-#if UDP_USE_MESSAGES != 0
-    
-    /*
-     * Clone the message parameters.
-     * The iovec points into the buffer
-     * The header uses the cloned iovec, a cloned anciliary buffer and the cloned sender (other) address from the message
-     */
-    
-    parms->udp_iovec.iov_base = &mesg_clone->buffer[0];
-    parms->udp_iovec.iov_len = sizeof(mesg_clone->buffer);
-    
-    memcpy(&parms->udp_msghdr, udp_msghdr, sizeof(struct msghdr)); // copy the whole content
-    parms->udp_msghdr.msg_name = &mesg_clone->other.sa;
-    // DO NOT : parms->udp_msghdr.msg_namelen = ...
-    parms->udp_msghdr.msg_iov = &parms->udp_iovec;
-    // DO NOT : parms->udp_msghdr.msg_iovlen = ...
-    MALLOC_OR_DIE(struct msghdr*, parms->udp_msghdr.msg_control, ANCILIARY_BUFFER_SIZE, MSGHDR_TAG);
-    memcpy(parms->udp_msghdr.msg_control, udp_msghdr->msg_control, ANCILIARY_BUFFER_SIZE);
-    // DO NOT : parms->udp_msghdr.msg_controllen = ANCILIARY_BUFFER_SIZE;
-    // DO NOT : parms->udp_msghdr.msg_flags = 0;
-#endif
-    
+        
     parms->timestamp = time(NULL);
     
     threaded_queue_enqueue(&dynupdate_query_service_queue, parms);

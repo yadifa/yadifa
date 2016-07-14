@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup acl Access Control List
  *  @ingroup yadifad
  *  @brief
@@ -77,10 +77,12 @@ extern logger_handle *g_server_logger;
  * 2011/10/18 : EDF: disabling the debug because it makes the legitimate error output unreadable.
  */
 
-
 #if !ACL_DEBUG_FLUSH
 #define logger_flush(...)
 #endif
+
+#define AMITSIGK_TAG 0x4b47495354494d41
+#define AMITSIGN_TAG 0x4e47495354494d41
 
 #define STR(x) ((x)!=NULL)?(x):"NULL"
 
@@ -458,7 +460,7 @@ address_match_item_alloc()
     address_match_item* item;
     
     MALLOC_OR_DIE(address_match_item*, item, sizeof(address_match_item), ADRMITEM_TAG);
-    ZEROMEMORY(item, sizeof (address_match_item));
+    ZEROMEMORY(item, sizeof(address_match_item));
 
     return item;
 }
@@ -698,7 +700,7 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, c
             separator++;
         }
 
-        if(token_len > sizeof (token) - 1)
+        if(token_len > sizeof(token) - 1)
         {
             return ACL_TOKEN_SIZE_ERROR; /* token is too big */
         }
@@ -754,7 +756,7 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, c
             word = next_word;
             next_word = (char*)parse_next_space(next_word);
             
-            if(next_word - word > sizeof (token))
+            if(next_word - word > sizeof(token))
             {
                 /* free(ami); */ /* pointless since the cleanup will not be fully done anyway (list) */
                 return ACL_TOKEN_SIZE_ERROR;
@@ -784,9 +786,10 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, c
             ami->parameters.tsig.secret_size = key->mac_size;
             ami->parameters.tsig.name_size = dnsname_len;
             ami->parameters.tsig.mac_algorithm = key->mac_algorithm;
-            MALLOC_OR_DIE(u8*, ami->parameters.tsig.known, key->mac_size, GENERIC_TAG);
+                  
+            MALLOC_OR_DIE(u8*, ami->parameters.tsig.known, key->mac_size, AMITSIGK_TAG);
             memcpy(ami->parameters.tsig.known, key->mac, key->mac_size);
-            MALLOC_OR_DIE(u8*, ami->parameters.tsig.name, dnsname_len, GENERIC_TAG);
+            MALLOC_OR_DIE(u8*, ami->parameters.tsig.name, dnsname_len, AMITSIGN_TAG);
             memcpy(ami->parameters.tsig.name, dnsname, dnsname_len);
 #else
             return ACL_UNKNOWN_TSIG_KEY;    // not supported
@@ -812,6 +815,12 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, c
             bool mask = FALSE;
             u32 bits = 0;
 
+            if(*next_word != '\0')
+            {
+                log_err("acl: unexpected %s after IP", next_word);
+                return ACL_TOO_MUCH_TOKENS;
+            }
+            
             int proto = -1;
 
             char *slash = word;
@@ -977,7 +986,7 @@ acl_parse_address_match_list(address_match_list *aml, const char *description, c
                 }
                 else if(ISOK(parse_u32_check_range(word, &bits, 0, (proto == AF_INET) ? 32 : 128, 10)))
                 {
-                    ZEROMEMORY(buffer, sizeof (buffer));
+                    ZEROMEMORY(buffer, sizeof(buffer));
 
                     u8 *b = buffer;
                     u8 maskbits = bits;
@@ -1079,9 +1088,9 @@ acl_add_definition(const char* name, const char *description)
         }
     }
     
-    MALLOC_OR_DIE(acl_entry*, acl, sizeof (acl_entry), ACLENTRY_TAG);
+    MALLOC_OR_DIE(acl_entry*, acl, sizeof(acl_entry), ACLENTRY_TAG);
 
-    ZEROMEMORY(acl, sizeof (acl_entry));
+    ZEROMEMORY(acl, sizeof(acl_entry));
 
     if(FAIL(return_code = acl_parse_address_match_list(&acl->list, description, NULL)))
     {
@@ -1351,7 +1360,7 @@ acl_build_access_control_item(address_match_set *ams, const char* allow_whatever
     ya_result return_code;
 
     address_match_list aml;
-    ZEROMEMORY(&aml, sizeof (aml));
+    ZEROMEMORY(&aml, sizeof(aml));
 
     if(ISOK(return_code = acl_parse_address_match_list(&aml, allow_whatever, &g_acl)))
     {

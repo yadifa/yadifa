@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup zone Functions used to sanitize a zone
  *  @ingroup dnsdb
  *  @brief Functions used to sanitize a zone
@@ -48,7 +48,10 @@
 #include <dnscore/dnskey.h>
 
 #include "dnsdb/zdb_sanitize.h"
+
+#if HAS_DNSSEC_SUPPORT
 #include "dnsdb/rrsig.h"
+#endif
 
 #include "dnsdb/zdb_rr_label.h"
 #include "dnsdb/zdb_record.h"
@@ -69,6 +72,8 @@ extern logger_handle* g_database_logger;
 #define CNAME_TYPE 5
 #define NS_TYPE 2
 #define DS_TYPE 43
+
+#define SANITIZE_DETECT_MISSING_GLUES 1
 
 struct zdb_sanitize_parms
 {
@@ -102,11 +107,13 @@ zdb_sanitize_parms_update_keys(zdb_sanitize_parms *parms)
     }
 }
 
+#if ZDB_HAS_DNSSEC_SUPPORT
 static bool
 zdb_sanitize_parms_has_key(zdb_sanitize_parms *parms, u16 tag)
 {
     return u32_set_avl_find(&parms->dnskey_set, tag) != NULL;
 }
+#endif
 
 static void
 zdb_sanitize_parms_finalise(zdb_sanitize_parms *parms)
@@ -260,7 +267,8 @@ zdb_sanitize_rr_set_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsname_
     u8 types[32]; /* I only really care about the types < 256, for any other one I'll use a boolean 'others' */
 
     ZEROMEMORY(types, sizeof(types));
-    
+   
+#if HAS_DNSSEC_SUPPORT 
     zdb_packed_ttlrdata *rrsig = zdb_record_find(&label->resource_record_set, TYPE_RRSIG);
     // the signing key must be known
     while(rrsig != NULL)
@@ -275,11 +283,12 @@ zdb_sanitize_rr_set_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsname_
             
             struct zdb_ttlrdata rrsig_record = {NULL, rrsig->ttl, ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig), 0,  ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig)};
             
-            zdb_record_delete_exact(&label->resource_record_set, TYPE_RRSIG, &rrsig_record);
+            zdb_record_delete_self_exact(&label->resource_record_set, TYPE_RRSIG, &rrsig_record);
         }
         
         rrsig = rrsig_next;
     }
+#endif
 
     btree_iterator iter;
     btree_iterator_init(label->resource_record_set, &iter);
@@ -291,10 +300,13 @@ zdb_sanitize_rr_set_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsname_
 
         zdb_packed_ttlrdata* record_list = (zdb_packed_ttlrdata*)node->data;
 
-        u32 ttl = record_list->ttl;
-        while((record_list = record_list->next) != NULL)
+        if(type != TYPE_RRSIG)
         {
-            record_list->ttl = ttl;
+            u32 ttl = record_list->ttl;
+            while((record_list = record_list->next) != NULL)
+            {
+                record_list->ttl = ttl;
+            }
         }
 
         if((type & NU16(0xff00)) == 0)
@@ -487,16 +499,52 @@ zdb_sanitize_rr_set_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsname_
     {
         if(flags & ZDB_RR_LABEL_DELEGATION)
         {
-
+#if SANITIZE_DETECT_MISSING_GLUES
+            /// The 3 SANITIZE_DETECT_MISSING_GLUES blocs are for the detection of NS that should have a glue but do not have one.
+            zdb_packed_ttlrdata* ns_record_list;
+#endif // SANITIZE_DETECT_MISSING_GLUES
+            
             if(HAS_TYPE(NS_TYPE))
             {
+#if SANITIZE_DETECT_MISSING_GLUES
+                ns_record_list = zdb_record_find(&label->resource_record_set, TYPE_NS);
+                /* verify if the NS warrants a glue and if said glue exists */
 
+                zdb_packed_ttlrdata* record_list = ns_record_list;
+
+                while(record_list != NULL)
+                {
+                    const u8* nameserver_name = ZDB_PACKEDRECORD_PTR_RDATAPTR(record_list);
+                    
+                    /*
+                     * check if the nameserver ends with our name
+                     * if it does then it needs a glue
+                     * look if said glue exists
+                     * _ any A/AAAA record at or under delegation that is not in this list needs to be removed
+                     * _ any missing A/AAAA record at or under delegation that is in this list needs to be added
+                     */
+                    
+                    if(dnsname_under_dnsname_stack(nameserver_name, name))
+                    {
+                        /**
+                         * needs glue
+                         * 
+                         * @todo 20120123 edf -- check if the glue is present
+                         * 
+                         */                        
+                    }
+
+                    record_list = record_list->next;
+                }
+#endif // SANITIZE_DETECT_MISSING_GLUES
                 
             }
             else
             {
                 return_value |= SANITY_EXPECTEDNS;
-
+#if SANITIZE_DETECT_MISSING_GLUES
+                ns_record_list = NULL;
+#endif // SANITIZE_DETECT_MISSING_GLUES
             }
             
             if(a_aaaa > 0 && parent != NULL)
@@ -690,7 +738,7 @@ zdb_sanitize_rr_label_with_parent(zdb_zone *zone, zdb_rr_label *label, dnsname_s
         memset(label_stack, 0xff, sizeof(label_stack));
 #endif
         
-        zdb_rr_label *parent_label = zdb_rr_label_stack_find(zone->apex, name->labels, name->size-1, zone->origin_vector.size + 1);
+        zdb_rr_label *parent_label = zdb_rr_label_stack_find(zone->apex, name->labels, name->size, zone->origin_vector.size + 1);
         
         if(parent_label != NULL)
         {
@@ -699,8 +747,8 @@ zdb_sanitize_rr_label_with_parent(zdb_zone *zone, zdb_rr_label *label, dnsname_s
 
             return_code =  zdb_sanitize_rr_label_ext(&parms, label, name, parent_label->flags, &label_stack[1]);
         }
-#if DEBUG
-        zdb_rr_label_stack_find(zone->apex, name->labels, name->size-1, zone->origin_vector.size + 1);
+#ifdef DEBUG
+        zdb_rr_label_stack_find(zone->apex, name->labels, name->size, zone->origin_vector.size + 1);
 #endif
     }
     else
@@ -712,6 +760,8 @@ zdb_sanitize_rr_label_with_parent(zdb_zone *zone, zdb_rr_label *label, dnsname_s
     
     return return_code;
 }
+
+#if HAS_NSEC3_SUPPORT
 
 static ya_result
 zdb_sanitize_zone_nsec3(zdb_sanitize_parms *parms)
@@ -796,6 +846,8 @@ zdb_sanitize_zone_nsec3(zdb_sanitize_parms *parms)
     return SUCCESS;
 }
 
+#endif
+
 ya_result
 zdb_sanitize_zone(zdb_zone *zone)
 {
@@ -816,11 +868,13 @@ zdb_sanitize_zone(zdb_zone *zone)
     dnsname_to_dnsname_stack(zone->origin, &name);
 
     ya_result return_code = zdb_sanitize_rr_label_ext(&parms, zone->apex, &name, 0, label_stack);
-    
+
+#if HAS_NSEC3_SUPPORT 
     if(zdb_zone_is_nsec3(zone))
     {
         return_code = zdb_sanitize_zone_nsec3(&parms);
     }
+#endif
     
     zdb_sanitize_parms_finalise(&parms);
     

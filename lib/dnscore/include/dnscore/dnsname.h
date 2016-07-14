@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnscore
  *  @ingroup dnscore
  *  @brief Functions used to manipulate dns formatted names and labels
@@ -148,17 +148,17 @@ extern "C"
  *
  */
 
-typedef u8* dnslabel_stack[DNSNAME_MAX_SECTIONS];
+typedef const u8* dnslabel_stack[DNSNAME_MAX_SECTIONS];
 
 /* This + 1 is just to make sure both are different to the compiler's eyes */
 
-typedef u8* dnslabel_vector[DNSNAME_MAX_SECTIONS + 1];
+typedef const u8* dnslabel_vector[DNSNAME_MAX_SECTIONS + 1];
 
-typedef u8** dnslabel_stack_reference;
-typedef u8** dnslabel_vector_reference;
+typedef const u8** dnslabel_stack_reference;
+typedef const u8** dnslabel_vector_reference;
 
-typedef u8*const* const_dnslabel_stack_reference;
-typedef u8*const* const_dnslabel_vector_reference;
+typedef const u8*const* const_dnslabel_stack_reference;
+typedef const u8*const* const_dnslabel_vector_reference;
 
 #ifdef DEBUG
 #define DEBUG_RESET_dnsname(name) memset(&(name),0x5b,sizeof(dnsname_stack))
@@ -584,7 +584,7 @@ bool dnsname_under_dnsname_stack(const u8* str, const dnsname_stack* name);
 
 /* FOUR uses */
 
-s32 dnsname_stack_push_label(dnsname_stack* dns_name, u8* dns_label);
+s32 dnsname_stack_push_label(dnsname_stack* dns_name, const u8* dns_label);
 
 /* FOUR uses */
 
@@ -603,6 +603,17 @@ s32 dnsname_to_dnsname_stack(const u8* dns_name, dnsname_stack* name);
 
 
 u8 *dnsname_zdup(const u8 *name);
+
+/** @brief Converts a name to a newly allocated dns name with ZALLOC.
+ *
+ *  Converts a name to a newly allocated dns name with ZALLOC.
+ *
+ *  @param domainname a pointer to the name
+ *
+ *  @return a new instance of the name converted to a dnsname
+ */
+
+u8 *dnsname_zdup_from_name(const char* domainname);
 
 void dnsname_zfree(u8 *name);
 

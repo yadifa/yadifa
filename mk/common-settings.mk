@@ -28,6 +28,18 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#       SVN Program:
+#               $URL: $
+#
+#       Last Update:
+#               $Date:$
+#               $Revision: 1717 $
+#
+#       Purpose:
+#               Settings common to all makefiles
+#
+################################################################################
 
 #
 # ALL
@@ -35,14 +47,34 @@
 
 AM_CFLAGS  = -D_THREAD_SAFE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -I$(abs_builddir) -I$(abs_srcdir)/include
 
+if HAS_DNSQ
+AM_CFLAGS += -DHAS_DNSQ
+endif
+
+if HAS_GERY
+AM_CFLAGS += -DGERY
+endif
+
+if HAS_EDF
+AM_CFLAGS += -DEDF
+endif
+
+if HAS_THX
+AM_CFLAGS += -DTHX
+endif
+
 AM_LDFLAGS =
 DEBUGFLAGS =
-LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"'
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"' -DTCLDIR='"$(tcldir)"'
 
 if USES_SUNC
 DEBUGFLAGS +=
 else
 DEBUGFLAGS += -O0
+endif
+
+if IS_DARWIN_OS
+AM_CFLAGS += -Wno-deprecated
 endif
 
 if HAS_CC_NO_IDENT
@@ -249,12 +281,12 @@ endif
 
 AM_CFLAGS += $(LOCALFLAGS)
 
-YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -DCMR
+YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -g -DCMR
 YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP
 YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
 YSCFLAGS = $(YRCFLAGS)
 
-YRLDFLAGS =
+YRLDFLAGS = -g
 YPLDFLAGS = -pg
 YDLDFLAGS = -g
 

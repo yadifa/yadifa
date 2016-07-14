@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief Internal functions for the database: zoned resource records label.
@@ -104,6 +104,7 @@ zdb_zone_label_destroy_callback(dictionary_node * zone_label_record)
     /* detach is made by destroy */
 
     dictionary_destroy(&zone_label->sub, zdb_zone_label_destroy_callback);
+
     dnslabel_zfree(zone_label->name);
 
     if(zone_label->zone != NULL)
@@ -143,7 +144,7 @@ zdb_zone_label_find(zdb * db, dnsname_vector* origin) // mutex checked
 
     while(zone_label != NULL && index >= 0)
     {
-        u8* label = sections[index];
+        const u8* label = sections[index];
         hashcode hash = hash_dnslabel(label);
 
         zone_label =
@@ -182,7 +183,7 @@ zdb_zone_label_find_nolock(zdb * db, dnsname_vector* origin)
 
     while(zone_label != NULL && index >= 0)
     {
-        u8* label = sections[index];
+        const u8* label = sections[index];
         hashcode hash = hash_dnslabel(label);
 
         zone_label =
@@ -306,7 +307,7 @@ zdb_zone_label_match(zdb * db, const dnsname_vector* origin,  // mutex checked
     zdb_zone_label* zone_label;
     
     yassert(zdb_islocked_by(db, ZDB_MUTEX_READER));
-
+    
     zone_label = db->root; /* the "." zone */
 
     const_dnslabel_stack_reference sections = origin->labels;
@@ -320,7 +321,7 @@ zdb_zone_label_match(zdb * db, const dnsname_vector* origin,  // mutex checked
 
     while(index >= 0)
     {
-        u8* label = sections[index];
+        const u8* label = sections[index];
         hashcode hash = hash_dnslabel(label);
 
         zone_label = (zdb_zone_label*)dictionary_find(&zone_label->sub, hash, label, zdb_zone_label_zlabel_match);
@@ -338,51 +339,6 @@ zdb_zone_label_match(zdb * db, const dnsname_vector* origin,  // mutex checked
     return sp;
 }
 
-#if OBSOLETE
-
-/**
- * @todo get rid of this
- * 
- * @brief Retrieve the zone label origin, adds it in the database if needed.
- *
- * Retrieve the zone label origin, adds it in the database if needed.
- *
- * @param[in] db a pointer to the database
- * @param[in] origin a pointer to the dns name
- *
- * @return a pointer to the label
- */
-
-zdb_zone_label*
-zdb_zone_label_add(zdb * db, dnsname_vector* origin) // mutex checked
-{
-    zdb_zone_label* zone_label;
-    
-    zdb_lock(db, ZDB_MUTEX_WRITER);
-
-    zone_label = db->root; /* the "." zone */
-
-    dnslabel_stack_reference sections = origin->labels;
-    s32 index = origin->size;
-
-    /* look into the sub level */
-
-    while(index >= 0)
-    {
-        u8* label = sections[index];
-        hashcode hash = hash_dnslabel(label);
-        zone_label = (zdb_zone_label*)dictionary_add(&zone_label->sub, hash, label, zdb_zone_label_zlabel_match, zdb_zone_label_create);
-
-        index--;
-    }
-
-    zdb_unlock(db, ZDB_MUTEX_WRITER);
-    
-    return zone_label;
-}
-
-#endif
-
 zdb_zone_label*
 zdb_zone_label_add_nolock(zdb * db, dnsname_vector* origin) // mutex checked
 {
@@ -399,7 +355,7 @@ zdb_zone_label_add_nolock(zdb * db, dnsname_vector* origin) // mutex checked
 
     while(index >= 0)
     {
-        u8* label = sections[index];
+        const u8* label = sections[index];
         hashcode hash = hash_dnslabel(label);
         zone_label = (zdb_zone_label*)dictionary_add(&zone_label->sub, hash, label, zdb_zone_label_zlabel_match, zdb_zone_label_create);
 
@@ -447,7 +403,7 @@ zdb_zone_label_delete_process_callback(void *a, dictionary_node * node)
      */
 
     s32 top = args->top;
-    u8* label = (u8*)args->sections[top];
+    const u8* label = (u8*)args->sections[top];
 
     if(!dnslabel_equals(zone_label->name, label))
     {

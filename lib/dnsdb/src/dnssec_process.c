@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnsdbdnssec DNSSEC functions
  *  @ingroup dnsdb
  *  @brief
@@ -38,7 +38,7 @@
  * @{
  */
 /**
- * @todo Test, debug then do the optimizations. (LATER)
+ * @todo 20160209 edf -- Test, debug then do the optimisations. (LATER)
  *
  */
 
@@ -80,10 +80,72 @@
 
 struct thread_pool_s *dnssec_process_default_pool = NULL;
 
+/**
+ * Initialises a task with two threads (given by the descriptor)
+ * 
+ * @param task task to initialise
+ * @param desc structure pointing to the two threads an a friendly name
+ */
+
+void
+dnssec_process_initialize(dnssec_task_s *task, dnssec_task_vtbl *vtbl, struct thread_pool_s *pool, zdb_zone *zone)
+{
+#if DNSSEC_DEBUGLEVEL>1
+    log_debug("dnssec_process_initialize(%s)", desc->name);
+#endif
+    
+    ZEROMEMORY(task, sizeof(dnssec_task_s));
+    task->vtbl = vtbl;
+    task->zone = zone;
+    task->pool = pool;
+    thread_pool_counter_init(&task->pool_counter, 0);
+    task->earliest_signature_expiration = MAX_U32;
+
+#if DNSSEC_DEBUGLEVEL>1
+    log_debug("dnssec_process_initialize: creating queues");
+#endif
+
+    u32 dnssec_process_queue_size = QUEUE_MAX_SIZE;
+
+    threaded_queue_init(&task->dnssec_task_query_queue, dnssec_process_queue_size);
+    threaded_queue_init(&task->dnssec_answer_query_queue, dnssec_process_queue_size);
+}
 
 /**
+ * Clears the threads and name of a task.
+ * 
+ * @param task the task structure
+ */
+
+void
+dnssec_process_finalize(dnssec_task_s *task)
+{
+#if DNSSEC_DEBUGLEVEL>1
+    log_debug("dnssec_process_finalize(%s)", task->descriptor_name);
+#endif
+    
+    threaded_queue_finalize(&task->dnssec_task_query_queue);
+    
+#ifdef DEBUG
+    memset(&task->dnssec_task_query_queue, 0xfe, sizeof(threaded_queue));
+#endif
+    
+    threaded_queue_finalize(&task->dnssec_answer_query_queue);
+    
+#ifdef DEBUG
+    memset(&task->dnssec_answer_query_queue, 0xfe, sizeof(threaded_queue));
+#endif
+    
+
+    
+    ZEROMEMORY(task, sizeof(dnssec_task_s));
+}
+
+/**
+ * Creates contexts and sends them to the pool.
+ * 
  * Using the parameters in task,
- * creates a task and an answer MT queues
+ * creates a context and an answer MT queues
  * queues task and answer threads to a thread pool
  * then calls the callback to work on the task/zone.
  * 
@@ -150,6 +212,8 @@ dnssec_process_begin(dnssec_task_s *task)
 #if DNSSEC_DEBUGLEVEL>1
     log_debug("dnssec_process_zone: starting answer processor");
 #endif
+    
+    // create the context/task
 
     ya_result ret;
     
@@ -162,7 +226,7 @@ dnssec_process_begin(dnssec_task_s *task)
         return ret;
     }
 
-    if(FAIL(ret = thread_pool_enqueue_call(pool, task->vtbl->result, processor_context, NULL, task->vtbl->name)))
+    if(FAIL(ret = thread_pool_enqueue_call(pool, task->vtbl->result, processor_context, &task->pool_counter, task->vtbl->name)))
     {
         DIE(DNSSEC_ERROR_CANTPOOLTHREAD);
     }
@@ -187,7 +251,7 @@ dnssec_process_begin(dnssec_task_s *task)
 
         contexts[processor] = processor_context;
         
-        if(FAIL(ret = thread_pool_enqueue_call(pool, task->vtbl->process, processor_context, NULL, task->vtbl->name)))
+        if(FAIL(ret = thread_pool_enqueue_call(pool, task->vtbl->process, processor_context, &task->pool_counter, task->vtbl->name)))
         {
             log_err("dnssec_process_zone: thread_pool_enqueue_call, critical fail: %r", ret);
             logger_flush();
@@ -202,6 +266,15 @@ dnssec_process_begin(dnssec_task_s *task)
     return ret;
 }
 
+/**
+ * Sends a NULL to every task of the query queue and waits for it to be removed.
+ * Sends a NULL to the answer queue and waits for it to be removed.
+ * Destroys all contexts of the tasks, ending with context #0.
+ * Clear the task of contexts tasks.
+ * 
+ * @param task
+ */
+
 void
 dnssec_process_end(dnssec_task_s *task)
 {
@@ -209,40 +282,77 @@ dnssec_process_end(dnssec_task_s *task)
     {
         threaded_queue_enqueue(&task->dnssec_task_query_queue, NULL);
     }
-
-    task->processor_threads_count = 0;
     
     /* Wait until the last thread has read its "NULL" query
      * This also means that the last answer has been posted.
      */
 
 #if DNSSEC_DEBUGLEVEL>1
-    log_debug("dnssec_process_zone: wait for queries");
+    log_debug("dnssec_process_end: wait for queries");
 #endif
 
     threaded_queue_wait_empty(&task->dnssec_task_query_queue);
+    
+    thread_pool_counter_wait_below_or_equal(&task->pool_counter, 1);
 
 #if DNSSEC_DEBUGLEVEL>1
-    log_debug("dnssec_process_zone: destroy queries");
+    log_debug("dnssec_process_end: destroy queries");
 #endif
 
     /* Wait until the last answer has been processed */
 
 #if DNSSEC_DEBUGLEVEL>1
-    log_debug("dnssec_process_zone: post NULL answer");
+    log_debug("dnssec_process_end: post NULL answer");
 #endif
 
     threaded_queue_enqueue(&task->dnssec_answer_query_queue, NULL);
 
 #if DNSSEC_DEBUGLEVEL>1
-    log_debug("dnssec_process_zone: wait for answer");
+    log_debug("dnssec_process_end: wait for answer");
 #endif
     /* Wait until the NULL answer has been processed */
     threaded_queue_wait_empty(&task->dnssec_answer_query_queue);
+    
+    thread_pool_counter_wait_below_or_equal(&task->pool_counter, 0);
 
 #if DNSSEC_DEBUGLEVEL>1
-    log_debug("dnssec_process_zone: destroy answer");
+    log_debug("dnssec_process_end: destroy answer");
 #endif
+    
+    if(task->contexts != NULL)
+    {
+#if DNSSEC_DEBUGLEVEL>1
+        log_debug("dnssec_process_end: destroy secondary contexts");
+#endif
+        
+        for(int processor = 1; processor <= task->processor_threads_count; processor++)
+        {
+            if(task->contexts[processor] != NULL)
+            {
+                task->vtbl->destroy_context(task, processor, task->contexts[processor]);
+                task->contexts[processor] = NULL;
+            }
+        }
+        
+#if DNSSEC_DEBUGLEVEL>1
+        log_debug("dnssec_process_end: destroy context");
+#endif
+
+        task->vtbl->destroy_context(task, 0, task->contexts[0]);
+    
+#if DNSSEC_DEBUGLEVEL>1
+        log_debug("dnssec_process_end: free contexts memory");
+#endif
+        
+#ifdef DEBUG
+        memset(task->contexts, 0xfe, sizeof(void*) * (task->processor_threads_count + 1));
+#endif
+
+        free(task->contexts);
+        task->contexts = NULL;
+    }
+    
+    task->processor_threads_count = 0;
 }
 
 ya_result
@@ -256,8 +366,6 @@ dnssec_process_task(dnssec_task_s *task, dnssec_process_task_callback *callback,
     
     /*
      * This is the actual core of the function, everything beside this couple of lines is setup
-     *
-     * @TODO handle possible error code
      */
 
     if(ISOK(ret))
@@ -308,86 +416,6 @@ dnssec_process_set_default_pool(struct thread_pool_s *pool)
     }
 }
 
-/**
- * Initialises a task with two threads (given by the descriptor)
- * 
- * @param task task to initialise
- * @param desc structure pointing to the two threads an a friendly name
- */
-
-void
-dnssec_process_initialize(dnssec_task_s *task, dnssec_task_vtbl *vtbl, struct thread_pool_s *pool, zdb_zone *zone)
-{
-#if DNSSEC_DEBUGLEVEL>1
-    log_debug("dnssec_process_initialize(%s)", desc->name);
-#endif
-    
-    ZEROMEMORY(task, sizeof(dnssec_task_s));
-    task->vtbl = vtbl;
-    task->zone = zone;
-    task->pool = pool;
-
-#if DNSSEC_DEBUGLEVEL>1
-    log_debug("dnssec_process_initialize: creating queues");
-#endif
-
-    u32 dnssec_process_queue_size = QUEUE_MAX_SIZE;
-
-    threaded_queue_init(&task->dnssec_task_query_queue, dnssec_process_queue_size);
-    threaded_queue_init(&task->dnssec_answer_query_queue, dnssec_process_queue_size);
-}
-
-/**
- * Clears the threads and name of a task.
- * 
- * @param task the task structure
- */
-
-void
-dnssec_process_finalize(dnssec_task_s *task)
-{
-#if DNSSEC_DEBUGLEVEL>1
-    log_debug("dnssec_process_finalize(%s)", task->descriptor_name);
-#endif
-    
-    threaded_queue_finalize(&task->dnssec_task_query_queue);
-    
-#ifdef DEBUG
-    memset(&task->dnssec_task_query_queue, 0xfe, sizeof(threaded_queue));
-#endif
-    
-    threaded_queue_finalize(&task->dnssec_answer_query_queue);
-    
-#ifdef DEBUG
-    memset(&task->dnssec_answer_query_queue, 0xfe, sizeof(threaded_queue));
-#endif
-    
-    if(task->contexts != NULL)
-    {
-        for(int processor = 0; processor <= task->processor_threads_count; processor++)
-        {
-            if(task->contexts[processor] != NULL)
-            {
-                task->vtbl->destroy_context(task, processor, task->contexts[processor]);
-                task->contexts[processor] = NULL;
-            }
-        }
-
-#if DNSSEC_DEBUGLEVEL>1
-        log_debug("dnssec_process_finalize: free contexts");
-#endif
-
-#ifdef DEBUG
-        memset(task->contexts, 0xfe, sizeof(void*) * (task->processor_threads_count + 1));
-#endif
-
-        free(task->contexts);
-        task->contexts = NULL;
-    }
-    
-    task->vtbl = NULL;
-}
-
 #if ZDB_HAS_NSEC3_SUPPORT != 0
 
 /**
@@ -414,7 +442,7 @@ dnssec_process_zone_nsec3_body(dnssec_task_s *task, void *not_used)
     log_debug("dnssec_process_zone_nsec3_body: begin %{dnsname} (%s)", &zone->origin, task->descriptor_name);
 #endif
     
-    nsec3_zone* n3 = zone->nsec.nsec3;
+    nsec3_zone *n3 = zone->nsec.nsec3;
     
     while(n3 != NULL)
     {
@@ -460,7 +488,7 @@ dnssec_process_zone_nsec3_body(dnssec_task_s *task, void *not_used)
                 {
                     nsec3_rrsig_update_item_s* query;
 
-                    MALLOC_OR_DIE(nsec3_rrsig_update_item_s*, query, sizeof (nsec3_rrsig_update_item_s), ZDB_RRSIGUPQ_TAG);
+                    MALLOC_OR_DIE(nsec3_rrsig_update_item_s*, query, sizeof(nsec3_rrsig_update_item_s), ZDB_RRSIGUPQ_TAG);
 
                     query->zone = zone;
                     query->item = item;
@@ -474,7 +502,7 @@ dnssec_process_zone_nsec3_body(dnssec_task_s *task, void *not_used)
                 }
                 else
                 {
-                    log_debug7("rrsig: nsec3: ignore %{digest32h}", item->digest);
+                    log_debug7("rrsig: nsec3: ignore %{digest32h}.%{dnsname}", item->digest, zone->origin);
                     task->vtbl->filter_nsec3_item(task, item, next);
                 }
 

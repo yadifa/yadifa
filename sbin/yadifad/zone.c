@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup zone Routines for zone_data struct
  *  @ingroup yadifad
  *  @brief zone functions
@@ -61,6 +61,13 @@
 
 #ifdef DEBUG
 #include <dnscore/u64_set.h>
+#endif
+
+#include <dnsdb/zdb-config-features.h> // else we get a chicken-egg issue on the following include
+
+#if ZDB_HAS_DNSSEC_SUPPORT
+#include <dnsdb/dnssec-keystore.h>
+#include "dnssec-policy.h"
 #endif
 
 #include "server.h"
@@ -110,6 +117,30 @@ static u64 zone_desc_next_id = 0;
 /*------------------------------------------------------------------------------
  * FUNCTIONS */
 
+void
+zone_set_lock(zone_data_set *dset)
+{
+    group_mutex_lock(&dset->lock, GROUP_MUTEX_READ);
+}
+
+void
+zone_set_unlock(zone_data_set *dset)
+{
+    group_mutex_unlock(&dset->lock, GROUP_MUTEX_READ);
+}
+
+void
+zone_set_writer_lock(zone_data_set *dset)
+{
+    group_mutex_lock(&dset->lock, GROUP_MUTEX_WRITE);
+}
+
+void
+zone_set_writer_unlock(zone_data_set *dset)
+{
+    group_mutex_unlock(&dset->lock, GROUP_MUTEX_WRITE);
+}
+
 #if HAS_DYNAMIC_PROVISIONING
 bool
 zone_data_is_clone(zone_desc_s *desc)
@@ -132,13 +163,13 @@ zone_init(zone_data_set *dset)
 {
     dset->set.root = NULL;
     dset->set.compare = zone_dnsname_compare;
-    mutex_init(&dset->lock);
+    group_mutex_init(&dset->lock);
 }
 
 void
 zone_finalize(zone_data_set *dset)
 {
-    mutex_destroy(&dset->lock);
+    group_mutex_destroy(&dset->lock);
     dset->set.root = NULL;
     dset->set.compare = zone_dnsname_compare;
 }
@@ -169,6 +200,7 @@ zone_alloc()
     
     zone_desc->qclass = CLASS_IN;
     
+#if ZDB_HAS_DNSSEC_SUPPORT
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
     
     zone_desc->signature.sig_validity_interval = MAX_S32;
@@ -182,6 +214,7 @@ zone_alloc()
     
     zone_desc->signature.scheduled_sig_invalid_first = MAX_S32;
     
+#endif
 #endif
     
     zone_desc->rc = 1;
@@ -229,6 +262,13 @@ zone_clone(zone_desc_s *zone_desc)
     clone->origin = dnsname_dup(zone_desc->origin);
     
     clone->rc = 1;
+    
+#if HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT
+    if(clone->dnssec_policy != NULL)
+    {
+        dnssec_policy_acquire(clone->dnssec_policy);
+    }
+#endif
     
     log_debug6("clone: %{dnsname}@%p of @%p rc=%i", zone_desc->origin, clone, zone_desc, zone_desc->rc);
     
@@ -286,7 +326,7 @@ zone_dump_allocated()
  */
 
 void
-zone_free(zone_desc_s *zone_desc)
+zone_release(zone_desc_s *zone_desc)
 {
     // note: the zone MUST be locked by the caller
     
@@ -332,12 +372,20 @@ zone_free(zone_desc_s *zone_desc)
 
             host_address_delete_list(zone_desc->notifies);
             zone_desc->notifies = NULL;
+            
+#if HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT
+            if(zone_desc->dnssec_policy != NULL)
+            {
+                dnssec_policy_release(zone_desc->dnssec_policy);
+                zone_desc->dnssec_policy = NULL;
+            }
+#endif
 
 #if HAS_ACL_SUPPORT
             acl_unmerge_access_control(&zone_desc->ac, &g_config->ac);
             acl_empties_access_control(&zone_desc->ac);
 #endif
-
+            
             /* Free memory */
             free(zone_desc->domain);
             free(zone_desc->file_name);
@@ -382,7 +430,7 @@ zone_remove_all_matching(zone_data_set *dset, zone_data_matching_callback *match
         {
             zone_desc_s *zone_desc = (zone_desc_s*)candidates.data[i];
             ptr_set_avl_delete(&dset->set, zone_desc->origin);
-            zone_free(zone_desc);
+            zone_release(zone_desc);
         }
         
         ptr_vector_destroy(&candidates);
@@ -390,9 +438,6 @@ zone_remove_all_matching(zone_data_set *dset, zone_data_matching_callback *match
         zone_set_unlock(dset);
     }
 }
-
-
-
 
 #if 1 // NOT USED
 /** \brief Frees all elements of the collection
@@ -438,7 +483,7 @@ zone_free_all(zone_data_set *dset)
                 }
 #endif
                    
-                zone_free(zone_desc);
+                zone_release(zone_desc);
             }
         }
 
@@ -514,6 +559,13 @@ zone_complete_settings(zone_desc_s *zone_desc)
     acl_merge_access_control(&zone_desc->ac, &g_config->ac);
 #endif
     
+#if ZDB_HAS_DNSSEC_SUPPORT
+    if(zone_desc->keys_path != NULL)
+    {
+        dnssec_keystore_add_domain(zone_desc->origin, zone_desc->keys_path);
+    }
+#endif
+    
     return SUCCESS;
 }
 
@@ -576,6 +628,13 @@ zone_desc_match(const zone_desc_s *a, const zone_desc_s *b)
     }
     ZONE_DESC_EQUALS_FIELD_PTR(a->masters,b->masters,host_address_list_equals, ZONE_DESC_MATCH_MASTERS);
     ZONE_DESC_EQUALS_FIELD_PTR(a->notifies,b->notifies,host_address_list_equals, ZONE_DESC_MATCH_NOTIFIES);
+    
+#if HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT
+    if(a->dnssec_policy != b->dnssec_policy)
+    {
+        return_code |= ZONE_DESC_MATCH_DNSSEC_POLICIES;
+    }
+#endif
 
 #if HAS_ACL_SUPPORT
     if(!acl_address_control_equals(&a->ac, &b->ac))
@@ -638,7 +697,7 @@ zone_register(zone_data_set *dset, zone_desc_s *zone_desc)
         }
     }
     
-    zone_set_lock(dset);
+    zone_set_writer_lock(dset);
     
     ptr_node *zone_desc_node = ptr_set_avl_find(&dset->set, zone_desc->origin);
     
@@ -655,7 +714,7 @@ zone_register(zone_data_set *dset, zone_desc_s *zone_desc)
             // already
             log_debug("zone: %{dnsname} has already been set", zone_desc->origin);
 
-            zone_set_unlock(dset);
+            zone_set_writer_unlock(dset);
             
             return SUCCESS;
         }
@@ -664,7 +723,7 @@ zone_register(zone_data_set *dset, zone_desc_s *zone_desc)
             // already
             log_debug("zone: %{dnsname} has already been set", zone_desc->origin);
 
-            zone_set_unlock(dset);
+            zone_set_writer_unlock(dset);
             
             return DATABASE_ZONE_CONFIG_CLONE;
         }
@@ -681,9 +740,9 @@ zone_register(zone_data_set *dset, zone_desc_s *zone_desc)
             
             log_err("zone: %{dnsname} has been set differently (bitmap=%08x) (ignoring)", zone_desc->origin, zone_desc_match_bitmap);
                         
-            // zone_desc_node->value = zone_desc; /// @todo this is wrong
+            // zone_desc_node->value = zone_desc; /// @todo 20150408 edf -- this is wrong
             
-            zone_set_unlock(dset);
+            zone_set_writer_unlock(dset);
             
             return DATABASE_ZONE_CONFIG_DUP;
         }
@@ -700,13 +759,13 @@ zone_register(zone_data_set *dset, zone_desc_s *zone_desc)
         log_debug1("zone: %{dnsname} is a slave, verifying master settings", zone_desc->origin);
         
         /**
-        * @todo Check that the master is single and is NOT a link to one of the listen addresses of the server
+        * @todo 20120406 edf -- Check that the master is single and is NOT a link to one of the listen addresses of the server
         *       This could trigger a deadlock (zone needs to be "locked" at the same time for read+write-blocked
         *       and for write.)
         */
         if(zone_desc->masters == NULL /* || address_matched(zone_desc->masters, g_config->listen, g_config->port) */)
         {
-            zone_set_unlock(dset);
+            zone_set_writer_unlock(dset);
             
             log_err("zone: %{dnsname} has no master setting (not loaded)", zone_desc->origin);
 
@@ -726,8 +785,10 @@ zone_register(zone_data_set *dset, zone_desc_s *zone_desc)
     if(node->value == NULL)
     {
         //log_info("zone: the zone %{dnsname} has been registered", zone_desc->origin);
-
+        
         node->value = zone_desc;
+        
+        ++dset->set_count;
 
         return_value = SUCCESS;
     }
@@ -742,7 +803,7 @@ zone_register(zone_data_set *dset, zone_desc_s *zone_desc)
         return_value = DATABASE_ZONE_CONFIG_DUP;
     }
 
-    zone_set_unlock(dset);
+    zone_set_writer_unlock(dset);
     
     return return_value;
 }
@@ -758,7 +819,7 @@ zone_unregister(zone_data_set *dset, const u8 *origin)
 {
     zone_desc_s *zone_desc = NULL;
 
-    zone_set_lock(dset);
+    zone_set_writer_lock(dset);
     
     ptr_node *node = ptr_set_avl_find(&dset->set, origin);
     
@@ -771,25 +832,14 @@ zone_unregister(zone_data_set *dset, const u8 *origin)
             if(ISOK(zone_wait_unlocked(zone_desc)))
             {
                 ptr_set_avl_delete(&dset->set, origin);
+                --dset->set_count;
             }
         }
     }
     
-    zone_set_unlock(dset);
+    zone_set_writer_unlock(dset);
 
     return zone_desc;
-}
-
-void
-zone_set_lock(zone_data_set *dset)
-{
-    mutex_lock(&dset->lock);
-}
-
-void
-zone_set_unlock(zone_data_set *dset)
-{
-    mutex_unlock(&dset->lock);
 }
 
 /**
@@ -1252,7 +1302,9 @@ zone_setwithzone(zone_desc_s *desc_zone_desc, zone_desc_s *src_zone_desc)
         desc_zone_desc->domain = strdup(src_zone_desc->domain);
         desc_zone_desc->qclass = src_zone_desc->qclass;
         desc_zone_desc->type = src_zone_desc->type;
+#if ZDB_HAS_DNSSEC_SUPPORT
         desc_zone_desc->dnssec_mode = src_zone_desc->dnssec_mode;
+#endif
         desc_zone_desc->dynamic_provisioning.flags = desc_zone_desc->dynamic_provisioning.flags;
         desc_zone_desc->origin = dnsname_dup(src_zone_desc->origin);
         desc_zone_desc->status_flags = src_zone_desc->status_flags;
@@ -1549,28 +1601,41 @@ zone_desc_log(logger_handle* handle, u32 level, const zone_desc_s *zone_desc, co
     format_writer status_flags_fw = {zone_desc_status_flags_long_format, &status_flags};
     logger_handle_msg(handle, level, "%s: %{dnsname} status=%w",
             text, FQDNNULL(zone_desc->origin), &status_flags_fw);
+#if ZDB_HAS_DNSSEC_SUPPORT
     logger_handle_msg(handle, level, "%s: %{dnsname} dnssec=%s type=%s flags=%x lock=%02hhx #olock=%d #wlock=%d",
             text, FQDNNULL(zone_desc->origin), zone_dnssec_to_name(zone_desc->dnssec_mode), zone_type_to_name(zone_desc->type),
             zone_desc->flags, zone_desc->lock_owner, zone_desc->lock_owner_count, zone_desc->lock_wait_count);
+#else
+    logger_handle_msg(handle, level, "%s: %{dnsname} type=%s flags=%x lock=%02hhx #olock=%d #wlock=%d",
+            text, FQDNNULL(zone_desc->origin), zone_type_to_name(zone_desc->type),
+            zone_desc->flags, zone_desc->lock_owner, zone_desc->lock_owner_count, zone_desc->lock_wait_count);
+#endif
     logger_handle_msg(handle, level, "%s: %{dnsname} refreshed=%d retried=%d next=%d",
             text, FQDNNULL(zone_desc->origin), zone_desc->refresh.refreshed_time, zone_desc->refresh.retried_time, zone_desc->refresh.zone_update_next_time);
    
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT
     
     u32 sig_invalid_first = zone_desc->signature.sig_invalid_first;
     u32 scheduled_sig_invalid_first = zone_desc->signature.scheduled_sig_invalid_first;
     
-    EPOCH_DEF(sig_invalid_first);
-    EPOCH_DEF(scheduled_sig_invalid_first);
-    
-    logger_handle_msg(handle, level, "%s: %{dnsname} interval=%d jitter=%d regeneration=%d invalid=%w scheduled-update=%w",
+
+    logger_handle_msg(handle, level, "%s: %{dnsname} interval=%d jitter=%d regeneration=%d invalid=%T scheduled-update=%T",
             text, FQDNNULL(zone_desc->origin),
             zone_desc->signature.sig_validity_interval,
             zone_desc->signature.sig_validity_jitter,
             zone_desc->signature.sig_validity_regeneration,
-            EPOCH_REF(sig_invalid_first),
-            EPOCH_REF(scheduled_sig_invalid_first));
-    
+            sig_invalid_first,
+            scheduled_sig_invalid_first);
+        
+    if(zone_desc->dnssec_policy != NULL)
+    {
+        logger_handle_msg(handle, level, "%s: %{dnsname} dnssec-policy: '%s'", text, FQDNNULL(zone_desc->origin), STRNULL(zone_desc->dnssec_policy->name));
+    }
+    else
+    {
+        logger_handle_msg(handle, level, "%s: %{dnsname} dnssec-policy: none", text, FQDNNULL(zone_desc->origin));
+    }
+
 #endif
     
     logger_handle_msg(handle, level, "%s: %{dnsname} master=%{hostaddr}",
@@ -1654,13 +1719,54 @@ zone_desc_log_all(logger_handle* handle, u32 level, zone_data_set *dset, const c
     {
         zone_set_unlock(dset);
         
-        log_info("%s set is empty", text);
+#ifdef DEBUG
+        log_debug("zone_desc_log_all: %s set is empty", text);
+#endif
     }
 }
 
+/**
+ * 
+ * Calls the callback for all zone_desc.
+ * 
+ * @param cb
+ * @param args
+ */
 
+ya_result
+zone_desc_for_all(zone_desc_for_all_callback *cb, void *args)
+{
+    ya_result ret = SUCCESS;
+        
+    zone_set_lock(&database_zone_desc);
+        
+    if(!ptr_set_avl_isempty(&database_zone_desc.set))
+    {        
+        ptr_set_avl_iterator iter;
+        ptr_set_avl_iterator_init(&database_zone_desc.set, &iter);
 
-const char* type_to_name[5] =
+        while(ptr_set_avl_iterator_hasnext(&iter))
+        {
+            ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
+            zone_desc_s *zone_desc = (zone_desc_s*)zone_node->value;
+
+            if(FAIL(ret = cb(zone_desc, args)))
+            {
+                return ret;
+            }
+        }
+        
+        zone_set_unlock(&database_zone_desc);
+    }
+    else
+    {
+        zone_set_unlock(&database_zone_desc);
+    }
+    
+    return ret;
+}
+
+const char* type_to_name[4] =
 {
     "hint",
     "master",
@@ -1679,7 +1785,7 @@ zone_type_to_name(zone_type t)
     return "invalid";
 }
 
-const char *dnssec_to_name[4] =
+static const char *dnssec_to_name[4] =
 {
     "nosec",
     "nsec",
@@ -1699,7 +1805,7 @@ zone_dnssec_to_name(u32 dnssec_flags)
 }
 
 void
-zone_enqueue_command(zone_desc_s *zone_desc, u32 id, void* parm, bool has_priority) /// @todo edf 20141016 -- test all callers RCs
+zone_enqueue_command(zone_desc_s *zone_desc, u32 id, void* parm, bool has_priority) /// @todo 20141016 edf -- test all callers RCs
 {
     if(!has_priority && ((zone_desc->status_flags & ZONE_STATUS_MARKED_FOR_DESTRUCTION) != 0))
     {
@@ -1713,7 +1819,7 @@ zone_enqueue_command(zone_desc_s *zone_desc, u32 id, void* parm, bool has_priori
 #endif
     
     zone_command_s *cmd;
-    ZALLOC_OR_DIE(zone_command_s*, cmd, zone_command_s, GENERIC_TAG);
+    ZALLOC_OR_DIE(zone_command_s*, cmd, zone_command_s, ZONECMD_TAG);
     cmd->parm.ptr = parm;
     cmd->id = id;
     bpqueue_enqueue(&zone_desc->commands, cmd, (has_priority)?0:1);
@@ -1724,14 +1830,12 @@ zone_dequeue_command(zone_desc_s *zone_desc)
 {
     zone_command_s *cmd = (zone_command_s*)bpqueue_dequeue(&zone_desc->commands);
     
+#ifdef DEBUG
     if(cmd != NULL)
     {
-#ifdef DEBUG
         log_debug("zone_desc: dequeue command %{dnsname}@%p=%i - %s",
                 zone_desc->origin, zone_desc, zone_desc->rc, database_service_operation_get_name(cmd->id));
-#endif
     }
-#ifdef DEBUG
     else
     {
         log_debug("zone_desc: dequeue command %{dnsname}@%p=%i - NULL",

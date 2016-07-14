@@ -44,18 +44,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
-#
-#	YADIFA config Makefile.am script
-#
-#      	Makefile.am script
-#
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.6-public/etc/Makefile.am $
-#
-#	$Date: 2016-01-21 11:33:18 +0100 (Thu, 21 Jan 2016) $
-#
-#	$Revision: 5792 $
-#
-##############################################################################
 
 
 VPATH = @srcdir@
@@ -244,7 +232,6 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GREP = @GREP@
-HAS_ACL_SUPPORT = @HAS_ACL_SUPPORT@
 HAS_BFD_DEBUG_SUPPORT = @HAS_BFD_DEBUG_SUPPORT@
 HAS_BIG_ENDIAN = @HAS_BIG_ENDIAN@
 HAS_CC_ADDRESS_SANITIZER_CHECK = @HAS_CC_ADDRESS_SANITIZER_CHECK@
@@ -273,22 +260,32 @@ HAS_CC_WALL = @HAS_CC_WALL@
 HAS_CC_XC99 = @HAS_CC_XC99@
 HAS_CTRL = @HAS_CTRL@
 HAS_CTRL_DYNAMIC_PROVISIONING = @HAS_CTRL_DYNAMIC_PROVISIONING@
+HAS_DNSQ = @HAS_DNSQ@
+HAS_DROPALL_SUPPORT = @HAS_DROPALL_SUPPORT@
+HAS_DYNCONF_SUPPORT = @HAS_DYNCONF_SUPPORT@
 HAS_DYNUPDATE_SUPPORT = @HAS_DYNUPDATE_SUPPORT@
+HAS_EDF = @HAS_EDF@
+HAS_EXPERIMENTAL = @HAS_EXPERIMENTAL@
 HAS_FULL_ASCII7 = @HAS_FULL_ASCII7@
+HAS_GERY = @HAS_GERY@
 HAS_LITTLE_ENDIAN = @HAS_LITTLE_ENDIAN@
 HAS_LOGDIR = @HAS_LOGDIR@
 HAS_LOG_PID_ALWAYS_ON = @HAS_LOG_PID_ALWAYS_ON@
 HAS_LOG_THREAD_ID_ALWAYS_ON = @HAS_LOG_THREAD_ID_ALWAYS_ON@
 HAS_MALLOC_DEBUG_SUPPORT = @HAS_MALLOC_DEBUG_SUPPORT@
 HAS_MASTER_SUPPORT = @HAS_MASTER_SUPPORT@
+HAS_MEMALIGN_ISSUES = @HAS_MEMALIGN_ISSUES@
 HAS_MESSAGES_SUPPORT = @HAS_MESSAGES_SUPPORT@
+HAS_MIRROR_SUPPORT = @HAS_MIRROR_SUPPORT@
 HAS_MUTEX_DEBUG_SUPPORT = @HAS_MUTEX_DEBUG_SUPPORT@
 HAS_NON_AA_AXFR_SUPPORT = @HAS_NON_AA_AXFR_SUPPORT@
 HAS_NSID_SUPPORT = @HAS_NSID_SUPPORT@
+HAS_RDTSC = @HAS_RDTSC@
 HAS_RRL_SUPPORT = @HAS_RRL_SUPPORT@
 HAS_RRSIG_MANAGEMENT_SUPPORT = @HAS_RRSIG_MANAGEMENT_SUPPORT@
+HAS_THX = @HAS_THX@
 HAS_TOOLS = @HAS_TOOLS@
-HAS_TSIG_SUPPORT = @HAS_TSIG_SUPPORT@
+HAS_TRACK_ZONES_DEBUG_SUPPORT = @HAS_TRACK_ZONES_DEBUG_SUPPORT@
 HAS_ZALLOC_DEBUG_SUPPORT = @HAS_ZALLOC_DEBUG_SUPPORT@
 HAS_ZALLOC_STATISTICS_SUPPORT = @HAS_ZALLOC_STATISTICS_SUPPORT@
 HAS_ZALLOC_SUPPORT = @HAS_ZALLOC_SUPPORT@
@@ -298,6 +295,7 @@ INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 IS_BSD_FAMILY = @IS_BSD_FAMILY@
+IS_DARWIN_GE14 = @IS_DARWIN_GE14@
 IS_DARWIN_OS = @IS_DARWIN_OS@
 IS_LINUX_FAMILY = @IS_LINUX_FAMILY@
 IS_SOLARIS_FAMILY = @IS_SOLARIS_FAMILY@
@@ -390,18 +388,30 @@ top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I m4
 OC = yadifad.conf
 OCE = $(OC).example
+MC = yadifa.conf
+MCE = $(MC).example
+KC = keys.conf
+KCE = $(KC).example
 YI = yadifad.init
 YIE = $(YI).example
-doc_DATA = $(OCE) $(YIE) yadifad-master.conf.example yadifad-slave.conf.example \
+YS = yadifad.service
+YSE = $(YS).example
+YC = yadifa
+YCE = $(YC).bash_completion
+YD = yadifad
+YDE = $(YD).bash_completion
+BC = /etc/bash_completion.d/
+doc_DATA = $(OC) $(MC) $(KC) $(YI) $(YS) $(YDE) $(YCE) \
+				yadifad-master.conf.example yadifad-slave.conf.example \
 				yadifad.init.debian	yadifad.init.rhel \
 				yadifad.logrotate \
-				yadifad.service yadifad.service.arch yadifad.service.debian yadifad.service.rhel
+				yadifad.service.arch yadifad.service.debian yadifad.service.rhel
 
-noinst_HEADERS = yadifad.conf.example yadifad-master.conf.example yadifad-slave.conf.example \
-				yadifad.init.example yadifad.init.debian yadifad.init.rhel \
+noinst_HEADERS = $(OCE) $(MCE) $(KCE) $(YIE) $(YSE) $(YDE) $(YCE) \
+				yadifad-master.conf.example yadifad-slave.conf.example \
+				yadifad.init.debian yadifad.init.rhel \
 				yadifad.logrotate \
-				yadifad.service yadifad.service.arch yadifad.service.debian yadifad.service.rhel \
-				$(OC) $(YI)
+				yadifad.service.arch yadifad.service.debian yadifad.service.rhel
 
 all: all-am
 
@@ -671,23 +681,41 @@ uninstall-am: uninstall-docDATA
 $(OC): $(OCE)
 	cat $(OCE) | sed "s@\"\(.*\)/var/\(.*\)\"@\"$(localstatedir)/\2\"@" > $(OC)
 
+$(MC): $(MCE)
+	cp $(MCE) $(MC)
+
+$(KC): $(KCE)
+	cat $(KCE) | sed "s@ChangeThisKey@`head -c 16 /dev/urandom | openssl enc -base64 2>/dev/null`@" > $(KC)
+
 $(YI): $(YIE)
 	cat $(YIE) | sed "s@^PREFIX=.*@PREFIX=\"$(prefix)\"@" > $(YI)
 
-all: $(YI) $(OC)
+$(YS): $(YSE)
+	cat $(YSE) | sed -e "s@/usr/sbin@$(sbindir)@g" -e "s@/etc/yadifa@$(sysconfdir)@g" -e "s@/var@$(localstatedir)@g" > $(YS)
+
+$(YC): $(YCE)
+	cp $(YCE) $(YC)
+
+$(YD): $(YDE)
+	cp $(YDE) $(YD)
+
+all: $(YI) $(OC) $(MC) $(KC) $(YC) $(YD)
 
 install-data-hook: $(OC)
 	mkdir -p $(DESTDIR)$(sysconfdir)
 	touch $(DESTDIR)$(sysconfdir)/$(OC)
+	if [ -d "$(BC)" -a -w "$(BC)" ] ; then cp $(YC) $(YD) $(BC) ; fi
 
 clean-local:
-	rm -f $(YI) $(OC)
+	rm -f $(YI) $(OC) $(MC) $(KC) $(YS) $(YC) $(YD)
 
-release: $(YI) $(OC)
+release: $(YI) $(OC) $(MC) $(KC) $(YS) $(YC) $(YD)
 
-profile: $(YI) $(OC)
+profile: $(YI) $(OC) $(MC) $(KC) $(YS) $(YC) $(YD)
 
-debug: $(YI) $(OC)
+debug: $(YI) $(OC) $(MC) $(KC) $(YS) $(YC) $(YD)
+
+features:
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

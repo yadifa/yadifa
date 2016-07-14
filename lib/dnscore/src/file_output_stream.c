@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -71,7 +71,7 @@ struct file_output_stream
 };
 
 static ya_result
-file_write(output_stream* stream_, const u8* buffer, u32 len)
+file_output_stream_write(output_stream* stream_, const u8* buffer, u32 len)
 {
     const file_output_stream* stream = (file_output_stream*)stream_;
 
@@ -90,7 +90,7 @@ file_write(output_stream* stream_, const u8* buffer, u32 len)
                 continue;
             }
             
-            if(err == EAGAIN) /// @todo edf 20150218 -- OSX 10.9.4 generates this on unexpected streams
+            if(err == EAGAIN) /// @todo 20150218 edf -- OSX 10.9.4 generates this on unexpected streams
             {
 #if __FreeBSD__ || __OpenBSD__ || __APPLE__
                 int oldflags = fcntl (stream->data.fd, F_GETFL, 0);
@@ -117,7 +117,7 @@ file_write(output_stream* stream_, const u8* buffer, u32 len)
 }
 
 static ya_result
-file_flush(output_stream* stream_)
+file_output_stream_flush(output_stream* stream_)
 {
     file_output_stream* stream = (file_output_stream*)stream_;
 
@@ -130,7 +130,7 @@ file_flush(output_stream* stream_)
 }
 
 static void
-file_close(output_stream* stream_)
+file_output_stream_close(output_stream* stream_)
 {
     file_output_stream* stream = (file_output_stream*)stream_;
     
@@ -145,28 +145,32 @@ file_close(output_stream* stream_)
 }
 
 static const output_stream_vtbl file_output_stream_vtbl ={
-    file_write,
-    file_flush,
-    file_close,
+    file_output_stream_write,
+    file_output_stream_flush,
+    file_output_stream_close,
     "file_output_stream",
 };
 
 ya_result
-file_output_stream_open(const char* filename, output_stream* stream)
+file_output_stream_open(output_stream* stream, const char* filename)
 {
-    return file_output_stream_open_ex(filename, O_RDWR, 0600, stream);
+    ya_result ret;
+    ret = file_output_stream_open_ex(stream, filename, O_RDWR, 0600);
+    return ret;
 }
 
 ya_result
-file_output_stream_create(const char* filename, mode_t mode, output_stream* stream)
+file_output_stream_create(output_stream* stream, const char* filename, mode_t mode)
 {
-    return file_output_stream_open_ex(filename, O_RDWR | O_CREAT | O_TRUNC, mode, stream);
+    ya_result ret;
+    ret = file_output_stream_open_ex(stream, filename, O_RDWR | O_CREAT | O_TRUNC, mode);
+    return ret;
 }
 
 ya_result
-file_output_stream_open_ex(const char* filename, int flags, mode_t mode, output_stream* stream_)
+file_output_stream_open_ex(output_stream* stream_, const char* filename, int flags, mode_t mode)
 {
-    yassert(sizeof (void*) >= sizeof (int));
+    yassert(sizeof(void*) >= sizeof(int));
 
     int fd = open_create_ex(filename, flags, mode);
 
@@ -188,9 +192,9 @@ file_output_stream_open_ex(const char* filename, int flags, mode_t mode, output_
 }
 
 ya_result
-file_output_stream_open_ex_nolog(const char* filename, int flags, mode_t mode, output_stream* stream_)
+file_output_stream_open_ex_nolog(output_stream* stream_, const char* filename, int flags, mode_t mode)
 {
-    yassert(sizeof (void*) >= sizeof (int));
+    yassert(sizeof(void*) >= sizeof(int));
 
     int fd = open_create_ex_nolog(filename, flags, mode);
 

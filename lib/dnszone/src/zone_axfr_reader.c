@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup zoneaxfr AXFR file loader module
  *  @ingroup dnszone
  *  @brief zone functions
@@ -85,7 +85,7 @@ zone_axfr_reader_unread_record(zone_reader *zr, resource_record *entry)
     zone_axfr_reader *zone = (zone_axfr_reader*)zr->data;
     resource_record *rr;
     u32 required = offsetof(resource_record,rdata) + entry->rdata_size;
-    MALLOC_OR_DIE(resource_record*, rr, required, GENERIC_TAG);
+    MALLOC_OR_DIE(resource_record*, rr, required, DNSRR_TAG);
     memcpy(rr, entry, required);
     rr->next = zone->unread_next;
     zone->unread_next = rr;
@@ -120,7 +120,7 @@ zone_axfr_reader_read_record(zone_reader *zr, resource_record *entry)
         {
             if(ISOK(return_value = input_stream_read_u16(&zone->is, &entry->class)))
             {
-                if(ISOK(return_value = input_stream_read_nu32(&zone->is, &entry->ttl)))
+                if(ISOK(return_value = input_stream_read_nu32(&zone->is, (u32*)&entry->ttl)))
                 {
                     if(ISOK(return_value = input_stream_read_nu16(&zone->is, &rdata_len)))
                     {
@@ -239,19 +239,19 @@ ya_result zone_axfr_reader_open(zone_reader *dst, const char *file_path)
     ya_result return_value;
     
     input_stream is;
-    if(FAIL(return_value = file_input_stream_open(file_path, &is)))
+    if(FAIL(return_value = file_input_stream_open(&is, file_path)))
     {
             return return_value;
     }
 
     /*    ------------------------------------------------------------    */
     
-    MALLOC_OR_DIE(zone_axfr_reader*, zone, sizeof (zone_axfr_reader), AXREADER_TAG);
-    ZEROMEMORY(zone, sizeof (zone_axfr_reader));
+    MALLOC_OR_DIE(zone_axfr_reader*, zone, sizeof(zone_axfr_reader), AXREADER_TAG);
+    ZEROMEMORY(zone, sizeof(zone_axfr_reader));
 
     /* Initialize the new zone data */
 
-    buffer_input_stream_init(&is, &zone->is, 4096);
+    buffer_input_stream_init(&zone->is, &is, 4096);
 
     zone->file_path = strdup(file_path);
     zone->soa_found = FALSE;

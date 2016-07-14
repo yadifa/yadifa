@@ -2,7 +2,8 @@
 Description=yadifa nameserver
 
 [Service]
-ExecStart=/usr/bin/yadifad
+Type=simple
+ExecStart=/usr/bin/yadifad --nodaemon
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=process
 

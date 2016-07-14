@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup collections Generic collections functions
  *  @ingroup dnscore
  *  @brief A dynamic-sized array of pointers
@@ -68,7 +68,7 @@ struct ptr_vector
 };
 
 static inline void
-ptr_vector_init_empty(ptr_vector* v)
+ptr_vector_init_empty(ptr_vector *v)
 {
     v->data = NULL;
     v->offset = -1;
@@ -81,7 +81,7 @@ ptr_vector_init_empty(ptr_vector* v)
  * @param v a pointer to the ptr_vector structure to initialise
  */
 
-void  ptr_vector_init(ptr_vector* v);
+void  ptr_vector_init(ptr_vector *v);
 
 /**
  * Initialises a vector structure with a size of PTR_VECTOR_DEFAULT_SIZE entries
@@ -90,8 +90,41 @@ void  ptr_vector_init(ptr_vector* v);
  * @param initial_capacity the size to allocate to start with
  */
 
-void  ptr_vector_init_ex(ptr_vector* v, s32 initial_capacity);
+void  ptr_vector_init_ex(ptr_vector *v, s32 initial_capacity);
 
+/**
+ * Initialises a vector as a copy as another vector.
+ * The reserved size is the size of the original plus the extra size.
+ * 
+ * @param v a pointer to the ptr_vector structure to initialise
+ * @param original the vector to copy
+ * @param extra_size the amount of reserved slots to allocate
+ */
+
+void  ptr_vector_init_copy(ptr_vector *v, const ptr_vector *original, u32 extra_size);
+
+/**
+ * Initialises a vector as a copy as another vector plus onz item added
+ * The reserved size is the size of the original plus one
+ * 
+ * @param v a pointer to the ptr_vector structure to initialise
+ * @param original the vector to copy
+ * @param data an item to add
+ */
+
+void  ptr_vector_init_copy_append(ptr_vector *v, const ptr_vector *original, void *data);
+
+/**
+ * Initialises a vector as a copy as another vector plus a few items added
+ * The reserved size is the size of the original plus the data size.
+ * 
+ * @param v a pointer to the ptr_vector structure to initialise
+ * @param original the vector to copy
+ * @param data is an array of pointers
+ * @param data_size the size of the data array
+ */
+
+void  ptr_vector_init_copy_append_array(ptr_vector *v, const ptr_vector *original, void *data, u32 data_size);
 
 /**
  * Frees the memory used by a vector structure (not the vector structure itself)
@@ -99,7 +132,7 @@ void  ptr_vector_init_ex(ptr_vector* v, s32 initial_capacity);
  * @param v a pointer to the ptr_vector structure
  */
 
-void  ptr_vector_destroy(ptr_vector* v);
+void  ptr_vector_destroy(ptr_vector *v);
 
 /**
  * Empties the vector (does not release memory)
@@ -107,7 +140,7 @@ void  ptr_vector_destroy(ptr_vector* v);
  * @param v a pointer to the ptr_vector structure
  */
 
-void  ptr_vector_empties(ptr_vector* v);
+void  ptr_vector_empties(ptr_vector *v);
 
 /**
  * Changes the capacity of a vector to the specified size
@@ -119,7 +152,7 @@ void  ptr_vector_empties(ptr_vector* v);
  * @param newsize the new size of the vector
  */
 
-void  ptr_vector_resize(ptr_vector*v, s32 newsize);
+void  ptr_vector_resize(ptr_vector *v, s32 newsize);
 
 /**
  * Ensures the vector has enough capacity to accommodate a
@@ -129,7 +162,7 @@ void  ptr_vector_resize(ptr_vector*v, s32 newsize);
  * @param reqsize the minimum size of the vector
  */
 
-void  ptr_vector_ensures(ptr_vector*v, s32 reqsize);
+void  ptr_vector_ensures(ptr_vector *v, s32 reqsize);
 
 /**
  * Resizes the capacity so it can at most contain its
@@ -138,7 +171,7 @@ void  ptr_vector_ensures(ptr_vector*v, s32 reqsize);
  * @param v a pointer to the ptr_vector structure
  */
 
-void  ptr_vector_shrink(ptr_vector*v);
+void  ptr_vector_shrink(ptr_vector *v);
 
 /**
  * Appends the item (pointer) to the vector
@@ -147,7 +180,18 @@ void  ptr_vector_shrink(ptr_vector*v);
  * @param data  a pointer to the item
  */
 
-void ptr_vector_append(ptr_vector* v, void* data);
+void ptr_vector_append(ptr_vector *v, void* data);
+
+/**
+ * Appends the item (pointer) to the vector
+ * 
+ * @param v     a pointer to the ptr_vector structure
+ * @param datap  a pointer to the items
+ * @param data_size the number of items to append
+ */
+
+void ptr_vector_append_array(ptr_vector *v, void** datap, u32 data_size);
+
 
 /**
  * Appends the item (pointer) to the vector and try to keep the buffer size at at most
@@ -160,7 +204,7 @@ void ptr_vector_append(ptr_vector* v, void* data);
  * @param restrictedlimit a guideline limit on the size of the vector
  */
 
-void ptr_vector_append_restrict_size(ptr_vector* v, void* data, u32 restrictedlimit);
+void ptr_vector_append_restrict_size(ptr_vector *v, void* data, u32 restrictedlimit);
 
 /**
  * Removes an item from the back of the vector and returns its reference
@@ -169,7 +213,8 @@ void ptr_vector_append_restrict_size(ptr_vector* v, void* data, u32 restrictedli
  * @return      a pointer to the removed item
  */
 
-void* ptr_vector_pop(ptr_vector* v);
+void* ptr_vector_pop(ptr_vector *v);
+
 
 typedef int ptr_vector_qsort_callback(const void*, const void*);
 
@@ -180,7 +225,7 @@ typedef int ptr_vector_qsort_callback(const void*, const void*);
  * @param compare comparison callback
  */
 
-void ptr_vector_qsort(ptr_vector* v, ptr_vector_qsort_callback compare);
+void ptr_vector_qsort(ptr_vector *v, ptr_vector_qsort_callback compare);
 
 typedef void void_function_voidp(void*);
 
@@ -191,7 +236,7 @@ typedef void void_function_voidp(void*);
  * @param free_memory item free callback
  */
 
-void ptr_vector_free_empties(ptr_vector* v, void_function_voidp free_memory);
+void ptr_vector_free_empties(ptr_vector *v, void_function_voidp free_memory);
 
 /*
  * First argument is the key, second one is the item to match with the key
@@ -211,7 +256,7 @@ typedef int ptr_vector_search_callback(const void*, const void*);
  * @return the first matching item or NULL if none has been found
  */
 
-void* ptr_vector_linear_search(const ptr_vector* v, const void* what, ptr_vector_search_callback compare);
+void* ptr_vector_linear_search(const ptr_vector *v, const void* what, ptr_vector_search_callback compare);
 
 /**
  * Look sequentially in the vector for an item using a key and a comparison function, returns the index of the first matching item
@@ -223,7 +268,7 @@ void* ptr_vector_linear_search(const ptr_vector* v, const void* what, ptr_vector
  * @return the first matching item index or -1 if none has been found
  */
 
-s32 ptr_vector_index_of(const ptr_vector* v, const void* what, ptr_vector_search_callback compare);
+s32 ptr_vector_index_of(const ptr_vector *v, const void* what, ptr_vector_search_callback compare);
 
 /**
  * Look in the vector for an item using a key and a comparison function
@@ -236,21 +281,48 @@ s32 ptr_vector_index_of(const ptr_vector* v, const void* what, ptr_vector_search
  * @return the first matching item or NULL if none has been found
  */
 
-void* ptr_vector_search(const ptr_vector* v, const void* what,ptr_vector_search_callback compare);
+void* ptr_vector_search(const ptr_vector *v, const void* what,ptr_vector_search_callback compare);
 
-static inline void* ptr_vector_get(const ptr_vector* v, s32 idx)
+/**
+ * Returns a pointer to the item at index
+ * Does NOT checks for the index range.
+ * 
+ * @param v
+ * @param idx
+ * @return a pointer to the item at index
+ */
+
+static inline void* ptr_vector_get(const ptr_vector *v, s32 idx)
 {
     return v->data[idx];
 }
 
-static inline void ptr_vector_set(ptr_vector* v, s32 idx, void* val)
+/**
+ * Sets the item at index to value.
+ * Does NOT checks for the index range.
+ * Does NOT grows the vector.
+ * 
+ * @param v
+ * @param idx
+ * @param val
+ */
+
+static inline void ptr_vector_set(ptr_vector *v, s32 idx, void* val)
 {
      v->data[idx] = val;
 }
 
-static inline void *ptr_vector_last(const ptr_vector* v)
+/**
+ * Returns a pointer to the last item in the vector or NULL if the vector is empty.
+ * 
+ * @param v
+ * @return a pointer to the last item or NULL if the vector is empty
+ */
+
+static inline void *ptr_vector_last(const ptr_vector *v)
 {
     void *r = NULL;
+    
     if(v->offset >= 0)
     {
         r = v->data[v->offset];
@@ -259,25 +331,67 @@ static inline void *ptr_vector_last(const ptr_vector* v)
     return r;
 }
 
+/**
+ * Returns the size of the vector
+ * 
+ * @param pv
+ * @param idx
+ */
+
 static inline s32 ptr_vector_size(const ptr_vector *v)
 {
     return v->offset + 1;
 }
+
+/**
+ * Returns the index of the last item in the vector
+ * This is useful because of an implementaiton detail :
+ * obtaining the last index is faster than the size.
+ * 
+ * @param pv
+ * @param idx
+ * @param val
+ */
 
 static inline s32 ptr_vector_last_index(const ptr_vector *v)
 {
     return v->offset;
 }
 
+/**
+ * Returns the capacity of the vector, that is : the number of items it can hold
+ * without growing.
+ * 
+ * @param pv
+ * @param idx
+ * @param valp
+ * @param n
+ */
+
 static inline s32 ptr_vector_capacity(const ptr_vector *v)
 {
     return v->size;
 }
 
-static inline bool ptr_vector_isempty(const ptr_vector* v)
+static inline bool ptr_vector_isempty(const ptr_vector *v)
 {
     return (v->offset < 0);
 }
+
+/**
+ * Swap the last item of the vector with the one at index idx.
+ * 
+ * One typical use of this function is to remove an item and shrink:
+ * If the vector does not need to keep the order of its content, the
+ * item that is not wanted is exchanged with the end, then the size is
+ * shrank of one slot.
+ * 
+ * This is certainly much faster than the insert and remove families
+ * that can be found here below.
+ * 
+ * @param pv
+ * @param idx
+ */
 
 static inline void ptr_vector_end_swap(ptr_vector *pv,s32 idx)
 {

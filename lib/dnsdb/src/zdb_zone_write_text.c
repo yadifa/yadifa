@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief
@@ -54,6 +54,8 @@
 #include <dnscore/typebitmap.h>
 #include <dnscore/base32hex.h>
 #include <dnscore/fdtools.h>
+#include <dnscore/random.h>
+#include <dnscore/thread_pool.h>
 
 #include "dnsdb/zdb_zone_write.h"
 
@@ -87,7 +89,9 @@ extern logger_handle* g_database_logger;
  */
 
 static const char __TAB__[1] = {'\t'};
+#ifndef DEBUG
 static const char __LF__[1] = {'\n'};
+#endif
 
 static void
 osprint_tab_padded(output_stream* os, char* str, u32 len, s32 tabs)
@@ -117,25 +121,31 @@ zdb_zone_rr_label_flags_format(const void *value, output_stream *os, s32 padding
         output_stream_write(os, "A", 1);
     }
     
+#if ZDB_HAS_NSEC_SUPPORT
     if((flags & ZDB_RR_LABEL_NSEC) != 0)
     {
         output_stream_write(os, "1", 1);
     }
+#endif
     
+#if ZDB_HAS_NSEC3_SUPPORT
     if((flags & ZDB_RR_LABEL_NSEC3) != 0)
     {
         output_stream_write(os, "3", 1);
     }
-    
+
     if((flags & ZDB_RR_LABEL_NSEC3_OPTOUT) != 0)
     {
         output_stream_write(os, "O", 1);
     }
+#endif
     
+#if ZDB_HAS_DNSSEC_SUPPORT
     if((flags & ZDB_RR_LABEL_DNSSEC_EDIT) != 0)
     {
         output_stream_write(os, "E", 1);
     }
+#endif
     
     if((flags & ZDB_RR_APEX_LABEL_FROZEN) != 0)
     {
@@ -180,19 +190,23 @@ zdb_zone_rr_label_flags_format(const void *value, output_stream *os, s32 padding
 #endif
 
 ya_result
-zdb_zone_write_text(const zdb_zone* zone, output_stream* fos, bool force_label)
+zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_label, bool allow_shutdown)
 {
     output_stream bos;
 
     ya_result ret;
     
     u32 current_ttl = DEFAULT_TTL;
+#if ZDB_HAS_NSEC3_SUPPORT
     u32 soa_nttl = zone->min_ttl;
+#endif
     u32 label_len;
     u32 origin_len;
+#if ZDB_HAS_NSEC3_SUPPORT
     u32 dot_origin_len;
+#endif
         
-    if(FAIL(ret = buffer_output_stream_init(fos, &bos, OUTPUT_BUFFER_SIZE)))
+    if(FAIL(ret = buffer_output_stream_init(&bos, fos, OUTPUT_BUFFER_SIZE)))
     {
         return ret;
     }
@@ -214,17 +228,19 @@ zdb_zone_write_text(const zdb_zone* zone, output_stream* fos, bool force_label)
         }
     }
     
+#if ZDB_HAS_NSEC3_SUPPORT
     char dot_origin[1 + MAX_DOMAIN_LENGTH + 1];
     
     dot_origin[0] = '.';
     dot_origin_len = dnsname_to_cstr(&dot_origin[1], zone->origin) + 1;
+#endif
     
     osformat(&bos, "$ORIGIN %{dnsname}\n$TTL %u\n", zone->origin, current_ttl);
 
     zdb_zone_label_iterator iter;
     btree_iterator records_iter;
 
-    zdb_zone_label_iterator_init(zone, &iter);
+    zdb_zone_label_iterator_init(&iter, zone);
 
     /*
      * Save each label, and its records.
@@ -290,7 +306,7 @@ zdb_zone_write_text(const zdb_zone* zone, output_stream* fos, bool force_label)
             print_label = force_label;
         }
         
-        if(dnscore_shuttingdown())
+        if(allow_shutdown && dnscore_shuttingdown())
         {
             output_stream_close(&bos);
 
@@ -358,7 +374,7 @@ zdb_zone_write_text(const zdb_zone* zone, output_stream* fos, bool force_label)
         }
     }
 
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
 
     /*
      * If the zone is NSEC3, print the nsec3 data
@@ -389,7 +405,7 @@ zdb_zone_write_text(const zdb_zone* zone, output_stream* fos, bool force_label)
 
                 do
                 {
-                    if(dnscore_shuttingdown())
+                    if(allow_shutdown && dnscore_shuttingdown())
                     {
                         output_stream_close(&bos);
 
@@ -407,7 +423,7 @@ zdb_zone_write_text(const zdb_zone* zone, output_stream* fos, bool force_label)
 
                     rdata[1] = item->flags;
 
-#if DEBUG
+#ifdef DEBUG
                     if(item->rc == 1)
                     {
                         if(item->rc != 0)
@@ -525,6 +541,14 @@ zdb_zone_write_text(const zdb_zone* zone, output_stream* fos, bool force_label)
     return SUCCESS;
 }
 
+ya_result
+zdb_zone_write_text(const zdb_zone *zone, output_stream *fos, bool force_label)
+{
+    ya_result ret;
+    ret = zdb_zone_write_text_ex(zone, fos, force_label, TRUE);
+    return ret;
+}
+
 /*
  * Without buffering:
  *
@@ -541,23 +565,81 @@ zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, bool for
 {
     output_stream fos;
     ya_result ret;
-    
-    if(file_is_link(output_file) > 0)
+    random_ctx rnd = thread_pool_get_random_ctx();
+    if(rnd == NULL)
     {
-        if(unlink(output_file) < 0)
+        thread_pool_setup_random_ctx();
+        rnd = thread_pool_get_random_ctx();
+    }
+    
+    bool allow_shutdown = TRUE;
+    char tmp[PATH_MAX];
+    
+    size_t output_file_len = strlen(output_file);
+    
+    if(output_file_len >= PATH_MAX)
+    {
+        return ERROR;
+    }
+    
+    if(PATH_MAX - output_file_len >= 8)
+    {   
+        do
         {
-            log_warn("could not delete symbolic link %s: %r", output_file, ERRNO_ERROR);
+            u32 rndval = random_next(rnd);
+            ret = snformat(tmp, sizeof(tmp), "%s%08x", output_file, rndval);
         }
+        while(file_exists(tmp) && !dnscore_shuttingdown());
+    }
+    else if(PATH_MAX - output_file_len >= 4)
+    {
+        do
+        {
+            u32 rndval = random_next(rnd);
+            ret = snformat(tmp, sizeof(tmp), "%s%04x", output_file, rndval & 0xffffU);
+        }
+        while(file_exists(tmp) && !dnscore_shuttingdown());
+    }
+    else
+    {
+        log_warn("%{dnsname}: path '%s' is too long to allow temporary random suffix, shutdown not allowed while saving the file", zone->origin, output_file);
+        allow_shutdown = FALSE;
+    }
+    
+    if(ISOK(ret = file_output_stream_create(&fos, tmp, FILE_RIGHTS)))
+    {
+        if(ISOK(ret = zdb_zone_write_text_ex(zone, &fos, force_label, allow_shutdown)))
+        {
+            if(file_is_link(output_file) > 0)
+            {
+                if(unlink(output_file) < 0)
+                {
+                    log_warn("%{dnsname}: could not delete symbolic link '%s': %r", zone->origin, output_file, ERRNO_ERROR);
+                }
+            }
+            if(rename(tmp, output_file) > 0)
+            {
+                log_info("%{dnsname}: saved as '%s'", zone->origin, output_file);
+                
+                return SUCCESS;
+            }
+            else
+            {
+                log_err("%{dnsname}: could not move temporary to overwrite '%s': %r", zone->origin, output_file, ERRNO_ERROR);
+                return ERROR;
+            }
+        }
+        else
+        {
+            log_warn("%{dnsname}: could not write '%s', cleaning up: %r", zone->origin, tmp, ret);
+            unlink(tmp);
+        }
+    }
+    else
+    {
+        log_err("%{dnsname}: could not create '%s': %r", zone->origin, tmp, ret);
     }
 
-    if(ISOK(ret = file_output_stream_create(output_file, FILE_RIGHTS, &fos)))
-    {
-        if(FAIL(ret = zdb_zone_write_text(zone, &fos, force_label)))
-        {
-            unlink(output_file);
-        }
-    }
-    
     return ret;
 }
 

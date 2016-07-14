@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnscore System core functions
  *  @brief System core functions
  *
@@ -117,6 +117,8 @@ static const char* ARCH_CHECK_SIGN_WARNING = "PANIC: %s does not match the sign 
 
 logger_handle *g_system_logger = NULL;
 
+void dnskey_init();
+
 
 
 static smp_int g_shutdown = SMP_INT_INITIALIZER;
@@ -126,16 +128,16 @@ dnscore_arch_checkup()
 {
     /* Test the archi=tecture */
 #pragma message("Don't worry about the possible warnings below")
-    ARCH_CHECK_SIZE(__SIZEOF_POINTER__, sizeof (void*));
-    ARCH_CHECK_SIZE(sizeof (u8), 1);
-    ARCH_CHECK_SIZE(sizeof (s8), 1);
-    ARCH_CHECK_SIZE(sizeof (u16), 2);
-    ARCH_CHECK_SIZE(sizeof (s16), 2);
-    ARCH_CHECK_SIZE(sizeof (u32), 4);
-    ARCH_CHECK_SIZE(sizeof (s32), 4);
-    ARCH_CHECK_SIZE(sizeof (u64), 8);
-    ARCH_CHECK_SIZE(sizeof (s64), 8);
-    ARCH_CHECK_SIZE(sizeof (intptr), sizeof (void*));
+    ARCH_CHECK_SIZE(__SIZEOF_POINTER__, sizeof(void*));
+    ARCH_CHECK_SIZE(sizeof(u8), 1);
+    ARCH_CHECK_SIZE(sizeof(s8), 1);
+    ARCH_CHECK_SIZE(sizeof(u16), 2);
+    ARCH_CHECK_SIZE(sizeof(s16), 2);
+    ARCH_CHECK_SIZE(sizeof(u32), 4);
+    ARCH_CHECK_SIZE(sizeof(s32), 4);
+    ARCH_CHECK_SIZE(sizeof(u64), 8);
+    ARCH_CHECK_SIZE(sizeof(s64), 8);
+    ARCH_CHECK_SIZE(sizeof(intptr), sizeof(void*));
     ARCH_CHECK_SIGNED(s8);
     ARCH_CHECK_SIGNED(s16);
     ARCH_CHECK_SIGNED(s32);
@@ -176,22 +178,15 @@ dnscore_arch_checkup()
 
 /*****************************************************************************/
 
-dnslib_fingerprint dnscore_getfingerprint()
+dnscore_fingerprint dnscore_getfingerprint()
 {
-    dnslib_fingerprint ret = (dnslib_fingerprint)(0
-    
-#if DNSCORE_HAS_TSIG_SUPPORT
-    | DNSLIB_TSIG
-#endif
-    )
-    ;
-    
+    dnscore_fingerprint ret = dnscore_getmyfingerprint();
     return ret;
 }
 
 u32 dnscore_fingerprint_mask()
 {
-    return DNSLIB_TSIG;
+    return DNSCORE_TSIG;
 }
 
 /*****************************************************************************/
@@ -200,18 +195,27 @@ output_stream __termout__ = {NULL, NULL};
 output_stream __termerr__ = {NULL, NULL};
 
 static void
-stdstream_init()
+stdstream_init(bool bufferise)
 {
     output_stream tmp;
     output_stream tmp2;
 
     fd_output_stream_attach(&tmp, 1);
-    buffer_output_stream_init(&tmp, &tmp2, TERM_BUFFER_SIZE);
-    mt_output_stream_init(&tmp2, &__termout__);
-
+    
+    if(bufferise)
+    {
+        buffer_output_stream_init(&tmp2, &tmp, TERM_BUFFER_SIZE);
+        mt_output_stream_init(&__termout__, &tmp2);
+        
+    }
+    
     fd_output_stream_attach(&tmp, 2);
-    buffer_output_stream_init(&tmp, &tmp2, TERM_BUFFER_SIZE);
-    mt_output_stream_init(&tmp2, &__termerr__);
+        
+    if(bufferise)
+    {
+        buffer_output_stream_init(&tmp2, &tmp, TERM_BUFFER_SIZE);
+        mt_output_stream_init(&__termerr__, &tmp2);
+    }
 }
 
 static void
@@ -314,8 +318,6 @@ void rfc_init();
 void rfc_finalize();
 void format_class_finalize();
 
-static bool dnscore_init_done = FALSE;
-
 //static smp_int dnscore_time_thread_must_run = SMP_INT_INITIALIZER;
 static async_wait_s timer_thread_sync;
 static pthread_t dnscore_timer_thread_id = 0;
@@ -330,9 +332,14 @@ dnscore_timer_thread(void * unused0)
 
     dnscore_timer_tick = time(NULL);
 
-#ifdef HAS_PTHREAD_SETNAME_NP
+#if HAS_PTHREAD_SETNAME_NP
 #ifdef DEBUG
+#if  __APPLE__
+    pthread_setname_np("timer");
+#else
     pthread_setname_np(pthread_self(), "timer");
+#endif // __APPLE__
+
 #endif
 #endif
     
@@ -360,7 +367,14 @@ dnscore_timer_thread(void * unused0)
 
         dnscore_timer_tick = time(NULL);
         
-        alarm_run_tick(dnscore_timer_tick);
+        if(!dnscore_shuttingdown())
+        {
+            alarm_run_tick(dnscore_timer_tick);
+        }
+        else
+        {
+            loop_period = 1000000LL;
+        }
 
         loop_next_timeout_epoch += loop_period;
     }
@@ -406,68 +420,148 @@ dnscore_timer_get_tick()
     return dnscore_timer_tick;
 }
 
+static volatile u32 dnscore_features = 0;
+static volatile bool dnscore_arch_checked = FALSE;
+static volatile bool dnscore_tty_init = FALSE;
+static volatile bool dnscore_tty_set = FALSE;
+static volatile bool dnscore_random_set = FALSE;
+static volatile bool dnscore_atexit_registered = FALSE;
+
 void
-dnscore_init()
+dnscore_init_ex(u32 features)
 {
-    if(dnscore_init_done)
+    if(!dnscore_arch_checked)
     {
-        return;
+        dnscore_arch_checkup();
+        dnscore_arch_checked = TRUE;
+    }
+    
+    if(!dnscore_tty_init)
+    {
+        output_stream_set_void(&__termout__);
+        output_stream_set_void(&__termerr__);
+        dnscore_tty_init = TRUE;
     }
     
 #if DNSCORE_HAS_ZALLOC_SUPPORT
-    zalloc_init();
+    if((features & DNSCORE_ZALLOC) && !(dnscore_features & DNSCORE_ZALLOC))
+    {
+        zalloc_init();
+        dnscore_features |= DNSCORE_ZALLOC;
+    }
 #endif
     
-    output_stream_set_void(&__termout__);
-    output_stream_set_void(&__termerr__);
-    
-    stdstream_init();
-    
-    dnscore_init_done = TRUE;
-    dnscore_arch_checkup();
-    
-    thread_pool_setup_random_ctx();
-    random_ctx rnd = thread_pool_get_random_ctx();
-    
-    // random NEEDS to work.
+    if(((features & DNSCORE_TTY_BUFFERED) && !(dnscore_features & DNSCORE_TTY_BUFFERED)) || !dnscore_tty_set)
     {
-        u32 r0 = random_next(rnd);
-        u32 r1 = random_next(rnd);
-        u32 r2 = random_next(rnd);
-        u32 r3 = random_next(rnd);
-        
-        if( ((r0 == 0) && (r1 == 0) && (r2 == 0) && (r3 == 0)) || ((r0 == r1) && (r1 == r2) && (r2 == r3)) )
+        if(dnscore_tty_set)
         {
-            // this IS possible, but has one chance in the order of 2^128 to happen
-            
-            printf("panic: random generation fails. (%08x,%08x,%08x,%08x)\n", r0, r1, r2, r3);
-            exit(-1);
+            stdtream_detach_fd_and_close();
+            dnscore_tty_set = FALSE;
         }
+        if(features & DNSCORE_TTY_BUFFERED)
+        {
+            features |= DNSCORE_TIMER_THREAD;
+        }
+        stdstream_init(features & DNSCORE_TTY_BUFFERED);
+        dnscore_features |= DNSCORE_TTY_BUFFERED;
+        dnscore_tty_set = TRUE;
+    }
+        
+    if(!dnscore_random_set)
+    {    
+        thread_pool_setup_random_ctx();
+        random_ctx rnd = thread_pool_get_random_ctx();
+
+        // random NEEDS to work.
+        for(int impossible_collisions_countdown = 16; impossible_collisions_countdown >= 0; --impossible_collisions_countdown)
+        {
+            u32 r0 = random_next(rnd);
+            u32 r1 = random_next(rnd);
+            u32 r2 = random_next(rnd);
+            u32 r3 = random_next(rnd);
+
+            if( ((r0 == 0) && (r1 == 0) && (r2 == 0) && (r3 == 0)) || ((r0 == r1) && (r1 == r2) && (r2 == r3)) )
+            {
+                // this IS possible, but has one chance in the order of 2^128 to happen
+
+                if(impossible_collisions_countdown == 0)
+                {
+                    printf("panic: random generation fails. (%08x,%08x,%08x,%08x)\n", r0, r1, r2, r3);
+                    exit(EXIT_FAILURE);
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+        dnscore_random_set = TRUE;
     }
 
-    rfc_init();
+    netformat_class_init();
     
-    format_class_init();
-    dnsformat_class_init();
-    logger_init();
+    if((features & DNSCORE_DNS) && !(dnscore_features & DNSCORE_DNS))
+    {
+        rfc_init();
+        dnsformat_class_init();
+        dnscore_features |= DNSCORE_DNS;
+    }
+    
+    if((features & DNSCORE_LOGGER) && !(dnscore_features & DNSCORE_LOGGER))
+    {
+        features |= DNSCORE_TIMER_THREAD;
+        logger_init();
+        dnscore_features |= DNSCORE_LOGGER;
+    }
 
     dnscore_register_errors();
     
+    if((features & DNSCORE_CRYPTO) && !(dnscore_features & DNSCORE_CRYPTO))
+    {
 #if DNSCORE_HAS_TSIG_SUPPORT
-    ENGINE_load_openssl();
-    ENGINE_load_builtin_engines();
-    SSL_library_init();
-    SSL_load_error_strings();
-    tsig_register_algorithms();
+        ENGINE_load_openssl();
+        ENGINE_load_builtin_engines();
+        SSL_library_init();
+        SSL_load_error_strings();
+        tsig_register_algorithms();
 #endif
+        dnskey_init();
+        dnscore_features |= DNSCORE_CRYPTO;
+    }
     
-    atexit(dnscore_finalize);
+    if(!dnscore_atexit_registered)
+    {
+        atexit(dnscore_finalize);
+        dnscore_atexit_registered = TRUE;
+    }
     
-    alarm_init();
+    if((features & DNSCORE_ALARM) && !(dnscore_features & DNSCORE_ALARM))
+    {
+        features |= DNSCORE_TIMER_THREAD;
+        alarm_init();
+        dnscore_features |= DNSCORE_ALARM;
+    }
     
-    dnscore_reset_timer();
+    int timer_period = (features >> (32 - 6)) & 0x3f;
+    if(timer_period == 0)
+    {
+        timer_period = 5;
+    }
+    dnscore_timer_period = timer_period;
+    
+    if((features & DNSCORE_TIMER_THREAD) && !(dnscore_features & DNSCORE_TIMER_THREAD))
+    {
+        dnscore_reset_timer();
+        dnscore_features |= DNSCORE_TIMER_THREAD;
+    }
     
     tcp_init_with_env();
+}
+
+void
+dnscore_init()
+{
+    dnscore_init_ex(DNSCORE_ALL);
 }
 
 void
@@ -598,8 +692,10 @@ dnscore_finalize()
     
     dnscore_stop_timer();               // timer uses logger
     dnscore_wait_timer_stopped();
-    
-    alarm_finalise();
+    if(dnscore_features & DNSCORE_ALARM)
+    {
+        alarm_finalise();
+    }
     
     config_finalise();
         
@@ -628,7 +724,7 @@ dnscore_finalize()
     format_class_finalize();
     
 #if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
-    debug_stat(TRUE);
+    debug_stat(DEBUG_STAT_SIZES|DEBUG_STAT_TAGS|DEBUG_STAT_DUMP);
     zalloc_print_stats(&__termout__);
 #endif
     
@@ -662,4 +758,3 @@ void dnscore_signature_check(int so_mutex_t, int so_group_mutex_t)
 /** @} */
 
 /*----------------------------------------------------------------------------*/
-

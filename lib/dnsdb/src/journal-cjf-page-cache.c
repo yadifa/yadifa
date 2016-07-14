@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -83,7 +83,6 @@
 #include <dnscore/mutex.h>
 #include <dnscore/serial.h>
 #include <dnscore/dns_resource_record.h>
-#include <dnscore/format.h>
 
 #include <dnscore/ptr_set.h>
 #include <dnscore/fdtools.h>
@@ -189,6 +188,8 @@ struct journal_cjf_page_tbl
 //
 // they should be pooled, I think
 
+#define JCJFPCI_TAG 0x494350464a434a
+
 struct journal_cjf_page_cache_item
 {
     u64 file_offset;
@@ -275,7 +276,7 @@ journal_cjf_page_cache_cull()
 {
     yassert(group_mutex_islocked(&page_cache_mtx));
     
-    /// @todo edf 20150113 -- make a rule that culls a cache entry at the end of the MRU
+    // culls a cache entry at the end of the MRU
     
     if(list_dl_size(&page_cache_mru) > journal_cfj_page_mru_size)
     {
@@ -290,14 +291,14 @@ journal_cjf_page_cache_cull()
 static journal_cjf_page_cache_item *
 journal_cjf_page_cache_new(int fd, u32 file_offset)
 {
-    /// @todo edf 20150113 -- make a rule that culls a cache entry at the end of the MRU
-    /// @todo edf 20150114 -- use a pool
+    /// @todo 20150113 edf -- make a rule that culls a cache entry at the end of the MRU
+    /// @todo 20150114 edf -- use a pool
     
     journal_cjf_page_cache_item *sci;
     
-    MALLOC_OR_DIE(journal_cjf_page_cache_item*, sci, sizeof(journal_cjf_page_cache_item), GENERIC_TAG);
+    MALLOC_OR_DIE(journal_cjf_page_cache_item*, sci, sizeof(journal_cjf_page_cache_item), JCJFPCI_TAG);
     sci->file_offset = file_offset;
-    MALLOC_OR_DIE(journal_cjf_page_tbl_item*, sci->buffer, CJF_PAGE_SIZE_IN_BYTE , GENERIC_TAG);
+    MALLOC_OR_DIE(journal_cjf_page_tbl_item*, sci->buffer, CJF_PAGE_SIZE_IN_BYTE , JCJFTI_TAG);
     sci->fd = fd;
     journal_cjf_page_cache_item_undirty(sci);
     
@@ -490,7 +491,7 @@ void
 journal_cjf_page_cache_write_item(int fd, u64 file_offset, s16 offset, const journal_cjf_page_tbl_item *value)
 {
     yassert(file_offset >= CJF_HEADER_SIZE);
-    log_debug5("journal_cjf_page_cache_write_item(%i, %lli=%llx, %i, {%08x,%08x}})", fd, file_offset, file_offset, offset, value->ends_with_serial, value->stream_file_offset);
+    log_debug5("journal_cjf_page_cache_write_item(%i, %lli=%llx, %i, {%08x,%08x})", fd, file_offset, file_offset, offset, value->ends_with_serial, value->stream_file_offset);
     journal_cjf_page_cache_write(fd, file_offset, offset + 2, value, sizeof(journal_cjf_page_tbl_item));
 }
 
@@ -499,7 +500,7 @@ journal_cjf_page_cache_read_item(int fd, u64 file_offset, s16 offset, journal_cj
 {
     yassert(file_offset >= CJF_HEADER_SIZE);
     journal_cjf_page_cache_read(fd, file_offset, offset + 2, value, sizeof(journal_cjf_page_tbl_item));
-    log_debug5("journal_cjf_page_cache_read_item(%i, %lli=%llx, %i, {%08x,%08x}})", fd, file_offset, file_offset, offset, value->ends_with_serial, value->stream_file_offset);
+    log_debug5("journal_cjf_page_cache_read_item(%i, %lli=%llx, %i, {%08x,%08x})", fd, file_offset, file_offset, offset, value->ends_with_serial, value->stream_file_offset);
 }
 
 void
@@ -509,7 +510,7 @@ journal_cjf_page_cache_write_header(int fd, u64 file_offset,  const journal_cjf_
     yassert(value->count <= value->size);
     yassert(((value->count <= value->size) && (value->next_page_offset < file_offset)) || (value->next_page_offset > file_offset) || (value->next_page_offset == 0));
     
-    log_debug5("journal_cjf_page_cache_write_header(%i, %lli=%llx, {%08x,%3d,%3d,%08x}})", fd, file_offset, file_offset, value->next_page_offset, value->count, value->size, value->stream_end_offset);
+    log_debug5("journal_cjf_page_cache_write_header(%i, %lli=%llx, {%08x,%3d,%3d,%08x})", fd, file_offset, file_offset, value->next_page_offset, value->count, value->size, value->stream_end_offset);
     journal_cjf_page_cache_write(fd, file_offset, 0, value, CJF_SECTION_INDEX_SLOT_HEAD);
 }
 
@@ -521,7 +522,7 @@ journal_cjf_page_cache_write_new_header(int fd, u64 file_offset)
     yassert(file_offset >= CJF_HEADER_SIZE);
     yassert(value->count <= value->size);
     yassert(((value->count <= value->size) && (value->next_page_offset < file_offset)) || (value->next_page_offset > file_offset) || (value->next_page_offset == 0));
-    log_debug5("journal_cjf_page_cache_write_new_header(%i, %lli=%llx, {%08x,%3d,%3d,%08x}})", fd, file_offset, file_offset, value->next_page_offset, value->count, value->size, value->stream_end_offset);
+    log_debug5("journal_cjf_page_cache_write_new_header(%i, %lli=%llx, {%08x,%3d,%3d,%08x})", fd, file_offset, file_offset, value->next_page_offset, value->count, value->size, value->stream_end_offset);
     journal_cjf_page_cache_write(fd, file_offset, 0, value, CJF_SECTION_INDEX_SLOT_HEAD);
 }
 
@@ -530,7 +531,7 @@ journal_cjf_page_cache_read_header(int fd, u64 file_offset,  journal_cjf_page_tb
 {
     yassert(file_offset >= CJF_HEADER_SIZE);
     journal_cjf_page_cache_read(fd, file_offset, 0, value, CJF_SECTION_INDEX_SLOT_HEAD);
-    log_debug5("journal_cjf_page_cache_read_header(%i, %lli=%llx, {%08x,%3d,%3d,%08x}})", fd, file_offset, file_offset, value->next_page_offset, value->count, value->size, value->stream_end_offset);
+    log_debug5("journal_cjf_page_cache_read_header(%i, %lli=%llx, {%08x,%3d,%3d,%08x})", fd, file_offset, file_offset, value->next_page_offset, value->count, value->size, value->stream_end_offset);
 }
 
 static void
@@ -732,7 +733,7 @@ journal_cjf_page_cache_close(int fd)
     if(fd_node != NULL)
     {
         journal_cjf_page_cache_items_close((u64_set*)&fd_node->value);
-        // @todo edf 20150113 -- close the content
+        // @todo 20150113 edf -- close the content
         // destroy the u64_set content
         // delete the fd_node
         u32_set_avl_delete(&page_cache_item_by_fd, (u32)fd);

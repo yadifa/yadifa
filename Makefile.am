@@ -38,12 +38,19 @@ ACLOCAL_AMFLAGS = -I m4
 
 dist_noinst_DATA = VERSION
 
-SUBDIRS = lib/dnscore lib/dnsdb lib/dnszone sbin/yadifad etc doc var
+SUBDIRS = lib/dnscore lib/dnsdb lib/dnszone
 
 if HAS_TOOLS
 SUBDIRS += lib/dnslg
+endif
+
+SUBDIRS += sbin/yadifad
+
+if HAS_TOOLS
 SUBDIRS += bin/yadifa
 endif
+
+SUBDIRS += etc doc var
 
 release:
 	for m in $(SUBDIRS); do $(MAKE) -C $$m release;done
@@ -53,4 +60,17 @@ profile:
 
 debug:
 	for m in $(SUBDIRS); do $(MAKE) -C $$m debug;done
+
+showsubdirs:
+	for m in $(SUBDIRS); do echo $$m; done
+
+features:
+	for m in $(SUBDIRS); do $(MAKE) -C $$m features;done
+
+
+release-install: release install
+
+profile-install: profile install
+
+debug-install: debug install
 

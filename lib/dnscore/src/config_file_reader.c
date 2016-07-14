@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 #define DO_PRINT 0
 
@@ -79,6 +79,53 @@ struct config_file_reader
     input_stream includes[CONFIG_FILE_READER_INCLUDE_DEPTH_MAX];
     char* file_name[CONFIG_FILE_READER_INCLUDE_DEPTH_MAX];
 };
+
+/**
+ * Prepends the path of the base file to the file path
+ * file_path should be in a buffer of at least PATH_MAX chars
+ * 
+ * @param file_path
+ * @param base_file_path
+ * @return 
+ */
+
+static ya_result
+config_file_reader_prepend_path_from_file(char *file_path, const char *base_file_path)
+{
+    size_t n = 0;
+    
+    const char *file_name_last_slash = strrchr(base_file_path, '/');
+
+    if(file_name_last_slash == NULL)
+    {
+        size_t m = strlen(file_path);
+        return m;
+    }
+    else
+    {
+        ++file_name_last_slash;
+    }
+
+    n = file_name_last_slash - base_file_path;
+
+    if(n >= PATH_MAX)
+    {
+        return CONFIG_FILE_PATH_TOO_BIG;
+    }
+    
+    size_t m = strlen(file_path);
+    
+    if(n + m + 1 >= PATH_MAX)
+    {
+        return CONFIG_FILE_PATH_TOO_BIG;
+    }
+
+    memmove(&file_path[n], file_path, m);
+    memcpy(file_path, base_file_path, n);
+    
+    return n + m;
+}
+
 
 /**
  * 
@@ -297,25 +344,46 @@ config_file_reader_read(config_file_reader *cfr) /// config_reader
                 {
                     // if we are not in a container
                     
-                    if (!cfr->in_container)
+                    if(!cfr->in_container)
                     {
                         // keyword match : include file ?
                         
                         if(parse_word_match(text, text_len, "include", 7))
                         {
+                            
                             char file_name[PATH_MAX];
-
+                            
                             if(FAIL(return_code = parser_copy_next_word(p, file_name, sizeof(file_name))))
                             {
-                                return_code = CONFIG_PARSE_INCLUDE_EXPECTED_FILE_PATH;
+                                if(return_code != PARSER_BUFFER_TOO_SMALL)
+                                {
+                                    return_code = CONFIG_PARSE_INCLUDE_EXPECTED_FILE_PATH;
+                                }
+                                else
+                                {
+                                    return_code = CONFIG_FILE_PATH_TOO_BIG;
+                                }
+                                
                                 return return_code;
+                            }
+                            
+                            // return_code is the length of the path
+                            
+                            if(file_name[0] != '/')
+                            {
+                                // relative path
+                                
+                                if(FAIL(return_code = config_file_reader_prepend_path_from_file(file_name, cfr->file_name[cfr->includes_count - 1])))
+                                {
+                                    return return_code;
+                                }
                             }
 
                             if(return_code > 0)
                             {
                                 ya_result err;
 
-                                if(ISOK(err = file_input_stream_open(file_name, &cfr->includes[cfr->includes_count])))
+                                if(ISOK(err = file_input_stream_open(&cfr->includes[cfr->includes_count], file_name)))
                                 {
                                     parser_push_stream(&cfr->parser, &cfr->includes[cfr->includes_count]);
                                     cfr->file_name[cfr->includes_count] = strdup(file_name);
@@ -436,7 +504,7 @@ config_file_reader_parse_stream(const char* stream_name, input_stream *ins, conf
     
     MALLOC_OR_DIE(config_file_reader*, cfr, sizeof(config_file_reader), CFREADER_TAG);
 
-    ZEROMEMORY(cfr, sizeof (config_file_reader));
+    ZEROMEMORY(cfr, sizeof(config_file_reader));
     
     cfr->error_context = cfgerr;
     if(cfgerr != NULL)
@@ -491,7 +559,7 @@ config_file_reader_parse_stream(const char* stream_name, input_stream *ins, conf
             
             if(cfgerr != NULL)
             {
-                char *file_name = cfr->file_name[cfr->includes_count - 1];
+                const char *file_name = cfr->file_name[cfr->includes_count - 1];
                 if(file_name == NULL)
                 {
                     file_name = "?";
@@ -541,9 +609,8 @@ config_file_reader_open(const char* fullpath, config_section_descriptor_s *csd, 
     input_stream ins;
     ya_result return_value;
     
-    if(FAIL(return_value = file_input_stream_open(fullpath, &ins)))
+    if(FAIL(return_value = file_input_stream_open(&ins, fullpath)))
     {
-        //log_debug("zone file: cannot open: '%s': %r", fullpath, return_value);
         return return_value;
     }
     

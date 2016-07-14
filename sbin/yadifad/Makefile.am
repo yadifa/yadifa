@@ -28,10 +28,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
-#
-#	YADIFA server Makefile.am script
-#
-##############################################################################
 
 ACLOCAL_AMFLAGS = -I ../../m4
 
@@ -64,14 +60,11 @@ yadifad_SOURCES = \
 	poll-util.c \
 	process_class_ch.c \
 	server-mt.c \
+	server-rw.c \
 	server.c \
 	server_context.c \
 	signals.c \
 	zone.c
-
-if HAS_NSID_SUPPORT
-yadifad_SOURCES += config-nsid.c
-endif
 
 noinst_HEADERS = \
 	axfr.h \
@@ -90,6 +83,7 @@ noinst_HEADERS = \
 	database-service-zone-unmount.h \
 	database-service.h \
 	database.h \
+	dnssec-policy.h \
 	ixfr.h \
 	log_query.h \
 	log_statistics.h \
@@ -97,26 +91,31 @@ noinst_HEADERS = \
 	poll-util.h \
 	process_class_ch.h \
 	server-mt.h \
+	server-rw.h \
 	server.h \
 	server_context.h \
 	server_error.h \
 	signals.h \
 	zone.h \
-	zone_data.h \
 	zone_desc.h \
 	zone-source.h
 
+if HAS_NSID_SUPPORT
+yadifad_SOURCES += config-nsid.c
+endif
+
 if HAS_CTRL
-yadifad_SOURCES +=	config_control.c \
+
+yadifad_SOURCES += config_control.c \
 	ctrl.c \
 	ctrl_query.c \
 	ctrl_zone.c
 
-noinst_HEADERS +=	ctrl.h \
+noinst_HEADERS += ctrl.h \
 	ctrl_query.h \
 	ctrl_zone.h
 
-endif
+endif # HAS_CTRL
 
 if HAS_ACL_SUPPORT 
 yadifad_SOURCES += acl.c config_acl.c
@@ -137,10 +136,27 @@ yadifad_SOURCES += dynupdate_query_service.c
 noinst_HEADERS += dynupdate_query_service.h
 endif
 
+if HAS_DNSSEC_SUPPORT
 if HAS_RRSIG_MANAGEMENT_SUPPORT
-yadifad_SOURCES += database-service-zone-resignature.c
-noinst_HEADERS += database-service-zone-resignature.h
+yadifad_SOURCES += database-service-zone-resignature.c \
+	config-denial.c \
+	config-dnssec-policy.c \
+	config-key-roll.c \
+	config-key-suite.c \
+	config-key-template.c \
+    config-key-roll-parser.c \
+    zone-signature-policy.c \
+    zone-signature-date-next.c \
+    zone-signature-date-prev.c
+
+noinst_HEADERS += database-service-zone-resignature.h \
+	config-dnssec-policy.h \
+    config-key-roll-parser.h \
+	zone-signature-policy.h
 endif
+endif
+
+features:
 
 include ../../mk/common-settings.mk
 

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -75,7 +75,7 @@ extern logger_handle *g_server_logger;
  * 
  * Handle an IXFR query from a slave.
  *
- * @TODO: Set the IXFR storage path
+ * @todo 20101125 edf -- Set the IXFR storage path
  */
 ya_result
 ixfr_process(message_data *mesg)
@@ -100,7 +100,7 @@ ixfr_process(message_data *mesg)
     
     ya_result return_value = SUCCESS;
 
-    /// @todo edf 20141006 -- verify qclass
+    /// @todo 20141006 edf -- verify qclass
     //u16 qclass = GET_U16_AT(mesg->buffer[DNS_HEADER_LENGTH + fqdn_len + 2]);
     
     if(((zone = zdb_acquire_zone_read_from_fqdn(g_config->database, fqdn)) != NULL) && ZDB_ZONE_VALID(zone))
@@ -139,7 +139,7 @@ ixfr_process(message_data *mesg)
                     {
                         /* already up-to-date */
                         
-                        log_info("ixfr: already up-to-date");
+                        log_info("ixfr: %{dnsname}: already up-to-date at serial %u", mesg->qname, zone_serial);
                  
                         // answer with the SOA
                         
@@ -150,7 +150,9 @@ ixfr_process(message_data *mesg)
                         u32 soa_ttl;
                         u16 soa_rdata_size;
                         
+                        zdb_zone_lock(zone, ZDB_ZONE_MUTEX_XFR);
                         zdb_zone_getsoa_ttl_rdata(zone, &soa_ttl, &soa_rdata_size, &soa_rdata);
+                        zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_XFR);
                         
                         packet_writer_add_fqdn(&pc, &mesg->buffer[12]);
                         packet_writer_add_u16(&pc, TYPE_SOA);
@@ -162,7 +164,7 @@ ixfr_process(message_data *mesg)
                         MESSAGE_SET_AN(mesg->buffer, NETWORK_ONE_16);
                         MESSAGE_SET_NSAR(mesg->buffer, 0);
                         
-                        mesg->send_length = pc.packet_offset;
+                        mesg->send_length = packet_writer_get_offset(&pc);
                         mesg->status = FP_XFR_UP_TO_DATE;
                     }
                 }
@@ -170,14 +172,14 @@ ixfr_process(message_data *mesg)
                 {
                     /* broken zone */
                     
-                    log_info("ixfr: broken zone");
+                    log_info("ixfr: %{dnsname}: broken zone", mesg->qname);
                     
                     mesg->status = FP_XFR_BROKENZONE;
                 }
             }
             else
             {                
-                log_info("ixfr: unable to fetch serial from message: %r", return_value);
+                log_info("ixfr: %{dnsname}: unable to fetch serial from message: %r", mesg->qname, return_value);
                 
                 mesg->status = FP_XFR_QUERYERROR;
             }
@@ -188,7 +190,7 @@ ixfr_process(message_data *mesg)
         {
             /* notauth */
 
-            log_info("ixfr: not authorised");
+            log_info("ixfr: %{dnsname}: not authorised", mesg->qname);
             
             mesg->status = FP_XFR_REFUSED;
         }
@@ -198,7 +200,7 @@ ixfr_process(message_data *mesg)
     {
         /* zone not found */
 
-        log_info("ixfr: zone not found");
+        log_info("ixfr: %{dnsname}: zone not found", mesg->qname);
 
         if(zone == NULL)
         {
@@ -260,25 +262,25 @@ ixfr_start_query(const host_address *servers, const u8 *origin, u32 ttl, const u
     
     if(FAIL(return_value = rr_soa_get_serial(soa_rdata, soa_rdata_size, &serial)))
     {
-        log_err("ixfr: error with the SOA: %r", return_value);
+        log_err("ixfr: %{dnsname}: error with the SOA: %r", origin, return_value);
         return return_value;
     }
     
-    log_info("ixfr: sending query from %{dnsname} to %{hostaddr} from serial %i", origin, servers, serial);
+    log_info("ixfr: %{dnsname}: %{hostaddr}: sending query from serial %i", origin, servers, serial);
              
     message_make_ixfr_query(ixfr_queryp, id, origin, ttl, soa_rdata_size, soa_rdata);
     
 #if HAS_TSIG_SUPPORT
     if(servers->tsig != NULL)
     {
-        log_info("ixfr: transfer will be signed with key '%{dnsname}'", servers->tsig->name);
+        log_info("ixfr: %{dnsname}: %{hostaddr}: transfer will be signed with key '%{dnsname}'", origin, servers, servers->tsig->name);
         
         message_sign_query(ixfr_queryp, servers->tsig);
     }
 #endif
 
     /**
-     * @todo start by doing it UDP (1.0.1)
+     * @todo 20120523 edf -- start by doing it UDP (1.0.1)
      * Send UDP, read UDP (or timeout)
      * if error, AXFR will be needed
      * if truncated, TCP will be needed
@@ -296,7 +298,7 @@ ixfr_start_query(const host_address *servers, const u8 *origin, u32 ttl, const u
         
         if(err != EINTR)
         {
-            log_info("ixfr: failed to send the query for %{dnsname} to %{hostaddr}: %r", origin, servers, return_value);
+            log_info("ixfr: %{dnsname}: %{hostaddr}: failed to send the query: %r", origin, servers, return_value);
             return return_value;
         }
     }
@@ -328,7 +330,7 @@ ixfr_start_query(const host_address *servers, const u8 *origin, u32 ttl, const u
  *
  * Send an IXFR query to a master and handle the answer (loads the zone).
  *
- * @TODO: Set the IXFR storage path
+ * @todo 20110620 edf -- Set the IXFR storage path
  */
 
 ya_result
@@ -359,8 +361,6 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
     u16 rdata_size;
     const u8 *rdata;
 
-    /** @todo check if zdb_zone_lock(zone, ZDB_ZONE_MUTEX_XFR) is needed */
-
     zdb_zone_lock(zone, ZDB_ZONE_MUTEX_XFR);
     
     if(FAIL(return_value = zdb_zone_getserial(zone, &current_serial)))
@@ -387,15 +387,6 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
     
     if(ISOK(return_value = ixfr_start_query(servers, zone->origin, ttl, rdata, rdata_size, &is, &os, &mesg)))
     {
-        /** @todo: disables updates/ixfr for the zone */ 
-/*
-        xfr_copy_args xfr;
-        xfr.is = &is;
-        xfr.origin = zone->origin;
-        xfr.message = &mesg;
-        xfr.current_serial = current_serial;
-        xfr.flags = XFR_ALLOW_BOTH|XFR_CURRENT_SERIAL_SET;
-*/        
         input_stream xfris;
         if(ISOK(return_value = xfr_input_stream_init(&xfris,
                                                      zone->origin,
@@ -407,7 +398,7 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
             switch(xfr_input_stream_get_type(&xfris))
             {
                 case TYPE_AXFR:
-                    log_info("ixfr: %{dnsname} server %{hostaddr} answered with AXFR", zone->origin, servers);
+                    log_info("ixfr: %{dnsname}: %{hostaddr}: server answered with AXFR", zone->origin, servers);
                     
                 case TYPE_ANY:
                 {
@@ -419,7 +410,7 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
 
                     zdb_zone_journal_delete(zone);
                     
-                    log_info("ixfr: %{dnsname}: loading AXFR stream from server %{hostaddr}", zone->origin, servers);
+                    log_info("ixfr: %{dnsname}: %{hostaddr}: loading AXFR stream from server", zone->origin, servers);
                     
                     if(ISOK(return_value = xfr_copy(&xfris, g_config->xfr_path)))
                     {
@@ -430,14 +421,15 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
                     }
                     else
                     {
-                        log_debug("ixfr: %{dnsname}: AXFR stream copy failed: %r", zone->origin, return_value);
+                        log_debug("ixfr: %{dnsname}: %{hostaddr}: AXFR stream copy failed: %r", zone->origin, servers, return_value);
                     }
                     
                     break;
                 }
                 case TYPE_IXFR:
                 {
-                    log_info("ixfr: %{dnsname}: loading IXFR stream from server %{hostaddr} into the journal", zone->origin, servers);
+                    log_info("ixfr: %{dnsname}: %{hostaddr}: writing stream into the journal", zone->origin, servers);
+                    
                     return_value = zdb_zone_journal_append_ixfr_stream(zone, &xfris);
                     
                     u32 ixfr_from_serial;
@@ -461,7 +453,7 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
                         else
                         {
                             return_value = ret;
-                            log_err("zone load: journal replay returned %r", return_value);
+                            log_err("ixfr: %{dnsname}: journal replay returned %r", zone->origin, return_value);
                         }
                         
                         if(ISOK(ret) && serial_lt(*out_loaded_serial, expected_serial))
@@ -474,7 +466,7 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
                     }
                     else
                     {
-                        log_err("ixfr: %{dnsname}: the loading IXFR stream from server %{hostaddr} into the journal failed with: %r", zone->origin, servers, return_value);
+                        log_err("ixfr: %{dnsname}: %{hostaddr}: failed to write the stream into the journal: %r", zone->origin, servers, return_value);
                     }
                     
                     break;
@@ -510,7 +502,7 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
         output_stream_close(&os);
 
         /**
-         * @todo Here is a good place to check the journal size.
+         * @todo 20121023 edf -- Here is a good place to check the journal size.
          *
          * If it worked, it may be nice to know the current total size of the journaling file
          * If it's beyond a given size, then an zone file/AXFR could be written on the disk and the older files deleted
@@ -521,4 +513,3 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
 }
 
 /** @} */
-

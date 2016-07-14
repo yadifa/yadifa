@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup 
  *  @ingroup dnscore
  *  @brief 
@@ -1026,6 +1026,8 @@
  */
 #define     TYPE_EUI64                      NU16(109)   /* EUI-64 address                   rfc 7043 */
 
+
+
 /*
                                    1  1  1  1  1  1
      0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
@@ -1152,9 +1154,7 @@
 #if HAS_WHOIS
 #define     CLASS_WHOIS                     NU16(0x2B)    /* @note WHOIS class */
 #endif  // HAS_WHOIS
-#if HAS_DNSQ
-#define     CLASS_DNSQ                      NU16(0x2C)    /* @note DNSQuality class */
-#endif  // HAS_DNSQ
+
 
 #define     CLASS_NONE                      NU16(254)     /* rfc 2136                          rfc 2136 */
 #define     CLASS_ANY                       NU16(255)     /* rfc 1035  QCLASS ONLY             rfc 1025 */
@@ -1176,21 +1176,36 @@
 
 #define     DNSKEY_PROTOCOL_FIELD               3       /* MUST be this */
 
+#define     DNSKEY_ALGORITHM_RSAMD5             1       // DEPRECATED
+#define     DNSKEY_ALGORITHM_DIFFIE_HELLMAN     2       // NOT USED
 #define     DNSKEY_ALGORITHM_DSASHA1            3
 #define     DNSKEY_ALGORITHM_RSASHA1            5
 #define     DNSKEY_ALGORITHM_DSASHA1_NSEC3      6
 #define     DNSKEY_ALGORITHM_RSASHA1_NSEC3      7
 #define     DNSKEY_ALGORITHM_RSASHA256_NSEC3    8       /* RFC 5702 */
 #define     DNSKEY_ALGORITHM_RSASHA512_NSEC3   10       /* RFC 5702 */
+#define     DNSKEY_ALGORITHM_GOST              12       /* RFC 5933, not supported by YADIFA */
 #define     DNSKEY_ALGORITHM_ECDSAP256SHA256   13       /* RFC 6605 */
 #define     DNSKEY_ALGORITHM_ECDSAP384SHA384   14       /* RFC 6605 */
 
-#define     DS_DIGEST_SHA1                  1
-#define     DS_DIGEST_SHA256                2
+#define     DS_DIGEST_SHA1                      1
+#define     DS_DIGEST_SHA256                    2
 
-#define     NSEC3_FLAGS_OPTOUT              1           /*  */
+#define     NSEC3_FLAGS_OPTOUT                  1           /*  */
 
-/* -----------------------------------------------------------------*/
+
+#define     DNSKEY_ALGORITHM_RSAMD5_NAME             "RSA"                   // DEPRECATED
+#define     DNSKEY_ALGORITHM_DIFFIE_HELLMAN_NAME     "DH"                    // NOT USED
+#define     DNSKEY_ALGORITHM_DSASHA1_NAME            "DSA"
+#define     DNSKEY_ALGORITHM_RSASHA1_NAME            "RSASHA1"
+#define     DNSKEY_ALGORITHM_DSASHA1_NSEC3_NAME      "NSEC3DSA"
+#define     DNSKEY_ALGORITHM_RSASHA1_NSEC3_NAME      "NSEC3RSASHA1"
+#define     DNSKEY_ALGORITHM_RSASHA256_NSEC3_NAME    "RSASHA256"             /* RFC 5702 */
+#define     DNSKEY_ALGORITHM_RSASHA512_NSEC3_NAME    "RSASHA512"             /* RFC 5702 */
+#define     DNSKEY_ALGORITHM_GOST_NAME               "GOST"                  /* RFC 5933, not supported by YADIFA */
+#define     DNSKEY_ALGORITHM_ECDSAP256SHA256_NAME    "ECDSAP256SHA256"       /* RFC 6605 */
+#define     DNSKEY_ALGORITHM_ECDSAP384SHA384_NAME    "ECDSAP384SHA384"       /* RFC 6605 */
+
 
 #define     IS_TYPE_PRIVATE(t)              ( ((t) >= 65280) && ( (t) <= 65534))
 #define     IS_TYPE_NPRIVATE(t)             ( (NU16(t) >= 65280) && ( NU16(t) <= 65534))
@@ -1230,6 +1245,7 @@ struct value_name_table
 
 typedef value_name_table class_table;
 typedef value_name_table type_table;
+typedef value_name_table dnssec_algo_table;
 
 typedef struct message_header message_header;
 
@@ -1250,6 +1266,12 @@ struct message_header
 #define     CLASS_CH_NAME                   "CH"
 #define     CLASS_HS_NAME                   "HS"
 #define     CLASS_CTRL_NAME                 "CTRL"  /* @note YADIFA's personal class, maybe one day in a RFC */
+
+#if HAS_WHOIS
+#define     CLASS_WHOIS_NAME                "WHOIS"
+#endif // HAS_WHOIS
+
+
 #define     CLASS_NONE_NAME                 "NONE"
 #define     CLASS_ANY_NAME                  "ANY"
 
@@ -1312,6 +1334,7 @@ extern const class_table qclass[];
 #define     TYPE_RKEY_NAME                  "RKEY"      /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
 #define     TYPE_TALINK_NAME                "TALINK"    /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
 #define     TYPE_CDS_NAME                   "CDS"
+
 #define     TYPE_SPF_NAME                   "SPF"
 #define     TYPE_UINFO_NAME                 "UINFO"
 #define     TYPE_UID_NAME                   "UID"
@@ -1323,6 +1346,9 @@ extern const class_table qclass[];
 #define     TYPE_LP_NAME                    "LP"
 #define     TYPE_EUI48_NAME                 "EUI48"
 #define     TYPE_EUI64_NAME                 "EUI64"
+
+
+
 #define     TYPE_TKEY_NAME                  "TKEY"
 #define     TYPE_TSIG_NAME                  "TSIG"
 #define     TYPE_IXFR_NAME                  "IXFR"
@@ -1416,6 +1442,13 @@ int get_type_from_case_name_len(const char *src, int src_len, u16 *dst);
  */
 ya_result get_value_from_casename(const value_name_table *table, const char *name, u32 *out_value);
 
+
+int get_dnssec_algo_from_name(const char *src, u8 *dst);
+int get_dnssec_algo_from_case_name(const char *src, u8 *dst);
+void rfc_dnssec_algo_init(void);
+void rfc_dnssec_algo_finalize(void);
+
+
 /**
  * @brief Static asciiz representation of a dns opcode
  * 
@@ -1434,7 +1467,7 @@ const char *get_opcode(u16 c);
  */
 const char *get_rcode(u16 c);
 
-#if HAS_NSID_SUPPORT
+#if DNSCORE_HAS_NSID_SUPPORT
 
 #ifndef DNSCORE_RFC_C
 extern u32 edns0_record_size;

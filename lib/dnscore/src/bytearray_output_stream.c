@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -52,6 +52,9 @@
 #define BYTE_ARRAY_OUTPUT_STREAM_BUFF_TAG 0x46465542534f4142 /* BAOSBUFF */
 
 #define BYTEARRAY_STARTSIZE 1024
+
+#define BAOSZDUP_TAG 0x5055445a534f4142
+#define BAOSDUP_TAG 0x505544534f4142
 
 typedef struct bytearray_output_stream_data bytearray_output_stream_data;
 
@@ -132,9 +135,9 @@ bytearray_output_stream_close(output_stream* stream)
 
     if((data->flags & BYTEARRAY_OWNED) != 0)
     {
-#ifdef DEBUG
+#if DEBUG
         memset(data->buffer, 0xe5, data->buffer_size);
-#endif
+#endif        
         free(data->buffer);
     }
 
@@ -170,7 +173,7 @@ bytearray_output_stream_init_ex_static(output_stream* out_stream, u8* array,u32 
             size = BYTEARRAY_STARTSIZE;
         }
 
-        MALLOC_OR_DIE(u8*, array, size, BYTE_ARRAY_OUTPUT_STREAM_BUFF_TAG);
+        MALLOC_OR_DIE(u8*, array, size, BYTE_ARRAY_OUTPUT_STREAM_BUFF_TAG);      
     }
 
     data->buffer = array;
@@ -228,7 +231,7 @@ bytearray_output_stream_detach(output_stream* stream)
     bytearray_output_stream_data* data = (bytearray_output_stream_data*)stream->data;
 
     data->flags &= ~BYTEARRAY_OWNED;
-
+    
     return data->buffer;
 }
 
@@ -276,8 +279,9 @@ bytearray_output_stream_zdup(output_stream* out_stream)
     bytearray_output_stream_data* data = (bytearray_output_stream_data*)out_stream->data;
     u8 *ret;
     u32 n = MAX(data->buffer_offset, 1); // because allocating 0 bytes can be an hassle
-    ZALLOC_ARRAY_OR_DIE(u8*, ret, n, GENERIC_TAG);
+    ZALLOC_ARRAY_OR_DIE(u8*, ret, n, BAOSZDUP_TAG);
     memcpy(ret, data->buffer, n);
+    
     return ret;
 }
 
@@ -287,8 +291,9 @@ bytearray_output_stream_dup(output_stream* out_stream)
     bytearray_output_stream_data* data = (bytearray_output_stream_data*)out_stream->data;
     u8 *ret;
     u32 n = MAX(data->buffer_offset, 1); // because allocating 0 bytes can be an hassle
-    MALLOC_OR_DIE(u8*, ret, n, GENERIC_TAG);
+    MALLOC_OR_DIE(u8*, ret, n, BAOSDUP_TAG);
     memcpy(ret, data->buffer, n);
+    
     return ret;
 }
 

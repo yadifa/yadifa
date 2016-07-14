@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -69,7 +69,7 @@ extern logger_handle *g_dnssec_logger;
  */
 
 int
-nsec3_zone_rdata_compare(const u8* a_rdata, const u8* b_rdata)
+nsec3param_compare_by_rdata(const u8 *a_rdata, const u8 *b_rdata)
 {
     int c;
 
@@ -88,10 +88,10 @@ nsec3_zone_rdata_compare(const u8* a_rdata, const u8* b_rdata)
 
             if(c == 0)
             {
-                c = a_rdata[4]; // size of the hash
+                c = a_rdata[4]; // size of the salt
                 c -= b_rdata[4];
 
-                if(c == 0) // if both sizes are equal
+                if(c == 0)
                 {
                     c = memcmp(&a_rdata[5], &b_rdata[5], a_rdata[4]);
                 }
@@ -111,7 +111,7 @@ nsec3_zone_rdata_compare(const u8* a_rdata, const u8* b_rdata)
 int
 nsec3_zone_compare(nsec3_zone* a, nsec3_zone* b)
 {
-    return nsec3_zone_rdata_compare(a->rdata, b->rdata);
+    return nsec3param_compare_by_rdata(a->rdata, b->rdata);
 }
 
 /*
@@ -170,6 +170,43 @@ nsec3_zone_item_empties_recursively(nsec3_zone_item* item)
     }
 }
 
+/**
+ * Detaches an nsec3 chain from the zone.
+ * 
+ * @param zone
+ * @param n3
+ * @return 
+ */
+
+bool
+nsec3_zone_detach(zdb_zone *zone, nsec3_zone *n3)
+{
+    nsec3_zone *first = zone->nsec.nsec3;
+
+    if(first == n3)
+    {
+        zone->nsec.nsec3 = n3->next;
+    }
+    else
+    {
+        while(first->next != n3)
+        {
+            first = first->next;
+            
+            if(first == NULL)
+            {
+                return FALSE;
+            }
+        }
+
+        first->next = n3->next;
+    }
+    
+    n3->next = NULL;
+    
+    return TRUE;
+}
+
 /*
  * Destroys the nsec3param alter-ego from the database.
  *
@@ -180,7 +217,7 @@ nsec3_zone_item_empties_recursively(nsec3_zone_item* item)
  */
 
 void
-nsec3_zone_destroy(zdb_zone* zone, nsec3_zone* n3)
+nsec3_zone_destroy(zdb_zone *zone, nsec3_zone *n3)
 {
     int n3_index = 0;
     
@@ -195,36 +232,30 @@ nsec3_zone_destroy(zdb_zone* zone, nsec3_zone* n3)
      *	    Destroy nsec3 record signature
      *	    Destroy nsec3 record
      */
+    
+    nsec3_zone **n3p = &zone->nsec.nsec3;
 
-
+    while(*n3p != n3 && n3p != NULL)
+    {
+        ++n3_index;
+        n3p = &(*n3p)->next;
+    }
+    
+    yassert(*n3p == n3);
+    
+    *n3p = n3->next;
+    n3->next = NULL;
+    
     nsec3_zone_item_empties_recursively(n3->items);
-
     nsec3_avl_destroy(&n3->items);
 
-    nsec3_zone* first = zone->nsec.nsec3;
-
-    if(first == n3)
-    {
-        zone->nsec.nsec3 = n3->next;
-    }
-    else
-    {
-        while(first->next != n3)
-        {
-            ++n3_index;
-            first = first->next;
-        }
-
-        first->next = n3->next;
-    }
-
-    ZFREE_ARRAY(n3, sizeof (nsec3_zone) - 1 + NSEC3PARAM_MINIMUM_LENGTH + n3->rdata[4]);
+    nsec3_zone_free(n3);
     
     // Every single label must have its chain updated
     
     zdb_zone_label_iterator label_iterator;
     
-    zdb_zone_label_iterator_init(zone, &label_iterator);
+    zdb_zone_label_iterator_init(&label_iterator, zone);
     
     if(n3_index == 0)
     {
@@ -235,9 +266,12 @@ nsec3_zone_destroy(zdb_zone* zone, nsec3_zone* n3)
             {
                 yassert(!ZDB_LABEL_UNDERDELEGATION(label));
                 struct nsec3_label_extension *n3_ext = label->nsec.nsec3;
-                label->nsec.nsec3 = n3_ext->next;
-                yassert(n3_ext->self == NULL && n3_ext->star == NULL);
-                ZFREE(n3_ext, nsec3_label_extension);
+                if(n3_ext != NULL)
+                {
+                    label->nsec.nsec3 = n3_ext->next;
+                    yassert(n3_ext->self == NULL && n3_ext->star == NULL);
+                    nsec3_label_extension_free(n3_ext);
+                }
             }
         }
     }
@@ -245,20 +279,40 @@ nsec3_zone_destroy(zdb_zone* zone, nsec3_zone* n3)
     {
         while(zdb_zone_label_iterator_hasnext(&label_iterator))
         {
+#ifdef DEBUG
+            u8 fqdn[256];
+            zdb_zone_label_iterator_nextname(&label_iterator, fqdn);
+#endif
+
             zdb_rr_label* label = zdb_zone_label_iterator_next(&label_iterator);
             if(label->flags & ZDB_RR_LABEL_NSEC3)
             {
                 yassert(!ZDB_LABEL_UNDERDELEGATION(label));
-                struct nsec3_label_extension **n3_extp = &label->nsec.nsec3->next;
-                struct nsec3_label_extension *n3_ext = *n3_extp;
-                for(int i = 1; i < n3_index; ++i)
+                if(label->nsec.nsec3 != NULL)
                 {
-                    n3_extp = &n3_ext->next;
-                    n3_ext = *n3_extp;
+                    struct nsec3_label_extension **n3_extp = &label->nsec.nsec3->next;
+                    struct nsec3_label_extension *n3_ext = *n3_extp;
+                    for(int i = 1; i < n3_index; ++i)
+                    {
+                        n3_extp = &n3_ext->next;
+                        n3_ext = *n3_extp;
+                    }
+                    *n3_extp = n3_ext->next;
+                    
+#ifdef DEBUG
+                    if(n3_ext->self != NULL)
+                    {
+                        log_debug2("%{dnsname} self %{digest32h}", fqdn, n3_ext->self->digest);
+                    }
+                    if(n3_ext->star != NULL)
+                    {
+                        log_debug2("%{dnsname} star %{digest32h}", fqdn, n3_ext->star->digest);
+                    }
+#endif
+                    
+                    yassert(n3_ext->self == NULL && n3_ext->star == NULL); // both are expected to be cleared
+                    nsec3_label_extension_free(n3_ext);
                 }
-                *n3_extp = n3_ext->next;
-                yassert(n3_ext->self == NULL && n3_ext->star == NULL);
-                ZFREE(n3_ext, nsec3_label_extension);
             }
         }
     }
@@ -275,8 +329,8 @@ static void
 nsec3_insert_empty_nsec3(zdb_zone* zone, u32 index)
 {
     zdb_zone_label_iterator label_iterator;
-    zdb_zone_label_iterator_init(zone, &label_iterator);
-
+    zdb_zone_label_iterator_init(&label_iterator, zone);
+    
     while(zdb_zone_label_iterator_hasnext(&label_iterator))
     {
         zdb_rr_label* label = zdb_zone_label_iterator_next(&label_iterator);
@@ -307,7 +361,7 @@ nsec3_insert_empty_nsec3(zdb_zone* zone, u32 index)
             {
                 nsec3_label_extension* n3ext;
                 
-                ZALLOC_OR_DIE(nsec3_label_extension*, n3ext, nsec3_label_extension, NSEC3_LABELEXT_TAG); // in nsec3_insert_empty_nsec3
+                n3ext = nsec3_label_extension_alloc();
                 n3ext->self = NULL;
                 n3ext->star = NULL;
                 n3ext->next = NULL;
@@ -321,11 +375,9 @@ nsec3_insert_empty_nsec3(zdb_zone* zone, u32 index)
 
         nsec3_label_extension* n3ext;
 
-        ZALLOC_OR_DIE(nsec3_label_extension*, n3ext, nsec3_label_extension, NSEC3_LABELEXT_TAG); // in nsec3_insert_empty_nsec3
-
+        n3ext = nsec3_label_extension_alloc();
         n3ext->self = NULL;
         n3ext->star = NULL;
-
         n3ext->next = *current;
 
         *current = n3ext;
@@ -354,9 +406,9 @@ nsec3_zone_add_from_rdata(zdb_zone* zone, u16 nsec3param_rdata_size, const u8* n
 
     if(n3 == NULL)
     {
-        u32 nsec3param_rdata_realsize = NSEC3_ZONE_RDATA_SIZE_FROM_SALT(NSEC3PARAM_RDATA_SALT_LEN(nsec3param_rdata));
+        u32 nsec3param_rdata_realsize = NSEC3PARAM_RDATA_SIZE_FROM_RDATA(nsec3param_rdata);
 
-        ZALLOC_ARRAY_OR_DIE(nsec3_zone*, n3, sizeof (nsec3_zone) + nsec3param_rdata_realsize - 1, NSEC3_ZONE_TAG);
+        ZALLOC_ARRAY_OR_DIE(nsec3_zone*, n3, sizeof(nsec3_zone) + nsec3param_rdata_realsize - 1, NSEC3_ZONE_TAG);
         n3->items = NULL;
 
         MEMCOPY(n3->rdata, nsec3param_rdata, nsec3param_rdata_realsize);
@@ -397,6 +449,133 @@ nsec3_zone_add_from_rdata(zdb_zone* zone, u16 nsec3param_rdata_size, const u8* n
     }
 
     return n3;
+}
+
+void nsec3_zone_free(nsec3_zone *n3)
+{
+    yassert(nsec3_avl_isempty(&n3->items));
+    yassert(n3->next == NULL);
+    ZFREE_ARRAY(n3, sizeof(nsec3_zone) - 1 + NSEC3PARAM_MINIMUM_LENGTH + n3->rdata[4]);
+}
+
+ya_result
+nsec3_zone_chain_count(zdb_zone* zone)
+{
+    ya_result ret = 0;;
+    nsec3_zone* n3 = zone->nsec.nsec3;
+    while(n3 != NULL)
+    {
+        ++ret;
+        n3 = n3->next;
+    }
+    return ret;
+}
+
+
+/**
+ * 
+ * Adds the nsec3_zone (NSEC3PARAM "alter-ego") to the zone.
+ *
+ * Updates labels flags + nsec3 item references placeholders
+ * using nsec3_insert_empty_nsec3
+ *
+ * Uses nsec3zone_compare
+ *
+ * Used by nsec3_add_nsec3param and nsec3_load_add_nsec3param
+ *
+ * @note Does not add the record.
+ * 
+ * @param zone
+ * @param nsec3param_rdata
+ * @param nsec3param_rdata_size
+ * 
+ * @return an error code
+ */
+
+ya_result
+nsec3_zone_chain_add_with_rdata(zdb_zone* zone, const u8* nsec3param_rdata, u16 nsec3param_rdata_size)
+{
+    /* Check that the rdata is big enough */
+    yassert(nsec3param_rdata_size >= NSEC3PARAM_MINIMUM_LENGTH);
+    ya_result ret = 0;
+    
+    nsec3_zone* n3 = zone->nsec.nsec3;
+    nsec3_zone** n3p;
+    if(n3 != NULL)
+    {
+        /// @todo 20150921 edf -- check for dups
+        
+        if(memcmp(n3->rdata, nsec3param_rdata, nsec3param_rdata_size) == 0)
+        {
+            // duplicate
+            return ERROR;
+        }
+        
+        ++ret;
+        
+        while(n3->next != NULL)
+        {
+            n3 = n3->next;
+            
+            if(memcmp(n3->rdata, nsec3param_rdata, nsec3param_rdata_size) == 0)
+            {
+                // duplicate
+                return ERROR;
+            }
+            
+            ++ret;
+        }
+        // add after n3
+        n3p = &n3->next;
+    }
+    else
+    {
+        // create n3
+        n3p = &zone->nsec.nsec3;
+    }
+    
+    u32 nsec3param_rdata_realsize = NSEC3PARAM_RDATA_SIZE_FROM_RDATA(nsec3param_rdata);
+    ZALLOC_ARRAY_OR_DIE(nsec3_zone*, n3, sizeof(nsec3_zone) + nsec3param_rdata_realsize - 1, NSEC3_ZONE_TAG);
+    n3->next = NULL;
+    n3->items = NULL;
+    MEMCOPY(n3->rdata, nsec3param_rdata, nsec3param_rdata_realsize);
+    *n3p = n3;
+
+    return ret;
+}
+
+/**
+ * Returns the index of an NSEC3PARAM in the zone, or an error code
+ * 
+ * @param zone
+ * @param nsec3param_rdata
+ * @param nsec3param_rdata_size
+ * @return 
+ */
+
+ya_result
+nsec3_zone_chain_get_index_from_rdata(zdb_zone* zone, const u8* nsec3param_rdata, u16 nsec3param_rdata_size)
+{
+    /* Check that the rdata is big enough */
+    yassert(nsec3param_rdata_size >= NSEC3PARAM_MINIMUM_LENGTH);
+    ya_result ret = 0;
+    
+    nsec3_zone* n3 = zone->nsec.nsec3;
+    
+    while(n3 != NULL)
+    {
+        if(memcmp(n3->rdata, nsec3param_rdata, nsec3param_rdata_size) == 0)
+        {
+            // return the index of the match
+            return ret;
+        }
+        
+        ++ret;
+        
+        n3 = n3->next;
+    }
+    
+    return ERROR;
 }
 
 /*

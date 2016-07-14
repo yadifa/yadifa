@@ -1,45 +1,50 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
+#include <dnscore/host_address.h>
+//#include <dnscore/logger.h>
+#include <dnscore/message-viewer.h>
+#include <dnslg/config-resolver.h>
+#include <dnscore/message-buffer.h>
 
 #include "common-config.h"
-#include <dnscore/logger.h>
-#include <dnscore/host_address.h>
-#include <dnslg/config-resolver.h>
-#include <dnslg/dns.h>
 #include "query-result.h"
+#include "message-viewer-dig.h"
+
 
 /*----------------------------------------------------------------------------*/
+#pragma mark GLOBAL VARIABLES
 
 extern logger_handle *g_client_logger;
 #define MODULE_MSG_HANDLE g_client_logger
@@ -48,8 +53,9 @@ extern resolv_s config_resolver_settings;
 
 
 /*----------------------------------------------------------------------------*/
+#pragma mark FUNCTIONS 
 
-/** @brief check_query_result
+/** @brief query_result_check
  *
  *  @param id_sent u16
  *  @param protocol u16
@@ -59,7 +65,7 @@ extern resolv_s config_resolver_settings;
  *  @return ya_result
  */
 ya_result
-check_query_result(u16 id_sent, u16 protocol, u16 question_mode, message_data *mesg, u8 *go_tcp)
+query_result_check(u16 id_sent, u16 protocol, u16 question_mode, message_data *mesg, u8 *go_tcp)
 {
     ya_result                                                           ret;
     u16                                                         id_returned;
@@ -92,7 +98,7 @@ check_query_result(u16 id_sent, u16 protocol, u16 question_mode, message_data *m
     /* 1. check ID */
     packet_reader_read_u16(&pr, &id_returned);
 
-    if(FAIL(id_sent == id_returned))
+    if(id_sent != id_returned)
     {
         return NOK;     /** @todo 2014xxxx gve --  still needs to add a nice error code */
     }
@@ -125,52 +131,25 @@ check_query_result(u16 id_sent, u16 protocol, u16 question_mode, message_data *m
     return OK;
 }
 
-
-/** @brief check_query_result
- *
- *  @param mesg message_data
- *  @param duration long
- *  @param view_mode_with u16
- *  @return ya_result
- */
 ya_result
-view_query_result(message_data *mesg, long duration, u16 view_mode_with)
+query_result_view(message_viewer *mv, message_data *mesg, long duration, u16 view_mode_with)
 {
-    ya_result                                                  return_value;
+    ya_result                                              return_value = 0;
 
-    if(view_mode_with == 0)
-    {
-        view_mode_with = VM_WITH_ADDITIONAL|VM_WITH_ANSWER|VM_WITH_AUTHORITY|VM_WITH_QUESTION;
-    }
+    /*    ------------------------------------------------------------    */
 
-    //u16 view_mode_with             = g_yadig_main_settings.view_mode_with;
 
-    /*    ------------------------------------------------------------    */ 
 
-//    log_debug("VIEW QUERY RESULT: %x", config->view_mode);
-//    formatln("result view_mode: %d", view_mode_with);
+    message_viewer_start(mv);
 
-#undef VM_MULTILINE
-#define VM_MULTILINE 0
-    if (view_mode_with & VM_MULTILINE)
-    {
-        formatln("MULTI");
-    }
+    message_buffer_processor(mv, mesg->buffer, mesg->received);
 
-    else
-    {
-#ifdef DEBUG
-       formatln("DIG");
-       osprint_dump(termout, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_LAYOUT_GERY | OSPRINT_DUMP_HEXTEXT);
-       formatln("");
+    message_viewer_bytes_and_message_update(mv, mesg->received, 1);
 
-       flushout();
-#endif
+    message_viewer_end(mv, duration);
 
-        return_value = message_print_format_dig(termout, mesg->buffer, mesg->received, view_mode_with, duration);
-    }
-
-    if (return_value < 0)
+    /// @todo 20150716 gve -- return_value is not really used
+    if(return_value < 0)
     {
         log_err("answer print: %r", return_value);
     }
@@ -179,6 +158,4 @@ view_query_result(message_data *mesg, long duration, u16 view_mode_with)
 
     return return_value;
 }
-
-/*    ------------------------------------------------------------    */
 

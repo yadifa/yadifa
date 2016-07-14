@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -43,11 +43,7 @@
 
 #include "server-config.h"
 
-#if HAS_PTHREAD_SETNAME_NP
-#ifdef DEBUG
 #define _GNU_SOURCE 1
-#endif
-#endif
 
 #include <pthread.h>
 
@@ -59,7 +55,10 @@
 #include <fcntl.h>
 
 #if defined(__linux__) || defined(__gnu_hurd__)
+#define _GNU_SOURCE 1
 #include <execinfo.h>
+#include <sys/mman.h>
+#include <ucontext.h>
 #elif defined(__sun)
 #include <ucontext.h>
 #endif
@@ -72,6 +71,9 @@
 #include "signals.h"
 #include "server_context.h"
 #include "server.h"
+#if HAS_RRSIG_MANAGEMENT_SUPPORT && HAS_DNSSEC_SUPPORT
+#include "database-service-zone-resignature.h"
+#endif
 
 #define MODULE_MSG_HANDLE g_server_logger
 #define MAXTRACE 128
@@ -117,7 +119,7 @@ static volatile bool signal_shutdown_received = FALSE;
 
 // tool to avoid external function calls during the signal
 
-static int
+int
 signal_strcat(char *dest, const char* src)
 {
     char *p = dest;
@@ -139,7 +141,7 @@ signal_strcat(char *dest, const char* src)
 
 // tool to avoid external function calls during the signal
 
-static int
+int
 signal_int2str(char *dest, int src)
 {
     char *p = dest;
@@ -174,38 +176,62 @@ signal_int2str(char *dest, int src)
     return p - dest;
 }
 
-// tool to avoid external function calls during the signal
+static const char __HEXA__[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
-static int
-signal_ptr2str(char *dest, void* srcp)
+int
+signal_longlong2hexstr(char *dest, u64 src)
 {
-    intptr src = (intptr)srcp;
-    char *p = dest;
-    
-    int shift = ((sizeof(intptr) - 1) << 3) + 4;
-    
+    int shift = 60;
     do
     {
-        char c = (src >> shift) & 0xf;
-        
-        if(c < 10)
-        {
-            c += '0';
-        }
-        else
-        {
-            c += 'A' - 10;
-        }
-        
-        *p++ = c;
-        
+        *dest++ = __HEXA__[(src >> shift) & 15];
         shift -= 4;
     }
     while(shift >= 0);
-    
-    *p = '\0';
-    
-    return sizeof(intptr) * 2;
+    *dest = '\0';
+    return 16;
+}
+
+int
+signal_int2hexstr(char *dest, u32 src)
+{
+    int shift = 28;
+    do
+    {
+        *dest++ = __HEXA__[(src >> shift) & 15];
+        shift -= 4;
+    }
+    while(shift >= 0);
+    *dest = '\0';
+    return 8;
+}
+
+int
+signal_char2hexstr(char *dest, u8 src)
+{
+    int shift = 4;
+    do
+    {
+        *dest++ = __HEXA__[(src >> shift) & 15];
+        shift -= 4;
+    }
+    while(shift >= 0);
+    *dest = '\0';
+    return 2;
+}
+
+// tool to avoid external function calls during the signal
+
+int
+signal_ptr2str(char *dest, const void* srcp)
+{
+#if __SIZEOF_POINTER__ == 8
+    return signal_longlong2hexstr(dest,(u64)srcp);
+#elif __SIZEOF_POINTER__ == 4
+    return signal_int2hexstr(dest,(u32)srcp);
+#else
+#error "unsupported pointer size"
+#endif
 }
 
 //
@@ -229,8 +255,12 @@ signal_task_reconfigure_reopen_log()
         {
             log_err("cannot reopen configuration file(s): '%s' is outside of jail", g_config->config_file);
         }
-
+        
         logger_reopen();
+        
+#if HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT
+        database_service_zone_dnskey_set_alarms_on_all_zones();
+#endif
     }
 #ifdef DEBUG
     else
@@ -270,8 +300,6 @@ signal_task_shutdown()
     
     if(!dnscore_shuttingdown())
     {
-        
-        
         program_mode = SA_SHUTDOWN;
         
         dnscore_shutdown();
@@ -287,7 +315,11 @@ signal_handler_thread(void* parms)
 
 #if HAS_PTHREAD_SETNAME_NP
 #ifdef DEBUG
+#if __APPLE__
+    pthread_setname_np("signal-handler");
+#else
     pthread_setname_np(pthread_self(), "signal-handler");
+#endif // __APPLE__
 #endif
 #endif
     
@@ -327,21 +359,21 @@ signal_handler_thread(void* parms)
         {
             case SIGHUP:
             {
-                signal_task_reconfigure_reopen_log();
+                if(!dnscore_shuttingdown())
+                {
+                    signal_task_reconfigure_reopen_log();
+                }
                 break;
             }
             
             case SIGUSR1:
             {
-                signal_task_database_save_all_zones_to_disk();
+                if(!dnscore_shuttingdown())
+                {
+                    signal_task_database_save_all_zones_to_disk();
+                }
                 break;
             }
-            
-            case SIGUSR2:
-            {
-                break;
-            }
-            
             case SIGINT:
             case SIGTERM:
             {
@@ -379,7 +411,7 @@ signal_handler_thread(void* parms)
  *
  *  @param[in] signo
  *
- *  @note The signal handler CANNOT use the loggers or it has to use its own channels + handle.
+ *  @note The signal handler CANNOT use the loggers or it has to use its own channels + handle. (ie: not the ones of the logger)
  *        The reason being mutexes are not reentrant.  So if a signal occurs while the log mutex is on
  *        the signal will deadlock as soon as it tries to log.
  *
@@ -389,8 +421,6 @@ signal_handler_thread(void* parms)
 static void
 signal_handler(int signo, siginfo_t* info, void* context)
 {   
-    /*    ------------------------------------------------------------    */
-
     switch(signo)
     {
         case SIGINT:
@@ -416,6 +446,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
         }
         case SIGHUP:
         case SIGUSR1:
+
         {
             int errno_value = errno;
             u8 signum = (u8)signo;
@@ -518,6 +549,125 @@ signal_handler(int signo, siginfo_t* info, void* context)
                         log_err(filepath);
                     }
 
+#if __linux__
+                    ucontext_t* ucontext = (ucontext_t*)context;
+                    /*
+                    filepath[0] = '\0';
+                    signal_strcat(filepath, "uc_flags=");
+                    signal_int2hexstr(number, ucontext->uc_flags);
+                    signal_strcat(filepath, number);
+                    len = signal_strcat(filepath, eol);
+                    
+                    if(source == 0)
+                    {
+                        writefully(fd, filepath, len);
+                        fsync(fd);
+                    }
+                    else
+                    {
+                        log_err(filepath);
+                    }
+                    */
+                    /*
+                     * cpu registers dump, if supported
+                     * this helps a lot if there is no core dump available
+                     */
+                    
+#ifdef __x86_64__   
+                    // specific x86_64 information
+                    
+                    struct text_idx
+                    {
+                        const char* name;
+                        int index;
+                    };
+                    
+                    static struct text_idx text_idx[18] =
+                    {
+                        {"rax", REG_RAX},
+                        {"rcx", REG_RCX},
+                        {"rdx", REG_RDX},
+                        {"rbx", REG_RBX},
+                        {"rsi", REG_RSI},
+                        {"rdi", REG_RDI},
+                        {"rsp", REG_RSP},
+                        {"rbp", REG_RBP},
+                        {"r8 ", REG_R8},
+                        {"r9 ", REG_R9},
+                        {"r10", REG_R10},
+                        {"r11", REG_R11},
+                        {"r12", REG_R12},
+                        {"r13", REG_R13},
+                        {"r14", REG_R14},
+                        {"r15", REG_R15},
+                        {"rip", REG_RIP},
+                        {"efl", REG_EFL}
+                    };
+                    
+                    for(int i = 0; i < 18; ++i)
+                    {   
+                        filepath[0] = '\0';
+                        signal_strcat(filepath, text_idx[i].name);
+                        signal_strcat(filepath, "=");
+                        signal_longlong2hexstr(number, ucontext->uc_mcontext.gregs[text_idx[i].index]);
+                        signal_strcat(filepath, number);
+                        len = signal_strcat(filepath, eol);
+                                                
+                        if(source == 0)
+                        {
+                            writefully(fd, filepath, len);
+                            fsync(fd);
+                        }
+                        else
+                        {
+                            log_err(filepath);
+                        }
+                    }
+#elif defined(__i386__)
+                    struct text_idx
+                    {
+                        const char* name;
+                        int index;
+                    };
+                    
+                    static struct text_idx text_idx[10] =
+                    {
+                        {"eax", REG_EAX},
+                        {"ecx", REG_ECX},
+                        {"edx", REG_EDX},
+                        {"ebx", REG_EBX},
+                        {"esi", REG_ESI},
+                        {"edi", REG_EDI},
+                        {"esp", REG_ESP},
+                        {"ebp", REG_EBP},
+                        {"rip", REG_EIP},
+                        {"efl", REG_EFL}
+                    };
+                    
+                    for(int i = 0; i < 10; ++i)
+                    {   
+                        filepath[0] = '\0';
+                        signal_strcat(filepath, text_idx[i].name);
+                        signal_strcat(filepath, "=");
+                        signal_int2hexstr(number, ucontext->uc_mcontext.gregs[text_idx[i].index]);
+                        signal_strcat(filepath, number);
+                        len = signal_strcat(filepath, eol);
+                                                
+                        if(source == 0)
+                        {
+                            writefully(fd, filepath, len);
+                            fsync(fd);
+                        }
+                        else
+                        {
+                            log_err(filepath);
+                        }
+                    }
+#else // not x86_64 nor i386
+                    // cpu registers dump not supported
+#endif
+                    
+#endif // linux
                     strings = backtrace_symbols(buffer, n);
 
                     if(strings != NULL)
@@ -581,6 +731,104 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     {
                         log_err(filepath);
                     }
+                    
+#if __linux__ && (defined(__x86_64__) || defined(__i386__)) && (_BSD_SOURCE || _SVID_SOURCE || _DEFAULT_SOURCE)
+                    // dump more information about the memory address of the error
+#define PAGESIZE 4096
+#define LINESIZE 32
+                    const u8 *addr = (u8*)info->si_addr;
+                    for(;;)
+                    {
+                        u8 *page_addr = (u8*) (((intptr)addr + PAGESIZE-1) & ~(PAGESIZE - 1));
+                        unsigned char vec[1];
+
+                        if(mincore(page_addr, PAGESIZE, vec) == 0)
+                        {
+                            // memory is resident
+
+                            for(const u8* p = page_addr; p < &page_addr[PAGESIZE]; p += 32)
+                            {
+                                filepath[0] = '\0';
+                                signal_ptr2str(number, p);
+                                signal_strcat(filepath, number);
+                                signal_strcat(filepath, " | ");
+                                for(int i = 0; i < LINESIZE; ++i)
+                                {
+                                    signal_char2hexstr(number, p[i]);
+                                    signal_strcat(filepath, number);
+                                    signal_strcat(filepath, " ");
+                                }
+                                len = signal_strcat(filepath, "| ");
+                                for(int i = 0; i < LINESIZE; ++i)
+                                {
+                                    u8 c = p[i];
+                                    if(c < 32 || c >= 127)
+                                    {
+                                        c = '.';
+                                    }
+                                    filepath[len + i] = c;
+                                }
+                                len += LINESIZE;
+
+                                if(source == 0)
+                                {
+                                    writefully(fd, filepath, len);
+                                    fsync(fd); // fd IS initialised : (source == 0) => fd set
+                                }
+                                else
+                                {
+                                    log_err(filepath);
+                                }
+                            }
+
+                            // dump enough memory to make sense
+
+                            if(&page_addr[PAGESIZE] >= &addr[32])
+                            {
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            int err = errno;
+
+                            if(err == ENOMEM)
+                            {
+                                // memory is not mapped
+                                filepath[0] = '\0';
+                                signal_strcat(filepath, "page at ");
+                                signal_ptr2str(number, page_addr);
+                                signal_strcat(filepath, number);
+                                len = signal_strcat(filepath, " is not mapped.");
+                            }
+                            else
+                            {
+                                //
+                                filepath[0] = '\0';
+                                signal_strcat(filepath, "could not get information for page at ");
+                                signal_ptr2str(number, page_addr);
+                                signal_strcat(filepath, number);
+                                signal_strcat(filepath, " : errno = ");
+                                signal_int2str(number, err);
+                                len = signal_strcat(filepath, number);
+                            }
+
+                            if(source == 0)
+                            {
+                                writefully(fd, filepath, len);
+                                fsync(fd); // fd IS initialised : (source == 0) => fd set
+                            }
+                            else
+                            {
+                                log_err(filepath);
+                            }
+                            
+                            break;
+                        }
+                    }
+                    
+#endif // linux && mincore supported
+                  
 #elif defined(__sun)
                     filepath[0] = '\0';
                     signal_strcat(filepath, "got signal ");

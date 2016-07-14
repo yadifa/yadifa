@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup database Routines for database manipulations
  *  @ingroup yadifad
  *  @brief database functions
@@ -60,6 +60,10 @@
 #include <dnsdb/zdb.h>
 
 #include "database-service.h"
+
+#if HAS_RRSIG_MANAGEMENT_SUPPORT && HAS_DNSSEC_SUPPORT
+#include "database-service-zone-resignature.h"
+#endif
 
 #include "notify.h"
 
@@ -99,7 +103,7 @@ database_service_zone_mount(zone_desc_s *zone_desc)
         log_err("zone mount: no zone loaded for '%{dnsname}'", zone_desc->origin);
         zone_desc->status_flags &= ~(ZONE_STATUS_STARTING_UP|ZONE_STATUS_MOUNTING|ZONE_STATUS_PROCESSING);
         
-        /// @todo check why the two commands were reversed
+        /// @todo 20140425 edf -- check why the two commands were reversed
         database_fire_zone_mounted(zone_desc, NULL, ERROR);
         zone_unlock(zone_desc, ZONE_LOCK_MOUNT);        
         return;
@@ -115,7 +119,7 @@ database_service_zone_mount(zone_desc_s *zone_desc)
     zone_desc->refresh.refreshed_time = now;
     zone_desc->refresh.retried_time = now;
     
-    /// @todo arm an alarm for refresh
+    /// @todo 20130918 edf -- arm an alarm for refresh
     
     log_debug1("database_service_zone_mount: locking zone '%{dnsname}' for mounting", zone->origin);
     
@@ -158,7 +162,7 @@ database_service_zone_mount(zone_desc_s *zone_desc)
     }
        
     //
- 
+    
     if(send_notify_to_slaves)
     {
 #if HAS_MASTER_SUPPORT
@@ -196,6 +200,13 @@ database_service_zone_mount(zone_desc_s *zone_desc)
     {
         log_debug("no need to send notify to slaves of zone %{dnsname}", zone_desc->origin);
     }
+
+#if HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT
+    if(zone_desc->type == ZT_MASTER)
+    {
+        database_service_zone_dnskey_set_alarms(zone);
+    }
+#endif
     
     database_fire_zone_mounted(zone_desc, zone, SUCCESS); // RC++
     

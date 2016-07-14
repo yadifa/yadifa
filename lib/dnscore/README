@@ -29,6 +29,48 @@
 # 
 ################################################################################
 
+20160715:
+	YADIFA 2.2.0
+        
+        Multi-master support:
+
+            In <zone>, the masters field is now a list.
+            When the master fails to answer, it is moved to the end of the list and (new) first one is used instead.
+
+            There is a true-multimaster setting, defaulted to 'no'.  In true multimaster mode, changing the master implies dropping local zone data and ignore serial values.
+            This is to be used for a setup with truly independent masters.
+
+            By default, the master change occurs at first failure. This can be changed to a higher value with multimaster-retries (maximum: 255)
+            This mostly makes sense on true-multimaster mode as you want to be sure before reloading a zone completely.
+
+        Smart signing:
+
+            Keys with smart signing information are now handled by YADIFA.
+
+        DNSSEC policies:
+
+            YADIFA generates an rolls your keys and makes a non-DNSSEC zone into an NSEC or NSEC3 one.
+
+
+        Support for ECDSA algorithm.
+
+        Better support for huge incremental changes of a zone:
+            YADIFA used to do the modification in one go, which could make it unresponsive for very big changes.
+            Now the changes are applied more slowly, allowing queries to be answered.
+
+        New network model:
+            A new network model can be enabled. This model's main purpose is to be more resistent to system stalls with minimal, if any, performance loss.
+
+            <main> network-model 1
+
+        NSEC3 management improved.
+            Several improvements have been made on the way NSEC3 is handlded.  Chains partially covering the zone are now accepted.
+
+        Fixes:
+        - fixed an issue where the maximum pid value supported was 99999
+        - fixed an issue with RRSIG TTL values that were not always at the expected value.
+        - fixed an issue with the $TTL not being respected.
+
 20160126:
         YADIFA 2.1.6
 

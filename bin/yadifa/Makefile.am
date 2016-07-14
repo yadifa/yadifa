@@ -36,19 +36,18 @@ dist_noinst_DATA = VERSION
 
 bin_PROGRAMS = yadifa
 
-yadifa_SOURCES  = main.c query-result.c
+yadifa_SOURCES  = \
+		  main.c \
+		  query-result.c
 
-yadifa_SOURCES += yadifa.c             yadifa-config.c
+noinst_HEADERS  = \
+		  common-config.h \
+		  query-result.h
 
-noinst_HEADERS  = common-config.h query-result.h
-noinst_HEADERS += yadifa.h             yadifa-config.h
+yadifa_SOURCES += yadifa.c yadifa-config.c message-viewer-dig.c
+noinst_HEADERS += yadifa.h yadifa-config.h message-viewer-dig.h
 
-# this will probably be removed afterwards
-#yadifa_SOURCES += dnssec-test.c
-
-# this will probably be removed afterwards
-noinst_HEADERS += dnssec-test.h
-
+features:
 
 include ../../mk/common-settings.mk
 

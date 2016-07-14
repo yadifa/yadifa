@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man on Thu Feb 04 14:26:28 CET 2016
+.\" Manual page created with latex2man on Thu Jul 14 18:39:49 CEST 2016
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFA" "8" "2016\-02\-04" "YADIFA " "YADIFA "
+.TH "YADIFA" "8" "2016\-07\-15" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -21,11 +21,15 @@ is an utility for controlling YADIFAD
 
 .PP
 yadifa
+[\fB\-\-config|\-c\fP\fI configfile\fP]
 [\fB\-s\fP\fI host\fP]
-[\fB\-V\fP]
+[\fB@host \fP]
+[\fB\-K\fP\fI key\-name\fP]
+[\fB\-\-version|\-V\fP]
 [\fB\-h\fP]
-[\fB\-t command\fP]
-[\fB\-q zone\fP]
+[\fB\-\-verbose|\-v\fP]
+\fB[\-t]\fP\fI command\fP
+[\fB[\-q]\fP\fI zone\fP]
 .PP
 .SH DESCRIPTION
 
@@ -46,15 +50,20 @@ HMAC\-SHA1
 .SH OPTIONS
 
 .TP
-[\fB\-\-config|\-c\fP\fI configfile\fP]
+[\fB\-\-config|\-c \fP\fIconfigfile\fP]
  Another config file will be used. 
 .TP
-[\fB\-\-server|\-s\fP\fI host\fP]
+[\fB\-\-server|\-s \fP\fIhost\fP] | [\fB @host \fP]
  Host is the remote server to operate. 
 If used with a different port: e.g.: \&./yadifa \-\-server "192.0.2.1 port 5353" 
-.PP
 .TP
-[\fB\-V\fP]
+[\fB\-k \fP\fIkey\-name\fP]
+ Name of the key to be used for the controller. 
+.TP
+[\fB\-\-verbose|\-v\fP]
+ verbose output. 
+.TP
+[\fB\-\-version|\-V\fP]
  Show version information. 
 .TP
 [\fB\-\-help|\-h\fP]
@@ -62,39 +71,42 @@ If used with a different port: e.g.: \&./yadifa \-\-server "192.0.2.1 port 5353"
 .PP
 .SH COMMANDS
 
-.TP
-[\fB\-t freeze \fP[\fI\-q zone\fP]]
- disables updates to a zone. 
-.TP
-[\fB\-t freezeall\fP]
- disables updates to all zones. 
-.TP
-[\fB\-t unfreeze \fP[\fI\-q zone\fP]]
- enables updates to a zone. 
-.TP
-[\fB\-t unfreezeall\fP]
- enables updates to all zones. 
 .PP
 .TP
-[\fB\-t reload \fP[\fI\-q zone\fP]]
- triggers the loading of the zone file(s) if the serial number is incremented. 
-If no zone is specified, all zones are implied. 
+[\fB\-t\fP] freeze [\fB\-q\fP] zone
+ disables updates to a zone. 
+.PP
 .TP
-[\fB\-t cfgreload \fP[\fI\-q zone\fP]]
- reload the zone and key sections in the configuration file and reload the zone file(s) with increased serial number. 
+[\fB\-t\fP] unfreeze [\fB\-q\fP] zone
+ enables updates to a zone. 
+.PP
+.TP
+[\fB\-t\fP] reload [\fB\-q\fP] zone
+ triggers the loading of the zone file(s) if the serial number is incremented. 
+.TP
+[\fB\-t\fP] cfgreload
+ reload the settings from the configuration file. 
+.PP
+.TP
+[\fB\-t\fP] zonecfgreload 
+[\fB\-q \fP\fIzone\fP]
+ reload the zone information in the configuration file and reload the zone file(s) with increased serial number. 
 If a zone is specified only that zone section is reloaded. 
 .TP
-[\fB\-t sync \fP[\fI\-q zone\fP]]
+[\fB\-t\fP] sync [\fB\-q\fP] zone [\fB\-\-clean\fP]
  write the zone to disk and optionally removes the journal. 
-If no zone is specified, all zones are implied. The extra [\-\-clean] option will remove the journal. 
+The extra [\-\-clean] option will remove the journal. 
 .TP
-[\fB\-t querylog \fP\fI\-\-enable|\-\-disable\fP]
+[\fB\-t\fP] querylog \-\-enable|\-\-disable
  sets the log for queries on or off. 
 .TP
-[\fB\-t logreopen\fP]
+[\fB\-t\fP] loglevel {\-\-level|\-l} level
+ sets the log level to the given value (0\-15). 
+.TP
+[\fB\-t\fP] logreopen
  close all log files and reopens them. 
 .TP
-[\fB\-t shutdown\fP]
+[\fB\-t\fP] shutdown
  shuts down the server. 
 .PP
 .SH FILES
@@ -103,6 +115,9 @@ If no zone is specified, all zones are implied. The extra [\-\-clean] option wil
 .TP
 yadifa
  The name server remote client. 
+.TP
+SYSCONFDIR/yadifa.conf
+ The default yadifa configuration file. 
 .TP
 $HOME/.yadifa.rc
  default rcfile. 
@@ -136,7 +151,7 @@ file from the sources code.
 .SH VERSION
 
 .PP
-Version: 2.1.6 of 2016-02-04\&.
+Version: 2.2.0 of 2016-07-15\&.
 .PP
 .SH MAILINGLIST
 
@@ -167,7 +182,7 @@ via:
 .PP
 .TP
 Copyright 
-(C) 2011\-2016, EURid
+(C)2011\-2016, EURid
 .br
 B\-1831 Diegem, Belgium
 .br

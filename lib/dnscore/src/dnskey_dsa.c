@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnskey DNSSEC keys functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -76,7 +76,6 @@ static const struct structdescriptor struct_DSA[] ={
     {NULL, 0, 0}
 };
 
-
 static int
 dsa_getnid(u8 algorithm)
 {
@@ -92,100 +91,6 @@ dsa_getnid(u8 algorithm)
             return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
         }
     }
-}
-
-static DSA*
-dsa_dnskey_key_scan(FILE *f)
-{
-    char tmp_label[1024];
-    /*char tmp_in[BASE64_ENCODED_SIZE(DNSSEC_MAXIMUM_KEY_SIZE_BYTES)];*/
-    u8 tmp_out[DNSSEC_MAXIMUM_KEY_SIZE_BYTES];
-
-    DSA* dsa = DSA_new();
-
-    while(!feof(f))
-    {
-        tmp_label[0] = '\0';
-
-        if(fgets(tmp_label, sizeof (tmp_label), f) == (char*)EOF) /* comparison ptr/int ? man fgets */
-        {
-            break;
-        }
-
-        char *tmp_in = strchr(tmp_label, ':');
-
-        if(tmp_in == NULL)
-        {
-            /* error */
-
-            break;
-        }
-
-        *tmp_in = '\0';
-        while(*++tmp_in == ' ');
-        size_t tmp_in_len = strcspn(tmp_in, " \t\r\n");
-        tmp_in[tmp_in_len] = '\0';
-
-        if(strcmp(tmp_label, "Private-key-format") == 0)
-        {
-            if(memcmp(tmp_in, "v1.", 3) != 0) /* Assume that all 1.x formatted keys will be recognisable */
-            {
-                break;
-            }
-        }
-        else if(strcmp(tmp_label, "Algorithm") == 0) /* only accept algorithms NSEC3-DSA-SHA1 and NSEC-DSA-SHA1 */
-        {
-            int alg = atoi(tmp_in);
-            
-            if(FAIL(dsa_getnid(alg)))
-            {
-                log_err("unsupported DSA algorithm '%s'", tmp_in);
-                    
-                break;
-            }
-        }
-        else
-        {
-            for(const struct structdescriptor *sd = struct_DSA; sd->name != NULL; sd++)
-            {
-                if(strcmp(tmp_label, sd->name) == 0)
-                {
-                    BIGNUM **valuep = (BIGNUM**)&(((u8*)dsa)[sd->address]);
-
-                    if(*valuep != NULL)
-                    {
-                        log_err("field %s has already been initialized", tmp_label);
-                        fseek(f, 0, SEEK_END);
-                        break;
-                    }
-
-                    ya_result n = base64_decode(tmp_in, tmp_in_len, tmp_out);
-
-                    if(FAIL(n))
-                    {
-                        log_err("unable to decode field %s (%s)", tmp_label, tmp_in);
-                        fseek(f, 0, SEEK_END);
-                        break;
-                    }
-
-                    *valuep = BN_bin2bn(tmp_out, n, NULL);
-                    break;
-                }
-            } /* for each possible field */
-        }
-    }
-
-    if((dsa->p == NULL)    ||
-       (dsa->q == NULL)    ||
-       (dsa->g == NULL)    ||
-       (dsa->priv_key == NULL)    ||
-       (dsa->pub_key == NULL))
-    {
-        DSA_free(dsa);
-        dsa = NULL;
-    }
-
-    return dsa;
 }
 
 static DSA*
@@ -214,7 +119,7 @@ dsa_genkey(u32 size)
 }
 
 static ya_result
-dsa_signdigest(dnssec_key *key, u8 *digest, u32 digest_len, u8 *output)
+dsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u8 *output)
 {
     DSA_SIG *sig = DSA_do_sign(digest, digest_len, key->key.dsa);
 
@@ -250,7 +155,7 @@ dsa_signdigest(dnssec_key *key, u8 *digest, u32 digest_len, u8 *output)
 }
 
 static bool
-dsa_verifydigest(dnssec_key* key, u8* digest, u32 digest_len, u8* signature, u32 signature_len)
+dsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len, const u8 *signature, u32 signature_len)
 {
     yassert(signature_len <= DNSSEC_MAXIMUM_KEY_SIZE_BYTES);
     
@@ -300,7 +205,7 @@ dsa_verifydigest(dnssec_key* key, u8* digest, u32 digest_len, u8* signature, u32
         while((ssl_err = ERR_get_error()) != 0)
         {
             char buffer[256];
-            ERR_error_string_n(ssl_err, buffer, sizeof (buffer));
+            ERR_error_string_n(ssl_err, buffer, sizeof(buffer));
             log_err("digest verification returned an ssl error %08x %s", ssl_err, buffer);
         }
 
@@ -448,7 +353,7 @@ dsa_public_store(DSA* dsa, u8* output_buffer)
 }
 
 static u32
-dsa_dnskey_public_store(dnssec_key *key, u8 *rdata)
+dsa_dnskey_public_store(const dnssec_key* key, u8 *rdata)
 {
     u32 len;
     
@@ -462,7 +367,7 @@ dsa_dnskey_public_store(dnssec_key *key, u8 *rdata)
 }
 
 static u32
-dsa_public_getsize(DSA* dsa)
+dsa_public_getsize(const DSA* dsa)
 {
     BIGNUM* q = dsa->q;
     BIGNUM* p = dsa->p;
@@ -478,7 +383,7 @@ dsa_public_getsize(DSA* dsa)
 }
 
 static u32
-dsa_dnskey_public_getsize(dnssec_key* key)
+dsa_dnskey_public_getsize(const dnssec_key* key)
 {
     return dsa_public_getsize(key->key.dsa) + 4;
 }
@@ -493,7 +398,7 @@ dsa_free(dnssec_key* key)
 }
 
 static bool
-dsa_equals(dnssec_key* key_a,dnssec_key* key_b)
+dsa_equals(const dnssec_key* key_a, const dnssec_key* key_b)
 {
     /* RSA, compare modulus and exponent, exponent first (it's the smallest) */
 
@@ -552,18 +457,49 @@ dsa_get_fields_descriptor(dnssec_key* key)
     return struct_DSA;
 }
 
-static const dnssec_key_vtbl dsa_vtbl = {
+static ya_result
+dsa_private_print_fields(dnssec_key *key, output_stream *os)
+{
+    ya_result ret; // static analyser false positive: the loop will run at least once
+
+#ifdef DEBUG
+    ret = ERROR; // just to shut-up the false positive
+#endif
+    
+    const DSA* dsa = key->key.dsa;
+    
+    for(const struct structdescriptor *sd = struct_DSA; sd->name != NULL; sd++)
+    {
+        osformat(os, "%s: ", sd->name);
+        const BIGNUM **valuep = (const BIGNUM**)&(((const u8*)dsa)[sd->address]);
+        
+        // WRITE_BIGNUM_AS_BASE64(private, *valuep, tmp_in, tmp_out);
+        
+        if(FAIL(ret = dnskey_write_bignum_as_base64_to_stream(*valuep, os)))
+        {
+            break;
+        }
+        
+        osprintln(os, "");
+    }
+    
+    return ret;
+}
+
+static const dnssec_key_vtbl dsa_vtbl =
+{
     dsa_signdigest,
     dsa_verifydigest,
     dsa_dnskey_public_getsize,
     dsa_dnskey_public_store,
     dsa_free,
     dsa_equals,
-    dsa_get_fields_descriptor,
+    dsa_private_print_fields,
     "DSA"
 };
 
-ya_result dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin, dnssec_key** out_key)
+static ya_result
+dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin, dnssec_key** out_key)
 {
     int nid;
     
@@ -577,7 +513,7 @@ ya_result dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin
     }
 
 #ifdef DEBUG
-    memset(rdata, 0xff, sizeof (rdata));
+    memset(rdata, 0xff, sizeof(rdata));
 #endif
 
     u32 rdata_size = dsa_public_getsize(dsa);
@@ -602,7 +538,7 @@ ya_result dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin
 
     u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size + 4);
 
-    dnssec_key* key = dnskey_newemptyinstance(algorithm, flags, origin);
+    dnssec_key* key = dnskey_newemptyinstance(algorithm, flags, origin); // RC
 
     key->key.dsa = dsa;
     key->vtbl = &dsa_vtbl;
@@ -618,54 +554,12 @@ ya_result dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin
     return SUCCESS;
 }
 
-
-ya_result dsa_loadprivate(FILE* private, u8 algorithm, u16 flags, const char* origin, dnssec_key** out_key)
-{
-    *out_key = NULL;
-    
-    if(private == NULL)
-    {
-        return UNEXPECTED_NULL_ARGUMENT_ERROR;
-    }
-    
-    if((algorithm != DNSKEY_ALGORITHM_DSASHA1_NSEC3) && (algorithm != DNSKEY_ALGORITHM_DSASHA1))
-    {
-        return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
-    }
-    
-    ya_result return_value = ERROR;
-    
-    DSA *dsa = dsa_dnskey_key_scan(private);
-    
-    if(dsa != NULL)
-    {
-        dnssec_key *key;
-                
-        if(ISOK(return_value = dsa_initinstance(dsa, algorithm, flags, origin, &key)))
-        {
-            *out_key = key;
-            
-            return return_value;
-        }
-        
-        DSA_free(dsa);
-    }
-    
-    return return_value;
-}
-
 ya_result
 dsa_private_parse_field(dnssec_key *key, parser_s *p)
 {
     if(key == NULL)
     {
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
-    }
-    
-    if(key->nid != 0)
-    {
-        // already set
-        return INVALID_STATE_ERROR;
     }
 
     switch(key->algorithm)
@@ -723,7 +617,7 @@ dsa_private_parse_field(dnssec_key *key, parser_s *p)
                 log_err("unable to get big number from field %s", sd->name);
                 return DNSSEC_ERROR_BNISNULL;
             }
-
+            
             parsed_it = TRUE;
             
             break;
@@ -786,6 +680,7 @@ dsa_private_parse_field(dnssec_key *key, parser_s *p)
     return ret;
 }
 
+
 ya_result
 dsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key** out_key)
 {
@@ -798,7 +693,7 @@ dsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key**
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
 
-    u16 flags = ntohs(GET_U16_AT(rdata[0]));
+    u16 flags = GET_U16_AT(rdata[0]);
     u8 algorithm = rdata[3];
     
     if((algorithm != DNSKEY_ALGORITHM_DSASHA1_NSEC3) && (algorithm != DNSKEY_ALGORITHM_DSASHA1))
@@ -866,51 +761,7 @@ dsa_newinstance(u32 size, u8 algorithm, u16 flags, const char* origin, dnssec_ke
     return return_value;
 }
 
-ya_result
-dsa_storeprivate(FILE* private, dnssec_key* key)
-{
-    if(private == NULL)
-    {
-        return UNEXPECTED_NULL_ARGUMENT_ERROR;
-    }
-    
-    if((key->algorithm != DNSKEY_ALGORITHM_DSASHA1_NSEC3) && (key->algorithm != DNSKEY_ALGORITHM_DSASHA1))
-    {
-        return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
-    }
-
-    u8 tmp_in[DNSSEC_MAXIMUM_KEY_SIZE_BYTES];
-    char tmp_out[BASE64_ENCODED_SIZE(DNSSEC_MAXIMUM_KEY_SIZE_BYTES)];
-
-    DSA* dsa = key->key.dsa;
-
-    /* Modulus */
-
-    fprintf(private, "Private-key-format: v1.2\nAlgorithm: %i (?)", key->algorithm); /// @todo 20140523 edf -- handle v1.3 */
-
-    ya_result return_code = ERROR;
-    
-    for(const struct structdescriptor *sd = struct_DSA; sd->name != NULL; sd++)
-    {
-        fprintf(private, "%s: ", sd->name);
-        BIGNUM **valuep = (BIGNUM**)&(((u8*)dsa)[sd->address]);
-        
-        // WRITE_BIGNUM_AS_BASE64(private, *valuep, tmp_in, tmp_out);
-        
-        if(FAIL(return_code = dnskey_write_bignum_as_base64(private, *valuep, tmp_in, sizeof(tmp_in), tmp_out, sizeof(tmp_out))))
-        {
-            break;
-        }
-        
-        fputs("\n", private);
-    }
-
-    return return_code;
-}
-
 /*    ------------------------------------------------------------    */
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
 

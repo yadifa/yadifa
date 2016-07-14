@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnsdb Zone database
  *  @brief The zone dataBase
  *
@@ -61,7 +61,7 @@ extern logger_handle* g_database_logger;
 #include "dnsdb/zdb.h"
 
 #if ZDB_HAS_DNSSEC_SUPPORT != 0
-#include "dnsdb/dnssec_keystore.h"
+#include "dnsdb/dnssec-keystore.h"
 #endif
 
 #include "dnsdb/zdb_zone.h"
@@ -96,6 +96,8 @@ const char *dnsdb_lib = "dnsdb " __DATE__ " " __TIME__ " debug";
 #else
 const char *dnsdb_lib = "dnsdb " __DATE__ " " __TIME__ " release";
 #endif
+
+void dnssec_keystore_init();
 
 static pthread_mutex_t *ssl_mutex = NULL;
 static int ssl_mutex_count = 0;
@@ -139,29 +141,15 @@ logger_handle* g_database_logger = NULL;
 
 static volatile bool zdb_init_done = FALSE;
 
-dnslib_fingerprint dnsdb_getfingerprint()
+dnsdb_fingerprint dnsdb_getfingerprint()
 {
-    dnslib_fingerprint ret = (dnslib_fingerprint)(0
-#if ZDB_HAS_TSIG_SUPPORT
-    | DNSLIB_TSIG
-#endif
-#if ZDB_HAS_ACL_SUPPORT != 0
-    | DNSLIB_ACL
-#endif
-#if ZDB_HAS_NSEC_SUPPORT != 0
-    | DNSLIB_NSEC
-#endif
-#if ZDB_HAS_NSEC3_SUPPORT != 0
-    | DNSLIB_NSEC3
-#endif
-    );
-
+    dnscore_fingerprint ret = dnsdb_getmyfingerprint();
     return ret;
 }
 
 u32 dnsdb_fingerprint_mask()
 {
-    return DNSLIB_TSIG|DNSLIB_ACL|DNSLIB_NSEC|DNSLIB_NSEC3;
+    return DNSCORE_TSIG|DNSCORE_ACL|DNSCORE_NSEC|DNSCORE_NSEC3;
 }
 
 int zalloc_init();
@@ -177,16 +165,13 @@ zdb_init_ex(u32 thread_pool_count)
     }
 
     /* DO or DIE */
-
-    if(dnscore_getfingerprint() != (dnsdb_getfingerprint() & dnscore_fingerprint_mask()))
+    
+    if(dnscore_getfingerprint() != dnscore_getmyfingerprint())
     {
-        osformatln(termerr, "mismatched fingerprints: %08x != (%08x = %08x & %08x)",
-                dnscore_getfingerprint(),
-                dnsdb_getfingerprint() & dnscore_fingerprint_mask(),
-                dnsdb_getfingerprint() , dnscore_fingerprint_mask());
-
+        flushout();
         flusherr();
-        
+        printf("dnsdb: the linked dnscore features are %08x but the the lib has been compiled against one with %08x", dnscore_getfingerprint(), dnscore_getmyfingerprint());
+        fflush(NULL);
         exit(-1);
     }
 
@@ -218,7 +203,7 @@ zdb_init_ex(u32 thread_pool_count)
 
     ssl_mutex_count = CRYPTO_num_locks();
 
-    MALLOC_OR_DIE(pthread_mutex_t*, ssl_mutex, ssl_mutex_count * sizeof (pthread_mutex_t), ZDB_SSLMUTEX_TAG);
+    MALLOC_OR_DIE(pthread_mutex_t*, ssl_mutex, ssl_mutex_count * sizeof(pthread_mutex_t), ZDB_SSLMUTEX_TAG);
 
     int i;
 
@@ -229,6 +214,8 @@ zdb_init_ex(u32 thread_pool_count)
 
     CRYPTO_set_id_callback(ssl_thread_id);
     CRYPTO_set_locking_callback(ssl_lock);
+    
+    dnssec_keystore_init();
 #endif
 
     journal_init(0);    // uses the default mru size (512)
@@ -258,12 +245,12 @@ zdb_finalize()
     
     journal_finalise();
     
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
     dnssec_keystore_destroy();
     dnssec_keystore_resetpath();
 #endif
 
-#if ZDB_OPENSSL_SUPPORT!=0
+#if ZDB_OPENSSL_SUPPORT
 
     ERR_remove_state(0);
 
@@ -302,14 +289,14 @@ zdb_create(zdb* db)
     zdb_zone_label* zone_label;
 
     ZALLOC_OR_DIE(zdb_zone_label*, zone_label, zdb_zone_label, ZDB_ZONELABEL_TAG);
-    ZEROMEMORY(zone_label, sizeof (zdb_zone_label));
+    ZEROMEMORY(zone_label, sizeof(zdb_zone_label));
     zone_label->name = dnslabel_zdup(ROOT_LABEL); /* . */
     dictionary_init(&zone_label->sub);
 
 
     db->root = zone_label; /* native order */
         
-    db->alarm_handle = alarm_open((const u8*)"\010database"); /** @todo change this (uppercase?) */
+    db->alarm_handle = alarm_open((const u8*)"\010d@tabase"); // a name that is not likely to be used for a domain as it has invalid chars
     
     group_mutex_init(&db->mutex);
 }

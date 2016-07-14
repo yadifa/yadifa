@@ -25,18 +25,33 @@
 /* dynamic provisioning disabled. */
 #define HAS_CTRL_DYNAMIC_PROVISIONING 0
 
+/* DNSQ support enabled */
+#define HAS_DNSQ 0
+
 /* always on */
 #define HAS_DNSSEC_SUPPORT 1
 
-/* always off */
+/* DROPALL mode will not actually send back the answer (debug/bench) */
 #define HAS_DROPALL_SUPPORT 0
+
+/* dynamic configuration disabled. */
+#define HAS_DYNCONF_SUPPORT 0
 
 /* dynamic update support disabled. */
 #define HAS_DYNUPDATE_SUPPORT 1
 
+/* Eric's code is enabled */
+#define HAS_EDF 0
+
+/* experimental stuff disabled. */
+#define HAS_EXPERIMENTAL 0
+
 /* YADIFA will now accept ASCII7 characters in DNS names (not recommended)
    disabled. */
 #define HAS_FULL_ASCII7 0
+
+/* Gery's code is enabled */
+#define HAS_GERY 0
 
 /* where to put the log files */
 #define HAS_LOGDIR 0
@@ -60,7 +75,7 @@
    the same network interface) disabled. */
 #define HAS_MESSAGES_SUPPORT 0
 
-/* always off */
+/* MIRROR mode will only reply what has been read (debug/bench) */
 #define HAS_MIRROR_SUPPORT 0
 
 /* mutex debug support disabled. */
@@ -78,6 +93,9 @@
 
 /* NSID support disabled. */
 #define HAS_NSID_SUPPORT 1
+
+/* The system supports thread affinity */
+#define HAS_PTHREAD_SETAFFINITY_NP 1
 
 /* The system supports thread names */
 #define HAS_PTHREAD_SETNAME_NP 1
@@ -108,6 +126,13 @@
 
 /* always off */
 #define HAS_TCL 0
+
+/* Tim's code is enabled */
+#define HAS_THX 0
+
+/* Tracks the instanciated zones for detecting zones potentially not released.
+   Relatively cheap with a small (<100) amount of zones. disabled. */
+#define HAS_TRACK_ZONES_DEBUG_SUPPORT 0
 
 /* always on */
 #define HAS_TSIG_SUPPORT 1
@@ -171,9 +196,6 @@
 
 /* Define to 1 if you have the `dnszone' library (-ldnszone). */
 /* #undef HAVE_LIBDNSZONE */
-
-/* Define to 1 if you have the `pthread' library (-lpthread). */
-#define HAVE_LIBPTHREAD 1
 
 /* Define to 1 if you have the <linux/limits.h> header file. */
 #define HAVE_LINUX_LIMITS_H 1
@@ -304,7 +326,7 @@
 #define PACKAGE_NAME "dnszone"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "dnszone 2.1.6-5826"
+#define PACKAGE_STRING "dnszone 2.2.0-6241"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "dnszone"
@@ -313,7 +335,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.1.6-5826"
+#define PACKAGE_VERSION "2.2.0-6241"
 
 /* Define as the return type of signal handlers (`int' or `void'). */
 #define RETSIGTYPE void
@@ -334,7 +356,7 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* Version number of package */
-#define VERSION "2.1.6-5826"
+#define VERSION "2.2.0-6241"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */

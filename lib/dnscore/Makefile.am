@@ -28,10 +28,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ##############################################################################
-#
-#	YADIFA dnscore Makefile.am script
-#
-##############################################################################
 
 srcdir =	@srcdir@
 libdir =	@libdir@
@@ -42,12 +38,14 @@ ACLOCAL_AMFLAGS = -I m4
 
 dist_noinst_DATA = VERSION
 
+lib_LTLIBRARIES= libdnscore.la
+
 I=include/dnscore
 
 FEATURESFILE=dnscore-config-features.h
 FEATURES=$(I)/$(FEATURESFILE)
 
-lib_LTLIBRARIES= libdnscore.la
+# alphabetically please
 
 libdnscore_la_SOURCES = \
 	src/alarm.c \
@@ -87,6 +85,7 @@ libdnscore_la_SOURCES = \
 	src/dnskey.c \
 	src/dnskey-keyring.c \
 	src/dnskey_dsa.c \
+    src/dnskey_ecdsa.c \
 	src/dnskey_rsa.c \
 	src/dnsname.c \
 	src/empty-input-stream.c \
@@ -101,18 +100,22 @@ libdnscore_la_SOURCES = \
 	src/limited_input_stream.c \
 	src/list-dl.c \
 	src/list-sl.c \
+	src/list-sl-debug.c \
+	src/logger-output-stream.c \
 	src/logger.c \
 	src/logger_channel_file.c \
 	src/logger_channel_stream.c \
 	src/logger_channel_syslog.c \
 	src/logger_handle.c \
-	src/logger-output-stream.c \
+	src/message-buffer.c \
+	src/message-viewer.c \
 	src/message.c \
-	src/message_dnsupdate.c \
 	src/message_print_format_dig.c \
 	src/message_verify_rrsig.c \
+    src/message_dnsupdate.c \
 	src/mt_output_stream.c \
 	src/mutex.c \
+	src/name.c \
 	src/output_stream.c \
 	src/pace.c \
 	src/packet_reader.c \
@@ -123,31 +126,36 @@ libdnscore_la_SOURCES = \
 	src/pipe_stream.c \
 	src/pool.c \
 	src/ptr_set.c \
+	src/ptr_set_debug.c \
 	src/ptr_vector.c \
+	src/queue-sl.c \
 	src/random.c \
 	src/rc.c \
+	src/rewind-input-stream.c \
 	src/rfc.c \
 	src/serial.c \
-	src/service.c \
 	src/server-setup.c \
+	src/service.c \
 	src/string_set.c \
 	src/sys_error.c \
 	src/sys_get_cpu_count.c \
 	src/tcp_io_stream.c \
 	src/thread_pool.c \
+	src/threaded-qsl-cw.c \
+	src/threaded_dll_cw.c \
 	src/threaded_nb_mm.c \
 	src/threaded_nbrb.c \
 	src/threaded_ringbuffer.c \
 	src/threaded_ringbuffer_cw.c \
 	src/threaded_ringlist.c \
-	src/threaded_dll_cw.c \
 	src/timeformat.c \
 	src/timems.c \
 	src/typebitmap.c \
 	src/u32_set.c \
 	src/u64_set.c \
-	src/zalloc.c \
-	src/xfr_input_stream.c
+	src/u64_set_debug.c \
+	src/xfr_input_stream.c \
+	src/zalloc.c
 
 pkginclude_HEADERS = \
 	$(FEATURES) \
@@ -184,9 +192,10 @@ pkginclude_HEADERS = \
 	$(I)/dnscore.h \
 	$(I)/dnsformat.h \
 	$(I)/dnskey.h \
-	$(I)/dnskey_dsa.h \
-	$(I)/dnskey_rsa.h \
 	$(I)/dnskey-keyring.h \
+	$(I)/dnskey_dsa.h \
+    $(I)/dnskey_ecdsa.h \
+	$(I)/dnskey_rsa.h \
 	$(I)/dnsname.h \
 	$(I)/dnsname_set.h \
 	$(I)/dnssec_errors.h \
@@ -204,17 +213,21 @@ pkginclude_HEADERS = \
 	$(I)/limited_input_stream.h \
 	$(I)/list-dl.h \
 	$(I)/list-sl.h \
+	$(I)/list-sl-debug.h \
 	$(I)/logger.h \
 	$(I)/logger_channel_file.h \
 	$(I)/logger_channel_stream.h \
 	$(I)/logger_channel_syslog.h \
 	$(I)/logger_handle.h \
 	$(I)/logger-output-stream.h \
+	$(I)/message-buffer.h \
+	$(I)/message-viewer.h \
 	$(I)/message.h \
-	$(I)/message_dnsupdate.h \
 	$(I)/message_verify_rrsig.h \
+    $(I)/message_dnsupdate.h \
 	$(I)/mt_output_stream.h \
 	$(I)/mutex.h \
+	$(I)/name.h \
 	$(I)/network.h \
 	$(I)/output_stream.h \
 	$(I)/pace.h \
@@ -227,9 +240,12 @@ pkginclude_HEADERS = \
 	$(I)/pool.h \
 	$(I)/print_stream.h \
 	$(I)/ptr_set.h \
+	$(I)/ptr_set_debug.h \
 	$(I)/ptr_vector.h \
+	$(I)/queue-sl.h \
 	$(I)/random.h \
 	$(I)/rc.h \
+	$(I)/rewind-input-stream.h \
 	$(I)/rfc.h \
 	$(I)/serial.h \
 	$(I)/server-setup.h \
@@ -240,20 +256,22 @@ pkginclude_HEADERS = \
 	$(I)/sys_types.h \
 	$(I)/tcp_io_stream.h \
 	$(I)/thread_pool.h \
+	$(I)/threaded-qsl-cw.h \
+	$(I)/threaded_dll_cw.h \
 	$(I)/threaded_nb_mm.h \
 	$(I)/threaded_nbrb.h \
 	$(I)/threaded_queue.h \
 	$(I)/threaded_ringbuffer.h \
 	$(I)/threaded_ringbuffer_cw.h \
 	$(I)/threaded_ringlist.h \
-	$(I)/threaded_dll_cw.h \
 	$(I)/timeformat.h \
 	$(I)/timems.h \
 	$(I)/typebitmap.h \
 	$(I)/u32_set.h \
 	$(I)/u64_set.h \
-	$(I)/zalloc.h \
+	$(I)/u64_set_debug.h \
 	$(I)/xfr_input_stream.h \
+	$(I)/zalloc.h \
 	$(I)/zonefile_reader.h
 
 if IS_DARWIN_OS
@@ -282,7 +300,9 @@ all: REVISION
 REVISION:
 	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
-src/alarm.c: $(FEATURES)
+src/alarm.c: features
+
+features: $(FEATURES)
 
 $(FEATURES): config.log REVISION VERSION
 	echo "#pragma once" > $(FEATURES)
@@ -321,6 +341,11 @@ if HAS_ZALLOC_DEBUG_SUPPORT
 else
 	echo "#define DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT 0" >> $(FEATURES)
 endif
+if HAS_NSID_SUPPORT
+	echo "#define DNSCORE_HAS_NSID_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define DNSCORE_HAS_NSID_SUPPORT 0" >> $(FEATURES)
+endif
 if HAS_ZALLOC_STATISTICS_SUPPORT
 	echo "#define DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT 1" >> $(FEATURES)
 else
@@ -335,6 +360,11 @@ if HAS_MUTEX_DEBUG_SUPPORT
 	echo "#define DNSCORE_HAS_MUTEX_DEBUG_SUPPORT 1" >> $(FEATURES)
 else
 	echo "#define DNSCORE_HAS_MUTEX_DEBUG_SUPPORT 0" >> $(FEATURES)
+endif
+if HAS_MEMALIGN_ISSUES
+	echo "#define DNSCORE_HAS_MEMALIGN_ISSUES 1" >> $(FEATURES)
+else
+	echo "#define DNSCORE_HAS_MEMALIGN_ISSUES 0" >> $(FEATURES)
 endif
 VP=DNSCORE
 	which printf > /dev/null 2>&1

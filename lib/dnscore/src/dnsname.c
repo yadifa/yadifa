@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnscore
  *  @ingroup dnscore
  *  @brief Functions used to manipulate dns formatted names and labels
@@ -1776,7 +1776,7 @@ dnsname_to_cstr(char* dest_cstr, const u8* name)
 
 /* ELEVEN uses */
 
-#if HAS_MEMALIGN_ISSUES == 0
+#if DNSCORE_HAS_MEMALIGN_ISSUES == 0
 
 bool
 dnslabel_equals(const u8* name_a, const u8* name_b)
@@ -1856,7 +1856,7 @@ dnslabel_equals(const u8* name_a, const u8* name_b)
  *  @return Returns TRUE if names are equal, else FALSE.
  */
 
-#if HAS_MEMALIGN_ISSUES == 0
+#if DNSCORE_HAS_MEMALIGN_ISSUES == 0
 
 bool
 dnslabel_equals_ignorecase_left(const u8* name_a, const u8* name_b)
@@ -2185,7 +2185,7 @@ dnslabel_vector_to_dnsname(const_dnslabel_vector_reference name, s32 top, u8* st
 
     while(name <= limit)
     {
-        u8* label = *name++;
+        const u8* label = *name++;
         u8 len = label[0] + 1;
         MEMCOPY(str, label, len);
         str += len;
@@ -2207,7 +2207,7 @@ dnslabel_vector_to_cstr(const_dnslabel_vector_reference name, s32 top, char* str
 
     while(name < limit)
     {
-        u8* label = *name++;
+        const u8* label = *name++;
         u8 len = *label++;
 
         MEMCOPY(str, label, len);
@@ -2237,7 +2237,7 @@ dnslabel_vector_dnslabel_to_dnsname(const u8 *prefix, const dnsname_vector *name
 
     while(bottom <= top)
     {
-        u8* label = *name++;
+        const u8* label = *name++;
         u32 len = *label;
 
         MEMCOPY(str, label, len + 1);
@@ -2318,7 +2318,7 @@ dnsname_to_dnslabel_vector(const u8 *dns_name, dnslabel_vector_reference labels)
             break;
         }
 
-        labels[++idx] = (u8*) & dns_name[offset];
+        labels[++idx] = &dns_name[offset];
         offset += len + 1;
     }
 
@@ -2398,7 +2398,7 @@ dnslabel_stack_to_cstr(const_dnslabel_stack_reference name, s32 top, char* str)
     char* start = str;
     while(top >= 0)
     {
-        u8* label = name[top];
+        const u8* label = name[top];
         u8 len = *label++;
 
         MEMCOPY(str, label, len);
@@ -2425,7 +2425,7 @@ dnslabel_stack_to_dnsname(const_dnslabel_stack_reference name, s32 top, u8* str_
 
     while(name >= base)
     {
-        u8* label = *name--;
+        const u8* label = *name--;
         u32 len = *label;
 
         MEMCOPY(str, label, len + 1);
@@ -2459,7 +2459,7 @@ dnsname_to_dnslabel_stack(const u8* dns_name, dnslabel_stack_reference labels)
 
     s32 size = label_pointers_top;
 
-    u8** labelp = labels;
+    const u8** labelp = labels;
     while(label_pointers_top >= 0)
     {
         *labelp++ = (u8*)label_pointers[label_pointers_top--];
@@ -2517,7 +2517,7 @@ dnsname_equals_dnsname_stack(const u8* str, const dnsname_stack* name)
 
     while(size >= 0)
     {
-        u8* label = name->labels[size];
+        const u8* label = name->labels[size];
         u8 len = *label;
 
         if(len != *str)
@@ -2548,7 +2548,7 @@ dnsname_under_dnsname_stack(const u8* str, const dnsname_stack* name)
 
     while(size >= 0)
     {
-        u8* label = name->labels[size];
+        const u8* label = name->labels[size];
         u8 len = *label;
 
         if(len != *str)
@@ -2575,7 +2575,7 @@ dnsname_under_dnsname_stack(const u8* str, const dnsname_stack* name)
 /* FOUR uses */
 
 s32
-dnsname_stack_push_label(dnsname_stack* dns_name, u8* dns_label)
+dnsname_stack_push_label(dnsname_stack* dns_name, const u8* dns_label)
 {
     yassert(dns_name != NULL && dns_label != NULL);
    
@@ -2620,7 +2620,7 @@ dnsname_to_dnsname_stack(const u8* dns_name, dnsname_stack* name)
 
     name->size = label_pointers_top;
 
-    u8** labelp = name->labels;
+    const u8** labelp = name->labels;
     while(label_pointers_top >= 0)
     {
         *labelp++ = label_pointers[label_pointers_top--];
@@ -2631,13 +2631,12 @@ dnsname_to_dnsname_stack(const u8* dns_name, dnsname_stack* name)
 
 /** @brief Allocates and duplicates a name with ZALLOC.
  *
- *  Allocates and duplicates a name ZALLOC.
+ *  Allocates and duplicates a dns name with ZALLOC.
  *
  *  @param[in] name a pointer to the dnsname
  *
  *  @return A new instance of the dnsname.
  */
-
 
 u8*
 dnsname_zdup(const u8* name)
@@ -2651,6 +2650,30 @@ dnsname_zdup(const u8* name)
     ZALLOC_ARRAY_OR_DIE(u8*, dup, len, ZDB_NAME_TAG);
     MEMCOPY(dup, name, len); // nothing wrong here
 
+    return dup;
+}
+
+/** @brief Converts a name to a newly allocated dns name with ZALLOC.
+ *
+ *  Converts a name to a newly allocated dns name with ZALLOC.
+ *
+ *  @param domainname a pointer to the name
+ *
+ *  @return a new instance of the name converted to a dnsname
+ */
+
+u8*
+dnsname_zdup_from_name(const char* domainname)
+{
+    yassert(domainname != NULL);
+
+    u32 len = cstr_get_dnsname_len(domainname);
+
+    u8* dup;
+
+    ZALLOC_ARRAY_OR_DIE(u8*, dup, len, ZDB_NAME_TAG);
+    cstr_to_dnsname(dup, domainname);
+    
     return dup;
 }
 

@@ -38,16 +38,30 @@ ACLOCAL_AMFLAGS = -I m4
 
 dist_noinst_DATA = VERSION
 
+lib_LTLIBRARIES= libdnslg.la
+
 I=include/dnslg
+
 FEATURESFILE=dnslg-config-features.h
 FEATURES=$(I)/$(FEATURESFILE)
 
-lib_LTLIBRARIES= libdnslg.la
-
-pkginclude_HEADERS = $(FEATURES) include/dnslg/config-resolver.h include/dnslg/resolv-conf.h include/dnslg/dns.h include/dnslg/config-load.h
+# alphabetically please
 
 # NOTE: the first one on this list must always be the one used to trigger $(FEATURES)
-libdnslg_la_SOURCES = src/config-resolver.c src/dns.c src/resolv-conf.c src/config-load.c
+pkginclude_HEADERS = \
+		     $(FEATURES) \
+		     include/dnslg/config-load.h \
+		     include/dnslg/config-resolver.h \
+		     include/dnslg/dns.h \
+		     include/dnslg/resolv-conf.h \
+		     include/dnslg/resolv.h
+
+libdnslg_la_SOURCES = \
+		      src/config-load.c \
+		      src/config-resolver.c \
+		      src/dns.c \
+		      src/resolv-conf.c \
+		      src/resolv.c
 
 libdnslg_la_LDFLAGS = -version-info 2:0:0
 
@@ -61,6 +75,8 @@ REVISION:
 	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
 src/config-resolver.c: $(FEATURES)
+
+features: $(FEATURES)
 
 $(FEATURES): config.log REVISION VERSION
 	echo "#pragma once" > $(FEATURES)

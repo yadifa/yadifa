@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup logger Logging functions
  *  @ingroup dnscore
  *  @brief
@@ -161,10 +161,11 @@ logger_channel_file_append(const char *fullpath, uid_t uid, gid_t gid, u16 mode,
     output_stream buffered_errlog_os;
     ya_result return_code;
 
-    if(FAIL(return_code = file_output_stream_open_ex_nolog(fullpath,
+    if(FAIL(return_code = file_output_stream_open_ex_nolog(
+                    &errlog_os,
+                    fullpath,
                     O_CREAT|O_APPEND|O_RDWR,
-                    mode,
-                    &errlog_os)))
+                    mode)))
     {
         sd->fd = -1;
         return return_code;
@@ -189,7 +190,7 @@ logger_channel_file_append(const char *fullpath, uid_t uid, gid_t gid, u16 mode,
     
     sd->fd = fd;
     
-    if(FAIL(return_code = buffer_output_stream_init(&errlog_os, &buffered_errlog_os, FILE_CHANNEL_BUFFER_SIZE)))
+    if(FAIL(return_code = buffer_output_stream_init(&buffered_errlog_os, &errlog_os, FILE_CHANNEL_BUFFER_SIZE)))
     {
         output_stream_close(&errlog_os);
         sd->fd = -1;
@@ -221,10 +222,11 @@ logger_channel_file_reopen(logger_channel* chan)
     
     output_stream errlog_os;
 
-    if(FAIL(return_code = file_output_stream_open_ex_nolog(sd->file_name,
+    if(FAIL(return_code = file_output_stream_open_ex_nolog(
+                    &errlog_os,
+                    sd->file_name,
                     O_CREAT|O_APPEND|O_RDWR,
-                    sd->mode,
-                    &errlog_os)))
+                    sd->mode)))
     {
         logger_channel_file_flush(chan);
 
@@ -355,7 +357,7 @@ logger_channel_file_open(const char *fullpath, uid_t uid, gid_t gid, u16 mode, b
     ya_result return_code;
     
     file_data* sd;
-    MALLOC_OR_DIE(file_data*, sd, sizeof (file_data), 0x4d5254534e414843); /* CHANSTRM */
+    MALLOC_OR_DIE(file_data*, sd, sizeof(file_data), 0x4d5254534e414843); /* CHANSTRM */
 
     if(ISOK(return_code = logger_channel_file_append(fullpath, uid, gid, mode, sd)))
     {

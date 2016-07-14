@@ -10,19 +10,19 @@
         chroot                      off
 
         # The path where all the log files will be written
-        logpath                     "/var/log/yadifad"
+        logpath                     "/var/log/yadifa"
 
         # The location of the pid file
         pidfile                     "/var/run/yadifad.pid"
 
         # The path where all zone files will be written
-        datapath                    "/var/lib/yadifad"
+        datapath                    "/var"
 
         # The path where the DNSSEC keys are found
-        keyspath                    "/var/lib/yadifa/keys"
+        keyspath                    "/var/zones/keys"
 
         # The path where the transfer and journaling files will be written (AXFR & IXFR)
-        xfrpath                     "/var/cache/yadifa/xfr"
+        xfrpath                     "/var/zones/xfr"
 
         # A string returned by a query of hostname. CH TXT (note if you leave this out, the real hostname will be given back)
         hostname                    "server-yadifad"
@@ -31,7 +31,7 @@
         serverid                     "yadifad-01"
 
         # The version returned by a query to version.yadifa. CH TXT
-        version                      "2.1.6"
+        version                      "2.2.0"
 
         # Set the maximum UDP packet size.  Cannot be less than 512.  Cannot be more than 65535.  Typical choice is 4096.
         edns0-max-size              4096
@@ -83,6 +83,7 @@
 
         # If YADIFA has the controller enabled, allow control only for these clients (none by default)
         allow-control               controller
+
 </main>
 
 # If YADIFA has NSID support (default)
@@ -183,15 +184,15 @@
         queries         *                                   queries
 </loggers>
 
+
+
+
+
 #
 # TSIG Key configuration
 #
 
-<key>
-        name        abroad-admin-key
-        algorithm   hmac-md5
-        secret      WorthlessKeyForExample==
-</key>
+include "keys.conf"
 
 <key>
         name        master-slave
@@ -220,7 +221,7 @@
 <zone>
         type                    master
         domain                  localhost
-        file                    masters/localhost.zone
+        file                    masters/localhost.
         allow-transfer          none
         allow-update            none
         allow-update-forwarding none
@@ -229,7 +230,7 @@
 <zone>
         type                    master
         domain                  localhost6
-        file                    masters/localhost6.zone
+        file                    masters/localhost6.
         allow-transfer          none
         allow-update            none
         allow-update-forwarding none
@@ -238,7 +239,7 @@
 <zone>
         type                    master
         domain                  0.0.127.in-addr.arpa
-        file                    masters/0.0.127.in-addr.arpa.zone
+        file                    masters/0.0.127.in-addr.arpa.
         allow-transfer          none
         allow-update            none
         allow-update-forwarding none
@@ -247,7 +248,7 @@
 <zone>
         type                    master
         domain                  0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa
-        file                    masters/0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa.zone
+        file                    masters/0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa.
         allow-transfer          none
         allow-update            none
         allow-update-forwarding none
@@ -255,12 +256,272 @@
 
 <zone>
         # This server is master for that zone (mandatory)
-        type        master
+        type                    master
 
         # The domain name (mandatory)
-        domain      somedomain.eu.
+        domain                  somedomain.eu.
 
         # The zone file, relative to 'datapath'.  (mandatory for a master)
-        file        masters/somedomain.eu.zone
+        file                    masters/somedomain.eu.
+
+
+        dnssec-policy           "normal-policy"
 </zone>
 
+
+################################################################################
+################################################################################
+###
+### POLICIES
+###
+################################################################################
+################################################################################
+
+<dnssec-policy>
+
+    # name of the 'dnssec-policy'
+    id                      "normal-policy"
+
+    description             "Example of a policy with ZSK and KSK"
+
+    # denial nsec|"nsec3-parameters-section-name"
+    # can be the keyword 'nsec' or the 'id | name' of a 'denial' section
+    denial                  "nsec3-fixed"
+
+    # at least one: key-descriptor "name"
+    # they define KSK & ZSK keys
+
+    key-suite               "zsk-1024"
+    key-suite               "ksk-2048"
+
+</dnssec-policy>
+
+
+
+<dnssec-policy>
+    # name of the 'dnssec-policy'
+    id                      "fast-roll-policy"
+    description             "Fast rolling policy"
+    denial                  "nsec"
+    key-suite               "zsk-1024-fast-roll"
+    key-suite               "ksk-2048-fast-roll"
+</dnssec-policy>
+
+
+
+<key-suite>
+    # name of the key-suite
+    id                      "zsk-1024-fast-roll"
+    key-template            "zsk-rsa-sha256-1024"
+    # optional, without it, the keys found in the storage are used
+    key-roll                "daily-diary"
+</key-suite>
+
+<key-suite>
+    # name of the key-suite
+    id                      "ksk-2048-fast-roll"
+    key-template            "ksk-rsa-sha256-2048"
+    # optional, without it, the keys found in the storage are used
+    key-roll                "weekly-diary"
+</key-suite>
+
+<key-suite>
+    # name of the key-suite
+    id                      "zsk-1024"
+    key-template            "zsk-rsa-sha256-1024"
+    # optional, without it, the keys found in the storage are used
+    key-roll                "monthly-diary"
+</key-suite>
+
+<key-suite>
+    # name of the key-suite
+    id                      "ksk-2048"
+    key-template            "ksk-rsa-sha256-2048"
+    # optional, without it, the keys found in the storage are used
+    key-roll                "yearly-diary"
+</key-suite>
+
+######################################################
+
+<key-template>
+    id                  "zsk-rsa-sha512-1024"
+    algorithm           RSASHA512
+    size                1024
+</key-template>
+
+<key-template>
+    id                  "zsk-rsa-sha512-2048"
+    algorithm           RSASHA512
+    size                2048
+</key-template>
+
+<key-template>
+    id                  "zsk-rsa-sha256-1024"
+    algorithm           RSASHA256
+    size                1024
+</key-template>
+
+<key-template>
+    id                  "zsk-rsa-sha256-2048"
+    algorithm           RSASHA256
+    size                2048
+</key-template>
+
+<key-template>
+    id                  "ksk-rsa-sha512-1024"
+    ksk                 1
+    algorithm           RSASHA512
+    size                1024
+</key-template>
+
+<key-template>
+    id                  "ksk-rsa-sha512-2048"
+    ksk                 1
+    algorithm           RSASHA512
+    size                2048
+</key-template>
+
+<key-template>
+    id                  "ksk-rsa-sha256-1024"
+    ksk                 1
+    algorithm           RSASHA256
+    size                1024
+</key-template>
+
+<key-template>
+    id                  "ksk-rsa-sha256-2048"
+    ksk                 1
+    algorithm           RSASHA256
+    size                2048
+</key-template>
+
+
+######################################################
+
+<denial>
+    type NSEC3
+    id            "nsec3-random"
+    salt-length   32
+    iterations    10
+    # can be 0 or 1, true or false, and on or off
+    optout        off
+</denial>
+
+<denial>
+    type NSEC3
+    id            "nsec3-fixed"
+    salt          "BA5EBA11"      # if nsec3-resalting is off 
+    iterations    5           # the number of additional times the hash function has been performe
+    # can be 0 or 1, true or false, and on or off
+    optout        off
+</denial>
+
+######################################################
+
+
+    #               minutes     hours       days               months         weekdays         weeks
+
+<key-roll>
+    id                 "yearly-diary"
+
+    generate            5          0           15                  6            *                 * # this year   (2016) 15/06 at 00:05
+    publish             10         0           15                  6            *                 * #                             00:10
+    activate            15         0           16                  6            *                 * #                    16/06 at 00:15
+    inactive            15         0           17                  6            *                 * #             (2017) 17/06 at 00:15
+    remove              15        11           18                  6            *                 * #             (2017) 18/06 at 11:15
+</key-roll>
+
+
+<key-roll>
+    id                 "monthly-diary"
+
+    generate            5          0           *                   *            tue               0 # 1 tuesday   of the month at 00:05
+    publish             10         0           *                   *            tue               0 #                             00:10
+    activate            15         0           *                   *            wed               0 # 1 wednesday of the month at 00:15
+    inactive            15         0           *                   *            thu               0 # 1 thursday  of the month at 00:15
+    remove              15        11           *                   *            fri               0 # 1 friday    of the month at 11:15
+</key-roll>
+
+<key-roll>
+    id                 "weekly-diary"
+
+    generate            25         0           *                   *            sun               * # every sunday of the month at 00:25
+    publish             30         0           *                   *            sun               * #                           at 00:30
+    activate            35         0           *                   *            sun               * #                           at 00:35
+    inactive            35         0           *                   *            sun               * #                           at 00:35
+    remove              35        11           *                   *            sun               * #                           at 11:35
+</key-roll>
+
+<key-roll>
+    id                 "daily-diary"
+
+    generate            5          0           *                   *            *               *   # at 00:05
+    publish             10         0           *                   *            *               *   # at 00:10
+    activate            15         0           *                   *            *               *   # at 00:15
+    inactive            15         0           *                   *            *               *   # at 00:15
+    remove              15        11           *                   *            *               *   # at 11:15
+</key-roll>
+
+<key-roll>
+    id                 "hourly-diary"
+
+    generate            1          *           *                   *            *                 *
+    publish             5          *           *                   *            *                 *
+    activate            10         *           *                   *            *                 *
+    inactive            15         *           *                   *            *                 *
+    remove              20         *           *                   *            *                 *
+</key-roll>
+
+<key-roll>
+    id                 "half-hourly-diary"
+
+    generate            0,30       *           *                   *            *                 *
+    publish             1,31       *           *                   *            *                 *
+    activate            2,32       *           *                   *            *                 *
+    inactive            34,04      *           *                   *            *                 *
+    remove              38,08      *           *                   *            *                 *
+</key-roll>
+
+<key-roll>
+    id                  "insane-diary"
+
+    generate   * * * * * *
+    publish    * * * * * *
+    activate   * * * * * *
+    inactive   * * * * * *
+    remove     * * * * * *
+</key-roll>
+
+<key-roll>
+    id                  "monthly-relative"
+
+    generate            +31d
+    publish             +60
+    activate            +120          
+    inactive            +33d # must be bigger than generate, to avoid a gap
+    remove              +1d
+</key-roll>
+
+<key-roll>
+    id                  "insane-relative"
+
+    generate            +60
+    publish             +0
+    activate            +0
+    inactive            +60
+    remove              +0
+</key-roll>
+
+<key-roll>
+    id                  "less-insane-relative"
+
+    generate            +120
+    publish             +0
+    activate            +0
+    inactive            +160
+    remove              +0
+</key-roll>
+
+
+
+######################################################

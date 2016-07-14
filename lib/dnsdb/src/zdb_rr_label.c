@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup records_labels Internal functions for the database: zoned resource records label.
  *  @ingroup dnsdb
  *  @brief Internal functions for the database: zoned resource records label.
@@ -39,6 +39,8 @@
  *
  * @{
  */
+
+#include "dnsdb/dnsdb-config.h"
 
 
 
@@ -49,6 +51,7 @@
 #include "dnsdb/zdb_rr_label.h"
 #include "dnsdb/zdb_utils.h"
 #include "dnsdb/zdb_error.h"
+#include "dnsdb/zdb-zone-lock.h"
 
 #include "dnsdb/zdb_listener.h"
 
@@ -96,7 +99,11 @@ zdb_rr_label_free(zdb_zone* zone, zdb_rr_label* label)
             yassert(label->nsec.nsec3->self == NULL);
             yassert(label->nsec.nsec3->star == NULL);
 
-            ZFREE(label->nsec.nsec3, nsec3_label_extension); // free the nsec3 label extension of the label being freed
+            // free the nsec3 label extension of the label being freed
+            nsec3_label_extension_free(label->nsec.nsec3);
+#if DEBUG
+            label->nsec.nsec3 = (nsec3_label_extension*)0xbad;
+#endif
         }
     }
 #endif
@@ -258,7 +265,7 @@ zdb_rr_label_find_exact(zdb_rr_label* apex, dnslabel_vector_reference sections, 
 
     while(rr_label != NULL && index >= 0)
     {
-        u8* label = sections[index];
+        const u8* label = sections[index];
         hashcode hash = hash_dnslabel(label);
         rr_label = (zdb_rr_label*)dictionary_find(&rr_label->sub, hash, label, zdb_rr_label_zlabel_match);
 
@@ -279,7 +286,7 @@ zdb_rr_label_find_child(zdb_rr_label* parent, const u8* dns_label)
 }
 
 zdb_rr_label*
-zdb_rr_label_stack_find(zdb_rr_label* apex, dnslabel_stack_reference sections, s32 pos, s32 index)
+zdb_rr_label_stack_find(zdb_rr_label* apex, const_dnslabel_stack_reference sections, s32 pos, s32 index)
 {
     zdb_rr_label* rr_label = apex; /* the zone cut */
 
@@ -287,7 +294,7 @@ zdb_rr_label_stack_find(zdb_rr_label* apex, dnslabel_stack_reference sections, s
 
     while(rr_label != NULL && index <= pos)
     {
-        u8* label = sections[index];
+        const u8* label = sections[index];
         hashcode hash = hash_dnslabel(label);
 
         rr_label = (zdb_rr_label*)dictionary_find(&rr_label->sub, hash, label, zdb_rr_label_zlabel_match);
@@ -323,7 +330,7 @@ zdb_rr_label_find(zdb_rr_label* apex, dnslabel_vector_reference sections, s32 in
 
     while(index >= 0)
     {
-        u8* label = sections[index];
+        const u8* label = sections[index];
         hashcode hash = hash_dnslabel(label);
 
         zdb_rr_label* sub_rr_label = (zdb_rr_label*)dictionary_find(&rr_label->sub, hash, label, zdb_rr_label_zlabel_match);
@@ -390,12 +397,13 @@ zdb_rr_label_find(zdb_rr_label* apex, dnslabel_vector_reference label_sections, 
 #endif
 
 zdb_rr_label*
-zdb_rr_label_find_from_name(zdb_rr_label* apex, const u8 *fqdn)
+zdb_rr_label_find_from_name(zdb_zone* zone, const u8 *fqdn)
 {
     s32 top;
     dnslabel_vector name;
     top = dnsname_to_dnslabel_vector(fqdn, name);
-    zdb_rr_label *label = zdb_rr_label_find(apex, name, top);
+    top -= zone->origin_vector.size + 1;
+    zdb_rr_label *label = zdb_rr_label_find(zone->apex, name, top);
     return label;
 }
 
@@ -416,7 +424,7 @@ zdb_rr_label_find_ext(zdb_rr_label* apex, dnslabel_vector_reference sections, s3
 
     while(index >= 0)
     {
-        u8* label = sections[index];
+        const u8* label = sections[index];
         hashcode hash = hash_dnslabel(label);
 
         rr_label = (zdb_rr_label*)dictionary_find(&rr_label->sub, hash, label, zdb_rr_label_zlabel_match);
@@ -458,10 +466,10 @@ zdb_rr_label_find_ext(zdb_rr_label* apex, dnslabel_vector_reference sections, s3
 }
 
 /**
- * @brief Adds the resource record label matching a path of labels starting from another rr label
+ * @brief Adds the resource record label matching a (relative) path of labels starting from another rr label
  *
  * Adds the resource record label matching a path of labels starting from another rr label
- * Typically the starting label is a zone cut.
+ * Typically the starting label is the apex of the zone.
  *
  * @param[in] apex the starting label
  * @param[in] path a stack of labels
@@ -473,7 +481,9 @@ zdb_rr_label_find_ext(zdb_rr_label* apex, dnslabel_vector_reference sections, s3
 zdb_rr_label*
 zdb_rr_label_add(zdb_zone* zone, dnslabel_vector_reference labels, s32 labels_top)
 {
-    zdb_rr_label* rr_label = zone->apex; /* the zone cut */
+    yassert(zdb_zone_iswritelocked(zone));
+    
+    zdb_rr_label *rr_label = zone->apex; /* the zone cut */
 
     /* look into the sub level*/
 
@@ -481,7 +491,7 @@ zdb_rr_label_add(zdb_zone* zone, dnslabel_vector_reference labels, s32 labels_to
 
     while(labels_top >= 0)
     {
-        u8* label = labels[labels_top];
+        const u8* label = labels[labels_top];
         hashcode hash = hash_dnslabel(label);
         
         /* If the current label is '*' (wild) then the parent is marked as owner of a wildcard. */
@@ -549,7 +559,7 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
      */
 
     s32 top = args->top;
-    u8* label = (u8*)args->sections[top];
+    const u8* label = args->sections[top];
 
     if(!dnslabel_equals(rr_label->name, label))
     {
@@ -664,6 +674,7 @@ ya_result
 zdb_rr_label_delete_record(zdb_zone* zone, dnslabel_vector_reference path, s32 path_index, u16 type)
 {
     yassert(zone != NULL && path != NULL && path_index >= -1);
+    yassert(zdb_zone_iswritelocked(zone));
 
     zdb_rr_label* apex = zone->apex;
 
@@ -723,7 +734,7 @@ typedef struct zdb_rr_label_delete_record_exact_process_callback_args zdb_rr_lab
 struct zdb_rr_label_delete_record_exact_process_callback_args
 {
     dnslabel_vector_reference sections;
-    zdb_ttlrdata* ttlrdata;
+    const zdb_ttlrdata* ttlrdata;
     zdb_zone* zone;
     s32 top;
     u16 type;
@@ -760,7 +771,7 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
      */
 
     s32 top = args->top;
-    u8* label = (u8*)args->sections[top];
+    const u8* label = args->sections[top];
 
     if(!dnslabel_equals(rr_label->name, label))
     {
@@ -889,8 +900,10 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
 
 /* NSEC3: Zone possible */
 ya_result
-zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path, s32 path_index, u16 type, zdb_ttlrdata* ttlrdata)
+zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path, s32 path_index, u16 type, const zdb_ttlrdata *ttlrdata)
 {
+    yassert(zdb_zone_iswritelocked(zone));
+    
     zdb_rr_label* apex = zone->apex;
 
     if(apex == NULL)
@@ -904,7 +917,7 @@ zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path,
     {
         if(ISOK(zdb_record_delete_exact(&apex->resource_record_set, type, ttlrdata))) /* FB done, APEX : no delegation */
         {
-#if ZDB_CHANGE_FEEDBACK_SUPPORT != 0
+#if ZDB_CHANGE_FEEDBACK_SUPPORT
             zdb_listener_notify_remove_record(zone, path[0], type, ttlrdata);
 #endif
             if(RR_LABEL_IRRELEVANT(apex))
@@ -975,7 +988,7 @@ zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path,
 #ifdef DEBUG
 
 void
-zdb_rr_label_print_indented(zdb_rr_label* rr_label, output_stream *os, int indent)
+zdb_rr_label_print_indented(const zdb_rr_label* rr_label, output_stream *os, int indent)
 {
     osformatln(os, "%tl: '%{dnslabel}'(%u) #[%08x]", indent, rr_label->name, rr_label->flags, hash_dnslabel(rr_label->name));
 
@@ -994,7 +1007,7 @@ zdb_rr_label_print_indented(zdb_rr_label* rr_label, output_stream *os, int inden
 }
 
 void
-zdb_rr_label_print(zdb_rr_label* rr_label, output_stream *os)
+zdb_rr_label_print(const zdb_rr_label* rr_label, output_stream *os)
 {
     zdb_rr_label_print_indented(rr_label, os, 0);
 }

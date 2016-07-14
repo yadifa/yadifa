@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 #include "dnscore/dnscore-config.h"
 #include "dnscore/sys_types.h"
 #include "dnscore/message_verify_rrsig.h"
@@ -46,6 +46,9 @@ extern logger_handle *g_system_logger;
 //#define TYPE_FQDN_HAS_VERIFIED_SIGNATURES       4
 //#define TYPE_FQDN_HAS_WRONG_SIGNATURES          8
 //#define TYPE_FQDN_HAS_UNKNOWN_SIGNATURES       16
+
+#define RRSVFQDN_TAG 0x4e44514656535252
+#define MSGVRDTT_TAG 0x545444525647534d
 
 static s32
 message_verify_rrsig_compute_digest(const u8 *owner, u16 rtype, u16 rclass,
@@ -234,7 +237,7 @@ message_verify_rrsig_set_flag(ptr_set *section_type_fqdn, const u8 *type_record_
 #endif
         
         u8 *type_record_fqdn_copy;
-        MALLOC_OR_DIE(u8*,type_record_fqdn_copy, type_record_fqdn_len, GENERIC_TAG);
+        MALLOC_OR_DIE(u8*,type_record_fqdn_copy, type_record_fqdn_len, RRSVFQDN_TAG);
         memcpy(type_record_fqdn_copy, type_record_fqdn, type_record_fqdn_len);
         type_fqdn_node = ptr_set_avl_insert(section_type_fqdn, type_record_fqdn_copy);
         type_fqdn_node->value = NULL; // has records, has verified signatures, has wrong signatures, has unknown signatures
@@ -507,7 +510,7 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
                             u8 *rdata_network_size_rdata;
                             u16 rdata_size = ntohs(tctr->rdlen);
 
-                            MALLOC_OR_DIE(u8*, rdata_network_size_rdata, rdata_size + 2, GENERIC_TAG);
+                            MALLOC_OR_DIE(u8*, rdata_network_size_rdata, rdata_size + 2, MSGVRDTT_TAG);
                             SET_U16_AT(rdata_network_size_rdata[0], tctr->rdlen);
                             memcpy(&rdata_network_size_rdata[2], rdata, rdata_size);
 
@@ -594,7 +597,7 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
                             {
                                 u16 tag = ntohs(rrsig_header.tag);
 
-                                dnssec_key*	key = dnskey_keyring_get(keyring, rrsig_header.algorithm, tag, rrsig_header.signer_name);
+                                dnssec_key *key = dnskey_keyring_acquire(keyring, rrsig_header.algorithm, tag, rrsig_header.signer_name);
 
                                 if(key != NULL)
                                 {
@@ -628,6 +631,8 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
                                         type_info.wrong_count++;
                                         rrsig_header.result |= MESSAGE_VERIFY_RRSIG_WRONG;
                                     }
+                                    
+                                    dnskey_release(key);
                                 }
                                 else
                                 {

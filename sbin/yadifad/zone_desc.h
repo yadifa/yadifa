@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -86,13 +86,15 @@ extern "C" {
 // behavioural flags
     
 #define     ZONE_FLAG_NOTIFY_AUTO                  1
-#define     ZONE_FLAG_DROP_BEFORE_LOAD             2
+#define     ZONE_FLAG_DROP_BEFORE_LOAD             2        // drops the old instance of a zone before loading it again (spare memory)
 #define     ZONE_FLAG_NO_MASTER_UPDATES            4        /* so a slave will not ask for updates
                                                              * edf: I added this so I would not hammer
                                                              *      the root servers when doing tests
                                                              */
 #define     ZONE_FLAG_MAINTAIN_DNSSEC              8
-
+#define     ZONE_FLAG_TRUE_MULTIMASTER            16        // drops a zone whenever changing the master
+#define     ZONE_FLAG_DROP_CURRENT_ZONE_ON_LOAD   32        // only triggered while changing the true master: the current zone will be dropped
+    
 // status flags
 // iIclLMUdDzZaAsSeERxX#---T---ur/!
 //#define     ZONE_STATUS_IDLE                    0x00000000      /* i nothing happening at ALL */
@@ -145,20 +147,21 @@ extern "C" {
 // locks owners
     
 #define     ZONE_LOCK_NOBODY             0x00
-#define     ZONE_LOCK_LOAD               0x81
-#define     ZONE_LOCK_UNLOAD             0x82
-#define     ZONE_LOCK_LOAD_DESC          0x83
-#define     ZONE_LOCK_DESC_UNLOAD        0x84
-#define     ZONE_LOCK_REPLACE_DESC       0x85
-#define     ZONE_LOCK_DOWNLOAD_DESC      0x86
-#define     ZONE_LOCK_MOUNT              0x87
-#define     ZONE_LOCK_UNMOUNT            0x88
-#define     ZONE_LOCK_SERVICE            0x89
-#define     ZONE_LOCK_SIGNATURE          0x8a
-#define     ZONE_LOCK_FREEZE             0x8b
-#define     ZONE_LOCK_UNFREEZE           0x8c
-#define     ZONE_LOCK_SAVE               0x8d
-#define     ZONE_LOCK_DYNUPDATE          0x8e
+#define     ZONE_LOCK_READONLY           0x01
+#define     ZONE_LOCK_LOAD               0x82
+#define     ZONE_LOCK_UNLOAD             0x83
+#define     ZONE_LOCK_LOAD_DESC          0x84
+#define     ZONE_LOCK_DESC_UNLOAD        0x85
+#define     ZONE_LOCK_REPLACE_DESC       0x86
+#define     ZONE_LOCK_DOWNLOAD_DESC      0x87
+#define     ZONE_LOCK_MOUNT              0x88
+#define     ZONE_LOCK_UNMOUNT            0x89
+#define     ZONE_LOCK_SERVICE            0x8a
+#define     ZONE_LOCK_SIGNATURE          0x8b
+#define     ZONE_LOCK_FREEZE             0x8c
+#define     ZONE_LOCK_UNFREEZE           0x8d
+#define     ZONE_LOCK_SAVE               0x8e
+#define     ZONE_LOCK_DYNUPDATE          0x8f
 #define     ZONE_LOCK_UNREGISTER         0xfe
 
 enum zone_type
@@ -222,7 +225,7 @@ struct zone_signature_s
     u32 sig_validity_regeneration;
     // The validity of newly generated signature will be off by at most this
     u32 sig_validity_jitter;
-    // The first epoch when a signature will become invalid.
+    // The earliest epoch at which a signature in the zone is expired.
     u32 sig_invalid_first;
     // The first epoch when a signature will be updated
     u32 scheduled_sig_invalid_first;
@@ -260,6 +263,9 @@ struct dynamic_provisioning_s
 #define ZONE_DESC_MATCH_DNSSEC_MODE     0x00000200
 #define ZONE_DESC_MATCH_TYPE            0x00000400
 #define ZONE_DESC_MATCH_ACL             0x00000800
+#define ZONE_DESC_MATCH_DNSSEC_POLICIES 0x00001000
+
+struct dnssec_policy;
 
 typedef struct zone_desc_s zone_desc_s;
 
@@ -286,6 +292,11 @@ struct zone_desc_s
 #if HAS_DNSSEC_SUPPORT
     
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
+    
+#if HAS_MASTER_SUPPORT
+    struct dnssec_policy                                   *dnssec_policy;
+#endif
+    
     // zone signature settings
     zone_signature_s                                            signature;      // may change (5 * 32 bits)
 #endif
@@ -302,6 +313,8 @@ struct zone_desc_s
     /* Type of zone file (master, slave, stub, unknown) */
     zone_type                                                        type;
     u16                                                            qclass;      // cannot change, most likely CLASS_IN
+    u8                                                multimaster_retries;      // config : how many failures before changing master
+    u8                                               multimaster_failures;
     // instead of having a priority queue with two levels, two queues will do
     // the job 
     bpqueue_s                                                    commands;      // queue of commands

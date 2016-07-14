@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup types The types used in the database
  *  @ingroup dnsdb
  *  @brief The types used in the database
@@ -85,6 +85,16 @@ struct zdb_packed_ttlrdata
     u32 ttl; /*  4  4 */
     u16 rdata_size; /*  2  2 */
     u8 rdata_start[1];
+};
+
+// a zdb_packed_ttlrdata ready to store a valid SOA
+
+struct zdb_packed_ttlrdata_soa
+{ /* DO NOT CHANGE THE ORDER OF THE FIELDS !!! */
+    zdb_packed_ttlrdata* next; /*  4  8 */
+    u32 ttl; /*  4  4 */
+    u16 rdata_size; /*  2  2 */
+    u8 rdata_start[MAX_SOA_RDATA_LENGTH];
 };
 
 #define ZDB_RDATABUF_TAG    0x4655424154414452
@@ -500,6 +510,7 @@ struct zdb_rr_label
 #define ZDB_ZONE_MUTEX_INVALIDATE       0x88 /* conflicting */
 #define ZDB_ZONE_MUTEX_REPLACE          0x89 /* conflicting */
 #define ZDB_ZONE_MUTEX_LOAD             0x8a /* conflicting but this case is impossible */
+#define ZDB_ZONE_MUTEX_NSEC3            0x8b /* conflicting, marks an hard operation to be done */
 #define ZDB_ZONE_MUTEX_DESTROY          0xFF /* conflicting, can never be launched more than once.  The zone will be destroyed before unlock. */
 
 typedef ya_result zdb_zone_access_filter(const message_data* /*mesg*/, const void* /*zone_extension*/);
@@ -508,7 +519,14 @@ typedef ya_result zdb_zone_access_filter(const message_data* /*mesg*/, const voi
 #define ALARM_KEY_ZONE_AXFR_QUERY       2
 #define ALARM_KEY_ZONE_REFRESH          3
 
+#define ALARM_KEY_ZONE_DNSKEY_PUBLISH   4
+#define ALARM_KEY_ZONE_DNSKEY_UNPUBLISH 5
+#define ALARM_KEY_ZONE_DNSKEY_ACTIVATE  6
+#define ALARM_KEY_ZONE_DNSKEY_DEACTIVATE 7
+
 #define ZDB_ZONE_KEEP_RAW_SIZE          1
+
+#define ZDB_ZONE_STATUS_ICMTL_ENABLED   1
 
 struct dnskey_keyring;
 
@@ -517,7 +535,7 @@ struct zdb_zone
     u8 *origin; /* dnsname, origin */
     zdb_rr_label *apex; /* pointer to the zone cut, 1 name for : SOA, NS, ... */
     
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
     nsec_zone_union nsec;
 #endif
 
@@ -528,8 +546,8 @@ struct zdb_zone
                          *
                          */
     
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
-    struct dnskey_keyring *keyring;
+#if ZDB_HAS_DNSSEC_SUPPORT
+    //struct dnskey_keyring *keyring;
     u8 *sig_last_processed_node;
 #endif
     
@@ -551,14 +569,14 @@ struct zdb_zone
      * 
      */
     
-    volatile u32 axfr_timestamp;    /* The last time when an AXFR has ENDED to be written on disk, if 0, an AXFR is being written right now */
-    volatile u32 axfr_serial;       /* The serial number of the AXFR (being written) on disk */
+    volatile u32 axfr_timestamp;        // The last time when an AXFR has ENDED to be written on disk, if 0, an AXFR is being written right now
+    volatile u32 axfr_serial;           // The serial number of the AXFR (being written) on disk
     
 #if ZDB_HAS_DNSSEC_SUPPORT != 0
     u32 sig_validity_regeneration_seconds;
     u32 sig_validity_interval_seconds;
     u32 sig_validity_jitter_seconds;
-    u32 sig_quota;              // starts at 100, updated so a batch does not takes more than a fraction of a second
+    u32 sig_quota;                      // starts at 100, updated so a batch does not takes more than a fraction of a second
 #endif
         
     alarm_t alarm_handle;               // 32 bits
@@ -567,6 +585,9 @@ struct zdb_zone
     volatile u8 lock_count;             // the number of owners with the current lock ID
     volatile u8 lock_reserved_owner;    // to the next-owner mechanism (reserve an ownership change)
     
+    volatile u8 status;                 // extended status flags for background tasks not part of the normal operations
+    
+        
 #if ZDB_RECORDS_MAX_CLASS != 1
     u16 zclass;
 #endif
@@ -581,15 +602,15 @@ struct zdb_zone
 #endif
 
 #if ZDB_ZONE_KEEP_RAW_SIZE
-    volatile s64 wire_size;               // approximation of the size of a zone. updated on load and store of the zone on disk
-    volatile u64 write_time_elapsed;      // the time that was spent writing the zone in a file (ie: axfr)
+    volatile s64 wire_size;             // approximation of the size of a zone. updated on load and store of the zone on disk
+    volatile u64 write_time_elapsed;    // the time that was spent writing the zone in a file (ie: axfr)
 #endif
     
     /** journal is only to be accessed trough the journal_* functions */
     
     struct journal *journal;
         
-    dnsname_vector origin_vector;
+    dnsname_vector origin_vector;       // note: the origin vector is truncated to it's used lenght (sparing quite a lot of memory)
 
 }; /* 18 34 => 20 40 */
 
@@ -601,7 +622,7 @@ typedef struct zdb_zone_label zdb_zone_label;
 
 struct zdb_zone_label
 {
-    zdb_zone_label* next;/* used to link labels with the same hash into a SLL */
+    zdb_zone_label* next;   /* used to link labels with the same hash into a SLL */
     zdb_zone_label_set sub; /* labels of the sub-level                           */
     u8* name;               /* label name                                        */
 
@@ -616,6 +637,8 @@ typedef zdb_zone_label* zdb_zone_label_pointer_array[DNSNAME_MAX_SECTIONS];
 #define ZDB_MUTEX_READER 0x01
 #define ZDB_MUTEX_WRITER 0x82                   // only one allowed at once
 typedef struct zdb zdb;
+
+#define ZDBCLASS_TAG 0x5353414c4342445a
 
 struct zdb
 {
@@ -659,6 +682,12 @@ struct zdb_zone_label_iterator /// 47136 bytes on a 64 bits architecture
     dnslabel_stack dnslabels;
     dictionary_iterator stack[DNSNAME_MAX_SECTIONS];
 };
+
+#define RRL_PROCEED         0
+#define RRL_SLIP            1
+#define RRL_DROP            2
+
+typedef ya_result rrl_process_callback(message_data *mesg, const zdb_query_ex_answer *ans_auth_add);
 
 #ifdef	__cplusplus
 }

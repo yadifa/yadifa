@@ -1,38 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
-#include "dnslg-config.h"
 #include <dnscore/parser.h>
 #include <dnscore/bytearray_input_stream.h>
 #include <dnscore/bytearray_output_stream.h>
@@ -449,7 +448,7 @@ resolv_conf_parse_stream(resolv_s *resolver, input_stream *is)
 
                                 break;
                             }
-                        case RO_SORTLIST_VALUE: // @todo still needs todo this when I got time
+                        case RO_SORTLIST_VALUE: // @todo 20140507 gve -- still needs todo this when I got time
                             {
 #if DO_PRINT
                                 format("\n*** SORTLIST VALUE: ");
@@ -473,7 +472,7 @@ resolv_conf_parse_stream(resolv_s *resolver, input_stream *is)
                 } // PARSER_WORD
                 else if(return_code & PARSER_EOL)
                 {
-                    /// @todo missing 'values' for the keys found still needs to be implemented for all keys -- gery
+                    /// @todo 20140507 gve -- missing 'values' for the keys found still needs to be implemented for all keys -- gery
                     if(expect_word == RO_NAME_SERVER_VALUE)
                     {
                         return_code = ERROR;
@@ -535,7 +534,7 @@ resolv_conf_parse_file(const char* file_name, resolv_s *resolver)
     input_stream is;
     ya_result return_code;
 
-    if(ISOK(return_code = file_input_stream_open(file_name, &is)))
+    if(ISOK(return_code = file_input_stream_open(&is, file_name)))
     {
         if(ISOK(return_code = resolv_conf_parse_stream(resolver, &is)))
         {
@@ -583,7 +582,7 @@ resolv_conf_parse(input_stream *out_is)
 
     if(resolver.nameserver != NULL)
     {
-        osformatln(&os, "nameserver %{hostaddrlist}", resolver.nameserver);         // TODO
+        osformatln(&os, "nameserver %{hostaddrlist}", resolver.nameserver);         /// @todo 20140509 edf -- ?
     }
 
     osformatln(&os, "timeout %hu", resolver.timeout);
@@ -599,7 +598,7 @@ resolv_conf_parse(input_stream *out_is)
 
     output_stream_close(&os);
 
-    bytearray_input_stream_init(buffer, buffer_size, out_is, TRUE);
+    bytearray_input_stream_init(out_is, buffer, buffer_size, TRUE);
 
 
     return buffer_size;

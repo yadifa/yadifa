@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup ### #######
  *  @ingroup dnscore
  *  @brief
@@ -378,7 +378,7 @@ tsig_verify_query(message_data *mesg)
     log_debug("tsig_verify: start");
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len, 32);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, tsig_classttl, sizeof (tsig_classttl), 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, tsig_classttl, sizeof(tsig_classttl), 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len, 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timehi, 2, 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timelo, 4, 32);
@@ -401,7 +401,7 @@ tsig_verify_query(message_data *mesg)
     /* TSIG Variables */
 
     HMAC_Update(&ctx, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len);
-    HMAC_Update(&ctx, tsig_classttl, sizeof (tsig_classttl));
+    HMAC_Update(&ctx, tsig_classttl, sizeof(tsig_classttl));
     HMAC_Update(&ctx, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len);
     HMAC_Update(&ctx, (u8*) & mesg->tsig.timehi, 2);
     HMAC_Update(&ctx, (u8*) & mesg->tsig.timelo, 4);
@@ -443,7 +443,7 @@ tsig_verify_answer(message_data *mesg, const u8 *mac, u16 mac_size)
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mac, mac_size, 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len, 32);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, tsig_classttl, sizeof (tsig_classttl), 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, tsig_classttl, sizeof(tsig_classttl), 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len, 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) &mesg->tsig.timehi, 2, 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) &mesg->tsig.timelo, 4, 32);
@@ -469,7 +469,7 @@ tsig_verify_answer(message_data *mesg, const u8 *mac, u16 mac_size)
     /* TSIG Variables */
 
     HMAC_Update(&ctx, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len);
-    HMAC_Update(&ctx, tsig_classttl, sizeof (tsig_classttl));
+    HMAC_Update(&ctx, tsig_classttl, sizeof(tsig_classttl));
     HMAC_Update(&ctx, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len);
     HMAC_Update(&ctx, (u8*) &mesg->tsig.timehi, 2);
     HMAC_Update(&ctx, (u8*) &mesg->tsig.timelo, 4);
@@ -521,7 +521,7 @@ tsig_digest_query(message_data *mesg)
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32);
 
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len, 32);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, tsig_classttl, sizeof (tsig_classttl), 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, tsig_classttl, sizeof(tsig_classttl), 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len, 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timehi, 2, 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timelo, 4, 32);
@@ -539,7 +539,7 @@ tsig_digest_query(message_data *mesg)
     /* TSIG Variables */
 
     HMAC_Update(&ctx, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len);
-    HMAC_Update(&ctx, tsig_classttl, sizeof (tsig_classttl));
+    HMAC_Update(&ctx, tsig_classttl, sizeof(tsig_classttl));
     HMAC_Update(&ctx, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len);
     HMAC_Update(&ctx, (u8*) & mesg->tsig.timehi, 2);
     HMAC_Update(&ctx, (u8*) & mesg->tsig.timelo, 4);
@@ -579,7 +579,7 @@ tsig_digest_answer(message_data *mesg)
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32);
 
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len, 32);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, tsig_classttl, sizeof (tsig_classttl), 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, tsig_classttl, sizeof(tsig_classttl), 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len, 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timehi, 2, 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.timelo, 4, 32);
@@ -601,7 +601,7 @@ tsig_digest_answer(message_data *mesg)
     /* TSIG Variables */
 
     HMAC_Update(&ctx, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len);
-    HMAC_Update(&ctx, tsig_classttl, sizeof (tsig_classttl));
+    HMAC_Update(&ctx, tsig_classttl, sizeof(tsig_classttl));
     HMAC_Update(&ctx, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len);
     HMAC_Update(&ctx, (u8*) & mesg->tsig.timehi, 2);
     HMAC_Update(&ctx, (u8*) & mesg->tsig.timelo, 4);
@@ -694,7 +694,7 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
          * Read the algorithm name and see if it matches our TSIG key
          */
 
-        if(FAIL(return_code = packet_reader_read_fqdn(purd, algorithm, sizeof (algorithm))))
+        if(FAIL(return_code = packet_reader_read_fqdn(purd, algorithm, sizeof(algorithm))))
         {
             /* oops */
 
@@ -947,7 +947,7 @@ tsig_extract_and_process(message_data *mesg)
 
     u8 tsigname[MAX_DOMAIN_LENGTH];
 
-    if(FAIL(packet_reader_read_fqdn(&purd, tsigname, sizeof (tsigname))))
+    if(FAIL(packet_reader_read_fqdn(&purd, tsigname, sizeof(tsigname))))
     {
         /* oops */
 
@@ -1009,8 +1009,8 @@ tsig_add_tsig(message_data *mesg)
     memcpy(tsig_ptr, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len);
     tsig_ptr += mesg->tsig.tsig->name_len;
 
-    memcpy(tsig_ptr, tsig_typeclassttl, sizeof (tsig_typeclassttl));
-    tsig_ptr += sizeof (tsig_typeclassttl);
+    memcpy(tsig_ptr, tsig_typeclassttl, sizeof(tsig_typeclassttl));
+    tsig_ptr += sizeof(tsig_typeclassttl);
     u16 *rdata_size_ptr = (u16*)tsig_ptr;
     tsig_ptr += 2;
 
@@ -1083,7 +1083,6 @@ tsig_sign_query(message_data *mesg)
  *
  *  Adds a TSIG error to the message
  *
- * @todo 20140523 edf -- Change the algorithm to use tsig_add_tsig
  */
 
 ya_result
@@ -1125,8 +1124,8 @@ tsig_append_unsigned_error(message_data *mesg)
     memcpy(tsig_ptr, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len);
     tsig_ptr += mesg->tsig.tsig->name_len;
 
-    memcpy(tsig_ptr, tsig_typeclassttl, sizeof (tsig_typeclassttl));
-    tsig_ptr += sizeof (tsig_typeclassttl);
+    memcpy(tsig_ptr, tsig_typeclassttl, sizeof(tsig_typeclassttl));
+    tsig_ptr += sizeof(tsig_typeclassttl);
     u16 *rdata_size_ptr = (u16*)tsig_ptr;
     tsig_ptr += 2;
 

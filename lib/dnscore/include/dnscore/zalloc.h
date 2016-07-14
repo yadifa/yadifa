@@ -1,47 +1,56 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
-/** @defgroup zmalloc The database specialized allocation function
- *  @ingroup dnsdb
- *  @brief The database specialized allocation function
  *
- * The database specialized allocation function
- * Which basically mean either I find a (very fast) way to use different memory pools
- * (one for each thread) either I can only use these allocations with the core
- * database : not the signer.
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
  *
- * Its no big deal, but its very important to remember this.
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
  *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+/** @defgroup zalloc very fast, no-overhead specialised memory allocation functions
+ *  @ingroup dnscore
+ *  @brief no-overhead specialised allocation functions
+ *
+ * These memory allocations are using memory mapping to allocate blocks.
+ * 
+ * One difficulty is that to free a block, its size has to be known first.
+ * Which is not an issue for most of our uses.
+ * 
+ * One drawback is that once allocated, the memory is never released to the system
+ * (but is still available to be allocated again by the program)
+ * 
+ * Much faster than malloc, and no overhead.
+ * 
+ * Allocated memory is always aligned to at least 64 bits
+ * 
+ * The granularity of the size of a block is 8 bytes
+ * 
+ * The base alignment is always 4096 + real size of the block
+ * 
  * @{
  */
 
@@ -63,6 +72,24 @@ extern "C" {
         
 #if !DNSCORE_HAS_ZALLOC_SUPPORT
 
+/**
+ * Uses malloc to mimmick zalloc_unaligned.  Source is in zalloc.c.
+ * 
+ * @param len
+ * @param tag
+ * @return 
+ */
+    
+void *malloc_string_or_die(size_t len, u64 tag);
+
+/**
+ * Uses malloc to mimmick zfree_unaligned.  Source is in zalloc.c.
+ * 
+ * @param ptr
+ */
+
+void mfree_string(void *ptr);
+
 /* 8 bytes aligned */
 #define ZALLOC_OR_DIE(cast,label,object,tag) MALLOC_OR_DIE(cast,label,sizeof(object),tag);assert((label) != NULL)
 #define ZFREE(label,object) free(label)
@@ -71,8 +98,8 @@ extern "C" {
 #define ZFREE_ARRAY(ptr,size_) (void)(size_);free(ptr)
 
 /* not aligned, max size 256 */
-#define ZALLOC_STRING_OR_DIE(cast,label,size,tag) MALLOC_OR_DIE(cast,label,size,tag);assert((label) != NULL)
-#define ZFREE_STRING(label) free(label)
+#define ZALLOC_STRING_OR_DIE(cast_,label_,size_,tag_) (label_)=(cast_)malloc_string_or_die((size_),(tag_))
+#define ZFREE_STRING(label_) mfree_string(label_)
 
 #define ZALLOC_ARRAY_RESIZE(type_,array_,count_,newcount_)		    \
     {									    \

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief
@@ -118,6 +118,8 @@ static smp_int thread_pool_waiting = SMP_INT_INITIALIZER;
 static smp_int thread_pool_running = SMP_INT_INITIALIZER;
 #endif
 
+#define THRDPOOL_TAG 0x4c4f4f5044524854
+
 struct thread_pool_s
 {
     mutex_t mtx;
@@ -136,12 +138,14 @@ void
 thread_pool_counter_init(thread_pool_task_counter *counter, s32 value)
 {
     mutex_init(&counter->mutex);
+    cond_init(&counter->cond);
     counter->value = value;
 }
 
 void
 thread_pool_counter_destroy(thread_pool_task_counter *counter)
 {
+    cond_finalize(&counter->cond);
     mutex_destroy(&counter->mutex);
 }
 
@@ -162,6 +166,25 @@ thread_pool_counter_add_value(thread_pool_task_counter *counter, s32 value)
     mutex_lock(&counter->mutex);
     counter->value += value;
     ret = counter->value;
+    cond_notify(&counter->cond);
+    mutex_unlock(&counter->mutex);
+    return ret;
+}
+
+s32
+thread_pool_counter_wait_below_or_equal(thread_pool_task_counter *counter, s32 value)
+{
+    s32 ret;
+    mutex_lock(&counter->mutex);
+    for(;;)
+    {
+        ret = counter->value;
+        if(ret <= value)
+        {
+            break;
+        }
+        cond_wait(&counter->cond, &counter->mutex);
+    }
     mutex_unlock(&counter->mutex);
     return ret;
 }
@@ -234,10 +257,14 @@ thread_pool_thread(void *args)
     for(;;)
     {
 #ifdef DEBUG
-#ifdef HAS_PTHREAD_SETNAME_NP        
+#if HAS_PTHREAD_SETNAME_NP        
         if(desc->pool->pool_name != NULL)
         {
+#if __APPLE__
+            pthread_setname_np(desc->pool->pool_name);
+#else
             pthread_setname_np(pthread_self(), desc->pool->pool_name);
+#endif // __APPLE__
         }
 #endif
 #endif
@@ -286,16 +313,19 @@ thread_pool_thread(void *args)
         log_debug("thread: %x %s::%p(%p) begin", id, categoryname, function, parm);
 #endif
        
-#ifdef HAS_PTHREAD_SETNAME_NP        
+#if HAS_PTHREAD_SETNAME_NP        
 #ifdef DEBUG
+#if __APPLE__
+        pthread_setname_np(desc->info);
+#else
         pthread_setname_np(pthread_self(), desc->info);
+#endif // __APPLE__
 #endif
 #endif
 
 #ifdef DEBUG
         smp_int_inc(&thread_pool_running);
-#endif
-        
+#endif  
         function(parm);
         
 #ifdef DEBUG
@@ -447,15 +477,17 @@ thread_pool_init_ex(u8 thread_count, u32 queue_size, const char *pool_name)
     thread_pool_setup_random_ctx();
     
     thread_pool_s *tp;
-    MALLOC_OR_DIE(thread_pool_s*, tp, sizeof(thread_pool_s), GENERIC_TAG);
+    MALLOC_OR_DIE(thread_pool_s*, tp, sizeof(thread_pool_s), THRDPOOL_TAG);
     ZEROMEMORY(tp, sizeof(thread_pool_s));
     
-#ifdef HAS_PTHREAD_SETNAME_NP
+#if HAS_PTHREAD_SETNAME_NP
 #ifdef DEBUG
     tp->pool_name = strdup(pool_name);
 #endif
 #endif
-    
+
+    log_debug("thread-pool: '%s' init", pool_name);
+ 
     thread_descriptor_s** thread_descriptors;
     
     mutex_init(&tp->mtx);
@@ -466,7 +498,7 @@ thread_pool_init_ex(u8 thread_count, u32 queue_size, const char *pool_name)
 
     threaded_queue_init(&tp->queue, queue_size);
 
-    MALLOC_OR_DIE(thread_descriptor_s**, thread_descriptors, thread_count * sizeof (thread_descriptor_s*), THREADPOOL_TAG);
+    MALLOC_OR_DIE(thread_descriptor_s**, thread_descriptors, thread_count * sizeof(thread_descriptor_s*), THREADPOOL_TAG);
 
     for(i = 0; i < thread_count; i++)
     {
@@ -474,6 +506,8 @@ thread_pool_init_ex(u8 thread_count, u32 queue_size, const char *pool_name)
         
         if((td = thread_pool_create_thread(tp)) == NULL)
         {
+            log_err("thread-pool: '%s' failed to create thread #%i/%i", pool_name, i, thread_count);
+
             free(thread_descriptors);
             threaded_queue_finalize(&tp->queue);
             return NULL;
@@ -498,6 +532,8 @@ thread_pool_init_ex(u8 thread_count, u32 queue_size, const char *pool_name)
             break;
         }
     }
+
+    log_debug("thread-pool: '%s' ready", pool_name);    
 
     return tp;
 }
@@ -670,7 +706,7 @@ thread_pool_stop(struct thread_pool_s* tp)
          *        This is not a problem. The thread keeps its working status (in a volatile)
          *        And this loop only tries to wait if the status is not "done" yet.
          *
-         * @TODO: look at PTHREAD_CREATE_JOINABLE
+         * @note  by default, threads are PTHREAD_CREATE_JOINABLE
          */
 
         if(td[i]->status != THREAD_STATUS_TERMINATING && td[i]->status != THREAD_STATUS_TERMINATED)
@@ -732,7 +768,7 @@ thread_pool_start(struct thread_pool_s* tp)
          *        This is not a problem. The thread keeps its working status (in a volatile)
          *        And this loop only tries to wait if the status is not "done" yet.
          *
-         * @TODO: look at PTHREAD_CREATE_JOINABLE
+         * @note  by default, threads are PTHREAD_CREATE_JOINABLE
          */
 
         u8 status = thread_descriptors[i]->status;
@@ -799,7 +835,7 @@ thread_pool_resize(struct thread_pool_s* tp, u8 new_size)
     // allocate a new struct, reuse thestructs
     
     thread_descriptor_s** thread_descriptors;
-    MALLOC_OR_DIE(thread_descriptor_s**, thread_descriptors, sizeof (thread_descriptor_s*) * new_size, THREADPOOL_TAG);
+    MALLOC_OR_DIE(thread_descriptor_s**, thread_descriptors, sizeof(thread_descriptor_s*) * new_size, THREADPOOL_TAG);
     
     // if grow
     
@@ -904,7 +940,7 @@ thread_pool_resize(struct thread_pool_s* tp, u8 new_size)
             *        This is not a problem. The thread keeps its working status (in a volatile)
             *        And this loop only tries to wait if the status is not "done" yet.
             *
-            * @TODO: look at PTHREAD_CREATE_JOINABLE
+            * @note  by default, threads are PTHREAD_CREATE_JOINABLE
             */
 
            if(tds[i]->status != THREAD_STATUS_TERMINATING && tds[i]->status != THREAD_STATUS_TERMINATED)
@@ -1029,7 +1065,7 @@ thread_pool_destroy(struct thread_pool_s* tp)
          *        This is not a problem. The thread keeps its working status (in a volatile)
          *        And this loop only tries to wait if the status is not "done" yet.
          *
-         * @TODO: look at PTHREAD_CREATE_JOINABLE
+         * @note  by default, threads are PTHREAD_CREATE_JOINABLE
          */
 
         if(td[i]->status != THREAD_STATUS_TERMINATING && td[i]->status != THREAD_STATUS_TERMINATED)

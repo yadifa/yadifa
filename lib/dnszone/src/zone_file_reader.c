@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 #include "dnszone/dnszone-config.h"
 
@@ -54,6 +54,7 @@
 #include "dnszone/zone_file_reader.h"
 
 #define ZFREADER_TAG 0x524544414552465a
+#define ZFERRMSG_TAG 0x47534d525245465a
 #define ZONE_FILE_READER_INCLUDE_DEPTH_MAX 16
 
 extern logger_handle *g_zone_logger;
@@ -89,13 +90,14 @@ struct zone_file_reader
     u16 rdata_size;
     bool soa_found;
     bool template_source;
-    
+    bool zttl_found;
+
     u8   domain[MAX_DOMAIN_LENGTH];
     u8   origin[MAX_DOMAIN_LENGTH];
     char dot_origin[MAX_DOMAIN_LENGTH + 1];
     //char text_buffer[512];
-    u8 rdata[RDATA_MAX_LENGTH];    
-    
+    u8 rdata[RDATA_MAX_LENGTH];
+
     input_stream includes[ZONE_FILE_READER_INCLUDE_DEPTH_MAX];
     u8 includes_count;
     //
@@ -136,9 +138,9 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
         return return_code;
     }
 
-    text = text_buffer;    
+    text = text_buffer;
     text_len = return_code;
-    
+
     if(!((text_len >= 1) && (text[0] == '#')))
     {
         switch(rtype)
@@ -153,7 +155,7 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 {
                     return_code = INCORRECT_IPADDRESS;
                 }
-                
+
                 break;
             }
             case TYPE_AAAA:
@@ -171,28 +173,27 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             case TYPE_SOA:
             {
                 s32 total_size;
-                
+
                 if(FAIL(return_code = cstr_to_locase_dnsname_with_check_len_with_origin(rdata, text, text_len, origin)))
                 {
                     break;
                 }
-                
+
                 total_size = return_code;
-                
+
                 rdata += return_code;
                 rdata_size -= return_code;
-                    
+
                 if(FAIL(return_code = parser_copy_next_fqdn_locase_with_origin(p, rdata, origin)))
                 {
                     break;
                 }
-                
+
                 total_size += return_code + 20;
-                
+
                 rdata += return_code;
-                rdata_size -= return_code;
                 return_code = total_size;
-                
+
                 for(u8 i = 5; i > 0; i--)
                 {
                     s32 tmp_int32;
@@ -206,7 +207,7 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     SET_U32_AT_P(rdata, tmp_int32);
                     rdata += 4;
                 }
-                                
+
                 break;
             }
             case TYPE_NS:
@@ -217,16 +218,40 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             case TYPE_MB:   /** NOTE: obsolete */
             case TYPE_MG:   /** NOTE: obsolete */
             case TYPE_MR:   /** NOTE: obsolete */
+
             {
                 return_code = cstr_to_locase_dnsname_with_check_len_with_origin(rdata, text, text_len, origin);
-                
+
                 break;
             }
-            case TYPE_AFSDB: // As THX pointed out, this is the same format as MX
+
+
+            case TYPE_AFSDB:
+            {
+                 u16 sub_type;
+
+                if(FAIL(return_code = parser_get_u16(text, text_len, &sub_type)))
+                {
+                    break;
+                }
+                sub_type = htons(sub_type);
+                SET_U16_AT_P(rdata, sub_type);
+                rdata += 2;
+
+                if(FAIL(return_code = parser_copy_next_fqdn_locase_with_origin(p, rdata, origin)))
+                {
+                    break;
+                }
+
+                return_code += 2;
+
+                break;
+            }
+
             case TYPE_MX:
             {
                 u16 preference;
-                
+
                 if(FAIL(return_code = parser_get_u16(text, text_len, &preference)))
                 {
                     break;
@@ -234,128 +259,129 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 preference = htons(preference);
                 SET_U16_AT_P(rdata, preference);
                 rdata += 2;
-                
+
                 if(FAIL(return_code = parser_copy_next_fqdn_locase_with_origin(p, rdata, origin)))
                 {
                     break;
                 }
-                
+
                 return_code += 2;
-                
+
                 break;
             }
             case TYPE_RRSIG:
             {
                 u16 rtype;
-                
+
                 if(FAIL(return_code = get_type_from_case_name_len(text, text_len, &rtype)))
                 {
                     break;
                 }
                 SET_U16_AT_P(rdata, rtype);
                 rdata += 2;
-                
+
                 // algorithm (8 bits integer)
-                
+
                 if(FAIL(return_code = parser_copy_next_u8(p, rdata)))
                 {
                     break;
                 }
-                
+
                 rdata++;
 
                 // labels (8 bits integer)
-                
+
                 if(FAIL(return_code = parser_copy_next_u8(p, rdata)))
                 {
                     break;
                 }
-                
+
                 rdata++;
-                
+
                 // original TTL (32 bits integer)
-                
+
                 s32 ttl;
-                
+
                 if(FAIL(return_code = parser_copy_next_ttl(p, &ttl)))
                 {
                     break;
                 }
-                
+
                 ttl = htonl(ttl);
                 SET_U32_AT_P(rdata, ttl);
                 rdata += 4;
-                
+
                 // signature expiration (YYYYMMDDHHMMSS epoch -> 32 bits)
-                
+
                 u32 epoch;
-                
+
                 if(FAIL(return_code = parser_copy_next_yyyymmddhhmmss(p, &epoch)))
                 {
                     break;
                 }
-                
+
                 epoch = htonl(epoch);
                 SET_U32_AT_P(rdata, epoch);
                 rdata += 4;
-                
+
                 // signature inception (YYYYMMDDHHMMSS epoch -> 32 bits)
-                
+
                 if(FAIL(return_code = parser_copy_next_yyyymmddhhmmss(p, &epoch)))
                 {
                     break;
                 }
-                
+
                 epoch = htonl(epoch);
                 SET_U32_AT_P(rdata, epoch);
                 rdata += 4;
-                
+
                 // key tag (16 bits integer)
-                
+
                 u16 tag;
-                
+
                 if(FAIL(return_code = parser_copy_next_u16(p, &tag)))
                 {
                     break;
                 }
-                
+
                 tag = htons(tag);
                 SET_U16_AT_P(rdata, tag);
                 rdata += 2;
-                
+
                 // signer's name (fqdn)
-                
+
                 if(FAIL(return_code = parser_copy_next_fqdn_with_origin(p, rdata, origin)))
                 {
                     break;
                 }
-                
+
                 rdata += return_code;
-                
+
                 u32 signer_len = return_code;
-                
+
                 // signature (base64)
-                
+
                 if(FAIL(return_code = parser_concat_next_tokens_nospace(p)))
                 {
                     break;
                 }
-                
+
                 if(FAIL(return_code = base64_decode(parser_text(p), parser_text_length(p), rdata)))
                 {
                     break;
                 }
-                
+
                 return_code += 18 + signer_len;
-                
+
                 break;
             }
             case TYPE_DNSKEY:
+
             {
                 // flags
-                
+
                 u16 flags;
-                
+
                 if(FAIL(return_code = parser_get_u16(text, text_len, &flags)))
                 {
                     break;
@@ -363,132 +389,139 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 flags = htons(flags);
                 SET_U16_AT_P(rdata, flags);
                 rdata += 2;
-                
+
                 // protocol (8 bits integer)
-                
+
                 if(FAIL(return_code = parser_copy_next_u8(p, rdata)))
                 {
                     break;
                 }
-                
+
                 rdata++;
-                
+
                 // algorithm (8 bits integer)
-                
+
                 if(FAIL(return_code = parser_copy_next_u8(p, rdata)))
                 {
                     break;
                 }
-                
+
                 rdata++;
-                
+
                 // key (base64)
-                
+
                 if(FAIL(return_code = parser_concat_next_tokens_nospace(p)))
                 {
                     break;
                 }
-                
+
                 if(FAIL(return_code = base64_decode(parser_text(p), parser_text_length(p), rdata)))
                 {
                     break;
                 }
-                
+
                 return_code += 4;
-                
+
                 break;
             }
             case TYPE_NSEC3PARAM:
             {
                 // hash algorithm
-                
+
                 if(FAIL(return_code = parser_get_u8(text, text_len, rdata)))
                 {
                     break;
                 }
-                
+
                 rdata++;
-                
+
                 // flags
-                
+
                 if(FAIL(return_code = parser_copy_next_u8(p, rdata)))
                 {
                     break;
                 }
-                
+
                 rdata++;
-                
+
                 // iterations
-                
+
                 u16 iterations;
-                
+
                 if(FAIL(return_code = parser_copy_next_u16(p, &iterations)))
                 {
                     break;
                 }
-                
+
                 iterations = htons(iterations);
                 SET_U16_AT_P(rdata, iterations);
                 rdata += 2;
-                
+
                 // salt
-                
+
                 if(FAIL(return_code = parser_next_token(p)))
                 {
                     break;
                 }
                 
-                if(FAIL(return_code = base16_decode(parser_text(p), parser_text_length(p), rdata + 1)))
+                if(! ((parser_text_length(p) == 1) && (parser_text(p)[0] == '-')) )
                 {
-                    break;
+                    if(FAIL(return_code = base16_decode(parser_text(p), parser_text_length(p), rdata + 1)))
+                    {
+                        break;
+                    }
+
+                    if(return_code > 255)
+                    {
+                        return_code = ZONEFILE_SALT_TOO_BIG; // parse error ...
+                        break;
+                    }
                 }
-                
-                if(return_code > 255)
+                else
                 {
-                    return_code = ZONEFILE_SALT_TOO_BIG; // parse error ...
-                    break;
+                    // no salt
+                    return_code = 0;
                 }
                 
                 rdata[0] = (u8)return_code;
-                
                 return_code += 5;
-                
+
                 break;
             }
             case TYPE_NSEC3:
             {
                 u8 *rdata_start = rdata;
                 // hash algorithm
-                
+
                 if(FAIL(return_code = parser_get_u8(text, text_len, rdata)))
                 {
                     break;
                 }
-                
+
                 rdata++;
-                
+
                 // flags
-                
+
                 if(FAIL(return_code = parser_copy_next_u8(p, rdata)))
                 {
                     break;
                 }
-                
+
                 rdata++;
-                
+
                 // iterations
-                
+
                 u16 iterations;
-                
+
                 if(FAIL(return_code = parser_copy_next_u16(p, &iterations)))
                 {
                     break;
                 }
-                
+
                 iterations = htons(iterations);
                 SET_U16_AT_P(rdata, iterations);
                 rdata += 2;
-                
+
                 // salt
                 
                 if(FAIL(return_code = parser_next_token(p)))
@@ -496,89 +529,97 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
                 
-                if(FAIL(return_code = base16_decode(parser_text(p), parser_text_length(p), rdata + 1)))
+                if(! ((parser_text_length(p) == 1) && (parser_text(p)[0] == '-')) )
                 {
-                    break;
+                    if(FAIL(return_code = base16_decode(parser_text(p), parser_text_length(p), rdata + 1)))
+                    {
+                        break;
+                    }
+
+                    if(return_code > 255)
+                    {
+                        return_code = ZONEFILE_SALT_TOO_BIG; // parse error ...
+                        break;
+                    }
                 }
-                
-                if(return_code > 255)
+                else
                 {
-                    return_code = ZONEFILE_SALT_TOO_BIG; // parse error ...
-                    break;
+                    return_code = 0;
                 }
                 
                 rdata[0] = (u8)return_code;
-                
                 rdata += return_code + 1;
-                
+
                 // digest
-                
+
                 if(FAIL(return_code = parser_next_token(p)))
                 {
                     break;
                 }
-                
+
                 if(FAIL(return_code = base32hex_decode(parser_text(p), parser_text_length(p), rdata + 1)))
                 {
                     break;
                 }
-                
+
                 rdata[0] = (u8)return_code;
                 rdata += return_code + 1;
-                
+
                 // type bitmap
-                
+
                 if(FAIL(return_code = parser_type_bit_maps_initialize(p, &tbmctx)))
                 {
                     break;
                 }
-                
+
                 if(return_code > 0)
                 {
                     type_bit_maps_write(rdata, &tbmctx);
                     rdata += return_code;
                 }
-                
+
                 return_code = rdata - rdata_start;
-                
+
                 parser_set_eol(p);
-                
+
                 break;
             }
             case TYPE_NSEC:
+
             {
                 u8 *rdata_start = rdata;
-                
+
                 if(FAIL(return_code = cstr_to_locase_dnsname_with_check_len_with_origin(rdata, text, text_len, origin)))
                 {
                     break;
                 }
-                
+
                 rdata += return_code;
-                
+
                 // type bitmap
-                                
+
                 if(FAIL(return_code = parser_type_bit_maps_initialize(p, &tbmctx)))
                 {
                     break;
                 }
-                
+
                 type_bit_maps_write(rdata, &tbmctx);
-                
+
                 rdata += return_code;
-                
+
                 return_code = rdata - rdata_start;
-                
+
                 parser_set_eol(p);
-                
+
                 break;
             }
             case TYPE_DS:
+
             {
                 // keytag
-                
+
                 u16 keytag;
-                
+
                 if(FAIL(return_code = parser_get_u16(text, text_len, &keytag)))
                 {
                     break;
@@ -586,45 +627,46 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 keytag = htons(keytag);
                 SET_U16_AT_P(rdata, keytag);
                 rdata += 2;
-                
+
                 // algorithm
-                
+
                 if(FAIL(return_code = parser_copy_next_u8(p, rdata)))
                 {
                     break;
                 }
-                
+
                 rdata++;
-                
+
                 // digest type
-                
+
                 if(FAIL(return_code = parser_copy_next_u8(p, rdata)))
                 {
                     break;
                 }
-                
+
                 rdata++;
-                
+
                 // digest
-                
+
                 if(FAIL(return_code = parser_concat_next_tokens_nospace(p)))
                 {
                     break;
                 }
-                
+
                 if(FAIL(return_code = base16_decode(parser_text(p), parser_text_length(p), rdata)))
                 {
                     break;
                 }
-                
+
                 return_code += 4;
-                
+
                 break;
             }
             case TYPE_TXT:
+
             {
                 u8 *rdata_start = rdata;
-                
+
                 for(;;)
                 {
                     if(text_len > 255)
@@ -651,100 +693,102 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     text = parser_text(p);
                     text_len = parser_text_length(p);
                 }
-                
-                return_code = rdata - rdata_start;
-                
-                parser_set_eol(p);
-                        
+
+                if(ISOK(return_code))
+                {
+                    return_code = rdata - rdata_start;
+                    parser_set_eol(p);
+                }
+
                 break;
             }
             case TYPE_SSHFP:
             {
                 // algorithm
-                
+
                 if(FAIL(return_code = parser_get_u8(text, text_len, rdata)))
                 {
                     break;
                 }
-                
+
                 rdata++;
-                
+
                 // fp type
-                
+
                 if(FAIL(return_code = parser_copy_next_u8(p, rdata)))
                 {
                     break;
                 }
-                
+
                 rdata++;
-                
+
                 // fingerprint
-                
+
                 if(FAIL(return_code = parser_concat_next_tokens_nospace(p)))
                 {
                     break;
                 }
-                
+
                 if(FAIL(return_code = base16_decode(parser_text(p), parser_text_length(p), rdata)))
                 {
                     break;
                 }
-                
+
                 return_code += 2;
-                
+
                 break;
             }
             case TYPE_TLSA:
             {
                 // ?
-                
+
                 if(FAIL(return_code = parser_get_u8(text, text_len, rdata)))
                 {
                     break;
                 }
-                
+
                 rdata++;
-                
+
                 // ?
-                
+
                 if(FAIL(return_code = parser_copy_next_u8(p, rdata)))
                 {
                     break;
                 }
-                
+
                 rdata++;
-                
+
                 // ?
-                
+
                 if(FAIL(return_code = parser_copy_next_u8(p, rdata)))
                 {
                     break;
                 }
-                
+
                 rdata++;
-                
+
                 // ?
-                
+
                 if(FAIL(return_code = parser_concat_next_tokens_nospace(p)))
                 {
                     break;
                 }
-                
+
                 if(FAIL(return_code = base16_decode(parser_text(p), parser_text_length(p), rdata)))
                 {
                     break;
                 }
-                
+
                 return_code += 3;
-                
+
                 break;
             }
             case TYPE_SRV:
             {
                 u16 tmp16;
-                
-                // ?                
-                
+
+                // ?
+
                 if(FAIL(return_code = parser_get_u16(text, text_len, &tmp16)))
                 {
                     break;
@@ -752,9 +796,9 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 tmp16 = htons(tmp16);
                 SET_U16_AT_P(rdata, tmp16);
                 rdata += 2;
-                
+
                 // ?
-                
+
                 if(FAIL(return_code = parser_copy_next_u16(p, &tmp16)))
                 {
                     break;
@@ -762,9 +806,9 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 tmp16 = htons(tmp16);
                 SET_U16_AT_P(rdata, tmp16);
                 rdata += 2;
-                
+
                 // ?
-                
+
                 if(FAIL(return_code = parser_copy_next_u16(p, &tmp16)))
                 {
                     break;
@@ -772,12 +816,12 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 tmp16 = htons(tmp16);
                 SET_U16_AT_P(rdata, tmp16);
                 rdata += 2;
-                
+
                 if(FAIL(return_code = parser_copy_next_fqdn_with_origin(p, rdata, origin)))
                 {
                     break;
                 }
-                
+
                 return_code += 6;
                 break;
             }
@@ -785,9 +829,9 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             {
                 u8 *rdata_start = rdata;
                 u16 tmp16;
-                
+
                 // order
-                
+
                 if(FAIL(return_code = parser_get_u16(text, text_len, &tmp16)))
                 {
                     break;
@@ -795,9 +839,9 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 tmp16 = htons(tmp16);
                 SET_U16_AT_P(rdata, tmp16);
                 rdata += 2;
-                
+
                 // preference
-                
+
                 if(FAIL(return_code = parser_copy_next_u16(p, &tmp16)))
                 {
                     break;
@@ -805,14 +849,14 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 tmp16 = htons(tmp16);
                 SET_U16_AT_P(rdata, tmp16);
                 rdata += 2;
-                
+
                 // flags
-                
+
                 if(FAIL(return_code = parser_next_token(p)))
                 {
                     break;
                 }
-                
+
                 if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
                 {
                     // stop
@@ -821,24 +865,24 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 }
                 text = parser_text(p);
                 text_len = parser_text_length(p);
-                
+
                 if(text_len > 255)
                 {
                     return_code = ZONEFILE_FLAGS_TOO_BIG;
                     break;
                 }
-                
+
                 *rdata++ = (u8)text_len;
                 memcpy(rdata, text, text_len);
                 rdata += text_len;
-                
+
                 // service
-                
+
                 if(FAIL(return_code = parser_next_token(p)))
                 {
                     break;
                 }
-                
+
                 if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
                 {
                     // stop
@@ -847,24 +891,24 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 }
                 text = parser_text(p);
                 text_len = parser_text_length(p);
-                
+
                 if(text_len > 255)
                 {
                     return_code = ZONEFILE_SERVICE_TOO_BIG;
                     break;
                 }
-                
+
                 *rdata++ = (u8)text_len;
                 memcpy(rdata, text, text_len);
                 rdata += text_len;
-                
+
                 // regex
-                
+
                 if(FAIL(return_code = parser_next_token(p)))
                 {
                     break;
                 }
-                
+
                 if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
                 {
                     // stop
@@ -873,26 +917,26 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 }
                 text = parser_text(p);
                 text_len = parser_text_length(p);
-                
+
                 if(text_len > 255)
                 {
                     return_code = ZONEFILE_REGEX_TOO_BIG;
                     break;
                 }
-                
+
                 *rdata++ = (u8)text_len;
                 memcpy(rdata, text, text_len);
                 rdata += text_len;
-                
+
                 if(FAIL(return_code = parser_copy_next_fqdn_with_origin(p, rdata, origin)))
                 {
                     break;
                 }
-                
+
                 return_code += rdata - rdata_start;
                 break;
             }
-            
+
             // exist out of two parts
             // 1. mbox-dname
             // 2. only 1 txt-dname
@@ -900,26 +944,26 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             {
                 // 1.mbox-name
                 //s32 total_size;
-                
+
                 // return_code = "length" or "error code"
                 if(FAIL(return_code = cstr_to_locase_dnsname_with_check_len_with_origin(rdata, text, text_len, origin)))
                 {
                     break;
                 }
-                
+
                 // set rdata to the next chunk
                 rdata += return_code;
-                
-                
+
+
                 // 2.txt-dname
-                
+
                 u8 *rdata_start = rdata;
-                
+
                 if(FAIL(return_code = parser_next_token(p)))
                 {
                     break;
                 }
-                
+
                 text_len = return_code;
                 // only 1 txt-dname will be parsed
                 //for(;;)
@@ -948,17 +992,17 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     //text = parser_text(p);
                     //text_len = parser_text_length(p);
                 }
-                
+
                 return_code += rdata - rdata_start;
-                
+
                 parser_set_eol(p);
-                
+
                 break;
             }
             case TYPE_HINFO:
             {
                 u8 *rdata_start = rdata;
-                
+
                 if(text_len > 255)
                 {
                     return_code = ZONEFILE_TEXT_TOO_BIG;
@@ -982,26 +1026,27 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 }
                 text = parser_text(p);
                 text_len = parser_text_length(p);
-                
+
                 if(text_len > 255)
                 {
                     return_code = ZONEFILE_TEXT_TOO_BIG;
                     break;
                 }
-                
+
                 *rdata++ = (u8)text_len;
                 memcpy(rdata, text, text_len);
                 rdata += text_len;
-                
+
                 if(FAIL(return_code = parser_copy_next_fqdn_with_origin(p, rdata, origin)))
                 {
                     break;
                 }
-                
+
                 return_code += rdata - rdata_start;
-                
+
                 break;
             }
+
             case TYPE_OPT:
             case TYPE_TSIG:
             case TYPE_IXFR:
@@ -1058,7 +1103,6 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             case TYPE_CAA:
             case TYPE_DLV:
             case TYPE_TA:
-            case TYPE_WKS:   
             {
                 return_code = ZONEFILE_UNSUPPORTED_TYPE;    /** unsupported type, TYPE## */
                 break;
@@ -1074,17 +1118,17 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
     else
     {
         // hex
-        
+
         return_code = ZONEFILE_RDATA_PARSE_ERROR; /// parse error
-        
+
         if((text_len == 1) && (text[0] == '#'))
         {
             u16 unknown_rdata_len;
-            
+
             if(ISOK(return_code = parser_copy_next_u16(p, &unknown_rdata_len)))
             {
                 return_code = ZONEFILE_RDATA_BUFFER_TOO_SMALL; /// buffer too small
-                
+
                 if(unknown_rdata_len <= rdata_size)
                 {
                     if(ISOK(return_code = parser_concat_next_tokens_nospace(p)))
@@ -1107,21 +1151,21 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 }
             }
         }
-    }
-    
+    } // if(!((text_len >= 1) && (text[0] == '#')))
+
     if(ISOK(return_code))
     {
         // expect to find EOL
         ya_result got_eol = parser_expect_eol(p);
-        
+
         if(FAIL(got_eol))
         {
             return_code = got_eol;
-            
+
             log_err("parser_copy_rdata: EXPECTED EOL: %{dnstype}: %r", &rtype, return_code);
         }
     }
-    
+
     return return_code;
 }
 
@@ -1131,11 +1175,11 @@ zone_file_reader_unread_record(zone_reader *zr, resource_record *entry)
     zone_file_reader *zfr = (zone_file_reader*)zr->data;
     resource_record *rr;
     u32 required = offsetof(resource_record,rdata) + entry->rdata_size;
-    MALLOC_OR_DIE(resource_record*, rr, required, GENERIC_TAG);
+    MALLOC_OR_DIE(resource_record*, rr, required, DNSRR_TAG);
     memcpy(rr, entry, required);
     rr->next = zfr->unread_next;
     zfr->unread_next = rr;
-    
+
     return SUCCESS;
 }
 
@@ -1145,7 +1189,7 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
     yassert((zr != NULL) && (entry != NULL));
 
     zone_file_reader *zfr = (zone_file_reader*)zr->data;
-    
+
     if(zfr->unread_next != NULL)
     {
         resource_record *top = zfr->unread_next;
@@ -1153,13 +1197,13 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
         memcpy(entry, top, required);
         zfr->unread_next = top->next;
         free(top);
-        
+
         return 0;
     }
-    
+
     parser_s *p = &zfr->parser;
     ya_result return_code;
-    
+
     for(;;)
     {
         if(ISOK(return_code = parser_next_token(p)))
@@ -1188,16 +1232,16 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                     println("[EOF]");
 #endif
                     input_stream *completed_stream = parser_pop_stream(p);
-                 /// @todo EDF NOW !
+                 /// @todo 20150410 edf -- EDF NOW !
                     /*
 #if (DNSDB_USE_POSIX_ADVISE != 0) && (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
 
                     input_stream *file_stream = buffer_input_stream_get_filtered(completed_stream);
-                    
+
                     int fd = fd_input_stream_get_filedescriptor(file_stream);
                     fdatasync(fd);
                     posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
-#endif              
+#endif
                      */
                     input_stream_close(completed_stream);
 
@@ -1210,12 +1254,12 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                         break;
                     }
                 }
-                
+
                 continue;
             }
 
             p->needle_mark = p->text;
-            
+
             // keywords or new domain
 
             u32 text_len = parser_text_length(p);
@@ -1247,7 +1291,7 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
 
                         memcpy(&zfr->dot_origin[1], text, text_len);
                         zfr->dot_origin_size = text_len + 1; // +1 for the dot
-                        
+
                         if(FAIL(return_code = cstr_to_locase_dnsname_with_check_len(zfr->origin, &zfr->dot_origin[1], zfr->dot_origin_size - 1)))
                         {
                             entry->name[0] = '\0';
@@ -1275,11 +1319,15 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                             zfr->error_message_buffer = "failed to parse $TTL";
                             return return_code;
                         }
+
+                        zfr->rttl = zfr->zttl;
+
+                        zfr->zttl_found = true;
                     }
                     else if(parse_word_match(text, text_len, "$INCLUDE", 8))
                     {
                          char file_name[PATH_MAX];
-    
+
                         if(FAIL(return_code = parser_copy_next_word(p, file_name, sizeof(file_name))))
                         {
                             entry->name[0] = '\0';
@@ -1292,12 +1340,12 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                             zfr->error_message_buffer = "failed to parse $INCLUDE";
                             return return_code;
                         }
-                        
+
                         if((return_code & PARSER_WORD) != 0)
                         {
                             ya_result err;
-                            
-                            if(ISOK(err = file_input_stream_open(file_name, &zfr->includes[zfr->includes_count])))
+
+                            if(ISOK(err = file_input_stream_open(&zfr->includes[zfr->includes_count], file_name)))
                             {
                                 parser_push_stream(&zfr->parser, &zfr->includes[zfr->includes_count]);
 /*
@@ -1322,7 +1370,7 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                                 {
                                     zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
                                 }
-                                
+
                                 return err;
                             }
                         }
@@ -1376,9 +1424,9 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                     if((return_code & PARSER_BLANK_START) == 0)
                     {
                         // new domain
-                        
+
                         u8 *domain = entry->name;
-                        
+
                         if(!((text_len == 1) && (text[0] == '@')))
                         {
                             if(text[text_len - 1] != '.')
@@ -1391,14 +1439,14 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                                     //
                                     zone_file_reader_free_error_message(zfr);
                                     zfr->error_message_code = return_code;
-                                    MALLOC_OR_DIE(char*, zfr->error_message_buffer, text_len + 1, GENERIC_TAG);
+                                    MALLOC_OR_DIE(char*, zfr->error_message_buffer, text_len + 1, ZFERRMSG_TAG);
                                     memcpy(zfr->error_message_buffer, text, text_len);
                                     zfr->error_message_buffer[text_len] = '\0';
                                     zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
-                                    
+
                                     return return_code;
                                 }
-                                
+
                                 return_code = dnsname_copy(&domain[return_code - 1], zfr->origin); /// @note: cannot fail
                             }
                             else
@@ -1411,11 +1459,11 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                                     //
                                     zone_file_reader_free_error_message(zfr);
                                     zfr->error_message_code = return_code;
-                                    MALLOC_OR_DIE(char*, zfr->error_message_buffer, text_len + 1, GENERIC_TAG);
+                                    MALLOC_OR_DIE(char*, zfr->error_message_buffer, text_len + 1, ZFERRMSG_TAG);
                                     memcpy(zfr->error_message_buffer, text, text_len);
                                     zfr->error_message_buffer[text_len] = '\0';
                                     zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
-                                    
+
                                     return return_code;
                                 }
                             }
@@ -1424,7 +1472,7 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                         {
                             dnsname_copy(domain, zfr->origin); /// @note: cannot fail
                             dnsname_to_cstr(&zfr->dot_origin[1], zfr->origin); /// @note: cannot fail
-                            
+
                             zfr->dot_origin_size = return_code + 1;
                             zfr->template_source = TRUE;
                         }
@@ -1441,9 +1489,9 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                         parser_rewind(p);
                     }
                     entry->ttl = zfr->rttl;
-                    
+
                     u16 rclass = CLASS_NONE;
-                    
+
                     parser_mark(p);
                     if(FAIL(parser_copy_next_class(p, &rclass)))
                     {
@@ -1451,9 +1499,9 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                     }
 
                     entry->class = zfr->zclass;
-                    
+
                     u16 rtype;
-                    
+
                     if(FAIL(return_code = parser_copy_next_type(p, &rtype)))
                     {
                         entry->type = TYPE_NONE;
@@ -1468,13 +1516,13 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                         }
                         return return_code;
                     }
-                    
+
                     entry->type = rtype;
 
                     if(rtype == TYPE_SOA)
                     {
                         entry->class = rclass;
-                        
+
                         if(rclass == CLASS_NONE)
                         {
                             entry->rdata_size = 0;
@@ -1502,12 +1550,23 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                     entry->rdata_size = return_code;
 
                     // FULL RECORD READY
-                    
+
+//                    s32 tmp_ttl;
+                    if((rtype == TYPE_SOA) & !zfr->zttl_found)
+                    {
+                        u8 *p = entry->rdata;
+                        p += entry->rdata_size -4;
+
+                        zfr->zttl = ntohl(GET_U32_AT_P(p));
+                        entry->ttl = zfr->zttl;
+                    }
+                    zfr->rttl = zfr->zttl;
+
                     return SUCCESS;
                 }
             }
 
-            
+
 #if DO_PRINT
             flushout();
 #endif
@@ -1520,12 +1579,12 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
             break;
         }
     }
-    
+
     if(ISOK(return_code))
     {
         return_code = 1;
     }
-    
+
     return return_code;
 }
 
@@ -1549,7 +1608,7 @@ zone_file_reader_close(zone_reader *zr)
     yassert(zr != NULL);
 
     zone_file_reader *zfr = (zone_file_reader*)zr->data;
-    
+
     parser_finalize(&zfr->parser);
 /*
 #if (DNSDB_USE_POSIX_ADVISE != 0) && (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
@@ -1565,11 +1624,11 @@ zone_file_reader_close(zone_reader *zr)
         rr = rr->next;
         free(tmp);
     }
-    
+
     zone_file_reader_free_error_message(zfr);
-    
+
     free(zfr);
-    
+
     zr->data = NULL;
     zr->vtbl = NULL;
 }
@@ -1616,9 +1675,9 @@ zone_file_reader_init_error_codes()
     {
         return;
     }
-    
+
     zone_file_reader_init_error_codes_done = TRUE;
-    
+
     error_register(ZONEFILE_FEATURE_NOT_SUPPORTED, "ZONEFILE_FEATURE_NOT_SUPPORTED");
     error_register(ZONEFILE_EXPECTED_FILE_PATH, "ZONEFILE_EXPECTED_FILE_PATH");
     error_register(ZONEFILE_SOA_WITHOUT_CLASS, "ZONEFILE_SOA_WITHOUT_CLASS");
@@ -1637,12 +1696,12 @@ zone_file_reader_init(zone_reader *zr)
 {
     ya_result error_code;
     zone_file_reader *zfr;
-    
-    /*    ------------------------------------------------------------    */
-    
-    MALLOC_OR_DIE(zone_file_reader*, zfr, sizeof (zone_file_reader), ZFREADER_TAG);
 
-    ZEROMEMORY(zfr, sizeof (zone_file_reader));
+    /*    ------------------------------------------------------------    */
+
+    MALLOC_OR_DIE(zone_file_reader*, zfr, sizeof(zone_file_reader), ZFREADER_TAG);
+
+    ZEROMEMORY(zfr, sizeof(zone_file_reader));
 
     if(ISOK(error_code = parser_init(&zfr->parser,
         zfr_string_delimiters,      // by 2
@@ -1650,7 +1709,7 @@ zone_file_reader_init(zone_reader *zr)
         zrf_comment_markers,        // by 1
         zrf_blank_makers,           // by 1
         zfr_escape_characters)))    // by 1
-    {     
+    {
         zfr->zttl = 86400;
         zfr->rttl = 86400;
         zfr->dot_origin_size = 2; // with the CHR0 sentinel
@@ -1662,10 +1721,10 @@ zone_file_reader_init(zone_reader *zr)
         zfr->dot_origin[0] = '.';
         zfr->dot_origin[1] = '\0';
     }
-    
+
     zr->data = zfr;
     zr->vtbl = &zone_file_reader_vtbl;
-    
+
     return error_code;
 }
 
@@ -1673,11 +1732,11 @@ ya_result
 zone_file_reader_parse_stream(input_stream *ins, zone_reader *zr)
 {
     if(ISOK(zone_file_reader_init(zr)))
-    {    
+    {
         zone_file_reader *zfr = (zone_file_reader*)zr->data;
-        
+
         // push the stream
-        
+
         parser_push_stream(&zfr->parser, ins);
     }
 
@@ -1716,19 +1775,19 @@ ya_result
 zone_file_reader_open(const char* fullpath, zone_reader *zr)
 {
     ya_result return_value;
-    
+
 #if DEBUG_BENCH_TEXT_ZONE_PARSE
     zone_file_reader_bench_register();
     u64 bench = debug_bench_start(&zone_file_reader_parse);
 #endif
-    
+
     if(ISOK(return_value = zone_file_reader_init(zr)))
     {
         // push the stream
-        
+
         zone_file_reader *zfr = (zone_file_reader*)zr->data;
-        
-        if(ISOK(return_value = file_input_stream_open(fullpath, &zfr->includes[0])))
+
+        if(ISOK(return_value = file_input_stream_open(&zfr->includes[0], fullpath)))
         {
 /*
 #if (DNSDB_USE_POSIX_ADVISE != 0) && (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
@@ -1742,18 +1801,18 @@ zone_file_reader_open(const char* fullpath, zone_reader *zr)
         else
         {
             log_debug("zone file: cannot open: '%s': %r", fullpath, return_value);
-            
+
             zone_file_reader_close(zr);
-            
+
             return return_value;
         }
-        
+
 #if DEBUG_BENCH_TEXT_ZONE_PARSE
         zone_file_reader_bench_register();
         debug_bench_stop(&zone_file_reader_parse, bench);
 #endif
     }
-    
+
     return return_value;
 }
 
@@ -1777,18 +1836,18 @@ ya_result
 zone_file_reader_copy_rdata(const char *text, u16 rtype, u8 *rdata, u32 rdata_size, const u8 *origin)
 {
     parser_s parser;
-    
+
     ya_result return_code;
-    
+
     char buffer[4096];
-    
+
     int n = strlen(text);
-    
+
     if(n > sizeof(buffer) - 2)
     {
         return -1;
     }
-    
+
     if(text[n - 1] != '\n')
     {
         memcpy(buffer, text, n);
@@ -1808,20 +1867,19 @@ zone_file_reader_copy_rdata(const char *text, u16 rtype, u8 *rdata, u32 rdata_si
         input_stream text_is;
 
         bytearray_input_stream_init_const(&text_is, (const u8*)text, n);
-        
+
         if(ISOK(return_code = parser_push_stream(&parser, &text_is)))
         {
             return_code = zone_file_reader_copy_rdata_inline(&parser, rtype, rdata, rdata_size, origin);
         }
-        
+
         // will be closed by the parser
         // input_stream_close(&text_is);
-        
+
         parser_finalize(&parser);
     }
-    
+
     return return_code;
 }
 
 /** @} */
-

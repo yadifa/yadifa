@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnsdbupdate Dynamic update functions
  *  @ingroup dnsdb
  *  @brief Generates "IXFR" (ICMTL) streams by registering as a listener to the changes in the database
@@ -74,8 +74,14 @@ extern logger_handle* g_database_logger;
 #define DEBUG_ICMTL_RECORDS 0
 #define USE_SET_FOR_OUTPUT 1
 
+#define IRRWIRER_TAG 0x5245524957525249
+#define IRRWIREA_TAG 0x4145524957525249
+
+
 typedef struct icmtl_dnssec_listener icmtl_dnssec_listener;
 typedef struct icmtl_dnssec_listener icmtl_zdb_listener;
+
+#define ITLDLTNR_TAG 0x524e544c444c5449
 
 struct icmtl_dnssec_listener
 {
@@ -126,7 +132,7 @@ icmtl_push_stream_record_to_remove(icmtl_zdb_listener* listener)
     if(!ptr_set_avl_find(&listener->rr_remove, buffer))
     {
         u8 *rr;
-        ZALLOC_ARRAY_OR_DIE(u8*, rr, size, GENERIC_TAG);
+        ZALLOC_ARRAY_OR_DIE(u8*, rr, size, IRRWIRER_TAG);
         memcpy(rr, buffer, size);
         
 #ifdef DEBUG
@@ -152,7 +158,7 @@ icmtl_push_stream_record_to_add(icmtl_zdb_listener* listener)
     if(!ptr_set_avl_find(&listener->rr_add, buffer))
     {
         u8 *rr;
-        ZALLOC_ARRAY_OR_DIE(u8*, rr, size, GENERIC_TAG);
+        ZALLOC_ARRAY_OR_DIE(u8*, rr, size, IRRWIREA_TAG);
         memcpy(rr, buffer, size);
         
 #ifdef DEBUG
@@ -165,7 +171,7 @@ icmtl_push_stream_record_to_add(icmtl_zdb_listener* listener)
 }
 
 static void
-output_stream_write_wire(output_stream* os, dnslabel_vector_reference labels, s32 top, u16 type, zdb_ttlrdata* record)
+output_stream_write_wire(output_stream* os, dnslabel_vector_reference labels, s32 top, u16 type, const zdb_ttlrdata* record)
 {
     output_stream_write_dnslabel_vector(os, labels, top);
     output_stream_write_u16(os, type); /** @note NATIVETYPE */
@@ -176,7 +182,7 @@ output_stream_write_wire(output_stream* os, dnslabel_vector_reference labels, s3
 }
 
 static void
-output_stream_write_wire_dnsname(output_stream* os, const u8 *dnsname, u16 type, zdb_ttlrdata* record)
+output_stream_write_wire_dnsname(output_stream* os, const u8 *dnsname, u16 type, const zdb_ttlrdata* record)
 {
     output_stream_write_dnsname(os, dnsname);
     output_stream_write_u16(os, type); /** @note NATIVETYPE */
@@ -194,7 +200,7 @@ icmtl_is_my_zone(icmtl_zdb_listener *listener, const zdb_zone *zone)
 }
 
 static void
-icmtl_on_remove_record_type_callback(zdb_listener *base_listener, const zdb_zone *zone, const u8* dnsname, zdb_rr_collection* recordssets, u16 type)
+icmtl_on_remove_record_type_callback(zdb_listener *base_listener, const zdb_zone *zone, const u8* dnsname, const zdb_rr_collection* recordssets, u16 type)
 {
     icmtl_zdb_listener *listener = (icmtl_zdb_listener*)base_listener;
     
@@ -266,7 +272,7 @@ icmtl_on_remove_record_type_callback(zdb_listener *base_listener, const zdb_zone
 }
 
 static void
-icmtl_on_add_record_callback(zdb_listener *base_listener, const zdb_zone *zone, dnslabel_vector_reference labels, s32 top, u16 type, zdb_ttlrdata* record)
+icmtl_on_add_record_callback(zdb_listener *base_listener, const zdb_zone *zone, dnslabel_vector_reference labels, s32 top, u16 type, const zdb_ttlrdata* record)
 {
     icmtl_zdb_listener* listener = (icmtl_zdb_listener*)base_listener;
 
@@ -297,7 +303,7 @@ icmtl_on_add_record_callback(zdb_listener *base_listener, const zdb_zone *zone, 
 }
 
 static void
-icmtl_on_remove_record_callback(zdb_listener *base_listener, const zdb_zone *zone, const u8* dnsname, u16 type, zdb_ttlrdata* record)
+icmtl_on_remove_record_callback(zdb_listener *base_listener, const zdb_zone *zone, const u8* dnsname, u16 type, const zdb_ttlrdata* record)
 {
     icmtl_zdb_listener* listener = (icmtl_zdb_listener*)base_listener;
 
@@ -373,8 +379,9 @@ output_stream_write_rrsig_list_wire(output_stream* os, u8* label, u32 label_len,
 
 #else
 
+#if ZDB_HAS_DNSSEC_SUPPORT
 static void
-output_stream_write_rrsig_wire(output_stream* os, u8* label, u32 label_len, u8* origin, u32 origin_len, zdb_packed_ttlrdata* sig_sll)
+output_stream_write_rrsig_wire(output_stream* os, const u8 *label, u32 label_len, const u8 *origin, u32 origin_len, const zdb_packed_ttlrdata *sig_sll)
 {
     if(sig_sll != NULL)
     {
@@ -401,13 +408,14 @@ output_stream_write_rrsig_wire(output_stream* os, u8* label, u32 label_len, u8* 
 #endif
     }
 }
+#endif
 
 #endif
 
-#if ZDB_HAS_NSEC3_SUPPORT!=0
+#if ZDB_HAS_NSEC3_SUPPORT
 
 static void
-icmtl_on_add_nsec3_callback(zdb_listener *base_listener, const zdb_zone *zone, nsec3_zone_item* nsec3_item, nsec3_zone* n3, u32 ttl)
+icmtl_on_add_nsec3_callback(zdb_listener *base_listener, const zdb_zone *zone, const nsec3_zone_item* nsec3_item, const nsec3_zone* n3, u32 ttl)
 {
 #if DEBUG_ICMTL_RECORDS
     log_debug("icmtl: add NSEC3");
@@ -437,7 +445,7 @@ icmtl_on_add_nsec3_callback(zdb_listener *base_listener, const zdb_zone *zone, n
 }
 
 static void
-icmtl_on_remove_nsec3_callback(zdb_listener *base_listener, const zdb_zone *zone, nsec3_zone_item* nsec3_item, nsec3_zone* n3, u32 ttl)
+icmtl_on_remove_nsec3_callback(zdb_listener *base_listener, const zdb_zone *zone, const nsec3_zone_item* nsec3_item, const nsec3_zone* n3, u32 ttl)
 {
 #if DEBUG_ICMTL_RECORDS
     log_debug("icmtl: del NSEC3");
@@ -467,7 +475,7 @@ icmtl_on_remove_nsec3_callback(zdb_listener *base_listener, const zdb_zone *zone
 }
 
 static void
-icmtl_on_update_nsec3rrsig_callback(zdb_listener *base_listener, const zdb_zone *zone, zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata* added_rrsig_sll, nsec3_zone_item* item)
+icmtl_on_update_nsec3rrsig_callback(zdb_listener *base_listener, const zdb_zone *zone, const zdb_packed_ttlrdata* removed_rrsig_sll, const zdb_packed_ttlrdata* added_rrsig_sll, const nsec3_zone_item* item)
 {
     u8 label[MAX_DOMAIN_LENGTH];
 
@@ -478,7 +486,7 @@ icmtl_on_update_nsec3rrsig_callback(zdb_listener *base_listener, const zdb_zone 
         return;
     }
 
-    u32 label_len = nsec3_zone_item_get_label(item, label, sizeof (label));
+    u32 label_len = nsec3_zone_item_get_label(item, label, sizeof(label));
 
 #if DEBUG_ICMTL_RECORDS
     log_debug("icmtl: del RRSIG: (NSEC3)");
@@ -515,8 +523,9 @@ icmtl_on_update_nsec3rrsig_callback(zdb_listener *base_listener, const zdb_zone 
 
 #endif
 
+#if ZDB_HAS_DNSSEC_SUPPORT
 static void
-icmtl_on_update_rrsig_callback(zdb_listener *base_listener, const zdb_zone *zone, zdb_packed_ttlrdata* removed_rrsig_sll, zdb_packed_ttlrdata* added_rrsig_sll, zdb_rr_label* label, dnsname_stack* name)
+icmtl_on_update_rrsig_callback(zdb_listener *base_listener, const zdb_zone *zone, const zdb_packed_ttlrdata *removed_rrsig_sll, const zdb_packed_ttlrdata *added_rrsig_sll, const zdb_rr_label *label, const dnsname_stack *name)
 {
     u8 fqdn[MAX_DOMAIN_LENGTH];
 
@@ -559,6 +568,7 @@ icmtl_on_update_rrsig_callback(zdb_listener *base_listener, const zdb_zone *zone
     output_stream_write_rrsig_list_wire(&listener->os_add, fqdn, fqdn_len, NULL, 0, added_rrsig_sll);
 #endif
 }
+#endif
 
 static mutex_t icmtl_listener_mtx = MUTEX_INITIALIZER;
 static ptr_set icmtl_listener_set = PTR_SET_DNSNAME_EMPTY;
@@ -569,12 +579,12 @@ static struct icmtl_dnssec_listener icmtl_listener =
     icmtl_on_add_record_callback,
     icmtl_on_remove_record_callback,
     icmtl_has_changes_callback,
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
     icmtl_on_add_nsec3_callback,
     icmtl_on_remove_nsec3_callback,
     icmtl_on_update_nsec3rrsig_callback,
 #endif
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
     icmtl_on_update_rrsig_callback,
 #endif
     NULL,
@@ -639,7 +649,7 @@ dynupdate_icmtlhook_enable(u8* origin, output_stream* os_remove, output_stream* 
         return ERROR; // already set
     }
         
-    ZALLOC_OR_DIE(icmtl_dnssec_listener*, listener, icmtl_dnssec_listener, GENERIC_TAG);
+    ZALLOC_OR_DIE(icmtl_dnssec_listener*, listener, icmtl_dnssec_listener, ITLDLTNR_TAG);
     memcpy(listener, &icmtl_listener, sizeof(icmtl_dnssec_listener));
 
 #if !USE_SET_FOR_OUTPUT
@@ -692,7 +702,7 @@ dynupdate_icmtlhook_enable_wait(u8* origin, output_stream* os_remove, output_str
         sleep(1);
     }
 
-    ZALLOC_OR_DIE(icmtl_dnssec_listener*, listener, icmtl_dnssec_listener, GENERIC_TAG);
+    ZALLOC_OR_DIE(icmtl_dnssec_listener*, listener, icmtl_dnssec_listener, ITLDLTNR_TAG);
     // This sets the "vtbl".  This is done a bit differently than the streams.
     // The original reason was to patch the listener calls in some cases (for speed).
     memcpy(listener, &icmtl_listener, sizeof(icmtl_dnssec_listener));

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnsdb
  *  @ingroup dnsdb
  *  @brief journal file & incremental changes
@@ -101,7 +101,6 @@ struct zdb_icmtl_item
 
 typedef struct zdb_icmtl zdb_icmtl;
 
-
 struct zdb_icmtl
 {
     output_stream os_remove_;
@@ -119,29 +118,21 @@ struct zdb_icmtl
     counter_output_stream_data os_add_stats;
     
     u32 patch_index;
-        
-    u32 soa_ttl;    
-    u16 soa_rdata_size;     
-    u8  soa_rdata[532];
     
+    bool modified;                  // @note not aligned
+    bool can_ignore_signatures;     // do not complain if no keys are available
+    
+    u32 soa_ttl;    
+    u16 soa_rdata_size;    
+    u8  soa_rdata[532];
 };
 
-/**
- * Reads the ix stream until the SOA of the remove part is bigger than or equal to serial
- *
- */
+#define ZDB_ICMTL_LISTENER_BEGIN    0
+#define ZDB_ICMTL_LISTENER_CANCEL   1
+#define ZDB_ICMTL_LISTENER_END      2
 
-/*
-ya_result zdb_icmtl_skip_until(input_stream *is, u32 serial);
+typedef void zdb_icmtl_listener_callback(u8 state, const zdb_icmtl* icmtl, void *args);
 
-ya_result zdb_icmtl_read_fqdn(input_steam *is, u8 *dst256bytes);
-
-ya_result zdb_icmtl_read_tctr(input_steam *is, struct type_class_ttl_rdlen *tctr);
-
-ya_result zdb_icmtl_read_rdata(input_steam *is, u8 *dst, u32 len);
-
-ya_result zdb_icmtl_skip_rdata(input_steam *is, u32 len);
-*/
 /**
  * Enables incremental changes recording in the zone
  */
@@ -170,17 +161,6 @@ ya_result zdb_icmtl_cancel(zdb_icmtl *icmtl);
 #define ZDB_ICMTL_REPLAY_SERIAL_OFFSET 1 // avoids scanning
 #define ZDB_ICMTL_REPLAY_SERIAL_LIMIT  2 // don't try to go beyond the set serial
 
-/*
-struct zdb_icmtl_replay_args
-{
-    zdb_zone *zone;
-    const char* directory;
-    u64 serial_offset;
-    u32 serial_limit;
-    u8 flags;
-};
-*/
-
 ya_result zdb_icmtl_replay(zdb_zone *zone);
 
 /**
@@ -201,6 +181,23 @@ ya_result zdb_icmtl_get_soa_with_serial(input_stream *is, u32 serial, u8 *out_dn
 
 ya_result zdb_icmtl_open_ix_get_soa(const u8 *origin, const char *directory, u32 serial, input_stream *is, struct type_class_ttl_rdlen *tctrp, u8 *rdata_buffer_780, u32 *rdata_size);
 
+/**
+ * Adds a listener to the global ICMTL events.
+ * Whenever zdb_icmtl_begin/cancel/end is successfully called, all listeners are notified
+ * 
+ * @param callback the callback function
+ * @param callback_args a pointer to pass to the callback function
+ */
+
+void zdb_icmtl_listener_add(zdb_icmtl_listener_callback *callback, void *callback_args);
+
+/**
+ * Removes a listener from the global ICMTL events.
+ * 
+ * @param callback the callback function
+ */
+
+void zdb_icmtl_listener_remove(zdb_icmtl_listener_callback *callback);
 
 #ifdef	__cplusplus
 }

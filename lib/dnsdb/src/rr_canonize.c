@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup rrsig RRSIG functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -48,7 +48,6 @@
 #include <arpa/inet.h>
 
 #include <dnscore/sys_types.h>
-#include <dnscore/format.h>
 
 #include "dnsdb/zdb_error.h"
 #include "dnsdb/rrsig.h"
@@ -107,13 +106,13 @@ rr_canonize_sort_rdata_compare(const void* a, const void* b)
 #if ZDB_GUARANTEED_LOWCASE_RDATA == 0
 
 static void
-rr_canonize_twonames(zdb_packed_ttlrdata* rr, ptr_vector* v)
+rr_canonize_twonames(const zdb_packed_ttlrdata* rr, ptr_vector* v)
 {
     while(rr != NULL)
     {
         zdb_canonized_packed_ttlrdata* c_rr;
 
-        u32 c_rr_size = sizeof (zdb_canonized_packed_ttlrdata) - 1 + ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
+        u32 c_rr_size = sizeof(zdb_canonized_packed_ttlrdata) - 1 + ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
         MALLOC_OR_DIE(zdb_canonized_packed_ttlrdata*, c_rr, c_rr_size, RR_CANONIZE_TWONAMES_TAG);
 
         ZDB_PACKEDRECORD_PTR_RDATASIZE(c_rr) = ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
@@ -137,13 +136,13 @@ rr_canonize_twonames(zdb_packed_ttlrdata* rr, ptr_vector* v)
 }
 
 static void
-rr_canonize_onename(zdb_packed_ttlrdata* rr, ptr_vector* v)
+rr_canonize_onename(const zdb_packed_ttlrdata* rr, ptr_vector* v)
 {
     while(rr != NULL)
     {
         zdb_canonized_packed_ttlrdata* c_rr;
 
-        u32 c_rr_size = sizeof (zdb_canonized_packed_ttlrdata) - 1 + ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
+        u32 c_rr_size = sizeof(zdb_canonized_packed_ttlrdata) - 1 + ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
 
         MALLOC_OR_DIE(zdb_canonized_packed_ttlrdata*, c_rr, c_rr_size, RR_CANONIZE_ONENAME_TAG);
 
@@ -162,13 +161,13 @@ rr_canonize_onename(zdb_packed_ttlrdata* rr, ptr_vector* v)
 }
 
 static void
-rr_canonize_mx(zdb_packed_ttlrdata* rr, ptr_vector* v)
+rr_canonize_mx(const zdb_packed_ttlrdata* rr, ptr_vector* v)
 {
     while(rr != NULL)
     {
         zdb_canonized_packed_ttlrdata* c_rr;
 
-        u32 c_rr_size = sizeof (zdb_canonized_packed_ttlrdata) - 1 + ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
+        u32 c_rr_size = sizeof(zdb_canonized_packed_ttlrdata) - 1 + ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
 
         MALLOC_OR_DIE(zdb_canonized_packed_ttlrdata*, c_rr, c_rr_size, RR_CANONIZE_MX_TAG);
 
@@ -190,13 +189,13 @@ rr_canonize_mx(zdb_packed_ttlrdata* rr, ptr_vector* v)
 }
 
 static void
-rr_canonize_soa(zdb_packed_ttlrdata* rr, ptr_vector* v)
+rr_canonize_soa(const zdb_packed_ttlrdata* rr, ptr_vector* v)
 {
     yassert(rr != NULL && rr->next == NULL);
 
     zdb_canonized_packed_ttlrdata* c_rr;
 
-    u32 c_rr_size = sizeof (zdb_canonized_packed_ttlrdata) - 1 + ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
+    u32 c_rr_size = sizeof(zdb_canonized_packed_ttlrdata) - 1 + ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
 
     MALLOC_OR_DIE(zdb_canonized_packed_ttlrdata*, c_rr, c_rr_size, RR_CANONIZE_SOA_TAG);
 
@@ -221,13 +220,13 @@ rr_canonize_soa(zdb_packed_ttlrdata* rr, ptr_vector* v)
 }
 
 static void
-rr_canonize_nsec(zdb_packed_ttlrdata* rr, ptr_vector* v)
+rr_canonize_nsec(const zdb_packed_ttlrdata* rr, ptr_vector* v)
 {
     while(rr != NULL)
     {
         zdb_canonized_packed_ttlrdata* c_rr;
 
-        u32 c_rr_size = sizeof (zdb_canonized_packed_ttlrdata) - 1 + ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
+        u32 c_rr_size = sizeof(zdb_canonized_packed_ttlrdata) - 1 + ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
         MALLOC_OR_DIE(zdb_canonized_packed_ttlrdata*, c_rr, c_rr_size, RR_CANONIZE_NSEC1_TAG);
 
         ZDB_PACKEDRECORD_PTR_RDATASIZE(c_rr) = ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
@@ -247,13 +246,13 @@ rr_canonize_nsec(zdb_packed_ttlrdata* rr, ptr_vector* v)
 #endif /* ZDB_GUARANTEED_LOWCASE_RDATA */
 
 static void
-rr_canonize_nsec3param(zdb_packed_ttlrdata* rr, ptr_vector* v)
+rr_canonize_nsec3param(const zdb_packed_ttlrdata* rr, ptr_vector* v)
 {
     while(rr != NULL)
     {
         zdb_canonized_packed_ttlrdata* c_rr;
 
-        u32 c_rr_size = sizeof (zdb_canonized_packed_ttlrdata) - 1 + ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
+        u32 c_rr_size = sizeof(zdb_canonized_packed_ttlrdata) - 1 + ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
         MALLOC_OR_DIE(zdb_canonized_packed_ttlrdata*, c_rr, c_rr_size, RR_CANONIZE_NOP_TAG);
 
         ZDB_PACKEDRECORD_PTR_RDATASIZE(c_rr) = ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
@@ -267,21 +266,18 @@ rr_canonize_nsec3param(zdb_packed_ttlrdata* rr, ptr_vector* v)
 }
 
 static void
-rr_canonize_nop(zdb_packed_ttlrdata* rr, ptr_vector* v)
+rr_canonize_nop(const zdb_packed_ttlrdata* rr, ptr_vector* v)
 {
     while(rr != NULL)
     {
         zdb_canonized_packed_ttlrdata* c_rr;
 
-        u32 c_rr_size = sizeof (zdb_canonized_packed_ttlrdata) - 1 + ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
+        u32 c_rr_size = sizeof(zdb_canonized_packed_ttlrdata) - 1 + ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
         MALLOC_OR_DIE(zdb_canonized_packed_ttlrdata*, c_rr, c_rr_size, RR_CANONIZE_NOP_TAG);
 
         ZDB_PACKEDRECORD_PTR_RDATASIZE(c_rr) = ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
         c_rr->rdata_canonized_size = htons(ZDB_PACKEDRECORD_PTR_RDATASIZE(rr));
-        /** @todo CHECK: If we don't lo-case anymore maybe I could grab some
-         *        more cycles here.  Not for the A-records on a 64bits arch,
-         *        but for any case where the rdata is (much) bigger than 8 bytes
-         */
+
         MEMCOPY(&c_rr->rdata_start[0], ZDB_PACKEDRECORD_PTR_RDATAPTR(rr), ZDB_PACKEDRECORD_PTR_RDATASIZE(rr));
         ptr_vector_append(v, c_rr);
 
@@ -289,14 +285,12 @@ rr_canonize_nop(zdb_packed_ttlrdata* rr, ptr_vector* v)
     }
 }
 
-
-
 void
-rr_canonize_rrset(u16 type, zdb_packed_ttlrdata* rr_sll, ptr_vector* rrsp)
+rr_canonize_rrset(u16 type, const zdb_packed_ttlrdata* rr_sll, ptr_vector* rrsp)
 {
     switch(type)
     {
-#if ZDB_GUARANTEED_LOWCASE_RDATA == 0
+#if !ZDB_GUARANTEED_LOWCASE_RDATA
         case TYPE_NS:
         case TYPE_CNAME:
         case TYPE_DNAME:

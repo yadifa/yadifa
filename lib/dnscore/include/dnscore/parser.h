@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 #ifndef PARSER_H
 #define	PARSER_H
 
@@ -38,6 +38,8 @@
 #include <dnscore/parsing.h>
 #include <dnscore/typebitmap.h>
 #include <dnscore/input_stream.h>
+
+
 
 #ifdef	__cplusplus
 extern "C" {
@@ -144,6 +146,7 @@ struct parser_s
     
     char multiline;     // TODO: stack of multilines
     char cutchar;       // 
+    bool tokenize_on_string;
     
     input_stream *input_stream_stack[PARSER_INCLUDE_DEPTH_MAX];
     u32 line_number_stack[PARSER_INCLUDE_DEPTH_MAX];
@@ -295,23 +298,23 @@ parser_get_line_number(const parser_s *p)
 static inline ya_result
 parser_next_word(parser_s *p)
 {
-    ya_result return_code;
+    ya_result ret;
     
     for(;;)
     {
-        if(FAIL(return_code = parser_next_token(p)))
+        if(FAIL(ret = parser_next_token(p)))
         {
-            return return_code;
+            return ret;
         }
         
-        if(return_code & PARSER_WORD)
+        if(ret & PARSER_WORD)
         {
             return 1;
         }
 
-        if(return_code & (PARSER_EOL|PARSER_EOF))
+        if(ret & (PARSER_EOL|PARSER_EOF))
         {
-            if(return_code & PARSER_EOL)
+            if(ret & PARSER_EOL)
             {
                 return PARSER_REACHED_END_OF_LINE;
             }
@@ -373,6 +376,16 @@ parser_get_u8(const char *text, u32 text_len, u8 *out_value)
     u32 tmp_u32;
     ya_result return_code = parse_u32_check_range_len_base10(text, text_len, &tmp_u32, 0, MAX_U8);
     *out_value = (u8)tmp_u32;
+
+    return return_code;
+}
+
+static inline ya_result
+parser_get_s8(const char *text, u32 text_len, s8 *out_value)
+{
+    s32 tmp_s32;
+    ya_result return_code = parse_s32_check_range_len_base10(text, text_len, &tmp_s32, (s32)MIN_S8, (s32)MAX_S8);
+    *out_value = (s8)tmp_s32;
 
     return return_code;
 }
@@ -524,10 +537,39 @@ parser_copy_next_yyyymmddhhmmss(parser_s *p, u32 *out_value)
     {    
         const char *text = parser_text(p);
         u32 text_len = parser_text_length(p);
-
-        return_code = parse_yyyymmddhhmmss_check_range_len(text, text_len, out_value);
+        time_t t;
+        return_code = parse_yyyymmddhhmmss_check_range_len(text, text_len, &t);
+        *out_value = (u32)t;
     }
     
+    return return_code;
+}
+
+static inline ya_result
+parser_get_s16(const char *text, u32 text_len, s16 *out_value)
+{
+    s32 tmp_s32;
+    ya_result return_code = parse_s32_check_range_len_base10(text, text_len, &tmp_s32, MIN_S16, MAX_S16);
+    *out_value = (s16)tmp_s32;
+
+    return return_code;
+}
+
+static inline ya_result
+parser_copy_next_s16(parser_s *p, s16 *out_value)
+{
+    ya_result return_code = parser_next_word(p);
+
+    if(ISOK(return_code))
+    {
+        const char *text = parser_text(p);
+        u32 text_len = parser_text_length(p);
+
+        s32 tmp_s32;
+        return_code = parse_s32_check_range_len_base10(text, text_len, &tmp_s32, MIN_S16, MAX_S16);
+        *out_value = (s16)tmp_s32;
+    }
+
     return return_code;
 }
 
@@ -578,6 +620,34 @@ parser_copy_next_u32(parser_s *p, u32 *out_value)
     
     return return_code;
 }
+
+static inline ya_result
+parser_get_u64(const char *text, u32 text_len, u64 *out_value)
+{
+    ya_result return_code = parse_u64_check_range_len_base10(text, text_len, out_value, 0, MAX_U64);
+
+    return return_code;
+}
+
+static inline ya_result
+parser_copy_next_u64(parser_s *p, u64 *out_value)
+{
+    ya_result return_code = parser_next_word(p);
+
+    if(ISOK(return_code))
+    {
+        const char *text = parser_text(p);
+        u32 text_len = parser_text_length(p);
+
+        return_code = parse_u64_check_range_len_base10(text, text_len, out_value, 0, MAX_U64);
+    }
+
+    return return_code;
+}
+
+
+
+
 
 ya_result parser_type_bit_maps_initialize(parser_s *p, type_bit_maps_context* context);
 

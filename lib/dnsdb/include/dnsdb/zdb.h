@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnsdb Zone database
  *  @brief The zone database
  *
@@ -81,11 +81,50 @@ extern "C"
 /*
  * This fingerprint feature has been added so libraries could check they are compatible
  */
+    
+typedef enum
+{
+    DNSDB_TSIG=1,
+    DNSDB_ACL=2,
+    DNSDB_NSEC=4,
+    DNSDB_NSEC3=8,
+    DNSDB_ZALLOC=16,
+    DNSDB_DEBUG=32,
+    DNSDB_RRCACHE=64
+} dnsdb_fingerprint;
 
-dnslib_fingerprint
-dnsdb_getfingerprint();
-u32
-dnsdb_fingerprint_mask();
+static inline dnsdb_fingerprint dnsdb_getmyfingerprint()
+{
+    dnsdb_fingerprint ret = (dnsdb_fingerprint)(0
+    
+#if ZDB_HAS_TSIG_SUPPORT
+    | DNSDB_TSIG
+#endif
+#if ZDB_HAS_ACL_SUPPORT
+    | DNSDB_ACL
+#endif
+#if ZDB_HAS_NSEC_SUPPORT
+    | DNSDB_NSEC
+#endif
+#if ZDB_HAS_NSEC3_SUPPORT
+    | DNSDB_NSEC3
+#endif
+#if HAS_ZALLOC_SUPPORT
+    | DNSDB_ZALLOC
+#endif
+#ifdef DEBUG
+    | DNSDB_DEBUG
+#endif
+
+    )
+    ;
+    
+    return ret;
+}
+
+dnsdb_fingerprint dnsdb_getfingerprint();
+
+u32 dnsdb_fingerprint_mask();
 
 /** @brief Initializes the database internals.
  *
@@ -184,6 +223,29 @@ static inline void zdb_query_ex_answer_create(zdb_query_ex_answer *ans_auth_add)
 finger_print zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 *restrict pool_buffer);
 
 /**
+ * @brief Queries the database given a message
+ * 
+ * @param db the database
+ * @param mesg the message
+ * @param pool_buffer a big enough buffer used for the memory pool
+ */
+
+void zdb_query_and_update(zdb *db, message_data *mesg, u8 * restrict pool_buffer);
+
+/**
+ * @brief Queries the database given a message
+ * 
+ * @param db the database
+ * @param mesg the message
+ * @param pool_buffer a big enough buffer used for the memory pool
+ * @param rrl_process an RRL callback that controls if the answer is to be made, truncated or dropped
+ * 
+ * @return the RRL status of the message (probably useless)
+ */
+
+finger_print zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_buffer, rrl_process_callback *rrl_process);
+
+/**
  * Destroys a zdb_query_ex_answer structure created with zdb_query_ex
  *
  * @param ans_auth_add
@@ -205,7 +267,24 @@ finger_print zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_
  * @param answer_set
  * @return
  */
+
 ya_result zdb_query_message_update(message_data* message, zdb_query_ex_answer* answer_set);
+
+/**
+ * @brief Writes the answer into the message, using an RRL callback.
+ *
+ * Writes the content of a zdb_query_ex_answer into a message_data if the RRL callback allows it.
+ *
+ * Returns the offset in the packet.
+ * 
+ * CANNOT FAIL !
+ *
+ * @param message
+ * @param answer_set
+ * @return
+ */
+
+ya_result zdb_query_message_update_with_rrl(message_data* mesg, zdb_query_ex_answer* answer_set, rrl_process_callback *rrl_process);
 
 /**
  * This function should not be used anymore. Please consider using zdb_append_ip_records instead.
@@ -234,49 +313,7 @@ ya_result zdb_query_ip_records(zdb* db, const u8* name_, zdb_packed_ttlrdata **t
 
 ya_result zdb_append_ip_records(zdb* db, const u8* name_, host_address *target_list);
 
-#if 0
-/**
- * Get a label from the database.
- * Optionally, the zone can be retrieved (zonep != NULL) and the zone can be locked by a specific owner.
- * Note that lock without retrieval of the zone is forbidden (and will abort on debug code)
- * The zone of the label may be locked as well.
- * 
- * Release the zone with: zdb_zone_release_unlock(*zonep, owner);
- * 
- * Note that using the returned pointer without locking the zone may have undefined results on a multi threaded environment.
- * 
- * @param db
- * @param name
- * @param zonep
- * @param owner
- * 
- * @return 
- */
 
-zdb_rr_label *zdb_get_rr_label(zdb* db, const u8* name, zdb_zone **zonep, u8 owner);
-
-/**
- * Get an rr set from the database.
- * The type must be specific (TYPE_ANY will return NULL)
- * Optionally, the zone can be retrieved (zonep != NULL) and the zone can be locked by a specific owner.
- * Note that lock without retrieval of the zone is forbidden (and will abort on debug code)
- * The zone of the label may be locked as well.
- * 
- * Release the zone with: zdb_zone_release_unlock(*zonep, owner);
- * 
- * Note that using the returned pointer without locking the zone may have undefined results on a multi threaded environment.
- * 
- * @param db
- * @param name
- * @param type
- * @param zonep
- * @param owner
- * 
- * @return 
- */
-
-const zdb_packed_ttlrdata *zdb_get_rr_set(zdb* db, const u8* name, u16 rtype, zdb_zone **zonep, u8 owner);
-#endif
 #if OBSOLETE
 /** @brief Adds an entry in a zone of the database
  *

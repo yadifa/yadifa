@@ -118,7 +118,8 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-@HAS_TOOLS_TRUE@am__append_1 = lib/dnslg bin/yadifa
+@HAS_TOOLS_TRUE@am__append_1 = lib/dnslg
+@HAS_TOOLS_TRUE@am__append_2 = bin/yadifa
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
@@ -193,8 +194,8 @@ am__define_uniq_tagged_files = \
 ETAGS = etags
 CTAGS = ctags
 CSCOPE = cscope
-DIST_SUBDIRS = lib/dnscore lib/dnsdb lib/dnszone sbin/yadifad etc doc \
-	var lib/dnslg bin/yadifa
+DIST_SUBDIRS = lib/dnscore lib/dnsdb lib/dnszone lib/dnslg \
+	sbin/yadifad bin/yadifa etc doc var
 am__DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/config.h.in AUTHORS \
 	COPYING ChangeLog INSTALL NEWS README TODO compile \
 	config.guess config.sub install-sh ltmain.sh missing
@@ -268,7 +269,6 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GREP = @GREP@
-HAS_ACL_SUPPORT = @HAS_ACL_SUPPORT@
 HAS_BFD_DEBUG_SUPPORT = @HAS_BFD_DEBUG_SUPPORT@
 HAS_BIG_ENDIAN = @HAS_BIG_ENDIAN@
 HAS_CC_ADDRESS_SANITIZER_CHECK = @HAS_CC_ADDRESS_SANITIZER_CHECK@
@@ -297,22 +297,32 @@ HAS_CC_WALL = @HAS_CC_WALL@
 HAS_CC_XC99 = @HAS_CC_XC99@
 HAS_CTRL = @HAS_CTRL@
 HAS_CTRL_DYNAMIC_PROVISIONING = @HAS_CTRL_DYNAMIC_PROVISIONING@
+HAS_DNSQ = @HAS_DNSQ@
+HAS_DROPALL_SUPPORT = @HAS_DROPALL_SUPPORT@
+HAS_DYNCONF_SUPPORT = @HAS_DYNCONF_SUPPORT@
 HAS_DYNUPDATE_SUPPORT = @HAS_DYNUPDATE_SUPPORT@
+HAS_EDF = @HAS_EDF@
+HAS_EXPERIMENTAL = @HAS_EXPERIMENTAL@
 HAS_FULL_ASCII7 = @HAS_FULL_ASCII7@
+HAS_GERY = @HAS_GERY@
 HAS_LITTLE_ENDIAN = @HAS_LITTLE_ENDIAN@
 HAS_LOGDIR = @HAS_LOGDIR@
 HAS_LOG_PID_ALWAYS_ON = @HAS_LOG_PID_ALWAYS_ON@
 HAS_LOG_THREAD_ID_ALWAYS_ON = @HAS_LOG_THREAD_ID_ALWAYS_ON@
 HAS_MALLOC_DEBUG_SUPPORT = @HAS_MALLOC_DEBUG_SUPPORT@
 HAS_MASTER_SUPPORT = @HAS_MASTER_SUPPORT@
+HAS_MEMALIGN_ISSUES = @HAS_MEMALIGN_ISSUES@
 HAS_MESSAGES_SUPPORT = @HAS_MESSAGES_SUPPORT@
+HAS_MIRROR_SUPPORT = @HAS_MIRROR_SUPPORT@
 HAS_MUTEX_DEBUG_SUPPORT = @HAS_MUTEX_DEBUG_SUPPORT@
 HAS_NON_AA_AXFR_SUPPORT = @HAS_NON_AA_AXFR_SUPPORT@
 HAS_NSID_SUPPORT = @HAS_NSID_SUPPORT@
+HAS_RDTSC = @HAS_RDTSC@
 HAS_RRL_SUPPORT = @HAS_RRL_SUPPORT@
 HAS_RRSIG_MANAGEMENT_SUPPORT = @HAS_RRSIG_MANAGEMENT_SUPPORT@
+HAS_THX = @HAS_THX@
 HAS_TOOLS = @HAS_TOOLS@
-HAS_TSIG_SUPPORT = @HAS_TSIG_SUPPORT@
+HAS_TRACK_ZONES_DEBUG_SUPPORT = @HAS_TRACK_ZONES_DEBUG_SUPPORT@
 HAS_ZALLOC_DEBUG_SUPPORT = @HAS_ZALLOC_DEBUG_SUPPORT@
 HAS_ZALLOC_STATISTICS_SUPPORT = @HAS_ZALLOC_STATISTICS_SUPPORT@
 HAS_ZALLOC_SUPPORT = @HAS_ZALLOC_SUPPORT@
@@ -322,6 +332,7 @@ INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 IS_BSD_FAMILY = @IS_BSD_FAMILY@
+IS_DARWIN_GE14 = @IS_DARWIN_GE14@
 IS_DARWIN_OS = @IS_DARWIN_OS@
 IS_LINUX_FAMILY = @IS_LINUX_FAMILY@
 IS_SOLARIS_FAMILY = @IS_SOLARIS_FAMILY@
@@ -413,8 +424,8 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I m4
 dist_noinst_DATA = VERSION
-SUBDIRS = lib/dnscore lib/dnsdb lib/dnszone sbin/yadifad etc doc var \
-	$(am__append_1)
+SUBDIRS = lib/dnscore lib/dnsdb lib/dnszone $(am__append_1) \
+	sbin/yadifad $(am__append_2) etc doc var
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
@@ -906,6 +917,18 @@ profile:
 
 debug:
 	for m in $(SUBDIRS); do $(MAKE) -C $$m debug;done
+
+showsubdirs:
+	for m in $(SUBDIRS); do echo $$m; done
+
+features:
+	for m in $(SUBDIRS); do $(MAKE) -C $$m features;done
+
+release-install: release install
+
+profile-install: profile install
+
+debug-install: debug install
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

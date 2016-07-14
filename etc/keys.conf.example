@@ -1,0 +1,5 @@
+<key>
+        name        abroad-admin-key
+        algorithm   hmac-md5
+        secret      "ChangeThisKey"
+</key>

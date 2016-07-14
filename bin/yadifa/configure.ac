@@ -32,7 +32,7 @@ dnl
 dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 5826 $])
+AC_REVISION([$Revision: 6237 $])
 # 1
 # svn log 2> /dev/null|head -2|grep ^r|sed 's/.\([1-9]*\).*/\1/'
 
@@ -183,27 +183,16 @@ echo
 echo "ZALLOC .............................. : $enable_zalloc"
 echo "ZALLOC STATISTICS ................... : $enable_zalloc_statistics"
 echo "ZALLOC DEBUG ........................ : $enable_zalloc_debug"
-echo "ACL ................................. : $enable_acl"
-echo "TSIG ................................ : $enable_tsig"
 echo "MASTER .............................. : $enable_master"
 echo "DYNUPDATE ........................... : $enable_dynupdate"
 echo "RRSIG MANAGEMENT .................... : $enable_rrsig_management"
 echo "CTRL ................................ : $enable_ctrl"
-echo "NSEC ................................ : $enable_nsec"
-echo "NSEC3 ............................... : $enable_nsec3"
 echo "RRL ................................. : $enable_rrl"
 
 if [[ ! "${OPENSSL}" = "" ]]
 	then
 	echo
         echo "Using OpenSLL from .................. : ${OPENSSL}"
-fi
-
-if [[ "$with_tcl" = "yes" ]]; then 
-	echo
-	echo TCL used ............................ : $tcl_version
-	echo TCL library ......................... : $tcl_libdir
-	echo "TCL includes ........................ : $tcl_includedir"
 fi
 
 echo

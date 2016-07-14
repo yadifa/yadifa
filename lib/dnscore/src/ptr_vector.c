@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup collections Generic collections functions
  *  @ingroup dnscore
  *  @brief A dynamic-sized array of pointers
@@ -55,7 +55,7 @@ void
 ptr_vector_init(ptr_vector* v)
 {
     v->size = PTR_VECTOR_DEFAULT_SIZE;
-    MALLOC_OR_DIE(void**, v->data, v->size * sizeof (void*), PTR_VECTOR_TAG);
+    MALLOC_OR_DIE(void**, v->data, v->size * sizeof(void*), PTR_VECTOR_TAG);
     v->offset = -1;
 }
 
@@ -72,13 +72,76 @@ ptr_vector_init_ex(ptr_vector* v, s32 initial_capacity)
     v->size = initial_capacity;
     if(initial_capacity > 0)
     {
-        MALLOC_OR_DIE(void**, v->data, v->size * sizeof (void*), PTR_VECTOR_TAG);
+        MALLOC_OR_DIE(void**, v->data, v->size * sizeof(void*), PTR_VECTOR_TAG);
     }
     else
     {
         v->data = NULL;
     }
     v->offset = -1;
+}
+
+/**
+ * Initialises a vector as a copy as another vector.
+ * The reserved size is the size of the original plus the extra size.
+ * 
+ * @param v a pointer to the ptr_vector structure to initialise
+ * @param original the vector to copy
+ * @param extra_size the amount of reserved slots to allocate
+ */
+
+void  ptr_vector_init_copy(ptr_vector* v, const ptr_vector* original, u32 extra_size)
+{
+    ptr_vector_init_ex(v, ptr_vector_size(original) + extra_size);
+    if(ptr_vector_last_index(original) >= 0) // => size > 0 => v->data != NULL
+    {
+        assert(original->data != NULL && v->data != NULL);
+        memcpy(v->data, original->data, ptr_vector_size(original) * sizeof(void*));
+    }
+    v->offset = original->offset;
+}
+
+/**
+ * Initialises a vector as a copy as another vector plus onz item added
+ * The reserved size is the size of the original plus one
+ * 
+ * @param v a pointer to the ptr_vector structure to initialise
+ * @param original the vector to copy
+ * @param data an item to add
+ */
+
+void  ptr_vector_init_copy_append(ptr_vector* v, const ptr_vector* original, void *data)
+{
+    ptr_vector_init_ex(v, ptr_vector_size(original) + 1);
+    if(ptr_vector_last_index(original) >= 0)
+    {
+        assert(original->data != NULL && v->data != NULL);
+        memcpy(v->data, original->data, ptr_vector_size(original) * sizeof(void*));
+    }
+    v->offset = original->offset;
+    ptr_vector_append(v, data);
+}
+
+/**
+ * Initialises a vector as a copy as another vector plus a few items added
+ * The reserved size is the size of the original plus the data size.
+ * 
+ * @param v a pointer to the ptr_vector structure to initialise
+ * @param original the vector to copy
+ * @param data an array of pointers
+ * @param data_size the size of the data array
+ */
+
+void  ptr_vector_init_copy_append_array(ptr_vector* v, const ptr_vector* original, void *data, u32 data_size)
+{
+    ptr_vector_init_ex(v, ptr_vector_size(original) + data_size);
+    if(ptr_vector_last_index(original) >= 0)
+    {
+        assert(original->data != NULL && v->data != NULL);
+        memcpy(v->data, original->data, ptr_vector_size(original) * sizeof(void*));
+    }
+    v->offset = original->offset;
+    ptr_vector_append_array(v, data, data_size);
 }
 
 /**
@@ -128,13 +191,12 @@ ptr_vector_resize(ptr_vector*v, s32 newsize)
     if(v->offset >= 0)
     {
         /* Only the data up to v->offset (included) is relevant */
-        MALLOC_OR_DIE(void**, data, newsize * sizeof (void*), PTR_VECTOR_TAG);
-        MEMCOPY(data, v->data, (v->offset + 1) * sizeof (void*));
-
+        MALLOC_OR_DIE(void**, data, newsize * sizeof(void*), PTR_VECTOR_TAG);
+        MEMCOPY(data, v->data, (v->offset + 1) * sizeof(void*));
 #ifdef DEBUG
         if(v->data != NULL)
         {
-            memset(v->data, 0xff, v->size * sizeof (void*));
+            memset(v->data, 0xff, v->size * sizeof(void*));
         }
 #endif
         free(v->data);
@@ -142,7 +204,7 @@ ptr_vector_resize(ptr_vector*v, s32 newsize)
     else
     {
         free(v->data);
-        MALLOC_OR_DIE(void**, data, newsize * sizeof (void*), PTR_VECTOR_TAG);
+        MALLOC_OR_DIE(void**, data, newsize * sizeof(void*), PTR_VECTOR_TAG);
     }
     v->data = data;
     v->size = newsize;
@@ -200,8 +262,44 @@ ptr_vector_append(ptr_vector* v, void* data)
         ptr_vector_resize(v, v->size * 2);
     }
 
+    assert(v->data != NULL);
     v->data[++v->offset] = data;
 }
+
+/**
+ * Appends the item (pointer) to the vector
+ * 
+ * @param v     a pointer to the ptr_vector structure
+ * @param datap  a pointer to the items
+ * @param data_size the number of items to append
+ */
+
+void
+ptr_vector_append_array(ptr_vector* v, void** datap, u32 data_size)
+{
+    while(v->offset + data_size >= v->size)
+    {
+        if(v->size == 0)
+        {
+            v->size = PTR_VECTOR_DEFAULT_SIZE;
+        }
+        ptr_vector_resize(v, v->size * 2);
+    }
+    assert(v->data != NULL);
+    assert(datap != NULL);
+    memcpy(&v->data[++v->offset], datap, data_size);
+}
+
+/**
+ * Appends the item (pointer) to the vector and try to keep the buffer size at at most
+ * restrictedlimit.
+ * The goal is to avoid a growth of *2 that would go far beyond the restrictedlimit.
+ * The performance is extremely poor when the number of items in the buffer is restrictedlimit or more.
+ * 
+ * @param v     a pointer to the ptr_vector structure
+ * @param data  a pointer to the item
+ * @param restrictedlimit a guideline limit on the size of the vector
+ */
 
 void
 ptr_vector_append_restrict_size(ptr_vector* v, void* data, u32 restrictedlimit)
@@ -265,7 +363,7 @@ ptr_vector_qsort(ptr_vector* v, ptr_vector_qsort_callback compare)
 {
     if(v->offset > 0) /* at least 2 items */
     {
-        qsort(v->data, v->offset + 1, sizeof (void*), compare);
+        qsort(v->data, v->offset + 1, sizeof(void*), compare);
     }
 }
 

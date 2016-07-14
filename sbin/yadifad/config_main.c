@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup config Configuration handling
  *  @ingroup yadifad
  *  @brief
@@ -45,6 +45,9 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include "config.h"
@@ -57,8 +60,10 @@
 #include <dnscore/chroot.h>
 
 #include <dnsdb/journal.h>
+#if ZDB_HAS_DNSSEC_SUPPORT
 #include <dnsdb/dnssec.h>
-#include <dnsdb/dnssec_keystore.h>
+#include <dnsdb/dnssec-keystore.h>
+#endif
 
 #include "confs.h"
 #include "config_error.h"
@@ -91,7 +96,7 @@ config_data						       *g_config = NULL;
 CONFIG_BEGIN(config_main_desc)
 
 CONFIG_FILE(     config_file                 , S_CONFIGDIR S_CONFIGFILE   )
-CONFIG_STRING(   config_file_dynamic         , S_CONFIGDIR S_CONFIGFILEDYNAMIC )
+
 /* Path to chroot, will be used if chroot is on */
 CONFIG_CHROOT(   chroot_path                 , S_CHROOTPATH               )
 /* Path to data which will be used for relative data */
@@ -106,6 +111,11 @@ CONFIG_STRING(   pid_file                    , S_PIDFILE                  )
 /* Switch for turning chroot, uid & gid off   */
 CONFIG_FLAG16(   daemon                      , S_DAEMONRUN               , server_flags,  SERVER_FL_DAEMON              )
 CONFIG_FLAG16(   chroot                      , S_CHROOT                  , server_flags,  SERVER_FL_CHROOT              )
+#ifdef DEBUG
+CONFIG_FLAG16(   log_unprocessable           , S_LOG_UNPROCESSABLE       , server_flags,  SERVER_FL_LOG_UNPROCESSABLE   )
+#endif
+
+CONFIG_FLAG16(   log_from_start              , S_LOG_FROM_START          , server_flags,  SERVER_FL_LOG_FROM_START      )
 CONFIG_UID(      uid                         , S_UID                      )
 CONFIG_GID(      gid                         , S_GID                      )
 
@@ -137,7 +147,8 @@ CONFIG_U32(      thread_count_by_address     , S_THREAD_COUNT_BY_ADDRESS  )
 // how many threads for the dnssec processing)
 CONFIG_U32(      dnssec_thread_count         , S_DNSSEC_THREAD_COUNT      )
 CONFIG_U32(      zone_load_thread_count      , S_ZONE_LOAD_THREAD_COUNT      )
-CONFIG_U32(      zone_download_thread_count  , S_ZONE_DOWNLOAD_THREAD_COUNT      )
+CONFIG_U32(      zone_download_thread_count  , S_ZONE_DOWNLOAD_THREAD_COUNT  )
+CONFIG_U32_RANGE(network_model               , S_NETWORK_MODEL, 0, 1      )
 
 /* Max number of TCP queries  */
 CONFIG_U32_RANGE(max_tcp_queries             , S_MAX_TCP_QUERIES          ,TCP_QUERIES_MIN, TCP_QUERIES_MAX)
@@ -154,9 +165,9 @@ CONFIG_U32(      statistics_max_period       , S_STATISTICS_MAX_PERIOD    )
 CONFIG_U32(      xfr_connect_timeout         , S_XFR_CONNECT_TIMEOUT      )
 CONFIG_U32(      queries_log_type            , S_QUERIES_LOG_TYPE         )
 
-#if HAS_DNSSEC_SUPPORT != 0
+#if HAS_DNSSEC_SUPPORT
 CONFIG_U16(      sig_signing_type            , S_SIG_SIGNING_TYPE          )
-CONFIG_U32_RANGE(sig_validity_interval       , S_SIG_VALIDITY_INTERVAL    , SIGNATURE_VALIDITY_INTERVAL_MIN     , SIGNATURE_VALIDITY_INTERVAL_MAX    ) /* 7 to 365 days = 30 */
+CONFIG_U32_RANGE(sig_validity_interval       , S_SIG_VALIDITY_INTERVAL    , SIGNATURE_VALIDITY_INTERVAL_MIN     , SIGNATURE_VALIDITY_INTERVAL_MAX    ) /* 7 to 366 days = 30 */
 CONFIG_U32_RANGE(sig_validity_regeneration   , S_SIG_VALIDITY_REGENERATION, SIGNATURE_VALIDITY_REGENERATION_MIN , SIGNATURE_VALIDITY_REGENERATION_MAX) /* 24 hours to 168 hours */
 CONFIG_U32_RANGE(sig_validity_jitter         , S_SIG_VALIDITY_JITTER      , SIGNATURE_VALIDITY_JITTER_MIN       , SIGNATURE_VALIDITY_JITTER_MAX      ) /* 0 to 86400 = 3600*/
 CONFIG_ALIAS(sig_jitter, sig_validity_jitter)
@@ -165,7 +176,7 @@ CONFIG_ALIAS(sig_jitter, sig_validity_jitter)
 CONFIG_U32_RANGE(axfr_max_record_by_packet   , S_AXFR_MAX_RECORD_BY_PACKET , AXFR_RECORD_BY_PACKET_MIN , AXFR_RECORD_BY_PACKET_MAX )
 CONFIG_U32_RANGE(axfr_max_packet_size        , S_AXFR_PACKET_SIZE_MAX      , AXFR_PACKET_SIZE_MIN      , AXFR_PACKET_SIZE_MAX      )
 CONFIG_BOOL(axfr_compress_packets            , S_AXFR_COMPRESS_PACKETS    )
-CONFIG_U32(      axfr_retry_delay            , S_AXFR_RETRY_DELAY         )
+CONFIG_U32_RANGE(axfr_retry_delay            , S_AXFR_RETRY_DELAY          , AXFR_RETRY_DELAY_MIN      , AXFR_RETRY_DELAY_MAX      )
 CONFIG_U32(      axfr_retry_jitter           , S_AXFR_RETRY_JITTER        )
 
           /* alias, aliased */
@@ -243,14 +254,14 @@ config_main_verify_and_update_directory(const char *base_path, char **dirp)
 
     if(stat(fullpath, &ds) < 0)
     {
-        osformatln(termerr, "error: '%s': %s", fullpath, strerror(errno));
-        
+        ttylog_err("error: '%s': %s", fullpath, strerror(errno));
+
         return ERROR;
     }
 
     if((ds.st_mode & S_IFMT) != S_IFDIR)
     {
-        osformatln(termerr, "error: '%s' is not a directory", dir);
+        ttylog_err("error: '%s' is not a directory", dir);
         
         return ERROR;
     }
@@ -261,7 +272,7 @@ config_main_verify_and_update_directory(const char *base_path, char **dirp)
     {
         int return_code = ERRNO_ERROR;
         
-        osformatln(termerr, "error: '%s' is not writable: %r", fullpath, return_code);
+        ttylog_err("error: '%s' is not writable: %r", fullpath, return_code);
         
         return return_code;
     }
@@ -341,16 +352,12 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
     u32 port = 0;
     char tmp[PATH_MAX];
 
-    if((g_config->config_file_dynamic == NULL) || (g_config->config_file_dynamic[0] != '/') )
-    {
-        osformatln(termerr, "config: main: config-file-dynamic is not absolute");
-        return ERROR;
-    }
+
 
     if(FAIL(parse_u32_check_range(g_config->server_port, &port, 1, MAX_U16, 10)))
     {
         port = DNS_DEFAULT_PORT;
-        osformatln(termerr, "config: main: wrong dns port set in main '%s', defaulted to %d", g_config->server_port, port);
+        ttylog_err("config: main: wrong dns port set in main '%s', defaulted to %d", g_config->server_port, port);
     }
     
     if(g_config->hostname_chaos == NULL)
@@ -382,7 +389,7 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
         
         if(euid != 0)
         {
-            osformatln(termerr, "config: main: chroot has been enabled but euid is not root (%i != 0)", (int)euid);
+            ttylog_err("config: main: chroot has been enabled but euid is not root (%i != 0)", (int)euid);
             return ERROR;
         }
     }
@@ -402,9 +409,17 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
     
     if(g_config->total_interfaces > MAX_INTERFACES)
     {
-        osformatln(termerr, "error: more than %d listening addresses defined.", MAX_INTERFACES);
+        ttylog_err("error: more than %d listening addresses defined.", MAX_INTERFACES);
         return ERROR;
     }
+
+#ifndef SO_REUSEPORT
+    if(g_config->network_model == 1)
+    {
+        ttylog_err("error: network-model 1 requires features not available on this system (SO_REUSEPORT)");
+        return ERROR;
+    }
+#endif
     
     g_config->axfr_retry_jitter = BOUND(AXFR_RETRY_JITTER_MIN, g_config->axfr_retry_jitter, g_config->axfr_retry_delay);
     
@@ -417,7 +432,7 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
 
     if(g_config->thread_count_by_address == 0)
     {
-        osformatln(termerr, "config: single thread engine has been removed, thread-count-by-address set to 1");
+        ttylog_err("config: single thread engine has been removed, thread-count-by-address set to 1");
         g_config->thread_count_by_address = 1;
     }
     
@@ -431,34 +446,33 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
         g_config->thread_count_by_address = sys_get_cpu_count();
     }
     
-    g_config->dnssec_thread_count = BOUND(1, g_config->dnssec_thread_count, sys_get_cpu_count());
-    
     g_config->tcp_query_min_rate_us = g_config->tcp_query_min_rate * 0.000001;
     
+#if HAS_DNSSEC_SUPPORT
+    g_config->dnssec_thread_count = BOUND(1, g_config->dnssec_thread_count, sys_get_cpu_count());
+
     if(!IS_TYPE_PRIVATE(g_config->sig_signing_type))
     {
-        osformatln(termerr, "error: signing type is not in the accepted range: %hx", g_config->sig_signing_type);
+        ttylog_err("error: signing type is not in the accepted range: %hx", g_config->sig_signing_type);
         return CONFIG_WRONG_SIG_TYPE;
     }
     
     if(g_config->sig_validity_interval > SIGNATURE_VALIDITY_INTERVAL_MAX)
     {
-        osformatln(termerr, "error: signature validity interval too high");
+        ttylog_err("error: signature validity interval too high");
         return CONFIG_WRONG_SIG_VALIDITY;
     }
 
     if(g_config->sig_validity_regeneration * SIGNATURE_VALIDITY_REGENERATION_S * 2 > g_config->sig_validity_interval * SIGNATURE_VALIDITY_INTERVAL_S)
     {
-        osformatln(termerr, "error: default signature regeneration is more than half the interval (%ds * 2 > %ds)",
+        ttylog_err("error: default signature regeneration is more than half the interval (%ds * 2 > %ds)",
                 g_config->sig_validity_regeneration * SIGNATURE_VALIDITY_REGENERATION_S,
                 g_config->sig_validity_interval * SIGNATURE_VALIDITY_INTERVAL_S);
         return CONFIG_WRONG_SIG_REGEN;
     }
-    
-    if(strcmp(g_config->config_file, g_config->config_file_dynamic) == 0)
-    {
-        return ERROR;
-    }
+#endif
+
+
     
     /// @note config_main_verify_and_update_directory updates the folder with the base_path
     
@@ -509,10 +523,11 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
         return ERROR;
     }
     
+#if ZDB_HAS_DNSSEC_SUPPORT
     dnssec_keystore_setpath(g_config->keys_path);
-    
     dnssec_set_xfr_path(g_config->xfr_path);
     journal_set_xfr_path(g_config->xfr_path);
+#endif
     
     if((logger_get_uid() != g_config->uid) || (logger_get_gid() != g_config->gid))
     {
@@ -528,8 +543,8 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
 ya_result
 config_register_main(s32 priority)
 {
-    MALLOC_OR_DIE(config_data*, g_config, sizeof(config_data), GENERIC_TAG);
-    ZEROMEMORY(g_config, sizeof (config_data));
+    MALLOC_OR_DIE(config_data*, g_config, sizeof(config_data), YGCONFIG_TAG);
+    ZEROMEMORY(g_config, sizeof(config_data));
     
     g_config->gid = getgid();
     g_config->uid = getuid();

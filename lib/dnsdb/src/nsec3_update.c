@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -46,7 +46,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <dnscore/format.h>
 #include <dnscore/typebitmap.h>
 
 #include "dnsdb/zdb_types.h"
@@ -55,10 +54,13 @@
 
 #include "dnsdb/nsec3_update.h"
 #include "dnsdb/nsec_common.h"
+
 #include "dnsdb/nsec3_owner.h"
+
 #include "dnsdb/rrsig.h"
+
 #include "dnsdb/zdb_listener.h"
-#include "dnsdb/zdb_zone.h"
+#include "dnsdb/zdb_icmtl.h"
 
 #define MODULE_MSG_HANDLE g_dnssec_logger
 
@@ -68,6 +70,15 @@ extern logger_handle *g_dnssec_logger;
 #undef NSEC3_UPDATE_ZONE_DEBUG
 #define NSEC3_UPDATE_ZONE_DEBUG 0
 #endif
+
+ya_result
+nsec3_chain_callback_nop(const zdb_zone *zone, s8 chain_index, void *args)
+{
+    (void)zone;
+    (void)chain_index;
+    (void)args;
+    return SUCCESS;
+}
 
 /*
  * Takes the result of an update and commits it to the label
@@ -192,12 +203,14 @@ nsec3_update_rrsig_commit(zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttl
 }
 
 bool
-nsec3_is_label_covered(zdb_rr_label *label, bool opt_out)
+nsec3_is_label_covered(const zdb_rr_label *label, bool opt_out)
 {
     bool opt_in = !opt_out;
     bool skip_children = FALSE;    
     bool nsec3_covered = FALSE;
     //bool force_rrsig = FALSE;
+    
+
     
     if(!ZDB_LABEL_ISAPEX(label)) /* Not the origin (The apex of a zone has got a '.' label */
     {
@@ -205,7 +218,11 @@ nsec3_is_label_covered(zdb_rr_label *label, bool opt_out)
         {
             skip_children = TRUE;
 
+
+            
             bool has_ds = zdb_record_find(&label->resource_record_set, TYPE_DS) != NULL;
+            
+
             
             nsec3_covered = opt_in|has_ds;
             //force_rrsig = has_ds;            
@@ -229,8 +246,6 @@ nsec3_is_label_covered(zdb_rr_label *label, bool opt_out)
             bool notempty = !zdb_record_isempty(&label->resource_record_set);
             
             nsec3_covered = notempty;
-            
-            //force_rrsig = notempty;
         }
     }
     else
@@ -241,17 +256,24 @@ nsec3_is_label_covered(zdb_rr_label *label, bool opt_out)
          * Records => RRSIG
          */
 
-        nsec3_covered = TRUE;
+        return TRUE;
     }
+    
+
 
     if(!skip_children)
     {
         /* for all children */
         
         dictionary_iterator iter;
+        
+
+        
         dictionary_iterator_init(&label->sub, &iter);
         
-        while(dictionary_iterator_hasnext(&iter))
+
+        
+        while(!nsec3_covered && dictionary_iterator_hasnext(&iter))
         {
             zdb_rr_label *sub_label =  *(zdb_rr_label**)dictionary_iterator_next(&iter);
             /* if a child has been signed, then this one will be too */
@@ -259,6 +281,8 @@ nsec3_is_label_covered(zdb_rr_label *label, bool opt_out)
             nsec3_covered |= nsec3_is_label_covered(sub_label, opt_out);
         }
     }
+    
+
     
     /*
      * If it's opt-out and we are not forced to sign, then skip to the next one
@@ -503,8 +527,7 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
 
         do
         {
-            ZALLOC_OR_DIE(nsec3_label_extension*, n3ext, nsec3_label_extension, NSEC3_LABELEXT_TAG); // in nsec3_update_label_nsec3_nodes_recursive
-
+            n3ext = nsec3_label_extension_alloc();
             n3ext->self = NULL;
             n3ext->star = NULL;
             n3ext->next = n3ext_first; // add this (potentially empty) node in the nsec3 chain
@@ -536,23 +559,10 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
         if(n3ext->self == NULL)
         {
             /*
-                * Retrieve the NSEC3 hash algorithm size
-                */
+             * Compute the digest for this fqdn
+             */
 
-            digest[0] = nsec3_hash_len(NSEC3_ZONE_ALGORITHM(n3));
-
-            /*
-                * Retrieve the NSEC3 hash algorithm function and compute the digest for this fqdn
-                */
-
-            nsec3_hash_get_function(NSEC3_ZONE_ALGORITHM(n3))(
-                    name,
-                    name_len,
-                    NSEC3_ZONE_SALT(n3),
-                    NSEC3_ZONE_SALT_LEN(n3),
-                    nsec3_zone_get_iterations(n3),
-                    &digest[1],
-                    FALSE);
+            nsec3_compute_digest_from_fqdn_with_len(n3, name, name_len, digest, FALSE);
 
             commonargs->internal_statistics_nsec3_count++;
 
@@ -560,20 +570,17 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
             log_debug("nsec3: made '%{dnsname}' %{digest32h} ", name, digest);
 #endif
             /*
-                * DYNUPDATE:
-                *
-                * Seek for digest
-                *
-                * If the digest does not exists:
-                *	Get the predecessor.
-                *      If the predecessor is not marked:
-                *	    Mark the predecessor for future add and output it right now
-                *
-                */
-
-            /*
-                * Find the node with the computed digest
-                */
+             * DYNUPDATE:
+             *
+             * Seek for digest
+             *
+             * If the digest does not exists:
+             *	Get the predecessor.
+             *      If the predecessor is not marked:
+             *	    Mark the predecessor for future add and output it right now
+             *
+             * Find the node with the computed digest
+             */
 
             nsec3_zone_item* node;
 
@@ -643,7 +650,7 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
                 /* Merge the existing bitmap with the new one */
 
                 u8* tmp_type_bit_maps;
-
+                
 #if DNSCORE_HAS_ZALLOC_SUPPORT
                 /* LOCK */
                 ZALLOC_ARRAY_OR_DIE(u8*, tmp_type_bit_maps, type_bit_maps_size, NSEC3_TYPEBITMAPS_TAG);
@@ -653,16 +660,17 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
                 // malloc cannot (undefined)
                 ZALLOC_ARRAY_OR_DIE(u8*, tmp_type_bit_maps, MAX(type_bit_maps_size,1), NSEC3_TYPEBITMAPS_TAG);
 #endif
+                
                 type_bit_maps_write(tmp_type_bit_maps, type_context);
 
                 if(type_bit_maps_merge(type_context, node->type_bit_maps, node->type_bit_maps_size, tmp_type_bit_maps, type_bit_maps_size))
                 {
                     /**
-                        * TRUE : a merge occurred
-                        * NOTE : this case never occurred while testing.  It has
-                        * to be triggered with a dynupdate or a wrong zone file.
-                        * @todo : factorize with "nsec3_add_label" (if possible ?)
-                        */
+                     * TRUE : a merge occurred
+                     * NOTE : this case never occurred while testing.  It has
+                     * to be triggered with a dynupdate or a wrong zone file.
+                     * @todo 20160106 edf -- : factorize with "nsec3_add_label" (if possible ?)
+                     */
 
                     /*
                         * The node existed already but has now been changed.
@@ -701,15 +709,15 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
                         type_bit_maps_write(node->type_bit_maps, type_context);
                     }
                     /*
-                        * This case does not exist:  A merge of something of size > 0
-                        * with anything will always give a size > 0
-                        *
-                        * else
-                        * {
-                        *   node->type_bit_maps_size = 0;
-                        * }
-                        *
-                        */
+                     * This case does not exist:  A merge of something of size > 0
+                     * with anything will always give a size > 0
+                     *
+                     * else
+                     * {
+                     *   node->type_bit_maps_size = 0;
+                     * }
+                     *
+                     */
                 }
 
                 /* LOCK */
@@ -771,16 +779,12 @@ nsec3_update_zone_nsec3_nodes_recursive(zdb_zone *zone, bool opt_out)
 /**
  * Updates ALL the NSEC3 records for ALL the labels, and this for ALL the NSEC3PARAM of the zone.
  * After this call, a signature update must be called/scheduled on the zone.
- *
  */
 
 ya_result
 nsec3_update_zone(zdb_zone* zone)
 {
     /**
-     * @todo : check if the zone is NSEC or NSEC3
-     *
-     * 
      * If it is NSEC: prepare to remove all NSEC information
      * If it is NSEC3: just do a normal update
      *
@@ -798,8 +802,8 @@ nsec3_update_zone(zdb_zone* zone)
         return DNSSEC_ERROR_NSEC3_INVALIDZONESTATE; /* NSEC3 update of an NSEC zone is not supported */
     }
 
-    bool opt_out = ((zone->apex->flags & ZDB_RR_LABEL_NSEC3_OPTOUT) != 0);
-    
+    bool opt_out = zdb_zone_is_nsec3_optout(zone);
+        
     u32 min_ttl = 900;
     
     zdb_zone_getminttl(zone, &min_ttl);
@@ -816,8 +820,15 @@ nsec3_update_zone(zdb_zone* zone)
      */
 
     u8 digest[1 + MAX_DIGEST_LENGTH];
-
-#if NSEC3_INCLUDE_ZONE_PATH != 0
+    
+#if NSEC3_INCLUDE_ZONE_PATH
+    
+    /**
+     * This now disabled code was used so YADIFA was compatible with the
+     * named 9.6.? NSEC3 chain.
+     * 
+     * It is now obsolete as 9.6.? does not do that anymore.
+     */
 
     u8* zone_path = zone->origin;
     zone_path += (*zone_path) + 1;
@@ -836,16 +847,7 @@ nsec3_update_zone(zdb_zone* zone)
 
         do
         {
-            digest[0] = nsec3_hash_len(NSEC3_ZONE_ALGORITHM(n3));
-
-            nsec3_hash_get_function(NSEC3_ZONE_ALGORITHM(n3))(
-                    zone_path,
-                    dnsname_len(zone_path),
-                    NSEC3_ZONE_SALT(n3),
-                    NSEC3_ZONE_SALT_LEN(n3),
-                    nsec3_zone_get_iterations(n3),
-                    &digest[1],
-                    FALSE);
+            nsec3_compute_digest_from_fqdn_with_len(n3, zone_path, dnsname_len(zone_path), digest, FALSE);
 
             //log_debug("nsec3_update_zone: creating node: %{digest32h} NSEC3 ; %{dnsname} (zone)", digest, zone_path);
 
@@ -854,7 +856,7 @@ nsec3_update_zone(zdb_zone* zone)
             node->flags = (opt_out)?1:0;
             node->flags |= NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD;
 
-            if(!nsec3_owned_by(node, NSEC3_ZONE_FAKE_OWNER))
+            if(!nsec3_is_owned_by(node, NSEC3_ZONE_FAKE_OWNER))
             {
                 nsec3_add_owner(node, NSEC3_ZONE_FAKE_OWNER); /* Zone proprietary */
             }
@@ -871,9 +873,7 @@ nsec3_update_zone(zdb_zone* zone)
         zone_path += (*zone_path) + 1;
     }
 #else
-
-
-
+    // generate a normal NSEC3 chain
 #endif
     
     zdb_zone_label_iterator label_iterator;
@@ -891,7 +891,6 @@ nsec3_update_zone(zdb_zone* zone)
      * NOTE: When I speak about IXFR I speak about the mechanism, not
      * the network transfer.
      *
-     * @todo; This should be improved for the TLD:
      * NOTE: This should be improved for the TLD:
      *
      *       When doing a small update (and not the first init) I should
@@ -933,7 +932,7 @@ nsec3_update_zone(zdb_zone* zone)
     
     //zdb_zone_label_iterator label_iterator;
 
-    zdb_zone_label_iterator_init(zone, &label_iterator);
+    zdb_zone_label_iterator_init(&label_iterator, zone);
 
     while(zdb_zone_label_iterator_hasnext(&label_iterator))
     {
@@ -966,17 +965,8 @@ nsec3_update_zone(zdb_zone* zone)
             yassert(n3ext != NULL);
 
             /* Compute the digest */
-            
-            digest[0] = nsec3_hash_len(NSEC3_ZONE_ALGORITHM(n3));
 
-            nsec3_hash_get_function(NSEC3_ZONE_ALGORITHM(n3))(
-                    name,
-                    name_len,
-                    NSEC3_ZONE_SALT(n3),
-                    NSEC3_ZONE_SALT_LEN(n3),
-                    nsec3_zone_get_iterations(n3),
-                    &digest[1],
-                    FALSE);
+            nsec3_compute_digest_from_fqdn_with_len(n3, name, name_len, digest, FALSE);
 
             //log_debug("nsec3_update_zone: \"precalc\" node: %{digest32h} NSEC3 ; %{dnsname}", digest, name);
 
@@ -1003,9 +993,120 @@ nsec3_update_zone(zdb_zone* zone)
         yassert(n3ext == NULL);
     }
 
-    /** @todo: SCHEDULE a signature for all NSEC3 of the zone */
-
     return SUCCESS;
+}
+
+/// @note 20150915 edf -- the first NSEC3PARAM is the one used for queries.  The other NSEC3PARAM chain must
+///                       be complete before removing this one.
+///                       And this tells the way to do this properly.
+///                       When an NSEC3PARAM is added, all the required processing should be computed in the
+///                       background.  The NSEC3PARAM has to be added only at the end.
+///                       When an NSEC3PARAM is removed (can be) it should only be removed at the end.
+///                       All the changes must be written in the journal and should be visible in the DB.
+///                       Deducing than an NSEC3PARAM is missing should be deduced from the NSEC3 without a chain.
+///                       I may have to prevent YADIFA to accept an update when one is already on the way.
+///                       This limitation may be removed later.
+/// @note 20150916 edf -- the zone needs to be marked as generating an NSEC3 chain.
+///                       the zone needs to be marked as deleting an NSEC3 chain (which one)
+///                       the program may be stopped while doing it so I need a way to tell what I'm doing
+///                       in the journal.
+
+
+
+void
+nsec3_update_zone_new_nsec3param(zdb_zone* zone, zdb_packed_ttlrdata* new_nsec3param)
+{
+    zdb_icmtl icmtl;
+    ya_result ret;
+
+    // start to write to the journal (the update triggering this should have stopped)
+    // add an experimental "started to add an nsec3param"
+    // stop to write to the journal
+    
+    if(ISOK(ret = zdb_icmtl_begin(&icmtl, zone)))
+    {
+        if(zdb_record_insert_checked(&zone->apex->resource_record_set, TYPE_NSEC3PARAMADD, new_nsec3param))
+        {
+        }
+        
+        if(FAIL(ret = zdb_icmtl_end(&icmtl)))
+        {
+            log_err("update: new nsec3param: failed to close the journal: %r", ret);
+            return;
+        }
+    }
+    else
+    {
+        log_err("update: new nsec3param: failed to open the journal: %r", ret);
+        return;
+    }
+    
+    // loop:
+    //  start to write to the journal (the update triggering this should have stopped)
+    //  compute a batch of nsec3 updates (don't sign them as they are not supposed to be used yet)
+    //  write the updates
+    //  stop to write to the journal
+    
+    // nsec3_forall_label(zdb_zone *zone, s8 chain_index, bool callback_need_fqdn, bool opt_out, nsec3_forall_label_callback *callback, void *callback_args)
+    
+    for(;;)
+    {
+        if(ISOK(ret = zdb_icmtl_begin(&icmtl, zone))) // @todo 20160106 edf -- loop this until doomsday
+        {
+            if(zdb_record_insert_checked(&zone->apex->resource_record_set, TYPE_NSEC3PARAMADD, new_nsec3param))
+            {
+            }
+            
+            if(FAIL(ret = zdb_icmtl_end(&icmtl)))
+            {
+                log_err("update: new nsec3param: failed to close the journal: %r", ret);
+                return;
+            }
+        }
+        else
+        {
+            log_err("update: new nsec3param: failed to open the journal: %r", ret);
+            return;
+        }
+    }
+    
+    // start to write to the journal (the update triggering this should have stopped)
+    // add the nsec3param
+    // update the signatures of the nsec3param & nsec3 of this chain
+    // stop to write to the journal
+    
+    // start to write to the journal (the update triggering this should have stopped)
+    // remove an experimental "started to add an nsec3param
+    // stop to write to the journal
+  
+    // if there is a task to remove an nsec3param, start it now
+    
+}
+
+void
+nsec3_update_zone_remove_nsec3param(zdb_zone* zone, zdb_packed_ttlrdata* new_nsec3param)
+{
+    // start to write to the journal (the update triggering this should have stopped)
+    //  remove the nsec3param
+    
+    // I'll use 0xFF00 for the type (Reserved for private use)
+    
+    // loop:
+    //  start to write to the journal (the update triggering this should have stopped)
+    //  remove a batch of nsec3 items linked to the nsec3param
+    //  write the updates
+    //  stop to write to the journal
+    
+    // start to write to the journal (the update triggering this should have stopped)
+    // add the nsec3param
+    // update the signatures of the nsec3param & nsec3 of this chain
+    // stop to write to the journal
+    
+    // start to write to the journal (the update triggering this should have stopped)
+    // remove an experimental "started to delete an nsec3param
+    // stop to write to the journal
+    
+    // if there is a task to remove an nsec3param, start it now
 }
 
 /** @} */

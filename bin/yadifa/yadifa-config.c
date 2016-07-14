@@ -1,43 +1,42 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 /** @defgroup yadifa
  *  @ingroup ###
  *  @brief yadifa
  */
 
-#include "client-config.h"
 #include <ctype.h>
 #include <sys/stat.h>
 
@@ -50,6 +49,7 @@
 #include <dnscore/string_set.h>
 
 #include <dnslg/config-resolver.h>
+#include <sys/stat.h>
 
 // automatic created include file
 #include "client-config.h"
@@ -59,19 +59,18 @@
 #include "common-config.h"
 
 /*----------------------------------------------------------------------------*/
-
- /*    ------------------------------------------------------------    */
+#pragma mark DEFINES 
 
 #define DEF_VAL_CLASS                                              "CTRL"
-#define DEF_VAL_TYPE                                                  "A"
+#define DEF_VAL_TYPE                                              "TYPE0"
+#define DEF_YADIFA_CONF                         SYSCONFDIR "/yadifa.conf"
 
 /*----------------------------------------------------------------------------*/
+#pragma mark GLOBAL VARIABLES
 
 extern logger_handle *g_client_logger;
 #define MODULE_MSG_HANDLE g_client_logger
 
-
-//extern config_resolver_settings_s g_resolver_settings;
 
 struct logger_name_handle_s
 {
@@ -87,6 +86,8 @@ static const struct logger_name_handle_s logger_name_handles[] =
 
 
 /*----------------------------------------------------------------------------*/
+#pragma mark CONFIG
+
 
 /// main container
 #define CONFIG_TYPE config_main_settings_s
@@ -99,12 +100,14 @@ CONFIG_FQDN(         qname,         "."                                         
 CONFIG_FQDN(         tsig_key_name, "ctrl-key"                                                     )
 CONFIG_BOOL(         enable,        "on"                                                           )
 CONFIG_BOOL(         clean,         "off"                                                          )
-CONFIG_STRING(       config_file,   ""                                                             )
+CONFIG_STRING(       config_file,   DEF_YADIFA_CONF                                                )
 
 
 
 CONFIG_BOOL(         verbose,       "off"                                                          )
 
+    /** @todo 20150219 gve -- must be removed before release */
+CONFIG_U8(           log_level,     "6"                                                            ) // 6 is MSG_INFO
 
 
 CONFIG_END(config_main_desc)
@@ -117,6 +120,7 @@ config_main_settings_s g_yadifa_main_settings;
 
 
 /*----------------------------------------------------------------------------*/
+#pragma mark COMMAND LINE
 
 // configuration specific to the command line
 
@@ -126,8 +130,8 @@ CMDLINE_BEGIN(yadifa_cmdline)
 CMDLINE_SECTION(  "yadifa")
 CMDLINE_OPT(      "config",          'c', "config_file"                )
 
-CMDLINE_BOOL(     "clean",            0,  "clean"                      )
-CMDLINE_BOOL_NOT( "noclean",          0,  "clean"                      )
+CMDLINE_BOOL(     "clean",             0,  "clean"                      )
+CMDLINE_BOOL_NOT( "noclean",           0,  "clean"                      )
 CMDLINE_OPT(      "level",           'l', "log_level"                  )
 CMDLINE_OPT(      "qname",           'q', "qname"                      )
 CMDLINE_OPT(      "server",          's', "server"                     )
@@ -136,16 +140,16 @@ CMDLINE_OPT(      "key-name",        'K', "tsig_key_name"              )
 
 
 
-CMDLINE_BOOL(     "enable",           0,  "enable"                     )
-CMDLINE_BOOL_NOT( "disable",          0,  "enable"                     )
-CMDLINE_BOOL(     "verbose",          0,  "verbose"                    )
+CMDLINE_BOOL(     "enable",            0,  "enable"                     )
+CMDLINE_BOOL_NOT( "disable",           0,  "enable"                     )
+CMDLINE_BOOL(     "verbose",         'v',  "verbose"                    )
 
-CMDLINE_BOOL(     "json",             0,  "json"                       )
-CMDLINE_BOOL(     "multiline",        0,  "multiline"                  )
-CMDLINE_BOOL(     "parse",            0,  "parse"                      )
-CMDLINE_BOOL(     "short",            0,  "short"                      )
-CMDLINE_BOOL(     "xml",              0,  "xml"                        )
-CMDLINE_BOOL(     "wire",             0,  "wire"                       )
+CMDLINE_BOOL(     "json",              0,  "json"                       )
+CMDLINE_BOOL(     "multiline",         0,  "multiline"                  )
+CMDLINE_BOOL(     "parse",             0,  "parse"                      )
+CMDLINE_BOOL(     "short",             0,  "short"                      )
+CMDLINE_BOOL(     "xml",               0,  "xml"                        )
+CMDLINE_BOOL(     "wire",              0,  "wire"                       )
 
 // resolver section
 CMDLINE_RESOLVER(yadifa_cmdline)
@@ -162,24 +166,53 @@ static string_node *ctrl_type_set = NULL;
 const ctrl_type_table ctrl_type[] = {
 #if 1
     { TYPE_CTRL_SRVCFGRELOAD,     TYPE_CTRL_SRVCFGRELOAD_NAME     },
-    { TYPE_CTRL_SRVCFGRELOAD,     TYPE_CTRL_SRVCFGRELOAD_NAME     },
     { TYPE_CTRL_SRVLOGREOPEN,     TYPE_CTRL_SRVLOGREOPEN_NAME     },
+    { TYPE_CTRL_SRVLOGLEVEL,      TYPE_CTRL_SRVLOGLEVEL_NAME      },
     { TYPE_CTRL_SRVSHUTDOWN,      TYPE_CTRL_SHUTDOWN_NAME         },
     { TYPE_CTRL_SRVSHUTDOWN,      "HALT"                          },
     { TYPE_CTRL_SRVSHUTDOWN,      "STOP"                          },
     { TYPE_CTRL_ZONECFGRELOAD,    TYPE_CTRL_ZONECFGRELOAD_NAME    },
     { TYPE_CTRL_ZONECFGRELOADALL, TYPE_CTRL_ZONECFGRELOADALL_NAME },
     { TYPE_CTRL_ZONEFREEZE,       TYPE_CTRL_ZONEFREEZE_NAME       },
-    { TYPE_CTRL_ZONEFREEZEALL,    TYPE_CTRL_ZONEFREEZEALL_NAME    },
+
     { TYPE_CTRL_ZONERELOAD,       TYPE_CTRL_ZONERELOAD_NAME       },
     { TYPE_CTRL_ZONEUNFREEZE,     TYPE_CTRL_ZONEUNFREEZE_NAME     },
-    { TYPE_CTRL_ZONEUNFREEZEALL,  TYPE_CTRL_ZONEUNFREEZEALL_NAME  },
+
 #endif
     { 0,                          NULL                            }
 };
 
+typedef struct command_translation_table command_translation_table;
+
+struct command_translation_table
+{
+    const char *name;                       // name of the command
+    const char *field_name;                 // what field to set
+    const char *field_value;                // what value to put in the set
+    const char *field_value_with_parameter; // what value to put in the set in case of parameter
+    const char *parameter_field_name;       // what field to put the parameter in
+};
+
+static command_translation_table yadifa_commands_translation_table[] =
+{
+    { "reload",        "qtype", NULL,                             TYPE_CTRL_ZONERELOAD_NAME,    "qname"  },
+    { "cfgreload",     "qtype", TYPE_CTRL_SRVCFGRELOAD_NAME,      NULL,                         NULL     },
+    { "sync",          "qtype", NULL,                             TYPE_CTRL_ZONESYNC_NAME,      "qname"  },
+    { "querylog",      "qtype", NULL,                             TYPE_CTRL_SRVQUERYLOG_NAME,   "enable" },
+    { "loglevel",      "qtype", NULL,                             TYPE_CTRL_SRVLOGLEVEL_NAME,   "log_level"  },
+    { "logreopen",     "qtype", TYPE_CTRL_SRVLOGREOPEN_NAME,      NULL,                         NULL     },
+    { "zonecfgreload", "qtype", TYPE_CTRL_ZONECFGRELOADALL_NAME , TYPE_CTRL_ZONECFGRELOAD_NAME, "qname"  },
+
+    { "freeze",        "qtype", NULL,                             TYPE_CTRL_ZONEFREEZE_NAME,    "qname"  },
+    { "unfreeze",      "qtype", NULL,                             TYPE_CTRL_ZONEUNFREEZE_NAME,  "qname"  },
+    { "shutdown",      "qtype", TYPE_CTRL_SHUTDOWN_NAME,          NULL,                         NULL     },
+
+    {NULL, NULL, NULL, NULL, NULL}
+};
+
 
 /*----------------------------------------------------------------------------*/
+#pragma mark GENERAL FUNCTIONS
 
 /** @brief ctrl_rfc_init
  *  
@@ -266,13 +299,13 @@ get_ctrl_type_from_case_name(const char *src, u16 *dst)
  *  @param -- nothing --
  *  @return -- nothing --
  */
-static void
+void
 yadifa_print_usage(void)
 {
-    puts("\n"
+    println("\n"
             "Usage: yadifa [-c config] [-s server] [-v] command\n\n"
             "\toptions:\n"
-//            "\t\t--config/-c <config_file>   : use <config_file> as configuration\n"
+            "\t\t--config/-c <config_file>   : use <config_file> as configuration\n"
             "\t\t--server/-s <host>          : <host> can be an ip address or\n"
             "\t\t                            : an ip address with portnumber\n"
             "\t\t                            : e.g. \"192.0.2.1 port 53\"\n"
@@ -282,7 +315,7 @@ yadifa_print_usage(void)
 
 
         );
-    puts("\n"
+    println("\n"
             "\t\t--verbose/-v                : verbose output\n"
             "\n"
             "\t\t--version/-V                : view version\n"
@@ -290,26 +323,27 @@ yadifa_print_usage(void)
 
             "\n"
             "\tcommands:\n"
-            "\t\tfreeze <zone>               : suspends updates to a zone.\n"
-            "\t\t                            : note: without <zone> all zones are suspended.\n"
-            "\t\tunfreeze <zone>             : enable updates to a zone.\n"
-            "\t\t                            : note: without <zone> all zones are enabled for updates.\n"
-            "\t\treload                      : \n"
-            "\t\tcfgreload                   : \n"
-            "\t\tsync                        : \n"
-            "\t\tquerylog <level>            : \n"
-            "\t\tlogreopen                   : \n"
-            "\t\tshutdown                    : shutdowns the server\n"
+            "\t\tfreeze <zone>               : suspends updates to a zone\n"
+
+            "\t\tunfreeze <zone>             : enable updates to a zone\n"
+
+            "\t\treload <zone>               : reloads a zone from disk\n"
+            "\t\tcfgreload                   : reloads settings from disk\n"
+            "\t\tzonecfgreload [<zone>]      : reloads all (or specified) zone settings from disk\n"
+            "\t\tsync <zone> [clean]         : writes the zone file on disk, optionally cleans up the journal\n"
+            "\t\tquerylog <enable>           : enables or disables the query logging\n"
+            "\t\tloglevel <level>            : sets up the maximum level of log [0;15], 6 = INFO, 15 = NULL\n"
+            "\t\tlogreopen                   : closes and reopens all log files\n"
+            "\t\tshutdown                    : shuts down the server\n"
 
             "\n"
             "\tnote:\n"
             "\t\twith ambiguity:\n"
             "\t\t-q <zone>                   : for a zone\n"
             "\t\t-t <command>                : for the command\n"
-            "\t\t-k <keyname>                : for the controller\n"
-            "\t\t--level/-l <number>         : with the \"querylog\" command\n"
-
-
+            "\t\t-K <keyname>                : for the controller\n"
+            "\t\t--level/-l <number>         : for the \"loglevel\" command, [0;15], 6 = INFO, 15 = FULL\n"
+            "\t\t--clean                     : for the \"sync\" command, requests to clean up the journal\n"
 
             "\n"
         );
@@ -324,14 +358,14 @@ yadifa_print_usage(void)
 static void
 yadifa_print_authors()
 {
-    print("\n"
+    println("\n"
             "\t\tYADIFAD authors:\n"
             "\t\t---------------\n"
             "\t\t\n"
             "\t\tGery Van Emelen\n"
             "\t\tEric Diaz Fernandez\n"
             "\n"
-            "\t\tContact: " PACKAGE_BUGREPORT "\n"
+            "\t\tContact: " PACKAGE_BUGREPORT
          );
     flushout();
 }
@@ -365,6 +399,7 @@ yadifa_print_version(int level)
 
 
 /*----------------------------------------------------------------------------*/
+#pragma mark FUNCTIONS
 
 /** @brief  yadifa_config_finalise
  *
@@ -398,7 +433,6 @@ yadifa_config_finalise()
     return return_code;
 }
 
-
 /** @brief  yadifa_config_cmdline_callback
 *
 *  @param desc const struct cmdline_desc_s *
@@ -410,18 +444,15 @@ static ya_result
 yadifa_config_cmdline_callback(const struct cmdline_desc_s *desc, const char *arg_name, void *callback_owned)
 {
     ya_result return_code = SUCCESS;
-
-
+    
     if(strcmp(arg_name, "--") == 0)
     {
         return CMDLINE_ARG_STOP_PROCESSING_FLAG_OPTIONS;
     }
 
-
     if(arg_name[0] == '@')
     {
-        formatln("ARG: %s\n", arg_name);
-        flushout();
+
         //
         config_section_descriptor_s *desc = config_section_get_descriptor("yadifa");
 
@@ -440,11 +471,13 @@ yadifa_config_cmdline_callback(const struct cmdline_desc_s *desc, const char *ar
     }
     else
     {
-
+        ptr_vector *yadifa_extras = (ptr_vector*)callback_owned;
+        ptr_vector_append(yadifa_extras, strdup(arg_name));
+        return_code = 0;
     }
 
 
-    return SUCCESS;
+    return return_code;
 }
 
 
@@ -464,13 +497,89 @@ yadifa_config_cmdline(int argc, char **argv)
     /*    ------------------------------------------------------------    */
 
     config_set_source(CONFIG_SOURCE_HIGHEST);
+    
+    ptr_vector yadifa_extras = EMPTY_PTR_VECTOR;
 
-    if(FAIL(return_code = cmdline_parse(yadifa_cmdline, argc, argv, yadifa_config_cmdline_callback, NULL, &config_is)))
+    if(FAIL(return_code = cmdline_parse(yadifa_cmdline, argc, argv, yadifa_config_cmdline_callback, &yadifa_extras, &config_is)))
     {
 #ifdef DEBUG
         formatln("cmdline_parse failed: %r", return_code);
         flushout();
 #endif // DEBUG
+        return return_code;
+    }
+    
+    if(ptr_vector_size(&yadifa_extras) > 0)
+    {
+        config_section_descriptor_s *yadifa_desc = config_section_get_descriptor("yadifa");
+        
+        assert(yadifa_desc != NULL);
+
+        {
+            int i = 0;
+            
+            char *name = (char*)ptr_vector_get(&yadifa_extras, i);
+            bool has_parameter = i < ptr_vector_last_index(&yadifa_extras);
+            
+            bool match = FALSE;
+            
+            for(const command_translation_table *item = yadifa_commands_translation_table; item->name != NULL; ++item)
+            {
+                if(strcasecmp(name, item->name) == 0)
+                {
+                    // if there is a parameter AND the command supports a parameter
+                    
+                    if(has_parameter && (item->field_value_with_parameter != NULL && item->parameter_field_name != NULL))
+                    {
+                        // one
+                        char *parm = (char*)ptr_vector_get(&yadifa_extras, ++i);
+                        config_value_set(yadifa_desc, item->field_name, item->field_value_with_parameter);
+                        config_value_set(yadifa_desc, item->parameter_field_name, parm);
+                        free(parm);
+                    }
+                    else
+                    {
+                        // all
+                        if(item->field_value != NULL)
+                        {
+                            config_value_set(yadifa_desc, item->field_name, item->field_value);
+                        }
+                        else
+                        {
+                            // requires parameter
+                            osformatln(termerr,"command %s requires a parameter", name);
+                            return_code = ERROR;
+                        }
+                    }
+                    
+                    match = TRUE;
+                    
+                    break;
+                }
+            }
+            
+            if(!match)
+            {
+                osformatln(termerr,"unknown command %s", name);
+            }
+            
+            free(name);
+            
+            if(i < ptr_vector_last_index(&yadifa_extras))
+            {
+                osformat(termerr, "extranneous parameters: ");
+                for(int j = i; j <= ptr_vector_last_index(&yadifa_extras); ++j)
+                {
+                    osprint(termerr, ptr_vector_get(&yadifa_extras, j));
+                }
+                osprintln(termerr, "");
+            }
+        }
+        ptr_vector_destroy(&yadifa_extras);
+    }
+
+    if(FAIL(return_code))
+    {
         return return_code;
     }
 
@@ -584,7 +693,7 @@ yadifa_config_file_get()
             {
                 formatln("error: %s has error: %lu", g_yadifa_main_settings.config_file, ERRNO_ERROR);
 
-                exit ERRNO_ERROR;
+                return NULL; // ERRNO_ERROR
             }
 
             /* Is it a regular file */
@@ -592,7 +701,7 @@ yadifa_config_file_get()
             {
                 formatln("error: %s is not a regular file", g_yadifa_main_settings.config_file);
 
-                exit CONFIG_NOT_A_REGULAR_FILE;
+                return NULL; // CONFIG_NOT_A_REGULAR_FILE;
             }
 
             return g_yadifa_main_settings.config_file;

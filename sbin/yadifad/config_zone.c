@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup config Configuration handling
  *  @ingroup yadifad
  *  @brief
@@ -54,6 +54,7 @@
 #include "zone.h"
 
 #include "database-service.h"
+#include "zone-signature-policy.h"
 
 /*
  *
@@ -68,16 +69,16 @@ extern zone_data_set database_zone_desc;
 
 static value_name_table zone_type_enum_table[]=
 {
-//    {ZT_HINT,       ZT_STRING_HINT},
+
 #if HAS_MASTER_SUPPORT
     {ZT_MASTER,     ZT_STRING_MASTER},
 #endif
     {ZT_SLAVE,      ZT_STRING_SLAVE},
-//    {ZT_STUB,       ZT_STRING_STUB},
-//    {ZT_UNKNOWN,    ZT_STRING_UNKNOWN},
+
     {0, NULL}
 };
 
+#if ZDB_HAS_DNSSEC_SUPPORT
 static value_name_table dnssec_enum[]=
 {
     {ZONE_DNSSEC_FL_NOSEC       , "none"        },
@@ -89,7 +90,7 @@ static value_name_table dnssec_enum[]=
     {ZONE_DNSSEC_FL_NSEC3_OPTOUT, "nsec3-optout"},
     {0, NULL}
 };
-
+#endif
 
 /*  Table with the parameters that can be set in the config file
  *  zone containers
@@ -100,6 +101,7 @@ static value_name_table dnssec_enum[]=
 CONFIG_BEGIN(config_section_zone_desc)
 CONFIG_STRING(domain, NULL)
 CONFIG_STRING(file_name, NULL)
+CONFIG_PATH(keys_path, NULL)
 CONFIG_HOST_LIST(masters, NULL)
 CONFIG_HOST_LIST(notifies, NULL)
 CONFIG_ENUM(type, NULL, zone_type_enum_table)
@@ -116,29 +118,41 @@ CONFIG_ACL(allow_control, NULL)
 // master
 
 CONFIG_FLAG32(notify_auto , S_ZONE_NOTIFY_AUTO, flags, ZONE_FLAG_NOTIFY_AUTO)
+CONFIG_FLAG32(drop_before_load, S_ZONE_FLAG_DROP_BEFORE_LOAD, flags, ZONE_FLAG_DROP_BEFORE_LOAD)
 CONFIG_FLAG32(no_master_updates , S_ZONE_NO_MASTER_UPDATES, flags, ZONE_FLAG_NO_MASTER_UPDATES)
 CONFIG_FLAG32(maintain_dnssec, S_ZONE_FLAG_MAINTAIN_DNSSEC, flags, ZONE_FLAG_MAINTAIN_DNSSEC)
+CONFIG_FLAG32(true_multimaster, S_ZONE_FLAG_TRUE_MULTIMASTER, flags, ZONE_FLAG_TRUE_MULTIMASTER)
 CONFIG_U32_RANGE(notify.retry_count, S_NOTIFY_RETRY_COUNT, NOTIFY_RETRY_COUNT_MIN, NOTIFY_RETRY_COUNT_MAX)
 CONFIG_U32_RANGE(notify.retry_period, S_NOTIFY_RETRY_PERIOD, NOTIFY_RETRY_PERIOD_MIN, NOTIFY_RETRY_PERIOD_MAX)
 CONFIG_U32_RANGE(notify.retry_period_increase, S_NOTIFY_RETRY_PERIOD_INCREASE, NOTIFY_RETRY_PERIOD_INCREASE_MIN, NOTIFY_RETRY_PERIOD_INCREASE_MAX)
+        
+CONFIG_U8(multimaster_retries, S_MULTIMASTER_RETRIES)
 
 #if HAS_DNSSEC_SUPPORT
         
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
+        
+#if HAS_MASTER_SUPPORT
+CONFIG_DNSSEC_POLICY(dnssec_policy)
+#endif
+        
 CONFIG_U32_RANGE(signature.sig_validity_interval, S_S32_VALUE_NOT_SET, SIGNATURE_VALIDITY_INTERVAL_MIN, SIGNATURE_VALIDITY_INTERVAL_MAX)
 CONFIG_U32_RANGE(signature.sig_validity_regeneration, S_S32_VALUE_NOT_SET, SIGNATURE_VALIDITY_REGENERATION_MIN, SIGNATURE_VALIDITY_REGENERATION_MAX)
 CONFIG_U32_RANGE(signature.sig_validity_jitter, S_S32_VALUE_NOT_SET, SIGNATURE_VALIDITY_JITTER_MIN, SIGNATURE_VALIDITY_JITTER_MAX)
+CONFIG_ALIAS(signature_validity_interval, signature.sig_validity_interval)
+CONFIG_ALIAS(signature_regeneration, signature.sig_validity_regeneration)
+CONFIG_ALIAS(signature_jitter, signature.sig_validity_jitter)
 #endif
- 
+
 CONFIG_ENUM(dnssec_mode, S_ZONE_DNSSEC_DNSSEC, dnssec_enum)
 
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
 CONFIG_ALIAS(signature.sig_jitter, sig_validity_jitter)
 #endif
-        
+
 CONFIG_ALIAS(dnssec,dnssec_mode)
 #endif
-        
+
 CONFIG_U32_RANGE(journal_size_kb, S_JOURNAL_SIZE_KB_DEFAULT, S_JOURNAL_SIZE_KB_MIN, S_JOURNAL_SIZE_KB_MAX)
 
 #if HAS_CTRL
@@ -150,9 +164,11 @@ CONFIG_HOST_LIST(slaves, NULL)
 /* CONFIG ALIAS: alias , aliased-real-name */
 CONFIG_ALIAS(also_notify,notifies)
 CONFIG_ALIAS(file,file_name)
+CONFIG_ALIAS(keyspath, keys_path)
 CONFIG_ALIAS(journal_size,journal_size_kb)
 CONFIG_ALIAS(master,masters)
 CONFIG_ALIAS(notify,notifies)
+CONFIG_ALIAS(auto_notify,notify_auto)
 CONFIG_END(config_section_zone_desc)
 
 #undef CONFIG_TYPE
@@ -246,7 +262,7 @@ config_section_zone_stop(struct config_section_descriptor_s *csd)
     }
     else
     {
-        zone_free(zone_desc);
+        zone_release(zone_desc);
     }
         
     csd->base = NULL;
@@ -268,7 +284,7 @@ config_section_zone_finalise(struct config_section_descriptor_s *csd)
         if(csd->base != NULL)
         {
             zone_desc_s *zone_desc = (zone_desc_s*)csd->base;
-            zone_free(zone_desc);
+            zone_release(zone_desc);
 #ifdef DEBUG
             csd->base = NULL;
 #endif
@@ -334,7 +350,7 @@ config_register_zone(const char *null_or_key_name, s32 priority)
     (void)null_or_key_name;
     
     config_section_descriptor_s *desc;
-    MALLOC_OR_DIE(config_section_descriptor_s*, desc, sizeof(config_section_descriptor_s), GENERIC_TAG);
+    MALLOC_OR_DIE(config_section_descriptor_s*, desc, sizeof(config_section_descriptor_s), CFGSDESC_TAG);
     desc->base = NULL;
     desc->vtbl = &config_section_zone_descriptor_vtbl;
     

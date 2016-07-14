@@ -24,18 +24,33 @@
 /* dynamic provisioning disabled. */
 #undef HAS_CTRL_DYNAMIC_PROVISIONING
 
+/* DNSQ support enabled */
+#undef HAS_DNSQ
+
 /* always on */
 #undef HAS_DNSSEC_SUPPORT
 
-/* always off */
+/* DROPALL mode will not actually send back the answer (debug/bench) */
 #undef HAS_DROPALL_SUPPORT
+
+/* dynamic configuration disabled. */
+#undef HAS_DYNCONF_SUPPORT
 
 /* dynamic update support disabled. */
 #undef HAS_DYNUPDATE_SUPPORT
 
+/* Eric's code is enabled */
+#undef HAS_EDF
+
+/* experimental stuff disabled. */
+#undef HAS_EXPERIMENTAL
+
 /* YADIFA will now accept ASCII7 characters in DNS names (not recommended)
    disabled. */
 #undef HAS_FULL_ASCII7
+
+/* Gery's code is enabled */
+#undef HAS_GERY
 
 /* where to put the log files */
 #undef HAS_LOGDIR
@@ -59,7 +74,7 @@
    the same network interface) disabled. */
 #undef HAS_MESSAGES_SUPPORT
 
-/* always off */
+/* MIRROR mode will only reply what has been read (debug/bench) */
 #undef HAS_MIRROR_SUPPORT
 
 /* mutex debug support disabled. */
@@ -77,6 +92,9 @@
 
 /* NSID support disabled. */
 #undef HAS_NSID_SUPPORT
+
+/* The system supports thread affinity */
+#undef HAS_PTHREAD_SETAFFINITY_NP
 
 /* The system supports thread names */
 #undef HAS_PTHREAD_SETNAME_NP
@@ -107,6 +125,13 @@
 
 /* always off */
 #undef HAS_TCL
+
+/* Tim's code is enabled */
+#undef HAS_THX
+
+/* Tracks the instanciated zones for detecting zones potentially not released.
+   Relatively cheap with a small (<100) amount of zones. disabled. */
+#undef HAS_TRACK_ZONES_DEBUG_SUPPORT
 
 /* always on */
 #undef HAS_TSIG_SUPPORT
@@ -170,9 +195,6 @@
 
 /* Define to 1 if you have the `dnszone' library (-ldnszone). */
 #undef HAVE_LIBDNSZONE
-
-/* Define to 1 if you have the `pthread' library (-lpthread). */
-#undef HAVE_LIBPTHREAD
 
 /* Define to 1 if you have the <linux/limits.h> header file. */
 #undef HAVE_LINUX_LIMITS_H

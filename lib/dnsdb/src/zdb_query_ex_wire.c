@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup query_ex Database top-level query function
  *  @ingroup dnsdb
  *  @brief Database top-level query function
@@ -59,7 +59,7 @@
 #include "dnsdb/hash.h"
 #include "dnsdb/dnsdb-config.h"
 
-#if HAS_NSID_SUPPORT
+#if ZDB_HAS_NSID_SUPPORT
 #include <dnscore/nsid.h>
 #endif
 
@@ -77,6 +77,8 @@ extern logger_handle* g_database_logger;
 /**
  * @note I could also have tables by label depth.
  *       But I'll need more time to experiment this.
+ * 
+ * @note Only used in zdb_query_message_update
  */
 
 static bool
@@ -201,7 +203,7 @@ zdb_query_message_update_write_label(zdb_resourcerecord* rr, u32* countp, packet
 
 extern u16 edns0_maxsize;
 
-ya_result
+u32
 zdb_query_message_update(message_data* message, zdb_query_ex_answer* answer_set)
 {
     /*
@@ -216,6 +218,8 @@ zdb_query_message_update(message_data* message, zdb_query_ex_answer* answer_set)
 
     /* Insert the query */
     message_header* header = (message_header*)message->buffer;
+    
+    message->referral = answer_set->delegation;
 
     u32 count;
 
@@ -227,12 +231,12 @@ zdb_query_message_update(message_data* message, zdb_query_ex_answer* answer_set)
 
 #ifdef DEBUG
     count = ~0;
-    memset(&pc, 0xff, sizeof (pc));
+    memset(&pc, 0xff, sizeof(pc));
 #endif
 
     if(message->edns)
     {
-#if HAS_NSID_SUPPORT
+#if ZDB_HAS_NSID_SUPPORT
         message->size_limit -= edns0_record_size;  /* edns0 opt record */
 #else
         message->size_limit -= EDNS0_RECORD_SIZE;  /* edns0 opt record */
@@ -268,7 +272,7 @@ zdb_query_message_update(message_data* message, zdb_query_ex_answer* answer_set)
         /* 00 00 29 SS SS rr vv 80 00 00 00 */
         /* 00 00 29 SS SS rr vv 80 00 |opt| 00 03 |nsid| nsid */
 
-#if HAS_NSID_SUPPORT
+#if ZDB_HAS_NSID_SUPPORT
         if(!message->nsid)
         {
             message->size_limit += EDNS0_RECORD_SIZE;  /* edns0 opt record */
@@ -326,6 +330,50 @@ zdb_query_message_update(message_data* message, zdb_query_ex_answer* answer_set)
     MESSAGE_FLAGS_OR(message->buffer, hi, message->status);
 
     return pc.packet_offset;
+}
+
+/**
+ * @brief Queries the database given a message
+ * 
+ * @param db the database
+ * @param mesg the message
+ * @param pool_buffer a big enough buffer used for the memory pool
+ * @param rrl_process an RRL callback that controls if the answer is to be made, truncated or dropped
+ * 
+ * @return the status of the message (probably useless)
+ */
+
+ya_result
+zdb_query_message_update_with_rrl(message_data* mesg, zdb_query_ex_answer* answer_set, rrl_process_callback *rrl_process)
+{
+    ya_result rrl = rrl_process(mesg, answer_set);
+
+    switch(rrl)
+    {
+        case RRL_PROCEED:
+        {
+            mesg->send_length = zdb_query_message_update(mesg, answer_set);
+            break;
+        }
+        case RRL_SLIP:
+        {
+#ifdef DEBUG
+            log_debug("rrl: slip");
+#endif
+            mesg->referral = answer_set->delegation;
+            break;
+        }
+        case RRL_DROP:
+        {
+            // DON'T PROCEED AT ALL
+#ifdef DEBUG
+            log_debug("rrl: drop");
+#endif
+            break;
+        }
+    }
+    
+    return rrl;
 }
 
 /** @} */

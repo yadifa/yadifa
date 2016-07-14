@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -357,10 +357,10 @@ journal_ix_append_ixfr_stream(journal *jh, input_stream *ixfr_wire_is)
     
     u8 mode = 0; /* 0: del, 1: add */
     
-    output_stream fos;    
-    fd_output_stream_attach(&fos, jix->fd);
+    output_stream fos;
     output_stream bos;
-    buffer_output_stream_init(&fos, &bos, 512);
+    fd_output_stream_attach(&fos, jix->fd);
+    buffer_output_stream_init(&bos, &fos, 512);
     
     for(;;)
     {
@@ -627,7 +627,7 @@ journal_ix_get_ixfr_stream_at_serial(journal *jh, u32 serial_from, input_stream 
     s64 file_size = journal_stat.st_size;
     
     
-#if DEBUG_JOURNAL != 0
+#if DEBUG_JOURNAL
     log_debug("journal: ix: the last page starts at position %lld", last_page_offset);
 #endif
 
@@ -783,7 +783,7 @@ journal_ix_get_ixfr_stream_at_serial(journal *jh, u32 serial_from, input_stream 
         offset += record_size;
     }
     
-#if DEBUG_JOURNAL != 0
+#if DEBUG_JOURNAL
     log_debug("journal: ix: serial %08x (%d) is at offset %lld. %d records parsed", serial_from, serial_from, offset, rr_count);
 #endif
     
@@ -1030,7 +1030,7 @@ static mutex_t journal_ix_mtx = MUTEX_INITIALIZER;
 static void
 journal_ix_writelock(journal_ix *jix)
 {
-#if DEBUG_JOURNAL != 0
+#if DEBUG_JOURNAL
     log_debug("journal_ix_writelock: locking");
 #endif
 
@@ -1053,7 +1053,7 @@ journal_ix_writelock(journal_ix *jix)
         usleep(1000);
     }
     
-#if DEBUG_JOURNAL != 0
+#if DEBUG_JOURNAL
     log_debug("journal_ix_writelock: locked");
 #endif
 
@@ -1062,7 +1062,7 @@ journal_ix_writelock(journal_ix *jix)
 static void
 journal_ix_writeunlock(journal_ix *jix)
 {
-#if DEBUG_JOURNAL != 0
+#if DEBUG_JOURNAL
     log_debug("journal_ix_writeunlock: unlocking");
 #endif
 
@@ -1074,7 +1074,7 @@ journal_ix_writeunlock(journal_ix *jix)
         
         mutex_unlock(&journal_ix_mtx);
     
-#if DEBUG_JOURNAL != 0
+#if DEBUG_JOURNAL
         log_debug("journal_ix_writeunlock: unlocked");
 #endif
     }

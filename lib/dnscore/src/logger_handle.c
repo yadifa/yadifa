@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup logger Logging functions
  *  @ingroup dnscore
  *  @brief
@@ -311,7 +311,7 @@ static volatile bool logger_handle_init_done = FALSE;
 static volatile bool logger_reopen_requested = FALSE;
 static volatile u8 logger_level = MSG_ALL;
 
-#if DEBUG_LOG_MESSAGES != 0
+#if DEBUG_LOG_MESSAGES
 static smp_int allocated_messages_count = SMP_INT_INITIALIZER;
 static time_t allocated_messages_count_stats_time = 0;
 #endif
@@ -336,7 +336,7 @@ logger_message_alloc()
     logger_message* message;
     ZALLOC_OR_DIE(logger_message*, message, logger_message, LOGRMSG_TAG);
     
-#if DEBUG_LOG_MESSAGES != 0
+#if DEBUG_LOG_MESSAGES
     smp_int_inc(&allocated_messages_count);
 #endif
     
@@ -347,7 +347,7 @@ logger_message_free(logger_message *message)
 {
     ZFREE(message, logger_message);
     
-#if DEBUG_LOG_MESSAGES != 0
+#if DEBUG_LOG_MESSAGES
     smp_int_dec(&allocated_messages_count);
 #endif
 }
@@ -362,6 +362,18 @@ logger_message_free(logger_message *message)
 
 static ya_result logger_service_handle_remove_channel(logger_handle *handle, const char *channel_name);
 static void logger_service_handle_remove_all_channel(logger_handle *handle);
+
+/**
+ * Returns true iff the current thread is the logger.
+ * 
+ * @return true iff the current thread is the logger.
+ */
+
+bool
+logger_is_self()
+{
+    return logger_thread_id == pthread_self();
+}
 
 static int
 logger_handle_compare(const void* a, const void* b)
@@ -391,7 +403,7 @@ logger_handle_free(void* ptr)
 {
     logger_handle* handle = (logger_handle*)ptr;   
     
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_handle_free(%s@%p)", handle->name, ptr);
     flushout();
 #endif
@@ -433,7 +445,7 @@ logger_channel_alloc()
 {
     logger_channel* chan;
     
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_channel_alloc()");
     flushout();
 #endif
@@ -465,7 +477,7 @@ logger_channel_alloc()
 static void
 logger_channel_free(logger_channel *channel)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_channel_free(%p), linked to %d", channel, channel->linked_handles);
     flushout();
 #endif
@@ -499,7 +511,7 @@ logger_service_channel_get(const char *channel_name)
         channel = (logger_channel*)node->value;
     }
     
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_service_channel_get(%s) = %p", channel_name, channel);
     flushout();
 #endif
@@ -510,14 +522,14 @@ logger_service_channel_get(const char *channel_name)
 static ya_result
 logger_service_channel_register(const char *channel_name, logger_channel *channel)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_service_channel_register(%s,%p)", channel_name, channel);
     flushout();
 #endif
     
     if(channel->linked_handles != 0)
     {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_service_channel_register(%s,%p) ALREADY LINKED", channel_name, channel);
         flushout();
 #endif
@@ -526,7 +538,7 @@ logger_service_channel_register(const char *channel_name, logger_channel *channe
     
     if(logger_service_channel_get(channel_name) != NULL)
     {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_service_channel_register(%s,%p) NAME ALREADY USED", channel_name, channel);
         flushout();
 #endif
@@ -542,7 +554,7 @@ logger_service_channel_register(const char *channel_name, logger_channel *channe
 static ya_result
 logger_service_channel_unregister(const char *channel_name)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_service_channel_unregister(%s)", channel_name);
     flushout();
 #endif
@@ -553,7 +565,7 @@ logger_service_channel_unregister(const char *channel_name)
     
     if(node == NULL)
     {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_service_channel_unregister(%s) NAME NOT USED", channel_name);
         flushout();
 #endif
@@ -564,7 +576,7 @@ logger_service_channel_unregister(const char *channel_name)
 
     if(channel->linked_handles != 0)
     {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_service_channel_unregister(%s) STILL LINKED", channel_name);
         flushout();
 #endif
@@ -591,7 +603,7 @@ logger_service_channel_unregister(const char *channel_name)
 static void
 logger_service_channel_unregister_all()
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_service_channel_unregister_all()");
     flushout();
 #endif
@@ -606,7 +618,7 @@ logger_service_channel_unregister_all()
         logger_channel *channel = (logger_channel*)node->value;
         char *channel_name = (char*)node->key;
 
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_service_channel_unregister_all() : channel %s@%p", channel_name, channel);
         flushout();
 #endif
@@ -617,7 +629,7 @@ logger_service_channel_unregister_all()
         {
             logger_handle *handle = (logger_handle*)ptr_vector_get(&logger_handles, i);
             
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
             osformatln(termout, "logger_service_channel_unregister_all() : channel %s@%p : handle %s@%p", channel_name, channel, handle->name, handle);
             flushout();
 #endif
@@ -667,7 +679,7 @@ logger_handle_channel_compare_match(const void *a, const void *b)
 static logger_handle*
 logger_service_handle_create(const char *name)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_service_handle_create(%s)", name);
     flushout();
 #endif
@@ -676,7 +688,7 @@ logger_service_handle_create(const char *name)
 
     if(handle == NULL)
     {
-        MALLOC_OR_DIE(logger_handle*, handle, sizeof (logger_handle), LOGGER_HANDLE_TAG);
+        MALLOC_OR_DIE(logger_handle*, handle, sizeof(logger_handle), LOGGER_HANDLE_TAG);
 
         handle->name = strdup(name);
         
@@ -701,7 +713,7 @@ logger_service_handle_create(const char *name)
     }
     else
     {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termerr, "logger: '%s' already created", name);
         flusherr();
 #endif
@@ -713,7 +725,7 @@ logger_service_handle_create(const char *name)
 static void
 logger_service_handle_close(const char *name)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_service_handle_close(%s)", name);
     flushout();
 #endif
@@ -778,7 +790,7 @@ logger_service_handle_get(const char *name)
 static ya_result
 logger_service_handle_add_channel(logger_handle *handle, int level, const char *channel_name)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_service_handle_add_channel(%s@%p, %x, %s)", handle->name, handle, level, channel_name);
     flushout();
 #endif
@@ -791,7 +803,7 @@ logger_service_handle_add_channel(logger_handle *handle, int level, const char *
     logger_channel *channel = logger_service_channel_get(channel_name);
     if(channel == NULL)
     {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_service_handle_add_channel(%s@%p, %x, %s) UNKNOWN CHANNEL", handle->name, handle, level, channel_name);
         flushout();
 #endif
@@ -819,7 +831,7 @@ logger_service_handle_add_channel(logger_handle *handle, int level, const char *
 static ya_result
 logger_service_handle_remove_channel(logger_handle *handle, const char *channel_name)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_service_handle_remove_channel(%s@%p, %s)", handle->name, handle, channel_name);
     flushout();
 #endif
@@ -827,7 +839,7 @@ logger_service_handle_remove_channel(logger_handle *handle, const char *channel_
     logger_channel *channel = logger_service_channel_get(channel_name);
     if(channel == NULL)
     {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_service_handle_remove_channel(%s@%p, %s) UNKNOWN CHANNEL", handle->name, handle, channel_name);
         flushout();
 #endif
@@ -853,7 +865,7 @@ logger_service_handle_remove_channel(logger_handle *handle, const char *channel_
 static void
 logger_service_handle_remove_all_channel(logger_handle *handle)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_service_handle_remove_all_channel(%s@%p)", handle->name, handle);
     flushout();
 #endif
@@ -872,7 +884,7 @@ logger_service_handle_remove_all_channel(logger_handle *handle)
 static ya_result
 logger_service_handle_count_channels(logger_handle *handle)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_service_handle_count_channels(%s@%p)", handle->name, handle);
     flushout();
 #endif
@@ -888,6 +900,8 @@ logger_service_handle_count_channels(logger_handle *handle)
     return sum;
 }
 
+
+
 /**
  * INTERNAL: used inside the service (2)
  */
@@ -895,7 +909,7 @@ logger_service_handle_count_channels(logger_handle *handle)
 static void
 logger_service_flush_all_channels()
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_service_flush_all_channels()");
     flushout();
 #endif
@@ -917,7 +931,7 @@ logger_service_flush_all_channels()
 static void
 logger_service_reopen_all_channels()
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_service_reopen_all_channels()");
     flushout();
 #endif
@@ -960,14 +974,18 @@ static void*
 logger_dispatcher_thread(void* context)
 {
     (void)context;
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_dispatcher_thread(%p)", context);
     flushout();
 #endif
    
-#ifdef HAS_PTHREAD_SETNAME_NP
+#if HAS_PTHREAD_SETNAME_NP
 #ifdef DEBUG
+#if __APPLE__
+    pthread_setname_np("logger");
+#else
     pthread_setname_np(pthread_self(), "logger");
+#endif // __APPPLE__
 #endif
 #endif
     
@@ -984,7 +1002,7 @@ logger_dispatcher_thread(void* context)
     
     char repeat_text[128];
 
-    bool must_run = TRUE;
+    bool must_run = TRUE; 
     
     while(must_run)
     {
@@ -1009,7 +1027,7 @@ logger_dispatcher_thread(void* context)
         {
             case LOGGER_MESSAGE_TYPE_TEXT:
             {
-#if DEBUG_LOG_MESSAGES != 0
+#if DEBUG_LOG_MESSAGES
                 {
                     time_t now = time(NULL);
                     if(now - allocated_messages_count_stats_time > 10)
@@ -1143,6 +1161,12 @@ logger_dispatcher_thread(void* context)
                                         flusherr();
                                     }
                                     
+                                    if(logger_reopen_requested) // fulfill that request 
+                                    {
+                                        logger_service_reopen_all_channels();
+                                        logger_reopen_requested = FALSE;
+                                    }
+                                    
                                     if(dnscore_shuttingdown())
                                     {
                                         // message will be lost
@@ -1167,14 +1191,14 @@ logger_dispatcher_thread(void* context)
                         {
                             /* free the message */
 
-#if DEBUG_LOG_MESSAGES != 0
+#if DEBUG_LOG_MESSAGES
                             osformatln(termout, "message rc is 0 (%s)", channel->last_message->text.text);
                             flushout();
 #endif
                             ZFREE_ARRAY(channel->last_message->text.text, channel->last_message->text.text_buffer_length);
                             logger_message_free(channel->last_message);
                         }
-#if DEBUG_LOG_MESSAGES != 0
+#if DEBUG_LOG_MESSAGES
                         else
                         {
                             osformatln(termout, "message rc decreased to %d (%s)", channel->last_message->text.rc, channel->last_message->text.text);
@@ -1186,7 +1210,7 @@ logger_dispatcher_thread(void* context)
                         channel->last_message_count = 0;
                         message->text.rc++;
 
-#if DEBUG_LOG_MESSAGES != 0
+#if DEBUG_LOG_MESSAGES
                         osformatln(termout, "message rc is %d (%s)", channel->last_message->text.rc, channel->last_message->text.text);
                         flushout();
 #endif
@@ -1197,6 +1221,12 @@ logger_dispatcher_thread(void* context)
                             {
                                 osformatln(termerr, "message write failed on channel: %r", return_code);
                                 flusherr();
+                            }
+                            
+                            if(logger_reopen_requested) // fulfill that request 
+                            {
+                                logger_service_reopen_all_channels();
+                                logger_reopen_requested = FALSE;
                             }
                             
                             if(dnscore_shuttingdown())
@@ -1215,7 +1245,7 @@ logger_dispatcher_thread(void* context)
 
                 if(message->text.rc == 0)
                 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
                     osformatln(termout, "message has not been used (full dup): '%s'", message->text.text);
                     flushout();
 #endif
@@ -1449,7 +1479,7 @@ logger_dispatcher_thread(void* context)
     
     output_stream_close(&baos);
     
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_dispatcher_thread(%p) END", context);
     flushout();
 #endif
@@ -1460,7 +1490,7 @@ logger_dispatcher_thread(void* context)
 s32
 logger_channel_get_usage_count(const char* channel_name)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_channel_get_usage_count(%s) ", channel_name);
     flushout();
 #endif
@@ -1508,7 +1538,7 @@ logger_channel_get_usage_count(const char* channel_name)
 void
 logger_channel_register(const char* channel_name, struct logger_channel *channel)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_channel_register(%s,%p) ", channel_name, channel);
     flushout();
 #endif
@@ -1539,7 +1569,7 @@ logger_channel_register(const char* channel_name, struct logger_channel *channel
 void
 logger_channel_unregister(const char* channel_name)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_channel_unregister(%s) ", channel_name);
     flushout();
 #endif
@@ -1561,7 +1591,7 @@ logger_channel_unregister(const char* channel_name)
 void
 logger_handle_create(const char *logger_name, logger_handle **handle_holder)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_handle_create(%s,%p) ", logger_name, handle_holder);
     flushout();
 #endif
@@ -1595,7 +1625,7 @@ logger_handle_create(const char *logger_name, logger_handle **handle_holder)
 void
 logger_handle_close(const char *logger_name)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_handle_close(%s) ", logger_name);
     flushout();
 #endif
@@ -1617,7 +1647,7 @@ logger_handle_close(const char *logger_name)
 void
 logger_handle_add_channel(const char *logger_name, int level, const char *channel_name)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_handle_add_channel(%s,%x,%s) ", logger_name, level, channel_name);
     flushout();
 #endif
@@ -1654,7 +1684,7 @@ logger_handle_add_channel(const char *logger_name, int level, const char *channe
 void
 logger_handle_remove_channel(const char *logger_name, const char *channel_name)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_handle_remove_channel(%s,%s) ", logger_name, channel_name);
     flushout();
 #endif
@@ -1677,7 +1707,7 @@ logger_handle_remove_channel(const char *logger_name, const char *channel_name)
 s32
 logger_handle_count_channels(const char *logger_name)
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_handle_remove_channel(%s,%s) ", logger_name, channel_name);
     flushout();
 #endif
@@ -1727,7 +1757,7 @@ logger_set_queue_size(u32 n)
 void
 logger_init()
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_init() ");
     flushout();
 #endif
@@ -1759,7 +1789,7 @@ logger_init()
     }
     else
     {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_init() : already initialised");
         flushout();
 #endif
@@ -1769,7 +1799,7 @@ logger_init()
 void
 logger_start()
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_start() ");
     flushout();
 #endif
@@ -1778,7 +1808,7 @@ logger_start()
     
     if(!logger_initialised)
     {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_start() : not initialised yet : calling");
         flushout();
 #endif     
@@ -1788,7 +1818,7 @@ logger_start()
     
     if(!logger_started)
     {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_start() : starting");
         flushout();
 #endif
@@ -1803,13 +1833,13 @@ logger_start()
     }
     else
     {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_start() : already started");
         flushout();
 #endif     
     }
     
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_start() : started");
     flushout();
 #endif     
@@ -1818,7 +1848,7 @@ logger_start()
 static void
 logger_send_message_stop_wait()
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_send_message_stop_wait()");
     flushout();
 #endif
@@ -1829,14 +1859,14 @@ logger_send_message_stop_wait()
     logger_message* message = logger_message_alloc();
     
 #ifdef DEBUG        
-    ZEROMEMORY(message, sizeof (logger_message));
+    ZEROMEMORY(message, sizeof(logger_message));
 #endif
     message->type = LOGGER_MESSAGE_TYPE_STOP;
     message->stop.aw = &aw;
 
     threaded_queue_enqueue(&logger_commit_queue, message);
 
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_send_message_stop_wait() : waiting");
     flushout();
 #endif
@@ -1844,7 +1874,7 @@ logger_send_message_stop_wait()
     async_wait(&aw);
     async_wait_finalize(&aw);
     
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_send_message_stop_wait() : should be stopped");
     flushout();
 #endif
@@ -1853,7 +1883,7 @@ logger_send_message_stop_wait()
 void
 logger_stop()
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_stop()");
     flushout();
 #endif     
@@ -1866,7 +1896,7 @@ logger_stop()
             
             logger_send_message_stop_wait();
             
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
             osformatln(termout, "logger_stop() : joining");
             flushout();
 #endif     
@@ -1888,7 +1918,7 @@ logger_stop()
         }
     }
     
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_stop() : stopped");
     flushout();
 #endif 
@@ -1897,14 +1927,14 @@ logger_stop()
 void
 logger_finalize()
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_finalize()");
     flushout();
 #endif 
             
     if(!logger_initialised)
     {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_finalize() : not initialised");
         flushout();
 #endif 
@@ -1913,7 +1943,7 @@ logger_finalize()
     
     if(threaded_queue_size(&logger_commit_queue) > 0)
     {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_finalize() : queue is not empty : starting & flushing");
         flushout();
 #endif
@@ -1923,7 +1953,7 @@ logger_finalize()
     
     if(logger_started)
     {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_finalize() : still running : stopping");
         flushout();
 #endif
@@ -1938,7 +1968,7 @@ logger_finalize()
     {
         logger_message* message = threaded_queue_dequeue(&logger_commit_queue);
         
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_finalize() : freeing message of type %u", message->type);
         flushout();
 #endif
@@ -1948,7 +1978,7 @@ logger_finalize()
 
     if(logger_handle_init_done)
     {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_finalize() : flushing all channels");
         flushout();
 #endif
@@ -1956,7 +1986,7 @@ logger_finalize()
         
         // closes all handles
         
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_finalize() : closing all handles");
         flushout();
 #endif
@@ -1966,7 +1996,7 @@ logger_finalize()
         
         // closes all channels
 
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
         osformatln(termout, "logger_finalize() : closing all channels");
         flushout();
 #endif
@@ -1984,7 +2014,7 @@ logger_finalize()
 
     logger_initialised = FALSE;
     
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_finalize() : finalised");
     flushout();
 #endif
@@ -1993,7 +2023,7 @@ logger_finalize()
 void
 logger_flush()
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_flush()");
     flushout();
 #endif
@@ -2008,7 +2038,7 @@ logger_flush()
             logger_message* message = logger_message_alloc();
 
 #ifdef DEBUG        
-            ZEROMEMORY(message, sizeof (logger_message));
+            ZEROMEMORY(message, sizeof(logger_message));
 #endif
             message->type = LOGGER_MESSAGE_TYPE_CHANNEL_FLUSH_ALL;
             message->channel_flush_all.aw = &aw;
@@ -2031,7 +2061,7 @@ logger_flush()
             logger_service_flush_all_channels();
         }
     }
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     else
     {   
         osformatln(termout, "logger_flush() : i=%i s=%i", logger_initialised, logger_started);
@@ -2043,7 +2073,7 @@ logger_flush()
 void
 logger_channel_close_all()
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_close_all_channels()");
     flushout();
 #endif
@@ -2056,7 +2086,7 @@ logger_channel_close_all()
         logger_message* message = logger_message_alloc();
 
 #ifdef DEBUG        
-        ZEROMEMORY(message, sizeof (logger_message));
+        ZEROMEMORY(message, sizeof(logger_message));
 #endif
         message->type = LOGGER_MESSAGE_TYPE_CHANNEL_CLOSE_ALL;
         message->channel_flush_all.aw = &aw;
@@ -2074,7 +2104,7 @@ logger_channel_close_all()
             }
         }
     }
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     else
     {   
         osformatln(termout, "logger_close_all_channels() : i=%i s=%i", logger_initialised, logger_started);
@@ -2086,7 +2116,7 @@ logger_channel_close_all()
 void
 logger_reopen()
 {
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_reopen()");
     flushout();
 #endif
@@ -2105,7 +2135,7 @@ logger_reopen()
         logger_message* message = logger_message_alloc();
         
 #ifdef DEBUG
-        ZEROMEMORY(message, sizeof (logger_message));
+        ZEROMEMORY(message, sizeof(logger_message));
 #endif
         message->type = LOGGER_MESSAGE_TYPE_CHANNEL_REOPEN_ALL;
         message->channel_reopen_all.aw = &aw;
@@ -2121,7 +2151,7 @@ logger_reopen()
             }
         }
     }
-#if DEBUG_LOG_HANDLER != 0
+#if DEBUG_LOG_HANDLER
     else
     {
         osformatln(termout, "logger_reopen() : i=%i s=%i", logger_initialised, logger_started);

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -106,6 +106,8 @@
 #include "dnsdb/zdb-zone-path-provider.h"
 #include "dnsdb/zdb_zone.h"
 
+extern logger_handle* g_database_logger;
+#define MODULE_MSG_HANDLE g_database_logger
 
 #define DEBUG_JOURNAL 1
 #ifndef DEBUG
@@ -226,7 +228,7 @@ log_debug_jnl(journal_cjf *jnl, const char *text)
                 jnl->serial_begin, jnl->serial_end,
                 jnl->first_page_offset, jnl->page_table_file_offset,
                 journal_cjf_is_dirty(jnl),
-                journal_cjf_is_empty(jnl));
+                journal_cjf_isempty(jnl));
     
     s16 n = jnl->idxt.count;
     
@@ -423,6 +425,9 @@ jnl_close_file(journal_cjf *jnl)
         log_debug3("cjf: %s,%i: closing file: flushing header", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
         jnl_header_flush(jnl);
         log_debug3("cjf: %s,%i: closing file: closing file", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
+        
+        log_info("zone: %{dnsname}: closing journal file '%s'", jnl->zone->origin, jnl->journal_file_name);
+        
         close_ex(jnl->fd);
         jnl->fd = -1;
     }
@@ -540,7 +545,7 @@ journal_cjf_read_soa_record(dns_resource_record *rr, input_stream *ixfr_wire_is)
  * Only checks that the first SOA serial is the current last serial
  * Should also check that the stream is complete before adding it.
  * 
- * @note edf 20160112 -- In order to handle enhancements:
+ * @note 20160112 edf -- In order to handle enhancements:
  * 
  * The zone of the journal SHOULD be locked
  * The zone of the journal MUST have locks in either of these states:
@@ -549,19 +554,19 @@ journal_cjf_read_soa_record(dns_resource_record *rr, input_stream *ixfr_wire_is)
  * _ doubly locked with the simple reader as owner or alternative owner
  * Any other case will be rejected.
  * 
- * @todo edf 20150127 -- In order to trigger the zone write, this function should: ...
+ * @todo 20150127 edf -- In order to trigger the zone write, this function should: ...
  * 
  * _ get the current written serial (AXFR/TXT), there must be a bridge between that serial an the journal
  * _ get how much room is available after that serial
  * _ if the available room is less or equal to half the maximum size of the journal,
  *   trigger a write to disk and proceed
  * 
- * @note edf 20150309 -- the problem is this:
+ * @note 20150309 edf -- the problem is this:
  *          for a master, the journal is being written as the records are stored into the database
  *          for a slave, the journal is first stored, then read.  A slave should not truncate an update.
  *          (and if we ever do it, it means that we will have to ensure that the calling part knows the final SOA is wrong)
  * 
- * @note edf 20150326 -- both master and slaves are working (on my tests). This part is ready for real life testing.
+ * @note 20150326 edf -- both master and slaves are working (on my tests). This part is ready for real life testing.
  * 
  */
 
@@ -585,7 +590,7 @@ journal_cjf_append_ixfr_stream_master(journal *jh, input_stream *ixfr_wire_is)
     stream_serial_del = ~0;
 #endif
     
-    // ensure the zone locks are usable
+    // ensure the zone locks are usable : locked by the reader, by nobody, or the reader is a reserved owner
     {
         zdb_zone *zone = (zdb_zone*)jnl->zone;
         u8 owner = zone->lock_owner;
@@ -598,6 +603,7 @@ journal_cjf_append_ixfr_stream_master(journal *jh, input_stream *ixfr_wire_is)
                 )
             )
         {
+            log_err("cjf: %s,%i: append IXFR (master) cannot happen because the zone locks are not set properly", jnl->journal_file_name, jnl->fd);
             return ERROR;
         }
     }
@@ -627,7 +633,7 @@ journal_cjf_append_ixfr_stream_master(journal *jh, input_stream *ixfr_wire_is)
     
     bool journal_was_empty;
     
-    if(!journal_cjf_is_empty(jnl))
+    if(!journal_cjf_isempty(jnl))
     {
 #if SLAVE_ONLY
 
@@ -676,7 +682,7 @@ journal_cjf_append_ixfr_stream_master(journal *jh, input_stream *ixfr_wire_is)
     }
     
     // the journal can only be used by the writer
-    /// @todo edf 20150323 -- lock parts of the journal
+    /// @todo 20150323 edf -- lock parts of the journal
     
     journal_cjf_writelock(jnl);
     
@@ -721,13 +727,13 @@ journal_cjf_append_ixfr_stream_master(journal *jh, input_stream *ixfr_wire_is)
             {
                 // complain about it
 
-                if(serial_lt(stream_serial_del, previous_journal_serial)) // !journal_was_empty -> previous_journal_serial set to  jnl->serial_end
+                if(serial_lt(stream_serial_del, previous_journal_serial)) // false positive: !journal_was_empty -> previous_journal_serial set to  jnl->serial_end
                 {
-                    log_err("cjf: %s,%i: serial of stream (%i) is inside the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
+                    log_err("cjf: %s,%i: serial of stream (%i) is inside of the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
                 }
                 else
                 {
-                    log_err("cjf: %s,%i: serial of stream (%i) is outside the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
+                    log_err("cjf: %s,%i: serial of stream (%i) is outside of the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
                 }
 
 #ifdef DEBUG
@@ -781,7 +787,7 @@ journal_cjf_append_ixfr_stream_master(journal *jh, input_stream *ixfr_wire_is)
                     {
                         log_debug("cjf: %s,%i: half the space has been reached, requesting zone write and forcing page change", jnl->journal_file_name, jnl->fd);
 
-                        zdb_zone_info_background_store_zone(jnl->zone->origin); /// @todo edf 20150219 -- stop storing in this PAGE
+                        zdb_zone_info_background_store_zone(jnl->zone->origin); /// @todo 20150219 edf -- stop storing in this PAGE
 
                         jnl->last_page.file_offset_limit = jnl->last_page.records_limit; // this will tell the PAGE is full
                         jnl->last_page.size = jnl->last_page.count;
@@ -1187,7 +1193,7 @@ journal_cjf_append_ixfr_stream_slave(journal *jh, input_stream *ixfr_wire_is)
     // remember the offset in the page when we started    
     u32 starting_page_file_offset = CJF_HEADER_SIZE;
     
-    if(!journal_cjf_is_empty(jnl))
+    if(!journal_cjf_isempty(jnl))
     {
         if(FAIL(journal_cjf_idxt_get_page_offset_from_serial(jnl, starting_zone_serial, &starting_page_file_offset)))
         {
@@ -1232,7 +1238,7 @@ journal_cjf_append_ixfr_stream_slave(journal *jh, input_stream *ixfr_wire_is)
     }
     
     // the journal can only be used by the writer
-    /// @todo edf 20150323 -- lock parts of the journal
+    /// @todo 20150323 edf -- lock parts of the journal
     
     journal_cjf_writelock(jnl);
     
@@ -1260,7 +1266,7 @@ journal_cjf_append_ixfr_stream_slave(journal *jh, input_stream *ixfr_wire_is)
         bool overwrite_risk = journal_cjf_page_current_output_stream_may_overwrite(jnl);
                       
         // if the journal is empty ...
-        if(journal_cjf_is_empty(jnl))
+        if(journal_cjf_isempty(jnl))
         {
             // the serial of the SOA is our starting point
             previous_journal_serial = stream_serial_del;
@@ -1272,13 +1278,13 @@ journal_cjf_append_ixfr_stream_slave(journal *jh, input_stream *ixfr_wire_is)
             {
                 // complain about it
                 
-                /// @note 20150610 edf -- This is where the update glitch prevents updating.
+                /// @note 20150610  edf -- This is where the update glitch prevents updating.
                 ///                       It is important to note that we are already in the main digestion loop.
                 ///                       This was meant to detect a hole in the stream.
                 ///                       But this also prevents a journal in the range [0..N] to accept an update in the range [N-i..N+j]
                 ///                       The fix should be: if we are not beyond our current limit (N) then we should skip SOA--SOA++ until we are.
 
-                if(serial_lt(stream_serial_del, previous_journal_serial))  // !journal_was_empty -> previous_journal_serial set to  jnl->serial_end
+                if(serial_lt(stream_serial_del, previous_journal_serial))  // false positive: !journal_was_empty -> previous_journal_serial set to  jnl->serial_end
                 {
                     log_info("cjf: %s,%i: serial of stream (%i) is inside the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
                     
@@ -1300,7 +1306,9 @@ journal_cjf_append_ixfr_stream_slave(journal *jh, input_stream *ixfr_wire_is)
                             ret = record_size;
                             break; // breaks the for
                         }
-                        
+#ifdef DEBUG
+                        log_debug2("journal: %s,%i: IXFR read %{dnsrr}", jnl->journal_file_name, jnl->fd, &rr);
+#endif
                         if(rr.tctr.qtype == TYPE_SOA)
                         {
                             // we got another SOA
@@ -1345,7 +1353,7 @@ journal_cjf_append_ixfr_stream_slave(journal *jh, input_stream *ixfr_wire_is)
                 }
                 else
                 {
-                    log_err("cjf: %s,%i: serial of stream (%i) is outside the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
+                    log_err("cjf: %s,%i: serial of stream (%i) is outside of the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
                     ret = ZDB_JOURNAL_IXFR_SERIAL_OUT_OF_KNOWN_RANGE;
                 }
 
@@ -1657,6 +1665,8 @@ journal_cjf_append_ixfr_stream(journal *jh, input_stream *ixfr_wire_is)
  *  
  ******************************************************************************/
 
+#define JCJFISDT_TAG 0x54445349464a434a
+
 struct journal_cjf_input_stream_data
 {
     journal_cjf *jnl;
@@ -1745,7 +1755,7 @@ journal_cjf_input_stream_read(input_stream* stream, u8 *buffer, u32 len)
             (void)stream_limit_offset;
             
             yassert(stream_limit_offset != 0);
-            yassert(stream_limit_offset > page_offset); /// @todo edf 20150115 -- fix this when a cycle occurs
+            yassert(stream_limit_offset > page_offset); /// @todo 20150115 edf -- fix this when a cycle occurs
  
             data->available = page_header.stream_end_offset - stream_offset;
             data->page_next = page_header.next_page_offset;
@@ -1877,9 +1887,9 @@ journal_cjf_get_ixfr_stream_at_serial(journal *jh, u32 serial_from, input_stream
     u16 idxt_index = (u16)ret;
         
     journal_cjf_input_stream_data *data;
-    ZALLOC_OR_DIE(journal_cjf_input_stream_data*, data, journal_cjf_input_stream_data, GENERIC_TAG);
+    ZALLOC_OR_DIE(journal_cjf_input_stream_data*, data, journal_cjf_input_stream_data, JCJFISDT_TAG);
     data->jnl = jnl;
-    data->fd = jnl_open_file(jnl, FALSE); /// @todo edf -- open the file, put the pointer at the right place and ret + 1, available = x
+    data->fd = jnl_open_file(jnl, FALSE); /// @todo 20160209 edf --  edf -- open the file, put the pointer at the right place and ret + 1, available = x
     
     data->serial_from = serial_from;
     
@@ -2364,7 +2374,7 @@ journal_cjf_open(journal **jh, const u8* origin, const char *workingdir, bool cr
     if(node != NULL)
     {
         journal_cjf *current_jnl = (journal_cjf*)node->value;
-        if(journal_cjf_is_empty(current_jnl))
+        if(journal_cjf_isempty(current_jnl))
         {
             mutex_unlock(&journal_cjf_set_mtx);
             
@@ -2601,4 +2611,3 @@ journal_cjf_open(journal **jh, const u8* origin, const char *workingdir, bool cr
 }
 
 /** @} */
-

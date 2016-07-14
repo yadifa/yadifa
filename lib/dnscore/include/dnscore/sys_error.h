@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnscoreerror Error
  *  @ingroup dnscore
  *  @brief 
@@ -139,7 +139,7 @@ typedef int32_t ya_result;
 #define UNEXPECTED_EOF                          CORE_ERROR_CODE(12)
 #define UNSUPPORTED_TYPE                        CORE_ERROR_CODE(13)
 #define UNKNOWN_NAME                            CORE_ERROR_CODE(14)     /* name->value table */
-#define BIGGER_THAN_MAX_PATH                    CORE_ERROR_CODE(15)
+#define BIGGER_THAN_PATH_MAX                    CORE_ERROR_CODE(15)
 #define UNABLE_TO_COMPLETE_FULL_WRITE           CORE_ERROR_CODE(16)
 #define BUFFER_WOULD_OVERFLOW                   CORE_ERROR_CODE(17)
 #define CHROOT_NOT_A_DIRECTORY                  CORE_ERROR_CODE(18)
@@ -163,6 +163,7 @@ typedef int32_t ya_result;
 #define PARSE_BUFFER_TOO_SMALL_ERROR            CORE_ERROR_CODE(0x1083)
 #define PARSE_INVALID_CHARACTER                 CORE_ERROR_CODE(0x1084)
 #define PARSE_INVALID_ARGUMENT                  CORE_ERROR_CODE(0x1085)
+#define PARSE_EMPTY_ARGUMENT                    CORE_ERROR_CODE(0x1086)
 
 #define CONFIG_SECTION_CALLBACK_ALREADY_SET     CORE_ERROR_CODE(0x1801)
 #define CONFIG_SECTION_CALLBACK_NOT_SET         CORE_ERROR_CODE(0x1802)
@@ -178,6 +179,7 @@ typedef int32_t ya_result;
 #define CONFIG_IPV6_NOT_ALLOWED                 CORE_ERROR_CODE(0x180c)
 #define CONFIG_KEY_UNKNOWN                      CORE_ERROR_CODE(0x180d)
 #define CONFIG_KEY_PARSE_ERROR                  CORE_ERROR_CODE(0x180e)
+#define CONFIG_SECTION_ERROR                    CORE_ERROR_CODE(0x180f)
 
 #define THREAD_CREATION_ERROR                   CORE_ERROR_CODE(0x2001)
 #define THREAD_DOUBLEDESTRUCTION_ERROR          CORE_ERROR_CODE(0x2002)
@@ -248,6 +250,8 @@ typedef int32_t ya_result;
 #define RRSIG_UNSUPPORTED_COVERED_TYPE          DNS_ERROR_CODE(38)
 #define RRSIG_VERIFICATION_FAILED               DNS_ERROR_CODE(39)
 
+#define UNKNOWN_DNSSEC_ALGO                     DNS_ERROR_CODE(40)
+
 /// @note EAI error codes are used for getaddrinfo
 ///
 /// @note EAI_ERROR_BADFLAGS error code is used for getaddrinfo through EAI_ERROR_CODE
@@ -303,12 +307,13 @@ void error_register(ya_result code, const char *text);
  * @brief Returns the string associated to an error code
  *
  * Returns the string associated to an error code
+ * 
+ * This is NOT thread-safe.  Only to be used 
  *
  * @param[in] err the ya_result error code
  *
  * @return a pointer to the error message
  */
-
 
 const char* error_gettext(ya_result code);
 
@@ -318,8 +323,8 @@ void error_writetext(struct output_stream *os, ya_result code);
 
 void dnscore_register_errors();
 
-#define DIE(code) dief((code), "%s:%i\n", __FILE__, __LINE__)
-#define DIE_MSG(msg) dief(ERROR, "%s:%i %s\n", __FILE__, __LINE__, (msg))
+#define DIE(code) dief((code), "%s:%i\n", __FILE__, __LINE__);abort()
+#define DIE_MSG(msg) dief(ERROR, "%s:%i %s\n", __FILE__, __LINE__, (msg));abort()
 
 #endif /* ERROR_H_ */
 

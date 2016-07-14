@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -51,7 +51,7 @@
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/nsec3_collection.h>
 
-#if ZDB_HAS_NSEC3_SUPPORT == 0
+#if !ZDB_HAS_NSEC3_SUPPORT
 #error "Please do not include nsec3.h if ZDB_HAS_NSEC3_SUPPORT is 0"
 #endif
 
@@ -178,10 +178,13 @@ typedef struct nsec3_load_context nsec3_load_context;
 
 #define NSEC3PARAM_MINIMUM_LENGTH		5
 
-#define NSEC3PARAM_RDATA_ALGORITHM(n3prd)	((n3prd)[0])
-#define NSEC3PARAM_RDATA_FLAGS(n3prd)		((n3prd)[1])
-#define NSEC3PARAM_RDATA_SALT_LEN(n3prd)	((n3prd)[4])
-#define NSEC3PARAM_RDATA_SALT(n3prd)		(&(n3prd)[NSEC3PARAM_MINIMUM_LENGTH])
+#define NSEC3PARAM_RDATA_ALGORITHM(n3prd)	(((const u8*)(n3prd))[0])
+#define NSEC3PARAM_RDATA_FLAGS(n3prd)		(((const u8*)(n3prd))[1])
+#define NSEC3PARAM_RDATA_ITERATIONS(n3prd)	GET_U16_AT(((const u8*)(n3prd))[2]) // network order
+#define NSEC3PARAM_RDATA_SALT_LEN(n3prd)	(((const u8*)(n3prd))[4])
+#define NSEC3PARAM_RDATA_SALT(n3prd)		(&((u8*)(n3prd))[NSEC3PARAM_MINIMUM_LENGTH])
+#define NSEC3PARAM_RDATA_SIZE_FROM_SALT(salt_len) (NSEC3PARAM_MINIMUM_LENGTH + (salt_len))
+#define NSEC3PARAM_RDATA_SIZE_FROM_RDATA(rdata_bytes_) (NSEC3PARAM_RDATA_SIZE_FROM_SALT(NSEC3PARAM_RDATA_SALT_LEN(rdata_bytes_)))
 
 #define NSEC3_ZONE_ALGORITHM(n3_)		NSEC3PARAM_RDATA_ALGORITHM((n3_)->rdata)
 #define NSEC3_ZONE_FLAGS(n3_)			NSEC3PARAM_RDATA_FLAGS((n3_)->rdata)
@@ -189,14 +192,19 @@ typedef struct nsec3_load_context nsec3_load_context;
 #define NSEC3_ZONE_SALT(n3_)	    		NSEC3PARAM_RDATA_SALT((n3_)->rdata)
 
 #define NSEC3PARAM_DEFAULT_TTL			0
+
+/// @note: defined in rfc.h : NSEC3_FLAGS_OPTOUT 0x01
+
 #define NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD	0x80   /* DO NOT PUT THIS IN THE RFC
 							* IT'S PROPRIETARY
 							*/
+#define NSEC3_FLAGS_MARKED_FOR_ICMTL_DEL	0x40   /* DO NOT PUT THIS IN THE RFC
+							* IT'S PROPRIETARY
+							*/
 
-#define NSEC3_ZONE_RDATA_SIZE_FROM_SALT(salt_len) (NSEC3PARAM_MINIMUM_LENGTH + (salt_len))
-#define NSEC3_ZONE_STRUCT_SIZE_FROM_SALT(salt_len) (sizeof(nsec3_zone) + NSEC3_ZONE_RDATA_SIZE_FROM_SALT(salt_len) - 1)
+#define NSEC3_ZONE_STRUCT_SIZE_FROM_SALT(salt_len) (sizeof(nsec3_zone) + NSEC3PARAM_RDATA_SIZE_FROM_SALT(salt_len) - 1)
 
-#define NSEC3_ZONE_RDATA_SIZE(n3_)		NSEC3_ZONE_RDATA_SIZE_FROM_SALT(NSEC3_ZONE_SALT_LEN(n3_))
+#define NSEC3_ZONE_RDATA_SIZE(n3_)		NSEC3PARAM_RDATA_SIZE_FROM_SALT(NSEC3_ZONE_SALT_LEN(n3_))
 #define NSEC3_ZONE_STRUCT_SIZE(n3_)		NSEC3_ZONE_STRUCT_SIZE_FROM_SALT(NSEC3_ZONE_SALT_LEN(n3_))
 
 #define nsec3_zone_get_iterations(n3_)		(ntohs(GET_U16_AT((n3_)->rdata[2])))
@@ -206,6 +214,36 @@ typedef struct nsec3_load_context nsec3_load_context;
 
 #define ZONE_HAS_NSEC3PARAM(zone_) (((zone_)->nsec.nsec3!=NULL) && (zdb_record_find(&(zone_)->apex->resource_record_set, TYPE_NSEC3PARAM)!=NULL))
 #define ZONE_NSEC3_AVAILABLE(zone_) ( ((zone_)->apex->flags & (ZDB_RR_LABEL_DNSSEC_EDIT|ZDB_RR_LABEL_NSEC3)) == ZDB_RR_LABEL_NSEC3)
+
+static inline nsec3_label_extension *nsec3_label_extension_alloc()
+{
+    nsec3_label_extension *n3le;
+    ZALLOC_OR_DIE(nsec3_label_extension*, n3le, nsec3_label_extension, NSEC3_LABELEXT_TAG); // in nsec3_label_link
+#ifdef DEBUG
+    memset(n3le, 0xac, sizeof(nsec3_label_extension));
+#endif
+    return n3le;
+}
+
+static inline void nsec3_label_extension_free(nsec3_label_extension *n3le)
+{
+#ifdef DEBUG
+    memset(n3le, 0xfe, sizeof(nsec3_label_extension));
+#endif
+    ZFREE(n3le, nsec3_label_extension);
+}
+
+static inline u8 nsec3param_get_flags(void *rdata_)
+{
+    u8 *rdata = (u8*)rdata_;
+    return rdata[1];
+}
+
+static inline void nsec3param_set_flags(void *rdata_, u8 flags)
+{
+    u8 *rdata = (u8*)rdata_;
+    rdata[1] = flags;
+}
 
 #ifdef	__cplusplus
 }

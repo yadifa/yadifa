@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man on Thu Feb  4 12:10:08 CET 2016
+.\" Manual page created with latex2man on Wed Jul 13 11:17:49 CEST 2016
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFAD\-CONF" "5" "2016\-02\-04" "YADIFA " "YADIFA "
+.TH "YADIFAD\-CONF" "5" "2016\-07\-15" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -44,13 +44,25 @@ NameServer IDentifier
 Response Rate Limiting directives 
 .TP
 <zone> 
-Description of the domain name in specific attributes 
+Description of the domain name in specific attributes. 
 .TP
 <channels> 
-Description of the logger outputs 
+Description of the logger outputs. 
 .TP
-<loggers> 
-Description of the loggers. 
+<dnssec\-policy> 
+Description of dnssec policies. 
+.TP
+<key\-suite> 
+Description of the key\-suites needed if \&'dnssec policies\&' are used. 
+.TP
+<key\-roll> 
+Description of the key\-rolls needed if \&'dnssec policies\&' are used. 
+.TP
+<key\-template> 
+Description of the key\-templates needed if \&'dnssec policies\&' are used. 
+.TP
+<denial> 
+Description of \&'denial\&', this can be used in certain \&'dnssec policies\&'\&. 
 .PP
 The configuration supports included files.
 .br
@@ -76,12 +88,12 @@ eg.
 .PP
 .Vb
 <container>
-# variable  argument
-variable    value1  
-# variable  argument1       argument2
-variable    value1          value2
-# variable  argument1
-variable    value1,value2
+    # variable  argument
+    variable    value1  
+    # variable  argument1       argument2
+    variable    value1          value2
+    # variable  argument1
+    variable    value1,value2
 </container>
 .Ve
 .PP
@@ -145,7 +157,7 @@ Main without includes
     serverid                "yadifad\-01"
 
     # The version returned by a query to version.yadifa. CH TXT (alias: version\-chaos)
-    version                 "2.1.6"
+    version                 "2.2.0"
 
     # Set the maximum UDP packet size.  
     # note: the packetsize cannot be less than 512 or more than 65535.
@@ -253,9 +265,9 @@ Admin\-key key definition (the name is arbitrary)
 .PP
 .Vb
 <key>
-	name        abroad\-admin\-key
-	algorithm   hmac\-md5
-	secret      WorthlessKeyForExample==
+    name        abroad\-admin\-key
+    algorithm   hmac\-md5
+    secret      WorthlessKeyForExample==
 </key>
 .Ve
 .PP
@@ -267,9 +279,9 @@ Master\-slave key definition
 .PP
 .Vb
 <key>
-	name        master\-slave
-	algorithm   hmac\-md5
-	secret      MasterAndSlavesTSIGKey==
+    name        master\-slave
+    algorithm   hmac\-md5
+    secret      MasterAndSlavesTSIGKey==
 </key>
 .Ve
 .RE
@@ -291,10 +303,10 @@ Master\-slave key use
 .PP
 .Vb
 <acl>
-	transferer  key master\-slave
-	admins      192.0.2.0/24, 2001:db8::74
-	master      192.0.2.53
-	localhost   127.0.0.0/8, ::1
+    transferer  key master\-slave
+    admins      192.0.2.0/24, 2001:db8::74
+    master      192.0.2.53
+    localhost   127.0.0.0/8, ::1
 </acl>
 .Ve
 .PP
@@ -317,7 +329,7 @@ Example with ascii
 .PP
 .Vb
 <nsid>
-	ascii belgium\-brussels\-01
+    ascii belgium\-brussels\-01
 </nsid>
 .Ve
 .PP
@@ -329,7 +341,7 @@ Example with hex
 .PP
 .Vb
 <nsid>
-	hex 00320201
+    hex 00320201
 </nsid>
 .Ve
 .RE
@@ -343,31 +355,31 @@ RRL
 Response Rate Limiting 
 .PP
 .Vb
-        <rrl>
-            # Number of identical responses per second before responses are being limited
-            responses\-per\-second 5
+<rrl>
+    # Number of identical responses per second before responses are being limited
+    responses\-per\-second    5
 
-            # Number of errors per second before reponses are being limited
-            errors\-per\-second 5
+    # Number of errors per second before reponses are being limited
+    errors\-per\-second       5
 
-            # Random slip parameter
-            slip 10
+    # Random slip parameter
+    slip                    10
 
-            # If enabled, the rate limits are only logged and not enforced
-            log\-only off
+    # If enabled, the rate limits are only logged and not enforced
+    log\-only                off
 
-            # Mask applied to group the IPv4 clients
-            ipv4\-prefix\-length 24
+    # Mask applied to group the IPv4 clients
+    ipv4\-prefix\-length      24
 
-            # Mask applied to group the IPv6 clients
-            ipv6\-prefix\-length 56
+    # Mask applied to group the IPv6 clients
+    ipv6\-prefix\-length      56
 
-            # Rate limits are not subject to the following clients (aka whitelist)
-            exempt\-clients none
+    # Rate limits are not subject to the following clients (aka whitelist)
+    exempt\-clients          none
 
-            # Enable or disable the rate limit capabilities
-            enabled yes
-        </rrl>
+    # Enable or disable the rate limit capabilities
+    enabled                 yes
+</rrl>
 .Ve
 .PP
 .TP
@@ -382,27 +394,29 @@ Master domain zone config
 .PP
 .Vb
 <zone>
-	# This server is master for the zone (mandatory)
-	type            master
+    # This server is master for the zone (mandatory)
+    type            master
 
-	# The domain name (mandatory)
-	domain          mydomain.eu
+    # The domain name (mandatory)
+    domain          mydomain.eu
 
-	# The zone file, relative to 'datapath'  (mandatory for a master) (alias: file\-name)
-	file            master/mydomain.eu
+    # The zone file, relative to 'datapath'  (mandatory for a master) (alias: file\-name)
+    file            master/mydomain.eu
 
-	# List of servers also notified of a change (beside the ones in the zone file) (alias: notifies, notify)
-	also\-notify     192.0.2.84, 192.0.2.149
+    # List of servers also notified of a change (beside the ones in the zone file) (alias: notifies, notify)
+    also\-notify     192.0.2.84, 192.0.2.149
 
-	# Set the size of the journal file in KB (alias: journal\-size\-kb)
-	journal\-size    8192 
+    # Set the size of the journal file in KB (alias: journal\-size\-kb)
+    journal\-size    8192 
 
-	# Allow dynupdate for these ACL entries
-	allow\-update    admins
+    # Allow dynupdate for these ACL entries
+    allow\-update    admins
 
-	# Allow AXFR/IXFR for these ACL entries
-	allow\-transfer  transferer
+    # Allow AXFR/IXFR for these ACL entries
+    allow\-transfer  transferer
 
+    # Use DNSSEC policies otherwise remove or put in remark line below
+    dnssec\-policy   1
 </zone>
 .Ve
 .PP
@@ -414,21 +428,151 @@ Slave domain zone config
 .PP
 .Vb
 <zone>
-	# This server is slave for that zone (mandatory)
-	type            slave
+    # This server is slave for that zone (mandatory)
+    type            slave
 
-	# The domain name (mandatory)
-	domain          myotherdomain.eu
+    # The domain name (mandatory)
+    domain          myotherdomain.eu
 
-	# The address of the master (mandatory for a slave, forbidden for a master) (alias: master)
-	masters         191.0.2.53 port 4053 key master\-slave
+    # The address of the master (mandatory for a slave, forbidden for a master) (alias: master)
+    masters         191.0.2.53 port 4053 key master\-slave
 
-	# The zone file, relative to 'datapath'.
-	file            slaves/myotherdomain.eu
+    # The zone file, relative to 'datapath'.
+    file            slaves/myotherdomain.eu
 
-	# Accept notifes from these ACL entries
-	allow\-notify    master
+    # Accept notifes from these ACL entries
+    allow\-notify    master
 </zone>
+.Ve
+.PP
+.RE
+.RE
+.PP
+.RE
+.TP
+.B *
+DNSSEC\-Policy 
+.PP
+DNSSEC\-Policy needs some extra sections: key\-suite, key\-roll, key\-template (and denial if NSEC3 is configured) 
+.PP
+.RS
+.TP
+1.
+dnssec\-policy example with all the needed sections 
+.RS
+.PP
+example with NSEC3 
+.Vb
+<dnssec\-policy>
+    id              "1"
+
+    description     "Example of ZSK and KSK"
+    denial          "nsec3\-with\-salt\-on"
+    key\-suite       "zsk\-1024"
+    key\-suite       "ksk\-2048"
+</dnssec\-policy>
+.Ve
+example with NSEC 
+.Vb
+<dnssec\-policy>
+    id              "2"
+
+    description     "Example of ZSK and KSK"
+    denial          nsec
+    key\-suite       "zsk\-1024"
+    key\-suite       "ksk\-2048"
+</dnssec\-policy>
+.Ve
+.PP
+.RE
+.TP
+2.
+key\-suite 
+.Vb
+<key\-suite>                     
+    id              "ksk\-2048"
+
+    key\-template    "ksk\-2048"
+    key\-roll        "key\-roll\-ksk\-2048\-short\-times"
+</key\-suite>                            
+
+<key\-suite>                     
+    id              "zsk\-1024"
+
+    key\-template    "zsk\-1024"
+    key\-roll        "key\-roll\-zsk\-1024\-short\-times"
+</key\-suite>                            
+.Ve
+.TP
+3.
+key\-roll 
+.Vb
+<key\-roll>      
+    id              "key\-roll\-ksk\-2048\-short\-times"
+
+#   command         minutes    hours      day        month      day\-week   week
+    generate        5,35       *          *          *          *          *
+    publish         6,36       *          *          *          *          *
+    activate        7,37       *          *          *          *          *
+    inactive        8,38       *          *          *          *          * 
+    remove          12,42      *          *          *          *          *
+</key\-roll>     
+
+<key\-roll>      
+    id              "key\-roll\-zsk\-1024\-short\-times"
+
+#   command         minutes    hours      day        month      day\-week   week
+    generate        5,35       *          *          *          *          *
+    publish         6,36       *          *          *          *          *
+    activate        7,37       *          *          *          *          *
+    inactive        8,38       *          *          *          *          * 
+    remove          12,42      *          *          *          *          *
+</key\-roll>     
+.Ve
+.TP
+4.
+key\-template 
+.Vb
+<key\-template>
+    id              "ksk\-2048"
+
+    ksk             true
+    algorithm       8
+    size            2048
+</key\-template>
+
+<key\-template>
+    id              "zsk\-1024"
+
+    ksk             false
+    algorithm       8
+    size            1024
+</key\-template>
+.Ve
+.TP
+5.
+denial 
+.Vb
+<denial>                
+    id              "nsec3\-with\-salt\-on"
+
+    salt            "ABCD"
+    algorithm       1
+    iterations      5
+    optout          off             
+</denial>                               
+.Ve
+.RS
+.PP
+.Vb
+<denial>                
+    id              "nsec3\-with\-salt\-length\-on"
+
+    salt\-length     4
+    algorithm       1
+    iterations      5
+    optout          off             
+</denial>                               
 .Ve
 .PP
 .RE
@@ -460,17 +604,17 @@ Example: YADIFA running as daemon channel definition.
 .PP
 .Vb
 <channels>
-	#   name        stream\-name     arguments
-	database    database.log    0644
-	dnssec      dnssec.log      0644
-	server      server.log      0644
-	statistics  statistics.log  0644
-	system      system.log      0644
-	queries     queries.log     0644
-	zone        zone.log        0644
-	all         all.log         0644
+#   name        stream\-name     arguments
+    database    database.log    0644
+    dnssec      dnssec.log      0644
+    server      server.log      0644
+    statistics  statistics.log  0644
+    system      system.log      0644
+    queries     queries.log     0644
+    zone        zone.log        0644
+    all         all.log         0644
 
-	syslog      syslog          user
+    syslog      syslog          user
 </channels>
 .Ve
 .PP
@@ -484,11 +628,11 @@ This example shows the "stderr" and "stdout" which can also be used in the first
 .PP
 .Vb
 <channels>
-	#   name        stream\-name     arguments
-	syslog      syslog          user
+#   name        stream\-name     arguments
+    syslog      syslog          user
 
-	stderr      STDERR
-	stdout      STDOUT
+    stderr      STDERR
+    stdout      STDOUT
 </channels>
 .Ve
 .PP
@@ -517,14 +661,14 @@ Example without syslog
 .PP
 .Vb
 <loggers>
-	#   bundle          debuglevel                          channels
-	database        ALL                                 database,all
-	dnssec          warning                             dnssec,all
-	server          INFO,WARNING,ERR,CRIT,ALERT,EMERG   server,all
-	statistics      *                                   statistics
-	system          *                                   system,all
-	queries         *                                   queries
-	zone            *                                   zone,all
+#   bundle          debuglevel                          channels
+    database        ALL                                 database,all
+    dnssec          warning                             dnssec,all
+    server          INFO,WARNING,ERR,CRIT,ALERT,EMERG   server,all
+    statistics      *                                   statistics
+    system          *                                   system,all
+    queries         *                                   queries
+    zone            *                                   zone,all
 </loggers>
 .Ve
 .PP
@@ -536,14 +680,14 @@ Example with syslog
 .PP
 .Vb
 <loggers>
-	#   bundle          debuglevel                          channels
-	database        ALL                                 database,syslog
-	dnssec          warning                             dnssec,syslog
-	server          INFO,WARNING,ERR,CRIT,ALERT,EMERG   server,syslog
-	stats           *                                   statistics, syslog
-	system          *                                   system,syslog
-	queries         *                                   queries,syslog
-	zone            *                                   zone,syslog
+#   bundle          debuglevel                          channels
+    database        ALL                                 database,syslog
+    dnssec          warning                             dnssec,syslog
+    server          INFO,WARNING,ERR,CRIT,ALERT,EMERG   server,syslog
+    stats           *                                   statistics, syslog
+    system          *                                   system,syslog
+    queries         *                                   queries,syslog
+    zone            *                                   zone,syslog
 </loggers>
 .Ve
 .RE
@@ -661,7 +805,7 @@ from the sources.
 .SH VERSION
 
 .PP
-Version: 2.1.6 of 2016-02-04\&.
+Version: 2.2.0 of 2016-07-15\&.
 .PP
 .SH MAILING LISTS
 
@@ -694,7 +838,7 @@ via:
 .PP
 .TP
 Copyright 
-(C) 2011\-2016, EURid
+(C)2012\-2016, EURid
 .br
 B\-1831 Diegem, Belgium
 .br

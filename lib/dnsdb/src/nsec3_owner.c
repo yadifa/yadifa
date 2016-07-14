@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -49,7 +49,7 @@
 #include "dnsdb/zdb_types.h"
 #include "dnsdb/nsec3_owner.h"
 
-#define NSEC3_OWNER_DEBUG 0
+#define NSEC3_OWNER_DEBUG 1
 
 //#if NSEC3_OWNER_DEBUG
 #include <dnscore/logger.h>
@@ -68,22 +68,55 @@ extern logger_handle *g_dnssec_logger;
  *
  *****************************************************************************/
 
-static void
-nsec3_label_extension_set_self(nsec3_label_extension* n3ext, nsec3_zone_item* item, nsec3_zone_item* value)
+static nsec3_label_extension*
+nsec3_label_get_extension(zdb_rr_label *label, int index)
 {
+    yassert(label != NULL);
+    
+    //yassert(index > 0);
+    nsec3_label_extension *n3e = label->nsec.nsec3;
+    while(index > 0)
+    {
+        yassert(n3e != NULL);
+        n3e = n3e->next;
+        index--;
+    }
+    return n3e;
+}
+
+/**
+ * Changes the value of the nsec3 extension of a label from a value to another.
+ * 
+ * 
+ * @param n3ext the nsec3 extension of the label 
+ * @param item the old nsec3 item, CANNOT BE NULL
+ * @param value the new nsec3 item, can be NULL
+ * 
+ * 2 uses
+ */
+
+static int
+nsec3_label_extension_replace_self(nsec3_label_extension* n3ext, const nsec3_zone_item *item, nsec3_zone_item *value)
+{
+    yassert(n3ext != NULL);
+    yassert(item != NULL);
+    // yassert(value != NULL); // can be NULL
+    
     /*
      * This loops should only be run once or twice
      * Still it annoys me a lot.
      *
      * I'll have to find a better, dynamic, way to handle
      * multiple NSEC3PARAM.
-     * (And of course memory usage and framentation is the
-     * first ennemy)
+     * (And of course memory usage and fragmentation is the
+     * first enemy)
      */
 
 #if NSEC3_OWNER_DEBUG
     log_debug("nsec3_label_extension_set_self: %p, %{digest32h} @ %p, %{digest32h} @ %p", n3ext, ITEM_DIGEST(item), item, ITEM_DIGEST(value), value);
 #endif
+    
+    int ret = 0;
 
     do
     {
@@ -92,45 +125,68 @@ nsec3_label_extension_set_self(nsec3_label_extension* n3ext, nsec3_zone_item* it
             yassert((value != NULL) || (n3ext->self != NULL));
             
             n3ext->self = value; /* Official way to change the "self" */
-            return;
+            return ret;
         }
 
 #if NSEC3_OWNER_DEBUG
         
-        if(n3ext->self == value)
+        if(value != NULL && n3ext->self == value)
         {
             yassert((value != NULL) || (n3ext->self != NULL));
             
             log_debug("nsec3_label_extension_set_self: already %{digest32h} @ %p ???", ITEM_DIGEST(n3ext->star), n3ext->star);
-            return;
+            return ret;
         }
         
         log_debug("nsec3_label_extension_set_self: skipped %{digest32h} @ %p", ITEM_DIGEST(n3ext->self), n3ext->self);
 #endif
 
+        ++ret;
         n3ext = n3ext->next;
     }
     while(n3ext != NULL);
 
     /* NULL means we didn't found the link back */
 
-    log_err("nsec3_label_extension_set_self: reference not found (internal error)");
+#if NSEC3_OWNER_DEBUG
+    log_debug("nsec3_label_extension_set_self: reference not found (something is wrong)");
+#endif
 
     logger_flush();
     abort();
 }
 
+/**
+ * Changes the star value of the nsec3 extension of a label from a value to another.
+ * 
+ * @param n3ext the nsec3 extension of the label 
+ * @param item the old nsec3 item, CANNOT BE NULL
+ * @param value the new nsec3 item, can be NULL
+ * 
+ * 6 uses
+ */
+
+
+
 static void
-nsec3_label_extension_set_star(nsec3_label_extension* n3ext, nsec3_zone_item* item, nsec3_zone_item* value)
+nsec3_label_extension_replace_star(nsec3_label_extension* n3ext, const nsec3_zone_item *item, nsec3_zone_item* value)
 {
+    yassert(n3ext != NULL);
+    yassert(item != NULL);
+    // yassert(value != NULL); @note value can be NULL
+    
 
 
 #if NSEC3_OWNER_DEBUG
-    log_debug("nsec3_label_extension_set_star: %p, %{digest32h} @ %p, %{digest32h} @ %p", n3ext, ITEM_DIGEST(item), item, ITEM_DIGEST(value), value);
+    log_debug("nsec3_label_extension_replace_star: %p, %{digest32h} @%p, %{digest32h} @%p", n3ext, ITEM_DIGEST(item), item, ITEM_DIGEST(value), value);
 #endif
 
     do
     {
+#if NSEC3_OWNER_DEBUG
+        log_debug("nsec3_label_extension_replace_star: %{digest32h} @%p",
+                  ITEM_DIGEST(n3ext->self),  n3ext->self, ITEM_DIGEST(n3ext->star), n3ext->star);
+#endif
         if(n3ext->star == item)
         {
             n3ext->star = value;
@@ -141,11 +197,11 @@ nsec3_label_extension_set_star(nsec3_label_extension* n3ext, nsec3_zone_item* it
         
         if(n3ext->star == value)
         {
-            log_debug("nsec3_label_extension_set_star: already %{digest32h} @ %p ???", ITEM_DIGEST(n3ext->star), n3ext->star);
+            log_debug("nsec3_label_extension_replace_star: already %{digest32h} @%p ???", ITEM_DIGEST(n3ext->star), n3ext->star);
             return;
         }
         
-        log_debug("nsec3_label_extension_set_star: skipped %{digest32h} @ %p", ITEM_DIGEST(n3ext->star), n3ext->star);
+        log_debug("nsec3_label_extension_replace_star: skipped %{digest32h} @%p", ITEM_DIGEST(n3ext->star), n3ext->star);
 #endif
 
         n3ext = n3ext->next;
@@ -154,21 +210,31 @@ nsec3_label_extension_set_star(nsec3_label_extension* n3ext, nsec3_zone_item* it
 
     /* NULL means we didn't found the link back */
 
-    log_err("nsec3_label_extension_set_star: reference not found (internal error)");
-
+#if NSEC3_OWNER_DEBUG
+    log_debug("nsec3_label_extension_replace_star: reference not found (something is wrong)");
+#endif
+    
     logger_flush();
     abort();
 }
 
-
-
-/*
+/**
  * Adds an entry to the "owner" array (of an item)
+ * 
+ * @param ownersp
+ * @param countp
+ * @param owner
+ * 
+ * 2 uses
  */
 
 static void
-nsec3_label_add(nsec3_label_pointer_array* ownersp, u16* countp, const zdb_rr_label* owner)
+nsec3_label_add(nsec3_label_pointer_array* ownersp, u16* countp, const zdb_rr_label *owner)
 {
+    yassert(ownersp != NULL);
+    yassert(countp != NULL);
+    yassert(owner != NULL);
+    
     if(*countp == 0)
     {
         (*ownersp).owner = (zdb_rr_label*)owner;
@@ -182,21 +248,29 @@ nsec3_label_add(nsec3_label_pointer_array* ownersp, u16* countp, const zdb_rr_la
         /*
          * We had one item : adding one will require using an array
          */
+        if((*ownersp).owner != owner)
+        {
+            *countp = 2;
 
-        *countp = 2;
+            nsec3_label_pointer_array owners;
 
-        nsec3_label_pointer_array owners;
+            ZALLOC_ARRAY_OR_DIE(zdb_rr_label**, owners.owners, sizeof(zdb_rr_label*) * 2, NSEC3_LABELPTRARRAY_TAG);
 
-        ZALLOC_ARRAY_OR_DIE(zdb_rr_label**, owners.owners, sizeof (zdb_rr_label*) * 2, NSEC3_LABELPTRARRAY_TAG);
+            owners.owners[0] = (*ownersp).owner;
+            owners.owners[1] = (zdb_rr_label*)owner;
 
-        owners.owners[0] = (*ownersp).owner;
-        owners.owners[1] = (zdb_rr_label*)owner;
-
-        (*ownersp).owners = owners.owners;
+            (*ownersp).owners = owners.owners;
 
 #if NSEC3_OWNER_DEBUG
-        log_debug("nsec3_label_add: 2 '%{dnslabel}' '%{dnslabel}'", OWNER_NAME(owners.owners[0]), OWNER_NAME(owners.owners[1]));
+            log_debug("nsec3_label_add: 2 '%{dnslabel}' '%{dnslabel}'", OWNER_NAME(owners.owners[0]), OWNER_NAME(owners.owners[1]));
 #endif
+        }
+        else
+        {
+#if NSEC3_OWNER_DEBUG
+            log_debug("nsec3_label_add: 1+1 '%{dnslabel}' already owned", OWNER_NAME(owner));
+#endif
+        }
     }
     else
     {
@@ -206,6 +280,17 @@ nsec3_label_add(nsec3_label_pointer_array* ownersp, u16* countp, const zdb_rr_la
 
         u16 count = *countp;
 
+        for(u16 i = 0; i < count; ++i)
+        {
+            if((*ownersp).owners[i] == owner)
+            {
+#if NSEC3_OWNER_DEBUG
+                  log_debug("nsec3_label_add: %hi+1 '%{dnslabel}' already owned", count, OWNER_NAME(owner));
+#endif
+                  return;
+            }
+        }
+        
         /** @note ZALLOC_ARRAY_RESIZE does change the value of "count" to "count+1" */
         
         ZALLOC_ARRAY_RESIZE(zdb_rr_label*, (*ownersp).owners, count, count + 1);
@@ -223,13 +308,24 @@ nsec3_label_add(nsec3_label_pointer_array* ownersp, u16* countp, const zdb_rr_la
     }
 }
 
-/*
+/**
  * Removes an entry from the "owner" array (of an item)
+ * 
+ * @param ownersp
+ * @param countp
+ * @param owner
+ * 
+ * 2 uses
  */
 
 static void
-nsec3_label_remove(nsec3_label_pointer_array* ownersp, u16* countp, zdb_rr_label* owner)
+nsec3_label_remove(nsec3_label_pointer_array* ownersp, u16* countp, const zdb_rr_label *owner)
 {
+    yassert(ownersp != NULL);
+    yassert(countp != NULL);
+    yassert(owner != NULL);
+    
+
     yassert(*countp > 0);
 
     if(*countp == 1)
@@ -266,7 +362,7 @@ nsec3_label_remove(nsec3_label_pointer_array* ownersp, u16* countp, zdb_rr_label
             last_owner = (*ownersp).owners[0];
         }
 
-        ZFREE_ARRAY((*ownersp).owners, sizeof (zdb_rr_label*) * 2);
+        ZFREE_ARRAY((*ownersp).owners, sizeof(zdb_rr_label*) * 2);
 
         (*ownersp).owner = last_owner;
         *countp = 1;
@@ -319,11 +415,20 @@ nsec3_label_remove(nsec3_label_pointer_array* ownersp, u16* countp, zdb_rr_label
 
 /**
  * Returns TRUE if item is owned by owner
+ * 
+ * @param item
+ * @param owner
+ * @return 
+ * 
+ * 1 use
  */
 
 bool
-nsec3_owned_by(const nsec3_zone_item* item, const zdb_rr_label* owner)
+nsec3_is_owned_by(const nsec3_zone_item *item, const zdb_rr_label *owner)
 {
+    yassert(item != NULL);
+    yassert(owner != NULL);
+    
     if(item->rc == 1)
     {
         return (item->label.owner == owner);
@@ -345,13 +450,24 @@ nsec3_owned_by(const nsec3_zone_item* item, const zdb_rr_label* owner)
     return FALSE;
 }
 
-/*
+/**
  * Adds an owner to the NSEC3 item
+ * 
+ * To be absolutely clear: links NSEC3 to LABEL, but does NOT links LABEL to NSEC3
+ * The label still has to be updated after this call.
+ * 
+ * @param item
+ * @param owner
+ * 
+ * 6 uses
  */
 
 void
-nsec3_add_owner(nsec3_zone_item* item, const zdb_rr_label* owner)
+nsec3_add_owner(nsec3_zone_item *item, const zdb_rr_label *owner)
 {
+    yassert(item != NULL);
+    yassert(owner != NULL);
+
 #if NSEC3_OWNER_DEBUG
     log_debug("nsec3_add_owner: %{digest32h} @ %p, '%{dnslabel}' RC=%hu", ITEM_DIGEST(item), item, OWNER_NAME(owner), item->rc);
     u16 rc = item->rc;
@@ -367,15 +483,22 @@ nsec3_add_owner(nsec3_zone_item* item, const zdb_rr_label* owner)
 #endif    
 }
 
-/*
+/**
  * Removes an owner from the NSEC3 item
  *
  * The entry MUST have been set before
+ * 
+ * @param item
+ * @param owner
+ * 
+ * 1 use
  */
-
 void
-nsec3_remove_owner(nsec3_zone_item* item, zdb_rr_label* owner)
+nsec3_remove_owner(nsec3_zone_item *item, const zdb_rr_label *owner)
 {
+    yassert(item != NULL);
+    yassert(owner != NULL);
+    
 #if NSEC3_OWNER_DEBUG
     log_debug("nsec3_remove_owner: %{digest32h} @ %p, '%{dnslabel}' RC=%hu", ITEM_DIGEST(item), item, OWNER_NAME(owner), item->rc);
     u16 rc = item->rc;
@@ -389,15 +512,21 @@ nsec3_remove_owner(nsec3_zone_item* item, zdb_rr_label* owner)
 #endif
 }
 
-/*
+/**
  * Removes all owners from the NSEC3 item
  *
  * The entry MUST have been set before
+ * 
+ * @param item
+ * 
+ * 3 uses
  */
 
 void
-nsec3_remove_all_owners(nsec3_zone_item* item)
+nsec3_remove_all_owners(nsec3_zone_item *item)
 {
+    yassert(item != NULL);
+    
 #if NSEC3_OWNER_DEBUG
     log_debug("nsec3_remove_all_owners: %{digest32h} @ %p", ITEM_DIGEST(item), item);
 #endif
@@ -417,29 +546,45 @@ nsec3_remove_all_owners(nsec3_zone_item* item)
 #endif
                     if(label->nsec.nsec3 != NULL)
                     {
-                        nsec3_label_extension_set_self(label->nsec.nsec3, item, NULL);
+                        int item_chain_index = nsec3_label_extension_replace_self(label->nsec.nsec3, item, NULL);
 
-                        if(label->nsec.nsec3->star != NULL)
+                        nsec3_label_extension *n3e = nsec3_label_get_extension(label, item_chain_index);
+                        
+                        if(n3e->star != NULL)
                         {
-                            nsec3_remove_star(label->nsec.nsec3->star, label);
-                            nsec3_label_extension_set_star(label->nsec.nsec3, label->nsec.nsec3->star, NULL);
+                            /*
+                            if(label->nsec.nsec3->star != NULL)
+                            {
+                                nsec3_remove_star(label->nsec.nsec3->star, label);
+                            }
+                            */
+                            nsec3_label_extension_replace_star(n3e, n3e->star, NULL);
                         }
 
                         /*
                         * Remove the NSEC3 link
                         */
-
-                        ZFREE(label->nsec.nsec3, nsec3_label_extension); // free the nsec3 label extension (in the process of removign all owners)
-                        label->nsec.nsec3 = NULL;
                     }
                     else
                     {
                         log_warn("nsec3_remove_all_owners: label %{dnslabel} has no NSEC3 (flags=%04x)", label->name, label->flags);
                     }
                     
-                    label->flags &= ~ZDB_RR_LABEL_NSEC3;
+                    u16 is_still_nsec3_mask = ~ZDB_RR_LABEL_NSEC3;
+                    struct nsec3_label_extension* n3e = label->nsec.nsec3;
+                    while(n3e != NULL)
+                    {
+                        if(n3e->self != NULL)
+                        {
+                            is_still_nsec3_mask = ~0;
+                            break;
+                        }
+                        n3e = n3e->next;
+                    }
                     
-                    /** @note edf 20150204 -- that's what's missing to avoid the empty terminal, but doing so requires both the zone and the fqdn : not possible here
+                    label->flags &= is_still_nsec3_mask;
+                    
+                    /** @note 20150204 edf -- that's what's missing to avoid the empty terminal, but doing so requires both the zone and the fqdn : not possible here
                               
                     if(RR_LABEL_IRRELEVANT(label))
                     {
@@ -470,18 +615,22 @@ nsec3_remove_all_owners(nsec3_zone_item* item)
                 {
                     if(label != NSEC3_ZONE_FAKE_OWNER)
                     {
-
 #if NSEC3_OWNER_DEBUG
                         log_debug("nsec3_remove_all_owners: n : %p '%{dnslabel}'", item, label->name);
 #endif
                         yassert(label->nsec.dnssec != NULL);
                         
-                        nsec3_label_extension_set_self(label->nsec.nsec3, item, NULL);
-                        nsec3_remove_star(label->nsec.nsec3->star, label);
-                        nsec3_label_extension_set_star(label->nsec.nsec3, label->nsec.nsec3->star, NULL);
+                        nsec3_label_extension_replace_self(label->nsec.nsec3, item, NULL);
+                        if(label->nsec.nsec3->star != NULL)
+                        {
+                            nsec3_remove_star(label->nsec.nsec3->star, label);
+                            nsec3_label_extension_replace_star(label->nsec.nsec3, label->nsec.nsec3->star, NULL);
+                        }
 
-                        ZFREE(label->nsec.nsec3, nsec3_label_extension); // free the nsec3 label extension (in the process of removign all stars)
-                        label->nsec.nsec3 = NULL;
+                        struct nsec3_label_extension *next = label->nsec.nsec3->next;
+                        // free the nsec3 label extension (in the process of removign all stars)
+                        nsec3_label_extension_free(label->nsec.nsec3);
+                        label->nsec.nsec3 = next;
                         label->flags &= ~ZDB_RR_LABEL_NSEC3;
                     }
 
@@ -489,7 +638,7 @@ nsec3_remove_all_owners(nsec3_zone_item* item)
                 }
             }
 
-            ZFREE_ARRAY(item->label.owners, sizeof (zdb_rr_label*) * n);
+            ZFREE_ARRAY(item->label.owners, sizeof(zdb_rr_label*) * n);
 
             item->label.owners = NULL;
         }
@@ -498,8 +647,23 @@ nsec3_remove_all_owners(nsec3_zone_item* item)
     }
 }
 
-zdb_rr_label* nsec3_owner_get(nsec3_zone_item* item, u16 idx)
+/**
+ * 
+ * Returns the nth label owner for this item.
+ * 
+ * @param item an NSEC3 item
+ * @param idx the index of the label for this hash (usually 0, except if there are collisions of digest(transform(label))
+ * 
+ * @return the owner
+ * 
+ * 1 use
+ */
+
+zdb_rr_label*
+nsec3_owner_get(const nsec3_zone_item *item, u16 idx)
 {
+    yassert(item != NULL);
+    
     if(item->rc == 1)
     {
         return item->label.owner;
@@ -514,11 +678,16 @@ zdb_rr_label* nsec3_owner_get(nsec3_zone_item* item, u16 idx)
 
 /*
  * Adds a "star" to the NSEC3 item
+ * 
+ * 5 uses
  */
 
 void
-nsec3_add_star(nsec3_zone_item* item, const zdb_rr_label* owner)
+nsec3_add_star(nsec3_zone_item *item, const zdb_rr_label *owner)
 {
+    yassert(item != NULL);
+    yassert(owner != NULL);
+    
 #if NSEC3_OWNER_DEBUG
     log_debug("nsec3_add_star: %{digest32h} @ %p, %p '%{dnslabel}' SC=%hu", ITEM_DIGEST(item), item, owner, owner->name, item->sc);
     u16 sc = item->sc;
@@ -535,15 +704,22 @@ nsec3_add_star(nsec3_zone_item* item, const zdb_rr_label* owner)
 
 }
 
-/*
+/**
  * Removes a star from the NSEC3 item
  *
  * The entry MUST have been set before
+ * 
+ * @param item
+ * @param owner
+ * 3 uses
  */
 
 void
-nsec3_remove_star(nsec3_zone_item* item, zdb_rr_label* owner)
+nsec3_remove_star(nsec3_zone_item *item, const zdb_rr_label *owner)
 {
+    yassert(item != NULL);
+    yassert(owner != NULL);
+    
 #if NSEC3_OWNER_DEBUG
     log_debug("nsec3_remove_star: %{digest32h}@ @ %p '%{dnslabel}' SC=%hu", ITEM_DIGEST(item), item, owner->name, item->sc);
     u16 sc = item->sc;
@@ -557,15 +733,21 @@ nsec3_remove_star(nsec3_zone_item* item, zdb_rr_label* owner)
 #endif
 }
 
-/*
+/**
  * Removes all stars from the NSEC3 item
  *
  * The entry MUST have been set before
+ * 
+ * @param item
+ * 
+ * 5 uses
  */
 
 void
-nsec3_remove_all_star(nsec3_zone_item* item)
+nsec3_remove_all_star(nsec3_zone_item *item)
 {
+    yassert(item != NULL);
+    
 #if NSEC3_OWNER_DEBUG
     log_debug("nsec3_remove_all_star(%{digest32h} @ %p)", ITEM_DIGEST(item), item);
 #endif
@@ -574,7 +756,7 @@ nsec3_remove_all_star(nsec3_zone_item* item)
     {
         if(item->sc == 1)
         {
-            zdb_rr_label* label = item->star_label.owner;
+            zdb_rr_label *label = item->star_label.owner;
 
             if(label != NULL)
             {
@@ -586,7 +768,7 @@ nsec3_remove_all_star(nsec3_zone_item* item)
                 {
                     if(label != NSEC3_ZONE_FAKE_OWNER)
                     {
-                        nsec3_label_extension_set_star(label->nsec.nsec3, item, NULL);
+                        nsec3_label_extension_replace_star(label->nsec.nsec3, item, NULL);
                     }
 #if NSEC3_OWNER_DEBUG
                     else
@@ -617,7 +799,7 @@ nsec3_remove_all_star(nsec3_zone_item* item)
 
             for(u32 i = 0; i < n; i++)
             {            
-                zdb_rr_label* label = item->star_label.owners[i];
+                zdb_rr_label *label = item->star_label.owners[i];
 
                 if(label != NULL)
                 {
@@ -629,7 +811,7 @@ nsec3_remove_all_star(nsec3_zone_item* item)
                             log_debug("nsec3_remove_all_star: %i/%i %p '%{dnslabel}'", i, n, label, label->name);
 #endif
 
-                            nsec3_label_extension_set_star(label->nsec.nsec3, item, NULL);
+                            nsec3_label_extension_replace_star(label->nsec.nsec3, item, NULL);
                         }
 #if NSEC3_OWNER_DEBUG
                         else
@@ -643,7 +825,7 @@ nsec3_remove_all_star(nsec3_zone_item* item)
                 }
             }
 
-            ZFREE_ARRAY(item->star_label.owners, sizeof (zdb_rr_label*) * n);
+            ZFREE_ARRAY(item->star_label.owners, sizeof(zdb_rr_label*) * n);
 
             item->star_label.owners = NULL;
         }
@@ -652,22 +834,33 @@ nsec3_remove_all_star(nsec3_zone_item* item)
     }
 }
 
-/*
+
+
+
+/**
  * Moves all stars from one NSEC3 item to another.
  *
  * This is used when an NSEC3 item is removed: All its NSEC3 must be moved
  * to his predecessor.
+ * 
+ * @param src
+ * @param dst
+ *
+ * 3 uses
  */
-
-
 
 void
 nsec3_move_all_star(nsec3_zone_item* src, nsec3_zone_item* dst)
 {
+    yassert(src != NULL);
+    yassert(dst != NULL);
+    
 #if NSEC3_OWNER_DEBUG
     log_debug("nsec3_move_all_star(%{digest32h} @ %p SC=%i, %{digest32h} @ %p SC=%i)", ITEM_DIGEST(src), src, src->sc, ITEM_DIGEST(dst), dst, dst->sc);
     u16 sum = src->sc + dst->sc;
 #endif
+    
+
     
     yassert(src != dst);
     
@@ -687,7 +880,7 @@ nsec3_move_all_star(nsec3_zone_item* src, nsec3_zone_item* dst)
         for(u16 i = 0; i < src->sc; i++)
         {
             zdb_rr_label *label = nsec3_star_get(src, i);
-            nsec3_label_extension_set_star(label->nsec.nsec3, src, dst);
+            nsec3_label_extension_replace_star(label->nsec.nsec3, src, dst);
         }
     }
     else
@@ -700,11 +893,14 @@ nsec3_move_all_star(nsec3_zone_item* src, nsec3_zone_item* dst)
          * rc > 0 and sc > 0, so total of 2 means rc = 1 and sc = 1
          */
 
-        ZALLOC_ARRAY_OR_DIE(zdb_rr_label**, owners.owners, sizeof (zdb_rr_label*) * total, NSEC3_LABELPTRARRAY_TAG);
+        ZALLOC_ARRAY_OR_DIE(zdb_rr_label**, owners.owners, sizeof(zdb_rr_label*) * total, NSEC3_LABELPTRARRAY_TAG);
 
         for(u16 i = 0; i < dst->sc; i++)
         {
             zdb_rr_label *label = nsec3_star_get(dst, i);
+            
+            log_debug("nsec3_move_all_star: %{digest32h} @%p %{dnslabel} @%p %i -> %i", ITEM_DIGEST(dst), dst, label->name, label, i, i);
+            
             owners.owners[i] = label;
         }
 
@@ -718,7 +914,10 @@ nsec3_move_all_star(nsec3_zone_item* src, nsec3_zone_item* dst)
         for(u16 i = 0; i < src->sc; i++)
         {
             zdb_rr_label *label = nsec3_star_get(src, i);
-            nsec3_label_extension_set_star(label->nsec.nsec3, src, dst);
+            
+            log_debug("nsec3_move_all_star: %{digest32h} @%p %{dnslabel} @%p %i -> %i", ITEM_DIGEST(src), src, label->name, label, i, dst->sc + i);
+            
+            nsec3_label_extension_replace_star(label->nsec.nsec3, src, dst);
             owners.owners[dst->sc + i] = label;
         }
 
@@ -731,7 +930,7 @@ nsec3_move_all_star(nsec3_zone_item* src, nsec3_zone_item* dst)
         dst->star_label.owner = owners.owner; // owner when 1 item, owners when multiple. False positives from static analysers.
         dst->sc = total;
     }
-
+    
     src->star_label.owners = NULL;
     src->sc = 0;
     
@@ -743,8 +942,23 @@ nsec3_move_all_star(nsec3_zone_item* src, nsec3_zone_item* dst)
 #endif
 }
 
-zdb_rr_label* nsec3_star_get(const nsec3_zone_item* item, u16 idx)
+/**
+ * 
+ * Returns the nth star label owner for this item.
+ * 
+ * @param item an NSEC3 item
+ * @param idx the index of the label for this hash (usually 0, except if there are collisions of digest(transform(label))
+ * 
+ * @return the owner
+ *
+ * 4 uses
+ */
+
+zdb_rr_label *
+nsec3_star_get(const nsec3_zone_item *item, u16 idx)
 {
+    yassert(item != NULL);
+    
     if(item->sc == 1)
     {
         return item->star_label.owner;

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -108,8 +108,11 @@ message_make_dnsupdate_init(message_data *mesg, u16 id, const u8 *zzone, u16 zcl
         mesg->edns = TRUE;
     }
     
+    dnsname_copy(&mesg->qname[0], zzone);
+    mesg->qtype = TYPE_SOA;
+    mesg->qclass = zclass;
+    
     packet_writer_create(uninitialised_pw, mesg->buffer, mesg->size_limit);
-
     /* 2. DO ZONE SECTION */
     packet_writer_add_fqdn(uninitialised_pw, zzone);
 
@@ -131,7 +134,7 @@ message_make_dnsupdate_delete_all_rrsets(message_data *mesg, packet_writer *pw, 
     
     if(ISOK(return_code = packet_writer_add_fqdn(pw, fqdn)))
     {
-        if(packet_writer_remaining_capacity(pw) >= 10)
+        if(packet_writer_get_remaining_capacity(pw) >= 10)
         {
             packet_writer_add_u16(pw, TYPE_ANY);  // type
             packet_writer_add_u16(pw, CLASS_ANY); // class
@@ -159,7 +162,7 @@ message_make_dnsupdate_delete_rrset(message_data *mesg, packet_writer *pw, const
     
     if(ISOK(return_code = packet_writer_add_fqdn(pw, fqdn)))
     {
-        if(packet_writer_remaining_capacity(pw) >= 10)
+        if(packet_writer_get_remaining_capacity(pw) >= 10)
         {
             packet_writer_add_u16(pw, rtype);  // type
             packet_writer_add_u16(pw, CLASS_ANY); // class
@@ -187,7 +190,7 @@ message_make_dnsupdate_delete_record(message_data *mesg, packet_writer *pw, cons
     
     if(ISOK(return_code = packet_writer_add_fqdn(pw, fqdn)))
     {
-        if(packet_writer_remaining_capacity(pw) >= 10 + rdata_size)
+        if(packet_writer_get_remaining_capacity(pw) >= 10 + rdata_size)
         {
             packet_writer_add_u16(pw, rtype);  // type
             packet_writer_add_u16(pw, CLASS_NONE); // class
@@ -231,7 +234,7 @@ message_make_dnsupdate_add_record(message_data *mesg, packet_writer *pw, const u
     
     if(ISOK(return_code = packet_writer_add_fqdn(pw, fqdn)))
     {
-        if(packet_writer_remaining_capacity(pw) >= 10 + rdata_size)
+        if(packet_writer_get_remaining_capacity(pw) >= 10 + rdata_size)
         {
             packet_writer_add_u16(pw, rtype);  // type
             packet_writer_add_u16(pw, rclass); // class
@@ -263,7 +266,7 @@ message_make_dnsupdate_finalize(message_data *mesg, packet_writer *pw)
     
     if(mesg->edns)
     {
-        if(packet_writer_remaining_capacity(pw) >= 11)
+        if(packet_writer_get_remaining_capacity(pw) >= 11)
         {            
             /* #AR = 1 */
             mesg->buffer[DNS_HEADER_LENGTH - 1] = 1;    /* AR count was 0, now it is 1 */
@@ -337,6 +340,19 @@ message_dnsupdate_data_init(message_dnsupdate_data* new_entry)
 
     new_entry->zname[0] = 0;
     new_entry->zname[1] = 0;
+}
+
+/// @todo 20150420 gve -- check this (obsolete, or zrdata parameter type should be const u8*) 
+void
+message_dnsupdate_data_create(message_dnsupdate_data* entry,  u32 zttl, u16 ztype, u16 zclass, const u8 *zname, u16 zrdata_len, char *zrdata)
+{
+    entry->zttl       = zttl;
+    entry->ztype      = ztype;
+    entry->zclass     = zclass;
+    entry->zrdata_len = zrdata_len;
+
+    dnsname_copy(entry->zname, zname);
+    memcpy(entry->zrdata, zrdata, zrdata_len);
 }
 
 void

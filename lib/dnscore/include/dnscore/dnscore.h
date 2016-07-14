@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnscore System core functions
  *  @brief System core functions
  *
@@ -79,15 +79,76 @@ extern "C"
 
 typedef enum
 {
-    DNSLIB_TSIG=1,
-    DNSLIB_ACL=2,
-    DNSLIB_NSEC=4,
-    DNSLIB_NSEC3=8
-} dnslib_fingerprint;
+    DNSCORE_TSIG=1,
+    DNSCORE_ACL=2,
+    DNSCORE_NSEC=4,
+    DNSCORE_NSEC3=8,
+    DNSCORE_ZALLOC=16,
+    DNSCORE_DEBUG=32
+} dnscore_fingerprint;
 
 u32 dnscore_fingerprint_mask();
 
-dnslib_fingerprint dnscore_getfingerprint();
+static inline dnscore_fingerprint dnscore_getmyfingerprint()
+{
+    dnscore_fingerprint ret = (dnscore_fingerprint)(0
+    
+#if DNSCORE_HAS_TSIG_SUPPORT
+    | DNSCORE_TSIG
+#endif
+#if DNSCORE_HAS_ACL_SUPPORT
+    | DNSCORE_ACL
+#endif
+#if DNSCORE_HAS_NSEC_SUPPORT
+    | DNSCORE_NSEC
+#endif
+#if DNSCORE_HAS_NSEC3_SUPPORT
+    | DNSCORE_NSEC3
+#endif
+#if DNSCORE_HAS_ZALLOC_SUPPORT
+    | DNSCORE_ZALLOC
+#endif
+#ifdef DEBUG
+    | DNSCORE_DEBUG
+#endif
+    )
+    ;
+    
+    return ret;
+}
+
+dnscore_fingerprint dnscore_getfingerprint();
+
+// Required by DNSCORE_TTY_BUFFERED and DNSCORE_LOGGER: a thread will periodically
+// do some tasks.  Required by the alarm mechanism.
+#define DNSCORE_TIMER_THREAD                0x02000000
+
+// default: 5 seconds
+#define DNSCORE_TIMER_PERIOD(seconds__)     (((u32)((seconds__)&0x3f)) << (32 - 6))
+
+// The logging system will be initialised.  Default points to the TTY.
+#define DNSCORE_LOGGER                      0x00000001      // logging mechanism
+
+// Enables initialisation of SSL, dns keys, digests, ...
+#define DNSCORE_CRYPTO                      0x00000002
+
+// Enables initialisation of DNS-related structures (RFC, dns format class for the *format*() calls, ...)
+#define DNSCORE_DNS                         0x00000004      // DNS specific initialisation (specific formats, keyrings, ...)
+
+// Enables the use of ZALLOC calls.  Without this calling a ZALLOC call will give undefined results (a.k.a: crash)
+#define DNSCORE_ZALLOC                      0x00000008
+
+#define DNSCORE_ALARM                       0x00000010
+
+// The TTY output will be flushed every timer tick
+// else the TTY output will be buffered by line ('\r' or '\n')
+// default: on
+#define DNSCORE_TTY_BUFFERED                0x00000020
+
+#define DNSCORE_ALL (DNSCORE_TIMER_THREAD|DNSCORE_TIMER_PERIOD(5)|DNSCORE_LOGGER|DNSCORE_CRYPTO|DNSCORE_DNS|DNSCORE_ZALLOC|DNSCORE_ALARM|DNSCORE_TTY_BUFFERED)
+
+void dnscore_init_ex(u32 features);
+u32 dnscore_get_settings_mask();
 
 void dnscore_init();
 

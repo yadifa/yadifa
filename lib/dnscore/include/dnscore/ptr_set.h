@@ -1,42 +1,54 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
-/** @defgroup dnsdbcollection Collections used by the database
- *  @ingroup dnsdb
- *  @brief 
  *
- *  
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
  *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+/** @defgroup collections Generic collections functions
+ *  @ingroup dnscore
+ *  @brief A dictionary (map, hash, ...) ptr->ptr implemented as an AVL balanced tree
+ * 
+ * A dictionary (map, hash, ...) implemented as an AVL balanced tree
+ * The key is a pointer and is compated with other keys using a used-defined,
+ * per-collection comparison function.
+ *
+ * Pre-defined comparators include:
+ * 
+ * PTR_SET_EMPTY  (ptr_set_default_node_compare) pointer addresses
+ * PTR_SET_ASCIIZ_EMPTY (ptr_set_asciizp_node_compare) C-strings
+ * PTR_SET_DNSNAME_EMPTY (ptr_set_dnsname_node_compare) FQDNs
+ * PTR_SET_NULLABLE_ASCIIZ_EMPTY (ptr_set_nullable_asciizp_node_compare) C-strings AND NULL
+ * PTR_SET_NULLABLE_DNSNAME_EMPTY (ptr_set_nullable_dnsname_node_compare) FQDNs AND NULL
+ * PTR_SET_PTR_EMPTY (ptr_set_ptr_node_compare) pointer addresses
+ * PTR_SET_HOST_ADDRESS_EMPTY (ptr_set_host_address_node_compare) host_address
+ * 
  * @{
  */
 
@@ -199,29 +211,82 @@ extern "C"
 
 #define ptr_set_default_node_compare ptr_set_ptr_node_compare
 
-// key = ptr
+/**
+ * ptr_set comparator function.
+ * Compares pointer values.
+ * 
+ * @param node_a
+ * @param node_b
+ * @return 
+ */
 
 int ptr_set_ptr_node_compare(const void *node_a, const void *node_b);
 
-// key = asciiz (cannot be NULL)
+/**
+ * ptr_set comparator function.
+ * Compares C-string values.
+ * 
+ * @param node_a
+ * @param node_b
+ * @return 
+ */
 
 int ptr_set_asciizp_node_compare(const void *node_a, const void *node_b);
 
-// key = fqdn (cannot be NULL)
+/**
+ * ptr_set comparator function.
+ * Compares dnsname values.
+ * 
+ * @param node_a
+ * @param node_b
+ * @return 
+ */
 
 int ptr_set_dnsname_node_compare(const void *node_a, const void *node_b);
 
-// key = fqdn (cannot be NULL)
+/**
+ * ptr_set comparator function.
+ * Compares dnslabel values.
+ * 
+ * @param node_a
+ * @param node_b
+ * @return 
+ */
 
 int ptr_set_dnslabel_node_compare(const void *node_a, const void *node_b);
 
 // key = asciiz (can be NULL)
 
+/**
+ * ptr_set comparator function.
+ * Compares C-strings values, NULL is allowed.
+ * 
+ * @param node_a
+ * @param node_b
+ * @return 
+ */
+
 int ptr_set_nullable_asciizp_node_compare(const void *node_a, const void *node_b);
 
-// key = fqdn (can be NULL)
+/**
+ * ptr_set comparator function.
+ * Compares dnsname values, NULL is allowed.
+ * 
+ * @param node_a
+ * @param node_b
+ * @return 
+ */
 
 int ptr_set_nullable_dnsname_node_compare(const void *node_a, const void *node_b);
+
+/**
+ * ptr_set comparator function.
+ * Compares host_address values.
+ * 
+ * @param node_a
+ * @param node_b
+ * @return 
+ */
 
 int ptr_set_host_address_node_compare(const void *node_a, const void *node_b);
 
@@ -237,6 +302,7 @@ int ptr_set_host_address_node_compare(const void *node_a, const void *node_b);
 void *ptr_set_avl_iterator_hasnext_next_value(ptr_set_avl_iterator *iterp);
 
 #define FOREACH_PTR_SET(cast__,var__,ptr_set__) ptr_set_avl_iterator PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__); ptr_set_avl_iterator_init((ptr_set__), &PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__)); for(cast__ var__;((var__) = (cast__)ptr_set_avl_iterator_hasnext_next_value(&PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__))) != NULL;)
+//#define FOREACH_PTR_SET_KEY_VALUE(castk__,vark__,castv__,varv__,ptr_set__) ptr_set_avl_iterator PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__); ptr_set_avl_iterator_init((ptr_set__), &PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__)); for(varv__ varv__;((varc__) = (cast__)ptr_set_avl_iterator_hasnext_next_key_value(&PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__))) != NULL;)
 
 /*
  * AVL definition part ends here

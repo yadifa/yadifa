@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup
  *  @ingroup dnscore
  *  @brief
@@ -47,8 +47,6 @@
 #include <arpa/inet.h>
 #include <ctype.h>
 
-//#include "dnscore/dnscore-config.h"
-
 #include "dnscore/rfc.h"
 #include "dnscore/ctrl-rfc.h"
 #include "dnscore/string_set.h"
@@ -60,6 +58,7 @@
 
 static string_node* class_set = NULL;
 static string_node* type_set = NULL;
+static string_node* dnssec_algo_set = NULL;
 
 const class_table qclass[] = {
     { CLASS_IN,   CLASS_IN_NAME   },
@@ -67,6 +66,7 @@ const class_table qclass[] = {
     { CLASS_CH,   CLASS_CH_NAME   },
     { CLASS_HS,   CLASS_HS_NAME   },
     { CLASS_CTRL, CLASS_CTRL_NAME },
+
     { CLASS_NONE, CLASS_NONE_NAME },
     { CLASS_ANY,  CLASS_ANY_NAME  },
     { 0,          NULL            }
@@ -131,14 +131,23 @@ const type_table qtype[] = {
     { TYPE_RKEY,       TYPE_RKEY_NAME       }, // 57
     { TYPE_TALINK,     TYPE_TALINK_NAME     }, // 58
     { TYPE_CDS,        TYPE_CDS_NAME        }, // 59
+
+
+
     { TYPE_SPF,        TYPE_SPF_NAME        }, // 99
     { TYPE_UINFO,      TYPE_UINFO_NAME      }, // 100
+
+
+
     { TYPE_NID,        TYPE_NID_NAME        }, // 104
     { TYPE_L32,        TYPE_L32_NAME        }, // 105
     { TYPE_L64,        TYPE_L64_NAME        }, // 106
     { TYPE_LP,         TYPE_LP_NAME         }, // 107
     { TYPE_EUI48,      TYPE_EUI48_NAME      }, // 108
     { TYPE_EUI64,      TYPE_EUI64_NAME      }, // 109
+
+
+
     { TYPE_TKEY,       TYPE_TKEY_NAME       }, // 249
     { TYPE_TSIG,       TYPE_TSIG_NAME       }, // 250
     { TYPE_IXFR,       TYPE_IXFR_NAME       }, // 251
@@ -171,6 +180,7 @@ const type_table qtype[] = {
     { TYPE_CTRL_SRVCFGRELOAD,     TYPE_CTRL_SRVCFGRELOAD_NAME     },
     { TYPE_CTRL_SRVQUERYLOG,      TYPE_CTRL_SRVQUERYLOG_NAME      },
     { TYPE_CTRL_SRVLOGREOPEN,     TYPE_CTRL_SRVLOGREOPEN_NAME     },
+    { TYPE_CTRL_SRVLOGLEVEL,      TYPE_CTRL_SRVLOGLEVEL_NAME      },
     { TYPE_CTRL_SRVSHUTDOWN,      TYPE_CTRL_SHUTDOWN_NAME         },
     { TYPE_CTRL_ZONECFGRELOAD,    TYPE_CTRL_ZONECFGRELOAD_NAME    },
     { TYPE_CTRL_ZONECFGRELOADALL, TYPE_CTRL_ZONECFGRELOADALL_NAME },
@@ -185,6 +195,22 @@ const type_table qtype[] = {
     { 0,               NULL                 }
 };
 
+
+const dnssec_algo_table dnssec_algo[] = {
+/// @note 20160512 gve -- 3 algorithms are not used ( deprecated or not implemented )
+//  { DNSKEY_ALGORITHM_RSAMD5, DNSKEY_ALGORITHM_RSAMD5_NAME                   },     //  1
+//  { DNSKEY_ALGORITHM_DIFFIE_HELLMAN, DNSKEY_ALGORITHM_DIFFIE_HELLMAN_NAME   },     //  2
+    { DNSKEY_ALGORITHM_DSASHA1,         DNSKEY_ALGORITHM_DSASHA1_NAME         },     //  3
+    { DNSKEY_ALGORITHM_RSASHA1,         DNSKEY_ALGORITHM_RSASHA1_NAME         },     //  5
+    { DNSKEY_ALGORITHM_DSASHA1_NSEC3,   DNSKEY_ALGORITHM_DSASHA1_NSEC3_NAME   },     //  6
+    { DNSKEY_ALGORITHM_RSASHA1_NSEC3,   DNSKEY_ALGORITHM_RSASHA1_NSEC3_NAME   },     //  7
+    { DNSKEY_ALGORITHM_RSASHA256_NSEC3, DNSKEY_ALGORITHM_RSASHA256_NSEC3_NAME },     //  8
+    { DNSKEY_ALGORITHM_RSASHA512_NSEC3, DNSKEY_ALGORITHM_RSASHA512_NSEC3_NAME },     // 10
+//  { DNSKEY_ALGORITHM_GOST,            DNSKEY_ALGORITHM_GOST_NAME            },     // 12
+    { DNSKEY_ALGORITHM_ECDSAP256SHA256, DNSKEY_ALGORITHM_ECDSAP256SHA256_NAME },     // 13
+    { DNSKEY_ALGORITHM_ECDSAP384SHA384, DNSKEY_ALGORITHM_ECDSAP384SHA384_NAME },     // 14
+    { 0,                                NULL                                  }
+};
 
 
 static char *opcode[16] =
@@ -223,6 +249,7 @@ static char *rcode[32] =
     "YXRRSET",                //   7       /* RR Set exists when it should not   rfc 2136 */
     "NXRRSET",                //   8       /* RR set that should exist doesn't   rfc 2136 */
     "NOTAUTH",                //   9       /* Server not Authortative for zone   rfc 2136 */
+                              //   9       /* Not Authorized                     rfc 2845 */
     "NOTZONE",                //   10      /* Name not contained in zone         rfc 2136 */
 
     "?",
@@ -233,8 +260,6 @@ static char *rcode[32] =
 
     "BADVERS",                //   16      /* Bad OPT Version         rfc 2671 / rfc 6891 */
 
-#if 0 /* fix */
-#else // THX
 
     "-",
     "-",
@@ -244,7 +269,6 @@ static char *rcode[32] =
     "-",
     "-",
 
-#endif // THX
     "-",
     
     "-",
@@ -410,10 +434,13 @@ get_name_from_type(u16 t)
             return TYPE_RKEY_NAME;
         case TYPE_TALINK:
             return TYPE_TALINK_NAME;
+
         case TYPE_SPF:
             return TYPE_SPF_NAME;
         case TYPE_UINFO:
             return TYPE_UINFO_NAME;
+
+
         case TYPE_TKEY:
             return TYPE_TKEY_NAME;
         case TYPE_TSIG:
@@ -442,6 +469,40 @@ get_name_from_type(u16 t)
             return NULL;
     }
 }
+
+const char*
+get_name_from_dnssec_algo(u16 d)
+{
+    switch(d)
+    {
+        case DNSKEY_ALGORITHM_RSAMD5:
+            return DNSKEY_ALGORITHM_RSAMD5_NAME;
+        case DNSKEY_ALGORITHM_DIFFIE_HELLMAN:
+            return DNSKEY_ALGORITHM_DIFFIE_HELLMAN_NAME;
+        case DNSKEY_ALGORITHM_DSASHA1:
+            return DNSKEY_ALGORITHM_DSASHA1_NAME;
+        case DNSKEY_ALGORITHM_RSASHA1:
+            return DNSKEY_ALGORITHM_RSASHA1_NAME;
+        case DNSKEY_ALGORITHM_DSASHA1_NSEC3:
+            return DNSKEY_ALGORITHM_DSASHA1_NSEC3_NAME;
+        case DNSKEY_ALGORITHM_RSASHA1_NSEC3:
+            return DNSKEY_ALGORITHM_RSASHA1_NSEC3_NAME;
+        case DNSKEY_ALGORITHM_RSASHA256_NSEC3:
+            return DNSKEY_ALGORITHM_RSASHA256_NSEC3_NAME;
+        case DNSKEY_ALGORITHM_RSASHA512_NSEC3:
+            return DNSKEY_ALGORITHM_RSASHA512_NSEC3_NAME;
+        case DNSKEY_ALGORITHM_GOST:
+            return DNSKEY_ALGORITHM_GOST_NAME;
+        case DNSKEY_ALGORITHM_ECDSAP256SHA256:
+            return DNSKEY_ALGORITHM_ECDSAP256SHA256_NAME;
+        case DNSKEY_ALGORITHM_ECDSAP384SHA384:
+            return DNSKEY_ALGORITHM_ECDSAP384SHA384_NAME;
+
+        default:
+            return NULL;
+    }
+}
+
 
 /** \brief Check in search table of class for the value
  *
@@ -539,6 +600,32 @@ get_type_from_name(const char *src, u16 *dst)
     }
 }
 
+
+/** \brief Check in search table of class for the value
+ *
+ *  @param[in]  src data to be found in table
+ *  @param[out] dst value found in table
+ *
+ *  @retval OK
+ *  @retval NOK
+ */
+int
+get_dnssec_algo_from_name(const char *src, u8 *dst)
+{
+    const string_node *node = string_set_avl_find(&dnssec_algo_set, (const char *)src);
+
+    if(node != NULL)
+    {
+        u8 c = node->value;
+        *dst = c;
+
+        return c;
+    }
+
+    return UNKNOWN_DNSSEC_ALGO;
+}
+
+
 int
 get_class_from_case_name(const char *src, u16 *dst)
 {
@@ -581,6 +668,28 @@ get_type_from_case_name(const char *src, u16 *dst)
     
     return ret;
 }
+
+
+int
+get_dnssec_algo_from_case_name(const char *src, u8 *dst)
+{
+    char txt[16];
+    s32 n = strlen(src);
+    if(n > sizeof(txt))
+    {
+        return UNKNOWN_DNSSEC_ALGO;
+    }
+
+    for(s32 i = 0; i < n; i++)
+    {
+        txt[i] = toupper(src[i]);
+    }
+
+    txt[n] = '\0';
+
+    return get_dnssec_algo_from_name(txt, dst);
+}
+
 
 int
 get_type_from_case_name_len(const char *src, int src_len, u16 *dst)
@@ -633,6 +742,29 @@ rfc_finalize()
     string_set_avl_destroy(&class_set);
     string_set_avl_destroy(&type_set);
 }
+
+
+void
+rfc_dnssec_algo_init()
+{
+    int i;
+
+    string_set_avl_init(&dnssec_algo_set);
+
+    for(i = 0; dnssec_algo[i].id != 0; i++)
+    {
+        string_node* node = string_set_avl_insert(&dnssec_algo_set, dnssec_algo[i].data);
+        node->value       = dnssec_algo[i].id;
+    }
+}
+
+void
+rfc_dnssec_algo_finalize()
+{
+    string_set_avl_destroy(&dnssec_algo_set);
+}
+
+
 
 ya_result
 get_value_from_casename(const value_name_table *table, const char *name, u32 *out_value)

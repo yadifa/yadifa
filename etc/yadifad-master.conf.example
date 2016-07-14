@@ -1,6 +1,6 @@
 <zone>
 	domain		somedomain.eu
-	file		masters/somedomain.eu.zone
+	file		masters/somedomain.eu.
 	type		master
 </zone>
 

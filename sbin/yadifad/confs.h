@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup config Configuration handling
  *  @ingroup yadifad
  *  @brief
@@ -68,7 +68,7 @@ extern "C" {
 
 #define     THREAD_POOL_SIZE_MAX        255 /* 8 bits ! */
 #define     TCP_QUERIES_MIN             0
-#define     TCP_QUERIES_MAX             512
+#define     TCP_QUERIES_MAX             255
 #define     AXFR_PACKET_SIZE_MIN        512
 #define     AXFR_PACKET_SIZE_MAX        65535
 #define     AXFR_RECORD_BY_PACKET_MIN   0
@@ -83,7 +83,7 @@ extern "C" {
 
 #define     PROGRAM_NAME                PACKAGE
 #define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASEDATE                 "2016-02-04"
+#define     RELEASEDATE                 "2016-07-15"
 #define     COMPILEDATE                 __DATE__
 
     /* List of default values for the different configuration parameters */
@@ -113,6 +113,10 @@ extern "C" {
     /** \def S_RUNMODE
      *       Run mode of the program */
 #define     S_RUNMODE                   RUNMODE_CONTINUE_CLEAN
+    
+#define     S_NETWORK_MODEL             "0"
+#define     S_INTERACTIVE               "0"
+#define     S_LOG_FROM_START            "0"
 
     /* */
 #define     S_CPU_COUNT_OVERRIDE        "0" /* max 256 */
@@ -124,6 +128,7 @@ extern "C" {
     
     /* Chroot, uid and gid */
 #define     S_CHROOT                    "0"
+#define     S_LOG_UNPROCESSABLE         "0"
 #define     S_CHROOTPATH                "/"
 #define     S_UID                       "0"
 #define     S_GID                       "0"
@@ -182,10 +187,15 @@ extern "C" {
 #define     S_NOTIFY_RETRY_PERIOD          "1"          /* first after 1 minute */
 #define     S_NOTIFY_RETRY_PERIOD_INCREASE "0"          /* period increased by "0" after every try */
 
-#define     S_ZONE_NOTIFY_AUTO          "1"
-#define     S_ZONE_NO_MASTER_UPDATES    "0"
-#define     S_ZONE_FLAG_MAINTAIN_DNSSEC "1"
+#define     S_ZONE_NOTIFY_AUTO           "1"
+#define     S_ZONE_FLAG_DROP_BEFORE_LOAD "0"
+#define     S_ZONE_NO_MASTER_UPDATES     "0"
+#define     S_ZONE_FLAG_MAINTAIN_DNSSEC  "1"
+#define     S_ZONE_FLAG_TRUE_MULTIMASTER "0"
     
+#define     S_MULTIMASTER_RETRIES       "0"             // in a multimaster setup, how many retries before changing master
+                                                        // 0 is perfectly fine except in true-multimaster mode where the resource cost
+                                                        // asks for some caution.  In that case 60 would be a good choice. Maximum is 255
 #define     S_ZONE_DNSSEC_DNSSEC        "off"
     
 #define     S_JOURNAL_SIZE_KB_DEFAULT   "0"
@@ -227,15 +237,17 @@ extern "C" {
 #define     SERVER_FL_DAEMON            0x02
 #define     SERVER_FL_STATISTICS        0x04
 #define     SERVER_FL_ANSWER_FORMERR    0x08
-    
-#define     SERVER_FL_DYNAMIC_PROVISIONING 0x10
+#define     SERVER_FL_LOG_UNPROCESSABLE 0x10
+#define     SERVER_FL_INTERACTIVE       0x20   
+#define     SERVER_FL_DYNAMIC_PROVISIONING 0x40
+#define     SERVER_FL_LOG_FROM_START    0x8000
 
     /* IP flags */
 #define     IP_FLAGS_IPV4               0x01
 #define     IP_FLAGS_IPV6               0x02
 
 #define     SIGNATURE_VALIDITY_INTERVAL_MIN     7       /* 7  days */
-#define     SIGNATURE_VALIDITY_INTERVAL_MAX     30      /* 30 days */
+#define     SIGNATURE_VALIDITY_INTERVAL_MAX     366     /* 366 days */
 #define     SIGNATURE_VALIDITY_INTERVAL_S       86400   /* seconds for that unit */
     
 #define     SIGNATURE_VALIDITY_REGENERATION_MIN 24      /* 1 day  */
@@ -302,6 +314,9 @@ struct config_reader_context
  *          the command line
  */
 typedef struct config_data config_data;
+
+#define YGCONFIG_TAG 0x4749464e4f434759
+
 struct config_data
 {
     /* Which are the interfaces to listen at */
@@ -314,7 +329,7 @@ struct config_data
     char                                                      *log_path; /* log files */
     char                                                     *keys_path; /* keys */
     char                                                   *config_file; /* config */
-    char                                           *config_file_dynamic; /* dynamic config */
+
     //char                                                      *pid_path; /* OBSOLETE: pid file path */
     char                                                      *pid_file; /* pid file path and name */
 
@@ -337,7 +352,6 @@ struct config_data
     int                                      zone_download_thread_count;
     int                                                 max_tcp_queries;
     int                                              tcp_query_min_rate;
-
     int                                       axfr_max_record_by_packet;
     int                                            axfr_max_packet_size;
     int                                                axfr_retry_delay;
@@ -345,6 +359,7 @@ struct config_data
     int                                             xfr_connect_timeout;
     int                                           statistics_max_period;
     int                                                  edns0_max_size;
+    int                                                   network_model; // 0: default MT, 1: experimental RqW 
     bool                                          axfr_compress_packets;
 
     /**/
@@ -363,19 +378,6 @@ struct config_data
     /*
      * The pid of the only child (a.k.a the server)
      */
-
-    struct
-    {
-        pid_t pid;
-    } child;
-
-    struct
-    {
-        pid_t pid;
-    } parent;
-
-    interface                                  interfaces[MAX_INTERFACES];
-    interface                                           *interfaces_limit;
 
     zdb                                                         *database;
 

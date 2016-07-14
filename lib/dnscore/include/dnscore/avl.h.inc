@@ -89,6 +89,10 @@ extern "C"
 #ifndef AVL_REFERENCE_IS_POINTER
     #error Expected define: AVL_REFERENCE_IS_POINTER
 #endif
+
+#ifndef AVL_MAX_DEPTH
+    #error Expected define: AVL_MAX_DEPTH
+#endif
     
 #if AVL_REFERENCE_IS_CONST
 #undef AVL_REFERENCE_MODIFIER
@@ -196,8 +200,33 @@ static inline bool AVL_PREFIXED(avl_isempty)(AVL_CONST_TREE_TYPE *tree)
 
 AVL_NODE_TYPE* AVL_PREFIXED(avl_node_last)(AVL_NODE_TYPE *node);
 
+/**
+ * Initialises an iterator for the AVL tree
+ * 
+ * @param tree
+ * @param iter
+ */
+
 void AVL_PREFIXED(avl_iterator_init)(AVL_CONST_TREE_TYPE* tree,AVL_PREFIXED(avl_iterator*) iter);
+
+/**
+ * Returns TRUE iff calling avl_iterator_next_node will return a node
+ * 
+ * @param iter
+ * @return TRUE iff calling avl_iterator_next_node will return a node
+ */
+
 bool AVL_PREFIXED(avl_iterator_hasnext)(AVL_PREFIXED(avl_iterator*) iter);
+
+/**
+ * Returns the next node from the iterator.
+ * XXX_avl_iterator_hasnext MUST be called before or results are undefined.
+ * XXX_ being the prefix of this particular version of the AVL tree.
+ * 
+ * @param iter
+ * @return 
+ */
+
 AVL_NODE_TYPE* AVL_PREFIXED(avl_iterator_next_node)(AVL_PREFIXED(avl_iterator*) iter);
 
 /** @brief Releases all the nodes of a tree
@@ -212,21 +241,80 @@ AVL_NODE_TYPE* AVL_PREFIXED(avl_iterator_next_node)(AVL_PREFIXED(avl_iterator*) 
 
 void AVL_PREFIXED(avl_callback_and_destroy)(AVL_TREE_TYPE *tree,callback_function callback);
 
+/**
+ * Returns the first element in the tree (with the key having the smallest value)
+ * If the tree is empty, NULL is returned.
+ * 
+ * @param tree
+ * @return the first element of the tree, or NULL if the tree is empty
+ */
+
 AVL_NODE_TYPE *AVL_PREFIXED(avl_get_first)(AVL_CONST_TREE_TYPE* tree);
 
 #if AVL_HAS_PARENT_POINTER != 0
 
+/**
+ * Only on implementations of nodes with a pointer to the parent.
+ * Return the node following this one or NULL if we are already on the last one.
+ * 
+ * @param node
+ * @return the 
+ */
+
 AVL_NODE_TYPE* AVL_PREFIXED(avl_node_next)(const AVL_NODE_TYPE* node);
+
+/**
+ * Only on implementations of nodes with a pointer to the parent.
+ * Return the node preceding this one or NULL if we are already on the first one.
+ * 
+ * @param node
+ * @return the 
+ */
 
 AVL_NODE_TYPE* AVL_PREFIXED(avl_node_prev)(const AVL_NODE_TYPE* node);
 
+/**
+ * Only on implementations of nodes with a pointer to the parent.
+ * Return the node following this one or the first one if we are already on the last one.
+ * 
+ * @param node
+ * @return the 
+ */
+
 AVL_NODE_TYPE* AVL_PREFIXED(avl_node_mod_next)(const AVL_NODE_TYPE* node);
+
+/**
+ * Only on implementations of nodes with a pointer to the parent.
+ * Return the node preceding this one or the last one if we are already on the first one.
+ * 
+ * @param node
+ * @return the 
+ */
 
 AVL_NODE_TYPE* AVL_PREFIXED(avl_node_mod_prev)(const AVL_NODE_TYPE* node);
 
-#endif
+#endif // AVL_HAS_PARENT_POINTER != 0
+
+/**
+ * DEBUG call.
+ * 
+ * Integrity check.
+ * 
+ * @param tree
+ * @return an error code in case of error.
+ */
 
 int AVL_PREFIXED(avl_check)(AVL_TREE_TYPE *tree);
+
+/**
+ * DEBUG call.
+ * 
+ * Dumps the tree on stdout
+ * DEBUG_DUMP must be defined for this to be implemented.
+ * 
+ * @param tree
+ */
+
 void AVL_PREFIXED(avl_dump)(AVL_TREE_TYPE *tree);
 
 #undef AVL_REFERENCE_CONST

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnscoretools Generic Tools
  *  @ingroup dnscore
  *  @brief
@@ -44,6 +44,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <sys/socket.h>
 
 #include "dnscore/fdtools.h"
 #include "dnscore/timems.h"
@@ -54,6 +55,11 @@
 extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
+#if DEBUG
+// avoids logging these operations in the logger.
+// this prevents a self-deadlock if the logger limit is reached (2^20 lines)
+bool logger_is_self();
+#endif
 
 /**
  * Writes fully the buffer to the fd
@@ -419,9 +425,14 @@ open_ex(const char *pathname, int flags)
     int fd;
     
 #ifdef DEBUG
-    log_debug6("open_ex(%s,%o)", STRNULL(pathname), flags);
-    errno = 0;
+    if(!logger_is_self())
+    {
+        log_debug6("open_ex(%s,%o)", STRNULL(pathname), flags);
+        errno = 0;
+    }
 #endif
+    
+    yassert(pathname != NULL);
     
 #if DEBUG_BENCH_FD
     fdtools_debug_bench_register();
@@ -443,7 +454,10 @@ open_ex(const char *pathname, int flags)
 #endif
     
 #ifdef DEBUG
-    log_debug6("open_ex(%s,%o): %r (fd)", STRNULL(pathname), flags, ERRNO_ERROR, fd);
+    if(!logger_is_self())
+    {
+        log_debug6("open_ex(%s,%o): %r (fd)", STRNULL(pathname), flags, ERRNO_ERROR, fd);
+    }
 #endif
     
     return fd;
@@ -463,9 +477,14 @@ open_create_ex(const char *pathname, int flags, mode_t mode)
     int fd;
     
 #ifdef DEBUG
-    log_debug6("open_create_ex(%s,%o,%o)", STRNULL(pathname), flags, mode);
-    errno = 0;
+    if(!logger_is_self())
+    {
+        log_debug6("open_create_ex(%s,%o,%o)", STRNULL(pathname), flags, mode);
+        errno = 0;
+    }
 #endif
+    
+    yassert(pathname != NULL);
     
 #if DEBUG_BENCH_FD
     fdtools_debug_bench_register();
@@ -489,7 +508,10 @@ open_create_ex(const char *pathname, int flags, mode_t mode)
 #endif
     
 #ifdef DEBUG
-    log_debug6("open_create_ex(%s,%o,%o): %r (%i)", STRNULL(pathname), flags, mode, ERRNO_ERROR, fd);
+    if(!logger_is_self())
+    {
+        log_debug6("open_create_ex(%s,%o,%o): %r (%i)", STRNULL(pathname), flags, mode, ERRNO_ERROR, fd);
+    }
 #endif
     
     return fd;
@@ -538,8 +560,11 @@ close_ex(int fd)
     ya_result return_value = SUCCESS;
     
 #ifdef DEBUG
-    log_debug6("close_ex(%i)", fd);
-    errno = 0;
+    if(!logger_is_self())
+    {
+        log_debug6("close_ex(%i)", fd);
+        errno = 0;
+    }
 #endif
     
 #if DEBUG_BENCH_FD
@@ -562,7 +587,10 @@ close_ex(int fd)
 #endif
     
 #ifdef DEBUG
-    log_debug6("close_ex(%i): %r", fd, return_value);
+    if(!logger_is_self())
+    {
+        log_debug6("close_ex(%i): %r", fd, return_value);
+    }
 #endif
     
     return return_value;
@@ -596,6 +624,29 @@ close_ex_nolog(int fd)
     return return_value;
 }
 
+/**
+ * Returns the type of socket.
+ * 
+ * @param fd the file descriptor of the socket
+ * @return SOCK_STREAM, SOCK_DGRAM, SOCK_RAW or an errno error code like MAKE_ERRON_ERROR(EBADF) or MAKE_ERRON_ERROR(ENOTSOCK)
+ */
+
+ya_result
+fd_getsockettype(int fd)
+{
+    int stype;
+    socklen_t stype_len = sizeof(stype);
+    int ret = getsockopt(fd, SOL_SOCKET, SO_TYPE, &stype, &stype_len);
+    if(ret >= 0)
+    {
+        return stype; // SOCK_STREAM, SOCK_DGRAM, SOCK_RAW, ...
+    }
+    else
+    {
+        return ERRNO_ERROR; // expecting EBADF or ENOTSOCK
+    }
+}
+
 s64
 filesize(const char *name)
 {
@@ -609,6 +660,34 @@ filesize(const char *name)
     }
     
     return (s64)ERRNO_ERROR;
+}
+
+/**
+ * Checks for existence of a file/dir/link
+ * 
+ * 
+ * @param name the file name
+ * 
+ * @return 1 if the file exists, 0 if the file does not exists, an error otherwise
+ */
+
+ya_result
+file_exists(const char *name)
+{
+    struct stat s;
+    if(lstat(name, &s) >= 0)    // MUST be lstat
+    {
+        return 1;
+    }
+    
+    int err = errno;
+    
+    if(err == ENOENT)
+    {
+        return 0;
+    }
+    
+    return MAKE_ERRNO_ERROR(err);
 }
 
 ya_result
@@ -720,6 +799,71 @@ mkdir_ex(const char *pathname, mode_t mode, u32 flags)
 }
 
 /**
+ * Returns the modification time of the file in microseconds
+ * This does not mean the precision of the time is that high.
+ * This is only to simplify reading the time on a file.
+ * 
+ * @param name the file name
+ * @param timestamp a pointer to the timestamp
+ * @return an error code
+ */
+
+ya_result
+file_mtime(const char *name, s64 *timestamp)
+{
+    struct stat st;
+    yassert(name != NULL);
+    yassert(timestamp != NULL);
+    if(stat(name, &st) >= 0)
+    {
+#if !__APPLE__
+        s64 ts = (1000000LL * st.st_mtim.tv_sec) + (st.st_mtim.tv_nsec / 1000LL);
+#else
+        s64 ts = (1000000LL * st.st_mtimespec.tv_sec) + (st.st_mtimespec.tv_nsec / 1000LL);
+#endif
+        *timestamp = ts;
+        return SUCCESS;
+    }
+    else
+    {
+        *timestamp = 0;
+        return ERRNO_ERROR;
+    }
+}
+
+/**
+ * Returns the modification time of the file in microseconds
+ * This does not mean the precision of the time is that high.
+ * This is only to simplify reading the time on a file.
+ * 
+ * @param name the file name
+ * @param timestamp a pointer to the timestamp
+ * @return an error code
+ */
+
+ya_result
+fd_mtime(int fd, s64 *timestamp)
+{
+    struct stat st;
+    yassert(timestamp != NULL);
+    if(fstat(fd, &st) >= 0)
+    {
+#if !__APPLE__
+        s64 ts = (1000000LL * st.st_mtim.tv_sec) + (st.st_mtim.tv_nsec / 1000LL);
+#else
+        s64 ts = (1000000LL * st.st_mtimespec.tv_sec) + (st.st_mtimespec.tv_nsec / 1000LL);
+#endif
+        *timestamp = ts;
+        return SUCCESS;
+    }
+    else
+    {
+        *timestamp = 0;
+        return ERRNO_ERROR;
+    }
+}
+
+/**
  * Fixes an issue with the dirent not always set as expected.
  *
  * The type can be set to DT_UNKNOWN instead of file or directory.
@@ -790,7 +934,7 @@ readdir_forall(const char *basedir, readdir_callback *func, void *args)
     }
     
     for(;;)
-    {    
+    {
         readdir_r(dir, &entry, &result);
 
         if(result == NULL)
@@ -801,6 +945,21 @@ readdir_forall(const char *basedir, readdir_callback *func, void *args)
         }
 
         u8 d_type = dirent_get_file_type(basedir, result);
+        
+        if(d_type == DT_DIR)
+        {
+            if(result->d_name[0] == '.')
+            {
+                if((result->d_name[1] == '.') && (result->d_name[2] == '\0'))
+                {
+                    continue;
+                }
+                else if(result->d_name[1] == '\0')
+                {
+                    continue;
+                }
+            }
+        }
         
         if(FAIL(ret = func(basedir, result->d_name, d_type, args)))
         {
@@ -844,6 +1003,8 @@ readdir_forall(const char *basedir, readdir_callback *func, void *args)
             }
         }
     }
+    
+    closedir(dir);
 
     return ret;
 }

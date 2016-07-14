@@ -28,55 +28,73 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
-#
-#	YADIFA config Makefile.am script
-#
-#      	Makefile.am script
-#
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.1.6-public/etc/Makefile.am $
-#
-#	$Date: 2016-01-21 11:33:18 +0100 (Thu, 21 Jan 2016) $
-#
-#	$Revision: 5792 $
-#
-##############################################################################
 
 ACLOCAL_AMFLAGS = -I m4
 
 OC=yadifad.conf
 OCE=$(OC).example
+MC=yadifa.conf
+MCE=$(MC).example
+KC=keys.conf
+KCE=$(KC).example
 YI=yadifad.init
 YIE=$(YI).example
+YS=yadifad.service
+YSE=$(YS).example
+YC=yadifa
+YCE=$(YC).bash_completion
+YD=yadifad
+YDE=$(YD).bash_completion
+BC=/etc/bash_completion.d/
 
-doc_DATA = $(OCE) $(YIE) yadifad-master.conf.example yadifad-slave.conf.example \
+doc_DATA = $(OC) $(MC) $(KC) $(YI) $(YS) $(YDE) $(YCE) \
+				yadifad-master.conf.example yadifad-slave.conf.example \
 				yadifad.init.debian	yadifad.init.rhel \
 				yadifad.logrotate \
-				yadifad.service yadifad.service.arch yadifad.service.debian yadifad.service.rhel
+				yadifad.service.arch yadifad.service.debian yadifad.service.rhel
 
-noinst_HEADERS = yadifad.conf.example yadifad-master.conf.example yadifad-slave.conf.example \
-				yadifad.init.example yadifad.init.debian yadifad.init.rhel \
+noinst_HEADERS = $(OCE) $(MCE) $(KCE) $(YIE) $(YSE) $(YDE) $(YCE) \
+				yadifad-master.conf.example yadifad-slave.conf.example \
+				yadifad.init.debian yadifad.init.rhel \
 				yadifad.logrotate \
-				yadifad.service yadifad.service.arch yadifad.service.debian yadifad.service.rhel \
-				$(OC) $(YI)
+				yadifad.service.arch yadifad.service.debian yadifad.service.rhel
 
 $(OC): $(OCE)
 	cat $(OCE) | sed "s@\"\(.*\)/var/\(.*\)\"@\"$(localstatedir)/\2\"@" > $(OC)
 
+$(MC): $(MCE)
+	cp $(MCE) $(MC)
+
+$(KC): $(KCE)
+	cat $(KCE) | sed "s@ChangeThisKey@`head -c 16 /dev/urandom | openssl enc -base64 2>/dev/null`@" > $(KC)
+
 $(YI): $(YIE)
 	cat $(YIE) | sed "s@^PREFIX=.*@PREFIX=\"$(prefix)\"@" > $(YI)
 
-all: $(YI) $(OC)
+$(YS): $(YSE)
+	cat $(YSE) | sed -e "s@/usr/sbin@$(sbindir)@g" -e "s@/etc/yadifa@$(sysconfdir)@g" -e "s@/var@$(localstatedir)@g" > $(YS)
+
+$(YC): $(YCE)
+	cp $(YCE) $(YC)
+
+$(YD): $(YDE)
+	cp $(YDE) $(YD)
+
+all: $(YI) $(OC) $(MC) $(KC) $(YC) $(YD)
 
 install-data-hook: $(OC)
 	mkdir -p $(DESTDIR)$(sysconfdir)
 	touch $(DESTDIR)$(sysconfdir)/$(OC)
+	if [ -d "$(BC)" -a -w "$(BC)" ] ; then cp $(YC) $(YD) $(BC) ; fi
 
 clean-local:
-	rm -f $(YI) $(OC)
+	rm -f $(YI) $(OC) $(MC) $(KC) $(YS) $(YC) $(YD)
 
-release: $(YI) $(OC)
+release: $(YI) $(OC) $(MC) $(KC) $(YS) $(YC) $(YD)
 
-profile: $(YI) $(OC)
+profile: $(YI) $(OC) $(MC) $(KC) $(YS) $(YC) $(YD)
 
-debug: $(YI) $(OC)
+debug: $(YI) $(OC) $(MC) $(KC) $(YS) $(YC) $(YD)
+
+features:
 

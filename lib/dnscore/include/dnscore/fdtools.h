@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnscoretools Generic Tools
  *  @ingroup dnscore
  *  @brief
@@ -44,6 +44,13 @@
 #include <dirent.h>
 #include <dnscore/sys_types.h>
 
+#ifdef	__cplusplus
+extern "C"
+{
+#endif
+    
+#define US_RATE(x) (0.000001 * (x))
+    
 #ifndef _DIRENT_HAVE_D_TYPE
 #ifndef DT_UNKNOWN
 #define DT_UNKNOWN  0
@@ -52,16 +59,9 @@
 #define DT_REG      8
 #endif
 #ifndef DT_DIR
-#define DT_DIR     10
+#define DT_DIR      4
 #endif
 #endif
-
-#ifdef	__cplusplus
-extern "C"
-{
-#endif
-    
-#define US_RATE(x) (0.000001 * (x))
 
 /**
  * Writes fully the buffer to the fd
@@ -142,6 +142,14 @@ ya_result open_create_ex_nolog(const char *pathname, int flags, mode_t mode);
 
 ya_result close_ex(int fd);
 
+/**
+ * Returns the type of socket.
+ * 
+ * @param fd the file descriptor of the socket
+ * @return SOCK_STREAM, SOCK_DGRAM, SOCK_RAW or an errno error code like MAKE_ERRON_ERROR(EBADF) or MAKE_ERRON_ERROR(ENOTSOCK)
+ */
+
+ya_result fd_getsockettype(int fd);
 
 /**
  * Returns the size of a file
@@ -153,10 +161,24 @@ ya_result close_ex(int fd);
 s64 filesize(const char *name);
 
 /**
+ * Checks for existence of a file/dir/link
  * 
- *   0 : not a link
- *   1 : a link
- * < 0 : error
+ * @param name the file name
+ * 
+ * @return 1 if the file exists, 0 if the file does not exists, or an error code (access rights & cie)
+ */
+
+ya_result file_exists(const char *name);
+
+/**
+ * 
+ * Checks if a file is a link
+ * 
+ * @param name the file name
+ * 
+ * @return  0 : not a link
+ *          1 : a link
+ *        < 0 : error
  */
 
 ya_result file_is_link(const char *name);
@@ -171,6 +193,30 @@ ya_result file_is_link(const char *name);
 #define MKDIR_EX_PATH_TO_FILE 1 // ie: pathname points to a file, so skip the file part
 
 int mkdir_ex(const char *pathname, mode_t mode, u32 flags);
+
+/**
+ * Returns the modification time of the file in microseconds
+ * This does not mean the precision of the time is that high.
+ * This is only to simplify reading the time on a file.
+ * 
+ * @param name the file name
+ * @param timestamp a pointer to the timestamp
+ * @return an error code
+ */
+
+ya_result file_mtime(const char *name, s64 *timestamp);
+
+/**
+ * Returns the modification time of the file in microseconds
+ * This does not mean the precision of the time is that high.
+ * This is only to simplify reading the time on a file.
+ * 
+ * @param fd the file descriptor
+ * @param timestamp a pointer to the timestamp
+ * @return an error code
+ */
+
+ya_result fd_mtime(int fd, s64 *timestamp);
 
 /**
  * Fixes an issue with the dirent not always set as expected.

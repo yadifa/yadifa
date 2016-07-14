@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup format C-string formatting
  *  @ingroup dnscore
  *  @brief
@@ -60,6 +60,8 @@
 #define PORT_SEPARATOR '#'
 #define PORT_SEPARATOR_V4 PORT_SEPARATOR
 #define PORT_SEPARATOR_V6 PORT_SEPARATOR
+
+#define TMP00002_TAG 0x3230303030504d54
 
 /** digest32h
  *
@@ -159,7 +161,7 @@ dnsnamevector_format_handler_method(const void *val, output_stream *stream, s32 
 
             for(idx = 0; idx <= top; idx++)
             {
-                u8 *label = namevector->labels[idx];
+                const u8 *label = namevector->labels[idx];
 
                 FORMAT_BREAK_ON_INVALID(label, 1);
 
@@ -204,7 +206,7 @@ dnsnamestack_format_handler_method(const void *val, output_stream *stream, s32 p
         {
             do
             {
-                u8 *label    = namestack->labels[top];
+                const u8 *label    = namestack->labels[top];
                 u8 label_len = *label++;
                 output_stream_write(stream, label, label_len);
                 output_stream_write(stream, &dot, 1);
@@ -283,6 +285,15 @@ dnsclass_format_handler_method(const void *val, output_stream *stream, s32 paddi
                 len = 4;
                 txt = CLASS_CTRL_NAME;
                 break;
+
+#if HAS_WHOIS
+            case CLASS_WHOIS:
+                len = 5;
+                txt = CLASS_WHOIS_NAME;
+                break;
+#endif  // HAS_WHOIS
+
+
             case CLASS_ANY:
                 len = 3;
                 txt = CLASS_ANY_NAME;
@@ -591,6 +602,8 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                 len = 5;
                 txt = TYPE_EUI64_NAME;
                 break;
+
+
             case TYPE_TKEY:
                 len = 4;
                 txt = TYPE_TKEY_NAME;
@@ -700,6 +713,10 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                 len = 9;
                 txt = TYPE_CTRL_SRVLOGREOPEN_NAME;
                 break;
+            case TYPE_CTRL_SRVLOGLEVEL:
+                len = 8;
+                txt = TYPE_CTRL_SRVLOGLEVEL_NAME;
+                break;
             case TYPE_CTRL_SRVSHUTDOWN:
                 len = 8;
                 txt = TYPE_CTRL_SHUTDOWN_NAME;
@@ -778,7 +795,7 @@ sockaddr_format_handler_method(const void *restrict val, output_stream *stream, 
         {
             struct sockaddr_in *ipv4 = (struct sockaddr_in*)sa;
             
-            if(inet_ntop(ipv4->sin_family, &ipv4->sin_addr, buffer, sizeof (buffer)) != NULL)
+            if(inet_ntop(ipv4->sin_family, &ipv4->sin_addr, buffer, sizeof(buffer)) != NULL)
             {
                 int n       = strlen(buffer);
                 buffer[n++] = PORT_SEPARATOR_V4;
@@ -794,7 +811,7 @@ sockaddr_format_handler_method(const void *restrict val, output_stream *stream, 
         {
             struct sockaddr_in6 *ipv6 = (struct sockaddr_in6*)sa;
 
-            if(inet_ntop(ipv6->sin6_family, &ipv6->sin6_addr, buffer, sizeof (buffer)) != NULL)
+            if(inet_ntop(ipv6->sin6_family, &ipv6->sin6_addr, buffer, sizeof(buffer)) != NULL)
             {
                 int n       = strlen(buffer);
                 buffer[n++] = PORT_SEPARATOR_V6;
@@ -808,7 +825,7 @@ sockaddr_format_handler_method(const void *restrict val, output_stream *stream, 
         }
         default:
         {
-            snprintf(buffer, sizeof (buffer), "AF_#%i:?", sa->sa_family);
+            snprintf(buffer, sizeof(buffer), "AF_#%i:?", sa->sa_family);
             break;
         }
     }
@@ -836,7 +853,7 @@ hostaddr_format_handler_method(const void *restrict val, output_stream *stream, 
         {
             case HOST_ADDRESS_IPV4:
             {
-                if(inet_ntop(AF_INET, ha->ip.v4.bytes, buffer, sizeof (buffer)) != NULL)
+                if(inet_ntop(AF_INET, ha->ip.v4.bytes, buffer, sizeof(buffer)) != NULL)
                 {
                     int n       = strlen(buffer);
                     buffer[n++] = PORT_SEPARATOR_V4;
@@ -850,7 +867,7 @@ hostaddr_format_handler_method(const void *restrict val, output_stream *stream, 
             }
             case HOST_ADDRESS_IPV6:
             {
-                if(inet_ntop(AF_INET6, ha->ip.v6.bytes, buffer, sizeof (buffer)) != NULL)
+                if(inet_ntop(AF_INET6, ha->ip.v6.bytes, buffer, sizeof(buffer)) != NULL)
                 {
                     int n       = strlen(buffer);
                     buffer[n++] = PORT_SEPARATOR_V6;
@@ -971,7 +988,7 @@ hostaddrlist_format_handler_method(const void *restrict val, output_stream *stre
             {
                 char *tmp;
                 len <<= 1;
-                MALLOC_OR_DIE(char*, tmp, len, GENERIC_TAG);
+                MALLOC_OR_DIE(char*, tmp, len, TMP00002_TAG);
                 memcpy(tmp, src, p - src);
                 if(allocated)
                 {
@@ -1017,7 +1034,7 @@ sockaddrip_format_handler_method(const void *restrict val, output_stream *stream
         {
             struct sockaddr_in *ipv4 = (struct sockaddr_in*)sa;
 
-            if(inet_ntop(ipv4->sin_family, &ipv4->sin_addr, buffer, sizeof (buffer)) != NULL)
+            if(inet_ntop(ipv4->sin_family, &ipv4->sin_addr, buffer, sizeof(buffer)) != NULL)
             {
             }
             else
@@ -1030,7 +1047,7 @@ sockaddrip_format_handler_method(const void *restrict val, output_stream *stream
         {
             struct sockaddr_in6 *ipv6 = (struct sockaddr_in6*)sa;
 
-            if(inet_ntop(ipv6->sin6_family, &ipv6->sin6_addr, buffer, sizeof (buffer)) != NULL)
+            if(inet_ntop(ipv6->sin6_family, &ipv6->sin6_addr, buffer, sizeof(buffer)) != NULL)
             {
             }
             else
@@ -1041,7 +1058,7 @@ sockaddrip_format_handler_method(const void *restrict val, output_stream *stream
         }
         default:
         {
-            snprintf(buffer, sizeof (buffer), "AF_#%i:?", sa->sa_family);
+            snprintf(buffer, sizeof(buffer), "AF_#%i:?", sa->sa_family);
             break;
         }
     }
@@ -1145,7 +1162,26 @@ static const format_handler_descriptor dnsrr_format_handler_descriptor = {
     dnsrr_format_handler_method
 };
 
+static bool netformat_class_init_done = FALSE;
 static bool dnsformat_class_init_done = FALSE;
+
+void
+netformat_class_init()
+{
+    if(netformat_class_init_done)
+    {
+        return;
+    }
+
+    netformat_class_init_done = TRUE;
+    
+    format_class_init();
+    
+    format_registerclass(&sockaddr_format_handler_descriptor);
+    format_registerclass(&sockaddrip_format_handler_descriptor);
+    format_registerclass(&hostaddr_format_handler_descriptor);
+    format_registerclass(&hostaddrlist_format_handler_descriptor);
+}
 
 void
 dnsformat_class_init()
@@ -1158,7 +1194,7 @@ dnsformat_class_init()
     dnsformat_class_init_done = TRUE;
 
     format_class_init();
-
+    
     format_registerclass(&dnsname_format_handler_descriptor);
     format_registerclass(&dnslabel_format_handler_descriptor);
     format_registerclass(&dnsclass_format_handler_descriptor);
@@ -1166,10 +1202,6 @@ dnsformat_class_init()
     format_registerclass(&dnsnamestack_format_handler_descriptor);
     format_registerclass(&dnsnamevector_format_handler_descriptor);
     format_registerclass(&digest32h_format_handler_descriptor);
-    format_registerclass(&sockaddr_format_handler_descriptor);
-    format_registerclass(&sockaddrip_format_handler_descriptor);
-    format_registerclass(&hostaddr_format_handler_descriptor);
-    format_registerclass(&hostaddrlist_format_handler_descriptor);
     format_registerclass(&rdatadesc_format_handler_descriptor);
     format_registerclass(&typerdatadesc_format_handler_descriptor);
     format_registerclass(&recordwire_format_handler_descriptor);

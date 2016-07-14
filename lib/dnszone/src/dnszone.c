@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnszone Zone loader modules
  * 
  *  @brief Zone loader modules
@@ -69,21 +69,21 @@ const char *dnszone_lib = "dnszone " __DATE__ " " __TIME__ " debug";
 const char *dnszone_lib = "dnszone " __DATE__ " " __TIME__ " release";
 #endif
 
-dnslib_fingerprint
+dnscore_fingerprint
 dnszone_getfingerprint()
 {
-    dnslib_fingerprint ret = 0
+    dnscore_fingerprint ret = 0
 #if HAS_TSIG_SUPPORT
-    | DNSLIB_TSIG
+    | DNSCORE_TSIG
 #endif
 #if HAS_ACL_SUPPORT != 0
-    | DNSLIB_ACL
+    | DNSCORE_ACL
 #endif
 #if HAS_NSEC_SUPPORT != 0
-    | DNSLIB_NSEC
+    | DNSCORE_NSEC
 #endif
 #if HAS_NSEC3_SUPPORT != 0
-    | DNSLIB_NSEC3
+    | DNSCORE_NSEC3
 #endif
     ;
 
@@ -93,7 +93,7 @@ dnszone_getfingerprint()
 u32
 dnszone_fingerprint_mask()
 {
-    return DNSLIB_TSIG|DNSLIB_ACL|DNSLIB_NSEC|DNSLIB_NSEC3;
+    return DNSCORE_TSIG|DNSCORE_ACL|DNSCORE_NSEC|DNSCORE_NSEC3;
 }
 
 static void
@@ -112,34 +112,25 @@ ya_result
 dnszone_init()
 {
     dnszone_register_errors();
-
-    if(dnscore_getfingerprint() != (dnszone_getfingerprint() & dnscore_fingerprint_mask()))
+    
+    if(dnscore_getfingerprint() != dnscore_getmyfingerprint())
     {
-        fprintf(stderr, "dnszone: Mismatched fingerprint: %s: %08x != (%08x = %08x & %08x)\n",
-                "core",
-                dnscore_getfingerprint(),
-                dnszone_getfingerprint() & dnscore_fingerprint_mask(),
-                dnszone_getfingerprint() , dnscore_fingerprint_mask());
-
+        flushout();
+        flusherr();
+        printf("dnszone: the linked dnscore features are %08x but the the lib has been compiled against one with %08x", dnscore_getfingerprint(), dnscore_getmyfingerprint());
         fflush(NULL);
-
-        exit(-1);
-    }
-
-    if(dnsdb_getfingerprint() != (dnszone_getfingerprint() & dnsdb_fingerprint_mask()))
-    {
-        fprintf(stderr, "dnszone: Mismatched fingerprint: %s: %08x != (%08x = %08x & %08x)\n",
-                "db",
-                dnsdb_getfingerprint(),
-                dnszone_getfingerprint() & dnsdb_fingerprint_mask(),
-                dnszone_getfingerprint() , dnsdb_fingerprint_mask());
-
-        fflush(NULL);
-
         exit(-1);
     }
     
-    //g_zone_logger = logger_handle_get("zone");
+    if(dnsdb_getfingerprint() != dnsdb_getmyfingerprint())
+    {
+        flushout();
+        flusherr();
+        printf("dnszone: the linked dnsdb features are %08x but the the lib has been compiled against one with %08x", dnsdb_getfingerprint(), dnscore_getmyfingerprint());
+        fflush(NULL);
+        exit(-1);
+    }
+
 
     return SUCCESS;
 }

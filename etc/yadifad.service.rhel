@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 PIDFile=/run/yadifad.pid
-ExecStart=/usr/sbin/yadifad
+ExecStart=/usr/sbin/yadifad --nodaemon
 ExecReload=/bin/kill -HUP $MAINPID
 
 [Install]

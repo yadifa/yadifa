@@ -28,10 +28,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
-#
-#	YADIFA data Makefile.am script
-#
-##############################################################################
 
 ACLOCAL_AMFLAGS = -I m4
 
@@ -45,6 +41,8 @@ release:
 profile:
 
 debug:
+
+features:
 
 install-data-hook:
 	@for d in zones/masters zones/slaves zones/xfr zones/keys run log; \

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnscoreerror Error
  *  @ingroup dnscore
  *  @brief
@@ -132,7 +132,7 @@ error_gettext(ya_result code)
 
     if(code > 0)
     {
-        snprintf(error_gettext_tmp, sizeof (error_gettext_tmp), "success (%08x)", code);
+        snprintf(error_gettext_tmp, sizeof(error_gettext_tmp), "success (%08x)", code);
         return error_gettext_tmp;
     }
 
@@ -159,7 +159,7 @@ error_gettext(ya_result code)
         return (const char*)error_node->value;
     }
 
-    snprintf(error_gettext_tmp, sizeof (error_gettext_tmp), "undefined error code %08x", code);
+    snprintf(error_gettext_tmp, sizeof(error_gettext_tmp), "undefined error code %08x", code);
 
     return error_gettext_tmp;
 }
@@ -186,7 +186,7 @@ error_writetext(output_stream *os, ya_result code)
     if((code & 0xffff0000) == ERRNO_ERROR_BASE)
     {
         code &= 0xffff;
-#if DEBUG
+#ifdef DEBUG
         if(code == EINTR)
         {
             osprint(os, "<EINTR> "); // whoopsie
@@ -248,6 +248,7 @@ dnscore_register_errors()
     error_register(PARSE_BUFFER_TOO_SMALL_ERROR, "PARSE_BUFFER_TOO_SMALL_ERROR");
     error_register(PARSE_INVALID_CHARACTER, "PARSE_INVALID_CHARACTER");
     error_register(PARSE_INVALID_ARGUMENT, "PARSE_INVALID_ARGUMENT");
+    error_register(PARSE_EMPTY_ARGUMENT, "PARSE_EMPTY_ARGUMENT");
     
     error_register(CONFIG_SECTION_CALLBACK_ALREADY_SET, "CONFIG_SECTION_CALLBACK_ALREADY_SET");
     error_register(CONFIG_SECTION_CALLBACK_NOT_SET, "CONFIG_SECTION_CALLBACK_NOT_SET");
@@ -263,6 +264,7 @@ dnscore_register_errors()
     error_register(CONFIG_IPV6_NOT_ALLOWED, "CONFIG_IPV6_NOT_ALLOWED");
     error_register(CONFIG_KEY_UNKNOWN, "CONFIG_KEY_UNKNOWN");
     error_register(CONFIG_KEY_PARSE_ERROR, "CONFIG_KEY_PARSE_ERROR");
+    error_register(CONFIG_SECTION_ERROR, "CONFIG_SECTION_ERROR");
 
     error_register(LOGGER_INITIALISATION_ERROR, "LOGGER_INITIALISATION_ERROR");
     error_register(COMMAND_ARGUMENT_EXPECTED, "COMMAND_ARGUMENT_EXPECTED");
@@ -282,7 +284,7 @@ dnscore_register_errors()
     error_register(UNEXPECTED_EOF, "UNEXPECTED_EOF");
     error_register(UNSUPPORTED_TYPE, "UNSUPPORTED_TYPE");
     error_register(UNKNOWN_NAME, "UNKNOWN_NAME");
-    error_register(BIGGER_THAN_MAX_PATH, "BIGGER_THAN_MAX_PATH");
+    error_register(BIGGER_THAN_PATH_MAX, "BIGGER_THAN_PATH_MAX");
     error_register(UNABLE_TO_COMPLETE_FULL_WRITE, "UNABLE_TO_COMPLETE_FULL_WRITE");
     error_register(BUFFER_WOULD_OVERFLOW, "BUFFER_WOULD_OVERFLOW");
     error_register(CHROOT_NOT_A_DIRECTORY, "CHROOT_NOT_A_DIRECTORY");

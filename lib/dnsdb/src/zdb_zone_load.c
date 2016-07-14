@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief Functions used to manipulate a zone
@@ -62,7 +62,7 @@
 #include "dnsdb/zdb-zone-find.h"
 
 #if ZDB_HAS_DNSSEC_SUPPORT
-#include "dnsdb/dnssec_keystore.h"
+#include "dnsdb/dnssec-keystore.h"
 #include "dnsdb/dnssec.h"
 #endif
 
@@ -118,6 +118,8 @@ s32 resource_record_size(resource_record* entry)
  * @brief Load a zone in the database.
  *
  * Load a zone in the database.
+ * 
+ * @note It is not a good idea to scan the zone content in here. ie: getting the earliest signature expiration. (It's counter-productive and pointless)
  *
  * @param[in] db a pointer to the database
  * @param[in] zone_data a pointer to an opened zone_reader
@@ -129,24 +131,26 @@ s32 resource_record_size(resource_record* entry)
 ya_result
 zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *expected_origin, u16 flags)
 {
+    u64 wire_size = 0;
     u8* rdata;
     size_t rdata_len;
     ya_result return_code;
     resource_record entry;
     u32 soa_min_ttl = 0;
     u32 soa_serial = 0;
-#if ZDB_HAS_DNSSEC_SUPPORT    
+#if ZDB_HAS_DNSSEC_SUPPORT
+#if ZDB_HAS_NSEC3_SUPPORT
     u32 has_optout = 0;
     u32 has_optin = 0;
-    u64 wire_size = 0;
+#endif
     bool nsec3_keys = FALSE;
     bool nsec_keys = FALSE;
+    bool has_dnskey = FALSE;
+#endif
     bool has_nsec3 = FALSE;
     bool has_nsec = FALSE;
     bool has_nsec3param = FALSE;
-    bool has_dnskey = FALSE;
     bool has_rrsig = FALSE;
-#endif
     bool dynupdate_forbidden = FALSE;
     //bool modified = FALSE;
     
@@ -245,8 +249,10 @@ zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *e
     nsec3_keys = FALSE;
     nsec_keys = FALSE;
     has_nsec3param = FALSE;
+#if ZDB_HAS_NSEC3_SUPPORT
     has_optout = 0;
     has_optin = 0;
+#endif
 #endif
 
     /* B */
@@ -353,7 +359,7 @@ zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *e
             }
             
             ZDB_RECORD_ZALLOC(ttlrdata, /*entry.ttl*/0, rdata_len, rdata);
-            zdb_zone_record_add(zone, entry_name.labels, (entry_name.size - name.size) - 1, entry.type, ttlrdata);
+            zdb_zone_record_add(zone, entry_name.labels, entry_name.size, entry.type, ttlrdata); // verified
 
             has_nsec3param = TRUE;
         }
@@ -410,6 +416,8 @@ zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *e
                         case DNSKEY_ALGORITHM_RSASHA1_NSEC3:
                         case DNSKEY_ALGORITHM_RSASHA256_NSEC3:
                         case DNSKEY_ALGORITHM_RSASHA512_NSEC3:
+                        case DNSKEY_ALGORITHM_ECDSAP256SHA256:
+                        case DNSKEY_ALGORITHM_ECDSAP384SHA384:
                         {
                             nsec3_keys = TRUE;
                             break;
@@ -431,11 +439,13 @@ zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *e
                     
                     if((flags & ZDB_ZONE_IS_SLAVE) == 0)
                     {
-                        /* @TODO use defines */
-                        if(ISOK(return_code = dnssec_key_load_private(algorithm, tag, key_flags, origin_ascii, &key)))
+                        if(ISOK(return_code = dnssec_keystore_load_private_key_from_parameters(algorithm, tag, key_flags, expected_origin, &key))) // converted
                         {
                             log_info("zone load: loaded private key K%{dnsname}+%03d+%05hd", zone->origin, algorithm, tag);
-
+                            
+                            // we are only interested on its existence so it can be released now (the fact the pointer is not NULL is all that matters)
+                            
+                            dnskey_release(key);
                             has_dnskey = TRUE;
                         }
                         else
@@ -455,9 +465,11 @@ zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *e
                          * Get the public key for signature verifications.
                          */
 
-                        if(ISOK(return_code = dnskey_load_public(rdata, rdata_len, origin_ascii, &key)))
+                        if(ISOK(return_code = dnssec_keystore_load_public_key_from_rdata(rdata, rdata_len, expected_origin, &key))) // converted
                         {
                             log_info("zone load: loaded public key K%{dnsname}+%03d+%05hd", zone->origin, algorithm, tag);
+                            
+                            dnskey_release(key);
                             
                             has_dnskey = TRUE;
                         }
@@ -471,7 +483,7 @@ zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *e
                     /* DNSKEY not supported */
 #endif
                     ZDB_RECORD_ZALLOC(ttlrdata, entry.ttl, rdata_len, rdata);
-                    zdb_zone_record_add(zone, entry_name.labels, (entry_name.size - name.size) - 1, entry.type, ttlrdata); /* class is implicit */
+                    zdb_zone_record_add(zone, entry_name.labels, entry_name.size, entry.type, ttlrdata); // class is implicit, verified
                     break;
                 }
 #if ZDB_HAS_NSEC_SUPPORT
@@ -479,13 +491,13 @@ zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *e
                 {
                     has_nsec = TRUE;
                     ZDB_RECORD_ZALLOC(ttlrdata, entry.ttl, rdata_len, rdata);
-                    zdb_zone_record_add(zone, entry_name.labels, (entry_name.size - name.size) - 1, entry.type, ttlrdata); /* class is implicit */
+                    zdb_zone_record_add(zone, entry_name.labels, entry_name.size, entry.type, ttlrdata); /* class is implicit */
                     break;
                 }
 #endif
                 case TYPE_RRSIG:
                 {
-#if ZDB_HAS_DNSSEC_SUPPORT == 0
+#if !ZDB_HAS_DNSSEC_SUPPORT
                     if(!has_rrsig)
                     {
                         log_warn("zone load: type %{dnstype} is not supported", &entry.type);
@@ -503,7 +515,7 @@ zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *e
                 default:
                 {
                     ZDB_RECORD_ZALLOC(ttlrdata, entry.ttl, rdata_len, rdata);
-                    zdb_zone_record_add(zone, entry_name.labels, (entry_name.size - name.size) - 1, entry.type, ttlrdata); /* class is implicit */
+                    zdb_zone_record_add(zone, entry_name.labels, entry_name.size, entry.type, ttlrdata); // class is implicit, name parameters verified
                     break;
                 }
 #if !ZDB_HAS_NSEC3_SUPPORT
@@ -582,7 +594,7 @@ zdb_zone_load_loop:
 
         if(!dnsname_locase_verify_charspace(entry.name))
         {
-            /** @todo handle this issue*/
+            /** @todo 20120113 edf -- handle this issue*/
             log_warn("zone load: DNS character space error on '%{dnsname}'", entry.name);
         }
     }
@@ -653,7 +665,7 @@ zdb_zone_load_loop:
             
             /**
              * 
-             * @todo DROP NSEC (?)
+             * @todo 20120217 edf -- DROP NSEC (?)
              * 
              */
             
@@ -709,8 +721,8 @@ zdb_zone_load_loop:
 
 #if ZDB_HAS_NSEC3_SUPPORT
             /**
-             * @todo Check if there is both NSEC & NSEC3.  Reject if yes. (LATER On hold until NSEC is back in)
-             *       compile NSEC if any
+             * Check if there is both NSEC & NSEC3.  Reject if yes.
+             *   compile NSEC if any
              *   compile NSEC3 if any
              *
              * I'm only doing NSEC3 here.
@@ -762,11 +774,18 @@ zdb_zone_load_loop:
 
                 log_debug("zone load: zone %{dnsname}: NSEC3 post-processing.", zone->origin);
 
-                return_code = nsec3_load_compile(&nsec3_context);
+                if((flags & ZDB_ZONE_IS_SLAVE) == 0)
+                {
+                    return_code = nsec3_load_compile(&nsec3_context);
+                }
+                else
+                {
+                    return_code = nsec3_load_forced(&nsec3_context);
+                }
                 
                 if(((flags & ZDB_ZONE_IS_SLAVE) != 0) && (nsec3_context.nsec3_rejected > 0))
                 {
-                    return_code = DNSSEC_ERROR_NSEC3_INVALIDZONESTATE;
+                    return_code = DNSSEC_ERROR_NSEC3_INVALIDZONESTATE; // the zone is corrupted and as a slave nothing can be done about it.
                 }
                 
                 if(ISOK(return_code))
@@ -794,10 +813,6 @@ zdb_zone_load_loop:
         }
         else if(has_nsec)
         {
-            /**
-             * @TODO build the nsec chain
-             */
-            
             if((flags & ZDB_ZONE_DNSSEC_MASK) >= ZDB_ZONE_NSEC3)
             {
                 log_warn("zone load: zone %{dnsname} was set to NSEC3 but is NSEC", zone->origin);
@@ -887,7 +902,7 @@ zdb_zone_load_loop:
             {
                 log_info("zone load: post-replay sanity check for %{dnsname} done", zone->origin);
                 
-                // zdb_update_zone_signatures(zone, MAX_S32); /// @todo instead clear the signatures without keys
+                // zdb_update_zone_signatures(zone, MAX_S32); /// @todo 20131220 edf -- instead clear the signatures without keys
             }
         }
 
@@ -901,6 +916,7 @@ zdb_zone_load_loop:
     {
         if(has_nsec3)
         {
+#if ZDB_HAS_NSEC3_SUPPORT
             /* Check the AVL collection */
 
             nsec3_zone *n3 = zone->nsec.nsec3;
@@ -933,7 +949,7 @@ zdb_zone_load_loop:
                 u8 fqdn[MAX_DOMAIN_LENGTH];
                 zdb_zone_label_iterator iter;
            
-                zdb_zone_label_iterator_init(zone, &iter);
+                zdb_zone_label_iterator_init(&iter, zone);
 
                 while(zdb_zone_label_iterator_hasnext(&iter))
                 {
@@ -945,7 +961,7 @@ zdb_zone_load_loop:
 
                     u32 last_issues_count = issues_count;
 
-                    if((flags & ZDB_RR_LABEL_UNDERDELEGATION) == 0) /** @todo !zdb_rr_label_is_glue(label) */
+                    if((flags & ZDB_RR_LABEL_UNDERDELEGATION) == 0) /** @todo 20111208 edf -- !zdb_rr_label_is_glue(label) */
                     {
                         /* APEX or NS+DS */
 
@@ -1028,6 +1044,7 @@ zdb_zone_load_loop:
                     }
                 }
             }
+#endif // ZDB_HAS_NSEC3_SUPPORT
         } // has nsec3
     }
 #endif

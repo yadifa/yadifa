@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -61,6 +61,9 @@
 
 extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
+
+#define UIDNAME_TAG 0x454d414e444955
+#define GIDNAME_TAG 0x454d414e444947
 
 /**
  * This collection links configuration parsing functions to printing functions.
@@ -765,8 +768,8 @@ config_set_uid_t(const char *value, uid_t *dest, anytype notused)
         {
             buffer_size = 1024;
         }
-        
-        MALLOC_OR_DIE(char*, buffer, buffer_size, GENERIC_TAG);
+            
+        MALLOC_OR_DIE(char*, buffer, buffer_size, UIDNAME_TAG);
         getpwnam_r(value,&pwd,buffer,buffer_size,&result);
         *dest = pwd.pw_uid;
         free(buffer);
@@ -819,7 +822,7 @@ config_set_gid_t(const char *value, gid_t *dest, anytype notused)
             buffer_size = 1024;
         }
 
-        MALLOC_OR_DIE(char*, buffer, buffer_size, GENERIC_TAG);
+        MALLOC_OR_DIE(char*, buffer, buffer_size, GIDNAME_TAG);
 
         getgrnam_r(value, &grp, buffer, buffer_size, &result);
         *dest = grp.gr_gid;
@@ -934,7 +937,7 @@ config_set_host_list(const char *value, host_address **dest, anytype settings)
 
     u8 ip_buffer[MAX_DOMAIN_LENGTH];
 
-    if (! (flags & CONFIG_HOST_LIST_FLAGS_APPEND))
+    if(! (flags & CONFIG_HOST_LIST_FLAGS_APPEND))
     {
         /* delete the content of the list */
         if(*dest != NULL)
@@ -952,7 +955,7 @@ config_set_host_list(const char *value, host_address **dest, anytype settings)
             dest = &(*dest)->next;
         }
 
-        if (counter > settings._8u8[1])
+        if(counter > settings._8u8[1])
         {
             return CONFIG_TOO_MANY_HOSTS;
         }
@@ -1009,7 +1012,7 @@ config_set_host_list(const char *value, host_address **dest, anytype settings)
 
         ip_size = (u8)return_code;
 
-        if (ip_size == 4)
+        if(ip_size == 4)
         {
             if(! (flags & CONFIG_HOST_LIST_FLAGS_IPV4))
             {
@@ -1018,7 +1021,7 @@ config_set_host_list(const char *value, host_address **dest, anytype settings)
             host_type = HOST_ADDRESS_IPV4;
         }
 
-        if (ip_size == 16)
+        if(ip_size == 16)
         {
             if(! (flags & CONFIG_HOST_LIST_FLAGS_IPV6))
             {
@@ -1413,7 +1416,7 @@ config_read_section(const char *the_configuration_file_path, config_error_s *cfg
         
         input_stream ins;
     
-        if(ISOK(err = file_input_stream_open(configuration_file_path, &ins)))
+        if(ISOK(err = file_input_stream_open(&ins, configuration_file_path)))
         {
             // parse stream will parse ALL sections
             
@@ -1548,7 +1551,7 @@ static ya_result
 config_source_get_from_file(struct config_source_s *source, input_stream *out_stream, config_error_s *cfgerr)
 {
     ya_result return_code;
-    return_code = file_input_stream_open(source->source.file_name.name, out_stream);
+    return_code = file_input_stream_open(out_stream, source->source.file_name.name);
     if(FAIL(return_code))
     {
         if(cfgerr != NULL)
@@ -1652,6 +1655,14 @@ config_read_from_sources(struct config_source_s *sources, u32 sources_count, con
             
             if(FAIL(err = config_set_section_default(section_descriptor, cfgerr)))
             {
+                if(cfgerr != NULL)
+                {
+                    // cfgerr->file[0] = '\0';
+                    snformat(cfgerr->file, sizeof(cfgerr->file), "setting-up section %s default", section_descriptor->vtbl->name);
+                    cfgerr->line[0] = '\0';
+                    cfgerr->line_number = 0;
+                }
+                
                 break;
             }
             
@@ -1659,6 +1670,14 @@ config_read_from_sources(struct config_source_s *sources, u32 sources_count, con
             {
                 if(FAIL(err = section_descriptor->vtbl->postprocess(section_descriptor)))
                 {
+                    if(cfgerr != NULL)
+                    {
+                        //cfgerr->file[0] = '\0';
+                        snformat(cfgerr->file, sizeof(cfgerr->file), "section %s", section_descriptor->vtbl->name);
+                        cfgerr->line[0] = '\0';
+                        cfgerr->line_number = 0;
+                    }
+                    
                     break;
                 }
             }

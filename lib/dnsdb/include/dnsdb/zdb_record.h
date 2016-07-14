@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup records Internal functions for the database: resource records.
  *  @ingroup dnsdb
  *  @brief Internal functions for the database: resource records.
@@ -102,6 +102,27 @@ void zdb_record_insert(zdb_rr_collection* collection, u16 type, zdb_packed_ttlrd
 
 /* 1 USE */
 bool zdb_record_insert_checked(zdb_rr_collection* collection, u16 type, zdb_packed_ttlrdata* record);
+
+/** @brief Inserts a resource record into the resource collection, checks for dups
+ *
+ *  Do not assume anything.
+ *  Inserts a ttl-rdata record into the rtl-rdata collection
+ *  The caller loses the property of the record.
+ *  If the record is a dup, it is destroyed.
+ *  TTL value is not propagated through the resource record set
+ *
+ *  @param[in]  collection the collection
+ *  @param[in]  class_ the class of the resource record
+ *  @param[in]  type the type of the resource record
+ *  @param[in]  ttl the ttl of the resource record
+ *  @param[in]  rdata_size the size of the rdata of the resource record
+ *  @param[in]  rdata a pointer to the rdata of the resource record
+ *
+ *  @return TRUE in case of success.
+ */
+
+/* 1 USE */
+bool zdb_record_insert_checked_keep_ttl(zdb_rr_collection* collection, u16 type, zdb_packed_ttlrdata* record);
 
 /** @brief Finds and return all the a resource record matching the class and type
  *
@@ -179,6 +200,25 @@ ya_result zdb_record_delete(zdb_rr_collection* collection, u16 type);
 /* 4 USES */
 ya_result zdb_record_delete_exact(zdb_rr_collection* collection, u16 type, const zdb_ttlrdata* ttl_rdata);
 
+/** @brief Deletes the a resource record matching the class, type, ttl, rdata (safer)
+ *
+ *  Makes a copy of the data to delete first.  This allow using the record from the DB as a base for removal.
+ *  Deletes the a resource record matching the class, type, ttl, rdata
+ *
+ *  @param[in]  collection the collection
+ *  @param[in]  type the type of the resource record to match
+ *  @param[in]  ttl the ttl of the resource record to match
+ *  @param[in]  rdata_size the size of the rdata of the resource record to match
+ *  @param[in]  rdata a pointer to the rdata of the resource record to match
+ *
+ *  @return SUCCESS  if we removed the last record of this type.
+ *	    >SUCCESS if we removed the record but other of this type are still available.
+ *          ERROR    if no record were deleted.
+ * 
+ */
+
+ya_result zdb_record_delete_self_exact(zdb_rr_collection* collection, u16 type, const zdb_ttlrdata *ttlrdata_);
+
 /** @brief Destroys all the a resource record of the collection
  *
  *  Destroys all the a resource record of the collection
@@ -236,7 +276,14 @@ ya_result zdb_record_getsoa(const zdb_packed_ttlrdata* soa, soa_rdata* soa_out);
  * @brief Allocated and duplicates the content of the source
  */
 
-zdb_ttlrdata* zdb_ttlrdata_clone(const zdb_ttlrdata* source);
+zdb_ttlrdata *zdb_ttlrdata_clone(const zdb_ttlrdata* source);
+
+/**
+ * @brief Allocated and duplicates the first bytes of content of the source
+ * This is mostly used to clone an NSEC3 record into an NSEC3PARAM
+ */
+
+zdb_ttlrdata *zdb_ttlrdata_clone_resized(const zdb_ttlrdata* source, u32 rdata_newsize);
 
 /**
  * @brief Frees the content of the source

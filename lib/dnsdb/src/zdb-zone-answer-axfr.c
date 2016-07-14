@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnsdbscheduler Scheduled tasks of the database
  *  @ingroup dnsdb
  *  @brief
@@ -130,11 +130,13 @@
 
 extern logger_handle* g_database_logger;
 
-#ifndef MAX_PATH
-#define MAX_PATH 4096
+#ifndef PATH_MAX
+#error "PATH_MAX not defined"
 #endif
 
 typedef struct scheduler_queue_zone_write_axfr_args scheduler_queue_zone_write_axfr_args;
+
+#define SHDQZWAA_TAG 0x4141575a51444853
 
 struct scheduler_queue_zone_write_axfr_args
 {
@@ -149,6 +151,8 @@ struct scheduler_queue_zone_write_axfr_args
 };
 
 typedef struct zdb_zone_answer_axfr_write_file_args zdb_zone_answer_axfr_write_file_args;
+
+#define ZAAXFRWF_TAG 0x465752465841415a
 
 struct zdb_zone_answer_axfr_write_file_args
 {
@@ -274,7 +278,7 @@ zdb_zone_answer_axfr_thread(void* data_)
     data->mesg->sockfd = -1;
         
     u8   data_zone_origin[MAX_DOMAIN_LENGTH];
-    char path[MAX_PATH + 8];
+    char path[PATH_MAX + 8];
 
     //char data_directory[MAX_PATH];
        
@@ -309,8 +313,6 @@ zdb_zone_answer_axfr_thread(void* data_)
         
         log_err("zone write axfr: %{dnsname}: marked as invalid", data_zone->origin);
         
-        /* @todo send a servfail answer ... */
-        
         zdb_zone_answer_axfr_thread_exit(data);
         close_ex(tcpfd);
         free(mesg);        
@@ -323,12 +325,12 @@ zdb_zone_answer_axfr_thread(void* data_)
     
     if(FAIL(zdb_zone_getserial(data_zone, &serial)))
     {
-        /** @todo error other than "does not exists" : SERVFAIL */
+        /** @todo 20121113 edf -- error other than "does not exists" : SERVFAIL */
         zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
 
         log_err("zone write axfr: no SOA in %{dnsname}", data_zone->origin);
         
-        /* @todo send a servfail answer ... */
+        /* @todo 20121219 edf -- send a servfail answer ... */
 
         zdb_zone_answer_axfr_thread_exit(data);
         close_ex(tcpfd);
@@ -382,13 +384,13 @@ zdb_zone_answer_axfr_thread(void* data_)
             zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
             log_warn("zone write axfr: %r", ret);
 
-            /** @todo error other than "does not exists" : SERVFAIL */
+            /** @todo 20150209 edf -- error other than "does not exists" : SERVFAIL */
 
             data->return_code = ret;
             
             data_zone->axfr_timestamp = 1;
 
-            /* @todo send a servfail answer ... */
+            /* @todo 20150209 edf -- send a servfail answer ... */
 
             zdb_zone_answer_axfr_thread_exit(data);
             close_ex(tcpfd);
@@ -409,7 +411,7 @@ zdb_zone_answer_axfr_thread(void* data_)
             log_err("zone write axfr: unable to get path for %{dnsname}: %r", data_zone_origin, ret);
             data->return_code = ret;
             
-            /* @todo send a servfail answer ... */
+            /* @todo 20121219 edf -- send a servfail answer ... */
             
             zdb_zone_answer_axfr_thread_exit(data); // releases
             close_ex(tcpfd);
@@ -465,13 +467,13 @@ zdb_zone_answer_axfr_thread(void* data_)
             zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
             log_err("zone write axfr: error accessing '%s': %r", path, ret);
 
-            /** @todo error other than "does not exists" : SERVFAIL */
+            /** @todo 20150209 edf -- error other than "does not exists" : SERVFAIL */
 
             data->return_code = ret;
             
             data_zone->axfr_timestamp = 1;
 
-            /* @todo send a servfail answer ... */
+            /* @todo 20150209 edf -- send a servfail answer ... */
 
             zdb_zone_answer_axfr_thread_exit(data);
             close_ex(tcpfd);
@@ -491,7 +493,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
             log_info("zone write axfr: storing %{dnsname} %d", data_zone_origin, serial);
 
-            if(FAIL(ret = file_output_stream_create(path, 0644, &os)))
+            if(FAIL(ret = file_output_stream_create(&os, path, 0644)))
             {
                 zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
                 
@@ -500,7 +502,7 @@ zdb_zone_answer_axfr_thread(void* data_)
                 
                 data->return_code = ret;
 
-                /** @todo cannot create error : SERVFAIL ? */
+                /** @todo 20150209 edf -- cannot create error : SERVFAIL ? */
 
                 zdb_zone_answer_axfr_thread_exit(data);
                 close_ex(tcpfd);
@@ -521,7 +523,7 @@ zdb_zone_answer_axfr_thread(void* data_)
              */
 
             zdb_zone_answer_axfr_write_file_args *store_axfr_args;
-            MALLOC_OR_DIE(zdb_zone_answer_axfr_write_file_args*, store_axfr_args, sizeof(zdb_zone_answer_axfr_write_file_args), GENERIC_TAG);
+            MALLOC_OR_DIE(zdb_zone_answer_axfr_write_file_args*, store_axfr_args, sizeof(zdb_zone_answer_axfr_write_file_args), ZAAXFRWF_TAG);
             store_axfr_args->os = os;
             store_axfr_args->pathpart = strdup(path);
             path[strlen(path) - 5] = '\0';
@@ -603,14 +605,14 @@ zdb_zone_answer_axfr_thread(void* data_)
 
             zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
 
-            /** @todo error other than "does not exists" : SERVFAIL */
+            /** @todo 20150209 edf -- error other than "does not exists" : SERVFAIL */
 
             data->return_code = ERRNO_ERROR;
             log_err("zone write axfr: error accessing '%s': %r", path, data->return_code);
 
             data_zone->axfr_timestamp = 1;
 
-            /* @todo send a servfail answer ... */
+            /* @todo 20150209 edf -- send a servfail answer ... */
 
             zdb_zone_answer_axfr_thread_exit(data);
             close_ex(tcpfd);
@@ -634,7 +636,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
     if(FAIL(ret)) /* replaces: if(FAIL(ret = file_input_stream_open(path, &fis))) */
     {
-        /** @todo cannot open error : SERVFAIL */
+        /** @todo 20101119 edf -- cannot open error : SERVFAIL */
 
         log_err("zone write axfr: error opening '%s': %r", path, ret);
 
@@ -659,7 +661,7 @@ zdb_zone_answer_axfr_thread(void* data_)
     u32 packet_count = 0;
     u16 an_records_count = 0;
 
-    // @TODO: With TSIG enabled this limit will be dynamic and change to a lower bound for every 100th packet
+    // @note 20091223 edf -- With TSIG enabled this limit will be dynamic and change to a lower bound for every 100th packet
 #if ZDB_HAS_TSIG_SUPPORT
     tsig_tcp_message_position pos = TSIG_NOWHERE;
 #endif
@@ -695,14 +697,12 @@ zdb_zone_answer_axfr_thread(void* data_)
 
                 if(packet_count == 0)
                 {
-                    /* TODO: TSIG: sign the packet*/
-
-                    packet_count = AXFR_TSIG_PERIOD; // why ?
+                    packet_count = AXFR_TSIG_PERIOD;
                 }
 
-                mesg->send_length = pw.packet_offset; /** @todo: I need to put this in a packet_writer function */
+                mesg->send_length = packet_writer_get_offset(&pw);
 
-                /** @TODO: if we only have 1 packet then we still need to cleanup  the message
+                /** @todo 20100820 edf -- if we only have 1 packet then we still need to cleanup  the message
                  *	   So a better way to do this is to check if pos is TSIG_START and if it does do the standard TSIG signature.
                  */
 
@@ -710,7 +710,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 #if ZDB_HAS_TSIG_SUPPORT
                 if(TSIG_ENABLED(mesg))
                 {
-                    mesg->ar_start = &pw.packet[pw.packet_offset];
+                    mesg->ar_start = packet_writer_get_next_u8_ptr(&pw);
 
                     if(pos != TSIG_START)
                     {
@@ -728,7 +728,7 @@ zdb_zone_answer_axfr_thread(void* data_)
                     }
                 } /* if TSIG_ENABLED */
 #endif
-                pw.packet_offset = mesg->send_length; /** @todo: I need to put this in a packet_writer function */
+                packet_writer_set_offset(&pw, mesg->send_length);
 
                 total_bytes_sent += mesg->send_length;
                 
@@ -757,7 +757,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
         /* Check if we have enough room available for the next record */
 
-        if((an_records_count >= packet_records_limit) || (pw.packet_limit - pw.packet_offset) < record_len)
+        if((an_records_count >= packet_records_limit) || packet_writer_get_remaining_capacity(&pw) < record_len)
         {
             if(an_records_count == 0)
             {
@@ -768,12 +768,12 @@ zdb_zone_answer_axfr_thread(void* data_)
 
             MESSAGE_SET_AN(mesg->buffer, htons(an_records_count));
 
-            mesg->send_length = pw.packet_offset; /** @todo: I need to put this in a packet_writer function */
+            mesg->send_length = packet_writer_get_offset(&pw);
 
 #if ZDB_HAS_TSIG_SUPPORT
             if(TSIG_ENABLED(mesg))
             {
-                mesg->ar_start = &pw.packet[pw.packet_offset];
+                mesg->ar_start = packet_writer_get_next_u8_ptr(&pw);
 
                 if(FAIL(ret = tsig_sign_tcp_message(mesg, pos)))
                 {
@@ -784,7 +784,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 #endif
             /* Flush the packet. */
 
-            pw.packet_offset = mesg->send_length; /** @todo: I need to put this in a packet_writer function */
+            packet_writer_set_offset(&pw, mesg->send_length);
             
             total_bytes_sent += mesg->send_length;
             
@@ -801,11 +801,11 @@ zdb_zone_answer_axfr_thread(void* data_)
 
             // Packet flushed ...
             // Reset the packet
-            // @TODO: reset the counts (?)
-            // @TODO: TSIG enabled means the limit changes every 100th packet
+            // @todo 20100820 edf -- reset the counts (?)
+            // @todo 20100820 edf -- TSIG enabled means the limit changes every 100th packet
 
             /* Remove the TSIG. */
-            /** @todo: Keep the AR count instead of setting it to 0  */
+            /** @todo 20100820 edf -- Keep the AR count instead of setting it to 0  */
             MESSAGE_SET_AR(mesg->buffer, 0);
             packet_writer_init(&pw, mesg->buffer, mesg->received, packet_size_limit);
         }
@@ -833,7 +833,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
         if(compress_dname_rdata != 0)
         {
-            u16 rdata_offset = pw.packet_offset;
+            u16 rdata_offset = packet_writer_get_offset(&pw);
 
             switch(tctrl.qtype)
             {
@@ -874,7 +874,7 @@ zdb_zone_answer_axfr_thread(void* data_)
                     }
 
                     packet_writer_add_fqdn(&pw, (const u8*)path);
-                    SET_U16_AT(pw.packet[rdata_offset - 2], htons(pw.packet_offset - rdata_offset));
+                    SET_U16_AT(pw.packet[rdata_offset - 2], htons(pw.packet_offset - rdata_offset)); // set RDATA size
 
                     continue;
                 }
@@ -919,7 +919,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
                     packet_writer_add_bytes(&pw, (const u8*)path, 20);
 
-                    SET_U16_AT(pw.packet[rdata_offset - 2], htons(pw.packet_offset - rdata_offset));
+                    SET_U16_AT(pw.packet[rdata_offset - 2], htons(pw.packet_offset - rdata_offset)); // set RDATA size
                     
                     continue;
                 }
@@ -969,7 +969,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
                     packet_writer_add_bytes(&pw, (const u8*)path, rdata_len);
 
-                    SET_U16_AT(pw.packet[rdata_offset - 2], htons(pw.packet_offset - rdata_offset));
+                    SET_U16_AT(pw.packet[rdata_offset - 2], htons(pw.packet_offset - rdata_offset)); // set RDATA size
 
                     continue;
                 }
@@ -1004,7 +1004,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
                     packet_writer_add_bytes(&pw, (const u8*)path, rdata_len);
 
-                    SET_U16_AT(pw.packet[rdata_offset - 2], htons(pw.packet_offset - rdata_offset));
+                    SET_U16_AT(pw.packet[rdata_offset - 2], htons(pw.packet_offset - rdata_offset)); // set RDATA size
 
                     continue;
                 }
@@ -1017,7 +1017,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
         while(rdata_len > 0)
         {
-            if((n = input_stream_read(&fis, (u8*)path, MIN(rdata_len, sizeof (path)))) <= 0)
+            if((n = input_stream_read(&fis, (u8*)path, MIN(rdata_len, sizeof(path)))) <= 0)
             {
                 if(n == 0)
                 {
@@ -1066,15 +1066,15 @@ zdb_zone_answer_axfr(zdb_zone *zone, message_data *mesg, struct thread_pool_s *n
     
     log_info("zone write axfr: queueing %{dnsname}", zone->origin);
         
-    MALLOC_OR_DIE(scheduler_queue_zone_write_axfr_args*, args, sizeof(scheduler_queue_zone_write_axfr_args), GENERIC_TAG);
+    MALLOC_OR_DIE(scheduler_queue_zone_write_axfr_args*, args, sizeof(scheduler_queue_zone_write_axfr_args), SHDQZWAA_TAG);
     zdb_zone_acquire(zone);
     args->zone = zone;
     
     args->disk_tp = disk_tp;
     
     message_data *mesg_clone;
-    MALLOC_OR_DIE(message_data*, mesg_clone, sizeof (message_data), MESGDATA_TAG);
-    memcpy(mesg_clone, mesg, sizeof (message_data));
+    MALLOC_OR_DIE(message_data*, mesg_clone, sizeof(message_data), MESGDATA_TAG);
+    memcpy(mesg_clone, mesg, sizeof(message_data));
 
     args->mesg = mesg_clone;
     args->packet_size_limit = max_packet_size;

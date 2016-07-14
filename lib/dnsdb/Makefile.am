@@ -28,10 +28,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ##############################################################################
-#
-#	YADIFA dnsdb Makefile.am script
-#
-##############################################################################
 
 srcdir = @srcdir@
 libdir = @libdir@
@@ -61,7 +57,7 @@ pkginclude_HEADERS = \
 	$(I)/dnsrdata.h \
 	$(I)/dnssec.h \
 	$(I)/dnssec_config.h \
-	$(I)/dnssec_keystore.h \
+	$(I)/dnssec-keystore.h \
 	$(I)/dnssec_task.h \
 	$(I)/dynupdate.h \
 	$(I)/hash.h \
@@ -110,6 +106,7 @@ pkginclude_HEADERS = \
 	$(I)/zdb_zone.h \
 	$(I)/zdb-lock.h \
 	$(I)/zdb-zone-arc.h \
+	$(I)/zdb-zone-dnssec.h \
 	$(I)/zdb-zone-find.h \
 	$(I)/zdb-zone-garbage.h \
 	$(I)/zdb-zone-journal.h \
@@ -124,7 +121,10 @@ pkginclude_HEADERS = \
 	$(I)/zdb-zone-path-provider.h \
 	$(I)/zdb_zone_process.h \
 	$(I)/zdb-zone-reader-filter.h \
-	$(I)/zdb_zone_write.h
+	$(I)/zdb_zone_write.h \
+	$(I)/nsec3-forall-label.h \
+	$(I)/nsec3-chain-create.h \
+	$(I)/nsec3-chain-destroy.h
 
 libdnsdb_la_SOURCES = \
 	src/avl.c \
@@ -139,15 +139,26 @@ libdnsdb_la_SOURCES = \
 	src/htable.c \
 	src/htbt.c \
 	src/icmtl_input_stream.c \
-	src/journal.c \
-	src/journal_ix.c \
-	src/journal-cjf.c \
 	src/journal-cjf-idxt.c \
-	src/journal-cjf-page.c \
 	src/journal-cjf-page-cache.c \
 	src/journal-cjf-page-output-stream.c \
+	src/journal-cjf-page.c \
+	src/journal-cjf.c \
+	src/journal.c \
+	src/journal_ix.c \
 	src/xfr_copy.c \
+	src/zdb-zone-answer-axfr.c \
+	src/zdb-zone-answer-ixfr.c \
+	src/zdb-zone-arc.c \
+	src/zdb-zone-dnssec.c \
+	src/zdb-zone-find.c \
+	src/zdb-zone-garbage.c \
+	src/zdb-zone-journal.c \
+	src/zdb-zone-lock.c \
+	src/zdb-zone-path-provider.c \
+	src/zdb-zone-reader-filter.c \
 	src/zdb.c \
+	src/zdb_cache.c \
 	src/zdb_error.c \
 	src/zdb_icmtl.c \
 	src/zdb_listener.c \
@@ -157,22 +168,12 @@ libdnsdb_la_SOURCES = \
 	src/zdb_rr_label.c \
 	src/zdb_sanitize.c \
 	src/zdb_utils.c \
-	src/zdb_cache.c \
 	src/zdb_zone.c \
-	src/zdb-zone-arc.c \
-	src/zdb-zone-find.c \
-	src/zdb-zone-garbage.c \
-	src/zdb-zone-journal.c \
-	src/zdb-zone-lock.c \
-	src/zdb-zone-answer-axfr.c \
-	src/zdb-zone-answer-ixfr.c \
 	src/zdb_zone_axfr_input_stream.c \
 	src/zdb_zone_label.c \
 	src/zdb_zone_label_iterator.c \
 	src/zdb_zone_load.c \
-	src/zdb-zone-path-provider.c \
 	src/zdb_zone_process.c \
-	src/zdb-zone-reader-filter.c \
 	src/zdb_zone_store_axfr.c \
 	src/zdb_zone_update_ixfr.c \
 	src/zdb_zone_write_text.c \
@@ -183,7 +184,7 @@ libdnsdb_la_SOURCES = \
 if HAS_DNSSEC_SUPPORT
 libdnsdb_la_SOURCES += \
 	src/dnssec.c \
-	src/dnssec_keystore.c \
+	src/dnssec-keystore.c \
 	src/dnssec_process.c \
 	src/nsec_common.c \
 	src/rr_canonize.c \
@@ -205,13 +206,19 @@ libdnsdb_la_SOURCES += \
 	src/nsec3_owner.c \
 	src/nsec3_rrsig_updater.c \
 	src/nsec3_update.c \
-	src/nsec3_zone.c
+	src/nsec3_zone.c \
+	src/nsec3-forall-label.c \
+	src/nsec3-chain-create.c \
+	src/nsec3-chain-destroy.c
 endif
 
 if HAS_NSEC_SUPPORT
 libdnsdb_la_SOURCES += \
 	src/nsec.c \
 	src/nsec_collection.c
+endif
+
+if HAS_EXPERIMENTAL
 endif
 
 libdnsdb_la_LDFLAGS = -version-info 3:0:0
@@ -226,6 +233,8 @@ REVISION:
 	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
 src/avl.c: $(FEATURES)
+
+features: $(FEATURES)
 
 $(FEATURES): config.log REVISION VERSION
 	echo "#pragma once" > $(FEATURES)
@@ -258,6 +267,11 @@ if HAS_TSIG_SUPPORT
 	echo "#define ZDB_HAS_TSIG_SUPPORT 1" >> $(FEATURES)
 else
 	echo "#define ZDB_HAS_TSIG_SUPPORT 0" >> $(FEATURES)
+endif
+if HAS_NSID_SUPPORT
+	echo "#define ZDB_HAS_NSID_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define ZDB_HAS_NSID_SUPPORT 0" >> $(FEATURES)
 endif
 VP=DNSDB
 	which printf > /dev/null 2>&1

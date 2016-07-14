@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup debug Debug functions
  *  @ingroup dnscore
  *  @brief Debug functions.
@@ -65,9 +65,9 @@
 #include "dnscore/debug.h"
 #include "dnscore/mutex.h"
 #include "dnscore/logger.h"
-#include "dnscore/ptr_set.h"
-#include "dnscore/u64_set.h"
-#include "dnscore/list-sl.h"
+#include "dnscore/ptr_set_debug.h"
+#include "dnscore/u64_set_debug.h"
+#include "dnscore/list-sl-debug.h"
 
 #undef malloc
 #undef free
@@ -83,7 +83,7 @@
 #define ZDB_DEBUG_STACKTRACE 0
 #endif
 
-#ifdef	__cplusplus
+#ifdef    __cplusplus
 extern "C" output_stream __termout__;
 extern "C" output_stream __termerr__;
 #else
@@ -184,7 +184,7 @@ typedef struct bfd_node bfd_node;
 
 static pthread_mutex_t bfd_mtx = PTHREAD_MUTEX_INITIALIZER;
 static bool bfd_initialised = FALSE;
-static ptr_set bfd_collection = PTR_SET_ASCIIZ_EMPTY;
+static ptr_set_debug bfd_collection = PTR_SET_ASCIIZ_EMPTY;
 static char *proc_self_exe = NULL;
 
 static char *
@@ -230,11 +230,11 @@ debug_get_real_file(const char *file)
 struct bfd_data
 {
     bfd_node *bfdn;
-	bfd_vma pc;
-	bfd_boolean found;
-	const char *filename;
-	const char *function;
-	unsigned int line;
+    bfd_vma pc;
+    bfd_boolean found;
+    const char *filename;
+    const char *function;
+    unsigned int line;
 };
 
 
@@ -324,9 +324,32 @@ debug_bfd_symbol_flag_help()
 "g : global    The symbol has global scope; initialized data in <<C>>. The value is the offset into the section of the data.\n"
 "D : debugging The symbol is a debugging record. The value has an arbitrary meaning, unless BSF_DEBUGGING_RELOC is also set.\n"
 "f : function  The symbol denotes a function entry point.  Used in ELF, perhaps others someday.\n"
+/*#if 0 // not common
+"? : unknown\n"
+"k : keep      Used by the linker.\n"
+"L : keep g    Used by the linker. (global ?)\n"
+"w : weak      A weak global symbol, overridable without warnings by a regular global symbol of the same name.\n"
+#endif*/
 "s : section   Points to a section.\n"
+/*#if 0 // not common
+"o : oldcommon The symbol used to be a common symbol, but now it is allocated.\n"
+"! : notatend  In some files the type of a symbol sometimes alters its location in an output file - ie in coff a <<ISFCN>> symbol which is also <<C_EXT>> symbol appears where it was declared and not at the end of a section.  This bit is set by the target BFD part to convey this information.\n"
+"C : construct Signal that the symbol is the label of constructor section.\n"
+"W : warning   Signal that the symbol is a warning symbol.  The name is a warning.  The name of the next symbol is the one to warn about; if a reference is made to a symbol with the same name as the next symbol, a warning is issued by the linker.\n"
+"I : indirect  Signal that the symbol is indirect.  This symbol is an indirect pointer to the symbol with the same name as the next symbol.\n"
+"F : file      Marks symbols that contain a file name.  This is used for ELF STT_FILE symbols.\n"
+#endif*/
 "d : dynamic   Symbol is from dynamic linking information.\n"
 "O : object    The symbol denotes a data object.  Used in ELF, and perhaps others someday.\n"
+/*#if 0 // not common
+"R : dbg reloc This symbol is a debugging symbol.  The value is the offset into the section of the data.  BSF_DEBUGGING should be set as well.\n"
+"T : threadloc This symbol is thread local.\n"
+"e : relc      This symbol represents a complex relocation expression, with the expression tree serialized in the symbol name.\n"
+"E : srelc     This symbol represents a signed complex relocation expression, with the expression tree serialized in the symbol name.\n"
+"S : synthetic This symbol was created by bfd_get_synthetic_symtab.\n"
+"u : gnuidrctf This symbol is an indirect code object.  Unrelated to BSF_INDIRECT. The dynamic linker will compute the value of this symbol by calling the function that it points to.  BSF_FUNCTION must also be also set.\n"
+"U : gnunique  This symbol is a globally unique data object.  The dynamic linker will make sure that in the entire process there is just one symbol with this name and type in use.  BSF_OBJECT must also be set.\n"
+#endif*/
     );
 }
 
@@ -357,7 +380,7 @@ debug_bfd_resolve_address(void *address, const char *binary_file_path, const cha
         debug_bfd_symbol_flag_help();        
     }
     
-    ptr_node *node = ptr_set_avl_insert(&bfd_collection, (char*)binary_file_path);
+    ptr_node_debug *node = ptr_set_debug_avl_insert(&bfd_collection, (char*)binary_file_path);
     
     bfd_node *bfdn = (bfd_node*)node->value;
     
@@ -427,7 +450,7 @@ debug_bfd_resolve_address(void *address, const char *binary_file_path, const cha
         }
         else
         {
-            ptr_set_avl_delete(&bfd_collection, binary_file_path);
+            ptr_set_debug_avl_delete(&bfd_collection, binary_file_path);
         }
     }
     
@@ -464,7 +487,7 @@ debug_bfd_resolve_address(void *address, const char *binary_file_path, const cha
 static void
 debug_bfd_clear_delete(void *node_)
 {
-    ptr_node *node = (ptr_node*)node_;
+    ptr_node_debug *node = (ptr_node_debug*)node_;
     bfd_node *bfd = (bfd_node*)node->value;
     if(bfd != NULL)
     {
@@ -479,13 +502,13 @@ static
 void debug_bfd_clear()
 {
     pthread_mutex_lock(&bfd_mtx);
-    ptr_set_avl_callback_and_destroy(&bfd_collection, debug_bfd_clear_delete);
+    ptr_set_debug_avl_callback_and_destroy(&bfd_collection, debug_bfd_clear_delete);
     pthread_mutex_unlock(&bfd_mtx);
 }
 
 #endif
 
-typedef u64_set stacktrace_set;
+typedef u64_set_debug stacktrace_set;
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -531,7 +554,7 @@ debug_stacktrace_get()
 #ifdef __linux__
     void* buffer[1024];
 
-    int n = backtrace(buffer, sizeof (buffer) / sizeof (void*));
+    int n = backtrace(buffer, sizeof(buffer) / sizeof(void*));
 
     // backtrace to key
     
@@ -545,30 +568,30 @@ debug_stacktrace_get()
     pthread_mutex_lock(&stacktraces_mutex);
     
     stacktrace trace;
-    u64_node *node = u64_set_avl_insert(&stacktraces_list_set, key);
+    u64_node_debug *node = u64_set_debug_avl_insert(&stacktraces_list_set, key);
     if(node->value == NULL)
     {
-        list_sl_s *sll;
-        sll = (list_sl_s*)malloc(sizeof(list_sl_s));
-        list_sl_init(sll);
+        list_sl_debug_s *sll;
+        sll = (list_sl_debug_s*)malloc(sizeof(list_sl_debug_s));
+        list_sl_debug_init(sll);
         node->value = sll;
         trace = (stacktrace)malloc((n + 2) * sizeof(intptr));
-        memcpy(trace, buffer, n * sizeof (void*));
+        memcpy(trace, buffer, n * sizeof(void*));
         trace[n] = 0;
-        list_sl_insert(sll, trace);
+        list_sl_debug_insert(sll, trace);
         trace[n+1] = (intptr)backtrace_symbols(buffer, n);
     }
     else
     {
-        list_sl_s *sll;
-        sll = (list_sl_s *)node->value;
-        trace = (stacktrace)list_sl_search(sll, debug_stacktraces_list_set_search, buffer);
+        list_sl_debug_s *sll;
+        sll = (list_sl_debug_s *)node->value;
+        trace = (stacktrace)list_sl_debug_search(sll, debug_stacktraces_list_set_search, buffer);
         if(trace == NULL)
         {
             trace = (stacktrace)malloc((n + 2) * sizeof(intptr));
-            memcpy(trace, buffer, n * sizeof (void*));
+            memcpy(trace, buffer, n * sizeof(void*));
             trace[n] = 0;
-            list_sl_insert(sll, trace);
+            list_sl_debug_insert(sll, trace);
             trace[n+1] = (intptr)backtrace_symbols(buffer, n);
         }
     }
@@ -589,12 +612,12 @@ debug_stacktrace_get()
 static void
 debug_stacktrace_clear_delete(void *node_)
 {
-    u64_node *node = (u64_node*)node_;
-    list_sl_s *sll = (list_sl_s *)node->value;
+    u64_node_debug *node = (u64_node_debug*)node_;
+    list_sl_debug_s *sll = (list_sl_debug_s *)node->value;
     if(sll != NULL)
     {
         stacktrace trace;
-        while((trace = (stacktrace)list_sl_pop(sll)) != NULL)
+        while((trace = (stacktrace)list_sl_debug_pop(sll)) != NULL)
         {
             int n = 0;
             while(trace[n] != 0)
@@ -613,7 +636,7 @@ void
 debug_stacktrace_clear()
 {
     pthread_mutex_lock(&stacktraces_mutex);
-    u64_set_avl_callback_and_destroy(&stacktraces_list_set, debug_stacktrace_clear_delete);
+    u64_set_debug_avl_callback_and_destroy(&stacktraces_list_set, debug_stacktrace_clear_delete);
     pthread_mutex_unlock(&stacktraces_mutex);
 #if HAS_BFD_DEBUG_SUPPORT 
     debug_bfd_clear();
@@ -651,8 +674,8 @@ debug_stacktrace_log(logger_handle* handle, u32 level, stacktrace trace)
                 memcpy(binary, text, n);
                 binary[n] = '\0';
 
-                const char *file;
-                const char *function;
+                const char *file = NULL;
+                const char *function = NULL;
                 u32 line;
 
                 debug_bfd_resolve_address(address, binary, &file, &function, &line);
@@ -683,15 +706,18 @@ debug_stacktrace_log(logger_handle* handle, u32 level, stacktrace trace)
 void
 debug_stacktrace_print(output_stream *os, stacktrace trace)
 {
+    if(trace == NULL)
+    {
+        output_stream_write(os, "NULL-TRACE", 10);
+        return;
+    }
+
 #ifdef __linux__
     int n = 0;
 
-    if(trace != NULL)
+    while(trace[n] != 0)
     {
-        while(trace[n] != 0)
-        {
-            ++n;
-        }
+        ++n;
     }
 
     char **trace_strings = (char**)trace[n + 1];
@@ -790,7 +816,7 @@ debug_log_stacktrace(logger_handle *handle, u32 level, const char *prefix)
 
 #if defined(__linux__)
     
-    int n = backtrace(addresses, sizeof (addresses) / sizeof (void*));
+    int n = backtrace(addresses, sizeof(addresses) / sizeof(void*));
     
     if(n > 0)
     {
@@ -1188,45 +1214,50 @@ debug_get_block_count()
 {
     return db_current_blocks;
 }
-
 void
-debug_stat(bool dump)
+debug_stat(int mask)
 {
     if(__termout__.vtbl == NULL)
     {
         return;
     }
-
-    formatln("DB: MEM: Total Allocated=%llu", db_total_allocated);
-    formatln("DB: MEM: Total Freed=%llu", db_total_freed);
-    formatln("DB: MEM: Peak Usage=%llu", db_peak_allocated);
-    formatln("DB: MEM: Allocated=%llu", db_current_allocated);
-    formatln("DB: MEM: Blocks=%llu", db_current_blocks);
-    formatln("DB: MEM: Monitoring Overhead=%llu (%i)", (u64)(db_current_blocks * HEADER_SIZE), (int)HEADER_SIZE);
+    
+    formatln("%16llx | DB: MEM: Total Allocated=%llu", timeus(), db_total_allocated);
+    formatln("%16llx | DB: MEM: Total Freed=%llu", timeus(), db_total_freed);
+    formatln("%16llx | DB: MEM: Peak Usage=%llu", timeus(), db_peak_allocated);
+    formatln("%16llx | DB: MEM: Allocated=%llu", timeus(), db_current_allocated);
+    formatln("%16llx | DB: MEM: Blocks=%llu", timeus(), db_current_blocks);
+    formatln("%16llx | DB: MEM: Monitoring Overhead=%llu (%i)", timeus(), (u64)(db_current_blocks * HEADER_SIZE), (int)HEADER_SIZE);
 
 #if ZDB_DEBUG_ENHANCED_STATISTICS
-
-    println("DB: MEM: Block sizes: ([size/8]={current / peak}");
-
-    int i;
-
-    for(i = 0; i < (ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3); i++)
+    if(mask & DEBUG_STAT_SIZES)
     {
-        format("[%4i]={%8llu / %8llu} ;", (i + 1) << 3, db_alloc_count_by_size[i], db_alloc_peak_by_size[i]);
+        formatln("%16llx | DB: MEM: Block sizes: ([size/8]={current / peak}", timeus());
 
-        if((i & 3) == 3)
+        format("%16llx | ", timeus());
+        
+        int i;
+
+        for(i = 0; i < (ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3); i++)
         {
-            println("");
-        }
-    }
+            format("[%4i]={%8llu / %8llu} ;", (i + 1) << 3, db_alloc_count_by_size[i], db_alloc_peak_by_size[i]);
 
-    formatln("[++++]={%8llu / %8llu}",
-             db_alloc_count_by_size[ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3],
-             db_alloc_peak_by_size[ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3]);
+            if((i & 3) == 3)
+            {
+                format("\n%16llx | ", timeus());
+            }
+        }
+        
+        println("");
+
+        formatln("%16llx | [++++]={%8llu / %8llu}", timeus(),
+                 db_alloc_count_by_size[ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3],
+                 db_alloc_peak_by_size[ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3]);
+    }
 #endif
 
 #if ZDB_DEBUG_CHAIN_ALLOCATED_BLOCKS
-    if(dump)
+    if(mask & DEBUG_STAT_TAGS)
     {
         db_header *ptr;
         
@@ -1244,10 +1275,10 @@ debug_stat(bool dump)
             }
         }
         
-        println("");
+        formatln("%16llx | ", timeus());
         
         //        0123456789ABCDEF   012345678   012345678   012345678   012345678   012345678
-        println("[-----TAG------] :   COUNT   :    MIN    :    MAX    :    MEAN    :   TOTAL");
+        formatln("%16llx | [-----TAG------] :   COUNT    :    MIN     :    MAX     :    MEAN    :   TOTAL", timeus());
         
         for(; mintag != MAX_U64; mintag = nexttag)
         {
@@ -1289,15 +1320,22 @@ debug_stat(bool dump)
             char tag_text[9];
             SET_U64_AT(tag_text[0], mintag);
             tag_text[8] = '\0';
-
-            formatln("%16s : %9u : %9u : %9u : %9u : %12llu", tag_text, count, minsize, maxsize, totalsize / count, totalsize);
-            flushout();
+            if(count > 0)
+            {
+                formatln("%16llx | %16s : %10u : %10u : %10u : %10u : %12llu", timeus(), tag_text, count, minsize, maxsize, totalsize / count, totalsize);
+            }
+            else
+            {
+                formatln("%16llx | %16s : %10u : %10u : %10u : ---------- : %12llu", timeus(), tag_text, count, minsize, maxsize, totalsize);
+            }
         }
         
-        println("");
+        formatln("%16llx | ", timeus());
     }
     
-    if(dump)
+    flushout();
+    
+    if(mask & DEBUG_STAT_DUMP)
     {
         db_header* ptr = db_mem_first.next;
         int index = 0;
@@ -1320,12 +1358,12 @@ debug_stat(bool dump)
                 {
                     ++n;
                 }
-            }
             
-            char **trace_strings = (char**)st[n + 1];
-            for(int i = 0; i < n; i++)
-            {
-                formatln("%p %s", (void*)st[i], (trace_strings != NULL) ? trace_strings[i] : "???");
+                char **trace_strings = (char**)st[n + 1];
+                for(int i = 0; i < n; i++)
+                {
+                    formatln("%p %s", (void*)st[i], (trace_strings != NULL) ? trace_strings[i] : "???");
+                }
             }
 #endif
 
@@ -1457,7 +1495,14 @@ void debug_bench_logdump_all()
         double total = p->time_total;
         total /= 1000000.0;
         u32 count = p->time_count;
-        log_info("bench: %12s: [%9.6fs:%9.6fs] total=%9.6fs mean=%9.6fs rate=%-12.3f/s calls=%9u", p->name, min, max, total, total / count, count / total, count);
+        if(logger_is_running())
+        {
+            log_info("bench: %12s: [%9.6fs:%9.6fs] total=%9.6fs mean=%9.6fs rate=%-12.3f/s calls=%9u", p->name, min, max, total, total / count, count / total, count);
+        }
+        else
+        {
+            formatln("bench: %12s: [%9.6fs:%9.6fs] total=%9.6fs mean=%9.6fs rate=%-12.3f/s calls=%9u", p->name, min, max, total, total / count, count / total, count);
+        }
         p = p->next;
     }
     pthread_mutex_unlock(&debug_bench_mtx);

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 /**
  *  @defgroup server Server
@@ -57,6 +57,7 @@
 #include <dnscore/tcp_io_stream.h>
 #include <dnscore/thread_pool.h>
 #include <dnscore/ctrl-rfc.h>
+#include <dnscore/service.h>
 
 logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
@@ -66,6 +67,7 @@ logger_handle *g_server_logger;
 #include "log_query.h"
 #include "poll-util.h"
 #include "server-mt.h"
+#include "server-rw.h"
 #include "notify.h"
 #include "server_context.h"
 #include "axfr.h"
@@ -83,6 +85,13 @@ logger_handle *g_server_logger;
 #include "rrl.h"
 #endif
 
+
+// DEBUG build: log debug 5 of incoming wire
+#define DUMP_TCP_RECEIVED_WIRE 0
+
+// DEBUG build: log debug 5 of outgoing wire
+#define DUMP_TCP_OUTPUT_WIRE 0
+
 static struct thread_pool_s *server_tcp_thread_pool = NULL;
 struct thread_pool_s *server_disk_thread_pool = NULL;
 
@@ -92,6 +101,24 @@ server_statistics_t server_statistics;
 static bool server_statistics_initialised = FALSE;
 
 volatile int program_mode = SA_CONT; /** @note must be volatile */
+
+static struct server_desc_s server_type[2] =
+{
+    {
+        server_mt_context_init,
+        server_mt_query_loop,
+        "multithreaded resolve"
+    },
+    {
+        server_rw_context_init,
+        server_rw_query_loop,
+        "multithreaded deferred resolve"
+    }
+};
+
+
+
+
 
 /*******************************************************************************************************************
  *
@@ -115,7 +142,9 @@ tcp_send_message_data(message_data* mesg)
 
 #ifdef DEBUG
     log_debug("tcp: answering %d bytes @%p to socket %d", mesg->send_length + 2, mesg->buffer_tcp_len, mesg->sockfd);
+#if DUMP_TCP_OUTPUT_WIRE
     log_memdump_ex(g_server_logger, MSG_DEBUG5, mesg->buffer, mesg->send_length, 16, OSPRINT_DUMP_HEXTEXT);
+#endif
 #endif
     
     /**
@@ -180,7 +209,7 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
         {
             log_err("tcp: message size is 0");
 
-            /** @todo no linger, check the best place to do it */
+            /** @todo 20120706 edf -- no linger, check the best place to do it */
 
             return_code = UNPROCESSABLE_MESSAGE;
 
@@ -214,7 +243,9 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
         mesg->received = received;
         
 #ifdef DEBUG
+#if DUMP_TCP_RECEIVED_WIRE
         log_memdump_ex(g_server_logger, MSG_DEBUG5, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_HEXTEXT);
+#endif
 #endif
 
         mesg->protocol = IPPROTO_TCP;
@@ -320,9 +351,12 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
                     log_warn("query [%04hx] error %i : %r", ntohs(MESSAGE_ID(mesg->buffer)), mesg->status, return_code);
 
                     TCPSTATS(tcp_fp[mesg->status]++);
-#ifdef DEBUG
-                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG5, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_ALL);
-#endif
+                    
+                    if(return_code == UNPROCESSABLE_MESSAGE && (g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE))
+                    {
+                        log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_ALL);
+                    }
+                    
                     if( (return_code != INVALID_MESSAGE) && (((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0) || mesg->status != RCODE_FORMERR) && (MESSAGE_QR(mesg->buffer) == 0) )
                     {
                         if(!MESSAGEP_HAS_TSIG(mesg))
@@ -353,7 +387,7 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
                     {
                         case CLASS_IN:
                         {
-                            /// @todo notify on TCP
+                            /// @todo 20140521 edf -- notify on TCP
 
                             TCPSTATS(tcp_notify_input_count++);
                             break;
@@ -488,7 +522,7 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
                         default:
                         {
                             /**
-                             * @todo Handle unknown classes better
+                             * @todo 20140521 edf -- Handle unknown classes better
                              */
                             log_warn("query [%04hx] %{dnsname} %{dnstype} %{dnsclass} (%{sockaddrip}) : unsupported class",
                                             ntohs(MESSAGE_ID(mesg->buffer)),
@@ -520,7 +554,7 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
 
                     TCPSTATS(tcp_fp[mesg->status]++);
 #ifdef DEBUG
-                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG5, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_ALL);
+                   log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG5, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_ALL);
 #endif
                     if( (return_code != INVALID_MESSAGE) &&
                         (((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0) || mesg->status != RCODE_FORMERR) &&
@@ -533,7 +567,7 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
                         }
                         else
                         {
-                            /// @todo edf 20150428 -- handle this more nicely
+                            /// @todo 20150428 edf -- handle this more nicely
                             
                             TCPSTATS(tcp_dropped_count++);
                             tcp_set_agressive_close(mesg->sockfd, 1);
@@ -650,7 +684,7 @@ server_process_tcp_thread(void* parm)
 
     mesg.sockfd = tcp_parm->sockfd;
 
-    mesg.process_flags = ~0; /** @todo FIX ME */
+    mesg.process_flags = ~0; /** @todo 20120706 edf -- FIX ME */
 
     memcpy(&mesg.other, &tcp_parm->sa, tcp_parm->addr_len);
     mesg.addr_len = tcp_parm->addr_len;
@@ -667,7 +701,7 @@ server_process_tcp_thread(void* parm)
 }
 
 void
-server_process_tcp(zdb *database, tcp *tcp_itf)
+server_process_tcp(zdb *database, int sockfd)
 {
     server_process_tcp_thread_parm* parm;
     socklen_t addr_len;
@@ -700,7 +734,7 @@ server_process_tcp(zdb *database, tcp *tcp_itf)
     {
         log_info("tcp: rejecting: already %d/%d handled", current_tcp, g_config->max_tcp_queries);
         
-        int rejected_fd = accept(tcp_itf->sockfd, &addr.sa, &addr_len);
+        int rejected_fd = accept(sockfd, &addr.sa, &addr_len);
         
         tcp_set_abortive_close(rejected_fd);
         close_ex(rejected_fd);
@@ -715,19 +749,17 @@ server_process_tcp(zdb *database, tcp *tcp_itf)
     MALLOC_OR_DIE(server_process_tcp_thread_parm*, parm, sizeof(server_process_tcp_thread_parm), TPROCPRM_TAG);
     parm->database = database;
 
-    /** @todo test: timeout */
+    /** @todo 20120706 edf -- test: timeout */
 
     /* don't test -1, test < 0 instead (test + js instead of add + stall + jz */
-    while((parm->sockfd = accept(tcp_itf->sockfd, &addr.sa, &addr_len)) < 0)
+    while((parm->sockfd = accept(sockfd, &addr.sa, &addr_len)) < 0)
     {
-		int err = errno;
+        int err = errno;
 
         if(err != EINTR)
         {
-			log_err("tcp: accept returned %r\n", MAKE_ERRNO_ERROR(err));
-
+            log_err("tcp: accept returned %r", MAKE_ERRNO_ERROR(err));
             free(parm);
-
             return;
         }
     }
@@ -745,7 +777,7 @@ server_process_tcp(zdb *database, tcp *tcp_itf)
 
     memcpy(&parm->sa, &addr, addr_len);
     parm->addr_len = addr_len;
-    parm->svr_sockfd = tcp_itf->sockfd;
+    parm->svr_sockfd = sockfd;
     
     if(poll_add(parm->sockfd))
     {
@@ -787,12 +819,37 @@ server_process_tcp(zdb *database, tcp *tcp_itf)
  *
  ******************************************************************************************************************/
 
+static struct service_s server_service_handler = UNINITIALIZED_SERVICE;
+static bool server_handler_initialised = FALSE;
+
+static ya_result
+server_init()
+{
+    ya_result ret;
+    
+    server_type[g_config->network_model].context_init(g_config->thread_count_by_address);
+    
+    log_info("using %i working modules per UDP interface (%i threads per UDP module)", server_context.udp_unit_per_interface, server_context.thread_per_udp_worker_count);
+    log_info("using %i working modules per TCP interface (%i threads per TCP module)", server_context.tcp_unit_per_interface, server_context.thread_per_tcp_worker_count);
+    
+    ret = server_context_start(g_config->listen);
+        
+    return ret;
+}
+
+static ya_result
+server_run_loop()
+{
+    ya_result ret = server_type[g_config->network_model].loop();
+    return ret;
+}
+
 /** @brief Startup server with all its processes
  *
  *  Never returns. Ends with the program.
  */
 
-ya_result
+static ya_result
 server_run()
 {
     log_info("server starting with pid %lu", getpid());
@@ -809,7 +866,7 @@ server_run()
     {
         server_statistics_initialised = TRUE;
         
-        ZEROMEMORY(&server_statistics, sizeof (server_statistics_t));
+        ZEROMEMORY(&server_statistics, sizeof(server_statistics_t));
         mutex_init(&server_statistics.mtx);
     }
 
@@ -832,7 +889,7 @@ server_run()
         }
     }
     
-    if(server_tcp_thread_pool == NULL)
+    if(server_tcp_thread_pool == NULL && g_config->max_tcp_queries > 0)
     {
         server_tcp_thread_pool = thread_pool_init_ex(g_config->max_tcp_queries, g_config->max_tcp_queries * 2, "server-tcp-tp");
         
@@ -848,7 +905,7 @@ server_run()
     {
         server_disk_thread_pool = thread_pool_init_ex(4, 64, "disk-io");
         
-        if(server_tcp_thread_pool == NULL)
+        if(server_disk_thread_pool == NULL)
         {
             log_warn("disk thread pool init failed");
             
@@ -869,8 +926,8 @@ server_run()
     /* Go to work */
         
     log_debug("thread count by address: %i", g_config->thread_count_by_address);
-
-    server_mt_query_loop();
+    
+    server_run_loop();
     
 
     
@@ -882,20 +939,155 @@ server_run()
     
     log_info("clearing context");
     
-    thread_pool_destroy(server_tcp_thread_pool);
-    server_tcp_thread_pool = NULL;
+    if((server_tcp_thread_pool != NULL) && (g_config->max_tcp_queries > 0))
+    {
+        thread_pool_destroy(server_tcp_thread_pool);
+        server_tcp_thread_pool = NULL;
+    }
     
-    thread_pool_destroy(server_disk_thread_pool);
-    server_disk_thread_pool = NULL;
+    if(server_disk_thread_pool != NULL)
+    {
+        thread_pool_destroy(server_disk_thread_pool);
+        server_disk_thread_pool = NULL;
+    }
     
     /* Clear config struct and close all fd's */
-    server_context_clear(g_config);
+    server_context_stop(g_config);
     
 #if HAS_RRL_SUPPORT
     rrl_finalize();
 #endif
     
     return SUCCESS;
+}
+
+static int
+server_service_main(struct service_worker_s *worker)
+{
+    ya_result ret;
+    
+    service_set_servicing(worker);
+    
+    if(ISOK(ret = server_init()))
+    {
+        ret = server_run();        
+    }
+    
+    service_set_stopping(worker);
+    
+    return ret;
+}
+
+/**
+ * Initialises the DNS server service.
+ * 
+ * @return 
+ */
+
+ya_result
+server_service_init()
+{
+    ya_result ret = ERROR;
+    
+    if(!server_handler_initialised && ISOK(ret = service_init_ex(&server_service_handler, server_service_main, "server", 1)))
+    {
+        if(ISOK(ret = server_init()))
+        {
+            server_handler_initialised = TRUE;
+        }
+    }
+    
+    return ret;
+}
+
+bool
+server_service_started()
+{
+    return server_handler_initialised && !service_stopped(&server_service_handler);
+}
+
+ya_result
+server_service_start()
+{
+    int err = ERROR;
+
+    if(server_handler_initialised)
+    {
+        if(service_stopped(&server_service_handler))
+        {
+            err = service_start(&server_service_handler);
+        }
+    }
+
+    return err;
+}
+
+ya_result
+server_service_start_and_wait()
+{
+    int ret = ERROR;
+    
+    if(server_handler_initialised)
+    {
+        if(service_stopped(&server_service_handler))
+        {
+            ret = service_start_and_wait(&server_service_handler);
+        }
+    }
+    
+    return ret;
+}
+
+ya_result
+server_service_wait()
+{
+    int ret = ERROR;
+    if(server_handler_initialised)
+    {
+        if(ISOK(ret = service_wait_servicing(&server_service_handler)))
+        {
+            ret = ERROR;
+            if(service_servicing(&server_service_handler))
+            {
+                ret = service_wait(&server_service_handler);
+            }
+        }
+    }
+    return ret;
+}
+
+ya_result
+server_service_stop()
+{
+    int err = ERROR;
+    
+    if(server_handler_initialised)
+    {
+        if(!service_stopped(&server_service_handler))
+        {
+            err = service_stop(&server_service_handler);
+            service_wait(&server_service_handler);
+        }
+    }
+    
+    return err;
+}
+
+ya_result
+server_service_finalise()
+{
+    int err = SUCCESS;
+    
+    if(server_handler_initialised)
+    {
+        err = server_service_stop();
+        
+        service_finalize(&server_service_handler);
+        
+        server_handler_initialised = FALSE;
+    }
+
+    return err;
 }
 
 /** @} */

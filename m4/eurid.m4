@@ -90,8 +90,8 @@ case "$(uname -s)" in
     Darwin)
         is_darwin_os=1
         is_bsd_family=1
-        AC_MSG_RESULT([OSX])
-
+        osx_version_major=$(uname -r|sed 's/\..*//')
+        AC_MSG_RESULT([OSX $osx_version_major])
         ;;
     FreeBSD)
         is_bsd_family=1
@@ -124,12 +124,20 @@ if [[ $is_darwin_os -ne 0 ]]
 then
     AC_DEFINE_UNQUOTED(IS_DARWIN_OS, [1], [OSX])
     AM_CONDITIONAL([IS_DARWIN_OS], [true])
+    if [[ $osx_version_major -ge 14 ]]
+    then
+        AM_CONDITIONAL([IS_DARWIN_GE14], [true])
+    else
+        AM_CONDITIONAL([IS_DARWIN_GE14], [false])
+    fi
 else
     AC_DEFINE_UNQUOTED(IS_DARWIN_OS, [0], [OSX])
     AM_CONDITIONAL([IS_DARWIN_OS], [false])
+    AM_CONDITIONAL([IS_DARWIN_GE14], [false])
 fi
 
 AC_SUBST(IS_DARWIN_OS)
+AC_SUBST(IS_DARWIN_GE14)
 
 if [[ $is_bsd_family -ne 0 ]]
 then
@@ -235,16 +243,18 @@ int main(int argc, char** argv)
 }
 _ACEOF
 ${CC} ${CFLAGS} memalign_issues_test.c -o memalign_issues_test > /dev/null 2>&1
-has_memalign_issues=0
 ./memalign_issues_test > /dev/null 2>&1
 if [[ $? -ne 0 ]]; then
 	has_memalign_issues=1
+    AM_CONDITIONAL([HAS_MEMALIGN_ISSUES], [true])
 	AC_MSG_RESULT([yes])
 else
+    has_memalign_issues=0
+    AM_CONDITIONAL([HAS_MEMALIGN_ISSUES], [false])
 	AC_MSG_RESULT([no])
 fi
 rm -f memalign_issues_test memalign_issues_test.c
-AM_CONDITIONAL([HAS_MEMALIGN_ISSUES], [test $has_memalign_issues])
+AC_SUBST(HAS_MEMALIGN_ISSUES)
 AC_DEFINE_UNQUOTED([HAS_MEMALIGN_ISSUES], [$has_memalign_issues], [Define this to enable slow but safe unaligned memory accesses])
 
 ])
@@ -762,8 +772,7 @@ dnl pthread spinlock support
 AC_DEFUN([AC_PTHREAD_SPINLOCK_CHECK], [
 
 AC_MSG_CHECKING([checking for pthread_spin_init])
-
-AC_TRY_LINK([#include<pthread.h>],[pthread_spinlock_t lock; pthread_spin_init(&lock, 0);],[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SPINLOCK], [1], [The system supports spinlocks]) echo yes],[echo no]);
+AC_CHECK_LIB(pthread,pthread_spin_init,[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SPINLOCK], [1], [The system supports spinlocks]) echo yes],[echo no])
 
 ])
 
@@ -772,9 +781,16 @@ dnl pthread_setname_np support
 AC_DEFUN([AC_PTHREAD_SETNAME_NP_CHECK], [
 
 AC_MSG_CHECKING([checking for pthread_setname_np])
+AC_CHECK_LIB(pthread,pthread_setname_np,[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SETNAME_NP], [1], [The system supports thread names]) echo yes],[echo no])
 
-AC_TRY_LINK([#define __USE_GNU
-#include<pthread.h>],[pthread_setname_np(pthread_self(), "myname");],[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SETNAME_NP], [1], [The system supports thread names]) echo yes],[echo no]);
+])
+
+dnl pthread_setaffinity_np support
+
+AC_DEFUN([AC_PTHREAD_SETAFFINITY_NP_CHECK], [
+
+AC_MSG_CHECKING([checking for pthread_setaffinity_np])
+AC_CHECK_LIB(pthread,pthread_setaffinity_np,[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SETAFFINITY_NP], [1], [The system supports thread affinity]) echo yes],[echo no])
 
 ])
 
@@ -803,19 +819,6 @@ AC_TRY_LINK([#include<netdb.h>],[struct hostent *host = gethostbyname("www.yadif
             ])
     ])
 ])
-
-dnl pthread_setname_np support
-
-AC_DEFUN([AC_PTHREAD_SETNAME_NP_CHECK], [
-
-AC_MSG_CHECKING([checking for pthread_setname_np])
-
-AC_TRY_LINK([#define __USE_GNU
-#include<pthread.h>],[pthread_setname_np(pthread_self(), "myname");],[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SETNAME_NP], [1], [The system supports thread names]) echo yes],[echo no]);
-
-])
-
-
 
 dnl LTO
 

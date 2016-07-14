@@ -1,4 +1,4 @@
-dnl ############################################################################
+
 dnl 
 dnl Copyright (c) 2011-2016, EURid. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
@@ -96,6 +96,19 @@ AC_SUBST(HAS_$2)
 # AC_HAS_ENABLE $1 DONE
 ])
 
+AC_DEFUN([AC_HAS_ENABLE_HOLD], [
+#
+# AC_HAS_ENABLE_HOLD $1
+#
+AM_CONDITIONAL(HAS_$2, [false])
+AC_DEFINE_UNQUOTED([HAS_$2], [0], ifelse($4,,[$3 disabled.],$4))
+AM_CONDITIONAL([HAS_$2], [false])
+enable_[$1]="no"
+$6
+AC_SUBST(HAS_$2)
+])
+
+
 dnl ####################################################
 dnl
 dnl AC_HAS_DISABLE(low-case --disable-*, up-case HAS_*, text, config.h text,ifyes,ifno)
@@ -126,7 +139,7 @@ AC_MSG_CHECKING(if [$2] has been disabled)
 # ARG ENABLE
 AC_ARG_ENABLE([$1], AS_HELP_STRING([--disable-[translit($1,[_],[-])]],[Disable $3]))
 # MSG RESULT
-dnl echo "enabled: '$enable_[$1]'"
+dnl echo;echo "disabled: '$enable_[$1]'";echo
 # CASE
 case "y$enable_[$1]" in
 	yyes|y)
@@ -140,7 +153,7 @@ case "y$enable_[$1]" in
         $5
 # ENDIF
 		;;
-	yno|*)
+	yno)
 # DEFINE N
 		AC_DEFINE_UNQUOTED([HAS_$2], [0], ifelse($4,,[$3 disabled.],$4))
 # CONDITIONAL N
@@ -332,7 +345,7 @@ dnl DYNAMIC_PROVISIONING
 
 AC_DEFUN([AC_CHECK_ENABLE_CTRL_DYNAMIC_PROVISIONING], [
 
-AC_HAS_ENABLE(ctrl_dynamic_provisioning,CTRL_DYNAMIC_PROVISIONING,[dynamic provisioning],,
+AC_HAS_ENABLE_HOLD(ctrl_dynamic_provisioning,CTRL_DYNAMIC_PROVISIONING,[dynamic provisioning],,
     AM_CONDITIONAL([HAS_CTRL], [true])
     ,
     )
@@ -384,6 +397,13 @@ AC_DEFUN([AC_YADIFA_ENABLE_DNSLG], [
 	requires_dnscore=1
 ])
 
+AC_DEFUN([AC_YADIFA_ENABLE_DNSTCL], [
+	requires_dnstcl=0
+	requires_dnszone=0
+	requires_dnsdb=0
+	requires_dnslg=0
+	requires_dnscore=0
+])
 
 AC_DEFUN([AC_YADIFA_ADD_LIBS], [
 
@@ -406,19 +426,13 @@ LIBS="$LDDYN $LIBS"
 AC_SEARCH_LIBS([gethostbyname],[nsl],,[exit 1])
 AC_SEARCH_LIBS([socket],[socket],,[exit 1])
 AC_SEARCH_LIBS([dlopen],[dl],,[exit 1])
+AC_SEARCH_LIBS([pthread_self],[pthread],,[exit 1])
+
 dnl AC_GETHOSTBYNAME_CHECK
 
-if [[ $requires_tcl -eq 1 ]]
-then
-	echo "TCL is required by this setup ..."
-
-	CFLAGS="$CFLAGS -DWITHTCLINCLUDED -I${tcl_includedir}" 
-	LDFLAGS="-L${tcl_libdir} $LDFLAGS"
-
-	AC_SEARCH_LIBS(Tcl_Main, [${tcl_version}], ,[echo "could not find ${tcl_version} :: tcl_includedir=${tcl_includedir} :: tcl_libdir=${tcl_libdir}"; exit 1])
-fi
-
 dnl SSL
+
+AC_YADIFA_ENABLE_SSL
 
 if [[ $requires_ssl -eq 1 ]]
 then
@@ -621,7 +635,6 @@ dnl ==========================================================================
 dnl NOTE: Putting the empty optional text (,,) is mandatory
 
 AC_HAS_DISABLE(master,MASTER_SUPPORT,[DNS master],,
-
     AC_YADIFA_ENABLE_SSL
     ,
     enable_dynupdate='no'
@@ -637,22 +650,6 @@ dnl ==========================================================================
 
 AC_HAS_DISABLE(nsid,NSID_SUPPORT,[NSID support])
 
-dnl ACL
-dnl ==========================================================================
-
-AC_HAS_DISABLE(acl,ACL_SUPPORT,[ACL support],,
-    AC_YADIFA_ENABLE_SSL
-    ,
-    enable_tsig='no'
-    )
-
-dnl TSIG
-dnl ==========================================================================
-
-AC_HAS_DISABLE(tsig,TSIG_SUPPORT,[TSIG support],,
-    AC_YADIFA_ENABLE_SSL
-    ,
-    )
 
 dnl DYNUPDATE
 dnl ==========================================================================
@@ -667,6 +664,15 @@ AC_HAS_DISABLE(rrsig_management,RRSIG_MANAGEMENT_SUPPORT,[RRSIG verification and
     ,
     )
 
+dnl RDTSC
+dnl ==========================================================================
+
+AC_HAS_ENABLE_HOLD(rdtsc,RDTSC,[RDTSC usage for profiling (devs only)])
+
+dnl DYNCONF
+dnl ==========================================================================
+
+AC_HAS_ENABLE_HOLD(dynconf,DYNCONF_SUPPORT,[dynamic configuration])
 
 dnl ZALLOC
 dnl ==========================================================================
@@ -708,18 +714,23 @@ dnl ======================
 
 AC_HAS_ENABLE(mutex_debug,MUTEX_DEBUG_SUPPORT,[mutex debug support])
 
+dnl INSTANCIATED ZONES DEBUG
+dnl ========================
+
+AC_HAS_ENABLE(track_zones_debug,TRACK_ZONES_DEBUG_SUPPORT,[Tracks the instanciated zones for detecting zones potentially not released.  Relatively cheap with a small (<100) amount of zones.])
+
 dnl LOG THREAD ID
 dnl =============
 
 AC_HAS_ENABLE(log_thread_id,LOG_THREAD_ID_ALWAYS_ON,[write the thread id in each line of log])
 
 dnl LOG PID
-dnl dnl ===
+dnl =======
 
 AC_HAS_ENABLE(log_pid,LOG_PID_ALWAYS_ON,[write the pid in each line of log])
 
 dnl ASCII 7
-dnl dnl =======
+dnl =======
 
 AC_HAS_ENABLE(full_ascii7,FULL_ASCII7,[YADIFA will now accept ASCII7 characters in DNS names (not recommended)])
         
@@ -727,6 +738,21 @@ dnl NON-AA AXFR (non-AA AXFR as sent by MS DNS)
 dnl ==========================================================================
 
 AC_HAS_ENABLE(non_aa_axfr_support,NON_AA_AXFR_SUPPORT,[Allows AXFR answer from master without AA bit set (Microsoft DNS)])
+
+dnl EXPERIMENTAL
+dnl ==========================================================================
+
+AC_HAS_ENABLE_HOLD(experimental,EXPERIMENTAL,[experimental stuff])
+
+dnl MIRROR debug 
+dnl ==========================================================================
+
+AC_HAS_ENABLE_HOLD(mirror,MIRROR_SUPPORT,[mirror mode (devs only)],[MIRROR mode will only reply what has been read (debug/bench)])
+
+dnl DROPALL debug 
+dnl ==========================================================================
+
+AC_HAS_ENABLE_HOLD(dropall,DROPALL_SUPPORT,[Enable DROPALL mode (devs only)],[DROPALL mode will not actually send back the answer (debug/bench)])
 
 dnl logdir
 dnl ==========================================================================
@@ -752,10 +778,10 @@ AM_CONDITIONAL([HAS_NSEC3_SUPPORT], [true])
 AC_DEFINE_UNQUOTED([HAS_NSEC3_SUPPORT], [1], [always on])
 AM_CONDITIONAL([HAS_NSEC_SUPPORT], [true])
 AC_DEFINE_UNQUOTED([HAS_NSEC_SUPPORT], [1], [always on])
-AM_CONDITIONAL([HAS_MIRROR_SUPPORT], [false])
-AC_DEFINE_UNQUOTED([HAS_MIRROR_SUPPORT], [0], [always off])
-AM_CONDITIONAL([HAS_DROPALL_SUPPORT], [false])
-AC_DEFINE_UNQUOTED([HAS_DROPALL_SUPPORT], [0], [always off])
+dnl AM_CONDITIONAL([HAS_MIRROR_SUPPORT], [false])
+dnl AC_DEFINE_UNQUOTED([HAS_MIRROR_SUPPORT], [0], [always off])
+dnl AM_CONDITIONAL([HAS_DROPALL_SUPPORT], [false])
+dnl AC_DEFINE_UNQUOTED([HAS_DROPALL_SUPPORT], [0], [always off])
 AM_CONDITIONAL([HAS_TCL], [false])
 AC_DEFINE_UNQUOTED([HAS_TCL], [0], [always off])
 AM_CONDITIONAL([HAS_RDTSC], [false])
@@ -763,6 +789,16 @@ AC_DEFINE_UNQUOTED([HAS_RDTSC], [0], [always off])
 AM_CONDITIONAL([HAS_RRCACHE_ENABLED], [false])
 AC_DEFINE_UNQUOTED([HAS_RRCACHE_ENABLED], [0], [always off])
 ])
+# DNSQ
+
+AC_HAS_ENABLE_HOLD(dnsq,DNSQ,[DNS Quality support (devs only)],[DNSQ support enabled])
+
+# DEV
+
+AC_HAS_ENABLE_HOLD(gery,GERY,[code not to be released yet, specific to Gery (devs only)],[Gery's code is enabled])
+AC_HAS_ENABLE_HOLD(edf,EDF,[code not to be released yet, specific to Eric (devs only)],[Eric's code is enabled])
+AC_HAS_ENABLE_HOLD(thx,THX,[code not to be released yet, specific to Tim (devs only)],[Tim's code is enabled])
+
 
 AC_DEFUN([AC_YADIFA_SUMMARY], [
 

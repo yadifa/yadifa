@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 #include "dnscore/dnscore-config.h"
 #include <netinet/in.h>
@@ -52,6 +52,8 @@
 
 extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
+
+#define SCKTARRY_TAG 0x59525241544b4353
 
 #define HAS_TC_FALLBACK_TO_TCP_SUPPORT 1
 
@@ -339,13 +341,14 @@ dns_udp_handler_init()
         message_edns0_setmaxsize(4096);
         
         rate_init(&dns_udp_send_rate, dns_udp_settings->send_rate);   // bytes-per-second
-        
+        //dns_udp_settings->port_count != 0
         u32 worker_count = dns_udp_settings->port_count;
+
         
         // open "worker_count" udp sockets (V6)
-
+        
         dns_udp_socket_count = worker_count;
-        MALLOC_OR_DIE(int*, dns_udp_socket, sizeof(int) * dns_udp_socket_count, GENERIC_TAG); // DON'T POOL
+        MALLOC_OR_DIE(int*, dns_udp_socket, sizeof(int) * dns_udp_socket_count, SCKTARRY_TAG); // DON'T POOL
         
         for(int i = 0; i < dns_udp_socket_count; i++) // dns_udp_socket_count is guaranteed > 0
         {
@@ -399,7 +402,8 @@ dns_udp_handler_init()
             }
         }
         // scan-build false positive: dns_udp_socket_count > 0
-        MALLOC_OR_DIE(list_dl_s*, dns_udp_high_priority, sizeof(list_dl_s) * dns_udp_socket_count, GENERIC_TAG); // DON'T POOL, count ALWAYS > 0       
+        assert(dns_udp_socket_count > 0);
+        MALLOC_OR_DIE(list_dl_s*, dns_udp_high_priority, sizeof(list_dl_s) * dns_udp_socket_count, LISTDL_TAG); // DON'T POOL, count ALWAYS > 0       
         for(int i = 0; i < dns_udp_socket_count; i++)
         {
             list_dl_init(&dns_udp_high_priority[i]);
@@ -828,6 +832,8 @@ dns_udp_simple_message_answer_call_handlers(dns_simple_message_s *simple_message
 
 #if HAS_TC_FALLBACK_TO_TCP_SUPPORT
 
+#define DNSUTQTP_TAG 0x5054515455534e44
+
 struct dns_udp_tcp_query_thread_params
 {
     dns_simple_message_s *simple_message;
@@ -975,7 +981,7 @@ static void
 dns_udp_tcp_query(dns_simple_message_s *simple_message, struct service_worker_s *worker)
 {
     dns_udp_tcp_query_thread_params *parms;
-    ZALLOC_OR_DIE(dns_udp_tcp_query_thread_params*, parms, dns_udp_tcp_query_thread_params, GENERIC_TAG);
+    ZALLOC_OR_DIE(dns_udp_tcp_query_thread_params*, parms, dns_udp_tcp_query_thread_params, DNSUTQTP_TAG);
     parms->simple_message = simple_message;
     parms->worker = worker;
     thread_pool_enqueue_call(tcp_query_thread_pool, dns_udp_tcp_query_thread, parms, NULL, "dns-udp-tcp");
@@ -1414,6 +1420,18 @@ dns_udp_aggregate_simple_messages(dns_simple_message_s *head, dns_simple_message
     dns_udp_simple_message_unlock(head);
 }
 
+static int dns_udp_receive_service_hook(dns_simple_message_s *simple_message, message_data *mesg);
+
+static bool
+dns_udp_send_simple_message_process_hook_default(dns_simple_message_s *simple_message, message_data *mesg)
+{
+    (void)simple_message;
+    (void)mesg;
+    return FALSE;
+}
+
+static dns_udp_query_hook *dns_udp_send_simple_message_process_hook = dns_udp_send_simple_message_process_hook_default;
+
 static int
 dns_udp_send_simple_message_process(async_message_s *domain_message, random_ctx rndctx, u16 source_port, int s, u32 worker_index)
 {
@@ -1448,7 +1466,7 @@ dns_udp_send_simple_message_process(async_message_s *domain_message, random_ctx 
     dns_udp_simple_message_lock(simple_message); // lock B
     
     ptr_node *node = ptr_set_avl_insert(&message_collection, simple_message);
-    
+        
     simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_COLLECTED;
     simple_message->status &= ~DNS_SIMPLE_MESSAGE_STATUS_QUEUED;
     
@@ -1500,76 +1518,90 @@ dns_udp_send_simple_message_process(async_message_s *domain_message, random_ctx 
         
         if(ISOK(return_code))
         {
-            for(;;)
+            if(!dns_udp_send_simple_message_process_hook(simple_message, &mesg))
             {
-                // send the packet
-                
-                rate_wait(&dns_udp_send_rate, mesg.send_length);
-                //rate_wait(&dns_udp_send_rate, 1);
-                
-                if((return_code = sendto(s, mesg.buffer, mesg.send_length, 0, &sa.sa, sa_len)) == mesg.send_length)
+                for(;;)
                 {
-                    dns_udp_simple_message_lock(simple_message);
-                    simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_SENT;                    
-                    
-                    log_notice("sent: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x)", simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server, simple_message->status);
-                    
-                    simple_message->sent_time_us = timeus();
-                    dns_udp_simple_message_unlock(simple_message); // unlock B
+                    // send the packet
 
-                    // one RC can be released
-                    dns_udp_simple_message_release(simple_message);
-                    
-                    /// @note at this point the RC is set to 1, but
-                    /// it potentially could be 0 (and thus simple_message could already be destroyed)
-                    
-                    // message should NOT be used after this point
-                    
-                    // <statistics>
-                    
-                    u64 now = time(NULL);
+                    rate_wait(&dns_udp_send_rate, mesg.send_length);
+                    //rate_wait(&dns_udp_send_rate, 1);
 
-                    mutex_lock(&sendto_statistics_mtx);
-                    if(sendto_epoch == now)
+                    if((return_code = sendto(s, mesg.buffer, mesg.send_length, 0, &sa.sa, sa_len)) == mesg.send_length)
                     {
-                        sendto_total += return_code;
-                        sendto_packets++;
+                        dns_udp_simple_message_lock(simple_message);
+                        simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_SENT;                    
 
-                        mutex_unlock(&sendto_statistics_mtx);
+                        log_notice("sent: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x)", simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server, simple_message->status);
+
+                        simple_message->sent_time_us = timeus();
+                        dns_udp_simple_message_unlock(simple_message); // unlock B
+
+                        // one RC can be released
+                        dns_udp_simple_message_release(simple_message);
+
+                        /// @note at this point the RC is set to 1, but
+                        /// it potentially could be 0 (and thus simple_message could already be destroyed)
+
+                        // message should NOT be used after this point
+
+                        // <statistics>
+
+                        u64 now = time(NULL);
+
+                        mutex_lock(&sendto_statistics_mtx);
+                        if(sendto_epoch == now)
+                        {
+                            sendto_total += return_code;
+                            sendto_packets++;
+
+                            mutex_unlock(&sendto_statistics_mtx);
+                        }
+                        else
+                        {
+                            u32 st = sendto_total;
+                            u32 sq = sendto_packets;
+                            u32 sqa = sendto_packets_aggregated;
+
+                            sendto_epoch = now;
+                            sendto_total = return_code;
+                            sendto_packets = 0;
+                            sendto_packets_aggregated = 0;
+
+                            mutex_unlock(&sendto_statistics_mtx);
+
+                            log_debug("sent: total=%db/s (packets=%d/aggregated=%d/s)", st, sq, sqa);
+                        }
+
+                        // </statistics>
+
+                        return return_code;
                     }
-                    else
+
+                    // an error occurred
+
+                    int err = errno;
+
+                    if((err != EINTR) && (err != EAGAIN))
                     {
-                        u32 st = sendto_total;
-                        u32 sq = sendto_packets;
-                        u32 sqa = sendto_packets_aggregated;
+                        return_code = MAKE_ERRNO_ERROR(err);
 
-                        sendto_epoch = now;
-                        sendto_total = return_code;
-                        sendto_packets = 0;
-                        sendto_packets_aggregated = 0;
-
-                        mutex_unlock(&sendto_statistics_mtx);
-
-                        log_debug("sent: total=%db/s (packets=%d/aggregated=%d/s)", st, sq, sqa);
+                        break;
                     }
-                    
-                    // </statistics>
 
-                    return return_code;
+                    // try again
                 }
-
-                // an error occurred
-
-                int err = errno;
-
-                if((err != EINTR) && (err != EAGAIN))
+            }
+            else // the hook did something
+            {
+                if((simple_message->status & DNS_SIMPLE_MESSAGE_STATUS_TIMEDOUT) == 0)
                 {
-                    return_code = MAKE_ERRNO_ERROR(err);
-                    
-                    break;
+                    dns_udp_receive_service_hook(simple_message, &mesg);
                 }
-
-                // try again
+                
+                dns_udp_simple_message_release(simple_message);
+                
+                return SUCCESS;
             }
         }
         
@@ -1656,7 +1688,7 @@ dns_udp_send_service(struct service_worker_s *worker)
     
     const u16 source_port = sin6.sin6_port;
 
-    while(service_shouldrun(worker))
+    while(service_shouldrun(worker) /*|| !async_queue_emtpy(&dns_udp_send_handler_queue)*/)
     {
         // timeout high priority list.
         
@@ -2254,4 +2286,214 @@ u32
 dns_udp_pending_feedback_count()
 {
     return message_collection_keys + message_collection_size;
+}
+
+/**
+ * Sets a hook for queries.
+ * 
+ * The hook is called by the service on each messages and is expected to answer
+ * TRUE if it wrote an answer on it
+ * FALSE if it did not
+ * 
+ * Every use of the dns_udp service is affected by this.
+ * Only one hook is possible at a given time.
+ * 
+ * @param hook a function or NULL to reset to no HOOK.
+ */
+
+void
+dns_udp_set_query_hook(dns_udp_query_hook *hook)
+{
+    if(hook != NULL)
+    {
+        dns_udp_send_simple_message_process_hook = hook;
+    }
+    else
+    {
+        dns_udp_send_simple_message_process_hook = dns_udp_send_simple_message_process_hook_default;
+    }
+}
+
+static int
+dns_udp_receive_service_hook(dns_simple_message_s *simple_message, message_data *mesg)
+{
+    host_address sender_host_address;
+    int n = mesg->received;
+    
+    if(n > 0)
+    {
+        log_debug6("receive: recvfrom(hook, ... , %{sockaddr}) = %i (hook)", &mesg->other, n);
+    }
+    else
+    {
+        log_debug6("receive: empty packet (hook)");
+    }
+
+    u64 now = time(NULL);
+
+    mutex_lock(&recvfrom_statistics_mtx);
+    if(recvfrom_epoch == now)
+    {
+        recvfrom_total += n;
+        recvfrom_packets++;
+        mutex_unlock(&recvfrom_statistics_mtx);
+    }
+    else
+    {
+        recvfrom_epoch = now;
+        u32 rt = recvfrom_total;
+        recvfrom_total = n;
+        u32 rq = recvfrom_packets;
+        recvfrom_packets = 0;
+
+        mutex_unlock(&recvfrom_statistics_mtx);
+
+        log_debug("receive: recvfrom: %d b/s %d p/s (hook)", rt, rq);
+    }
+
+    ya_result return_code;
+
+    if(ISOK(return_code = message_process_lenient(mesg)))
+    {
+        // look in the timeout collection
+
+        host_address_set_with_sockaddr(&sender_host_address, &mesg->other);
+
+        if(sender_host_address.version == 6)
+        {
+            if(memcmp(sender_host_address.ip.v6.bytes, V4_WRAPPED_IN_V6, sizeof(V4_WRAPPED_IN_V6)) == 0)
+            {
+                // unwrap
+
+                u32 ipv4 = sender_host_address.ip.v6.dwords[3];
+                sender_host_address.ip.v4.value = ipv4;
+                sender_host_address.version = 4;
+            }
+        }
+
+        dns_simple_message_s message;
+        message.name_server = &sender_host_address;
+        message.sent_time_us = MAX_S64;
+        message.received_time_us = 0;
+        message.retries_left = 0;
+
+
+        int len = dnsname_copy(message.fqdn, mesg->qname);
+
+        if(ISOK(len))
+        {
+            message.qtype = GET_U16_AT(mesg->buffer[12 + len]);
+            message.qclass = GET_U16_AT(mesg->buffer[12 + len + 2]);
+
+            // remove it from the collection
+
+            mutex_lock(&message_collection_mtx);
+
+            ptr_node *node = ptr_set_avl_find(&message_collection, &message);
+
+            if(node != NULL)
+            {
+                // proceed
+
+                bool truncated = MESSAGE_TC(mesg->buffer);
+
+                dns_simple_message_s *simple_message = (dns_simple_message_s*)node->key;
+
+                dns_udp_simple_message_lock(simple_message);
+
+                ptr_set_avl_delete(&message_collection, simple_message);
+                --message_collection_keys;
+
+                // the message is not in the timeout collection anymore
+                // it should contain an answer, or an error, ... or a message with the TC bit on
+
+                if(!truncated)
+                {
+                    simple_message->status &= ~DNS_SIMPLE_MESSAGE_STATUS_COLLECTED;
+                    simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_RECEIVED;
+                }
+
+                dns_udp_simple_message_unlock(simple_message);
+
+                mutex_unlock(&message_collection_mtx);
+
+                // RC is supposed to be 1
+
+#ifdef DEBUG
+                if(simple_message->rc.value != 1)
+                {
+                    log_warn("receive: message RC is not 1 (%i) (hook)", simple_message->rc.value);
+                }
+#endif
+                simple_message->received_time_us = timeus();
+                s64 dt = MAX(simple_message->received_time_us - simple_message->sent_time_us, 0);
+                double dts = dt;
+                dts/=1000000.0;
+
+#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
+                if(!truncated)
+                {
+#endif
+                    simple_message->answer = mesg;
+
+                    log_notice("receive: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) [%6.3fs] (hook)", message.fqdn, &message.qtype, &message.qclass, message.name_server, simple_message->status, dts);
+
+                    dns_udp_simple_message_retain(simple_message);
+                    dns_udp_simple_message_answer_call_handlers(simple_message);
+                    simple_message->answer = NULL;
+                    //dns_udp_simple_message_release(simple_message);
+
+                    // allocate the next buffer, handle the hard_limit of the pool:
+                    // when the pool has reached peak capacity, allocation returns NULL
+#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
+
+                }
+                else
+                {
+                    // the message has been truncated
+                    // it should be queried again using TCP
+
+                    log_notice("receive: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) [%6.3fs]: truncated (hook)", message.fqdn, &message.qtype, &message.qclass, message.name_server, simple_message->status, dts);
+
+                    // TCP ???
+                }
+#endif
+            }
+            else
+            {
+                mutex_unlock(&message_collection_mtx);
+
+                // unknown
+
+                log_warn("receive: unexpected message %{dnsname} %{dnstype} %{dnsclass}", message.fqdn, &message.qtype, &message.qclass);
+            }
+        }
+        else
+        {
+            log_err("receive: an error occurred while copying the name '%{dnsname}': %r", mesg->qname, len);
+        }
+    }
+    else
+    {
+        // nop
+    }
+    
+    return return_code;
+}
+
+/**
+ * 
+ * Mark a simple message as being timed-out
+ * Meant for use in hooks.
+ * Use with care.
+ * 
+ * @param simple_message
+ */
+
+void
+dns_udp_mark_as_timedout(dns_simple_message_s *simple_message)
+{
+    simple_message->sent_time_us = timeus() - 10000000; // 10 seconds ago
+    simple_message->received_time_us = MAX_S64;
+    simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_TIMEDOUT;
 }

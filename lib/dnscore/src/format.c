@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup format C-string formatting
  *  @ingroup dnscore
  *  @brief
@@ -47,6 +47,9 @@
 #include <stdarg.h>
 #include <string.h>
 #include <ctype.h>
+
+
+#include "dnscore/timeformat.h"
 
 #include "dnscore/ctrl-rfc.h"
 
@@ -316,7 +319,7 @@ static void
 format_hex_u64_common(const char* hexa_table, u64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified)
 {
     char tmp[__SIZEOF_POINTER__ * 2];
-    char* next = &tmp[sizeof (tmp)];
+    char* next = &tmp[sizeof(tmp)];
 
     do
     {
@@ -325,14 +328,14 @@ format_hex_u64_common(const char* hexa_table, u64 val, output_stream* stream, s3
     }
     while(val != 0);
 
-    format_unsigned(next, &tmp[sizeof (tmp)] - next, stream, padding, pad_char, left_justified);
+    format_unsigned(next, &tmp[sizeof(tmp)] - next, stream, padding, pad_char, left_justified);
 }
 
 void
 format_oct_u64(u64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified)
 {
     char tmp[20];
-    char* next = &tmp[sizeof (tmp)];
+    char* next = &tmp[sizeof(tmp)];
 
     do
     {
@@ -343,14 +346,14 @@ format_oct_u64(u64 val, output_stream* stream, s32 padding, char pad_char, bool 
 
     /* next points at the first char of the 10-based representation of the integer */
 
-    format_unsigned(next, &tmp[sizeof (tmp)] - next, stream, padding, pad_char, left_justified);
+    format_unsigned(next, &tmp[sizeof(tmp)] - next, stream, padding, pad_char, left_justified);
 }
 
 void
 format_dec_u64(u64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified)
 {
     char tmp[20];
-    char* next = &tmp[sizeof (tmp)];
+    char* next = &tmp[sizeof(tmp)];
 
     do
     {
@@ -361,14 +364,14 @@ format_dec_u64(u64 val, output_stream* stream, s32 padding, char pad_char, bool 
 
     /* next points at the first char of the 10-based representation of the integer */
 
-    format_unsigned(next, &tmp[sizeof (tmp)] - next, stream, padding, pad_char, left_justified);
+    format_unsigned(next, &tmp[sizeof(tmp)] - next, stream, padding, pad_char, left_justified);
 }
 
 void
 format_dec_s64(s64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified)
 {
     char tmp[20];
-    char* next = &tmp[sizeof (tmp)];
+    char* next = &tmp[sizeof(tmp)];
 
     bool sign;
 
@@ -386,7 +389,7 @@ format_dec_s64(s64 val, output_stream* stream, s32 padding, char pad_char, bool 
     }
     while(uval != 0);
 
-    format_signed(next, &tmp[sizeof (tmp)] - next, stream, padding, pad_char, left_justified, sign);
+    format_signed(next, &tmp[sizeof(tmp)] - next, stream, padding, pad_char, left_justified, sign);
 }
 
 void
@@ -439,7 +442,7 @@ format_longdouble(long double val, output_stream* stream, s32 padding, s32 float
 
     format_double_make_format(fmt, padding, float_padding, pad_char, left_justified, TRUE);
 
-    int len = snprintf(tmp, sizeof (tmp), fmt, val);
+    int len = snprintf(tmp, sizeof(tmp), fmt, val);
 
     output_stream_write(stream, (const u8*)tmp, len);
 }
@@ -452,7 +455,7 @@ format_double(double val, output_stream* stream, s32 padding, s32 float_padding,
 
     format_double_make_format(fmt, padding, float_padding, pad_char, left_justified, FALSE);
 
-    int len = snprintf(tmp, sizeof (tmp), fmt, val);
+    int len = snprintf(tmp, sizeof(tmp), fmt, val);
 
     output_stream_write(stream, (const u8*)tmp, len);
 }
@@ -493,7 +496,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
 
     s32 padding = -1;
     s32 float_padding = -1;
-    u8 type_size = sizeof (int);
+    u8 type_size = sizeof(int);
     char pad_char = ' ';
     bool left_justified = TRUE;
 
@@ -569,7 +572,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                 fmt = next;
 
                 padding = 0;
-                type_size = sizeof (int);
+                type_size = sizeof(int);
                 pad_char = ' ';
                 left_justified = TRUE;
 
@@ -641,59 +644,46 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
             {
                 c = *next++;
 
-                type_size = sizeof (u16);
+                type_size = sizeof(u16);
 
                 if(c == 'h')
                 {
                     c = *next++;
 
-                    type_size = sizeof (u8);
+                    type_size = sizeof(u8);
                 }
             }
             else if(c == 'l')
             {
                 c = *next++;
 
-                type_size = sizeof (u32);
+                type_size = sizeof(u32);
 
                 if(c == 'l')
                 {
                     c = *next++;
 
-                    type_size = sizeof (u64);
+                    type_size = sizeof(u64);
                 }
             }
             else if(c == 'L')
             {
                 c = *next++;
 
-                type_size = sizeof (long double);
+                type_size = sizeof(long double);
             }
 
             /* Type */
 
             switch(c)
             {
-                case 't':
-                {
-                    int val = (int)va_arg(args, int);
-                    do_padding(&os, val, '\t');
-                    break;
-                }
-                case 'T':
-                {
-                    int val = (int)va_arg(args, int);
-                    do_padding(&os, val, ' ');
-                    break;
-                }
                 case 'i':
                 {
                     s64 val;
 
                     switch(type_size)
                     {
-
-                        case sizeof (s8):
+                        case sizeof(s8):
                         {
                             /*
                              * warning: ‘u8’ is promoted to ‘int’ when passed through ‘...’
@@ -706,7 +696,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                             break;
                         }
 
-                        case sizeof (s16):
+                        case sizeof(s16):
                         {
                             /*
                              * warning: ‘u16’ is promoted to ‘int’ when passed through ‘...’
@@ -720,13 +710,13 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                             break;
                         }
 
-                        case sizeof (s32):
+                        case sizeof(s32):
                         {
                             val = (s32)va_arg(args, s32);
                             break;
                         }
 
-                        case sizeof (s64):
+                        case sizeof(s64):
                         {
                             val = va_arg(args, s64);
                             break;
@@ -789,7 +779,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                     switch(type_size)
                     {
 
-                        case sizeof (u8):
+                        case sizeof(u8):
                         {
                             /*
                              * warning: ‘u8’ is promoted to ‘int’ when passed through ‘...’
@@ -802,7 +792,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                             break;
                         }
 
-                        case sizeof (u16):
+                        case sizeof(u16):
                         {
                             /*
                              * warning: ‘u16’ is promoted to ‘int’ when passed through ‘...’
@@ -816,13 +806,13 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                             break;
                         }
 
-                        case sizeof (u32):
+                        case sizeof(u32):
                         {
                             val = va_arg(args, u32);
                             break;
                         }
 
-                        case sizeof (u64):
+                        case sizeof(u64):
                         {
                             val = va_arg(args, u64);
                             break;
@@ -883,7 +873,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                 }
                 case 'f':
                 {
-                    if(type_size == sizeof (long double))
+                    if(type_size == sizeof(long double))
                     {
                         long double val = va_arg(args, long double);
 
@@ -976,13 +966,81 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                     fw->callback(fw->value, &os, padding, pad_char, left_justified, NULL);
                     break;
                 }
+                
+                case 't':
+                {
+                    int val = (int)va_arg(args, int);
+                    do_padding(&os, val, '\t');
+                    break;
+                }
+                
+                case 'S':
+                {
+                    int val = (int)va_arg(args, int);
+                    do_padding(&os, val, ' ');
+                    break;
+                }
+                
+                case 'T':
+                {
+                    switch(type_size)
+                    {
+                        case sizeof(s32):
+                        {
+                            u32 val = (u32)va_arg(args, u32);
+                            localepoch_format_handler_method((void*)(intptr)val, &os, 0, 0, FALSE, NULL);
+                            break;
+                        }
+
+                        case sizeof(s64):
+                        {
+
+                            u64 val = (s16)va_arg(args, u64);
+                            localdatetimeus_format_handler_method((void*)(intptr)val, &os, 0, 0, FALSE, NULL);
+                            break;
+                        }
+                        default:
+                        {
+                            abort();
+                        }
+                    }
+                    
+                    break;
+                }
+                
+                case 'U':
+                {
+                    switch(type_size)
+                    {
+                        case sizeof(s32):
+                        {
+                            u32 val = (u32)va_arg(args, u32);
+                            epoch_format_handler_method((void*)(intptr)val, &os, 0, 0, FALSE, NULL);
+                            break;
+                        }
+
+                        case sizeof(s64):
+                        {
+
+                            u64 val = (s16)va_arg(args, u64);
+                            datetimeus_format_handler_method((void*)(intptr)val, &os, 0, 0, FALSE, NULL);
+                            break;
+                        }
+                        default:
+                        {
+                            abort();
+                        }
+                    }
+                    
+                    break;
+                }
             }
 
             fmt = next;
 
             padding = -1;
             float_padding = -1;
-            type_size = sizeof (int);
+            type_size = sizeof(int);
             pad_char = ' ';
             left_justified = TRUE;
 
@@ -1272,13 +1330,13 @@ fformat(FILE* out, const char* fmt, ...)
     char tmp[4096];
 
 #ifdef DEBUG
-    memset(tmp, '!', sizeof (tmp));
+    memset(tmp, '!', sizeof(tmp));
 #endif
 
     int ret;
     va_list args;
     va_start(args, fmt);
-    ret = vsnformat(tmp, sizeof (tmp), fmt, args);
+    ret = vsnformat(tmp, sizeof(tmp), fmt, args);
     fputs(tmp, out);
     va_end(args);
 
@@ -1596,6 +1654,9 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         }
         case TYPE_DNSKEY:
         case TYPE_KEY:
+
+
+
         {
             osformat(os, "%u %u %u ",
                      ntohs(GET_U16_AT(rdata_pointer[0])),
@@ -1610,6 +1671,9 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             return SUCCESS;
         }
         case TYPE_DS:
+
+
+
         {
             osformat(os, "%u %u %u ",
                      ntohs(GET_U16_AT(rdata_pointer[0])),
@@ -1627,6 +1691,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             return SUCCESS;
         }
         case TYPE_NSEC:
+
         {
             osformat(os, "%{dnsname} ", rdata_pointer);
 
@@ -1706,6 +1771,19 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
             return osprint_base16(os, &rdata_pointer[2], rdata_size - 2);
         }
+
+
+
+
+
+
+
+
+
+
+
+
+
         case TYPE_SRV:
         {
             u16 priority = GET_U16_AT(rdata_pointer[0]);
@@ -1800,12 +1878,37 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
             if((flags & REMOTE_SERVER_FLAGS_KEY_MASK) != 0)
             {
+
                 total += osformat(os, " %{dnsname}", src);
             }
 
             return total;
         }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         case TYPE_TXT:
+
+
+
         {
             u8 c;
 
@@ -1838,6 +1941,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             }
             return INCORRECT_RDATA;
         }
+
         case TYPE_A6:
         case TYPE_AFSDB:
         case TYPE_TSIG:

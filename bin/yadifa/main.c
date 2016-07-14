@@ -1,45 +1,44 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 /** @defgroup yadifa
  *  @ingroup ###
  *  @brief
  */
 
-#include "client-config.h"
 #include <sys/resource.h>
-#include <sys/time.h>
+//#include <sys/time.h>
 
 #include "client-config.h"
 
@@ -52,9 +51,25 @@
 #include "yadifa.h"
 #include "yadifa-config.h"
 
-#undef HAS_TCL
+
+//#undef HAS_TCL
+
+
+
+
+#if HAS_YAO
+#include "yao.h"
+#include "yao-config.h"
+#endif // HAS_YAO
+
+
+
+
+
+
 
 /*----------------------------------------------------------------------------*/
+#pragma mark GLOBAL VARIABLES
 
 logger_handle *g_client_logger;
 #define MODULE_MSG_HANDLE g_client_logger
@@ -66,16 +81,18 @@ logger_handle *g_client_logger;
 //static bool server_do_clean_exit = FALSE;
 
 /*----------------------------------------------------------------------------*/
+#pragma mark STATIC PROTOTYPES
 
 void config_logger_setdefault();
 void config_logger_cleardefault();
 
 /*----------------------------------------------------------------------------*/
+#pragma mark MACROS
 
 ya_result (*generic_config_init)(void);
 ya_result (*generic_config_cmdline)(int , char **);
 ya_result (*generic_config_finalise)(void);
-char *    (*generic_config_file_get)(void);
+char * (*generic_config_file_get)(void);
 
 int (*generic_run)(void);
 
@@ -96,6 +113,7 @@ int (*generic_run)(void);
 
 
 /*----------------------------------------------------------------------------*/
+#pragma mark FUNCTIONS
 
 /** @brief base_of_path
  *
@@ -167,6 +185,16 @@ struct my_additional_stuff_s
 
 /*    ------------------------------------------------------------    */
 
+
+
+//    my_additional_stuff_s my_additional_stuff;
+//    ZEROMEMORY(&my_additional_stuff, sizeof(my_additional_stuff_s));
+
+
+
+
+
+
 /** @brief main function of yadifa
  *
  *  @param[in] argc number of arguments on the command line
@@ -199,8 +227,18 @@ main(int argc, char *argv[])
     config_init_error_codes();
 
     logger_start();
-
+#if 0 /* fix */
+#else
     GENERIC_COMMAND_BEGIN("yadifa",yadifa)
+#endif
+
+
+
+#if HAS_YAO
+    GENERIC_COMMAND("yao",yao)
+#endif // HAS_YAO
+
+
 
 
 
@@ -208,17 +246,19 @@ main(int argc, char *argv[])
 
     if(FAIL(return_code = generic_config_init()))
     {
-        formatln("config_init failed: %r", return_code);
-        flushout();
+        osformatln(termerr, "config init failed: %r", return_code);
+        flusherr();
         dnscore_finalize();
+
 
         return EXIT_FAILURE;
     }
 
     if(FAIL(return_code = generic_config_cmdline(argc, argv)))
     {
-        formatln("cmdline_parse failed: %r", return_code);
-        flushout();
+        osformatln(termerr, "cmdline parse failed: %r", return_code);
+        flusherr();
+
         dnscore_finalize();
 
         return EXIT_FAILURE;
@@ -228,31 +268,43 @@ main(int argc, char *argv[])
     if (return_code > 0)
     {
         return EXIT_SUCCESS;
-
     }
 
-    /* if there's a config file, use that one otherwise use the 'rc' file */
-    char *config_file;
-    if (NULL == (config_file = generic_config_file_get()))
-    {
-        /* load the config of rc file */
-        if (FAIL(return_code = config_load_rc(rc_file)))
-        {
-            dnscore_finalize();
 
-            return EXIT_FAILURE;
+
+
+    /* load the config of rc file */
+    if (FAIL(return_code = config_load_rc(rc_file)))
+    {
+        osformatln(termerr, "config load rc file '%s' failed: %r", rc_file, return_code);
+        flusherr();
+
+        dnscore_finalize();
+
+        return EXIT_FAILURE;
+    }
+
+    if(return_code == 0)
+    {
+        config_error_s cfgerr;
+        config_value_set_to_default("yadifa", "config_file", &cfgerr);
+
+        char *config_file;
+        if (NULL != (config_file = generic_config_file_get()))
+        {
+            if (FAIL(return_code = config_load_rc(config_file)))
+            {
+                osformatln(termerr, "config load file '%s' failed: %r", config_file, return_code);
+                flusherr();
+
+                dnscore_finalize();
+
+                return EXIT_FAILURE;
+            }
         }
     }
-    else
-    {
-        /* load the config of rc file */
-        if (FAIL(return_code = config_load_rc(config_file)))
-        {
-            dnscore_finalize();
 
-            return EXIT_FAILURE;
-        }
-    }
+
 
 
     if(FAIL(return_code = generic_config_finalise()))
@@ -266,7 +318,13 @@ main(int argc, char *argv[])
     /* finally run "the command" */
 
 
-    return_code = generic_run();
+    if(FAIL(return_code = generic_run()))
+    {
+        osformatln(termerr, "error: %r", return_code);
+        flusherr();
+
+        return EXIT_FAILURE;
+    }
 
 
 

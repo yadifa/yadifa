@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -65,7 +65,6 @@
 
 #include "dnsdb/rrsig_updater.h"
 #include "dnsdb/nsec3_rrsig_updater.h"
-#include "dnsdb/zdb_zone.h"
 
 #define MODULE_MSG_HANDLE g_dnssec_logger
 
@@ -78,6 +77,8 @@
  *****************************************************************************/
 
 #define NSEC3_RRSIG_TTLRDATA_TAG	0x5254474953334e /* RRSIGTR */
+
+
 
 static ya_result
 nsec3_rrsig_updater_thread_init(dnssec_task_s *task)
@@ -113,7 +114,7 @@ nsec3_rrsig_updater_thread_create_context(dnssec_task_s *task, s32 processor, vo
     if(processor > 0)
     {
         rrsig_context_s *ctx;
-        MALLOC_OR_DIE(rrsig_context_s*, ctx, sizeof(rrsig_context_s), GENERIC_TAG);
+        MALLOC_OR_DIE(rrsig_context_s*, ctx, sizeof(rrsig_context_s), RRSIGCTX_TAG);
 
         u32 valid_from = time(NULL);    
         nsec3_rrsig_updater_parms *parms = (nsec3_rrsig_updater_parms*)task->args;
@@ -136,7 +137,7 @@ nsec3_rrsig_updater_thread_create_context(dnssec_task_s *task, s32 processor, vo
     else
     {
         nsec3_rrsig_answer_context_s *ctx;
-        MALLOC_OR_DIE(nsec3_rrsig_answer_context_s*, ctx, sizeof(nsec3_rrsig_answer_context_s), GENERIC_TAG);
+        MALLOC_OR_DIE(nsec3_rrsig_answer_context_s*, ctx, sizeof(nsec3_rrsig_answer_context_s), N3ANSCTX_TAG);
         ctx->task = task;
         ctx->items = NULL;
         *ctxp = ctx;
@@ -152,7 +153,7 @@ nsec3_rrsig_updater_thread_destroy_context(dnssec_task_s *task, s32 processor, v
     
     if(processor > 0)
     {
-        rrsig_updater_parms *parms = (rrsig_updater_parms*)task->args;
+        nsec3_rrsig_updater_parms *parms = (nsec3_rrsig_updater_parms*)task->args;
         rrsig_context_s *ctx = (rrsig_context_s*)ctx_;
 
         parms->good_signatures += ctx->good_signatures;
@@ -164,7 +165,11 @@ nsec3_rrsig_updater_thread_destroy_context(dnssec_task_s *task, s32 processor, v
     }
     else
     {
+        nsec3_rrsig_updater_parms *parms = (nsec3_rrsig_updater_parms*)task->args;
         nsec3_rrsig_answer_context_s *ctx = (nsec3_rrsig_answer_context_s*)ctx_;
+        yassert(parms->to_commit == NULL);
+        parms->to_commit = ctx->items;
+        ctx->items = NULL;
         ctx->task = NULL;
         free(ctx);
     }
@@ -238,9 +243,27 @@ nsec3_rrsig_updater_update_nsec3(rrsig_context_s *sig_context, nsec3_rrsig_updat
             continue;
         }
 
-        rrsig_context_set_key(sig_context, key);
+        rrsig_context_set_current_key(sig_context, key);
 
-        sig_count += rrsig_update_records(sig_context, key, tmp_nsec3_ttlrdata, TYPE_NSEC3, TRUE);
+        sig_count += rrsig_update_rrset_with_key(sig_context, tmp_nsec3_ttlrdata, TYPE_NSEC3, key, TRUE);
+    }
+    
+    zdb_packed_ttlrdata* rrsig_sll = item->rrsig;
+
+    time_t now = time(NULL);
+        
+    while(rrsig_sll != NULL)
+    {
+        if(RRSIG_VALID_UNTIL(rrsig_sll) < now)
+        {
+#if RRSIG_DUMP >= 3
+            log_debug5("rrsig: destroying expired signature (%{digest32h}.%{dnsname} NSEC3)", item->digest, sig_context->origin);
+#endif
+            rrsig_context_append_delete_signature(sig_context, rrsig_sll);
+            ++sig_count;
+        }
+
+        rrsig_sll = rrsig_sll->next;
     }
     
     rrsig_context_update_quota(sig_context, sig_count);
@@ -278,7 +301,7 @@ nsec3_rrsig_updater_thread(void* context_)
 #if DNSSEC_DEBUGLEVEL>0
     int id = context->id;
 
-    log_debug("nsec3_rrsig_updater_thread(%i): starting an UPDATER thread", id);
+    log_debug("nsec3_rrsig_updater_thread(%x): starting an UPDATER thread", id);
 #endif
 
     /*
@@ -292,7 +315,7 @@ nsec3_rrsig_updater_thread(void* context_)
     for(;;)
     {
 #if DNSSEC_DEBUGLEVEL>1
-        log_debug("nsec3_rrsig_updater_thread(%i): dequeue (WAIT)", id);
+        log_debug("nsec3_rrsig_updater_thread(%x): dequeue (WAIT)", id);
 #endif
 
         nsec3_rrsig_update_item_s *query = (nsec3_rrsig_update_item_s*)threaded_queue_dequeue(dnssec_task_query_queue);
@@ -300,7 +323,7 @@ nsec3_rrsig_updater_thread(void* context_)
         if(query == NULL)
         {
 #if DNSSEC_DEBUGLEVEL>1
-            log_debug("nsec3_rrsig_updater_thread(%i): stop", id);
+            log_debug("nsec3_rrsig_updater_thread(%x): stop", id);
 #endif
 
             break;
@@ -308,7 +331,7 @@ nsec3_rrsig_updater_thread(void* context_)
         
         if(rrsig_context_get_quota(sig_context) <= 0)
         {
-            log_debug("quota exceeded, ignoring signature query");
+            log_debug1("quota exceeded, postponing signature query");
             free(query);
             
             task->stop_task = true;
@@ -329,7 +352,7 @@ nsec3_rrsig_updater_thread(void* context_)
          ******************************************************************/
 
 #if DNSSEC_DEBUGLEVEL>1
-        log_debug("nsec3_rrsig_updater_thread(%i): enqueue (RESULT)", id);
+        log_debug("nsec3_rrsig_updater_thread(%x): enqueue (RESULT)", id);
 #endif
 
         yassert(query->item != NULL);
@@ -337,7 +360,7 @@ nsec3_rrsig_updater_thread(void* context_)
         threaded_queue_enqueue(dnssec_task_answer_queue, query);
 
 #if DNSSEC_DEBUGLEVEL>1
-        log_debug("nsec3_rrsig_updater_thread(%i): done", id);
+        log_debug("nsec3_rrsig_updater_thread(%x): done", id);
 #endif
     }
 
@@ -346,7 +369,7 @@ nsec3_rrsig_updater_thread(void* context_)
     ERR_remove_state(0);
 
 #if DNSSEC_DEBUGLEVEL>0
-    log_debug("nsec3_rrsig_updater_thread(%i): exit", id);
+    log_debug("nsec3_rrsig_updater_thread(%x): exit", id);
 #endif
 
     return NULL;
@@ -395,13 +418,13 @@ nsec3_rrsig_updater_result_process(nsec3_rrsig_answer_context_s *answer_context)
         if((task->removed_rrsig_sll != NULL) || (task->added_rrsig_sll != NULL))
         {
             nsec3_rrsig_updater_result_process_item_s *item;
-            ZALLOC_ARRAY_OR_DIE(nsec3_rrsig_updater_result_process_item_s *, item, sizeof(nsec3_rrsig_updater_result_process_item_s), GENERIC_TAG);
+            ZALLOC_ARRAY_OR_DIE(nsec3_rrsig_updater_result_process_item_s *, item, sizeof(nsec3_rrsig_updater_result_process_item_s), N3RSURPI_TAG);
             item->next = to_commit;
             to_commit = item;
             item->added_rrsig_sll = task->added_rrsig_sll;
             item->removed_rrsig_sll = task->removed_rrsig_sll;
             item->item = task->item;
-            //nsec3_update_rrsig_commit(task->removed_rrsig_sll, task->added_rrsig_sll, task->item, context->task->zone);
+            /// @note 20160502 eedf -- DO NOT DO THIS ANYMORE : nsec3_update_rrsig_commit(task->removed_rrsig_sll, task->added_rrsig_sll, task->item, context->task->zone);
         }
         
         free(task);
@@ -415,8 +438,24 @@ nsec3_rrsig_updater_result_process(nsec3_rrsig_answer_context_s *answer_context)
         }
 #endif
     }
+    
+    //
 
-    answer_context->items = to_commit;
+    if(answer_context->items == NULL)
+    {
+        answer_context->items = to_commit;
+    }
+    else
+    {
+        struct nsec3_rrsig_updater_result_process_item_s *last = answer_context->items;
+        while(last->next != NULL)
+        {
+            last = last->next;
+        }
+        last->next = to_commit;
+    }
+    
+    //
     
     ERR_remove_state(0);
 
@@ -452,11 +491,12 @@ nsec3_rrsig_updater_filter_label(dnssec_task_s* task, zdb_rr_label *rr_label)
 static ya_result
 nsec3_rrsig_updater_filter_nsec3_item(dnssec_task_s* task, nsec3_zone_item *item, nsec3_zone_item *next)
 {   
-    rrsig_updater_parms *parms = (rrsig_updater_parms*)task->args;
-           
+    nsec3_rrsig_updater_parms *parms = (nsec3_rrsig_updater_parms*)task->args;
+    
     if(parms->signatures_are_verified)
     {        
         zdb_packed_ttlrdata *rrsig = item->rrsig;
+        u32 unknown_zsk = 0;
         
         if(rrsig != NULL)
         {
@@ -470,10 +510,19 @@ nsec3_rrsig_updater_filter_nsec3_item(dnssec_task_s* task, nsec3_zone_item *item
                 {
                     return DNSSEC_THREAD_TASK_FILTER_ACCEPT;
                 }
+                
+                unknown_zsk += rrsig_updater_mark_tag(&parms->zsk_tag_set, RRSIG_KEY_TAG(rrsig));
 
                 rrsig = rrsig->next;
             }
             while(rrsig != NULL);
+            
+            bool redo_zsk = rrsig_updater_clear_tags(&parms->zsk_tag_set);
+            
+            if(redo_zsk|(unknown_zsk != 0))
+            {
+                return DNSSEC_THREAD_TASK_FILTER_ACCEPT;
+            }
         }
         else
         {
@@ -537,6 +586,17 @@ nsec3_rrsig_updater_process_zone(nsec3_rrsig_updater_parms *parms)
         /* work */
         return_code = dnssec_process_zone_nsec3(task);
         /* release */
+        if(ISOK(return_code))
+        {
+            return_code = 0;
+            
+            struct nsec3_rrsig_updater_result_process_item_s *item = parms->to_commit;
+            while(item != NULL)
+            {
+                ++return_code;
+                item = item->next;
+            }
+        }
     }
     
     return return_code;
@@ -550,29 +610,33 @@ void
 nsec3_rrsig_updater_commit(nsec3_rrsig_updater_parms *parms)
 {
     log_debug1("nsec3_rrsig_updater_commit(%p)", parms);
-            
+        
     dnssec_task_s *task = &parms->task;
+
+    struct nsec3_rrsig_updater_result_process_item_s *to_commit = NULL;
     
-    nsec3_rrsig_answer_context_s *context = (nsec3_rrsig_answer_context_s*)task->contexts[0];
-    
-    if(context != NULL && context->items != NULL)
+    if(parms->to_commit != NULL)
     {
-        // commit all the signatures changes
-        
-        struct nsec3_rrsig_updater_result_process_item_s *to_commit = context->items;
-        
-        context->items = NULL;
-        
-        while(to_commit != NULL)
+        to_commit = parms->to_commit;
+    }
+    else if(task->contexts != NULL && task->processor_threads_count > 0)
+    {
+        nsec3_rrsig_answer_context_s *context = (nsec3_rrsig_answer_context_s*)task->contexts[0];        
+        if(context != NULL && context->items != NULL)
         {
-            nsec3_rrsig_updater_result_process_item_s *item = to_commit;
-            
-            nsec3_update_rrsig_commit(item->removed_rrsig_sll, item->added_rrsig_sll, item->item, context->task->zone);
-            
-            to_commit = to_commit->next;
-            
-            ZFREE_ARRAY(item, sizeof(nsec3_rrsig_updater_result_process_item_s));
+            to_commit = context->items;
+            context->items = NULL;
         }
+    }
+    
+    // commit all the signatures changes
+    
+    while(to_commit != NULL)
+    {
+         nsec3_rrsig_updater_result_process_item_s *item = to_commit;
+         nsec3_update_rrsig_commit(item->removed_rrsig_sll, item->added_rrsig_sll, item->item, parms->task.zone);
+         to_commit = to_commit->next;
+         ZFREE_ARRAY(item, sizeof(nsec3_rrsig_updater_result_process_item_s));
     }
 }
 
@@ -590,6 +654,39 @@ nsec3_rrsig_updater_finalize(nsec3_rrsig_updater_parms *parms)
     }
     
     dnssec_process_finalize(&parms->task);
+}
+
+ya_result
+nsec3_rrsig_generate_signatures(rrsig_context_s *context, nsec3_zone* n3, struct nsec3_node* item, struct nsec3_node* next)
+{
+    log_debug1("nsec3_rrsig_update(%p, %p, %{digest32h}@%p, %p)", context, n3, item->digest, item, next);
+    u8 digest_len;
+    u8 digest_to_dnsname[MAX_DOMAIN_LENGTH + 1];
+    u8 zdb_packed_ttlrdata_buffer[sizeof(zdb_packed_ttlrdata) - 1 + 1 + 2 + 1 + 255 + 64 + 8192];
+    zdb_packed_ttlrdata* tmp_nsec3_ttlrdata = (zdb_packed_ttlrdata*)&zdb_packed_ttlrdata_buffer[0];
+    digest_len = NSEC3_NODE_DIGEST_SIZE(item);
+    
+    digest_to_dnsname[0] = BASE32HEX_ENCODED_LEN(digest_len);
+    base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), digest_len, (char*)&digest_to_dnsname[1]);
+    
+    tmp_nsec3_ttlrdata->next = NULL;
+    tmp_nsec3_ttlrdata->ttl = context->min_ttl;
+    u32 n3_rdata_size = NSEC3_ZONE_RDATA_SIZE(n3);
+    u8 *n3_rdata = &tmp_nsec3_ttlrdata->rdata_start[0];
+    MEMCOPY(n3_rdata, &n3->rdata[0], n3_rdata_size);
+    MEMCOPY(&n3_rdata[n3_rdata_size], next->digest, digest_len + 1);
+    n3_rdata_size += digest_len + 1;
+    MEMCOPY(&n3_rdata[n3_rdata_size], item->type_bit_maps, item->type_bit_maps_size);
+    n3_rdata_size += item->type_bit_maps_size;
+    tmp_nsec3_ttlrdata->rdata_size = n3_rdata_size;
+    
+    yassert(&n3_rdata[n3_rdata_size] < &zdb_packed_ttlrdata_buffer[sizeof(zdb_packed_ttlrdata_buffer)]);
+    
+    ya_result ret;
+    
+    ret = rrsig_generate_signatures(context, digest_to_dnsname, TYPE_NSEC3, tmp_nsec3_ttlrdata, &item->rrsig);
+    
+    return ret;
 }
 
 /** @} */

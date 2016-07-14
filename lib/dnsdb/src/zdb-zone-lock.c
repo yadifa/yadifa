@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief Functions used to manipulate a zone
@@ -192,6 +192,35 @@ zdb_zone_lock_set_monitor()
 }
 #endif
 
+bool
+zdb_zone_islocked(zdb_zone *zone)
+{
+    mutex_t *mutex = &zone->lock_mutex;   
+    mutex_lock(mutex);
+    u8 owner = zone->lock_owner;
+    mutex_unlock(mutex);
+    
+    return owner != 0;
+}
+
+/**
+ * Returns TRUE iff the zone is locked by a writer (any other owner value than nobody and simple reader)
+ * 
+ * @param zone
+ * @return 
+ */
+
+bool
+zdb_zone_iswritelocked(zdb_zone *zone)
+{
+    mutex_t *mutex = &zone->lock_mutex;   
+    mutex_lock(mutex);
+    u8 owner = zone->lock_owner;
+    mutex_unlock(mutex);
+    
+    return owner > ZDB_ZONE_MUTEX_SIMPLEREADER;
+}
+
 void
 zdb_zone_lock(zdb_zone *zone, u8 owner)
 {
@@ -232,7 +261,7 @@ zdb_zone_lock(zdb_zone *zone, u8 owner)
         if(d > MUTEX_WAITED_TOO_MUCH_TIME_US)
         {
             log_warn("zdb_zone_lock(%{dnsname},%x) : waited for %llius already ...", zone->origin, owner, d);
-            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "zdb_zone_lock:");
+            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "zdb_zone_double_lock:");
         }
         cond_timedwait(&zone->lock_cond, mutex, MUTEX_WAITED_TOO_MUCH_TIME_US);
 #else
@@ -549,7 +578,7 @@ zdb_zone_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
         if(d > MUTEX_WAITED_TOO_MUCH_TIME_US)
         {
             log_warn("zdb_zone_transfer_lock(%{dnsname},%x,%x) : waited for %llius already ...", zone->origin, owner, secondary_owner, d);
-            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "zdb_zone_transfer_lock:");
+            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "zdb_zone_double_lock:");
         }
 #endif
         
@@ -671,7 +700,7 @@ zdb_zone_exchange_locks(zdb_zone *zone, u8 owner, u8 secondary_owner)
         if(d > MUTEX_WAITED_TOO_MUCH_TIME_US)
         {
             log_warn("zdb_zone_transfer_lock(%{dnsname},%x,%x) : waited for %llius already ...", zone->origin, owner, secondary_owner, d);
-            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "zdb_zone_transfer_lock:");
+            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "zdb_zone_double_lock:");
         }
 #endif
         

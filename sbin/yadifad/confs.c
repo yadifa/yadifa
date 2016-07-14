@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup config Configuration handling
  *  @ingroup yadifad
  *  @brief
@@ -54,6 +54,7 @@
 
 #if HAS_DNSSEC_SUPPORT != 0
 #include <dnsdb/dnssec.h>
+#include <dnsdb/dnssec-keystore.h>
 #endif
 
 #include <dnscore/base64.h>
@@ -68,7 +69,9 @@
 #include <dnscore/config-cmdline.h>
 #include <dnscore/tsig.h>
 
+#if HAS_DNSSEC_SUPPORT
 #include <dnsdb/dnssec.h>
+#endif
 
 #include "buildinfo.h"
 
@@ -141,6 +144,8 @@ CMDLINE_SECTION("main")
 CMDLINE_OPT("config",'c',"config_file")
 CMDLINE_BOOL("daemon", 'd', "daemon")
 CMDLINE_BOOL_NOT("nodaemon", 0, "daemon")
+CMDLINE_BOOL("log", 'L', "log_from_start")
+
 CMDLINE_OPT("uid", 'u', "uid")
 CMDLINE_OPT("gid", 'g', "gid")
 CMDLINE_OPT("port", 'P', "server_port")
@@ -165,7 +170,11 @@ config_logger_setdefault()
     for(const struct logger_name_handle_s *name_handle = logger_name_handles; name_handle->name != NULL; name_handle++)
     {
         logger_handle_create(name_handle->name, name_handle->handlep);
+#ifndef DEBUG
         logger_handle_add_channel(name_handle->name, MSG_PROD_MASK, default_channel);
+#else
+        logger_handle_add_channel(name_handle->name, MSG_ALL_MASK, default_channel);
+#endif
     }
 
 #ifdef DEBUG
@@ -195,6 +204,7 @@ yadifad_print_usage()
           "\t\t--uid/-u userid             : overrides the uid setting\n"
           "\t\t--gid/-g groupid            : overrides the gid setting\n"
           "\t\t--port/-P port              : overrides the server-port setting\n"
+
           "\n"
 
           "\n"
@@ -260,9 +270,10 @@ ya_result config_register_control(s32 priority);
 #if HAS_RRL_SUPPORT
 ya_result config_register_rrl(s32 priority);
 #endif
-#if HAS_NSID_SUPPORT
+#if DNSCORE_HAS_NSID_SUPPORT
 ya_result config_register_nsid(s32 priority);
 #endif
+ya_result config_register_dnssec_policy(const char *null_or_key_name, s32 priority);
 
 ya_result
 yadifad_config_init()
@@ -281,56 +292,69 @@ yadifad_config_init()
     
     // to handle version & help
     
-    if(FAIL(return_code = config_register_cmdline(1)))
+    int priority = 0;
+    
+    if(FAIL(return_code = config_register_cmdline(priority++)))
     {
         return return_code;
     }
             
 #if HAS_TSIG_SUPPORT
-    if(FAIL(return_code = config_register_key(NULL, 2)))
+    if(FAIL(return_code = config_register_key(NULL, priority++)))
     {
         return return_code;
     }
 #endif
     
 #if HAS_ACL_SUPPORT
-    if(FAIL(return_code = config_register_acl(NULL, 3)))
+    if(FAIL(return_code = config_register_acl(NULL, priority++)))
+    {
+        return return_code;
+    }
+#endif
+
+#if HAS_MASTER_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT && HAS_DNSSEC_SUPPORT    
+    if(FAIL(return_code = config_register_dnssec_policy(NULL, priority)))
     {
         return return_code;
     }
 #endif
     
-    if(FAIL(return_code = config_register_main(4)))
+    priority += 5;
+    
+    if(FAIL(return_code = config_register_main(priority++)))
     {
         return return_code;
     }
     
-    if(FAIL(return_code = config_register_logger(NULL, NULL, 5))) // 5 & 6
+    if(FAIL(return_code = config_register_logger(NULL, NULL,priority))) // 5 & 6
     {
         return return_code;
     }
+    
+    priority += 2;
     
 #if HAS_CTRL
-    if(FAIL(return_code = config_register_control(7)))
+    if(FAIL(return_code = config_register_control(priority++)))
     {
         return return_code;
     }
 #endif
     
-    if(FAIL(return_code = config_register_zone(NULL, 8)))
+    if(FAIL(return_code = config_register_zone(NULL, priority++)))
     {
         return return_code;
     }
 
 #if HAS_RRL_SUPPORT
-    if(FAIL(return_code = config_register_rrl(9)))
+    if(FAIL(return_code = config_register_rrl(priority++)))
     {
         return return_code;
     }
 #endif
     
-#if HAS_NSID_SUPPORT
-    if(FAIL(return_code = config_register_nsid(10)))
+#if DNSCORE_HAS_NSID_SUPPORT
+    if(FAIL(return_code = config_register_nsid(priority++)))
     {
         return return_code;
     }
@@ -514,9 +538,9 @@ yadifad_config_update(const char *config_file)
     config_error_s cfgerr;
     ya_result return_code = ERROR;
     
-    /// @todo apply ZONE_STATUS_DROP_AFTER_RELOAD
+    /// @todo 20130930 edf -- apply ZONE_STATUS_DROP_AFTER_RELOAD
     
-    /// @todo There MUST be an event that clears a "reloading" status, in order
+    /// @todo 20131203 edf -- There MUST be an event that clears a "reloading" status, in order
     ///       to block smashing the HUPs
     
     if(!database_zone_is_reconfigure_enabled())
@@ -534,7 +558,7 @@ yadifad_config_update(const char *config_file)
         if(ISOK(return_code =  config_read_section(config_file, &cfgerr, "key")))
         {
             if(ISOK(return_code =  config_read_section(config_file, &cfgerr, "zone")))
-            {
+            {                
                 database_do_drop_after_reload();
             }
             else
@@ -562,6 +586,9 @@ yadifad_config_update(const char *config_file)
         }
         
         database_zone_reconfigure_end();
+#if DNSCORE_HAS_DNSSEC_SUPPORT
+        dnssec_keystore_reload();
+#endif
     }
     else
     {
@@ -603,9 +630,9 @@ yadifad_config_update_zone(const char *config_file, const u8 *fqdn)
     config_error_s cfgerr;
     ya_result return_code = ERROR;
     
-    /// @todo apply ZONE_STATUS_DROP_AFTER_RELOAD
+    /// @todo 20140512 edf -- apply ZONE_STATUS_DROP_AFTER_RELOAD
     
-    /// @todo There MUST be an event that clears a "reloading" status, in order
+    /// @todo 20140512 edf -- There MUST be an event that clears a "reloading" status, in order
     ///       to block smashing the HUPs
     
     if(!database_zone_is_reconfigure_enabled())

@@ -32,7 +32,7 @@ dnl
 dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 5826 $])
+AC_REVISION([$Revision: 6237 $])
 AC_INIT([dnscore],m4_esyscmd([svn info 2> /dev/null | grep 'Last Changed Rev: ' | sed -re 's/.*: (.*)/Revision: \1 $/' -e 's/^/$/' >> revision.txt;echo $(cat VERSION)-$(grep \$Revision: * | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[bugreport@yadifa.eu])
 
 echo
@@ -70,7 +70,7 @@ AC_PROG_LIBTOOL
 
 dnl Checks for libraries.
 AC_CHECK_LIB([c], [printf])
-AC_CHECK_LIB([pthread], [pthread_mutex_init])
+AC_SEARCH_LIBS([pthread_create],[pthread],,[exit 1])
 
 dnl Checks for header files.
 AC_HEADER_STDC
@@ -126,6 +126,7 @@ AC_SYS_LARGEFILE
 AC_COMPILER_CHECK
 AC_PTHREAD_SPINLOCK_CHECK
 AC_PTHREAD_SETNAME_NP_CHECK
+AC_PTHREAD_SETAFFINITY_NP_CHECK
 AC_TIMEGM_CHECK
 
 AC_YADIFA_FEATURES
@@ -178,14 +179,10 @@ echo
 echo "ZALLOC .............................. : $enable_zalloc"
 echo "ZALLOC STATISTICS ................... : $enable_zalloc_statistics"
 echo "ZALLOC DEBUG ........................ : $enable_zalloc_debug"
-echo "ACL ................................. : $enable_acl"
-echo "TSIG ................................ : $enable_tsig"
 echo "MASTER .............................. : $enable_master"
 echo "DYNUPDATE ........................... : $enable_dynupdate"
 echo "RRSIG MANAGEMENT .................... : $enable_rrsig_management"
 echo "CTRL ................................ : $enable_ctrl"
-echo "NSEC ................................ : $enable_nsec"
-echo "NSEC3 ............................... : $enable_nsec3"
 echo "RRL ................................. : $enable_rrl"
 
 echo

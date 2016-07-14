@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 #include "dnscore/dnscore-config.h"
 #include "dnscore/bytearray_input_stream.h"
 #include "dnscore/bytearray_output_stream.h"
@@ -38,6 +38,8 @@
 #include "dnscore/format.h"
 
 #include "dnscore/cmdline.h"
+
+#define CMDLOSAP_TAG 0x5041534f4c444d43
 
 static ptr_set g_cmdline_sections = PTR_SET_ASCIIZ_EMPTY;
 static bool cmdline_init_error_codes_done = FALSE;
@@ -68,6 +70,7 @@ i
 thread-count || t , "10"
 #endif
 */
+
 ya_result
 cmdline_process_argument(const cmdline_desc_s *desc, const char *section_name, const char *arg)
 {
@@ -86,7 +89,7 @@ cmdline_process_argument(const cmdline_desc_s *desc, const char *section_name, c
 
     if(node->value == NULL)
     {
-        MALLOC_OR_DIE(output_stream*, os, sizeof(output_stream), GENERIC_TAG);
+        MALLOC_OR_DIE(output_stream*, os, sizeof(output_stream), CMDLOSAP_TAG);
         bytearray_output_stream_init(os, NULL, 0);
 
         osformatln(os, "<%s>", section_name);
@@ -167,7 +170,7 @@ cmdline_get_opt_long(const cmdline_desc_s *table, const char *name, const char *
 
     for(const cmdline_desc_s *desc = table; desc->name != NULL; desc++)
     {
-        if (desc->flags == CMDLINE_FLAG_SECTION)
+        if(desc->flags == CMDLINE_FLAG_SECTION)
         {
             section_name = desc->name;
 
@@ -202,7 +205,7 @@ cmdline_get_opt_short(const cmdline_desc_s *table, const char *name, const char 
     {
         for(const cmdline_desc_s *desc = table; desc->name != NULL; desc++)
         {
-            if (desc->flags == CMDLINE_FLAG_SECTION)
+            if(desc->flags == CMDLINE_FLAG_SECTION)
             {
                 section_name = desc->name;
 
@@ -349,7 +352,7 @@ cmdline_parse(const cmdline_desc_s *table, int argc, char **argv, cmdline_filter
         osformatln(os, "</%s>", section_name);
 
         u32 buffer_size = bytearray_output_stream_size(os);
-        u8 *buffer      = bytearray_output_stream_buffer(os);
+        const u8 *buffer = bytearray_output_stream_buffer(os);
 
         output_stream_write(&complete_config_os, buffer, buffer_size);
 
@@ -364,7 +367,7 @@ cmdline_parse(const cmdline_desc_s *table, int argc, char **argv, cmdline_filter
     
     output_stream_close(&complete_config_os);
 
-    bytearray_input_stream_init(buffer, buffer_size, is, TRUE);
+    bytearray_input_stream_init(is, buffer, buffer_size, TRUE);
 
     return buffer_size;
 }

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief
@@ -124,7 +124,7 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
 
     /* Get the first SOA */
 
-    if(FAIL(err = input_stream_read_rr_header(is, rname, sizeof (rname), &rtype, &rclass, &rttl, &rdata_size)))
+    if(FAIL(err = input_stream_read_rr_header(is, rname, sizeof(rname), &rtype, &rclass, &rttl, &rdata_size)))
     {
         return err;
     }
@@ -191,7 +191,7 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
     nsec3_load_init(&nsec3_context, zone);
 #endif
 
-    MALLOC_OR_DIE(zdb_packed_ttlrdata*, tmp_ttlrdata, sizeof (zdb_ttlrdata) + RDATA_MAX_LENGTH, ZDB_RDATABUF_TAG);
+    MALLOC_OR_DIE(zdb_packed_ttlrdata*, tmp_ttlrdata, sizeof(zdb_ttlrdata) + RDATA_MAX_LENGTH, ZDB_RDATABUF_TAG);
 
     /* We do not need tmp_ttlrdata and rdata at the same time, let's spare memory */
 
@@ -199,7 +199,7 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
 
     /* Read the next SOA (sub or end) */
 
-    if(FAIL(err = input_stream_read_rr_header(is, rname, sizeof (rname), &rtype, &rclass, &rttl, &rdata_size)))
+    if(FAIL(err = input_stream_read_rr_header(is, rname, sizeof(rname), &rtype, &rclass, &rttl, &rdata_size)))
     {
         zdb_zone_release(zone);
         
@@ -280,7 +280,7 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
         {
             /* Load the next record without the data (sub) */
 
-            if(FAIL(err = input_stream_read_rr_header(is, rname, sizeof (rname), &rtype, &rclass, &rttl, &rdata_size)))
+            if(FAIL(err = input_stream_read_rr_header(is, rname, sizeof(rname), &rtype, &rclass, &rttl, &rdata_size)))
             {
                 break;
             }
@@ -416,7 +416,7 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
         {
             /* Load the record without the data (add) */
 
-            if(FAIL(err = input_stream_read_rr_header(is, rname, sizeof (rname), &rtype, &rclass, &rttl, &rdata_size)))
+            if(FAIL(err = input_stream_read_rr_header(is, rname, sizeof(rname), &rtype, &rclass, &rttl, &rdata_size)))
             {
                 break;
             }
@@ -579,7 +579,7 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
          *   compile NSEC if any
          *	 compile NSEC3 if any
          *
-         * @todo: I'm only doing NSEC3 here. Do NSEC as well.
+         * @todo 20140526 edf -- I'm only doing NSEC3 here. Do NSEC as well.
          */
         
         err = nsec3_load_compile(&nsec3_context);
@@ -595,7 +595,7 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
             
             nsec3_load_destroy(&nsec3_context);
 #endif
-            /// @todo edf 20141008 -- why is this done here ? The zone comes from the label already : zone_label->zone = zone;
+            /// @todo 20141008 edf -- why is this done here ? The zone comes from the label already : zone_label->zone = zone;
 
             return err;
 #if ZDB_HAS_NSEC3_SUPPORT != 0

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnspacket DNS Messages
  *  @ingroup dnscore
  *  @brief
@@ -177,7 +177,7 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
         record_offset = purd.offset;
 #endif
 
-        if(FAIL(packet_reader_read_fqdn(&purd, tsigname, sizeof (tsigname))))
+        if(FAIL(packet_reader_read_fqdn(&purd, tsigname, sizeof(tsigname))))
         {
             /* oops */
             
@@ -205,7 +205,7 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
                 {
                     u32 rdlen = ntohs(tctr.rdlen);
                     
-#if HAS_NSID_SUPPORT
+#if DNSCORE_HAS_NSID_SUPPORT
                     if(rdlen != 0)
                     {
                         u32 next = purd.offset + rdlen;
@@ -234,6 +234,7 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
                     {
                         mesg->size_limit = MAX(EDNS0_MIN_LENGTH, ntohs(tctr.qclass)); /* our own limit, taken from the config file */
                         mesg->edns = TRUE;
+
                         mesg->rcode_ext = tctr.ttl;
     
                         log_debug("EDNS: udp-size=%d rcode-ext=%08x desc=%04x", mesg->size_limit, tctr.ttl, rdlen);
@@ -421,7 +422,7 @@ message_process_answer_additionals(message_data *mesg, u8* s, u16 ar_count)
         record_offset = purd.offset;
 #endif
 
-        if(FAIL(packet_reader_read_fqdn(&purd, tsigname, sizeof (tsigname))))
+        if(FAIL(packet_reader_read_fqdn(&purd, tsigname, sizeof(tsigname))))
         {
             /* oops */
             
@@ -779,7 +780,7 @@ message_process_query(message_data *mesg)
 #endif
     mesg->rcode_ext  = 0;
     mesg->edns       = FALSE;
-#if HAS_NSID_SUPPORT
+#if DNSCORE_HAS_NSID_SUPPORT
     mesg->nsid       = FALSE;
 #endif
 
@@ -911,7 +912,7 @@ message_process(message_data *mesg)
 #endif
             mesg->rcode_ext  = 0;
             mesg->edns       = FALSE;
-#if HAS_NSID_SUPPORT
+#if DNSCORE_HAS_NSID_SUPPORT
             mesg->nsid       = FALSE;
 #endif
             
@@ -1035,7 +1036,7 @@ message_process(message_data *mesg)
 #endif
             mesg->rcode_ext  = 0;
             mesg->edns       = FALSE;
-#if HAS_NSID_SUPPORT
+#if DNSCORE_HAS_NSID_SUPPORT
             mesg->nsid       = FALSE;
 #endif
             /*
@@ -1146,7 +1147,7 @@ message_process(message_data *mesg)
 #endif
             mesg->rcode_ext  = 0;
             mesg->edns       = FALSE;
-#if HAS_NSID_SUPPORT
+#if DNSCORE_HAS_NSID_SUPPORT
             mesg->nsid       = FALSE;
 #endif
             /*
@@ -1261,7 +1262,7 @@ message_process(message_data *mesg)
 #endif
             mesg->rcode_ext  = 0;
             mesg->edns       = FALSE;
-#if HAS_NSID_SUPPORT
+#if DNSCORE_HAS_NSID_SUPPORT
             mesg->nsid       = FALSE;
 #endif
             /*
@@ -1307,7 +1308,7 @@ message_process(message_data *mesg)
 #endif
                 mesg->rcode_ext  = 0;
                 mesg->edns       = FALSE;
-#if HAS_NSID_SUPPORT
+#if DNSCORE_HAS_NSID_SUPPORT
                 mesg->nsid       = FALSE;
 #endif
                 mesg->status = FP_NOT_SUPP_OPC;
@@ -1356,7 +1357,7 @@ message_process_lenient(message_data *mesg)
     mesg->ar_start   = NULL;
     mesg->rcode_ext  = 0;
     mesg->edns       = FALSE;
-#if HAS_NSID_SUPPORT
+#if DNSCORE_HAS_NSID_SUPPORT
     mesg->nsid       = FALSE;
 #endif
 
@@ -1557,8 +1558,8 @@ void message_make_message(message_data *mesg, u16 id, const u8 *qname, u16 qtype
 #if DNSCORE_HAS_TSIG_SUPPORT
     mesg->tsig.tsig = NULL;
 #endif
-    mesg->ar_start = &mesg->buffer[uninitialised_packet_writer->packet_offset];
-    mesg->send_length = uninitialised_packet_writer->packet_offset;
+    mesg->send_length = packet_writer_get_offset(uninitialised_packet_writer);
+    mesg->ar_start = &mesg->buffer[mesg->send_length];
     
     if(mesg->send_length < UDPPACKET_MAX_LENGTH)
     {
@@ -1630,9 +1631,9 @@ message_make_ixfr_query(message_data *mesg, u16 id, const u8 *qname, u32 soa_ttl
 #if DNSCORE_HAS_TSIG_SUPPORT
     mesg->tsig.tsig = NULL;
 #endif
-    mesg->ar_start = &mesg->buffer[pw.packet_offset];
+    mesg->ar_start = &mesg->buffer[packet_writer_get_offset(&pw)];
     mesg->size_limit = UDPPACKET_MAX_LENGTH;
-    mesg->send_length = pw.packet_offset;
+    mesg->send_length = packet_writer_get_offset(&pw);
     mesg->status = FP_MESG_OK;
 }
 
@@ -1737,7 +1738,7 @@ message_make_error_ext(message_data *mesg, u16 error_code)
 }
 
 ya_result
-message_query_tcp(message_data *mesg, host_address *server)
+message_query_tcp(message_data *mesg, const host_address *server)
 {
     /* connect the server */
     
@@ -1815,7 +1816,7 @@ message_query_tcp(message_data *mesg, host_address *server)
 }
 
 ya_result
-message_query_tcp_ex(message_data *mesg, host_address *server, message_data *answer)
+message_query_tcp_ex(message_data *mesg, const host_address *server, message_data *answer)
 {
     /* connect the server */
     
@@ -1898,7 +1899,7 @@ message_query_tcp_ex(message_data *mesg, host_address *server, message_data *ans
 }
 
 ya_result
-message_query_tcp_with_timeout(message_data *mesg, host_address *address,  u8 to_sec)
+message_query_tcp_with_timeout(message_data *mesg, const host_address *address,  u8 to_sec)
 {
 
     ya_result                                                  return_value;
@@ -1954,12 +1955,15 @@ message_query_tcp_with_timeout(message_data *mesg, host_address *address,  u8 to
 
 
 ya_result
-message_query_udp(message_data *mesg, host_address *server)
+message_query_udp(message_data *mesg, const host_address *server)
 {
     ya_result                                         return_code = SUCCESS;
 
     int                                                   seconds = 0;
     int                                                  useconds = 500000;
+    
+    yassert(mesg != NULL);
+    yassert(server != NULL);
 
     return_code = message_query_udp_with_time_out(mesg, server, seconds, useconds);
 
@@ -1971,7 +1975,7 @@ message_query_udp(message_data *mesg, host_address *server)
 
 #if 1
 ya_result
-message_query_udp_with_time_out_and_retries(message_data *mesg, host_address *server, int seconds, int useconds, u8 retries, u8 flags)
+message_query_udp_with_time_out_and_retries(message_data *mesg, const host_address *server, int seconds, int useconds, u8 retries, u8 flags)
 {
     ya_result return_value = SUCCESS;
     random_ctx rndctx = thread_pool_get_random_ctx();
@@ -2042,8 +2046,11 @@ message_query_udp_with_time_out_and_retries(message_data *mesg, host_address *se
 
 
 ya_result
-message_query_udp_with_time_out(message_data *mesg, host_address *server, int seconds, int useconds)
+message_query_udp_with_time_out(message_data *mesg, const host_address *server, int seconds, int useconds)
 {
+    yassert(mesg != NULL);
+    yassert(server != NULL);
+    
     /* connect the server */
     
     ya_result                                        return_value = SUCCESS;
@@ -2162,8 +2169,12 @@ message_ixfr_query_get_serial(const message_data *mesg, u32 *serial)
 }
 
 ya_result
-message_query_serial(const u8 *origin, host_address *server, u32 *serial_out)
+message_query_serial(const u8 *origin, const host_address *server, u32 *serial_out)
 {
+    yassert(origin != NULL);
+    yassert(server != NULL);
+    yassert(serial_out != NULL);
+    
     /* do an SOA query */
     
     ya_result return_value;
@@ -2184,7 +2195,7 @@ message_query_serial(const u8 *origin, host_address *server, u32 *serial_out)
             if((MESSAGE_ID(buffer) == id) && MESSAGE_QR(buffer) &&(MESSAGE_RCODE(buffer) == RCODE_NOERROR) && (MESSAGE_QD(buffer) == NETWORK_ONE_16)&& ((MESSAGE_AN(buffer) == NETWORK_ONE_16) || (MESSAGE_NS(buffer) == NETWORK_ONE_16)))
             {
                 packet_unpack_reader_data reader;
-                packet_reader_init(&reader, buffer, soa_query_mesg.received);
+                packet_reader_init(&reader, buffer, soa_query_mesg.received); // scan-build false positive: if message_query_udp returns no-error, then soa_query_mesg.received is set
                 reader.offset =  DNS_HEADER_LENGTH;
                 packet_reader_skip_fqdn(&reader);
                 packet_reader_skip(&reader, 4);

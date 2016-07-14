@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnspacket DNS Messages
  *  @ingroup dnscore
  *  @brief
@@ -222,9 +222,9 @@ typedef struct message_data message_data;
 
 struct message_data
 {
-    u8 *ar_start; /* for the TSIG */
+    u8 *ar_start;       // for the TSIG
 
-    socketaddress other;
+    socketaddress other;// who the sender is
 
     u16 received;
     u16 size_limit;
@@ -232,22 +232,20 @@ struct message_data
     u16 reserved_;
 
     socklen_t addr_len;
-
     int sockfd;
 
     finger_print status;
-
     u32 rcode_ext;
-
-    bool edns;
-#if HAS_NSID_SUPPORT
-    bool nsid;
-#endif
 
     process_flags_t process_flags;
 
     u16 qtype;
     u16 qclass;
+    
+    bool edns;
+#if DNSCORE_HAS_NSID_SUPPORT
+    bool nsid;
+#endif
 
     char protocol;
     u8 referral;
@@ -257,8 +255,8 @@ struct message_data
     message_tsig tsig;
 #endif
 
-    u_char qname[MAX_DOMAIN_LENGTH];
-
+    u8 qname[MAX_DOMAIN_LENGTH];
+    
     /* Ensure (buffer - buffer_tcp_len) is equal to 2 ! */
     u64 __reserved_force_align__1;
     u32 __reserved_force_align__2;
@@ -267,6 +265,10 @@ struct message_data
     u8  buffer[NETWORK_BUFFER_SIZE]; /* DON'T SEPARATE THESE TWO (SECOND) */
     u64 __reserved_force_align__4;
     u8  pool_buffer[MESSAGE_POOL_SIZE]; /* A memory pool for the lookup's benefit */
+    
+    volatile u64 recv_us;
+    volatile u64 pushed_us;
+    volatile u64 popped_us;
 };
 
 
@@ -389,19 +391,19 @@ static inline u16 message_get_tcp_length(message_data *mesg)
 }
 
 
-ya_result message_query_tcp_with_timeout(message_data *mesg, host_address *server,  u8 to_sec);
-ya_result message_query_tcp(message_data *mesg, host_address *server);
-ya_result message_query_tcp_ex(message_data *mesg, host_address *server, message_data *answer);
-ya_result message_query_udp(message_data *mesg, host_address *server);
-ya_result message_query_udp_with_time_out(message_data *mesg, host_address *server, int seconds, int useconds);
-ya_result message_query_udp_with_time_out_and_retries(message_data *mesg, host_address *server, int seconds, int useconds, u8 retries, u8 flags); 
-ya_result message_query_serial(const u8 *origin, host_address *server, u32 *serial_out);
+ya_result message_query_tcp_with_timeout(message_data *mesg, const host_address *server,  u8 to_sec);
+ya_result message_query_tcp(message_data *mesg, const host_address *server);
+ya_result message_query_tcp_ex(message_data *mesg, const host_address *server, message_data *answer);
+ya_result message_query_udp(message_data *mesg, const host_address *server);
+ya_result message_query_udp_with_time_out(message_data *mesg, const host_address *server, int seconds, int useconds);
+ya_result message_query_udp_with_time_out_and_retries(message_data *mesg, const host_address *server, int seconds, int useconds, u8 retries, u8 flags); 
+ya_result message_query_serial(const u8 *origin, const host_address *server, u32 *serial_out);
 
 /*
  * Does not clone the pool.
  */
 
-message_data* message_dup(message_data *mesg);
+message_data *message_dup(message_data *mesg);
 
 ya_result message_ixfr_query_get_serial(const message_data *mesg, u32 *serial);
 

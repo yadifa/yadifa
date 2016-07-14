@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup 
  *  @ingroup dnscore
  *  @brief 
@@ -79,6 +79,11 @@ extern "C"
 // these two are for error reporting in debug builds
 #define MUTEX_LOCKED_TOO_MUCH_TIME_US 5000000
 #define MUTEX_WAITED_TOO_MUCH_TIME_US 2000000
+
+typedef pthread_cond_t  cond_t;
+
+#define COND_INITIALIZER PTHREAD_COND_INITIALIZER
+
     
 // DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
     
@@ -101,13 +106,14 @@ struct mutex_t
     volatile stacktrace trace;
     volatile pthread_t id;
     volatile u64 timestamp;
+    volatile bool wait;
     bool recursive;
     char _MTXs[4];
 };
 
 typedef struct mutex_t mutex_t;
 
-#define MUTEX_INITIALIZER {PTHREAD_MUTEX_INITIALIZER, 0, 0, 0, FALSE, {'M', 'T', 'X', sizeof(mutex_t)}}
+#define MUTEX_INITIALIZER {PTHREAD_MUTEX_INITIALIZER, 0, 0, 0, FALSE, FALSE, {'M', 'T', 'X', sizeof(mutex_t)}}
 
 extern logger_handle *g_system_logger;
 extern volatile bool mutex_ultraverbose;
@@ -186,6 +192,20 @@ void mutex_init_recursive(mutex_t *mtx);
 void mutex_init(mutex_t *mtx);
 void mutex_destroy(mutex_t *mtx);
 
+#if !DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+static inline void cond_wait(cond_t *cond, mutex_t *mtx)
+{
+    pthread_cond_wait(cond, mtx);
+}
+#else
+static inline void cond_wait(cond_t *cond, mutex_t *mtx)
+{
+    mtx->wait = TRUE;
+    pthread_cond_wait(cond, &mtx->mtx);
+    mtx->wait = FALSE;
+}
+#endif
+
 #else
 
 typedef pthread_spinlock_t mutex_t;
@@ -198,28 +218,17 @@ typedef pthread_spinlock_t mutex_t;
 #define mutex_trylock(mtx) (pthread_spin_trylock(mtx)==0)
 #define mutex_unlock(mtx)  pthread_spin_unlock(mtx)
 
+static inline void cond_wait(cond_t *cond, mutex_t *mtx)
+{
+    pthread_cond_wait(cond, mtx);
+}
+
 #endif
-
-typedef pthread_cond_t  cond_t;
-
-#define COND_INITIALIZER PTHREAD_COND_INITIALIZER
 
 static inline void cond_init(cond_t *cond)
 {
     pthread_cond_init(cond, NULL);
 }
-
-#if !DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
-static inline void cond_wait(cond_t *cond, mutex_t *mtx)
-{
-    pthread_cond_wait(cond, mtx);
-}
-#else
-static inline void cond_wait(cond_t *cond, mutex_t *mtx)
-{
-    pthread_cond_wait(cond, &mtx->mtx);
-}
-#endif
 
 #if !_POSIX_TIMERS
 u64 timeus();
@@ -250,9 +259,14 @@ static inline void cond_timedwait(cond_t *cond, mutex_t *mtx, u64 usec)
 #if !DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
     pthread_cond_timedwait(cond, mtx, &ts);
 #else
+    mtx->wait = TRUE;
     pthread_cond_timedwait(cond, &mtx->mtx, &ts);
+    mtx->wait = FALSE;
 #endif
 }
+
+// Only use this if there is only one possible thread waiting on
+// the condition.
 
 static inline void cond_notify_one(cond_t *cond)
 {
@@ -420,6 +434,27 @@ bool group_mutex_islocked(group_mutex_t* mtx);
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
 void group_mutex_locked_set_monitor();
 #endif
+
+static inline void group_mutex_read_lock(group_mutex_t *mtx)
+{
+    group_mutex_lock(mtx, GROUP_MUTEX_READ);
+}
+
+static inline void group_mutex_read_unlock(group_mutex_t *mtx)
+{
+    group_mutex_unlock(mtx, GROUP_MUTEX_READ);
+}
+
+static inline void group_mutex_write_lock(group_mutex_t *mtx)
+{
+    group_mutex_lock(mtx, GROUP_MUTEX_WRITE);
+}
+
+static inline void group_mutex_write_unlock(group_mutex_t *mtx)
+{
+    group_mutex_unlock(mtx, GROUP_MUTEX_WRITE);
+}
+
 
 /**
  * The shared group mutex is a group mutex that only uses N mutex(es) and N condition(s).

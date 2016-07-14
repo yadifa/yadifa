@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 /** @defgroup collections Generic collections functions
  *  @ingroup dnscore
@@ -74,6 +74,8 @@ typedef struct list_dl_node_s list_dl_node_s;
 
 // 24 bytes
 
+#define LISTDLND_TAG 0x444e4c445453494c
+
 struct list_dl_node_s
 {
     struct list_dl_node_s *next;
@@ -94,6 +96,8 @@ struct list_dl_node_sentiel_s
 typedef struct list_dl_s list_dl_s;
 
 // 36 bytes
+
+#define LISTDL_TAG 0x4c445453494c
 
 struct list_dl_s
 {
@@ -135,11 +139,31 @@ list_dl_iterator_next(list_dl_iterator_s *iter)
      return iter->current_node->data;
 }
 
+/**
+ * Inserts data BEFORE the current node
+ * 
+ * @param iter
+ * @param data
+ * @return 
+ */
+
+bool list_dl_iterator_insert(list_dl_iterator_s *iter, void *data);
+
+/**
+ * Inserts data BEFORE the current node
+ * 
+ * @param iter
+ * @param data
+ * @return 
+ */
+
+bool list_dl_iterator_append(list_dl_iterator_s *iter, void *data);
+
 static inline list_dl_node_s *
 list_dl_node_alloc()
 {
     list_dl_node_s *node;
-    ZALLOC_OR_DIE(list_dl_node_s*, node, list_dl_node_s, GENERIC_TAG);
+    ZALLOC_OR_DIE(list_dl_node_s*, node, list_dl_node_s, LISTDLND_TAG);
     return node;
 }
 
@@ -174,7 +198,7 @@ static inline void
 list_dl_insert(list_dl_s *list, void *data)
 {
     list_dl_node_s *node;
-    ZALLOC_OR_DIE(list_dl_node_s*, node, list_dl_node_s, GENERIC_TAG);
+    ZALLOC_OR_DIE(list_dl_node_s*, node, list_dl_node_s, LISTDLND_TAG);
     node->next = list->head_sentinel.next;
     node->prev = (list_dl_node_s*)&list->head_sentinel;
     list->head_sentinel.next->prev = node;
@@ -214,7 +238,7 @@ static inline void
 list_dl_append(list_dl_s *list, void *data)
 {
     list_dl_node_s *node;
-    ZALLOC_OR_DIE(list_dl_node_s*, node, list_dl_node_s, GENERIC_TAG);
+    ZALLOC_OR_DIE(list_dl_node_s*, node, list_dl_node_s, LISTDLND_TAG);
     node->next = (list_dl_node_s*)&list->tail_sentinel;
     node->prev = list->tail_sentinel.prev;
     list->tail_sentinel.prev->next = node;
@@ -320,6 +344,36 @@ list_dl_remove_first(list_dl_s *list)
     }
 }
 
+/**
+ * Returns the data of the first item on the list
+ * 
+ * @param list
+ * @return the data or NULL if the list is empty
+ */
+
+static inline void*
+list_dl_peek_first(list_dl_s *list)
+{
+    if(list->size > 0)
+    {
+#ifdef DEBUG
+        assert(list->head_sentinel.next != (list_dl_node_s*)&list->tail_sentinel);
+        assert(list->tail_sentinel.prev != (list_dl_node_s*)&list->head_sentinel);
+        assert(list->head_sentinel.next != NULL);
+        assert(list->tail_sentinel.prev != NULL);
+#endif
+        
+        list_dl_node_s *node = list->head_sentinel.next;
+        void *data = node->data;
+        
+        return data;
+    }
+    else
+    {
+        return NULL;
+    }
+}
+
 static inline list_dl_node_s*
 list_dl_remove_first_node(list_dl_s *list)
 {
@@ -378,6 +432,36 @@ list_dl_remove_last(list_dl_s *list)
 #ifdef DEBUG
         assert(list->tail_sentinel.prev->next == (list_dl_node_s*)&list->tail_sentinel);
 #endif
+        return data;
+    }
+    else
+    {
+        return NULL;
+    }
+}
+
+/**
+ * Returns the data of the last item on the list
+ * 
+ * @param list
+ * @return the data or NULL if the list is empty
+ */
+
+static inline void*
+list_dl_peek_last(list_dl_s *list)
+{
+    if(list->size > 0)
+    {
+#ifdef DEBUG
+        assert(list->head_sentinel.next != (list_dl_node_s*)&list->tail_sentinel);
+        assert(list->tail_sentinel.prev != (list_dl_node_s*)&list->head_sentinel);
+        assert(list->head_sentinel.next != NULL);
+        assert(list->tail_sentinel.prev != NULL);
+#endif
+        
+        list_dl_node_s *node = list->tail_sentinel.prev;
+        void *data = node->data;
+        
         return data;
     }
     else

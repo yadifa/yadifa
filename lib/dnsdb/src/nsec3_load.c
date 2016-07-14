@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -54,11 +54,8 @@
 #include "dnsdb/nsec3_load.h"
 #include "dnsdb/nsec3_zone.h"
 #include "dnsdb/nsec3_update.h"
-#include "dnsdb/zdb_zone.h"
 
 #include <dnscore/base32hex.h>
-
-#include <dnscore/format.h>
 
 #define N3CHNCTX_TAG 0x5854434e4843334e
 #define N3PRDATA_TAG 0x415441445250334e
@@ -124,8 +121,8 @@ nsec3_label_to_digest(nsec3_load_context *context, const u8 *entry_name)
      * Both path MUST match
      */
 
-    u8** origin_labelsp = &origin.labels[0];
-    u8** name_labelsp = &name.labels[1];
+    const u8** origin_labelsp = &origin.labels[0];
+    const u8** name_labelsp = &name.labels[1];
 
     while(name.size-- > 0)
     {
@@ -170,7 +167,7 @@ nsec3_load_add_collection(nsec3_load_context *context, const u8 *entry_name, u32
     }
 
     nsec3_context_record *cr;
-    MALLOC_OR_DIE(nsec3_context_record*, cr, sizeof (nsec3_context_record), NSEC3_CONTEXT_RECORD_TAG);
+    MALLOC_OR_DIE(nsec3_context_record*, cr, sizeof(nsec3_context_record), NSEC3_CONTEXT_RECORD_TAG);
     cr->digest = digest;
     MALLOC_OR_DIE(u8*, cr->rdata, entry_rdata_size, NSEC3_RDATA_TAG);
     MEMCOPY(cr->rdata, entry_rdata, entry_rdata_size);
@@ -404,6 +401,7 @@ nsec3_load_compile(nsec3_load_context *context)
      */
 
     zdb_zone* zone = context->zone;
+    //u32 min_ttl = zone->min_ttl;
     s32 i;
 
     /*
@@ -422,11 +420,12 @@ nsec3_load_compile(nsec3_load_context *context)
 
     if(context->opt_out)
     {
-        context->zone->apex->flags |= ZDB_RR_LABEL_NSEC3_OPTOUT;
+        context->zone->apex->flags |= ZDB_RR_LABEL_NSEC3_OPTOUT|ZDB_RR_LABEL_NSEC3;
     }
     else
     {
         context->zone->apex->flags &= ~ZDB_RR_LABEL_NSEC3_OPTOUT;
+        context->zone->apex->flags |= ZDB_RR_LABEL_NSEC3;
     }
     
     nsec3_update_zone(context->zone);
@@ -564,22 +563,9 @@ nsec3_load_compile(nsec3_load_context *context)
                  * Didn't matched: The signature, if any, will be wrong
                  */
 
-#if 1
-                /*
-                 * This code will print what NSEC3 was computed by YADIFA and what NSEC3 was provided by the zone file.
-                 *
-                 * The rejects are NSEC3 records whose names where expected but with a different content.
-                 * Typically it's because there is an unexpected record from the zone in the NSEC3 chain that implies a different "next" value in previous rdata.
-                 * That happened when a bug in named generated a NSEC3 record for '.' when it was not expected (the named code was fixed in a following release)
-                 * But if it was the case, the "discarded" count would be > 0.
-                 * What remains is an issue with the types bit mask for the covered domain, or maybe an OPT-OUT/OPT-IN mix that would give a bad reaction (but unlikely).
-                 * Since .de has more records types than .eu, the bitmask is most probable cause.
-                 *
-                 * The output will be on the debug channel.
-                 */
-
+#ifdef DEBUG
                 rdata_desc nsec3_desc = {TYPE_NSEC3, cr->rdata_size, cr->rdata};
-                log_warn("nsec3: %{digest32h} %{typerdatadesc} rejected (do not agree with rdata value).", item->digest, &nsec3_desc);
+                log_debug("nsec3: %{digest32h} %{typerdatadesc} rejected (do not agree with rdata value).", item->digest, &nsec3_desc);
 
                 zdb_packed_ttlrdata *nsec3_ttlrdata;
                 const zdb_packed_ttlrdata *nsec3_ttlrdata_rrsig;
@@ -603,10 +589,10 @@ nsec3_load_compile(nsec3_load_context *context)
                 if(nsec3_ttlrdata != NULL)
                 {
                     rdata_desc nsec3_desc = {TYPE_NSEC3, nsec3_ttlrdata->rdata_size, &nsec3_ttlrdata->rdata_start[0]};
-                    log_warn("nsec3: computed: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
+                    log_debug("nsec3: computed: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
                     nsec3_desc.len = cr->rdata_size;
                     nsec3_desc.rdata = cr->rdata;
-                    log_warn("nsec3: received: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
+                    log_debug("nsec3: received: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
                 }
                 
 #endif
@@ -621,14 +607,12 @@ nsec3_load_compile(nsec3_load_context *context)
         }
         else
         {
-#if 1
             /*
              * Threre are no discarded NSEC3 records in the investigated issue, but in case the issue evolves, this information may help.
              */
 
             rdata_desc nsec3_desc = {TYPE_NSEC3, cr->rdata_size, cr->rdata};
             log_warn("nsec3: discarded: %{digest32h} %{typerdatadesc}", cr->digest, &nsec3_desc);
-#endif
             
             nsec3_discarded++;
         }
@@ -643,7 +627,7 @@ nsec3_load_compile(nsec3_load_context *context)
         nsec3s->data[i] = NULL;
     }
 
-    log_info("nsec3: accept: %u reject: %u discard: %u", nsec3_accepted, nsec3_rejected, nsec3_discarded);
+    log_debug("nsec3: accept: %u reject: %u discard: %u", nsec3_accepted, nsec3_rejected, nsec3_discarded);
 
     /*
      * The caller needs to destroy the context
@@ -690,15 +674,29 @@ nsec3_load_forced(nsec3_load_context *context)
      */
 
     zdb_zone* zone = context->zone;
-    u32 min_ttl = 900;
-    zdb_zone_getminttl(zone, &min_ttl);
+    u32 min_ttl = zone->min_ttl;
     s32 i;
 
     /*
      * NOTE: should I enable the NSEC3 flag here already ?
      */
+    
+    if(context->chain == NULL)
+    {
+        return DNSSEC_ERROR_NSEC3_INVALIDZONESTATE;
+    }
 
     /* 1) */
+    
+    if(context->opt_out)
+    {
+        context->zone->apex->flags |= ZDB_RR_LABEL_NSEC3_OPTOUT|ZDB_RR_LABEL_NSEC3;
+    }
+    else
+    {
+        context->zone->apex->flags &= ~ZDB_RR_LABEL_NSEC3_OPTOUT;
+        context->zone->apex->flags |= ZDB_RR_LABEL_NSEC3;
+    }
 
     nsec3_update_zone(context->zone);
 
@@ -784,13 +782,56 @@ nsec3_load_forced(nsec3_load_context *context)
              * it was supposed to be
              */
 
-            if(!nsec3_zone_item_equals_rdata(n3, item, cr->rdata_size, cr->rdata))
+            if(!nsec3_zone_item_equals_rdata_lenient(n3, item, cr->rdata_size, cr->rdata))
             {
+                nsec3_zone_item_equals_rdata_lenient(n3, item, cr->rdata_size, cr->rdata);
                 /*
                  * Didn't matched: The signature, if any, will be wrong
                  */
 
-                log_debug("nsec3: %{digest32h} rejected.", item->digest);
+                /*
+                 * This prints what NSEC3 was computed by YADIFA and what NSEC3 was provided by the zone file.
+                 *
+                 * The rejects are NSEC3 records whose names where expected but with a different content.
+                 * Typically it's because there is an unexpected record from the zone in the NSEC3 chain that implies a different "next" value in previous rdata.
+                 * That happened when a bug in named generated a NSEC3 record for '.' when it was not expected (the named code was fixed in a following release)
+                 * But if it was the case, the "discarded" count would be > 0.
+                 * What remains is an issue with the types bit mask for the covered domain, or maybe an OPT-OUT/OPT-IN mix that would give a bad reaction (but unlikely).
+                 * Since .de has more records types than .eu, the bitmask is most probable cause.
+                 *
+                 * The output will be on the debug channel.
+                 */
+
+                rdata_desc nsec3_desc = {TYPE_NSEC3, cr->rdata_size, cr->rdata};
+                log_warn("nsec3: %{digest32h} %{typerdatadesc} rejected (do not agree with rdata value).", item->digest, &nsec3_desc);
+
+                zdb_packed_ttlrdata *nsec3_ttlrdata;
+                const zdb_packed_ttlrdata *nsec3_ttlrdata_rrsig;
+
+                u8 *owner;
+                u8 *pool;
+                u8 pool_buffer[NSEC3_ZONE_ITEM_TO_NEW_ZDB_PACKED_TTLRDATA_SIZE];
+                pool = pool_buffer;
+                
+                nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm nsec3_parms =
+                {
+                    n3,
+                    item,
+                    zone->origin,
+                    &pool,
+                    min_ttl
+                };
+
+                nsec3_zone_item_to_new_zdb_packed_ttlrdata(&nsec3_parms, &owner, &nsec3_ttlrdata, &nsec3_ttlrdata_rrsig);
+
+                if(nsec3_ttlrdata != NULL)
+                {
+                    rdata_desc nsec3_desc = {TYPE_NSEC3, nsec3_ttlrdata->rdata_size, &nsec3_ttlrdata->rdata_start[0]};
+                    log_warn("nsec3: computed: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
+                    nsec3_desc.len = cr->rdata_size;
+                    nsec3_desc.rdata = cr->rdata;
+                    log_warn("nsec3: received: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
+                }
 
 #if 1
                 nsec3_zone_item_equals_rdata(n3, item, cr->rdata_size, cr->rdata);

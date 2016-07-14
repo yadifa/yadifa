@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup nsec NSEC functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -49,7 +49,6 @@
 #include <dnscore/dnscore.h>
 #include <dnscore/dnsname.h>
 #include <dnscore/logger.h>
-#include <dnscore/format.h>
 
 #include "dnscore/ptr_set.h"
 
@@ -62,8 +61,6 @@
 
 #include "dnsdb/nsec.h"
 #include "dnsdb/nsec_common.h"
-
-#include "dnsdb/zdb_zone.h"
 
 /*
    Note : (rfc 4034)
@@ -206,7 +203,7 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
     prev_name = name_buffer[1];
     
     zdb_zone_label_iterator label_iterator;
-    zdb_zone_label_iterator_init(zone, &label_iterator);
+    zdb_zone_label_iterator_init(&label_iterator, zone);
 
     while(zdb_zone_label_iterator_hasnext(&label_iterator))
     {
@@ -391,7 +388,6 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
              * no record -> create one and schedule a signature (MASTER ONLY)
              */
 
-            
             if(nsec_record == NULL)
             {
                 missing_nsec_records++;
@@ -413,8 +409,24 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
                 {                    
                     zdb_record_insert(&label->resource_record_set, TYPE_NSEC, nsec_record);
 
-                    log_warn("nsec: %{dnsname}: add: %{dnsname} %{typerdatadesc}", zone->origin, prev_name, &nsec_desc);
+#ifdef DEBUG
+                    log_debug("nsec: %{dnsname}: add: %{dnsname} %{typerdatadesc}", zone->origin, prev_name, &nsec_desc);
+#endif
+                    if(zdb_listener_notify_enabled())
+                    {        
+                        dnsname_vector name_path;
 
+                        zdb_ttlrdata unpacked_ttlrdata;
+
+                        unpacked_ttlrdata.ttl = nsec_record->ttl;
+                        unpacked_ttlrdata.rdata_size = rdata_size;
+                        unpacked_ttlrdata.rdata_pointer = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_record);
+
+                        dnsname_to_dnsname_vector(name, &name_path);
+
+                        zdb_listener_notify_add_record(zone, name_path.labels, name_path.size, TYPE_NSEC, &unpacked_ttlrdata);
+                    }
+                    
                     /*
                      * Schedule a signature
                      */
@@ -492,7 +504,7 @@ nsec_inverse_name(u8 *inverse_name, const u8 *name)
  */
 
 bool
-nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *node, nsec_node *next_node, u8 *name)
+nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *item, nsec_node *next_item, u8 *name)
 {
     type_bit_maps_context tbmctx;
     u8 tmp_bitmap[256 * (1 + 1 + 32)]; /* 'max window count' * 'max window length' */
@@ -514,7 +526,7 @@ nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *node, n
          *
          */
 
-        log_debug("nsec_update_label_record: [%{dnsname}] %{dnsname} (=> %{dnsname}) updating record.", name, node->inverse_relative_name, next_node->inverse_relative_name);
+        log_debug("nsec_update_label_record: [%{dnsname}] %{dnsname} (=> %{dnsname}) updating record.", name, item->inverse_relative_name, next_item->inverse_relative_name);
 
         /*
          * If there is more than one record, clean-up
@@ -541,8 +553,11 @@ nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *node, n
                     /*
                      * check the nsec next
                      */
+                    
+                    u8 tmp_name[MAX_DOMAIN_LENGTH];
+                    nsec_inverse_name(tmp_name, next_item->inverse_relative_name);
 
-                    if(dnsname_equals(rdata, name))
+                    if(dnsname_equals(rdata, tmp_name))
                     {
                         /* All good */
 
@@ -587,9 +602,9 @@ nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *node, n
         zdb_packed_ttlrdata *nsec_record;
         u8 next_name[256];
 
-        log_debug("nsec_update_label_record: [%{dnsname}] %{dnsname} (=> %{dnsname}) building new record.", name, node->inverse_relative_name, next_node->inverse_relative_name);
+        log_debug("nsec_update_label_record: [%{dnsname}] %{dnsname} (=> %{dnsname}) building new record.", name, item->inverse_relative_name, next_item->inverse_relative_name);
 
-        u16 dname_len = nsec_inverse_name(next_name, next_node->inverse_relative_name);
+        u16 dname_len = nsec_inverse_name(next_name, next_item->inverse_relative_name);
         u16 rdata_size = dname_len + tbm_size;
 
         ZDB_RECORD_ZALLOC_EMPTY(nsec_record, ttl, rdata_size);
@@ -649,7 +664,10 @@ nsec_update_label_node(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_refe
     node->label = label;
     label->nsec.nsec.node = node;
 
+#ifdef DEBUG
+    memset(inverse_name, 0xff, sizeof(inverse_name));
     log_debug("nsec_update_label_node: %{dnsname}", node->inverse_relative_name);
+#endif
     
     return node;
 }

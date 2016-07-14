@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -390,7 +390,7 @@ journal_open(journal **jhp, zdb_zone *zone, bool create)
         
         // it does not exist, so create a new one (using the default format)
         
-        /// @todo edf 20141128 -- get rid of the hashing function here : this has to be pushed to the journal file format
+        /// @todo 20141128 edf -- get rid of the hashing function here : this has to be pushed to the journal file format
         ///                       but first, the journal must be able to know where the zone file is (so it could put the journal next to it)
         
         u32 path_flags = ZDB_ZONE_PATH_PROVIDER_ZONE_PATH;
@@ -597,10 +597,8 @@ journal_last_soa(const u8 *origin, const char *workingdir, u32 *serial, u32 *ttl
     /* check preconditions */
 
     if((origin == NULL)     ||  /* mandatory */
-       (workingdir == NULL) ||  /* mandatory */
-       (    ((last_soa_rdata == NULL) == (last_soa_rdata_size == NULL)) && /* at least one of them mandatory */
-            (ttl == NULL) &&
-            (serial == NULL) )  )
+       (workingdir == NULL)    /* mandatory */
+      )
     {
         return ZDB_JOURNAL_WRONG_PARAMETERS;
     }
@@ -618,13 +616,19 @@ journal_last_soa(const u8 *origin, const char *workingdir, u32 *serial, u32 *ttl
     
     if(ISOK(return_value = journal_default_open(&jh, origin, workingdir, FALSE))) // no link ?
     {
-        bool close_it = (jh->zone == NULL);
-        
         input_stream is;
-        dns_resource_record rr;
-        
         u32 first_serial = 0;
         u32 last_serial = 0;
+        u16 last_soa_rdata_size_store;
+        
+        bool close_it = (jh->zone == NULL);
+
+        dns_resource_record rr;
+
+        if(last_soa_rdata_size == NULL)
+        {
+            last_soa_rdata_size = &last_soa_rdata_size_store;
+        }
         
         journal_get_first_serial(jh, &first_serial);
         journal_get_last_serial(jh, &last_serial);
@@ -637,17 +641,14 @@ journal_last_soa(const u8 *origin, const char *workingdir, u32 *serial, u32 *ttl
             {
                 journal_mru_add(jh);
                 
-                if(last_soa_rdata != NULL) /* one not NULL => both not NULL */
+                if(last_soa_rdata_size == NULL)
                 {
-                    if(*last_soa_rdata_size >= rr.rdata_size)
+                    *last_soa_rdata_size = rr.rdata_size;
+                    
+                    if((last_soa_rdata != NULL) && (*last_soa_rdata_size >= rr.rdata_size))
                     {
                         MEMCOPY(last_soa_rdata, rr.rdata, rr.rdata_size);
-                        *last_soa_rdata_size = rr.rdata_size;
                     }
-                }
-                else
-                {
-                    return_value = ERROR;
                 }
 
                 if(serial != NULL)

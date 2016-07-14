@@ -28,10 +28,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
-#
-#	YADIFA doc Makefile.am script
-#
-##############################################################################
 
 dist_man8_MANS = yadifad.man yadifa.man
 dist_man5_MANS = yadifad.conf.man yadifa.rc.man
@@ -46,4 +42,6 @@ release:
 profile:
 
 debug:
+
+features:
 

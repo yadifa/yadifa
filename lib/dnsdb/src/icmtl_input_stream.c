@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2016, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup ### #######
  *  @ingroup dnsdb
  *  @brief
@@ -149,11 +149,11 @@ zdb_icmtl_input_stream_reset_icmtls(zdb_icmtl_input_stream_data* data)
 
     output_stream_close(&data->icmtls_bis);
 
-    snformat(name, sizeof (name), ICMTL_SUMMARY_FILE_FORMAT, data->folder, data->origin, data->from, data->to);
+    snformat(name, sizeof(name), ICMTL_SUMMARY_FILE_FORMAT, data->folder, data->origin, data->from, data->to);
 
     input_stream icmtls_is;
 
-    if(ISOK(err = file_input_stream_open(name, &icmtls_is)))
+    if(ISOK(err = file_input_stream_open(&icmtls_is, name)))
     {
         buffer_input_stream_init(&icmtls_is, &data->icmtls_bis, ICMTL_BUFFER_SIZE);
     }
@@ -333,13 +333,13 @@ icmtl_input_stream_open(u8* origin, u32 from, u32 to, input_stream* out_is, cons
     }
 
     zdb_icmtl_input_stream_data* data;
-    MALLOC_OR_DIE(zdb_icmtl_input_stream_data*, data, sizeof (zdb_icmtl_input_stream_data), ICMTL_INPUT_STREAM_TAG);
+    MALLOC_OR_DIE(zdb_icmtl_input_stream_data*, data, sizeof(zdb_icmtl_input_stream_data), ICMTL_INPUT_STREAM_TAG);
 
-    snformat(name, sizeof (name), ICMTL_SUMMARY_FILE_FORMAT, folder, origin, from, to);
+    snformat(name, sizeof(name), ICMTL_SUMMARY_FILE_FORMAT, folder, origin, from, to);
 
     input_stream icmtls_is; /* I could use the same temp var for the 3 input_streams but I think it's cleared this way */
 
-    if(FAIL(err = file_input_stream_open(name, &icmtls_is)))
+    if(FAIL(err = file_input_stream_open(&icmtls_is, name)))
     {
         free(data);
         return err;
@@ -347,11 +347,11 @@ icmtl_input_stream_open(u8* origin, u32 from, u32 to, input_stream* out_is, cons
 
     buffer_input_stream_init(&icmtls_is, &data->icmtls_bis, ICMTL_BUFFER_SIZE);
 
-    snformat(name, sizeof (name), ICMTL_ADD_FILE_FORMAT, folder, origin, from, to);
+    snformat(name, sizeof(name), ICMTL_ADD_FILE_FORMAT, folder, origin, from, to);
 
     input_stream icmtla_is; /* I could use the same temp var for the 3 input_streams but I think it's cleared this way */
 
-    if(FAIL(err = file_input_stream_open(name, &icmtla_is)))
+    if(FAIL(err = file_input_stream_open(&icmtla_is, name)))
     {
         output_stream_close(&data->icmtls_bis);
         free(data);
@@ -360,11 +360,11 @@ icmtl_input_stream_open(u8* origin, u32 from, u32 to, input_stream* out_is, cons
 
     buffer_input_stream_init(&icmtla_is, &data->icmtla_bis, ICMTL_BUFFER_SIZE);
 
-    snformat(name, sizeof (name), ICMTL_REMOVE_FILE_FORMAT, folder, origin, from, to);
+    snformat(name, sizeof(name), ICMTL_REMOVE_FILE_FORMAT, folder, origin, from, to);
 
     input_stream icmtlr_is; /* I could use the same temp var for the 3 input_streams but I think it's cleared this way */
 
-    if(FAIL(err = file_input_stream_open(name, &icmtlr_is)))
+    if(FAIL(err = file_input_stream_open(&icmtlr_is, name)))
     {
         output_stream_close(&data->icmtla_bis);
         output_stream_close(&data->icmtls_bis);
