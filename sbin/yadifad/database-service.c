@@ -1493,8 +1493,8 @@ database_zone_axfr_query_alarm(void *args, bool cancel)
     else
     {
         log_debug("database: %{dnsname}: enqueue operation DATABASE_SERVICE_QUERY_AXFR cancelled (alarm)", message->origin);
-        async_message_release(async);
         database_load_message_free((database_message*)async->args);
+        async_message_release(async);
     }
     
     return SUCCESS;
@@ -1504,6 +1504,14 @@ void
 database_zone_axfr_query_at(const u8 *origin, time_t at)
 {    
     log_debug("database: %{dnsname}: will enqueue operation DATABASE_SERVICE_QUERY_AXFR at %T", origin, at);
+    
+    zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(g_config->database, origin);
+    
+    if(zone == NULL)
+    {
+        log_warn("database: %{dnsname}: arming AXFR query: zone not in database", origin);
+        return;
+    }
     
     database_message *message = database_load_message_alloc(origin, DATABASE_SERVICE_QUERY_AXFR);
     async_message_s *async = async_message_alloc();
@@ -1520,7 +1528,9 @@ database_zone_axfr_query_at(const u8 *origin, time_t at)
             ALARM_DUP_REMOVE_LATEST,
             "database-zone-axfr-query-alarm");
     
-    alarm_set(event->handle, event);
+    alarm_set(zone->alarm_handle, event);
+    
+    zdb_zone_release(zone);
 }
 
 
@@ -1551,18 +1561,25 @@ database_zone_ixfr_query_alarm(void *args, bool cancel)
     else
     {
         log_debug("database: %{dnsname}: enqueue operation DATABASE_SERVICE_QUERY_IXFR cancelled (alarm)", message->origin);
-        async_message_release(async);
         database_load_message_free((database_message*)async->args);
+        async_message_release(async);
     }
     
     return SUCCESS;
 }
 
-
 void
 database_zone_ixfr_query_at(const u8 *origin, time_t at)
 {    
     log_debug("database: %{dnsname}: will enqueue operation DATABASE_SERVICE_QUERY_IXFR at %T", origin, at);
+    
+    zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(g_config->database, origin);
+    
+    if(zone == NULL)
+    {
+        log_warn("database: %{dnsname}: arming IXFR query: zone not in database", origin);
+        return;
+    }
     
     database_message *message = database_load_message_alloc(origin, DATABASE_SERVICE_QUERY_IXFR);
     async_message_s *async = async_message_alloc();
@@ -1570,7 +1587,7 @@ database_zone_ixfr_query_at(const u8 *origin, time_t at)
     async->args = message;
     async->handler = NULL;
     async->handler_args = NULL;
-    
+        
     alarm_event_node *event = alarm_event_new(
             at,
             ALARM_KEY_ZONE_AXFR_QUERY,
@@ -1578,8 +1595,10 @@ database_zone_ixfr_query_at(const u8 *origin, time_t at)
             async,
             ALARM_DUP_REMOVE_LATEST,
             "database-zone-ixfr-query-alarm");
+        
+    alarm_set(zone->alarm_handle, event);
     
-    alarm_set(event->handle, event);
+    zdb_zone_release(zone);
 }
 
 void

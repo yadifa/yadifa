@@ -83,7 +83,7 @@ extern "C" {
 
 #define     PROGRAM_NAME                PACKAGE
 #define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASEDATE                 "2016-07-15"
+#define     RELEASEDATE                 "2016-07-19"
 #define     COMPILEDATE                 __DATE__
 
     /* List of default values for the different configuration parameters */
@@ -147,6 +147,15 @@ extern "C" {
 #define     S_AXFR_COMPRESS_PACKETS     "1"
 #define     S_AXFR_RETRY_DELAY          "600"
 #define     S_AXFR_RETRY_JITTER         "180"
+
+#define     S_AXFR_RETRY_FAILURE_DELAY_MULTIPLIER "5"
+#define     AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MIN 0
+#define     AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX 86400
+    
+#define     S_AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX "3600"
+#define     AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX_MIN 0
+#define     AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX_MAX 604800
+
     
 #define     S_XFR_CONNECT_TIMEOUT       "5"    /* seconds */
     
@@ -356,6 +365,8 @@ struct config_data
     int                                            axfr_max_packet_size;
     int                                                axfr_retry_delay;
     int                                               axfr_retry_jitter;
+    u32                             axfr_retry_failure_delay_multiplier;
+    u32                                    axfr_retry_failure_delay_max;
     int                                             xfr_connect_timeout;
     int                                           statistics_max_period;
     int                                                  edns0_max_size;

@@ -78,7 +78,7 @@ CONFIG_STRING_ARRAY(  key_suite,            NULL,   DP_KEY_SUITE_SIZE           
 CONFIG_U32_RANGE(     ds_ttl,               "3600", 0, MAX_S32                  )
 CONFIG_FLAG8(         weaker_key_removal,   "0",    flags, DP_FLAGS_WEAKER_KEY  )
 CONFIG_FLAG8(         stronger_key_removal, "0",    flags, DP_FLAGS_STRONGER_KEY)
-CONFIG_U8(            max_key,              "2"                                 ) /// @todo 20160520 gve -- check if this per key or key_suite
+CONFIG_U8(            max_key,              "2"                                 )
 
          /*           alias,                aliased */
 CONFIG_ALIAS(         max_keys,             max_key                             )
@@ -273,7 +273,6 @@ config_section_dnssec_policy_postprocess(struct config_section_descriptor_s *csd
 
         // get the <denial> section from <dnssec-policy> configuration
         dnssec_denial *dd = dnssec_policy_denial_acquire(dnssec_policy_desc->denial);
-        /// @todo 20160614 gve -- check if 'dd' can be zero (I think not) before release 2.2.0
         
         bool has_zsk = FALSE;
                 

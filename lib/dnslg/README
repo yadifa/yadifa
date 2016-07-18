@@ -29,6 +29,16 @@
 # 
 ################################################################################
 
+20160719:
+    YADIFA 2.2.1
+
+        Multi-master support:
+            Added axfr-retry-failure-delay-multiplier and axfr-retry-failure-delay-max <main> parameters to increase the time between two AXFR/IXFR retries on a master.
+
+        Fixes:
+        - fixed an issue that would crash a YADIFA slave when restarting with a journal present
+        - fixed an issue in AXFR/IXFR retry timing management
+
 20160715:
 	YADIFA 2.2.0
         

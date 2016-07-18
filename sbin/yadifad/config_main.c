@@ -178,6 +178,9 @@ CONFIG_U32_RANGE(axfr_max_packet_size        , S_AXFR_PACKET_SIZE_MAX      , AXF
 CONFIG_BOOL(axfr_compress_packets            , S_AXFR_COMPRESS_PACKETS    )
 CONFIG_U32_RANGE(axfr_retry_delay            , S_AXFR_RETRY_DELAY          , AXFR_RETRY_DELAY_MIN      , AXFR_RETRY_DELAY_MAX      )
 CONFIG_U32(      axfr_retry_jitter           , S_AXFR_RETRY_JITTER        )
+CONFIG_U32_RANGE(axfr_retry_failure_delay_multiplier, S_AXFR_RETRY_FAILURE_DELAY_MULTIPLIER, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MIN, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX)
+CONFIG_U32_RANGE(axfr_retry_failure_delay_max, S_AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX_MIN, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX_MAX)
+//CONFIG_U32_RANGE(multimaster_
 
           /* alias, aliased */
 CONFIG_ALIAS(port, server_port)
@@ -198,6 +201,15 @@ CONFIG_ALIAS(daemonize, daemon)
 CONFIG_ALIAS(axfr_maxrecordbypacket, axfr_max_record_by_packet)
 CONFIG_ALIAS(axfr_maxpacketsize, axfr_max_packet_size)
 CONFIG_ALIAS(axfr_compresspackets, axfr_compress_packets)
+
+CONFIG_ALIAS(xfr_maxrecordbypacket, axfr_max_record_by_packet)
+CONFIG_ALIAS(xfr_maxpacketsize, axfr_max_packet_size)
+CONFIG_ALIAS(xfr_compresspackets, axfr_compress_packets)
+CONFIG_ALIAS(xfr_retry_delay, axfr_retry_delay)
+CONFIG_ALIAS(xfr_retry_jitter, axfr_retry_jitter)
+CONFIG_ALIAS(xfr_retry_failure_delay_multiplier, axfr_retry_failure_delay_multiplier)
+CONFIG_ALIAS(xfr_retry_failure_delay_max, axfr_retry_failure_delay_max)
+
 CONFIG_ALIAS(user, uid)
 CONFIG_ALIAS(group, gid)
 CONFIG_ALIAS(max_tcp_connections, max_tcp_queries)

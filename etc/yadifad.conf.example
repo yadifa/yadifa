@@ -16,7 +16,7 @@
         pidfile                     "/var/run/yadifad.pid"
 
         # The path where all zone files will be written
-        datapath                    "/var"
+        datapath                    "/var/zones"
 
         # The path where the DNSSEC keys are found
         keyspath                    "/var/zones/keys"
@@ -31,7 +31,7 @@
         serverid                     "yadifad-01"
 
         # The version returned by a query to version.yadifa. CH TXT
-        version                      "2.2.0"
+        version                      "2.2.1"
 
         # Set the maximum UDP packet size.  Cannot be less than 512.  Cannot be more than 65535.  Typical choice is 4096.
         edns0-max-size              4096
@@ -175,13 +175,13 @@
 
 <loggers>
 #       bundle          debuglevel                          channels
-        database        *                                   database,all
-        dnssec          *                                   dnssec,all
-        server          *                                   server,all
-        stats           *                                   statistics
-        system          *                                   system,all
-        zone            *                                   zone,all
-        queries         *                                   queries
+        database        prod                                database,all
+        dnssec          prod                                dnssec,all
+        server          prod                                server,all
+        stats           prod                                statistics
+        system          prod                                system,all
+        zone            prod                                zone,all
+        queries         prod                                queries
 </loggers>
 
 

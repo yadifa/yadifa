@@ -311,10 +311,12 @@ struct zone_desc_s
     u32                                                   journal_size_kb;      // may change, expressed in kb, 0 "choose", 2^32-1 "
     u32                                                     stored_serial;      // serial of the last stored full zone image
     /* Type of zone file (master, slave, stub, unknown) */
+    u32                                            download_failure_count;      // axfr or ixfr downloads that failed since the last one that succeeded
     zone_type                                                        type;
     u16                                                            qclass;      // cannot change, most likely CLASS_IN
     u8                                                multimaster_retries;      // config : how many failures before changing master
-    u8                                               multimaster_failures;
+    u8                                               multimaster_failures;      // the number of error on the current primary master (reset on success)
+    
     // instead of having a priority queue with two levels, two queues will do
     // the job 
     bpqueue_s                                                    commands;      // queue of commands

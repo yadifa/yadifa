@@ -74,7 +74,6 @@ CONFIG_BEGIN(config_section_denial_desc)
 
 CONFIG_STRING(   id,          NULL                    )
 CONFIG_ENUM(     type,        "nsec3", dnssec_enum    )
-CONFIG_U32(      resalting,   "0"                     )   /// @todo 20160520 gve -- does not work in version 2.2.0
 CONFIG_STRING(   salt,        NULL                    )
 CONFIG_STRING(   algorithm,   "sha1"                  )
 CONFIG_U16(      iterations,  "1"                     )

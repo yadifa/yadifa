@@ -366,7 +366,7 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
     if(FAIL(return_value = zdb_zone_getserial(zone, &current_serial)))
     {
         zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_XFR);
-        return return_value;
+        return return_value; // will return ZDB_ERROR_NOSOAATAPEX if the zone is invalid
     }
 
     if(FAIL(return_value = zdb_zone_getsoa_ttl_rdata(zone, &ttl, &rdata_size, &rdata)))

@@ -1104,7 +1104,7 @@ alarm_run_tick(u32 epoch)
     {    
         alarm_event_node *event = (alarm_event_node*)ptr_vector_get(&rearm, i);
         event->epoch = epoch + 5;
-        alarm_set(event->handle, event);
+        alarm_set(event->handle, event); // can use the handle as it's a re-arm
     }
     ptr_vector_destroy(&rearm);
     

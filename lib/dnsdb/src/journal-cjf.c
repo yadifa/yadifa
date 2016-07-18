@@ -300,7 +300,7 @@ journal_cjf_readunlock(journal_cjf *jnl)
 static int
 jnl_open_file(journal_cjf *jnl, bool create)
 {
-    const u8* origin = (jnl->zone)?jnl->zone->origin:(const u8*)"\004NULL"; // VALID
+    const u8* origin = (jnl->zone)?jnl->zone->origin:(const u8*)"\010<notset>"; // VALID
     log_debug3("cjf: %{dnsname},%i: opening%s %s", origin, jnl->fd, (create)?"/creating":"", jnl->journal_file_name);
     
     int flags = O_RDWR;
@@ -414,7 +414,7 @@ jnl_header_flush(journal_cjf *jnl)
 static void
 jnl_close_file(journal_cjf *jnl)
 {
-    log_debug3("cjf: %s,%i: closing file", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
+    log_debug3("cjf: %s,%i: closing file", jnl->journal_file_name, jnl->fd);
     
     if(jnl->fd >= 0)
     {
@@ -426,7 +426,14 @@ jnl_close_file(journal_cjf *jnl)
         jnl_header_flush(jnl);
         log_debug3("cjf: %s,%i: closing file: closing file", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
         
-        log_info("zone: %{dnsname}: closing journal file '%s'", jnl->zone->origin, jnl->journal_file_name);
+        if(jnl->zone != NULL)
+        {
+            log_info("zone: %{dnsname}: closing journal file '%s'", jnl->zone->origin, jnl->journal_file_name);
+        }
+        else
+        {
+            log_info("zone: <notset>: closing journal file '%s'", jnl->journal_file_name);
+        }
         
         close_ex(jnl->fd);
         jnl->fd = -1;

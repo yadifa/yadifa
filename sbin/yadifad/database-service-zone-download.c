@@ -214,8 +214,6 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
     
     zone_unlock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
     
-    u64 now = timeus();
-    
     u32 loaded_serial = ~0;
     u16 transfer_type = 0;
     bool may_try_next_master = FALSE;
@@ -232,6 +230,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                 zone_desc->refresh.refreshed_time = time(NULL);
                 zone_desc->multimaster_failures = 0;
                 zone_desc->status_flags |= ZONE_STATUS_DOWNLOADED;
+                zone_desc->download_failure_count = 0;
                 zone_unlock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
                 
                 transfer_type = (u16)return_value;
@@ -246,6 +245,10 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                 log_err("slave: query error for domain %{dnsname} from master at %{hostaddr}: %r", origin, servers, return_value);
                 
                 may_try_next_master = is_multimaster;
+                
+                zone_lock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
+                ++zone_desc->download_failure_count;
+                zone_unlock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
             }
             
             break;
@@ -262,6 +265,14 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                 return_value = ERROR;
                 break;
             }
+            
+            if(zdb_zone_isinvalid(zone))
+            {
+                log_err("slave: zone %{dnsname} cannot do an incremental transfer from an invalid zone", origin);
+
+                return_value = ERROR;
+                break;
+            }
 
             if((zone_desc->flags & ZONE_FLAG_NO_MASTER_UPDATES) == 0)
             {
@@ -270,6 +281,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                     zone_lock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
                     zone_desc->refresh.refreshed_time = time(NULL);
                     zone_desc->multimaster_failures = 0;
+                    zone_desc->download_failure_count = 0;
                     zone_unlock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
                     
                     transfer_type = (u16)return_value;
@@ -284,6 +296,10 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                     log_err("slave: query error for domain %{dnsname} from master at %{hostaddr}: %r", origin, servers, return_value);
                     
                     may_try_next_master = is_multimaster;
+                    
+                    zone_lock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
+                    ++zone_desc->download_failure_count;
+                    zone_unlock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
                 }
             }
             else
@@ -314,36 +330,60 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
     if(!may_try_next_master)
     {
         database_fire_zone_downloaded(origin, transfer_type, loaded_serial, return_value);
+
+        if(FAIL(return_value))
+        {
+            log_warn("slave: %{hostaddr} master failed to answer for domain %{dnsname}: retrying", servers, origin);
+            
+            random_ctx rndctx = thread_pool_get_random_ctx();
+            u32 jitter = random_next(rndctx);
+            if(g_config->axfr_retry_jitter > 0)
+            {
+                jitter %= g_config->axfr_retry_jitter;
+            }
+
+            time_t next_try = time(NULL) + g_config->axfr_retry_delay + jitter +
+                    MIN(zone_desc->download_failure_count * g_config->axfr_retry_failure_delay_multiplier, g_config->axfr_retry_failure_delay_max);
+            
+            if(qtype == TYPE_AXFR)
+            {
+                database_zone_axfr_query_at(zone_desc->origin, next_try); // should not be lower than 5
+            }
+            else
+            {
+                database_zone_ixfr_query_at(zone_desc->origin, next_try); // should not be lower than 5
+            }
+        }
     }
-    else
+    else // failure + multimaster
     {
+        random_ctx rndctx = thread_pool_get_random_ctx();
+        u32 jitter = random_next(rndctx);
+        if(g_config->axfr_retry_jitter > 0)
+        {
+            jitter %= g_config->axfr_retry_jitter;
+        }
+        
+        time_t next_try = time(NULL) + g_config->axfr_retry_delay + jitter;
+                
         if(zone_desc->multimaster_failures < zone_desc->multimaster_retries)
         {
             log_warn("slave: %{hostaddr} master failed to answer for domain %{dnsname}: retrying", servers, origin);
             
-            ++zone_desc->multimaster_failures;
+            next_try += MIN(zone_desc->download_failure_count * g_config->axfr_retry_failure_delay_multiplier, g_config->axfr_retry_failure_delay_max);
             
-            if(timeus() - now >= 1000000) // 1 second
+            if(zone_desc->multimaster_failures < MAX_U8)
             {
-                if(qtype == TYPE_AXFR)
-                {
-                    database_zone_axfr_query(zone_desc->origin);
-                }
-                else
-                {
-                    database_zone_ixfr_query(zone_desc->origin);
-                }
+                ++zone_desc->multimaster_failures;
+            }
+            
+            if(qtype == TYPE_AXFR)
+            {
+                database_zone_axfr_query_at(zone_desc->origin, next_try); // should not be lower than 5
             }
             else
             {
-                if(qtype == TYPE_AXFR)
-                {
-                    database_zone_axfr_query_at(zone_desc->origin, time(NULL) + 5); // should not be lower than 5
-                }
-                else
-                {
-                    database_zone_ixfr_query_at(zone_desc->origin, time(NULL) + 5); // should not be lower than 5
-                }
+                database_zone_ixfr_query_at(zone_desc->origin, next_try); // should not be lower than 5
             }
         }
         else
@@ -376,26 +416,19 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                 
                 zone_desc->flags |= ZONE_FLAG_DROP_CURRENT_ZONE_ON_LOAD;
                 
-                if(timeus() - now >= 1000000) // 1 second
-                {
-                    database_zone_axfr_query(zone_desc->origin);
-                }
-                else
-                {
-                    database_zone_axfr_query_at(zone_desc->origin, time(NULL) + 5);
-                }
+                database_zone_axfr_query_at(zone_desc->origin, next_try);
             }
             else
             {
                 log_warn("slave: %{hostaddr} master failed to answer for domain %{dnsname}: next master is %{hostaddr}", servers, origin, zone_desc->masters);
                 
-                if(timeus() - now >= 1000000) // 1 second
+                if(qtype == TYPE_AXFR)
                 {
-                    database_zone_ixfr_query(zone_desc->origin);
+                    database_zone_axfr_query_at(zone_desc->origin, next_try);
                 }
-                else
+                else if(qtype == TYPE_IXFR)
                 {
-                    database_zone_ixfr_query_at(zone_desc->origin, time(NULL) + 5);
+                    database_zone_ixfr_query_at(zone_desc->origin, next_try);
                 }
             }
         }
