@@ -754,7 +754,7 @@ AC_CHECK_HEADERS([sys/byteorder.h])
 AC_CHECK_HEADERS([sys/socket.h])
 AC_CHECK_HEADERS([netinet/in.h])
 AC_CHECK_HEADERS([netinet6/in6.h])
-
+AC_CHECK_HEADERS([cpuid.h])
 ])
 
 dnl timegm support

@@ -157,7 +157,7 @@ Main without includes
     serverid                "yadifad\-01"
 
     # The version returned by a query to version.yadifa. CH TXT (alias: version\-chaos)
-    version                 "2.2.1"
+    version                 "2.2.2"
 
     # Set the maximum UDP packet size.  
     # note: the packetsize cannot be less than 512 or more than 65535.
@@ -805,7 +805,7 @@ from the sources.
 .SH VERSION
 
 .PP
-Version: 2.2.1 of 2016-07-19\&.
+Version: 2.2.2 of 2016-11-08\&.
 .PP
 .SH MAILING LISTS
 

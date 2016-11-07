@@ -1215,7 +1215,7 @@ dnssec_keystore_new_key(u8 algorithm, u32 size, u16 flags, const char *origin, d
             case DNSKEY_ALGORITHM_RSASHA256_NSEC3:
             case DNSKEY_ALGORITHM_RSASHA512_NSEC3:
             {
-                if(FAIL(return_value = rsa_newinstance(size, algorithm, flags, clean_origin, &key)))
+                if(FAIL(return_value = dnskey_rsa_newinstance(size, algorithm, flags, clean_origin, &key)))
                 {
                     return return_value;
                 }
@@ -1225,21 +1225,25 @@ dnssec_keystore_new_key(u8 algorithm, u32 size, u16 flags, const char *origin, d
             case DNSKEY_ALGORITHM_DSASHA1:
             case DNSKEY_ALGORITHM_DSASHA1_NSEC3:
             {
-                if(FAIL(return_value = dsa_newinstance(size, algorithm, flags, clean_origin, &key)))
+                if(FAIL(return_value = dnskey_dsa_newinstance(size, algorithm, flags, clean_origin, &key)))
                 {
                     return return_value;
                 }
 
                 break;
             }
+#if HAS_ECDSA_SUPPORT
             case DNSKEY_ALGORITHM_ECDSAP256SHA256:
             case DNSKEY_ALGORITHM_ECDSAP384SHA384:
             {
-                if(FAIL(return_value = ecdsa_newinstance(size, algorithm, flags, clean_origin, &key)))
+                if(FAIL(return_value = dnskey_ecdsa_newinstance(size, algorithm, flags, clean_origin, &key)))
                 {
                     return return_value;
                 }
+
+                break;
             }
+#endif
             default:
             {
                 return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;

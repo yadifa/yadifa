@@ -52,11 +52,11 @@
 extern "C" {
 #endif
 
-ya_result ecdsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key** out_key);
+ya_result dnskey_ecdsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key** out_key);
 
-ya_result ecdsa_newinstance(u32 size, u8 algorithm,u16 flags,const char* origin, dnssec_key** out_key);
+ya_result dnskey_ecdsa_newinstance(u32 size, u8 algorithm,u16 flags,const char* origin, dnssec_key** out_key);
 
-ya_result ecdsa_private_parse_field(dnssec_key *key, parser_s *p);
+void dnskey_ecdsa_parse_init(dnskey_field_parser *fp);
 
 #ifdef	__cplusplus
 }

@@ -90,15 +90,36 @@ extern "C"
 #endif
     
 #define DNSKEY_RDATA_TAG 0x445259454b534e44 /* DNSKEYRD */
+
+union dnskey_getter_retval_t
+{
+    BIGNUM *bignumber;
+    const BIGNUM *bignumber_const;
+    int integer;
+};
+
+struct dnssec_key;
+
+typedef union dnskey_getter_retval_t dnskey_getter_retval_t;
+
+typedef dnskey_getter_retval_t (*dnskey_field_getter_method)(const struct dnssec_key*);
+typedef void (*dnskey_field_setter_method)(struct dnssec_key*, dnskey_getter_retval_t);
+
+#define STRUCTDESCRIPTOR_BN 1
     
-struct structdescriptor
+struct dnskey_field_access
 {
     const char* name;
-    size_t address;
+    size_t relative;
     int type;
 };
 
-#define STRUCTDESCRIPTOR_BN 1
+typedef struct dnskey_field_access dnskey_field_access;
+
+struct parser_s;
+
+ya_result dnskey_field_access_parse(const struct dnskey_field_access *sd, void *base, struct parser_s *p);
+ya_result dnskey_field_access_print(const struct dnskey_field_access *sd, const void *base, output_stream *os);
 
 struct dnssec_key_vtbl;
 typedef struct dnssec_key_vtbl dnssec_key_vtbl;
@@ -111,7 +132,9 @@ union dnssec_key_data
     void* any;
     RSA* rsa;
     DSA* dsa;
+#if HAS_ECDSA_SUPPORT
     EC_KEY* ec;
+#endif
 
 };
 
@@ -185,6 +208,29 @@ struct dnssec_key_vtbl
     
     const char *__class__;
 };
+
+struct dnskey_field_parser;
+
+typedef ya_result dnskey_field_parser_parse_field_method(struct dnskey_field_parser *, struct parser_s *);
+typedef ya_result dnskey_field_parser_set_key_method(struct dnskey_field_parser *, dnssec_key *);
+typedef void dnskey_field_parser_finalise_method(struct dnskey_field_parser *);
+
+struct dnskey_field_parser_vtbl
+{
+    dnskey_field_parser_parse_field_method *parse_field;
+    dnskey_field_parser_set_key_method *set_key;
+    dnskey_field_parser_finalise_method *finalise;
+    const char *__class__;
+};
+
+struct dnskey_field_parser
+{
+    void *data;
+    const struct dnskey_field_parser_vtbl *vtbl;
+};
+
+typedef struct dnskey_field_parser dnskey_field_parser;
+
 
 /**
  * Initialises internal structures

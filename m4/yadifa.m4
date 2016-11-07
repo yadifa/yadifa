@@ -405,39 +405,8 @@ AC_DEFUN([AC_YADIFA_ENABLE_DNSTCL], [
 	requires_dnscore=0
 ])
 
-AC_DEFUN([AC_YADIFA_ADD_LIBS], [
+AC_DEFUN([AC_YADIFA_ADD_SSL], [
 
-LDDYN="-Wl,-Bdynamic"
-LDSTAT="-Wl,-Bstatic"
-
-echo -n "checking if -Bstatic & -Bdynamic are supported ... "
-$CC -Wl,-Bstatic 2>&1|grep Bstatic > /dev/null
-if [[ $? -eq 0 ]]
-then
-	echo "not supported";
-	LDDYN=""
-	LDSTAT=""
-else
-	echo "supported";
-fi
-
-LIBS="$LDDYN $LIBS"
-
-AC_SEARCH_LIBS([gethostbyname],[nsl],,[exit 1])
-AC_SEARCH_LIBS([socket],[socket],,[exit 1])
-AC_SEARCH_LIBS([dlopen],[dl],,[exit 1])
-AC_SEARCH_LIBS([pthread_self],[pthread],,[exit 1])
-
-dnl AC_GETHOSTBYNAME_CHECK
-
-dnl SSL
-
-AC_YADIFA_ENABLE_SSL
-
-if [[ $requires_ssl -eq 1 ]]
-then
-	echo "SSL is required by this setup ..."
-    
     SSLDEPS=""
     echo "Finding the SSL dependencies"
     AC_SEARCH_LIBS([deflate],[z])
@@ -490,10 +459,51 @@ then
 dnl    	AC_CHECK_LIB([crypto], [RSA_new],,,[$SSLDEPS])
 dnl		AC_CHECK_LIB([ssl], [SSL_library_init],,[exit],[$SSLDEPS])
         AC_SEARCH_LIBS([RSA_new],[crypto],,[exit 1],)
-        AC_SEARCH_LIBS([SSL_library_init],[ssl],,[exit 1])
+        AC_SEARCH_LIBS([SSL_library_init],[ssl],,[
+            AC_SEARCH_LIBS([OPENSSL_init_ssl],[ssl],,[exit 1])
+            ])
+
     fi
 
 	AC_SUBST(OPENSSL)
+
+
+])
+
+AC_DEFUN([AC_YADIFA_ADD_LIBS], [
+
+LDDYN="-Wl,-Bdynamic"
+LDSTAT="-Wl,-Bstatic"
+
+echo -n "checking if -Bstatic & -Bdynamic are supported ... "
+$CC -Wl,-Bstatic 2>&1|grep Bstatic > /dev/null
+if [[ $? -eq 0 ]]
+then
+	echo "not supported";
+	LDDYN=""
+	LDSTAT=""
+else
+	echo "supported";
+fi
+
+LIBS="$LDDYN $LIBS"
+
+AC_SEARCH_LIBS([gethostbyname],[nsl],,[exit 1])
+AC_SEARCH_LIBS([socket],[socket],,[exit 1])
+AC_SEARCH_LIBS([dlopen],[dl],,[exit 1])
+AC_SEARCH_LIBS([pthread_self],[pthread],,[exit 1])
+
+dnl AC_GETHOSTBYNAME_CHECK
+
+dnl SSL
+
+AC_YADIFA_ENABLE_SSL
+
+if [[ $requires_ssl -eq 1 ]]
+then
+	echo "SSL is required by this setup ..."
+    
+    AC_YADIFA_ADD_SSL
 
 else
 	echo "SSL is not required by this setup"
@@ -733,7 +743,12 @@ dnl ASCII 7
 dnl =======
 
 AC_HAS_ENABLE(full_ascii7,FULL_ASCII7,[YADIFA will now accept ASCII7 characters in DNS names (not recommended)])
-        
+
+dnl ECDSA
+dnl =====
+AC_HAS_DISABLE(ecdsa,ECDSA_SUPPORT,[Disables Elliptic Curve (ECDSA) support (ie: the available OpenSSL does not supports it)])
+
+
 dnl NON-AA AXFR (non-AA AXFR as sent by MS DNS)
 dnl ==========================================================================
 

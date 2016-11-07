@@ -53,7 +53,9 @@
 #include "dnscore/dnskey.h"
 #include "dnscore/dnskey_rsa.h"
 #include "dnscore/dnskey_dsa.h"
+#if HAS_ECDSA_SUPPORT
 #include "dnscore/dnskey_ecdsa.h"
+#endif
 #include "dnscore/digest.h"
 #include "dnscore/base64.h"
 #include "dnscore/string_set.h"
@@ -136,6 +138,113 @@ dnskey_get_algorithm_name_from_value(int alg)
         default:
             return "?";
     }
+}
+
+static ya_result
+dnskey_field_parser_dummy_parse_field(struct dnskey_field_parser *parser, struct parser_s *p)
+{
+    (void)parser;
+    (void)p;
+    return ERROR;
+}
+
+static ya_result
+dnskey_field_parser_dummy_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
+{
+    (void)parser;
+    (void)key;
+    return ERROR;
+}
+
+static void
+dnskey_field_parser_dummy_finalise_method(struct dnskey_field_parser *parser)
+{
+    (void)parser;
+}
+
+struct dnskey_field_parser_vtbl dnskey_field_dummy_parser =
+{
+    dnskey_field_parser_dummy_parse_field,
+    dnskey_field_parser_dummy_set_key,
+    dnskey_field_parser_dummy_finalise_method,
+    "DUMMY"
+};
+
+ya_result
+dnskey_field_access_parse(const struct dnskey_field_access *sd, void *base, parser_s *p)
+{
+    ya_result ret = ERROR;
+
+    u32 label_len = parser_text_length(p);
+    const char *label = parser_text(p);
+    bool parsed_it = FALSE;
+    u8 tmp_out[DNSSEC_MAXIMUM_KEY_SIZE_BYTES];
+    
+    for(; sd->name != NULL; sd++)
+    {
+        if(memcmp(label, sd->name, label_len) == 0)
+        {
+            BIGNUM **bnp = (BIGNUM**)(((u8*)base) + sd->relative);
+            
+            ret = parser_next_word(p);
+            
+            if((*bnp != NULL) || FAIL(ret))
+            {
+                return ret;
+            }
+
+            u32 word_len = parser_text_length(p);
+            const char *word = parser_text(p);
+            
+            ya_result n = base64_decode(word, word_len, tmp_out);
+
+            if(FAIL(n))
+            {
+                log_err("dnskey: unable to decode field %s", sd->name);
+                return n;
+            }
+
+            *bnp = BN_bin2bn(tmp_out, n, NULL);
+            
+            if(*bnp == NULL)
+            {
+                log_err("dnskey: unable to get big number from field %s", sd->name);
+                return DNSSEC_ERROR_BNISNULL;
+            }
+            
+            parsed_it = TRUE;
+            
+            break;
+        }
+    } /* for each possible field */
+    
+    if(!parsed_it)
+    {
+        return SUCCESS; // unknown keyword (ignore)
+    }
+            
+    return ret;
+}
+
+ya_result
+dnskey_field_access_print(const struct dnskey_field_access *sd, const void *base, output_stream *os)
+{
+    ya_result ret = SUCCESS;
+    
+    for(; sd->name != NULL; sd++)
+    {
+        const u8 *bn_ptr_ptr = (((const u8*)base) + sd->relative);
+        const BIGNUM **bn = (const BIGNUM**)bn_ptr_ptr;
+        
+        if(bn != NULL)
+        {
+            osformat(os, "%s: ", sd->name);
+            dnskey_write_bignum_as_base64_to_stream(*bn, os);
+            osprintln(os, "");
+        }
+    }
+    
+    return ret;
 }
 
 /*
@@ -504,17 +613,19 @@ dnskey_new_from_rdata(const u8 *rdata, u16 rdata_size, const u8 *fqdn, dnssec_ke
         case DNSKEY_ALGORITHM_RSASHA1_NSEC3:
         case DNSKEY_ALGORITHM_RSASHA256_NSEC3:
         case DNSKEY_ALGORITHM_RSASHA512_NSEC3:
-            return_value = rsa_loadpublic(rdata, rdata_size, origin, out_key); // RC
+            return_value = dnskey_rsa_loadpublic(rdata, rdata_size, origin, out_key); // RC
             break;
             
         case DNSKEY_ALGORITHM_DSASHA1:
         case DNSKEY_ALGORITHM_DSASHA1_NSEC3:
-            return_value = dsa_loadpublic(rdata, rdata_size, origin, out_key); // RC
+            return_value = dnskey_dsa_loadpublic(rdata, rdata_size, origin, out_key); // RC
             break;
+#if HAS_ECDSA_SUPPORT
         case DNSKEY_ALGORITHM_ECDSAP256SHA256:
         case DNSKEY_ALGORITHM_ECDSAP384SHA384:
-            return_value = ecdsa_loadpublic(rdata, rdata_size, origin, out_key); // RC
+            return_value = dnskey_ecdsa_loadpublic(rdata, rdata_size, origin, out_key); // RC
             break;
+#endif
 
         default:
             return_value = DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
@@ -1140,9 +1251,11 @@ ya_result
 dnskey_new_private_key_from_file(const char *filename, dnssec_key **keyp)
 {
     dnssec_key *key;
+    dnskey_field_parser dnskey_parser = {NULL, &dnskey_field_dummy_parser};
+    
     ya_result ret;
     int path_len;
-    int algorithm;
+    int algorithm = -1;
     int tag;
     u8 parsed_algorithm;
     //bool ext_is_private;
@@ -1372,34 +1485,48 @@ dnskey_new_private_key_from_file(const char *filename, dnssec_key **keyp)
                 }
                 else
                 {
-                    switch(algorithm)
-                    {            
-                        case DNSKEY_ALGORITHM_RSASHA1:
-                        case DNSKEY_ALGORITHM_RSASHA1_NSEC3:
-                        case DNSKEY_ALGORITHM_RSASHA256_NSEC3:
-                        case DNSKEY_ALGORITHM_RSASHA512_NSEC3:
-                        {
-                            ret = rsa_private_parse_field(key, &parser);
-                            break;
-                        }
-                        case DNSKEY_ALGORITHM_DSASHA1:
-                        case DNSKEY_ALGORITHM_DSASHA1_NSEC3:
-                        {
-                            ret = dsa_private_parse_field(key, &parser);
-                            break;
-                        }
+                    if(dnskey_parser.data == NULL)
+                    {
+                        ret = SUCCESS;
                         
-                        case DNSKEY_ALGORITHM_ECDSAP256SHA256:
-                        case DNSKEY_ALGORITHM_ECDSAP384SHA384:
+                        switch(algorithm)
                         {
-                            ret = ecdsa_private_parse_field(key, &parser);
-                            break;
+                            case DNSKEY_ALGORITHM_RSASHA1:
+                            case DNSKEY_ALGORITHM_RSASHA1_NSEC3:
+                            case DNSKEY_ALGORITHM_RSASHA256_NSEC3:
+                            case DNSKEY_ALGORITHM_RSASHA512_NSEC3:
+                            {
+                                dnskey_rsa_parse_init(&dnskey_parser);
+                                break;
+                            }
+                            case DNSKEY_ALGORITHM_DSASHA1:
+                            case DNSKEY_ALGORITHM_DSASHA1_NSEC3:
+                            {
+                                dnskey_dsa_parse_init(&dnskey_parser);
+                                break;
+                            }
+#if HAS_ECDSA_SUPPORT
+                            case DNSKEY_ALGORITHM_ECDSAP256SHA256:
+                            case DNSKEY_ALGORITHM_ECDSAP384SHA384:
+                            {
+                                dnskey_ecdsa_parse_init(&dnskey_parser);
+                                break;
+                            }
+#endif
+                            default:
+                            {
+                                ret = DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
+                                break;
+                            }
                         }
-                        
-                        default:
-                        {
-                            ret = DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
-                        }
+                    }
+                    
+                    ret = dnskey_parser.vtbl->parse_field(&dnskey_parser, &parser);
+                    
+                    if(FAIL(ret))
+                    {
+                        log_err("dnssec: error parsing key %s: %r", path, ret);
+                        break;
                     }
 
                     while(FAIL(parser_expect_eol(&parser)))
@@ -1412,14 +1539,26 @@ dnskey_new_private_key_from_file(const char *filename, dnssec_key **keyp)
                 // else issue a warning
                 // note the last modification time of the file, for management
                 // close
-            }
+            } // for(;;)
 
+            if(ISOK(ret))
+            {
+                if(FAIL(ret = dnskey_parser.vtbl->set_key(&dnskey_parser, key)))
+                {
+                    log_err("dnssec: %s cannot be read as a private key", path);
+                }
+            }
+            
+            dnskey_parser.vtbl->finalise(&dnskey_parser);
             parser_finalize(&parser);   // also closes the stream
 
-            if(!dnssec_key_is_private(key))
+            if(ISOK(ret))
             {
-                log_err("dnssec: %s is not a valid private key", path);
-                ret = ERROR;
+                if(!dnssec_key_is_private(key))
+                {
+                    log_err("dnssec: %s is not a valid private key", path);
+                    ret = ERROR;
+                }
             }
 
             if(ISOK(ret))

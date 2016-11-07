@@ -203,8 +203,8 @@ struct message_tsig
     u8 mac[64];
     u8 *other;
 
-    HMAC_CTX ctx;   /* only used for tcp */
-    s8 tcp_tsig_countdown;  /* Maximum value is supposed to be 100 */
+    tsig_hmac_t hmac;       /* only used for tcp */
+    s8 tcp_tsig_countdown;  /* maximum value is supposed to be 100 */
     u8 mac_algorithm;
 };
 
@@ -217,6 +217,10 @@ struct message_tsig
 // flags for MESSAGE_MAKE_QUERY_EX
 #define MESSAGE_EDNS0_SIZE      0x4000 // any bit that is not set in EDNS0
 #define MESSAGE_EDNS0_DNSSEC    0x8000
+
+#define MESSAGE_BUFFER_SIZE     0x10500
+
+#define MESSAGE_DATA_CONTROL_BUFFER_SIZE    32  // used in --enable-message for storing the receiver address
 
 typedef struct message_data message_data;
 
@@ -249,6 +253,7 @@ struct message_data
 
     char protocol;
     u8 referral;
+    u8 control_buffer_size;
     /* bool is_delegation; for quick referral : later */
 
 #if DNSCORE_HAS_TSIG_SUPPORT
@@ -257,15 +262,17 @@ struct message_data
 
     u8 qname[MAX_DOMAIN_LENGTH];
     
+    u8 control_buffer[MESSAGE_DATA_CONTROL_BUFFER_SIZE];          // receives the destination address
+    
     /* Ensure (buffer - buffer_tcp_len) is equal to 2 ! */
     u64 __reserved_force_align__1;
     u32 __reserved_force_align__2;
     u16 __reserved_force_align__3;
     u8  buffer_tcp_len[2];           /* DON'T SEPARATE THESE TWO (FIRST)  */
-    u8  buffer[NETWORK_BUFFER_SIZE]; /* DON'T SEPARATE THESE TWO (SECOND) */
+    u8  buffer[MESSAGE_BUFFER_SIZE]; /* DON'T SEPARATE THESE TWO (SECOND) */
     u64 __reserved_force_align__4;
     u8  pool_buffer[MESSAGE_POOL_SIZE]; /* A memory pool for the lookup's benefit */
-    
+   
     volatile u64 recv_us;
     volatile u64 pushed_us;
     volatile u64 popped_us;

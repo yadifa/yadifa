@@ -334,7 +334,7 @@ nsec3_rrsig_updater_thread(void* context_)
             log_debug1("quota exceeded, postponing signature query");
             free(query);
             
-            task->stop_task = true;
+            task->stop_task = TRUE;
             
             continue;
         }
@@ -365,8 +365,9 @@ nsec3_rrsig_updater_thread(void* context_)
     }
 
     free(tmp_nsec3_ttlrdata);
-
+#if OPENSSL_VERSION_NUMBER < 0x10000000L
     ERR_remove_state(0);
+#endif
 
 #if DNSSEC_DEBUGLEVEL>0
     log_debug("nsec3_rrsig_updater_thread(%x): exit", id);
@@ -456,8 +457,9 @@ nsec3_rrsig_updater_result_process(nsec3_rrsig_answer_context_s *answer_context)
     }
     
     //
-    
+#if OPENSSL_VERSION_NUMBER < 0x10000000L
     ERR_remove_state(0);
+#endif
 
 #if DNSSEC_DEBUGLEVEL>0
     log_debug("nsec3_rrsig_updater_result_process(): exit");

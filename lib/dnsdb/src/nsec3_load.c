@@ -827,14 +827,13 @@ nsec3_load_forced(nsec3_load_context *context)
                 if(nsec3_ttlrdata != NULL)
                 {
                     rdata_desc nsec3_desc = {TYPE_NSEC3, nsec3_ttlrdata->rdata_size, &nsec3_ttlrdata->rdata_start[0]};
-                    log_warn("nsec3: computed: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
+                    log_debug("nsec3: computed: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
                     nsec3_desc.len = cr->rdata_size;
                     nsec3_desc.rdata = cr->rdata;
-                    log_warn("nsec3: received: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
+                    log_debug("nsec3: received: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
                 }
-
-#if 1
-                nsec3_zone_item_equals_rdata(n3, item, cr->rdata_size, cr->rdata);
+#ifdef DEBUG
+                nsec3_zone_item_equals_rdata_lenient(n3, item, cr->rdata_size, cr->rdata);
 #endif
                 nsec3_rejected++;
 

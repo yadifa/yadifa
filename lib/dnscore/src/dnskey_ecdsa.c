@@ -43,6 +43,9 @@
  *
  * USE INCLUDES */
 #include "dnscore/dnscore-config.h"
+
+#if HAS_ECDSA_SUPPORT
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
@@ -69,17 +72,88 @@
 
 #include "dnscore/dnskey.h"
 
-
+#include "dnscore/zalloc.h"
 
 #define MODULE_MSG_HANDLE g_system_logger
 
 #define DNSKEY_ALGORITHM_ECDSAP256SHA256_NID NID_X9_62_prime256v1
 #define DNSKEY_ALGORITHM_ECDSAP384SHA384_NID NID_secp384r1
 
-static const char* ecdsa_private_key_field = "PrivateKey";
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+
+#define SSL_FIELD_GET(st_,f_) if(f_ != NULL) { *f_ = st_->f_; }
+#define SSL_FIELD_SET(st_,f_) if(f_ != NULL) { BN_free(st_->f_); st_->f_ = f_; }
+#define SSL_FIELD_SET_FAIL(st_,f_) (st_->f_ == NULL && f_ == NULL)
+
+void ECDSA_SIG_get0(const ECDSA_SIG *sig, const BIGNUM **r, const BIGNUM **s)
+{
+    SSL_FIELD_GET(sig,r)
+    SSL_FIELD_GET(sig,s)
+}
+
+int ECDSA_SIG_set0(ECDSA_SIG *sig, BIGNUM *r, BIGNUM *s)
+{
+    if(SSL_FIELD_SET_FAIL(sig,r) || SSL_FIELD_SET_FAIL(sig,s))
+    {
+        return 0;
+    }
+    SSL_FIELD_SET(sig,r)
+    SSL_FIELD_SET(sig,s)
+    return 1;
+}
+
+#endif
+
+/*
+ * Intermediary key
+ */
+
+struct dnskey_ecdsa
+{
+    BIGNUM *private_key;
+};
+
+struct dnskey_ecdsa_const
+{
+    const BIGNUM *private_key;
+};
+
+static void dnskey_ecdsa_init(struct dnskey_ecdsa *yecdsa)
+{
+    memset(yecdsa, 0, sizeof(struct dnskey_ecdsa));
+}
+    
+static bool dnskey_ecdsa_to_ecdsa(struct dnskey_ecdsa *yecdsa, EC_KEY *ecdsa)
+{
+    if(EC_KEY_set_private_key(ecdsa, yecdsa->private_key) != 0)
+    {
+        yecdsa->private_key = NULL;
+    
+        return TRUE;
+    }
+    
+    return FALSE;
+}
+
+static void dnskey_ecdsa_from_ecdsa(struct dnskey_ecdsa_const *yecdsa, const EC_KEY *ecdsa)
+{
+    yecdsa->private_key = EC_KEY_get0_private_key(ecdsa);
+}
+
+static void dnskey_ecdsa_finalise(struct dnskey_ecdsa *yecdsa)
+{
+    if(yecdsa->private_key != NULL) BN_free(yecdsa->private_key);
+    dnskey_ecdsa_init(yecdsa);
+}
+
+static const struct dnskey_field_access ECDSA_field_access[] =
+{
+    {"PrivateKey", offsetof(struct dnskey_ecdsa,private_key), STRUCTDESCRIPTOR_BN},
+    {NULL, 0, 0}
+};
 
 static int
-ecdsa_getnid(u8 algorithm)
+dnskey_ecdsa_getnid(u8 algorithm)
 {
     switch(algorithm)
     {
@@ -99,7 +173,7 @@ ecdsa_getnid(u8 algorithm)
 }
 
 static int
-ecdsa_getnid_by_size(u32 size)
+dnskey_ecdsa_getnid_by_size(u32 size)
 {
     switch(size)
     {
@@ -119,7 +193,7 @@ ecdsa_getnid_by_size(u32 size)
 }
 
 static int
-ecdsa_nid_to_signature_bn_size(int nid)
+dnskey_ecdsa_nid_to_signature_bn_size(int nid)
 {
     switch(nid)
     {
@@ -139,7 +213,7 @@ ecdsa_nid_to_signature_bn_size(int nid)
 }
 
 static EC_KEY*
-ecdsa_genkey(u32 size)
+dnskey_ecdsa_genkey(u32 size)
 {
     yassert(size == 256 || size == 384);
 
@@ -147,7 +221,7 @@ ecdsa_genkey(u32 size)
     EC_KEY *ecdsa;
     EC_GROUP *group;
     
-    if((group = EC_GROUP_new_by_curve_name(ecdsa_getnid_by_size(size))) == NULL)
+    if((group = EC_GROUP_new_by_curve_name(dnskey_ecdsa_getnid_by_size(size))) == NULL)
     {
         return NULL;
     }
@@ -173,18 +247,22 @@ ecdsa_genkey(u32 size)
 }
 
 static ya_result
-ecdsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u8 *output)
+dnskey_ecdsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u8 *output)
 {
     ECDSA_SIG *sig = ECDSA_do_sign(digest, digest_len, key->key.ec);
 
     if(sig != NULL)
     {
-        int bn_size = ecdsa_nid_to_signature_bn_size(key->nid);
+        int bn_size = dnskey_ecdsa_nid_to_signature_bn_size(key->nid);
         ZEROMEMORY(output, bn_size * 2);
-        int r_size = BN_bn2bin(sig->r, output);
+        
+        const BIGNUM *sig_r;
+        const BIGNUM *sig_s;
+        ECDSA_SIG_get0(sig, &sig_r, &sig_s);
+        
+        int r_size = BN_bn2bin(sig_r, output);
         output += r_size;
-        //output += bn_size;
-        int s_size = BN_bn2bin(sig->s, output);
+        int s_size = BN_bn2bin(sig_s, output);
         
         ECDSA_SIG_free(sig);
         
@@ -208,7 +286,7 @@ ecdsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u8 *ou
 }
 
 static bool
-ecdsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len, const u8 *signature, u32 signature_len)
+dnskey_ecdsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len, const u8 *signature, u32 signature_len)
 {
     yassert(signature_len <= DNSSEC_MAXIMUM_KEY_SIZE_BYTES);
     
@@ -223,24 +301,24 @@ ecdsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len, cons
      * for P-384, each integer MUST be encoded as 48 octets.
      */
     
-    int bn_size = ecdsa_nid_to_signature_bn_size(key->nid);
-    
-    ECDSA_SIG sig;    
-    
+    int bn_size = dnskey_ecdsa_nid_to_signature_bn_size(key->nid);
+
     if(signature_len != bn_size * 2)
     {
         log_err("EC_KEY signature expected to be 41 bytes long");
         return FALSE;
     }
     
-    sig.r = BN_bin2bn(signature, bn_size, NULL);
-    signature += bn_size;
-    sig.s = BN_bin2bn(signature, bn_size, NULL);
-
-    int err = ECDSA_do_verify(digest, digest_len, &sig, key->key.ec);
+    ECDSA_SIG *sig = ECDSA_SIG_new();
     
-    BN_free(sig.r);
-    BN_free(sig.s);
+    BIGNUM *sig_r = BN_bin2bn(signature, bn_size, NULL);
+    signature += bn_size;
+    BIGNUM *sig_s = BN_bin2bn(signature, bn_size, NULL);
+    ECDSA_SIG_set0(sig, sig_r, sig_s);
+
+    int err = ECDSA_do_verify(digest, digest_len, sig, key->key.ec);
+    
+    ECDSA_SIG_free(sig);
     
     if(err != 1)
     {
@@ -250,7 +328,7 @@ ecdsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len, cons
         {
             char buffer[256];
             ERR_error_string_n(ssl_err, buffer, sizeof(buffer));
-            log_err("digest verification returned an ssl error %08x %s", ssl_err, buffer);
+            log_debug("digest verification returned an ssl error %08x %s", ssl_err, buffer);
         }
 
         ERR_clear_error();
@@ -262,10 +340,10 @@ ecdsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len, cons
 }
 
 static EC_KEY*
-ecdsa_public_load(u8 algorithm, const u8* rdata, u16 rdata_size)
+dnskey_ecdsa_public_load(u8 algorithm, const u8* rdata, u16 rdata_size)
 {
     EC_KEY *ecdsa;
-    if((ecdsa = EC_KEY_new_by_curve_name(ecdsa_getnid(algorithm))) != NULL)
+    if((ecdsa = EC_KEY_new_by_curve_name(dnskey_ecdsa_getnid(algorithm))) != NULL)
     {
         const EC_GROUP *group = EC_KEY_get0_group(ecdsa);
         EC_POINT *point = EC_POINT_new(group);
@@ -307,7 +385,7 @@ ecdsa_public_store(const EC_KEY* ecdsa, u8* output_buffer)
 }
 
 static u32
-ecdsa_dnskey_public_store(const dnssec_key* key, u8* rdata)
+dnskey_ecdsa_dnskey_public_store(const dnssec_key* key, u8* rdata)
 {
     u32 len;
 
@@ -329,7 +407,7 @@ ecdsa_dnskey_public_store(const dnssec_key* key, u8* rdata)
  */
 
 static u32
-ecdsa_public_getsize(const EC_KEY* ecdsa)
+dnskey_ecdsa_public_getsize(const EC_KEY* ecdsa)
 {
     const EC_GROUP *group = EC_KEY_get0_group(ecdsa);
     const EC_POINT *point = EC_KEY_get0_public_key(ecdsa);    
@@ -346,14 +424,14 @@ ecdsa_public_getsize(const EC_KEY* ecdsa)
 }
 
 static u32
-ecdsa_dnskey_public_getsize(const dnssec_key* key)
+dnskey_ecdsa_dnskey_public_getsize(const dnssec_key* key)
 {
-    u32 size = ecdsa_public_getsize(key->key.ec) + 4;
+    u32 size = dnskey_ecdsa_public_getsize(key->key.ec) + 4;
     return size;
 }
 
 static void
-ecdsa_free(dnssec_key* key)
+dnskey_ecdsa_free(dnssec_key* key)
 {
     EC_KEY* ecdsa = key->key.ec;
     EC_KEY_free(ecdsa);
@@ -362,7 +440,7 @@ ecdsa_free(dnssec_key* key)
 }
 
 static bool
-ecdsa_equals(const dnssec_key *key_a, const dnssec_key *key_b)
+dnskey_ecdsa_equals(const dnssec_key *key_a, const dnssec_key *key_b)
 {
     /* RSA, compare modulus and exponent, exponent first (it's the smallest) */
 
@@ -407,58 +485,30 @@ ecdsa_equals(const dnssec_key *key_a, const dnssec_key *key_b)
     return FALSE;
 }
 
-const struct structdescriptor *
-ecdsa_get_fields_descriptor(dnssec_key* key)
+static ya_result
+dnskey_ecdsa_print_fields(dnssec_key *key, output_stream *os)
 {
-    return NULL;
-}
-
-ya_result
-ecdsa_private_print_fields(dnssec_key *key, output_stream *os)
-{
-    if(key == NULL)
-    {
-        return UNEXPECTED_NULL_ARGUMENT_ERROR;
-    }
-
-    switch(key->algorithm)
-    {
-        case DNSKEY_ALGORITHM_ECDSAP256SHA256:
-        case DNSKEY_ALGORITHM_ECDSAP384SHA384:
-            break;
-        default:
-            return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
-            break;
-    }
+    struct dnskey_ecdsa_const yecdsa;
+    dnskey_ecdsa_from_ecdsa(&yecdsa, key->key.ec);
     
-    ya_result ret;
-    
-    EC_KEY* ecdsa = key->key.ec;
-   
-    osformat(os, "PrivateKey: ");
-    
-    const BIGNUM *private_key = EC_KEY_get0_private_key(ecdsa);
-    
-    ret = dnskey_write_bignum_as_base64_to_stream(private_key, os);
-    
-    osprintln(os, "");
-    
+    ya_result ret = dnskey_field_access_print(ECDSA_field_access, &yecdsa, os);
+        
     return ret;
 }
 
 static const dnssec_key_vtbl ecdsa_vtbl = {
-    ecdsa_signdigest,
-    ecdsa_verifydigest,
-    ecdsa_dnskey_public_getsize,
-    ecdsa_dnskey_public_store,
-    ecdsa_free,
-    ecdsa_equals,
-    ecdsa_private_print_fields,
+    dnskey_ecdsa_signdigest,
+    dnskey_ecdsa_verifydigest,
+    dnskey_ecdsa_dnskey_public_getsize,
+    dnskey_ecdsa_dnskey_public_store,
+    dnskey_ecdsa_free,
+    dnskey_ecdsa_equals,
+    dnskey_ecdsa_print_fields,
     "ECDSA"
 };
 
 static ya_result
-ecdsa_initinstance(EC_KEY *ecdsa, u8 algorithm, u16 flags, const char *origin, dnssec_key **out_key)
+dnskey_ecdsa_initinstance(EC_KEY *ecdsa, u8 algorithm, u16 flags, const char *origin, dnssec_key **out_key)
 {
     int nid;
     
@@ -466,7 +516,7 @@ ecdsa_initinstance(EC_KEY *ecdsa, u8 algorithm, u16 flags, const char *origin, d
     
     *out_key = NULL;
     
-    if(FAIL(nid = ecdsa_getnid(algorithm)))
+    if(FAIL(nid = dnskey_ecdsa_getnid(algorithm)))
     {
         return nid;
     }
@@ -475,7 +525,7 @@ ecdsa_initinstance(EC_KEY *ecdsa, u8 algorithm, u16 flags, const char *origin, d
     memset(rdata, 0xff, sizeof(rdata));
 #endif
 
-    u32 public_key_size = ecdsa_public_getsize(ecdsa);
+    u32 public_key_size = dnskey_ecdsa_public_getsize(ecdsa);
 
     if(public_key_size > DNSSEC_MAXIMUM_KEY_SIZE_BYTES)
     {
@@ -510,14 +560,25 @@ ecdsa_initinstance(EC_KEY *ecdsa, u8 algorithm, u16 flags, const char *origin, d
     return SUCCESS;
 }
 
-ya_result
-ecdsa_private_parse_field(dnssec_key *key, parser_s *p)
+static ya_result
+dnskey_ecdsa_parse_field(struct dnskey_field_parser *parser, parser_s *p)
 {
+    struct dnskey_ecdsa *yecdsa = (struct dnskey_ecdsa*)parser->data;
+    
+    ya_result ret = dnskey_field_access_parse(ECDSA_field_access, yecdsa, p);
+            
+    return ret;
+}
+
+static ya_result
+dnskey_ecdsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
+{
+    struct dnskey_ecdsa *yecdsa = (struct dnskey_ecdsa*)parser->data;
+    
     if(key == NULL)
     {
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
-
     switch(key->algorithm)
     {
         case DNSKEY_ALGORITHM_ECDSAP256SHA256:
@@ -528,120 +589,140 @@ ecdsa_private_parse_field(dnssec_key *key, parser_s *p)
             break;
     }
     
-    ya_result ret = ERROR;
-    
-    u32 label_len = parser_text_length(p);
-    const char *label = parser_text(p);
-    u8 tmp_out[DNSSEC_MAXIMUM_KEY_SIZE_BYTES];
-    
-    if((label_len == 10) && memcmp(label, ecdsa_private_key_field, 10) == 0)
+    if(yecdsa->private_key == NULL)
     {
-        if(ISOK(ret = parser_next_word(p)))
+        return ERROR;
+    }
+    
+    int nid;
+    
+    if(FAIL(nid = dnskey_ecdsa_getnid(key->algorithm)))
+    {
+        return nid;
+    }
+
+    const EC_GROUP *group = NULL;
+    
+    if(key->key.ec == NULL)
+    {
+        EC_KEY *ecdsa = EC_KEY_new_by_curve_name(nid);
+        
+        if(ecdsa == NULL)
         {
-            u32 word_len = parser_text_length(p);
-            const char *word = parser_text(p);
-
-            ya_result n = base64_decode(word, word_len, tmp_out);
-
-            if(ISOK(n))
-            {
-                BIGNUM *private_key = BN_bin2bn(tmp_out, n, NULL);
-
-                if(private_key != NULL)
-                {
-                    EC_KEY *ecdsa = key->key.ec;
-                    
-                    if(ecdsa == NULL)
-                    {
-                        ecdsa = EC_KEY_new_by_curve_name(ecdsa_getnid(key->algorithm));
-                        
-                        yassert(ecdsa != NULL);
-                    }
-
-                    const EC_GROUP *group = EC_KEY_get0_group(ecdsa);
-
-                    if(group != NULL)
-                    {
-                        const EC_POINT *point;
-                        
-                        if((point = EC_KEY_get0_public_key(ecdsa)) == NULL)
-                        {
-                            EC_POINT *gen_point = EC_POINT_new(group);
-
-                            if(EC_POINT_mul(group, gen_point, private_key, NULL, NULL, NULL) == 1)
-                            {
-                                EC_KEY_set_public_key(ecdsa, gen_point);
-                                point = gen_point;
-                            }
-                        }
-                        
-                        if(point != NULL)
-                        {
-                            EC_KEY_set_private_key(ecdsa, private_key);
-
-                            u32 rdata_size = ecdsa_public_getsize(ecdsa);
-                            u8 *rdata = tmp_out;
-                            if(rdata_size > DNSSEC_MAXIMUM_KEY_SIZE_BYTES)
-                            {
-                                return DNSSEC_ERROR_KEYISTOOBIG;
-                            }
-
-                            SET_U16_AT(rdata[0], key->flags);
-                            rdata[2] = DNSKEY_PROTOCOL_FIELD;
-                            rdata[3] = key->algorithm;
-
-                            if(ecdsa_public_store(ecdsa, &rdata[4]) != rdata_size)
-                            {
-                                return DNSSEC_ERROR_UNEXPECTEDKEYSIZE; /* Computed size != real size */
-                            }
-
-                            /* Note : + 4 because of the flags,protocol & algorithm bytes
-                             *        are not taken in account
-                             */
-
-                            u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size + 4);
-                            
-                            if(key->key.ec == NULL)
-                            {
-                                key->key.ec = ecdsa;
-                                key->vtbl = &ecdsa_vtbl;
-                            }
-
-                            key->tag = tag;
-                            key->nid = ecdsa_getnid(key->algorithm);
-
-                            key->status |= DNSKEY_KEY_IS_VALID | DNSKEY_KEY_IS_PRIVATE;
-
-                            return SUCCESS;
-                        }
-                    }
-                    
-                    if(key->key.ec == NULL)
-                    {
-                        EC_KEY_free(ecdsa);
-                    }
-                }
-                else
-                {
-                    log_err("unable to get big number from field %s", ecdsa_private_key_field);
-                    ret = DNSSEC_ERROR_BNISNULL;
-                }
-                
-                BN_free(private_key);
-            }
-            else
-            {
-                log_err("unable to decode field %s", ecdsa_private_key_field);
-                ret = n;
-            }
+            return ERROR;
+        }
+        
+        group = EC_KEY_get0_group(ecdsa);
+        
+        if(group == NULL)
+        {
+            return ERROR;
+        }
+        
+        key->key.ec = ecdsa;
+        key->vtbl = &ecdsa_vtbl;
+    }
+    else
+    {
+        group = EC_KEY_get0_group(key->key.ec);
+        
+        if(group == NULL)
+        {
+            return ERROR;
         }
     }
         
-    return ret;
+    EC_KEY *ecdsa = key->key.ec;
+
+    const EC_POINT *point;
+
+    if((point = EC_KEY_get0_public_key(ecdsa)) == NULL)
+    {
+        EC_POINT *gen_point = EC_POINT_new(group);
+
+        if(EC_POINT_mul(group, gen_point, yecdsa->private_key, NULL, NULL, NULL) == 1)
+        {
+            EC_KEY_set_public_key(ecdsa, gen_point);
+            point = gen_point;
+        }
+    }
+
+    if(point != NULL)
+    {
+        if(dnskey_ecdsa_to_ecdsa(yecdsa, ecdsa) != 0)
+        {
+            // at this point, yecdsa has been emptied
+            
+            u32 rdata_size = dnskey_ecdsa_public_getsize(ecdsa);
+
+            u16 tag;
+
+            u8 rdata[DNSSEC_MAXIMUM_KEY_SIZE_BYTES];
+
+            if(rdata_size > DNSSEC_MAXIMUM_KEY_SIZE_BYTES)
+            {
+                return DNSSEC_ERROR_KEYISTOOBIG;
+            }
+
+            SET_U16_AT(rdata[0], key->flags);
+            rdata[2] = DNSKEY_PROTOCOL_FIELD;
+            rdata[3] = key->algorithm;
+
+            if(ecdsa_public_store(ecdsa, &rdata[4]) != rdata_size)
+            {
+                return DNSSEC_ERROR_UNEXPECTEDKEYSIZE; /* Computed size != real size */
+            }
+
+            /* Note : + 4 because of the flags,protocol & algorithm bytes
+             *        are not taken in account
+             */
+
+            tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size + 4);
+
+            key->tag = tag;
+            key->nid = nid;
+
+            key->status |= DNSKEY_KEY_IS_VALID | DNSKEY_KEY_IS_PRIVATE;
+
+            return SUCCESS;
+        }
+    }
+
+    return ERROR;
+}
+
+static void
+dnskey_ecdsa_parse_finalise(struct dnskey_field_parser *parser)
+{
+    struct dnskey_ecdsa *ydsa = (struct dnskey_ecdsa*)parser->data;
+    
+    if(ydsa != NULL)
+    {
+        dnskey_ecdsa_finalise(ydsa);
+        ZFREE(ydsa, struct dnskey_ecdsa);
+    }
+}
+
+static const struct dnskey_field_parser_vtbl dsa_field_parser_vtbl =
+{
+    dnskey_ecdsa_parse_field,
+    dnskey_ecdsa_parse_set_key,
+    dnskey_ecdsa_parse_finalise,
+    "DSA"
+};
+
+void
+dnskey_ecdsa_parse_init(dnskey_field_parser *fp)
+{
+    struct dnskey_ecdsa *ydsa;
+    ZALLOC_OR_DIE(struct dnskey_ecdsa *, ydsa, struct dnskey_ecdsa, GENERIC_TAG);
+    ZEROMEMORY(ydsa, sizeof(struct dnskey_ecdsa));
+    fp->data = ydsa;
+    fp->vtbl = &dsa_field_parser_vtbl;
 }
 
 ya_result
-ecdsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key** out_key)
+dnskey_ecdsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key** out_key)
 {
     *out_key = NULL;
             
@@ -665,13 +746,13 @@ ecdsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key
     
     ya_result return_value = ERROR;
 
-    EC_KEY *ecdsa = ecdsa_public_load(algorithm, rdata, rdata_size);
+    EC_KEY *ecdsa = dnskey_ecdsa_public_load(algorithm, rdata, rdata_size);
     
     if(ecdsa != NULL)
     {
         dnssec_key *key;
         
-        if(ISOK(return_value = ecdsa_initinstance(ecdsa, algorithm, flags, origin, &key)))
+        if(ISOK(return_value = dnskey_ecdsa_initinstance(ecdsa, algorithm, flags, origin, &key)))
         {
             *out_key = key;
 
@@ -685,7 +766,7 @@ ecdsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key
 }
 
 ya_result
-ecdsa_newinstance(u32 size, u8 algorithm, u16 flags, const char* origin, dnssec_key** out_key)
+dnskey_ecdsa_newinstance(u32 size, u8 algorithm, u16 flags, const char* origin, dnssec_key** out_key)
 {
     *out_key = NULL;
     
@@ -701,13 +782,13 @@ ecdsa_newinstance(u32 size, u8 algorithm, u16 flags, const char* origin, dnssec_
     
     ya_result return_value = ERROR;
 
-    EC_KEY *ecdsa = ecdsa_genkey(size);
+    EC_KEY *ecdsa = dnskey_ecdsa_genkey(size);
     
     if(ecdsa != NULL)
     {
         dnssec_key *key;
         
-        if(ISOK(return_value = ecdsa_initinstance(ecdsa, algorithm, flags, origin, &key)))
+        if(ISOK(return_value = dnskey_ecdsa_initinstance(ecdsa, algorithm, flags, origin, &key)))
         {
             *out_key = key;
             
@@ -719,6 +800,11 @@ ecdsa_newinstance(u32 size, u8 algorithm, u16 flags, const char* origin, dnssec_
 
     return return_value;
 }
+#else
+
+void dnskey_ecdsa_not_supported() {}
+
+#endif // HAS_ECDSA_SUPPORT
 
 /*    ------------------------------------------------------------    */
 

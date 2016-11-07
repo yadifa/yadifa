@@ -73,7 +73,6 @@ libdnscore_la_SOURCES = \
 	src/config_struct.c \
 	src/counter_output_stream.c \
 	src/debug.c \
-	src/digest_sha0.c \
 	src/digest_sha1.c \
 	src/digest_sha256.c \
 	src/digest_sha384.c \

@@ -460,7 +460,7 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
     {
         if(missing_nsec_records + sibling_count + nsec_under_delegation)
         {
-            log_warn("nsec: missing records: %u, nsec with siblings: %u, nsec under delegation: %u", missing_nsec_records, sibling_count, nsec_under_delegation);
+            log_debug("nsec: missing records: %u, nsec with siblings: %u, nsec under delegation: %u", missing_nsec_records, sibling_count, nsec_under_delegation);
         }
     }
     

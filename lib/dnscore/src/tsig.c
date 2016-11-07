@@ -43,12 +43,12 @@
 #include <stdlib.h>
 
 #include "dnscore/dnscore-config.h"
-
+#include "dnscore/zalloc.h"
 #include "dnscore/message.h" // DO NOT REMOVE ME
 #include "dnscore/tsig.h"
 #include "dnscore/packet_reader.h"
 
-#if DNSCORE_HAS_TSIG_SUPPORT
+//#if DNSCORE_HAS_TSIG_SUPPORT
 
 #define TSIGNODE_TAG 0x45444f4e47495354
 #define TSIGPAYL_TAG 0x4c59415047495354
@@ -225,6 +225,91 @@
 #undef AVL_REFERENCE_TYPE
 #undef _AVL_H_INC
 
+/**
+ * Allocates an HMAC_CTX
+ * This layer has been added for openssl-1.1.0 compatibility
+ */
+
+tsig_hmac_t
+tsig_hmac_allocate()
+{
+#if OPENSSL_VERSION_NUMBER < 0x10100000L // ie: 0.9.x
+    HMAC_CTX *hmac;
+    ZALLOC_OR_DIE(HMAC_CTX*, hmac, HMAC_CTX, GENERIC_TAG);
+    HMAC_CTX_init(hmac);
+#else
+    HMAC_CTX *hmac = HMAC_CTX_new();
+    if(hmac == NULL)
+    {
+        abort();
+    }
+#endif
+    return hmac;
+}
+
+/**
+ * Frees an HMAC_CTX
+ * This layer has been added for openssl-1.1.0 compatibility
+ */
+
+void
+tsig_hmac_free(tsig_hmac_t t)
+{
+    HMAC_CTX *hmac = (HMAC_CTX*)t;
+    yassert(hmac != NULL);
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    HMAC_CTX_cleanup(hmac);
+    ZFREE(t, HMAC_CTX);
+#else
+    HMAC_CTX_free(hmac);
+#endif
+}
+
+void tsig_hmac_reset(tsig_hmac_t t)
+{
+    HMAC_CTX *hmac = (HMAC_CTX*)t;
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    HMAC_CTX_cleanup(hmac);
+    HMAC_CTX_init(hmac);
+#else
+    HMAC_CTX_reset(hmac);
+#endif
+}
+
+void tsig_hmac_init(tsig_hmac_t t, const void *key, int len, const EVP_MD *md)
+{
+    HMAC_CTX *hmac = (HMAC_CTX*)t;
+#if OPENSSL_VERSION_NUMBER < 0x10000000L
+    HMAC_Init(hmac, key, len, md);
+#else
+    HMAC_Init_ex(hmac, key, len, md, NULL);
+#endif
+}
+
+int
+tsig_hmac_update(tsig_hmac_t hmac, const void *data, size_t len)
+{
+#if OPENSSL_VERSION_NUMBER < 0x10000000L
+    HMAC_Update((HMAC_CTX*)hmac, (const unsigned char*)data, len);
+    return 1;
+#else
+    int ret = HMAC_Update((HMAC_CTX*)hmac, (const unsigned char*)data, len);
+    return ret;
+#endif
+}
+
+int
+tsig_hmac_final(tsig_hmac_t hmac, void *out_data, unsigned int *out_len)
+{
+#if OPENSSL_VERSION_NUMBER < 0x10000000L
+    HMAC_Final((HMAC_CTX*)hmac, (unsigned char*)out_data, out_len);
+    return 1;
+#else
+    int ret = HMAC_Final((HMAC_CTX*)hmac, (unsigned char*)out_data, out_len);
+    return ret;
+#endif
+}
+
 /*
  *
  */
@@ -389,34 +474,33 @@ tsig_verify_query(message_data *mesg)
     log_debug("tsig_verify: stop");
 #endif
 
-    HMAC_CTX ctx;
-    HMAC_CTX_init(&ctx);
+    tsig_hmac_t hmac = tsig_hmac_allocate();
 
-    HMAC_Init(&ctx, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, mesg->tsig.tsig->evp_md);
+    tsig_hmac_init(hmac, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, mesg->tsig.tsig->evp_md);
 
     /* DNS message */
 
-    HMAC_Update(&ctx, mesg->buffer, mesg->received);
+    tsig_hmac_update(hmac, mesg->buffer, mesg->received);
 
     /* TSIG Variables */
 
-    HMAC_Update(&ctx, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len);
-    HMAC_Update(&ctx, tsig_classttl, sizeof(tsig_classttl));
-    HMAC_Update(&ctx, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len);
-    HMAC_Update(&ctx, (u8*) & mesg->tsig.timehi, 2);
-    HMAC_Update(&ctx, (u8*) & mesg->tsig.timelo, 4);
-    HMAC_Update(&ctx, (u8*) & mesg->tsig.fudge, 2);
-    HMAC_Update(&ctx, (u8*) & mesg->tsig.error, 2);
-    HMAC_Update(&ctx, (u8*) & mesg->tsig.other_len, 2);
+    tsig_hmac_update(hmac, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len);
+    tsig_hmac_update(hmac, tsig_classttl, sizeof(tsig_classttl));
+    tsig_hmac_update(hmac, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len);
+    tsig_hmac_update(hmac, (u8*) & mesg->tsig.timehi, 2);
+    tsig_hmac_update(hmac, (u8*) & mesg->tsig.timelo, 4);
+    tsig_hmac_update(hmac, (u8*) & mesg->tsig.fudge, 2);
+    tsig_hmac_update(hmac, (u8*) & mesg->tsig.error, 2);
+    tsig_hmac_update(hmac, (u8*) & mesg->tsig.other_len, 2);
 
     if(mesg->tsig.other_len != 0)
     {
-        HMAC_Update(&ctx, mesg->tsig.other, ntohs(mesg->tsig.other_len));
+        tsig_hmac_update(hmac, mesg->tsig.other, ntohs(mesg->tsig.other_len));
     }
 
-    HMAC_Final(&ctx, md, &md_len);
+    tsig_hmac_final(hmac, md, &md_len);
 
-    HMAC_CTX_cleanup(&ctx);
+    tsig_hmac_free(hmac);
 
     if((md_len != mesg->tsig.mac_size) || (memcmp(mesg->tsig.mac, md, md_len) != 0))
     {
@@ -454,37 +538,36 @@ tsig_verify_answer(message_data *mesg, const u8 *mac, u16 mac_size)
     log_debug("tsig_verify_answer: stop");
 #endif
 
-    HMAC_CTX ctx;
-    HMAC_CTX_init(&ctx);
+    tsig_hmac_t hmac = tsig_hmac_allocate();
 
-    HMAC_Init(&ctx, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, mesg->tsig.tsig->evp_md);
+    tsig_hmac_init(hmac, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, mesg->tsig.tsig->evp_md);
     
-    HMAC_Update(&ctx, (u8*) &mac_size_network, 2);
-    HMAC_Update(&ctx, mac, mac_size);
+    tsig_hmac_update(hmac, (u8*) &mac_size_network, 2);
+    tsig_hmac_update(hmac, mac, mac_size);
 
     /* DNS message */
 
-    HMAC_Update(&ctx, mesg->buffer, mesg->received);
+    tsig_hmac_update(hmac, mesg->buffer, mesg->received);
 
     /* TSIG Variables */
 
-    HMAC_Update(&ctx, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len);
-    HMAC_Update(&ctx, tsig_classttl, sizeof(tsig_classttl));
-    HMAC_Update(&ctx, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len);
-    HMAC_Update(&ctx, (u8*) &mesg->tsig.timehi, 2);
-    HMAC_Update(&ctx, (u8*) &mesg->tsig.timelo, 4);
-    HMAC_Update(&ctx, (u8*) &mesg->tsig.fudge, 2);
-    HMAC_Update(&ctx, (u8*) &mesg->tsig.error, 2);
-    HMAC_Update(&ctx, (u8*) &mesg->tsig.other_len, 2);
+    tsig_hmac_update(hmac, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len);
+    tsig_hmac_update(hmac, tsig_classttl, sizeof(tsig_classttl));
+    tsig_hmac_update(hmac, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len);
+    tsig_hmac_update(hmac, (u8*) &mesg->tsig.timehi, 2);
+    tsig_hmac_update(hmac, (u8*) &mesg->tsig.timelo, 4);
+    tsig_hmac_update(hmac, (u8*) &mesg->tsig.fudge, 2);
+    tsig_hmac_update(hmac, (u8*) &mesg->tsig.error, 2);
+    tsig_hmac_update(hmac, (u8*) &mesg->tsig.other_len, 2);
 
     if(mesg->tsig.other_len != 0)
     {
-        HMAC_Update(&ctx, mesg->tsig.other, ntohs(mesg->tsig.other_len));
+        tsig_hmac_update(hmac, mesg->tsig.other, ntohs(mesg->tsig.other_len));
     }
 
-    HMAC_Final(&ctx, md, &md_len);
+    tsig_hmac_final(hmac, md, &md_len);
 
-    HMAC_CTX_cleanup(&ctx);
+    tsig_hmac_free(hmac);
 
     //if(md_len != ntohs(mesg->tsig.mac_size))
     if(md_len != mac_size)
@@ -506,10 +589,9 @@ tsig_verify_answer(message_data *mesg, const u8 *mac, u16 mac_size)
 static ya_result
 tsig_digest_query(message_data *mesg)
 {
-    HMAC_CTX ctx;
-    HMAC_CTX_init(&ctx);
+    tsig_hmac_t hmac = tsig_hmac_allocate();
 
-    HMAC_Init(&ctx, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, mesg->tsig.tsig->evp_md);
+    tsig_hmac_init(hmac, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, mesg->tsig.tsig->evp_md);
 
     /* Request MAC */
 
@@ -534,26 +616,26 @@ tsig_digest_query(message_data *mesg)
 
     /* DNS message */
 
-    HMAC_Update(&ctx, mesg->buffer, mesg->send_length);
+    tsig_hmac_update(hmac, mesg->buffer, mesg->send_length);
 
     /* TSIG Variables */
 
-    HMAC_Update(&ctx, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len);
-    HMAC_Update(&ctx, tsig_classttl, sizeof(tsig_classttl));
-    HMAC_Update(&ctx, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len);
-    HMAC_Update(&ctx, (u8*) & mesg->tsig.timehi, 2);
-    HMAC_Update(&ctx, (u8*) & mesg->tsig.timelo, 4);
-    HMAC_Update(&ctx, (u8*) & mesg->tsig.fudge, 2);
+    tsig_hmac_update(hmac, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len);
+    tsig_hmac_update(hmac, tsig_classttl, sizeof(tsig_classttl));
+    tsig_hmac_update(hmac, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len);
+    tsig_hmac_update(hmac, (u8*) & mesg->tsig.timehi, 2);
+    tsig_hmac_update(hmac, (u8*) & mesg->tsig.timelo, 4);
+    tsig_hmac_update(hmac, (u8*) & mesg->tsig.fudge, 2);
     // error is 0
     // other len is 0
     // no need to work on other data either (since other len is 0)
-    HMAC_Update(&ctx, tsig_noerror_noother, 4); // four zeros
+    tsig_hmac_update(hmac, tsig_noerror_noother, 4); // four zeros
 
     u32 tmp_mac_size;
-    HMAC_Final(&ctx, mesg->tsig.mac, &tmp_mac_size);
+    tsig_hmac_final(hmac, mesg->tsig.mac, &tmp_mac_size);
     mesg->tsig.mac_size = tmp_mac_size;
 
-    HMAC_CTX_cleanup(&ctx);
+    tsig_hmac_free(hmac);
 
     return SUCCESS;
 }
@@ -561,10 +643,9 @@ tsig_digest_query(message_data *mesg)
 static ya_result
 tsig_digest_answer(message_data *mesg)
 {
-    HMAC_CTX ctx;
-    HMAC_CTX_init(&ctx);
+    tsig_hmac_t hmac = tsig_hmac_allocate();
 
-    HMAC_Init(&ctx, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, mesg->tsig.tsig->evp_md);
+    tsig_hmac_init(hmac, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, mesg->tsig.tsig->evp_md);
 
     /* Request MAC */
 
@@ -591,34 +672,34 @@ tsig_digest_answer(message_data *mesg)
 #endif
 
     u16 mac_size_network = htons(mesg->tsig.mac_size);
-    HMAC_Update(&ctx, (u8*) & mac_size_network, 2);
-    HMAC_Update(&ctx, mesg->tsig.mac, mesg->tsig.mac_size);
+    tsig_hmac_update(hmac, (u8*) & mac_size_network, 2);
+    tsig_hmac_update(hmac, mesg->tsig.mac, mesg->tsig.mac_size);
 
     /* DNS message */
 
-    HMAC_Update(&ctx, mesg->buffer, mesg->send_length);
+    tsig_hmac_update(hmac, mesg->buffer, mesg->send_length);
 
     /* TSIG Variables */
 
-    HMAC_Update(&ctx, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len);
-    HMAC_Update(&ctx, tsig_classttl, sizeof(tsig_classttl));
-    HMAC_Update(&ctx, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len);
-    HMAC_Update(&ctx, (u8*) & mesg->tsig.timehi, 2);
-    HMAC_Update(&ctx, (u8*) & mesg->tsig.timelo, 4);
-    HMAC_Update(&ctx, (u8*) & mesg->tsig.fudge, 2);
-    HMAC_Update(&ctx, (u8*) & mesg->tsig.error, 2);
-    HMAC_Update(&ctx, (u8*) & mesg->tsig.other_len, 2);
+    tsig_hmac_update(hmac, mesg->tsig.tsig->name, mesg->tsig.tsig->name_len);
+    tsig_hmac_update(hmac, tsig_classttl, sizeof(tsig_classttl));
+    tsig_hmac_update(hmac, mesg->tsig.tsig->mac_algorithm_name, mesg->tsig.tsig->mac_algorithm_name_len);
+    tsig_hmac_update(hmac, (u8*) & mesg->tsig.timehi, 2);
+    tsig_hmac_update(hmac, (u8*) & mesg->tsig.timelo, 4);
+    tsig_hmac_update(hmac, (u8*) & mesg->tsig.fudge, 2);
+    tsig_hmac_update(hmac, (u8*) & mesg->tsig.error, 2);
+    tsig_hmac_update(hmac, (u8*) & mesg->tsig.other_len, 2);
 
     if(mesg->tsig.other_len != 0)
     {
-        HMAC_Update(&ctx, mesg->tsig.other, ntohs(mesg->tsig.other_len));
+        tsig_hmac_update(hmac, mesg->tsig.other, ntohs(mesg->tsig.other_len));
     }
 
     u32 tmp_mac_size;
-    HMAC_Final(&ctx, mesg->tsig.mac, &tmp_mac_size);
+    tsig_hmac_final(hmac, mesg->tsig.mac, &tmp_mac_size);
     mesg->tsig.mac_size = tmp_mac_size;
 
-    HMAC_CTX_cleanup(&ctx);
+    tsig_hmac_free(hmac);
 
     return SUCCESS;
 }
@@ -1184,8 +1265,8 @@ tsig_sign_tcp_first_message(struct message_data *mesg)
      * Digest the digest (mesg->tsig.mac, mesg->tsig.mac_size (NETWORK ORDERED!))
      */
 
-    HMAC_CTX_init(&mesg->tsig.ctx);
-    HMAC_Init(&mesg->tsig.ctx, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, mesg->tsig.tsig->evp_md);
+    mesg->tsig.hmac = tsig_hmac_allocate();
+    tsig_hmac_init(mesg->tsig.hmac, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, mesg->tsig.tsig->evp_md);
 
     u16 mac_size_network = htons(mesg->tsig.mac_size);
 
@@ -1195,8 +1276,8 @@ tsig_sign_tcp_first_message(struct message_data *mesg)
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.mac, mesg->tsig.mac_size, 32);
 #endif
 
-    HMAC_Update(&mesg->tsig.ctx, (u8*) & mac_size_network, 2);
-    HMAC_Update(&mesg->tsig.ctx, mesg->tsig.mac, mesg->tsig.mac_size);
+    tsig_hmac_update(mesg->tsig.hmac, (u8*) & mac_size_network, 2);
+    tsig_hmac_update(mesg->tsig.hmac, mesg->tsig.mac, mesg->tsig.mac_size);
 
     mesg->tsig.tcp_tsig_countdown = TSIG_TCP_PERIOD;
 
@@ -1215,7 +1296,7 @@ tsig_sign_tcp_next_message(struct message_data *mesg)
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32);
 #endif
 
-    HMAC_Update(&mesg->tsig.ctx, mesg->buffer, mesg->send_length);
+    tsig_hmac_update(mesg->tsig.hmac, mesg->buffer, mesg->send_length);
 
     /*
      * If it's the 100th since the last TSIG, then ...
@@ -1236,12 +1317,12 @@ tsig_sign_tcp_next_message(struct message_data *mesg)
         log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.fudge, 2, 32);
 #endif
 
-        HMAC_Update(&mesg->tsig.ctx, (u8*) & mesg->tsig.timehi, 2);
-        HMAC_Update(&mesg->tsig.ctx, (u8*) & mesg->tsig.timelo, 4);
-        HMAC_Update(&mesg->tsig.ctx, (u8*) & mesg->tsig.fudge, 2);
+        tsig_hmac_update(mesg->tsig.hmac, (u8*) & mesg->tsig.timehi, 2);
+        tsig_hmac_update(mesg->tsig.hmac, (u8*) & mesg->tsig.timelo, 4);
+        tsig_hmac_update(mesg->tsig.hmac, (u8*) & mesg->tsig.fudge, 2);
 
         u32 tmp_mac_size;
-        HMAC_Final(&mesg->tsig.ctx, mesg->tsig.mac, &tmp_mac_size);
+        tsig_hmac_final(mesg->tsig.hmac, mesg->tsig.mac, &tmp_mac_size);
 
         /*
          * Store the TSIG
@@ -1255,9 +1336,9 @@ tsig_sign_tcp_next_message(struct message_data *mesg)
          * Digest the digest
          */
 
-        HMAC_CTX_cleanup(&mesg->tsig.ctx);
-        HMAC_CTX_init(&mesg->tsig.ctx);
-        HMAC_Init(&mesg->tsig.ctx, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, mesg->tsig.tsig->evp_md);
+        tsig_hmac_reset(mesg->tsig.hmac);
+        
+        tsig_hmac_init(mesg->tsig.hmac, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, mesg->tsig.tsig->evp_md);
 
         u16 mac_size_network = htons(mesg->tsig.mac_size);
 
@@ -1267,8 +1348,8 @@ tsig_sign_tcp_next_message(struct message_data *mesg)
         log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.mac, mesg->tsig.mac_size, 32);
 #endif
 
-        HMAC_Update(&mesg->tsig.ctx, (u8*) & mac_size_network, 2);
-        HMAC_Update(&mesg->tsig.ctx, mesg->tsig.mac, mesg->tsig.mac_size);
+        tsig_hmac_update(mesg->tsig.hmac, (u8*) & mac_size_network, 2);
+        tsig_hmac_update(mesg->tsig.hmac, mesg->tsig.mac, mesg->tsig.mac_size);
     }
 
     return SUCCESS;
@@ -1286,7 +1367,7 @@ tsig_sign_tcp_last_message(struct message_data *mesg)
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->send_length, 32);
 #endif
 
-    HMAC_Update(&mesg->tsig.ctx, mesg->buffer, mesg->send_length);
+    tsig_hmac_update(mesg->tsig.hmac, mesg->buffer, mesg->send_length);
 
     /*
      * If it's the 100th since the last TSIG, then ...
@@ -1305,12 +1386,12 @@ tsig_sign_tcp_last_message(struct message_data *mesg)
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.fudge, 2, 32);
 #endif
 
-    HMAC_Update(&mesg->tsig.ctx, (u8*) & mesg->tsig.timehi, 2);
-    HMAC_Update(&mesg->tsig.ctx, (u8*) & mesg->tsig.timelo, 4);
-    HMAC_Update(&mesg->tsig.ctx, (u8*) & mesg->tsig.fudge, 2);
+    tsig_hmac_update(mesg->tsig.hmac, (u8*) & mesg->tsig.timehi, 2);
+    tsig_hmac_update(mesg->tsig.hmac, (u8*) & mesg->tsig.timelo, 4);
+    tsig_hmac_update(mesg->tsig.hmac, (u8*) & mesg->tsig.fudge, 2);
 
     u32 tmp_mac_size;
-    HMAC_Final(&mesg->tsig.ctx, mesg->tsig.mac, &tmp_mac_size);
+    tsig_hmac_final(mesg->tsig.hmac, mesg->tsig.mac, &tmp_mac_size);
 
     /*
      * Store the TSIG
@@ -1318,7 +1399,7 @@ tsig_sign_tcp_last_message(struct message_data *mesg)
 
     tsig_add_tsig(mesg);
 
-    HMAC_CTX_cleanup(&mesg->tsig.ctx);
+    tsig_hmac_free(mesg->tsig.hmac);
 
     return SUCCESS;
 }
@@ -1388,8 +1469,8 @@ tsig_verify_tcp_first_message(struct message_data *mesg, const u8 *mac, u16 mac_
      * Digest the digest (mesg->tsig.mac, mesg->tsig.mac_size (NETWORK ORDERED!))
      */
 
-    HMAC_CTX_init(&mesg->tsig.ctx);
-    HMAC_Init(&mesg->tsig.ctx, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, mesg->tsig.tsig->evp_md);
+    mesg->tsig.hmac = tsig_hmac_allocate();
+    tsig_hmac_init(mesg->tsig.hmac, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, mesg->tsig.tsig->evp_md);
 
     u16 mac_size_network = htons(mesg->tsig.mac_size);
 
@@ -1399,8 +1480,8 @@ tsig_verify_tcp_first_message(struct message_data *mesg, const u8 *mac, u16 mac_
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.mac, mesg->tsig.mac_size, 32);
 #endif
 
-    HMAC_Update(&mesg->tsig.ctx, (u8*) & mac_size_network, 2);
-    HMAC_Update(&mesg->tsig.ctx, mesg->tsig.mac, mesg->tsig.mac_size);
+    tsig_hmac_update(mesg->tsig.hmac, (u8*) & mac_size_network, 2);
+    tsig_hmac_update(mesg->tsig.hmac, mesg->tsig.mac, mesg->tsig.mac_size);
 
     mesg->tsig.tcp_tsig_countdown = TSIG_TCP_PERIOD + 2;    /* be a bit lenient */
 
@@ -1426,7 +1507,7 @@ tsig_verify_tcp_next_message(struct message_data *mesg)
         return TSIG_BADSIG;
     }
 
-    HMAC_Update(&mesg->tsig.ctx, mesg->buffer, mesg->received);
+    tsig_hmac_update(mesg->tsig.hmac, mesg->buffer, mesg->received);
 
     /*
      * If it has been signed ...
@@ -1447,17 +1528,16 @@ tsig_verify_tcp_next_message(struct message_data *mesg)
         log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->tsig.fudge, 2, 32);
 #endif
 
-        HMAC_Update(&mesg->tsig.ctx, (u8*) & mesg->tsig.timehi, 2);
-        HMAC_Update(&mesg->tsig.ctx, (u8*) & mesg->tsig.timelo, 4);
-        HMAC_Update(&mesg->tsig.ctx, (u8*) & mesg->tsig.fudge, 2);
+        tsig_hmac_update(mesg->tsig.hmac, (u8*) & mesg->tsig.timehi, 2);
+        tsig_hmac_update(mesg->tsig.hmac, (u8*) & mesg->tsig.timelo, 4);
+        tsig_hmac_update(mesg->tsig.hmac, (u8*) & mesg->tsig.fudge, 2);
 
         u32 tmp_mac_size;
-        HMAC_Final(&mesg->tsig.ctx, mac, &tmp_mac_size);
-
-        HMAC_CTX_cleanup(&mesg->tsig.ctx);
+        tsig_hmac_final(mesg->tsig.hmac, mac, &tmp_mac_size);
 
         if(memcmp(mesg->tsig.mac, mac, tmp_mac_size) != 0)
         {
+            tsig_hmac_free(mesg->tsig.hmac);
             return TSIG_BADSIG;
         }
 
@@ -1467,8 +1547,9 @@ tsig_verify_tcp_next_message(struct message_data *mesg)
          * Digest the digest
          */
 
-        HMAC_CTX_init(&mesg->tsig.ctx);
-        HMAC_Init(&mesg->tsig.ctx, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, mesg->tsig.tsig->evp_md);
+        tsig_hmac_reset(mesg->tsig.hmac);
+        
+        tsig_hmac_init(mesg->tsig.hmac, mesg->tsig.tsig->mac, mesg->tsig.tsig->mac_size, mesg->tsig.tsig->evp_md);
 
         u16 mac_size_network = htons(mesg->tsig.mac_size);
 
@@ -1478,8 +1559,8 @@ tsig_verify_tcp_next_message(struct message_data *mesg)
         log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->tsig.mac, mesg->tsig.mac_size, 32);
 #endif
 
-        HMAC_Update(&mesg->tsig.ctx, (u8*) & mac_size_network, 2);
-        HMAC_Update(&mesg->tsig.ctx, mesg->tsig.mac, mesg->tsig.mac_size);
+        tsig_hmac_update(mesg->tsig.hmac, (u8*) & mac_size_network, 2);
+        tsig_hmac_update(mesg->tsig.hmac, mesg->tsig.mac, mesg->tsig.mac_size);
     }
     
     return SUCCESS;
@@ -1504,7 +1585,8 @@ tsig_verify_tcp_last_message(struct message_data *mesg)
 #endif
     if(mesg->tsig.tsig != NULL)
     {
-        HMAC_CTX_cleanup(&mesg->tsig.ctx);
+        //tsig_hmac_reset(mesg->tsig.hmac);
+        tsig_hmac_free(mesg->tsig.hmac);
     }
 }
 
@@ -1673,7 +1755,7 @@ tsig_message_extract(struct message_data *mesg)
     return 1;   /* got 1 signature */
 }
 
-#endif
+//#endif
 
 /** @} */
 

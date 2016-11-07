@@ -151,7 +151,7 @@ file from the sources code.
 .SH VERSION
 
 .PP
-Version: 2.2.1 of 2016-07-19\&.
+Version: 2.2.2 of 2016-11-08\&.
 .PP
 .SH MAILINGLIST
 

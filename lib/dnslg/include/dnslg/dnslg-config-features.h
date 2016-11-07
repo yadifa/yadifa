@@ -1,4 +1,4 @@
 #pragma once
-// version 2.2.1.0-6283
-#define DNSLG_VERSION 0x02020100188bLL// include/dnslg/dnslg-config-features.h
+// version 2.2.2.0-6587
+#define DNSLG_VERSION 0x0202020019bbLL// include/dnslg/dnslg-config-features.h
 

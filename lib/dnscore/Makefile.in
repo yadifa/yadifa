@@ -364,14 +364,14 @@ am__libdnscore_la_SOURCES_DIST = src/alarm.c src/allocator.c \
 	src/concat_input_stream.c src/config-cmdline.c \
 	src/config_file_reader.c src/config_key.c src/config_logger.c \
 	src/config_settings.c src/config_struct.c \
-	src/counter_output_stream.c src/debug.c src/digest_sha0.c \
-	src/digest_sha1.c src/digest_sha256.c src/digest_sha384.c \
-	src/digest_sha512.c src/dns-udp.c src/dns_resource_record.c \
-	src/dnscore.c src/dnsformat.c src/dnskey.c \
-	src/dnskey-keyring.c src/dnskey_dsa.c src/dnskey_ecdsa.c \
-	src/dnskey_rsa.c src/dnsname.c src/empty-input-stream.c \
-	src/fdtools.c src/file_input_stream.c src/file_output_stream.c \
-	src/format.c src/host_address.c src/hsdllist.c src/identity.c \
+	src/counter_output_stream.c src/debug.c src/digest_sha1.c \
+	src/digest_sha256.c src/digest_sha384.c src/digest_sha512.c \
+	src/dns-udp.c src/dns_resource_record.c src/dnscore.c \
+	src/dnsformat.c src/dnskey.c src/dnskey-keyring.c \
+	src/dnskey_dsa.c src/dnskey_ecdsa.c src/dnskey_rsa.c \
+	src/dnsname.c src/empty-input-stream.c src/fdtools.c \
+	src/file_input_stream.c src/file_output_stream.c src/format.c \
+	src/host_address.c src/hsdllist.c src/identity.c \
 	src/input_stream.c src/limited_input_stream.c src/list-dl.c \
 	src/list-sl.c src/list-sl-debug.c src/logger-output-stream.c \
 	src/logger.c src/logger_channel_file.c \
@@ -410,15 +410,14 @@ am_libdnscore_la_OBJECTS = src/alarm.lo src/allocator.lo src/async.lo \
 	src/config_file_reader.lo src/config_key.lo \
 	src/config_logger.lo src/config_settings.lo \
 	src/config_struct.lo src/counter_output_stream.lo src/debug.lo \
-	src/digest_sha0.lo src/digest_sha1.lo src/digest_sha256.lo \
-	src/digest_sha384.lo src/digest_sha512.lo src/dns-udp.lo \
-	src/dns_resource_record.lo src/dnscore.lo src/dnsformat.lo \
-	src/dnskey.lo src/dnskey-keyring.lo src/dnskey_dsa.lo \
-	src/dnskey_ecdsa.lo src/dnskey_rsa.lo src/dnsname.lo \
-	src/empty-input-stream.lo src/fdtools.lo \
-	src/file_input_stream.lo src/file_output_stream.lo \
-	src/format.lo src/host_address.lo src/hsdllist.lo \
-	src/identity.lo src/input_stream.lo \
+	src/digest_sha1.lo src/digest_sha256.lo src/digest_sha384.lo \
+	src/digest_sha512.lo src/dns-udp.lo src/dns_resource_record.lo \
+	src/dnscore.lo src/dnsformat.lo src/dnskey.lo \
+	src/dnskey-keyring.lo src/dnskey_dsa.lo src/dnskey_ecdsa.lo \
+	src/dnskey_rsa.lo src/dnsname.lo src/empty-input-stream.lo \
+	src/fdtools.lo src/file_input_stream.lo \
+	src/file_output_stream.lo src/format.lo src/host_address.lo \
+	src/hsdllist.lo src/identity.lo src/input_stream.lo \
 	src/limited_input_stream.lo src/list-dl.lo src/list-sl.lo \
 	src/list-sl-debug.lo src/logger-output-stream.lo src/logger.lo \
 	src/logger_channel_file.lo src/logger_channel_stream.lo \
@@ -644,6 +643,7 @@ HAS_DNSQ = @HAS_DNSQ@
 HAS_DROPALL_SUPPORT = @HAS_DROPALL_SUPPORT@
 HAS_DYNCONF_SUPPORT = @HAS_DYNCONF_SUPPORT@
 HAS_DYNUPDATE_SUPPORT = @HAS_DYNUPDATE_SUPPORT@
+HAS_ECDSA_SUPPORT = @HAS_ECDSA_SUPPORT@
 HAS_EDF = @HAS_EDF@
 HAS_EXPERIMENTAL = @HAS_EXPERIMENTAL@
 HAS_FULL_ASCII7 = @HAS_FULL_ASCII7@
@@ -781,14 +781,14 @@ libdnscore_la_SOURCES = src/alarm.c src/allocator.c src/async.c \
 	src/concat_input_stream.c src/config-cmdline.c \
 	src/config_file_reader.c src/config_key.c src/config_logger.c \
 	src/config_settings.c src/config_struct.c \
-	src/counter_output_stream.c src/debug.c src/digest_sha0.c \
-	src/digest_sha1.c src/digest_sha256.c src/digest_sha384.c \
-	src/digest_sha512.c src/dns-udp.c src/dns_resource_record.c \
-	src/dnscore.c src/dnsformat.c src/dnskey.c \
-	src/dnskey-keyring.c src/dnskey_dsa.c src/dnskey_ecdsa.c \
-	src/dnskey_rsa.c src/dnsname.c src/empty-input-stream.c \
-	src/fdtools.c src/file_input_stream.c src/file_output_stream.c \
-	src/format.c src/host_address.c src/hsdllist.c src/identity.c \
+	src/counter_output_stream.c src/debug.c src/digest_sha1.c \
+	src/digest_sha256.c src/digest_sha384.c src/digest_sha512.c \
+	src/dns-udp.c src/dns_resource_record.c src/dnscore.c \
+	src/dnsformat.c src/dnskey.c src/dnskey-keyring.c \
+	src/dnskey_dsa.c src/dnskey_ecdsa.c src/dnskey_rsa.c \
+	src/dnsname.c src/empty-input-stream.c src/fdtools.c \
+	src/file_input_stream.c src/file_output_stream.c src/format.c \
+	src/host_address.c src/hsdllist.c src/identity.c \
 	src/input_stream.c src/limited_input_stream.c src/list-dl.c \
 	src/list-sl.c src/list-sl-debug.c src/logger-output-stream.c \
 	src/logger.c src/logger_channel_file.c \
@@ -1043,7 +1043,6 @@ src/config_struct.lo: src/$(am__dirstamp) \
 src/counter_output_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/debug.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/digest_sha0.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/digest_sha1.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/digest_sha256.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
@@ -1206,7 +1205,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/config_struct.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/counter_output_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/debug.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/digest_sha0.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/digest_sha1.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/digest_sha256.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/digest_sha384.Plo@am__quote@

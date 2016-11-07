@@ -617,7 +617,8 @@ zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, bool for
                     log_warn("%{dnsname}: could not delete symbolic link '%s': %r", zone->origin, output_file, ERRNO_ERROR);
                 }
             }
-            if(rename(tmp, output_file) > 0)
+            
+            if(rename(tmp, output_file) >= 0)
             {
                 log_info("%{dnsname}: saved as '%s'", zone->origin, output_file);
                 

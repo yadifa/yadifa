@@ -185,7 +185,7 @@ nsec3_zone_item_equals_rdata_lenient(const nsec3_zone* n3,
 
     u32 item_rdata_size = param_rdata_size + 1 + hash_len /*+ type_bit_maps_size*/;
 
-    if(item_rdata_size >= rdata_size)
+    if(item_rdata_size > rdata_size)
     {
         return FALSE;
     }

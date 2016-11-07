@@ -631,7 +631,9 @@ rrsig_updater_thread(void *context_)
 #endif
     }
 
+#if OPENSSL_VERSION_NUMBER < 0x10000000L
     ERR_remove_state(0);
+#endif
 
     log_debug1("rrsig: %{dnsname}: updater thread %x stop (made=%d,ignored=%d)", origin, id, signatures_made, labels_ignored);
 
@@ -807,7 +809,9 @@ rrsig_updater_result_process(rrsig_answer_context_s *answer_context)
     log_debug("rrsig: updater thread result : %u in %llums (%f/s)", count, elapsed, rate);
 #endif
 
+#if OPENSSL_VERSION_NUMBER < 0x10000000L
     ERR_remove_state(0);
+#endif
 
     log_debug("rrsig: %{dnsname}: updater thread result end", origin);
 

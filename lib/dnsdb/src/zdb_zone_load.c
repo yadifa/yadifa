@@ -311,7 +311,7 @@ zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *e
 
             return_code = ZDB_READER_WRONGNAMEFORZONE;
 
-            log_err("zone load: domain name %{dnsnamestack} is too big", &entry_name);
+            log_err("zone load: domain name %{dnsnamevector} is too big", &entry_name);
 
             break;
         }
@@ -325,7 +325,7 @@ zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *e
 
             if(!dnslabel_equals(a, b))
             {
-                log_warn("zone load: bad domain name %{dnsnamestack} for zone %{dnsnamestack}", &entry_name, &name);
+                log_warn("zone load: bad domain name %{dnsnamevector} for zone %{dnsnamevector}", &entry_name, &name);
 
                 //rr_entry_freecontent(&entry);
 
@@ -965,7 +965,9 @@ zdb_zone_load_loop:
                     {
                         /* APEX or NS+DS */
 
-                        if( ((flags & ZDB_RR_LABEL_APEX) != 0) || (((flags & ZDB_RR_LABEL_DELEGATION) != 0) && (zdb_record_find(&label->resource_record_set, TYPE_DS) != NULL) ) )
+                        if( ((flags & ZDB_RR_LABEL_APEX) != 0) ||
+                            ( ((flags & ZDB_RR_LABEL_DELEGATION) != 0) &&
+                              (zdb_record_find(&label->resource_record_set, TYPE_DS) != NULL) ) )
                         {
                             /* should be linked */
                             if(label->nsec.nsec3 != NULL)

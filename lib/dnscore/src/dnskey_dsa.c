@@ -60,24 +60,149 @@
 #include "dnscore/dnskey.h"
 #include "dnscore/dnskey_dsa.h"
 #include "dnscore/dnssec_errors.h"
+#include "dnscore/zalloc.h"
 
 #include "dnscore/dnskey.h"
 
 #define MODULE_MSG_HANDLE g_system_logger
 
-/// @note 20151118 edf -- names MUST end with ':'
+#ifndef OPENSSL_VERSION_NUMBER
+#error "OPENSSL_VERSION_NUMBER not defined"
+#endif
 
-static const struct structdescriptor struct_DSA[] ={
-    {"Prime(p)", offsetof(DSA, p), STRUCTDESCRIPTOR_BN},
-    {"Subprime(q)", offsetof(DSA, q), STRUCTDESCRIPTOR_BN},
-    {"Base(g)", offsetof(DSA, g), STRUCTDESCRIPTOR_BN},
-    {"Private_value(x)", offsetof(DSA, priv_key), STRUCTDESCRIPTOR_BN},
-    {"Public_value(y)", offsetof(DSA, pub_key), STRUCTDESCRIPTOR_BN},
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+
+/*
+ * Backward-compatible interface for 0.9.x
+ */
+
+#define SSL_FIELD_GET(st_,f_) if(f_ != NULL) { *f_ = st_->f_; }
+#define SSL_FIELD_SET(st_,f_) if(f_ != NULL) { BN_free(st_->f_); st_->f_ = f_; }
+#define SSL_FIELD_SET_FAIL(st_,f_) (st_->f_ == NULL && f_ == NULL)
+
+static void DSA_get0_pqg(const DSA *d,
+                  const BIGNUM **p, const BIGNUM **q, const BIGNUM **g)
+{
+    SSL_FIELD_GET(d,p)
+    SSL_FIELD_GET(d,q)
+    SSL_FIELD_GET(d,g)
+}
+
+static int DSA_set0_pqg(DSA *d, BIGNUM *p, BIGNUM *q, BIGNUM *g)
+{
+    if(SSL_FIELD_SET_FAIL(d,p) || SSL_FIELD_SET_FAIL(d,q) || SSL_FIELD_SET_FAIL(d,g))
+    {
+        return 0;
+    }
+    SSL_FIELD_SET(d,p)
+    SSL_FIELD_SET(d,q)
+    SSL_FIELD_SET(d,g)
+    return 1;
+}
+
+void DSA_get0_key(const DSA *d,
+                  const BIGNUM **pub_key, const BIGNUM **priv_key)
+{
+    SSL_FIELD_GET(d,pub_key)
+    SSL_FIELD_GET(d,priv_key)
+}
+
+int DSA_set0_key(DSA *d, BIGNUM *pub_key, BIGNUM *priv_key)
+{
+    if(SSL_FIELD_SET_FAIL(d,pub_key))
+    {
+        return 0;
+    }
+    SSL_FIELD_SET(d,pub_key)
+    SSL_FIELD_SET(d,priv_key)
+    return 1;
+}
+
+void DSA_SIG_get0(const DSA_SIG *sig, const BIGNUM **r, const BIGNUM **s)
+{
+    SSL_FIELD_GET(sig,r)
+    SSL_FIELD_GET(sig,s)
+}
+
+int DSA_SIG_set0(DSA_SIG *sig, BIGNUM *r, BIGNUM *s)
+{
+    if(SSL_FIELD_SET_FAIL(sig,r) || SSL_FIELD_SET_FAIL(sig,s))
+    {
+        return 0;
+    }
+    SSL_FIELD_SET(sig,r)
+    SSL_FIELD_SET(sig,s)
+    return 1;
+}
+
+#endif
+
+/*
+ * Intermediary key
+ */
+
+struct dnskey_dsa
+{
+    BIGNUM *p,*q,*g,*pub_key,*priv_key;
+};
+
+struct dnskey_dsa_const
+{
+    const BIGNUM *p,*q,*g,*pub_key,*priv_key;
+};
+
+static void dnskey_dsa_init(struct dnskey_dsa *ydsa)
+{
+    memset(ydsa, 0, sizeof(struct dnskey_dsa));
+}
+    
+static bool dnskey_dsa_to_dsa(struct dnskey_dsa *ydsa, DSA *dsa)
+{
+    if(DSA_set0_pqg(dsa, ydsa->p, ydsa->q, ydsa->g) != 0)
+    {
+        ydsa->p = NULL;
+        ydsa->q = NULL;
+        ydsa->g = NULL;
+        
+        if(DSA_set0_key(dsa, ydsa->pub_key, ydsa->priv_key) != 0)
+        {
+            ydsa->pub_key = NULL;
+            ydsa->priv_key = NULL;
+            return TRUE;
+        }
+    }
+    
+    return FALSE;
+}
+
+static void dnskey_dsa_from_dsa(struct dnskey_dsa_const *ydsa, const DSA *dsa)
+{
+    DSA_get0_pqg(dsa, &ydsa->p, &ydsa->q, &ydsa->g);
+    DSA_get0_key(dsa, &ydsa->pub_key, &ydsa->priv_key);
+}
+
+static void dnskey_dsa_finalise(struct dnskey_dsa *ydsa)
+{
+    if(ydsa->p != NULL) BN_free(ydsa->p);
+    if(ydsa->q != NULL) BN_free(ydsa->q);
+    if(ydsa->g != NULL) BN_free(ydsa->g);
+    if(ydsa->pub_key != NULL) BN_free(ydsa->pub_key);
+    if(ydsa->priv_key != NULL) BN_free(ydsa->priv_key);
+    dnskey_dsa_init(ydsa);
+}
+
+static const struct dnskey_field_access DSA_field_access[] =
+{
+    {"Prime(p)", offsetof(struct dnskey_dsa,p), STRUCTDESCRIPTOR_BN},
+    {"Subprime(q)", offsetof(struct dnskey_dsa,q), STRUCTDESCRIPTOR_BN},
+    {"Base(g)", offsetof(struct dnskey_dsa,g), STRUCTDESCRIPTOR_BN},
+    {"Private_value(x)", offsetof(struct dnskey_dsa,priv_key), STRUCTDESCRIPTOR_BN},
+    {"Public_value(y)", offsetof(struct dnskey_dsa,pub_key), STRUCTDESCRIPTOR_BN},
     {NULL, 0, 0}
 };
 
 static int
-dsa_getnid(u8 algorithm)
+dnskey_dsa_getnid(u8 algorithm)
 {
     switch(algorithm)
     {
@@ -94,14 +219,22 @@ dsa_getnid(u8 algorithm)
 }
 
 static DSA*
-dsa_genkey(u32 size)
+dnskey_dsa_genkey(u32 size)
 {
     yassert(size >= DNSSEC_MINIMUM_KEY_SIZE && size <= DNSSEC_MAXIMUM_KEY_SIZE);
 
     int err;
     DSA* dsa;
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
     dsa = DSA_generate_parameters(size, NULL,0, NULL, NULL, NULL, NULL);
+#else
+    dsa = DSA_new();
+    DSA_generate_parameters_ex(dsa, size,
+                               NULL, 0,
+                               NULL, NULL,
+                               NULL);
+#endif
     
     yassert(dsa != NULL);
     
@@ -119,19 +252,28 @@ dsa_genkey(u32 size)
 }
 
 static ya_result
-dsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u8 *output)
+dnskey_dsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u8 *output)
 {
     DSA_SIG *sig = DSA_do_sign(digest, digest_len, key->key.dsa);
 
     if(sig != NULL)
     {
-        u32 t = BN_num_bytes(key->key.dsa->pub_key) >> 3;
-        u32 rn = BN_num_bytes(sig->r);        
+        const BIGNUM *sig_r;
+        const BIGNUM *sig_s;
+        
+        const BIGNUM *pub_key;       
+        
+        DSA_get0_key(key->key.dsa, &pub_key, NULL);
+
+        DSA_SIG_get0(sig, &sig_r, &sig_s);
+        
+        u32 t = BN_num_bytes(pub_key) >> 3;
+        u32 rn = BN_num_bytes(sig_r);
         
         *output++ = t;
-        BN_bn2bin(sig->r, output);
+        BN_bn2bin(sig_r, output);
         output += rn;
-        BN_bn2bin(sig->s, output);
+        BN_bn2bin(sig_s, output);
         
         DSA_SIG_free(sig);
         
@@ -155,7 +297,7 @@ dsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u8 *outp
 }
 
 static bool
-dsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len, const u8 *signature, u32 signature_len)
+dnskey_dsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len, const u8 *signature, u32 signature_len)
 {
     yassert(signature_len <= DNSSEC_MAXIMUM_KEY_SIZE_BYTES);
     
@@ -165,8 +307,6 @@ dsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len, const 
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG6, signature, signature_len, 32);
 #endif
 
-    DSA_SIG sig;
-    
     if(signature_len != 41)
     {
         log_warn("DSA signature expected to be 41 bytes long");
@@ -189,14 +329,16 @@ dsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len, const 
     signature_len--;        
     signature_len >>= 1;
     
-    sig.r = BN_bin2bn(signature, signature_len, NULL);
-    signature += signature_len;
-    sig.s = BN_bin2bn(signature, signature_len, NULL);
-
-    int err = DSA_do_verify(digest, digest_len, &sig, key->key.dsa);
+    DSA_SIG *sig = DSA_SIG_new();
     
-    BN_free(sig.r);
-    BN_free(sig.s);
+    BIGNUM *sig_r = BN_bin2bn(signature, signature_len, NULL);
+    signature += signature_len;
+    BIGNUM *sig_s = BN_bin2bn(signature, signature_len, NULL);
+    DSA_SIG_set0(sig, sig_r, sig_s);
+
+    int err = DSA_do_verify(digest, digest_len, sig, key->key.dsa);
+    
+    DSA_SIG_free(sig);
     
     if(err != 1)
     {
@@ -206,7 +348,7 @@ dsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len, const 
         {
             char buffer[256];
             ERR_error_string_n(ssl_err, buffer, sizeof(buffer));
-            log_err("digest verification returned an ssl error %08x %s", ssl_err, buffer);
+            log_debug("digest verification returned an ssl error %08x %s", ssl_err, buffer);
         }
 
         ERR_clear_error();
@@ -218,7 +360,7 @@ dsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len, const 
 }
 
 static DSA*
-dsa_public_load(const u8* rdata, u16 rdata_size)
+dnskey_dsa_public_load(const u8* rdata, u16 rdata_size)
 {
     if(rdata == NULL)
     {
@@ -238,45 +380,45 @@ dsa_public_load(const u8* rdata, u16 rdata_size)
     
     inptr++;
 
-    BIGNUM* q;
-    BIGNUM* p;
-    BIGNUM* g;
-    BIGNUM* y;
+    BIGNUM* dsa_q;
+    BIGNUM* dsa_p;
+    BIGNUM* dsa_g;
+    BIGNUM* dsa_pub_key;
 
-    q = BN_bin2bn(inptr, 20, NULL);
-    if(q == NULL)
+    dsa_q = BN_bin2bn(inptr, 20, NULL);
+    if(dsa_q == NULL)
     {
         log_err("dsa_public_load: NULL q");
         
         return NULL;
     }
     inptr += 20;
-    p = BN_bin2bn(inptr, pgy_len, NULL);
-    if(p == NULL)
+    dsa_p = BN_bin2bn(inptr, pgy_len, NULL);
+    if(dsa_p == NULL)
     {
         log_err("dsa_public_load: NULL p");
-        BN_free(q);
+        BN_free(dsa_q);
         
         return NULL;
     }
     inptr += pgy_len;
-    g = BN_bin2bn(inptr, pgy_len, NULL);
-    if(g == NULL)
+    dsa_g = BN_bin2bn(inptr, pgy_len, NULL);
+    if(dsa_g == NULL)
     {
         log_err("dsa_public_load: NULL g");
-        BN_free(q);
-        BN_free(p);
+        BN_free(dsa_q);
+        BN_free(dsa_p);
         
         return NULL;
     }
     inptr += pgy_len;
-    y = BN_bin2bn(inptr, pgy_len, NULL);
-    if(y == NULL)
+    dsa_pub_key = BN_bin2bn(inptr, pgy_len, NULL);
+    if(dsa_pub_key == NULL)
     {
         log_err("dsa_public_load: NULL y");
-        BN_free(q);
-        BN_free(p);
-        BN_free(g);
+        BN_free(dsa_q);
+        BN_free(dsa_p);
+        BN_free(dsa_g);
         
         return NULL;
     }
@@ -286,23 +428,24 @@ dsa_public_load(const u8* rdata, u16 rdata_size)
 
     yassert(dsa != NULL);
 
-    dsa->q = q;
-    dsa->p = p;
-    dsa->g = g;
-    dsa->pub_key = y;
+    DSA_set0_pqg(dsa, dsa_p, dsa_q, dsa_g);
+    DSA_set0_key(dsa, dsa_pub_key, NULL);
 
     return dsa;
  }
 
 static u32
-dsa_public_store(DSA* dsa, u8* output_buffer)
+dnskey_dsa_public_store(DSA* dsa, u8* output_buffer)
 {
     unsigned char* outptr = output_buffer;
 
-    BIGNUM* q = dsa->q;
-    BIGNUM* p = dsa->p;
-    BIGNUM* g = dsa->g;
-    BIGNUM* y = dsa->pub_key;
+    const BIGNUM* q = NULL;
+    const BIGNUM* p = NULL;
+    const BIGNUM* g = NULL;
+    const BIGNUM* y = NULL;
+    
+    DSA_get0_pqg(dsa, &p, &q, &g);
+    DSA_get0_key(dsa, &y, NULL);
 
     u32 q_n = BN_num_bytes(q);
     
@@ -311,11 +454,11 @@ dsa_public_store(DSA* dsa, u8* output_buffer)
         return 0;
     }
     
-    u32 p_n = BN_num_bytes(p);
-    u32 g_n = BN_num_bytes(g);
-    u32 y_n = BN_num_bytes(y);
+    s32 p_n = BN_num_bytes(p);
+    s32 g_n = BN_num_bytes(g);
+    s32 y_n = BN_num_bytes(y);
 
-    if((p_n != g_n) || (p_n != y_n))
+    if((abs(p_n - g_n) > 2) || (abs(p_n - y_n) > 2)) /* sometimes, there is one byte difference in storage */
     {
         return 0;
     }
@@ -353,7 +496,7 @@ dsa_public_store(DSA* dsa, u8* output_buffer)
 }
 
 static u32
-dsa_dnskey_public_store(const dnssec_key* key, u8 *rdata)
+dnskey_dsa_dnskey_public_store(const dnssec_key* key, u8 *rdata)
 {
     u32 len;
     
@@ -361,18 +504,21 @@ dsa_dnskey_public_store(const dnssec_key* key, u8 *rdata)
     rdata[2] = DNSKEY_PROTOCOL_FIELD;
     rdata[3] = key->algorithm;
     
-    len = dsa_public_store(key->key.dsa, &rdata[4]) + 4;
+    len = dnskey_dsa_public_store(key->key.dsa, &rdata[4]) + 4;
     
     return len;
 }
 
 static u32
-dsa_public_getsize(const DSA* dsa)
+dnskey_dsa_public_getsize(const DSA* dsa)
 {
-    BIGNUM* q = dsa->q;
-    BIGNUM* p = dsa->p;
-    BIGNUM* g = dsa->g;
-    BIGNUM* y = dsa->pub_key;
+    const BIGNUM* q;
+    const BIGNUM* p;
+    const BIGNUM* g;
+    const BIGNUM* y;
+    
+    DSA_get0_pqg(dsa, &p, &q, &g);
+    DSA_get0_key(dsa, &y, NULL);
 
     u32 q_n = BN_num_bytes(q);
     u32 p_n = BN_num_bytes(p);
@@ -383,13 +529,13 @@ dsa_public_getsize(const DSA* dsa)
 }
 
 static u32
-dsa_dnskey_public_getsize(const dnssec_key* key)
+dnskey_dsa_dnskey_public_getsize(const dnssec_key* key)
 {
-    return dsa_public_getsize(key->key.dsa) + 4;
+    return dnskey_dsa_public_getsize(key->key.dsa) + 4;
 }
 
 static void
-dsa_free(dnssec_key* key)
+dnskey_dsa_free(dnssec_key* key)
 {
     DSA* dsa = key->key.dsa;
     DSA_free(dsa);
@@ -398,9 +544,9 @@ dsa_free(dnssec_key* key)
 }
 
 static bool
-dsa_equals(const dnssec_key* key_a, const dnssec_key* key_b)
+dnskey_dsa_equals(const dnssec_key* key_a, const dnssec_key* key_b)
 {
-    /* RSA, compare modulus and exponent, exponent first (it's the smallest) */
+    /* DSA, compare modulus and exponent, exponent first (it's the smallest) */
 
     if(key_a == key_b)
     {
@@ -419,27 +565,45 @@ dsa_equals(const dnssec_key* key_a, const dnssec_key* key_b)
     {
         if(strcmp(key_a->origin, key_b->origin) == 0)
         {
-            DSA* a_dsa = key_a->key.dsa;
-            DSA* b_dsa = key_b->key.dsa;
-
-            if(BN_cmp(a_dsa->q, b_dsa->q) == 0)
+            const DSA* a_dsa = key_a->key.dsa;
+            const DSA* b_dsa = key_b->key.dsa;
+            
+            const BIGNUM* a_dsa_q;
+            const BIGNUM* a_dsa_p;
+            const BIGNUM* a_dsa_g;
+            const BIGNUM* b_dsa_q;
+            const BIGNUM* b_dsa_p;
+            const BIGNUM* b_dsa_g;
+            
+            DSA_get0_pqg(a_dsa, &a_dsa_p, &a_dsa_q, &a_dsa_g);
+            DSA_get0_pqg(b_dsa, &b_dsa_p, &b_dsa_q, &b_dsa_g);
+            
+            if(BN_cmp(a_dsa_q, b_dsa_q) == 0)
             {
-                if(BN_cmp(a_dsa->p, b_dsa->p) == 0)
+                if(BN_cmp(a_dsa_p, b_dsa_p) == 0)
                 {
-                    if(BN_cmp(a_dsa->g, b_dsa->g) == 0)
+                    if(BN_cmp(a_dsa_g, b_dsa_g) == 0)
                     {
-                        if(BN_cmp(a_dsa->pub_key, b_dsa->pub_key) == 0)
+                        const BIGNUM* a_dsa_pub_key;
+                        const BIGNUM* a_dsa_priv_key;
+                        const BIGNUM* b_dsa_pub_key;
+                        const BIGNUM* b_dsa_priv_key;
+                        
+                        DSA_get0_key(a_dsa, &a_dsa_pub_key, &a_dsa_priv_key);
+                        DSA_get0_key(b_dsa, &b_dsa_pub_key, &b_dsa_priv_key);
+                        
+                        if(BN_cmp(a_dsa_pub_key, b_dsa_pub_key) == 0)
                         {
-                            if(a_dsa->priv_key != NULL)
+                            if(a_dsa_priv_key != NULL)
                             {
-                                if(b_dsa->priv_key != NULL)
+                                if(b_dsa_priv_key != NULL)
                                 {
-                                    return BN_cmp(a_dsa->priv_key, b_dsa->priv_key) == 0;
+                                    return BN_cmp(a_dsa_priv_key, b_dsa_priv_key) == 0;
                                 }
                             }
                             else
                             {
-                                return b_dsa->priv_key == NULL;
+                                return b_dsa_priv_key == NULL;
                             }
                         }
                     }
@@ -451,55 +615,31 @@ dsa_equals(const dnssec_key* key_a, const dnssec_key* key_b)
     return FALSE;
 }
 
-const struct structdescriptor *
-dsa_get_fields_descriptor(dnssec_key* key)
-{
-    return struct_DSA;
-}
-
 static ya_result
-dsa_private_print_fields(dnssec_key *key, output_stream *os)
+dnskey_dsa_private_print_fields(dnssec_key *key, output_stream *os)
 {
-    ya_result ret; // static analyser false positive: the loop will run at least once
-
-#ifdef DEBUG
-    ret = ERROR; // just to shut-up the false positive
-#endif
+    struct dnskey_dsa_const ydsa;
+    dnskey_dsa_from_dsa(&ydsa, key->key.dsa);
     
-    const DSA* dsa = key->key.dsa;
-    
-    for(const struct structdescriptor *sd = struct_DSA; sd->name != NULL; sd++)
-    {
-        osformat(os, "%s: ", sd->name);
-        const BIGNUM **valuep = (const BIGNUM**)&(((const u8*)dsa)[sd->address]);
+    ya_result ret = dnskey_field_access_print(DSA_field_access, &ydsa, os);
         
-        // WRITE_BIGNUM_AS_BASE64(private, *valuep, tmp_in, tmp_out);
-        
-        if(FAIL(ret = dnskey_write_bignum_as_base64_to_stream(*valuep, os)))
-        {
-            break;
-        }
-        
-        osprintln(os, "");
-    }
-    
     return ret;
 }
 
 static const dnssec_key_vtbl dsa_vtbl =
 {
-    dsa_signdigest,
-    dsa_verifydigest,
-    dsa_dnskey_public_getsize,
-    dsa_dnskey_public_store,
-    dsa_free,
-    dsa_equals,
-    dsa_private_print_fields,
+    dnskey_dsa_signdigest,
+    dnskey_dsa_verifydigest,
+    dnskey_dsa_dnskey_public_getsize,
+    dnskey_dsa_dnskey_public_store,
+    dnskey_dsa_free,
+    dnskey_dsa_equals,
+    dnskey_dsa_private_print_fields,
     "DSA"
 };
 
 static ya_result
-dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin, dnssec_key** out_key)
+dnskey_dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin, dnssec_key** out_key)
 {
     int nid;
     
@@ -507,7 +647,7 @@ dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin, dnssec_k
     
     *out_key = NULL;
     
-    if(FAIL(nid = dsa_getnid(algorithm)))
+    if(FAIL(nid = dnskey_dsa_getnid(algorithm)))
     {
         return nid;
     }
@@ -516,7 +656,7 @@ dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin, dnssec_k
     memset(rdata, 0xff, sizeof(rdata));
 #endif
 
-    u32 rdata_size = dsa_public_getsize(dsa);
+    u32 rdata_size = dnskey_dsa_public_getsize(dsa);
 
     if(rdata_size > DNSSEC_MAXIMUM_KEY_SIZE_BYTES)
     {
@@ -527,7 +667,9 @@ dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin, dnssec_k
     rdata[2] = DNSKEY_PROTOCOL_FIELD;
     rdata[3] = algorithm;
 
-    if(dsa_public_store(dsa, &rdata[4]) != rdata_size)
+    u32 stored_rdata_size = dnskey_dsa_public_store(dsa, &rdata[4]);
+    
+    if(stored_rdata_size != rdata_size)
     {
         return DNSSEC_ERROR_UNEXPECTEDKEYSIZE; /* Computed size != real size */
     }
@@ -544,7 +686,11 @@ dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin, dnssec_k
     key->vtbl = &dsa_vtbl;
     key->tag = tag;
     key->nid = nid;
-    if(dsa->priv_key != NULL)
+    
+    const BIGNUM *dsa_priv_key = NULL;
+    DSA_get0_key(dsa, NULL, &dsa_priv_key);
+    
+    if(dsa_priv_key != NULL)
     {
         key->status |= DNSKEY_KEY_IS_PRIVATE;
     }
@@ -554,14 +700,25 @@ dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin, dnssec_k
     return SUCCESS;
 }
 
-ya_result
-dsa_private_parse_field(dnssec_key *key, parser_s *p)
+static ya_result
+dnskey_dsa_parse_field(struct dnskey_field_parser *parser, parser_s *p)
 {
+    struct dnskey_dsa *ydsa = (struct dnskey_dsa*)parser->data;
+    
+    ya_result ret = dnskey_field_access_parse(DSA_field_access, ydsa, p);
+            
+    return ret;
+}
+
+static ya_result
+dnskey_dsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
+{
+    struct dnskey_dsa *ydsa = (struct dnskey_dsa*)parser->data;
+    
     if(key == NULL)
     {
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
-
     switch(key->algorithm)
     {
         case DNSKEY_ALGORITHM_DSASHA1_NSEC3:
@@ -572,7 +729,22 @@ dsa_private_parse_field(dnssec_key *key, parser_s *p)
             break;
     }
     
-    ya_result ret = ERROR;
+    if((ydsa->p == NULL) ||
+       (ydsa->q == NULL) ||
+       (ydsa->g == NULL) ||
+       (ydsa->pub_key == NULL))
+    {
+        return ERROR;
+    }
+    
+    int nid;
+    
+    if(FAIL(nid = dnskey_dsa_getnid(key->algorithm)))
+    {
+        return nid;
+    }
+    
+    bool has_private = ydsa->priv_key != NULL;
     
     if(key->key.dsa == NULL)
     {
@@ -580,72 +752,18 @@ dsa_private_parse_field(dnssec_key *key, parser_s *p)
         key->vtbl = &dsa_vtbl;
     }
     
-    DSA *dsa = key->key.dsa;
-    u32 label_len = parser_text_length(p);
-    const char *label = parser_text(p);
-    bool parsed_it = FALSE;
-    u8 tmp_out[DNSSEC_MAXIMUM_KEY_SIZE_BYTES];
-    
-    for(const struct structdescriptor *sd = struct_DSA; sd->name != NULL; sd++)
+    if(dnskey_dsa_to_dsa(ydsa, key->key.dsa))
     {
-        if(memcmp(label, sd->name, label_len) == 0)
-        {
-            BIGNUM **valuep = (BIGNUM**)&(((u8*)dsa)[sd->address]);
-
-            ret = parser_next_word(p);
-            
-            if((*valuep != NULL) || FAIL(ret))
-            {
-                return ret;
-            }
-
-            u32 word_len = parser_text_length(p);
-            const char *word = parser_text(p);
-            
-            ya_result n = base64_decode(word, word_len, tmp_out);
-
-            if(FAIL(n))
-            {
-                log_err("unable to decode field %s", sd->name);
-                return n;
-            }
-
-            *valuep = BN_bin2bn(tmp_out, n, NULL);
-            
-            if(*valuep == NULL)
-            {
-                log_err("unable to get big number from field %s", sd->name);
-                return DNSSEC_ERROR_BNISNULL;
-            }
-            
-            parsed_it = TRUE;
-            
-            break;
-        }
-    } /* for each possible field */
-    
-    if(!parsed_it)
-    {
-        return SUCCESS; // unknown keyword (currently : ignore)
-    }
-    
-    if((dsa->p != NULL)    &&
-       (dsa->q != NULL)    &&
-       (dsa->g != NULL)    &&
-       /*(dsa->priv_key != NULL)    &&*/
-       (dsa->pub_key != NULL))
-    {
-        yassert(key->nid == 0);
+        // at this point, ydsa has been emptied
         
-        int nid;
+        DSA *dsa = key->key.dsa;
         
-        if(FAIL(nid = dsa_getnid(key->algorithm)))
-        {
-            return nid;
-        }
+        u32 rdata_size = dnskey_dsa_public_getsize(dsa);
         
-        u32 rdata_size = dsa_public_getsize(dsa);
-        u8 *rdata = tmp_out;
+        u16 tag;
+        
+        u8 rdata[DNSSEC_MAXIMUM_KEY_SIZE_BYTES];
+        
         if(rdata_size > DNSSEC_MAXIMUM_KEY_SIZE_BYTES)
         {
             return DNSSEC_ERROR_KEYISTOOBIG;
@@ -655,7 +773,7 @@ dsa_private_parse_field(dnssec_key *key, parser_s *p)
         rdata[2] = DNSKEY_PROTOCOL_FIELD;
         rdata[3] = key->algorithm;
 
-        if(dsa_public_store(dsa, &rdata[4]) != rdata_size)
+        if(dnskey_dsa_public_store(dsa, &rdata[4]) != rdata_size)
         {
             return DNSSEC_ERROR_UNEXPECTEDKEYSIZE; /* Computed size != real size */
         }
@@ -664,25 +782,58 @@ dsa_private_parse_field(dnssec_key *key, parser_s *p)
          *        are not taken in account
          */
 
-        u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size + 4);
+        tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size + 4);
 
         key->tag = tag;
         key->nid = nid;
-        
+
         key->status |= DNSKEY_KEY_IS_VALID;
-    }
-    
-    if(((key->status & DNSKEY_KEY_IS_VALID) != 0) && (dsa->priv_key != NULL))
-    {
-        key->status |= DNSKEY_KEY_IS_PRIVATE;
-    }
+
+        if(has_private)
+        {
+            key->status |= DNSKEY_KEY_IS_PRIVATE;
+        }
         
-    return ret;
+        return SUCCESS;
+    }
+    else
+    {
+        return ERROR;
+    }
 }
 
+static void
+dnskey_dsa_parse_finalise(struct dnskey_field_parser *parser)
+{
+    struct dnskey_dsa *ydsa = (struct dnskey_dsa*)parser->data;
+    
+    if(ydsa != NULL)
+    {
+        dnskey_dsa_finalise(ydsa);
+        ZFREE(ydsa, struct dnskey_dsa);
+    }
+}
+
+static const struct dnskey_field_parser_vtbl dsa_field_parser_vtbl =
+{
+    dnskey_dsa_parse_field,
+    dnskey_dsa_parse_set_key,
+    dnskey_dsa_parse_finalise,
+    "DSA"
+};
+
+void
+dnskey_dsa_parse_init(dnskey_field_parser *fp)
+{
+    struct dnskey_dsa *ydsa;
+    ZALLOC_OR_DIE(struct dnskey_dsa *, ydsa, struct dnskey_dsa, GENERIC_TAG);
+    ZEROMEMORY(ydsa, sizeof(struct dnskey_dsa));
+    fp->data = ydsa;
+    fp->vtbl = &dsa_field_parser_vtbl;
+}
 
 ya_result
-dsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key** out_key)
+dnskey_dsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key** out_key)
 {
     *out_key = NULL;
             
@@ -706,13 +857,13 @@ dsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key**
     
     ya_result return_value = ERROR;
 
-    DSA *dsa = dsa_public_load(rdata, rdata_size);
+    DSA *dsa = dnskey_dsa_public_load(rdata, rdata_size);
     
     if(dsa != NULL)
     {
         dnssec_key *key;
         
-        if(ISOK(return_value = dsa_initinstance(dsa, algorithm, flags, origin, &key)))
+        if(ISOK(return_value = dnskey_dsa_initinstance(dsa, algorithm, flags, origin, &key)))
         {
             *out_key = key;
 
@@ -726,7 +877,7 @@ dsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key**
 }
 
 ya_result
-dsa_newinstance(u32 size, u8 algorithm, u16 flags, const char* origin, dnssec_key** out_key)
+dnskey_dsa_newinstance(u32 size, u8 algorithm, u16 flags, const char* origin, dnssec_key** out_key)
 {
     *out_key = NULL;
     
@@ -742,13 +893,13 @@ dsa_newinstance(u32 size, u8 algorithm, u16 flags, const char* origin, dnssec_ke
     
     ya_result return_value = ERROR;
 
-    DSA *dsa = dsa_genkey(size);
+    DSA *dsa = dnskey_dsa_genkey(size);
     
     if(dsa != NULL)
     {
         dnssec_key *key;
         
-        if(ISOK(return_value = dsa_initinstance(dsa, algorithm, flags, origin, &key)))
+        if(ISOK(return_value = dnskey_dsa_initinstance(dsa, algorithm, flags, origin, &key)))
         {
             *out_key = key;
             

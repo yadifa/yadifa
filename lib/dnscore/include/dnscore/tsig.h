@@ -273,6 +273,11 @@ ya_result tsig_message_extract(struct message_data *mesg);
 
 #define TSIG_ENABLED(message__) ((message__)->tsig.tsig != NULL)
 
+typedef HMAC_CTX* tsig_hmac_t;
+
+tsig_hmac_t tsig_hmac_allocate();
+void tsig_hmac_free(tsig_hmac_t t);
+
 #ifdef	__cplusplus
 }
 #endif

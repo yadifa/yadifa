@@ -39,6 +39,10 @@
 /* dynamic update support disabled. */
 #undef HAS_DYNUPDATE_SUPPORT
 
+/* Disables Elliptic Curve (ECDSA) support (ie: the available OpenSSL does not
+   supports it) disabled. */
+#undef HAS_ECDSA_SUPPORT
+
 /* Eric's code is enabled */
 #undef HAS_EDF
 
@@ -159,6 +163,9 @@
 
 /* Define to 1 if you have the `bzero' function. */
 #undef HAVE_BZERO
+
+/* Define to 1 if you have the <cpuid.h> header file. */
+#undef HAVE_CPUID_H
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #undef HAVE_DLFCN_H

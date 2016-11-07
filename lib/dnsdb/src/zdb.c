@@ -99,6 +99,8 @@ const char *dnsdb_lib = "dnsdb " __DATE__ " " __TIME__ " release";
 
 void dnssec_keystore_init();
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+
 static pthread_mutex_t *ssl_mutex = NULL;
 static int ssl_mutex_count = 0;
 
@@ -124,6 +126,8 @@ ssl_thread_id()
 {
     return (unsigned long)pthread_self();
 }
+
+#endif
 
 #endif
 
@@ -197,8 +201,13 @@ zdb_init_ex(u32 thread_pool_count)
 
     /* Init openssl */
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
     ENGINE_load_openssl();
+#endif
+    
     ENGINE_load_builtin_engines();
+    
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
     SSL_load_error_strings();
 
     ssl_mutex_count = CRYPTO_num_locks();
@@ -214,11 +223,12 @@ zdb_init_ex(u32 thread_pool_count)
 
     CRYPTO_set_id_callback(ssl_thread_id);
     CRYPTO_set_locking_callback(ssl_lock);
+#endif
     
     dnssec_keystore_init();
 #endif
 
-    journal_init(0);    // uses the default mru size (512)
+    journal_init(0);    // uses the default mru size (128)
     
     logger_start();
 }
@@ -241,10 +251,10 @@ zdb_finalize()
 
     zdb_init_done = FALSE;
 
-    zdb_zone_garbage_finalize();
-    
     journal_finalise();
     
+    zdb_zone_garbage_finalize();
+        
 #if ZDB_HAS_DNSSEC_SUPPORT
     dnssec_keystore_destroy();
     dnssec_keystore_resetpath();
@@ -252,6 +262,7 @@ zdb_finalize()
 
 #if ZDB_OPENSSL_SUPPORT
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
     ERR_remove_state(0);
 
     /* Init openssl */
@@ -269,7 +280,8 @@ zdb_finalize()
     ssl_mutex_count = 0;
 
     free(ssl_mutex);
-
+#endif
+    
     ENGINE_cleanup();
 
 #endif
@@ -373,7 +385,7 @@ zdb_remove_zone_from_dnsname(zdb *db, const u8 *fqdn)
  */
 
 ya_result
-zdb_query(zdb* db, const u8 *name_, u16 type, zdb_packed_ttlrdata** ttlrdata_out)
+zdb_query_OBSOLETE(zdb* db, const u8 *name_, u16 type, zdb_packed_ttlrdata** ttlrdata_out)
 {
     yassert(ttlrdata_out != NULL);
 
@@ -405,7 +417,7 @@ zdb_query(zdb* db, const u8 *name_, u16 type, zdb_packed_ttlrdata** ttlrdata_out
 
         if(zone_label->zone != NULL)
         {
-            if((*ttlrdata_out = zdb_zone_record_find(zone_label->zone, name.labels, name.size - sp, type)) != NULL)
+            if((*ttlrdata_out = zdb_zone_record_find(zone_label->zone, name.labels, name.size - sp, type)) != NULL) // in obsolete
             {
                 /* *ttlrdata_out for the answer */
                 /* zone_label->zone for the authority section */
@@ -481,8 +493,8 @@ zdb_query_ip_records(zdb* db, const u8* name_, zdb_packed_ttlrdata* * restrict t
 
             if(rr_label != NULL)
             {
-                zdb_packed_ttlrdata* a = zdb_record_find(&rr_label->resource_record_set, TYPE_A);
-                zdb_packed_ttlrdata* aaaa = zdb_record_find(&rr_label->resource_record_set, TYPE_AAAA);
+                zdb_packed_ttlrdata* a = zdb_record_find(&rr_label->resource_record_set, TYPE_A); // zone is locked
+                zdb_packed_ttlrdata* aaaa = zdb_record_find(&rr_label->resource_record_set, TYPE_AAAA); // zone is locked
 
                 if(a != NULL || aaaa != NULL)
                 {
@@ -556,7 +568,7 @@ zdb_append_ip_records(zdb* db, const u8* name_, host_address *target_list)
         {
             zdb_zone_lock(zone_label->zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
             /* Get the label, instead of the type in the label */
-            zdb_rr_label* rr_label = zdb_rr_label_find_exact(zone_label->zone->apex, name.labels, name.size - sp);
+            zdb_rr_label* rr_label = zdb_rr_label_find_exact(zone_label->zone->apex, name.labels, name.size - sp); // zone is locked
 
             if(rr_label != NULL)
             {
@@ -564,7 +576,7 @@ zdb_append_ip_records(zdb* db, const u8* name_, host_address *target_list)
                 
                 zdb_packed_ttlrdata* rrset;
                 
-                rrset = zdb_record_find(&rr_label->resource_record_set, TYPE_A);
+                rrset = zdb_record_find(&rr_label->resource_record_set, TYPE_A); // zone is locked
                 while(rrset != NULL)
                 {
                     host_address_append_ipv4(target_list, ZDB_PACKEDRECORD_PTR_RDATAPTR(rrset), NU16(DNS_DEFAULT_PORT));
@@ -572,7 +584,7 @@ zdb_append_ip_records(zdb* db, const u8* name_, host_address *target_list)
                     rrset = rrset->next;
                 }
                 
-                rrset = zdb_record_find(&rr_label->resource_record_set, TYPE_AAAA);
+                rrset = zdb_record_find(&rr_label->resource_record_set, TYPE_AAAA); // zone is locked
                 while(rrset != NULL)
                 {
                     host_address_append_ipv6(target_list, ZDB_PACKEDRECORD_PTR_RDATAPTR(rrset), NU16(DNS_DEFAULT_PORT));
