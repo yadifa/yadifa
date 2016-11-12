@@ -63,7 +63,6 @@
 #include "dnsdb/zdb_icmtl.h"
 
 #define MODULE_MSG_HANDLE g_dnssec_logger
-
 extern logger_handle *g_dnssec_logger;
 
 #ifndef DEBUG
@@ -197,20 +196,14 @@ nsec3_update_rrsig_commit(zdb_packed_ttlrdata *removed_rrsig_sll, zdb_packed_ttl
         sig = sig->next;
         free(tmp);
     }
-
-
-
 }
 
 bool
-nsec3_is_label_covered(const zdb_rr_label *label, bool opt_out)
+nsec3_is_label_covered(const zdb_rr_label *label, bool opt_out) // OBSOLETE ?
 {
     bool opt_in = !opt_out;
     bool skip_children = FALSE;    
     bool nsec3_covered = FALSE;
-    //bool force_rrsig = FALSE;
-    
-
     
     if(!ZDB_LABEL_ISAPEX(label)) /* Not the origin (The apex of a zone has got a '.' label */
     {
@@ -218,14 +211,9 @@ nsec3_is_label_covered(const zdb_rr_label *label, bool opt_out)
         {
             skip_children = TRUE;
 
-
-            
-            bool has_ds = zdb_record_find(&label->resource_record_set, TYPE_DS) != NULL;
-            
-
+            bool has_ds = zdb_record_find(&label->resource_record_set, TYPE_DS) != NULL; // in obsolete ?
             
             nsec3_covered = opt_in|has_ds;
-            //force_rrsig = has_ds;            
 
             /*
              * After processing this node, the brother will be processed.
@@ -237,7 +225,6 @@ nsec3_is_label_covered(const zdb_rr_label *label, bool opt_out)
             
             nsec3_covered = false;
             skip_children = true;
-            //force_rrsig = false;
         }
         else
         {
@@ -259,31 +246,22 @@ nsec3_is_label_covered(const zdb_rr_label *label, bool opt_out)
         return TRUE;
     }
     
-
-
     if(!skip_children)
     {
         /* for all children */
         
         dictionary_iterator iter;
-        
-
-        
         dictionary_iterator_init(&label->sub, &iter);
-        
-
         
         while(!nsec3_covered && dictionary_iterator_hasnext(&iter))
         {
-            zdb_rr_label *sub_label =  *(zdb_rr_label**)dictionary_iterator_next(&iter);
+            zdb_rr_label *sub_label = *(zdb_rr_label**)dictionary_iterator_next(&iter);
             /* if a child has been signed, then this one will be too */
 
             nsec3_covered |= nsec3_is_label_covered(sub_label, opt_out);
         }
     }
-    
 
-    
     /*
      * If it's opt-out and we are not forced to sign, then skip to the next one
      */
@@ -305,7 +283,7 @@ struct nsec3_update_zone_nsec3_nodes_recursive_args
     zdb_zone* zone;
     s32 label_stack_level;
     u32 origin_len;
-    u32 min_ttl;
+    s32 min_ttl;
     u8 nsec3_flags;
     bool opt_out;
     zdb_rr_label *label_stack[128];
@@ -334,7 +312,9 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
     u8 *digest = &commonargs->digest[0];
     type_bit_maps_context *type_context = &commonargs->type_context;
     u8 nsec3_flags = commonargs->nsec3_flags;
-    u32 min_ttl = commonargs->min_ttl;
+    s32 min_ttl = commonargs->min_ttl;
+    
+    yassert(zdb_zone_islocked(zone));
     
     /* build the current name */
     
@@ -389,7 +369,7 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
 
             skip_children = TRUE;
 
-            bool has_ds = zdb_record_find(&label->resource_record_set, TYPE_DS) != NULL;
+            bool has_ds = zdb_record_find(&label->resource_record_set, TYPE_DS) != NULL; // zone is locked
             
             nsec3_covered = opt_in|has_ds;
             force_rrsig = has_ds;            
@@ -597,6 +577,8 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
 
                 if((node_prev->flags & NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD) == 0)
                 {
+                    zdb_listener_notify_update_nsec3rrsig(zone, node_prev->rrsig, NULL, node_prev);
+                    
                     zdb_listener_notify_remove_nsec3(zone, node_prev, n3, min_ttl);
                     node_prev->flags |= NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD;
                 }
@@ -688,6 +670,8 @@ nsec3_update_label_nsec3_nodes_recursive(nsec3_update_zone_nsec3_nodes_recursive
 
                     if((node->flags & NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD) == 0)
                     {
+                        zdb_listener_notify_update_nsec3rrsig(zone, node->rrsig, NULL, node);
+                        
                         zdb_listener_notify_remove_nsec3(zone, node, n3, min_ttl);
                         node->flags |= NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD;
                     }
@@ -804,8 +788,7 @@ nsec3_update_zone(zdb_zone* zone)
 
     bool opt_out = zdb_zone_is_nsec3_optout(zone);
         
-    u32 min_ttl = 900;
-    
+    s32 min_ttl;
     zdb_zone_getminttl(zone, &min_ttl);
 
     u8 name[2 + MAX_DOMAIN_LENGTH];
@@ -915,6 +898,9 @@ nsec3_update_zone(zdb_zone* zone)
                 {
                     node->flags &= ~NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD;
                     zdb_listener_notify_add_nsec3(zone, node, n3, min_ttl);
+#if HAS_EDF
+                    // @todo sign it, now
+#endif
                 }
             }
 
@@ -938,7 +924,7 @@ nsec3_update_zone(zdb_zone* zone)
     {
         u32 name_len = zdb_zone_label_iterator_nextname(&label_iterator, &name[2]) + 2;
 
-#if NSEC3_UPDATE_ZONE_DEBUG!=0
+#if NSEC3_UPDATE_ZONE_DEBUG
         log_debug("nsec3: wild '%{dnsname}'", name);
 #endif
 
@@ -950,7 +936,7 @@ nsec3_update_zone(zdb_zone* zone)
              * Already done.
              */
 
-#if NSEC3_UPDATE_ZONE_DEBUG!=0
+#if NSEC3_UPDATE_ZONE_DEBUG
             log_debug("nsec3: wild '%{dnsname}' already set", name);
 #endif
             continue;

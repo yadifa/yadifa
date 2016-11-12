@@ -171,7 +171,7 @@ yadifa_run()
             message_make_query(&mesg, id, root_fqdn, qtype, CLASS_CTRL);
 
             packet_writer pw;
-            packet_writer_init(&pw, mesg.buffer, mesg.send_length, sizeof(mesg.buffer));
+            packet_writer_init(&pw, mesg.buffer, mesg.send_length, MIN(NETWORK_BUFFER_SIZE, sizeof(mesg.buffer)));
 
             packet_writer_add_record(&pw, root_fqdn, qtype, CLASS_CTRL, 0, qname, (u16)dnsname_len(qname));
             MESSAGE_SET_AN(mesg.buffer, htons(1));
@@ -218,7 +218,7 @@ yadifa_run()
 
             /* 3. modify message, add an extra resource record */
             packet_writer pw;
-            packet_writer_init(&pw, mesg.buffer, mesg.send_length, sizeof(mesg.buffer));
+            packet_writer_init(&pw, mesg.buffer, mesg.send_length, MIN(NETWORK_BUFFER_SIZE, sizeof(mesg.buffer)));
 
             packet_writer_add_record(&pw, root_fqdn, qtype, CLASS_CTRL, 0, buffer, buffer_len);
 
@@ -249,7 +249,7 @@ yadifa_run()
 
             /* 3. modify message, add an extra resource record */
             packet_writer pw;
-            packet_writer_init(&pw, mesg.buffer, mesg.send_length, sizeof(mesg.buffer));
+            packet_writer_init(&pw, mesg.buffer, mesg.send_length, MIN(NETWORK_BUFFER_SIZE, sizeof(mesg.buffer)));
 
             packet_writer_add_record(&pw, root_fqdn, qtype, CLASS_CTRL, 0, buffer, buffer_len);
 
@@ -266,7 +266,7 @@ yadifa_run()
 
             /* 2. modify message, add an extra resource record */
             packet_writer pw;
-            packet_writer_init(&pw, mesg.buffer, mesg.send_length, sizeof(mesg.buffer));
+            packet_writer_init(&pw, mesg.buffer, mesg.send_length, MIN(NETWORK_BUFFER_SIZE, sizeof(mesg.buffer)));
 
             if(g_yadifa_main_settings.enable) /* from command line parameter */
             {

@@ -79,6 +79,24 @@ list_dl_remove(list_dl_s *list, const void *data)
     return NULL;
 }
 
+/**
+ * Removes the node from the list, the node is not freed
+ * 
+ * @param list
+ * @param node
+ */
+
+void
+list_dl_remove_node(list_dl_s *list, list_dl_node_s *node)
+{
+    node->prev->next = node->next;
+    node->next->prev = node->prev;
+    node->next = NULL;
+    node->prev = NULL;
+    
+    list->size--;
+}
+
 bool
 list_dl_remove_matching(list_dl_s *list, result_callback_function *match, void *args)
 {
@@ -199,7 +217,7 @@ void *list_dl_search(list_dl_s *list, result_callback_function *comparator, void
  * 
  * @param list
  * @param comparator
- * @return 
+ * @return the index in the list or -1 if the item is wasn't found
  */
 
 ya_result
@@ -207,21 +225,21 @@ list_dl_indexof(list_dl_s *list, void *data)
 {
     list_dl_node_s *node = list->head_sentinel.next;
     
-    ya_result index = -1;
-
+    ya_result index = 0;
+    
     while(node->next != NULL)
     {
-        index++;
-        
         if(node->data == data)
         {
-            break;
+            return index;
         }
-                
+        
+        ++index;
+        
         node = node->next;
     }
     
-    return index;
+    return -1;
 }
 
 void *

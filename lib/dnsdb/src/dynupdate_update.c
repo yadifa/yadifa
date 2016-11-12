@@ -148,27 +148,34 @@ label_update_status_delete(label_update_status *lus)
     ZFREE(lus, label_update_status);
 }
 
-
-
 #if ZDB_HAS_DNSSEC_SUPPORT
+
+/**
+ * 
+ * 1 caller
+ * 
+ * @param zone
+ * @param lus_set
+ * @return 
+ */
 
 static ya_result
 dynupdate_update_rrsig_body(zdb_zone *zone, ptr_set *lus_set)
 {
+    yassert(zdb_zone_islocked(zone));
+    
     ya_result return_code;
     dnsname_stack path;
     rrsig_updater_parms parms;
     ZEROMEMORY(&parms, sizeof(rrsig_updater_parms));
     rrsig_updater_init(&parms, zone);
     
-    return_code = rrsig_updater_prepare_keys(&parms, zone);
+    return_code = rrsig_updater_prepare_keys(&parms, zone); // zone is locked
     if(FAIL(return_code))
     {
         rrsig_updater_finalize(&parms);
         return return_code;
     }
-    
-
     
     if(FAIL(return_code = dnssec_process_begin(&parms.task)))
     {
@@ -235,7 +242,7 @@ dynupdate_update_rrsig_body(zdb_zone *zone, ptr_set *lus_set)
     }
     
 #ifdef DEBUG
-    log_debug("dynupdate_update_rrsig_body: %{dnsname}: ready to commi", zone->origin);
+    log_debug("dynupdate_update_rrsig_body: %{dnsname}: ready to commit", zone->origin);
 #endif
     
     dnssec_process_end(&parms.task);
@@ -314,6 +321,273 @@ dynupdate_update_nsec3_body_postdel(zdb_zone *zone, ptr_vector *candidates, ptr_
             }
         }
     }
+}
+
+static ya_result
+dynupdate_update_nsec3_body(zdb_zone *zone, ptr_set *lus_set)
+{
+#ifdef DEBUG
+    log_debug1("update: %{dnsname} updating NSEC3 body", zone->origin);
+#endif
+    
+    bool opt_out = ((zone->apex->flags & ZDB_RR_LABEL_NSEC3_OPTOUT) != 0);
+    
+    ptr_set nsec3_del = PTR_SET_EMPTY;
+    ptr_set nsec3_upd = PTR_SET_EMPTY;
+    ptr_vector label_del = EMPTY_PTR_VECTOR;
+    
+    dnsname_stack path;
+
+    ya_result return_code;
+        
+    ptr_set_avl_iterator lus_iter;
+    ptr_set_avl_iterator_init(lus_set, &lus_iter);
+    while(ptr_set_avl_iterator_hasnext(&lus_iter))
+    {
+        ptr_node *lus_node = ptr_set_avl_iterator_next_node(&lus_iter);
+        label_update_status *lus = (label_update_status *)lus_node->value;
+
+#ifdef DEBUG
+        log_debug1("update: %{dnsname} updating NSEC3 body: %{dnsname}", zone->origin, lus->dname);
+#endif
+        
+        dnsname_to_dnsname_stack(lus->dname, &path);
+
+        zdb_rr_label *label = lus->label;
+        
+        /* dnssec_process_rr_label(lus->label, task); */
+
+        if(((label->flags & ZDB_RR_LABEL_UPDATING) != 0))
+        {
+            label->flags &= ~ZDB_RR_LABEL_UPDATING;
+
+            if(LABEL_HAS_RECORDS(label))
+            {
+                /*
+                 * Check if the label needs nsec
+                 * If it does, update it if needed then request for a signature
+                 * If it does not, delete it if needed along with its signature
+                 */
+                /*
+                bool has_ds = zdb_record_find(&label->resource_record_set, TYPE_DS) != NULL;
+                bool has_no_ns = zdb_record_find(&label->resource_record_set, TYPE_NS) == NULL;
+                bool nsec_covered = (zone->apex == label) || has_ds || has_no_ns;
+                */
+                
+#ifdef DEBUG
+                log_debug2("update: %{dnsname} updating NSEC3 body: %{dnsname}: is label covered", zone->origin, lus->dname);
+#endif
+                
+                bool nsec_covered = nsec3_is_label_covered(label, opt_out);
+
+                if(nsec_covered)
+                {
+                    dnslabel_vector labels;
+                    s32 labels_top = dnsname_to_dnslabel_vector(lus->dname, labels);
+
+                    bool new_one = label->nsec.nsec3 == NULL;
+                    
+#ifdef DEBUG
+                    log_debug2("update: %{dnsname} updating NSEC3 body: %{dnsname}: update label", zone->origin, lus->dname);
+#endif
+
+                    if(nsec3_update_label(zone, label, labels, labels_top))
+                    {
+                        ptr_set_avl_insert(&nsec3_upd, label->nsec.nsec3->self)->value = label;
+
+                        if(new_one) /* if it's a new insert, the previous nsec3 will have to be updated */
+                        {
+                            nsec3_zone_item *pred = nsec3_avl_node_mod_prev(label->nsec.nsec3->self);
+                            
+                            yassert(pred != NULL);
+
+                            // ? if(pred != label->nsec.nsec3->self)
+                            {
+                                ptr_set_avl_insert(&nsec3_upd, pred)->value = label;
+
+                                nsec3_zone* n3 = nsec3_zone_from_item(zone, pred);
+                                
+                                zdb_listener_notify_update_nsec3rrsig(zone, pred->rrsig, NULL, pred);
+                                
+                                zdb_listener_notify_remove_nsec3(zone, pred, n3, 0);
+                            }
+                        }
+                        /*
+                        The item has already been updated, it cannot be notified here (its image is already the new one)
+                        nsec3_zone* n3 = nsec3_zone_from_item(zone, label->nsec.nsec3->self);
+                        if(!new_one)
+                        {
+                            zdb_listener_notify_remove_nsec3(zone, label->nsec.nsec3->self, n3, 0);
+                        }
+                        */
+                    }
+                    
+#ifdef DEBUG
+                    log_debug2("update: %{dnsname} updating NSEC3 body: %{dnsname}: update label done", zone->origin, lus->dname);
+#endif
+                    // else the NSEC3 record didn't changed
+                }
+                else
+                {
+                    /* @todo 20100820 edf -- remove nsec3 for label
+                     *       The previous NSEC3 will have to be processed for re-signature
+                     */
+                    
+#ifdef DEBUG
+                    log_debug2("update: %{dnsname} updating NSEC3 body: %{dnsname}: add to delete set", zone->origin, lus->dname);
+#endif
+
+                    if(label->nsec.nsec3 != NULL)
+                    {
+                        ptr_set_avl_insert(&nsec3_del, label->nsec.nsec3->self)->value = label;
+                    }
+                    
+                    /* check if the label will need to be destroyed after the NSEC3 is removed */
+                    
+                    dynupdate_update_nsec3_body_postdel(zone, &label_del, &nsec3_del, label, lus->dname);
+                    
+#ifdef DEBUG
+                    log_debug2("update: %{dnsname} updating NSEC3 body: %{dnsname}: add to delete set done", zone->origin, lus->dname);
+#endif
+                }
+            }
+            else
+            {
+                /* remove nsec3, update the pred */
+
+#ifdef DEBUG
+                log_debug2("update: %{dnsname} updating NSEC3 body: %{dnsname}: add to delete set 2", zone->origin, lus->dname);
+#endif
+                
+                if(label->nsec.nsec3 != NULL)
+                {
+                    ptr_set_avl_insert(&nsec3_del, label->nsec.nsec3->self)->value = label;
+                }
+                
+                dynupdate_update_nsec3_body_postdel(zone, &label_del, &nsec3_del, label, lus->dname);
+                
+#ifdef DEBUG
+                log_debug2("update: %{dnsname} updating NSEC3 body: %{dnsname}: add to delete set done 2", zone->origin, lus->dname);
+#endif
+            }
+        }
+    }
+
+    /*
+     * The treeset does not contain any dup and is sorted already
+     */
+
+
+    /*
+     * Remove the nsec3 of the del set from the upd set and from the db
+     */
+
+#ifdef DEBUG
+    log_debug1("update: %{dnsname} NSEC3 body: removing deleted set from the db", zone->origin);
+#endif
+
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&nsec3_del, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
+    {
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+
+        nsec3_zone_item *nsec3_item = (nsec3_zone_item*)node->key;
+        zdb_rr_label *label = (zdb_rr_label*)node->value;
+
+        nsec3_zone_item *pred = nsec3_avl_node_mod_prev(nsec3_item);
+        /* Add the del's pred to the 'to update' */
+        ptr_set_avl_insert(&nsec3_upd, pred);
+        
+        nsec3_zone* n3 = nsec3_zone_from_item(zone, nsec3_item);
+        
+        zdb_listener_notify_update_nsec3rrsig(zone, pred->rrsig, NULL, pred);
+        zdb_listener_notify_remove_nsec3(zone, pred, n3, 0);
+        
+        zdb_listener_notify_update_nsec3rrsig(zone, nsec3_item->rrsig, NULL, nsec3_item);
+        zdb_listener_notify_remove_nsec3(zone, nsec3_item, n3, 0);         
+        
+        /* Remove the del from the 'to update' */
+        ptr_set_avl_delete(&nsec3_upd, nsec3_item);
+
+        nsec3_remove_label(zone, label);
+    }
+    
+    /*
+     * All nsec3 candidates to be resigned are in nsec3_upd
+     */
+    
+#ifdef DEBUG
+    log_debug1("update: %{dnsname} NSEC3 body: nsec3 resigning candidates", zone->origin);
+#endif
+    
+    nsec3_rrsig_updater_parms parms;
+    ZEROMEMORY(&parms, sizeof(nsec3_rrsig_updater_parms));
+    nsec3_rrsig_updater_init(&parms, zone);
+    
+    if(FAIL(return_code = dnssec_process_begin(&parms.task)))
+    {
+        return return_code;
+    }
+
+    ptr_set_avl_iterator_init(&nsec3_upd, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
+    {
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+
+        nsec3_zone_item *nsec3_item = (nsec3_zone_item*)node->key;
+        /*zdb_rr_label *label = (zdb_rr_label*)node->value;*/
+
+        /* dnssec_process_rr_label(lus->label, task); */
+        
+        nsec3_zone* n3 = nsec3_zone_from_item(zone, nsec3_item);
+        zdb_listener_notify_add_nsec3(zone, nsec3_item, n3, 0);
+
+        nsec3_rrsig_update_item_s* query;
+
+        MALLOC_OR_DIE(nsec3_rrsig_update_item_s*, query, sizeof(nsec3_rrsig_update_item_s), ZDB_RRSIGUPQ_TAG);
+
+        query->zone = zone;
+        query->item = nsec3_item;
+        query->next = nsec3_avl_node_mod_next(nsec3_item);
+        query->added_rrsig_sll = NULL;
+        query->removed_rrsig_sll = NULL;
+
+        threaded_queue_enqueue(&parms.task.dnssec_task_query_queue, query);
+    }
+    
+    dnssec_process_end(&parms.task);
+    
+    nsec3_rrsig_updater_commit(&parms);
+    
+    nsec3_rrsig_updater_finalize(&parms);
+    
+#ifdef DEBUG
+    log_debug1("update: %{dnsname} NSEC3 body: deleting records from zone", zone->origin);
+#endif
+    
+    ptr_set_avl_destroy(&nsec3_upd);
+    ptr_set_avl_destroy(&nsec3_del);
+    
+    for(s32 i = 0; i <= label_del.offset; i++)
+    {
+        u8 *qname = (u8*)label_del.data[i];
+        /* delete qname */
+        
+        dnslabel_vector name_path;
+        
+        s32 path_index = dnsname_to_dnslabel_stack(qname, name_path);
+                
+        zdb_rr_label_delete_record(zone, name_path, (path_index - zone->origin_vector.size) - 1, TYPE_ANY);
+        
+        free(qname);
+    }
+    
+#ifdef DEBUG
+    log_debug1("update: %{dnsname} NSEC3 body updated", zone->origin);
+#endif
+
+    return SUCCESS;
 }
 
 #endif
@@ -766,6 +1040,8 @@ label_update_status_destroy(ptr_set* lus_setp)
 ya_result
 dynupdate_update(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, bool dryrun)
 {
+    yassert(zdb_zone_islocked(zone));
+    
     if(ZDB_ZONE_INVALID(zone))
     {
         return ZDB_ERROR_ZONE_INVALID;
@@ -823,11 +1099,20 @@ dynupdate_update(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, b
 
         /* ensure all the private keys are available or servfail */
 
-        const zdb_packed_ttlrdata *dnskey_rrset = zdb_zone_get_dnskey_rrset(zone);
+        const zdb_packed_ttlrdata *dnskey_rrset = zdb_zone_get_dnskey_rrset(zone); // zone is locked
 
         int ksk_count = 0;
         int zsk_count = 0;
-
+#if 0
+        if(dnskey_rrset == NULL)
+        {
+            dnssec_keystore_reload_domain(zone->origin);
+            zdb_zone_update_keystore_keys_from_zone(zone);
+            database_service_zone_dnskey_set_alarms(zone);
+            
+            dnskey_rrset = zdb_zone_get_dnskey_rrset(zone);
+        }
+#endif
         if(dnskey_rrset != NULL)
         {
             do
@@ -1533,7 +1818,7 @@ dynupdate_update(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, b
 
     ya_result return_value = SUCCESS;
 
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
     
     if( !dryrun && (zone->apex->nsec.dnssec != NULL) && changes_occurred )
     {
@@ -1580,7 +1865,7 @@ dynupdate_update(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, b
 
         dynupdate_update_rrsig_body(zone, &lus_set);
                 
-#if 0 && ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
         if(ISOK(return_value) && ((zone->apex->flags & ZDB_RR_LABEL_NSEC3) != 0))
         {
             ptr_set_avl_iterator_init(&lus_set, &lus_iter);
@@ -1593,6 +1878,8 @@ dynupdate_update(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, b
 
             dynupdate_update_nsec3_body(zone, &lus_set);
         }
+#else
+    //nsec3_update_zone(zone);
 #endif
 
     }

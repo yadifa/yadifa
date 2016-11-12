@@ -101,7 +101,59 @@ file_output_stream_write(output_stream* stream_, const u8* buffer, u32 len)
                     break;
                 }
 #endif
+                continue;
+            }
+
+            /* error */
+            return MAKE_ERRNO_ERROR(err);
+        }
+
+        buffer += ret;
+        len -= ret;
+    }
+
+    return buffer - start;
+}
+
+static ya_result
+file_output_stream_writefully(output_stream* stream_, const u8* buffer, u32 len)
+{
+    const file_output_stream* stream = (file_output_stream*)stream_;
+
+    const u8* start = buffer;
+
+    while(len > 0)
+    {
+        ssize_t ret = write(stream->data.fd, buffer, len);
+
+        if(ret <= 0)
+        {
+            int err = errno;
+
+            if(err == EINTR)
+            {
+                continue;
+            }
+            
+            if(err == EAGAIN) /// @todo 20150218 edf -- OSX 10.9.4 generates this on unexpected streams
+            {
+#if __FreeBSD__ || __OpenBSD__ || __APPLE__
+                int oldflags = fcntl (stream->data.fd, F_GETFL, 0);
+                if(oldflags < 0)
+                {
+                    // maybe ?
+                    err = errno;
+                    break;
+                }
+#endif
                 
+                continue;
+            }
+            
+            if(err == ENOSPC)
+            {
+                // the disk is full : wait a bit, hope the admin catches it, try again later
+                sleep((rand()&7) + 1);
                 continue;
             }
 
@@ -151,6 +203,13 @@ static const output_stream_vtbl file_output_stream_vtbl ={
     "file_output_stream",
 };
 
+static const output_stream_vtbl file_full_output_stream_vtbl ={
+    file_output_stream_writefully,
+    file_output_stream_flush,
+    file_output_stream_close,
+    "file_output_stream",
+};
+
 ya_result
 file_output_stream_open(output_stream* stream, const char* filename)
 {
@@ -165,6 +224,35 @@ file_output_stream_create(output_stream* stream, const char* filename, mode_t mo
     ya_result ret;
     ret = file_output_stream_open_ex(stream, filename, O_RDWR | O_CREAT | O_TRUNC, mode);
     return ret;
+}
+
+ya_result
+file_output_stream_create_excl(output_stream* stream, const char* filename, mode_t mode)
+{
+    ya_result ret;
+    ret = file_output_stream_open_ex(stream, filename, O_RDWR | O_CREAT | O_TRUNC | O_EXCL, mode);
+    return ret;
+}
+
+ya_result
+file_output_stream_set_full_writes(output_stream* stream, bool full_writes)
+{
+    if(is_fd_output_stream(stream))
+    {
+        if(full_writes)
+        {
+            stream->vtbl = &file_full_output_stream_vtbl;
+        }
+        else
+        {
+            stream->vtbl = &file_output_stream_vtbl;
+        }
+        return SUCCESS;
+    }
+    else
+    {
+        return ERROR;
+    }
 }
 
 ya_result
@@ -263,7 +351,7 @@ bool
 is_fd_output_stream(output_stream* stream_)
 {
     file_output_stream* stream = (file_output_stream*)stream_;
-    return (stream != NULL) && (stream->vtbl == &file_output_stream_vtbl);
+    return (stream != NULL) && ((stream->vtbl == &file_output_stream_vtbl) || (stream->vtbl == &file_full_output_stream_vtbl));
 }
 
 s64 fd_output_stream_get_size(output_stream* stream_)

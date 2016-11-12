@@ -80,7 +80,7 @@ ENGINE* dnssec_loadengine(const char *engine_name);
 void dnssec_unloadengine(ENGINE *engine);
 
 ya_result zdb_update_zone_signatures_alarm(void *zone);     /* zdb_zone* */
-ya_result zdb_update_zone_signatures(zdb_zone *zone, u32 signature_count_loose_limit, bool present_signatures_are_verified);
+ya_result zdb_update_zone_signatures(zdb_zone *zone, s32 signature_count_loose_limit, bool present_signatures_are_verified);
 
 /// @note MUST BE SET
 

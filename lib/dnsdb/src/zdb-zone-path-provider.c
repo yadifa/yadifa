@@ -372,6 +372,19 @@ zdb_zone_info_background_store_zone_and_wait_for_serial(const u8 *origin, u32 mi
     return ret;    
 }
 
+ya_result
+zdb_zone_info_background_store_in_progress(const u8 *origin)
+{
+    // This mechanism should be improved : the zone should be unlocked, frozen, saved, unfrozen, re-locked
+    
+    yassert(origin != NULL);
+    ya_result ret;
+    
+    ret = zdb_zone_info_get_provider()(origin, NULL, ZDB_ZONE_INFO_PROVIDER_STORE_IN_PROGRESS);
+    
+    return ret;
+}
+
 /** @} */
 
 /*----------------------------------------------------------------------------*/

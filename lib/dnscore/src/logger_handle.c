@@ -77,7 +77,6 @@
 
 #include "dnscore/ptr_set.h"
 
-
 #define LOGGER_HANDLE_TAG 0x4c444e48474f4c /* LOGHNDL */
 
 // If the logger thread queues a log message, and the log queue is full (ie: because the disk is full) a dead-lock may ensue.
@@ -108,18 +107,19 @@ struct logger_handle;
 #define LOGGER_MESSAGE_TYPE_STOP                        1 // stop the service
 #define LOGGER_MESSAGE_TYPE_CHANNEL_FLUSH_ALL           2 // flush all channels
 #define LOGGER_MESSAGE_TYPE_CHANNEL_REOPEN_ALL          3 // reopen all channels
-#define LOGGER_MESSAGE_TYPE_CHANNEL_CLOSE_ALL          12 // close all channels
-#define LOGGER_MESSAGE_TYPE_IGNORE                      4 // no operation
+#define LOGGER_MESSAGE_TYPE_CHANNEL_CLOSE_ALL           4 // close all channels
+#define LOGGER_MESSAGE_TYPE_CHANNEL_SINK_ALL            5 // sink all channels
+#define LOGGER_MESSAGE_TYPE_IGNORE                      6 // no operation
 
-#define LOGGER_MESSAGE_TYPE_CHANNEL_GET_USAGE_COUNT     5 // grabs the number of uses of the channel, or -1 if not registered
-#define LOGGER_MESSAGE_TYPE_CHANNEL_REGISTER            6 // register a new channel
-#define LOGGER_MESSAGE_TYPE_CHANNEL_UNREGISTER          7 // unregister a channel
+#define LOGGER_MESSAGE_TYPE_CHANNEL_GET_USAGE_COUNT     7 // grabs the number of uses of the channel, or -1 if not registered
+#define LOGGER_MESSAGE_TYPE_CHANNEL_REGISTER            8 // register a new channel
+#define LOGGER_MESSAGE_TYPE_CHANNEL_UNREGISTER          9 // unregister a channel
 
-#define LOGGER_MESSAGE_TYPE_HANDLE_CREATE               8 // open a new handle
-#define LOGGER_MESSAGE_TYPE_HANDLE_CLOSE                9 // close a handle
-#define LOGGER_MESSAGE_TYPE_HANDLE_NAME_ADD_CHANNEL    10 // add a channel to a handle identified by its name
-#define LOGGER_MESSAGE_TYPE_HANDLE_NAME_REMOVE_CHANNEL 11 // remove a channel from a handle identified by its name
-#define LOGGER_MESSAGE_TYPE_HANDLE_NAME_COUNT_CHANNELS 13 // return the number of channels linked to this logger
+#define LOGGER_MESSAGE_TYPE_HANDLE_CREATE              10 // open a new handle
+#define LOGGER_MESSAGE_TYPE_HANDLE_CLOSE               11 // close a handle
+#define LOGGER_MESSAGE_TYPE_HANDLE_NAME_ADD_CHANNEL    12 // add a channel to a handle identified by its name
+#define LOGGER_MESSAGE_TYPE_HANDLE_NAME_REMOVE_CHANNEL 13 // remove a channel from a handle identified by its name
+#define LOGGER_MESSAGE_TYPE_HANDLE_NAME_COUNT_CHANNELS 14 // return the number of channels linked to this logger
 
 struct logger_message_text_s
 {
@@ -156,6 +156,16 @@ struct logger_message_channel_flush_all_s
 };
 
 struct logger_message_channel_reopen_all_s
+{
+    u8 type;
+    u8 val8;
+    u16 val16;
+    u32 val32;  // align 64
+    
+    async_wait_s *aw;
+};
+
+struct logger_message_channel_sinc_all_s
 {
     u8 type;
     u8 val8;
@@ -282,6 +292,7 @@ union logger_message
     // no specific data for ignore
     struct logger_message_channel_flush_all_s channel_flush_all;
     struct logger_message_channel_reopen_all_s channel_reopen_all;
+    struct logger_message_channel_sinc_all_s channel_sinc_all;
     struct logger_message_channel_get_usage_count_s get_usage_count;
     struct logger_message_channel_register_s channel_register;
     struct logger_message_channel_unregister_s channel_unregister;
@@ -309,6 +320,7 @@ static volatile bool logger_initialised = FALSE;
 static volatile bool logger_queue_initialised = FALSE;
 static volatile bool logger_handle_init_done = FALSE;
 static volatile bool logger_reopen_requested = FALSE;
+static volatile bool logger_sink_requested = FALSE;
 static volatile u8 logger_level = MSG_ALL;
 
 #if DEBUG_LOG_MESSAGES
@@ -900,8 +912,6 @@ logger_service_handle_count_channels(logger_handle *handle)
     return sum;
 }
 
-
-
 /**
  * INTERNAL: used inside the service (2)
  */
@@ -945,8 +955,29 @@ logger_service_reopen_all_channels()
         
         if(FAIL(return_code))
         {
-            log_err("could not reopen logger channel '%s': %r", STRNULL((char*)node->key), return_code);
+            log_try_err("could not reopen logger channel '%s': %r", STRNULL((char*)node->key), return_code);
         }
+    }
+}
+
+/**
+ * INTERNAL: used inside the service (1)
+ */
+
+static void
+logger_service_sink_all_channels()
+{
+#if DEBUG_LOG_HANDLER
+    osformatln(termout, "logger_service_reopen_all_channels()");
+    flushout();
+#endif
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&logger_channels, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
+    {
+        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        logger_channel *channel = (logger_channel*)node->value;
+        logger_channel_sink(channel);
     }
 }
 
@@ -974,6 +1005,7 @@ static void*
 logger_dispatcher_thread(void* context)
 {
     (void)context;
+    
 #if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_dispatcher_thread(%p)", context);
     flushout();
@@ -1017,10 +1049,18 @@ logger_dispatcher_thread(void* context)
          * So instead a flag is used0
          */
         
-        if(logger_reopen_requested)
+        if(logger_sink_requested || logger_reopen_requested)
         {
-            logger_service_reopen_all_channels();
-            logger_reopen_requested = FALSE;
+            if(logger_sink_requested)
+            {
+                logger_service_sink_all_channels();
+                logger_sink_requested = FALSE;
+            }
+            if(logger_reopen_requested)
+            {
+                logger_service_reopen_all_channels();
+                logger_reopen_requested = FALSE;
+            }
         }
 
         switch(message->type)
@@ -1161,10 +1201,23 @@ logger_dispatcher_thread(void* context)
                                         flusherr();
                                     }
                                     
-                                    if(logger_reopen_requested) // fulfill that request 
+                                    if(return_code == MAKE_ERRNO_ERROR(EBADF) || return_code == MAKE_ERRNO_ERROR(ENOSPC))
                                     {
-                                        logger_service_reopen_all_channels();
-                                        logger_reopen_requested = FALSE;
+                                        logger_sink_requested = TRUE;
+                                    }
+                                    
+                                    if(logger_sink_requested || logger_reopen_requested)
+                                    {
+                                        if(logger_sink_requested)
+                                        {
+                                            logger_service_sink_all_channels();
+                                            logger_sink_requested = FALSE;
+                                        }
+                                        if(logger_reopen_requested)
+                                        {
+                                            logger_service_reopen_all_channels();
+                                            logger_reopen_requested = FALSE;
+                                        }
                                     }
                                     
                                     if(dnscore_shuttingdown())
@@ -1223,10 +1276,23 @@ logger_dispatcher_thread(void* context)
                                 flusherr();
                             }
                             
-                            if(logger_reopen_requested) // fulfill that request 
+                            if(return_code == MAKE_ERRNO_ERROR(EBADF) || return_code == MAKE_ERRNO_ERROR(ENOSPC))
                             {
-                                logger_service_reopen_all_channels();
-                                logger_reopen_requested = FALSE;
+                                logger_sink_requested = TRUE;
+                            }
+                            
+                            if(logger_sink_requested || logger_reopen_requested)
+                            {
+                                if(logger_sink_requested)
+                                {
+                                    logger_service_sink_all_channels();
+                                    logger_sink_requested = FALSE;
+                                }
+                                if(logger_reopen_requested)
+                                {
+                                    logger_service_reopen_all_channels();
+                                    logger_reopen_requested = FALSE;
+                                }
                             }
                             
                             if(dnscore_shuttingdown())
@@ -1303,10 +1369,20 @@ logger_dispatcher_thread(void* context)
                 // reopen is activated by a flag
                 // this structure is just a way to fire the event
                 
-                async_wait_s *awp = message->channel_flush_all.aw;
-                
+                async_wait_s *awp = message->channel_reopen_all.aw;
                 logger_message_free(message);
+                async_wait_progress(awp, 1);
                 
+                break;
+            }
+            
+            case LOGGER_MESSAGE_TYPE_CHANNEL_SINK_ALL:
+            {
+                // sink is activated by a flag
+                // this structure is just a way to fire the event
+                
+                async_wait_s *awp = message->channel_sinc_all.aw;
+                logger_message_free(message);
                 async_wait_progress(awp, 1);
                 
                 break;
@@ -2160,6 +2236,59 @@ logger_reopen()
 #endif
 }
 
+void
+logger_sink_noblock()
+{
+    logger_sink_requested = TRUE;
+}
+
+void
+logger_sink()
+{
+#if DEBUG_LOG_HANDLER
+    osformatln(termout, "logger_reopen()");
+    flushout();
+#endif
+    
+    if(logger_initialised && logger_started)
+    {
+        logger_sink_requested = TRUE;
+        
+        // even for a lflag, the message NEEDS to be enqueued because
+        // 1) it activates the service
+        // 2) synchronises the memory between the threads (memory wall)
+        
+        async_wait_s aw;
+        async_wait_init(&aw, 1);
+        
+        logger_message* message = logger_message_alloc();
+        
+#ifdef DEBUG
+        ZEROMEMORY(message, sizeof(logger_message));
+#endif
+        message->type = LOGGER_MESSAGE_TYPE_CHANNEL_SINK_ALL;
+        message->channel_sinc_all.aw = &aw;
+
+        threaded_queue_enqueue(&logger_commit_queue, message);
+        
+        while(logger_initialised && logger_started)
+        {
+            if(async_wait_timeout(&aw, 1000000))
+            {
+                async_wait_finalize(&aw);
+                break;
+            }
+        }
+    }
+#if DEBUG_LOG_HANDLER
+    else
+    {
+        osformatln(termout, "logger_reopen() : i=%i s=%i", logger_initialised, logger_started);
+        flushout();
+    }
+#endif
+}
+
 bool
 logger_is_running()
 {
@@ -2542,6 +2671,228 @@ logger_handle_msg_text_ext(logger_handle* handle, u32 level, const char* text, u
     if(level <= exit_level)
     {
         logger_handle_trigger_shutdown();
+    }
+}
+
+void
+logger_handle_try_msg(logger_handle* handle, u32 level, const char* fmt, ...)
+{
+    /*
+     * check that the handle has got a channel for the level
+     */
+
+#ifdef DEBUG
+    if(level >= MSG_LEVEL_COUNT)
+    {
+        osformatln(termerr, "bad message level %u", level);
+        logger_handle_trigger_shutdown();
+        return;
+    }
+    
+    if(level <= MSG_ERR)
+    {
+        sleep(0);
+    }
+    
+#endif
+
+    if(handle == NULL)
+    {
+        if(level <= exit_level)
+        {
+            logger_handle_trigger_shutdown();
+        }
+        return;
+    }
+    
+    if(level > logger_level)
+    {
+        return;
+    }
+
+    s32 channel_count = handle->channels[level].offset;
+
+    if(channel_count < 0) /* it's count-1 actually */
+    {
+        return;
+    }
+
+    /**
+     * @note At this point we KNOW we have to print something.
+     */
+
+    output_stream baos;
+    bytezarray_output_stream_context baos_context;
+
+    /*
+     * DEFAULT_MAX_LINE_SIZE is the base size.
+     *
+     * The output stream has the BYTEARRAY_DYNAMIC flag set in order to allow
+     * bigger sentences.
+     *
+     */
+
+    va_list args;
+    va_start(args, fmt);
+
+    /* Will use the tmp buffer, but alloc a bigger one if required. */
+    bytezarray_output_stream_init_ex_static(&baos, NULL, DEFAULT_MAX_LINE_SIZE, BYTEARRAY_DYNAMIC, &baos_context);
+
+    if(FAIL(vosformat(&baos, fmt, args)))
+    {
+        bytezarray_output_stream_reset(&baos);        
+        osprint(&baos, "*** ERROR : MESSAGE FORMATTING FAILED ***");
+    }
+
+    output_stream_write_u8(&baos, 0);
+
+    logger_message* message = logger_message_alloc();
+    
+    message->type = LOGGER_MESSAGE_TYPE_TEXT;
+    message->text.level = level;
+    message->text.flags = 0;
+    
+    message->text.text_length = bytezarray_output_stream_size(&baos) - 1;
+    message->text.text_buffer_length = bytezarray_output_stream_buffer_size(&baos);
+    
+    message->text.handle = handle;
+    
+    message->text.text = bytezarray_output_stream_detach(&baos);
+    
+    gettimeofday(&message->text.tv, NULL);
+    
+    // prefix
+    // prefix_len
+    
+    message->text.rc = 0;
+   
+#if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
+    message->text.pid = getpid();
+#endif
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
+    message->text.thread_id = pthread_self();
+#endif
+    
+    if(!threaded_queue_try_enqueue(&logger_commit_queue, message))
+    {
+        // could not enqueue
+        ZFREE_ARRAY(message->text.text, message->text.text_buffer_length);
+        logger_message_free(message);
+    }
+
+    va_end(args);
+
+    output_stream_close(&baos); /* Frees the memory */
+
+    if(level <= exit_level)
+    {
+        exit_level = 0;
+        if(!dnscore_shuttingdown())
+        {
+            logger_handle_trigger_shutdown();
+        }
+    }
+}
+
+
+void
+logger_handle_try_msg_text(logger_handle* handle, u32 level, const char* text, u32 text_len)
+{
+    /*
+     * check that the handle has got a channel for the level
+     */
+
+#ifdef DEBUG
+    if(level >= MSG_LEVEL_COUNT)
+    {
+        osformatln(termerr, "bad message level %u", level);
+        logger_handle_trigger_shutdown();
+        return;
+    }
+    
+    if(level <= MSG_ERR)
+    {
+        sleep(0);
+    }
+    
+#endif
+
+    if(handle == NULL)
+    {
+        if(level <= exit_level)
+        {
+            logger_handle_trigger_shutdown();
+        }
+        return;
+    }
+    
+    if(level > logger_level)
+    {
+        return;
+    }
+
+    s32 channel_count = handle->channels[level].offset;
+
+    if(channel_count < 0) /* it's count-1 actually */
+    {
+        return;
+    }
+ 
+    logger_message* message = logger_message_alloc();
+    
+    message->type = LOGGER_MESSAGE_TYPE_TEXT;
+    message->text.level = level;
+    message->text.flags = 0;
+    
+    message->text.text_length = text_len;
+    message->text.text_buffer_length = text_len;
+    message->text.handle = handle;
+    
+    ZALLOC_ARRAY_OR_DIE(u8*, message->text.text, text_len, LOGRTEXT_TAG);
+    memcpy(message->text.text, text, text_len);
+    
+    gettimeofday(&message->text.tv, NULL);
+    
+    // prefix
+    // prefix_len
+    
+    message->text.rc = 0;
+
+#if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
+    message->text.pid = getpid();
+#endif
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
+    message->text.thread_id = pthread_self();
+#endif
+    
+    if(!threaded_queue_try_enqueue(&logger_commit_queue, message))
+    {
+        // could not enqueue
+        ZFREE_ARRAY(message->text.text, message->text.text_buffer_length);
+        logger_message_free(message);
+    }
+
+    if(level <= exit_level)
+    {
+        logger_handle_trigger_shutdown();
+    }
+}
+
+bool
+logger_queue_fill_critical()
+{
+    int size = threaded_ringbuffer_cw_size(&logger_commit_queue);
+    int room = threaded_ringbuffer_cw_room(&logger_commit_queue);
+    int maxsize = size + room;
+    if(maxsize > 0)
+    {
+        float ratio = ((float)size) / ((float)maxsize);
+        
+        return (ratio > 0.5f);
+    }
+    else
+    {
+        return TRUE;
     }
 }
 

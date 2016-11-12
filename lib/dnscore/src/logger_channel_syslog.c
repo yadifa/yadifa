@@ -163,6 +163,12 @@ logger_channel_syslog_reopen(logger_channel* chan)
     return SUCCESS;
 }
 
+static void
+logger_channel_syslog_sync(logger_channel* chan)
+{
+    (void)chan;
+}
+
 static const logger_channel_vtbl syslog_vtbl = {
     logger_channel_syslog_constmsg,
     logger_channel_syslog_msg,
@@ -170,6 +176,7 @@ static const logger_channel_vtbl syslog_vtbl = {
     logger_channel_syslog_flush,
     logger_channel_syslog_close,
     logger_channel_syslog_reopen,
+    logger_channel_syslog_sync,
     "syslog_channel"
 };
 

@@ -51,6 +51,7 @@ extern "C" {
 
 ya_result sys_get_cpu_count();
 void sys_set_cpu_count(int count);
+bool sys_has_hyperthreading();
 
 #ifdef	__cplusplus
 }

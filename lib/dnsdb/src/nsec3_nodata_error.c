@@ -88,8 +88,7 @@ nsec3_nodata_error(const zdb_zone *zone, const zdb_rr_label* owner,
 
     nsec3_zone* n3 = zone->nsec.nsec3;
     
-    u32 min_ttl = 900;
-    
+    s32 min_ttl;
     zdb_zone_getminttl(zone, &min_ttl);
     
     nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm nsec3_parms =

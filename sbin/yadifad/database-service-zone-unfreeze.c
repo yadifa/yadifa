@@ -90,7 +90,7 @@ database_service_zone_unfreeze(zone_desc_s *zone_desc)
     if(zone == NULL)
     {
         log_err("zone freeze: no zone loaded for '%{dnsname}'", zone_desc->origin);
-        zone_desc->status_flags &= ~ZONE_STATUS_PROCESSING;
+        zone_clear_status(zone_desc, ZONE_STATUS_PROCESSING);
         
         log_debug1("database_service_zone_unfreeze: unlocking zone '%{dnsname}' for unfreezing", zone_desc->origin);
         
@@ -116,7 +116,7 @@ database_service_zone_unfreeze(zone_desc_s *zone_desc)
     
     log_info("zone unfreeze: %{dnsname}", zone_desc->origin);
     
-    zone_desc->status_flags &= ~(ZONE_STATUS_FROZEN|ZONE_STATUS_PROCESSING);
+    zone_clear_status(zone_desc, ZONE_STATUS_FROZEN|ZONE_STATUS_PROCESSING);
     
     log_debug1("database_service_zone_unfreeze: unlocking zone '%{dnsname}' for unfreezing", zone_desc->origin);
     

@@ -73,6 +73,9 @@
 #include <dnsdb/dnssec.h>
 #endif
 
+#define ZDB_JOURNAL_CODE 1
+#include <dnsdb/journal.h>
+
 #include "buildinfo.h"
 
 extern logger_handle *g_server_logger;
@@ -533,7 +536,7 @@ config_read_zones()
 ya_result
 yadifad_config_update(const char *config_file)
 {
-    log_debug("yadifad_config_update(%s) started", config_file);
+    log_try_debug("yadifad_config_update(%s) started", config_file);
     
     config_error_s cfgerr;
     ya_result return_code = ERROR;
@@ -546,6 +549,8 @@ yadifad_config_update(const char *config_file)
     if(!database_zone_is_reconfigure_enabled())
     {
         database_zone_reconfigure_begin();
+        
+        journal_close_unused();
         
         database_set_drop_after_reload();
 
@@ -595,7 +600,7 @@ yadifad_config_update(const char *config_file)
         ttylog_err("previous reconfigure still running, ignoring this one");
     }
     
-    log_debug("yadifad_config_update(%s): %r", config_file, return_code);
+    log_try_debug("yadifad_config_update(%s): %r", config_file, return_code);
     
     return return_code;
 }

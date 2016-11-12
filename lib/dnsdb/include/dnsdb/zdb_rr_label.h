@@ -223,7 +223,7 @@ static inline zdb_packed_ttlrdata* zdb_rr_label_get_rrset(const zdb_rr_label *rr
 
 static inline bool zdb_rr_label_has_rrset(const zdb_rr_label *rr_label, u16 type)
 {
-    bool ret = (zdb_rr_label_get_rrset(rr_label, type) != NULL);
+    bool ret = (zdb_rr_label_get_rrset(rr_label, type) != NULL); // zone is locked
     return ret;
 }
 

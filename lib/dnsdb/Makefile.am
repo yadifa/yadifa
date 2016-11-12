@@ -273,6 +273,11 @@ if HAS_NSID_SUPPORT
 else
 	echo "#define ZDB_HAS_NSID_SUPPORT 0" >> $(FEATURES)
 endif
+if HAS_MUTEX_DEBUG_SUPPORT
+	echo "#define ZDB_HAS_MUTEX_DEBUG_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define ZDB_HAS_MUTEX_DEBUG_SUPPORT 0" >> $(FEATURES)
+endif
 VP=DNSDB
 	which printf > /dev/null 2>&1
 	if [ $$? -eq 0 ];then \

@@ -115,6 +115,11 @@ list_sl_init(list_sl_s *list)
     list->sentinel.next = NULL;
     list->size = 0;
 }
+static inline bool
+list_sl_hasnext(const list_sl_s *list, const list_sl_node_s *node)
+{
+    return (node->next != (const list_sl_node_s *)&list->sentinel);
+}
 
 /**
  * Adds an item at the head of the list.

@@ -120,9 +120,11 @@ zdb_zone_garbage_collect(zdb_zone *zone)
     yassert(zone->rc == 0);
 
     zone->apex->flags &= ~ZDB_RR_LABEL_APEX;
+    
+#if ZDB_ZONE_HAS_JNL_REFERENCE
     journal *jh = zone->journal; // pointed to, to be closed as the zone is about to be destroyed
-    //zone->journal = NULL;
     journal_close(jh);
+#endif
     
     if(zdb_zone_garbage_initialised)
     {

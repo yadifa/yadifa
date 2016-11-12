@@ -2070,7 +2070,7 @@ zone_policy_process(zone_desc_s *zone_desc)
 
     if(dnssec_policy_queue_has_command_type(zone_desc->origin, DNSSEC_POLICY_COMMAND_INIT))
     {
-        log_debug("dnssec-policy: %{dnsname} is already marked for full generation");
+        log_debug("dnssec-policy: %{dnsname} is already marked for full generation", zone_desc->origin);
         return SUCCESS;
     }
     
@@ -2082,8 +2082,17 @@ zone_policy_process(zone_desc_s *zone_desc)
     
     zone_lock(zone_desc, ZONE_LOCK_READONLY);
     zdb_zone *zone = zone_desc->loaded_zone;
-    zdb_zone_acquire(zone);
-    zone_unlock(zone_desc, ZONE_LOCK_READONLY);
+    if(zone != NULL)
+    {
+        zdb_zone_acquire(zone);
+        zone_unlock(zone_desc, ZONE_LOCK_READONLY);
+    }
+    else
+    {
+        log_err("dnssec-policy: %{dnsname}: settings are not linked to a loaded zone", zone_desc->origin);
+        zone_unlock(zone_desc, ZONE_LOCK_READONLY);
+        return ERROR;
+    }
     
     if(zdb_zone_isvalid(zone))
     {        
@@ -2235,9 +2244,7 @@ zone_policy_process(zone_desc_s *zone_desc)
         
         dnskey_release(key);
     }
-    
 
-    
     /*
      * sort-out the remaining keys
      * trigger the generation of keys

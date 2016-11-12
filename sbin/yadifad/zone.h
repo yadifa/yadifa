@@ -261,6 +261,12 @@ ya_result zone_try_lock(zone_desc_s *zone_desc, u8 owner_mark);
 ya_result zone_lock(zone_desc_s *zone_desc, u8 owner_mark);
 
 /*
+ * wait a while for lock (and return the owner) or return an error if the zone_desc becomes obsolete
+ */
+
+ya_result zone_try_lock_wait(zone_desc_s *zone_desc, u64 usec, u8 owner_id);
+
+/*
  * unlocks if locked by the owner, else return an error
  */
 
@@ -358,6 +364,9 @@ static inline bool zone_is_true_multimaster(const zone_desc_s *zone_desc)
     return zone_is_multimaster(zone_desc) && ((zone_desc->flags & ZONE_FLAG_TRUE_MULTIMASTER) != 0);
 }
 
+void zone_set_status(zone_desc_s *zone_desc, u32 flags);
+void zone_clear_status(zone_desc_s *zone_desc, u32 flags);
+u32 zone_get_status(const zone_desc_s *zone_desc);
 
 /*    ------------------------------------------------------------    */
 

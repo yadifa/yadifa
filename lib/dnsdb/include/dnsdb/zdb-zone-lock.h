@@ -89,9 +89,20 @@ void zdb_zone_lock(zdb_zone *zone, u8 owner);
 
 bool zdb_zone_trylock(zdb_zone *zone, u8 owner);
 
+bool zdb_zone_trylock_wait(zdb_zone *zone, u64 usec, u8 owner);
+
 void zdb_zone_unlock(zdb_zone *zone, u8 owner);
 
 bool zdb_zone_islocked(zdb_zone *zone);
+
+/**
+ * Functions for internal testing, do not use.
+ * 
+ * @param zone
+ * @return 
+ */
+
+bool zdb_zone_islocked_weak(const zdb_zone *zone);
 
 /**
  * Returns TRUE iff the zone is locked by a writer (any other owner value than nobody and simple reader)

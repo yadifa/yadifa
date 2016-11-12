@@ -69,8 +69,6 @@
 
 #define MODULE_MSG_HANDLE g_dnssec_logger
 
-/* EDF: Don't ZALLOC */
-
 #define RRSIG_ALLOW_ZALLOC 1
 
 /*
@@ -79,7 +77,7 @@
  * 2 : more dump ...
  */
 
-#define RRSIG_DUMP 0 // 5
+#define RRSIG_DUMP 2 // 5
 
 #define RRSIG_AUTOMATIC_ALARM_REFRESH 0
 
@@ -128,6 +126,8 @@ rrsig_context_initialize(rrsig_context_s *context, const zdb_zone *zone, const c
     /* Init the engine */
 
     yassert(zone != NULL && context != NULL);
+    
+    yassert(zdb_zone_islocked_weak(zone));
 
     /* Ensure the context is harmless */
     ZEROMEMORY(context, sizeof(rrsig_context_s));
@@ -139,7 +139,7 @@ rrsig_context_initialize(rrsig_context_s *context, const zdb_zone *zone, const c
         engine_name = DEFAULT_ENGINE_NAME;
     }
 
-    zdb_packed_ttlrdata* dnskey_rr_sll = zdb_record_find(&zone->apex->resource_record_set, TYPE_DNSKEY);
+    zdb_packed_ttlrdata* dnskey_rr_sll = zdb_record_find(&zone->apex->resource_record_set, TYPE_DNSKEY); // zone is locked
 
     if(dnskey_rr_sll == NULL)
     {
@@ -257,7 +257,7 @@ rrsig_context_initialize(rrsig_context_s *context, const zdb_zone *zone, const c
 
     soa_rdata soa;
 
-    if(FAIL(zdb_zone_getsoa(zone, &soa)))
+    if(FAIL(zdb_zone_getsoa(zone, &soa))) // zone is locked (weak)
     {
         return DNSSEC_ERROR_RRSIG_NOSOA;
     }
@@ -303,8 +303,7 @@ rrsig_context_initialize(rrsig_context_s *context, const zdb_zone *zone, const c
         context->nsec_flags = RRSIG_CONTEXT_NSEC;
     }
     
-    u32 min_ttl = 900;
-    
+    s32 min_ttl;
     zdb_zone_getminttl(zone, &min_ttl);
     
     context->min_ttl = min_ttl;
@@ -403,7 +402,9 @@ rrsig_context_push_label(rrsig_context_s *context, zdb_rr_label* label)
 
     /* CANONIZED RR HEADER PRECALC : */
 
-    rrsig_context_push_name_rrsigsll(context, label->name, zdb_record_find(&label->resource_record_set, TYPE_RRSIG));
+    // task may be NULL, so no zone check here
+    
+    rrsig_context_push_name_rrsigsll(context, label->name, zdb_record_find(&label->resource_record_set, TYPE_RRSIG)); // zone is locked
 }
 
 /*
@@ -955,10 +956,16 @@ rrsig_update_rrset_with_key(rrsig_context_s *context, const zdb_packed_ttlrdata 
         
             rrsig_context_update_canon(context, type, rr_sll);
 
-            u32 digest_len;
-            u32 signature_len;
+            s32 digest_len;
+            s32 signature_len;
             u8 digest[DIGEST_BUFFER_SIZE];
             u8 signature[DNSSEC_MAXIMUM_KEY_SIZE_BYTES];
+            
+#if 0//def DEBUG
+            signature_len = MAX_U32;
+            memset(digest, 0xa5, sizeof(digest));
+            memset(signature, 0x5a, sizeof(signature));
+#endif
 
             digest_len = rrsig_compute_digest(context->rrsig_header,
                                     context->rrsig_header_length,
@@ -974,35 +981,39 @@ rrsig_update_rrset_with_key(rrsig_context_s *context, const zdb_packed_ttlrdata 
 
             signature_len = key->vtbl->dnssec_key_sign_digest(key, digest, digest_len, signature);
 
-            yassert(signature_len > 0);
-
-            /* We got the signature. */
+            if(signature_len > 0)
+            {
+                /* We got the signature. */
 
 #if RRSIG_DUMP >= 2
-            log_debug5("rrsig: signature:");
-            log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG5, signature, signature_len, 32, OSPRINT_DUMP_HEXTEXT);
-            log_debug5("<< ------------------------------------------------------------------------");
+                log_debug5("rrsig: signature:");
+                log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG5, signature, signature_len, 32, OSPRINT_DUMP_HEXTEXT);
+                log_debug5("<< ------------------------------------------------------------------------");
 #endif
 
+                ZDB_RECORD_MALLOC_EMPTY(rrsig, rr_sll->ttl, context->rrsig_header_length + signature_len);
 
-            ZDB_RECORD_MALLOC_EMPTY(rrsig, rr_sll->ttl, context->rrsig_header_length + signature_len);
-            
-            /* Copy the header */
+                /* Copy the header */
 
-            MEMCOPY(&rrsig->rdata_start[0], context->rrsig_header, context->rrsig_header_length);
+                MEMCOPY(&rrsig->rdata_start[0], context->rrsig_header, context->rrsig_header_length);
 
-            /* Append the signature */
+                /* Append the signature */
 
-            MEMCOPY(&rrsig->rdata_start[context->rrsig_header_length], signature, signature_len);
+                MEMCOPY(&rrsig->rdata_start[context->rrsig_header_length], signature, signature_len);
 
-            /* Add to the schedule "to be added" list */
+                /* Add to the schedule "to be added" list */
 
-            rrsig->next = context->added_rrsig_sll;
-            context->added_rrsig_sll = rrsig;
+                rrsig->next = context->added_rrsig_sll;
+                context->added_rrsig_sll = rrsig;
 
-            context->flags |= UPDATED_SIGNATURES;
+                context->flags |= UPDATED_SIGNATURES;
 
-            sig_count++;
+                sig_count++;
+            }
+            else
+            {
+                log_err("rrsig: %{dnsname}+%03i+%05i: digest signature failed: %r", key->owner_name, key->algorithm, key->tag, signature_len);
+            }
         }
         else
         {

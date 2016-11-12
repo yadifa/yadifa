@@ -325,13 +325,14 @@ nsec3_rrsig_updater_thread(void* context_)
 #if DNSSEC_DEBUGLEVEL>1
             log_debug("nsec3_rrsig_updater_thread(%x): stop", id);
 #endif
+            log_debug("rrsig: nsec3: %{dnsname}: no more signatures updates queued", sig_context->origin);
 
             break;
         }
         
         if(rrsig_context_get_quota(sig_context) <= 0)
         {
-            log_debug1("quota exceeded, postponing signature query");
+            log_debug("rrsig: nsec3: %{dnsname}: signature quota exceeded, postponing signature query", sig_context->origin);
             free(query);
             
             task->stop_task = TRUE;
@@ -368,7 +369,7 @@ nsec3_rrsig_updater_thread(void* context_)
 #if OPENSSL_VERSION_NUMBER < 0x10000000L
     ERR_remove_state(0);
 #endif
-
+    
 #if DNSSEC_DEBUGLEVEL>0
     log_debug("nsec3_rrsig_updater_thread(%x): exit", id);
 #endif
@@ -664,7 +665,9 @@ nsec3_rrsig_generate_signatures(rrsig_context_s *context, nsec3_zone* n3, struct
     log_debug1("nsec3_rrsig_update(%p, %p, %{digest32h}@%p, %p)", context, n3, item->digest, item, next);
     u8 digest_len;
     u8 digest_to_dnsname[MAX_DOMAIN_LENGTH + 1];
-    u8 zdb_packed_ttlrdata_buffer[sizeof(zdb_packed_ttlrdata) - 1 + 1 + 2 + 1 + 255 + 64 + 8192];
+    
+    u8 zdb_packed_ttlrdata_buffer[sizeof(zdb_packed_ttlrdata) - 1 + TMP_NSEC3_TTLRDATA_SIZE];
+    
     zdb_packed_ttlrdata* tmp_nsec3_ttlrdata = (zdb_packed_ttlrdata*)&zdb_packed_ttlrdata_buffer[0];
     digest_len = NSEC3_NODE_DIGEST_SIZE(item);
     
@@ -674,7 +677,11 @@ nsec3_rrsig_generate_signatures(rrsig_context_s *context, nsec3_zone* n3, struct
     tmp_nsec3_ttlrdata->next = NULL;
     tmp_nsec3_ttlrdata->ttl = context->min_ttl;
     u32 n3_rdata_size = NSEC3_ZONE_RDATA_SIZE(n3);
-    u8 *n3_rdata = &tmp_nsec3_ttlrdata->rdata_start[0];
+    u8 *n3_rdata = &tmp_nsec3_ttlrdata->rdata_start[0]; /** @note 20161011 edf -- n3_rdata points to a buffer with the maximum
+                                                         *        possible size of an NSEC3 record, which does not happen in
+                                                         *        practice as it would require DNS types that do not exist nor
+                                                         *        are defined.
+                                                         */
     MEMCOPY(n3_rdata, &n3->rdata[0], n3_rdata_size);
     MEMCOPY(&n3_rdata[n3_rdata_size], next->digest, digest_len + 1);
     n3_rdata_size += digest_len + 1;

@@ -187,7 +187,9 @@ enum finger_print
     
     FP_IXFR_UDP                 = RCODE_NOTIMP,
     
-    FP_FEATURE_DISABLED         = RCODE_NOTIMP
+    FP_FEATURE_DISABLED         = RCODE_NOTIMP,
+    
+    FP_CANNOT_HOLD_AXFR_DATA    = RCODE_SERVFAIL
 };
 
 typedef enum finger_print finger_print;

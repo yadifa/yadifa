@@ -158,9 +158,11 @@ database_service_zone_resignature_publish_dnskey_alarm(void *args_, bool cancel)
             {
                 zdb *db = g_config->database;
                 zdb_zone *zone;
-                if((zone = zdb_acquire_zone_read_double_lock_from_fqdn(db, args->domain, ZDB_ZONE_MUTEX_RRSIG_UPDATER, ZDB_ZONE_MUTEX_SIMPLEREADER)) != NULL)
+                if((zone = zdb_acquire_zone_read_double_lock_from_fqdn(db, args->domain, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_RRSIG_UPDATER)) != NULL)
                 {
                     yassert(zdb_zone_islocked(zone));
+                    
+                    zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_RRSIG_UPDATER);
                     
                     zdb_icmtl icmtl;
                     dnsname_vector apex_name;
@@ -175,7 +177,8 @@ database_service_zone_resignature_publish_dnskey_alarm(void *args_, bool cancel)
                         zdb_icmtl_end(&icmtl);
                     }
                     
-                    zdb_zone_release_double_unlock(zone, ZDB_ZONE_MUTEX_RRSIG_UPDATER, ZDB_ZONE_MUTEX_SIMPLEREADER);
+                    zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_RRSIG_UPDATER, ZDB_ZONE_MUTEX_SIMPLEREADER);
+                    zdb_zone_release_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_RRSIG_UPDATER);
                 }
             }
             else if(dnskey_is_unpublished(key, time(NULL)))
@@ -230,9 +233,12 @@ database_service_zone_resignature_unpublish_dnskey_alarm(void *args_, bool cance
             {
                 zdb *db = g_config->database;
                 zdb_zone *zone;
-                if((zone = zdb_acquire_zone_read_double_lock_from_fqdn(db, args->domain, ZDB_ZONE_MUTEX_RRSIG_UPDATER, ZDB_ZONE_MUTEX_SIMPLEREADER)) != NULL)
+                if((zone = zdb_acquire_zone_read_double_lock_from_fqdn(db, args->domain, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_RRSIG_UPDATER)) != NULL)
                 {
+                    zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_RRSIG_UPDATER);
+                    
                     zdb_icmtl icmtl;
+                    icmtl.can_ignore_signatures = FALSE;
                     dnsname_vector apex_name;
                     DEBUG_RESET_dnsname(apex_name);
                     dnsname_to_dnsname_vector(zone->origin, &apex_name);
@@ -242,8 +248,10 @@ database_service_zone_resignature_unpublish_dnskey_alarm(void *args_, bool cance
                     {
                         zdb_zone_remove_dnskey_from_key(zone, key);
                         zdb_icmtl_end(&icmtl);
-                        zdb_zone_release_double_unlock(zone, ZDB_ZONE_MUTEX_RRSIG_UPDATER, ZDB_ZONE_MUTEX_SIMPLEREADER);
                     }
+                    
+                    zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_RRSIG_UPDATER, ZDB_ZONE_MUTEX_SIMPLEREADER);
+                    zdb_zone_release_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_RRSIG_UPDATER);
                 }
                 
                 // remove the key from the store and rename the files
@@ -585,8 +593,9 @@ database_service_zone_resignature_init_callback(zdb_zone_process_label_callback_
         return ZDB_ZONE_PROCESS_CONTINUE;
     }
     
+    yassert(zdb_zone_islocked(parms->zone));
 
-    zdb_packed_ttlrdata*  rrsig_rrset = zdb_rr_label_get_rrset(parms->rr_label, TYPE_RRSIG);
+    zdb_packed_ttlrdata *rrsig_rrset = zdb_rr_label_get_rrset(parms->rr_label, TYPE_RRSIG); // zone is locked
     
     if(rrsig_rrset != NULL) // there are RRSIGs on the label
     {
@@ -596,7 +605,7 @@ database_service_zone_resignature_init_callback(zdb_zone_process_label_callback_
         // look in the signatures which one are covering them
         // proceed
         
-        bool has_DS = zdb_rr_label_has_rrset(parms->rr_label, TYPE_DS);
+        bool has_DS = zdb_rr_label_has_rrset(parms->rr_label, TYPE_DS); // zone is locked
         
         btree_iterator types_iter;
         btree_iterator_init(parms->rr_label->resource_record_set, &types_iter);
@@ -698,7 +707,7 @@ database_service_zone_resignature_init_callback(zdb_zone_process_label_callback_
             if(ZDB_LABEL_ATDELEGATION(parms->rr_label))
             {
                 // opt-in or the presence of a DS calls for a signature
-                if(zdb_zone_is_nsec3_optin(parms->zone) || zdb_rr_label_has_rrset(parms->rr_label, TYPE_DS))
+                if(zdb_zone_is_nsec3_optin(parms->zone) || zdb_rr_label_has_rrset(parms->rr_label, TYPE_DS)) // zone is locked
                 {
 #ifdef DEBUG
                     log_debug2("database_service_zone_resignature: no signature at delegation: %{dnsnamestack}", &parms->fqdn_stack);
@@ -810,14 +819,16 @@ database_service_zone_resignature_init(zone_desc_s *zone_desc, zdb_zone *zone)
     if(zdb_zone_is_nsec3(zone))
     {
         // if there is a (first) NSEC3PARAMADD record, then generate its chain
-        
+        zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
         return_code = zdb_zone_process_all_labels_from_zone(zone, database_service_nsec3_zone_resignature_init_callback, &args);
+        zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
     }
     else
 #endif
     {
-
+        zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
         return_code = zdb_zone_process_all_labels_from_zone(zone, database_service_zone_resignature_init_callback, &args);
+        zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
     }
     
     u64 now = timeus();
@@ -936,9 +947,9 @@ database_service_zone_resignature_thread(void *parms_)
     log_debug("database_service_zone_resignature_thread(%{dnsname}@%p=%i)", zone_desc->origin, zone_desc, zone_desc->rc);
 #endif
     
-    if((zone_desc->status_flags & must_be_off) != 0)
+    if((zone_get_status(zone_desc) & must_be_off) != 0)
     {
-        log_err("zone sign: %{dnsname}: conflicting status: %08x instead of 0", zone_desc->origin, (zone_desc->status_flags & must_be_off));
+        log_err("zone sign: %{dnsname}: conflicting status: %08x instead of 0", zone_desc->origin, (zone_get_status(zone_desc) & must_be_off));
     
         zone_unlock(zone_desc, ZONE_LOCK_SIGNATURE);
         
@@ -947,7 +958,7 @@ database_service_zone_resignature_thread(void *parms_)
         return NULL;
     }
         
-    zone_desc->status_flags |= ZONE_STATUS_SIGNATURES_UPDATING;
+    zone_set_status(zone_desc, ZONE_STATUS_SIGNATURES_UPDATING);
         
     // do a bunch of signatures
 
@@ -992,7 +1003,7 @@ database_service_zone_resignature_thread(void *parms_)
             time_t soon = time(NULL) + 1;
             log_debug("zone sign: %{dnsname}: arming signatures, moving scheduled time from %T to %T", zone_desc->origin, zone_desc->signature.scheduled_sig_invalid_first, soon);
 
-            zone_desc->status_flags |= ZONE_STATUS_MODIFIED;
+            zone_set_status(zone_desc, ZONE_STATUS_MODIFIED);
             zone_desc->signature.scheduled_sig_invalid_first = soon + 1;
             zone_desc->signature.sig_invalid_first = soon;
             return_code = database_service_zone_resignature_arm(zone_desc, zone);
@@ -1007,7 +1018,7 @@ database_service_zone_resignature_thread(void *parms_)
     
     // release
     
-    zone_desc->status_flags &= ~(ZONE_STATUS_PROCESSING|ZONE_STATUS_SIGNATURES_UPDATE|ZONE_STATUS_SIGNATURES_UPDATING|ZONE_STATUS_PROCESSING);
+    zone_clear_status(zone_desc, ZONE_STATUS_PROCESSING|ZONE_STATUS_SIGNATURES_UPDATE|ZONE_STATUS_SIGNATURES_UPDATING|ZONE_STATUS_PROCESSING);
     
     log_debug("zone sign: %{dnsname}: signatures update end", zone_desc->origin);
     
@@ -1044,7 +1055,7 @@ database_service_zone_resignature(zone_desc_s *zone_desc) // one thread for all 
     
     log_info("zone sign: %{dnsname}", origin);
     
-    if(zone_desc->status_flags & (ZONE_STATUS_SIGNATURES_UPDATE|ZONE_STATUS_SIGNATURES_UPDATING))
+    if(zone_get_status(zone_desc) & (ZONE_STATUS_SIGNATURES_UPDATE|ZONE_STATUS_SIGNATURES_UPDATING))
     {
         // already loading
         
@@ -1059,8 +1070,8 @@ database_service_zone_resignature(zone_desc_s *zone_desc) // one thread for all 
     
     log_debug("zone sign: %{dnsname}: zone signatures update begin", origin);
 
-    zone_desc->status_flags &= ~ZONE_STATUS_STARTING_UP;
-    zone_desc->status_flags |= ZONE_STATUS_SIGNATURES_UPDATE;
+    zone_clear_status(zone_desc, ZONE_STATUS_STARTING_UP);
+    zone_set_status(zone_desc, ZONE_STATUS_SIGNATURES_UPDATE);
     
     database_service_zone_resignature_parms_s *database_zone_resignature_parms = database_service_zone_resignature_parms_alloc(zone_desc);
     zone_acquire(zone_desc);

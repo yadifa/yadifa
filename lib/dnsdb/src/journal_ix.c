@@ -196,9 +196,8 @@ struct journal_ix
     /* common points with journal base */
     volatile struct journal_vtbl *vtbl;
     volatile zdb_zone            *zone;    
-    volatile struct journal      *next;
-    volatile struct journal      *prev;
-    volatile bool                  mru;
+    volatile list_dl_node_s   mru_node;
+    volatile unsigned int forget:1,mru:1;
     
     /* ******************************* */
 
@@ -929,6 +928,41 @@ journal_ix_truncate_to_serial(journal *jh, u32 serial_)
 }
 
 static ya_result
+journal_ix_reopen(journal *jh)
+{
+    journal_ix *jix = (journal_ix*)jh;
+    ya_result ret;
+    journal_ix_writelock(jix);
+    if(jix->fd < 0)
+    {
+        if(ISOK(ret = open_ex(jix->journal_name, O_RDWR)))
+        {
+            jix->fd = ret;
+        }
+        else
+        {
+            ret = ERRNO_ERROR;
+            if(ret == MAKE_ERRNO_ERROR(ENOENT))
+            {
+                ret = ZDB_ERROR_ICMTL_NOTFOUND;
+            }
+        }        
+    }
+    journal_ix_writeunlock(jix);
+    return ret;
+}
+
+static void
+journal_ix_flush(journal *jh)
+{
+    journal_ix *jix = (journal_ix*)jh;
+    
+    journal_ix_writelock(jix);    
+    fsync(jix->fd);
+    journal_ix_writeunlock(jix);
+}
+
+static ya_result
 journal_ix_close(journal *jh)
 {
     journal_ix *jix = (journal_ix*)jh;
@@ -998,11 +1032,15 @@ static void
 journal_ix_link_zone(journal *jh, zdb_zone *zone)
 {
     yassert(jh->zone == NULL);
+#if ZDB_ZONE_HAS_JNL_REFERENCE
     yassert(zone->journal == NULL);
+#endif
     journal_ix *jix = (journal_ix*)jh;
     journal_ix_writelock(jix);
     jix->zone = zone;
+#if ZDB_ZONE_HAS_JNL_REFERENCE
     zone->journal = jh;
+#endif
     journal_ix_writeunlock(jix);
 }
 
@@ -1010,6 +1048,8 @@ struct journal_vtbl journal_ix_vtbl =
 {
     journal_ix_get_format_name,
     journal_ix_get_format_version,
+    journal_ix_reopen,
+    journal_ix_flush,
     journal_ix_close,
     journal_ix_append_ixfr_stream,
     journal_ix_get_ixfr_stream_at_serial,
@@ -1269,6 +1309,7 @@ journal_ix_open(journal **jh, const u8* origin, const char *workingdir, bool cre
             MALLOC_OR_DIE(journal_ix*, jix, sizeof(journal_ix), JRNLIX_TAG);
             ZEROMEMORY(jix, sizeof(journal_ix));
             jix->vtbl = &journal_ix_vtbl;
+            jix->mru_node.data = jix;
             jix->flags = LOCK_NONE;
             jix->first_serial = from;
             jix->last_serial = to;
@@ -1335,6 +1376,7 @@ journal_ix_open(journal **jh, const u8* origin, const char *workingdir, bool cre
         MALLOC_OR_DIE(journal_ix*, jix, sizeof(journal_ix), JRNLIX_TAG);
         ZEROMEMORY(jix, sizeof(journal_ix));
         jix->vtbl = &journal_ix_vtbl;
+        jix->mru_node.data = jix;
         jix->flags = LOCK_NONE;
         jix->first_serial = 0;
         jix->last_serial = 0;

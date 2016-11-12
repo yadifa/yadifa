@@ -200,6 +200,13 @@ zdb_icmtl_unlink_file(const char* name)
 }
 #endif
 
+static void
+zdb_icmtl_replay_ptr_set_node_key_free(void *nodep)
+{
+    ptr_node *node = (ptr_node*)nodep;
+    free(node->key);
+}
+
 static ya_result
 zdb_icmtl_replay_commit(zdb_zone *zone, input_stream *is, u32 *current_serialp)
 {
@@ -209,6 +216,8 @@ zdb_icmtl_replay_commit(zdb_zone *zone, input_stream *is, u32 *current_serialp)
      * The mode is switched every time an SOA is found.
      */
 
+    yassert(zdb_zone_islocked(zone));
+    
 #if ZDB_HAS_NSEC3_SUPPORT
     bool has_nsec3 = zdb_zone_is_nsec3(zone);
 #endif
@@ -598,8 +607,7 @@ zdb_icmtl_replay_commit(zdb_zone *zone, input_stream *is, u32 *current_serialp)
                     logger_flush();
 #endif
 
-                    s32 rr_label_top = top - zone->origin_vector.size;
-                    zdb_zone_record_add(zone, labels, rr_label_top - 1, rr.tctr.qtype, packed_ttlrdata); /* class is implicit */
+                    zdb_zone_record_add(zone, labels, top, rr.tctr.qtype, packed_ttlrdata); /* class is implicit */
 
                     // NSEC
                     {
@@ -703,7 +711,6 @@ zdb_icmtl_replay_commit(zdb_zone *zone, input_stream *is, u32 *current_serialp)
 #endif
     }
     
-    
 #if ZDB_HAS_NSEC3_SUPPORT
     has_nsec3 = zdb_zone_is_nsec3(zone);
     nsec3_icmtl_replay_destroy(&nsec3replay);
@@ -749,6 +756,10 @@ zdb_icmtl_replay_commit(zdb_zone *zone, input_stream *is, u32 *current_serialp)
         
         ptr_set_avl_destroy(&downed_fqdn);
     }
+    else
+    {
+        ptr_set_avl_callback_and_destroy(&downed_fqdn, zdb_icmtl_replay_ptr_set_node_key_free);
+    }
 
     // NSEC3
     if(has_nsec3)
@@ -792,7 +803,7 @@ zdb_icmtl_replay(zdb_zone *zone)
     
     zdb_zone_double_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
 
-    return_value = zdb_zone_getserial(zone, &serial);
+    return_value = zdb_zone_getserial(zone, &serial); // zone is locked
     
     if(FAIL(return_value))
     {
@@ -953,7 +964,7 @@ zdb_icmtl_replay(zdb_zone *zone)
         
         if((replay_state & ZDB_ICMTL_REPLAY_COMMIT) != 0)
         {
-            log_info("journal: %{dnsname}: commiting changes", zone->origin);
+            log_info("journal: %{dnsname}: committing changes", zone->origin);
             u64 ts_start = timeus();
             zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
             bytearray_input_stream_init_const(&bais, bytearray_output_stream_buffer(&baos), bytearray_output_stream_size(&baos));
@@ -970,19 +981,19 @@ zdb_icmtl_replay(zdb_zone *zone)
             
             if(ts_delta < 1000)
             {            
-                log_info("journal: %{dnsname}: commited changes (%lluus)", zone->origin, ts_delta);
+                log_info("journal: %{dnsname}: committed changes (%lluus)", zone->origin, ts_delta);
             }
             else if(ts_delta < 1000000)
             {
                 double ts_delta_s = ts_delta;
                 ts_delta_s /= 1000.0;
-                log_info("journal: %{dnsname}: commited changes (%5.2fms)", zone->origin, ts_delta_s);
+                log_info("journal: %{dnsname}: committed changes (%5.2fms)", zone->origin, ts_delta_s);
             }
             else
             {
                 double ts_delta_s = ts_delta;
                 ts_delta_s /= 1000000.0;
-                log_info("journal: %{dnsname}: commited changes (%5.2fs)", zone->origin, ts_delta_s);
+                log_info("journal: %{dnsname}: committed changes (%5.2fs)", zone->origin, ts_delta_s);
             }
                     
             // the current page has been processed
@@ -1026,7 +1037,7 @@ zdb_icmtl_replay(zdb_zone *zone)
         log_debug("journal: %{dnsname}: zone switched to NSEC3 by reading the journal: links updated", zone->origin);
     }
         
-    if(FAIL(return_value = zdb_zone_getserial(zone, &serial)))
+    if(FAIL(return_value = zdb_zone_getserial(zone, &serial))) // zone is locked
     {
         zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
         
@@ -1068,6 +1079,8 @@ zdb_icmtl_get_last_serial_from(zdb_zone *zone, u32 *last_serial)
 ya_result
 zdb_icmtl_begin(zdb_icmtl *icmtl, zdb_zone *zone)
 {
+    yassert(zdb_zone_islocked(zone));
+    
 #ifdef DEBUG
     log_debug1("zdb_icmtl_begin(%p/%{dnsname}) : begin", icmtl, zone->origin);
 #endif
@@ -1078,7 +1091,9 @@ zdb_icmtl_begin(zdb_icmtl *icmtl, zdb_zone *zone)
     
     ya_result return_code;
     
-    if(zone->status & ZDB_ZONE_STATUS_ICMTL_ENABLED)
+    u8 zone_status = zdb_zone_set_status(zone, ZDB_ZONE_STATUS_ICMTL_ENABLED);
+    
+    if(zone_status & ZDB_ZONE_STATUS_ICMTL_ENABLED)
     {
 #ifdef DEBUG
         log_debug1("zdb_icmtl_begin(%p/%{dnsname}) : end : already marked", icmtl, zone->origin);
@@ -1086,8 +1101,6 @@ zdb_icmtl_begin(zdb_icmtl *icmtl, zdb_zone *zone)
     
         return ERROR;
     }
-    
-    zone->status = ZDB_ZONE_STATUS_ICMTL_ENABLED;
 
     //UNICITY_ACQUIRE(icmtl);
 
@@ -1141,7 +1154,7 @@ zdb_icmtl_begin(zdb_icmtl *icmtl, zdb_zone *zone)
 
                         /* After this call, the database can be edited. */
 
-                        zdb_packed_ttlrdata* soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);    
+                        zdb_packed_ttlrdata* soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA); // zone is locked
 
                         if(soa != NULL)
                         {
@@ -1188,7 +1201,7 @@ zdb_icmtl_begin(zdb_icmtl *icmtl, zdb_zone *zone)
 
         /* After this call, the database can be edited. */
 
-        zdb_packed_ttlrdata *soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);    
+        zdb_packed_ttlrdata *soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA); // zone is locked
 
         if(soa != NULL)
         {
@@ -1225,7 +1238,7 @@ zdb_icmtl_begin(zdb_icmtl *icmtl, zdb_zone *zone)
     else
     {
         //UNICITY_RELEASE(icmtl);
-        zone->status &= ~ZDB_ZONE_STATUS_ICMTL_ENABLED;
+        zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_ICMTL_ENABLED);
     }
 
 #ifdef DEBUG
@@ -1256,7 +1269,7 @@ zdb_icmtl_close(zdb_icmtl *icmtl)
     output_stream_close(&icmtl->os_add);
     output_stream_close(&icmtl->os_add_);
     
-    icmtl->zone->status &= ~ZDB_ZONE_STATUS_ICMTL_ENABLED;
+    zdb_zone_clear_status(icmtl->zone, ZDB_ZONE_STATUS_ICMTL_ENABLED);
     
     //UNICITY_RELEASE(icmtl);
     
@@ -1285,8 +1298,10 @@ zdb_icmtl_cancel(zdb_icmtl *icmtl)
 static void
 zdb_icmtl_update_soa(zdb_icmtl *icmtl, int increment)
 {
+    yassert(zdb_zone_islocked(icmtl->zone));
+    
     zdb_rr_label* apex = icmtl->zone->apex;
-    zdb_packed_ttlrdata* soa = zdb_record_find(&apex->resource_record_set, TYPE_SOA);
+    zdb_packed_ttlrdata* soa = zdb_record_find(&apex->resource_record_set, TYPE_SOA); // zone is locked
     
 #ifdef DEBUG
     u32 soa_serial;
@@ -1312,7 +1327,7 @@ zdb_icmtl_update_soa(zdb_icmtl *icmtl, int increment)
         context.must_verify_signatures = TRUE;
         context.signatures_are_invalid = increment != 0;
         
-        rrsig_context_push_label(&context, icmtl->zone->apex);
+        rrsig_context_push_label(&context, icmtl->zone->apex); // zone is locked
         
         // use a local copy of the SOA for generating the signature
         
@@ -1426,16 +1441,18 @@ zdb_icmtl_end(zdb_icmtl *icmtl)
     icmtl->file_size_before_append = 0;
     icmtl->file_size_after_append = 0;
     
+    yassert(zdb_zone_islocked(icmtl->zone));
+    
     zdb_rr_label* apex = icmtl->zone->apex;
-    zdb_packed_ttlrdata* soa = zdb_record_find(&apex->resource_record_set, TYPE_SOA);
+    zdb_packed_ttlrdata* soa = zdb_record_find(&apex->resource_record_set, TYPE_SOA); // zone is locked
     
     if(soa == NULL)
     {
         zdb_icmtl_close(icmtl);
         
-    #ifdef DEBUG
+#ifdef DEBUG
         log_debug1("zdb_icmtl_end(%p/%{dnsname}) : end : no SOA", icmtl, icmtl->zone->origin);
-    #endif
+#endif
 
         return ZDB_ERROR_NOSOAATAPEX;
     }
@@ -1472,11 +1489,13 @@ zdb_icmtl_end(zdb_icmtl *icmtl)
 #ifdef DEBUG
             log_debug1("journal: %{dnsname}: journal has not been written on", icmtl->zone->origin);
 #endif
-            zdb_icmtl_close(icmtl);
+            return_value = zdb_icmtl_close(icmtl);
             
 #ifdef DEBUG
-            log_debug1("zdb_icmtl_end(%p/%{dnsname}) : end : nothing done", icmtl, icmtl->zone->origin);
+            log_debug1("zdb_icmtl_end(%p/%{dnsname}) : end : nothing done (%r)", icmtl, icmtl->zone->origin, return_value);
 #endif
+            (void)return_value;
+            
             return SUCCESS;
         }
         
@@ -1578,7 +1597,7 @@ zdb_icmtl_end(zdb_icmtl *icmtl)
     
     input_stream_close(&cis);
     
-    icmtl->zone->status &= ~ZDB_ZONE_STATUS_ICMTL_ENABLED;
+    zdb_zone_clear_status(icmtl->zone, ZDB_ZONE_STATUS_ICMTL_ENABLED);
 
     //UNICITY_RELEASE(icmtl);
     

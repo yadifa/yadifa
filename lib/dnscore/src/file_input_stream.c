@@ -116,6 +116,11 @@ file_input_stream_read(input_stream* stream_, u8* buffer, u32 len)
             {
                 continue;
             }
+            
+            if(buffer - start > 0)
+            {
+                return buffer - start;
+            }
 
             /* error */
             return MAKE_ERRNO_ERROR(err);

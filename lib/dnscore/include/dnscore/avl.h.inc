@@ -251,7 +251,7 @@ void AVL_PREFIXED(avl_callback_and_destroy)(AVL_TREE_TYPE *tree,callback_functio
 
 AVL_NODE_TYPE *AVL_PREFIXED(avl_get_first)(AVL_CONST_TREE_TYPE* tree);
 
-#if AVL_HAS_PARENT_POINTER != 0
+#if AVL_HAS_PARENT_POINTER
 
 /**
  * Only on implementations of nodes with a pointer to the parent.

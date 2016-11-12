@@ -55,7 +55,24 @@
 
 #define SERVER_ST_C_
 
+// keep this order -->
+
 #include "server-config.h"
+
+#ifndef __USE_GNU
+#define __USE_GNU 1
+#endif
+#define _GNU_SOURCE 1
+#include <sched.h>
+
+#if defined __FreeBSD__
+#include <sys/param.h>
+#include <sys/cpuset.h>
+typedef cpuset_t cpu_set_t;
+#endif
+
+// <-- keep this order
+
 #include "config.h"
 
 #include <dnscore/logger.h>
@@ -341,12 +358,13 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
     st->udp_iovec.iov_base = mesg->buffer;
     st->udp_iovec.iov_len = sizeof(mesg->buffer);
     st->udp_msghdr.msg_name = &mesg->other.sa;
-    st->udp_msghdr.msg_namelen = sizeof(socketaddress);
     st->udp_msghdr.msg_controllen = ANCILIARY_BUFFER_SIZE;
     */
     
 #if UDP_USE_MESSAGES
-    st->udp_iovec.iov_len = sizeof(mesg->buffer);
+    st->udp_msghdr.msg_namelen = sizeof(socketaddress);
+    st->udp_iovec.iov_len = MIN(NETWORK_BUFFER_SIZE, sizeof(mesg->buffer));
+    st->udp_msghdr.msg_controllen = sizeof(st->udp_mesg->control_buffer);
 #endif
     
     ssize_t n;
@@ -357,7 +375,7 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
         
 
         
-        n = recvfrom(st->fdsock, mesg->buffer, sizeof(mesg->buffer), 0, (struct sockaddr*)&mesg->other.sa, &mesg->addr_len);
+        n = recvfrom(st->fdsock, mesg->buffer, MIN(NETWORK_BUFFER_SIZE, sizeof(mesg->buffer)), 0, (struct sockaddr*)&mesg->other.sa, &mesg->addr_len);
         
         if(n >= 0)
         {
@@ -556,7 +574,6 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
                     log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_ALL);
                 }
 #endif
-                
                 /*
                  * If not FE, or if we answer FE
                  * 
@@ -883,6 +900,17 @@ server_mt_query_loop_udp(void* parm)
 
     /*    ------------------------------------------------------------    */
 
+#if HAS_PTHREAD_SETAFFINITY_NP
+    cpu_set_t mycpu;
+    CPU_ZERO(&mycpu);
+    
+    int affinity_with = g_config->thread_affinity_base + st->idx * g_config->thread_affinity_multiplier;
+    log_info("server-mt: setting affinity with virtual cpu %i", affinity_with);
+    CPU_SET(affinity_with, &mycpu);
+    
+    pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mycpu);
+#endif
+
     /* Clear and initialize mesg */
     ZEROMEMORY(st->udp_mesg, sizeof(message_data));
     
@@ -918,7 +946,7 @@ server_mt_query_loop_udp(void* parm)
     {
         st->udp_msghdr.msg_control = NULL;
     }    
-    st->udp_msghdr.msg_controllen = ANCILIARY_BUFFER_SIZE;
+    st->udp_msghdr.msg_control = st->udp_mesg->control_buffer;
     st->udp_msghdr.msg_flags = 0;
 
 #endif
@@ -1035,12 +1063,6 @@ server_mt_query_loop()
             for(u32 r = 0; r < reader_by_fd; r++)
             {
                 synced_threads.threads[tidx].fdsock = server_context.udp_socket[sockfd_idx++];
-                
-#if UDP_USE_MESSAGES
-                const int sockopt_dstaddr = 1;
-                setsockopt(synced_threads.threads[tidx].fdsock , IPPROTO_IP, DSTADDR_SOCKOPT, &sockopt_dstaddr, sizeof(sockopt_dstaddr));
-#endif
-                
                 synced_threads.threads[tidx].fdsock = synced_threads.threads[tidx].fdsock;
             
                 log_info("thread #%i of UDP interface: %{hostaddr} using socket %i", r, server_context.listen[intf_idx], synced_threads.threads[tidx].fdsock);

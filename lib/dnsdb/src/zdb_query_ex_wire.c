@@ -347,31 +347,6 @@ ya_result
 zdb_query_message_update_with_rrl(message_data* mesg, zdb_query_ex_answer* answer_set, rrl_process_callback *rrl_process)
 {
     ya_result rrl = rrl_process(mesg, answer_set);
-
-    switch(rrl)
-    {
-        case RRL_PROCEED:
-        {
-            mesg->send_length = zdb_query_message_update(mesg, answer_set);
-            break;
-        }
-        case RRL_SLIP:
-        {
-#ifdef DEBUG
-            log_debug("rrl: slip");
-#endif
-            mesg->referral = answer_set->delegation;
-            break;
-        }
-        case RRL_DROP:
-        {
-            // DON'T PROCEED AT ALL
-#ifdef DEBUG
-            log_debug("rrl: drop");
-#endif
-            break;
-        }
-    }
     
     return rrl;
 }

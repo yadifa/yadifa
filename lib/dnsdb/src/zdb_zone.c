@@ -291,7 +291,7 @@ zdb_zone_record_delete_self(zdb_zone *zone, dnslabel_vector_reference labels, s3
     {
         tmp = &tmp_[0];
     }
-    else   
+    else // ttlrdata.rdata_size > sizeof(tmp_) // scan build does not seem to get this
     {
         MALLOC_OR_DIE(u8*,tmp,ttlrdata.rdata_size,GENERIC_TAG);
     }
@@ -404,13 +404,15 @@ zdb_zone_create(const u8* origin)
     zone->lock_owner = ZDB_ZONE_MUTEX_NOBODY;
     zone->lock_count = 0;
     zone->lock_reserved_owner = ZDB_ZONE_MUTEX_NOBODY;
-    zone->status = 0;
+    zone->_status = 0;
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
     zone->lock_trace = NULL;
     zone->lock_id = 0;
     zone->lock_timestamp = 0;
 #endif
+#if ZDB_ZONE_HAS_JNL_REFERENCE
     zone->journal = NULL;
+#endif
     
     return zone;
 }
@@ -511,7 +513,7 @@ zdb_zone_destroy(zdb_zone *zone)
             alarm_close(zone->alarm_handle);
             zone->alarm_handle = ALARM_HANDLE_INVALID;
         }
-        
+#if ZDB_ZONE_HAS_JNL_REFERENCE        
         if(zone->journal != NULL)
         {
             journal *jh = zone->journal; // pointed for closing/releasing
@@ -520,6 +522,7 @@ zdb_zone_destroy(zdb_zone *zone)
             zone->journal = NULL;
         }
         else
+#endif
         {
             zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_DESTROY);
         }
@@ -606,7 +609,7 @@ zdb_zone_getsoa(const zdb_zone *zone, soa_rdata* soa_out)
 #endif
     
     const zdb_rr_label *apex = zone->apex;
-    const zdb_packed_ttlrdata *soa = zdb_record_find(&apex->resource_record_set, TYPE_SOA);
+    const zdb_packed_ttlrdata *soa = zdb_record_find(&apex->resource_record_set, TYPE_SOA); // zone is locked
     ya_result return_code;
 
     if(soa != NULL)
@@ -638,7 +641,7 @@ zdb_zone_getsoa_ttl_rdata(const zdb_zone *zone, u32 *ttl, u16 *rdata_size, const
 #endif
     
     const zdb_rr_label *apex = zone->apex;
-    const zdb_packed_ttlrdata *soa = zdb_record_find(&apex->resource_record_set, TYPE_SOA);
+    const zdb_packed_ttlrdata *soa = zdb_record_find(&apex->resource_record_set, TYPE_SOA); // zone is locked
 
     if(soa == NULL)
     {
@@ -680,14 +683,14 @@ zdb_zone_getserial(const zdb_zone *zone, u32 *serial)
     }
     else
     {
-        log_debug("zdb_zone_getserial called on a zone locked by %02hhx (%{dnsname})", zone->lock_owner, zone->origin);
+        log_debug1("zdb_zone_getserial called on a zone locked by %02hhx (%{dnsname})", zone->lock_owner, zone->origin);
     }
 #endif
     
     yassert(serial != NULL);
 
     zdb_rr_label *apex = zone->apex;
-    zdb_packed_ttlrdata *soa = zdb_record_find(&apex->resource_record_set, TYPE_SOA);
+    zdb_packed_ttlrdata *soa = zdb_record_find(&apex->resource_record_set, TYPE_SOA); // zone is locked
 
     if(soa != NULL)
     {
@@ -700,7 +703,7 @@ zdb_zone_getserial(const zdb_zone *zone, u32 *serial)
 const zdb_packed_ttlrdata*
 zdb_zone_get_dnskey_rrset(zdb_zone *zone)
 {
-    return zdb_record_find(&zone->apex->resource_record_set, TYPE_DNSKEY);
+    return zdb_record_find(&zone->apex->resource_record_set, TYPE_DNSKEY); // zone is locked
 }
 
 #if OBSOLETE
@@ -872,7 +875,7 @@ zdb_zone_contains_dnskey_record_for_key(zdb_zone *zone, const dnssec_key *key)
 {
     yassert(zdb_zone_islocked(zone));
     
-    const zdb_packed_ttlrdata *dnskey_rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_DNSKEY);
+    const zdb_packed_ttlrdata *dnskey_rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_DNSKEY); // zone is locked
     
     const zdb_packed_ttlrdata *dnskey_record = dnskey_rrset;
     
@@ -902,7 +905,7 @@ zdb_zone_apex_contains_rrsig_record_by_key(zdb_zone *zone, const dnssec_key *key
 {
     yassert(zdb_zone_islocked(zone));
     
-    const zdb_packed_ttlrdata *rrsig_rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_RRSIG);
+    const zdb_packed_ttlrdata *rrsig_rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_RRSIG); // zone is locked
     
     if(rrsig_rrset != NULL)
     {
@@ -958,7 +961,7 @@ zdb_zone_update_keystore_keys_from_zone(zdb_zone *zone)
     }
 
 
-    zdb_packed_ttlrdata *dnskey_rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_DNSKEY);
+    zdb_packed_ttlrdata *dnskey_rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_DNSKEY); // zone is locked
     zdb_packed_ttlrdata *dnskey_record = dnskey_rrset;
     while(dnskey_record != NULL)
     {
@@ -1008,7 +1011,6 @@ zdb_zone_update_keystore_keys_from_zone(zdb_zone *zone)
             zdb_icmtl_end(&icmtl);
         }
     }
-        
 }
 
 #endif
@@ -1042,5 +1044,40 @@ zdb_zone_print(zdb_zone *zone, output_stream *os)
 }
 
 #endif
+
+u8
+zdb_zone_get_status(zdb_zone *zone)
+{
+    mutex_lock(&zone->lock_mutex);
+    u8 ret = zone->_status;
+    mutex_unlock(&zone->lock_mutex);
+    return ret;
+}
+
+u8
+zdb_zone_set_status(zdb_zone *zone, u8 status)
+{
+#ifdef DEBUG
+    log_debug4("zdb_zone_set_status(%{dnsname},%02x)", zone->origin, status);
+#endif
+    mutex_lock(&zone->lock_mutex);
+    u8 ret = zone->_status;
+    zone->_status |= status;
+    mutex_unlock(&zone->lock_mutex);
+    return ret;
+}
+
+u8
+zdb_zone_clear_status(zdb_zone *zone, u8 status)
+{
+#ifdef DEBUG
+    log_debug4("zdb_zone_clear_status(%{dnsname},%02x)", zone->origin, status);
+#endif
+    mutex_lock(&zone->lock_mutex);
+    u8 ret = zone->_status;
+    zone->_status &= ~status;
+    mutex_unlock(&zone->lock_mutex);
+    return ret;
+}
 
 /** @} */

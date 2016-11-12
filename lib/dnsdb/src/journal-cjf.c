@@ -78,11 +78,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 
-#include <dnscore/buffer_input_stream.h>
-#include <dnscore/buffer_output_stream.h>
 #include <dnscore/file_input_stream.h>
-#include <dnscore/file_output_stream.h>
-#include <dnscore/limited_input_stream.h>
 #include <dnscore/empty-input-stream.h>
 #include <dnscore/mutex.h>
 #include <dnscore/serial.h>
@@ -97,6 +93,9 @@
 #include <dnscore/list-dl.h>
 
 #include <dnscore/ctrl-rfc.h>
+
+#include <dnscore/bytearray_output_stream.h>
+#include <dnscore/bytearray_input_stream.h>
 
 #include "dnsdb/zdb_error.h"
 #include "dnsdb/zdb_utils.h"
@@ -165,57 +164,12 @@ extern logger_handle* g_database_logger;
  * Table Index Offset
  */
 
-/*
- *  MAGIC 'JCS' 0
- *  offset to next (0 until the section is closed and followed by a new one)
- *  list of last-serial + file_offset
- */
-
-
-struct cjf_header // Cyclic Journal File
-{
-    u32 magic_plus_version;
-    u32 serial_begin;
-    u32 serial_end;
-    u32 first_index_offset;
-    u32 table_index_offset;
-    //
-    u32 last_soa_offset;
-    u32 last_page_offset_next; // the byte after the last PAGE on the chain ends
-    u16 flags;
-    u8 __end_of_struct__;
-};
-
-typedef struct cjf_header cjf_header;
-
-#define CJF_HEADER_REAL_SIZE offsetof(cjf_header,__end_of_struct__)
-/*
-#if CJF_HEADER_SIZE != CJF_HEADER_REAL_SIZE
-#error "CJF_HEADER_SIZE != CJF_HEADER_REAL_SIZE"
-#endif
-*/
-
-/*
- * PAGE
- * 
- * Serial Number Stream Offset
- * 
- * The table of serials streams (IXFR) and their offset
- * The value stored is of the serial ending the IXFR
- */
-
-#define CJF_CJF0_MAGIC MAGIC4('C','J','F', 0x20) // ver 2.0
 
 /**
  * There is a need of lockable 4K pages in an MRU that points back to their user
  * That's where the PAGE will be stored
  * I'm not sure of what the ratio between allowed FDs and allowed PAGE pages should be.
  */
-
-
-
-static ptr_set journal_cjf_set = PTR_SET_ASCIIZ_EMPTY;
-static mutex_t journal_cjf_set_mtx = MUTEX_INITIALIZER;
 
 static shared_group_shared_mutex_t journal_shared_mtx;
 static bool journal_shared_mtx_initialized = FALSE;
@@ -266,117 +220,362 @@ log_debug_jnl(journal_cjf *jnl, const char *text)
 static void
 journal_cjf_writelock(journal_cjf *jnl)
 {
+#ifdef DEBUG
+    log_debug4("cjf: %s,%i: write lock", jnl->journal_file_name, jnl->fd);
+#endif
     shared_group_mutex_lock(&jnl->mtx, GROUP_MUTEX_WRITE);
 }
 
 static void
 journal_cjf_writeunlock(journal_cjf *jnl)
 {
+#ifdef DEBUG
+    log_debug4("cjf: %s,%i: write unlock", jnl->journal_file_name, jnl->fd);
+#endif
     shared_group_mutex_unlock(&jnl->mtx, GROUP_MUTEX_WRITE);
 }
 
 static void
 journal_cjf_readlock(journal_cjf *jnl)
 {
+#ifdef DEBUG
+    log_debug4("cjf: %s,%i: read lock", jnl->journal_file_name, jnl->fd);
+#endif
     shared_group_mutex_lock(&jnl->mtx, GROUP_MUTEX_READ);
 }
 
 static void
 journal_cjf_readunlock(journal_cjf *jnl)
 {
+#ifdef DEBUG
+    log_debug4("cjf: %s,%i: read unlock", jnl->journal_file_name, jnl->fd);
+#endif
     shared_group_mutex_unlock(&jnl->mtx, GROUP_MUTEX_READ);
+}
+
+bool
+journal_cjf_isreadlocked(journal_cjf *jnl)
+{
+    bool ret = shared_group_mutex_islocked_by(&jnl->mtx, GROUP_MUTEX_READ);
+    return ret;
+}
+
+bool
+journal_cjf_iswritelocked(journal_cjf *jnl)
+{
+    bool ret = shared_group_mutex_islocked_by(&jnl->mtx, GROUP_MUTEX_WRITE);
+    return ret;
+}
+
+void
+journal_cjf_release(journal_cjf *jnl)
+{
+    journal_release((journal*)jnl);
+}
+
+static journal_cjf* journal_cjf_alloc_default(const u8 *origin, const char *filename);
+
+static void
+journal_cjf_load_idxt(journal_cjf *jnl)
+{
+    if(jnl->idxt.entries != NULL)
+    {
+        return;
+    }
+    
+    journal_cjf_idxt_load(jnl);
+
+    if(jnl->idxt.count > 0)
+    {
+        jnl->last_page.file_offset = journal_cjf_idxt_get_last_file_offset(jnl);
+        journal_cjf_page_tbl_header current_page_header;
+        journal_cjf_page_cache_read_header(jnl->fd, jnl->last_page.file_offset, &current_page_header);
+        jnl->last_page.count = current_page_header.count;
+        jnl->last_page.size = current_page_header.size;
+
+        if(jnl->last_page.file_offset < jnl->first_page_offset)
+        {
+            jnl->last_page.file_offset_limit = jnl->first_page_offset;
+        }
+        else
+        {
+            jnl->last_page.file_offset_limit = jnl->file_maximum_size;
+        }
+
+        if(jnl->idxt.count > 1)
+        {
+            jnl->last_page.serial_start = journal_cjf_idxt_get_last_serial(jnl, jnl->idxt.count - 2);
+        }
+        else
+        {
+            jnl->last_page.serial_start = jnl->serial_begin;
+        }
+    }
+    else
+    {
+        jnl->idxt.dirty = FALSE;
+        jnl->flags |= JOURNAL_CFJ_FLAGS_DIRTY;
+
+        journal_cjf_page_cache_flush(jnl->fd);
+
+        journal_cjf_idxt_destroy(jnl);
+
+        jnl->serial_begin = 0;
+        jnl->serial_end = 0;
+
+        jnl->mtx.owner = LOCK_NONE;
+        jnl->mtx.count = 0;
+        jnl->first_page_offset = CJF_HEADER_SIZE;
+        jnl->page_table_file_offset = 0;
+        jnl->last_soa_offset = 0;
+        jnl->file_maximum_size = MAX_U32;
+
+        if(jnl->zone != NULL)
+        {
+            jnl->file_maximum_size = jnl->zone->wire_size >> 1;
+            zdb_zone_info_get_zone_max_journal_size(jnl->origin, &jnl->file_maximum_size);
+        }
+
+        jnl->last_page.file_offset = CJF_HEADER_SIZE;
+        jnl->last_page.count = 0;
+        jnl->last_page.size = CJF_SECTION_INDEX_SLOT_COUNT;
+        jnl->last_page.serial_start = 0;
+        jnl->last_page.serial_end = 0;
+        jnl->last_page.records_limit = jnl->last_page.file_offset + CJF_SECTION_INDEX_SIZE;
+        jnl->last_page.file_offset_limit = jnl->file_maximum_size;
+
+#if _BSD_SOURCE || _XOPEN_SOURCE >= 500 || _XOPEN_SOURCE && _XOPEN_SOURCE_EXTENDED || /* Since glibc 2.3.5: */ _POSIX_C_SOURCE >= 200112L        
+        ftruncate(jnl->fd, CJF_HEADER_SIZE);
+#endif
+    }
+}
+
+static int
+journal_cjf_create_file(journal_cjf **jnlp, const u8 *origin, const char *filename)
+{
+    log_debug3("cjf: %{dnsname}: creating %s", origin, filename);
+    
+    int flags = O_RDWR|O_CREAT|O_EXCL;
+#ifdef O_NOATIME
+    flags |= O_NOATIME;
+#endif
+    int fd;
+    ya_result ret;
+    cjf_header hdr;
+
+    fd = open_create_ex(filename, flags, 0644);
+
+    if(fd >= 0)
+    {
+        journal_cjf *jnl = journal_cjf_alloc_default(origin, filename);
+        
+        hdr.magic_plus_version = CJF_CJF0_MAGIC;
+        hdr.serial_begin = 0;
+        hdr.serial_end = 0;
+        hdr.first_index_offset = 0;
+        hdr.table_index_offset = 0;
+        hdr.last_soa_offset = 0,
+        hdr.last_page_offset_next = 0;
+        //hdr.last_page_item_count = 0;
+        hdr.flags = JOURNAL_CFJ_FLAGS_MY_ENDIAN; // not dirty
+
+        ssize_t n = writefully(fd, &hdr, CJF_HEADER_SIZE);
+        if(n < 0)
+        {
+            ret = ERRNO_ERROR;
+            return ret;
+        }
+        
+        jnl->fd = fd;
+        
+        *jnlp = jnl;
+
+        return fd;
+    }
+    else
+    {
+        ret = ERRNO_ERROR;
+        log_err("cjf: %s: failed to create %s: %r", origin, filename, ret);
+        
+        *jnlp = NULL;
+        
+        return ret;
+    }
 }
 
 /**
  * 
  * Does NOT set the fd field in jnl
- * MUST return -1 in case of error
- * 
+
  * @param jnl
  * @param create
- * @return 
+ * @return the file descriptor or an error code
  */
 
 static int
-jnl_open_file(journal_cjf *jnl, bool create)
+journal_cjf_init_from_file(journal_cjf **jnlp, const u8 *origin, const char *filename, bool create)
 {
-    const u8* origin = (jnl->zone)?jnl->zone->origin:(const u8*)"\010<notset>"; // VALID
-    log_debug3("cjf: %{dnsname},%i: opening%s %s", origin, jnl->fd, (create)?"/creating":"", jnl->journal_file_name);
+    log_debug3("cjf: %{dnsname}: opening%s %s", origin, (create)?"/creating":"", filename);
     
     int flags = O_RDWR;
 #ifdef O_NOATIME
     flags |= O_NOATIME;
 #endif
     int fd;
-
+    ya_result ret;
+    bool bad_journal = FALSE;
     cjf_header hdr;
 
-    if(create)
+    fd = open_ex(filename, flags);
+
+    if(fd < 0)
     {
-        flags |= O_CREAT;
-
-        fd = open_create_ex(jnl->journal_file_name, flags, 0644);
-
-        if(fd >= 0)
+        fd = ERRNO_ERROR;
+        log_debug3("cjf: %{dnsname}: failed to open %s: %r", origin, filename, fd);
+        
+        if(create)
         {
-            hdr.magic_plus_version = CJF_CJF0_MAGIC;
-            hdr.serial_begin = 0;
-            hdr.serial_end = 0;
-            hdr.first_index_offset = 0;
-            hdr.table_index_offset = 0;
-            hdr.last_soa_offset = 0,
-            hdr.last_page_offset_next = 0;
-            //hdr.last_page_item_count = 0;
-            hdr.flags = JOURNAL_CFJ_FLAGS_MY_ENDIAN;
+            fd = journal_cjf_create_file(jnlp, origin, filename);
+        }
+        
+        return fd;
+    }
+    
+    s64 size = filesize(filename);
+    if(size < CJF_HEADER_SIZE)
+    {
+        bad_journal = TRUE;
+    }
+    
+    // look if the journal makes sense
 
-            writefully(fd, &hdr, CJF_HEADER_SIZE);
+    if(FAIL(ret = readfully(fd, &hdr, sizeof(hdr))))
+    {
+        ret = ERRNO_ERROR;
+        log_err("cjf: %{dnsname}: could not read header on %s: %r", origin, filename, ret);
+        bad_journal = TRUE;
+    }
+    else if((hdr.magic_plus_version != CJF_CJF0_MAGIC) || ((hdr.flags & JOURNAL_CFJ_FLAGS_MY_ENDIAN) == 0) )
+    {
+        if(hdr.magic_plus_version != CJF_CJF0_MAGIC)
+        {
+            log_err("cjf: %{dnsname}: wrong magic on %s", origin, filename);
         }
         else
         {
-            log_err("cjf: %s,%i: failed to create %s: %r", origin, jnl->fd, jnl->journal_file_name, ERRNO_ERROR);
+            log_err("cjf: %{dnsname}: wrong endian on %s", origin, filename);
         }
-    }        
+
+        bad_journal = TRUE;
+    }
+    else if(hdr.first_index_offset == 0)
+    {
+        bad_journal = TRUE;
+    }
+
+    if(!bad_journal)
+    {
+        // it does makes sense
+        
+        // note: DO NOT jnl->fd = fd;
+        
+        journal_cjf *jnl = journal_cjf_alloc_default(origin, filename);
+
+        jnl->flags = hdr.flags;
+
+        jnl->serial_begin = hdr.serial_begin;
+        jnl->serial_end = hdr.serial_end;
+        jnl->first_page_offset = hdr.first_index_offset;
+        jnl->page_table_file_offset = hdr.table_index_offset;
+        jnl->last_soa_offset = hdr.last_soa_offset;
+
+        jnl->last_page.serial_end = jnl->serial_end;    
+        jnl->last_page.records_limit = hdr.last_page_offset_next;
+        
+        jnl->fd = fd;
+
+        log_debug("cjf: %{dnsname}: journal expected to cover serials from %i to %i", jnl->origin, hdr.serial_begin, hdr.serial_end);
+        log_debug("cjf: %{dnsname}: journal table index located at %x%s", jnl->origin, hdr.table_index_offset,
+            (hdr.table_index_offset!=0)?"":", which means it has not been closed properly");
+        
+        *jnlp = jnl;
+
+        return fd;
+    }
     else
     {
-        fd = open_ex(jnl->journal_file_name, flags);
+        // the journal content is unexpected
         
-        if(fd < 0)
+        close_ex(fd);
+        fd = -1;
+
+        char broken_file_path[PATH_MAX];
+
+        if(ISOK(ret = snformat(broken_file_path, sizeof(broken_file_path),"%s.bad-journal", filename)))
         {
-            log_debug3("cjf: %s,%i: failed to open %s: %r", origin, jnl->fd, jnl->journal_file_name, ERRNO_ERROR);
+            bool try_again = create;
+
+            // remove previous bad-journal if any
+            if(unlink(broken_file_path) < 0)
+            {
+                ret = ERRNO_ERROR;
+                if(ret == MAKE_ERRNO_ERROR(ENOENT))
+                {
+                    ret = SUCCESS;
+                }
+                else
+                {
+                    log_err("cjf: %{dnsname}: unable to delete previous bad journal %s: %r", origin, broken_file_path, ret);
+                    try_again = FALSE;
+                }
+            }
+            
+            // successfully handled the previous .bad-journal
+            
+            if(ISOK(ret))
+            {
+                // rename the journal into bad-journal
+                if(rename(filename, broken_file_path) < 0)
+                {
+                    ret = ERRNO_ERROR;
+                    log_err("cjf: %{dnsname}: unable to rename %s into %s: %r", origin, filename, broken_file_path, ret);
+
+                    if(unlink(filename) < 0)
+                    {
+                        ret = ERRNO_ERROR;
+                        log_err("cjf: %{dnsname}: unable to delete %s: %r", origin, filename, ret);
+                        try_again = FALSE;
+                    }
+                }
+                
+                ret = ZDB_ERROR_ICMTL_NOTFOUND;
+            }
+
+            if(try_again) // we are allowed to create and got no counter-indication
+            {
+                fd = journal_cjf_create_file(jnlp, origin, filename); // we are in a branch where "create = TRUE"
+
+                return fd;
+            }
+        }
+        else
+        {
+            log_err("cjf: %{dnsname}: %s is a bad journal, please remove it.", origin, filename);
         }
     }
     
-    return fd;
+    return ret;
 }
 
 bool
-jnl_ensure_file_opened(journal_cjf *jnl, bool create)
+journal_cjf_ensure_file_opened(journal_cjf *jnl, bool create)
 {
-    if(jnl->fd < 0)
-    {
-        journal_cjf_writelock(jnl);
-        jnl->fd = jnl_open_file(jnl, create);
-        int err = ERRNO_ERROR;
-        journal_cjf_writeunlock(jnl);
-        if(jnl->fd < 0)
-        {
-            if(create)
-            {
-                log_err("cjf: %s,%i: failed to open %s: %r", jnl->journal_file_name, jnl->fd, jnl->journal_file_name, err);
-            }
-            else
-            {
-                log_debug("cjf: %s,%i: failed to open %s: %r", jnl->journal_file_name, jnl->fd, jnl->journal_file_name, err);
-            }
-        }
-    }
-        
-    return jnl->fd >= 0;
+    yassert(jnl->fd >= 0);    
+    return TRUE;
 }
 
-
 void
-jnl_header_flush(journal_cjf *jnl)
+journal_cjf_header_flush(journal_cjf *jnl)
 {
     yassert(jnl->fd >= 0);
     
@@ -411,35 +610,6 @@ jnl_header_flush(journal_cjf *jnl)
     }
 }
 
-static void
-jnl_close_file(journal_cjf *jnl)
-{
-    log_debug3("cjf: %s,%i: closing file", jnl->journal_file_name, jnl->fd);
-    
-    if(jnl->fd >= 0)
-    {
-        log_debug3("cjf: %s,%i: closing file: closing PAGE cache", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
-        journal_cjf_page_cache_close(jnl->fd);
-        log_debug3("cjf: %s,%i: closing file: flushing IDXT", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
-        journal_cjf_idxt_flush(jnl);
-        log_debug3("cjf: %s,%i: closing file: flushing header", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
-        jnl_header_flush(jnl);
-        log_debug3("cjf: %s,%i: closing file: closing file", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
-        
-        if(jnl->zone != NULL)
-        {
-            log_info("zone: %{dnsname}: closing journal file '%s'", jnl->zone->origin, jnl->journal_file_name);
-        }
-        else
-        {
-            log_info("zone: <notset>: closing journal file '%s'", jnl->journal_file_name);
-        }
-        
-        close_ex(jnl->fd);
-        jnl->fd = -1;
-    }
-}
-
 /**
  * 
  * Removes the first PAGE from the journal.
@@ -456,20 +626,29 @@ journal_cjf_remove_first_page(journal_cjf *jnl)
     u32 stored_serial = jnl->serial_begin + 1; // (ensure an error would trigger a flush)
     
     u8 zt = 0;
-    if(ISOK(zdb_zone_info_get_zone_type(jnl->zone->origin, &zt)))
+    if(ISOK(zdb_zone_info_get_zone_type(jnl->origin, &zt)))
     {
         if(zt == ZT_MASTER)
         {
-            zdb_zone_info_get_stored_serial(jnl->zone->origin, &stored_serial);
+            zdb_zone_info_get_stored_serial(jnl->origin, &stored_serial); // for master only
     
             if(serial_le(stored_serial, jnl->serial_begin))
             {
                 log_debug("cjf: %s,%i: journal page %u will be lost, flushing zone first", jnl->journal_file_name, jnl->fd, jnl->journal_file_name, jnl->serial_begin);
-                zdb_zone_info_background_store_zone(jnl->zone->origin);
+                zdb_zone_info_background_store_zone(jnl->origin);
             }
         }
     }
     
+    journal_cjf_page_tbl_header first_page_hdr;    
+    journal_cjf_page_cache_read_header(jnl->fd, jnl->first_page_offset,  &first_page_hdr);
+    if(first_page_hdr.next_page_offset < jnl->first_page_offset)
+    {
+        // this is the last page, of the file, physically
+        jnl->page_table_file_offset = jnl->last_page.records_limit;
+        jnl->idxt.dirty = TRUE;
+    }
+        
     journal_cjf_page_cache_clear(jnl->fd, jnl->first_page_offset);
     
     jnl->serial_begin = journal_cjf_idxt_get_last_serial(jnl, 0);
@@ -547,55 +726,378 @@ journal_cjf_read_soa_record(dns_resource_record *rr, input_stream *ixfr_wire_is)
     return return_value;
 }
 
+struct journal_jcf_read_ixfr_s
+{
+    input_stream *ixfr_wire_is;
+    output_stream baos;
+    dns_resource_record rr;
+    u32 serial_from;
+    u32 serial_to;
+    u32 size;
+    bool eof;
+};
+
+typedef struct journal_jcf_read_ixfr_s journal_jcf_read_ixfr_s;
+
+ya_result
+journal_jcf_read_ixfr_init(journal_jcf_read_ixfr_s *ixfrinc, input_stream *ixfr_wire_is)
+{
+    ya_result ret;
+    ixfrinc->ixfr_wire_is = ixfr_wire_is;
+    bytearray_output_stream_init_ex(&ixfrinc->baos, NULL, 65536, BYTEARRAY_DYNAMIC);
+    dns_resource_record_init(&ixfrinc->rr);
+    ixfrinc->serial_from = 0;
+    ixfrinc->serial_to = 0;
+    ixfrinc->size = 0;
+    ixfrinc->eof = FALSE;
+    
+    ret = journal_cjf_read_soa_record(&ixfrinc->rr, ixfr_wire_is);
+    
+#ifdef DEBUG
+    if(ISOK(ret))
+    {
+        log_debug2("cjf: ---: started with %{dnsrr}", &ixfrinc->rr); 
+    }
+#endif
+    
+    return ret;
+}
+
+void
+journal_jcf_read_ixfr_finalize(journal_jcf_read_ixfr_s *ixfrinc)
+{
+    ixfrinc->ixfr_wire_is = NULL;
+    
+    dns_resource_record_clear(&ixfrinc->rr);
+    output_stream_close(&ixfrinc->baos);
+    
+    ixfrinc->serial_from = 0;
+    ixfrinc->serial_to = 0;
+    ixfrinc->size = 0;
+}
+
+ya_result
+journal_jcf_read_ixfr_read(journal_jcf_read_ixfr_s *ixfrinc)
+{
+    if(ixfrinc->eof)
+    {
+        ixfrinc->size = 0;
+        return 0;
+    }
+    
+    input_stream *ixfr_wire_is = ixfrinc->ixfr_wire_is;
+    output_stream *baos = &ixfrinc->baos;
+    dns_resource_record *rr = &ixfrinc->rr;
+        
+    ya_result ret;
+    bool need_another_soa = TRUE;
+    
+    bytearray_output_stream_reset(baos);
+    
+    // must start by an SOA
+        
+    if(rr->tctr.qtype == TYPE_SOA)
+    {
+        ret = rr_soa_get_serial(rr->rdata, rr->rdata_size, &ixfrinc->serial_from);
+    }
+    else
+    {
+        ret = ZDB_JOURNAL_SOA_RECORD_EXPECTED;
+    }
+    
+    ixfrinc->size = 0;
+    
+    if(ISOK(ret))
+    {
+        for(int idx = 0;; ++idx)
+        {
+#ifdef DEBUG
+            log_debug2("cjf: ---: %4i: %{dnsrr}", idx, rr); 
+#endif
+            
+            dns_resource_record_write(rr, baos);
+
+            if((ret = dns_resource_record_read(rr, ixfr_wire_is)) <= 0)
+            {
+                if(ret == 0)
+                {
+                    if(!need_another_soa)
+                    {
+                        ixfrinc->size = bytearray_output_stream_size(baos);
+#ifdef DEBUG
+                        log_debug2("cjf: ===: IXFR incremental change size: %i", ixfrinc->size);
+#endif
+                        ret = ixfrinc->size;
+                    }
+                    else
+                    {
+#ifdef DEBUG
+                        log_debug2("cjf: ===: still expected an SOA");
+#endif
+                        // SOA expected
+                        ret = ZDB_JOURNAL_SOA_RECORD_EXPECTED;
+                    }
+                    
+                    ixfrinc->eof = TRUE;
+                }
+                else
+                {
+#ifdef DEBUG
+                    log_debug2("cjf: ===: failed to read the next record: %r", ret);
+#endif
+                }
+                
+                break;
+            }
+            
+            if(rr->tctr.qtype == TYPE_SOA)
+            {
+                if(need_another_soa)
+                {
+                    if(FAIL(ret = rr_soa_get_serial(rr->rdata, rr->rdata_size, &ixfrinc->serial_to)))
+                    {
+#ifdef DEBUG
+                        log_debug2("cjf: ===: failed parse serial from  record: %r", ret);
+#endif
+                        break;
+                    }
+                    
+                    need_another_soa = FALSE;
+                }
+                else
+                {
+                    // another page starts here
+                    // this record will written for the next page
+                    
+                    ixfrinc->size = bytearray_output_stream_size(baos);
+#ifdef DEBUG
+                    log_debug2("cjf: ===: IXFR incremental change size: %i (followed ...)", ixfrinc->size);
+#endif
+                    ret = ixfrinc->size;
+                    break;
+                }
+            }
+        }
+    }
+    
+    return ret;
+}
+
 /**
- * Appends the uncompressed IXFR stream (SOA RR ... RR SOA RR ... RR) to the journal
- * Only checks that the first SOA serial is the current last serial
- * Should also check that the stream is complete before adding it.
+ * The caller will take action that will end up removing the first page.
+ * Either explicitely, either overwriting it (ie: looping).
  * 
- * @note 20160112 edf -- In order to handle enhancements:
+ * This function ensures that it's OK to do so.
  * 
- * The zone of the journal SHOULD be locked
- * The zone of the journal MUST have locks in either of these states:
- * _ not locked
- * _ locked by a simple reader
- * _ doubly locked with the simple reader as owner or alternative owner
- * Any other case will be rejected.
+ * Returns:
  * 
- * @todo 20150127 edf -- In order to trigger the zone write, this function should: ...
+ * 0 if it's OK to do so, and no actions were taken,
+ * 1 if it's OK to do so, but the zone needed to be stored
+ * or an error code.
  * 
- * _ get the current written serial (AXFR/TXT), there must be a bridge between that serial an the journal
- * _ get how much room is available after that serial
- * _ if the available room is less or equal to half the maximum size of the journal,
- *   trigger a write to disk and proceed
+ * @param jnl
  * 
- * @note 20150309 edf -- the problem is this:
- *          for a master, the journal is being written as the records are stored into the database
- *          for a slave, the journal is first stored, then read.  A slave should not truncate an update.
- *          (and if we ever do it, it means that we will have to ensure that the calling part knows the final SOA is wrong)
- * 
- * @note 20150326 edf -- both master and slaves are working (on my tests). This part is ready for real life testing.
+ * @return the state of the operation
  * 
  */
 
 static ya_result
-journal_cjf_append_ixfr_stream_master(journal *jh, input_stream *ixfr_wire_is)
+journal_cjf_append_ixfr_stream_first_page_removal(journal_cjf *jnl)
+{
+    // the caller will remove first page to make room, prepare for it
+    
+    ya_result ret;
+    u32 zone_stored_serial;
+    
+    // get the serial of the stored zone
+
+    if(FAIL(ret = zdb_zone_info_get_stored_serial(jnl->origin, &zone_stored_serial)))
+    {
+        log_warn("cjf: %{dnsname}: could not get serial of stored zone: %r", jnl->origin, ret);
+        return ret;
+    }
+    
+    u8 zt = 0;
+    if(ISOK(zdb_zone_info_get_zone_type(jnl->origin, &zt)))
+    {
+        if(zt == ZT_SLAVE)
+        {
+            u32 ts = jnl->zone->axfr_timestamp;
+            u32 sr = jnl->zone->axfr_serial;
+            if(ts > 1)
+            {
+                if(serial_gt(sr, zone_stored_serial))
+                {
+                    zone_stored_serial = sr;
+                }
+            }
+        }
+    }
+    
+    // get the page of the serial
+
+    if(FAIL(ret = journal_cjf_idxt_get_page_offset_from_serial(jnl, zone_stored_serial, NULL)))
+    {
+        if(serial_le(jnl->serial_end, zone_stored_serial))
+        {
+            log_debug("cjf: %{dnsname}: no need to store the zone again as it's already %i steps further", jnl->origin, zone_stored_serial - jnl->serial_end);
+            return 0;
+        }
+        else
+        {
+            log_warn("cjf: %{dnsname}: could not get page of serial %u: %r", jnl->origin, zone_stored_serial, ret);
+            return ret;
+        }
+    }
+
+    // ret is the index of the page, if it is 0 we may need to save the current zone
+
+    bool need_to_save_before_removing_first_page = (ret == 0);
+    
+    log_debug("cjf: %{dnsname}: zone currently stored up to serial %i, located on page %i of the journal", jnl->origin, zone_stored_serial, ret);
+    
+    if(need_to_save_before_removing_first_page)
+    {
+        // we are about to destroy the page of the currently stored serial AND
+        // there are steps remaining to be safe
+
+        log_warn("cjf: %{dnsname}: need to store the zone right now, consider increasing the journal size", jnl->origin);
+
+        zdb_zone *zone = (zdb_zone*)jnl->zone;
+
+        // the zone at this point is supposed to be locked
+        // either simply with a simple reader
+        // either doubly with something and a simple reader
+        // if simply : do nothing
+        // if doubly : with the simple reader : exchange them
+        //             with anything else : it cannot ever work
+
+        u8 owner = zone->lock_owner;
+        u8 reserved_owner = zone->lock_reserved_owner;
+        if(owner == ZDB_ZONE_MUTEX_SIMPLEREADER)
+        {
+            zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+            ret = zdb_zone_info_store_locked_zone(jnl->origin);
+            zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+        }
+        else if(owner == ZDB_ZONE_MUTEX_NOBODY)
+        {
+            zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+            ret = zdb_zone_info_store_locked_zone(jnl->origin);
+            zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+        }
+        else if(reserved_owner == ZDB_ZONE_MUTEX_SIMPLEREADER)
+        {   
+            zdb_zone_exchange_locks(zone, owner, ZDB_ZONE_MUTEX_SIMPLEREADER);
+            ret = zdb_zone_info_store_locked_zone(jnl->origin);
+            zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, owner);
+        }
+        else
+        {
+            ret = ERROR;
+        }
+
+        if(FAIL(ret))
+        {
+            log_warn("cjf: %{dnsname}: cannot store the zone: %r", jnl->origin, ret);
+            return ret;
+        }
+
+        return 1; // try again
+    }
+    else
+    {
+        return 0; // continue
+    }
+}
+
+static s64 journal_cjf_get_space_left_until_need_storage_page(journal_cjf *jnl)
+{
+    ya_result ret;
+    u32 zone_stored_serial;
+    
+    if(FAIL(ret = zdb_zone_info_get_stored_serial(jnl->origin, &zone_stored_serial)))
+    {
+        log_warn("cjf: %{dnsname}: could not get serial of stored zone: %r", jnl->origin, ret);
+        
+        // save asap
+        
+        return 0;
+    }
+    
+    u8 zt = 0;
+    if(ISOK(zdb_zone_info_get_zone_type(jnl->origin, &zt)))
+    {
+        if(zt == ZT_SLAVE)
+        {
+            u32 ts = jnl->zone->axfr_timestamp;
+            u32 sr = jnl->zone->axfr_serial;
+            if(ts > 1)
+            {
+                if(serial_gt(sr, zone_stored_serial))
+                {
+                    zone_stored_serial = sr;
+                }
+            }
+        }
+    }
+    
+    // get the page of the serial
+
+    if(FAIL(ret = journal_cjf_idxt_get_page_offset_from_serial(jnl, zone_stored_serial, NULL)))
+    {
+        if(serial_le(jnl->serial_end, zone_stored_serial))
+        {
+            log_debug("cjf: %{dnsname}: no need to store the zone again as it's already %i steps further", jnl->origin, zone_stored_serial - jnl->serial_end);
+            
+            // the journal is only there for the slaves, it could be completely replaced
+            
+            return jnl->file_maximum_size;
+        }
+        else
+        {
+            log_warn("cjf: %{dnsname}: could not get page of serial %u: %r", jnl->origin, zone_stored_serial, ret);
+            
+            // save asap
+            
+            return 0;
+        }
+    }
+    
+    const journal_cjf_idxt_tbl_item* need_storage = journal_cjf_idxt_get_entry(jnl, ret);
+    
+    if(jnl->last_page.file_offset == need_storage->file_offset)
+    {
+        // we are on the page : we basically have the size of our page minus the file size
+        
+        return MAX(jnl->file_maximum_size - (jnl->last_page.records_limit - jnl->last_page.file_offset), 0);
+    }
+    else if(jnl->last_page.file_offset < need_storage->file_offset)
+    {
+        // we have everything until that page
+        
+        return MAX(need_storage->file_offset - jnl->last_page.records_limit, 0);
+    }
+    else // if(jnl->last_page.file_offset > need_storage->file_offset)
+    {
+        // we have the remaining space until the end of the file plus the offset of the page (minus the header)
+        
+        return MAX(jnl->file_maximum_size - jnl->last_page.records_limit, 0) + need_storage->file_offset;
+    }    
+}
+
+static ya_result
+journal_cjf_append_ixfr_stream_per_page(journal *jh, input_stream *ixfr_wire_is, bool is_slave)
 {
     journal_cjf *jnl = (journal_cjf*)jh;
+    ya_result ret;
     
     log_debug("cjf: %s,%i: append IXFR (master)", jnl->journal_file_name, jnl->fd);
     
-    if(!jnl_ensure_file_opened(jnl, TRUE))
+    if(!journal_cjf_ensure_file_opened(jnl, TRUE))
     {
         return ERRNO_ERROR;
     }
-    
-    ya_result ret;
-    ya_result record_size;
-    u32 stream_serial_del;
-    
-#ifdef DEBUG
-    stream_serial_del = ~0;
-#endif
     
     // ensure the zone locks are usable : locked by the reader, by nobody, or the reader is a reserved owner
     {
@@ -614,1048 +1116,353 @@ journal_cjf_append_ixfr_stream_master(journal *jh, input_stream *ixfr_wire_is)
             return ERROR;
         }
     }
-
-    // current record
-#if SLAVE_ONLY    
-    u32 starting_zone_serial;
-#endif    
-    u32 previous_journal_serial;
     
-#if SLAVE_ONLY
-    zdb_zone *zone = (zdb_zone*)jnl->zone;
-    zdb_zone_acquire(zone);
-    zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
-    ret = zdb_zone_getserial((zdb_zone*)jnl->zone, &starting_zone_serial);
-    zdb_zone_release_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
-    
-    if(FAIL(ret))
-    {
-        log_err("cjf: %s,%i: failed to get the serial from the zone: %r", jnl->journal_file_name, jnl->fd, ret);
-        return ret;
-    }
-    
-    // remember the offset in the page when we started    
-    u32 starting_page_file_offset = CJF_HEADER_SIZE;
-#endif
-    
-    bool journal_was_empty;
-    
-    if(!journal_cjf_isempty(jnl))
-    {
-#if SLAVE_ONLY
-
-        if(FAIL(journal_cjf_idxt_get_page_offset_from_serial(jnl, starting_zone_serial, &starting_page_file_offset)))
-        {
-            log_err("cjf: %s,%i: failed to get the serial from the zone: %r", jnl->journal_file_name, jnl->fd, ret);
-            return ret;
-        }
-#endif        
-        previous_journal_serial = jnl->serial_end;
-        journal_was_empty = FALSE;
-    }
-    else
-    {
-        // create the IDXT
-        journal_cjf_idxt_create(jnl, 1);
-        journal_was_empty = TRUE;
-    }
+    int written_pages = 0;
     
     dns_resource_record rr;    
     dns_resource_record_init(&rr);
     
-    // read the SOA record (start serial)
-            
-    if(FAIL(record_size = journal_cjf_read_soa_record(&rr, ixfr_wire_is)))
-    {
-        log_err("cjf: %s,%i: expected valid SOA record: %r", jnl->journal_file_name, jnl->fd, record_size);
-
-        dns_resource_record_clear(&rr);
-
-        return record_size;
-    }
-
-#ifdef DEBUG
-    log_debug1("cjf: %s,%i: SOA: %{dnsrr}", jnl->journal_file_name, jnl->fd, &rr);
-#endif
-    // this is the SOA we are about to delete from, get its serial
-
-    if(FAIL(ret = rr_soa_get_serial(rr.rdata, rr.rdata_size, &stream_serial_del)))
-    {
-        log_err("cjf: %s,%i: could not get serial from SOA record: %r", jnl->journal_file_name, jnl->fd, ret);
-
-        dns_resource_record_clear(&rr);
-
-        return ret;
-    }
-    
-    // the journal can only be used by the writer
-    /// @todo 20150323 edf -- lock parts of the journal
-    
-    journal_cjf_writelock(jnl);
-    
-    ////////////////////////////////////////////////////////////////////////////
-
-    // we didn't got the SOA yet
-    u8 soa_count;
-       
     output_stream os;
     output_stream_set_void(&os); // very important
     
-    do
+    journal_jcf_read_ixfr_s ixfrinc;
+    journal_jcf_read_ixfr_init(&ixfrinc, ixfr_wire_is);
+    
+    journal_cjf_writelock(jnl);
+
+    for(;;)
     {
-        // open a new output stream where to write the records
-        // if the stream is already set in a non-void state, use it from its position
-        // this may open a new page
+        ret = journal_jcf_read_ixfr_read(&ixfrinc);
+        
+        if(ret <= 0)
+        {
+            journal_cjf_page_output_stream_cancel(&os);
+            
+            if(ret == 0)
+            {
+                log_info("cjf: %{dnsname}: no incremental changes remaining", jnl->origin);
+            }
+            else
+            {
+                log_err("cjf: %{dnsname}: failed to read changes: %r", jnl->origin, ret);
+            }
+            break;
+        }
+        
+        // else records have been read
+        
+        yassert((ixfrinc.serial_from == ixfrinc.serial_to) || (ixfrinc.size != 0));
+        
+        log_info("cjf: %{dnsname}: incremental changes read from %u to %u (%u bytes)", jnl->origin, ixfrinc.serial_from, ixfrinc.serial_to, ixfrinc.size);
+        
+        bool journal_is_empty = journal_cjf_isempty(jnl);
+        
+        if(!journal_is_empty)
+        {
+            if(serial_lt(ixfrinc.serial_from, jnl->serial_end))
+            {
+                log_info("cjf: %{dnsname}: ignoring changes before serial %u", jnl->origin, jnl->serial_end);
+                
+                continue;
+            }
+            else if(serial_gt(ixfrinc.serial_from, jnl->serial_end))
+            {
+                log_warn("cjf: %{dnsname}: missing changes between serials %u and %u", jnl->origin, jnl->serial_end, ixfrinc.serial_from);
+                
+                break;
+            }
+        }
+        else
+        {
+            journal_cjf_idxt_create(jnl, 1);
+        }
+        
+journal_cjf_append_ixfr_stream_master_accum_tryagain:
         
         journal_cjf_page_output_stream_reopen(&os, jnl);
         
-        // compute the amount of space available on the journal from the current writing position
-        // this takes into account both the maximum size of the journal and the possible overwrite
-        s64 available = journal_cjf_get_last_page_available_space_left(jnl);
+        // the file is cycling, so we also need to see if we are writing at
+        // a position before the first page's and thus risking to overwrite it
         
-        // are we in a situation were it is possible to overwrite the first page ?
-        bool overwrite_risk = journal_cjf_page_current_output_stream_may_overwrite(jnl);
+        s64 available = 0;
         
-        u32 zone_stored_serial;
-        u32 zone_stored_serial_page_offset;
-        
-        // if the journal is empty ...
-        if(journal_was_empty)
+        while(journal_cjf_page_current_output_stream_may_overwrite(jnl))
         {
-            // the serial of the SOA is our starting point
-            previous_journal_serial = stream_serial_del;
-            zone_stored_serial = 0;
-            zone_stored_serial_page_offset = 0;
-        }
-        else
-        {        
-            // if the serial we are about to delete from is not the last serial, AND if we are not in a starting state (empty journal)
-            if(stream_serial_del != previous_journal_serial) // false positive: previous_journal_serial is initialised (!journal_was_empty)
-            {
-                // complain about it
-
-                if(serial_lt(stream_serial_del, previous_journal_serial)) // false positive: !journal_was_empty -> previous_journal_serial set to  jnl->serial_end
-                {
-                    log_err("cjf: %s,%i: serial of stream (%i) is inside of the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
-                }
-                else
-                {
-                    log_err("cjf: %s,%i: serial of stream (%i) is outside of the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
-                }
-
-#ifdef DEBUG
-                logger_flush();
-#endif
-                ret = ZDB_JOURNAL_IXFR_SERIAL_OUT_OF_KNOWN_RANGE;
-                break;
-            }
-        
-            // BEGIN SERVER FLUSH CONDITION AND TRIGGER
+            // if total available is smaller than half the file, the division will be >= 2
             
-            zone_stored_serial = jnl->serial_begin;
-            zone_stored_serial_page_offset = 0;
-
-            // get the serial number of the persistent image of the zone file
+            s64 total_available = journal_cjf_get_space_left_until_need_storage_page(jnl);
             
-            if(ISOK(ret = zdb_zone_info_get_stored_serial(jnl->zone->origin, &zone_stored_serial)))
+            if( ((total_available > 0) && ((jnl->file_maximum_size / total_available) >= 2)) || (total_available == 0))
             {
-                // get the offset of the PAGE that works from that serial
-                if(ISOK(ret = journal_cjf_idxt_get_page_offset_from_serial(jnl, zone_stored_serial, &zone_stored_serial_page_offset)))
+                // if not writing already, then write
+                // 0 = not saving, 1 = saving, <0 = error
+                if(zdb_zone_info_background_store_in_progress(jnl->origin) != 1)
                 {
-                    // that offset is the limit of no return, if we overwrite it will not be
-                    // able to replay the journal from the zone
-
-                    // if the remaining space between the current writing position and the
-                    // above limit is half the maximum journal size, we ask to dump the zone
-                    // on disk.  It will hopefully be done by the time we reach the limit
-                    // (else we will have to wait)
-
-                    bool cut_current_page = FALSE;
-
-                    if(zone_stored_serial_page_offset <= jnl->last_page.records_limit)
-                    {
-                        // we are after the limit, we can easily get the used space
-                        u32 used_space = MAX(jnl->last_page.records_limit - zone_stored_serial_page_offset, 1);
-                        if((jnl->file_maximum_size / used_space) <= 1)
-                        {
-                            cut_current_page = TRUE;
-                        }
-                    }
-                    else
-                    {
-                        u32 remaining_space = MAX(zone_stored_serial_page_offset - jnl->last_page.file_offset, 1);
-                        if((jnl->file_maximum_size / remaining_space) >= 1)
-                        {
-                            cut_current_page = TRUE;
-                        }
-                    }
-
-                    if(cut_current_page)
-                    {
-                        log_debug("cjf: %s,%i: half the space has been reached, requesting zone write and forcing page change", jnl->journal_file_name, jnl->fd);
-
-                        zdb_zone_info_background_store_zone(jnl->zone->origin); /// @todo 20150219 edf -- stop storing in this PAGE
-
-                        jnl->last_page.file_offset_limit = jnl->last_page.records_limit; // this will tell the PAGE is full
-                        jnl->last_page.size = jnl->last_page.count;
-                        journal_cjf_page_output_stream_cancel(&os);
-                        journal_cjf_idxt_append_page(jnl);
-                        output_stream_set_void(&os); // very important
-                        journal_cjf_page_output_stream_reopen(&os, jnl);
-
-                        overwrite_risk = journal_cjf_page_current_output_stream_may_overwrite(jnl);
-
-                        if(jnl->last_page.file_offset_limit >= jnl->last_page.records_limit)
-                        {
-                            available = jnl->last_page.file_offset_limit - jnl->last_page.records_limit;
-                        }
-                        else
-                        {
-                            // we are already at the limit
-                            available = 0;
-                        }
-                    }
-                }
-                else
-                {
-                    log_err("cjf: %s,%i: could not find the serial %u in the journal: %r", jnl->journal_file_name, jnl->fd, zone_stored_serial, ret);
+                    zdb_zone_info_background_store_zone(jnl->origin);
                 }
             }
-            else
-            {
-                log_warn("cjf: %s,%i: could not get information on the stored zone: %r", jnl->journal_file_name, jnl->fd, ret);
-            }
-
-            // END SERVER FLUSH CONDITION AND TRIGGER
-        }
-        
-        soa_count = 0;
-        
-        for(;;)
-        {
-            // if the record is an SOA, we may be at the end of the current stream
-
-            if(rr.tctr.qtype == TYPE_SOA)
-            {
-                if(++soa_count == 3)
-                {
-                    // we had a +SOA already:
-                    //   mark that we have a -SOA ready in rr
-#ifdef DEBUG
-                    log_debug1("cjf: %s,%i: SOA: %{dnsrr}", jnl->journal_file_name, jnl->fd, &rr);
-#endif
-                    break;
-                }
-                
-                // this is the +SOA of the chunk
-                // for now it is also the last SOA found in the file
-            }
             
-            yassert((soa_count > 0) && (soa_count < 3));
-            
-#ifdef DEBUG
-            if(soa_count == 2)
+            available = jnl->first_page_offset - jnl->last_page.records_limit;
+
+            if(available >= ixfrinc.size)
             {
-                log_debug1("cjf: %s,%i: +++: %{dnsrr}", jnl->journal_file_name, jnl->fd, &rr);
-            }
-            else
-            {
-                log_debug1("cjf: %s,%i: ---: %{dnsrr}", jnl->journal_file_name, jnl->fd, &rr);
-            }
-#endif
-            
-            // if there is a risk overwriting a page, and not enough room is available, then update the journal structure
-
-            if(!journal_was_empty)
-            {
-                // BEGIN CUT CONDITION TEST
-                
-                for(;;)
-                {
-                    // if writing the next record (SOA) makes us go beyond the limit, we need to start a new page
-                    bool should_add_page = (record_size > available);
-
-                    if(!should_add_page)
-                    {
-                        break;
-                    }
-
-                    // if we have started to write, as a master, we MUST continue
-                    bool can_stop_writing_without_breaking = journal_cfj_page_output_stream_get_size(&os) == 0;
-
-                    // as a slave, we cannot lose the page that contains our starting point for the next update
-                    bool cannot_remove_first_page = (jnl->first_page_offset == zone_stored_serial_page_offset); // implies we need at least 2 pages
-
-                    // if writing the next record (SOA) makes us go beyond the limit and that limit is a page, we need to make room
-                    bool must_remove_first_page = (overwrite_risk && should_add_page);
-
-                    // if the journal is full, we should remove a page
-                    bool journal_full = journal_cfj_page_output_stream_get_current_offset(&os) >= journal_cjf_maximum_size(jnl);
-
-                    bool not_enough_pages_to_loop = (journal_cjf_idxt_get_page_count(jnl) <= 1);
-
-                    // impossible conundrum
-                    if(cannot_remove_first_page && must_remove_first_page)
-                    {
-                        log_warn("cjf: %s,%i: journal size is too small compared to the rate of updates", jnl->journal_file_name, jnl->fd);
-
-                        zdb_zone *zone = (zdb_zone*)jnl->zone;
-                        
-                        // the zone at this point is supposed to be locked
-                        // either simply with a simple reader
-                        // either doubly with something and a simple reader
-                        // if simply : do nothing
-                        // if doubly : with the simple reader : exchange them
-                        //             with anything else : it cannot ever work
-                        
-                        u8 owner = zone->lock_owner;
-                        u8 reserved_owner = zone->lock_reserved_owner;
-                        if(owner == ZDB_ZONE_MUTEX_SIMPLEREADER)
-                        {
-                            ret = zdb_zone_info_store_locked_zone(jnl->zone->origin);
-                        }
-                        else if(owner == ZDB_ZONE_MUTEX_NOBODY)
-                        {
-                            zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
-                            ret = zdb_zone_info_store_locked_zone(jnl->zone->origin);
-                            zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
-                        }
-                        else if(reserved_owner == ZDB_ZONE_MUTEX_SIMPLEREADER)
-                        {   
-                            zdb_zone_exchange_locks(zone, owner, ZDB_ZONE_MUTEX_SIMPLEREADER);
-                            ret = zdb_zone_info_store_locked_zone(jnl->zone->origin);
-                            zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, owner);
-                        }
-                        else
-                        {
-                            ret = ERROR;
-                        }
-                        
-                        if(ISOK(ret))
-                        {
-                            // and recompute ...
-
-                            if(ISOK(ret = zdb_zone_info_get_stored_serial(jnl->zone->origin, &zone_stored_serial)))
-                            {
-                                if(serial_ge(jnl->serial_end, zone_stored_serial))
-                                {                                
-                                    // get the offset of the PAGE that works from that serial
-                                    if(ISOK(ret = journal_cjf_idxt_get_page_offset_from_serial(jnl, zone_stored_serial, &zone_stored_serial_page_offset)))
-                                    {
-                                        log_debug("cjf: %s,%i: zone stored with serial %i, journal page offset %i", jnl->journal_file_name, jnl->fd, zone_stored_serial, zone_stored_serial_page_offset);
-                                    }
-                                    else
-                                    {
-                                        log_err("cjf: %s,%i: could not find the serial in the journal: %r", jnl->journal_file_name, jnl->fd, ret);
-                                    }
-                                }
-                                else
-                                {
-                                    // the journal is older than the zone
-                                    // zone_stored_serial_page_offset = last_page_offset
-                                    
-                                    if(ISOK(ret = journal_cjf_idxt_get_page_offset_from_serial(jnl, jnl->serial_end, &zone_stored_serial_page_offset)))
-                                    {
-                                        log_debug("cjf: %s,%i: last journal page offset %i", jnl->journal_file_name, jnl->fd, zone_stored_serial_page_offset);
-                                    }
-                                    else
-                                    {
-                                        // should not be possible
-                                        log_err("cjf: %s,%i: could not find page for the serial in the journal: %r", jnl->journal_file_name, jnl->fd, ret);
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                log_warn("cjf: %s,%i: could not get information on the stored zone: %r", jnl->journal_file_name, jnl->fd, ret);
-                            }
-                        }
-                        else
-                        {
-                            log_err("cjf: %s,%i: could not trigger the zone write: %r", jnl->journal_file_name, jnl->fd, ret);
-                        }
-
-                        continue;
-                    }
-
-                    // remember the current limit for the page
-                    u32 old_page_file_offset_limit = jnl->last_page.file_offset_limit;
-
-                    if(must_remove_first_page)
-                    {
-#ifdef DEBUG
-                        log_debug1("cjf: %s,%i: must remove first page before overwrite", jnl->journal_file_name, jnl->fd);
-#endif
-                        // remove the first page (which is our current limit)
-                        journal_cjf_remove_first_page(jnl);
-
-                        // add the difference of limits
-                        available += jnl->last_page.file_offset_limit - old_page_file_offset_limit;
-                        // update the overwrite risk
-                        overwrite_risk = journal_cjf_page_current_output_stream_may_overwrite(jnl);
-
-                        // just continue writing
-                        break;
-                    }
-
-                    // if we must finish the steam, we cannot break it, obviously
-                    if(can_stop_writing_without_breaking)
-                    {
-                        if(not_enough_pages_to_loop)
-                        {   
-#ifdef DEBUG
-                            log_debug1("cjf: %s,%i: journal is full with one page, adding one", jnl->journal_file_name, jnl->fd);
-#endif
-
-                            journal_cjf_page_output_stream_cancel(&os);
-                            journal_cjf_idxt_append_page(jnl);
-                            output_stream_set_void(&os); // very important
-                            journal_cjf_page_output_stream_reopen(&os, jnl);
-
-                            // compute the amount of space available on the journal from the current writing position
-                            // this takes into account both the maximum size of the journal and the possible overwrite
-                            available = journal_cjf_get_last_page_available_space_left(jnl);
-
-                            // are we in a situation were it is possible to overwrite the first page ?
-                            overwrite_risk = journal_cjf_page_current_output_stream_may_overwrite(jnl);
-
-                            // just continue writing
-                            break;
-                        }
-                        else // there are enough pages to loop
-                        {
-                            if(journal_cjf_page_line_count(jnl) > 0)
-                            {
-                                // we have at least one line in the page
-
-                                if(journal_full)
-                                {
-#ifdef DEBUG
-                                    log_debug1("cjf: %s,%i: journal is full and the first page can be removed", jnl->journal_file_name, jnl->fd);
-#endif
-
-                                    journal_cjf_page_output_stream_cancel(&os);
-                                    //journal_cjf_remove_first_page(jnl);
-                                    journal_cjf_idxt_append_page(jnl);
-                                    output_stream_set_void(&os); // very important
-                                    journal_cjf_page_output_stream_reopen(&os, jnl);
-
-                                    // compute the amount of space available on the journal from the current writing position
-                                    // this takes into account both the maximum size of the journal and the possible overwrite
-                                    available = journal_cjf_get_last_page_available_space_left(jnl);
-
-                                    // are we in a situation were it is possible to overwrite the first page ?
-                                    overwrite_risk = journal_cjf_page_current_output_stream_may_overwrite(jnl);
-
-                                    // just continue writing
-                                    break;
-                                }
-
-#ifdef DEBUG
-                                log_debug1("cjf: %s,%i: journal is full but the first page cannot be removed", jnl->journal_file_name, jnl->fd);
-#endif
-
-                                // give up
-
-                                //goto journal_cjf_append_ixfr_stream_slave_exit;
-                            }
-
-#ifdef DEBUG
-                            log_debug1("cjf: %s,%i: last page has not even one line yet", jnl->journal_file_name, jnl->fd);
-#endif
-
-                            // empty page : just continue writing
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        // just continue writing
-                        break;
-                    }
-
-                    // add the difference of limits
-                    available += jnl->last_page.file_offset_limit - old_page_file_offset_limit;
-                    // update the overwrite risk
-                    overwrite_risk = journal_cjf_page_current_output_stream_may_overwrite(jnl);
-                }
-            
-               // END CUT CONDITION TEST
-            }
-            
-            if(FAIL(ret = journal_cfj_page_output_stream_write_resource_record(&os, &rr)))
-            {
-                log_err("cjf: %s,%i: failed to write record %{dnsrr}: %r", jnl->journal_file_name, jnl->fd, &rr, ret);
+                log_debug("cjf: %{dnsname}: %lli >= %i storage available before overwriting the first page", jnl->origin, available, ixfrinc.size);
                 break;
             }
             
-            yassert(ret == record_size);
-            yassert(!overwrite_risk || (available >= record_size));
-            available -= record_size;
-            
-            if((record_size = dns_resource_record_read(&rr, ixfr_wire_is)) <= 0)
+            if(FAIL(ret = journal_cjf_append_ixfr_stream_first_page_removal(jnl)))
             {
-                /* FAIL or EOF */                
-#ifdef DEBUG
-                log_debug1("journal: %s,%i: EOF: no more resource records from input", jnl->journal_file_name, jnl->fd);
-#endif
                 break;
             }
-        }
+            
+            if(ret == 1)
+            {
+                continue;
+            }
 
-        if((soa_count >= 2) && ISOK(ret))
+            journal_cjf_remove_first_page(jnl);
+        } // while may overwrite
+        
+        if(FAIL(ret))
         {
-            // only close the output stream if ALL the PAGE of a page have been written OR if we are about to exit the loop
-
-            journal_cjf_page_output_stream_next(&os);
-        }
-        else
-        {
-            // cancel the stream
             journal_cjf_page_output_stream_cancel(&os);
             break;
         }
-    }
-    while(soa_count > 2);
-
-
-// It's for a goto and it's ugly ...
-    
-//journal_cjf_append_ixfr_stream_master_exit:
+        
+        // available space between the first available byte to write records and
+        // the file size limit
+        
+        if(!journal_cjf_page_current_output_stream_may_overwrite(jnl))
+        {
+            s64 total_available = journal_cjf_get_space_left_until_need_storage_page(jnl);
             
-    //journal_cjf_page_output_stream_close(jnl);
-    output_stream_close(&os);
-
-    dns_resource_record_clear(&rr);
-
-    // ...
-
-    // update the next append position
-
-    // update the header (?)
-
-    // journal_cjf_page_flush(); // =>  journal_cjf_idxt_flush() => jnl_header_flush();
-
-    // if the last SOA read is not the last serial, loop
-    
-    if(ISOK(ret))
-    {
-        journal_cjf_page_cache_flush(jnl->fd);
-        jnl_header_flush(jnl);
-        
-        journal_cjf_writeunlock(jnl);
-        
-        log_debug("cjf: %s,%i: append IXFR (master) done", jnl->journal_file_name, jnl->fd);
-
-        return TYPE_IXFR;       /* that's what the caller expects to handle the new journal pages */
-    }
-    else
-    {   
-        journal_cjf_writeunlock(jnl);
-        
-        // in case of error, forget the last stream addition (more or less no operation)
-        
-        log_err("cjf: %s,%i: append IXFR (master) failed with: %r", jnl->journal_file_name, jnl->fd, ret);
-
-        return ret;
-    }
-}
-
-static ya_result
-journal_cjf_append_ixfr_stream_slave(journal *jh, input_stream *ixfr_wire_is)
-{
-    journal_cjf *jnl = (journal_cjf*)jh;
-    
-    if(!jnl_ensure_file_opened(jnl, TRUE))
-    {
-        log_err("cjf: %{dnsname}: failed to open/create the file", jnl->zone);
-        return ERRNO_ERROR;
-    }
-    
-    ya_result ret;
-    ya_result record_size;
-    u32 stream_serial_del;
-    
-#ifdef DEBUG
-    stream_serial_del = ~0;
-#endif
-    
-    // current record
-    
-    u32 starting_zone_serial;
-    u32 previous_journal_serial;
-    
-    zdb_zone *zone = (zdb_zone*)jnl->zone;
-    zdb_zone_acquire(zone);
-    zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
-    ret = zdb_zone_getserial((zdb_zone*)jnl->zone, &starting_zone_serial);
-    zdb_zone_release_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
-    
-    if(FAIL(ret))
-    {
-        log_err("cjf: %s,%i: failed to get the serial from the zone: %r", jnl->journal_file_name, jnl->fd, ret);
-        return ret;
-    }
-    
-    // remember the offset in the page when we started    
-    u32 starting_page_file_offset = CJF_HEADER_SIZE;
-    
-    if(!journal_cjf_isempty(jnl))
-    {
-        if(FAIL(journal_cjf_idxt_get_page_offset_from_serial(jnl, starting_zone_serial, &starting_page_file_offset)))
-        {
-            log_err("cjf: %s,%i: failed to get the serial from the zone: %r", jnl->journal_file_name, jnl->fd, ret);
-            return ret;
-        }
-        
-        previous_journal_serial = jnl->serial_end;
-    }
-    else
-    {
-        // create the IDXT
-        journal_cjf_idxt_create(jnl, 1);
-    }
-    
-    dns_resource_record rr;    
-    dns_resource_record_init(&rr);
-    
-    // read the SOA record (start serial)
-            
-    if(FAIL(record_size = journal_cjf_read_soa_record(&rr, ixfr_wire_is)))
-    {
-        log_err("cjf: %s,%i: expected valid SOA record: %r", jnl->journal_file_name, jnl->fd, record_size);
-
-        dns_resource_record_clear(&rr);
-
-        return record_size;
-    }
-
-#ifdef DEBUG
-    log_debug1("cjf: %s,%i: SOA: %{dnsrr}", jnl->journal_file_name, jnl->fd, &rr);
-#endif
-    // this is the SOA we are about to delete from, get its serial
-
-    if(FAIL(ret = rr_soa_get_serial(rr.rdata, rr.rdata_size, &stream_serial_del)))
-    {
-        log_err("cjf: %s,%i: could not get serial from SOA record: %r", jnl->journal_file_name, jnl->fd, ret);
-
-        dns_resource_record_clear(&rr);
-
-        return ret;
-    }
-    
-    // the journal can only be used by the writer
-    /// @todo 20150323 edf -- lock parts of the journal
-    
-    journal_cjf_writelock(jnl);
-    
-    ////////////////////////////////////////////////////////////////////////////
-
-    // we didn't got the SOA yet
-    u8 soa_count;
-       
-    output_stream os;
-    output_stream_set_void(&os); // very important
-    
-    do
-    {
-        // open a new output stream where to write the records
-        // if the stream is already set in a non-void state, use it from its position
-        // this may open a new page
-        
-        journal_cjf_page_output_stream_reopen(&os, jnl);
-        
-        // compute the amount of space available on the journal from the current writing position
-        // this takes into account both the maximum size of the journal and the possible overwrite
-        s64 available = journal_cjf_get_last_page_available_space_left(jnl);
-        
-        // are we in a situation were it is possible to overwrite the first page ?
-        bool overwrite_risk = journal_cjf_page_current_output_stream_may_overwrite(jnl);
-                      
-        // if the journal is empty ...
-        if(journal_cjf_isempty(jnl))
-        {
-            // the serial of the SOA is our starting point
-            previous_journal_serial = stream_serial_del;
-        }
-        else
-        {
-            // if the serial we are about to delete from is not the last serial, AND if we are not in a starting state (empty journal)
-            if(stream_serial_del != previous_journal_serial) // false positive: previous_journal_serial is initialised (!journal_was_empty)
+            if( ((total_available > 0) && ((jnl->file_maximum_size / total_available) >= 2)) || (total_available == 0))
             {
-                // complain about it
-                
-                /// @note 20150610  edf -- This is where the update glitch prevents updating.
-                ///                       It is important to note that we are already in the main digestion loop.
-                ///                       This was meant to detect a hole in the stream.
-                ///                       But this also prevents a journal in the range [0..N] to accept an update in the range [N-i..N+j]
-                ///                       The fix should be: if we are not beyond our current limit (N) then we should skip SOA--SOA++ until we are.
-
-                if(serial_lt(stream_serial_del, previous_journal_serial))  // false positive: !journal_was_empty -> previous_journal_serial set to  jnl->serial_end
+                // if not writing already, then write
+                // 0 = not saving, 1 = saving, <0 = error
+                if(zdb_zone_info_background_store_in_progress(jnl->origin) != 1)
                 {
-                    log_info("cjf: %s,%i: serial of stream (%i) is inside the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
-                    
-                    // SKIP ? the SOA has already been read
-                    // read until next SOA
-                    // then read again until next SOA and evaluate again if we are at the right point.
-                    // at some point we may find the right starting point, or finally give up
-                                        
-                    for(int soa_found = 0;;)
-                    {
-                        // read next redcord
-                        
-                        if((record_size = dns_resource_record_read(&rr, ixfr_wire_is)) <= 0)
-                        {
-                            /* FAIL or EOF */                
-#ifdef DEBUG
-                            log_debug1("journal: %s,%i: skipping old changes: EOF: no more resource records from input", jnl->journal_file_name, jnl->fd);
-#endif
-                            ret = record_size;
-                            break; // breaks the for
-                        }
-#ifdef DEBUG
-                        log_debug2("journal: %s,%i: IXFR read %{dnsrr}", jnl->journal_file_name, jnl->fd, &rr);
-#endif
-                        if(rr.tctr.qtype == TYPE_SOA)
-                        {
-                            // we got another SOA
-                            
-                            if(++soa_found == 2)
-                            {
-                                // we are at the third one
-                                
-                                if(FAIL(ret = rr_soa_get_serial(rr.rdata, rr.rdata_size, &stream_serial_del)))
-                                {
-                                    log_err("cjf: %s,%i: skipping old changes: could not get serial from SOA record: %r", jnl->journal_file_name, jnl->fd, ret);
-                                    break; // breaks the for
-                                }
-                                
-                                // if the serial is still below : skip further
-                                
-                                if(serial_lt(stream_serial_del, previous_journal_serial))
-                                {
-                                    log_info("cjf: %s,%i: skipping old changes: serial of stream (%i) is inside the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
-                                    soa_found = 0;
-                                    continue;
-                                }
-                                
-                                // if it is equal, we can proceed reading the stream into the journal
-                                
-                                if(stream_serial_del == previous_journal_serial)
-                                {
-                                    ret = SUCCESS;
-                                }
-                                else // else it's broken
-                                {
-                                    log_err("cjf: %s,%i: serial of stream (%i) is outside the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
-                                    ret = ZDB_JOURNAL_IXFR_SERIAL_OUT_OF_KNOWN_RANGE;
-                                }
-                                
-                                break; // breaks the for
-                            }
-                            // else we have found the second SOA and still need to find the end or the next SOA to try to recover from this
-                        }
-                        // else we don't care
-                    } // end for soa_found
+                    zdb_zone_info_background_store_zone(jnl->origin);
                 }
-                else
-                {
-                    log_err("cjf: %s,%i: serial of stream (%i) is outside of the journal range [%i; %i]", jnl->journal_file_name, jnl->fd, stream_serial_del, jnl->serial_begin, jnl->serial_end);
-                    ret = ZDB_JOURNAL_IXFR_SERIAL_OUT_OF_KNOWN_RANGE;
-                }
-
-                // at this point, we either have
-                // _ a success value in ret with record_size > 0 (and then we continue)
-                // _ a success value in ret with record_size <= 0 (and then we are at the end of the stream)
-                // _ an error value in ret with record_size > 0 (and the stream is not usable)
-                
-                if(FAIL(ret) || (record_size <= 0))
-                {
-#ifdef DEBUG
-                    logger_flush();
-#endif
-
-                    journal_cjf_page_output_stream_cancel(&os);
-                    
-                    break; // breaks the do{}while();
-                }
-                
-                // rr contains the current (next) SOA
-                // record_size contains the size of that SOA
-            }
-        }
-        
-        soa_count = 0;
-        
-        for(;;)
-        {
-            // if the record is an SOA, we may be at the end of the current stream
-
-            if(rr.tctr.qtype == TYPE_SOA)
-            {
-                if(++soa_count == 3)
-                {
-                    // we had a +SOA already:
-                    //   mark that we have a -SOA ready in rr
-#ifdef DEBUG
-                    log_debug1("cjf: %s,%i: SOA: %{dnsrr}", jnl->journal_file_name, jnl->fd, &rr);
-#endif
-                    break;
-                }
-                
-                // this is the +SOA of the chunk
-                // for now it is also the last SOA found in the file
             }
             
-            yassert((soa_count > 0) && (soa_count < 3));
+            // space available until the current limit of the page (file size or first page offset)
+            available = journal_cjf_get_last_page_available_space_left(jnl);
             
-#ifdef DEBUG
-            if(soa_count == 2)
+            if(available >= ixfrinc.size)
             {
-                log_debug1("cjf: %s,%i: +++: %{dnsrr}", jnl->journal_file_name, jnl->fd, &rr);
+                log_debug("cjf: %{dnsname}: %lli >= %i storage available in this page", jnl->origin, available, ixfrinc.size);
             }
             else
             {
-                log_debug1("cjf: %s,%i: ---: %{dnsrr}", jnl->journal_file_name, jnl->fd, &rr);
-            }
-#endif
-            
-            // if there is a risk overwriting a page, and not enough room is available, then update the journal structure
-
-            // BEGIN CUT CONDITION TEST
-            
-            for(;;)
-            {
-                // if writing the next record (SOA) makes us go beyond the limit, we need to start a new page
-                bool should_add_page = (record_size > available);
-
-                if(!should_add_page)
+                // not enough room, but can we handle it ?
+                //
+                // if there is only one NON-EMPTY page in the journal,
+                //    cut it and create a new one
+                // if there are at least two NON-EMPTY pages and the available space between them is big enough,
+                //    cut the last page
+                //    remove the first 
+                // else just complain about the journal size and continue
+                
+                int page_count = journal_cjf_idxt_get_page_count(jnl);
+                bool last_page_empty = journal_cjf_page_line_count(jnl) == 0;
+                
+                yassert(page_count > 0);
+                
+                if(page_count == 1)
                 {
-                    break;
-                }
-                
-                // if we have started to write, as a slave, we should continue
-                bool can_stop_writing_without_breaking = journal_cfj_page_output_stream_get_size(&os) == 0;
-                
-                // as a slave, we cannot lose the page that contains our starting point for the next update
-                bool cannot_remove_first_page = (jnl->first_page_offset == starting_page_file_offset); // implies we need at least 2 pages
-
-                // if writing the next record (SOA) makes us go beyond the limit and that limit is a page, we need to make room
-                bool must_remove_first_page = (overwrite_risk && should_add_page);
-                
-                // if the journal is full, we should remove a page
-                bool journal_full = journal_cfj_page_output_stream_get_current_offset(&os) >= journal_cjf_maximum_size(jnl);
-                
-                bool not_enough_pages_to_loop = (journal_cjf_idxt_get_page_count(jnl) <= 1);
-
-                // impossible conundrum
-                if(cannot_remove_first_page && must_remove_first_page)
-                {
-                    log_err("cjf: %s,%i: journal size is too small compared to what the master is sending", jnl->journal_file_name, jnl->fd);
-
-                    // we are about to destroy what we still need to read
-                    // no can do : we must stop here.
-                    journal_cjf_page_output_stream_cancel(&os);
-                    soa_count = 0;
-                    goto journal_cjf_append_ixfr_stream_slave_exit;
-                }
-
-                // remember the current limit for the page
-                u32 old_page_file_offset_limit = jnl->last_page.file_offset_limit;
-
-                if(must_remove_first_page)
-                {
-#ifdef DEBUG
-                    log_debug1("cjf: %s,%i: must remove first page before overwrite", jnl->journal_file_name, jnl->fd);
-#endif
-                    // remove the first page (which is our current limit)
-                    journal_cjf_remove_first_page(jnl);
-                    
-                    // add the difference of limits
-                    available += jnl->last_page.file_offset_limit - old_page_file_offset_limit;
-                    // update the overwrite risk
-                    overwrite_risk = journal_cjf_page_current_output_stream_may_overwrite(jnl);
-                    
-                    // just continue writing
-                    break;
-                }
-                
-                // if we must finish the steam, we cannot break it, obviously
-                if(can_stop_writing_without_breaking)
-                {
-                    if(not_enough_pages_to_loop)
-                    {   
-#ifdef DEBUG
-                        log_debug1("cjf: %s,%i: journal is full with one page, adding one", jnl->journal_file_name, jnl->fd);
-#endif
+                    if(!last_page_empty)
+                    {
+                        log_debug("cjf: %{dnsname}: one page: append another page", jnl->origin);
+                        
+                        // cut and proceed, as we will probably want to roll on the next update
                         
                         journal_cjf_page_output_stream_cancel(&os);
                         journal_cjf_idxt_append_page(jnl);
                         output_stream_set_void(&os); // very important
-                        journal_cjf_page_output_stream_reopen(&os, jnl);
                         
-                        // compute the amount of space available on the journal from the current writing position
-                        // this takes into account both the maximum size of the journal and the possible overwrite
-                        available = journal_cjf_get_last_page_available_space_left(jnl);
-
-                        // are we in a situation were it is possible to overwrite the first page ?
-                        overwrite_risk = journal_cjf_page_current_output_stream_may_overwrite(jnl);
+                        //journal_cjf_page_output_stream_reopen(&os, jnl);
                         
-                        // just continue writing
-                        break;
+                        // and loop
+                        
+                        ret = SUCCESS;
+                        
+                        goto journal_cjf_append_ixfr_stream_master_accum_tryagain;
                     }
                     else
                     {
-                        if(journal_cjf_page_line_count(jnl) > 0)
+                        log_debug("cjf: %{dnsname}: one empty page: write on it", jnl->origin);
+                        // just proceed
+                    }
+                }
+                else
+                {
+                    if(!last_page_empty)
+                    {
+                        u32 available_from_beginning = jnl->last_page.file_offset - CJF_PAGE_SIZE_IN_BYTE - CJF_HEADER_SIZE;
+                        
+                        if(ixfrinc.size <= available_from_beginning)
                         {
-                            // we have at least one line in the page
+                            // for a slave only, ensure the journal has been read before going further.
                             
-                            if(journal_full && !cannot_remove_first_page)
+                            if(is_slave)
                             {
-#ifdef DEBUG
-                                log_debug1("cjf: %s,%i: journal is full and the first page can be removed", jnl->journal_file_name, jnl->fd);
-#endif
+                                // page_count > 1
                                 
-                                journal_cjf_page_output_stream_cancel(&os);
-                                //journal_cjf_remove_first_page(jnl);
-                                journal_cjf_idxt_append_page(jnl);
-                                output_stream_set_void(&os); // very important
-                                journal_cjf_page_output_stream_reopen(&os, jnl);
-                                
-                                // compute the amount of space available on the journal from the current writing position
-                                // this takes into account both the maximum size of the journal and the possible overwrite
-                                available = journal_cjf_get_last_page_available_space_left(jnl);
-
-                                // are we in a situation were it is possible to overwrite the first page ?
-                                overwrite_risk = journal_cjf_page_current_output_stream_may_overwrite(jnl);
-
-                                // just continue writing
+                                u32 page_1_serial_from = journal_cjf_idxt_get_page_serial_from_index(jnl, 1);
+                                u32 starting_zone_serial = page_1_serial_from - 1;
+                                zdb_zone_lock((zdb_zone*)jnl->zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+                                /*ret = */zdb_zone_getserial((zdb_zone*)jnl->zone, &starting_zone_serial); // zone is locked
+                                zdb_zone_unlock((zdb_zone*)jnl->zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+                                // compare with start serial of second page
+                                if(serial_lt(starting_zone_serial, page_1_serial_from))
+                                {
+                                    // cutting the first page will break continuity :stop reading IXFR now, apply the journal and try later.
+                                    journal_cjf_page_output_stream_cancel(&os);
+                                    goto journal_cjf_append_ixfr_stream_master_accum_exit;
+                                }
+                            }
+                            
+                            log_debug("cjf: %{dnsname}: %u of %u bytes available on a loop: loop", jnl->origin, available_from_beginning, ixfrinc.size);
+                            
+                            // cutting now will allow to loop
+                            
+                            if(FAIL(ret = journal_cjf_append_ixfr_stream_first_page_removal(jnl)))
+                            {
+                                // could not remove first page
                                 break;
                             }
                             
-#ifdef DEBUG
-                            log_debug1("cjf: %s,%i: journal is full but the first page cannot be removed", jnl->journal_file_name, jnl->fd);
-#endif
-                            
-                            // give up
-                            
-                            goto journal_cjf_append_ixfr_stream_slave_exit;
+                            journal_cjf_page_output_stream_cancel(&os);
+                            u32 tmp = jnl->file_maximum_size;
+                            jnl->file_maximum_size = 0; // force the loop (thus removing the first page)
+                            journal_cjf_idxt_append_page(jnl);
+                            jnl->file_maximum_size = tmp;
+                            output_stream_set_void(&os); // very important
+                            journal_cjf_page_output_stream_reopen(&os, jnl);
                         }
-                        
-#ifdef DEBUG
-                        log_debug1("cjf: %s,%i: last page has not even one line yet", jnl->journal_file_name, jnl->fd);
-#endif
-                        
-                        // empty page : just continue writing
-                        break;
+                        else
+                        {
+                            log_debug("cjf: %{dnsname}: %u/%u bytes available on a loop: continue", jnl->origin, available_from_beginning, ixfrinc.size);
+                                    
+                            // do a cut to allow to loop soon
+
+                            journal_cjf_page_output_stream_cancel(&os);
+                            u32 tmp = jnl->file_maximum_size;
+                            jnl->file_maximum_size = MAX_U32;
+                            journal_cjf_idxt_append_page(jnl);
+                            jnl->file_maximum_size = tmp;
+                            output_stream_set_void(&os); // very important
+                            journal_cjf_page_output_stream_reopen(&os, jnl);
+                        }
+                    }
+                    else
+                    {
+                        // just proceed
+                        log_debug("cjf: %{dnsname}: last page is empty: write on it", jnl->origin);
                     }
                 }
-                else
-                {
-                    // just continue writing
-                    break;
-                }
-
-                // add the difference of limits
-                available += jnl->last_page.file_offset_limit - old_page_file_offset_limit;
-                // update the overwrite risk
-                overwrite_risk = journal_cjf_page_current_output_stream_may_overwrite(jnl);
             }
-            
-            // END CUT CONDITION TEST
+        }
+        
+        // write the ixfr increment in the page
+        
+        input_stream bais;
+        bytearray_input_stream_init_const(&bais, bytearray_output_stream_buffer(&ixfrinc.baos), bytearray_output_stream_size(&ixfrinc.baos));
+        for(;;)
+        {
+            if((ret = dns_resource_record_read(&rr, &bais)) <= 0)
+            {
+                if(ret != 0)
+                {
+                    log_err("cjf: %{dnsname}: error re-reading record: %r", jnl->origin, ret);
+                }
+                break;
+            }
             
             if(FAIL(ret = journal_cfj_page_output_stream_write_resource_record(&os, &rr)))
             {
-                log_err("cjf: %s,%i: failed to write record %{dnsrr}: %r", jnl->journal_file_name, jnl->fd, &rr, ret);
+                log_err("cjf: %{dnsname}: could not store record: %r", jnl->origin, ret);
                 break;
             }
-            
-            yassert(ret == record_size);
-            yassert(!overwrite_risk || (available >= record_size));
-            available -= record_size;
-            
-            if((record_size = dns_resource_record_read(&rr, ixfr_wire_is)) <= 0)
-            {
-                /* FAIL or EOF */                
-#ifdef DEBUG
-                log_debug1("journal: %s,%i: EOF: no more resource records from input", jnl->journal_file_name, jnl->fd);
-#endif
-                break;
-            }
-        } // end for
-
-        if((soa_count >= 2) && ISOK(ret))
+        }
+        input_stream_close(&bais);
+        
+        if(ISOK(ret))
         {
-            // only close the output stream if ALL the PAGE of a page have been written OR if we are about to exit the loop
-
+            if(journal_is_empty)
+            {
+                jnl->serial_begin = ixfrinc.serial_from;
+                journal_cjf_clear_empty(jnl);
+            }
+            
+            jnl->serial_end = ixfrinc.serial_to;
+            journal_cjf_set_dirty(jnl);
+            
+            ++written_pages;
             journal_cjf_page_output_stream_next(&os);
+            
+            // if we wrote records after the expected position for the IDXT, move the IDXT position
+            
+            if(jnl->last_page.records_limit > jnl->page_table_file_offset)
+            {
+                jnl->page_table_file_offset = jnl->last_page.records_limit;
+                jnl->idxt.dirty = TRUE;
+                journal_cjf_set_dirty(jnl);
+            }
         }
         else
         {
-            // cancel the stream
             journal_cjf_page_output_stream_cancel(&os);
             break;
         }
     }
-    while(soa_count > 2);
 
-
-// It's for a goto and it's ugly ...
+journal_cjf_append_ixfr_stream_master_accum_exit:
+    if(os.data != NULL)
+    {
+        output_stream_close(&os);
+    }
     
-journal_cjf_append_ixfr_stream_slave_exit:
-            
-    //journal_cjf_page_output_stream_close(jnl);
-    output_stream_close(&os);
-
+    journal_jcf_read_ixfr_finalize(&ixfrinc);
     dns_resource_record_clear(&rr);
-
-    // ...
-
-    // update the next append position
-
-    // update the header (?)
-
-    // journal_cjf_page_flush(); // =>  journal_cjf_idxt_flush() => jnl_header_flush();
-
-    // if the last SOA read is not the last serial, loop
+    
+    if(written_pages > 0)
+    {
+        journal_cjf_page_cache_flush(jnl->fd);
+        journal_cjf_header_flush(jnl);
+    }
+        
+    journal_cjf_writeunlock(jnl);
     
     if(ISOK(ret))
     {
-        journal_cjf_page_cache_flush(jnl->fd);
-        jnl_header_flush(jnl);
-        journal_cjf_writeunlock(jnl);
-        
-        log_debug("cjf: %s,%i: append IXFR (slave) done", jnl->journal_file_name, jnl->fd);
-
-        return TYPE_IXFR;       /* that's what the caller expects to handle the new journal pages */
+        log_info("cjf: %{dnsname}: added %i incremental changes to the journal", jnl->origin, written_pages);
+        ret = TYPE_IXFR;
     }
     else
-    {   
-        journal_cjf_writeunlock(jnl);
-        
-        log_err("cjf: %s,%i: append IXFR (slave) failed with: %r", jnl->journal_file_name, jnl->fd, ret);
-        
-        // in case of error, forget the last stream addition (more or less no operation)
-
-        return ret;
+    {
+        log_err("cjf: %{dnsname}: append IXFR (master) failed with: %r", jnl->origin, ret);
     }
+    
+    return ret;
 }
-
 
 static ya_result
 journal_cjf_append_ixfr_stream(journal *jh, input_stream *ixfr_wire_is)
 {
     u8 zt;
-    ya_result ret = zdb_zone_info_get_zone_type(jh->zone->origin, &zt);
+    journal_cjf *jnl = (journal_cjf*)jh;
+    ya_result ret = zdb_zone_info_get_zone_type(jnl->origin, &zt);
     if(ISOK(ret))
     {
         switch(zt)
         {
             case ZT_MASTER:
-                ret = journal_cjf_append_ixfr_stream_master(jh, ixfr_wire_is);
+                ret = journal_cjf_append_ixfr_stream_per_page(jh, ixfr_wire_is, FALSE);
                 break;
             case ZT_SLAVE:
-                ret = journal_cjf_append_ixfr_stream_slave(jh, ixfr_wire_is);
+                ret = journal_cjf_append_ixfr_stream_per_page(jh, ixfr_wire_is, TRUE);
                 break;
             default:
                 ret = ERROR;
@@ -1761,6 +1568,14 @@ journal_cjf_input_stream_read(input_stream* stream, u8 *buffer, u32 len)
             
             (void)stream_limit_offset;
             
+#ifdef DEBUG
+            if(stream_limit_offset == 0)
+            {
+                log_err("impossible limit value read from the journal");
+                journal_cjf_page_cache_read_header(data->jnl->fd, page_offset, &page_header);
+            }
+#endif
+            
             yassert(stream_limit_offset != 0);
             yassert(stream_limit_offset > page_offset); /// @todo 20150115 edf -- fix this when a cycle occurs
  
@@ -1818,7 +1633,7 @@ journal_cjf_input_stream_close(input_stream* is)
     
     log_debug("cjf: %s,%i: input: close (%i)", data->jnl->journal_file_name, data->jnl->fd, data->fd);
     journal_cjf_readunlock(data->jnl);
-    
+    journal_cjf_release(data->jnl);
     close_ex(data->fd);
     ZFREE(data, journal_cjf_input_stream_data);
     
@@ -1844,7 +1659,7 @@ journal_cjf_get_ixfr_stream_at_serial(journal *jh, u32 serial_from, input_stream
     
     log_debug("cjf: %s,%i: get IXFR stream at serial %i", jnl->journal_file_name, jnl->fd, serial_from);
     
-    if(!jnl_ensure_file_opened(jnl, TRUE))
+    if(!journal_cjf_ensure_file_opened(jnl, TRUE))
     {
         return ERRNO_ERROR;
     }
@@ -1855,6 +1670,7 @@ journal_cjf_get_ixfr_stream_at_serial(journal *jh, u32 serial_from, input_stream
     {
         if(serial_from == jnl->serial_end)
         {
+            log_debug("cjf: %s,%i: the journal ends at %i, returning empty stream", jnl->journal_file_name, jnl->fd, serial_from);
             journal_cjf_readunlock(jnl);
             empty_input_stream_init(out_input_stream);
             return SUCCESS; // 0
@@ -1895,8 +1711,20 @@ journal_cjf_get_ixfr_stream_at_serial(journal *jh, u32 serial_from, input_stream
         
     journal_cjf_input_stream_data *data;
     ZALLOC_OR_DIE(journal_cjf_input_stream_data*, data, journal_cjf_input_stream_data, JCJFISDT_TAG);
+    journal_acquire((journal*)jnl);
     data->jnl = jnl;
-    data->fd = jnl_open_file(jnl, FALSE); /// @todo 20160209 edf --  edf -- open the file, put the pointer at the right place and ret + 1, available = x
+    data->fd = open_ex(jnl->journal_file_name, O_RDONLY); /// @todo 20160209 edf --  edf -- open the file, put the pointer at the right place and ret + 1, available = x
+    
+    if(data->fd < 0)
+    {
+        // the journal doess not exist (anymore ?)
+        ZFREE(data, journal_cjf_input_stream_data);
+        
+        journal_cjf_readunlock(jnl);
+        journal_cjf_release(jnl);
+        
+        return MAKE_ERRNO_ERROR(ENOENT);
+    }
     
     data->serial_from = serial_from;
     
@@ -1918,6 +1746,7 @@ journal_cjf_get_ixfr_stream_at_serial(journal *jh, u32 serial_from, input_stream
         if(FAIL(ret))
         {
             journal_cjf_readunlock(jnl);
+            journal_cjf_release(jnl);
             
             log_err("cjf: %s,%i: unable to read the SOA at position %u: %r", jnl->journal_file_name, jnl->fd, jnl->last_soa_offset, ret);
             ZFREE(data, journal_cjf_input_stream_data);
@@ -2021,9 +1850,9 @@ journal_cjf_get_last_serial(journal *jh, u32 *serial)
         ret = SUCCESS;
     }
     
-    journal_cjf_readunlock(jnl);
-    
     log_debug("cjf: %s,%i: get last serial: %i", jnl->journal_file_name, jnl->fd, value);
+
+    journal_cjf_readunlock(jnl);
     
     return ret;
 }
@@ -2053,12 +1882,13 @@ static ya_result
 journal_cjf_truncate_to_size(journal *jh, u32 size_)
 {
     journal_cjf *jnl = (journal_cjf*)jh;
-    yassert(!shared_group_mutex_islocked(&jnl->mtx));
 
     if(size_ == 0)
     {
+        journal_cjf_writelock(jnl);
+        
         log_debug("cjf: %s,%i: truncate to size 0", jnl->journal_file_name, jnl->fd);
-
+       
         if(jnl->fd >= 0)
         {
             journal_cjf_page_cache_close(jnl->fd);
@@ -2074,9 +1904,11 @@ journal_cjf_truncate_to_size(journal *jh, u32 size_)
         if(jnl->zone != NULL)
         {
             jnl->file_maximum_size = jnl->zone->wire_size >> 1;
-            zdb_zone_info_get_zone_max_journal_size(jnl->zone->origin, &jnl->file_maximum_size);
+            zdb_zone_info_get_zone_max_journal_size(jnl->origin, &jnl->file_maximum_size);
         }
-
+        
+        jnl->fd = -1;
+            
         jnl->last_page.file_offset = CJF_HEADER_SIZE;
         jnl->last_page.count = 0;
         jnl->last_page.size = CJF_SECTION_INDEX_SLOT_COUNT;
@@ -2092,8 +1924,8 @@ journal_cjf_truncate_to_size(journal *jh, u32 size_)
         jnl->last_soa_offset = 0;
         //jnl->file_maximum_size = MAX_U32;
 
-        jnl->mtx.owner = LOCK_NONE;
-        jnl->mtx.count = 0;
+        //jnl->mtx.owner = LOCK_NONE;
+        //jnl->mtx.count = 0;
 
         jnl->flags = JOURNAL_CFJ_FLAGS_MY_ENDIAN;
 
@@ -2101,6 +1933,8 @@ journal_cjf_truncate_to_size(journal *jh, u32 size_)
         jnl->last_page.file_offset_limit = jnl->file_maximum_size;
 
         //jnl->journal_file_name = strdup(filename);
+        
+        journal_cjf_writeunlock(jnl);
 
         return SUCCESS;
     }
@@ -2116,9 +1950,82 @@ static ya_result
 journal_cjf_truncate_to_serial(journal *jh, u32 serial_)
 {
     journal_cjf *jnl = (journal_cjf*)jh;
+    (void)serial_;
+    journal_cjf_readlock(jnl);
     log_err("cjf: %s,%i: truncate to serial not implemented", jnl->journal_file_name, jnl->fd);
+    journal_cjf_readunlock(jnl);
     
     return ZDB_JOURNAL_FEATURE_NOT_SUPPORTED;
+}
+
+/**
+ * 
+ * @param jnl
+ * @return 
+ */
+
+static ya_result
+journal_cjf_reopen(journal *jh)
+{
+    journal_cjf *jnl = (journal_cjf*)jh;
+    int flags = O_RDWR;
+#ifdef O_NOATIME
+    flags |= O_NOATIME;
+#endif
+    
+    ya_result ret;
+    journal_cjf_writelock(jnl);
+    if((ret = jnl->fd) < 0)
+    {
+        if(ISOK(ret = open_ex(jnl->journal_file_name, flags)))
+        {
+            jnl->fd = ret;
+        }
+        else
+        {
+            ret = ERRNO_ERROR;
+            if(ret == MAKE_ERRNO_ERROR(ENOENT))
+            {
+                ret = ZDB_ERROR_ICMTL_NOTFOUND;
+            }
+        }
+    }
+    journal_cjf_writeunlock(jnl);
+    
+    return ret;
+}
+
+static void
+journal_cjf_flush(journal *jh)
+{
+    journal_cjf *jnl = (journal_cjf*)jh;
+
+    log_debug("cjf: %s,%i: flush", jnl->journal_file_name, jnl->fd);
+    
+    journal_cjf_writelock(jnl);
+    
+#if ZDB_ZONE_HAS_JNL_REFERENCE
+    zdb_zone *zone;
+    if((zone = (zdb_zone*)jnl->zone) != NULL)
+    {
+        yassert(zone->journal == jh);
+        zone->journal = NULL;
+    }
+#endif
+    
+    log_debug3("cjf: %s,%i: flushing to file", jnl->journal_file_name, jnl->fd);
+    
+    if(jnl->fd >= 0)
+    {
+        log_debug3("cjf: %s,%i: flushing to file: flushing PAGE cache", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
+        journal_cjf_page_cache_flush(jnl->fd);
+        log_debug3("cjf: %s,%i: flushing to file: flushing IDXT", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
+        journal_cjf_idxt_flush(jnl);
+        log_debug3("cjf: %s,%i: flushing to file: flushing header", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
+        journal_cjf_header_flush(jnl);
+    }
+    
+    journal_cjf_writeunlock(jnl);
 }
 
 static ya_result
@@ -2128,36 +2035,44 @@ journal_cjf_close(journal *jh)
 
     log_debug("cjf: %s,%i: close", jnl->journal_file_name, jnl->fd);
     
-    shared_group_mutex_lock(&jnl->mtx, 0x83);
+    journal_cjf_writelock(jnl);
     
+#if ZDB_ZONE_HAS_JNL_REFERENCE
     zdb_zone *zone;
     if((zone = (zdb_zone*)jnl->zone) != NULL)
     {
         yassert(zone->journal == jh);
         zone->journal = NULL;
     }
+#endif
     
-    shared_group_mutex_unlock(&jnl->mtx, 0x83);
+    log_debug3("cjf: %s,%i: closing file", jnl->journal_file_name, jnl->fd);
     
-    yassert(!shared_group_mutex_islocked(&jnl->mtx));
-    
-    mutex_lock(&journal_cjf_set_mtx);
-    ptr_set_avl_delete(&journal_cjf_set, jnl->journal_file_name);
-    mutex_unlock(&journal_cjf_set_mtx);
-    
-    journal_cjf_writelock(jnl);
-    
-    jnl_close_file(jnl);
-    
-    jnl->vtbl = NULL;
+    if(jnl->fd >= 0)
+    {
+        log_debug3("cjf: %s,%i: closing file: closing PAGE cache", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
+        journal_cjf_page_cache_close(jnl->fd);
+        log_debug3("cjf: %s,%i: closing file: flushing IDXT", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
+        journal_cjf_idxt_flush(jnl);
+        log_debug3("cjf: %s,%i: closing file: flushing header", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
+        journal_cjf_header_flush(jnl);
+        log_debug3("cjf: %s,%i: closing file: closing file", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
+        
+        if(jnl->zone != NULL)
+        {
+            log_info("zone: %{dnsname}: closing journal file '%s'", jnl->origin, jnl->journal_file_name);
+        }
+        else
+        {
+            log_info("zone: <notset>: closing journal file '%s'", jnl->journal_file_name);
+        }
+        
+        close_ex(jnl->fd);
+        jnl->fd = -1;
+    }
     
     journal_cjf_writeunlock(jnl);
-    
-    shared_group_mutex_destroy(&jnl->mtx);
-    free(jnl->journal_file_name);
-    memset(jnl, 0xfe, sizeof(journal_cjf));
-    free(jnl);
-        
+
     return SUCCESS;
 }
 
@@ -2165,29 +2080,20 @@ static void
 journal_cjf_log_dump(journal *jh)
 {
     journal_cjf *jnl = (journal_cjf*)jh;
+    journal_cjf_readlock(jnl);
     log_debug("cjf: %s,%i: [%u; %u] '%s' (%i) lck=%i rc=%i", jnl->journal_file_name, jnl->fd, jnl->serial_begin, jnl->serial_end, jnl->journal_file_name, jnl->fd, jnl->mtx.owner, jnl->mtx.count);
+    journal_cjf_readunlock(jnl);
 }
 
 static ya_result
 journal_cjf_get_domain(journal *jh, u8 *out_domain)
 {
-    if(jh->zone != NULL)
-    {   
-        dnsname_copy(out_domain, jh->zone->origin);
-        return SUCCESS;
-    }
-    
-    return ERROR;
-}
-
-static void
-journal_cjf_destroy(journal *jh)
-{
     journal_cjf *jnl = (journal_cjf*)jh;
-    log_debug("cjf: %s,%i: destroy", jnl->journal_file_name, jnl->fd);
-    shared_group_mutex_destroy(&jnl->mtx);
-    free(jnl->journal_file_name);
-    free(jnl);
+    
+    // don't: journal_cjf_readlock(jnl); as the field is constant until the destruction of the journal
+
+    dnsname_copy(out_domain, jnl->origin);
+    return SUCCESS;
 }
 
 /**
@@ -2200,17 +2106,18 @@ journal_cjf_destroy(journal *jh)
 static void
 journal_cjf_link_zone(journal *jh, zdb_zone *zone)
 {
-    yassert(zone != NULL);
-    
     journal_cjf *jnl = (journal_cjf*)jh;
     
+    journal_cjf_writelock(jnl);
+    
+#if ZDB_ZONE_HAS_JNL_REFERENCE
     if(jh->zone != NULL)
     {
         if(jh->zone->journal == jh)
         {
             log_debug("cjf: %s,%i: updating maximum journal size", jnl->journal_file_name, jnl->fd);
             jnl->file_maximum_size = jnl->zone->wire_size >> 1;
-            zdb_zone_info_get_zone_max_journal_size(jnl->zone->origin, &jnl->file_maximum_size);
+            zdb_zone_info_get_zone_max_journal_size(jnl->origin, &jnl->file_maximum_size);
             return;
         }
         else
@@ -2220,7 +2127,7 @@ journal_cjf_link_zone(journal *jh, zdb_zone *zone)
             abort();
         }
     } //jh->zone may be null
-    
+
     if(zone->journal != NULL)
     {
         if(zone->journal == jh)
@@ -2228,7 +2135,7 @@ journal_cjf_link_zone(journal *jh, zdb_zone *zone)
             log_debug("cjf: %s,%i: updating incomplete link", jnl->journal_file_name, jnl->fd);
             jh->zone = zone;
             jnl->file_maximum_size = jnl->zone->wire_size >> 1;
-            zdb_zone_info_get_zone_max_journal_size(jnl->zone->origin, &jnl->file_maximum_size);
+            zdb_zone_info_get_zone_max_journal_size(jnl->origin, &jnl->file_maximum_size);
             return;
         }
         else
@@ -2238,18 +2145,64 @@ journal_cjf_link_zone(journal *jh, zdb_zone *zone)
             abort();
         }
     }
+#endif
     
-    log_debug("cjf: %s,%i: linking to zone %{dnsname},%p", jnl->journal_file_name, jnl->fd, zone->origin, zone);
-    
-    jnl->zone = zone;
-    zone->journal = jh;
-    jnl->file_maximum_size = jnl->zone->wire_size >> 1;
-    zdb_zone_info_get_zone_max_journal_size(jnl->zone->origin, &jnl->file_maximum_size);
-    
-
+    if(jnl->zone != zone)
     {
+        jnl->file_maximum_size = MAX_U32;
+        
+#if !ZDB_ZONE_HAS_JNL_REFERENCE
+        if(jnl->zone != NULL)
+        {
+            log_debug("cjf: %s,%i: unlinking zone %{dnsname},%p", jnl->journal_file_name, jnl->fd, jnl->zone->origin, jnl->zone);
+            
+            zdb_zone_release((zdb_zone*)jnl->zone);
+        }
+        
+        if(zone != NULL)
+        {
+            zdb_zone_acquire(zone);
+            
+            log_debug("cjf: %s,%i: linking to zone %{dnsname},%p", jnl->journal_file_name, jnl->fd, zone->origin, zone);
+            
+            jnl->file_maximum_size = zone->wire_size >> 1;
+        }
+#endif
+        jnl->zone = zone;
+        
+        zdb_zone_info_get_zone_max_journal_size(jnl->origin, &jnl->file_maximum_size);
+    
         jnl->last_page.file_offset_limit = jnl->file_maximum_size;
     }
+    
+#if ZDB_ZONE_HAS_JNL_REFERENCE
+    zone->journal = jh;
+#endif
+    
+    journal_cjf_writeunlock(jnl);
+}
+
+static void
+journal_cjf_destroy(journal *jh)
+{
+    journal_cjf *jnl = (journal_cjf*)jh;
+    
+    yassert(jnl->rc == 0);
+    
+    log_debug("cjf: %s,%i: destroy", jnl->journal_file_name, jnl->fd);
+    
+    journal_cjf_link_zone(jh, NULL);
+    
+    shared_group_mutex_destroy(&jnl->mtx);
+    free(jnl->origin);
+    free(jnl->journal_file_name);
+    
+#ifdef DEBUG    
+    memset(jnl, 0xfe, sizeof(journal_cjf));
+    jnl->mru = FALSE;
+#endif
+    
+    free(jnl);
 }
 
 /*******************************************************************************
@@ -2262,6 +2215,8 @@ struct journal_vtbl journal_cjf_vtbl =
 {
     journal_cjf_get_format_name,
     journal_cjf_get_format_version,
+    journal_cjf_reopen,
+    journal_cjf_flush,
     journal_cjf_close,
     journal_cjf_append_ixfr_stream,
     journal_cjf_get_ixfr_stream_at_serial,
@@ -2300,25 +2255,28 @@ journal_cjf_load_index_table(journal *jh)
 }
 
 static journal_cjf*
-journal_cjf_alloc_default(const char *filename)
+journal_cjf_alloc_default(const u8 *origin, const char *filename)
 {
     journal_cjf *jnl;
     MALLOC_OR_DIE(journal_cjf*, jnl, sizeof(journal_cjf), JRNLCJF_TAG);
     ZEROMEMORY(jnl, sizeof(journal_cjf));
     jnl->vtbl = &journal_cjf_vtbl;
+    jnl->mru_node.data = jnl;
     jnl->fd = -1;
-    jnl->file_maximum_size = MAX_U32;                
+    jnl->file_maximum_size = MAX_U32;
     jnl->first_page_offset = CJF_HEADER_SIZE;
+    jnl->origin = dnsname_dup(origin);
     jnl->journal_file_name = strdup(filename);                
     jnl->last_page.file_offset = CJF_HEADER_SIZE;
     jnl->last_page.size = CJF_SECTION_INDEX_SLOT_COUNT;
     jnl->last_page.records_limit = CJF_HEADER_SIZE + CJF_SECTION_INDEX_SIZE;
     jnl->last_page.file_offset_limit = jnl->file_maximum_size;
-    jnl->flags = JOURNAL_CFJ_FLAGS_MY_ENDIAN;
+    jnl->flags = JOURNAL_CFJ_FLAGS_MY_ENDIAN|JOURNAL_CFJ_FLAGS_UNINITIALISED;
     shared_group_mutex_init(&jnl->mtx, &journal_shared_mtx, "journal-cjf");
     return jnl;
 }
 /**
+ * The caller guarantees not to call this on an already opened journal
  * 
  * Should not be called directly (only by journal_* functions.
  * 
@@ -2334,13 +2292,8 @@ journal_cjf_alloc_default(const char *filename)
  */
 
 ya_result
-journal_cjf_open(journal **jh, const u8* origin, const char *workingdir, bool create)
+journal_cjf_open(journal **jhp, const u8* origin, const char *workingdir, bool create)
 {
-    /*
-     * try to open the journal file
-     * if it exists, create the structure for the handle
-     */
-        
     // CFJ_PAGE_CACHE ->
     journal_cjf_page_cache_init();
     if(!journal_shared_mtx_initialized)
@@ -2351,269 +2304,84 @@ journal_cjf_open(journal **jh, const u8* origin, const char *workingdir, bool cr
     // CFJ_PAGE_CACHE <-
     
     journal_cjf *jnl;
-    ya_result return_value;
-    char   filename[PATH_MAX];
+    ya_result ret;
     
-    if((jh == NULL) || (origin == NULL) || (workingdir == NULL))
+    // generate the file name
+    
+    char filename[PATH_MAX];
+    
+    if((jhp == NULL) || (origin == NULL) || (workingdir == NULL))
     {
         return ZDB_JOURNAL_WRONG_PARAMETERS;
     }
-    
-#ifdef DEBUG
-    log_debug("cjf: open(%p, '%{dnsname}', \"%s\", %d)", jh, origin, workingdir, (create)?1:0);
-#endif
-        
+
 #ifdef DEBUG
     log_debug("cjf: trying to open journal for %{dnsname} in '%s'", origin, workingdir);
 #endif
     
     /* get the soa of the loaded zone */
     
-    *jh = NULL;
+    *jhp = NULL;
     
-    if(FAIL(return_value = snformat(filename, sizeof(filename), CJF_WIRE_FILE_FORMAT, workingdir, origin)))
+    if(FAIL(ret = snformat(filename, sizeof(filename), CJF_WIRE_FILE_FORMAT, workingdir, origin)))
     {
-        return return_value;
-    }
-    
-    mutex_lock(&journal_cjf_set_mtx);
-    ptr_node *node = ptr_set_avl_find(&journal_cjf_set, filename);
-    if(node != NULL)
-    {
-        journal_cjf *current_jnl = (journal_cjf*)node->value;
-        if(journal_cjf_isempty(current_jnl))
-        {
-            mutex_unlock(&journal_cjf_set_mtx);
-            
-            if(!jnl_ensure_file_opened(current_jnl, create))
-            {
-                return ZDB_ERROR_ICMTL_NOTFOUND;
-            }
-            
-            *jh = (journal*)current_jnl;
-            return SUCCESS;
-        }
-        log_debug("cjf: %{dnsname} has already got an opened journal at %p, fd=%i", origin, current_jnl, current_jnl->fd);
-#if DEBUG
-        logger_flush();
-#endif
-        *jh = (journal*)current_jnl;
-        mutex_unlock(&journal_cjf_set_mtx);
-        return 1;
-    }
-    
-    mutex_unlock(&journal_cjf_set_mtx);
-    
-    int fd = open_ex(filename, O_RDWR);
-
-    if(fd < 0)
-    {
-        // not found (?)
-        int err = errno;
-        
-        if(err == ENOENT)
-        {
-            if(create)
-            {
-                jnl = journal_cjf_alloc_default(filename);
-
-                *jh = (journal*)jnl;
-                
-                mutex_lock(&journal_cjf_set_mtx);
-                ptr_node *node = ptr_set_avl_insert(&journal_cjf_set, jnl->journal_file_name);
-                yassert(node->value == NULL);
-                node->value = jnl;
-                mutex_unlock(&journal_cjf_set_mtx);
-                                
-                return SUCCESS;
-            }
-            else
-            {
-                return ZDB_ERROR_ICMTL_NOTFOUND;
-            }
-        }
-
-        return MAKE_ERRNO_ERROR(err);
-    }
-    else // the file exists, is opened, an its file descriptor is in fd
-    {
-        /*
-         * Got a journal file, initialise the handling structure
-         */
-
-        struct cjf_header header;
-
-        if(FAIL(return_value = readfully(fd, &header, sizeof(header))))
-        {
-            close_ex(fd);
-            return return_value;
-        }
-
-        if((header.magic_plus_version != CJF_CJF0_MAGIC) || ((header.flags & JOURNAL_CFJ_FLAGS_MY_ENDIAN) == 0) )
-        {
-            if(header.magic_plus_version != CJF_CJF0_MAGIC)
-            {
-                log_err("cjf: wrong magic on %s", filename);
-            }
-            else
-            {
-                log_err("cjf: wrong endian on %s", filename);
-            }
-
-            close_ex(fd);
-
-            if(create)
-            {
-                // try to fix it
-                // rename
-                
-                char broken_file_path[PATH_MAX];
-
-                if(ISOK(snformat(broken_file_path, sizeof(broken_file_path),"%s.bad-journal", filename)))
-                {
-                    bool try_again = TRUE;
-                    
-                    // remove previous bad-journal if any
-                    unlink(broken_file_path);
-
-                    // rename the journal into bad-journal
-                    if(rename(filename, broken_file_path) < 0)
-                    {
-                        log_err("cjf: unable to rename %s into %s: %r", filename, broken_file_path, ERRNO_ERROR);
-
-                        if(unlink(filename) < 0)
-                        {
-                            log_err("cjf: unable to delete %s: %r", filename, ERRNO_ERROR);
-                            try_again = FALSE;
-                        }
-                    }
-
-                    if(try_again)
-                    {
-                        return_value = journal_cjf_open(jh, origin, workingdir, TRUE); // we are in a branch where "create = TRUE"
-
-                        return return_value;
-                    }
-                }
-                else
-                {
-                    log_err("cjf: %s is a bad journal, please remove it.", filename);
-                }
-            }
-
-            return ZDB_JOURNAL_ERROR_READING_JOURNAL;
-        }
-
-        log_debug("cjf: journal for %{dnsname} expected to cover serials from %i to %i", origin, header.serial_begin, header.serial_end);
-        log_debug("cjf: journal for %{dnsname} table index located at %x%s", origin, header.table_index_offset,
-            (header.table_index_offset!=0)?"":", which means it has not been closed properly");
-
-        jnl = journal_cjf_alloc_default(filename);
-        
-        jnl->fd = fd; // file opened
-        
-        // if the file is empty, the header can be ignored (or reconstructed)
-        
-        if((header.flags & JOURNAL_CFJ_FLAGS_NOT_EMPTY) != 0)
-        {        
-            jnl->flags = header.flags;
-
-            jnl->serial_begin = header.serial_begin;
-            jnl->serial_end = header.serial_end;
-            jnl->first_page_offset = header.first_index_offset;
-            jnl->page_table_file_offset = header.table_index_offset;
-            jnl->last_soa_offset = header.last_soa_offset;
-
-            jnl->last_page.serial_end = jnl->serial_end;    
-            jnl->last_page.records_limit = header.last_page_offset_next;
-
-            jnl->journal_file_name = strdup(filename);
-
-            journal_cjf_idxt_load(jnl);
-            
-            if(jnl->idxt.count > 0)
-            {
-                jnl->last_page.file_offset = journal_cjf_idxt_get_last_file_offset(jnl);
-                journal_cjf_page_tbl_header current_page_header;
-                journal_cjf_page_cache_read_header(jnl->fd, jnl->last_page.file_offset, &current_page_header);
-                jnl->last_page.count = current_page_header.count;
-                jnl->last_page.size = current_page_header.size;
-
-                if(jnl->last_page.file_offset < jnl->first_page_offset)
-                {
-                    jnl->last_page.file_offset_limit = jnl->first_page_offset;
-                }
-                else
-                {
-                    jnl->last_page.file_offset_limit = jnl->file_maximum_size;
-                }
-
-                if(jnl->idxt.count > 1)
-                {
-                    jnl->last_page.serial_start = journal_cjf_idxt_get_last_serial(jnl, jnl->idxt.count - 2);
-                }
-                else
-                {
-                    jnl->last_page.serial_start = jnl->serial_begin;
-                }
-            }
-            else
-            {
-                jnl->idxt.dirty = FALSE;
-                jnl->flags = JOURNAL_CFJ_FLAGS_MY_ENDIAN|JOURNAL_CFJ_FLAGS_DIRTY;
-
-                journal_cjf_page_cache_flush(jnl->fd);
-
-                journal_cjf_idxt_destroy(jnl);
-
-                jnl->serial_begin = 0;
-                jnl->serial_end = 0;
-
-                jnl->mtx.owner = LOCK_NONE;
-                jnl->mtx.count = 0;
-                jnl->first_page_offset = CJF_HEADER_SIZE;
-                jnl->page_table_file_offset = 0;
-                jnl->last_soa_offset = 0;
-                jnl->file_maximum_size = MAX_U32;
-
-                if(jnl->zone != NULL)
-                {
-                    jnl->file_maximum_size = jnl->zone->wire_size >> 1;
-                    zdb_zone_info_get_zone_max_journal_size(jnl->zone->origin, &jnl->file_maximum_size);
-                }
-
-                jnl->last_page.file_offset = CJF_HEADER_SIZE;
-                jnl->last_page.count = 0;
-                jnl->last_page.size = CJF_SECTION_INDEX_SLOT_COUNT;
-                jnl->last_page.serial_start = 0;
-                jnl->last_page.serial_end = 0;
-                jnl->last_page.records_limit = jnl->last_page.file_offset + CJF_SECTION_INDEX_SIZE;
-                jnl->last_page.file_offset_limit = jnl->file_maximum_size;
-
-                jnl_header_flush(jnl);
-    
-#if _BSD_SOURCE || _XOPEN_SOURCE >= 500 || _XOPEN_SOURCE && _XOPEN_SOURCE_EXTENDED || /* Since glibc 2.3.5: */ _POSIX_C_SOURCE >= 200112L        
-                ftruncate(jnl->fd, CJF_HEADER_SIZE);
-#endif
-            }
-        }
-        
-        // got the header loaded
-        // now we know the basics about this journal
-        // remaining work has to be done on a as-needed basis
-
-        *jh = (journal*)jnl;
-
-        mutex_lock(&journal_cjf_set_mtx);
-        ptr_node *journal_cjf_node = ptr_set_avl_insert(&journal_cjf_set, jnl->journal_file_name);
-        journal_cjf_node->value = jnl;
-        mutex_unlock(&journal_cjf_set_mtx);
-
 #ifdef DEBUG
-        log_debug("cjf: returning %r", return_value);
+        log_debug("cjf: %{dnsname}: journal file name is too long", origin);
 #endif
+        return ret;
+    }
+    
+    if(file_exists(filename) || create)
+    {
+        // instantiate and open the journal
+        
+        jnl = NULL;
+        ret = journal_cjf_init_from_file(&jnl, origin, filename, create);
 
-        return return_value;
+        if(ISOK(ret))
+        {
+            //jnl->fd = ret;
+
+            if(!((jnl->serial_begin == 0) && (jnl->serial_begin == jnl->serial_end)))
+            {
+                journal_cjf_load_idxt(jnl);
+            }
+        }
+        else
+        {
+            if(create)
+            {
+                log_err("cjf: %{dnsname}: failed to open %s: %r", origin, filename, ret);
+            }
+            else
+            {
+                log_debug("cjf: %{dnsname}: failed to open %s: %r", origin, filename, ret);
+            }
+
+            if(jnl != NULL)
+            {
+                journal_cjf_destroy((journal*)jnl);
+#ifdef DEBUG
+                log_debug("cjf: %{dnsname}: journal file cannot be opened/created", origin);
+#endif
+            }
+            
+            return ZDB_ERROR_ICMTL_NOTFOUND;
+        }
+        
+#ifdef DEBUG
+        log_debug("cjf: %{dnsname}: journal opened", origin);
+#endif
+        *jhp = (journal*)jnl;
+        
+        return SUCCESS;
+    }
+    else
+    {
+#ifdef DEBUG
+        log_debug("cjf: %{dnsname}: journal file not found", origin);
+#endif
+        return ZDB_ERROR_ICMTL_NOTFOUND;
     }
 }
 

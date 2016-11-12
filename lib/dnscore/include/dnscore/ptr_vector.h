@@ -298,6 +298,24 @@ static inline void* ptr_vector_get(const ptr_vector *v, s32 idx)
 }
 
 /**
+ * Returns a pointer to the item at index, in a circular fashion
+ * Does NOT checks for the index range.
+ * The array must NOT be empty (div0).
+ * 
+ * @param v
+ * @param idx
+ * @return a pointer to the item at index
+ */
+
+static inline void* ptr_vector_get_mod(const ptr_vector *v, s32 idx)
+{
+    assert(v->size != 0);
+    int m = idx % v->size;
+    if(m < 0) { m += v->size; }
+    return v->data[m];
+}
+
+/**
  * Sets the item at index to value.
  * Does NOT checks for the index range.
  * Does NOT grows the vector.
@@ -399,6 +417,37 @@ static inline void ptr_vector_end_swap(ptr_vector *pv,s32 idx)
     pv->data[idx] = pv->data[pv->offset];
     pv->data[pv->offset] = tmp;
 }
+
+
+/**
+ * Reverse the content 
+ * 
+ * e.g.
+ * 'I' 'I' 'S' 'G'
+ * becomes
+ * 'G' 'S' 'I' 'I'
+ * 
+ * @param pv
+ */
+
+static inline void ptr_vector_reverse(ptr_vector *v)
+{
+    void *temp;
+
+    void **start = v->data;
+    void **end   = &v->data[v->offset];
+
+    while (start < end)
+    {
+        temp   = *start;
+        *start = *end;
+        *end   = temp;
+
+        start++;
+        end--;
+    }
+}
+
 
 /**
  * Inserts a value at position, pushing items from this position up

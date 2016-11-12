@@ -137,6 +137,7 @@ typedef ya_result logger_channel_vmsg_method(logger_channel* chan, int level, ch
 typedef void logger_channel_flush_method(logger_channel* chan);
 typedef void logger_channel_close_method(logger_channel* chan);
 typedef ya_result logger_channel_reopen_method(logger_channel* chan);
+typedef void logger_channel_sink_method(logger_channel* chan);
 
 typedef struct logger_channel_vtbl logger_channel_vtbl;
 
@@ -147,7 +148,8 @@ struct logger_channel_vtbl
     logger_channel_vmsg_method *vmsg;
     logger_channel_flush_method *flush;
     logger_channel_close_method *close;
-    logger_channel_reopen_method *reopen; /* So a HUP will flush, close then reopen/create the log files again */
+    logger_channel_reopen_method *reopen;   // so a HUP will flush, close then reopen/create the log files again
+    logger_channel_sink_method *sink;       // the channel will verify its output make sense and if not act on it (ie: junk all until next reopen)
     const char *__class__;
 };
 
@@ -157,6 +159,7 @@ struct logger_channel_vtbl
 #define logger_channel_flush(channel_) (channel_)->vtbl->flush(channel_)
 #define logger_channel_reopen(channel_) (channel_)->vtbl->reopen(channel_)
 #define logger_channel_close(channel_) (channel_)->vtbl->close(channel_)
+#define logger_channel_sink(channel_) (channel_)->vtbl->sink(channel_)
 
 /**
  * Message flags
@@ -180,6 +183,15 @@ logger_channel* logger_channel_alloc();
  */
 
 bool logger_is_self();
+
+/**
+ * Returns TRUE if the queue is half full
+ * 
+ * @param channel_name
+ * @return 
+ */
+
+bool logger_queue_fill_critical();
 
 s32 logger_channel_get_usage_count(const char* channel_name);
 void logger_channel_register(const char* channel_name, struct logger_channel *channel);
@@ -245,6 +257,39 @@ void logger_handle_msg_text(logger_handle *handle, u32 level, const char* text, 
 void logger_handle_msg_text_ext(logger_handle *handle, u32 level, const char* text, u32 text_len, const char* prefix, u32 prefix_len, u16 flags);
 
 /**
+ * Try to send a formatted text to the logger.
+ * If the logging queue is full, drop the line.
+ * This is to be used only in parts of code that would be dead-locked with the
+ * logger in case of a full disk.
+ * 
+ * ie: anything on the path of the HUP signal handling.
+ * 
+ * @param handle        handle to use, can be NULL
+ * @param level         level of the message
+ * @param fmt           format string
+ * @param ...           parameters for the format
+ */
+
+void logger_handle_try_msg(logger_handle* handle, u32 level, const char* fmt, ...);
+
+/**
+ * Try to send a formatted text to the logger.
+ * If the logging queue is full, drop the line.
+ * This is to be used only in parts of code that would be dead-locked with the
+ * logger in case of a full disk.
+ * 
+ * ie: anything on the path of the HUP signal handling.
+ * 
+ * @param handle        handle to use, can be NULL
+ * @param level         level of the message
+ * @param text          text to send
+ * @param text_len      length of the text to send
+ */
+
+void logger_handle_try_msg_text(logger_handle *handle, u32 level, const char* text, u32 text_len);
+
+
+/**
  * Sets the layout for the logged memory dumps
  * Values MUST be set to (2^n)-1 with n >= 0
  * Values MUST be < 256
@@ -267,8 +312,8 @@ void log_memdump_set_layout(u32 group_mask, u32 separator_mask);
  * @param flags         see osprint_dump for details: OSPRINT_DUMP_ADDRESS, OSPRINT_DUMP_HEX, OSPRINT_DUMP_TEXT
  */
 
-void log_memdump_ex(logger_handle* hndl, u32 level, const void* data_pointer, size_t size, size_t line_size, u32 flags);
-void log_memdump(logger_handle* hndl, u32 level, const void* data_pointer, size_t size, size_t line_size);
+void log_memdump_ex(logger_handle* hndl, u32 level, const void* data_pointer, ssize_t size, ssize_t line_size, u32 flags);
+void log_memdump(logger_handle* hndl, u32 level, const void* data_pointer, ssize_t size, ssize_t line_size);
 
 void logger_handle_exit_level(u32 level);
 
@@ -325,6 +370,26 @@ void logger_set_level(u8 level);
 /* Emergency: quit      */
 #define log_emerg(...)  logger_handle_msg(MODULE_MSG_HANDLE,MSG_EMERG,LOG_TEXT_PREFIX __VA_ARGS__)
 
+#define log_try_debug7(...) logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_DEBUG7,LOG_TEXT_PREFIX __VA_ARGS__)
+#define log_try_debug6(...) logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_DEBUG6,LOG_TEXT_PREFIX __VA_ARGS__)
+#define log_try_debug5(...) logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_DEBUG5,LOG_TEXT_PREFIX __VA_ARGS__)
+#define log_try_debug4(...) logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_DEBUG4,LOG_TEXT_PREFIX __VA_ARGS__)
+#define log_try_debug3(...) logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_DEBUG3,LOG_TEXT_PREFIX __VA_ARGS__)
+#define log_try_debug2(...) logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_DEBUG2,LOG_TEXT_PREFIX __VA_ARGS__)
+#define log_try_debug1(...) logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_DEBUG1,LOG_TEXT_PREFIX __VA_ARGS__)
+#define log_try_debug(...)  logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_DEBUG,LOG_TEXT_PREFIX __VA_ARGS__)
+#define log_try_notice(...) logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_NOTICE,LOG_TEXT_PREFIX __VA_ARGS__)
+#define log_try_info(...)   logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_INFO,LOG_TEXT_PREFIX __VA_ARGS__)
+#define log_try_warn(...)   logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_WARNING,LOG_TEXT_PREFIX __VA_ARGS__)
+#define log_try_err(...)    logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_ERR,LOG_TEXT_PREFIX __VA_ARGS__)
+/* Obsolete, Critical error: quit */
+#define log_try_quit(...)   logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_CRIT,LOG_TEXT_PREFIX __VA_ARGS__)
+/* Critical error: quit */
+#define log_try_crit(...)   logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_CRIT,LOG_TEXT_PREFIX __VA_ARGS__)
+/* Emergency: quit      */
+#define log_try_emerg(...)  logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_EMERG,LOG_TEXT_PREFIX __VA_ARGS__)
+
+
 /* -7----------------------------------------------------------------------------
  *
  *      MACROS
@@ -365,6 +430,19 @@ void logger_finalize();
  */
 
 void logger_flush();
+
+/**
+ * The next message seen by the logger will trigger a sink.
+ */
+
+void logger_sink_noblock();
+
+/**
+ * Asks all channels to verify their output is valid and if not, to discard
+ * all content to a sink until reopen is called.
+ */
+
+void logger_sink();
 
 /**
  * For practical reasons, the code for logger_reopen() is in logger_handle.c

@@ -82,9 +82,15 @@ dnssec_set_xfr_path(const char* xfr_path)
 }
 
 ya_result
-zdb_update_zone_signatures(zdb_zone* zone, u32 signature_count_loose_limit, bool present_signatures_are_verified)
+zdb_update_zone_signatures(zdb_zone* zone, s32 signature_count_loose_limit, bool present_signatures_are_verified)
 {
     log_debug("zdb_update_zone_signatures(%p) %{dnsname} [lock=%x]", zone, zone->origin, zone->lock_owner);
+    
+    if(signature_count_loose_limit < 0)
+    {
+        log_warn("zdb_update_zone_signatures called with a negative number (%i): assuming sign error and setting to max instead", signature_count_loose_limit);
+        signature_count_loose_limit = MAX_S32;
+    }
 
     if(dnssec_xfr_path == NULL)
     {
@@ -128,7 +134,7 @@ zdb_update_zone_signatures(zdb_zone* zone, u32 signature_count_loose_limit, bool
 
     zdb_icmtl icmtl;
     
-    if(ISOK(ret = rrsig_updater_prepare_keys(&parms, zone)))
+    if(ISOK(ret = rrsig_updater_prepare_keys(&parms, zone))) // zone is locked
     {
         has_zsk = (ret & RRSIG_UPDATER_PREPARE_KEYS_ZSK) != 0;
     }

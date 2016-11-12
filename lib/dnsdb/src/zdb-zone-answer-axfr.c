@@ -56,11 +56,13 @@
 #include <dnscore/buffer_output_stream.h>
 #include <dnscore/buffer_input_stream.h>
 #include <dnscore/counter_output_stream.h>
+#include <dnscore/empty-input-stream.h>
 #include <dnscore/format.h>
 #include <dnscore/packet_writer.h>
 #include <dnscore/rfc.h>
 #include <dnscore/serial.h>
 #include <dnscore/fdtools.h>
+#include <dnscore/tcp_io_stream.h>
 
 #include "dnsdb/zdb_types.h"
 #include "dnsdb/zdb-zone-arc.h"
@@ -164,7 +166,6 @@ struct zdb_zone_answer_axfr_write_file_args
     ya_result return_code;
 };
 
-
 static void
 zdb_zone_answer_axfr_thread_exit(scheduler_queue_zone_write_axfr_args* data)
 {
@@ -186,15 +187,7 @@ zdb_zone_answer_axfr_write_file_thread(void* data_)
     // serial
     // *return_code
     /*-----------------------------------------------------------------------*/
-#if OBSOLETE
-    /*
-     * And I do the cleaning here: seek for and destroy all axfr files with an older serial.
-     */
 
-    zdb_zone_write_axfr_clean_older(storage->data_path, storage->data->zone, storage->serial);
-#endif
-    //u64 now = timeus();
-    
     buffer_output_stream_init(&storage->os, &storage->os, 4096);
     
     // ALEADY LOCKED BY THE CALLER SO NO NEED TO zdb_zone_lock(data->zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
@@ -206,7 +199,7 @@ zdb_zone_answer_axfr_write_file_thread(void* data_)
     counter_output_stream_data counter_data;
     counter_output_stream_init(&storage->os, &counter_stream, &counter_data);
 
-    storage->return_code = zdb_zone_store_axfr(storage->zone, &counter_stream);
+    storage->return_code = zdb_zone_store_axfr(storage->zone, &counter_stream); // zone is locked
     
     zdb_zone_unlock(storage->zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
     
@@ -231,6 +224,8 @@ zdb_zone_answer_axfr_write_file_thread(void* data_)
         {
             storage->zone->axfr_timestamp = time(NULL);
             storage->zone->axfr_serial = storage->serial;
+            
+            // here, the zone exists as persistent storage on an .axfr file
         }
         else
         {
@@ -251,6 +246,8 @@ zdb_zone_answer_axfr_write_file_thread(void* data_)
         storage->zone->axfr_timestamp = 1;
         storage->zone->axfr_serial = storage->serial - 1;
     }
+    
+    zdb_zone_clear_status(storage->zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
     
     zdb_zone_release(storage->zone);
     storage->zone = NULL;
@@ -273,14 +270,13 @@ zdb_zone_answer_axfr_thread(void* data_)
     ya_result ret;
     u32 serial = 0;
     u32 now = time(NULL);
+    int path_len;
     
     int tcpfd = data->mesg->sockfd;
     data->mesg->sockfd = -1;
-        
+    
     u8   data_zone_origin[MAX_DOMAIN_LENGTH];
-    char path[PATH_MAX + 8];
-
-    //char data_directory[MAX_PATH];
+    char buffer[PATH_MAX + 8];
        
     /**
      * The zone could already be dumping in the disk.
@@ -320,15 +316,15 @@ zdb_zone_answer_axfr_thread(void* data_)
     }
     
 #ifdef DEBUG
-    log_debug("zone write axfr: checking serial number");
+    log_debug("zone write axfr: %{dnsname}: checking serial number", data_zone->origin);
 #endif
     
-    if(FAIL(zdb_zone_getserial(data_zone, &serial)))
+    if(FAIL(zdb_zone_getserial(data_zone, &serial))) // zone is locked
     {
         /** @todo 20121113 edf -- error other than "does not exists" : SERVFAIL */
-        zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
+        zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
 
-        log_err("zone write axfr: no SOA in %{dnsname}", data_zone->origin);
+        log_err("zone write axfr: %{dnsname}: no SOA", data_zone->origin);
         
         /* @todo 20121219 edf -- send a servfail answer ... */
 
@@ -358,6 +354,8 @@ zdb_zone_answer_axfr_thread(void* data_)
 
     dnsname_copy(data_zone_origin, data_zone->origin);
     
+    empty_input_stream_init(&fis);
+    
     /*
      * The zone could be being written to the disk right now.
      *    axfr_timestamp = 0, file exists as a .part (or as a normal file, if race)
@@ -374,20 +372,48 @@ zdb_zone_answer_axfr_thread(void* data_)
      * 
      */
     
-    for(;;)
+    for(int countdown = 5; countdown >= 0; --countdown)
     {
+        if(countdown == 0)
+        {
+            // tried to many times: servfail
+            
+            zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+            
+            data->return_code = ERROR;
+            log_warn("zone write axfr: %{dnsname}: could not prepare file", data_zone_origin);
+            
+            message_make_error(mesg, FP_CANNOT_HOLD_AXFR_DATA);
+            if(mesg->tsig.tsig != NULL)
+            {
+                tsig_sign_answer(mesg);
+            }
+            message_update_tcp_length(mesg);
+            
+            if(FAIL(ret = writefully(tcpfd, mesg->buffer_tcp_len, mesg->send_length + 2)))
+            {
+                log_warn("zone write axfr: %{dnsname}: tcp write error: %r", data_zone_origin, ret);
+            }
+            
+            tcp_set_abortive_close(mesg->sockfd);
+            close_ex(mesg->sockfd);
+            
+            free(mesg);
+
+            return NULL;
+        }
+        
         if(dnscore_shuttingdown())
         {
             /* Yes, it means there will be a "leak" but the app is shutting down anyway ... */
             
             ret = STOPPED_BY_APPLICATION_SHUTDOWN;
-            zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
-            log_warn("zone write axfr: %r", ret);
+            zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+            log_warn("zone write axfr: %{dnsname}: %r", data_zone_origin, ret);
 
             /** @todo 20150209 edf -- error other than "does not exists" : SERVFAIL */
 
             data->return_code = ret;
-            
             data_zone->axfr_timestamp = 1;
 
             /* @todo 20150209 edf -- send a servfail answer ... */
@@ -398,17 +424,17 @@ zdb_zone_answer_axfr_thread(void* data_)
             return NULL;
         }
                 
-        // file path and name
+        // get the file path and name
         
         if(FAIL(ret = zdb_zone_path_get_provider()(
                 data_zone_origin, 
-                path, sizeof(path),
+                buffer, sizeof(buffer),
                 ZDB_ZONE_PATH_PROVIDER_AXFR_FILE|ZDB_ZONE_PATH_PROVIDER_MKDIR)))
         {
             // failed to get the name
             
             zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
-            log_err("zone write axfr: unable to get path for %{dnsname}: %r", data_zone_origin, ret);
+            log_err("zone write axfr: %{dnsname}: unable to get path: %r", data_zone_origin, ret);
             data->return_code = ret;
             
             /* @todo 20121219 edf -- send a servfail answer ... */
@@ -419,86 +445,70 @@ zdb_zone_answer_axfr_thread(void* data_)
             return NULL;
         }
         
+        path_len = ret;
+        
         u32 axfr_dump_age = (now >= data_zone->axfr_timestamp)?now - data_zone->axfr_timestamp:0;
         
-        if((data_zone->axfr_serial != serial) && (data_zone->axfr_timestamp != 0) && (axfr_dump_age > ZDB_ZONE_AXFR_MINIMUM_DUMP_PERIOD))
+        // try to set the dumping axfr status
+        
+        u8 zone_axfr_status = zdb_zone_set_status(data_zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
+        
+        // if status didn't had the flag, we have ownership
+        
+        bool have_writing_rights = (zone_axfr_status & ZDB_ZONE_STATUS_DUMPING_AXFR) == 0;
+        bool too_old = (axfr_dump_age > ZDB_ZONE_AXFR_MINIMUM_DUMP_PERIOD);
+        bool different_serial = (data_zone->axfr_serial != serial);
+        
+        bool should_write = have_writing_rights && (different_serial && too_old);
+        
+        if(!should_write && have_writing_rights)
         {
-            // the serial on disk is not the one in memory AND it is not being written AND it has been written a sufficient long time ago ...
-            log_debug("AXFR serial = %d, zone serial = %d; AXFR timestamp = %d; last written %d seconds ago",
+            should_write = access(buffer, R_OK | F_OK) < 0;
+        }
+        
+        if(should_write)
+        {
+            // the serial on disk is not the one in memory AND
+            // it has been written a sufficient long time ago ...
+            // it is not being written
+            
+            log_debug("zone write axfr: %{dnsname}:  serial = %d, zone serial = %d; AXFR timestamp = %d; last written %d seconds ago",
+                      data_zone_origin,
                       data_zone->axfr_serial,
                       serial,
                       data_zone->axfr_timestamp,
                       axfr_dump_age);
             
-            unlink(path); // trigger a new update
-        }
-        
-        if(access(path, R_OK | F_OK) >= 0)
-        {
-            // the file seems ok, let's start streaming it
-            ret = zdb_zone_axfr_input_stream_open_with_path(&fis, data_zone, path);
+            // trigger a new update : delete the old files
             
-            if(FAIL(ret))
+            unlink(buffer);
+
+            yassert(path_len < sizeof(buffer) - 6);
+            
+            memcpy(&buffer[path_len], ".part", 6);
+            unlink(buffer); // trigger a new update
+            
+            // create a new file (pathpart)
+            
+            log_info("zone write axfr: %{dnsname}: storing at serial %d", data_zone_origin, serial);
+
+            if(FAIL(ret = file_output_stream_create_excl(&os, buffer, 0644)))
             {
-                // opening failed but it should not have : try again
-                continue;
-            }
-            
-            data->return_code = SUCCESS;
-            
-            log_info("zone write axfr: releasing implicit write lock %{dnsname} %d (should be)", data_zone_origin, serial);
-            zdb_zone_acquire(data_zone);            
-            zdb_zone_answer_axfr_thread_exit(data); // WARNING: From this point forward, 'data' cannot be used anymore 
-            data = NULL;                            //          This ensures a crash if data is used
-            zdb_zone_release_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
-            data_zone = NULL;
-            
-            
-            break;
-        }
-
-        // there is an error accessing the file
-
-        if(errno != ENOENT)
-        {
-            // the error is not that the file does not exists : give up
-            
-            ret = ERRNO_ERROR;
-            zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
-            log_err("zone write axfr: error accessing '%s': %r", path, ret);
-
-            /** @todo 20150209 edf -- error other than "does not exists" : SERVFAIL */
-
-            data->return_code = ret;
-            
-            data_zone->axfr_timestamp = 1;
-
-            /* @todo 20150209 edf -- send a servfail answer ... */
-
-            zdb_zone_answer_axfr_thread_exit(data);
-            close_ex(tcpfd);
-            free(mesg);
-            return NULL;
-        }
-            
-        // the file does not exists: maybe the .part does
-
-        // append ".part" to the name (re tis still the length of the path string)
-        memcpy(&path[ret], ".part", 6);
-
-        if(data_zone->axfr_timestamp != 0)
-        {
-            // if the part file does exists, it's not expected.
-            // after some race checks, the zone should be written to disk
-
-            log_info("zone write axfr: storing %{dnsname} %d", data_zone_origin, serial);
-
-            if(FAIL(ret = file_output_stream_create(&os, path, 0644)))
-            {
+                zdb_zone_clear_status(data_zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
+                
+                log_debug("zone write axfr: %{dnsname}: could not exclusively create '%s': %r", data_zone_origin, buffer, ret);
+                
+                if(ret == MAKE_ERRNO_ERROR(EEXIST))
+                {
+                    log_err("zone write axfr: %{dnsname}: file unexpectedly exists '%s': %r", data_zone_origin, buffer, ret);
+                    // race condition creating the file : try again
+                    
+                    continue;
+                }
+                
                 zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
                 
-                log_err("zone write axfr: file create error for '%s': %r",
-                        path, serial, ret);
+                log_err("zone write axfr: %{dnsname}: file create error for '%s': %r", data_zone_origin, buffer, serial, ret);
                 
                 data->return_code = ret;
 
@@ -525,20 +535,27 @@ zdb_zone_answer_axfr_thread(void* data_)
             zdb_zone_answer_axfr_write_file_args *store_axfr_args;
             MALLOC_OR_DIE(zdb_zone_answer_axfr_write_file_args*, store_axfr_args, sizeof(zdb_zone_answer_axfr_write_file_args), ZAAXFRWF_TAG);
             store_axfr_args->os = os;
-            store_axfr_args->pathpart = strdup(path);
-            path[strlen(path) - 5] = '\0';
-            store_axfr_args->path = strdup(path);
+            
+            store_axfr_args->pathpart = strdup(buffer);
+            
+            buffer[path_len] = '\0';
+            store_axfr_args->path = strdup(buffer);
+            
             store_axfr_args->zone = data->zone;
             store_axfr_args->serial = serial;
             store_axfr_args->return_code = SUCCESS;
 
             /*
              * This is how it is supposed to be.  Double lock, unlocked when the file has been stored.
+             * Again: do not try to remove this lock.
              */
 
             zdb_zone_acquire(data_zone);
             zdb_zone_lock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC was already + 1 by the (async) caller
 
+            log_debug("zone write axfr: %{dnsname}: zone with serial %d is being written on disk", data_zone_origin, serial);
+            
+            // the ZDB_ZONE_STATUS_DUMPING_AXFR status will be cleared in the thread
             
             if(data->disk_tp != NULL)
             {
@@ -550,17 +567,18 @@ zdb_zone_answer_axfr_thread(void* data_)
             }
             
             // the file seems ok, let's start streaming it
-            ret = zdb_zone_axfr_input_stream_open_with_path(&fis, data_zone, path);
+            ret = zdb_zone_axfr_input_stream_open_with_path(&fis, data_zone, buffer);
             
             if(FAIL(ret))
             {
                 // opening failed but it should not have : try again
+                log_warn("zone write axfr: %{dnsname}: after write, could not open %s: %r", data_zone_origin, buffer, ret);
                 continue;
             }
             
             data->return_code = SUCCESS;
             
-            log_debug("zone write axfr: %{dnsname} with serial %d is being written on disk", data_zone_origin, serial);
+            log_debug("zone write axfr: %{dnsname}: zone with serial %d is being written on disk", data_zone_origin, serial);
             
             zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
             data_zone = NULL;
@@ -568,86 +586,129 @@ zdb_zone_answer_axfr_thread(void* data_)
             data = NULL; // This ensures a crash if data is used
             break;
         }
-        
-        // .part should exist (except for race)
-
-        if(access(path, R_OK | F_OK) >= 0)
+        else
         {
-            // the part file does exists: stream it
-
-            ret = zdb_zone_axfr_input_stream_open_with_path(&fis, data_zone, path);
-
-            if(FAIL(ret))
+            // if !have_writing_rights, somebody is writing the part file,
+            // that's the one that should be followed
+            
+            if(!have_writing_rights)
             {
-                // opening failed but it should not have : try again
+                memcpy(&buffer[path_len], ".part", 6);
+                
+                if(access(buffer, R_OK | F_OK) >= 0)
+                {
+                    // file exists and the file seems usable, let's start streaming it
 
-                continue;
+                    ret = zdb_zone_axfr_input_stream_open_with_path(&fis, data_zone, buffer);
+
+                    if(have_writing_rights)
+                    {
+                        zdb_zone_clear_status(data_zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
+                    }
+
+                    if(FAIL(ret))
+                    {
+                        // opening failed but it should not have: try again
+                        log_warn("zone write axfr: %{dnsname}: could not open %s: %r", data_zone_origin, buffer, ret);
+                        
+                        // or servfail ?
+                        
+                        continue;
+                    }
+
+                    data->return_code = SUCCESS;
+
+                    log_info("zone write axfr: %{dnsname}: releasing implicit write lock, serial is %d", data_zone_origin, serial);
+                    zdb_zone_acquire(data_zone);            
+                    zdb_zone_answer_axfr_thread_exit(data); // WARNING: From this point forward, 'data' cannot be used anymore 
+                    data = NULL;                            //          This ensures a crash if data is used
+                    zdb_zone_release_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+                    data_zone = NULL;
+
+                    break;
+                }
+                
+                // file could not be properly accessed, maybe it just finished
+                buffer[path_len] = '\0';
+            }
+            
+            if(access(buffer, R_OK | F_OK) >= 0)
+            {
+                // file exists and the file seems usable, let's start streaming it
+
+                ret = zdb_zone_axfr_input_stream_open_with_path(&fis, data_zone, buffer);
+
+                if(have_writing_rights)
+                {
+                    zdb_zone_clear_status(data_zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
+                }
+
+                if(FAIL(ret))
+                {
+                    // opening failed but it should not have: try again
+                    
+                    log_warn("zone write axfr: %{dnsname}: could not open %s: %r", data_zone_origin, buffer, ret);
+
+                    continue;
+                }
+
+                data->return_code = SUCCESS;
+
+                log_info("zone write axfr: %{dnsname}: releasing implicit write lock, serial is %d", data_zone_origin, serial);
+                zdb_zone_acquire(data_zone);            
+                zdb_zone_answer_axfr_thread_exit(data); // WARNING: From this point forward, 'data' cannot be used anymore 
+                data = NULL;                            //          This ensures a crash if data is used
+                zdb_zone_release_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+                data_zone = NULL;
+
+                break;
+            }
+                            
+            // file does not exist, or there is an error accessing the file
+            
+            if(have_writing_rights)
+            {
+                zdb_zone_clear_status(data_zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
             }
 
-            data->return_code = SUCCESS;
+            if(errno != ENOENT)
+            {
+                // the error is not that the file does not exists : give up
 
-            log_info("zone write axfr: releasing implicit write lock %{dnsname} %d (should be)", data_zone_origin, serial);
-            zdb_zone_acquire(data_zone);
-            zdb_zone_answer_axfr_thread_exit(data);
-            /* WARNING: From this point forward, 'data' cannot be used anymore */
-            data = NULL;    /* WITH THIS I ENSURE A CRASH IF I DO NOT RESPECT THE ABOVE COMMENT */
+                ret = ERRNO_ERROR;
+                zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
+                log_err("zone write axfr: %{dnsname}: error accessing '%s': %r", data_zone_origin, buffer, ret);
 
-            zdb_zone_release_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
-            data_zone = NULL;
+                /** @todo 20150209 edf -- error other than "does not exists" : SERVFAIL */
 
-            break;
+                data->return_code = ret;
+
+                data_zone->axfr_timestamp = 1;
+
+                /* @todo 20150209 edf -- send a servfail answer ... */
+
+                zdb_zone_answer_axfr_thread_exit(data);
+                close_ex(tcpfd);
+                free(mesg);
+                return NULL;
+            }
+            
+            // could not access any of the two expected files, try again
         }
-
-        if(errno != ENOENT)
-        {
-            // the error is not that the file does not exists : give up
-            ret = ERRNO_ERROR;
-
-            zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
-
-            /** @todo 20150209 edf -- error other than "does not exists" : SERVFAIL */
-
-            data->return_code = ERRNO_ERROR;
-            log_err("zone write axfr: error accessing '%s': %r", path, data->return_code);
-
-            data_zone->axfr_timestamp = 1;
-
-            /* @todo 20150209 edf -- send a servfail answer ... */
-
-            zdb_zone_answer_axfr_thread_exit(data);
-            close_ex(tcpfd);
-            free(mesg);
-            return NULL;
-        }
-    }
+    } // for(;;)
     
-    /* open an xfr stream on it and stream it up to the client */
+
+    mesg->size_limit = 0x8000; // limit to 32KB, knowing perfectly well the buffer is actually 64KB
+
+    log_info("zone write axfr: %{dnsname}: sending AXFR with serial %d", data_zone_origin, serial);
     
-    mesg->size_limit = 0x8000;
-
-    /**
-     * I should open the file BEFORE releasing the lock.
-     * So every AXFR write request could cleanup the old files without any risk of race
-     * (given that an opened file can be deleted and continue to exist until last accessor
-     * has closed it)
-     */
-
-    /* pool for path */
-
-    if(FAIL(ret)) /* replaces: if(FAIL(ret = file_input_stream_open(path, &fis))) */
+#ifdef DEBUG
+    if(fis.data == NULL)
     {
-        /** @todo 20101119 edf -- cannot open error : SERVFAIL */
-
-        log_err("zone write axfr: error opening '%s': %r", path, ret);
-
-        close_ex(tcpfd);
-        free(mesg);
-        return NULL;
+        log_err("zone write axfr: %{dnsname}: empty stream");
+        goto scheduler_queue_zone_write_axfr_thread_exit;
     }
-
-    /* Sends the "Write unlocked" notification */
-
-    log_info("zone write axfr: sending AXFR %{dnsname} %d", data_zone_origin, serial);
+#endif
 
     output_stream tcpos;
     fd_output_stream_attach(&tcpos, tcpfd);
@@ -665,6 +726,9 @@ zdb_zone_answer_axfr_thread(void* data_)
 #if ZDB_HAS_TSIG_SUPPORT
     tsig_tcp_message_position pos = TSIG_NOWHERE;
 #endif
+    
+    yassert(mesg->received <= packet_size_limit); // should have already been tested by the caller
+    
     packet_writer_init(&pw, mesg->buffer, mesg->received, packet_size_limit);
 
     for(;; packet_count--) /* using path as the buffer */
@@ -675,9 +739,10 @@ zdb_zone_answer_axfr_thread(void* data_)
 
         /* Read the next DNAME from the stored AXFR */
 
-        if(FAIL(qname_len = input_stream_read_dnsname(&fis, (u8*)path)))
+        if(FAIL(qname_len = input_stream_read_dnsname(&fis, (u8*)buffer))) // length checked
         {
-            log_err("zone write axfr: error reading next record domain: %r", qname_len); /* qname_len is an error code */
+            /* qname_len is an error code */
+            log_err("zone write axfr: %{dnsname}: error reading next record domain: %r", data_zone_origin, qname_len);
 
             break;
         }
@@ -695,10 +760,15 @@ zdb_zone_answer_axfr_thread(void* data_)
             {
                 /* Then write them */
 
+                /*
+                
+                will not be used anymore
+                 
                 if(packet_count == 0)
                 {
                     packet_count = AXFR_TSIG_PERIOD;
                 }
+                */
 
                 mesg->send_length = packet_writer_get_offset(&pw);
 
@@ -723,7 +793,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
                     if(FAIL(ret))
                     {
-                        log_err("zone write axfr: failed to sign the answer: %r", ret);
+                        log_err("zone write axfr: %{dnsname}: failed to sign the answer: %r", data_zone_origin, ret);
                         break;
                     }
                 } /* if TSIG_ENABLED */
@@ -734,10 +804,10 @@ zdb_zone_answer_axfr_thread(void* data_)
                 
                 if(FAIL(n = write_tcp_packet(&pw, &tcpos)))
                 {
-                    log_err("zone write axfr: error sending AXFR packet: %r", n);
+                    log_err("zone write axfr: %{dnsname}: error sending AXFR packet: %r", data_zone_origin, n);
                 }
 
-                an_records_count = 0;
+                // in effect, an_records_count = 0;
             }
 
             break; /* done */
@@ -747,21 +817,38 @@ zdb_zone_answer_axfr_thread(void* data_)
 
         if(FAIL(n = input_stream_read_fully(&fis, &tctrl, 10)))
         {
-            log_err("zone write axfr: error reading record: %r", n);
+            log_err("zone write axfr: %{dnsname}: error reading record: %r", data_zone_origin, n);
             break;
         }
 
         u16 rdata_len = ntohs(tctrl.rdlen);
+        
+        // if for any reason the rdata_len is bigger than the 4K buffer size (not supposed to happen as even keys are not bigger than 1K)
+        
+        if(rdata_len > sizeof(buffer))
+        {
+            log_err("zone write axfr: %{dnsname}: record data length is too big (%i)", data_zone_origin, rdata_len);
+#ifdef DEBUG
+            log_memdump(g_database_logger, MSG_DEBUG, &tctrl, 10, 16);
+#endif
+            break;
+        }
 
         u32 record_len = qname_len + 10 + rdata_len;
 
         /* Check if we have enough room available for the next record */
+        
+#ifdef DEBUG
+        s32 remaining_capacity = packet_writer_get_remaining_capacity(&pw);
+#endif
 
-        if((an_records_count >= packet_records_limit) || packet_writer_get_remaining_capacity(&pw) < record_len)
+        if((an_records_count >= packet_records_limit) || (packet_writer_get_remaining_capacity(&pw) < record_len))
         {
+            // not enough room
+            
             if(an_records_count == 0)
             {
-                log_err("zone write axfr: error preparing packet: next record is too big (%d)", record_len);
+                log_err("zone write axfr: %{dnsname}: error preparing packet: next record is too big (%d)", data_zone_origin, record_len);
 
                 break;
             }
@@ -824,11 +911,9 @@ zdb_zone_answer_axfr_thread(void* data_)
             }
         }
 #endif
-        
         an_records_count++;
 
-        packet_writer_add_fqdn(&pw, (const u8*)path);
-
+        packet_writer_add_fqdn(&pw, (const u8*)buffer);
         packet_writer_add_bytes(&pw, (const u8*)&tctrl, 10);
 
         if(compress_dname_rdata != 0)
@@ -838,19 +923,49 @@ zdb_zone_answer_axfr_thread(void* data_)
             switch(tctrl.qtype)
             {
                 case TYPE_MX:
-
-                    if(FAIL(n = input_stream_read_fully(&fis, path, 2)))
+                {
+                    if(FAIL(n = input_stream_read_fully(&fis, buffer, rdata_len))) // rdata_len < sizeof(buffer)
                     {
-                        log_err("zone write axfr: error reading MX record: %r", n);
+                        log_err("zone write axfr: %{dnsname}: error reading MX record: %r", data_zone_origin, n);
 
                         /*
-                         * GOTO !!! (I hate this)
+                         * GOTO !!! (thread carefully)
+                         */
+                        
+                        goto scheduler_queue_zone_write_axfr_thread_exit;
+                    }
+                    
+                    // verify fqdn
+                    u32 len = dnsname_len((const u8*)&buffer[2]);
+                    if(len > MAX_DOMAIN_LENGTH)
+                    {
+                        log_err("zone write axfr: %{dnsname}: rdata fqdn is too long", data_zone_origin);
+                        
+                        /*
+                         * GOTO !!! (thread carefully)
+                         */
+                        
+                        goto scheduler_queue_zone_write_axfr_thread_exit;
+                    }
+                    if(len + 2 != rdata_len)
+                    {
+                        log_err("zone write axfr: %{dnsname}: expected rdata of %i bytes but got %i", data_zone_origin, n,
+                                rdata_len, len + 2);
+                        
+                        /*
+                         * GOTO !!! (thread carefully)
                          */
 
                         goto scheduler_queue_zone_write_axfr_thread_exit;
                     }
 
-                    packet_writer_add_bytes(&pw, (const u8*)path, 2);
+                    packet_writer_add_bytes(&pw, (const u8*)buffer, 2);
+                    // the write buffer is bigger than the limit and the fqdn size has been verified
+                    packet_writer_add_fqdn(&pw, (const u8*)&buffer[2]);
+                    SET_U16_AT(pw.packet[rdata_offset - 2], htons(pw.packet_offset - rdata_offset)); // set RDATA size
+                    
+                    continue;
+                }
 
                 case TYPE_NS:
                 case TYPE_CNAME:
@@ -862,62 +977,106 @@ zdb_zone_answer_axfr_thread(void* data_)
                 case TYPE_MG:
                 case TYPE_MR:
                 {
-                    if(FAIL(qname_len = input_stream_read_dnsname(&fis, (u8*)path)))
+                    if(FAIL(n = input_stream_read_fully(&fis, buffer, rdata_len))) // rdata_len < sizeof(buffer)
                     {
-                        log_err("zone write axfr: error reading %{dnstype} domain: %r", &tctrl.qtype, qname_len);
-
+                        log_err("zone write axfr: %{dnsname}: error reading %{dnstype} record: %r", data_zone_origin, &tctrl.qtype, n);
+                        
                         /*
-                         * GOTO !!! (I hate this)
+                         * GOTO !!! (thread carefully)
+                         */
+                        
+                        goto scheduler_queue_zone_write_axfr_thread_exit;
+                    }
+                    
+                    // verify fqdn
+                    u32 len = dnsname_len((const u8*)buffer);
+                    if(len > MAX_DOMAIN_LENGTH)
+                    {
+                        log_err("zone write axfr: %{dnsname}: rdata fqdn is too long", data_zone_origin);
+                        
+                        /*
+                         * GOTO !!! (thread carefully)
+                         */
+                        
+                        goto scheduler_queue_zone_write_axfr_thread_exit;
+                    }
+                    if(len != rdata_len)
+                    {
+                        log_err("zone write axfr: %{dnsname}: expected rdata of %i bytes but got %i", data_zone_origin, n,
+                                rdata_len, len);
+                        
+                        /*
+                         * GOTO !!! (thread carefully)
                          */
 
                         goto scheduler_queue_zone_write_axfr_thread_exit;
                     }
-
-                    packet_writer_add_fqdn(&pw, (const u8*)path);
+                    // the write buffer is bigger than the limit and the fqdn size has been verified
+                    packet_writer_add_fqdn(&pw, (const u8*)buffer);
                     SET_U16_AT(pw.packet[rdata_offset - 2], htons(pw.packet_offset - rdata_offset)); // set RDATA size
 
                     continue;
                 }
                 case TYPE_SOA:
                 {
-                    if(FAIL(qname_len = input_stream_read_dnsname(&fis, (u8*)path)))
+                    if(FAIL(n = input_stream_read_fully(&fis, buffer, rdata_len))) // rdata_len < sizeof(buffer)
                     {
-                        log_err("zone write axfr: error reading SOA mname: %r", qname_len);
-
+                        log_err("zone write axfr: %{dnsname}: error reading SOA record: %r", data_zone_origin, n);
+                        
                         /*
-                         * GOTO !!! (I hate this)
+                         * GOTO !!! (thread carefully)
                          */
-
+                        
                         goto scheduler_queue_zone_write_axfr_thread_exit;
                     }
-
-                    packet_writer_add_fqdn(&pw, (const u8*)path);
                     
-                    if(FAIL(qname_len = input_stream_read_rname(&fis, (u8*)path)))
+                    // verify fqdn
+                    const u8 *m = (const u8*)buffer;
+                    u32 mlen = dnsname_len(m);
+                    
+                    if(mlen > MAX_DOMAIN_LENGTH)
                     {
-                        log_err("zone write axfr: error reading SOA rname: %r", qname_len);
-
+                        log_err("zone write axfr: %{dnsname}: mname is too long", data_zone_origin);
+                        
                         /*
-                         * GOTO !!! (I hate this)
+                         * GOTO !!! (thread carefully)
+                         */
+
+                        goto scheduler_queue_zone_write_axfr_thread_exit;
+                    }
+                    
+                    const u8 *r = &m[mlen];
+                    
+                    u32 rlen = dnsname_len(r);
+                    
+                    if(rlen > MAX_DOMAIN_LENGTH)
+                    {
+                        log_err("zone write axfr: %{dnsname}: rname is too long", data_zone_origin);
+                        
+                        /*
+                         * GOTO !!! (thread carefully)
                          */
 
                         goto scheduler_queue_zone_write_axfr_thread_exit;
                     }
 
-                    packet_writer_add_fqdn(&pw, (const u8*)path);
-
-                    if(FAIL(n = input_stream_read_fully(&fis, path, 20)))
+                    if(mlen + rlen + 20 != rdata_len)
                     {
-                        log_err("zone write axfr: error reading SOA rdata: %r", n);
-
+                        log_err("zone write axfr: %{dnsname}: expected rdata of %i bytes but got %i", data_zone_origin, n,
+                                rdata_len, mlen + rlen + 20);
+                        
                         /*
-                         * GOTO !!! (I hate this)
+                         * GOTO !!! (thread carefully)
                          */
 
                         goto scheduler_queue_zone_write_axfr_thread_exit;
                     }
-
-                    packet_writer_add_bytes(&pw, (const u8*)path, 20);
+                    
+                    // the write buffer is bigger than the limit and the fqdn size has been verified
+                    packet_writer_add_fqdn(&pw, m);
+                    // the write buffer is bigger than the limit and the fqdn size has been verified
+                    packet_writer_add_fqdn(&pw, r);
+                    packet_writer_add_bytes(&pw, &r[rlen], 20);
 
                     SET_U16_AT(pw.packet[rdata_offset - 2], htons(pw.packet_offset - rdata_offset)); // set RDATA size
                     
@@ -926,114 +1085,99 @@ zdb_zone_answer_axfr_thread(void* data_)
 
                 case TYPE_RRSIG:
                 {
-                    if(FAIL(n = input_stream_read_fully(&fis, path, 18)))
+                    if(FAIL(n = input_stream_read_fully(&fis, buffer, rdata_len))) // rdata_len < sizeof(buffer)
                     {
-                        log_err("zone write axfr: error reading RRSIG rdata: %r", n);
+                        log_err("zone write axfr: %{dnsname}: error reading RRSIG record: %r", data_zone_origin, n);
 
                         /*
-                         * GOTO !!! (I hate this)
+                         * GOTO !!! (thread carefully)
+                         */
+
+                        goto scheduler_queue_zone_write_axfr_thread_exit;
+                    }
+                    
+                    s32 remaining = rdata_len;
+                    remaining -= 18;
+                    
+                    if(remaining < 0)
+                    {
+                        log_err("zone write axfr: %{dnsname}: error reading RRSIG record: rdata is too short", data_zone_origin);
+
+                        /*
+                         * GOTO !!! (thread carefully )
+                        */
+
+                        goto scheduler_queue_zone_write_axfr_thread_exit;
+                    }
+
+                    packet_writer_add_bytes(&pw, (const u8*)buffer, 18);
+                    
+                    const u8 *o = (const u8*)&buffer[18];
+                    u32 olen = dnsname_len(o);
+                    remaining -= olen;
+                    
+                    if(remaining < 0)
+                    {
+                        log_err("zone write axfr: %{dnsname}: error reading RRSIG record: rdata is too short", data_zone_origin);
+
+                        /*
+                         * GOTO !!! (thread carefully)
                          */
 
                         goto scheduler_queue_zone_write_axfr_thread_exit;
                     }
 
-                    rdata_len -= 18;
-
-                    packet_writer_add_bytes(&pw, (const u8*)path, 18);
-
-                    if(FAIL(qname_len = input_stream_read_dnsname(&fis, (u8*)path)))
-                    {
-                        log_err("zone write axfr: error reading RRSIG signer's name: %r", qname_len);
-
-                        /*
-                         * GOTO !!! (I hate this)
-                         */
-
-                        goto scheduler_queue_zone_write_axfr_thread_exit;
-                    }
-
-                    packet_writer_add_fqdn(&pw, (const u8*)path);
-
-                    rdata_len -= qname_len;
-
-                    if(FAIL(n = input_stream_read_fully(&fis, path, rdata_len)))
-                    {
-                        log_err("zone write axfr: error reading RRSIG signature: %r", n);
-
-                        /*
-                         * GOTO !!! (I hate this)
-                         */
-
-                        goto scheduler_queue_zone_write_axfr_thread_exit;
-                    }
-
-                    packet_writer_add_bytes(&pw, (const u8*)path, rdata_len);
+                    packet_writer_add_fqdn(&pw, o);
+                    
+                    packet_writer_add_bytes(&pw, &o[olen], remaining);
 
                     SET_U16_AT(pw.packet[rdata_offset - 2], htons(pw.packet_offset - rdata_offset)); // set RDATA size
 
                     continue;
                 }
+            } // switch
+        } // if
 
-                case TYPE_NSEC:
-                {
-                    if(FAIL(qname_len = input_stream_read_dnsname(&fis, (u8*)path)))
-                    {
-                        log_err("zone write axfr: error reading NSEC next domain name: %r", qname_len);
-
-                        /*
-                         * GOTO !!! (I hate this)
-                         */
-
-                        goto scheduler_queue_zone_write_axfr_thread_exit;
-                    }
-
-                    packet_writer_add_fqdn(&pw, (const u8*)path);
-
-                    rdata_len -= qname_len;
-
-                    if(FAIL(n = input_stream_read_fully(&fis, path, rdata_len)))
-                    {
-                        log_err("zone write axfr: error reading NSEC type map: %r", n);
-
-                        /*
-                         * GOTO !!! (I hate this)
-                         */
-
-                        goto scheduler_queue_zone_write_axfr_thread_exit;
-                    }
-
-                    packet_writer_add_bytes(&pw, (const u8*)path, rdata_len);
-
-                    SET_U16_AT(pw.packet[rdata_offset - 2], htons(pw.packet_offset - rdata_offset)); // set RDATA size
-
-                    continue;
-                }
-                case TYPE_NSEC3PARAM:
-                {
-                    break;
-                }
-            }
-        }
-
+        // not a case handled with compression : raw copy
+        
         while(rdata_len > 0)
         {
-            if((n = input_stream_read(&fis, (u8*)path, MIN(rdata_len, sizeof(path)))) <= 0)
+            if((n = input_stream_read(&fis, (u8*)buffer, MIN(rdata_len, sizeof(buffer)))) <= 0)
             {
                 if(n == 0)
                 {
                     break;
                 }
 
-                log_err("zone write axfr: error reading %{dnstype} rdata: %r", &tctrl.qtype, n);
+                log_err("zone write axfr: %{dnsname}: error reading %{dnstype} rdata: %r", data_zone_origin, &tctrl.qtype, n);
 
                 /*
-                 * GOTO !!! (I hate this)
+                 * GOTO !!! (thread carefully)
                  */
 
                 goto scheduler_queue_zone_write_axfr_thread_exit;
             }
+            
+#ifdef DEBUG
+            if(packet_writer_get_remaining_capacity(&pw) < n)
+            {
+                log_err("zone write axfr: %{dnsname}: would store %i bytes when %i were expected and %i remaining, from %i",
+                        data_zone_origin,
+                        n,
+                        rdata_len,
+                        packet_writer_get_remaining_capacity(&pw),
+                        remaining_capacity
+                        );
+                
+                /*
+                 * GOTO !!! (thread carefully)
+                 */
 
-            packet_writer_add_bytes(&pw, (const u8*)path, n);
+                goto scheduler_queue_zone_write_axfr_thread_exit;
+            }
+#endif
+
+            packet_writer_add_bytes(&pw, (const u8*)buffer, n);
 
             rdata_len -= n;
         }
@@ -1045,10 +1189,10 @@ zdb_zone_answer_axfr_thread(void* data_)
 
 scheduler_queue_zone_write_axfr_thread_exit:
 
-    log_info("zone write axfr: closing file for %{dnsname}, %llu bytes sent", data_zone_origin, total_bytes_sent);
+    log_info("zone write axfr: %{dnsname}: closing file, %llu bytes sent", data_zone_origin, total_bytes_sent);
 
 #ifdef DEBUG
-    log_debug("zone write axfr: closing socket %i", tcpfd);
+    log_debug("zone write axfr: %{dnsname}: closing socket %i", data_zone_origin, tcpfd);
 #endif
     
     output_stream_close(&tcpos);
@@ -1064,7 +1208,14 @@ zdb_zone_answer_axfr(zdb_zone *zone, message_data *mesg, struct thread_pool_s *n
 {
     scheduler_queue_zone_write_axfr_args* args;
     
-    log_info("zone write axfr: queueing %{dnsname}", zone->origin);
+    log_info("zone write axfr: %{dnsname}: queueing", zone->origin);
+    
+    if(mesg->received >= max_packet_size)
+    {
+        log_err("zone write axfr: %{dnsname}: received message is already bigger than maximum message size in answer: cancelled",
+                zone->origin);
+        return;
+    }
         
     MALLOC_OR_DIE(scheduler_queue_zone_write_axfr_args*, args, sizeof(scheduler_queue_zone_write_axfr_args), SHDQZWAA_TAG);
     zdb_zone_acquire(zone);

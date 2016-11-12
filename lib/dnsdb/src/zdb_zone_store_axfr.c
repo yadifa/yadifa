@@ -118,6 +118,8 @@ zdb_zone_store_axfr(zdb_zone* zone, output_stream* os)
            (((u8*) & rec.rttl - (u8*) & rec) == 4) &&
            (((u8*) & rec.rsize - (u8*) & rec) == 8)
            ); /* Else the struct is "aligned" ... and broken */
+    
+    yassert(zdb_zone_islocked(zone));
 
     rec.rclass = zdb_zone_getclass(zone); /** @note: NATIVECLASS */
 
@@ -128,7 +130,7 @@ zdb_zone_store_axfr(zdb_zone* zone, output_stream* os)
         return ZDB_ERROR_GENERAL;
     }
 
-    u32 minimum_ttl;
+    s32 minimum_ttl;
 
     zdb_zone_getminttl(zone, &minimum_ttl);
 

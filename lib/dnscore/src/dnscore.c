@@ -640,13 +640,11 @@ void log_assert__(bool b, const char *txt, const char *file, int line)
         if(logger_is_running() && (g_system_logger != NULL))
         {
             //logger_handle_exit_level(MAX_U32);
-            log_crit("assert: at %s:%d: %s", file, line, txt); /* this is in zassert */
+            log_crit("assert: at %s:%d: %s", file, line, txt); /* this is in yassert */
             logger_flush();
         }
-        else
-        {
-            osformatln(&__termerr__,"assert: at %s:%d: %s", file, line, txt);            
-        }
+
+        osformatln(&__termerr__,"assert: at %s:%d: %s", file, line, txt);
         stdstream_flush_both_terms();
         abort();
     }

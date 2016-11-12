@@ -205,6 +205,8 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
 #if ZDB_HAS_NSEC3_SUPPORT
     u32 dot_origin_len;
 #endif
+    
+    yassert(zdb_zone_islocked_weak(zone));
         
     if(FAIL(ret = buffer_output_stream_init(&bos, fos, OUTPUT_BUFFER_SIZE)))
     {
@@ -541,13 +543,6 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
     return SUCCESS;
 }
 
-ya_result
-zdb_zone_write_text(const zdb_zone *zone, output_stream *fos, bool force_label)
-{
-    ya_result ret;
-    ret = zdb_zone_write_text_ex(zone, fos, force_label, TRUE);
-    return ret;
-}
 
 /*
  * Without buffering:
@@ -558,6 +553,17 @@ zdb_zone_write_text(const zdb_zone *zone, output_stream *fos, bool force_label)
  *
  * zdb_zone_write_text: 1245933590000 -> 1245933597877 (7877)
  *
+ */
+
+/**
+ * 
+ * Zone MUST be locked 
+ * Note that the one caller locks the zone.
+ * 
+ * @param zone
+ * @param output_file
+ * @param force_label
+ * @return 
  */
 
 ya_result
@@ -608,7 +614,7 @@ zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, bool for
     
     if(ISOK(ret = file_output_stream_create(&fos, tmp, FILE_RIGHTS)))
     {
-        if(ISOK(ret = zdb_zone_write_text_ex(zone, &fos, force_label, allow_shutdown)))
+        if(ISOK(ret = zdb_zone_write_text_ex(zone, &fos, force_label, allow_shutdown))) // zone is locked
         {
             if(file_is_link(output_file) > 0)
             {

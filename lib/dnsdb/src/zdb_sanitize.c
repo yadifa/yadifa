@@ -563,7 +563,7 @@ zdb_sanitize_rr_set_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsname_
                 if(a_aaaa == others + not_ns_ds_nsec_rrsig)
                 {
                     //zdb_packed_ttlrdata* record_list = ns_record_list;
-                    zdb_packed_ttlrdata* record_list =zdb_record_find(&label->resource_record_set, TYPE_NS);
+                    zdb_packed_ttlrdata* record_list =zdb_record_find(&label->resource_record_set, TYPE_NS); // sanitize
 
                     while(record_list != NULL)
                     {
@@ -750,6 +750,16 @@ zdb_sanitize_rr_label_with_parent(zdb_zone *zone, zdb_rr_label *label, dnsname_s
 #ifdef DEBUG
         zdb_rr_label_stack_find(zone->apex, name->labels, name->size, zone->origin_vector.size + 1);
 #endif
+        if(!RR_LABEL_RELEVANT(label))
+        {
+            u8 name_fqdn[MAX_DOMAIN_LENGTH];
+            dnsname_vector name_vector;
+            dnsname_stack_to_dnsname(name, name_fqdn);
+            dnsname_to_dnsname_vector(name_fqdn, &name_vector);
+            
+            
+            zdb_rr_label_delete_record(zone, name_vector.labels, (name_vector.size - zone->origin_vector.size) - 1, TYPE_ANY);
+        }
     }
     else
     {

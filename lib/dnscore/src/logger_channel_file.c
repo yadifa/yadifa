@@ -55,10 +55,9 @@
 
 #include "dnscore/buffer_output_stream.h"
 #include "dnscore/file_output_stream.h"
-
 #include "dnscore/format.h"
-
 #include "dnscore/chroot.h"
+#include "dnscore/fdtools.h"
 
 /*
  * The new logger model does not requires MT protection on the channels
@@ -340,6 +339,39 @@ logger_channel_file_reopen(logger_channel* chan)
     return return_code;
 }
 
+static void
+logger_channel_file_sink(logger_channel* chan)
+{
+    file_data* sd = (file_data*)chan->data;
+    struct stat st;
+    fstat(sd->fd, &st);
+        
+    if(st.st_nlink == 0)
+    {
+        int ret = 0;
+        // deleted
+        // close and open /dev/null instead
+
+        int dev_null = open_ex("/dev/null", O_WRONLY);
+        
+        while(dup2(dev_null, sd->fd) < 0)
+        {
+            ret = errno;
+            if(ret != EINTR)
+            {
+                break;
+            }
+            ret = 0;
+        }
+        close_ex(dev_null);
+        if(ret != 0)
+        {
+            close_ex(sd->fd);
+            sd->fd = -1;
+        }
+    }
+}
+
 static const logger_channel_vtbl stream_vtbl =
 {
     logger_channel_file_constmsg,
@@ -348,6 +380,7 @@ static const logger_channel_vtbl stream_vtbl =
     logger_channel_file_flush,
     logger_channel_file_close,
     logger_channel_file_reopen,
+    logger_channel_file_sink,
     "file_channel"
 };
 

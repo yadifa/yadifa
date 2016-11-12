@@ -98,8 +98,12 @@ extern "C" {
      */
     
     bool serial_le(u32 a, u32 b);
-
-
+    
+    static inline bool serial_eq(u32 a, u32 b)
+    {
+        return a == b;
+    }
+    
 #ifdef	__cplusplus
 }
 #endif

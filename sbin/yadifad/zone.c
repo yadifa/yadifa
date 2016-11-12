@@ -307,7 +307,7 @@ zone_dump_allocated()
         u64_node *node = u64_set_avl_iterator_next_node(&iter);
         zone_desc_s *zone_desc = (zone_desc_s*)node->value;
 
-        u32 status_flags = zone_desc->status_flags;
+        u32 status_flags = zone_get_status(zone_desc);
         format_writer status_flags_fw = {zone_desc_status_flags_long_format, &status_flags};
         log_debug1("zone dump: %p #%llu, %llu, rc=%u, %{dnsname} status=%w",zone_desc, zone_desc->instance_id, zone_desc->instance_time_us, zone_desc->rc, zone_desc->origin, &status_flags_fw);
     }
@@ -721,7 +721,7 @@ zone_register(zone_data_set *dset, zone_desc_s *zone_desc)
         else if((zone_desc_match_bitmap = zone_desc_match(zone_desc, current_zone_desc)) == 0)
         {
             // already
-            log_debug("zone: %{dnsname} has already been set", zone_desc->origin);
+            log_debug("zone: %{dnsname} has already been set this way", zone_desc->origin);
 
             zone_set_writer_unlock(dset);
             
@@ -751,7 +751,7 @@ zone_register(zone_data_set *dset, zone_desc_s *zone_desc)
     {
         log_info("zone: %{dnsname} is a new zone", zone_desc->origin);
         
-        zone_desc->status_flags = ZONE_STATUS_STARTING_UP;
+        zone_desc->_status_flags = ZONE_STATUS_STARTING_UP;
     }
         
     if(zone_desc->type == ZT_SLAVE)
@@ -904,11 +904,11 @@ zone_setmodified(zone_desc_s *zone_desc, bool v)
     
     if(v)
     {
-        zone_desc->status_flags |= mask;
+        zone_set_status(zone_desc, mask);
     }
     else
     {
-        zone_desc->status_flags &= ~mask;
+        zone_clear_status(zone_desc, mask);
     }
 }
 
@@ -919,11 +919,11 @@ zone_setloading(zone_desc_s *zone_desc, bool v)
     
     if(v)
     {
-        zone_desc->status_flags |= mask;
+        zone_set_status(zone_desc, mask);
     }
     else
     {
-        zone_desc->status_flags &= ~mask;
+        zone_clear_status(zone_desc, mask);
     }
 }
 
@@ -934,11 +934,11 @@ zone_setmustsavefile(zone_desc_s *zone_desc, bool v)
     
     if(v)
     {
-        zone_desc->status_flags |= mask;
+        zone_set_status(zone_desc, mask);
     }
     else
     {
-        zone_desc->status_flags &= ~mask;
+        zone_clear_status(zone_desc, mask);
     }
 }
 
@@ -949,11 +949,11 @@ zone_setmustsaveaxfr(zone_desc_s *zone_desc, bool v)
     
     if(v)
     {
-        zone_desc->status_flags |= mask;
+        zone_set_status(zone_desc, mask);
     }
     else
     {
-        zone_desc->status_flags &= ~mask;
+        zone_clear_status(zone_desc, mask);
     }
 }
 
@@ -964,11 +964,11 @@ zone_setsavingfile(zone_desc_s *zone_desc, bool v)
     
     if(v)
     {
-        zone_desc->status_flags |= mask;
+        zone_set_status(zone_desc, mask);
     }
     else
     {
-        zone_desc->status_flags &= ~mask;
+        zone_clear_status(zone_desc, mask);
     }
 }
 
@@ -979,11 +979,11 @@ zone_setsavingaxfr(zone_desc_s *zone_desc, bool v)
     
     if(v)
     {
-        zone_desc->status_flags |= mask;
+        zone_set_status(zone_desc, mask);
     }
     else
     {
-        zone_desc->status_flags &= ~mask;
+        zone_clear_status(zone_desc, mask);
     }
 }
 
@@ -994,78 +994,78 @@ zone_setstartingup(zone_desc_s *zone_desc, bool v)
     
     if(v)
     {
-        zone_desc->status_flags |= mask;
+        zone_set_status(zone_desc, mask);
     }
     else
     {
-        zone_desc->status_flags &= ~mask;
+        zone_clear_status(zone_desc, mask);
     }
 }
 
 bool
 zone_isidle(zone_desc_s *zone_desc)
 {
-    return (zone_desc->status_flags & ZONE_STATUS_BUSY) == 0;
+    return (zone_get_status(zone_desc) & ZONE_STATUS_BUSY) == 0;
 }
 
 bool
 zone_isfrozen(zone_desc_s *zone_desc)
 {
-    return (zone_desc->status_flags & ZONE_STATUS_FROZEN) != 0;
+    return (zone_get_status(zone_desc) & ZONE_STATUS_FROZEN) != 0;
 }
 
 bool
 zone_ismodified(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & ZONE_STATUS_MODIFIED) != 0);
+    return ((zone_get_status(zone_desc) & ZONE_STATUS_MODIFIED) != 0);
 }
 
 bool
 zone_isloading(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & ZONE_STATUS_LOADING) != 0);
+    return ((zone_get_status(zone_desc) & ZONE_STATUS_LOADING) != 0);
 }
 
 bool
 zone_mustsavefile(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & ZONE_STATUS_SAVETO_ZONE_FILE) != 0);
+    return ((zone_get_status(zone_desc) & ZONE_STATUS_SAVETO_ZONE_FILE) != 0);
 }
 
 bool
 zone_mustsaveaxfr(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & ZONE_STATUS_SAVETO_AXFR_FILE) != 0);
+    return ((zone_get_status(zone_desc) & ZONE_STATUS_SAVETO_AXFR_FILE) != 0);
 }
 
 bool
 zone_issavingfile(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & ZONE_STATUS_SAVING_ZONE_FILE) != 0);
+    return ((zone_get_status(zone_desc) & ZONE_STATUS_SAVING_ZONE_FILE) != 0);
 }
 
 bool
 zone_issavingaxfr(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & ZONE_STATUS_SAVING_AXFR_FILE) != 0);
+    return ((zone_get_status(zone_desc) & ZONE_STATUS_SAVING_AXFR_FILE) != 0);
 }
 
 bool
 zone_isstartingup(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & ZONE_STATUS_STARTING_UP) != 0);
+    return ((zone_get_status(zone_desc) & ZONE_STATUS_STARTING_UP) != 0);
 }
 
 bool
 zone_isdynamicupdating(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & ZONE_STATUS_DYNAMIC_UPDATING) != 0);
+    return ((zone_get_status(zone_desc) & ZONE_STATUS_DYNAMIC_UPDATING) != 0);
 }
  
 bool
 zone_canbeedited(zone_desc_s *zone_desc)
 {
-    return ((zone_desc->status_flags & (ZONE_STATUS_STARTING_UP|ZONE_STATUS_DYNAMIC_UPDATING|ZONE_STATUS_SAVING_AXFR_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_LOADING)) == 0);
+    return ((zone_get_status(zone_desc) & (ZONE_STATUS_STARTING_UP|ZONE_STATUS_DYNAMIC_UPDATING|ZONE_STATUS_SAVING_AXFR_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_LOADING)) == 0);
 }
 
 bool
@@ -1105,14 +1105,15 @@ zone_is_obsolete(zone_desc_s *zone_desc)
     mutex_lock(&zone_desc->lock);
 
     r = ((zone_desc->lock_owner_count | zone_desc->lock_wait_count) == 0) &&
-        ((zone_desc->status_flags & (ZONE_STATUS_UNREGISTERING|ZONE_STATUS_MARKED_FOR_DESTRUCTION)) != 0);
+        ((zone_get_status(zone_desc) & (ZONE_STATUS_UNREGISTERING|ZONE_STATUS_MARKED_FOR_DESTRUCTION)) != 0);
 
     mutex_unlock(&zone_desc->lock);
     
     return r;
 }
 
-ya_result zone_try_lock(zone_desc_s *zone_desc, u8 owner_id)
+ya_result zone_try_lock
+(zone_desc_s *zone_desc, u8 owner_id)
 {
     log_debug6("zone_try_lock(%{dnsname}@%p, %u", zone_desc->origin, zone_desc, owner_id);
     
@@ -1173,6 +1174,53 @@ zone_lock(zone_desc_s *zone_desc, u8 owner_id)
     return return_value;
 }
 
+ya_result
+zone_try_lock_wait(zone_desc_s *zone_desc, u64 usec, u8 owner_id)
+{
+    ya_result return_value = ERROR;
+    
+    log_debug6("zone_lock(%{dnsname}@%p, %02x)", zone_desc->origin, zone_desc, owner_id);
+
+    mutex_lock(&zone_desc->lock);
+    
+    if(zone_desc->lock_owner != ZONE_LOCK_UNREGISTER)
+    {    
+        if((zone_desc->lock_owner != ZONE_LOCK_NOBODY) && (zone_desc->lock_owner != owner_id))
+        {
+            zone_desc->lock_wait_count++;
+            
+            s64 start = timeus();
+            
+            do
+            {
+                cond_timedwait(&zone_desc->lock_cond, &zone_desc->lock, usec);
+                
+                s64 now = timeus();
+                
+                if(now - start >= usec)
+                {
+                    pthread_cond_broadcast(&zone_desc->lock_cond);
+                    mutex_unlock(&zone_desc->lock);
+                    return ERROR;
+                }
+            }
+            while((zone_desc->lock_owner != ZONE_LOCK_NOBODY) && (zone_desc->lock_owner != owner_id));
+
+            zone_desc->lock_wait_count--;
+        }
+
+        zone_desc->lock_owner = owner_id & 0x7f;
+        zone_desc->lock_owner_count++;
+        
+        return_value = owner_id;
+    }
+    
+    pthread_cond_broadcast(&zone_desc->lock_cond);
+    mutex_unlock(&zone_desc->lock);
+    
+    return return_value;
+}
+
 void
 zone_unlock(zone_desc_s *zone_desc, u8 owner_mark)
 {
@@ -1219,7 +1267,7 @@ zone_setdefaults(zone_desc_s *zone_desc)
         port = DNS_DEFAULT_PORT;
     }
     
-    zone_desc->status_flags = ZONE_STATUS_STARTING_UP;
+    zone_desc->_status_flags = ZONE_STATUS_STARTING_UP;
     
 #if HAS_ACL_SUPPORT
     acl_merge_access_control(&zone_desc->ac, &g_config->ac);
@@ -1307,7 +1355,7 @@ zone_setwithzone(zone_desc_s *desc_zone_desc, zone_desc_s *src_zone_desc)
 #endif
         desc_zone_desc->dynamic_provisioning.flags = desc_zone_desc->dynamic_provisioning.flags;
         desc_zone_desc->origin = dnsname_dup(src_zone_desc->origin);
-        desc_zone_desc->status_flags = src_zone_desc->status_flags;
+        desc_zone_desc->_status_flags = src_zone_desc->_status_flags;
         if(src_zone_desc->file_name != NULL)
         {
             desc_zone_desc->file_name = strdup(src_zone_desc->file_name);
@@ -1596,7 +1644,7 @@ zone_desc_log(logger_handle* handle, u32 level, const zone_desc_s *zone_desc, co
     
     logger_handle_msg(handle, level, "%s: %{dnsname} @%p '%s' file='%s'",
             text, FQDNNULL(zone_desc->origin), zone_desc, STRNULL(zone_desc->domain), STRNULL(zone_desc->file_name));
-    u32 status_flags = zone_desc->status_flags;
+    u32 status_flags = zone_get_status(zone_desc);
     //format_writer status_flags_fw = {zone_desc_status_flags_format, &status_flags};
     format_writer status_flags_fw = {zone_desc_status_flags_long_format, &status_flags};
     logger_handle_msg(handle, level, "%s: %{dnsname} status=%w",
@@ -1807,7 +1855,7 @@ zone_dnssec_to_name(u32 dnssec_flags)
 void
 zone_enqueue_command(zone_desc_s *zone_desc, u32 id, void* parm, bool has_priority) /// @todo 20141016 edf -- test all callers RCs
 {
-    if(!has_priority && ((zone_desc->status_flags & ZONE_STATUS_MARKED_FOR_DESTRUCTION) != 0))
+    if(!has_priority && ((zone_get_status(zone_desc) & ZONE_STATUS_MARKED_FOR_DESTRUCTION) != 0))
     {
         log_err("tried to queue to a zone marked for destruction");
         return;
@@ -1888,6 +1936,30 @@ zone_has_loaded_zone(zone_desc_s *zone_desc)
     zdb_zone *zone = zone_desc->loaded_zone; // OK
     return zone != NULL;
 }
+
+void
+zone_set_status(zone_desc_s *zone_desc, u32 flags)
+{
+    zone_desc->_status_flags |= flags;
+}
+
+void
+zone_clear_status(zone_desc_s *zone_desc, u32 flags)
+{
+    zone_desc->_status_flags &= ~flags;
+    if((flags & ZONE_STATUS_PROCESSING) == 0)
+    {
+        // poke
+        database_fire_zone_processed(zone_desc);
+    }
+}
+
+u32
+zone_get_status(const zone_desc_s *zone_desc)
+{
+    return zone_desc->_status_flags;
+}
+
 
 /** @} */
 

@@ -537,6 +537,15 @@ list_dl_dequeue(list_dl_s *list)
 bool list_dl_remove(list_dl_s *list, const void *data);
 
 /**
+ * Removes the node from the list, the node is not freed
+ * 
+ * @param list
+ * @param node
+ */
+
+void list_dl_remove_node(list_dl_s *list, list_dl_node_s *node);
+
+/**
  * Remove the first item for which the match does not returns 0.
  * 
  * @param list

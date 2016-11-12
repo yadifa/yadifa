@@ -98,8 +98,6 @@ axfr_process(message_data *mesg)
     dnsname_vector fqdn_vector;
 
     dnsname_to_dnsname_vector(fqdn, &fqdn_vector);
-
-
     
     u16 rcode;
 
@@ -256,11 +254,12 @@ axfr_query(const host_address *servers, const u8 *origin, u32* out_loaded_serial
             zdb_zone *zone = zdb_acquire_zone_write_lock_from_fqdn(g_config->database, origin, ZDB_ZONE_MUTEX_XFR);
             if(zone != NULL)
             {
+#if ZDB_ZONE_HAS_JNL_REFERENCE
                 if(zone->journal != NULL)
                 {
                     journal_close(zone->journal);
                 }
-                
+#endif
                 zdb_zone_release_unlock(zone, ZDB_ZONE_MUTEX_XFR);
             }
                                     

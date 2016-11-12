@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man on Thu Jul 14 18:39:49 CEST 2016
+.\" Manual page created with latex2man on Thu Jul 14 18:39:49 CEST 2017
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFA" "8" "2016\-07\-19" "YADIFA " "YADIFA "
+.TH "YADIFA" "8" "2016\-11\-10" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -151,7 +151,7 @@ file from the sources code.
 .SH VERSION
 
 .PP
-Version: 2.2.2 of 2016-11-08\&.
+Version: 2.3.0 of 2016\-11\-10\&.
 .PP
 .SH MAILINGLIST
 

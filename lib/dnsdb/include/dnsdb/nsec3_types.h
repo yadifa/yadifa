@@ -93,7 +93,21 @@ extern "C"
 #define NSEC3_PROPRIETARY_FLAG_SCHEDULED 0x80
 #define NSEC3_PROPRIETARY_FLAG_DELETED   0x40
     
-#define TMP_NSEC3_TTLRDATA_SIZE (1 + 1 + 2 + 1 + MAX_DOMAIN_LENGTH + 1 + MAX_DOMAIN_LENGTH + TYPE_BIT_MAPS_MAX_RDATA_SIZE)
+/**
+ * @note 20161011 edf -- to sum it up :
+ * 
+ * 1 byte for the hash
+ * 1 bytes for the flags
+ * 1 byte for the opt-out flag
+ * 2 bytes for the iterations
+ * 1 byte for the salt length
+ * 255 bytes for the salt
+ * 1 byte for the hash len
+ * 255 bytes for the hash
+ * 256 * (1 + 1 +32) bytes for the type bitmap encoding
+ */
+    
+#define TMP_NSEC3_TTLRDATA_SIZE (1 + 1 + 1 + 2 + 1 + MAX_DOMAIN_LENGTH + 1 + MAX_DOMAIN_LENGTH + TYPE_BIT_MAPS_MAX_RDATA_SIZE)
 
 //typedef struct nsec3_node nsec3_zone_item;
 #define nsec3_zone_item struct nsec3_node

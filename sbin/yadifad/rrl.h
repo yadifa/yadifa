@@ -54,8 +54,8 @@
 #define RRL_DROP            2
 #endif
 
-#define RRL_PROCEED_SLIP    (RRL_SLIP|4)
-#define RRL_PROCEED_DROP    (RRL_DROP|4)
+#define RRL_PROCEED_SLIP    (RRL_SLIP|4)    // ignored slip
+#define RRL_PROCEED_DROP    (RRL_DROP|4)    // ignored drop
 
 #define RRL_QUEUE_SIZE_MIN  0x00000400
 #define RRL_QUEUE_SIZE_MAX  0x01000000
@@ -74,8 +74,20 @@
 
 void rrl_init();
 void rrl_finalize();
-ya_result rrl_process(message_data *mesg, const zdb_query_ex_answer *ans_auth_add);
+
+/**
+ * Look at the message for RRL processing.
+ * Returns an RRL code.
+ * After this call, the message may be truncated.
+ * 
+ * @param mesg the query message
+ * @param ans_auth_add the answer that would be given to the client
+ * @return an RRL error code
+ */
+
+ya_result rrl_process(message_data *mesg, zdb_query_ex_answer *ans_auth_add);
 void rrl_cull();
+bool rrl_is_logonly();
 
 const config_section_descriptor_s *confs_rrl_get_descriptor();
 

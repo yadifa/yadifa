@@ -75,10 +75,6 @@
 #include <dirent.h>
 #include <fcntl.h>
 
-#include <dnscore/buffer_input_stream.h>
-#include <dnscore/buffer_output_stream.h>
-#include <dnscore/file_input_stream.h>
-#include <dnscore/file_output_stream.h>
 #include <dnscore/limited_input_stream.h>
 #include <dnscore/mutex.h>
 #include <dnscore/serial.h>
@@ -144,8 +140,6 @@ extern logger_handle* g_database_logger;
  * The table of serials streams (IXFR) and their offset
  * The value stored is of the serial ending the IXFR
  */
-
-#define CJF_PAGE_MAGIC MAGIC4('P','A','G','E')
 
 #define PAGE_INITIALIZER {CJF_PAGE_MAGIC, 0, 0, CJF_SECTION_INDEX_SLOT_COUNT, 0, 0}
 
@@ -256,7 +250,7 @@ journal_cjf_page_cache_item_flush(journal_cjf_page_cache_item *sci)
             log_debug5("journal_cjf_page_cache_flush_item fd=%i offset=%lli=%llx size=%i)", fd, first_offset, first_offset, (sci->last_written_entry - sci->first_written_entry) * CJF_SECTION_INDEX_SLOT_SIZE);
 
             lseek(fd, first_offset, SEEK_SET);
-            writefully(fd, &sci->buffer[sci->first_written_entry], (sci->last_written_entry - sci->first_written_entry) * CJF_SECTION_INDEX_SLOT_SIZE);
+            writefully(fd, &sci->buffer[sci->first_written_entry], ((sci->last_written_entry - sci->first_written_entry) + 1) * CJF_SECTION_INDEX_SLOT_SIZE);
 
             // mark the entry as not being used
 
@@ -280,6 +274,8 @@ journal_cjf_page_cache_cull()
     
     if(list_dl_size(&page_cache_mru) > journal_cfj_page_mru_size)
     {
+        log_debug6("journal_cjf_page_cache_cull() %i > %i, removing and flushing last",
+                list_dl_size(&page_cache_mru) > journal_cfj_page_mru_size);
         // get the tail one
         journal_cjf_page_cache_item *sci = (journal_cjf_page_cache_item*)list_dl_remove_last(&page_cache_mru);
         // flush it
@@ -393,9 +389,19 @@ journal_cjf_page_cache_write(int fd, u64 file_offset, s16 offset, const void *va
             if(file_offset + CJF_PAGE_SIZE_IN_BYTE <= st.st_size)
             {
                 off_t here = lseek(fd, 0, SEEK_CUR);
-                lseek(fd, file_offset, SEEK_SET);
-                readfully(fd, sci->buffer, CJF_PAGE_SIZE_IN_BYTE);
-                lseek(fd, here, SEEK_SET);
+                yassert(here != (off_t)-1);
+                
+                off_t there = lseek(fd, file_offset, SEEK_SET);
+                yassert(there == file_offset);
+                // it is a READ, because to write the cache, it must first be loaded
+                ssize_t size = readfully(fd, sci->buffer, CJF_PAGE_SIZE_IN_BYTE);
+#ifdef DEBUG
+                log_memdump_ex(g_database_logger, MSG_DEBUG6, sci->buffer, size, 32, OSPRINT_DUMP_ADDRESS|OSPRINT_DUMP_HEX);
+#endif                
+                yassert(size == CJF_PAGE_SIZE_IN_BYTE);
+                
+                there = lseek(fd, here, SEEK_SET);
+                yassert(there == here);
             }
         }
         
@@ -404,7 +410,11 @@ journal_cjf_page_cache_write(int fd, u64 file_offset, s16 offset, const void *va
     
     if(offset > sci->last_written_entry)
     {
-        sci->last_written_entry = offset;
+        s16 value_len_slots = ((value_len + 7) >> 3) - 1;
+        
+        yassert(value_len_slots >= 0);
+        
+        sci->last_written_entry = offset + value_len_slots;
     }
     
     if(offset < sci->first_written_entry)
@@ -465,9 +475,19 @@ journal_cjf_page_cache_read(int fd, u64 file_offset, s16 offset, void *value, u3
             if(file_offset + CJF_PAGE_SIZE_IN_BYTE <= st.st_size)
             {
                 off_t here = lseek(fd, 0, SEEK_CUR);
-                lseek(fd, file_offset, SEEK_SET);
-                readfully(fd, sci->buffer, CJF_PAGE_SIZE_IN_BYTE);
-                lseek(fd, here, SEEK_SET);
+                yassert(here != (off_t)-1);
+                
+                off_t there = lseek(fd, file_offset, SEEK_SET);
+                yassert(there == file_offset);
+                
+                ssize_t size = readfully(fd, sci->buffer, CJF_PAGE_SIZE_IN_BYTE);                
+#ifdef DEBUG
+                log_memdump_ex(g_database_logger, MSG_DEBUG6, sci->buffer, size, 32, OSPRINT_DUMP_ADDRESS|OSPRINT_DUMP_HEX);
+#endif
+                yassert(size == CJF_PAGE_SIZE_IN_BYTE);
+                
+                there = lseek(fd, here, SEEK_SET);
+                yassert(there == here);
             }
         }
         
@@ -509,7 +529,7 @@ journal_cjf_page_cache_write_header(int fd, u64 file_offset,  const journal_cjf_
     yassert(file_offset >= CJF_HEADER_SIZE);
     yassert(value->count <= value->size);
     yassert(((value->count <= value->size) && (value->next_page_offset < file_offset)) || (value->next_page_offset > file_offset) || (value->next_page_offset == 0));
-    
+    yassert(value->stream_end_offset != 0);
     log_debug5("journal_cjf_page_cache_write_header(%i, %lli=%llx, {%08x,%3d,%3d,%08x})", fd, file_offset, file_offset, value->next_page_offset, value->count, value->size, value->stream_end_offset);
     journal_cjf_page_cache_write(fd, file_offset, 0, value, CJF_SECTION_INDEX_SLOT_HEAD);
 }
@@ -517,13 +537,19 @@ journal_cjf_page_cache_write_header(int fd, u64 file_offset,  const journal_cjf_
 void
 journal_cjf_page_cache_write_new_header(int fd, u64 file_offset)
 {
-    journal_cjf_page_tbl_header new_page_header = PAGE_INITIALIZER;
+    static const journal_cjf_page_tbl_header new_page_header = PAGE_INITIALIZER;
+    static const journal_cjf_page_tbl_item empty_item = {0,0};
     const journal_cjf_page_tbl_header *value = &new_page_header;
     yassert(file_offset >= CJF_HEADER_SIZE);
     yassert(value->count <= value->size);
     yassert(((value->count <= value->size) && (value->next_page_offset < file_offset)) || (value->next_page_offset > file_offset) || (value->next_page_offset == 0));
     log_debug5("journal_cjf_page_cache_write_new_header(%i, %lli=%llx, {%08x,%3d,%3d,%08x})", fd, file_offset, file_offset, value->next_page_offset, value->count, value->size, value->stream_end_offset);
     journal_cjf_page_cache_write(fd, file_offset, 0, value, CJF_SECTION_INDEX_SLOT_HEAD);
+    
+    for(int i = 0; i < CJF_SECTION_INDEX_SLOT_COUNT; ++i)
+    {
+        journal_cjf_page_cache_write_item(fd, file_offset, i, &empty_item);
+    }
 }
 
 void
@@ -740,7 +766,6 @@ journal_cjf_page_cache_close(int fd)
     }
     group_mutex_unlock(&page_cache_mtx, GROUP_MUTEX_WRITE);
 }
-
 
 /** @} */
 

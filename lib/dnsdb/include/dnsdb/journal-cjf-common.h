@@ -38,11 +38,54 @@
 #define JOURNAL_CJF 1
 
 #include <dnscore/output_stream.h>
-#include "dnsdb/journal.h"
+#include <dnscore/serial.h>
+#include <dnsdb/journal.h>
+#include <dnsdb/zdb-zone-path-provider.h>
 
 #ifdef CJF_HEADER_SIZE
 #error "CJF_HEADER_SIZE already defined"
 #endif
+
+/*
+ *  MAGIC 'JCS' 0
+ *  offset to next (0 until the section is closed and followed by a new one)
+ *  list of last-serial + file_offset
+ */
+
+
+struct cjf_header // Cyclic Journal File
+{
+    u32 magic_plus_version;
+    u32 serial_begin;
+    u32 serial_end;
+    u32 first_index_offset;
+    u32 table_index_offset;
+    //
+    u32 last_soa_offset;
+    u32 last_page_offset_next; // the byte after the last PAGE on the chain ends
+    u16 flags;
+    u8 __end_of_struct__;
+};
+
+typedef struct cjf_header cjf_header;
+
+#define CJF_HEADER_REAL_SIZE offsetof(cjf_header,__end_of_struct__)
+/*
+#if CJF_HEADER_SIZE != CJF_HEADER_REAL_SIZE
+#error "CJF_HEADER_SIZE != CJF_HEADER_REAL_SIZE"
+#endif
+*/
+
+/*
+ * PAGE
+ * 
+ * Serial Number Stream Offset
+ * 
+ * The table of serials streams (IXFR) and their offset
+ * The value stored is of the serial ending the IXFR
+ */
+
+#define CJF_CJF0_MAGIC MAGIC4('C','J','F', 0x20) // ver 2.0
 
 #define CJF_HEADER_SIZE 30
 
@@ -98,19 +141,20 @@ typedef struct journal_cjf_idxt journal_cjf_idxt;
 
 #define CJF_IDXT_MAGIC MAGIC4('I','D','X','T')
 
-#define JOURNAL_CFJ_FLAGS_OTHER_ENDIAN  0x8000
-#define JOURNAL_CFJ_FLAGS_MY_ENDIAN     0x0080
-#define JOURNAL_CFJ_FLAGS_NOT_EMPTY     0x0001
-#define JOURNAL_CFJ_FLAGS_DIRTY         0x0002
+#define JOURNAL_CFJ_FLAGS_OTHER_ENDIAN  0x8000  // journal endian is different
+#define JOURNAL_CFJ_FLAGS_MY_ENDIAN     0x0080  // journal endian is the same
+#define JOURNAL_CFJ_FLAGS_NOT_EMPTY     0x0001  // journal contains pages
+#define JOURNAL_CFJ_FLAGS_DIRTY         0x0002  // journal needs flushing
+#define JOURNAL_CFJ_FLAGS_UNINITIALISED 0x0004
 
 struct journal_cjf
 {
     /* common points with journal base */
     volatile struct journal_vtbl *vtbl;
-    volatile zdb_zone            *zone;    
-    volatile struct journal      *next;
-    volatile struct journal      *prev;
-    volatile bool                  mru;
+    volatile zdb_zone            *zone;   
+    volatile list_dl_node_s   mru_node;
+    volatile int                    rc;
+    volatile unsigned int forget:1,mru:1;
     
     /* ******************************* */
 
@@ -131,14 +175,14 @@ struct journal_cjf
     shared_group_mutex_t           mtx;
     
     u16                          flags;
-        
+    u8                         *origin; // to not rely on zone
     char            *journal_file_name;
 };
 
 typedef struct journal_cjf journal_cjf;
 
 void log_debug_jnl(journal_cjf *jnl, const char *prefix);
-void jnl_header_flush(journal_cjf *jnl);
+void journal_cjf_header_flush(journal_cjf *jnl);
 void journal_cjf_remove_first_page(journal_cjf *jnl);
 
 static inline u32 journal_cjf_get_last_page_offset_limit(journal_cjf *jnl)
@@ -164,7 +208,7 @@ static inline s64 journal_cjf_get_last_page_available_space_left(journal_cjf *jn
     return ret;
 }
 
-bool jnl_ensure_file_opened(journal_cjf *jnl, bool create);
+bool journal_cjf_ensure_file_opened(journal_cjf *jnl, bool create);
 
 static inline u32 journal_cjf_maximum_size(journal_cjf *jnl)
 {

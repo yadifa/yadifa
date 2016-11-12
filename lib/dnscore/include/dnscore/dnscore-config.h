@@ -323,7 +323,8 @@
    slash. */
 #define LSTAT_FOLLOWS_SLASHED_SYMLINK 1
 
-/* Define to the sub-directory where libtool stores uninstalled libraries. */
+/* Define to the sub-directory in which libtool stores uninstalled libraries.
+   */
 #define LT_OBJDIR ".libs/"
 
 /* Name of package */
@@ -336,7 +337,7 @@
 #define PACKAGE_NAME "dnscore"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "dnscore 2.2.2-6587"
+#define PACKAGE_STRING "dnscore 2.3.0-6695"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "dnscore"
@@ -345,7 +346,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.2.2-6587"
+#define PACKAGE_VERSION "2.3.0-6695"
 
 /* Define as the return type of signal handlers (`int' or `void'). */
 #define RETSIGTYPE void
@@ -366,7 +367,7 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* Version number of package */
-#define VERSION "2.2.2-6587"
+#define VERSION "2.3.0-6695"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */

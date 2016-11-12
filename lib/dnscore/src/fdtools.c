@@ -93,6 +93,13 @@ writefully(int fd, const void *buf, size_t count)
             {
                 break;
             }
+            
+            if(err == ENOSPC)
+            {
+                // the disk is full : wait a bit, hope the admin catches it, try again later
+                sleep((rand()&7) + 1);
+                continue;
+            }
 
             if(current - start > 0)
             {
@@ -212,6 +219,13 @@ writefully_limited(int fd, const void *buf, size_t count, double minimum_rate)
                     return TCP_RATE_TOO_SLOW;
                 }
 
+                continue;
+            }
+            
+            if(err == ENOSPC)
+            {
+                // the disk is full : wait a bit, hope the admin catches it, try again later
+                sleep((rand()&7) + 1);
                 continue;
             }
 
@@ -414,6 +428,8 @@ static inline void fdtools_debug_bench_register()
 /**
  * Opens a file. (see man 2 open)
  * Handles EINTR and other retry errors.
+ * Safe to use in the logger thread as it only logs (debug) if the current
+ * thread is not the logger's
  * 
  * @param fd
  * @return 

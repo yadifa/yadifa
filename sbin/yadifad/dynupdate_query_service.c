@@ -223,6 +223,9 @@ dynupdate_query_service_thread_main_loop:
             udp_msghdr.msg_namelen = mesg->addr_len;
             udp_msghdr.msg_iov = &udp_iovec;
             udp_msghdr.msg_iovlen = 1;
+            udp_msghdr.msg_control = NULL;
+            udp_msghdr.msg_controllen = 0;
+            udp_msghdr.msg_flags = 0;
 
 #ifdef DEBUG
             log_debug("sendmsg(%d, %p, %d", mesg->sockfd, &udp_msghdr, 0);

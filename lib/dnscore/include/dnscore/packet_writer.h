@@ -46,6 +46,8 @@
 #include <dnscore/sys_types.h>
 #include <dnscore/output_stream.h>
 
+#define PW_MESSAGE_BUFFER_SIZE 0x10500
+
 #ifdef	__cplusplus
 extern "C"
 {
@@ -114,47 +116,50 @@ ya_result packet_writer_add_record(packet_writer *pw, const u8* fqdn, u16 rr_typ
 
 static inline void packet_writer_forward(packet_writer *pw, u32 bytes)
 {
-    assert(pw->packet_offset + bytes <= pw->packet_limit);
+    assert(pw->packet_offset + bytes <= PW_MESSAGE_BUFFER_SIZE /*pw->packet_limit*/);
     pw->packet_offset += bytes;
 }
 
 static inline void packet_writer_set_u8(packet_writer *pw, u16 value, u32 offset)
 {
-
+    assert(pw->packet_offset <= PW_MESSAGE_BUFFER_SIZE /*pw->packet_limit*/);
     pw->packet[offset] = value;
 }
 
 static inline void packet_writer_add_u8(packet_writer *pw, u16 value)
 {
+    assert(pw->packet_offset + 1 <= PW_MESSAGE_BUFFER_SIZE/*pw->packet_limit*/);
     pw->packet[pw->packet_offset++] = value;
 }
 
 static inline void packet_writer_set_u16(packet_writer *pw, u16 value, u32 offset)
 {
-
     SET_U16_AT(pw->packet[offset], value);
 }
 
 static inline void packet_writer_add_u16(packet_writer *pw, u16 value)
 {
+    assert(pw->packet_offset + 2 <= PW_MESSAGE_BUFFER_SIZE/*pw->packet_limit*/);
     SET_U16_AT(pw->packet[pw->packet_offset], value);
     pw->packet_offset += 2;
 }
 
 static inline void packet_writer_add_u32(packet_writer *pw, u32 value)
 {
+    assert(pw->packet_offset + 4 <= PW_MESSAGE_BUFFER_SIZE /*pw->packet_limit*/);
     SET_U32_AT(pw->packet[pw->packet_offset], value);
     pw->packet_offset += 4;
 }
 
 static inline void packet_writer_set_u32(packet_writer *pw, u32 value, u32 offset)
 {
-    assert(offset <= pw->packet_limit - 4);
+    assert(offset + 4 <= PW_MESSAGE_BUFFER_SIZE /*pw->packet_limit*/);
     SET_U32_AT(pw->packet[offset], value);
 }
 
 static inline void packet_writer_add_bytes(packet_writer *pw, const u8 *buffer, u32 len)
 {
+    assert(pw->packet_offset + len <= PW_MESSAGE_BUFFER_SIZE /*pw->packet_limit*/);
     MEMCOPY(&pw->packet[pw->packet_offset], buffer, len);
     pw->packet_offset += len;
 }
@@ -166,7 +171,7 @@ static inline u32 packet_writer_get_offset(const packet_writer *pw)
 
 static inline void packet_writer_set_offset(packet_writer *pw, u32 offset)
 {
-    yassert(offset <= pw->packet_limit);
+    yassert(offset <= PW_MESSAGE_BUFFER_SIZE /*pw->packet_limit*/);
     pw->packet_offset = offset;
 }
 

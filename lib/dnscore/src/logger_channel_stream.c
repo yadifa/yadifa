@@ -136,10 +136,18 @@ static ya_result
 logger_channel_stream_reopen(logger_channel* chan)
 {
     stream_data* sd = (stream_data*)chan->data;
+    
+    // there is no way to reopen a steam, simply flush its current contents
 
     output_stream_flush(&sd->os);
 
     return SUCCESS;
+}
+
+static void
+logger_channel_steam_sync(logger_channel* chan)
+{
+    (void)chan;
 }
 
 static const logger_channel_vtbl stream_vtbl =
@@ -150,6 +158,7 @@ static const logger_channel_vtbl stream_vtbl =
     logger_channel_stream_flush,
     logger_channel_stream_close,
     logger_channel_stream_reopen,
+    logger_channel_steam_sync,
     "stream_channel"
 };
 

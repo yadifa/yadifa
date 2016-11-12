@@ -827,6 +827,8 @@ server_init()
 {
     ya_result ret;
     
+    log_info("server model: %s", server_type[g_config->network_model].name);
+    
     server_type[g_config->network_model].context_init(g_config->thread_count_by_address);
     
     log_info("using %i working modules per UDP interface (%i threads per UDP module)", server_context.udp_unit_per_interface, server_context.thread_per_udp_worker_count);

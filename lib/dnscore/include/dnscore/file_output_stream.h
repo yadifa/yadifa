@@ -65,6 +65,28 @@ void file_output_stream_close_nolog(output_stream* os);
 
 ya_result file_output_stream_create(output_stream *stream, const char *filename,mode_t mode);
 
+/**
+ * Returns MAKE_ERRNO_ERROR(EEXIST) if the file exists already.
+ */
+
+ya_result file_output_stream_create_excl(output_stream* stream, const char* filename, mode_t mode);
+
+/**
+ * Enables or disables the write mode of the steam as "full"
+ * In "full" mode, the stream will stay blocked on a write if a recoverable
+ * error occurs. (ie: there is no space left).
+ * 
+ * Do NOT use this for the loggers as it would make it impossible to act on HUP
+ * 
+ * Main target: journal
+ * 
+ * @param stream
+ * @param full_writes
+ * @return 
+ */
+
+ya_result file_output_stream_set_full_writes(output_stream* stream, bool full_writes);
+
 ya_result fd_output_stream_attach(output_stream *os, int fd);
 
 void      fd_output_stream_detach(output_stream *os);

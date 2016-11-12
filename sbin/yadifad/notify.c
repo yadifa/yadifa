@@ -417,7 +417,7 @@ notify_masterquery_thread(void *args_)
         {
             /* get the current serial of the zone */
             
-            if(ISOK(zdb_zone_getserial(dbzone, &current_serial)))
+            if(ISOK(zdb_zone_getserial(dbzone, &current_serial))) // zone is locked
             {
                /*
                 * If the serial on the "master" is lower,
@@ -946,7 +946,7 @@ notify_service(struct service_worker_s *worker)
     
     ptr_set current_queries = PTR_SET_EMPTY;
     current_queries.compare = message_query_summary_compare;
-    u32 last_current_queries_cleanup_epoch_us = 0;
+    u64 last_current_queries_cleanup_epoch_us = 0;
 
     /**
      * @todo 20111216 edf -- the idea here is to get the right interface.
@@ -1205,6 +1205,19 @@ notify_service(struct service_worker_s *worker)
                     else
                     {
                         node->value = message;
+                    }
+                    
+                    // ready to send
+                    
+                    zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(g_config->database, message->origin); // RC++
+                    if(zone != NULL)
+                    {
+                        zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_WILL_NOTIFY);
+                        zdb_zone_release(zone);
+                    }
+                    else
+                    {
+                        log_err("notify: %{dnsname}: could not un-mark zone as queue for notification: zone not found ?", message->origin);
                     }
 
                     message->payload.notify.epoch = time(NULL);
@@ -1539,6 +1552,34 @@ notify_slaves(const u8 *origin)
         return;
     }
     
+    zdb *db = g_config->database;
+    zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(db, origin); // RC++
+    
+    if((zone == NULL) || ZDB_ZONE_INVALID(zone))
+    {
+        if(zone != NULL)
+        {
+            zdb_zone_release(zone);
+        }
+        
+        log_warn("notify: %{dnsname}: notify called on an invalid zone", origin);
+        
+        return;
+    }
+    
+    if((zdb_zone_get_status(zone) & ZDB_ZONE_STATUS_WILL_NOTIFY) != 0)
+    {
+        // zone already marked for notification
+        zdb_zone_release(zone);
+        
+        log_debug("notify: %{dnsname}: already marked for notification", origin);
+        
+        return;
+    }
+    
+    zdb_zone_set_status(zone, ZDB_ZONE_STATUS_WILL_NOTIFY);
+    zdb_zone_release(zone); // RC--
+    
     notify_message *message;
     ZALLOC_OR_DIE(notify_message*, message, notify_message, NOTFYMSG_TAG);
 
@@ -1553,6 +1594,46 @@ notify_slaves(const u8 *origin)
     async_message_call(&notify_handler_queue, async);
 }
 
+static ya_result
+notify_slaves_alarm(void *args_, bool cancel)
+{
+    u8 *origin = (u8*)args_;
+    if(notify_service_initialised && !cancel)
+    {
+        log_debug("notify: %{dnsname}: delayed retry", origin);
+        
+        notify_message *message;
+        ZALLOC_OR_DIE(notify_message*, message, notify_message, NOTFYMSG_TAG);
+
+        message->origin = origin;
+        message->payload.domain.type = NOTIFY_MESSAGE_TYPE_DOMAIN;
+
+        async_message_s *async = async_message_alloc();
+        async->id = 0;
+        async->args = message;
+        async->handler = NULL;
+        async->handler_args = NULL;
+        async_message_call(&notify_handler_queue, async);
+    }
+    else
+    {
+        zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(g_config->database, origin); // RC++
+        if(zone != NULL)
+        {
+            zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_WILL_NOTIFY);
+            zdb_zone_release(zone);
+        }
+        else
+        {
+            log_err("notify: %{dnsname}: alarm-cancel: could not un-mark zone as queue for notification: zone not found ?", origin);
+        }
+        
+        dnsname_zfree(origin);
+    }
+    
+    return SUCCESS;
+}
+
 /**
  * 
  * @param origin
@@ -1561,11 +1642,6 @@ notify_slaves(const u8 *origin)
 static bool
 notify_slaves_convert_domain_to_notify(notify_message *message)
 {
-    if(!notify_service_initialised)
-    {
-        return FALSE;
-    }
-
     /*
      * Build a list of IPs to contact
      * The master in the SOA must not be in this list
@@ -1582,14 +1658,18 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
 
     zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(db, message->origin); // RC++
     
-    if((zone == NULL) || ZDB_ZONE_INVALID(zone))
+    if((zone == NULL) || ZDB_ZONE_INVALID(zone) || !notify_service_initialised)
     {
         if(zone != NULL)
         {
+            zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_WILL_NOTIFY);
             zdb_zone_release(zone);
         }
         
-        log_debug("notify: %{dnsname}: zone temporarily unavailable", message->origin);
+        if(notify_service_initialised)
+        {
+            log_debug("notify: %{dnsname}: zone temporarily unavailable", message->origin);
+        }
         
         return FALSE;
     }
@@ -1597,6 +1677,7 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
     zone_desc_s *zone_desc = zone_acquirebydnsname(message->origin);
     if(zone_desc == NULL)
     {
+        zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_WILL_NOTIFY);
         zdb_zone_release(zone);
         log_err("notify: %{dnsname}: zone not configured", message->origin);
         return FALSE;
@@ -1607,80 +1688,93 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
     memset(&list, 0xff, sizeof(list));
 #endif
     list.next = NULL;
+    list.version = HOST_ADDRESS_NONE;
+    
+    bool lock_failed = FALSE;
+    
     /* no need to set TSIG */
     
     if(zone_ismaster(zone_desc) && zone_is_auto_notify(zone_desc))
     {
-        zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
-        
-        // get the SOA
-        zdb_packed_ttlrdata *soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);
-        // get the NS
-        zdb_packed_ttlrdata *ns = zdb_record_find(&zone->apex->resource_record_set, TYPE_NS);    
-        // get the IPs for each NS but the one in the SOA
-
-        u8 *soa_mname = ZDB_PACKEDRECORD_PTR_RDATAPTR(soa);
-        u32 soa_mname_size = dnsname_len(soa_mname);
-        u8 *soa_rname = soa_mname + soa_mname_size;
-        u8 *serial_ptr = soa_rname + dnsname_len(soa_rname);
-        u32 serial = *((u32*)serial_ptr);
-        serial = ntohl(serial);
-
-        for(zdb_packed_ttlrdata *nsp = ns; nsp != NULL; nsp = nsp->next)
+        if(zdb_zone_trylock_wait(zone, 1000000, ZDB_ZONE_MUTEX_SIMPLEREADER))
+        //if(zdb_zone_trylock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER))
         {
-            u32 ns_dname_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(nsp);
-            u8 *ns_dname = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsp);
+            // get the SOA
+            zdb_packed_ttlrdata *soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA); // zone is locked
+            // get the NS
+            zdb_packed_ttlrdata *ns = zdb_record_find(&zone->apex->resource_record_set, TYPE_NS); // zone is locked
+            // get the IPs for each NS but the one in the SOA
 
-            if(ns_dname_size == soa_mname_size)
+            u8 *soa_mname = ZDB_PACKEDRECORD_PTR_RDATAPTR(soa);
+            u32 soa_mname_size = dnsname_len(soa_mname);
+            u8 *soa_rname = soa_mname + soa_mname_size;
+            u8 *serial_ptr = soa_rname + dnsname_len(soa_rname);
+            u32 serial = *((u32*)serial_ptr);
+            serial = ntohl(serial);
+
+            for(zdb_packed_ttlrdata *nsp = ns; nsp != NULL; nsp = nsp->next)
             {
-                if(memcmp(ns_dname, soa_mname, soa_mname_size) == 0)
-                {
-                    continue;
-                }
-            }
+                u32 ns_dname_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(nsp);
+                u8 *ns_dname = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsp);
 
-            /* valid candidate : get its IP, later */
+                if(ns_dname_size == soa_mname_size)
+                {
+                    if(memcmp(ns_dname, soa_mname, soa_mname_size) == 0)
+                    {
+                        continue;
+                    }
+                }
+
+                /* valid candidate : get its IP, later */
             
 #if 1
-            if(zdb_append_ip_records(db, ns_dname, &list) <= 0)
-            {
-                // If no IP has been found, they will have to be resolved using the system ... later
+                if(zdb_append_ip_records(db, ns_dname, &list) <= 0) // zone is locked
+                {
+                    // If no IP has been found, they will have to be resolved using the system ... later
 
-                host_address_append_dname(&list, ns_dname, NU16(DNS_DEFAULT_PORT));
-            }
+                    host_address_append_dname(&list, ns_dname, NU16(DNS_DEFAULT_PORT));
+                }
 #else
-            zdb_packed_ttlrdata *a_records = NULL;
-            zdb_packed_ttlrdata *aaaa_records = NULL;
+                zdb_packed_ttlrdata *a_records = NULL;
+                zdb_packed_ttlrdata *aaaa_records = NULL;
 
-            zdb_query_ip_records(db, ns_dname, &a_records, &aaaa_records);
+                zdb_query_ip_records(db, ns_dname, &a_records, &aaaa_records); // zone is locked
 
-            // If there is any bit set in the returned pointers ...
+                // If there is any bit set in the returned pointers ...
 
-            if(((intptr)a_records|(intptr)aaaa_records) != 0)
-            {
-                // Add these IPs to the list.
-
-                while(a_records != NULL)
+                if(((intptr)a_records|(intptr)aaaa_records) != 0)
                 {
-                    host_address_append_ipv4(&list, ZDB_PACKEDRECORD_PTR_RDATAPTR(a_records), NU16(DNS_DEFAULT_PORT));
-                    a_records = a_records->next;
-                }
-                while(aaaa_records != NULL)
-                {
-                    host_address_append_ipv6(&list, ZDB_PACKEDRECORD_PTR_RDATAPTR(aaaa_records), NU16(DNS_DEFAULT_PORT));
-                    aaaa_records = aaaa_records->next;
-                }
-            }
-            else
-            {
-                // If no IP has been found, they will have to be resolved using the system ... later
+                    // Add these IPs to the list.
 
-                host_address_append_dname(&list, ns_dname, NU16(DNS_DEFAULT_PORT));
-            }
+                    while(a_records != NULL)
+                    {
+                        host_address_append_ipv4(&list, ZDB_PACKEDRECORD_PTR_RDATAPTR(a_records), NU16(DNS_DEFAULT_PORT));
+                        a_records = a_records->next;
+                    }
+                    while(aaaa_records != NULL)
+                    {
+                        host_address_append_ipv6(&list, ZDB_PACKEDRECORD_PTR_RDATAPTR(aaaa_records), NU16(DNS_DEFAULT_PORT));
+                        aaaa_records = aaaa_records->next;
+                    }
+                }
+                else
+                {
+                    // If no IP has been found, they will have to be resolved using the system ... later
+
+                    host_address_append_dname(&list, ns_dname, NU16(DNS_DEFAULT_PORT));
+                }
 #endif
+            }
+
+            zdb_zone_release_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
         }
-        
-        zdb_zone_release_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+        else
+        {
+            log_debug("notify: %{dnsname}: zone already locked", message->origin);
+            
+            lock_failed = TRUE;
+            zdb_zone_release(zone);
+        }
     }
     else
     {
@@ -1690,31 +1784,69 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
     // at this point I have the list of every IP I could find along with names I cannot resolve.
     // note that we don't need to care about the changes in the database : it would mean a new
     // notify and this one would be discarded
-
-    host_address *also_notifies = zone_desc->notifies;
-
-    while(also_notifies != NULL)
+    
+    if(!lock_failed && ISOK(zone_try_lock_wait(zone_desc, 1000000, ZONE_LOCK_READONLY)))
     {
-        host_address_append_host_address(&list, also_notifies); //copy made
+        const host_address *also_notifies = zone_desc->notifies;
 
-        also_notifies = also_notifies->next;
+        while(also_notifies != NULL)
+        {
+            host_address_append_host_address(&list, also_notifies); //copy made
+
+            also_notifies = also_notifies->next;
+        }
+        
+        // It's separate from the DB push the lot thread from the pool
+
+        if(list.next != NULL)
+        {
+            message->payload.type = NOTIFY_MESSAGE_TYPE_NOTIFY;
+            message->payload.notify.hosts_list = list.next;
+            message->payload.notify.repeat_countdown = zone_desc->notify.retry_count; /* 10 times */
+            message->payload.notify.repeat_period = zone_desc->notify.retry_period; /* 1 minute */
+            message->payload.notify.repeat_period_increase = zone_desc->notify.retry_period_increase; /* 1 minute */
+            message->payload.notify.ztype = TYPE_SOA;
+            message->payload.notify.zclass = CLASS_IN;
+        }
+        
+        zone_unlock(zone_desc, ZONE_LOCK_READONLY);
     }
-
-    // It's separate from the DB push the lot
-
-    // thread from the pool
-
-    if(list.next != NULL)
+    else
     {
+        // could not lock the zone right away : delay a bit
+        log_debug("notify: %{dnsname}: delaying notification", message->origin);
+        
+        zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(db, message->origin); // RC++
+        if(zone != NULL)
+        {        
+            if(!ZDB_ZONE_INVALID(zone))
+            {
+                alarm_event_node *event = alarm_event_new(
+                        time(NULL),
+                        ALARM_KEY_ZONE_NOTIFY_SLAVES,
+                        notify_slaves_alarm,
+                        dnsname_zdup(message->origin),
+                        ALARM_DUP_REMOVE_LATEST,
+                        "notify slaves");
 
-        message->payload.type = NOTIFY_MESSAGE_TYPE_NOTIFY;
-        message->payload.notify.hosts_list = list.next;
-        message->payload.notify.repeat_countdown = zone_desc->notify.retry_count; /* 10 times */
-        message->payload.notify.repeat_period = zone_desc->notify.retry_period; /* 1 minute */
-        message->payload.notify.repeat_period_increase = zone_desc->notify.retry_period_increase; /* 1 minute */
-        message->payload.notify.ztype = TYPE_SOA;
-        message->payload.notify.zclass = CLASS_IN;
-
+                alarm_set(zone->alarm_handle, event);
+            }
+            else
+            {
+                // if the message is ignored, will-notify status must be cleared
+                zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_WILL_NOTIFY);
+                
+                log_warn("notify: %{dnsname}: (temporarily) invalid zone, notify slaves request will remain ignored", message->origin);
+            }
+            
+            zdb_zone_release(zone);
+        }
+        else
+        {
+            // could not get the zone anymore
+            
+            log_warn("notify: %{dnsname}: could not acquire the zone, notify slaves request will remain ignored", message->origin);
+        }
     }
     
     zone_release(zone_desc);
@@ -1759,8 +1891,6 @@ notify_host_list(zone_desc_s *zone_desc, host_address *hosts, u16 zclass)
     async->handler_args = NULL;
     async_message_call(&notify_handler_queue, async);
 }
-
-
 
 ya_result
 notify_service_init()

@@ -193,8 +193,6 @@ main_dump_info()
 static ya_result
 yadifad_config_on_section_loggers_read(const char* name, int index)
 {
-    //formatln("yadifad_config_on_section_main_read(%s,%i)", name, index);
-
     ya_result                                                   ret;
     
     if(FAIL(ret = pid_check_running_program(PROGRAM_NAME, g_config->pid_file))) /// @todo 20160127 edf -- needs to add pid_file stuff
@@ -317,11 +315,6 @@ main_config(int argc, char *argv[])
 
         return ERROR;
     }
-        
-#if 0 && defined(DEBUG)
-    config_print(termout);    
-    osformatln(termout, "starting logging service");
-#endif
     
     /*
      * flushes whatever is in the buffers
@@ -527,8 +520,6 @@ int
 main(int argc, char *argv[])
 {
     ya_result ret;
-    
-
 
     /*    ------------------------------------------------------------    */
     
@@ -571,8 +562,6 @@ main(int argc, char *argv[])
     {
         return ISOK(ret)?EXIT_SUCCESS:EXIT_FAILURE;
     }
-
-
 
     // This is always 'exit' on failure
     if(FAIL(ret = pid_check_running_program(PROGRAM_NAME, g_config->pid_file)))
@@ -654,20 +643,16 @@ main(int argc, char *argv[])
      */
     
     int exit_code;
-
-
         
-        if(ISOK(ret = server_service_start_and_wait()))
-        {
-            exit_code = EXIT_SUCCESS;
-        }
-        else
-        {
-            exit_code = EXIT_FAILURE;
-        }
+    if(ISOK(ret = server_service_start_and_wait()))
+    {
+        exit_code = EXIT_SUCCESS;
+    }
+    else
+    {
+        exit_code = EXIT_FAILURE;
+    }
 
-
-    
     /// @note DO NOT: logger_finalize() don't, it will be done automatically at exit
 
     return exit_code;

@@ -136,7 +136,7 @@ zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *e
     size_t rdata_len;
     ya_result return_code;
     resource_record entry;
-    u32 soa_min_ttl = 0;
+    s32 soa_min_ttl = 0;
     u32 soa_serial = 0;
 #if ZDB_HAS_DNSSEC_SUPPORT
 #if ZDB_HAS_NSEC3_SUPPORT
@@ -967,7 +967,7 @@ zdb_zone_load_loop:
 
                         if( ((flags & ZDB_RR_LABEL_APEX) != 0) ||
                             ( ((flags & ZDB_RR_LABEL_DELEGATION) != 0) &&
-                              (zdb_record_find(&label->resource_record_set, TYPE_DS) != NULL) ) )
+                              (zdb_record_find(&label->resource_record_set, TYPE_DS) != NULL) ) ) // zone is locked
                         {
                             /* should be linked */
                             if(label->nsec.nsec3 != NULL)

@@ -6,6 +6,7 @@
 #define ZDB_HAS_ACL_SUPPORT 1
 #define ZDB_HAS_TSIG_SUPPORT 1
 #define ZDB_HAS_NSID_SUPPORT 1
-// version 2.2.2.0-6587
-#define DNSDB_VERSION 0x0202020019bbLL// include/dnsdb/zdb-config-features.h
+#define ZDB_HAS_MUTEX_DEBUG_SUPPORT 0
+// version 2.3.0.0-7548
+#define DNSDB_VERSION 0x020300001d7cLL// include/dnsdb/zdb-config-features.h
 

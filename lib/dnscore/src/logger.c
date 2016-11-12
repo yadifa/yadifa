@@ -59,7 +59,7 @@ log_memdump_set_layout(u32 group_mask, u32 separator_mask)
 }
 
 void
-log_memdump_ex(logger_handle* hndl, u32 level, const void* data_pointer_, size_t size_, size_t line_size, u32 flags)
+log_memdump_ex(logger_handle* hndl, u32 level, const void* data_pointer_, ssize_t size_, ssize_t line_size, u32 flags)
 {
     /*
      * ensure there is an output for this handle/level
@@ -115,7 +115,7 @@ log_memdump_ex(logger_handle* hndl, u32 level, const void* data_pointer_, size_t
 }
 
 void
-log_memdump(logger_handle* hndl, u32 level, const void* data_pointer_, size_t size_, size_t line_size)
+log_memdump(logger_handle* hndl, u32 level, const void* data_pointer_, ssize_t size_, ssize_t line_size)
 {
     log_memdump_ex(hndl, level, data_pointer_, size_, line_size, OSPRINT_DUMP_HEXTEXT);
 }

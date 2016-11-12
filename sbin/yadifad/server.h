@@ -65,7 +65,7 @@ extern volatile int program_mode;
 #define SOA_MIN_RETRY   60
 #define SOA_MIN_EXPIRE  60
 
-#define ANCILIARY_BUFFER_SIZE 0 // 65536
+#define ANCILIARY_BUFFER_SIZE 64
 
 #define TPROCPRM_TAG 0x4d5250434f525054
 #define POLLFDBF_TAG 0x464244464c4c4f50

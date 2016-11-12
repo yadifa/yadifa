@@ -49,9 +49,8 @@
 #define EIS_CANREADMASK (EIS_CLOSED|EIS_READONCE)
 #define EIS_CANREAD     0
 
-struct empty_input_stream_data
+struct empty_input_stream_overload
 {
-
     union
     {
         void* _voidp;
@@ -61,12 +60,15 @@ struct empty_input_stream_data
     const input_stream_vtbl *vtbl;
 };
 
-typedef struct empty_input_stream_data empty_input_stream_data;
+typedef struct empty_input_stream_overload empty_input_stream_overload;
 
 static ya_result
-empty_input_stream_read(input_stream* stream_, u8* buffer, u32 len)
+empty_input_stream_read(input_stream *stream_, u8* buffer, u32 len)
 {
-    empty_input_stream_data *eis = (empty_input_stream_data*)stream_->data;
+    yassert(stream_ != NULL);
+    empty_input_stream_overload *eis = (empty_input_stream_overload*)stream_; // mutant stream
+    (void)buffer;
+    (void)len;
     if((eis->data.flags & EIS_CANREADMASK) == EIS_CANREAD)    // closed read-once
     {
         if(len > 0)
@@ -82,16 +84,18 @@ empty_input_stream_read(input_stream* stream_, u8* buffer, u32 len)
 }
 
 static void
-empty_input_stream_close(input_stream* stream_)
+empty_input_stream_close(input_stream *stream_)
 {
-    empty_input_stream_data* eis = (empty_input_stream_data*)stream_->data;
+    yassert(stream_ != NULL);
+    empty_input_stream_overload *eis = (empty_input_stream_overload*)stream_; // mutant stream
     eis->data.flags |= EIS_CLOSED;
 }
 
 static ya_result
-empty_input_stream_skip(input_stream* stream_, u32 len)
+empty_input_stream_skip(input_stream *stream_, u32 len)
 {
-    empty_input_stream_data* eis = (empty_input_stream_data*)stream_->data;
+    yassert(stream_ != NULL);
+    empty_input_stream_overload *eis = (empty_input_stream_overload*)stream_; // mutant stream
     if((eis->data.flags & EIS_CANREADMASK) == EIS_CANREAD)    // closed read-once
     {
         if(len > 0)
@@ -120,7 +124,4 @@ empty_input_stream_init(input_stream *stream)
     stream->vtbl = &empty_input_stream_vtbl;
 }
 
-
 /** @} */
-
-/*----------------------------------------------------------------------------*/

@@ -61,6 +61,75 @@ extern logger_handle* g_database_logger;
 
 #define CJF_IDXT_SLOT_SIZE 8
 
+
+const journal_cjf_idxt_tbl_item*
+journal_cjf_idxt_get_entry(const journal_cjf *jnl, s16 index)
+{
+    yassert(index >= 0);yassert(jnl->idxt.first >= 0);
+    
+    journal_cjf_idxt_tbl_item *entry;
+    entry = &jnl->idxt.entries[(jnl->idxt.first + index) % jnl->idxt.size];
+    return entry;
+}
+
+s16
+journal_cjf_idxt_size(const journal_cjf *jnl)
+{
+    return jnl->idxt.count;
+}
+
+s16
+journal_cjf_idxt_size_max(const journal_cjf *jnl)
+{
+    return jnl->idxt.size;
+}
+
+/**
+ * 
+ * Returns the file offset value at index in the current IDXT
+ * 
+ * @param jnl
+ * @param index
+ * @return 
+ */
+
+u32
+journal_cjf_idxt_get_file_offset(const journal_cjf *jnl, s16 index)
+{
+    u32 file_offset = journal_cjf_idxt_get_entry(jnl, index)->file_offset;
+    return file_offset;
+}
+
+u32
+journal_cjf_idxt_get_last_file_offset(const journal_cjf *jnl)
+{
+    if(jnl->idxt.count > 0)
+    {
+        u32 n = journal_cjf_idxt_get_file_offset(jnl, jnl->idxt.count - 1);
+        return n;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+/**
+ * 
+ * Returns the last serial number value at index in the IDXT
+ * 
+ * @param jnl
+ * @param index
+ * @return 
+ */
+
+u32
+journal_cjf_idxt_get_last_serial(const journal_cjf *jnl, s16 index)
+{
+    u32 last_serial = journal_cjf_idxt_get_entry(jnl, index)->last_serial;
+    return last_serial;
+}
+
 /**
  * Creates an empty table of indexes (IDXT) for the journal, with a minimum number of entries.
  * Nothing is written to disk.
@@ -89,6 +158,201 @@ journal_cjf_idxt_create(journal_cjf *jnl, s16 entries)
     jnl->first_page_offset = jnl->last_page.file_offset;
 }
 
+#if 0
+static ya_result
+journal_cjf_scan(journal_cjf *jnl)
+{
+    // from position CJF_HEADER_SIZE
+    // read the page
+    // read the records of the page
+    // if everything matches, put the page on the side
+    // after the page+records, scan for the next page
+    
+    // with all the gathered pages, make the longest latest chain
+}
+#endif
+
+/**
+ * Verifies the page table chain
+ * To be used for small discrepancies between the header and the page table (idxt)
+ * 
+ * @param jnl
+ * @return 
+ */
+
+static ya_result
+journal_cjf_idxt_verify(journal_cjf *jnl)
+{
+    // check the values of the pages
+    // serials have to be ordered in serial arithmetics
+    // pages are supposed to start after each other except a looping ones that goes after the header
+    
+    // if the verify fails, a scan may be needed (other procedure)
+    
+    journal_cjf_page_tbl_header page_hdr;
+    u32 previous_page_offset;
+    u32 stream_end_offset;
+    u32 next_page_offset;
+    u32 prev_serial = jnl->serial_begin;
+    int loops = 0;
+    bool error = FALSE;
+    bool has_page_after_header = FALSE;
+    
+    s16 size = journal_cjf_idxt_size(jnl);
+    
+    for(int page = 0; page < size; ++page)
+    {
+        const journal_cjf_idxt_tbl_item* entry = journal_cjf_idxt_get_entry(jnl, page);
+        
+        has_page_after_header |= entry->file_offset == CJF_HEADER_SIZE;
+        
+        if(page > 0)
+        {
+            if(entry->file_offset != next_page_offset)
+            {
+                // page do not start at the expected position
+                log_err("cjf: %{dnsname}: page[%i] starts at an unexpected position (%u != expected %u)", jnl->origin, page, entry->file_offset, next_page_offset);
+                error = TRUE;
+            }
+            
+            if(entry->file_offset == previous_page_offset)
+            {
+                // broken chain
+                log_err("cjf: %{dnsname}: page[%i] is a duplicate at position %u", jnl->origin, page, entry->file_offset);
+                error = TRUE;
+            }
+            
+            if(entry->file_offset > previous_page_offset)
+            {
+                if(entry->file_offset != stream_end_offset)
+                {
+                    // suspicious hole in the file
+                    log_err("cjf: %{dnsname}: page[%i] is %u bytes after the expected position", jnl->origin, page, entry->file_offset - stream_end_offset);
+                    error = TRUE;
+                }
+            }
+            else
+            {
+                // just looped ...
+                
+                if(loops == 0)
+                {
+                    if(entry->file_offset > CJF_HEADER_SIZE)
+                    {
+                        // looped at an unexpected position
+                        log_err("cjf: %{dnsname}: page[%i] looped at an unexpected position (%u != expected %u)", jnl->origin, page, entry->file_offset, CJF_HEADER_SIZE);
+                        error = TRUE;
+                    }
+                    else if(entry->file_offset > CJF_HEADER_SIZE)
+                    {
+                        // looped at an unexpected position
+                        log_err("cjf: %{dnsname}: page[%i] looped into the header position (%u < %u)", jnl->origin, page, entry->file_offset, CJF_HEADER_SIZE);
+                        error = TRUE;
+                    }
+                    
+                    loops = 1;
+                }
+                else
+                {
+                    // should only have looped once
+                    log_err("cjf: %{dnsname}: page[%i] looped for a second time", jnl->origin, page);
+                    error = TRUE;
+                }
+            }
+            
+            if(error)
+            {
+                // got at least one error
+                return ERROR;
+            }
+        }
+        
+        ssize_t pos = lseek(jnl->fd, entry->file_offset, SEEK_SET);
+        if(pos < 0)
+        {
+            // invalid position (as EBADF should not happen)
+            ya_result ret = ERRNO_ERROR;
+            
+            log_err("cjf: %{dnsname}: page[%i] seek at %u returned %r", jnl->origin, page, ret);
+            
+            return ret;
+        }
+        
+        int len = readfully(jnl->fd, &page_hdr, CJF_SECTION_INDEX_SLOT_HEAD);
+        if(len != CJF_SECTION_INDEX_SLOT_HEAD)
+        {
+            if(len >= 0)
+            {
+                log_err("cjf: %{dnsname}: page[%i] short count reading the header (%u < %u)", jnl->origin, page, len, CJF_SECTION_INDEX_SLOT_HEAD);
+                return ERROR; // short
+            }
+            else
+            {
+                log_err("cjf: %{dnsname}: page[%i] error reading the header: %r", jnl->origin, page, len);
+                return len; // other error
+            }
+        }
+        
+        if(page_hdr.magic != CJF_PAGE_MAGIC)
+        {
+            // page is corrupted
+            log_err("cjf: %{dnsname}: page[%i] corrupted magic", jnl->origin, page);
+            return ERROR;
+        }
+        if(page_hdr.count > page_hdr.size)
+        {
+            // page is corrupted
+            log_err("cjf: %{dnsname}: page[%i] says to contain more than allowed", jnl->origin, page, page_hdr.count, page_hdr.size);
+            return ERROR;
+        }
+        
+        if(page_hdr.count == 0)
+        {
+            // empty page (warning)
+            log_warn("cjf: %{dnsname}: page[%i] is empty", jnl->origin, page);
+        }
+        
+        if(serial_gt(prev_serial, entry->last_serial))
+        {
+            // suspicious serial backward jump
+            log_err("cjf: %{dnsname}: page[%i] serial jumped back from %u to %u", jnl->origin, page, prev_serial, entry->last_serial);
+        }
+        else if(serial_eq(prev_serial, entry->last_serial))
+        {
+            // suspicious serial standstill
+            log_err("cjf: %{dnsname}: page[%i] serial didn't changed from %u", jnl->origin, page, prev_serial);
+        }
+        
+        previous_page_offset = entry->file_offset;
+        next_page_offset = page_hdr.next_page_offset; // next page, 0 for the last one
+        stream_end_offset = page_hdr.stream_end_offset; // start of next page, start of page table, or 0 for the last in the chain
+    }
+    
+    if(size > 0)
+    {
+        if(next_page_offset != 0)
+        {
+            // chain end was not marked
+            log_err("cjf: %{dnsname}: page[%i] is last but points to a next at %u", jnl->origin, size - 1, next_page_offset);
+            return ERROR;
+        }
+        if(!has_page_after_header)
+        {
+            // no page at an obvious position
+            log_err("cjf: %{dnsname}: page table has no page at position %u", jnl->origin, CJF_HEADER_SIZE);
+            return ERROR;
+        }
+    }
+    else
+    {
+        // table is empty
+        log_err("cjf: %{dnsname}: page table is empty", jnl->origin);
+        return ERROR;
+    }
+    
+    return SUCCESS;
+}
+
 /**
  * Loads (or rebuilds) the table of indexes (IDXT)
  * 
@@ -98,7 +362,11 @@ journal_cjf_idxt_create(journal_cjf *jnl, s16 entries)
 void
 journal_cjf_idxt_load(journal_cjf *jnl)
 {
-    yassert(jnl->idxt.size == 0);
+    if(jnl->idxt.entries != NULL)
+    {
+        // already loaded ...
+        return;
+    }
     
     // the file is opened
     
@@ -130,6 +398,20 @@ journal_cjf_idxt_load(journal_cjf *jnl)
             
             jnl->idxt.count = count;
             
+            u32 first_page_offset = journal_cjf_idxt_get_file_offset(jnl, 0);
+            
+            if(jnl->first_page_offset != first_page_offset)
+            {
+                // discrepancy : check the IDXT is valid
+                
+                if(ISOK(journal_cjf_idxt_verify(jnl)))
+                {
+                    // the header is wrong, update it
+                    
+                    jnl->first_page_offset = first_page_offset;
+                }
+            }
+            
             return;
         }
         
@@ -159,6 +441,8 @@ journal_cjf_idxt_load(journal_cjf *jnl)
     journal_cjf_page_tbl_header page_header;
     journal_cjf_page_tbl_item page_last_item;
     s16 idx = 0;
+    u32 page_serial = 0;
+    bool page_read = FALSE;
     
     do
     {
@@ -166,7 +450,7 @@ journal_cjf_idxt_load(journal_cjf *jnl)
         
         log_debug2("journal_cjf_idxt_load: reading '%s' PAGE header at %x", jnl->journal_file_name, index_offset);
         
-        lseek(jnl->fd, index_offset, SEEK_SET);    
+        lseek(jnl->fd, index_offset, SEEK_SET);
         if(readfully(jnl->fd, &page_header, JOURNAL_CJF_PAGE_HEADER_SIZE) != JOURNAL_CJF_PAGE_HEADER_SIZE) // next offset
         {
             log_err("journal_cjf_idxt_load: '%s' is too corrupt to go on further reading PAGE header at %x", jnl->journal_file_name, index_offset);
@@ -215,6 +499,9 @@ journal_cjf_idxt_load(journal_cjf *jnl)
 
             log_debug2("journal_cjf_idxt_load: IDXT[%3i] = {%8x, %u}", idx, index_offset, page_last_item.ends_with_serial);
             
+            page_serial = page_last_item.ends_with_serial;
+            page_read = TRUE;
+            
             ++idx;
         
             index_offset = page_header.next_page_offset;
@@ -223,12 +510,34 @@ journal_cjf_idxt_load(journal_cjf *jnl)
         {
             // an empty page should not exist
             
-            log_err("journal_cjf_idxt_load: found an empty page on the journal, probable corruption");
+            if(page_read)
+            {
+                if(serial_eq(page_serial, jnl->serial_end))
+                {
+                    log_info("journal_cjf_idxt_load: got up to expected serial %i", page_serial);
+                }
+                else if(serial_lt(page_serial, jnl->serial_end))
+                {
+                    log_err("journal_cjf_idxt_load: got up to serial %i, before the expected %i", page_serial, jnl->serial_end);
+                }
+                else if(serial_gt(page_serial, jnl->serial_end))
+                {
+                    log_err("journal_cjf_idxt_load: got up to serial %i, after the expected %i", page_serial, jnl->serial_end);
+                }
+            }
+            else
+            {
+                log_err("journal_cjf_idxt_load: could not read the content of the journal");
+            }
+            
+            break;
         }
     }
     while(index_offset != 0);
     
     log_debug1("journal_cjf_idxt_load: IDXT table has size %i", idx + 1);
+    
+    // scan for an SOA record
     
     journal_cjf_idxt_create(jnl, idx + 1);
     memcpy(jnl->idxt.entries, tbl, JOURNAL_CJF_PAGE_ITEM_SIZE * idx);
@@ -255,31 +564,45 @@ journal_cjf_idxt_flush(journal_cjf *jnl)
     
     if(jnl->fd < 0)
     {
-        log_err("cjf: no file descriptor but index table is dirty", jnl->journal_file_name, jnl->fd);
+        log_err("cjf: %{dnsname}: no file descriptor but index table is dirty", jnl->origin);
+        return;
+    }
+    
+    if(jnl->page_table_file_offset == 0)
+    {
+        log_debug("cjf: %{dnsname}: table index not set", jnl->origin);
         return;
     }
     
     // write the table at the end
     
-    off_t end = lseek(jnl->fd, jnl->last_page.records_limit, SEEK_SET);
+    off_t end = lseek(jnl->fd, jnl->page_table_file_offset, SEEK_SET);
     
     if(end < 0)
     {
-        log_err("cjf: forward to end of PAGE chain failed: %r", ERRNO_ERROR);
+        int err = ERRNO_ERROR;
+        
+        log_err("cjf: forward to end of PAGE chain failed: %r", err);
+        
+        if(err == EBADF)
+        {
+            log_err("cjf: file has been closed before writing the summary");
+        }
+        
         logger_flush();
-        abort();
+        
+        return;
     }
-    
-    yassert(end == jnl->last_page.records_limit);
     
     output_stream fos;
     output_stream bos;
-    jnl->page_table_file_offset = jnl->last_page.records_limit;
+    
     journal_cjf_set_dirty(jnl);
     
     log_debug3("cjf: flushing IDXT %u indexes at %08x", jnl->idxt.count, jnl->page_table_file_offset);
     
     fd_output_stream_attach(&fos, jnl->fd);
+    file_output_stream_set_full_writes(&fos, TRUE);      // this makes the stream "write fully"
     buffer_output_stream_init(&bos, &fos, 512);
     output_stream_write(&bos, (const u8*)"IDXT", 4);
     output_stream_write(&bos, (const u8*)&jnl->idxt.count , 2);
@@ -294,7 +617,7 @@ journal_cjf_idxt_flush(journal_cjf *jnl)
     
     // write the table offset
     
-    jnl_header_flush(jnl);
+    journal_cjf_header_flush(jnl);
     
 #if DO_SYNC
     log_debug3("cjf: syncing to disk");
@@ -306,7 +629,7 @@ journal_cjf_idxt_flush(journal_cjf *jnl)
     jnl->idxt.marked = FALSE;
     
 #if _BSD_SOURCE || _XOPEN_SOURCE >= 500 || _XOPEN_SOURCE && _XOPEN_SOURCE_EXTENDED || /* Since glibc 2.3.5: */ _POSIX_C_SOURCE >= 200112L
-    u32 file_size = jnl->last_page.records_limit + 4 + 2 + 4 + jnl->idxt.count * CJF_IDXT_SLOT_SIZE;
+    u32 file_size = jnl->page_table_file_offset + 4 + 2 + 4 + jnl->idxt.count * CJF_IDXT_SLOT_SIZE;
     ftruncate(jnl->fd, file_size);
 #endif
 }
@@ -332,54 +655,6 @@ journal_cjf_idxt_destroy(journal_cjf *jnl)
 }
 
 /**
- * 
- * Returns the file offset value at index in the current IDXT
- * 
- * @param jnl
- * @param index
- * @return 
- */
-
-u32
-journal_cjf_idxt_get_file_offset(journal_cjf *jnl, s16 index)
-{   yassert(index >= 0);yassert(jnl->idxt.first >= 0);
-    journal_cjf_idxt_tbl_item *entry;
-    entry = &jnl->idxt.entries[(jnl->idxt.first + index) % jnl->idxt.size];
-    return entry->file_offset;
-}
-
-u32
-journal_cjf_idxt_get_last_file_offset(journal_cjf *jnl)
-{
-    if(jnl->idxt.count > 0)
-    {
-        u32 n = journal_cjf_idxt_get_file_offset(jnl, jnl->idxt.count - 1);
-        return n;
-    }
-    else
-    {
-        return 0;
-    }
-}
-
-/**
- * 
- * Returns the last serial number value at index in the IDXT
- * 
- * @param jnl
- * @param index
- * @return 
- */
-
-u32
-journal_cjf_idxt_get_last_serial(journal_cjf *jnl, s16 index)
-{
-    journal_cjf_idxt_tbl_item *entry;
-    entry = &jnl->idxt.entries[(jnl->idxt.first + index) % jnl->idxt.size];
-    return entry->last_serial;
-}
-
-/**
  * Updates the value of the last serial at current position in the PAGE
  * 
  * @param jnl
@@ -400,11 +675,6 @@ journal_cjf_idxt_update_last_serial(journal_cjf *jnl, u32 last_serial)
     
     jnl->idxt.dirty = TRUE;
 }
-
-/*
- scans all the PAGE entries from the IDXT and get the one that contains the serial
- */
-
 
 /**
  * Appends an PAGE table after the current one
@@ -515,12 +785,11 @@ journal_cjf_idxt_append_page_nogrow(journal_cjf *jnl)
     
     if(!jnl->idxt.marked)
     {
-        jnl->page_table_file_offset = 0;
         jnl->idxt.marked = TRUE;
     }
     
     journal_cjf_page_cache_flush(jnl->fd);
-    jnl_header_flush(jnl);
+    journal_cjf_header_flush(jnl);
     
 #if DO_SYNC
     log_debug3("cjf: syncing to disk");
@@ -710,7 +979,7 @@ journal_cjf_idxt_append_page(journal_cjf *jnl)
  */
 
 ya_result
-journal_cjf_idxt_get_page_index_from_serial(journal_cjf *jnl, u32 serial)
+journal_cjf_idxt_get_page_index_from_serial(const journal_cjf *jnl, u32 serial)
 {
     u32 prev = jnl->serial_begin;
     
@@ -741,8 +1010,8 @@ journal_cjf_idxt_get_page_index_from_serial(journal_cjf *jnl, u32 serial)
     return ZDB_JOURNAL_SERIAL_OUT_OF_KNOWN_RANGE;
 }
 
-ya_result
-journal_cjf_idxt_get_page_serial_from_index(journal_cjf *jnl, int idx)
+u32
+journal_cjf_idxt_get_page_serial_from_index(const journal_cjf *jnl, int idx)
 {
     if(idx > 0)
     {
@@ -756,17 +1025,26 @@ journal_cjf_idxt_get_page_serial_from_index(journal_cjf *jnl, int idx)
     }
 }
 
+/**
+ * Returns the page index containing the serial, and optionally its position in the file.
+ * 
+ * @param jnl
+ * @param serial
+ * @param file_offset
+ * @return 
+ */
+
 ya_result
-journal_cjf_idxt_get_page_offset_from_serial(journal_cjf *jnl, u32 serial, u32 *file_offset)
+journal_cjf_idxt_get_page_offset_from_serial(const journal_cjf *jnl, u32 serial, u32 *file_offset)
 {
-    u32 prev = jnl->serial_begin;
+    u32 prev_serial = jnl->serial_begin;
     
-    if(serial_lt(serial, prev))
+    // ensure the journal starts at least from the serial we are looking for
+    
+    if(serial_lt(serial, prev_serial))
     {
         return ZDB_JOURNAL_SERIAL_OUT_OF_KNOWN_RANGE;
     }
-    
-    u32 prev_serial = jnl->serial_begin;
     
     /// @todo 20150115 edf -- do a dichotomy instead
     
@@ -775,23 +1053,30 @@ journal_cjf_idxt_get_page_offset_from_serial(journal_cjf *jnl, u32 serial, u32 *
     {
         journal_cjf_idxt_tbl_item *entry;
         entry = &jnl->idxt.entries[(jnl->idxt.first + i) % jnl->idxt.size];
-        if(serial_le(serial, entry->last_serial))
+        
+        // entry->last_serial is the last_serial TO, so the start of the next page
+        
+        if(serial_lt(serial, entry->last_serial))
         {
-            log_debug1("journal_cjf_idxt_get_page_index_from_serial(%s, %d) returning %i (%i -> %i)", jnl->journal_file_name, serial, i, prev_serial, entry->last_serial);
+            log_debug1("journal_cjf_idxt_get_page_index_from_serial(%s, %d) returning %i (%i -> %i)",
+                    jnl->journal_file_name, serial, i, prev_serial, entry->last_serial);
             if(file_offset != NULL)
             {
                 *file_offset = entry->file_offset;
             }
             return i;
         }
+        
         prev_serial = entry->last_serial;
     }
+    
+    // too far ...
     
     return ZDB_JOURNAL_SERIAL_OUT_OF_KNOWN_RANGE;
 }
 
 ya_result
-journal_cjf_idxt_get_page_serial_to(journal_cjf *jnl, int idx)
+journal_cjf_idxt_get_page_serial_to(const journal_cjf *jnl, int idx)
 {
     journal_cjf_idxt_tbl_item *entry;
     entry = &jnl->idxt.entries[(jnl->idxt.first + idx) % jnl->idxt.size];
@@ -799,7 +1084,7 @@ journal_cjf_idxt_get_page_serial_to(journal_cjf *jnl, int idx)
 }
 
 u32
-journal_cjf_idxt_get_page_offset(journal_cjf *jnl, int idx)
+journal_cjf_idxt_get_page_offset(const journal_cjf *jnl, int idx)
 {
     journal_cjf_idxt_tbl_item *entry;
     entry = &jnl->idxt.entries[(jnl->idxt.first + idx) % jnl->idxt.size];

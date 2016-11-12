@@ -58,6 +58,7 @@
 #include "database-service.h"
 #include "notify.h"
 #include "zone-signature-policy.h"
+#include "zone.h"
 
 #if HAS_CTRL
 #include "ctrl.h"
@@ -76,7 +77,6 @@ database_load_zone_desc(zone_desc_s *zone_desc)
     
     log_debug1("database_load_zone_desc(%{dnsname}@%p=%i)", zone_desc->origin, zone_desc, zone_desc->rc);
     
-
     
     s32 err = zone_register(&database_zone_desc, zone_desc);
 
@@ -85,8 +85,8 @@ database_load_zone_desc(zone_desc_s *zone_desc)
         log_info("zone: the zone %{dnsname} has been registered", zone_desc->origin);
         
         zone_lock(zone_desc, ZONE_LOCK_LOAD_DESC);
-        zone_desc->status_flags |= ZONE_STATUS_REGISTERED;
-        zone_desc->status_flags &= ~ZONE_STATUS_DROP_AFTER_RELOAD;
+        zone_set_status(zone_desc, ZONE_STATUS_REGISTERED);
+        zone_clear_status(zone_desc, ZONE_STATUS_DROP_AFTER_RELOAD);
         zone_unlock(zone_desc, ZONE_LOCK_LOAD_DESC);
         
         // newly registered zone
@@ -121,7 +121,7 @@ database_load_zone_desc(zone_desc_s *zone_desc)
             {
                 log_err("config: zone: ?: no domain set (not loaded)", zone_desc->domain);
                 
-                if(zone_desc->status_flags & ZONE_STATUS_PROCESSING)
+                if(zone_get_status(zone_desc) & ZONE_STATUS_PROCESSING)
                 {
                     log_err("destroying desc@%p being processed by %s", zone_desc, database_service_operation_get_name(zone_desc->last_processor));
                 }
@@ -134,7 +134,7 @@ database_load_zone_desc(zone_desc_s *zone_desc)
             {
                 log_err("config: zone: %{dnsname} has no master setting (not loaded)", zone_desc->origin);
                 
-                if(zone_desc->status_flags & ZONE_STATUS_PROCESSING)
+                if(zone_get_status(zone_desc) & ZONE_STATUS_PROCESSING)
                 {
                     log_err("destroying desc@%p being processed by %s", zone_desc, database_service_operation_get_name(zone_desc->last_processor));
                 }
@@ -150,7 +150,7 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                 zone_desc_s* current = zone_acquirebydnsname(zone_desc->origin);
                 
                 zone_lock(current, ZONE_LOCK_REPLACE_DESC);
-                current->status_flags &= ~ZONE_STATUS_DROP_AFTER_RELOAD;
+                zone_clear_status(current, ZONE_STATUS_DROP_AFTER_RELOAD);
                 zone_unlock(current, ZONE_LOCK_REPLACE_DESC);
                 zone_release(current);
                 
@@ -184,7 +184,7 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                 {
                     zone_lock(current, ZONE_LOCK_REPLACE_DESC);
                     
-                    if(current->status_flags & ZONE_STATUS_PROCESSING)
+                    if(zone_get_status(current) & ZONE_STATUS_PROCESSING)
                     {
                         log_err("overwriting a desc@%p being processed by %s, with %p", current, database_service_operation_get_name(current->last_processor), zone_desc);
                     }
@@ -201,12 +201,12 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                     {
                         if(strcmp(current->file_name, zone_desc->file_name) != 0)
                         {
-                            current->status_flags |= ZONE_STATUS_MODIFIED;
+                            zone_set_status(current, ZONE_STATUS_MODIFIED);
                         }
                     }
                     else if(current->file_name != zone_desc->file_name) // at least one of them is NULL
                     {
-                        current->status_flags |= ZONE_STATUS_MODIFIED;
+                        zone_set_status(current, ZONE_STATUS_MODIFIED);
                     }
                     
                     free(current->file_name);
@@ -422,7 +422,7 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                     zone_release(zone_desc);
                 }
                 
-                current->status_flags &= ~ZONE_STATUS_DROP_AFTER_RELOAD;
+                zone_clear_status(zone_desc, ZONE_STATUS_DROP_AFTER_RELOAD);
                 
                 zone_release(current);
                 

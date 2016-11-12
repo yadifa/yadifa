@@ -98,13 +98,76 @@ s32 thread_pool_counter_wait_below_or_equal(thread_pool_task_counter *counter, s
 
 struct thread_pool_s;
 
+/**
+ * Initialises a thread pool
+ * 
+ * @param thread_count number of threads in the pool (max 255)
+ * @param queue_size size of the task queue (when full, enqueue will block until not full)
+ * @param pool_name the friendly name of the thread pool
+ * @return 
+ */
+
 struct thread_pool_s *thread_pool_init_ex(u8 thread_count, u32 queue_size, const char* pool_name);
+
+/**
+ * Initialises a thread pool
+ * 
+ * @param thread_count number of threads in the pool (max 255)
+ * @param queue_size size of the task queue (when full, enqueue will block until not full)
+ * @return 
+ */
 
 struct thread_pool_s *thread_pool_init(u8 thread_count, u32 queue_size);
 
+/**
+ * Enqueues a function to be executed by a thread pool
+ * Do NOT use this function for concurrent producer-consumer spawning on the same pool as
+ * you will end up with a situation where no slots are available for consumers and everybody is waiting.
+ * Instead, when spawning a group, use thread_pool_enqueue_calls
+ * 
+ * @param tp            the thread pool
+ * @param func          the function
+ * @param parm          the parameter for the function
+ * @param counter       an optional counter that will be incremented just before the function is called, and decremented just after
+ * @param categoryname  an optional string that will be along the thread, mostly for debugging
+ * 
+ * @return SUCCESS
+ */
+
 ya_result thread_pool_enqueue_call(struct thread_pool_s *tp, thread_pool_function func, void *parm, thread_pool_task_counter *counter, const char *categoryname);
 
+
+struct thread_pool_enqueue_call_item
+{
+    thread_pool_function *func;
+    void *parm;
+    thread_pool_task_counter *counter;
+    const char *categoryname;
+};
+
+typedef struct thread_pool_enqueue_call_item thread_pool_enqueue_call_item;
+
+/**
+ * Enqueues a fixed amount of tasks in one go.
+ * This new feature helps fixing a starvation issue when allocating consumers
+ * and producers from a pool in a random order for several tasks.
+ * 
+ * @param tp
+ * @param tasks
+ * @param tasks_count
+ * @return 
+ */
+
+ya_result thread_pool_enqueue_calls(struct thread_pool_s *tp, thread_pool_enqueue_call_item *tasks, int tasks_count);
+
 ya_result thread_pool_destroy(struct thread_pool_s *tp);
+
+/**
+ * Waits until all threads in the pool are up and ready
+ * 
+ * @param tp
+ * @return 
+ */
 
 ya_result thread_pool_wait_all_running(struct thread_pool_s *tp);
 

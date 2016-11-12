@@ -214,10 +214,13 @@ database_zone_path_provider(const u8* domain_fqdn, char *path_buffer, u32 path_b
                     
                     if((flags & ZDB_ZONE_PATH_PROVIDER_MKDIR) != 0)
                     {
-                        ret = mkdir_ex(path_buffer, 0750, 0);
+                        ya_result err = mkdir_ex(path_buffer, 0750, 0);
+                        if(FAIL(err) && (err != MAKE_ERRNO_ERROR(EEXIST)))
+                        {
+                            log_err("database: zone path mkdir: could not create '%s': %r", path_buffer, err);
+                        }
                         flags &= ~ZDB_ZONE_PATH_PROVIDER_MKDIR;
                     }
-
                 }
                 break;
             }
@@ -227,7 +230,11 @@ database_zone_path_provider(const u8* domain_fqdn, char *path_buffer, u32 path_b
                 {
                     if((flags & ZDB_ZONE_PATH_PROVIDER_MKDIR) != 0)
                     {
-                        ret = mkdir_ex(path_buffer, 0750, MKDIR_EX_PATH_TO_FILE);
+                        ya_result err = mkdir_ex(path_buffer, 0750, MKDIR_EX_PATH_TO_FILE);
+                        if(FAIL(err) && (err != MAKE_ERRNO_ERROR(EEXIST)))
+                        {
+                            log_err("database: zone file mkdir: could not create '%s': %r", path_buffer, err);
+                        }
                         flags &= ~ZDB_ZONE_PATH_PROVIDER_MKDIR;
                     }
                 }
@@ -240,7 +247,11 @@ database_zone_path_provider(const u8* domain_fqdn, char *path_buffer, u32 path_b
                 {
                     if((flags & ZDB_ZONE_PATH_PROVIDER_MKDIR) != 0)
                     {
-                        ret = mkdir_ex(path_buffer, 0750, 0);
+                        ya_result err = mkdir_ex(path_buffer, 0750, 0);
+                        if(FAIL(err) && (err != MAKE_ERRNO_ERROR(EEXIST)))
+                        {
+                            log_err("database: axfr path mkdir: could not create '%s': %r", path_buffer, err);
+                        }
                         flags &= ~ZDB_ZONE_PATH_PROVIDER_MKDIR;
                     }
                 }
@@ -253,7 +264,11 @@ database_zone_path_provider(const u8* domain_fqdn, char *path_buffer, u32 path_b
                 {
                     if((flags & ZDB_ZONE_PATH_PROVIDER_MKDIR) != 0)
                     {
-                        ret = mkdir_ex(path_buffer, 0750, 0);
+                        ya_result err = mkdir_ex(path_buffer, 0750, 0);
+                        if(FAIL(err) && (err != MAKE_ERRNO_ERROR(EEXIST)))
+                        {
+                            log_err("database: axfr file mkdir: could not create '%s': %r", path_buffer, err);
+                        }
                         flags &= ~ZDB_ZONE_PATH_PROVIDER_MKDIR;
                     }
                     
@@ -420,6 +435,22 @@ database_info_provider(const u8 *origin, zdb_zone_info_provider_data *data, u32 
             }
             break;
         }
+        case ZDB_ZONE_INFO_PROVIDER_STORE_IN_PROGRESS:
+        {
+            zone_desc_s *zone_desc = zone_acquirebydnsname(origin);
+            if(zone_desc != NULL)
+            {
+                bool saving = (zone_get_status(zone_desc) & (ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE)) != 0;
+                
+                zone_release(zone_desc);
+                ret = saving?1:0;
+            }
+            else
+            {
+                ret = ERROR;
+            }
+            break;
+        }
         default:
         {
             ret = database_info_next_provider(origin, data, flags);
@@ -455,7 +486,6 @@ database_finalize()
 {
     zdb_zone_path_set_provider(NULL);
     zdb_zone_info_set_provider(NULL);
-
     zdb_finalize();
 }
 
@@ -624,7 +654,7 @@ database_zone_ensure_private_keys(zone_desc_s *zone_desc, zdb_zone *zone)
 
     log_debug("database: update: checking DNSKEY availability");
 
-    const zdb_packed_ttlrdata *dnskey_rrset = zdb_zone_get_dnskey_rrset(zone);
+    const zdb_packed_ttlrdata *dnskey_rrset = zdb_zone_get_dnskey_rrset(zone); // zone is locked
 
     int ksk_count = 0;
     int zsk_count = 0;
@@ -715,6 +745,8 @@ database_update(zdb *database, message_data *mesg)
 
     if(zone_desc != NULL)
     {
+        bool need_to_notify_slaves = FALSE;
+        
         zone_lock(zone_desc, ZONE_LOCK_DYNUPDATE);
         switch(zone_desc->type)
         {
@@ -780,15 +812,17 @@ database_update(zdb *database, message_data *mesg)
                         {
                             if(zone_maintains_dnssec(zone_desc))
                             {
-                                if(FAIL(return_code = database_zone_ensure_private_keys(zone_desc, zone)))
+                                if(FAIL(return_code = database_zone_ensure_private_keys(zone_desc, zone))) //  is locked
                                 {
                                     log_info("database: update: %{dnsname} loading keys from keystore", zone->origin);
                                     
                                     dnssec_keystore_reload_domain(zone->origin);
+                                    zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
                                     zdb_zone_update_keystore_keys_from_zone(zone);
+                                    zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_DYNUPDATE, ZDB_ZONE_MUTEX_SIMPLEREADER);
                                     database_service_zone_dnskey_set_alarms(zone);
                                     
-                                    return_code = database_zone_ensure_private_keys(zone_desc, zone);
+                                    return_code = database_zone_ensure_private_keys(zone_desc, zone); // zone is locked
                                 }
                             }
                             else
@@ -819,32 +853,12 @@ database_update(zdb *database, message_data *mesg)
 
                                 /// @todo 20141008 edf -- this lock is too early, it should be moved just before the actual run
                                 
-#if 1
                                 zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
                                 bool locked = TRUE;
-#else
-                                u64 start = timeus();
-                                u64 now;
-                                u64 locktimeout = 2000000; /// @todo 20141008 edf -- 2 seconds, make this configurable
-                                bool locked;
-                                
-                                do
-                                {   // zone was double-locked, now only locked for dynupdate
-                                    if((locked = zdb_zone_try_transfer_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE)))
-                                    {
-                                        break;
-                                    }
-                                    usleep(1000);
-                                    now = timeus();
-                                }
-                                while(now - start < locktimeout);
-#endif
                                 
                                 if(locked)
                                 {
                                     // from this point, the zone is single-locked
-                                    
-                                    bool need_to_notify_slaves = FALSE;
                                     
                                     log_debug("database: update: processing %d prerequisites", count);
 
@@ -897,7 +911,7 @@ database_update(zdb *database, message_data *mesg)
 
                                                 if(len > 0)
                                                 {
-                                                    zone_desc->status_flags |= ZONE_STATUS_MODIFIED;
+                                                    zone_set_status(zone_desc, ZONE_STATUS_MODIFIED);
                                                     need_to_notify_slaves = TRUE;
                                                 }
                                                 
@@ -962,19 +976,15 @@ database_update(zdb *database, message_data *mesg)
                                     zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
 #else                               
                                     zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_DYNUPDATE);
-#endif                               
-                                    if(need_to_notify_slaves)
-                                    {
-                                        notify_slaves(zone->origin);
-                                    }
-                                    
+#endif
                                     zdb_zone_release(zone);
                                     
                                 } // lock timeout
                                 else
                                 {
                                     // we are still double-locked
-                                    
+
+                                    zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_DYNUPDATE, ZDB_ZONE_MUTEX_SIMPLEREADER);                                    
                                     zdb_zone_release_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
                                     
                                     log_warn("database: update: timeout trying to lock the zone %{dnsname}", mesg->qname);
@@ -1113,6 +1123,12 @@ database_update(zdb *database, message_data *mesg)
         }
         
         zone_unlock(zone_desc, ZONE_LOCK_DYNUPDATE);
+        
+        if(need_to_notify_slaves)
+        {
+            notify_slaves(zone_desc->origin);
+        }
+        
         zone_release(zone_desc);
     }
     else
@@ -1245,7 +1261,7 @@ database_zone_refresh_alarm(void *args, bool cancel)
 
         if(zdb_zone_trylock(zone, ZDB_ZONE_MUTEX_REFRESH))
         {
-            if(FAIL(return_value = zdb_zone_getsoa(zone, &soa)))
+            if(FAIL(return_value = zdb_zone_getsoa(zone, &soa))) // zone is locked
             {
                 zdb_zone_release(zone);
                 
@@ -1374,13 +1390,13 @@ database_zone_refresh_alarm(void *args, bool cancel)
          * The alarm rang but nothing has been done
          */
          
-        log_warn("database: refresh: %{dnsname}: re-arming the alarm for %T", origin, next_alarm_epoch);
+        log_debug("database: refresh: %{dnsname}: re-arming the alarm for %T", origin, next_alarm_epoch);
 
         database_zone_refresh_maintenance(db, origin, next_alarm_epoch);
     }
     else
     {
-        log_warn("database: refresh: %{dnsname}: alarm will not be re-armed", origin);
+        log_debug("database: refresh: %{dnsname}: alarm will not be re-armed", origin);
     }
 
     free((char*)sszra->origin);
@@ -1420,7 +1436,7 @@ database_zone_refresh_maintenance_wih_zone(zdb_zone* zone, u32 next_alarm_epoch)
 
         if(next_alarm_epoch == 0)
         {
-            if(FAIL(return_value = zdb_zone_getsoa(zone, &soa)))
+            if(FAIL(return_value = zdb_zone_getsoa(zone, &soa))) // zone is locked
             {
                 /*
                  * No SOA ? It's critical

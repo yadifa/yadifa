@@ -94,14 +94,14 @@ database_service_zone_mount(zone_desc_s *zone_desc)
         return;
     }
     
-    zone_desc->status_flags |= ZONE_STATUS_MOUNTING;
+    zone_set_status(zone_desc, ZONE_STATUS_MOUNTING);
     
     zdb_zone *zone = zone_get_loaded_zone(zone_desc); // RC++, because we get to keep a reference
     
     if(zone == NULL)
     {
         log_err("zone mount: no zone loaded for '%{dnsname}'", zone_desc->origin);
-        zone_desc->status_flags &= ~(ZONE_STATUS_STARTING_UP|ZONE_STATUS_MOUNTING|ZONE_STATUS_PROCESSING);
+        zone_clear_status(zone_desc, ZONE_STATUS_STARTING_UP|ZONE_STATUS_MOUNTING|ZONE_STATUS_PROCESSING);
         
         /// @todo 20140425 edf -- check why the two commands were reversed
         database_fire_zone_mounted(zone_desc, NULL, ERROR);
@@ -213,7 +213,7 @@ database_service_zone_mount(zone_desc_s *zone_desc)
     zdb_zone_release(zone); // RC--
     zone = NULL;
     
-    zone_desc->status_flags &= ~(ZONE_STATUS_STARTING_UP|ZONE_STATUS_MOUNTING|ZONE_STATUS_PROCESSING);
+    zone_clear_status(zone_desc, ZONE_STATUS_STARTING_UP|ZONE_STATUS_MOUNTING|ZONE_STATUS_PROCESSING);
     
     log_debug1("database_service_zone_mount: unlocking zone '%{dnsname}' for mounting", zone_desc->origin);
     

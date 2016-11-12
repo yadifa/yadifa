@@ -401,7 +401,18 @@ nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference l
 
         if(self_prev->rrsig != NULL)
         {
-            ZDB_RECORD_ZFREE(self_prev->rrsig);
+            zdb_packed_ttlrdata *rrsig_list = self_prev->rrsig;
+            do
+            {
+                zdb_packed_ttlrdata *tmp = rrsig_list;
+                rrsig_list = rrsig_list->next;
+                
+                zdb_listener_notify_update_nsec3rrsig(zone, tmp, NULL, self_prev);
+                
+                ZDB_RECORD_ZFREE(tmp);
+            }
+            while(rrsig_list != NULL);
+            
             self_prev->rrsig = NULL;
         }
 

@@ -208,6 +208,8 @@ ya_result
 rrsig_updater_update_label_signatures(rrsig_context_s *context, zdb_rr_label *label)
 {
     yassert(context != NULL);
+    
+    yassert(zdb_zone_islocked(context->task->zone));
 
     if(context->key_sll == NULL)
     {
@@ -394,7 +396,7 @@ rrsig_updater_update_label_signatures(rrsig_context_s *context, zdb_rr_label *la
         
         /// remove all expired signatures
         
-        zdb_packed_ttlrdata* rrsig_sll = zdb_record_find(&label->resource_record_set, TYPE_RRSIG);
+        zdb_packed_ttlrdata* rrsig_sll = zdb_record_find(&label->resource_record_set, TYPE_RRSIG); // zone is locked
 
         time_t now = time(NULL);
         
@@ -427,7 +429,7 @@ rrsig_updater_update_label_signatures(rrsig_context_s *context, zdb_rr_label *la
         log_debug5("rrsig: destroy: %{dnsnamestack} %04x", &context->rr_dnsname, label->flags);
 #endif
 
-        zdb_packed_ttlrdata* rrsig_sll = zdb_record_find(&label->resource_record_set, TYPE_RRSIG);
+        zdb_packed_ttlrdata* rrsig_sll = zdb_record_find(&label->resource_record_set, TYPE_RRSIG); // zone is locked
 
         while(rrsig_sll != NULL)
         {
@@ -537,6 +539,7 @@ rrsig_updater_thread(void *context_)
 #if DNSSEC_DEBUGLEVEL>1
             log_debug("rrsig_updater_thread(%x): stop", id);
 #endif
+            log_debug("rrsig: %{dnsname}: no more signatures updates queued", sig_context->origin);
             break;
         }
         
@@ -548,7 +551,7 @@ rrsig_updater_thread(void *context_)
         
         if(rrsig_context_get_quota(sig_context) <= 0)
         {
-            log_debug1("rrsig: %{dnsname}: quota exceeded, postponing NSEC3 signature query", query->zone->origin);
+            log_debug1("rrsig: %{dnsname}: quota exceeded, postponing signature query", query->zone->origin);
             rrsig_update_item_free(query);
             
             task->stop_task = true;
@@ -704,8 +707,8 @@ rrsig_updater_result_process(rrsig_answer_context_s *answer_context)
             rrsig_updater_result_process_item_s *item;
             u32 fqdn_len = dnsname_stack_len(&query->path);
             ZALLOC_ARRAY_OR_DIE(rrsig_updater_result_process_item_s *, item, sizeof(rrsig_updater_result_process_item_s) - 1 + fqdn_len, RRSURPI_TAG);
-            item->next = to_commit;
-            to_commit = item;
+            item->next = to_commit; // chaining happens here
+            to_commit = item; // chaining happens here
             item->added_rrsig_sll = query->added_rrsig_sll;
             item->removed_rrsig_sll = query->removed_rrsig_sll;
             dnsname_stack_to_dnsname(&query->path, &item->internal_fqdn[0]);
@@ -719,7 +722,7 @@ rrsig_updater_result_process(rrsig_answer_context_s *answer_context)
 #ifdef DEBUG
             memset(previous_query, 0xfe, sizeof(rrsig_update_item_s));
 #endif
-            rrsig_update_item_free(previous_query);
+            rrsig_update_item_free(previous_query); // does not frees the content
         }
         
         previous_query = query;
@@ -739,11 +742,11 @@ rrsig_updater_result_process(rrsig_answer_context_s *answer_context)
     //
     
     if(answer_context->items == NULL)
-    {
+    {   // set
         answer_context->items = to_commit;
     }
     else
-    {
+    {   // append
         struct rrsig_updater_result_process_item_s *last = answer_context->items;
         while(last->next != NULL)
         {
@@ -845,9 +848,11 @@ rrsig_updater_filter_label_apex(dnssec_task_s *task, zdb_rr_label *rr_label)
 {
     rrsig_updater_parms *parms = (rrsig_updater_parms*)task->args;
     
+    yassert(zdb_zone_islocked(task->zone));
+    
     if(parms->signatures_are_verified)
     {
-        zdb_packed_ttlrdata *rrsig_set = zdb_record_find(&rr_label->resource_record_set, TYPE_RRSIG);
+        zdb_packed_ttlrdata *rrsig_set = zdb_record_find(&rr_label->resource_record_set, TYPE_RRSIG); // zone is locked
         int unknown_zsk = 0;
         int unknown_ksk = 0;
         bool has_dnskey = false;
@@ -949,9 +954,11 @@ rrsig_updater_filter_label_rrsig(dnssec_task_s *task, zdb_rr_label *rr_label)
 {
     rrsig_updater_parms *parms = (rrsig_updater_parms*)task->args;
     
+    yassert(zdb_zone_islocked(task->zone));
+    
     if(parms->signatures_are_verified)
     {
-        zdb_packed_ttlrdata *rrsig_set = zdb_record_find(&rr_label->resource_record_set, TYPE_RRSIG);
+        zdb_packed_ttlrdata *rrsig_set = zdb_record_find(&rr_label->resource_record_set, TYPE_RRSIG); // zone is locked
         int unknown_zsk = 0;
 
         u32 now = time(NULL);
@@ -1036,9 +1043,11 @@ rrsig_updater_filter_label_delegation(dnssec_task_s *task, zdb_rr_label *rr_labe
 {
     rrsig_updater_parms *parms = (rrsig_updater_parms*)task->args;
     
+    yassert(zdb_zone_islocked(task->zone));
+    
     if(parms->signatures_are_verified)
     {
-        zdb_packed_ttlrdata *rrsig_set = zdb_record_find(&rr_label->resource_record_set, TYPE_RRSIG);
+        zdb_packed_ttlrdata *rrsig_set = zdb_record_find(&rr_label->resource_record_set, TYPE_RRSIG); // zone is locked
         int unknown_zsk = 0;
 
         u32 now = time(NULL);
@@ -1129,6 +1138,8 @@ rrsig_updater_filter_label_delegation(dnssec_task_s *task, zdb_rr_label *rr_labe
  * Return TRUE iff the label should be resigned.
  * Expected to be called at a delegation.
  * 
+ * 1 use
+ * 
  * @param task
  * @param rr_label
  * @return 
@@ -1137,7 +1148,10 @@ rrsig_updater_filter_label_delegation(dnssec_task_s *task, zdb_rr_label *rr_labe
 static bool
 rrsig_updater_filter_label_under_delegation(dnssec_task_s *task, zdb_rr_label *rr_label)
 {
-    zdb_packed_ttlrdata * rrsig = zdb_record_find(&rr_label->resource_record_set, TYPE_RRSIG);
+    yassert(zdb_zone_islocked(task->zone));
+    (void)task;
+    
+    zdb_packed_ttlrdata * rrsig = zdb_record_find(&rr_label->resource_record_set, TYPE_RRSIG); // zone is locked
 
     // no signature allowed
     
@@ -1360,7 +1374,9 @@ rrsig_updater_init(rrsig_updater_parms *parms, zdb_zone *zone)
 ya_result
 rrsig_updater_prepare_keys(rrsig_updater_parms *parms, zdb_zone *zone)
 {
-    const zdb_packed_ttlrdata *dnskey_rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_DNSKEY);
+    yassert(zdb_zone_islocked(zone));
+    
+    const zdb_packed_ttlrdata *dnskey_rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_DNSKEY); // zone is locked
     
     if(dnskey_rrset == NULL)
     {

@@ -1943,8 +1943,6 @@ message_query_tcp_with_timeout(message_data *mesg, const host_address *address, 
             }
         }
 
-
-
         output_stream_close(&os);
         output_stream_close(&is);
 

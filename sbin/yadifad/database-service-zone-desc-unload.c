@@ -76,10 +76,10 @@ database_service_zone_desc_unload(zone_desc_s *zone_desc)
         return;
     }
     
-    if((zone_desc->status_flags & ZONE_STATUS_REGISTERED) == 0)
+    if((zone_get_status(zone_desc) & ZONE_STATUS_REGISTERED) == 0)
     {
         log_err("database_service_zone_desc_unload(%p) %{dnsname} is not registered!", zone_desc, zone_desc->origin);
-        zone_desc->status_flags &= ~ZONE_STATUS_PROCESSING;
+        zone_clear_status(zone_desc, ZONE_STATUS_PROCESSING);
         zone_unlock(zone_desc, ZONE_LOCK_DESC_UNLOAD);
         return;
     }
@@ -99,7 +99,7 @@ database_service_zone_desc_unload(zone_desc_s *zone_desc)
         zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_UNLOAD, NULL, TRUE); // default zone
         zone_enqueue_command(zone_desc, DATABASE_SERVICE_ZONE_DESC_UNLOAD, NULL, TRUE);
         
-        zone_desc->status_flags &= ~ZONE_STATUS_PROCESSING;
+        zone_clear_status(zone_desc, ZONE_STATUS_PROCESSING);
         zone_unlock(zone_desc, ZONE_LOCK_DESC_UNLOAD);
     }
     else
@@ -128,7 +128,7 @@ database_service_zone_desc_unload(zone_desc_s *zone_desc)
 
         if(zone_desc == zone_unregistered_desc)
         {
-            zone_desc->status_flags &= ~ZONE_STATUS_REGISTERED;
+            zone_clear_status(zone_desc, ZONE_STATUS_REGISTERED);
             
             zone_release(zone_desc);
         }
@@ -146,8 +146,8 @@ database_service_zone_desc_unload(zone_desc_s *zone_desc)
             }
         }
         
-        zone_desc->status_flags &= ~ZONE_STATUS_PROCESSING;
-        zone_desc->status_flags |= ZONE_STATUS_MARKED_FOR_DESTRUCTION;
+        zone_clear_status(zone_desc, ZONE_STATUS_PROCESSING);
+        zone_set_status(zone_desc, ZONE_STATUS_MARKED_FOR_DESTRUCTION);
     }
     
     log_debug1("database_service_zone_desc_unload(%p) done", zone_desc);

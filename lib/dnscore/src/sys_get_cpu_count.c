@@ -41,9 +41,14 @@
  *
  *----------------------------------------------------------------------------*/
 #include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore-config-features.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+
+#if defined(__linux__) && HAVE_CPUID_H
+#include <cpuid.h>
+#endif
 
 #include "dnscore/sys_types.h"
 
@@ -85,6 +90,21 @@ sys_get_cpu_count()
 
     return cpu_count_override;
 }
+
+bool
+sys_has_hyperthreading()
+{
+#if defined(__linux__) && HAVE_CPUID_H
+    unsigned int a,c,d,b;
+    int ret = __get_cpuid(1,&a,&b,&c,&d);
+    if(ret == 1)
+    {
+        return (d & (1<<28)) != 0;
+    }
+#endif    
+    return FALSE;
+}
+
 /** @} */
 
 /*----------------------------------------------------------------------------*/

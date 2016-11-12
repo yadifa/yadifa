@@ -305,7 +305,7 @@ struct zone_desc_s
 #endif
     // zone refresh status
     zone_refresh_s                                                refresh;      // internal (3 * 32 bits)
-    volatile u32                                             status_flags;      // internal
+    volatile u32                                            _status_flags;      // internal
     volatile u32                                           last_processor;      // internal, diagnostic
     u32                                                             flags;      // may change ? (notify auto, drop before load, ...)
     u32                                                   journal_size_kb;      // may change, expressed in kb, 0 "choose", 2^32-1 "

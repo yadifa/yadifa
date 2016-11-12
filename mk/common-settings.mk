@@ -198,7 +198,7 @@ endif
 
 AM_CFLAGS += -DUSES_LLVM
 
-DEBUGFLAGS += -DMODE_DEBUG_CLANG
+DEBUGFLAGS += -DMODE_DEBUG_CLANG -fsanitize=address -fsanitize=bounds
 
 # Note: add a _d suffix for debug builds ?
 
@@ -228,7 +228,7 @@ AM_LD = ld
 endif
 
 AM_CFLAGS += -DUSES_GCC
-DEBUGFLAGS += -DMODE_DEBUG_GCC
+DEBUGFLAGS += -DMODE_DEBUG_GCC -fstack-check -fstack-protector-strong
 
 endif # USES_GCC
 

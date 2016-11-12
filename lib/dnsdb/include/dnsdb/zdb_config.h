@@ -214,7 +214,7 @@ extern "C"
  */
     
 #define ZDB_JOURNAL_FD_DEFAULT  512
-    
+   
 #ifdef	__cplusplus
 }
 #endif

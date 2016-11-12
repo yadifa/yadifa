@@ -34,7 +34,7 @@
 
 #pragma once
 
-#include "dnsdb/journal-cjf-common.h"
+#include <dnsdb/journal-cjf-common.h>
 
 /**
  * Prepares a stream for the next chunk (-SOA ... +SOA ...)

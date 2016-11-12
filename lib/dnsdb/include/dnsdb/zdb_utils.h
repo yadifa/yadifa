@@ -77,7 +77,7 @@ extern "C" {
     ya_result rr_soa_get_serial(const u8* rdata, u16 rdata_size, u32* serial);
     ya_result rr_soa_increase_serial(u8* rdata, u16 rdata_size, u32 increment);
 
-    ya_result rr_soa_get_minimumttl(const u8* rdata, u16 rdata_size, u32* minimum_ttl);
+    ya_result rr_soa_get_minimumttl(const u8* rdata, u16 rdata_size, s32* minimum_ttl);
 
     /*
      * PRINT ANSWER

@@ -160,6 +160,15 @@ typedef int bool;
 
 #endif
 
+#define UNSIGNED_TYPE_VALUE_MAX(__type__)    ((__type__)~0)
+#define SIGNED_TYPE_VALUE_MAX(__type__)      (((__type__)~0)>>1)
+#define SIGNED_TYPE_VALUE_MIN(__type__)      (((__type__)~0) - (((__type__)~0)>>1))
+
+#define UNSIGNED_VAR_VALUE_MAX(__var__)     ((~0ULL)>>((sizeof(~0ULL) - sizeof(__var__)) * 8LL))
+#define SIGNED_VAR_VALUE_MAX(__var__)      (UNSIGNED_VAR_VALUE_MAX(__var__)>>1)
+#define SIGNED_VAR_VALUE_MIN(__var__)      (UNSIGNED_VAR_VALUE_MAX(__var__) - SIGNED_VAR_VALUE_MAX(__var__))
+
+#define UNSIGNED_VAR_VALUE_IS_MAX(__var__) (__var__ == UNSIGNED_VAR_VALUE_MAX(__var__))
 
 /* This is the basic type definition set                        */
 /* Tweaks will be added for each setup (using the preprocessor) */

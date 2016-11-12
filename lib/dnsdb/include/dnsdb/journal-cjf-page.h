@@ -35,7 +35,7 @@
 
 #pragma once
 
-#include "dnsdb/journal-cjf-common.h"
+#include <dnsdb/journal-cjf-common.h>
 
 /**
  * Search from the offset of the stream for a serial, looking in an PAGE referenced by index

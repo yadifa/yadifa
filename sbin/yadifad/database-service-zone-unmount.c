@@ -92,7 +92,7 @@ database_service_zone_unmount(zone_desc_s *zone_desc)
     
     log_info("zone unmount: %{dnsname}", origin);
     
-    zone_desc->status_flags |= ZONE_STATUS_UNMOUNTING;
+    zone_set_status(zone_desc, ZONE_STATUS_UNMOUNTING);
                     
     /*
      * Find the zone
@@ -131,7 +131,7 @@ database_service_zone_unmount(zone_desc_s *zone_desc)
         log_debug2("database_service_zone_unmount: zone %{dnsname} not found in the database", origin);
     }
         
-    zone_desc->status_flags &= ~(ZONE_STATUS_STARTING_UP|ZONE_STATUS_UNMOUNTING|ZONE_STATUS_PROCESSING);
+    zone_clear_status(zone_desc, ZONE_STATUS_STARTING_UP|ZONE_STATUS_UNMOUNTING|ZONE_STATUS_PROCESSING);
     
     log_debug1("database_service_zone_unmount: unlocking zone '%{dnsname}' for unmounting", origin);
     

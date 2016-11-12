@@ -329,7 +329,9 @@ nsec3_chain_create_callback(nsec3_forall_label_s* ctx)
     zdb_icmtl icmtl;
     nsec3_zone* n3 = zdb_zone_get_nsec3chain(ctx->zone, ctx->chain_index);
     nsec3_chain_create_s* current = (nsec3_chain_create_s*)ctx->callback_args;
-    u32 min_ttl = 600; /// @todo 20150918 edf -- fix me
+    
+    s32 min_ttl;
+    
     //u8 digest[1 + MAX_DIGEST_LENGTH];
     if(n3 == NULL)
     {
@@ -387,6 +389,8 @@ nsec3_chain_create_callback(nsec3_forall_label_s* ctx)
 #endif
             }
         }
+        
+        zdb_zone_getminttl(ctx->zone, &min_ttl);
         
         // process the batch
         

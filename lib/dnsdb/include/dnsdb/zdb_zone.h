@@ -227,10 +227,9 @@ ya_result zdb_zone_getserial(const zdb_zone* zone, u32 *serial);
  * @param[out] serial a pointer to an u32 that will get the minttl
  */
 
-static inline ya_result zdb_zone_getminttl(const zdb_zone *zone, u32 *minttl)
+static inline void zdb_zone_getminttl(const zdb_zone *zone, s32 *minttl)
 {
     *minttl = zone->min_ttl;
-    return SUCCESS;
 }
 
 
@@ -276,7 +275,7 @@ static inline u16 zdb_zone_getclass(const zdb_zone *zone)
  * @return an error code
  */
 
-ya_result zdb_zone_update_ixfr(zdb *db, input_stream *is);
+ya_result zdb_zone_update_ixfr_OBSOLETE(zdb *db, input_stream *is);
 
 ya_result zdb_zone_store_axfr(zdb_zone *zone, output_stream* os);
 

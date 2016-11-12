@@ -271,9 +271,29 @@ dnskey_dsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u
         u32 rn = BN_num_bytes(sig_r);
         
         *output++ = t;
-        BN_bn2bin(sig_r, output);
-        output += rn;
-        BN_bn2bin(sig_s, output);
+        int sig_r_n = BN_bn2bin(sig_r, output);
+        if(sig_r_n < 20)
+        {
+            memset(&output[sig_r_n], 0, 20 - sig_r_n);
+        }
+        else if(sig_r_n > 20)
+        {
+            log_err("dsa: sign: %{dnsname}/%05i: unexpected signature R size (%i)", key->owner_name, key->tag, sig_r_n);
+            return DNSSEC_ERROR_DSASIGNATUREFAILED;
+        }
+        
+        output += 20;
+        
+        int sig_s_n = BN_bn2bin(sig_s, output);
+        if(sig_s_n < 20)
+        {
+            memset(&output[sig_s_n], 0, 20 - sig_s_n);
+        }
+        else if(sig_s_n > 20)
+        {
+            log_err("dsa: sign: %{dnsname}/%05i: unexpected signature S size (%i)", key->owner_name, key->tag, sig_s_n);
+            return DNSSEC_ERROR_DSASIGNATUREFAILED;
+        }
         
         DSA_SIG_free(sig);
         
@@ -287,7 +307,7 @@ dnskey_dsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u
         {
             char buffer[256];
             ERR_error_string_n(ssl_err, buffer, sizeof(buffer));
-            log_err("digest signature returned an ssl error %08x %s", ssl_err, buffer);
+            log_err("dsa: sign: %{dnsname}/%05i: error %08x %s", key->owner_name, key->tag, ssl_err, buffer);
         }
 
         ERR_clear_error();
@@ -348,7 +368,8 @@ dnskey_dsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len,
         {
             char buffer[256];
             ERR_error_string_n(ssl_err, buffer, sizeof(buffer));
-            log_debug("digest verification returned an ssl error %08x %s", ssl_err, buffer);
+
+            log_debug("dsa: verify: %{dnsname}/%05i: error %08x %s", key->owner_name, key->tag, ssl_err, buffer);
         }
 
         ERR_clear_error();

@@ -321,13 +321,17 @@ zdb_zone_answer_ixfr_thread(void* data_)
 
     /***********************************************************************/
 
+    zdb_zone_lock(data->zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+    
     /* Keep a snapshot of the current SOA */
 
-    zdb_packed_ttlrdata* soa = zdb_record_find(&data->zone->apex->resource_record_set, TYPE_SOA);
+    zdb_packed_ttlrdata* soa = zdb_record_find(&data->zone->apex->resource_record_set, TYPE_SOA); // zone is locked
     
     if(soa == NULL)
     {
         /** @todo 20101214 edf -- error other than "does not exists" : SERVFAIL */
+        
+        zdb_zone_unlock(data->zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
 
         /**
          * @note This does an exit with error.
@@ -335,10 +339,10 @@ zdb_zone_answer_ixfr_thread(void* data_)
         
         data->return_code = ZDB_ERROR_NOSOAATAPEX;
 
-        zdb_zone_answer_ixfr_thread_exit(data);
-        
         log_crit("zone write ixfr: %{dnsname}: no SOA in zone", data->zone->origin); /* will ultimately lead to the end of the program */
         
+        zdb_zone_answer_ixfr_thread_exit(data);
+                
         return NULL;        
     }
 
@@ -349,6 +353,8 @@ zdb_zone_answer_ixfr_thread(void* data_)
     current_soa_tctrl.qclass = CLASS_IN;
     current_soa_tctrl.ttl    = htonl(soa->ttl);
     current_soa_tctrl.rdlen  = htons(soa->rdata_size);
+    
+    zdb_zone_unlock(data->zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
 
     /***********************************************************************/
 

@@ -104,6 +104,7 @@ struct nsec3_node
 
     u8 flags; /* opt-out */
     u16 type_bit_maps_size;
+    
     u16 rc; /* label RC */
     u16 sc; /* *.label RC */
 

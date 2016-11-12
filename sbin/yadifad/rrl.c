@@ -61,6 +61,8 @@
 #include "acl.h"
 #include "config_acl.h"
 
+u32 zdb_query_message_update(message_data* message, zdb_query_ex_answer* answer_set);
+
 extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
 
@@ -717,7 +719,7 @@ rrl_slip(message_data *mesg)
                 ednsrecord += 2;
                 SET_U16_AT(*ednsrecord, htons(message_edns0_getmaxsize()));  // udp payload size
                 ednsrecord += 2;
-                SET_U32_AT(*ednsrecord, mesg->rcode_ext);    // edns flags
+                SET_U32_AT(*ednsrecord, mesg->rcode_ext);       // edns flags
                 ednsrecord += 4;
                 SET_U16_AT(*ednsrecord, 0);                     // rdata size
                 
@@ -747,8 +749,18 @@ rrl_slip(message_data *mesg)
     return return_code;
 }
 
+/**
+ * Look at the message for RRL processing.
+ * Returns an RRL code.
+ * After this call, the message may be truncated.
+ * 
+ * @param mesg the query message
+ * @param ans_auth_add the answer that would be given to the client
+ * @return an RRL error code
+ */
+
 ya_result
-rrl_process(message_data *mesg, const zdb_query_ex_answer *ans_auth_add)
+rrl_process(message_data *mesg, zdb_query_ex_answer *ans_auth_add)
 {
     s32 return_code = RRL_PROCEED;
     
@@ -757,6 +769,12 @@ rrl_process(message_data *mesg, const zdb_query_ex_answer *ans_auth_add)
     
     if(!g_rrl_settings.enabled || (g_rrl_settings.exempted_filter(mesg, &g_rrl_settings.exempted) > 0))
     {
+#ifdef DEBUG
+        log_debug("rrl: %{sockaddrip} %{dnsname} %{dnstype} %{dnsclass}: disabled or exempted",
+                &mesg->other.sa, mesg->qname, &mesg->qtype, &mesg->qclass);
+#endif
+        mesg->send_length = zdb_query_message_update(mesg, ans_auth_add);
+
         return return_code;
     }
     
@@ -885,6 +903,15 @@ rrl_process(message_data *mesg, const zdb_query_ex_answer *ans_auth_add)
                 }
             }
         }
+        
+        if(((return_code & (RRL_SLIP|RRL_DROP)) == 0) || g_rrl_settings.log_only)
+        {
+#ifdef DEBUG
+            log_debug("rrl: %{sockaddrip} %{dnsname} %{dnstype} %{dnsclass}: %x | %i",
+                    &mesg->other.sa, mesg->qname, &mesg->qtype, &mesg->qclass, return_code, g_rrl_settings.log_only);
+#endif
+            mesg->send_length = zdb_query_message_update(mesg, ans_auth_add);
+        }
     }
     else
     {
@@ -917,6 +944,8 @@ rrl_process(message_data *mesg, const zdb_query_ex_answer *ans_auth_add)
         }
         
         mutex_unlock(&rrl_mtx);
+                
+        mesg->send_length = zdb_query_message_update(mesg, ans_auth_add);
     }
     
     return return_code;
@@ -972,6 +1001,12 @@ rrl_cull_all()
     g_rrl_list.offset = -1;
     
     mutex_unlock(&rrl_mtx);
+}
+
+bool
+rrl_is_logonly()
+{
+    return g_rrl_settings.log_only;
 }
 
 /** @} */

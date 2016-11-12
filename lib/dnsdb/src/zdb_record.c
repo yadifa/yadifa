@@ -62,6 +62,9 @@
 #include "dnsdb/nsec3_types.h"
 #endif
 
+#define MODULE_MSG_HANDLE g_database_logger
+extern logger_handle *g_database_logger;
+
 #define TTLRDATA_TAG 0x41544144524c5454
 #define ZDBRDATA_TAG 0x415441445242445a
 
@@ -79,7 +82,6 @@ zdb_record_free(zdb_packed_ttlrdata* record)
     /** DO NOT DO THIS : memset(record,0x8f,sizeof(zdb_packed_ttlrdata)+record->rdata_size-1); */
 
 #ifdef DEBUG
-    //yassert((u32)(intptr)(record->next) != 0xfefefefeUL);
     u16 tmp = record->rdata_size;
     memset(record, 0xfe, sizeof(zdb_packed_ttlrdata) + tmp - 1);
     record->rdata_size = tmp;
@@ -380,6 +382,12 @@ zdb_record_delete(zdb_rr_collection* collection, u16 type)
             {
                 zdb_packed_ttlrdata* tmp = record_list;
                 record_list = record_list->next;
+                
+#ifdef DEBUG
+                rdata_desc rdatadesc = ZDB_PACKEDRECORD_RDATADESC(type, tmp);
+                log_debug5("zdb_record_delete: %{typerdatadesc}", &rdatadesc);
+#endif
+                
                 zdb_record_free(tmp);
             }
             while(record_list != NULL);
@@ -391,6 +399,9 @@ zdb_record_delete(zdb_rr_collection* collection, u16 type)
     }
     else
     {
+#ifdef DEBUG
+        log_debug5("zdb_record_delete: ANY");
+#endif
         zdb_record_destroy(collection); /* FB: This should be handled by the caller */
 
         return SUCCESS;
@@ -502,6 +513,11 @@ zdb_record_delete_exact(zdb_rr_collection* collection, u16 type, const zdb_ttlrd
                     }
                     
                     yassert(record_list->rdata_start != ttlrdata->rdata_pointer);
+                    
+#ifdef DEBUG
+                    rdata_desc rdatadesc = ZDB_PACKEDRECORD_RDATADESC(type, record_list);
+                    log_debug5("zdb_record_delete: %{typerdatadesc}", &rdatadesc);
+#endif
 
                     zdb_record_free(record_list);
 
@@ -511,6 +527,11 @@ zdb_record_delete_exact(zdb_rr_collection* collection, u16 type, const zdb_ttlrd
                 prev->next = record_list->next;
 
                 yassert(record_list->rdata_start != ttlrdata->rdata_pointer);
+                
+#ifdef DEBUG
+                rdata_desc rdatadesc = ZDB_PACKEDRECORD_RDATADESC(type, record_list);
+                log_debug5("zdb_record_delete: %{typerdatadesc}", &rdatadesc);
+#endif
                 
                 zdb_record_free(record_list);
 

@@ -91,6 +91,8 @@ zdb_zone_process_label_children(zdb_zone_process_label_callback_parms *parms)
 ya_result
 zdb_zone_process_all_labels_from_zone(zdb_zone *zone, zdb_zone_process_label_callback *cb, void *args)
 {
+    yassert(zdb_zone_islocked(zone));
+    
     ya_result return_code = ERROR;
     
     if(zone != NULL && zone->apex != NULL)

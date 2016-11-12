@@ -269,6 +269,9 @@ struct zdb_ttlrdata
     void* rdata_pointer; /*  4  8 */
 };
 
+#define ZDB_PACKEDRECORD_RDATADESC(type_,ttlrdata_) { (type_), ZDB_PACKEDRECORD_PTR_RDATASIZE(ttlrdata_), ZDB_PACKEDRECORD_PTR_RDATAPTR(ttlrdata_)}
+#define ZDB_RECORD_RDATADESC(type_,ttlrdata_) { (type_), ZDB_RECORD_PTR_RDATASIZE(ttlrdata_), ZDB_RECORD_PTR_RDATAPTR(ttlrdata_)}
+
 #define TTLRDATA_INLINESIZE         THIS_SHOULD_NOT_BE_USED_IN_PACKED_MODE
 
 #define ZDB_RECORD_TTLRDATA_SET(record,ttl_,len_,rdata_)            \
@@ -499,6 +502,8 @@ struct zdb_rr_label
 }; /* 28 44 => 32 48 */
 
 #define ZDB_ZONE_MUTEX_EXCLUSIVE_FLAG   0x80
+#define ZDB_ZONE_MUTEX_LOCKMASK_FLAG    0x7f
+#define ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG  0x7f
 
 #define ZDB_ZONE_MUTEX_NOBODY           GROUP_MUTEX_NOBODY
 #define ZDB_ZONE_MUTEX_SIMPLEREADER     0x01 /* non-conflicting */
@@ -511,7 +516,7 @@ struct zdb_rr_label
 #define ZDB_ZONE_MUTEX_REPLACE          0x89 /* conflicting */
 #define ZDB_ZONE_MUTEX_LOAD             0x8a /* conflicting but this case is impossible */
 #define ZDB_ZONE_MUTEX_NSEC3            0x8b /* conflicting, marks an hard operation to be done */
-#define ZDB_ZONE_MUTEX_DESTROY          0xFF /* conflicting, can never be launched more than once.  The zone will be destroyed before unlock. */
+#define ZDB_ZONE_MUTEX_DESTROY          0xff /* conflicting, can never be launched more than once.  The zone will be destroyed before unlock. */
 
 typedef ya_result zdb_zone_access_filter(const message_data* /*mesg*/, const void* /*zone_extension*/);
 
@@ -524,11 +529,17 @@ typedef ya_result zdb_zone_access_filter(const message_data* /*mesg*/, const voi
 #define ALARM_KEY_ZONE_DNSKEY_ACTIVATE  6
 #define ALARM_KEY_ZONE_DNSKEY_DEACTIVATE 7
 
+#define ALARM_KEY_ZONE_NOTIFY_SLAVES    8
+
 #define ZDB_ZONE_KEEP_RAW_SIZE          1
 
 #define ZDB_ZONE_STATUS_ICMTL_ENABLED   1
+#define ZDB_ZONE_STATUS_DUMPING_AXFR    2
+#define ZDB_ZONE_STATUS_WILL_NOTIFY     4 // in the queue
 
 struct dnskey_keyring;
+
+#define ZDB_ZONE_HAS_JNL_REFERENCE 0
 
 struct zdb_zone
 {
@@ -551,7 +562,7 @@ struct zdb_zone
     u8 *sig_last_processed_node;
 #endif
     
-    u32 min_ttl;        /* a copy of the min-ttl from the SOA */
+    s32 min_ttl;        /* a copy of the min-ttl from the SOA */
 
     /* 
      * AXFR handling.
@@ -581,11 +592,10 @@ struct zdb_zone
         
     alarm_t alarm_handle;               // 32 bits
     volatile s32 rc;                    // reference counter when it reaches 0, the zone and its content should be destroyed asap
+    volatile s32 lock_count;            // the number of owners with the current lock ID
     volatile u8 lock_owner;             // the ID of who can manipulate the zone
-    volatile u8 lock_count;             // the number of owners with the current lock ID
     volatile u8 lock_reserved_owner;    // to the next-owner mechanism (reserve an ownership change)
-    
-    volatile u8 status;                 // extended status flags for background tasks not part of the normal operations
+    volatile u8 _status;                // extended status flags for background tasks not part of the normal operations
     
         
 #if ZDB_RECORDS_MAX_CLASS != 1
@@ -606,9 +616,10 @@ struct zdb_zone
     volatile u64 write_time_elapsed;    // the time that was spent writing the zone in a file (ie: axfr)
 #endif
     
+#if ZDB_ZONE_HAS_JNL_REFERENCE
     /** journal is only to be accessed trough the journal_* functions */
-    
-    struct journal *journal;
+    struct journal *_journal;
+#endif
         
     dnsname_vector origin_vector;       // note: the origin vector is truncated to it's used lenght (sparing quite a lot of memory)
 
@@ -687,7 +698,11 @@ struct zdb_zone_label_iterator /// 47136 bytes on a 64 bits architecture
 #define RRL_SLIP            1
 #define RRL_DROP            2
 
-typedef ya_result rrl_process_callback(message_data *mesg, const zdb_query_ex_answer *ans_auth_add);
+typedef ya_result rrl_process_callback(message_data *mesg, zdb_query_ex_answer *ans_auth_add);
+
+u8 zdb_zone_get_status(zdb_zone *zone);
+u8 zdb_zone_set_status(zdb_zone *zone, u8 status);
+u8 zdb_zone_clear_status(zdb_zone *zone, u8 status);
 
 #ifdef	__cplusplus
 }

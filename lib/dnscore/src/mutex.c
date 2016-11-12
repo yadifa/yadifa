@@ -388,6 +388,7 @@ void
 group_mutex_lock(group_mutex_t *mtx, u8 owner)
 {
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    
 #ifdef MODULE_MSG_HANDLE
     log_debug7("group_mutex: locking mutex@%p for %x", mtx, owner);
 #endif
@@ -418,13 +419,13 @@ group_mutex_lock(group_mutex_t *mtx, u8 owner)
 			Sharable entities have their msb off.
 		*/
 
-        u8 co = mtx->owner & 0x7f;
+        u8 co = mtx->owner & GROUP_MUTEX_LOCKMASK_FLAG;
         
         if(co == GROUP_MUTEX_NOBODY || co == owner)
         {
             yassert(mtx->count != MAX_S32);
 
-            mtx->owner = owner & 0x7f;
+            mtx->owner = owner & GROUP_MUTEX_LOCKMASK_FLAG;
             mtx->count++;
 
             break;
@@ -451,7 +452,7 @@ group_mutex_lock(group_mutex_t *mtx, u8 owner)
                 }
                 else
                 {
-                    log_warn("shared_group_mutex(%p): the mutex was locked by %p", mtx, now - ts, culprit);
+                    log_warn("group_mutex(%p): the mutex was locked by %p", mtx, now - ts, culprit);
                 }
             }
         }
@@ -491,13 +492,13 @@ group_mutex_trylock(group_mutex_t *mtx, u8 owner)
 
     mutex_lock(&mtx->mutex);
 
-    u8 co = mtx->owner & 0x7f;
+    u8 co = mtx->owner & GROUP_MUTEX_LOCKMASK_FLAG;
     
     if(co == GROUP_MUTEX_NOBODY || co == owner)
     {
         yassert(mtx->count != MAX_S32);
 
-        mtx->owner = owner & 0x7f;
+        mtx->owner = owner & GROUP_MUTEX_LOCKMASK_FLAG;
         mtx->count++;
 
         mutex_unlock(&mtx->mutex);
@@ -542,7 +543,7 @@ group_mutex_unlock(group_mutex_t *mtx, u8 owner)
     mutex_lock(&mtx->mutex);
 
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
-    if((mtx->owner != (owner & 0x7f)) || (mtx->count == 0))
+    if((mtx->owner != (owner & GROUP_MUTEX_LOCKMASK_FLAG)) || (mtx->count == 0))
     {
         if(mtx->count > 0)
         {
@@ -564,7 +565,7 @@ group_mutex_unlock(group_mutex_t *mtx, u8 owner)
         abort();
     }
 #else
-    yassert(mtx->owner == (owner & 0x7f));
+    yassert(mtx->owner == (owner & GROUP_MUTEX_LOCKMASK_FLAG));
     yassert(mtx->count != 0);
 #endif
 
@@ -590,35 +591,283 @@ group_mutex_unlock(group_mutex_t *mtx, u8 owner)
     mutex_unlock(&mtx->mutex);
 }
 
-bool
-group_mutex_transferlock(group_mutex_t *mtx, u8 owner, u8 newowner)
-{   
-    bool r;
+void
+group_mutex_double_lock(group_mutex_t *mtx, u8 owner, u8 secondary_owner)
+{
+    yassert(owner == GROUP_MUTEX_READ);
+    
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    
+#ifdef MODULE_MSG_HANDLE
+    log_debug7("group_mutex: double-locking mutex@%p for %x", mtx, secondary_owner);
+#endif
+    s64 start = timeus();
+    
+    pthread_t tid = pthread_self();
+    
+    if(tid == mtx->id)
+    {
+        logger_handle_msg(g_system_logger,MSG_ERR, "group_mutex_double_lock(%p): double lock from the same thread on a non-recursive mutex", mtx);
+        debug_log_stacktrace(g_system_logger, MSG_ERR, "group_mutex_lock");
+        logger_handle_msg(g_system_logger,MSG_ERR, "group_mutex_double_lock(%p): already locked by", mtx);
+        debug_stacktrace_log(g_system_logger, MSG_ERR, mtx->trace);
+        
+        logger_flush();
+        abort();
+    }
+    
+#endif
+    
+    mutex_lock(&mtx->mutex);
+    
+    for(;;)
+    {
+        /*
+         * A simple way to ensure that a lock can be shared
+         * by similar entities or not.
+         * Sharable entities have their msb off.
+         */
+        
+        u8 so = mtx->reserved_owner & GROUP_MUTEX_LOCKMASK_FLAG;
+        
+        if(so == GROUP_MUTEX_NOBODY || so == secondary_owner)
+        {
+            u8 co = mtx->owner & GROUP_MUTEX_LOCKMASK_FLAG;
+
+            if(co == GROUP_MUTEX_NOBODY || co == owner)
+            {
+                yassert(!UNSIGNED_VAR_VALUE_IS_MAX(mtx->count));
+
+                mtx->owner = owner & GROUP_MUTEX_LOCKMASK_FLAG;
+                mtx->count++;
+                mtx->reserved_owner = secondary_owner & GROUP_MUTEX_LOCKMASK_FLAG;
+
+                break;
+            }
+        }
+        else
+        {
+            // the secondary owner is already taken
+        }
+
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+        s64 now = timeus();
+        s64 d = now - start;
+        pthread_t culprit = mtx->id;
+        stacktrace trace = mtx->trace;
+        s64 ts = mtx->timestamp;
+        
+        if(d > MUTEX_WAITED_TOO_MUCH_TIME_US)
+        {
+            log_warn("group_mutex(%p): waited for %llius already ...", mtx, d);
+            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "group_mutex");
+        
+
+            if(culprit != 0)
+            {
+                if(trace != NULL && ts != 0)
+                {
+                    log_warn("group_mutex(%p): the mutex has been locked for %llius already by %p", mtx, now - ts, culprit);
+                    debug_stacktrace_log(g_system_logger, MSG_WARNING, trace);
+                }
+                else
+                {
+                    log_warn("group_mutex(%p): the mutex was locked by %p", mtx, now - ts, culprit);
+                }
+            }
+        }
+        
+        cond_timedwait(&mtx->cond, &mtx->mutex, MUTEX_WAITED_TOO_MUCH_TIME_US);
+#else
+        cond_wait(&mtx->cond, &mtx->mutex);
+#endif
+    }
+    
+    mutex_unlock(&mtx->mutex);
+    
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    mtx->trace = debug_stacktrace_get();
+    mtx->id = tid;
+    mtx->timestamp = timeus();
+
+    group_mutex_locked_set_add(mtx);
+#endif
     
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
 #ifdef MODULE_MSG_HANDLE
-    log_debug7("group_mutex: transferring ownership of mutex@%p from %x to %x (owned by %x)", mtx, owner, newowner, mtx->owner);
+    log_debug7("group_mutex: double-locked mutex@%p for %x", mtx, secondary_owner);
 #endif
+#endif
+}
+
+void
+group_mutex_double_unlock(group_mutex_t *mtx, u8 owner, u8 secondary_owner)
+{
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#ifdef MODULE_MSG_HANDLE
+    log_debug7("group_mutex: double-unlocking mutex@%p for %x (owned by %x)", mtx, secondary_owner, mtx->reserved_owner);
+#endif
+#endif
+    
+    yassert(owner == GROUP_MUTEX_READ);
+
+    mutex_lock(&mtx->mutex);
+    
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    if((mtx->owner != (owner & GROUP_MUTEX_LOCKMASK_FLAG)) || (mtx->reserved_owner != (secondary_owner & GROUP_MUTEX_LOCKMASK_FLAG)) || (mtx->count == 0))
+    {
+        if(mtx->count > 0)
+        {
+            s64 now = timeus();
+
+            log_err("group_mutex(%p): the mutex has been locked by %p/%x,%x for %llius (count = %i) but is being unlocked by %p/%x,%x",
+                mtx,
+                mtx->id, mtx->owner, mtx->reserved_owner, now - mtx->timestamp, mtx->count,
+                pthread_self(), owner, secondary_owner);
+        }
+        else
+        {
+            log_err("group_mutex(%p): the mutex is not locked but is being unlocked by %p/%x,%x",
+                mtx, pthread_self(), owner, secondary_owner);
+        }
+
+        debug_log_stacktrace(g_system_logger, MSG_ERR, "group_mutex_double_unlock");
+
+        abort();
+    }
+#else
+    yassert(mtx->owner == (owner & GROUP_MUTEX_LOCKMASK_FLAG));
+    yassert(mtx->reserved_owner == (secondary_owner & GROUP_MUTEX_LOCKMASK_FLAG));
+    yassert(mtx->count != 0);
+#endif
+
+    mtx->reserved_owner = GROUP_MUTEX_NOBODY;
+
+    --mtx->count;
+    
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#ifdef MODULE_MSG_HANDLE
+    log_debug7("group_mutex: double-unlocked mutex@%p for %x,%x", mtx, owner, secondary_owner);
+#endif
+#endif
+    
+    yassert((mtx->owner & 0xc0) == 0);
+
+    if(mtx->count == 0)
+    {
+        mtx->owner = GROUP_MUTEX_NOBODY;
+        cond_notify(&mtx->cond);
+    }
+    
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    mtx->trace = NULL;
+    mtx->id = 0;
+    mtx->timestamp = 0;
+
+    group_mutex_locked_set_del(mtx);
+#endif
+    
+    mutex_unlock(&mtx->mutex);
+}
+
+void
+group_mutex_exchange_locks(group_mutex_t *mtx, u8 owner, u8 secondary_owner)
+{
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#ifdef MODULE_MSG_HANDLE
+    log_debug7("group_mutex: exchanging-locks of mutex@%p %x,%x (", mtx, owner, secondary_owner, mtx->owner, mtx->reserved_owner);
+#endif
+#endif
+    
+    yassert(owner == GROUP_MUTEX_READ || secondary_owner == GROUP_MUTEX_READ);
+    
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    
+    s64 start = timeus();
+    
+    if((mtx->owner != (owner & GROUP_MUTEX_LOCKMASK_FLAG)) || (mtx->reserved_owner != (secondary_owner & GROUP_MUTEX_LOCKMASK_FLAG)) || (mtx->count == 0))
+    {
+        if(mtx->count > 0)
+        {
+            s64 now = timeus();
+
+            log_err("group_mutex(%p): the mutex has been locked by %p/%x,%x for %llius (count = %i) but is being exchanged from %p/%x,%x",
+                mtx,
+                mtx->id, mtx->owner, mtx->reserved_owner, now - mtx->timestamp, mtx->count,
+                pthread_self(), owner, secondary_owner);
+        }
+        else
+        {
+            log_err("group_mutex(%p): the mutex is not locked but is being exchanged by %p/%x,%x",
+                mtx, pthread_self(), owner, secondary_owner);
+        }
+
+        debug_log_stacktrace(g_system_logger, MSG_ERR, "group_mutex_exchange_locks");
+
+        abort();
+    }
+#else
+    yassert(mtx->owner == (owner & GROUP_MUTEX_LOCKMASK_FLAG));
+    yassert(mtx->reserved_owner == (secondary_owner & GROUP_MUTEX_LOCKMASK_FLAG));
+    yassert(mtx->count != 0);
 #endif
 
     mutex_lock(&mtx->mutex);
-
-    u8 co = mtx->owner & 0x7f;
     
-    if((r = (co == owner)))
+#ifdef DEBUG
+    if((mtx->owner != (owner & GROUP_MUTEX_LOCKMASK_FLAG)) || (mtx->count == 0))
     {
-        mtx->owner = newowner;
+        mutex_unlock(&mtx->mutex);
+        yassert(mtx->owner == (owner & GROUP_MUTEX_LOCKMASK_FLAG));
+        yassert(mtx->count != 0);
     }
-
+    
+    if(mtx->reserved_owner != (secondary_owner & GROUP_MUTEX_LOCKMASK_FLAG))
+    {
+        mutex_unlock(&mtx->mutex);
+        yassert(mtx->reserved_owner != (secondary_owner & GROUP_MUTEX_LOCKMASK_FLAG));
+    }
+#endif
+    
+    // wait to be the last one
+    
+    while(mtx->count != 1)
+    {
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+        s64 d = timeus() - start;
+        if(d > MUTEX_WAITED_TOO_MUCH_TIME_US)
+        {
+            log_warn("group_mutex_exchange_locks(%p,%x,%x) : waited for %llius already ...", mtx, owner, secondary_owner, d);
+            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "group_mutex_exchange_locks:");
+        }
+#endif
+        
+        cond_timedwait(&mtx->cond, &mtx->mutex, 100);
+    }
+    
+    mtx->owner = secondary_owner & GROUP_MUTEX_LOCKMASK_FLAG;
+    mtx->reserved_owner = owner & GROUP_MUTEX_LOCKMASK_FLAG;
+    
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#ifdef MODULE_MSG_HANDLE
+    log_debug7("group_mutex: exchanged locks of mutex@%p to %x, %x", mtx, secondary_owner, owner);
+#endif
+#endif
+    
+    if((secondary_owner & GROUP_MUTEX_EXCLUSIVE_FLAG) == 0)
+    {
+        cond_notify(&mtx->cond);
+    }
+    
     mutex_unlock(&mtx->mutex);
     
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
     mtx->trace = debug_stacktrace_get();
     mtx->id = pthread_self();
     mtx->timestamp = timeus();
-#endif
 
-    return r;
+    group_mutex_locked_set_add(mtx);
+#endif
 }
 
 void
@@ -975,7 +1224,7 @@ bool
 shared_group_mutex_islocked_by(shared_group_mutex_t *mtx, u8 owner)
 {
     mutex_lock(&mtx->shared_mutex->mutex);
-    bool r = mtx->owner == (owner & 0x7f);
+    bool r = mtx->owner == (owner & GROUP_MUTEX_LOCKMASK_FLAG);
     mutex_unlock(&mtx->shared_mutex->mutex);
     return r;
 }
@@ -1014,13 +1263,13 @@ shared_group_mutex_lock(shared_group_mutex_t *mtx, u8 owner)
 			Sharable entities have their msb off.
 		*/
 
-        u8 co = mtx->owner & 0x7f;
+        u8 co = mtx->owner & GROUP_MUTEX_LOCKMASK_FLAG;
         
         if(co == GROUP_MUTEX_NOBODY || co == owner)
         {
             yassert(mtx->count != MAX_S32);
 
-            mtx->owner = owner & 0x7f;
+            mtx->owner = owner & GROUP_MUTEX_LOCKMASK_FLAG;
             
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
             add = mtx->count == 0;
@@ -1096,13 +1345,13 @@ shared_group_mutex_trylock(shared_group_mutex_t *mtx, u8 owner)
 
     mutex_lock(&mtx->shared_mutex->mutex);
 
-    u8 co = mtx->owner & 0x7f;
+    u8 co = mtx->owner & GROUP_MUTEX_LOCKMASK_FLAG;
         
     if(co == GROUP_MUTEX_NOBODY || co == owner)
     {
         yassert(mtx->count != MAX_S32);
 
-        mtx->owner = owner & 0x7f;
+        mtx->owner = owner & GROUP_MUTEX_LOCKMASK_FLAG;
         
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
         bool add = mtx->count == 0;
@@ -1155,7 +1404,7 @@ shared_group_mutex_unlock(shared_group_mutex_t *mtx, u8 owner)
 
     mutex_lock(&mtx->shared_mutex->mutex);
 
-    yassert(mtx->owner == (owner & 0x7f));
+    yassert(mtx->owner == (owner & GROUP_MUTEX_LOCKMASK_FLAG));
     yassert(mtx->count != 0);
     
     mtx->count--;
@@ -1193,7 +1442,7 @@ shared_group_mutex_transferlock(shared_group_mutex_t *mtx, u8 owner, u8 newowner
 
     mutex_lock(&mtx->shared_mutex->mutex);
 
-    u8 co = mtx->owner & 0x7f;
+    u8 co = mtx->owner & GROUP_MUTEX_LOCKMASK_FLAG;
     
     if((r = (co == owner)))
     {

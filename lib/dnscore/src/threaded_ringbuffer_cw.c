@@ -142,6 +142,52 @@ threaded_ringbuffer_cw_enqueue(threaded_ringbuffer_cw *queue, void *constant_poi
     pthread_mutex_unlock(&queue->mutex);
 }
 
+void
+threaded_ringbuffer_cw_enqueue_set(threaded_ringbuffer_cw *queue, void **constant_pointer_array, int count)
+{
+    assert(queue->max_size > 0);
+    assert(queue->max_size >= count);
+    
+    /*
+     * Ensure I'm allowed to work on queue (only one working on it)
+     */
+    
+    pthread_mutex_lock(&queue->mutex);
+    while( queue->size + count > queue->max_size )
+    {
+        pthread_cond_wait(&queue->cond_write, &queue->mutex);
+    }
+
+    /*
+     * Set the data to the write position,
+     * and move the write position to the next slot
+     *
+     */
+
+    /**
+     * @note: "if(overflow) reset" is (much) faster than MOD(limit)
+     */
+
+    for(int i = 0; i < count; ++i)
+    {
+        *queue->write_slot++ = constant_pointer_array[i];
+
+        if(queue->write_slot == queue->buffer_limit)
+        {
+            queue->write_slot = queue->buffer;
+        }
+    }
+    
+    queue->size += count;
+
+    /*
+     * We are done here, we can always signal the readers
+     */
+
+    pthread_cond_broadcast(&queue->cond_read);
+    pthread_mutex_unlock(&queue->mutex);
+}
+
 bool
 threaded_ringbuffer_cw_try_enqueue(threaded_ringbuffer_cw* queue, void* constant_pointer)
 {

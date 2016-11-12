@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man on Wed Jul 13 11:17:49 CEST 2016
+.\" Manual page created with latex2man on Tue  9 May 09:45:30 CEST 2017
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFAD\-CONF" "5" "2016\-07\-19" "YADIFA " "YADIFA "
+.TH "YADIFAD\-CONF" "5" "2016\-11\-10" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -157,7 +157,7 @@ Main without includes
     serverid                "yadifad\-01"
 
     # The version returned by a query to version.yadifa. CH TXT (alias: version\-chaos)
-    version                 "2.2.2"
+    version                 "2.3.0"
 
     # Set the maximum UDP packet size.  
     # note: the packetsize cannot be less than 512 or more than 65535.
@@ -359,7 +359,7 @@ Response Rate Limiting
     # Number of identical responses per second before responses are being limited
     responses\-per\-second    5
 
-    # Number of errors per second before reponses are being limited
+    # Number of errors per second before responses are being limited
     errors\-per\-second       5
 
     # Random slip parameter
@@ -646,7 +646,7 @@ Loggers
 .PP
 Logging input configurations: 
 .PP
-The "bundle" name is predifined: database, dnssec, server, statistics, system, zone.
+The "bundle" is the name of the section of YADIDA being logged, sources are : database, dnssec, queries, server, stats, system, zone.
 .br
 The "debuglevel" uses the same names as syslog or "*" or "all" to filter the input.
 .br
@@ -665,7 +665,7 @@ Example without syslog
     database        ALL                                 database,all
     dnssec          warning                             dnssec,all
     server          INFO,WARNING,ERR,CRIT,ALERT,EMERG   server,all
-    statistics      *                                   statistics
+    stats           prod                                statistics
     system          *                                   system,all
     queries         *                                   queries
     zone            *                                   zone,all
@@ -684,7 +684,7 @@ Example with syslog
     database        ALL                                 database,syslog
     dnssec          warning                             dnssec,syslog
     server          INFO,WARNING,ERR,CRIT,ALERT,EMERG   server,syslog
-    stats           *                                   statistics, syslog
+    stats           prod                                statistics, syslog
     system          *                                   system,syslog
     queries         *                                   queries,syslog
     zone            *                                   zone,syslog
@@ -805,7 +805,7 @@ from the sources.
 .SH VERSION
 
 .PP
-Version: 2.2.2 of 2016-11-08\&.
+Version: 2.3.0 of 2016\-11\-10 \&.
 .PP
 .SH MAILING LISTS
 
@@ -838,7 +838,7 @@ via:
 .PP
 .TP
 Copyright 
-(C)2012\-2016, EURid
+(C)2011\-2016, EURid
 .br
 B\-1831 Diegem, Belgium
 .br

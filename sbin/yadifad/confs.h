@@ -83,7 +83,7 @@ extern "C" {
 
 #define     PROGRAM_NAME                PACKAGE
 #define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASEDATE                 "2016-11-08"
+#define     RELEASEDATE                 "2016-11-10"
 #define     COMPILEDATE                 __DATE__
 
     /* List of default values for the different configuration parameters */
@@ -356,6 +356,8 @@ struct config_data
     int                                                total_interfaces;
     int                                              cpu_count_override;
     int                                         thread_count_by_address;
+    int                                            thread_affinity_base;
+    int                                      thread_affinity_multiplier;
     int                                             dnssec_thread_count;
     int                                          zone_load_thread_count;
     int                                      zone_download_thread_count;

@@ -1232,17 +1232,7 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                     println("[EOF]");
 #endif
                     input_stream *completed_stream = parser_pop_stream(p);
-                 /// @todo 20150410 edf -- EDF NOW !
-                    /*
-#if (DNSDB_USE_POSIX_ADVISE != 0) && (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
 
-                    input_stream *file_stream = buffer_input_stream_get_filtered(completed_stream);
-
-                    int fd = fd_input_stream_get_filedescriptor(file_stream);
-                    fdatasync(fd);
-                    posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
-#endif
-                     */
                     input_stream_close(completed_stream);
 
                     if(parser_stream_count(p) > 0)

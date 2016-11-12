@@ -82,8 +82,10 @@
 #define DATABASE_SERVICE_ZONE_FREEZE            23
 #define DATABASE_SERVICE_ZONE_UNFREEZE          24
 
+#define DATABASE_SERVICE_ZONE_PROCESSED         25
+
 //
-#define DATABASE_SERVICE_OPERATION_COUNT        25
+#define DATABASE_SERVICE_OPERATION_COUNT        26
 
 struct database_message_stop_s
 {
@@ -216,6 +218,7 @@ struct database_message
         struct database_message_zone_unloaded_event_s zone_unloaded_event;
         struct database_message_zone_unmounted_event_s zone_unmounted_event;
         struct database_message_zone_downloaded_event_s zone_downloaded_event;
+        // struct database_message_zone_processed_event_s zone_processed_event;
         
     } payload;
 };
@@ -535,5 +538,7 @@ void database_service_create_invalid_zones();
 bool database_service_is_running();
 
 void database_service_run_garbage_collector();
+
+void database_fire_zone_processed(zone_desc_s *zone_desc);
 
 /** @} */

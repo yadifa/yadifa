@@ -273,7 +273,7 @@ void debug_unicity_release(debug_unicity *dus);
 /*
  * This is a helper for valgrind
  * Reads the bytes and prints them using putchar
- * Called to hunt unintialised bytes
+ * Called to hunt uninitialised bytes
  */
 
 void debug_vg(const void* b, int len);

@@ -401,7 +401,6 @@ nsec3_load_compile(nsec3_load_context *context)
      */
 
     zdb_zone* zone = context->zone;
-    //u32 min_ttl = zone->min_ttl;
     s32 i;
 
     /*
@@ -523,8 +522,7 @@ nsec3_load_compile(nsec3_load_context *context)
 
     s32 nsec3_count = nsec3s->offset + 1;
     
-    u32 min_ttl = 900;
-    
+    s32 min_ttl;
     zdb_zone_getminttl(zone, &min_ttl);
     
     shutdown_test_countdown = 1000;
@@ -674,7 +672,7 @@ nsec3_load_forced(nsec3_load_context *context)
      */
 
     zdb_zone* zone = context->zone;
-    u32 min_ttl = zone->min_ttl;
+    s32 min_ttl;
     s32 i;
 
     /*
@@ -685,6 +683,8 @@ nsec3_load_forced(nsec3_load_context *context)
     {
         return DNSSEC_ERROR_NSEC3_INVALIDZONESTATE;
     }
+    
+    zdb_zone_getminttl(zone, &min_ttl);
 
     /* 1) */
     

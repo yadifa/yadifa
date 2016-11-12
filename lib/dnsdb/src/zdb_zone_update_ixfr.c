@@ -104,7 +104,7 @@
  */
 
 ya_result
-zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
+zdb_zone_update_ixfr_OBSOLETE(zdb *db, input_stream *is) // mutex checked
 {
     u8 rname[MAX_DOMAIN_LENGTH];
     u16 rtype;
@@ -176,10 +176,12 @@ zdb_zone_update_ixfr(zdb *db, input_stream *is) // mutex checked
     }
     
 #endif
+    
+    // zone is not locked here, only acquired
 
     u32 serial_current;
 
-    if(FAIL(err = zdb_zone_getserial(zone, &serial_current)))
+    if(FAIL(err = zdb_zone_getserial(zone, &serial_current))) // zone is NOT locked, but caller seems obsolete
     {
         ZDB_RECORD_ZFREE(soa_ttlrdata);
         

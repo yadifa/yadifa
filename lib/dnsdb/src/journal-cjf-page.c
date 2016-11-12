@@ -72,34 +72,41 @@ journal_cjf_page_get_stream_offset_from_serial(journal_cjf *jnl, int idx, u32 se
     journal_cjf_page_tbl_header hdr;
     journal_cjf_page_cache_read_header(jnl->fd, file_offset, &hdr);
     
-    //for(int i = 1; i <= CJF_SECTION_INDEX_SLOT_COUNT - 1; i++)
-    for(int i = 0; i < hdr.count - 1; i++)
-    {
-        journal_cjf_page_cache_read_item(jnl->fd, file_offset, i, &value);
-        
-        if(value.ends_with_serial == serial)
+    if(hdr.magic == CJF_PAGE_MAGIC)
+    {    
+        //for(int i = 1; i <= CJF_SECTION_INDEX_SLOT_COUNT - 1; i++)
+        for(int i = 0; i < hdr.count - 1; i++)
         {
-            // we found the item that ends with the requested serial,
-            // the next item is the one that starts from the requested serial
-            
-            journal_cjf_page_cache_read_item(jnl->fd, file_offset, i + 1, &value);
-            *out_offset = value.stream_file_offset;
-            
-            return SUCCESS;
+            journal_cjf_page_cache_read_item(jnl->fd, file_offset, i, &value);
+
+            if(value.ends_with_serial == serial)
+            {
+                // we found the item that ends with the requested serial,
+                // the next item is the one that starts from the requested serial
+
+                journal_cjf_page_cache_read_item(jnl->fd, file_offset, i + 1, &value);
+                *out_offset = value.stream_file_offset;
+
+                return SUCCESS;
+            }
         }
-    }
     
-    //this is the wrong idx
+        //this is the wrong idx
 
 #if EXPERIMENTAL
 #ifdef DEBUG
-    // this will crash with a stack overflow
-    if(out_offset != NULL)
-    {
-        journal_cjf_page_get_stream_offset_from_serial(jnl, idx, serial, NULL);
+        // this will crash with a stack overflow
+        if(out_offset != NULL)
+        {
+            journal_cjf_page_get_stream_offset_from_serial(jnl, idx, serial, NULL);
+        }
+#endif
+#endif
     }
-#endif
-#endif
+    else
+    {
+        // invalid
+    }
     
     return ERROR;
 }

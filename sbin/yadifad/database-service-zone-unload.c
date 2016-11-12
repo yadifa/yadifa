@@ -176,7 +176,7 @@ database_service_zone_unload(zone_desc_s *zone_desc, zdb_zone *zone)
                 zone_desc);                   
     }
     zone_lock(zone_desc, ZONE_LOCK_UNLOAD);
-    zone_desc->status_flags &= ~ZONE_STATUS_PROCESSING;
+    zone_clear_status(zone_desc, ZONE_STATUS_PROCESSING);
     zone_unlock(zone_desc, ZONE_LOCK_UNLOAD);
 }
 

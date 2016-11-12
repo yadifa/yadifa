@@ -190,7 +190,9 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
     u8 inverse_name[MAX_DOMAIN_LENGTH];
     u8 tmp_bitmap[256 * (1 + 1 + 32)]; /* 'max window count' * 'max window length' */
 
-    if(FAIL(return_code = zdb_zone_getsoa(zone, &soa)))
+    yassert(zdb_zone_islocked_weak(zone));
+    
+    if(FAIL(return_code = zdb_zone_getsoa(zone, &soa))) // zone is locked (weak)
     {
         return return_code;
     }
@@ -217,7 +219,7 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
             
             zdb_packed_ttlrdata *nsec_record;
 
-            if((nsec_record = zdb_record_find(&label->resource_record_set, TYPE_NSEC)) != NULL)
+            if((nsec_record = zdb_record_find(&label->resource_record_set, TYPE_NSEC)) != NULL) // zone is locked
             {
                 nsec_under_delegation++;
                 
@@ -285,7 +287,7 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
 
             zdb_packed_ttlrdata *nsec_record;
 
-            if((nsec_record = zdb_record_find(&label->resource_record_set, TYPE_NSEC)) != NULL)
+            if((nsec_record = zdb_record_find(&label->resource_record_set, TYPE_NSEC)) != NULL) // zone is locked
             {
                 /*
                  * has record -> compare the type and the nsec next
@@ -460,7 +462,7 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
     {
         if(missing_nsec_records + sibling_count + nsec_under_delegation)
         {
-            log_debug("nsec: missing records: %u, nsec with siblings: %u, nsec under delegation: %u", missing_nsec_records, sibling_count, nsec_under_delegation);
+            log_warn("nsec: missing records: %u, nsec with siblings: %u, nsec under delegation: %u", missing_nsec_records, sibling_count, nsec_under_delegation);
         }
     }
     
@@ -506,6 +508,8 @@ nsec_inverse_name(u8 *inverse_name, const u8 *name)
 bool
 nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *item, nsec_node *next_item, u8 *name)
 {
+    yassert(zdb_zone_islocked(zone));
+    
     type_bit_maps_context tbmctx;
     u8 tmp_bitmap[256 * (1 + 1 + 32)]; /* 'max window count' * 'max window length' */
     u32 tbm_size = type_bit_maps_initialize(&tbmctx, label, TRUE, TRUE);
@@ -518,7 +522,7 @@ nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *item, n
 
     zdb_packed_ttlrdata *nsec_record;
 
-    if((nsec_record = zdb_record_find(&label->resource_record_set, TYPE_NSEC)) != NULL)
+    if((nsec_record = zdb_record_find(&label->resource_record_set, TYPE_NSEC)) != NULL) // zone is locked
     {
         /*
          * has record -> compare the type and the nsec next
@@ -722,9 +726,7 @@ nsec_delete_label_node(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_refe
 void
 nsec_update_label(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_reference labels, s32 labels_top)
 {
-    //soa_rdata soa;
     u8 name[MAX_DOMAIN_LENGTH];
-    //zdb_zone_getsoa(zone, &soa);
 
     /* Create or get the node */
 

@@ -118,6 +118,8 @@ typedef ya_result zdb_zone_info_provider_callback(const u8 *origin, zdb_zone_inf
 
 #define ZDB_ZONE_INFO_PROVIDER_STORE_TRIGGER       0x10000 // NULL, enqueues the storage of the zone
 #define ZDB_ZONE_INFO_PROVIDER_STORE_NOW           0x10001 // ?, stores the zone now, in this thread
+#define ZDB_ZONE_INFO_PROVIDER_STORE_IN_PROGRESS   0x10002 // ?, stores the zone now, in this thread
+
 
 void zdb_zone_info_set_provider(zdb_zone_info_provider_callback *data);
 zdb_zone_info_provider_callback *zdb_zone_info_get_provider();
@@ -133,5 +135,8 @@ ya_result zdb_zone_info_store_locked_zone(const u8 *origin);
 ya_result zdb_zone_info_background_store_zone(const u8 *origin);
 
 ya_result zdb_zone_info_background_store_zone_and_wait_for_serial(const u8 *origin, u32 minimum_serial);
+
+ya_result zdb_zone_info_background_store_in_progress(const u8 *origin);
+
 
 /** @} */

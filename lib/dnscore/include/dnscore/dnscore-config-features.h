@@ -11,6 +11,6 @@
 #define DNSCORE_HAS_MALLOC_DEBUG_SUPPORT 0
 #define DNSCORE_HAS_MUTEX_DEBUG_SUPPORT 0
 #define DNSCORE_HAS_MEMALIGN_ISSUES 0
-// version 2.2.2.0-6587
-#define DNSCORE_VERSION 0x0202020019bbLL// include/dnscore/dnscore-config-features.h
+// version 2.3.0.0-7548
+#define DNSCORE_VERSION 0x020300001d7cLL// include/dnscore/dnscore-config-features.h
 

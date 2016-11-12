@@ -195,7 +195,7 @@ output_stream_write_wire_dnsname(output_stream* os, const u8 *dnsname, u16 type,
 static bool
 icmtl_is_my_zone(icmtl_zdb_listener *listener, const zdb_zone *zone)
 {
-    bool ret = memcmp(zone->origin, listener->origin, listener->origin_len) == 0;
+    bool ret = dnsname_equals(zone->origin, listener->origin);
     return ret;
 }
 
@@ -743,6 +743,10 @@ ya_result
 dynupdate_icmtlhook_disable(const u8 *origin)
 {
     icmtl_dnssec_listener* listener = NULL;
+    
+#ifdef DEBUG
+    log_debug1("icmtl: %{dnsname}: disabling hook", origin);
+#endif
     
     mutex_lock(&icmtl_listener_mtx);
     ptr_node *node = ptr_set_avl_find(&icmtl_listener_set, origin);

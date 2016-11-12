@@ -121,7 +121,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
     
     const u32 must_be_off = ZONE_STATUS_DOWNLOADING_XFR_FILE | ZONE_STATUS_DOWNLOADED | ZONE_STATUS_LOAD | ZONE_STATUS_LOADING;
     
-    if((zone_desc->status_flags & must_be_off) != 0)
+    if((zone_get_status(zone_desc) & must_be_off) != 0)
     {
         zone_unlock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
 
@@ -130,7 +130,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
         return ERROR;
     }
     
-    zone_desc->status_flags |= ZONE_STATUS_DOWNLOADING_XFR_FILE;
+    zone_set_status(zone_desc, ZONE_STATUS_DOWNLOADING_XFR_FILE);
     
     bool is_multimaster = zone_is_multimaster(zone_desc);
     bool is_true_multimaster = zone_is_true_multimaster(zone_desc);
@@ -146,7 +146,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
         u32 local_serial;
         
         zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
-        return_value = zdb_zone_getsoa(zone, &soa);
+        return_value = zdb_zone_getsoa(zone, &soa); // zone is locked
         zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
         local_serial = soa.serial;
         
@@ -179,7 +179,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                     
                     zone_lock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
                                
-                    zone_desc->status_flags &= ~(ZONE_STATUS_DOWNLOADING_XFR_FILE|ZONE_STATUS_PROCESSING);
+                    zone_clear_status(zone_desc, ZONE_STATUS_DOWNLOADING_XFR_FILE|ZONE_STATUS_PROCESSING);
                     zone_desc->refresh.refreshed_time = time(NULL);
                     zone_desc->refresh.retried_time = zone_desc->refresh.refreshed_time;
 
@@ -209,9 +209,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
     // get ready with the download of the AXFR/IXFR
     
     zone_lock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
-    
     host_address *servers = host_address_copy_list(zone_desc->masters);
-    
     zone_unlock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
     
     u32 loaded_serial = ~0;
@@ -229,7 +227,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                 zone_lock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
                 zone_desc->refresh.refreshed_time = time(NULL);
                 zone_desc->multimaster_failures = 0;
-                zone_desc->status_flags |= ZONE_STATUS_DOWNLOADED;
+                zone_set_status(zone_desc, ZONE_STATUS_DOWNLOADED);
                 zone_desc->download_failure_count = 0;
                 zone_unlock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
                 
@@ -242,7 +240,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
             }
             else
             {
-                log_err("slave: query error for domain %{dnsname} from master at %{hostaddr}: %r", origin, servers, return_value);
+                log_err("slave: axfr query error for domain %{dnsname} from master at %{hostaddr}: %r", origin, servers, return_value);
                 
                 may_try_next_master = is_multimaster;
                 
@@ -293,7 +291,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                 }
                 else
                 {
-                    log_err("slave: query error for domain %{dnsname} from master at %{hostaddr}: %r", origin, servers, return_value);
+                    log_err("slave: ixfr query error for domain %{dnsname} from master at %{hostaddr}: %r", origin, servers, return_value);
                     
                     may_try_next_master = is_multimaster;
                     
@@ -316,7 +314,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
             log_err("slave: %{hostaddr} gave unexpected answer type %{dnstype} for domain %{dnsname}", servers, &qtype, origin);
             break;
         }
-    }
+    } // switch(qtype)
     
     if(zone != NULL)
     {
@@ -325,7 +323,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
     
     zone_lock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
     
-    zone_desc->status_flags &= ~(ZONE_STATUS_DOWNLOADING_XFR_FILE|ZONE_STATUS_PROCESSING);
+    zone_clear_status(zone_desc, ZONE_STATUS_DOWNLOADING_XFR_FILE|ZONE_STATUS_PROCESSING);
 
     if(!may_try_next_master)
     {

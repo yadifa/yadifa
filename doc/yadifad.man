@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFAD" "8" "2016\-07\-19" "YADIFA " "YADIFA "
+.TH "YADIFAD" "8" "2016\-11\-10" "YADIFA " "YADIFA "
 .SH NAME
 yadifad \- an authoritative Internet domain name server. 
 .PP
@@ -135,6 +135,13 @@ shuts down the server
 SIGTERM 
 (see SIGINT) 
 .PP
+.SH CONFIGURATION
+
+.PP
+The yadifad.conf itself is mandatory, but can be empty. No options are needed for using yadifad DNS name server. 
+.PP
+The yadifad configuration options can be found in yadifad.conf.5 man page. A complete description is provided in the YADIFA 2.3.0 Reference Manual (YRM230). 
+.PP
 .SH FILES
 
 .PP
@@ -167,13 +174,13 @@ requires OpenSSL version 0.9.8 or later.
 .PP
 .SH CHANGES
 
-Please check the README
+Please check the ChangeLog
 file from the source code. 
 .PP
 .SH VERSION
 
 .PP
-Version: 2.2.2 of 2016-11-08\&.
+Version: 2.3.0 of 2016\-11\-10\&.
 .PP
 .SH MAILING LISTS
 

@@ -51,8 +51,8 @@
 #include <dnscore/digest.h>
 #include <dnscore/mutex.h>
 
-#define DNSSEC_MINIMUM_KEY_SIZE     512
-#define DNSSEC_MAXIMUM_KEY_SIZE     (8192 + 128)
+#define DNSSEC_MINIMUM_KEY_SIZE     512             // bits
+#define DNSSEC_MAXIMUM_KEY_SIZE     (8192 + 128)    // bits
 
 #define DNSSEC_DEFAULT_KEYSTORE_PATH    "."
 

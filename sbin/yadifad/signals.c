@@ -83,7 +83,7 @@
 // Let's configure this using runtime flags.
 #define SIGNAL_HOOK_COREDUMP 1
 
-#define LOGGER_REOPEN_MIN_PERIOD_US 10000000
+#define LOGGER_REOPEN_MIN_PERIOD_US 1000000
 
 ya_result database_save_all_zones_to_disk();
 
@@ -239,7 +239,8 @@ signal_ptr2str(char *dest, const void* srcp)
 static void
 signal_task_reconfigure_reopen_log()
 {  
-    log_debug1("signal_task_reconfigure_reopen_log()");
+    // TRY debug as else there is a risk of deadlock
+    log_try_debug1("signal_task_reconfigure_reopen_log()");
     
     u64 now = timeus();
         
@@ -247,14 +248,25 @@ signal_task_reconfigure_reopen_log()
     {        
         signal_task_logger_handle_reopen_last_active = now;
         
+        log_try_debug1("signal_task_reconfigure_reopen_log(): setting the sink");
+        
+        logger_sink();
+        
         if(g_config->reloadable)
         {
+            log_try_debug1("signal_task_reconfigure_reopen_log(): reloading configuration");
+            
             yadifad_config_update(g_config->config_file);
         }
         else
         {
-            log_err("cannot reopen configuration file(s): '%s' is outside of jail", g_config->config_file);
+            // TRY error as else there is a risk of deadlock
+            log_try_err("cannot reopen configuration file(s): '%s' is outside of jail", g_config->config_file);
         }
+        
+#ifdef DEBUG
+        log_try_debug1("signal_task_reconfigure_reopen_log(): reopening log files");
+#endif
         
         logger_reopen();
         
@@ -267,11 +279,13 @@ signal_task_reconfigure_reopen_log()
     {
         double dt = LOGGER_REOPEN_MIN_PERIOD_US - (now - signal_task_logger_handle_reopen_last_active);
         dt /= 1000000.0;
-        log_debug1("signal_task_reconfigure_reopen_log(): ignore for %.3fs", dt);
+        
+        log_try_debug1("signal_task_reconfigure_reopen_log(): ignore for %.3fs", dt);
     }
 #endif
     
-    log_debug1("signal_task_reconfigure_reopen_log(): end");
+    // TRY debug as else there is a risk of deadlock
+    log_try_debug1("signal_task_reconfigure_reopen_log(): end");
 }
 
 /***/
@@ -308,11 +322,22 @@ signal_task_shutdown()
     log_debug("signal_task_shutdown(): end");
 }
 
+static void
+signal_handler_thread_stop()
+{
+    log_info("signal: thread stopping");
+                
+    close_ex(signal_handler_read_fd);
+    mutex_lock(&signal_mutex);
+    signal_handler_read_fd = -1;
+    mutex_unlock(&signal_mutex);
+}
+
 static void*
 signal_handler_thread(void* parms)
 {
     (void)parms;
-
+    
 #if HAS_PTHREAD_SETNAME_NP
 #ifdef DEBUG
 #if __APPLE__
@@ -359,6 +384,10 @@ signal_handler_thread(void* parms)
         {
             case SIGHUP:
             {
+                // that was a bad idea as logs may be full and this is the only way
+                // to save the situation :
+                // log_info("signal: HUP");
+                
                 if(!dnscore_shuttingdown())
                 {
                     signal_task_reconfigure_reopen_log();
@@ -368,6 +397,7 @@ signal_handler_thread(void* parms)
             
             case SIGUSR1:
             {
+                log_info("signal: USR1");
                 if(!dnscore_shuttingdown())
                 {
                     signal_task_database_save_all_zones_to_disk();
@@ -375,19 +405,24 @@ signal_handler_thread(void* parms)
                 break;
             }
             case SIGINT:
+            {
+                log_info("signal: INT");
+                signal_task_shutdown();
+                signal_handler_thread_stop();
+                break;
+            }
+            
             case SIGTERM:
             {
+                log_info("signal: TERM");
                 signal_task_shutdown();
+                signal_handler_thread_stop();
+                break;
             }
             
             case MAX_U8:
             {
-                log_info("signal: thread stopping");
-                
-                close_ex(signal_handler_read_fd);
-                mutex_lock(&signal_mutex);
-                signal_handler_read_fd = -1;
-                mutex_unlock(&signal_mutex);
+                signal_handler_thread_stop();
                 break;
             }
             
@@ -446,8 +481,9 @@ signal_handler(int signo, siginfo_t* info, void* context)
         }
         case SIGHUP:
         case SIGUSR1:
-
         {
+            logger_sink_noblock();
+            
             int errno_value = errno;
             u8 signum = (u8)signo;
             write(signal_handler_write_fd, &signum, sizeof(signum));
@@ -718,7 +754,18 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     signal_strcat(filepath, number);
                     signal_strcat(filepath, " ");
                     signal_strcat(filepath, "thread id: ");
-                    signal_int2str(number, (u32)pthread_self());
+                    
+                    pthread_t self = pthread_self();
+                    
+                    if(sizeof(self) >= sizeof(u64))
+                    {
+                        signal_longlong2hexstr(number,(u64)self);
+                    }
+                    else
+                    {
+                        signal_int2hexstr(number,(u32)self);
+                    }
+                    
                     signal_strcat(filepath, number);
                     len = signal_strcat(filepath, eol);
                     
@@ -739,7 +786,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     const u8 *addr = (u8*)info->si_addr;
                     for(;;)
                     {
-                        u8 *page_addr = (u8*) (((intptr)addr + PAGESIZE-1) & ~(PAGESIZE - 1));
+                        u8 *page_addr = (u8*)(((intptr)addr) & ~(PAGESIZE - 1));
                         unsigned char vec[1];
 
                         if(mincore(page_addr, PAGESIZE, vec) == 0)
@@ -899,14 +946,6 @@ signal_handler(int signo, siginfo_t* info, void* context)
             }
 
             errno = errno_value;
-            
-            /* trigger the original signal (to dump a core if possible ) */
-
-            raise(signo);
-
-            /* should never be reached : Exit without disabling stuff (no atexit registered function called) */
-
-            _exit(EXIT_CODE_SELFCHECK_ERROR);
 
             break;
         }
@@ -1020,29 +1059,36 @@ signal_handler_init()
     };
 
     struct sigaction action;
+    struct sigaction error_action;
     int signal_idx;
     
-    ZEROMEMORY(&action,sizeof(action));
-
+    ZEROMEMORY(&action, sizeof(action));
     action.sa_sigaction = signal_handler;
+#ifdef SA_NOCLDWAIT
+    action.sa_flags = SA_SIGINFO | SA_NOCLDSTOP | SA_NOCLDWAIT;
+#else /// @note 20151119 edf -- quick fix for Debian Hurd i386, and any other system missing SA_NOCLDWAIT
+    action.sa_flags = SA_SIGINFO | SA_NOCLDSTOP;
+#endif
+    
+    ZEROMEMORY(&error_action, sizeof(error_action));
+    error_action.sa_sigaction = signal_handler;
+#ifdef SA_NOCLDWAIT
+    error_action.sa_flags = SA_SIGINFO | SA_NOCLDSTOP | SA_NOCLDWAIT | SA_RESETHAND;
+#else /// @note 20151119 edf -- quick fix for Debian Hurd i386, and any other system missing SA_NOCLDWAIT
+    error_action.sa_flags = SA_SIGINFO | SA_NOCLDSTOP | SA_RESETHAND;
+#endif
     
     for(signal_idx = 0; handled_signals[signal_idx] != 0; signal_idx++)
     {
-#ifdef SA_NOCLDWAIT
-        action.sa_flags = SA_SIGINFO | SA_NOCLDSTOP | SA_NOCLDWAIT;
-#else /// @note 20151119 edf -- quick fix for Debian Hurd i386, and any other system missing SA_NOCLDWAIT
-        action.sa_flags = SA_SIGINFO | SA_NOCLDSTOP;
-#endif
-        
         switch(signal_idx)
         {
             case SIGBUS:
             case SIGFPE:
             case SIGILL:
             case SIGSEGV:
+            case SIGABRT:
             {
-                sigemptyset(&action.sa_mask);    /* can interrupt the interrupt */
-                
+                sigemptyset(&error_action.sa_mask);    /* can interrupt the interrupt */
                 break;
             }
             default:
@@ -1056,7 +1102,7 @@ signal_handler_init()
     
     action.sa_handler = SIG_IGN;
 
-    for(signal_idx = 0; ignored_signals[signal_idx] != 0; signal_idx++)
+    for(signal_idx = 0; ignored_signals[signal_idx] != 0; ++signal_idx)
     {
         sigaction(ignored_signals[signal_idx], &action, NULL);
     }
@@ -1142,8 +1188,6 @@ signal_handler_finalise()
             log_err("signal: handler is unexpectedly still running");
         }        
     }
-  
-    
     
     log_debug("signal_handler_finalise() done");
 }

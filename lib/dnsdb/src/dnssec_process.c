@@ -84,7 +84,7 @@ struct thread_pool_s *dnssec_process_default_pool = NULL;
  * Initialises a task with two threads (given by the descriptor)
  * 
  * @param task task to initialise
- * @param desc structure pointing to the two threads an a friendly name
+ * @param desc structure pointing to the two threads and a friendly name
  */
 
 void
@@ -135,8 +135,6 @@ dnssec_process_finalize(dnssec_task_s *task)
 #ifdef DEBUG
     memset(&task->dnssec_answer_query_queue, 0xfe, sizeof(threaded_queue));
 #endif
-    
-
     
     ZEROMEMORY(task, sizeof(dnssec_task_s));
 }
@@ -215,6 +213,8 @@ dnssec_process_begin(dnssec_task_s *task)
     
     // create the context/task
 
+#define NO_STARVE 1 // fixes the starvation issue
+    
     ya_result ret;
     
     void *processor_context;
@@ -226,11 +226,9 @@ dnssec_process_begin(dnssec_task_s *task)
         return ret;
     }
 
-    if(FAIL(ret = thread_pool_enqueue_call(pool, task->vtbl->result, processor_context, &task->pool_counter, task->vtbl->name)))
-    {
-        DIE(DNSSEC_ERROR_CANTPOOLTHREAD);
-    }
-    
+#if !NO_STARVE
+    thread_pool_enqueue_call(pool, task->vtbl->result, processor_context, &task->pool_counter, task->vtbl->name);
+#endif
     /* The array of contextes for each thread */
     void** contexts;
     MALLOC_OR_DIE(void**, contexts, sizeof(void*) * (processor_threads_count + 1), ZDB_THREAD_CONTEXT_TAG);
@@ -250,15 +248,30 @@ dnssec_process_begin(dnssec_task_s *task)
         }
 
         contexts[processor] = processor_context;
-        
-        if(FAIL(ret = thread_pool_enqueue_call(pool, task->vtbl->process, processor_context, &task->pool_counter, task->vtbl->name)))
-        {
-            log_err("dnssec_process_zone: thread_pool_enqueue_call, critical fail: %r", ret);
-            logger_flush();
-            log_quit("dnssec_process_zone: thread_pool_enqueue_call: %r", ret);
-            break;
-        }
+#if !NO_STARVE
+        thread_pool_enqueue_call(pool, task->vtbl->process, processor_context, &task->pool_counter, task->vtbl->name); // can only return SUCCESS
+#endif
     }
+    
+#if NO_STARVE
+    thread_pool_enqueue_call_item items[processor_threads_count + 1];
+    
+    items[0].func = task->vtbl->result;
+    items[0].parm = contexts[0];
+    items[0].counter = &task->pool_counter;
+    items[0].categoryname = task->vtbl->name;
+    
+    for(int processor = 1; processor <= processor_threads_count; processor++)
+    {
+        items[processor].func = task->vtbl->process;
+        items[processor].parm = contexts[processor];
+        items[processor].counter = &task->pool_counter;
+        items[processor].categoryname = task->vtbl->name;
+    }
+
+    thread_pool_enqueue_calls(pool, items, processor_threads_count + 1); // can only return SUCCESS
+    
+#endif
     
     task->contexts = contexts;
     task->processor_threads_count = processor_threads_count;

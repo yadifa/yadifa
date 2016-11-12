@@ -74,8 +74,6 @@ extern logger_handle *g_server_logger;
 /**
  * 
  * Handle an IXFR query from a slave.
- *
- * @todo 20101125 edf -- Set the IXFR storage path
  */
 ya_result
 ixfr_process(message_data *mesg)
@@ -100,9 +98,6 @@ ixfr_process(message_data *mesg)
     
     ya_result return_value = SUCCESS;
 
-    /// @todo 20141006 edf -- verify qclass
-    //u16 qclass = GET_U16_AT(mesg->buffer[DNS_HEADER_LENGTH + fqdn_len + 2]);
-    
     if(((zone = zdb_acquire_zone_read_from_fqdn(g_config->database, fqdn)) != NULL) && ZDB_ZONE_VALID(zone))
     {
 #if ZDB_HAS_ACL_SUPPORT
@@ -122,7 +117,7 @@ ixfr_process(message_data *mesg)
                 u32 zone_serial;
                 
                 zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
-                return_value = zdb_zone_getserial(zone, &zone_serial);
+                return_value = zdb_zone_getserial(zone, &zone_serial); // zone is locked
                 zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
                 
                 if(ISOK(return_value))
@@ -151,7 +146,7 @@ ixfr_process(message_data *mesg)
                         u16 soa_rdata_size;
                         
                         zdb_zone_lock(zone, ZDB_ZONE_MUTEX_XFR);
-                        zdb_zone_getsoa_ttl_rdata(zone, &soa_ttl, &soa_rdata_size, &soa_rdata);
+                        zdb_zone_getsoa_ttl_rdata(zone, &soa_ttl, &soa_rdata_size, &soa_rdata); // zone is locked
                         zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_XFR);
                         
                         packet_writer_add_fqdn(&pc, &mesg->buffer[12]);
@@ -363,13 +358,13 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
 
     zdb_zone_lock(zone, ZDB_ZONE_MUTEX_XFR);
     
-    if(FAIL(return_value = zdb_zone_getserial(zone, &current_serial)))
+    if(FAIL(return_value = zdb_zone_getserial(zone, &current_serial))) // zone is locked
     {
         zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_XFR);
         return return_value; // will return ZDB_ERROR_NOSOAATAPEX if the zone is invalid
     }
 
-    if(FAIL(return_value = zdb_zone_getsoa_ttl_rdata(zone, &ttl, &rdata_size, &rdata)))
+    if(FAIL(return_value = zdb_zone_getsoa_ttl_rdata(zone, &ttl, &rdata_size, &rdata))) // zone is locked
     {
         zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_XFR);
         return return_value;
@@ -430,21 +425,20 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
                 {
                     log_info("ixfr: %{dnsname}: %{hostaddr}: writing stream into the journal", zone->origin, servers);
                     
-                    return_value = zdb_zone_journal_append_ixfr_stream(zone, &xfris);
-                    
-                    u32 ixfr_from_serial;
-                    
-                    zdb_zone_journal_get_serial_range(zone, &ixfr_from_serial, out_loaded_serial);
-                    
-                    u32 expected_serial = xfr_input_stream_get_serial(&xfris);
+                    if(ISOK(return_value = zdb_zone_journal_append_ixfr_stream(zone, &xfris)))
+                    {
+                        u32 ixfr_from_serial;
+
+                        zdb_zone_journal_get_serial_range(zone, &ixfr_from_serial, out_loaded_serial);
+
+                        u32 expected_serial = xfr_input_stream_get_serial(&xfris);
                     
 #ifdef DEBUG
-                    log_debug("ixfr: %{dnsname}: journal_append_ixfr_stream returned %r", zone->origin, return_value);
+                        log_debug("ixfr: %{dnsname}: journal_append_ixfr_stream returned %r", zone->origin, return_value);
 #endif
-                    if(ISOK(return_value))
-                    {
+
                         ya_result ret;
-                        
+
                         log_info("ixfr: %{dnsname}: replaying journal (%u;%u)", zone->origin, ixfr_from_serial, *out_loaded_serial);
                         if(ISOK(ret = zdb_icmtl_replay(zone)))
                         {
@@ -455,18 +449,28 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
                             return_value = ret;
                             log_err("ixfr: %{dnsname}: journal replay returned %r", zone->origin, return_value);
                         }
-                        
+
                         if(ISOK(ret) && serial_lt(*out_loaded_serial, expected_serial))
                         {
                             // should redo an IXFR asap
-                            
+
                             log_info("ixfr: %{dnsname}: loaded serial %u below expected serial: querying IXFR again", zone->origin, *out_loaded_serial, expected_serial);
                             database_service_zone_ixfr_query(zone->origin);
                         }
                     }
                     else
                     {
-                        log_err("ixfr: %{dnsname}: %{hostaddr}: failed to write the stream into the journal: %r", zone->origin, servers, return_value);
+                        if(return_value == ZDB_JOURNAL_SERIAL_OUT_OF_KNOWN_RANGE)
+                        {
+                            /// @note 20161018 edf -- we are slave, so it's OK
+                            log_warn("ixfr: %{dnsname}: %{hostaddr}: no continuity with the journal, resetting", zone->origin, servers, return_value);
+                            // hole in the journal : reset
+                            zdb_zone_journal_delete(zone);
+                        }
+                        else
+                        {
+                            log_err("ixfr: %{dnsname}: %{hostaddr}: failed to write the stream into the journal: %r", zone->origin, servers, return_value);
+                        }
                     }
                     
                     break;

@@ -203,6 +203,14 @@ zdb_zone_islocked(zdb_zone *zone)
     return owner != 0;
 }
 
+bool
+zdb_zone_islocked_weak(const zdb_zone *zone)
+{
+    u8 owner = zone->lock_owner;
+    
+    return owner != 0;
+}
+
 /**
  * Returns TRUE iff the zone is locked by a writer (any other owner value than nobody and simple reader)
  * 
@@ -232,25 +240,25 @@ zdb_zone_lock(zdb_zone *zone, u8 owner)
     u64 start = timeus();
 #endif
 
-    mutex_t *mutex = &zone->lock_mutex;   
+    mutex_t *mutex = &zone->lock_mutex;
     
     mutex_lock(mutex);
     
     for(;;)
     {
-		/*
-			A simple way to ensure that a lock can be shared
-			by similar entities or not.
-			Sharable entities have their msb off.
-		*/
+        /*
+        A simple way to ensure that a lock can be shared
+        by similar entities or not.
+        Sharable entities have their msb off.
+        */
 
-        u8 co = zone->lock_owner & 0x7f;
+        u8 co = zone->lock_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
         
         if(co == GROUP_MUTEX_NOBODY || co == owner)
         {
-            yassert(zone->lock_count != 255);
+            yassert(!UNSIGNED_VAR_VALUE_IS_MAX(zone->lock_count));
 
-            zone->lock_owner = owner & 0x7f;
+            zone->lock_owner = owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
             zone->lock_count++;
 
             break;
@@ -288,20 +296,20 @@ zdb_zone_trylock(zdb_zone *zone, u8 owner)
 #endif
 
     mutex_lock(&zone->lock_mutex);
-
-    u8 co = zone->lock_owner & 0x7f;
+    
+    u8 co = zone->lock_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
     
     if(co == ZDB_ZONE_MUTEX_NOBODY || co == owner)
     {
-        yassert(zone->lock_count != 255);
+        yassert(!UNSIGNED_VAR_VALUE_IS_MAX(zone->lock_count));
 
-        zone->lock_owner = owner & 0x7f;
+        zone->lock_owner = owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
         zone->lock_count++;
 
 #if ZONE_MUTEX_LOG
         log_debug7("acquired lock for zone %{dnsname}@%p for %x (#%i)", zone->origin, zone, owner, zone->lock_count);
 #endif
-
+        
         mutex_unlock(&zone->lock_mutex);
         
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
@@ -314,7 +322,7 @@ zdb_zone_trylock(zdb_zone *zone, u8 owner)
 
         return TRUE;
     }
-
+    
     mutex_unlock(&zone->lock_mutex);
 
 #if ZONE_MUTEX_LOG
@@ -322,6 +330,73 @@ zdb_zone_trylock(zdb_zone *zone, u8 owner)
 #endif
 
     return FALSE;
+}
+
+bool
+zdb_zone_trylock_wait(zdb_zone *zone, u64 usec, u8 owner)
+{
+#if ZONE_MUTEX_LOG
+    log_debug7("trying to acquire lock for %lluus for zone %{dnsname}@%p for %x", usec, zone->origin, zone, owner);
+#endif
+    
+    u64 start = timeus();
+    bool ret = FALSE;
+
+    mutex_t *mutex = &zone->lock_mutex;
+    
+    mutex_lock(mutex);
+    
+    for(;;)
+    {
+        /*
+        A simple way to ensure that a lock can be shared
+        by similar entities or not.
+        Sharable entities have their msb off.
+        */
+
+        u8 co = zone->lock_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
+        
+        if(co == GROUP_MUTEX_NOBODY || co == owner)
+        {
+            yassert(!UNSIGNED_VAR_VALUE_IS_MAX(zone->lock_count));
+
+            zone->lock_owner = owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
+            zone->lock_count++;
+
+            ret = TRUE;
+            break;
+        }
+        
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+        s64 d = timeus() - start;
+        if(d > MUTEX_WAITED_TOO_MUCH_TIME_US)
+        {
+            log_warn("zdb_zone_lock(%{dnsname},%x) : waited for %llius already ...", zone->origin, owner, d);
+            debug_log_stacktrace(MODULE_MSG_HANDLE, MSG_WARNING, "zdb_zone_double_lock:");
+        }
+        cond_timedwait(&zone->lock_cond, mutex, MIN(MUTEX_WAITED_TOO_MUCH_TIME_US, usec));
+#else
+        cond_timedwait(&zone->lock_cond, mutex, usec);
+#endif
+        u64 now = timeus();
+        
+        if(now - start >= usec)
+        {
+            break;
+        }
+    }
+    
+    mutex_unlock(mutex);
+    
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    zone->lock_trace = debug_stacktrace_get();
+    zone->lock_id = pthread_self();
+    zone->lock_timestamp = timeus();
+
+    zdb_zone_lock_set_add(zone);
+#endif
+    
+    return ret;
 }
 
 void
@@ -332,12 +407,12 @@ zdb_zone_unlock(zdb_zone *zone, u8 owner)
 #endif
 
     mutex_lock(&zone->lock_mutex);
-
+    
 #ifdef DEBUG
-    if((zone->lock_owner != (owner & 0x7f)) || (zone->lock_count == 0))
+    if(((zone->lock_owner & ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG) != (owner & ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG)) || (zone->lock_count == 0))
     {
         mutex_unlock(&zone->lock_mutex);
-        yassert(zone->lock_owner == (owner & 0x7f));
+        yassert((zone->lock_owner == ZDB_ZONE_MUTEX_DESTROY) || (zone->lock_owner == (owner & ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG)));
         yassert(zone->lock_count != 0);
     }
 #endif
@@ -386,19 +461,19 @@ zdb_zone_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
          * Sharable entities have their msb off.
          */
         
-        u8 so = zone->lock_reserved_owner & 0x7f;
+        u8 so = zone->lock_reserved_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
         
         if(so == ZDB_ZONE_MUTEX_NOBODY || so == secondary_owner)
         {
-            u8 co = zone->lock_owner & 0x7f;
+            u8 co = zone->lock_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
 
             if(co == ZDB_ZONE_MUTEX_NOBODY || co == owner)
             {
-                yassert(zone->lock_count != 255);
+                yassert(!UNSIGNED_VAR_VALUE_IS_MAX(zone->lock_count));
 
-                zone->lock_owner = owner & 0x7f;
+                zone->lock_owner = owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
                 zone->lock_count++;
-                zone->lock_reserved_owner = secondary_owner & 0x7f;
+                zone->lock_reserved_owner = secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
             
 #if ZONE_MUTEX_LOG
                 log_debug7("acquired lock for zone %{dnsname}@%p for %x (#%i)", zone->origin, zone, owner, zone->lock_count);
@@ -444,25 +519,25 @@ zdb_zone_try_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 #endif
 
     mutex_lock(&zone->lock_mutex);
-
-    u8 so = zone->lock_reserved_owner & 0x7f;
+    
+    u8 so = zone->lock_reserved_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
         
     if(so == ZDB_ZONE_MUTEX_NOBODY || so == secondary_owner)
     {
-        u8 co = zone->lock_owner & 0x7f;
+        u8 co = zone->lock_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
     
         if(co == ZDB_ZONE_MUTEX_NOBODY || co == owner)
         {
-            yassert(zone->lock_count != 255);
+            yassert(!UNSIGNED_VAR_VALUE_IS_MAX(zone->lock_count));
 
-            zone->lock_owner = owner & 0x7f;
+            zone->lock_owner = owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
             zone->lock_count++;
-            zone->lock_reserved_owner = secondary_owner & 0x7f;
+            zone->lock_reserved_owner = secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
 
 #if ZONE_MUTEX_LOG
             log_debug7("acquired lock for zone %{dnsname}@%p for %x (#%i)", zone->origin, zone, owner, zone->lock_count);
 #endif
-
+            
             mutex_unlock(&zone->lock_mutex);
 
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
@@ -501,18 +576,18 @@ zdb_zone_double_unlock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 
     mutex_lock(&zone->lock_mutex);
 
-#ifdef DEBUG
-    if((zone->lock_owner != (owner & 0x7f)) || (zone->lock_count == 0))
+#if 0 //def DEBUG
+    if(((zone->lock_owner  & ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG)!= (owner & ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG)) || (zone->lock_count == 0))
     {
         mutex_unlock(&zone->lock_mutex);
-        yassert(zone->lock_owner == (owner & 0x7f));
+        yassert(zone->lock_owner == (owner & ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG));
         yassert(zone->lock_count != 0);
     }
     
-    if(zone->lock_reserved_owner != (secondary_owner & 0x7f))
+    if(zone->lock_reserved_owner != (secondary_owner & ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG))
     {
         mutex_unlock(&zone->lock_mutex);
-        yassert(zone->lock_reserved_owner != (secondary_owner & 0x7f));
+        yassert(zone->lock_reserved_owner != (secondary_owner & ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG));
     }
 #endif
     
@@ -523,6 +598,9 @@ zdb_zone_double_unlock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 #if ZONE_MUTEX_LOG
     log_debug7("released lock for zone %{dnsname}@%p by %x (#%i)", zone->origin, zone, owner, zone->lock_count);
 #endif
+    
+    yassert((zone->lock_owner & 0xc0) == 0);
+    // NO, because it does not always to a transfer lock yassert(zone->lock_count == 0);
     
     if(zone->lock_count == 0)
     {
@@ -541,6 +619,14 @@ zdb_zone_double_unlock(zdb_zone *zone, u8 owner, u8 secondary_owner)
     mutex_unlock(&zone->lock_mutex);
 }
 
+/**
+ * obsolete ?
+ * 
+ * @param zone
+ * @param owner
+ * @param secondary_owner
+ */
+
 void
 zdb_zone_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 {
@@ -553,19 +639,19 @@ zdb_zone_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 #endif
 
     mutex_lock(&zone->lock_mutex);
-
-#ifdef DEBUG
-    if((zone->lock_owner != (owner & 0x7f)) || (zone->lock_count == 0))
+    
+#if 0 //def DEBUG
+    if((zone->lock_owner != (owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG)) || (zone->lock_count == 0))
     {
         mutex_unlock(&zone->lock_mutex);
-        yassert(zone->lock_owner == (owner & 0x7f));
+        yassert(zone->lock_owner == (owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG));
         yassert(zone->lock_count != 0);
     }
     
-    if(zone->lock_reserved_owner != (secondary_owner & 0x7f))
+    if(zone->lock_reserved_owner != (secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG))
     {
         mutex_unlock(&zone->lock_mutex);
-        yassert(zone->lock_reserved_owner != (secondary_owner & 0x7f));
+        yassert(zone->lock_reserved_owner != (secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG));
     }
 #endif
     
@@ -585,7 +671,7 @@ zdb_zone_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
         cond_timedwait(&zone->lock_cond, &zone->lock_mutex, 100);
     }
     
-    zone->lock_owner = secondary_owner & 0x7f;
+    zone->lock_owner = secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
     zone->lock_reserved_owner = ZDB_ZONE_MUTEX_NOBODY;
     
 
@@ -593,11 +679,11 @@ zdb_zone_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
     log_debug7("transferred lock for zone %{dnsname}@%p from %x to %x (#%i)", zone->origin, zone, owner, secondary_owner, zone->lock_count);
 #endif
     
-    if((secondary_owner & 0x80) == 0)
+    if((secondary_owner & ZDB_ZONE_MUTEX_EXCLUSIVE_FLAG) == 0)
     {
         cond_notify(&zone->lock_cond);
     }
-
+    
     mutex_unlock(&zone->lock_mutex);
     
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
@@ -609,6 +695,15 @@ zdb_zone_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 #endif
 }
 
+/**
+ * Obsolete ?
+ * 
+ * @param zone
+ * @param owner
+ * @param secondary_owner
+ * @return 
+ */
+
 bool
 zdb_zone_try_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 {
@@ -617,30 +712,30 @@ zdb_zone_try_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 #endif
     
     mutex_lock(&zone->lock_mutex);
-
-#ifdef DEBUG
-    if((zone->lock_owner != (owner & 0x7f)) || (zone->lock_count == 0))
+    
+#if 0 //def DEBUG
+    if((zone->lock_owner != (owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG)) || (zone->lock_count == 0))
     {
         mutex_unlock(&zone->lock_mutex);
-        yassert(zone->lock_owner == (owner & 0x7f));
+        yassert(zone->lock_owner == (owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG));
         yassert(zone->lock_count != 0);
     }
     
-    if(zone->lock_reserved_owner != (secondary_owner & 0x7f))
+    if(zone->lock_reserved_owner != (secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG))
     {
         mutex_unlock(&zone->lock_mutex);
-        yassert(zone->lock_reserved_owner != (secondary_owner & 0x7f));
+        yassert(zone->lock_reserved_owner != (secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG));
     }
 #endif
-    
+        
     // wait to be the last one
     
     if(zone->lock_count == 1)
     {
-        zone->lock_owner = secondary_owner & 0x7f;
+        zone->lock_owner = secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
         zone->lock_reserved_owner = ZDB_ZONE_MUTEX_NOBODY;
         
-        if((secondary_owner & 0x80) == 0)
+        if((secondary_owner & ZDB_ZONE_MUTEX_EXCLUSIVE_FLAG) == 0)
         {
             cond_notify(&zone->lock_cond);
         }
@@ -657,7 +752,7 @@ zdb_zone_try_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
         
         return TRUE;
     }
-    
+        
     mutex_unlock(&zone->lock_mutex);
     
     return FALSE;
@@ -675,19 +770,19 @@ zdb_zone_exchange_locks(zdb_zone *zone, u8 owner, u8 secondary_owner)
 #endif
 
     mutex_lock(&zone->lock_mutex);
-
+    
 #ifdef DEBUG
-    if((zone->lock_owner != (owner & 0x7f)) || (zone->lock_count == 0))
+    if((zone->lock_owner != (owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG)) || (zone->lock_count == 0))
     {
         mutex_unlock(&zone->lock_mutex);
-        yassert(zone->lock_owner == (owner & 0x7f));
+        yassert(zone->lock_owner == (owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG));
         yassert(zone->lock_count != 0);
     }
     
-    if(zone->lock_reserved_owner != (secondary_owner & 0x7f))
+    if(zone->lock_reserved_owner != (secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG))
     {
         mutex_unlock(&zone->lock_mutex);
-        yassert(zone->lock_reserved_owner != (secondary_owner & 0x7f));
+        yassert(zone->lock_reserved_owner != (secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG));
     }
 #endif
     
@@ -707,19 +802,19 @@ zdb_zone_exchange_locks(zdb_zone *zone, u8 owner, u8 secondary_owner)
         cond_timedwait(&zone->lock_cond, &zone->lock_mutex, 100);
     }
     
-    zone->lock_owner = secondary_owner & 0x7f;
-    zone->lock_reserved_owner = owner & 0x7f;
+    zone->lock_owner = secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
+    zone->lock_reserved_owner = owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
     
 
 #if ZONE_MUTEX_LOG
     log_debug7("exchanged locks for zone %{dnsname}@%p from %x to %x (#%i)", zone->origin, zone, owner, secondary_owner, zone->lock_count);
 #endif
     
-    if((secondary_owner & 0x80) == 0)
+    if((secondary_owner & ZDB_ZONE_MUTEX_EXCLUSIVE_FLAG) == 0)
     {
         cond_notify(&zone->lock_cond);
     }
-
+    
     mutex_unlock(&zone->lock_mutex);
     
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT

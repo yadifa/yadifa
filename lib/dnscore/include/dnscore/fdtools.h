@@ -103,6 +103,8 @@ int unlink_ex(const char *folder, const char *filename);
 /**
  * Opens a file. (see man 2 open)
  * Handles EINTR and other retry errors.
+ * Safe to use in the logger thread as it only logs (debug) if the current
+ * thread is not the logger's
  * 
  * @param fd
  * @return 

@@ -144,6 +144,10 @@ CONFIG_U32_RANGE(edns0_max_size              , S_EDNS0_MAX_SIZE          ,EDNS0_
 CONFIG_U32(      cpu_count_override          , S_CPU_COUNT_OVERRIDE       )
 // how many threads by address (UDP)
 CONFIG_U32(      thread_count_by_address     , S_THREAD_COUNT_BY_ADDRESS  )
+
+CONFIG_U32_RANGE(thread_affinity_base        , "0", 0, 3  )                 // first virtual cpu
+CONFIG_U32_RANGE(thread_affinity_multiplier  , "0", 0, 4  )                 // dual thread
+
 // how many threads for the dnssec processing)
 CONFIG_U32(      dnssec_thread_count         , S_DNSSEC_THREAD_COUNT      )
 CONFIG_U32(      zone_load_thread_count      , S_ZONE_LOAD_THREAD_COUNT      )
@@ -362,9 +366,8 @@ static ya_result
 config_main_section_postprocess(struct config_section_descriptor_s *csd)
 {
     u32 port = 0;
+    u32 cpu_per_core = (sys_has_hyperthreading())?2:1;
     char tmp[PATH_MAX];
-
-
 
     if(FAIL(parse_u32_check_range(g_config->server_port, &port, 1, MAX_U16, 10)))
     {
@@ -387,6 +390,11 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
 #else
         g_config->hostname_chaos = strdup("not disclosed");
 #endif
+    }
+       
+    if(g_config->thread_affinity_multiplier == 0)
+    {
+        g_config->thread_affinity_multiplier = cpu_per_core;
     }
     
     class_ch_set_hostname(g_config->hostname_chaos);    
@@ -450,12 +458,12 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
     
     if(g_config->thread_count_by_address < 0)
     {
-        g_config->thread_count_by_address = sys_get_cpu_count();
+        g_config->thread_count_by_address = MAX(sys_get_cpu_count() / cpu_per_core, 1);
     }
     else if((g_config->thread_count_by_address > sys_get_cpu_count()))
     {
-        osformatln(termerr,"config: bounding down thread-count-by-address to the number of cpus (%d)", sys_get_cpu_count());
-        g_config->thread_count_by_address = sys_get_cpu_count();
+        g_config->thread_count_by_address = MAX(sys_get_cpu_count() / cpu_per_core, 1);
+        ttylog_err("config: bounding down thread-count-by-address to the number of physical CPUs (%d)", g_config->thread_count_by_address);
     }
     
     g_config->tcp_query_min_rate_us = g_config->tcp_query_min_rate * 0.000001;

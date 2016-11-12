@@ -284,10 +284,9 @@ nsec3_remove_nsec3_by_name(zdb_zone* zone, const u8 *nsec3_label, const u8* nsec
                     {
                         nsec3_zone_item *prev = nsec3_avl_node_mod_prev(item);
                         
-                        log_debug("nsec3_remove_nsec3_by_name: prev of %{digest32h} is %{digest32h}", item->digest, prev->digest);
-                        
                         yassert(prev != NULL);
                         
+                        log_debug("nsec3_remove_nsec3_by_name: prev of %{digest32h} is %{digest32h}", item->digest, prev->digest);
                         if(prev != item) // because it can be the last item
                         {
                             nsec3_move_all_star(item, prev);
@@ -629,12 +628,28 @@ nsec3_icmtl_replay_destroy(nsec3_icmtl_replay *replay)
     nsec3_icmtl_destroy_nsec3param(&replay->nsec3param_add);
     nsec3_icmtl_destroy_nsec3param(&replay->nsec3param_del);
     
+    //replay->nsec3_labels;
+    //replay->nsec3add_add;
+    //replay->nsec3add_del;
+    //replay->nsec3paramadd_add;
+    
+    ptr_set_avl_destroy(&replay->nsec3_labels);
+    ptr_set_avl_destroy(&replay->nsec3add_add);
+    ptr_set_avl_destroy(&replay->nsec3add_del);
+    ptr_set_avl_destroy(&replay->nsec3paramadd_add);
+    
     replay->zone = NULL;
 }
 
 void nsec3_icmtl_replay_nsec3param_del(nsec3_icmtl_replay *replay, const zdb_ttlrdata *ttlrdata)
 {
     assert(ttlrdata->next == NULL);
+    
+#ifdef DEBUG
+    rdata_desc rdatadesc = ZDB_RECORD_RDATADESC(TYPE_NSEC3PARAM,ttlrdata);
+    log_debug2("nsec3_icmtl_replay_nsec3param_del(%p, %{dnsname}, %{typerdatadesc})",
+            replay, replay->zone->origin, &rdatadesc);
+#endif
     
 #ifdef DEBUG
     rdata_desc nsec3param_rdata = { TYPE_NSEC3PARAM, ttlrdata->rdata_size, ttlrdata->rdata_pointer};    
@@ -681,6 +696,12 @@ void nsec3_icmtl_replay_nsec3param_add(nsec3_icmtl_replay *replay, const zdb_ttl
     assert(ttlrdata->next == NULL);
     
 #ifdef DEBUG
+    rdata_desc rdatadesc = ZDB_RECORD_RDATADESC(TYPE_NSEC3PARAM,ttlrdata);
+    log_debug2("nsec3_icmtl_replay_nsec3param_add(%p, %{dnsname}, %{typerdatadesc})",
+            replay, replay->zone->origin, &rdatadesc);
+#endif
+    
+#ifdef DEBUG
     rdata_desc nsec3param_rdata = { TYPE_NSEC3PARAM, ttlrdata->rdata_size, ttlrdata->rdata_pointer};    
     log_debug("journal: %{dnsname}: will add %{typerdatadesc}", replay->zone->origin, &nsec3param_rdata);
 #endif
@@ -716,11 +737,22 @@ void nsec3_icmtl_replay_nsec3param_add(nsec3_icmtl_replay *replay, const zdb_ttl
 
 void nsec3_icmtl_replay_nsec3paramadd_del(nsec3_icmtl_replay *replay, const zdb_ttlrdata *ttlrdata)
 {
+#ifdef DEBUG
+    rdata_desc rdatadesc = ZDB_RECORD_RDATADESC(TYPE_NSEC3PARAMADD,ttlrdata);
+    log_debug2("nsec3_icmtl_replay_nsec3paramadd_del(%p, %{dnsname}, %{typerdatadesc})",
+            replay, replay->zone->origin, &rdatadesc);
+#endif
 }
 
 void nsec3_icmtl_replay_nsec3paramadd_add(nsec3_icmtl_replay *replay, const zdb_ttlrdata *ttlrdata)
 {
     assert(ttlrdata->next == NULL);
+    
+#ifdef DEBUG
+    rdata_desc rdatadesc = ZDB_RECORD_RDATADESC(TYPE_NSEC3PARAMADD,ttlrdata);
+    log_debug2("nsec3_icmtl_replay_nsec3paramadd_add(%p, %{dnsname}, %{typerdatadesc})",
+            replay, replay->zone->origin, &rdatadesc);
+#endif
     
 #ifdef DEBUG
     rdata_desc nsec3param_rdata = { TYPE_NSEC3PARAM, ttlrdata->rdata_size, ttlrdata->rdata_pointer};    
@@ -766,6 +798,11 @@ void nsec3_icmtl_replay_nsec3_del(nsec3_icmtl_replay *replay, const u8* fqdn, co
 {
     assert(ttlrdata->next == NULL);
 
+#ifdef DEBUG
+    rdata_desc rdatadesc = ZDB_RECORD_RDATADESC(TYPE_NSEC3,ttlrdata);
+    log_debug2("nsec3_icmtl_replay_nsec3_del(%p, %{dnsname}, %{typerdatadesc})",
+            replay, fqdn, &rdatadesc);
+#endif
     
     ptr_node *node = ptr_set_avl_insert(&replay->nsec3_del, (u8*)fqdn);
     if(node->value == NULL)
@@ -784,6 +821,11 @@ void nsec3_icmtl_replay_nsec3_add(nsec3_icmtl_replay *replay, const u8* fqdn, co
 {
     assert(ttlrdata->next == NULL);
 
+#ifdef DEBUG
+    rdata_desc rdatadesc = ZDB_RECORD_RDATADESC(TYPE_NSEC3,ttlrdata);
+    log_debug2("nsec3_icmtl_replay_nsec3_add(%p, %{dnsname}, %{typerdatadesc})",
+            replay, fqdn, &rdatadesc);
+#endif
     
     ptr_node *node;
     
@@ -820,8 +862,12 @@ void nsec3_icmtl_replay_nsec3_add(nsec3_icmtl_replay *replay, const u8* fqdn, co
 void nsec3_icmtl_replay_nsec3_rrsig_del(nsec3_icmtl_replay *replay, const u8* fqdn, const zdb_ttlrdata *ttlrdata)
 {
     assert(ttlrdata->next == NULL);
-    
 
+#ifdef DEBUG
+    rdata_desc rdatadesc = ZDB_RECORD_RDATADESC(TYPE_RRSIG,ttlrdata);
+    log_debug2("nsec3_icmtl_replay_nsec3_rrsig_del(%p, %{dnsname}, %{typerdatadesc})",
+            replay, fqdn, &rdatadesc);
+#endif
 
     ptr_node *node;
 
@@ -885,7 +931,11 @@ void nsec3_icmtl_replay_nsec3_rrsig_del(nsec3_icmtl_replay *replay, const u8* fq
 
 void nsec3_icmtl_replay_nsec3_rrsig_add(nsec3_icmtl_replay *replay, const u8* fqdn, zdb_packed_ttlrdata *packed_ttlrdata)
 {
-
+#ifdef DEBUG
+    rdata_desc rdatadesc = ZDB_PACKEDRECORD_RDATADESC(TYPE_RRSIG,packed_ttlrdata);
+    log_debug2("nsec3_icmtl_replay_nsec3_rrsig_add(%p, %{dnsname}, %{typerdatadesc})",
+            replay, fqdn, &rdatadesc);
+#endif
     
     ptr_node *node;
     
@@ -962,7 +1012,7 @@ void nsec3_icmtl_replay_nsec3_rrsig_add(nsec3_icmtl_replay *replay, const u8* fq
 void
 nsec3_icmtl_replay_label_add(nsec3_icmtl_replay *replay, const u8 *fqdn, dnslabel_vector_reference labels, s32 label_top)
 {
-
+    yassert(zdb_zone_islocked(replay->zone));
     
     zdb_rr_label *rr_label = zdb_rr_label_add(replay->zone, labels, label_top);
 
@@ -973,7 +1023,7 @@ nsec3_icmtl_replay_label_add(nsec3_icmtl_replay *replay, const u8 *fqdn, dnslabe
         /* APEX or NS+DS */
 
         if( ((flags & ZDB_RR_LABEL_APEX) != 0) ||
-            (((flags & ZDB_RR_LABEL_DELEGATION) != 0) && (zdb_record_find(&rr_label->resource_record_set, TYPE_DS) != NULL) ) )
+            (((flags & ZDB_RR_LABEL_DELEGATION) != 0) && (zdb_record_find(&rr_label->resource_record_set, TYPE_DS) != NULL) ) ) // zone is locked
         {
             ptr_node *node = ptr_set_avl_insert(&replay->nsec3_labels, (u8*)fqdn);
 
@@ -993,14 +1043,12 @@ nsec3_icmtl_replay_label_add(nsec3_icmtl_replay *replay, const u8 *fqdn, dnslabe
 ya_result
 nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
 {
-
+    yassert(zdb_zone_islocked(replay->zone));
     
     bool nsec3param_added = FALSE;
     
     int cleared_nsec3_zone_post_check_count = 0;
     nsec3_zone *cleared_nsec3_zone_post_check[16]; // arbitrary maximum number of nsec3 chains
-    
-
     
     if(!ptr_set_avl_isempty(&replay->nsec3param_add))
     {
@@ -1171,8 +1219,6 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
 
         ptr_set_avl_destroy(&replay->nsec3_del);
     }
-    
-
     
     if(!ptr_set_avl_isempty(&replay->nsec3_add))
     {
@@ -1486,7 +1532,7 @@ nsec3_icmtl_replay_execute(nsec3_icmtl_replay *replay)
             {
                 // find the nsec3param in the zone
                 int n3_salt_len = NSEC3PARAM_RDATA_SIZE_FROM_RDATA(n3->rdata);
-                zdb_packed_ttlrdata* nsec3param = zdb_record_find(&replay->zone->apex->resource_record_set, TYPE_NSEC3PARAM);
+                zdb_packed_ttlrdata* nsec3param = zdb_record_find(&replay->zone->apex->resource_record_set, TYPE_NSEC3PARAM); // zone is locked
                 while(nsec3param != NULL)
                 {
                     int nsec3param_salt_len = NSEC3PARAM_RDATA_SIZE_FROM_RDATA(ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec3param));

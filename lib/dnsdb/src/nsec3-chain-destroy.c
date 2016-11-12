@@ -2,18 +2,18 @@
  *
  * Copyright (c) 2011-2016, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
+ *
+ * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
  *
- *        * Redistributions of source code must retain the above copyright 
+ *        * Redistributions of source code must retain the above copyright
  *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
  *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
  *          without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
@@ -127,8 +127,10 @@ nsec3_chain_destroy_thread(void* args)
     //                  TRUE, nsec3_chain_update->opt_out,
     //                  nsec3_chain_create_callback, nsec3_chain_update);
     //nsec3_chain_update->zone->nsec.nsec3.
-    u32 min_ttl = 600; /// @todo 20151102 edf -- fix me
+    s32 min_ttl;
     zdb_icmtl icmtl;
+    
+    zdb_zone_getminttl(ctx->zone, &min_ttl);
     
     if(ctx->chain_index == 0)
     {
@@ -157,8 +159,6 @@ nsec3_chain_destroy_thread(void* args)
     }
     
     nsec3_zone* n3 = zdb_zone_get_nsec3chain(ctx->zone, ctx->chain_index);
-    
-    
     
 /* 
  *  Take N and signatures

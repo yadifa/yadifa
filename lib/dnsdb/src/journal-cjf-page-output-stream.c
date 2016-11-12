@@ -128,7 +128,7 @@ journal_cjf_page_output_stream_next(output_stream *stream)
         item.stream_file_offset = jnl->last_page.records_limit;
         
         // CFJ_PAGE_CACHE ->
-        log_debug3("cjf: updating PAGE item at %u[(1 + %u) * 8])", jnl->last_page.file_offset, jnl->last_page.count);
+        log_debug3("cjf: updating PAGE item at %u[(1 + %u) * 8]", jnl->last_page.file_offset, jnl->last_page.count);
 
         journal_cjf_page_cache_read_header(jnl->fd, jnl->last_page.file_offset, &head);
         head.stream_end_offset = item.stream_file_offset + data->size;
@@ -173,7 +173,7 @@ journal_cjf_page_output_stream_next(output_stream *stream)
     }
     else
     {
-        log_debug2("cjf: PAGE stream is emtpy");
+        log_debug2("cjf: PAGE stream is empty");
     }
 }
 
@@ -294,7 +294,7 @@ journal_cfj_page_output_stream_write_resource_record(output_stream *stream, dns_
 {
     journal_cjf_page_output_stream_data* data = (journal_cjf_page_output_stream_data*)stream->data;
 
-    yassert(dnsname_is_subdomain(rr->name, data->jnl->zone->origin));
+    yassert(dnsname_is_subdomain(rr->name, data->jnl->origin));
     
     ya_result ret;
     
@@ -338,7 +338,7 @@ journal_cjf_page_output_stream_reopen(output_stream *out_os, journal_cjf *jnl)
     {
         // first PAGE
         
-        jnl_ensure_file_opened(jnl, TRUE);
+        journal_cjf_ensure_file_opened(jnl, TRUE);
         
         // CFJ_PAGE_CACHE ->
         journal_cjf_page_cache_write_new_header(jnl->fd, jnl->last_page.file_offset);
@@ -358,10 +358,9 @@ journal_cjf_page_output_stream_reopen(output_stream *out_os, journal_cjf *jnl)
             // reposition the stream
             if(lseek(jnl->fd, jnl->last_page.records_limit, SEEK_SET) < 0)
             {
-                log_err("cannot move into journal: %r", ERRNO_ERROR);
+                log_err("cjf: %{dnsname}: cannot move into journal at new page (fd=%i, pos=%llu): %r", jnl->origin, jnl->fd, jnl->last_page.records_limit, ERRNO_ERROR);
                 logger_flush();
-                abort();
-                return 0;
+                return ERRNO_ERROR;
             }
         }
         
@@ -383,16 +382,16 @@ journal_cjf_page_output_stream_reopen(output_stream *out_os, journal_cjf *jnl)
     
         if(lseek(jnl->fd, jnl->last_page.records_limit, SEEK_SET) < 0)
         {
-            log_err("cannot move into journal: %r", ERRNO_ERROR);
+            log_err("cjf: %{dnsname}: cannot move into journal at next page (fd=%i, pos=%llu): %r", jnl->origin, jnl->fd, jnl->last_page.records_limit, ERRNO_ERROR);
             logger_flush();
-            abort();
-            return 0;
+            return ERRNO_ERROR;
         }
         
         journal_cjf_page_output_stream_data *data;
         ZALLOC_OR_DIE(journal_cjf_page_output_stream_data*, data, journal_cjf_page_output_stream_data, JCJFPOSD_TAG);
-        ZEROMEMORY(data, sizeof(journal_cjf_page_output_stream_data)); // false positive: data cannot be NULL
-        fd_output_stream_attach(&data->filtered, jnl->fd);
+        ZEROMEMORY(data, sizeof(journal_cjf_page_output_stream_data));  // false positive: data cannot be NULL
+        fd_output_stream_attach(&data->filtered, jnl->fd);              // this initialises the stream
+        file_output_stream_set_full_writes(&data->filtered, TRUE);      // this makes the stream "write fully"
         buffer_output_stream_init(&data->filtered, &data->filtered, 512);
         data->jnl = jnl;
         data->start_offset = jnl->last_page.records_limit;

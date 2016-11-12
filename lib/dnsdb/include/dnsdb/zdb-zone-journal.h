@@ -92,7 +92,7 @@ ya_result zdb_zone_journal_append_ixfr_stream(zdb_zone *zone, input_stream *is);
  * @return an error code
  */
 
-ya_result zdb_zone_journal_delete(zdb_zone *zone);
+ya_result zdb_zone_journal_delete(const zdb_zone *zone);
 
 /**
  * @}

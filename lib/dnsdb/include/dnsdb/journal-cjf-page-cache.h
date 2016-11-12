@@ -52,6 +52,8 @@ extern "C" {
 #define CJF_PAGE_SIZE_IN_BYTE       (CJF_SECTION_INDEX_SLOT_HEAD + (CJF_SECTION_INDEX_SLOT_COUNT * CJF_SECTION_INDEX_SLOT_SIZE))
 
 #define CJF_PAGE_ARBITRARY_UPDATE_SIZE      512
+    
+#define CJF_PAGE_MAGIC MAGIC4('P','A','G','E')
 
 struct journal_cjf_page_tbl_header
 {

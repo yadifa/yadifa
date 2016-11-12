@@ -102,15 +102,15 @@ database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonel
         zone_lock(zone_desc, desclockowner);
     }
     
-    if(zone_desc->status_flags & ZONE_STATUS_MUST_CLEAR_JOURNAL)
+    if(zone_get_status(zone_desc) & ZONE_STATUS_MUST_CLEAR_JOURNAL)
     {
-        zone_desc->status_flags |= ZONE_STATUS_MODIFIED;
+        zone_set_status(zone_desc, ZONE_STATUS_MODIFIED);
     }
     
-    if(!save_unmodified && ((zone_desc->status_flags & ZONE_STATUS_MODIFIED) == 0)) // a "journal" should set modified, or should it be tested here ?
+    if(!save_unmodified && ((zone_get_status(zone_desc) & ZONE_STATUS_MODIFIED) == 0)) // a "journal" should set modified, or should it be tested here ?
     {
-        log_debug("zone save: %{dnsname} hasn't been modified", zone_desc->origin);
-        zone_desc->status_flags &= ~(ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
+        log_info("zone save: %{dnsname} hasn't been modified", zone_desc->origin);
+        zone_clear_status(zone_desc, ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
         
         if(desclockowner != 0)
         {
@@ -122,8 +122,8 @@ database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonel
     
     if(zone_desc->file_name == NULL)
     {
-        log_debug("zone save: %{dnsname} has no source file set", zone_desc->origin);
-        zone_desc->status_flags &= ~(ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
+        log_info("zone save: %{dnsname} has no source file set", zone_desc->origin);
+        zone_clear_status(zone_desc, ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
         if(desclockowner != 0)
         {
             zone_unlock(zone_desc, desclockowner);
@@ -132,10 +132,10 @@ database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonel
         return ERROR;
     }
     
-    if((zone_desc->status_flags & ZONE_STATUS_TEMPLATE_SOURCE_FILE) != 0)
+    if((zone_get_status(zone_desc) & ZONE_STATUS_TEMPLATE_SOURCE_FILE) != 0)
     {
-        log_debug("zone save: %{dnsname} source is a template", zone_desc->origin);
-        zone_desc->status_flags &= ~(ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
+        log_info("zone save: %{dnsname} source is a template", zone_desc->origin);
+        zone_clear_status(zone_desc, ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
         if(desclockowner != 0)
         {
             zone_unlock(zone_desc, desclockowner);
@@ -144,10 +144,11 @@ database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonel
         return ERROR;
     }
     
-    if((zone_desc->status_flags & must_be_off) != 0)
+    if((zone_get_status(zone_desc) & must_be_off) != 0)
     {
-        log_debug("zone save: %{dnsname} can't be saved at this time (%08x & %08x = %08x)", zone_desc->origin, zone_desc->status_flags, must_be_off, zone_desc->status_flags & must_be_off);
-        zone_desc->status_flags &= ~(ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
+        log_info("zone save: %{dnsname} can't be saved at this time (%08x & %08x = %08x)",
+                zone_desc->origin, zone_get_status(zone_desc), must_be_off, zone_get_status(zone_desc) & must_be_off);
+        zone_clear_status(zone_desc, ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
         if(desclockowner != 0)
         {
             zone_unlock(zone_desc, desclockowner);
@@ -156,7 +157,7 @@ database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonel
         return ERROR;
     }
     
-    zone_desc->status_flags |= ZONE_STATUS_SAVING_ZONE_FILE;
+    zone_set_status(zone_desc, ZONE_STATUS_SAVING_ZONE_FILE);
     
     zdb *db = g_config->database;
 
@@ -180,24 +181,24 @@ database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonel
             char file_name[PATH_MAX];    
             snformat(file_name, sizeof(file_name), "%s/%s", g_config->data_path, zone_desc->file_name);
     
-            log_debug("zone save: %{dnsname} saving zone to file '%s'", zone_desc->origin, file_name);
+            log_info("zone save: %{dnsname} saving zone to file '%s'", zone_desc->origin, file_name);
             
-            ret = zdb_zone_write_text_file(zone, file_name, FALSE);
+            ret = zdb_zone_write_text_file(zone, file_name, FALSE); // zone is locked
             
             if(ISOK(ret))
             {
-                zdb_zone_getserial(zone, &zone_desc->stored_serial);
-                zone_desc->status_flags &= ~ZONE_STATUS_MODIFIED;
+                zdb_zone_getserial(zone, &zone_desc->stored_serial); // zone is locked
+                zone_clear_status(zone_desc, ZONE_STATUS_MODIFIED);
                 
-                bool clear_journal = zone_desc->status_flags & ZONE_STATUS_MUST_CLEAR_JOURNAL;
+                bool clear_journal = zone_get_status(zone_desc) & ZONE_STATUS_MUST_CLEAR_JOURNAL;
                 
                 if(clear_journal)
                 {
                     journal_truncate(zone_desc->origin);
-                    zone_desc->status_flags &= ~ZONE_STATUS_MUST_CLEAR_JOURNAL;
+                    zone_clear_status(zone_desc, ZONE_STATUS_MUST_CLEAR_JOURNAL);
                 }
                 
-                log_debug("zone save: %{dnsname} saved zone to file '%s'", zone_desc->origin, file_name);
+                log_info("zone save: %{dnsname} saved zone to file '%s'", zone_desc->origin, file_name);
             }
             else
             {
@@ -221,7 +222,7 @@ database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonel
     
     // zdb_unlock(db, ZDB_MUTEX_READER);
     
-    zone_desc->status_flags &= ~(ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
+    zone_clear_status(zone_desc, ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
     
     if(desclockowner != 0)
     {
@@ -283,20 +284,20 @@ database_service_zone_save(zone_desc_s *zone_desc)
     
     // locks the descriptor with the saveer identity
     
-    if(zone_desc->status_flags & (ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE))
+    if(zone_get_status(zone_desc) & (ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE))
     {
         // already saving
         
         zone_desc_log(MODULE_MSG_HANDLE, MSG_DEBUG1, zone_desc, "database_service_zone_save");
         
-        log_err("database_service_zone_save: '%{dnsname}' already saving", origin);
+        log_debug("database_service_zone_save: '%{dnsname}' already saving", origin);
         
         zone_unlock(zone_desc, ZONE_LOCK_SAVE);
                         
         return ERROR;
     }
     
-    zone_desc->status_flags |= ZONE_STATUS_SAVETO_ZONE_FILE;
+    zone_set_status(zone_desc, ZONE_STATUS_SAVETO_ZONE_FILE);
 
     zone_acquire(zone_desc);
     database_service_zone_save_queue_thread(database_service_zone_save_thread, zone_desc, NULL, "database_zone_save_thread");

@@ -402,6 +402,9 @@ static inline void smp_int_destroy(smp_int *v)
 #define GROUP_MUTEX_PRIVATE 0x80    // THIS IS A MASK, ADD IT TO THE OWNER ID
 #define GROUP_MUTEX_DESTROY 0xfe
 
+#define GROUP_MUTEX_LOCKMASK_FLAG 0x7f
+#define GROUP_MUTEX_EXCLUSIVE_FLAG 0x80
+
 typedef struct group_mutex_t group_mutex_t;
 
 struct group_mutex_t
@@ -415,12 +418,13 @@ struct group_mutex_t
 #endif
     volatile s32 count;
     volatile u8 owner;
+    volatile u8 reserved_owner;
 };
 
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
-#define GROUP_MUTEX_INITIALIZER {MUTEX_INITIALIZER, COND_INITIALIZER, NULL, 0, 0, 0, 0}
+#define GROUP_MUTEX_INITIALIZER {MUTEX_INITIALIZER, COND_INITIALIZER, NULL, 0, 0, 0, 0, 0}
 #else
-#define GROUP_MUTEX_INITIALIZER {MUTEX_INITIALIZER, COND_INITIALIZER, 0, 0}
+#define GROUP_MUTEX_INITIALIZER {MUTEX_INITIALIZER, COND_INITIALIZER, 0, 0, 0}
 #endif
 
 void group_mutex_init(group_mutex_t* mtx);
@@ -430,6 +434,10 @@ void group_mutex_unlock(group_mutex_t *mtx, u8 owner);
 bool group_mutex_transferlock(group_mutex_t *mtx, u8 owner, u8 newowner);
 void group_mutex_destroy(group_mutex_t* mtx);
 bool group_mutex_islocked(group_mutex_t* mtx);
+
+void group_mutex_double_lock(group_mutex_t *mtx, u8 owner, u8 secondary_owner);
+void group_mutex_double_unlock(group_mutex_t *mtx, u8 owner, u8 secondary_owner);
+void group_mutex_exchange_locks(group_mutex_t *mtx, u8 owner, u8 secondary_owner);
 
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
 void group_mutex_locked_set_monitor();

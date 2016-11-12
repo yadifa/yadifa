@@ -79,6 +79,7 @@ struct threaded_ringbuffer_cw
 void  threaded_ringbuffer_cw_init(threaded_ringbuffer_cw *queue, int max_size);
 void  threaded_ringbuffer_cw_finalize(threaded_ringbuffer_cw *queue);
 void  threaded_ringbuffer_cw_enqueue(threaded_ringbuffer_cw *queue,void* constant_pointer);
+void  threaded_ringbuffer_cw_enqueue_set(threaded_ringbuffer_cw *queue, void **constant_pointer_array, int count);
 bool  threaded_ringbuffer_cw_try_enqueue(threaded_ringbuffer_cw *queue,void* constant_pointer);
 void* threaded_ringbuffer_cw_peek(threaded_ringbuffer_cw *queue);
 void* threaded_ringbuffer_cw_try_peek(threaded_ringbuffer_cw *queue);

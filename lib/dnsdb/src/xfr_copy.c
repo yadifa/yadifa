@@ -91,7 +91,7 @@ xfr_copy_create_file(output_stream *xfrs, char *file_path, u32 file_path_len, co
      * We finally can create the file
      */
 
-    ret = file_output_stream_create(xfrs, file_path, 0644);
+    ret = file_output_stream_create_excl(xfrs, file_path, 0644);
 
     /*
      * Do NOT use buffers yet.

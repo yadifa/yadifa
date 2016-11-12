@@ -227,9 +227,6 @@ thread_pool_thread(void *args)
      */
 
     thread_descriptor_s* desc = (thread_descriptor_s*)args;
-    
-
-    
     threaded_queue *queue = &desc->pool->queue;
 
 #if VERBOSE_THREAD_LOG > 1
@@ -569,6 +566,9 @@ thread_pool_debug_dump(struct thread_pool_s* tp)
 
 /**
  * Enqueues a function to be executed by a thread pool
+ * Do NOT use this function for concurrent producer-consumer spawning on the same pool as
+ * you will end up with a situation where no slots are available for consumers and everybody is waiting.
+ * Instead, when spawning a group, use thread_pool_enqueue_calls
  * 
  * @param tp            the thread pool
  * @param func          the function
@@ -615,6 +615,60 @@ thread_pool_enqueue_call(struct thread_pool_s* tp, thread_pool_function func, vo
 
     threaded_queue_enqueue(&tp->queue, task);
 
+    return SUCCESS;
+}
+
+/**
+ * Enqueues a fixed amount of tasks in one go.
+ * This new feature helps fixing a starvation issue when allocating consumers
+ * and producers from a pool in a random order for several tasks.
+ * 
+ * @param tp
+ * @param tasks
+ * @param tasks_count
+ * @return 
+ */
+
+ya_result
+thread_pool_enqueue_calls(struct thread_pool_s *tp, thread_pool_enqueue_call_item *tasks_parameter, int tasks_count)
+{
+    // two conditions have to be met
+    // enough threads should be waiting to work
+    // enough slots should be available in the queue
+    
+    // lock pool
+    // cond wait until enough slots are available (pool unlocked while waiting)
+    // enqueue all tasks
+    // unlock pool
+    
+    // if the enqueue one call follows the same rule, it should ensure all tasks
+    // are executed together
+    
+    //threaded_ringbuffer_cw_enqueue_set(&tp->queue, void **constant_pointer_array, int count)
+    
+    threaded_queue_task *tasks[tasks_count];
+    for(int i = 0 ; i < tasks_count; ++i)
+    {
+        threaded_queue_task *task;
+        ZALLOC_OR_DIE(threaded_queue_task*, task, threaded_queue_task, THREADPOOL_TAG);
+        tasks[i] = task;
+
+        task->function = tasks_parameter[i].func;
+        task->parm = tasks_parameter[i].parm;
+        task->counter = tasks_parameter[i].counter;
+
+        if(tasks_parameter[i].categoryname == NULL)
+        {
+            task->categoryname = "anonymous";
+        }
+        else
+        {
+            task->categoryname = tasks_parameter[i].categoryname;
+        }
+    }
+
+    threaded_ringbuffer_cw_enqueue_set(&tp->queue, (void**)tasks, tasks_count);
+    
     return SUCCESS;
 }
 
