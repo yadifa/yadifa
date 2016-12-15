@@ -275,7 +275,7 @@ journal_init(u32 mru_size)
 
         journal_mru_size = MAX(MIN(mru_size, ZDB_JOURNAL_FD_MAX), ZDB_JOURNAL_FD_MIN);
         
-        log_debug("journal: intialised with an MRU of %i slots", journal_mru_size);
+        log_debug("journal: initialised with an MRU of %i slots", journal_mru_size);
 
         journal_initialised = TRUE;
     }

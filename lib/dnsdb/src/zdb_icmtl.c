@@ -953,7 +953,7 @@ zdb_icmtl_replay(zdb_zone *zone)
         
         if((replay_state & ZDB_ICMTL_REPLAY_COMMIT) != 0)
         {
-            log_info("journal: %{dnsname}: commiting changes", zone->origin);
+            log_info("journal: %{dnsname}: committing changes", zone->origin);
             u64 ts_start = timeus();
             zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
             bytearray_input_stream_init_const(&bais, bytearray_output_stream_buffer(&baos), bytearray_output_stream_size(&baos));
@@ -970,19 +970,19 @@ zdb_icmtl_replay(zdb_zone *zone)
             
             if(ts_delta < 1000)
             {            
-                log_info("journal: %{dnsname}: commited changes (%lluus)", zone->origin, ts_delta);
+                log_info("journal: %{dnsname}: committed changes (%lluus)", zone->origin, ts_delta);
             }
             else if(ts_delta < 1000000)
             {
                 double ts_delta_s = ts_delta;
                 ts_delta_s /= 1000.0;
-                log_info("journal: %{dnsname}: commited changes (%5.2fms)", zone->origin, ts_delta_s);
+                log_info("journal: %{dnsname}: committed changes (%5.2fms)", zone->origin, ts_delta_s);
             }
             else
             {
                 double ts_delta_s = ts_delta;
                 ts_delta_s /= 1000000.0;
-                log_info("journal: %{dnsname}: commited changes (%5.2fs)", zone->origin, ts_delta_s);
+                log_info("journal: %{dnsname}: committed changes (%5.2fs)", zone->origin, ts_delta_s);
             }
                     
             // the current page has been processed

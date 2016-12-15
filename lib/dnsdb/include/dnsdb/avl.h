@@ -125,7 +125,7 @@ F# 44  Value= 1134903170  Items= 2971215072  Log2= 31.4684058927
 F# 45  Value= 1836311903  Items= 4807526975  Log2= 32.1626478065
  */
 
-#define AVL_MAX_DEPTH 40    /* Covers more than enough (433494436 items) */
+#define AVL_MAX_DEPTH 52 // 139*10^9 items max (worst case)
 
 struct avl_leftrightchildren
 {

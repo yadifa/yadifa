@@ -173,7 +173,7 @@ journal_cjf_page_output_stream_next(output_stream *stream)
     }
     else
     {
-        log_debug2("cjf: PAGE stream is emtpy");
+        log_debug2("cjf: PAGE stream is empty");
     }
 }
 

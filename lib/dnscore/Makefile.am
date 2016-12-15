@@ -109,7 +109,6 @@ libdnscore_la_SOURCES = \
 	src/message-buffer.c \
 	src/message-viewer.c \
 	src/message.c \
-	src/message_print_format_dig.c \
 	src/message_verify_rrsig.c \
     src/message_dnsupdate.c \
 	src/mt_output_stream.c \

@@ -32,7 +32,7 @@ dnl
 dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 6237 $])
+AC_REVISION([$Revision: 6698 $])
 AC_INIT([dnscore],m4_esyscmd([svn info 2> /dev/null | grep 'Last Changed Rev: ' | sed -re 's/.*: (.*)/Revision: \1 $/' -e 's/^/$/' >> revision.txt;echo $(cat VERSION)-$(grep \$Revision: * | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[bugreport@yadifa.eu])
 
 echo
@@ -128,6 +128,10 @@ AC_PTHREAD_SPINLOCK_CHECK
 AC_PTHREAD_SETNAME_NP_CHECK
 AC_PTHREAD_SETAFFINITY_NP_CHECK
 AC_TIMEGM_CHECK
+
+AC_YADIFA_ENABLE_SSL
+
+AC_YADIFA_ADD_SSL
 
 AC_YADIFA_FEATURES
 

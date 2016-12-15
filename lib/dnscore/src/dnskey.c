@@ -976,8 +976,6 @@ dnssec_key_get_tag_const(const dnssec_key *key)
         yassert(rdata_size <= 2048);
         
         tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size);
-        
-
     }
     
     return tag;
@@ -1804,9 +1802,8 @@ dnskey_is_expired(const dnssec_key *key)
 int
 dnskey_get_size(const dnssec_key *key)
 {
-    int rdata_size = key->vtbl->dnskey_key_rdatasize(key);
-    rdata_size -= 4;
-    return rdata_size << 3;
+    int bits_size = key->vtbl->dnskey_key_size(key);
+    return bits_size;
 }
 
 u16

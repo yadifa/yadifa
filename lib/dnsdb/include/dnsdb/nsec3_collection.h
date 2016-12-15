@@ -167,10 +167,10 @@ struct nsec3_node
  *
  * Depth 0 is one node.
  *
- * Worst case : N is enough for sum[n = 0,N](Fn) where F is Fibonacci
+ * Worst case : N is enough for sum[n = 0,N](Fn) where Fn is Fibonacci(n+1)
  * Best case : N is enough for (2^(N+1))-1
  */
-#define AVL_MAX_DEPTH   40 /* 64 */
+#define AVL_MAX_DEPTH 52 // 139*10^9 items max (worst case)
 
 /*
  * The previx that will be put in front of each function name

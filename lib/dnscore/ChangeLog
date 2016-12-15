@@ -29,6 +29,13 @@
 # 
 ################################################################################
 
+20161215:
+    YADIFA 2.2.3
+        Removed code triggering an ICE on ppc64le
+        Fixes an issue with the policies where the key size would not be matched
+        Fixes an issue with the generation of RSA keys that would be rejected by the policies
+        Included patches from the community about typos and gcc ICE on ppc64le.
+
 20161108:
     YADIFA 2.2.2
         OpenSSL 1.1.0 crypto API support

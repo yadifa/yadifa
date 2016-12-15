@@ -1160,6 +1160,7 @@ zone_policy_key_roll_matches(const struct dnssec_policy_key_suite *kr, const dns
         if((dnssec_key_get_flags(key) & kr->key->flags) == kr->key->flags)
         {
             int key_size = dnskey_get_size(key);
+            
             if((key_size - kr->key->size) < 48)
             {
                 // algorithm, flags and size are matching
@@ -1171,13 +1172,11 @@ zone_policy_key_roll_matches(const struct dnssec_policy_key_suite *kr, const dns
                    (key->epoch_inactive != 0) &&
                    (key->epoch_delete != 0))
                 {
-#ifdef DEBUG
-                    log_debug("dnssec-policy: %s: %s: key %05i/%i timings: %T %T %T %T %T",
+                    log_debug1("dnssec-policy: %s: %s: key %05i/%i timings: %T %T %T %T %T c",
                             key->origin,
                             kr->name,
                             dnssec_key_get_tag_const(key), ntohs(key->flags),
                             key->epoch_created, key->epoch_publish, key->epoch_activate, key->epoch_inactive, key->epoch_delete);
-#endif
                     
                     zone_policy_table_s key_tbl;
                     // kr->roll->time_table.created.type
@@ -1199,18 +1198,44 @@ zone_policy_key_roll_matches(const struct dnssec_policy_key_suite *kr, const dns
                                         
                     bool match = (dc < KEY_POLICY_EPOCH_MATCH_MARGIN && dp < KEY_POLICY_EPOCH_MATCH_MARGIN && da < KEY_POLICY_EPOCH_MATCH_MARGIN && di < KEY_POLICY_EPOCH_MATCH_MARGIN && dd < KEY_POLICY_EPOCH_MATCH_MARGIN);
                     
-#ifdef DEBUG
-                    log_debug("dnssec-policy: %s: %s: key %05i/%i expects: %T %T %T %T %T : %s",
+                    log_debug1("dnssec-policy: %s: %s: key %05i/%i expects: %T %T %T %T %T : %s",
                             key->origin,
                             kr->name,
                             dnssec_key_get_tag_const(key), ntohs(key->flags),
                             key_created, key_publish, key_activate, key_inactive, key_delete,
                             ((match)?"MATCH":"DIFFERS"));
-#endif
                     return match;
                 }
+                else
+                {
+                    log_debug1("dnssec-policy: %s: %s: key %05i/%i has no time table",
+                            key->origin,
+                            kr->name,
+                            dnssec_key_get_tag_const(key), ntohs(key->flags));
+                }
+            }
+            else
+            {
+                log_debug1("dnssec-policy: %s: %s: key %05i/%i size of %i differs too much from the expected %i",
+                            key->origin,
+                            kr->name,
+                            dnssec_key_get_tag_const(key), ntohs(key->flags), key_size, kr->key->size);
             }
         }
+        else
+        {
+            log_debug1("dnssec-policy: %s: %s: key %05i/%i flags do not match the expected %i",
+                            key->origin,
+                            kr->name,
+                            dnssec_key_get_tag_const(key), ntohs(key->flags), kr->key->flags);
+        }
+    }
+    else
+    {
+        log_debug1("dnssec-policy: %s: %s: key %05i/%i algorithm do not match the expected %i",
+                            key->origin,
+                            kr->name,
+                            dnssec_key_get_tag_const(key), ntohs(key->flags), kr->key->algorithm);
     }
     
     return FALSE;
@@ -2070,7 +2095,7 @@ zone_policy_process(zone_desc_s *zone_desc)
 
     if(dnssec_policy_queue_has_command_type(zone_desc->origin, DNSSEC_POLICY_COMMAND_INIT))
     {
-        log_debug("dnssec-policy: %{dnsname} is already marked for full generation");
+        log_debug("dnssec-policy: %{dnsname} is already marked for full generation", zone_desc->origin);
         return SUCCESS;
     }
     
@@ -2082,8 +2107,17 @@ zone_policy_process(zone_desc_s *zone_desc)
     
     zone_lock(zone_desc, ZONE_LOCK_READONLY);
     zdb_zone *zone = zone_desc->loaded_zone;
-    zdb_zone_acquire(zone);
-    zone_unlock(zone_desc, ZONE_LOCK_READONLY);
+    if(zone != NULL)
+    {
+        zdb_zone_acquire(zone);
+        zone_unlock(zone_desc, ZONE_LOCK_READONLY);
+    }
+    else
+    {
+        log_warn("dnssec-policy: %{dnsname}: settings are not linked to a loaded zone", zone_desc->origin);
+        zone_unlock(zone_desc, ZONE_LOCK_READONLY);
+        return ERROR;
+    }
     
     if(zdb_zone_isvalid(zone))
     {        
@@ -2235,9 +2269,7 @@ zone_policy_process(zone_desc_s *zone_desc)
         
         dnskey_release(key);
     }
-    
 
-    
     /*
      * sort-out the remaining keys
      * trigger the generation of keys
@@ -2262,8 +2294,9 @@ zone_policy_process(zone_desc_s *zone_desc)
             // ensure we have continuity
             // start with a base period
 
-            //s64 begin_period;
             dnssec_key *last_key = NULL;
+            s64 begin_period;
+            s64 next_period;
             s64 end_period;
 
             {
@@ -2277,7 +2310,8 @@ zone_policy_process(zone_desc_s *zone_desc)
                         last_key->epoch_created, last_key->epoch_publish, last_key->epoch_activate, last_key->epoch_inactive, last_key->epoch_delete);
 #endif
                 
-                //begin_period = last_key->epoch_activate;
+                begin_period = last_key->epoch_activate;
+                next_period = begin_period;
                 end_period = last_key->epoch_inactive;
             }
             
@@ -2286,7 +2320,6 @@ zone_policy_process(zone_desc_s *zone_desc)
             for(int i = 1; i <= ptr_vector_last_index(&key_roll_keys[ksi]); ++i)
             {
                 dnssec_key *key = (dnssec_key*)ptr_vector_get(&key_roll_keys[ksi], i);
-                
 #ifdef DEBUG
                 log_debug("dnssec-policy: %s: %s: key %05i/%i timings: %T %T %T %T %T",
                         key->origin,
@@ -2294,6 +2327,7 @@ zone_policy_process(zone_desc_s *zone_desc)
                         dnssec_key_get_tag_const(key), ntohs(key->flags),
                         key->epoch_created, key->epoch_publish, key->epoch_activate, key->epoch_inactive, key->epoch_delete);
 #endif
+                next_period = key->epoch_activate;
                 
                 // ensure the key chains with this interval
                 if(key->epoch_activate > end_period /*|| key->epoch_inactive < begin_period irrelevant because of the sort */)
@@ -2331,11 +2365,25 @@ zone_policy_process(zone_desc_s *zone_desc)
             
             ptr_vector_destroy(&key_roll_keys[ksi]);
             
-            log_debug("dnssec-policy: %{dnsname}: %s: last key will be inactive at %T", zone_desc->origin, kr->name, end_period);
+            log_debug("dnssec-policy: %{dnsname}: %s: covered from %T to %T, last key activates at %T", zone_desc->origin, kr->name, begin_period, end_period, next_period);
             
-            dnssec_policy_queue_add_generate_key_create_at(zone_desc, kr, last_key->epoch_created);
-
-            // dnssec_policy_queue_add_generate_key_active_at(zone_desc, kr, end_period);
+            time_t now = time(NULL);
+            
+            if(next_period <= now)
+            {            
+                if(kr->roll->time_table.created.type.type == ZONE_POLICY_RELATIVE)
+                {
+                    dnssec_policy_queue_add_generate_key_create_at(zone_desc, kr, next_period);
+                }
+                else if(kr->roll->time_table.created.type.type == ZONE_POLICY_RULE)
+                {
+                    dnssec_policy_queue_add_generate_key_active_at(zone_desc, kr, end_period);
+                }
+                else
+                {
+                    log_err("dnssec-policy: %{dnsname}: %s: is not supported by this version of the policies", zone_desc->origin, kr->name);
+                }
+            }
             
             dnskey_release(last_key);
         }

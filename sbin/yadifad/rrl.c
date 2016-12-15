@@ -483,7 +483,7 @@ rrl_payload_copy(rrl_item_s *a, const rrl_item_s *b)
  *
  * Depth 0 is one node.
  *
- * Worst case : N is enough for sum[n = 0,N](Fn) where F is Fibonacci
+ * Worst case : N is enough for sum[n = 0,N](Fn) where Fn is Fibonacci(n+1)
  * Best case : N is enough for (2^(N+1))-1
  */
 #define AVL_MAX_DEPTH   32 /* 9227464 items max */

@@ -398,16 +398,32 @@ dnskey_ecdsa_dnskey_public_store(const dnssec_key* key, u8* rdata)
     return len;
 }
 
+static u32
+dnskey_ecdsa_size(const dnssec_key* key)
+{
+    const EC_GROUP *group = EC_KEY_get0_group(key->key.ec);
+    const EC_POINT *point = EC_KEY_get0_public_key(key->key.ec);    
+    BN_CTX *ctx = BN_CTX_new();
+    u8 tmp[512];
+    
+    size_t size = EC_POINT_point2oct(group, point, POINT_CONVERSION_UNCOMPRESSED, tmp, sizeof(tmp), ctx);
+    
+    assert((size > 0) && (tmp[0] == 4));
+        
+    BN_CTX_free(ctx);
+    
+    return (size - 1) << 2;
+}
+
 /**
  * Returns the size in byte of the public key.
- * @todo 20160209 edf -- This is very inneficient.  Have to find a better way than writing the key.
  * 
  * @param ecdsa
  * @return 
  */
 
 static u32
-dnskey_ecdsa_public_getsize(const EC_KEY* ecdsa)
+dnskey_ecdsa_public_size(const EC_KEY* ecdsa)
 {
     const EC_GROUP *group = EC_KEY_get0_group(ecdsa);
     const EC_POINT *point = EC_KEY_get0_public_key(ecdsa);    
@@ -424,9 +440,9 @@ dnskey_ecdsa_public_getsize(const EC_KEY* ecdsa)
 }
 
 static u32
-dnskey_ecdsa_dnskey_public_getsize(const dnssec_key* key)
+dnskey_ecdsa_dnskey_rdatasize(const dnssec_key* key)
 {
-    u32 size = dnskey_ecdsa_public_getsize(key->key.ec) + 4;
+    u32 size = dnskey_ecdsa_public_size(key->key.ec) + 4;
     return size;
 }
 
@@ -499,11 +515,12 @@ dnskey_ecdsa_print_fields(dnssec_key *key, output_stream *os)
 static const dnssec_key_vtbl ecdsa_vtbl = {
     dnskey_ecdsa_signdigest,
     dnskey_ecdsa_verifydigest,
-    dnskey_ecdsa_dnskey_public_getsize,
+    dnskey_ecdsa_dnskey_rdatasize,
     dnskey_ecdsa_dnskey_public_store,
     dnskey_ecdsa_free,
     dnskey_ecdsa_equals,
     dnskey_ecdsa_print_fields,
+    dnskey_ecdsa_size,
     "ECDSA"
 };
 
@@ -525,7 +542,7 @@ dnskey_ecdsa_initinstance(EC_KEY *ecdsa, u8 algorithm, u16 flags, const char *or
     memset(rdata, 0xff, sizeof(rdata));
 #endif
 
-    u32 public_key_size = dnskey_ecdsa_public_getsize(ecdsa);
+    u32 public_key_size = dnskey_ecdsa_public_size(ecdsa);
 
     if(public_key_size > DNSSEC_MAXIMUM_KEY_SIZE_BYTES)
     {
@@ -653,7 +670,7 @@ dnskey_ecdsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
         {
             // at this point, yecdsa has been emptied
             
-            u32 rdata_size = dnskey_ecdsa_public_getsize(ecdsa);
+            u32 rdata_size = dnskey_ecdsa_public_size(ecdsa);
 
             u16 tag;
 

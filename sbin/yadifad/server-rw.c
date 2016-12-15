@@ -1329,7 +1329,10 @@ server_rw_query_loop()
                 }
                 else
                 {
-                    log_warn("could not close %i: socket is not a datagram", ctx->sockfd);
+                    if(ctx->sockfd >= 0)
+                    {
+                        log_warn("could not close %i: socket is not a datagram", ctx->sockfd);
+                    }
                 }
                 
                 ctx->sockfd = -1;

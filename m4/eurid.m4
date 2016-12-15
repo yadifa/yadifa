@@ -298,6 +298,12 @@ case "$(uname -m)" in
 		CPU_UNKNOWN=0
 		cpu_intel_compatible=1
 		;;
+    ppc64le)
+
+        dnl https://github.com/asciiprod/yadifa/blob/master/debian/patches/fix-ppc64el_ftbfs.patch
+
+        cpu_power_compatible=1
+        ;;
 	*)
 		;;
 esac
@@ -625,6 +631,13 @@ then
 			CCOPTIMISATIONFLAGS=-O3
 		fi
 	fi
+
+    dnl https://github.com/asciiprod/yadifa/blob/master/debian/patches/fix-ppc64el_ftbfs.patch
+
+    if [[ $cpu_power_compatible -eq 1 ]]
+    then
+        CCOPTIMISATIONFLAGS=-O2
+    fi
 
     AM_CONDITIONAL([USES_ICC], [false])
     AM_CONDITIONAL([USES_GCC], [true])

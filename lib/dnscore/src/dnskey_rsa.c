@@ -405,7 +405,7 @@ dnskey_rsa_public_store(RSA* rsa, u8* output_buffer)
 
     const BIGNUM* exponent;
     const BIGNUM* modulus;
-    RSA_get0_key(rsa, &exponent, &modulus, NULL);
+    RSA_get0_key(rsa, &modulus, &exponent, NULL);
 
     n = BN_num_bytes(exponent);
 
@@ -445,11 +445,22 @@ dnskey_rsa_dnskey_public_store(const dnssec_key *key, u8 *rdata)
 }
 
 static u32
-dnskey_rsa_public_getsize(const RSA* rsa)
+dnskey_rsa_size(const dnssec_key* key)
+{
+    const BIGNUM* rsa_n;
+    RSA_get0_key(key->key.rsa, &rsa_n, NULL, NULL);
+    
+    u32 m_size = BN_num_bytes(rsa_n);
+
+    return m_size << 3;
+}
+
+static u32
+dnskey_rsa_public_size(const RSA* rsa)
 {
     const BIGNUM* rsa_e;
     const BIGNUM* rsa_n;
-    RSA_get0_key(rsa, &rsa_e, &rsa_n, NULL);
+    RSA_get0_key(rsa, &rsa_n, &rsa_e, NULL);
     
     u32 e_size = BN_num_bytes(rsa_e);
     u32 m_size = BN_num_bytes(rsa_n);
@@ -458,9 +469,9 @@ dnskey_rsa_public_getsize(const RSA* rsa)
 }
 
 static u32
-dnskey_rsa_dnskey_public_getsize(const dnssec_key* key)
+dnskey_rsa_dnskey_rdatasize(const dnssec_key* key)
 {
-    u32 size = dnskey_rsa_public_getsize(key->key.rsa) + 4;
+    u32 size = dnskey_rsa_public_size(key->key.rsa) + 4;
     return size;
 }
 
@@ -502,8 +513,8 @@ dnskey_rsa_equals(const dnssec_key* key_a, const dnssec_key* key_b)
             const BIGNUM* a_rsa_n;
             const BIGNUM* b_rsa_e;
             const BIGNUM* b_rsa_n;
-            RSA_get0_key(a_rsa, &a_rsa_e, &a_rsa_n, NULL);            
-            RSA_get0_key(b_rsa, &b_rsa_e, &b_rsa_n, NULL);
+            RSA_get0_key(a_rsa, &a_rsa_n, &a_rsa_e, NULL);            
+            RSA_get0_key(b_rsa, &b_rsa_n, &b_rsa_e, NULL);
 
             if(BN_cmp(a_rsa_e, b_rsa_e) == 0)
             {
@@ -519,7 +530,7 @@ dnskey_rsa_equals(const dnssec_key* key_a, const dnssec_key* key_b)
 }
 
 ya_result
-dnskey_rsa_print_fields(dnssec_key *key, output_stream *os)
+dnskey_rsa_private_print_fields(dnssec_key *key, output_stream *os)
 {
     struct dnskey_rsa_const yrsa;
     dnskey_rsa_from_rsa(&yrsa, key->key.rsa);
@@ -533,11 +544,12 @@ static const dnssec_key_vtbl rsa_vtbl =
 {
     dnskey_rsa_signdigest,
     dnskey_rsa_verifydigest,
-    dnskey_rsa_dnskey_public_getsize,
+    dnskey_rsa_dnskey_rdatasize,
     dnskey_rsa_dnskey_public_store,
     dnskey_rsa_free,
     dnskey_rsa_equals,
-    dnskey_rsa_print_fields,
+    dnskey_rsa_private_print_fields,
+    dnskey_rsa_size,
     "RSA"
 };
 
@@ -559,7 +571,7 @@ dnskey_rsa_initinstance(RSA* rsa, u8 algorithm, u16 flags, const char* origin, d
     memset(rdata, 0xff, sizeof(rdata));
 #endif
 
-    u32 rdata_size = dnskey_rsa_public_getsize(rsa);
+    u32 rdata_size = dnskey_rsa_public_size(rsa);
 
     if(rdata_size > DNSSEC_MAXIMUM_KEY_SIZE_BYTES)
     {
@@ -673,7 +685,7 @@ dnskey_rsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
         
         RSA *rsa = key->key.rsa;
 
-        u32 rdata_size = dnskey_rsa_public_getsize(rsa);
+        u32 rdata_size = dnskey_rsa_public_size(rsa);
         
         u16 tag;
         

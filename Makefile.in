@@ -353,6 +353,7 @@ NM = @NM@
 NMEDIT = @NMEDIT@
 OBJDUMP = @OBJDUMP@
 OBJEXT = @OBJEXT@
+OPENSSL = @OPENSSL@
 OTOOL = @OTOOL@
 OTOOL64 = @OTOOL64@
 PACKAGE = @PACKAGE@
@@ -910,19 +911,19 @@ uninstall-am:
 .PRECIOUS: Makefile
 
 
-release:
+release: features
 	for m in $(SUBDIRS); do $(MAKE) -C $$m release;done
 
-profile:
+profile: features
 	for m in $(SUBDIRS); do $(MAKE) -C $$m profile;done
 
-debug:
+debug: features
 	for m in $(SUBDIRS); do $(MAKE) -C $$m debug;done
 
 showsubdirs:
 	for m in $(SUBDIRS); do echo $$m; done
 
-features:
+features: config.log
 	for m in $(SUBDIRS); do $(MAKE) -C $$m features;done
 
 release-install: release install

@@ -52,19 +52,19 @@ endif
 
 SUBDIRS += etc doc var
 
-release:
+release: features
 	for m in $(SUBDIRS); do $(MAKE) -C $$m release;done
 
-profile:
+profile: features
 	for m in $(SUBDIRS); do $(MAKE) -C $$m profile;done
 
-debug:
+debug: features
 	for m in $(SUBDIRS); do $(MAKE) -C $$m debug;done
 
 showsubdirs:
 	for m in $(SUBDIRS); do echo $$m; done
 
-features:
+features: config.log
 	for m in $(SUBDIRS); do $(MAKE) -C $$m features;done
 
 

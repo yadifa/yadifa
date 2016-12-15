@@ -51,8 +51,8 @@
 #include <dnscore/digest.h>
 #include <dnscore/mutex.h>
 
-#define DNSSEC_MINIMUM_KEY_SIZE     512
-#define DNSSEC_MAXIMUM_KEY_SIZE     (8192 + 128)
+#define DNSSEC_MINIMUM_KEY_SIZE     512             // bits
+#define DNSSEC_MAXIMUM_KEY_SIZE     (8192 + 128)    // bits
 
 #define DNSSEC_DEFAULT_KEYSTORE_PATH    "."
 
@@ -195,6 +195,7 @@ typedef ya_result dnssec_key_sign_digest_method(const dnssec_key *key, const u8 
 typedef bool dnssec_key_verify_digest_method(const dnssec_key *key, const u8 *digest, u32 digest_len, const u8 *signature, u32 signature_len);
 typedef bool dnssec_key_equals_method(const dnssec_key *key_a, const dnssec_key *key_b);
 typedef ya_result dnssec_key_private_print_fields_method(dnssec_key *key, output_stream *os);
+typedef u32 dnskey_key_size_method(const dnssec_key *key);
 
 struct dnssec_key_vtbl
 {
@@ -205,7 +206,7 @@ struct dnssec_key_vtbl
     dnskey_key_free_method *dnskey_key_free;
     dnssec_key_equals_method *dnssec_key_equals;
     dnssec_key_private_print_fields_method *dnssec_key_print_fields;
-    
+    dnskey_key_size_method *dnskey_key_size;
     const char *__class__;
 };
 

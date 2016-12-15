@@ -359,7 +359,7 @@ Response Rate Limiting
     # Number of identical responses per second before responses are being limited
     responses\-per\-second    5
 
-    # Number of errors per second before reponses are being limited
+    # Number of errors per second before responses are being limited
     errors\-per\-second       5
 
     # Random slip parameter
@@ -646,7 +646,7 @@ Loggers
 .PP
 Logging input configurations: 
 .PP
-The "bundle" name is predifined: database, dnssec, server, statistics, system, zone.
+The "bundle" name is predefined: database, dnssec, server, statistics, system, zone.
 .br
 The "debuglevel" uses the same names as syslog or "*" or "all" to filter the input.
 .br

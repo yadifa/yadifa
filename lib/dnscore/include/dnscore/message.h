@@ -418,23 +418,6 @@ ya_result message_print_buffer(output_stream *os, const u8 *buffer, u16 length);
 
 u16 message_edns0_getmaxsize();
 
-
-ya_result message_print_format_multiline(output_stream *os_, const u8 *buffer, u16 length, u16 view_mode_with, long time_duration);
-ya_result message_print_format_short(output_stream *os_, const u8 *buffer, u16 length, u16 view_mode_with, long time_duration);
-ya_result message_print_format_wire(output_stream *os_, const u8 *buffer, u16 length, u16 view_mode_with, long time_duration);
-ya_result message_print_format_wire_ext(output_stream *os_, const u8 *buffer, u16 length, u16 view_mode_with, long time_duration);
-
-ya_result message_print_format_dig(output_stream *os_, const u8 *buffer, u16 length, u16 view_mode_with, long time_duration);
-ya_result message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u16 length, u16 view_mode_with);
-
-ya_result message_print_format_json(output_stream *os_, const u8 *buffer, u16 length, u16 view_mode_with, long time_duration);
-ya_result message_print_format_json_buffer(output_stream *os_, const u8 *buffer, u16 length, u16 view_mode_with);
-
-ya_result message_print_format_parse(output_stream *os_, const u8 *buffer, u16 length, u16 view_mode_with, long time_duration);
-ya_result message_print_buffer_format_parse(output_stream *os_, const u8 *buffer, u16 length, u16 view_mode_with);
-
-ya_result message_print_format_xml(output_stream *os_, const u8 *buffer, u16 length, u16 view_mode_with, long time_duration);
-ya_result message_print_format_xml_buffer(output_stream *os_, const u8 *buffer, u16 length, u16 view_mode_with);
 #ifdef __cplusplus
 }
 #endif

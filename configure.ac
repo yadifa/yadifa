@@ -32,7 +32,7 @@ dnl
 dnl ############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 6237 $])
+AC_REVISION([$Revision: 6698 $])
 AC_INIT([yadifa],m4_esyscmd([svn info 2> /dev/null | grep 'Last Changed Rev: ' | sed -re 's/.*: (.*)/Revision: \1 $/' -e 's/^/$/' >> revision.txt;echo $(cat VERSION)-$(grep -r \$Revision: revision.txt configure.ac Makefile.am sbin/* lib/*/* bin/* doc/* etc/* | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[info@yadifa.eu])
 
 echo
@@ -87,6 +87,10 @@ AC_PTHREAD_SPINLOCK_CHECK
 AC_PTHREAD_SETNAME_NP_CHECK
 AC_PTHREAD_SETAFFINITY_NP_CHECK
 
+AC_YADIFA_ENABLE_SSL
+
+AC_YADIFA_ADD_SSL
+
 AC_YADIFA_FEATURES
 
 AC_CHECK_LTO
@@ -96,6 +100,8 @@ AC_EURID_SUMMARY
 AC_OUTPUT
 
 dnl AC_YADIFA_SUMMARY
+
+make features
 
 echo
 echo

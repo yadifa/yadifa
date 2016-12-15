@@ -377,10 +377,9 @@ am__libdnscore_la_SOURCES_DIST = src/alarm.c src/allocator.c \
 	src/logger.c src/logger_channel_file.c \
 	src/logger_channel_stream.c src/logger_channel_syslog.c \
 	src/logger_handle.c src/message-buffer.c src/message-viewer.c \
-	src/message.c src/message_print_format_dig.c \
-	src/message_verify_rrsig.c src/message_dnsupdate.c \
-	src/mt_output_stream.c src/mutex.c src/name.c \
-	src/output_stream.c src/pace.c src/packet_reader.c \
+	src/message.c src/message_verify_rrsig.c \
+	src/message_dnsupdate.c src/mt_output_stream.c src/mutex.c \
+	src/name.c src/output_stream.c src/pace.c src/packet_reader.c \
 	src/packet_writer.c src/parser.c src/parsing.c src/pid.c \
 	src/pipe_stream.c src/pool.c src/ptr_set.c src/ptr_set_debug.c \
 	src/ptr_vector.c src/queue-sl.c src/random.c src/rc.c \
@@ -423,17 +422,16 @@ am_libdnscore_la_OBJECTS = src/alarm.lo src/allocator.lo src/async.lo \
 	src/logger_channel_file.lo src/logger_channel_stream.lo \
 	src/logger_channel_syslog.lo src/logger_handle.lo \
 	src/message-buffer.lo src/message-viewer.lo src/message.lo \
-	src/message_print_format_dig.lo src/message_verify_rrsig.lo \
-	src/message_dnsupdate.lo src/mt_output_stream.lo src/mutex.lo \
-	src/name.lo src/output_stream.lo src/pace.lo \
-	src/packet_reader.lo src/packet_writer.lo src/parser.lo \
-	src/parsing.lo src/pid.lo src/pipe_stream.lo src/pool.lo \
-	src/ptr_set.lo src/ptr_set_debug.lo src/ptr_vector.lo \
-	src/queue-sl.lo src/random.lo src/rc.lo \
-	src/rewind-input-stream.lo src/rfc.lo src/serial.lo \
-	src/server-setup.lo src/service.lo src/string_set.lo \
-	src/sys_error.lo src/sys_get_cpu_count.lo src/tcp_io_stream.lo \
-	src/thread_pool.lo src/threaded-qsl-cw.lo \
+	src/message_verify_rrsig.lo src/message_dnsupdate.lo \
+	src/mt_output_stream.lo src/mutex.lo src/name.lo \
+	src/output_stream.lo src/pace.lo src/packet_reader.lo \
+	src/packet_writer.lo src/parser.lo src/parsing.lo src/pid.lo \
+	src/pipe_stream.lo src/pool.lo src/ptr_set.lo \
+	src/ptr_set_debug.lo src/ptr_vector.lo src/queue-sl.lo \
+	src/random.lo src/rc.lo src/rewind-input-stream.lo src/rfc.lo \
+	src/serial.lo src/server-setup.lo src/service.lo \
+	src/string_set.lo src/sys_error.lo src/sys_get_cpu_count.lo \
+	src/tcp_io_stream.lo src/thread_pool.lo src/threaded-qsl-cw.lo \
 	src/threaded_dll_cw.lo src/threaded_nb_mm.lo \
 	src/threaded_nbrb.lo src/threaded_ringbuffer.lo \
 	src/threaded_ringbuffer_cw.lo src/threaded_ringlist.lo \
@@ -794,10 +792,9 @@ libdnscore_la_SOURCES = src/alarm.c src/allocator.c src/async.c \
 	src/logger.c src/logger_channel_file.c \
 	src/logger_channel_stream.c src/logger_channel_syslog.c \
 	src/logger_handle.c src/message-buffer.c src/message-viewer.c \
-	src/message.c src/message_print_format_dig.c \
-	src/message_verify_rrsig.c src/message_dnsupdate.c \
-	src/mt_output_stream.c src/mutex.c src/name.c \
-	src/output_stream.c src/pace.c src/packet_reader.c \
+	src/message.c src/message_verify_rrsig.c \
+	src/message_dnsupdate.c src/mt_output_stream.c src/mutex.c \
+	src/name.c src/output_stream.c src/pace.c src/packet_reader.c \
 	src/packet_writer.c src/parser.c src/parsing.c src/pid.c \
 	src/pipe_stream.c src/pool.c src/ptr_set.c src/ptr_set_debug.c \
 	src/ptr_vector.c src/queue-sl.c src/random.c src/rc.c \
@@ -1096,8 +1093,6 @@ src/message-buffer.lo: src/$(am__dirstamp) \
 src/message-viewer.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/message.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/message_print_format_dig.lo: src/$(am__dirstamp) \
-	src/$(DEPDIR)/$(am__dirstamp)
 src/message_verify_rrsig.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/message_dnsupdate.lo: src/$(am__dirstamp) \
@@ -1242,7 +1237,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/message-viewer.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/message.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/message_dnsupdate.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/message_print_format_dig.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/message_verify_rrsig.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/mt_output_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/mutex.Plo@am__quote@

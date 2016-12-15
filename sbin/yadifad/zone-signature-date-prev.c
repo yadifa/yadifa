@@ -348,21 +348,35 @@ zone_policy_date_prev_minute(zone_policy_date *date, const zone_policy_rule_defi
 void
 zone_policy_date_init_at_prev_rule(zone_policy_date *date, const zone_policy_date *from, const zone_policy_date *rule)
 {
-    yassert((from->type.type == ZONE_POLICY_ABSOLUTE) && (rule->type.type == ZONE_POLICY_RULE));
-    const zone_policy_rule_definition_s *def = zone_policy_rule_definition_get_from_rule(rule);
-    
-    time_t epoch;
-    zone_policy_date_get_epoch(from, &epoch);
+    yassert(from->type.type == ZONE_POLICY_ABSOLUTE);
     if(rule->type.type == ZONE_POLICY_RULE)
     {
-        epoch -= 60;
+        const zone_policy_rule_definition_s *def = zone_policy_rule_definition_get_from_rule(rule);
+
+        time_t epoch;
+        zone_policy_date_get_epoch(from, &epoch);
+        if(rule->type.type == ZONE_POLICY_RULE)
+        {
+            epoch -= 60;
+        }
+        zone_policy_date_init_from_epoch(date, epoch);   
+
+        zone_policy_date_prev_month(date, def);
+        zone_policy_date_prev_day(date, def);
+        zone_policy_date_prev_hour(date, def);
+        zone_policy_date_prev_minute(date, def);
     }
-    zone_policy_date_init_from_epoch(date, epoch);   
-    
-    zone_policy_date_prev_month(date, def);
-    zone_policy_date_prev_day(date, def);
-    zone_policy_date_prev_hour(date, def);
-    zone_policy_date_prev_minute(date, def);
+    else if(rule->type.type == ZONE_POLICY_RELATIVE)
+    {
+        time_t epoch;
+        zone_policy_date_get_epoch(from, &epoch);
+        epoch -= rule->relative.seconds;
+        zone_policy_date_init_from_epoch(date, epoch);
+    }
+    else
+    {
+        abort();
+    }
 }
 
 /**
