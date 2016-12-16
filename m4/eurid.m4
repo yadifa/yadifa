@@ -632,6 +632,7 @@ then
 		fi
 	fi
 
+    dnl Move to O2 due to https://gcc.gnu.org/bugzilla/show_bug.cgi?id=78543
     dnl https://github.com/asciiprod/yadifa/blob/master/debian/patches/fix-ppc64el_ftbfs.patch
 
     if [[ $cpu_power_compatible -eq 1 ]]

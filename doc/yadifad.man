@@ -173,7 +173,7 @@ file from the source code.
 .SH VERSION
 
 .PP
-Version: 2.2.2 of 2016-11-08\&.
+Version: 2.2.3 of 2016-12-15\&.
 .PP
 .SH MAILING LISTS
 

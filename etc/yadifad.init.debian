@@ -1,4 +1,5 @@
-N INIT INFO
+#!/bin/sh
+### BEGIN INIT INFO
 # Provides:          yadifa
 # Required-Start:    $remote_fs
 # Required-Stop:     $remote_fs
@@ -17,7 +18,7 @@ DESC="domain name service"
 NAME=yadifa
 DAEMON=/usr/sbin/yadifad
 DAEMON_ARGS=""             # Arguments to run the daemon with
-PIDFILE=/var/run/$NAME/$NAME.pid
+PIDFILE=/run/$NAME/$NAME.pid
 SCRIPTNAME=/etc/init.d/$NAME
 
 # Exit if the package is not installed
@@ -38,10 +39,10 @@ SCRIPTNAME=/etc/init.d/$NAME
 #
 do_start()
 {
-        # dirs under /var/run can go away on reboots.
-        mkdir -p /var/run/yadifa
-        chmod 775 /var/run/yadifa
-        chown root:yadifa /var/run/yadifa >/dev/null 2>&1 || true
+        # dirs under /run can go away on reboots.
+        mkdir -p /run/yadifa
+        chmod 775 /run/yadifa
+        chown root:yadifa /run/yadifa >/dev/null 2>&1 || true
     # Return
     #   0 if daemon has been started
     #   1 if daemon was already running
@@ -154,3 +155,4 @@ case "$1" in
 esac
 
 :
+
