@@ -619,6 +619,47 @@ thread_pool_enqueue_call(struct thread_pool_s* tp, thread_pool_function func, vo
 }
 
 /**
+ * Tries to enqueue a function to be executed by a thread pool
+ * If the queue is not available (high concurrency or full), the function will give up and return ERROR.
+ * 
+ * @param tp            the thread pool
+ * @param func          the function
+ * @param parm          the parameter for the function
+ * @param counter       an optional counter that will be incremented just before the function is called, and decremented just after
+ * @param categoryname  an optional string that will be along the thread, mostly for debugging
+ * 
+ * @return SUCCESS if the call has been queued, ERROR if the queue was not available for pushing
+ */
+
+ya_result
+thread_pool_try_enqueue_call(struct thread_pool_s* tp, thread_pool_function func, void* parm, thread_pool_task_counter *counter, const char* categoryname)
+{
+    threaded_queue_task* task;
+    ZALLOC_OR_DIE(threaded_queue_task*, task, threaded_queue_task, THREADPOOL_TAG);
+
+    task->function = func;
+    task->parm = parm;
+    task->counter = counter;
+
+    if(categoryname == NULL)
+    {
+        categoryname = "anonymous";
+    }
+    
+    task->categoryname = categoryname;
+    
+    if(threaded_queue_try_enqueue(&tp->queue, task))
+    {
+        return SUCCESS;
+    }
+    else
+    {
+        ZFREE(task, threaded_queue_task);
+        return ERROR;   // full
+    }
+}
+
+/**
  * Enqueues a fixed amount of tasks in one go.
  * This new feature helps fixing a starvation issue when allocating consumers
  * and producers from a pool in a random order for several tasks.

@@ -29,6 +29,11 @@
 # 
 ################################################################################
 
+20170223:
+    YADIFA 2.3.1
+        Added thread_pool_try_enqueue_call to give up if a queue is full or overworked (distance project)
+        Fixes an issue with the CW queuing mechanism when trying to fill a full queue.
+
 20161124:
     YADIFA 2.3.0
 

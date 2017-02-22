@@ -202,6 +202,7 @@ threaded_ringbuffer_cw_try_enqueue(threaded_ringbuffer_cw* queue, void* constant
 
     if( queue->size >= queue->max_size )
     {
+        pthread_mutex_unlock(&queue->mutex);
         return FALSE;
     }
 

@@ -137,6 +137,21 @@ struct thread_pool_s *thread_pool_init(u8 thread_count, u32 queue_size);
 ya_result thread_pool_enqueue_call(struct thread_pool_s *tp, thread_pool_function func, void *parm, thread_pool_task_counter *counter, const char *categoryname);
 
 
+/**
+ * Tries to enqueue a function to be executed by a thread pool
+ * If the queue is not available (high concurrency or full), the function will give up and return ERROR.
+ * 
+ * @param tp            the thread pool
+ * @param func          the function
+ * @param parm          the parameter for the function
+ * @param counter       an optional counter that will be incremented just before the function is called, and decremented just after
+ * @param categoryname  an optional string that will be along the thread, mostly for debugging
+ * 
+ * @return SUCCESS if the call has been queued, ERROR if the queue was not available for pushing
+ */
+
+ya_result thread_pool_try_enqueue_call(struct thread_pool_s* tp, thread_pool_function func, void* parm, thread_pool_task_counter *counter, const char* categoryname);
+
 struct thread_pool_enqueue_call_item
 {
     thread_pool_function *func;

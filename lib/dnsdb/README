@@ -29,14 +29,34 @@
 # 
 ################################################################################
 
-201608??:
-    YADIFA 2.2.2
+20170223:
+    YADIFA 2.3.1
+        Added thread_pool_try_enqueue_call to give up if a queue is full or overworked (distance project)
+        Fixes an issue with the CW queuing mechanism when trying to fill a full queue.
+
+20161124:
+    YADIFA 2.3.0
 
         ECDSA can now be disabled at ./configure time.
             The support of ECDSA is not available in the openssl package of older Linux distributions.
             You can now add --disable-ecdsa at configure time to allow a build on these systems.
 
         Processed signals are now logged upon processing (info level) to allow the admin to know when a signal has effectively gone through.
+
+        CPU affinity can now be tuned to stick a worker on a core.  In <main>:
+
+            thread-affinity-multiplier can be used to use every (1) or every odd (2) logical CPU.
+
+                Parameter range from 0 to 4.  (default is 0 = autodetect)
+                By default, if hypertheading is detected, the multiplier is set to 2, else to 1.
+            
+            thread-affinity-base can be used to chose the first local CPU to consider.
+
+                Parameter range from 0 to 3. (default is 0)
+
+            In the end, network workers will have their affinity set to (base + multiplier * workerindex).
+
+            The main purpose is to avoid using the hyperthread logical CPU as it can be counterproductive in some setups for high (10Gbps) troughput.
 
         Fixes:
         - fixed an issue on servers using the network-model 1 model (<main> : network-model 1)
@@ -45,7 +65,11 @@
         - fixed an issue where a zone loaded with a journal would not be marked "dirty" and thus would not be fully dumped on disk upon kill -USR1
         - fixed an issue with network aliases not configured on all setups of --enable-messages
         - fixed an issue with the logger not releasing the log files before reconfiguration
-        - fixed an issue where a disk full was considered non-recoverable.
+        - fixed an issue with the journal where heavy load would prevent notification to slaves
+
+20161108:
+    YADIFA 2.2.2
+        OpenSSL 1.1.0 crypto API support
 
 20160719:
     YADIFA 2.2.1
