@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -1027,7 +1027,7 @@ zdb_zone_answer_axfr_thread(void* data_)
                 log_err("zone write axfr: error reading %{dnstype} rdata: %r", &tctrl.qtype, n);
 
                 /*
-                 * GOTO !!! (I hate this)
+                 * GOTO !!!
                  */
 
                 goto scheduler_queue_zone_write_axfr_thread_exit;

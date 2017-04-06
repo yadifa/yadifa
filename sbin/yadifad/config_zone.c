@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -254,6 +254,19 @@ config_section_zone_stop(struct config_section_descriptor_s *csd)
     {            
         zone_setdefaults(zone_desc);
         // load the descriptor (most likely offline)
+        
+        zone_desc_s *current = zone_acquirebydnsname(zone_desc->origin);
+        if(current != NULL)
+        {
+            // if the zone settings for this domain were previously loaded, remove the drop mark
+            
+#ifdef DEBUG
+            log_info("database: will not drop %{dnsname}@%p (ignored but found)", current->origin, current);
+#endif
+            zone_lock(zone_desc, ZONE_LOCK_LOAD_DESC);
+            current->status_flags &= ~ZONE_STATUS_DROP_AFTER_RELOAD;
+            zone_unlock(zone_desc, ZONE_LOCK_LOAD_DESC);
+        }
 
         if(config_section_zone_filter(zone_desc, config_section_zone_filter_params) == 1)
         {
@@ -264,7 +277,7 @@ config_section_zone_stop(struct config_section_descriptor_s *csd)
     {
         zone_release(zone_desc);
     }
-        
+    
     csd->base = NULL;
     
     return return_code;

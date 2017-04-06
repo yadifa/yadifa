@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -1046,30 +1046,43 @@ ctrl_query_zonecfgreload(message_data *mesg)
                 zone_desc_s *zone_desc = zone_acquirebydnsname(fqdn);
                 tmp_status = RCODE_REFUSED;
 
-                if((zone_desc != NULL) && (rclass == zone_desc->qclass) && (view[0] == '\0'))
+                // if the zone is unknown
+                // or if the zone is known and control is allowed ...
+                
+                if(     (zone_desc == NULL) ||
+                        (
+                            (zone_desc != NULL) &&
+                                (rclass == zone_desc->qclass) && (view[0] == '\0') &&
+                                    !ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control))
+                        ) )
                 {
-                    tmp_status = RCODE_NOTAUTH;
+                    tmp_status = RCODE_SERVFAIL;
 
-                    if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
+                    const_ptr_set_of_one fqdn_set;
+                    const_ptr_set_of_one_init(&fqdn_set, fqdn, fqdn, ptr_set_dnsname_node_compare);
+
+                    ya_result return_code = yadifad_config_update_zone(g_config->config_file, &fqdn_set.set);
+
+                    if(ISOK(return_code))
                     {
-                        tmp_status = RCODE_SERVFAIL;
+                        tmp_status = RCODE_NOERROR;
+                        mesg->send_length = mesg->received;
 
-                        ya_result return_code = yadifad_config_update_zone(g_config->config_file, fqdn);
-
-                        if(ISOK(return_code))
+                        if(zone_desc != NULL)
                         {
-                            tmp_status = RCODE_NOERROR;
-                            mesg->send_length = mesg->received;
                             zone_release(zone_desc);
-
-                            return;
                         }
-                    }
-                    else
-                    {
-                        log_err("ctrl: zone config reload: rejected by ACL");
-                    }
 
+                        return;
+                    }
+                }
+                else
+                {
+                    log_err("ctrl: zone config reload: rejected by ACL");
+                }
+                
+                if(zone_desc != NULL)
+                {
                     zone_release(zone_desc);
                 }
             }
@@ -1081,6 +1094,8 @@ ctrl_query_zonecfgreload(message_data *mesg)
         else if(pc == 0)
         {
             tmp_status = RCODE_NOTAUTH;
+            
+            log_info("ctrl: zone config reload");
 
             if(!ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac.allow_control)))
             {
@@ -1092,6 +1107,10 @@ ctrl_query_zonecfgreload(message_data *mesg)
                 {
                     tmp_status = RCODE_NOERROR;
                     return;
+                }
+                else
+                {
+                    log_err("ctrl: zone config reload failed with %r", return_code);
                 }
             }
         }
