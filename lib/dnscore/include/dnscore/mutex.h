@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -327,6 +327,20 @@ static inline void smp_int_add(smp_int *v, int value)
     pthread_mutex_unlock(&v->mutex);
 }
 
+static inline void smp_int_or(smp_int *v, int value)
+{
+    pthread_mutex_lock(&v->mutex);
+    v->value |= value;
+    pthread_mutex_unlock(&v->mutex);
+}
+
+static inline void smp_int_and(smp_int *v, int value)
+{
+    pthread_mutex_lock(&v->mutex);
+    v->value &= value;
+    pthread_mutex_unlock(&v->mutex);
+}
+
 static inline int smp_int_inc_get(smp_int *v)
 {
     u32 ret;
@@ -381,6 +395,16 @@ static inline int smp_int_get(smp_int *v)
     int ret;
     pthread_mutex_lock(&v->mutex);
     ret = v->value;
+    pthread_mutex_unlock(&v->mutex);
+    return ret;
+}
+
+static inline int smp_int_get_set(smp_int *v, int newvalue)
+{
+    int ret;
+    pthread_mutex_lock(&v->mutex);
+    ret = v->value;
+    v->value = newvalue;
     pthread_mutex_unlock(&v->mutex);
     return ret;
 }

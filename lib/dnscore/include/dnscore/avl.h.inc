@@ -1,6 +1,6 @@
 /* 
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -29,11 +29,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  *------------------------------------------------------------------------------
- *
- * File:   avl.h.inc
- * Author: ericdf
- *
- * Created on June 5, 2009, 12:07 PM
  */
 
 #ifndef _AVL_H_INC
