@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -43,33 +43,6 @@
 
 static ptr_set g_cmdline_sections = PTR_SET_ASCIIZ_EMPTY;
 static bool cmdline_init_error_codes_done = FALSE;
-
-/*
-#if 0
-v = value;
-t = translate;
-
-ya_result
-cmdline_tsigkey_translate(output_stream *os, const char *text, const char *section_name)
-{
-
-
-}
-CMDLINE(0, "main");
-    v, 'd', "daemon",     "on" ,  "daemon"   /// (on/off)
-CMDLINE(0, "zone");
-    v,  0,  "nodaemon",   "off" , "daemon" /// (on/off)
-CMDLINE(0, "main");
-    v, 't', "thread-count, NULL , "thread-count"
-{0, "key"}
-{t, "key", 'y', cmdline_tsigkey_translate}
-
-
-daemon || d    ===  on /off;
-i
-thread-count || t , "10"
-#endif
-*/
 
 ya_result
 cmdline_process_argument(const cmdline_desc_s *desc, const char *section_name, const char *arg)

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -89,6 +89,10 @@ database_load_zone_desc(zone_desc_s *zone_desc)
         zone_desc->status_flags &= ~ZONE_STATUS_DROP_AFTER_RELOAD;
         zone_unlock(zone_desc, ZONE_LOCK_LOAD_DESC);
         
+#ifdef DEBUG
+        log_info("database: will not drop %{dnsname}@%p (registered)", zone_desc->origin, zone_desc);
+#endif
+        
         // newly registered zone
         // used to be message->origin
         
@@ -148,6 +152,12 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                 log_debug("config: zone: the zone %{dnsname} has already been set like this", zone_desc->origin);
                 
                 zone_desc_s* current = zone_acquirebydnsname(zone_desc->origin);
+                
+                yassert(current != NULL);
+                
+#ifdef DEBUG
+                log_info("database: will not drop %{dnsname}@%p (match)", current->origin, current);
+#endif
                 
                 zone_lock(current, ZONE_LOCK_REPLACE_DESC);
                 current->status_flags &= ~ZONE_STATUS_DROP_AFTER_RELOAD;
@@ -421,6 +431,10 @@ database_load_zone_desc(zone_desc_s *zone_desc)
 
                     zone_release(zone_desc);
                 }
+                
+#ifdef DEBUG
+                log_info("database: will not drop %{dnsname}@%p (just because)", current->origin, current);
+#endif
                 
                 current->status_flags &= ~ZONE_STATUS_DROP_AFTER_RELOAD;
                 

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -83,7 +83,7 @@ extern "C" {
 
 #define     PROGRAM_NAME                PACKAGE
 #define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASEDATE                 "2016-11-30"
+#define     RELEASEDATE                 "2017-04-06"
 #define     COMPILEDATE                 __DATE__
 
     /* List of default values for the different configuration parameters */
@@ -442,7 +442,8 @@ ya_result yadifad_config_read(const char *config_file);
 ya_result yadifad_config_finalise();
 
 ya_result yadifad_config_update(const char *config_file);
-ya_result yadifad_config_update_zone(const char *config_file, const u8 *fqdn);
+
+ya_result yadifad_config_update_zone(const char *config_file, const ptr_set *fqdn);
 
 /*    ------------------------------------------------------------    */
 

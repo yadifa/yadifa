@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFA" "8" "2016\-07\-19" "YADIFA " "YADIFA "
+.TH "YADIFA" "8" "2017\-04\-06" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -151,7 +151,7 @@ file from the sources code.
 .SH VERSION
 
 .PP
-Version: 2.2.3 of 2016-12-15\&.
+Version: 2.2.4 of 2017-04-06\&.
 .PP
 .SH MAILINGLIST
 
@@ -182,7 +182,7 @@ via:
 .PP
 .TP
 Copyright 
-(C)2011\-2016, EURid
+(C)2011\-2017, EURid
 .br
 B\-1831 Diegem, Belgium
 .br
