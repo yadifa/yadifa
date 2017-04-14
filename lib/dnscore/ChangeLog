@@ -1,6 +1,6 @@
 ################################################################################
 # 
-#  Copyright (c) 2011-2016, EURid. All rights reserved.
+#  Copyright (c) 2011-2017, EURid. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 #  Redistribution and use in source and binary forms, with or without 
@@ -29,6 +29,11 @@
 # 
 ################################################################################
 
+20170406:
+    YADIFA 2.2.4
+        Fixes an issue with relative include names that would not always be properly computed
+        Fixes an issue where concurrent configuration reloads could lead to a crash
+    
 20161215:
     YADIFA 2.2.3
         Removed code triggering an ICE on ppc64le

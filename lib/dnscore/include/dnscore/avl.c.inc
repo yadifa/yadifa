@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -1255,6 +1255,7 @@ AVL_PREFIXED(avl_callback_and_destroy)(AVL_TREE_TYPE *tree, callback_function ca
     if(AVL_TREE_ROOT(tree) != NULL)
     {
         avl_callback_and_destroy_(AVL_TREE_ROOT(tree), callback);
+        AVL_TREE_ROOT(tree) = NULL;
     }
 }
 

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -198,7 +198,7 @@ static const char* database_service_operation[DATABASE_SERVICE_OPERATION_COUNT]=
     "ZONE-UPDATE-SIGNATURES"
 };
 
-static volatile bool database_reconfigure_enabled = FALSE;
+static smp_int database_reconfigure_enable_count = SMP_INT_INITIALIZER;
 
 const char*
 database_service_operation_get_name(u32 id)
@@ -538,6 +538,10 @@ database_service_set_drop_after_reload()
         zone_desc_s *zone_desc = (zone_desc_s *)zone_node->value;
 
         zone_desc->status_flags |= ZONE_STATUS_DROP_AFTER_RELOAD;
+        
+#ifdef DEBUG
+        log_info("database: may drop %{dnsname}", zone_desc->origin);
+#endif
     }
 
     zone_set_unlock(&database_zone_desc);
@@ -562,7 +566,9 @@ database_service_do_drop_after_reload()
         {
             // drop the zone & zone desc
             
-            log_debug2("database_service_do_drop_after_reload: queuing %{dnsname} for unload", zone_desc->origin);
+#ifdef DEBUG
+            log_info("database: dropping %{dnsname}@%p, queuing for unload", zone_desc->origin, zone_desc);
+#endif
 
             database_zone_desc_unload(zone_desc->origin);
         }
@@ -889,43 +895,6 @@ database_service(struct service_worker_s *worker)
             case DATABASE_SERVICE_DO_DROP_AFTER_RELOAD:
             {
                 database_service_do_drop_after_reload();
-                
-                break;
-            }
-            
-            //
-            
-            case DATABASE_SERVICE_RECONFIGURE_BEGIN:
-            {
-                if(!database_reconfigure_enabled)
-                {
-                    log_debug("database: re-configuration enabled");
-                    
-                    database_reconfigure_enabled = TRUE;
-                }
-                else
-                {
-                    log_debug("database: re-configuration already enabled");
-                }
-                
-                break;
-            }
-            
-            case DATABASE_SERVICE_RECONFIGURE_END:
-            {
-                if(database_reconfigure_enabled)
-                {
-#ifdef DEBUG
-                    zone_dump_allocated();
-#endif        
-                    log_debug("database: re-configuration disabled");
-                    
-                    database_reconfigure_enabled = FALSE;
-                }
-                else
-                {
-                    log_debug("database: re-configuration already disabled");
-                }
                 
                 break;
             }
@@ -1601,80 +1570,172 @@ database_zone_ixfr_query_at(const u8 *origin, time_t at)
     zdb_zone_release(zone);
 }
 
-void
-database_zone_reconfigure_begin()
-{
-    if(database_service_is_running())
-    {
-        log_debug("database: enqueue operation DATABASE_SERVICE_RECONFIGURE_BEGIN");
-        database_message *message = database_load_message_alloc(database_all_origins, DATABASE_SERVICE_RECONFIGURE_BEGIN);
 
-        async_message_s *async = async_message_alloc();
-        async->id = message->payload.type;
-        async->args = message;
-        async->handler = NULL;
-        async->handler_args = NULL;
-        async_message_call(&database_handler_queue, async);
-    }
-    else
-    {
-        database_reconfigure_enabled = TRUE;
-    }
-}
+#define DATABASE_ZONE_RECONFIGURE_ALL   3
+#define DATABASE_ZONE_RECONFIGURE_ZONES 2
+#define DATABASE_ZONE_RECONFIGURE_ZONE  1
 
-void
-database_zone_reconfigure_end()
-{
-    if(database_service_is_running())
-    {
-        log_debug("database: enqueue operation DATABASE_SERVICE_RECONFIGURE_END");
-        database_message *message = database_load_message_alloc(database_all_origins, DATABASE_SERVICE_RECONFIGURE_END);
+// keys+zones (a.k.a everything), zones, zone
+static smp_int database_zone_reconfigure_queued = SMP_INT_INITIALIZER;
 
-        async_message_s *async = async_message_alloc();
-        async->id = message->payload.type;
-        async->args = message;
-        async->handler = NULL;
-        async->handler_args = NULL;
-        async_message_call(&database_handler_queue, async);
-    }
-    else
-    {
-        database_reconfigure_enabled = FALSE;
-    }
-}
+static ptr_set database_zone_reconfigure_fqdn = PTR_SET_DNSNAME_EMPTY;
 
 bool
 database_zone_is_reconfigure_enabled()
 {
-    return database_reconfigure_enabled;
+    return smp_int_get(&database_reconfigure_enable_count) > 0;
+}
+
+bool
+database_zone_try_reconfigure_enable()
+{
+    bool ret = smp_int_setifequal(&database_reconfigure_enable_count, 0, 1);
+    if(ret)
+    {
+        log_info("database: reconfigure started");
+    }
+    else
+    {
+        log_info("database: reconfigure already running");
+    }
+    return ret;
+}
+
+static void
+database_zone_postpone_reconfigure_fqdn_destroy_cb(void *node_)
+{
+    ptr_node *node = (ptr_node*)node_;
+    dnsname_zfree(node->key);
+    node->key = NULL;
+    node->value = NULL;
+}
+
+static void
+database_zone_postpone_reconfigure_fqdn_destroy()
+{
+#ifdef DEBUG
+    log_info("database: clearing config update zone collection");
+#endif
+    ptr_set_avl_callback_and_destroy(&database_zone_reconfigure_fqdn, database_zone_postpone_reconfigure_fqdn_destroy_cb);
+}
+
+void
+database_zone_postpone_reconfigure_all()
+{
+    log_info("database: postponing reconfigure all");
+    
+    pthread_mutex_lock(&database_zone_reconfigure_queued.mutex);
+    database_zone_reconfigure_queued.value = DATABASE_ZONE_RECONFIGURE_ALL;
+    database_zone_postpone_reconfigure_fqdn_destroy();
+    pthread_mutex_unlock(&database_zone_reconfigure_queued.mutex);
+}
+
+void
+database_zone_postpone_reconfigure_zones()
+{
+    log_info("database: postponing reconfigure zones");
+    
+    pthread_mutex_lock(&database_zone_reconfigure_queued.mutex);
+    if(database_zone_reconfigure_queued.value < DATABASE_ZONE_RECONFIGURE_ZONES)
+    {
+        database_zone_reconfigure_queued.value = DATABASE_ZONE_RECONFIGURE_ZONES;
+        database_zone_postpone_reconfigure_fqdn_destroy();
+    }
+    pthread_mutex_unlock(&database_zone_reconfigure_queued.mutex);
+}
+
+void
+database_zone_postpone_reconfigure_zone(const ptr_set *fqdn_set)
+{
+    log_info("database: postponing reconfigure of a set of zones");
+    
+    pthread_mutex_lock(&database_zone_reconfigure_queued.mutex);
+    if(database_zone_reconfigure_queued.value <= DATABASE_ZONE_RECONFIGURE_ZONE)
+    {
+        database_zone_reconfigure_queued.value = DATABASE_ZONE_RECONFIGURE_ZONE;
+        ptr_set_avl_iterator iter;
+        ptr_set_avl_iterator_init(fqdn_set, &iter);
+        while(ptr_set_avl_iterator_hasnext(&iter))
+        {
+            ptr_node *src_node = ptr_set_avl_iterator_next_node(&iter);
+            ptr_node *node = ptr_set_avl_insert(&database_zone_reconfigure_fqdn, src_node->key);
+            if(node->value == NULL)
+            {
+                node->key = dnsname_zdup((const u8*)src_node->key);
+                node->value = node->key;
+            }
+        }
+    }
+    pthread_mutex_unlock(&database_zone_reconfigure_queued.mutex);
+}
+
+void
+database_zone_reconfigure_disable()
+{
+    log_info("database: reconfigure done");
+    
+    pthread_mutex_lock(&database_zone_reconfigure_queued.mutex);
+    
+    int queue = database_zone_reconfigure_queued.value;
+    database_zone_reconfigure_queued.value = 0;
+    
+#ifdef DEBUG
+    log_info("database: moving collection content to a local one");
+#endif
+    ptr_set fqdn_set = database_zone_reconfigure_fqdn;
+    database_zone_reconfigure_fqdn.root = NULL;
+    
+    pthread_mutex_unlock(&database_zone_reconfigure_queued.mutex);
+    
+    // a copy of the queue and the fqdns is ready
+    
+    smp_int_set(&database_reconfigure_enable_count, 0);
+       
+    switch(queue)
+    {
+        case DATABASE_ZONE_RECONFIGURE_ALL:
+        {
+            log_info("database: running postponed reconfigure");
+            yadifad_config_update(g_config->config_file);
+            break;
+        }
+        case DATABASE_ZONE_RECONFIGURE_ZONES:
+        {
+            log_info("database: running postponed reconfigure zones");
+            yadifad_config_update_zone(g_config->config_file, NULL);
+            break;
+        }
+        case DATABASE_ZONE_RECONFIGURE_ZONE:
+        default:
+        {
+            if(!ptr_set_avl_isempty(&fqdn_set))
+            {
+                log_info("database: running postponed reconfigure of a set of zones");
+                yadifad_config_update_zone(g_config->config_file, &fqdn_set);
+            }
+            break;
+        }
+    }
+    
+    ptr_set_avl_callback_and_destroy(&fqdn_set, database_zone_postpone_reconfigure_fqdn_destroy_cb);
 }
 
 void
 database_set_drop_after_reload()
 {
-    log_debug("database: enqueue operation DATABASE_SERVICE_SET_DROP_AFTER_RELOAD");
-    database_message *message = database_load_message_alloc(database_all_origins, DATABASE_SERVICE_SET_DROP_AFTER_RELOAD);
-
-    async_message_s *async = async_message_alloc();
-    async->id = message->payload.type;
-    async->args = message;
-    async->handler = NULL;
-    async->handler_args = NULL;
-    async_message_call(&database_handler_queue, async);
+#ifdef DEBUG
+    log_info("database: marking zones to be dropped after the reload");
+#endif
+    database_service_set_drop_after_reload();
 }
 
 void
 database_do_drop_after_reload()
 {
-    log_debug("database: enqueue operation DATABASE_SERVICE_DO_DROP_AFTER_RELOAD");
-    database_message *message = database_load_message_alloc(database_all_origins, DATABASE_SERVICE_DO_DROP_AFTER_RELOAD);
-
-    async_message_s *async = async_message_alloc();
-    async->id = message->payload.type;
-    async->args = message;
-    async->handler = NULL;
-    async->handler_args = NULL;
-    async_message_call(&database_handler_queue, async);
+#ifdef DEBUG
+    log_info("database: dropping zones that still have the mark after the reload");
+#endif
+    database_service_do_drop_after_reload();
 }
 
 void

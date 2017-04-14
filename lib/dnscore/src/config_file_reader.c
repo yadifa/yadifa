@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -120,7 +120,7 @@ config_file_reader_prepend_path_from_file(char *file_path, const char *base_file
         return CONFIG_FILE_PATH_TOO_BIG;
     }
 
-    memmove(&file_path[n], file_path, m);
+    memmove(&file_path[n], file_path, m + 1);
     memcpy(file_path, base_file_path, n);
     
     return n + m;

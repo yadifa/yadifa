@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -318,11 +318,6 @@ main_config(int argc, char *argv[])
         return ERROR;
     }
         
-#if 0 && defined(DEBUG)
-    config_print(termout);    
-    osformatln(termout, "starting logging service");
-#endif
-    
     /*
      * flushes whatever is in the buffers
      */

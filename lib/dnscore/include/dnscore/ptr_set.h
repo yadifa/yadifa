@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -183,7 +183,7 @@ extern "C"
 #endif
 
 /*
- * I recommand setting a define to identify the C part of the template
+ * I recommend setting a define to identify the C part of the template
  * So it can be used to undefine what is not required anymore for every
  * C file but that one.
  *
@@ -303,6 +303,47 @@ void *ptr_set_avl_iterator_hasnext_next_value(ptr_set_avl_iterator *iterp);
 
 #define FOREACH_PTR_SET(cast__,var__,ptr_set__) ptr_set_avl_iterator PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__); ptr_set_avl_iterator_init((ptr_set__), &PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__)); for(cast__ var__;((var__) = (cast__)ptr_set_avl_iterator_hasnext_next_value(&PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__))) != NULL;)
 //#define FOREACH_PTR_SET_KEY_VALUE(castk__,vark__,castv__,varv__,ptr_set__) ptr_set_avl_iterator PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__); ptr_set_avl_iterator_init((ptr_set__), &PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__)); for(varv__ varv__;((varc__) = (cast__)ptr_set_avl_iterator_hasnext_next_key_value(&PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_iter,__LINE__))) != NULL;)
+
+struct const_ptr_set_of_one
+{
+    ptr_set set;
+    ptr_node one;
+};
+
+typedef struct const_ptr_set_of_one const_ptr_set_of_one;
+
+/**
+ * 
+ * For these cases you need a set of a single element that is to be used a simple, constant, input,
+ * this is an efficient way to do so.
+ * 
+ * Can only be used for reading (find, iterate)
+ * The above implies : cannot be destroyed (as it is supposed to be on the stack and die winding up)
+ * 
+ * Any other usage WILL crash the program.
+ * 
+ * @param cpsoo
+ * @param key
+ * @param value
+ * @param cmp
+ * 
+ * example usage:
+ * 
+ * const_ptr_set_of_one fqdn_set;
+ * const_ptr_set_of_one_init(&fqdn_set, fqdn, fqdn, ptr_set_dnsname_node_compare);
+ * my_function_expecting_a_read_only_fqdn_set(&fqdn_set.set);
+ * 
+ * // do whatever I want with the fqdn and forget the fqdn_set
+ */
+
+static inline void const_ptr_set_of_one_init(const_ptr_set_of_one *cpsoo, void *key, void *value, ptr_node_compare *cmp)
+{
+    cpsoo->set.root = &cpsoo->one;
+    cpsoo->set.compare = cmp;
+    ZEROMEMORY(&cpsoo->one, sizeof(ptr_node));
+    cpsoo->one.key = key;
+    cpsoo->one.value = value;
+}
 
 /*
  * AVL definition part ends here

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -1579,22 +1579,6 @@ dynupdate_update(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, b
 #endif
 
         dynupdate_update_rrsig_body(zone, &lus_set);
-                
-#if 0 && ZDB_HAS_NSEC3_SUPPORT != 0
-        if(ISOK(return_value) && ((zone->apex->flags & ZDB_RR_LABEL_NSEC3) != 0))
-        {
-            ptr_set_avl_iterator_init(&lus_set, &lus_iter);
-            while(ptr_set_avl_iterator_hasnext(&lus_iter))
-            {
-                ptr_node *lus_node = ptr_set_avl_iterator_next_node(&lus_iter);
-                label_update_status *lus = (label_update_status *)lus_node->value;
-                lus->label->flags |= ZDB_RR_LABEL_UPDATING;
-            }
-
-            dynupdate_update_nsec3_body(zone, &lus_set);
-        }
-#endif
-
     }
 
 #endif

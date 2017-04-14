@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -399,9 +399,14 @@ void database_set_drop_after_reload();
 
 void database_do_drop_after_reload();
 
-void database_zone_reconfigure_begin();
-void database_zone_reconfigure_end();
 bool database_zone_is_reconfigure_enabled();
+
+bool database_zone_try_reconfigure_enable();
+void database_zone_reconfigure_disable();
+
+void database_zone_postpone_reconfigure_all();
+void database_zone_postpone_reconfigure_zones();
+void database_zone_postpone_reconfigure_zone(const ptr_set *fqdn_set);
 
 /**
  * Queues a function in the thread pool for loading zones
