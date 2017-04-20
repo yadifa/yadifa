@@ -124,23 +124,25 @@ struct msg_hdr_s
 {
     union socketaddress_46 sa;
     //struct msg_data_s *next;
+    u8 ctrl[32];
     int blk_count;
     int msg_size;
     int sa_len;
+    int ctrl_len;
 };
 
 struct msg_data_s
 {
     struct msg_hdr_s hdr;
-    u8 data[1];
+    u8 data[1];                     // keep this 1 value
 };
 
 typedef struct msg_data_s msg_data_s;
 
 union msg_cell_u
 {
-    struct msg_data_s data;
-    u8 l1_data[L1_DATA_LINE_SIZE]; // L1 data cache line size
+    struct msg_data_s data;         // this is an UNION, l1_data is there to specify the size
+    u8 l1_data[L1_DATA_LINE_SIZE];  // L1 data cache line size, ensures the size is right
 };
 
 typedef union msg_cell_u msg_cell_u;
@@ -168,8 +170,8 @@ struct network_thread_context_s
     msg_cell_u backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1] __attribute__ ((aligned (L1_DATA_LINE_SIZE)));
     
 #if UDP_USE_MESSAGES
-    struct iovec    udp_iovec;
-    struct msghdr   udp_msghdr;
+    struct iovec    sender_iovec;
+    struct msghdr   sender_msghdr;
 #endif
     // should be aligned with 64
     
@@ -201,27 +203,18 @@ server_rw_udp_receiver_thread(void *parms)
     CPU_SET((ctx->idx << 1) + 0, &mycpu);
     pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mycpu);
 #endif
-    
+
 #if UDP_USE_MESSAGES
     
-    struct msghdr   mesg_msghdr;
-    struct iovec    mesg_iovec;
-    
-    mesg_msghdr.msg_iov = &mesg_iovec;
-    mesg_msghdr.msg_iovlen = 1;
-    if(ANCILIARY_BUFFER_SIZE > 0)
-    {
-        MALLOC_OR_DIE(struct msghdr*, mesg_msghdr.msg_control, ANCILIARY_BUFFER_SIZE, MSGHDR_TAG);
-    }
-    else
-    {
-        mesg_msghdr.msg_control = NULL;
-    }
-    mesg_msghdr.msg_controllen = ANCILIARY_BUFFER_SIZE;
-    mesg_msghdr.msg_flags = 0;
+    struct msghdr   receiver_msghdr;
+    struct iovec    receiver_iovec;
+    receiver_msghdr.msg_iov = &receiver_iovec;
+    receiver_msghdr.msg_iovlen = 1;
+    receiver_msghdr.msg_control = NULL;
+    receiver_msghdr.msg_controllen = 0;
+    receiver_msghdr.msg_flags = 0;
 
     /* UDP messages handling requires more setup */
-
 #endif
     
     // const void *nullptr = NULL;
@@ -237,27 +230,32 @@ server_rw_udp_receiver_thread(void *parms)
         
 #if !UDP_USE_MESSAGES
         mesg->addr_len = sizeof(socketaddress);
-        n = recvfrom(fd, mesg->buffer, sizeof(mesg->buffer), 0, (struct sockaddr*)&mesg->other.sa, &mesg->addr_len);
+        n = recvfrom(fd, mesg->buffer, MIN(NETWORK_BUFFER_SIZE, sizeof(mesg->buffer)), 0, (struct sockaddr*)&mesg->other.sa, &mesg->addr_len);
 #else
-        mesg_iovec.iov_base = mesg->buffer;
-        mesg_iovec.iov_len = sizeof(mesg->buffer);
-        mesg_msghdr.msg_name = &mesg->other.sa;
-        mesg_msghdr.msg_namelen = sizeof(socketaddress);
-        mesg_msghdr.msg_controllen = ANCILIARY_BUFFER_SIZE;
+        receiver_iovec.iov_base = mesg->buffer;
+        receiver_iovec.iov_len = MIN(NETWORK_BUFFER_SIZE, sizeof(mesg->buffer));
+        receiver_msghdr.msg_name = &mesg->other.sa;
+        receiver_msghdr.msg_namelen = sizeof(socketaddress);
+        receiver_msghdr.msg_control = mesg->control_buffer;
+        receiver_msghdr.msg_controllen = sizeof(mesg->control_buffer);
 
-        n = recvmsg(fd, &mesg_msghdr, 0);
+        n = recvmsg(fd, &receiver_msghdr, 0);
 #endif
-        if(n >= 0)
+        if(n >= DNS_HEADER_LENGTH)
         {
             local_statistics_udp_input_count++;
             
+#ifdef DEBUG
             mesg->recv_us = timeus();
+#endif
             
 #if UDP_USE_MESSAGES
-            mesg->addr_len = mesg_msghdr.msg_namelen;
+            mesg->addr_len = receiver_msghdr.msg_namelen;
+            mesg->control_buffer_size = receiver_msghdr.msg_controllen;
 #endif
             
 #ifdef DEBUG
+            mesg->recv_us = timeus();
             log_debug("server_rw_udp_receiver_thread: recvfrom: got %d bytes from %{sockaddr}", n, &mesg->other.sa);
 #if DUMP_UDP_RW_RECEIVED_WIRE
             log_memdump_ex(g_server_logger, MSG_DEBUG5, mesg->buffer, n, 16, OSPRINT_DUMP_HEXTEXT);
@@ -276,8 +274,9 @@ server_rw_udp_receiver_thread(void *parms)
                 ctx->next_message = mesg;
                 
                 // notify the other side it has to do some job
-                
+#ifdef DEBUG
                 mesg->pushed_us = timeus();
+#endif
                 cond_notify_one(&ctx->cond);
                 mutex_unlock(&ctx->mtx);
                 next_message_index = (next_message_index + 1) % 3;
@@ -305,9 +304,10 @@ server_rw_udp_receiver_thread(void *parms)
                 msg_cell_u *cell = (msg_cell_u *)ctx->backlog_enqueue;
                 msg_cell_u *cell_next = cell + blk_count;
                 
-                if(cell >= ctx->backlog_enqueue)
+                if(cell >= ctx->backlog_dequeue) // we are on the last half
                 {
                     // can fill up to the end of the buffer
+                    
                     const msg_cell_u *cell_limit = &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE];
                     
                     if(cell_next <= cell_limit)
@@ -319,9 +319,15 @@ server_rw_udp_receiver_thread(void *parms)
                         // keep the relevant data from the message
                     
                         memcpy(&cell->data.hdr.sa, &mesg->other.sa, mesg->addr_len);
+#if UDP_USE_MESSAGES
+                        memcpy(cell->data.hdr.ctrl, receiver_msghdr.msg_control, receiver_msghdr.msg_controllen);
+#endif
                         cell->data.hdr.msg_size = mesg->received;
                         cell->data.hdr.blk_count = blk_count;
                         cell->data.hdr.sa_len = mesg->addr_len;
+#if UDP_USE_MESSAGES
+                        cell->data.hdr.ctrl_len = receiver_msghdr.msg_controllen;
+#endif
                         memcpy(&cell->data.data, mesg->buffer, mesg->received);
                         
                         //
@@ -334,6 +340,8 @@ server_rw_udp_receiver_thread(void *parms)
                     }
                     else
                     {
+                        // erase
+                        cell->data.hdr.msg_size = 0;
                         // loop
                         cell = &ctx->backlog_queue[0];
                         cell_next = cell + blk_count;
@@ -343,9 +351,15 @@ server_rw_udp_receiver_thread(void *parms)
                         // keep the relevant data from the message
                     
                         memcpy(&cell->data.hdr.sa, &mesg->other.sa, mesg->addr_len);
+#if UDP_USE_MESSAGES
+                        memcpy(cell->data.hdr.ctrl, receiver_msghdr.msg_control, receiver_msghdr.msg_controllen);
+#endif
                         cell->data.hdr.msg_size = mesg->received;
                         cell->data.hdr.blk_count = blk_count;
                         cell->data.hdr.sa_len = mesg->addr_len;
+#if UDP_USE_MESSAGES
+                        cell->data.hdr.ctrl_len = receiver_msghdr.msg_controllen;
+#endif
                         memcpy(&cell->data.data, mesg->buffer, mesg->received);
                         
                         //
@@ -364,9 +378,15 @@ server_rw_udp_receiver_thread(void *parms)
                         // keep the relevant data from the message
                     
                         memcpy(&cell->data.hdr.sa, &mesg->other.sa, mesg->addr_len);
+#if UDP_USE_MESSAGES
+                        memcpy(cell->data.hdr.ctrl, receiver_msghdr.msg_control, receiver_msghdr.msg_controllen);
+#endif
                         cell->data.hdr.msg_size = mesg->received;
                         cell->data.hdr.blk_count = blk_count;
                         cell->data.hdr.sa_len = mesg->addr_len;
+#if UDP_USE_MESSAGES
+                        cell->data.hdr.ctrl_len = receiver_msghdr.msg_controllen;
+#endif
                         memcpy(&cell->data.data, mesg->buffer, mesg->received);
                     }
 #ifdef DEBUG
@@ -377,14 +397,16 @@ server_rw_udp_receiver_thread(void *parms)
                     }
 #endif
                 }
-                
-                //mutex_lock(&ctx->mtx); // keeping the mutex above may actually be more efficient
                 ctx->backlog_enqueue = cell_next;
                 cond_notify_one(&ctx->cond);
                 mutex_unlock(&ctx->mtx);
             }
         }
-        else
+        else if(n >= 0)
+        {
+            log_warn("%i: received %i bytes garbage from %{sockaddr}", fd, &mesg->other.sa);
+        }
+        else // n < 0
         {
             /*
              * errno is not a variable but a macro
@@ -449,7 +471,7 @@ server_rw_process_udp_update(message_data *mesg)
 #endif
 
 static ya_result
-server_rw_process_message(struct network_thread_context_s *ctx, message_data *mesg)
+server_rw_udp_sender_process_message(struct network_thread_context_s *ctx, message_data *mesg)
 {
     server_statistics_t * const local_statistics = &ctx->statistics;
     local_statistics->udp_input_count++;
@@ -794,12 +816,14 @@ server_rw_process_message(struct network_thread_context_s *ctx, message_data *me
         }
     }
 #else
-    ctx->udp_iovec.iov_base = mesg->buffer;
-    ctx->udp_iovec.iov_len = mesg->send_length;
-    ctx->udp_msghdr.msg_name = &mesg->other.sa;
-    ctx->udp_msghdr.msg_namelen = mesg->addr_len;
+    ctx->sender_iovec.iov_base = mesg->buffer;
+    ctx->sender_iovec.iov_len = mesg->send_length;
+    ctx->sender_msghdr.msg_name = &mesg->other.sa;
+    ctx->sender_msghdr.msg_namelen = mesg->addr_len;
+    ctx->sender_msghdr.msg_control = mesg->control_buffer;
+    ctx->sender_msghdr.msg_controllen = mesg->control_buffer_size;
     
-    while(sendmsg(fd, &ctx->udp_msghdr, 0) < 0)
+    while(sendmsg(fd, &ctx->sender_msghdr, 0) < 0)
     {
         int error_code = errno;
 
@@ -828,21 +852,14 @@ server_rw_udp_sender_thread(void *parms)
     CPU_SET((ctx->idx << 1) + 1, &mycpu);
     pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mycpu);
 #endif
-    
+   
+        
 #if UDP_USE_MESSAGES
-    ctx->udp_msghdr.msg_iov = &ctx->udp_iovec;
-    ctx->udp_msghdr.msg_iovlen = 1;
-    
-    if(ANCILIARY_BUFFER_SIZE > 0)
-    {
-        MALLOC_OR_DIE(struct msghdr*, ctx->udp_msghdr.msg_control, ANCILIARY_BUFFER_SIZE, MSGHDR_TAG);
-    }
-    else
-    {
-        ctx->udp_msghdr.msg_control = NULL;
-    }
-    ctx->udp_msghdr.msg_controllen = ANCILIARY_BUFFER_SIZE;
-    ctx->udp_msghdr.msg_flags = 0;
+    ctx->sender_msghdr.msg_iov = &ctx->sender_iovec;
+    ctx->sender_msghdr.msg_iovlen = 1;
+    ctx->sender_msghdr.msg_control = NULL;
+    ctx->sender_msghdr.msg_controllen = 0;
+    ctx->sender_msghdr.msg_flags = 0;
 #endif
     
     for(;;)
@@ -857,9 +874,10 @@ server_rw_udp_sender_thread(void *parms)
 
         const msg_cell_u *cell = (const msg_cell_u *)ctx->backlog_dequeue;
         
+#if 0
 dont_worry_about_this: // ...
-
-        if(ctx->backlog_enqueue == cell)
+#endif
+        if(ctx->backlog_enqueue == cell) // embty backlog (the next to read is also the next to be filled)
         {
             // no item on the backlog
 #ifdef DEBUG1
@@ -869,20 +887,40 @@ dont_worry_about_this: // ...
             
             if((mesg = (message_data*)ctx->next_message) == NULL)
             {
-                cond_wait(&ctx->cond, &ctx->mtx);
+                // no item, so wait for an event ...
+
+                cond_timedwait(&ctx->cond, &ctx->mtx, 1000000);
                 
-                goto dont_worry_about_this;
+                while((mesg = (message_data*)ctx->next_message) == NULL)
+                {
+                    if(ctx->sockfd >= 0)
+                    {
+                        cond_timedwait(&ctx->cond, &ctx->mtx, 1000000);
+                    }
+                    else
+                    {
+                        mutex_unlock(&ctx->mtx);
+                        
+                        log_debug("server_rw_udp_sender_thread(%i, %i): stopped (wait->no-socket)", ctx->idx, fd);
+    
+                        return NULL;
+                        // exit
+                    }
+                }
             }
+            
+            // there was an item, and it's now on mesg : clear the fast lane slot
             
             ctx->next_message = NULL;
                         
             mutex_unlock(&ctx->mtx);
-
-            mesg->popped_us = timeus();
+            
 #ifdef DEBUG
+            mesg->popped_us = timeus();
+
             log_debug("%i: look: %04hx %lluus %lluus", ctx->sockfd, ntohs(MESSAGE_ID(mesg->buffer)), mesg->pushed_us - mesg->recv_us, mesg->popped_us - mesg->pushed_us);
 #endif
-            if(FAIL(server_rw_process_message(ctx, mesg)))
+            if(FAIL(server_rw_udp_sender_process_message(ctx, mesg)))
             {
                 if(ctx->sockfd >= 0)
                 {
@@ -891,41 +929,50 @@ dont_worry_about_this: // ...
                 return NULL;
             }
         }
-        else
+        else // there are items on the backlog
         {
             const msg_cell_u *cell_limit = (const msg_cell_u *)ctx->backlog_enqueue;
             
             mutex_unlock(&ctx->mtx);
             
+            // until we processed them all (cell until but not included to cell_limit)
+            
             int loop_idx = 0;
             
-            if(cell > cell_limit) // go up to the end of the buffer
+            yassert(cell >= &ctx->backlog_queue[0] && cell < &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1]);
+            
+            if(cell > cell_limit) // go up to the end of the buffer (ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1])
             {
-                do   
+                while(cell < &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE])
                 {
-                    if(cell->data.hdr.msg_size == 0) // partial cell
+                    if(cell->data.hdr.msg_size == 0) // partial cell (which can only happen if there was no room anymore for a cell
                     {
-                        cell = &ctx->backlog_queue[0];
                         break;
                     }
-                    
 #ifdef DEBUG
                     u64 retrieve_start = timeus();
 #endif
                     mesg = &ctx->out_message;
 
                     memcpy(&mesg->other.sa, &cell->data.hdr.sa, cell->data.hdr.sa_len);
-                                        
+#if UDP_USE_MESSAGES
+                    ctx->sender_msghdr.msg_control = mesg->control_buffer;
+                    memcpy(ctx->sender_msghdr.msg_control, cell->data.hdr.ctrl, cell->data.hdr.ctrl_len);
+#endif
                     mesg->received = cell->data.hdr.msg_size;
                     mesg->addr_len = cell->data.hdr.sa_len;
+#if UDP_USE_MESSAGES
+                    ctx->sender_msghdr.msg_controllen = cell->data.hdr.ctrl_len;
+#endif
+                    yassert(cell->data.hdr.msg_size < 65536);
+                    
                     memcpy(mesg->buffer, &cell->data.data, cell->data.hdr.msg_size);
-
-                    mesg->popped_us = timeus();
-
 #ifdef DEBUG
+                    mesg->popped_us = timeus();
+                    
                     log_debug("%i: popd: %04hx %lluus (%i) (>)", ctx->sockfd, ntohs(MESSAGE_ID(mesg->buffer)), mesg->popped_us - retrieve_start, loop_idx);
 #endif
-                    if(FAIL(server_rw_process_message(ctx, mesg)))
+                    if(FAIL(server_rw_udp_sender_process_message(ctx, mesg)))
                     {
                         log_err("%i: popd: %04hx (>)", ctx->sockfd, ntohs(MESSAGE_ID(mesg->buffer)));
                         return NULL;
@@ -934,29 +981,41 @@ dont_worry_about_this: // ...
                     ++loop_idx;
 
                     cell += cell->data.hdr.blk_count;
+                    
+                    yassert(cell >= &ctx->backlog_queue[0] && cell < &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1]);
                 }
-                while(cell < cell_limit);
                 
+                cell = &ctx->backlog_queue[0];
             }
+            
+            yassert(cell >= &ctx->backlog_queue[0] && cell < &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1]);
             
             while(cell < cell_limit)
             {
 #ifdef DEBUG
                 u64 retrieve_start = timeus();
 #endif
+                yassert(cell >= &ctx->backlog_queue[0] && cell < &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1]);
+                
                 mesg = &ctx->out_message;
 
                 memcpy(&mesg->other.sa, &cell->data.hdr.sa, cell->data.hdr.sa_len);
-
+#if UDP_USE_MESSAGES
+                ctx->sender_msghdr.msg_control = mesg->control_buffer;
+                memcpy(ctx->sender_msghdr.msg_control, cell->data.hdr.ctrl, cell->data.hdr.ctrl_len);
+#endif
                 mesg->received = cell->data.hdr.msg_size;
                 mesg->addr_len = cell->data.hdr.sa_len;
+#if UDP_USE_MESSAGES
+                ctx->sender_msghdr.msg_controllen = cell->data.hdr.ctrl_len;
+#endif
                 memcpy(mesg->buffer, &cell->data.data, cell->data.hdr.msg_size);
 
-                mesg->popped_us = timeus();
 #ifdef DEBUG
+                mesg->popped_us = timeus();
                 log_debug("%i: popd: %04hx %lluus (%i)", ctx->sockfd, ntohs(MESSAGE_ID(mesg->buffer)), mesg->popped_us - retrieve_start, loop_idx);
 #endif
-                if(FAIL(server_rw_process_message(ctx, mesg)))
+                if(FAIL(server_rw_udp_sender_process_message(ctx, mesg)))
                 {
                     log_err("%i: popd: %04hx", ctx->sockfd, ntohs(MESSAGE_ID(mesg->buffer)));
                     return NULL;
@@ -965,20 +1024,16 @@ dont_worry_about_this: // ...
                 ++loop_idx;
 
                 cell += cell->data.hdr.blk_count;
+                
+                yassert(cell >= &ctx->backlog_queue[0] && cell < &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1]);
             }
+            
+            yassert(cell >= &ctx->backlog_queue[0] && cell < &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1]);
             
             // cell             
             ctx->backlog_dequeue = cell;
         }
     }
-    
-#if UDP_USE_MESSAGES
-    if(ctx->udp_msghdr.msg_control != NULL)
-    {
-        free(ctx->udp_msghdr.msg_control);
-        ctx->udp_msghdr.msg_control = NULL;
-    }
-#endif
     
     log_debug("server_rw_udp_sender_thread(%i, %i): stopped", ctx->idx, fd);
     
@@ -1099,11 +1154,6 @@ server_rw_query_loop()
             
             ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE].data.hdr.blk_count = 0; // implicitely done by the memset, but I want to be absolutely clear about this
             ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE].data.hdr.msg_size = 0;
-            
-#if UDP_USE_MESSAGES
-            int sockopt_dstaddr = 1;
-            setsockopt(ctx->sockfd, IPPROTO_IP, DSTADDR_SOCKOPT, &sockopt_dstaddr, sizeof(sockopt_dstaddr));
-#endif
             
             mutex_init(&ctx->mtx);
             cond_init(&ctx->cond);
@@ -1308,7 +1358,6 @@ server_rw_query_loop()
     
     for(int i = 0; i < 5; ++i)
     {    
-        
         for(int listen_idx = 0, sockfd_idx = 0; listen_idx < server_context.listen_count; ++listen_idx)
         {
             for(u32 r = 0; r < reader_by_fd; r++)
@@ -1357,7 +1406,7 @@ server_rw_query_loop()
                     pthread_kill(id, SIGUSR2); 
                 }
 
-                memset(&ctx->out_message.buffer, 0xff, 13);
+                //memset(&ctx->out_message.buffer, 0xff, 13);
                 ctx->next_message = &ctx->out_message;
 
                 mutex_lock(&ctx->mtx);

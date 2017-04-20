@@ -341,12 +341,13 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
     st->udp_iovec.iov_base = mesg->buffer;
     st->udp_iovec.iov_len = sizeof(mesg->buffer);
     st->udp_msghdr.msg_name = &mesg->other.sa;
-    st->udp_msghdr.msg_namelen = sizeof(socketaddress);
     st->udp_msghdr.msg_controllen = ANCILIARY_BUFFER_SIZE;
     */
     
 #if UDP_USE_MESSAGES
-    st->udp_iovec.iov_len = sizeof(mesg->buffer);
+    st->udp_msghdr.msg_namelen = sizeof(socketaddress);
+    st->udp_iovec.iov_len = MIN(NETWORK_BUFFER_SIZE, sizeof(mesg->buffer));
+    st->udp_msghdr.msg_controllen = sizeof(st->udp_mesg->control_buffer);
 #endif
     
     ssize_t n;
@@ -357,7 +358,7 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
         
 
         
-        n = recvfrom(st->fdsock, mesg->buffer, sizeof(mesg->buffer), 0, (struct sockaddr*)&mesg->other.sa, &mesg->addr_len);
+        n = recvfrom(st->fdsock, mesg->buffer, MIN(NETWORK_BUFFER_SIZE, sizeof(mesg->buffer)), 0, (struct sockaddr*)&mesg->other.sa, &mesg->addr_len);
         
         if(n >= 0)
         {
@@ -556,7 +557,6 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
                     log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_ALL);
                 }
 #endif
-                
                 /*
                  * If not FE, or if we answer FE
                  * 
@@ -875,7 +875,7 @@ static u64 server_run_loop_rate_tick         = 0;
 static s32 server_run_loop_timeout_countdown = 0;
 
 void*
-server_mt_query_loop_udp(void* parm)
+server_mt_udp_messages_thread(void* parm)
 {
     synced_thread_t *st = (synced_thread_t*)parm;
     
@@ -918,7 +918,7 @@ server_mt_query_loop_udp(void* parm)
     {
         st->udp_msghdr.msg_control = NULL;
     }    
-    st->udp_msghdr.msg_controllen = ANCILIARY_BUFFER_SIZE;
+    st->udp_msghdr.msg_control = st->udp_mesg->control_buffer;
     st->udp_msghdr.msg_flags = 0;
 
 #endif
@@ -1035,17 +1035,11 @@ server_mt_query_loop()
             for(u32 r = 0; r < reader_by_fd; r++)
             {
                 synced_threads.threads[tidx].fdsock = server_context.udp_socket[sockfd_idx++];
-                
-#if UDP_USE_MESSAGES
-                const int sockopt_dstaddr = 1;
-                setsockopt(synced_threads.threads[tidx].fdsock , IPPROTO_IP, DSTADDR_SOCKOPT, &sockopt_dstaddr, sizeof(sockopt_dstaddr));
-#endif
-                
                 synced_threads.threads[tidx].fdsock = synced_threads.threads[tidx].fdsock;
             
                 log_info("thread #%i of UDP interface: %{hostaddr} using socket %i", r, server_context.listen[intf_idx], synced_threads.threads[tidx].fdsock);
 
-                if(FAIL(return_code = thread_pool_enqueue_call(server_udp_thread_pool, server_mt_query_loop_udp, &synced_threads.threads[tidx], NULL, "server-mt-task")))
+                if(FAIL(return_code = thread_pool_enqueue_call(server_udp_thread_pool, server_mt_udp_messages_thread, &synced_threads.threads[tidx], NULL, "server-mt-task")))
                 {
                     log_err("unable to start task : %r", return_code);
 
@@ -1069,7 +1063,7 @@ server_mt_query_loop()
 
                 log_info("thread #%i of UDP interface: %{hostaddr} using socket %i", r, server_context.listen[intf_idx], synced_threads.threads[tidx].fdsock);
 
-                if(FAIL(return_code = thread_pool_enqueue_call(server_udp_thread_pool, server_mt_query_loop_udp, &synced_threads.threads[tidx], NULL, "server-mt-task")))
+                if(FAIL(return_code = thread_pool_enqueue_call(server_udp_thread_pool, server_mt_udp_messages_thread, &synced_threads.threads[tidx], NULL, "server-mt-task")))
                 {
                     log_err("unable to start task : %r", return_code);
 
