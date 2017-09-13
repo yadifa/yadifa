@@ -31,7 +31,7 @@
         serverid                     "yadifad-01"
 
         # The version returned by a query to version.yadifa. CH TXT
-        version                      "2.2.5"
+        version                      "2.2.6"
 
         # Set the maximum UDP packet size.  Cannot be less than 512.  Cannot be more than 65535.  Typical choice is 4096.
         edns0-max-size              4096

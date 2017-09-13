@@ -29,8 +29,7 @@
 # 
 ################################################################################
 
-20170420:
-    YADIFA 2.2.5
-        Fixes an issue on message-enabled servers where the return address would not be captured
-        Increased the maximum number of network interfaces to 256
+20170912:
+    YADIFA 2.2.6
+        Fixes an issue where a maliciously crafted message may block the server.
 

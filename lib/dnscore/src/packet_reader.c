@@ -101,7 +101,7 @@ packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8 *output_buffer, u3
             return buffer - output_buffer;
         }
 
-        if((p + len > p_limit) || (buffer + len > buffer_limit))
+        if((p + len >= p_limit) || (buffer + len >= buffer_limit))
         {
             return UNEXPECTED_EOF;
         }
@@ -120,18 +120,24 @@ packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8 *output_buffer, u3
 
     for(;;)
     {
-        u8 len = *p++;
+        u8 len = *p;
 
         if((len & 0xc0) == 0xc0) /* EDF: better yet: cmp len, 192; jge  */
         {
             /* reposition the pointer */
             u32 new_offset = len & 0x3f;
             new_offset   <<= 8;
-            new_offset    |= *p;
+            new_offset    |= p[1];
 
-            p             = &reader->packet[new_offset];
-
-            continue;
+            const u8* q = &reader->packet[new_offset];
+            
+            if(q < p)
+            {
+                p = q;
+                continue;
+            }
+            
+            return SERVER_ERROR_CODE(RCODE_FORMERR);
         }
 
         *buffer++ = len;
@@ -140,13 +146,16 @@ packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8 *output_buffer, u3
         {
             return buffer - output_buffer;
         }
+        
+        ++p;
 
-        if((p + len > p_limit) || (buffer + len > buffer_limit))
+        if((p + len >= p_limit) || (buffer + len >= buffer_limit))
         {
             return UNEXPECTED_EOF;
         }
 
         u8* buffer_limit = &buffer[len];
+        
         do
         {
             *buffer++ = tolower(*p++);
@@ -621,7 +630,7 @@ packet_reader_skip_fqdn(packet_unpack_reader_data* reader)
             return reader->offset - from;
         }
 
-        if(p + len > p_limit)
+        if(p + len >= p_limit)
         {
             return UNEXPECTED_EOF;
         }
@@ -728,7 +737,7 @@ packet_reader_read_utf8(packet_unpack_reader_data *reader, u16 rdatasize, u16 rc
     {
         if(rdatasize != 0)
         {
-            return ERROR; /* formerr */
+            return SERVER_ERROR_CODE(RCODE_FORMERR); /* formerr */
         }
         
         if(!dryrun)
@@ -810,7 +819,7 @@ packet_reader_read_remote_server(packet_unpack_reader_data *reader, u16 rdatasiz
     {
         if(rdatasize != 0)
         {
-            return ERROR; /* formerr */
+            return SERVER_ERROR_CODE(RCODE_FORMERR); /* formerr */
         }
         
         if(!dryrun)
@@ -868,7 +877,7 @@ packet_reader_read_remote_server(packet_unpack_reader_data *reader, u16 rdatasiz
 
                 if((tsig = tsig_get(tsig_name)) == NULL)
                 {
-                    return ERROR;
+                    return SERVER_ERROR_CODE(TSIG_BADKEY);
                 }                
             }
 
