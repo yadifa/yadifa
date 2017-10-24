@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -71,7 +71,7 @@ buffer_input_stream_read(input_stream* stream, u8* buffer, u32 len)
 
     u32 remaining = data->buffer_size - data->buffer_offset;
 
-    if(len < remaining)
+    if(len <= remaining)
     {
         MEMCOPY(buffer, &src[data->buffer_offset], len);
         data->buffer_offset += len;
@@ -89,7 +89,7 @@ buffer_input_stream_read(input_stream* stream, u8* buffer, u32 len)
 
     /* NOTE: at this point the internal buffer is empty */
 
-    if(len > data->buffer_maxsize)
+    if(len >= data->buffer_maxsize)
     {
         /* It would be pointless to buffer a read bigger than the buffer */
 
@@ -97,25 +97,35 @@ buffer_input_stream_read(input_stream* stream, u8* buffer, u32 len)
 
         if(ISOK(ret = input_stream_read(&data->filtered, buffer, len)))
         {
-            return remaining + len; /* the chunk we've read from the buffer +
+            return remaining + ret; /* the chunk we've read from the buffer +
 				   the chunk we've read from the stream */
         }
-
-        return ret;
+        else // 'remaining' bytes may have been copied already, if so, return that before the error
+        {
+            return (remaining > 0)?remaining:ret;
+        }
     }
 
 #ifdef DEBUG
     memset(data->buffer, 0xee, data->buffer_maxsize);
 #endif
 
-    /* What remains to read is smaller than the buffer max size */
+    // What remains to read is smaller than the buffer max size:
+    // read a full buffer
 
     if((ret = input_stream_read(&data->filtered, data->buffer, data->buffer_maxsize)) <= 0)
     {
         data->buffer_size = 0;
         data->buffer_offset = 0;
+        
+        // 'remaining' bytes may have been copied already, if so, return that before the error
 
-        return (remaining > 0) ? remaining : ERROR /* eof */; // @todo 20130211 edf -- this should be 0, not ERROR ... what are the side effects if fixed ?
+        return (remaining > 0) ? remaining : ERROR /* eof */;
+    }
+    
+    if(len > ret)
+    {
+        len = ret;
     }
 
     MEMCOPY(buffer, data->buffer, len); /* starts at offset 0 */
@@ -139,13 +149,12 @@ buffer_input_stream_close(input_stream* stream)
 static ya_result
 buffer_input_stream_skip(input_stream* stream, u32 len)
 {
-    ya_result return_code;
-    u32 total_len = len;
+    ya_result ret;
     
     buffer_input_stream_data* data = (buffer_input_stream_data*)stream->data;
     u32 remaining = data->buffer_size - data->buffer_offset;
 
-    if(remaining > len)
+    if(len <= remaining)
     {
         data->buffer_offset += len;
         return len;
@@ -155,12 +164,14 @@ buffer_input_stream_skip(input_stream* stream, u32 len)
 
     data->buffer_offset = data->buffer_size;
 
-    if(FAIL(return_code = input_stream_skip(&data->filtered, len)))
+    if(FAIL(ret = input_stream_skip(&data->filtered, len)))
     {
-        return return_code;
+        // 'remaining' bytes may have been skipped already, if so, return that before the error
+        
+        return (remaining > 0)?remaining:ret;
     }
 
-    return total_len;
+    return remaining + ret;
 }
 
 static const input_stream_vtbl buffer_input_stream_vtbl =

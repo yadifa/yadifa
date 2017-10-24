@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief Hash-Table of Balanced trees structure and functions.
@@ -101,7 +101,7 @@ htbt_init(htbt* collection)
     *collection = htbt_create();
 }
 
-#if ZDB_INLINES_HTBT_FIND == 0
+#if !ZDB_INLINES_HTBT_FIND
 
 /** @brief Finds a node in the collection.
  *
@@ -258,7 +258,7 @@ htbt_iterator_init(htbt collection, htbt_iterator* iter)
                 /* The next one, if any, can be found from the next hash-table slot*/
                 
                 iter->table = collection + 1;
-                iter->count = collection_limit - collection - 1;
+                iter->count = collection_limit - collection - 1; // the size of the remaining array (starts close to the size of the htbt hash)
 
                 return;
             }
@@ -271,7 +271,7 @@ htbt_iterator_init(htbt collection, htbt_iterator* iter)
     btree_iterator_init(NULL, &iter->iter);
 }
 
-void
+avl_node *
 htbt_iterator_init_from(htbt collection, htbt_iterator* iter, hashcode obj_hash)
 {
     if(collection != NULL)
@@ -288,13 +288,13 @@ htbt_iterator_init_from(htbt collection, htbt_iterator* iter, hashcode obj_hash)
         {
             /* We got one */
 
-            btree_iterator_init_from((btree)collection->data, &iter->iter, obj_hash);
+            btree_node *node = btree_iterator_init_from((btree)collection->data, &iter->iter, obj_hash);
             /* The next one, if any, can be found from the next hash-table slot*/
 
             iter->table = collection + 1;
             iter->count = collection_limit - collection - 1;
 
-            return;
+            return node;
         }
         
         // else find the first tree that exists
@@ -310,6 +310,8 @@ htbt_iterator_init_from(htbt collection, htbt_iterator* iter, hashcode obj_hash)
 
                 iter->table = collection + 1;
                 iter->count = collection_limit - collection - 1;
+                
+                return NULL;
             }
         }
     }
@@ -320,9 +322,11 @@ htbt_iterator_init_from(htbt collection, htbt_iterator* iter, hashcode obj_hash)
     iter->table = NULL;
 
     btree_iterator_init(NULL, &iter->iter);
+    
+    return NULL;
 }
 
-#if ZDB_INLINES_HTBT_FIND == 0
+#if !ZDB_INLINES_HTBT_FIND
 
 bool
 htbt_iterator_hasnext(htbt_iterator* iter)
@@ -387,7 +391,3 @@ htbt_iterator_next_node(htbt_iterator* iter)
 }
 
 /** @} */
-
-
-/*----------------------------------------------------------------------------*/
-

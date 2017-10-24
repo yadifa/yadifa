@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 
 #ifndef DNS_UDP_H
 #define DNS_UDP_H
@@ -53,10 +53,18 @@
 #define DNS_UDP_TIMEOUT_US_MIN 1000000   // 1s
 #define DNS_UDP_TIMEOUT_US_MAX 3600000000// 1h
 
-#define DNS_UDP_SEND_RATE      1000000   // 1MB/s
+#define DNS_UDP_SEND_RATE      1000      // 1000 queries/s
+#define DNS_UDP_SEND_BANDWIDTH 1000000   // 1MB/s
+#define DNS_UDP_RECV_BANDWIDTH 1000000   // 1MB/s
 
-#define DNS_UDP_SEND_RATE_MIN  512       // 512B/s
-#define DNS_UDP_SEND_RATE_MAX  100000000 // 100MB/s
+#define DNS_UDP_SEND_RATE_MIN  1         // q/s
+#define DNS_UDP_SEND_RATE_MAX  1000000   // q/s
+
+#define DNS_UDP_SEND_BANDWIDTH_MIN  512       // 512B/s
+#define DNS_UDP_SEND_BANDWIDTH_MAX  100000000 // 100MB/s
+
+#define DNS_UDP_RECV_BANDWIDTH_MIN  512       // 512B/s
+#define DNS_UDP_RECV_BANDWIDTH_MAX  100000000 // 100MB/s
 
 #define DNS_UDP_SEND_QUEUE     200000    // 200000 messages
 
@@ -70,6 +78,24 @@
 #define DNS_UDP_RETRY_COUNT      2       // tries after the first failure
 #define DNS_UDP_RETRY_COUNT_MIN  0
 #define DNS_UDP_RETRY_COUNT_MAX  16
+
+#define DNS_UDP_PER_DNS_RATE     5       // packets per second
+#define DNS_UDP_PER_DNS_RATE_MIN 1
+#define DNS_UDP_PER_DNS_RATE_MAX 65536
+
+#define DNS_UDP_PER_DNS_BANDWIDTH     4096  // bytes per second
+#define DNS_UDP_PER_DNS_BANDWIDTH_MIN 512
+#define DNS_UDP_PER_DNS_BANDWIDTH_MAX 65536
+
+#define DNS_UDP_PER_DNS_FREQ_MIN     10000  // us between two queries
+#define DNS_UDP_PER_DNS_FREQ_MIN_MIN 0
+#define DNS_UDP_PER_DNS_FREQ_MIN_MAX 1000000
+
+#define DNS_UDP_TCP_THREAD_POOL_SIZE 1
+#define DNS_UDP_TCP_THREAD_POOL_MIN 1
+#define DNS_UDP_TCP_THREAD_POOL_MAX 64
+
+#define DNS_UDP_TCP_FALLBACK_ON_TIMEOUT 0
 
 #define DNS_SIMPLE_MESSAGE_HAS_WAIT_COND 0
 
@@ -88,9 +114,17 @@ struct dns_udp_settings_s
 {
     u64 timeout;
     u32 send_rate;
+    u32 send_bandwidth;
+    u32 recv_bandwidth;
     u32 queue_size;
     u32 port_count;
     u32 retry_count;
+    
+    u32 per_dns_rate;
+    u32 per_dns_bandwidth;
+    u32 per_dns_freq_min;
+    u8 tcp_thread_pool_size;
+    bool tcp_fallback_on_timeout;
 };
 
 typedef struct dns_udp_settings_s dns_udp_settings_s;
@@ -124,15 +158,17 @@ struct dns_simple_message_s
     group_mutex_t mtx;
     volatile pthread_t owner;
     
-    u32 worker_index;
+    int sender_socket;              // used so a repeated message will be sent from the same address:port
+    u32 worker_index;               // seems to be only useful to get the priority queue index
     u16 qtype;
     u16 qclass;
     u16 flags;
-    u16 source_port;
+    u16 source_port;                // seems useless
     u16 dns_id;
-    u8  retries_left;
+    s8  retries_left;
     u8  status;
     bool recurse;
+    bool tcp;                       // try TCP
     u8 fqdn[MAX_DOMAIN_LENGTH];
 };
 
@@ -146,6 +182,10 @@ typedef struct dns_simple_message_s dns_simple_message_s;
  */
 
 void dns_udp_handler_configure(const dns_udp_settings_s *settings);
+void dns_udp_handler_host_limit_set(const host_address* name_server,
+        u32 rate,
+        u32 bandwidth,
+        u32 freq_min);
 int dns_udp_handler_init();
 int dns_udp_handler_start();
 int dns_udp_handler_stop();

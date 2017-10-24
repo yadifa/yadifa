@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -52,7 +52,17 @@ extern "C"
 #endif
 
 /* NOTE: The first byte of the digest is its length */
-nsec3_zone_item *nsec3_zone_item_find(nsec3_zone *n3, const u8 *digest);
+nsec3_zone_item *nsec3_zone_item_find_encloser_start(const nsec3_zone *n3, const u8 *digest);
+
+/**
+ * Finds the nsec3 record based on the binary digest
+ * 
+ * @param n3
+ * @param digest
+ * @return 
+ */
+
+nsec3_zone_item* nsec3_zone_item_find(const nsec3_zone* n3, const u8* digest);
 
 /**
  *
@@ -60,7 +70,7 @@ nsec3_zone_item *nsec3_zone_item_find(nsec3_zone *n3, const u8 *digest);
  * @param dnsnamedigest
  * @return
  */
-nsec3_zone_item *nsec3_zone_item_find_by_name(nsec3_zone *n3, const u8 *dnsnamedigest);
+nsec3_zone_item *nsec3_zone_item_find_by_name(const nsec3_zone *n3, const u8 *dnsnamedigest);
 
 /**
  *
@@ -71,9 +81,9 @@ nsec3_zone_item *nsec3_zone_item_find_by_name(nsec3_zone *n3, const u8 *dnsnamed
  * @param out_n3
  * @return
  */
-nsec3_zone_item *nsec3_zone_item_find_by_name_ext(zdb_zone *zone, const u8 *nsec3_label, nsec3_zone **out_n3);
+nsec3_zone_item *nsec3_zone_item_find_by_name_ext(const zdb_zone *zone, const u8 *nsec3_label, nsec3_zone **out_n3);
 
-nsec3_zone_item *nsec3_zone_item_find_by_record(zdb_zone *zone, const u8 *fqdn, u16 rdata_size, const u8 *rdata);
+nsec3_zone_item *nsec3_zone_item_find_by_record(const zdb_zone *zone, const u8 *fqdn, u16 rdata_size, const u8 *rdata);
 
 bool nsec3_zone_item_equals_rdata(
                             const nsec3_zone* n3,
@@ -94,8 +104,7 @@ ya_result nsec3_zone_item_to_zdb_packed_ttlrdata(
                             u8* out_owner, /* dnsname */
                             u32 ttl,
                             zdb_packed_ttlrdata* nsec3,
-                            u32  nsec3_max_size,
-                            const zdb_packed_ttlrdata** out_nsec3_rrsig);
+                            u32  nsec3_max_size);
 
 struct nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm
 {

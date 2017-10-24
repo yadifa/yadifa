@@ -1,6 +1,6 @@
 dnl ############################################################################
 dnl 
-dnl Copyright (c) 2011-2016, EURid. All rights reserved.
+dnl Copyright (c) 2011-2017, EURid. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl  
 dnl Redistribution and use in source and binary forms, with or without 
@@ -30,9 +30,21 @@ dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
 dnl ############################################################################
+dnl
+dnl       SVN Program:
+dnl               $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/configure.ac $
+dnl
+dnl       Last Update:
+dnl               $Date: 2017-09-26 11:33:35 +0200 (Tue, 26 Sep 2017) $
+dnl               $Revision: 7307 $
+dnl
+dnl       Purpose:
+dnl              configure for YADIFA (domain name server)
+dnl
+dnl ############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 6237 $])
+AC_REVISION([$Revision: 7307 $])
 AC_INIT([yadifa],m4_esyscmd([svn info 2> /dev/null | grep 'Last Changed Rev: ' | sed -re 's/.*: (.*)/Revision: \1 $/' -e 's/^/$/' >> revision.txt;echo $(cat VERSION)-$(grep -r \$Revision: revision.txt configure.ac Makefile.am sbin/* lib/*/* bin/* doc/* etc/* | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[info@yadifa.eu])
 
 echo
@@ -55,14 +67,13 @@ dnl DO THE LIBRARIES
 dnl
 AC_CONFIG_SUBDIRS([lib/dnscore lib/dnsdb lib/dnszone])
 
-AC_HAS_WITHOUT(tools, TOOLS, "build the DNS tools",,AC_CONFIG_SUBDIRS([lib/dnslg]),)
+AC_HAS_WITHOUT(tools, TOOLS, [the DNS tools built-in],,AC_CONFIG_SUBDIRS([lib/dnslg]),)
 
 dnl DO THE BINARIES
 dnl
 AC_CONFIG_SUBDIRS([sbin/yadifad])
 
-AC_HAS_WITHOUT(tools, TOOLS, "build the DNS tools",,AC_CONFIG_SUBDIRS([bin/yadifa]),)
-
+AC_HAS_WITHOUT(tools, TOOLS, [the DNS tools built-in],,AC_CONFIG_SUBDIRS([bin/yadifa]),)
 
 dnl @todo 20150119 gve -- can be removed
 dnl AC_CONFIG_HEADERS([yadifa-config.h])
@@ -87,6 +98,10 @@ AC_PTHREAD_SPINLOCK_CHECK
 AC_PTHREAD_SETNAME_NP_CHECK
 AC_PTHREAD_SETAFFINITY_NP_CHECK
 
+AC_YADIFA_ENABLE_SSL
+
+AC_YADIFA_ADD_SSL
+
 AC_YADIFA_FEATURES
 
 AC_CHECK_LTO
@@ -96,6 +111,8 @@ AC_EURID_SUMMARY
 AC_OUTPUT
 
 dnl AC_YADIFA_SUMMARY
+
+make features
 
 echo
 echo

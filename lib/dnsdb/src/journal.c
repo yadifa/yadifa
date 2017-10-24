@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -161,8 +161,6 @@ journal_init(u32 mru_size)
         list_dl_init(&journal_mru_list);
         
         journal_initialised = TRUE;
-        
-        log_debug("journal: initialised with %i slots", mru_size);
     }
     else
     {
@@ -215,11 +213,12 @@ static void journal_mru_remove(journal *jh)
 static void journal_mru_close_last()
 {
     list_dl_node_s *victim_node = list_dl_remove_last_node(&journal_mru_list);
-    victim_node->next = NULL;
-    victim_node->prev = NULL;
 
     if(victim_node != NULL)
     {
+        victim_node->next = NULL;
+        victim_node->prev = NULL;
+
         journal *victim = (journal*)((u8*)victim_node - offsetof(journal, mru_node)); /* cast */
         
         u8 origin_buffer[MAX_DOMAIN_LENGTH];
@@ -340,6 +339,7 @@ journal_finalise()
     {
         // remove the natural victims first
         
+
         for(;;)
         {
             group_mutex_lock(&journal_set_mtx, GROUP_MUTEX_WRITE);
@@ -457,11 +457,11 @@ journal_acquire_from_fqdn_and_zone(journal **jhp, const u8 *origin, zdb_zone *zo
         }
         else
         {
-            log_warn("journal: %{dnsname}: could not reopen the journal file: %r", zone->origin, ret);
+            log_warn("journal: %{dnsname}: could not reopen the journal file: %r", origin, ret);
             // no journal file found, although it was in the set
             // it may have been deleted manually
             // there may be not enough file descriptors available in the system
-            
+
             // no recovery from this state
             // dereference (release) and return an error
 
@@ -595,10 +595,13 @@ journal_release(journal *jh)
             
             if(!journal_forget_flag_get(jh))
             {
+                log_debug("journal: enqueuing journal@%p to MRU", jh);
                 journal_mru_enqueue(jh); // set locked, close later
             }
             else
             {
+                log_debug("journal: closing journal@%p", jh);
+                
                 u8 origin_buffer[MAX_DOMAIN_LENGTH];        
                 jh->vtbl->get_domain(jh, origin_buffer);
         
@@ -640,6 +643,22 @@ journal_last_serial(const u8 *origin, u32 *serialp)
     if(ISOK(ret = journal_acquire_from_fqdn(&jh, origin)))
     {
         ret = journal_get_last_serial(jh, serialp);
+
+        journal_release(jh);
+    }
+    
+    return ret;
+}
+
+ya_result
+journal_serial_range(const u8 *origin, u32 *serialfromp, u32 *serialtop)
+{
+    journal *jh = NULL;
+    ya_result ret;
+
+    if(ISOK(ret = journal_acquire_from_fqdn(&jh, origin)))
+    {
+        ret = journal_get_serial_range(jh, serialfromp, serialtop);
 
         journal_release(jh);
     }
@@ -736,7 +755,7 @@ journal_last_soa(const u8 *origin, u32 *serial, u32 *ttl, u8 *last_soa_rdata, u1
             
             if(ISOK(ret = journal_get_ixfr_stream_at_serial(jh, first_serial, &is, &rr)))
             {
-                if(last_soa_rdata_size == NULL)
+                if(last_soa_rdata_size != NULL)
                 {
                     *last_soa_rdata_size = rr.rdata_size;
                     

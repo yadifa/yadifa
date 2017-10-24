@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2011-2016, EURid. All rights reserved.
+# Copyright (c) 2011-2017, EURid. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without 
@@ -26,6 +26,20 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+##############################################################################
+#
+#	YADIFA dnsdb Makefile.am script
+#
+#      	Makefile.am script
+#
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/lib/dnsdb/Makefile.am $
+#
+#       $Date: 2017-10-25 09:42:05 +0200 (Wed, 25 Oct 2017) $
+#
+#       $Revision: 7376 $
+#
+#	$Author: ericdf $
 #
 ##############################################################################
 
@@ -58,12 +72,11 @@ pkginclude_HEADERS = \
 	$(I)/dnssec.h \
 	$(I)/dnssec_config.h \
 	$(I)/dnssec-keystore.h \
-	$(I)/dnssec_task.h \
 	$(I)/dynupdate.h \
+	$(I)/dynupdate-diff.h \
 	$(I)/hash.h \
 	$(I)/htable.h \
 	$(I)/htbt.h \
-	$(I)/icmtl_input_stream.h \
 	$(I)/journal.h \
 	$(I)/journal_ix.h \
 	$(I)/journal-cjf.h \
@@ -72,31 +85,29 @@ pkginclude_HEADERS = \
 	$(I)/journal-cjf-page.h \
 	$(I)/journal-cjf-page-cache.h \
 	$(I)/journal-cjf-page-output-stream.h \
+	$(I)/chain-replay.h \
 	$(I)/nsec.h \
+	$(I)/nsec-chain-replay.h \
 	$(I)/nsec3.h \
 	$(I)/nsec3_collection.h \
 	$(I)/nsec3_hash.h \
-	$(I)/nsec3_icmtl.h \
+	$(I)/nsec3-chain-replay.h \
 	$(I)/nsec3_item.h \
 	$(I)/nsec3_load.h \
 	$(I)/nsec3_name_error.h \
 	$(I)/nsec3_nodata_error.h \
 	$(I)/nsec3_owner.h \
-	$(I)/nsec3_rrsig_updater.h \
 	$(I)/nsec3_types.h \
-	$(I)/nsec3_update.h \
 	$(I)/nsec3_zone.h \
 	$(I)/nsec_collection.h \
 	$(I)/nsec_common.h \
 	$(I)/rr_canonize.h \
 	$(I)/rrsig.h \
-	$(I)/rrsig_updater.h \
 	$(I)/xfr_copy.h \
 	$(I)/zdb.h \
 	$(I)/zdb_config.h \
 	$(I)/zdb_error.h \
 	$(I)/zdb_icmtl.h \
-	$(I)/zdb_listener.h \
 	$(I)/zdb_record.h \
 	$(I)/zdb_rr_label.h \
 	$(I)/zdb_sanitize.h \
@@ -111,8 +122,11 @@ pkginclude_HEADERS = \
 	$(I)/zdb-zone-garbage.h \
 	$(I)/zdb-zone-journal.h \
 	$(I)/zdb-zone-lock.h \
+	$(I)/zdb-zone-lock-monitor.h \
 	$(I)/zdb-zone-answer-axfr.h \
 	$(I)/zdb-zone-answer-ixfr.h \
+	$(I)/zdb-zone-maintenance.h \
+	$(I)/zdb-packed-ttlrdata.h \
 	$(I)/zdb_zone_axfr_input_stream.h \
 	$(I)/zdb_zone_label.h \
 	$(I)/zdb_zone_label_iterator.h \
@@ -122,9 +136,7 @@ pkginclude_HEADERS = \
 	$(I)/zdb_zone_process.h \
 	$(I)/zdb-zone-reader-filter.h \
 	$(I)/zdb_zone_write.h \
-	$(I)/nsec3-forall-label.h \
-	$(I)/nsec3-chain-create.h \
-	$(I)/nsec3-chain-destroy.h
+	$(I)/nsec3-forall-label.h
 
 libdnsdb_la_SOURCES = \
 	src/avl.c \
@@ -132,13 +144,14 @@ libdnsdb_la_SOURCES = \
 	src/dictionary_btree.c \
 	src/dictionary_htbt.c \
 	src/dynupdate_check_prerequisites.c \
-	src/dynupdate_icmtlhook.c \
-	src/dynupdate_update.c \
+	src/dynupdate-diff.c \
+	src/dynupdate-diff-nochain.c \
+	src/dynupdate-diff-nsec.c \
+	src/dynupdate-diff-nsec3.c \
 	src/hash.c \
 	src/hash_table_values.c \
 	src/htable.c \
 	src/htbt.c \
-	src/icmtl_input_stream.c \
 	src/journal-cjf-idxt.c \
 	src/journal-cjf-page-cache.c \
 	src/journal-cjf-page-output-stream.c \
@@ -155,13 +168,17 @@ libdnsdb_la_SOURCES = \
 	src/zdb-zone-garbage.c \
 	src/zdb-zone-journal.c \
 	src/zdb-zone-lock.c \
+    src/zdb-zone-lock-monitor.c \
 	src/zdb-zone-path-provider.c \
 	src/zdb-zone-reader-filter.c \
+	src/zdb-zone-maintenance.c \
+	src/zdb-zone-maintenance-rrsig.c \
+	src/zdb-zone-maintenance-nsec.c \
+	src/zdb-zone-maintenance-nsec3.c \
 	src/zdb.c \
 	src/zdb_cache.c \
 	src/zdb_error.c \
 	src/zdb_icmtl.c \
-	src/zdb_listener.c \
 	src/zdb_query_ex.c \
 	src/zdb_query_ex_wire.c \
 	src/zdb_record.c \
@@ -175,7 +192,6 @@ libdnsdb_la_SOURCES = \
 	src/zdb_zone_load.c \
 	src/zdb_zone_process.c \
 	src/zdb_zone_store_axfr.c \
-	src/zdb_zone_update_ixfr.c \
 	src/zdb_zone_write_text.c \
 	src/zdb_zone_write_unbound.c
 
@@ -185,12 +201,11 @@ if HAS_DNSSEC_SUPPORT
 libdnsdb_la_SOURCES += \
 	src/dnssec.c \
 	src/dnssec-keystore.c \
-	src/dnssec_process.c \
 	src/nsec_common.c \
 	src/rr_canonize.c \
 	src/rrsig.c \
-	src/rrsig_updater.c \
-	src/zdb_update_signatures.c
+	src/zdb_update_signatures.c \
+	src/zdb-packed-ttlrdata.c
 endif
 			
 if HAS_NSEC3_SUPPORT
@@ -199,26 +214,20 @@ libdnsdb_la_SOURCES += \
 	src/nsec3_collection.c \
 	src/nsec3_hash.c \
 	src/nsec3_item.c \
-	src/nsec3_icmtl.c  \
+	src/nsec3-chain-replay.c  \
 	src/nsec3_load.c \
 	src/nsec3_name_error.c \
 	src/nsec3_nodata_error.c \
 	src/nsec3_owner.c \
-	src/nsec3_rrsig_updater.c \
-	src/nsec3_update.c \
 	src/nsec3_zone.c \
-	src/nsec3-forall-label.c \
-	src/nsec3-chain-create.c \
-	src/nsec3-chain-destroy.c
+	src/nsec3-forall-label.c
 endif
 
 if HAS_NSEC_SUPPORT
 libdnsdb_la_SOURCES += \
 	src/nsec.c \
+	src/nsec-chain-replay.c  \
 	src/nsec_collection.c
-endif
-
-if HAS_EXPERIMENTAL
 endif
 
 libdnsdb_la_LDFLAGS = -version-info 3:0:0
@@ -238,11 +247,6 @@ features: $(FEATURES)
 
 $(FEATURES): config.log REVISION VERSION
 	echo "#pragma once" > $(FEATURES)
-if HAS_RRCACHE_ENABLED
-	echo "#define ZDB_HAS_RRCACHE_ENABLED 1" >> $(FEATURES)
-else
-	echo "#define ZDB_HAS_RRCACHE_ENABLED 0" >> $(FEATURES)
-endif
 if HAS_DNSSEC_SUPPORT
 	echo "#define ZDB_HAS_DNSSEC_SUPPORT 1" >> $(FEATURES)
 else

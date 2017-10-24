@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnskey DNSSEC keys functions
  *  @ingroup dnscore
  *  @brief 
@@ -84,6 +84,28 @@
 
 #define DNSKEY_TAG(x__)        (dnskey_get_key_tag_from_rdata(&(x__).rdata_start[0],(x__).rdata_size))
 
+#if OPENSSL_VERSION_NUMBER
+#define SSL_API 1
+
+// warning: this use of "defined" may not be portable [-Wexpansion-to-defined]
+//
+// #define SSL_API_LT_110 ((OPENSSL_VERSION_NUMBER < 0x10100000L) || defined(LIBRESSL_VERSION_NUMBER))
+//
+// hence:
+//
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#define SSL_API_LT_110 1
+#elif defined(LIBRESSL_VERSION_NUMBER)
+#define SSL_API_LT_110 1
+#else
+#define SSL_API_LT_110 0
+#endif
+
+#define SSL_API_LT_100 (OPENSSL_VERSION_NUMBER < 0x10000000L) 
+#else
+#define SSL_API 0
+#endif
+
 #ifdef	__cplusplus
 extern "C"
 {
@@ -105,11 +127,13 @@ typedef union dnskey_getter_retval_t dnskey_getter_retval_t;
 typedef dnskey_getter_retval_t (*dnskey_field_getter_method)(const struct dnssec_key*);
 typedef void (*dnskey_field_setter_method)(struct dnssec_key*, dnskey_getter_retval_t);
 
-#define STRUCTDESCRIPTOR_BN 1
+#define STRUCTDESCRIPTOR_NONE   0
+#define STRUCTDESCRIPTOR_BN     1
     
 struct dnskey_field_access
 {
-    const char* name;
+    //const char* name;
+    const char name[24];
     size_t relative;
     int type;
 };
@@ -135,7 +159,6 @@ union dnssec_key_data
 #if HAS_ECDSA_SUPPORT
     EC_KEY* ec;
 #endif
-
 };
 
 typedef union dnssec_key_data dnssec_key_data;
@@ -195,6 +218,7 @@ typedef ya_result dnssec_key_sign_digest_method(const dnssec_key *key, const u8 
 typedef bool dnssec_key_verify_digest_method(const dnssec_key *key, const u8 *digest, u32 digest_len, const u8 *signature, u32 signature_len);
 typedef bool dnssec_key_equals_method(const dnssec_key *key_a, const dnssec_key *key_b);
 typedef ya_result dnssec_key_private_print_fields_method(dnssec_key *key, output_stream *os);
+typedef u32 dnskey_key_size_method(const dnssec_key *key);
 
 struct dnssec_key_vtbl
 {
@@ -205,7 +229,7 @@ struct dnssec_key_vtbl
     dnskey_key_free_method *dnskey_key_free;
     dnssec_key_equals_method *dnssec_key_equals;
     dnssec_key_private_print_fields_method *dnssec_key_print_fields;
-    
+    dnskey_key_size_method *dnskey_key_size;
     const char *__class__;
 };
 
@@ -744,8 +768,4 @@ bool dnskey_is_deactivated(const dnssec_key *key, time_t t);
 
 #endif	/* _DNSKEY_H */
 
-
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

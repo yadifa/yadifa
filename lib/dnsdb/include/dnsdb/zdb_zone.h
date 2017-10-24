@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief Functions used to manipulate a zone
@@ -58,6 +58,7 @@
 
 #if ZDB_HAS_NSEC3_SUPPORT
 #include <dnsdb/nsec3_types.h>
+#include <dnsdb/zdb_record.h>
 #endif
 
 #ifdef	__cplusplus
@@ -246,40 +247,16 @@ static inline u16 zdb_zone_getclass(const zdb_zone *zone)
 }
 #endif
 
-/**
- * @brief Updates a zone from an IXFR input stream
- *
- * Loads a zone from an IXFR input stream
- *
- * The function does not closes the input stream
- *
- * If the IXFR is wrong, the zone will be messed up.
- * Please check that the general structure of the stream is right
- * before calling this.
- *
- * SOA x+n
- *	SOA x+0
- *	...
- *	SOA x+1
- *	...
- *
- *	SOA x+1
- *	...
- *	SOA x+2
- *	...
- * SOA x+n
- *
- * @param[in] db a pointer to the database
- * @param[in] is a pointer to an input stream containing the IXFR
- *
- * @return an error code
- */
-
-ya_result zdb_zone_update_ixfr_OBSOLETE(zdb *db, input_stream *is);
-
 ya_result zdb_zone_store_axfr(zdb_zone *zone, output_stream* os);
 
 const zdb_packed_ttlrdata *zdb_zone_get_dnskey_rrset(zdb_zone *zone);
+
+/**
+ * Tells if the apex of the zone has an NSEC3 extension
+ * 
+ * @param zone
+ * @return 
+ */
 
 static inline bool zdb_zone_is_nsec3(const zdb_zone* zone)
 {
@@ -290,6 +267,13 @@ static inline bool zdb_zone_is_nsec3(const zdb_zone* zone)
 #endif
 }
 
+/**
+ * Tells if the apex of the zone has an NSEC3 extension with opt-out
+ * 
+ * @param zone
+ * @return 
+ */
+
 static inline bool zdb_zone_is_nsec3_optout(const zdb_zone* zone)
 {
 #if ZDB_HAS_NSEC3_SUPPORT
@@ -298,6 +282,13 @@ static inline bool zdb_zone_is_nsec3_optout(const zdb_zone* zone)
     return FALSE;
 #endif
 }
+
+/**
+ * Tells if the apex of the zone has an NSEC3 extension without opt-out
+ * 
+ * @param zone
+ * @return 
+ */
 
 static inline bool zdb_zone_is_nsec3_optin(const zdb_zone* zone)
 {
@@ -309,7 +300,16 @@ static inline bool zdb_zone_is_nsec3_optin(const zdb_zone* zone)
 }
 
 #if ZDB_HAS_NSEC3_SUPPORT
-static inline nsec3_zone* zdb_zone_get_nsec3chain(const zdb_zone* zone, s8 idx)
+
+/**
+ * Returns the nth nsec3 chain or NULL if the chain does not exists
+ * 
+ * @param zone
+ * @param idx
+ * @return 
+ */
+
+static inline nsec3_zone* zdb_zone_get_nsec3chain(const zdb_zone *zone, s8 idx)
 {
     nsec3_zone *n3 = zone->nsec.nsec3;
     while(n3 != NULL && --idx >= 0)
@@ -318,7 +318,58 @@ static inline nsec3_zone* zdb_zone_get_nsec3chain(const zdb_zone* zone, s8 idx)
     }
     return n3;
 }
+
+/**
+ * Tells if a zone has an NSEC3 chain
+ * 
+ * @param zone
+ * @return 
+ */
+
+static inline bool zdb_zone_has_nsec3_chain(const zdb_zone *zone)
+{
+    return zone->nsec.nsec3 != NULL;
+}
+
+/**
+ * Tells if a zone has an NSEC3 chain with opt-out
+ * 
+ * @param zone
+ * @return 
+ */
+
+static inline bool zdb_zone_has_nsec3_optout_chain(const zdb_zone *zone)
+{
+    return (zone->nsec.nsec3 != NULL) && (zone->_flags & ZDB_ZONE_HAS_OPTOUT_COVERAGE); /// and ?
+}
+
+static inline bool zdb_zone_has_nsec3_records(const zdb_zone *zone)
+{
+    nsec3_zone *n3 = zone->nsec.nsec3;
+    while(n3 != NULL)
+    {
+        if(n3->items != NULL)
+        {
+            return TRUE;
+        }
+        n3 = n3->next;
+    }
+    return FALSE;
+}
+
+static inline bool zdb_zone_has_nsec3param_records(const zdb_zone *zone)
+{
+    return zdb_record_find(&zone->apex->resource_record_set, TYPE_NSEC3PARAM) != NULL;
+}
+
 #endif
+
+/**
+ * Tells if the apex of the zone has an NSEC extension
+ * 
+ * @param zone
+ * @return 
+ */
 
 static inline bool zdb_zone_is_nsec(const zdb_zone *zone)
 {
@@ -327,6 +378,64 @@ static inline bool zdb_zone_is_nsec(const zdb_zone *zone)
 #else
     return FALSE;
 #endif
+}
+
+#if ZDB_HAS_NSEC_SUPPORT
+/**
+ * Tells if a zone has an NSEC chain
+ * 
+ * @param zone
+ * @return 
+ */
+
+static inline bool zdb_zone_has_nsec_chain(const zdb_zone *zone)
+{
+    return zone->nsec.nsec != NULL;
+}
+
+static inline bool zdb_zone_has_nsec_records(const zdb_zone *zone)
+{
+    return zdb_zone_has_nsec_chain(zone);
+}
+
+#endif
+
+/**
+ * True for zones that are to be maintained.
+ * This covers DNSSEC zones, but also zones in the process of being
+ * DNSSEC.
+ * 
+ * @param zone
+ * @return 
+ */
+
+static inline bool zdb_zone_is_maintained(const zdb_zone *zone)
+{
+    return (zone->apex->flags & ZDB_RR_LABEL_MAINTAINED) != 0;
+}
+
+static inline void zdb_zone_set_maintained(const zdb_zone *zone, bool maintained)
+{
+    if(maintained)
+    {
+        zone->apex->flags |= ZDB_RR_LABEL_MAINTAINED;
+    }
+    else
+    {
+        zone->apex->flags &= ~ZDB_RR_LABEL_MAINTAINED;
+    }
+}
+
+static inline void zone_set_maintain_mode(zdb_zone *zone, u8 mode)
+{
+    yassert((mode & ZDB_ZONE_MAINTAIN_MASK) == mode);
+    zone->_flags &= ~ZDB_ZONE_MAINTAIN_MASK;
+    zone->_flags |= mode;
+}
+
+static inline u8 zone_get_maintain_mode(const zdb_zone *zone)
+{
+    return zone->_flags & ZDB_ZONE_MAINTAIN_MASK;
 }
 
 static inline bool zdb_zone_is_dnssec(const zdb_zone *zone)
@@ -338,20 +447,22 @@ static inline bool zdb_zone_is_dnssec(const zdb_zone *zone)
 #endif    
 }
 
-#if OBSOLETE
-/**
- * Exchange the current zone with a dummy invalid one.
- * Do nothing if the zone in place is already invalid.
- * Returns the previous zone.
- * 
- * @param db
- * @param origin
- * @return 
- */
+static inline void zdb_zone_set_rrsig_push_allowed(zdb_zone *zone, bool allowed)
+{
+    if(allowed)
+    {
+        zone->_flags |= ZDB_ZONE_RRSIG_PUSH_ALLOWED;
+    }
+    else
+    {
+        zone->_flags &= ~ZDB_ZONE_RRSIG_PUSH_ALLOWED;
+    }
+}
 
-zdb_zone *zdb_zone_xchg_with_invalid(zdb *db, const u8 *origin, u16 or_flags);
-
-#endif
+static inline bool zdb_zone_get_rrsig_push_allowed(const zdb_zone *zone)
+{
+    return (zone->_flags & ZDB_ZONE_RRSIG_PUSH_ALLOWED) != 0;
+}
 
 bool zdb_zone_isinvalid(zdb_zone *zone);
 
@@ -403,7 +514,7 @@ bool zdb_zone_contains_dnskey_record_for_key(zdb_zone *zone, const dnssec_key *k
 
 bool zdb_zone_apex_contains_rrsig_record_by_key(zdb_zone *zone, const dnssec_key *key);
 
-void zdb_zone_update_keystore_keys_from_zone(zdb_zone *zone);
+void zdb_zone_update_keystore_keys_from_zone(zdb_zone *zone, u8 secondary_lock);
 
 #endif
 

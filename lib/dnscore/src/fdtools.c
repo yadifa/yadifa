@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnscoretools Generic Tools
  *  @ingroup dnscore
  *  @brief
@@ -49,16 +49,115 @@
 #include "dnscore/fdtools.h"
 #include "dnscore/timems.h"
 #include "dnscore/logger.h"
+#include "dnscore/mutex.h"
 
  /* GLOBAL VARIABLES */
 
 extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
-#if DEBUG
+#define DEBUG_FD_OPEN_CLOSE_MONITOR 0
+
+#ifdef DEBUG
 // avoids logging these operations in the logger.
 // this prevents a self-deadlock if the logger limit is reached (2^20 lines)
 bool logger_is_self();
+#endif
+
+#if DEBUG_FD_OPEN_CLOSE_MONITOR
+
+// file descriptor track enabled
+
+#include "dnscore/u32_set.h"
+#include "dnscore/zalloc.h"
+
+static group_mutex_t fd_mtx = GROUP_MUTEX_INITIALIZER;
+
+static u32_set fd_to_name = U32_SET_EMPTY;
+
+struct fd_track
+{
+    stacktrace opener;
+    stacktrace closer;
+    char name[256];
+};
+
+typedef struct fd_track fd_track;
+
+static void fd_set_name(int fd, const char *name)
+{
+    fd_track *track;
+    
+    group_mutex_lock(&fd_mtx, GROUP_MUTEX_WRITE);
+    
+    log_debug6("file descriptor: %i is '%s'", fd, name);
+    
+    u32_node *node = u32_set_avl_insert(&fd_to_name, fd);
+                
+    if(node->value == NULL)
+    {    
+        ZALLOC_OR_DIE(fd_track*, track, fd_track, GENERIC_TAG);
+        node->value = track;
+        track->opener = 0;
+        track->closer = 0;
+        track->name[0] = '\0';
+    }
+    else
+    {
+        track = (fd_track*)node->value;
+        if(track->name[0] != '\0')
+        {
+            log_err("file descriptor: %i was associated with '%s'", fd, track->name);
+        }
+    }
+    
+    strncpy(track->name, name, sizeof(track->name));
+    track->opener = debug_stacktrace_get();
+    track->name[sizeof(track->name) - 1] = '\0';
+    
+    group_mutex_unlock(&fd_mtx, GROUP_MUTEX_WRITE);
+}
+
+static void fd_clear_name(int fd)
+{
+    group_mutex_lock(&fd_mtx, GROUP_MUTEX_WRITE);
+    
+    u32_node *node = u32_set_avl_find(&fd_to_name, fd);
+    if(node != NULL)
+    {
+        yassert(node->value != NULL);
+        
+        fd_track *track = (fd_track*)node->value;
+        stacktrace st = debug_stacktrace_get();
+
+        if(track->name[0] != '\0')
+        {            
+            log_debug6("file descriptor: %i is '%s' no more", fd, track->name);
+        }
+        else
+        {
+            log_debug6("file descriptor: %i is being closed by", fd);
+            debug_stacktrace_log(MODULE_MSG_HANDLE, MSG_DEBUG6, st);
+            log_debug6("file descriptor: %i was closed already by", fd);
+            debug_stacktrace_log(MODULE_MSG_HANDLE, MSG_DEBUG6, track->closer);
+            log_debug6("file descriptor: %i was last opened by", fd);
+            debug_stacktrace_log(MODULE_MSG_HANDLE, MSG_DEBUG6, track->opener);
+        }
+
+        track->closer = st;
+        
+        track->name[0] = '\0';
+    }
+    else
+    {
+        stacktrace st = debug_stacktrace_get();
+
+        log_debug6("file descriptor: %i is untracked and is being closed by", fd);
+        debug_stacktrace_log(MODULE_MSG_HANDLE, MSG_DEBUG6, st);
+    }
+    
+    group_mutex_unlock(&fd_mtx, GROUP_MUTEX_WRITE);
+}
 #endif
 
 /**
@@ -149,7 +248,7 @@ readfully(int fd, void *buf, size_t count)
             {
                 break;
             }
-
+            
             if(current - start > 0)
             {
                 break;
@@ -380,6 +479,8 @@ readtextline(int fd, char *start, size_t count)
 /**
  * Deletes a file (see man 2 unlink).
  * Handles EINTR and other retry errors.
+ * Safe to use in the logger thread as it only logs (debug) if the current
+ * thread is not the logger's
  * 
  * @param fd
  * @return 
@@ -441,7 +542,7 @@ open_ex(const char *pathname, int flags)
     int fd;
     
 #ifdef DEBUG
-    if(!logger_is_self())
+    if(!logger_is_self() && logger_is_running())
     {
         log_debug6("open_ex(%s,%o)", STRNULL(pathname), flags);
         errno = 0;
@@ -470,9 +571,15 @@ open_ex(const char *pathname, int flags)
 #endif
     
 #ifdef DEBUG
-    if(!logger_is_self())
+    if(!logger_is_self() && logger_is_running())
     {
-        log_debug6("open_ex(%s,%o): %r (fd)", STRNULL(pathname), flags, ERRNO_ERROR, fd);
+        log_debug6("open_ex(%s,%o): %r (%i)", STRNULL(pathname), flags, ERRNO_ERROR, fd);
+#if DEBUG_FD_OPEN_CLOSE_MONITOR
+        if(fd > 0)
+        {
+            fd_set_name(fd, pathname);
+        }
+#endif
     }
 #endif
     
@@ -482,6 +589,8 @@ open_ex(const char *pathname, int flags)
 /**
  * Opens a file, create if it does not exist. (see man 2 open with O_CREAT)
  * Handles EINTR and other retry errors.
+ * Safe to use in the logger thread as it only logs (debug) if the current
+ * thread is not the logger's
  * 
  * @param fd
  * @return 
@@ -493,7 +602,7 @@ open_create_ex(const char *pathname, int flags, mode_t mode)
     int fd;
     
 #ifdef DEBUG
-    if(!logger_is_self())
+    if(!logger_is_self() && logger_is_running())
     {
         log_debug6("open_create_ex(%s,%o,%o)", STRNULL(pathname), flags, mode);
         errno = 0;
@@ -524,12 +633,35 @@ open_create_ex(const char *pathname, int flags, mode_t mode)
 #endif
     
 #ifdef DEBUG
-    if(!logger_is_self())
+    if(!logger_is_self() && logger_is_running())
     {
         log_debug6("open_create_ex(%s,%o,%o): %r (%i)", STRNULL(pathname), flags, mode, ERRNO_ERROR, fd);
+#if DEBUG_FD_OPEN_CLOSE_MONITOR
+        if(fd > 0)
+        {
+            fd_set_name(fd, pathname);
+        }
+#endif
     }
 #endif
     
+    return fd;
+}
+
+int mkstemp_ex(char *template)
+{
+    int fd = mkstemp(template);
+#ifdef DEBUG
+    if(!logger_is_self() && logger_is_running())
+    {
+#if DEBUG_FD_OPEN_CLOSE_MONITOR
+        if(fd > 0)
+        {
+            fd_set_name(fd, template);
+        }
+#endif
+    }
+#endif
     return fd;
 }
 
@@ -571,13 +703,35 @@ open_create_ex_nolog(const char *pathname, int flags, mode_t mode)
  */
 
 ya_result
+#ifndef DEBUG
 close_ex(int fd)
+#else
+close_ex_ref(int* fdp)
+#endif
 {
     ya_result return_value = SUCCESS;
+
+#ifdef DEBUG
+    int fd = *fdp;
+    
+    if(fd == -2)
+    {
+        abort();
+    }
+    
+    *fdp = -2;
+#endif
     
 #ifdef DEBUG
-    if(!logger_is_self())
+    if(!logger_is_self() && logger_is_running())
     {
+#if DEBUG_FD_OPEN_CLOSE_MONITOR
+        if(fd > 0)
+        {
+            fd_clear_name(fd);
+        }
+#endif
+        
         log_debug6("close_ex(%i)", fd);
         errno = 0;
     }
@@ -603,9 +757,13 @@ close_ex(int fd)
 #endif
     
 #ifdef DEBUG
-    if(!logger_is_self())
+    if(!logger_is_self() && logger_is_running())
     {
         log_debug6("close_ex(%i): %r", fd, return_value);
+        if(FAIL(return_value))
+        {
+            logger_flush();
+        }
     }
 #endif
     
@@ -622,9 +780,24 @@ close_ex(int fd)
  */
 
 ya_result
+#ifndef DEBUG
 close_ex_nolog(int fd)
+#else
+close_ex_nolog_ref(int* fdp)
+#endif
 {
     ya_result return_value = SUCCESS;
+    
+#ifdef DEBUG
+    int fd = *fdp;
+    
+    if(fd == -2)
+    {
+        abort();
+    }
+    
+    *fdp = -2;
+#endif
     
     while(close(fd) < 0)
     {
@@ -638,6 +811,64 @@ close_ex_nolog(int fd)
     }
   
     return return_value;
+}
+
+int
+fsync_ex(int fd)
+{
+    while(fsync(fd) < 0)
+    {
+        int err = errno;
+        if(err != EINTR)
+        {
+            return ERRNO_ERROR;
+        }
+    }
+    
+    return SUCCESS;
+}
+
+int
+fdatasync_ex(int fd)
+{
+    while(fdatasync(fd) < 0)
+    {
+        int err = errno;
+        if(err != EINTR)
+        {
+            return ERRNO_ERROR;
+        }
+    }
+    
+    return SUCCESS;
+}
+
+int dup_ex(int fd)
+{
+    while(dup(fd) < 0)
+    {
+        int err = errno;
+        if(err != EINTR)
+        {
+            return ERRNO_ERROR;
+        }
+    }
+    
+    return SUCCESS;
+}
+
+int dup2_ex(int old_fd, int new_fd)
+{
+    while(dup2(old_fd, new_fd) < 0)
+    {
+        int err = errno;
+        if(err != EINTR)
+        {
+            return ERRNO_ERROR;
+        }
+    }
+    
+    return SUCCESS;
 }
 
 /**
@@ -887,46 +1118,51 @@ fd_mtime(int fd, s64 *timestamp)
  */
 
 u8
-dirent_get_file_type(const char* folder, struct dirent *entry)
+dirent_get_type_from_fullpath(const char *fullpath)
 {
+    struct stat file_stat;
     u8 d_type;
 
-#ifdef _DIRENT_HAVE_D_TYPE
-    d_type = entry->d_type;
-#else
     d_type = DT_UNKNOWN;
-#endif
+
+    while(stat(fullpath, &file_stat) < 0)
+    {
+        int e = errno;
+
+        if(e != EINTR)
+        {
+            log_err("stat(%s): %r", fullpath, ERRNO_ERROR);
+            break;
+        }
+    }
+
+    if(S_ISREG(file_stat.st_mode))
+    {
+        d_type = DT_REG;
+    }
+    else if(S_ISDIR(file_stat.st_mode))
+    {
+        d_type = DT_DIR;
+    }
+
+    return d_type;
+}
+
+u8
+dirent_get_file_type(const char *folder, const char *name)
+{
+    u8 d_type;
+    char fullpath[PATH_MAX];
+
+    d_type = DT_UNKNOWN;
     
     /*
      * If the FS OR the OS does not supports d_type :
      */
 
-    if(d_type == DT_UNKNOWN)
+    if(ISOK(snprintf(fullpath, sizeof(fullpath), "%s/%s", folder, name)))
     {
-        struct stat file_stat;
-        
-        char d_name[PATH_MAX];
-        snprintf(d_name, sizeof(d_name), "%s/%s", folder, entry->d_name);
-
-        while(stat(d_name, &file_stat) < 0)
-        {
-            int e = errno;
-
-            if(e != EINTR)
-            {
-                log_err("stat(%s): %r", d_name, ERRNO_ERROR);
-                break;
-            }
-        }
-
-        if(S_ISREG(file_stat.st_mode))
-        {
-            d_type = DT_REG;
-        }
-        else if(S_ISDIR(file_stat.st_mode))
-        {
-            d_type = DT_DIR;
-        }
+        d_type = dirent_get_type_from_fullpath(fullpath);
     }
 
     return d_type;
@@ -934,13 +1170,19 @@ dirent_get_file_type(const char* folder, struct dirent *entry)
 
 // typedef ya_result readdir_callback(const char *basedir, const char* file, u8 filetype, void *args);
 
+static group_mutex_t readdir_mutex = GROUP_MUTEX_INITIALIZER;
+
 ya_result
 readdir_forall(const char *basedir, readdir_callback *func, void *args)
 {
     DIR *dir;
     ya_result ret;
-    struct dirent entry;
-    struct dirent *result;
+    size_t basedir_len = strlen(basedir);
+    char *name;
+    char path[PATH_MAX];
+    memcpy(path, basedir, basedir_len);
+    path[basedir_len] = '/';
+    name = &path[basedir_len + 1];
     
     dir = opendir(basedir);
     
@@ -951,33 +1193,48 @@ readdir_forall(const char *basedir, readdir_callback *func, void *args)
     
     for(;;)
     {
-        readdir_r(dir, &entry, &result);
+        group_mutex_lock(&readdir_mutex, GROUP_MUTEX_WRITE);
+        struct dirent *tmp = readdir(dir);
 
-        if(result == NULL)
+        if(tmp == NULL)
         {
+            group_mutex_unlock(&readdir_mutex, GROUP_MUTEX_WRITE);
+            
             ret = SUCCESS;
 
             break;
         }
-
-        u8 d_type = dirent_get_file_type(basedir, result);
         
-        if(d_type == DT_DIR)
+        // ignore names "." and ".."
+        
+        if(tmp->d_name[0] == '.')
         {
-            if(result->d_name[0] == '.')
+            if(
+                ((tmp->d_name[1] == '.') && (tmp->d_name[2] == '\0')) ||
+                (tmp->d_name[1] == '\0')
+                )
             {
-                if((result->d_name[1] == '.') && (result->d_name[2] == '\0'))
-                {
-                    continue;
-                }
-                else if(result->d_name[1] == '\0')
-                {
-                    continue;
-                }
+                group_mutex_unlock(&readdir_mutex, GROUP_MUTEX_WRITE);
+                continue;
             }
         }
         
-        if(FAIL(ret = func(basedir, result->d_name, d_type, args)))
+        size_t name_len = strlen(tmp->d_name);
+        
+        if(name_len + basedir_len + 1 + 1 > sizeof(path))
+        {
+            group_mutex_unlock(&readdir_mutex, GROUP_MUTEX_WRITE);
+            log_err("readdir_forall: '%s/%s' is bigger than expected (%i): skipping", basedir, tmp->d_name, sizeof(path));
+            continue;
+        }
+        
+        memcpy(name, tmp->d_name, name_len + 1);
+        
+        group_mutex_unlock(&readdir_mutex, GROUP_MUTEX_WRITE);
+
+        u8 d_type = dirent_get_type_from_fullpath(path);
+                
+        if(FAIL(ret = func(basedir, name, d_type, args)))
         {
             return ret;
         }
@@ -992,10 +1249,6 @@ readdir_forall(const char *basedir, readdir_callback *func, void *args)
             {
                 if(d_type == DT_DIR)
                 {
-                    char path[PATH_MAX];
-                    
-                    snprintf(path, sizeof(path), "%s/%s", basedir, result->d_name);
-                    
                     if(FAIL(ret = readdir_forall(path, func, args)))
                     {
                         return ret;

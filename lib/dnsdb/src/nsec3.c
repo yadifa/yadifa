@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -63,9 +63,7 @@
 
 #include "dnsdb/zdb_types.h"
 
-
-
-#if ZDB_HAS_NSEC3_SUPPORT == 0
+#if !ZDB_HAS_NSEC3_SUPPORT
 #error nsec3.c should not be compiled when ZDB_HAS_NSEC3_SUPPORT == 0
 #endif
 
@@ -80,503 +78,21 @@
 #include "dnsdb/nsec3.h"
 #include "dnsdb/nsec_common.h"
 #include "dnsdb/nsec3_owner.h"
-#include "dnsdb/zdb_listener.h"
 #include "dnsdb/rrsig.h"
+#include "dnsdb/dynupdate-diff.h"
+
+#ifndef NSEC3_LABEL_DEBUG
+#ifdef DEBUG
+#define NSEC3_LABEL_DEBUG 1 // set to 1 for debugging ...
+#else
+#define NSEC3_LABEL_DEBUG 0
+#endif
+#endif
 
 #define MODULE_MSG_HANDLE g_dnssec_logger
 extern logger_handle *g_dnssec_logger;
 
 
-
-static group_mutex_t nsec3_owners_readers_write_locks = GROUP_MUTEX_INITIALIZER;
-
-static nsec3_label_extension*
-nsec3_update_label_links_get_extension(zdb_rr_label *label, int nsec3_chain_index)
-{
-    nsec3_label_extension **n3lep = &label->nsec.nsec3;
-    nsec3_label_extension *n3le = NULL;
-    for(int i = 0; i <= nsec3_chain_index; ++i)
-    {
-        if(*n3lep == NULL)
-        {
-            // a node of the chain is missing.
-            *n3lep = nsec3_label_extension_alloc();
-            ZEROMEMORY(*n3lep, sizeof(nsec3_label_extension));
-        }
-        n3le = *n3lep;
-        n3lep = &(*n3lep)->next;
-    }
-    
-    // the link for the chain we need is now available
-    
-    return n3le;
-}
-
-static void
-nsec3_update_label_links_owner(zdb_rr_label *label, int nsec3_chain_index, nsec3_zone_item *item)
-{
-    nsec3_label_extension *n3le = nsec3_update_label_links_get_extension(label, nsec3_chain_index);            
-    
-    yassert(n3le->self == NULL || n3le->self == item);
-    
-    if(n3le->self == NULL)
-    {
-        n3le->self = item;
-    }
-}
-
-static void
-nsec3_update_label_links_star(zdb_rr_label *label, int nsec3_chain_index, nsec3_zone_item *item)
-{
-    nsec3_label_extension *n3le = nsec3_update_label_links_get_extension(label, nsec3_chain_index);            
-    
-    yassert(n3le->star == NULL || n3le->star == item);
-    
-    if(n3le->star == NULL)
-    {
-        n3le->star = item;
-    }
-}
-
-/**
- * Looks for all labels linked to the nsec3 record (RC / SC) and ensure they are properly linked.
- * This is the other side of nsec3_add_owner and nsec3_add_star, when all informations are available.
- * Used by the chain create.
- */
-
-void
-nsec3_update_labels_links(zdb_zone *zone, int nsec3_chain_index, nsec3_zone_item *item)
-{
-    if(item->rc > 0)
-    {
-        if(item->rc == 1)
-        {
-            zdb_rr_label *label = item->label.owner;
-            nsec3_update_label_links_owner(label, nsec3_chain_index, item);
-        }
-        else
-        {
-            for(int i = 0; i < item->rc; ++i)
-            {
-                zdb_rr_label *label = item->label.owners[i];
-                nsec3_update_label_links_owner(label, nsec3_chain_index, item);
-            }
-        }            
-    }
-    if(item->sc > 0)
-    {
-        if(item->sc == 1)
-        {
-            zdb_rr_label *label = item->star_label.owner;
-            nsec3_update_label_links_star(label, nsec3_chain_index, item);
-        }
-        else
-        {
-            for(int i = 0; i < item->rc; ++i)
-            {
-                zdb_rr_label *label = item->star_label.owners[i];
-                nsec3_update_label_links_star(label, nsec3_chain_index, item);
-            }
-        }            
-    }
-}
-
-bool
-nsec3_update_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference labels, s32 labels_top)
-{
-
-    /*
-     * If label has no nsec3 ->  nsec3_add_label
-     *
-     * Else
-     *
-     * Check the types, change if required.
-     */
-
-    if(label->nsec.nsec3 == NULL)
-    {
-        nsec3_add_label(zone, label, labels, labels_top);
-        
-        return TRUE;
-    }
-    
-    nsec3_zone_item *nsec3_item = label->nsec.nsec3->self;
-
-    if(nsec3_item == NULL)
-    {
-        yassert((label->nsec.nsec3->self == NULL) && (label->nsec.nsec3->star == NULL) && (label->nsec.nsec3->next == NULL));
-        nsec3_label_extension_free(label->nsec.nsec3);
-        label->nsec.nsec3 = NULL;
-        
-        nsec3_add_label(zone, label, labels, labels_top);
-
-        return TRUE;
-    }
-
-    type_bit_maps_context type_context;
-
-    u16 type_bit_maps_size = type_bit_maps_initialize(&type_context, label, FALSE, TRUE);
-    
-    if(type_bit_maps_size > 0)
-    {
-        u8 *type_bit_maps;
-        
-        ZALLOC_ARRAY_OR_DIE(u8*, type_bit_maps, type_bit_maps_size, NSEC3_TYPEBITMAPS_TAG);
-        type_bit_maps_write(type_bit_maps, &type_context);
-        
-        bool type_map_did_change = TRUE;
-        if(nsec3_item->type_bit_maps_size == type_bit_maps_size)
-        {
-            if(memcmp(nsec3_item->type_bit_maps, type_bit_maps, type_bit_maps_size) == 0)
-            {
-                type_map_did_change = FALSE; 
-            }
-        }
-
-        if(type_map_did_change)
-        {
-            // notify the removal of NSEC3 before going further
-            
-            nsec3_zone* n3 = nsec3_zone_from_item(zone, nsec3_item);
-            zdb_listener_notify_update_nsec3rrsig(zone, nsec3_item->rrsig, NULL, nsec3_item);
-            zdb_listener_notify_remove_nsec3(zone, nsec3_item, n3, 0);
-            nsec3_zone_item_rrsig_delete_all(nsec3_item);
-            
-            type_bit_maps_merge(&type_context, nsec3_item->type_bit_maps, nsec3_item->type_bit_maps_size, type_bit_maps, type_bit_maps_size);
-
-            /*
-             * Try to re-use one of the buffers
-             */
-
-            if(type_context.type_bit_maps_size == nsec3_item->type_bit_maps_size)
-            {
-                ZFREE_ARRAY(type_bit_maps, type_bit_maps_size);
-            }
-            else if(type_context.type_bit_maps_size == type_bit_maps_size)
-            {
-                ZFREE_ARRAY(nsec3_item->type_bit_maps, nsec3_item->type_bit_maps_size);
-
-                nsec3_item->type_bit_maps = type_bit_maps;
-                nsec3_item->type_bit_maps_size = type_bit_maps_size;
-            }
-            else
-            {
-                ZFREE_ARRAY(type_bit_maps, type_bit_maps_size);
-                ZFREE_ARRAY(nsec3_item->type_bit_maps, nsec3_item->type_bit_maps_size);
-
-                ZALLOC_ARRAY_OR_DIE(u8*, nsec3_item->type_bit_maps, type_bit_maps_size, NSEC3_TYPEBITMAPS_TAG);
-                nsec3_item->type_bit_maps_size = type_bit_maps_size;
-            }
-
-            type_bit_maps_write(nsec3_item->type_bit_maps, &type_context);
-
-            return TRUE;
-        }
-        else
-        {
-            // nothing to do
-
-            ZFREE_ARRAY(type_bit_maps, type_bit_maps_size);
-
-            return FALSE;
-        }
-    }
-    else
-    {
-        /*
-         * Empty terminator ...
-         */
-
-        log_quit("nsec3_update_label called on an empty terminator.  nsec3_remove_label should have been called instead.");
-
-        return FALSE; /* NEVER REACHED */
-    }
-}
-
-/*
- * Adds NSEC3 records to a label.  This is NOT an update.
- * We assume that the labels are not a fqdn bigger than MAX_DOMAIN_LENGTH
- */
-
-void
-nsec3_add_label(zdb_zone *zone, zdb_rr_label* label, dnslabel_vector_reference labels, s32 labels_top)
-{
-    /*
-     * All the intermediary labels are supposed to be ready, the caller
-     * MUST call this function each time it adds a new label
-     *
-     * Compute the stuff
-     * Create/Link the NSEC3
-     *	    From the PREVIOUS NSEC3 record, recompute the ones that are now
-     *	    supposed to be put in the new one
-     * Increase the relevant SC
-     * A signature should be ordered for this one and for the previous one
-     *
-     */
-
-    type_bit_maps_context type_context;
-
-    /*
-     * All the labels from (included) the root to the zone have to be added
-     */
-
-    u32 name_len;
-    u8 name[2 + MAX_DOMAIN_LENGTH];
-    u8 digest[1 + MAX_DIGEST_LENGTH];
-
-    name[0] = 1;
-    name[1] = '*';
-
-    /* NOTE: the final 0 is taken in account in the returned length */
-
-    /* - 1 because of said final 0 */
-    name_len = dnslabel_vector_to_dnsname(labels, labels_top, &name[2])/* - 1*/;
-
-    log_debug("nsec3_add_label: %{dnsname}: adding", &name[2]);
-
-    bool opt_out = zdb_zone_is_nsec3_optout(zone);
-
-    u8 default_flags = (opt_out)?1:0;
-    
-    bool force_rrsig;
-    
-    if(ZDB_LABEL_UNDERDELEGATION(label))
-    {
-        force_rrsig = FALSE;
-    }
-    else
-    {
-        /* opt-in */
-        
-        if(!opt_out)
-        {
-            force_rrsig = TRUE;
-        }
-        else /* opt-out */
-        {            
-            if(ZDB_LABEL_ATDELEGATION(label))
-            {
-                force_rrsig =  (zdb_record_find(&label->resource_record_set, TYPE_DS) != NULL);    /* Has NS & DS */
-            }
-            else
-            {
-                force_rrsig = TRUE;
-            }
-        }
-    }
-    
-    /*
-     * These two slots are for the owner label but have to be stored in
-     * (and owned by) the NSEC3 item.
-     */
-
-    u16 type_bit_maps_size = type_bit_maps_initialize(&type_context, label, FALSE, force_rrsig);
-    nsec3_zone* n3 = zone->nsec.nsec3;
-    nsec3_label_extension* next_n3_ext = NULL;
-
-    yassert(n3 != NULL);
-
-    do
-    {
-        nsec3_compute_digest_from_fqdn_with_len(n3, &name[2], name_len, digest, FALSE);
-
-        log_debug("nsec3_add_label: %{dnsname}: NSEC3 name is %{digest32h}", &name[2], digest);
-
-        /*
-         * Creates or return the existing nsec3 node for the digest
-         *
-         */
-
-        nsec3_zone_item *self = nsec3_avl_insert(&n3->items, digest);
-
-        // self->type_bit_maps is NULL => new one
-
-        /*
-         * Destroy the previous NSEC3's signature
-         */
-
-        nsec3_zone_item *self_prev = nsec3_avl_node_mod_prev(self);
-
-        yassert(self_prev != NULL);
-
-        if(self_prev->rrsig != NULL)
-        {
-            zdb_packed_ttlrdata *rrsig_list = self_prev->rrsig;
-            do
-            {
-                zdb_packed_ttlrdata *tmp = rrsig_list;
-                rrsig_list = rrsig_list->next;
-                
-                zdb_listener_notify_update_nsec3rrsig(zone, tmp, NULL, self_prev);
-                
-                ZDB_RECORD_ZFREE(tmp);
-            }
-            while(rrsig_list != NULL);
-            
-            self_prev->rrsig = NULL;
-        }
-
-        /*
-         * Destroy the prev's star references.
-         */
-
-#ifdef DEBUG
-        if(self_prev->sc > 0)
-        {
-            log_debug("nsec3_add_label: %{dnsname}: clearing %{digest32h} (predecessor)", &name[2], self_prev->digest);
-        }
-#endif
-
-        nsec3_remove_all_star(self_prev);
-
-        /** @todo 20140526 edf -- self_prev needs to be signed */
-
-        /*
-         *  self -> rc++
-         *  self -> owner += label (list + 1 item)
-         */
-
-#ifdef DEBUG
-        if(self->rc != 0)
-        {
-            log_debug("nsec3_add_label: %{dnsname}: %{digest32h} has got owner collisions", &name[2], self->digest);
-        }
-#endif
-
-        nsec3_add_owner(self, label);
-
-        /*
-         * Note: the self is edited later
-         */
-        
-        self->flags = default_flags;
-
-        if(self->type_bit_maps_size == 0)
-        {
-            /*
-             * Set the bitmap
-             */
-
-            self->type_bit_maps = NULL;
-            self->type_bit_maps_size = type_bit_maps_size;
-
-            if(type_bit_maps_size > 0)
-            {
-                ZALLOC_ARRAY_OR_DIE(u8*, self->type_bit_maps, type_bit_maps_size, NSEC3_TYPEBITMAPS_TAG);
-                type_bit_maps_write(self->type_bit_maps, &type_context);
-            }
-            
-            zdb_listener_notify_add_nsec3(zone, self, n3, zone->min_ttl);
-        }
-        else
-        {
-            /* Merge the existing bitmap with the new one */
-
-            u8* tmp_type_bit_maps;
-
-            ZALLOC_ARRAY_OR_DIE(u8*, tmp_type_bit_maps, MAX(type_bit_maps_size, 1), NSEC3_TYPEBITMAPS_TAG);
-
-            /* type_bit_maps_size > 0 */
-
-            type_bit_maps_write(tmp_type_bit_maps, &type_context);
-
-            if(type_bit_maps_merge(&type_context, self->type_bit_maps, self->type_bit_maps_size, tmp_type_bit_maps, type_bit_maps_size))
-            {
-                /* TRUE : a merge occurred */
-
-                /**
-                 * @todo 20110926 edf -- nsec3_update has got this operation added:
-                 *
-                 * Check if this is a mistake to have not put it here
-                 *
-                 * If it was, do the requested factorization (nsec3_update)
-
-                if((node->flags&NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD)==0)
-                {
-                    zdb_listener_notify_remove_nsec3(zone, node, n3);
-                    node->flags|=NSEC3_FLAGS_MARKED_FOR_ICMTL_ADD;
-                }
-                 */
-
-                yassert(type_bit_maps_size > 0);
-
-                type_bit_maps_size = type_context.type_bit_maps_size;
-
-                ZFREE_ARRAY(self->type_bit_maps, self->type_bit_maps_size);
-
-                ZALLOC_ARRAY_OR_DIE(u8*, self->type_bit_maps, type_bit_maps_size, NSEC3_TYPEBITMAPS_TAG);
-
-                self->type_bit_maps_size = type_bit_maps_size;
-
-                type_bit_maps_write(self->type_bit_maps, &type_context);
-
-                /*
-                 * This case does not exist:  A merge of something of size > 0
-                 * with anything will always give a size > 0
-                 *
-                 * else
-                 * {
-                 *   self->type_bit_maps_size = 0;
-                 * }
-                 *
-                 */
-            }
-
-            ZFREE_ARRAY(tmp_type_bit_maps, type_bit_maps_size);
-        }
-
-        /* nsec3_set_label_extension */
-
-        if(next_n3_ext == NULL)
-        {
-            yassert(label->nsec.nsec3 == NULL);
-            next_n3_ext = nsec3_label_extension_alloc();
-
-#ifdef DEBUG
-            memset(next_n3_ext, 0xac, sizeof(nsec3_label_extension));
-#endif
-
-            label->nsec.nsec3 = next_n3_ext;
-        }
-        else
-        {
-            yassert(next_n3_ext->next == NULL);
-            next_n3_ext->next = nsec3_label_extension_alloc();
-
-#ifdef DEBUG
-            memset(next_n3_ext->next, 0xca, sizeof(nsec3_label_extension));
-#endif
-
-            next_n3_ext = next_n3_ext->next;
-        }
-
-        /*
-         * Are an array (More than one NSEC3PARAM)
-         */
-
-        yassert(self != NULL);
-
-
-        next_n3_ext->self = self;
-
-        /** @todo 20140526 edf -- self needs to be signed */
-
-        nsec3_compute_digest_from_fqdn_with_len(n3, name, name_len + 2, digest, FALSE);
-        //digestname(name, name_len + 2, NSEC3_ZONE_SALT(n3), NSEC3_ZONE_SALT_LEN(n3), nsec3_zone_get_iterations(n3), &digest[1], FALSE);
-
-        nsec3_zone_item* star = nsec3_avl_find_interval_start(&n3->items, digest);
-
-        nsec3_add_star(star, label);
-
-        next_n3_ext->star = star;
-        next_n3_ext->next = NULL;
-
-        n3 = n3->next;
-    }
-    while(n3 != NULL);
-
-    label->flags |= ZDB_RR_LABEL_NSEC3;
-}
 
 /**
  * used by nsec3_label_link
@@ -590,7 +106,7 @@ nsec3_label_link_seeknode(nsec3_zone* n3, const u8 *fqdn, s32 fqdn_len, u8 *dige
 {
     nsec3_compute_digest_from_fqdn_with_len(n3, fqdn, fqdn_len, digest, FALSE);
     
-#if DEBUG
+#if NSEC3_LABEL_DEBUG
     log_debug("nsec3: seeking node for %{dnsname} with %{digest32h}", fqdn, digest);
 #endif
 
@@ -611,426 +127,13 @@ nsec3_label_link_seekstar(nsec3_zone* n3, const u8 *fqdn, s32 fqdn_len, u8 *dige
 {
     nsec3_compute_digest_from_fqdn_with_len(n3, fqdn, fqdn_len, digest, TRUE);
     
-#if DEBUG
+#if NSEC3_LABEL_DEBUG
     log_debug("nsec3: seeking star for %{dnsname} with %{digest32h}", fqdn, digest);
 #endif
 
     nsec3_zone_item* star = nsec3_avl_find_interval_start(&n3->items, digest);
 
     return star;
-}
-
-/**
-  * 
-  * Links a label to already existing nsec3 items
-  * 
-  * This function is for when a label has been added "without intelligence".
-  * It will find if the function has got a matching NSEC3 record (by digest)
-  * If so, it will link to it.
-  * Link is thus made both ways (NSEC3<->LABEL)
-  * 
-  * @param zone
-  * @param label
-  * @param fqdn
-  *
-  */
- 
-void
-nsec3_label_link(zdb_zone *zone, zdb_rr_label* label, const u8 *fqdn)
-{
-    nsec3_zone* n3 = zone->nsec.nsec3;
-    
-#ifdef DEBUG
-    if(n3 == NULL)
-    {
-        log_err("zone %{dnsname} has invalid NSEC3 data");
-        return;
-    }
-#endif
-    
-    nsec3_label_extension **n3lep = &label->nsec.nsec3;
-
-    
-    u8 digest[1 + MAX_DIGEST_LENGTH];
-    
-    // yassert(label->nsec.nsec3 == NULL);
-
-    yassert(n3 != NULL);
-
-    s32 fqdn_len = dnsname_len(fqdn);
-    s32 add_count = 0;
-    bool linked = FALSE;
-
-    do
-    {
-        nsec3_label_extension *n3le = *n3lep;
-        
-        if(n3le == NULL)
-        {
-            nsec3_zone_item *self = nsec3_label_link_seeknode(n3, fqdn, fqdn_len, digest);
-            /// @note 20150908 edf -- investigation: the self returned both has label and *.label pointing to the apex
-            if(self == NULL)
-            {
-                /* no associated node */
-
-                log_debug("nsec3_label_link: %{dnsname} => %{digest32h}: no NSEC3", fqdn, digest);
-            }
-            
-            /**/
-
-            *n3lep = nsec3_label_extension_alloc();
-            n3le = *n3lep;            
-            ZEROMEMORY(n3le, sizeof(nsec3_label_extension));
-            //n3le->next = NULL;
-            
-            if(self != NULL)
-            {
-                /**/
-
-                nsec3_add_owner(self, label);
-                n3le->self = self;
-#if SUPERDUMP
-                nsec3_superdump_integrity_check_label_nsec3_self_points_back(label,0);
-                nsec3_superdump_integrity_check_nsec3_owner_self_points_back(self,0);
-#endif
-                /**/
-
-                nsec3_zone_item* star = nsec3_label_link_seekstar(n3, fqdn, fqdn_len, digest);
-                //nsec3_superdump_integrity_check_label_nsec3_star_points_back(label,0);
-                nsec3_add_star(star, label);
-                n3le->star = star;
-#if SUPERDUMP
-                nsec3_superdump_integrity_check_label_nsec3_star_points_back(label,0);
-                nsec3_superdump_integrity_check_nsec3_owner_star_points_back(star,0);
-#endif
-                /**/
-                
-                linked = TRUE;
-
-                add_count++;
-            }
-
-            n3lep = &n3le->next;
-        }
-        else
-        {
-            nsec3_label_extension *n3le = *n3lep;
-            
-            /* a node exists already, maybe it's not associated yet */
-            
-            if(n3le->self == NULL)
-            {
-                nsec3_zone_item *self = nsec3_label_link_seeknode(n3, fqdn, fqdn_len, digest);
-                
-                if(self != NULL)
-                {
-                    nsec3_add_owner(self, label); // there is an empty n3e in the label right now
-                    n3le->self = self;
-#if SUPERDUMP
-                    nsec3_superdump_integrity_check_nsec3_owner_self_points_back(self,0);
-                    nsec3_superdump_integrity_check_label_nsec3_self_points_back(label,0);
-#endif
-                    nsec3_zone_item* star = nsec3_label_link_seekstar(n3, fqdn, fqdn_len, digest);
-                    assert(star != NULL);
-                    //nsec3_superdump_integrity_check_label_nsec3_star_points_back(label,0);
-                    nsec3_add_star(star, label);
-                    n3le->star = star;
-#if SUPERDUMP
-                    nsec3_superdump_integrity_check_label_nsec3_star_points_back(label,0);
-                    nsec3_superdump_integrity_check_nsec3_owner_star_points_back(star,0);
-#endif
-                    
-                    linked = TRUE;
-                }
-            }
-            
-            n3lep = &n3le->next;
-        }
-        
-        n3 = n3->next;
-    }
-    while(n3 != NULL);
-
-    /* Partial update = BAD */
-    
-    yassert((n3 == NULL) || (n3 != NULL  && add_count == 0));
-
-    if(linked)
-    {
-        label->flags |= ZDB_RR_LABEL_NSEC3;
-    }
-}
-
-/**
- * Unlinks the label from the NSEC3
- *
- * Destroy everything NSEC3 from the label
- *
- * @param zone
- * @param label
- */
-
-void
-nsec3_remove_label(zdb_zone *zone, zdb_rr_label* label)
-{
-    /*
-     *
-     * 1)
-     *
-     * Decrease the RC
-     * Decrease the SC
-     *
-     * 2)
-     *
-     * If RC == 0 (most likely)
-     *	    Move all star references to the PREVIOUS NSEC3 record
-     *	    destroy the NSEC3 record
-     */
-
-    nsec3_label_extension* n3le = label->nsec.nsec3;
-
-    yassert(n3le != NULL);
-
-    //assert_mallocated(n3le);
-
-    log_debug("nsec3_remove_label: %{dnslabel} . %{dnsname}", label->name, zone->origin);
-
-    /* 1) */
-
-    do
-    {
-        nsec3_zone_item *item = n3le->self;
-
-        if(n3le->star != NULL)
-        {
-            log_debug("nsec3_remove_label: releasing star %{digest32h}", n3le->star->digest);
-
-            nsec3_remove_star(n3le->star, label);
-            n3le->star = NULL;
-        }
-
-        if(item != NULL)    /* item = n3le->self */
-        {
-            log_debug("nsec3_remove_label: releasing self %{digest32h}", item->digest);
-            
-            nsec3_remove_owner(item, label);
-            n3le->self = NULL;
-
-            /* 2) */
-
-            if(item->rc == 0)
-            {
-                if(item->sc > 0)
-                {
-                    nsec3_zone_item* prev = nsec3_avl_node_mod_prev(item);
-                    
-                    yassert(prev != NULL);
-
-                    /*
-                     * Take all the star nodes from item
-                     *
-                     * For each of these nodes, update the NSEC3 reference to "prev"
-                     *
-                     * Add all the star nodes of item to prev, in one go
-                     */
-
-                    if(prev != item)
-                    {
-                        nsec3_move_all_star(item, prev);
-                    }
-                    else
-                    {
-                        nsec3_remove_all_star(item);
-                    }
-                }
-
-                yassert(item->rc == 0 && item-> sc == 0 && label->nsec.nsec3->self == NULL);
-
-                /* Destroy item */
-
-                /* First, get the root */
-
-                nsec3_zone* n3 = nsec3_zone_from_item(zone, item);
-
-                yassert(n3 != NULL);
-
-                ZFREE_ARRAY(item->type_bit_maps, item->type_bit_maps_size);
-                item->type_bit_maps = NULL;
-
-                nsec3_avl_delete(&n3->items, item->digest);
-                
-                /** @todo 20120306 edf -- if incremental is on, feedback */
-            }
-        }
-
-        nsec3_label_extension *n3le_tmp = n3le;
-
-        n3le = n3le->next;
-
-        // free the nsec3 label extension of the label being removed
-        
-        nsec3_label_extension_free(n3le_tmp);
-    }
-    while(n3le != NULL);
-
-    label->nsec.nsec3 = NULL;
-}
-
-/**
- * Initializes an RDATA for an NSEC3PARAM using an hash algorithm, flags, iterations, salt length and salt.
- */
-
-static ya_result
-nsec3_build_nsec3param_rdata(u8* nsec3param_rdata, const u8* origin, u8 default_hash_alg, u8 default_flags, u16 default_iterations, u8 default_salt_len, const u8* default_salt)
-{
-    /* Size of the digest in Base32 Hex */
-
-    u32 b32h_hash_len = ((nsec3_hash_len(default_hash_alg) + 4) / 5) << 3;
-
-    if((b32h_hash_len == 0) || (1 + b32h_hash_len + dnsname_len(origin)) > MAX_DOMAIN_LENGTH - 2) /* - 2 for the '*.' */
-    {
-        return DNSSEC_ERROR_NSEC3_DIGESTORIGINOVERFLOW; /* name would be too big */
-    }
-
-    nsec3param_rdata[0] = default_hash_alg;
-    nsec3param_rdata[1] = default_flags;
-    SET_U16_AT(nsec3param_rdata[2], htons(default_iterations));
-    nsec3param_rdata[4] = default_salt_len;
-    MEMCOPY(NSEC3PARAM_RDATA_SALT(nsec3param_rdata), default_salt, default_salt_len);
-    
-    return NSEC3PARAM_MINIMUM_LENGTH + default_salt_len;
-}
-
-/**
- * Adds an nsec3param in the zone (both "DB" and "NSEC3" sides).
- *
- * Delegates to nsec3_zone_add_from_rdata
- *
- */
-
-ya_result
-nsec3_add_nsec3param(zdb_zone *zone, u8 default_hash_alg, u8 default_flags, u16 default_iterations, u8 default_salt_len, u8* default_salt)
-{
-    yassert(default_hash_alg == 1);
-
-    ya_result return_code;
-
-    u16 nsec3param_rdata_size;
-    
-    u8 nsec3param_rdata[NSEC3PARAM_MINIMUM_LENGTH + MAX_SALT_LENGTH];
-
-    if(FAIL(return_code = nsec3_build_nsec3param_rdata(nsec3param_rdata, zone->origin, default_hash_alg, default_flags, default_iterations, default_salt_len, default_salt)))
-    {
-        return return_code;
-    }
-
-    nsec3param_rdata_size = (u16)return_code;
-
-    nsec3_zone* n3 = nsec3_zone_get_from_rdata(zone, nsec3param_rdata_size, nsec3param_rdata);
-
-    if(n3 == NULL)
-    {
-        /*n3 =*/nsec3_zone_add_from_rdata(zone, nsec3param_rdata_size, nsec3param_rdata);
-
-        zdb_packed_ttlrdata* nsec3param;
-
-        ZDB_RECORD_ZALLOC(nsec3param, NSEC3PARAM_DEFAULT_TTL, nsec3param_rdata_size, nsec3param_rdata); /** @todo 20110825 edf -- NSEC3PARAM_DEFAULT_TTL : put the real value here*/
-
-        /*
-         * Add the NSEC3PARAM to the zone apex
-         * Don't do dups
-         */
-
-        if(zdb_record_insert_checked(&zone->apex->resource_record_set, TYPE_NSEC3PARAM, nsec3param)) /* FB done (and yes: this returns a boolean) */
-        {
-#if ZDB_CHANGE_FEEDBACK_SUPPORT != 0
-
-            /*
-             * Update ICMTL.
-             *
-             * NOTE: the zdb_rr_label set of functions are zdb_listener-aware but the zdb_record ones are not.
-             * That's why this one needs a call to the listener.
-             *
-             */
-
-            zdb_ttlrdata unpacked_ttlrdata;
-            unpacked_ttlrdata.rdata_pointer = &nsec3param->rdata_start[0];
-            unpacked_ttlrdata.rdata_size = nsec3param->rdata_size;
-            unpacked_ttlrdata.ttl = nsec3param->ttl;
-            
-            zdb_listener_notify_add_record(zone, zone->origin_vector.labels, zone->origin_vector.size, TYPE_NSEC3PARAM, &unpacked_ttlrdata);
-#endif
-        }
-
-        /** @note if we add an nsec3param, we are about to edit the zone.
-         *  @todo 20110825 edf -- have an "atomic" way to do all this (mark edit + add param + update nsec3 + update sigs + unmark edit)
-         */
-
-        nsec3_edit_zone_start(zone);
-    }
-
-    return SUCCESS;
-}
-
-/**
- * 
- * Removes an NSEC3PARAM record and its associated structure.
- *
- */
-
-ya_result
-nsec3_remove_nsec3param(zdb_zone *zone, u8 hash_alg, u8 flags, u16 iterations, u8 salt_len, const u8* salt)
-{
-    ya_result return_code;
-
-    /* Build the wire */
-
-    u16 nsec3param_rdata_size;
-    u8 nsec3param_rdata[NSEC3PARAM_MINIMUM_LENGTH + MAX_SALT_LENGTH];
-
-    if(FAIL(return_code = nsec3_build_nsec3param_rdata(nsec3param_rdata, zone->origin, hash_alg, flags, iterations, salt_len, salt)))
-    {
-        return return_code;
-    }
-
-    nsec3param_rdata_size = (u16)return_code;
-
-    /* Remove the NSEC3PARAM record */
-
-    zdb_ttlrdata nsec3param_record;
-    nsec3param_record.next = NULL;
-    nsec3param_record.rdata_size = nsec3param_rdata_size;
-    nsec3param_record.rdata_pointer = nsec3param_rdata;
-    nsec3param_record.ttl = NSEC3PARAM_DEFAULT_TTL;
-
-    if(ISOK(zdb_record_delete_exact(&zone->apex->resource_record_set, TYPE_NSEC3PARAM, &nsec3param_record))) // safe delete of record
-    {
-#if ZDB_CHANGE_FEEDBACK_SUPPORT != 0
-
-       /*
-        * Update ICMTL.
-        *
-        * NOTE: the zdb_rr_label set of functions are zdb_listener-aware but the zdb_record ones are not.
-        * That's why this one needs a call to the listener.
-        *
-        */
-
-        zdb_listener_notify_remove_record(zone, zone->origin, TYPE_NSEC3PARAM, &nsec3param_record);
-#endif
-    }
-
-    /* Retrieve the NSEC3PARAM structure from the zone */
-
-    nsec3_zone* n3 = nsec3_zone_get_from_rdata(zone, nsec3param_rdata_size, nsec3param_rdata);
-
-    if(n3 != NULL)
-    {
-        /* Destroy said structure and all its associations (NSEC3 item + label's references to it) */
-
-        nsec3_zone_destroy(zone, n3);
-    }
-
-    return SUCCESS;
 }
 
 /*
@@ -1041,12 +144,20 @@ nsec3_remove_nsec3param(zdb_zone *zone, u8 hash_alg, u8 flags, u16 iterations, u
 void
 nsec3_destroy_zone(zdb_zone *zone)
 {
-    if((zone->apex->flags & ZDB_RR_LABEL_NSEC3) != 0)
+     // Note that from the 'transaction' update, the dnssec zone collections have to be read without checking for the NSEC3 flag
+#if NSEC3_LABEL_DEBUG 
+    nsec3_check(zone);
+#endif
+
+    while(zone->nsec.nsec3 != NULL)
     {
-        while(zone->nsec.nsec3 != NULL)
-        {
-            nsec3_zone_destroy(zone, zone->nsec.nsec3);
-        }
+#ifdef DEBUG
+        nsec3_zone *n3 = zone->nsec.nsec3;
+#endif
+        nsec3_zone_destroy(zone, zone->nsec.nsec3);
+#ifdef DEBUG
+        yassert(n3 != zone->nsec.nsec3);
+#endif
     }
 }
 
@@ -1055,62 +166,6 @@ nsec3_destroy_zone(zdb_zone *zone)
  * NSEC3 - queries
  *
  *****************************************************************************/
-
-/**
- * This sets the flags of each NSEC3PARAM of the zone
- *
- */
-
-void
-nsec3_set_nsec3param_flags(zdb_zone *zone, u8 flags)
-{
-    if(zdb_zone_is_nsec3(zone))
-    {
-        zdb_packed_ttlrdata* rr_sll = zdb_record_find(&zone->apex->resource_record_set, TYPE_NSEC3PARAM);
-
-        while(rr_sll != NULL)
-        {
-            rr_sll->rdata_start[1] = flags;
-            rr_sll = rr_sll->next;
-        }
-    }
-}
-
-/**
- * This sets the flags of each NSEC3PARAM of the zone to 1
- * This should be called before modifying an NSEC3 zone.
- * Note that NSEC3PARAM signature are not affected : the signed version has
- * alsways the flags set to 0
- *
- * If an NSEC3PARAM RR is present at the apex of a zone with a Flags
- * field value of zero, then there MUST be an NSEC3 RR using the same
- * hash algorithm, iterations, and salt parameters present at every
- * hashed owner name in the zone.  That is, the zone MUST contain a
- * complete set of NSEC3 RRs with the same hash algorithm, iterations,
- * and salt parameters.
- */
-
-void
-nsec3_edit_zone_start(zdb_zone *zone)
-{
-    zone->apex->flags |= ZDB_RR_LABEL_DNSSEC_EDIT;
-
-    nsec3_set_nsec3param_flags(zone, 1);
-}
-
-/**
- * This sets the flags of each NSEC3PARAM of the zone to 0
- * This should be called after modifying an NSEC3 zone.
- *
- */
-
-void
-nsec3_edit_zone_end(zdb_zone *zone)
-{
-    nsec3_set_nsec3param_flags(zone, 0);
-
-    zone->apex->flags &= ~ZDB_RR_LABEL_DNSSEC_EDIT;
-}
 
 /**
  * @brief Finds the provable resource record label matching a path of labels starting from another rr label
@@ -1145,7 +200,7 @@ nsec3_get_closest_provable_encloser_match(const void *label, const dictionary_no
  */
 
 const zdb_rr_label*
-nsec3_get_closest_provable_encloser(const zdb_rr_label *apex, const_dnslabel_vector_reference sections, s32 *sections_topp)
+nsec3_get_closest_provable_encloser_optin(const zdb_rr_label *apex, const_dnslabel_vector_reference sections, s32 *sections_topp)
 {
     yassert(apex != NULL && sections != NULL && sections_topp != NULL);
 
@@ -1175,7 +230,50 @@ nsec3_get_closest_provable_encloser(const zdb_rr_label *apex, const_dnslabel_vec
             break;
         }
 
-        if(rr_label->nsec.dnssec != NULL)
+        if((rr_label->flags & ZDB_RR_LABEL_N3COVERED) == ZDB_RR_LABEL_N3COVERED)
+        {
+            provable = rr_label;
+            *sections_topp = index;
+        }
+
+        index--;
+    }
+
+    return provable;
+}
+
+const zdb_rr_label*
+nsec3_get_closest_provable_encloser_optout(const zdb_rr_label *apex, const_dnslabel_vector_reference sections, s32 *sections_topp)
+{
+    yassert(apex != NULL && sections != NULL && sections_topp != NULL);
+
+    s32 index = *sections_topp;
+    const zdb_rr_label* rr_label = apex; /* the zone cut */
+
+    const zdb_rr_label* provable = apex;
+
+    /*
+     * the apex is already known, so we don't loop for it
+     */
+
+    index--;
+
+    /* look into the sub level*/
+
+    while(index >= 0)
+    {
+        const u8* label = sections[index];
+        hashcode hash = hash_dnslabel(label);
+
+        rr_label = (zdb_rr_label*) dictionary_find(&rr_label->sub, hash, label, nsec3_get_closest_provable_encloser_match);
+
+        if(rr_label == NULL)
+        {
+            index++;
+            break;
+        }
+
+        if((rr_label->flags & ZDB_RR_LABEL_N3OCOVERED) == ZDB_RR_LABEL_N3OCOVERED)
         {
             provable = rr_label;
             *sections_topp = index;
@@ -1210,8 +308,8 @@ nsec3_closest_encloser_proof(
                         const nsec3_zone_item **wild_closest_provable_encloser_nsec3p
                         )
 {
-    u8 closest_provable_encloser[MAX_DOMAIN_LENGTH];
-    u8 encloser[MAX_DOMAIN_LENGTH];
+    u8 closest_provable_encloser[MAX_DOMAIN_LENGTH+1];
+    u8 encloser[MAX_DOMAIN_LENGTH+1];
     u8 digest[64 + 1];
     digest[0] = 20;
     
@@ -1222,7 +320,7 @@ nsec3_closest_encloser_proof(
     const_dnslabel_vector_reference qname_sections = qname->labels;
     s32 closest_encloser_index_limit = qname->size - apex_index + 1; /* not "+1'" because it starts at the apex */
 
-    nsec3_zone* n3 = zone->nsec.nsec3;
+    const nsec3_zone* n3 = zone->nsec.nsec3;
     
 #ifdef DEBUG
     if((n3 == NULL) || (n3->items == NULL))
@@ -1234,8 +332,10 @@ nsec3_closest_encloser_proof(
     
     if(closest_encloser_index_limit > 0)
     {
-        const zdb_rr_label* closest_provable_encloser_label = nsec3_get_closest_provable_encloser(zone->apex, qname_sections, &closest_encloser_index_limit);
-
+        const zdb_rr_label* closest_provable_encloser_label = ((zone->_flags & ZDB_ZONE_HAS_OPTOUT_COVERAGE) != 0)?
+                nsec3_get_closest_provable_encloser_optout(zone->apex, qname_sections, &closest_encloser_index_limit):
+                nsec3_get_closest_provable_encloser_optin(zone->apex, qname_sections, &closest_encloser_index_limit);
+        
         //log_debug("closest_provable_encloser_label: %{dnslabel}: %{digest32h}", closest_provable_encloser_label->name, closest_provable_encloser_label->nsec.nsec3->self->digest);
         //log_debug("*.closest_provable_encloser_label: %{dnslabel}: %{digest32h}", closest_provable_encloser_label->name, closest_provable_encloser_label->nsec.nsec3->star->digest);
 
@@ -1246,9 +346,9 @@ nsec3_closest_encloser_proof(
         /* Get ZONE NSEC3PARAM */
         u16 iterations = nsec3_zone_get_iterations(n3);
         u8 salt_len = NSEC3_ZONE_SALT_LEN(n3);
-        u8* salt = NSEC3_ZONE_SALT(n3);
+        const u8* salt = NSEC3_ZONE_SALT(n3);
 
-        nsec3_hash_function* digestname = nsec3_hash_get_function(NSEC3_ZONE_ALGORITHM(n3)); /// @note 20150917 edf -- do not use nsec3_compute_digest_from_fqdn_with_len
+        nsec3_hash_function* const digestname = nsec3_hash_get_function(NSEC3_ZONE_ALGORITHM(n3)); /// @note 20150917 edf -- do not use nsec3_compute_digest_from_fqdn_with_len
 
         /** @note log_* cannot be used here (except yassert because if that one logs it will abort anyway ...) */
 
@@ -1258,13 +358,11 @@ nsec3_closest_encloser_proof(
         {
             yassert(closest_provable_encloser_label != NULL); 
 
-            nsec3_zone_item* encloser_nsec3;
+            const nsec3_zone_item* encloser_nsec3;
             dnsname_vector_sub_to_dnsname(qname, closest_encloser_index_limit - 1, encloser);
             digestname(encloser, dnsname_len(encloser), salt, salt_len, iterations, &digest[1], FALSE);
-            //OSDEBUG("nsec3_closest_encloser_proof: next digest %{dnsname}: %{digest32h}", encloser, encloser_nsec3->digest);
-            encloser_nsec3 = nsec3_zone_item_find(n3, digest);
+            encloser_nsec3 = nsec3_zone_item_find_encloser_start(n3, digest);
             *encloser_nsec3p = encloser_nsec3;
-            //OSDEBUG("nsec3_closest_encloser_proof: next encloser %{dnsname}: %{digest32h}", encloser, encloser_nsec3->digest);
         }
         else
         {
@@ -1275,33 +373,14 @@ nsec3_closest_encloser_proof(
 
         dnsname_vector_sub_to_dnsname(qname, closest_encloser_index_limit  , closest_provable_encloser);
 
-        nsec3_zone_item* closest_provable_encloser_nsec3;
-        if((closest_provable_encloser_nsec3 = closest_provable_encloser_label->nsec.nsec3->self) == NULL)
-        {
-            /*
-             * @note 20150910 edf -- IMPORTANT: at this point, the database is locked for the readers.
-             *                       Calling nsec3_add_owner betrays this.
-             *                       Re-locking as writer may lead to starvation.
-             *                       All that's needed is to ensure that no two nsec3_add_owner calls are made at the same time from here.
-             *                       Two (not very pretty) ways that should have minimal impact: a global mutex OR a global mutex and a set.
-             *                       nsec3_add_owner is at most a couple ZALLOC and a few assignations.  The mutex seems a good compromise.
-             */
-            digestname(closest_provable_encloser, dnsname_len(closest_provable_encloser), salt, salt_len, iterations, &digest[1], FALSE);
-            if((closest_provable_encloser_nsec3 = nsec3_avl_find(&n3->items, digest)) != NULL)
-            {          
-                group_mutex_lock(&nsec3_owners_readers_write_locks, GROUP_MUTEX_WRITE);
-                if(closest_provable_encloser_label->nsec.nsec3->self == NULL)
-                {
-                    nsec3_add_owner(closest_provable_encloser_nsec3, closest_provable_encloser_label);
-                    closest_provable_encloser_label->nsec.nsec3->self = closest_provable_encloser_nsec3; /* @todo 20150814 edf -- check multiples */
-                }
-                group_mutex_unlock(&nsec3_owners_readers_write_locks, GROUP_MUTEX_WRITE);
-            }
-        }
-        *closest_provable_encloser_nsec3p = closest_provable_encloser_nsec3;
-        //OSDEBUG("nsec3_closest_encloser_proof: closest_provable_encloser %{dnsname}: %{digest32h}",closest_provable_encloser,closest_provable_encloser_nsec3->digest);
+        const nsec3_zone_item* closest_provable_encloser_nsec3;
+        
 
-        // wild_closest_provable_encloser_nsec3p
+            digestname(closest_provable_encloser, dnsname_len(closest_provable_encloser), salt, salt_len, iterations, &digest[1], FALSE);
+            closest_provable_encloser_nsec3 = nsec3_avl_find(&n3->items, digest);
+
+        
+        *closest_provable_encloser_nsec3p = closest_provable_encloser_nsec3;
         
         if(wild_closest_provable_encloser_nsec3p != NULL)
         {
@@ -1310,33 +389,19 @@ nsec3_closest_encloser_proof(
                 dnsname_vector_sub_to_dnsname(qname, closest_encloser_index_limit  , closest_provable_encloser);
             }
 
-            nsec3_zone_item* wild_closest_provable_encloser_nsec3;
+            const nsec3_zone_item* wild_closest_provable_encloser_nsec3;
 
-            if((wild_closest_provable_encloser_nsec3 = closest_provable_encloser_label->nsec.nsec3->star) == NULL)
+            if(!zdb_rr_label_nsec3_linked(closest_provable_encloser_label))
             {
-                /*
-                 * @note 20150910 edf -- IMPORTANT: at this point, the database is locked for the readers.
-                 *                       Calling nsec3_add_owner betrays this.
-                 *                       Re-locking as writer may lead to starvation.
-                 *                       All that's needed is to ensure that no two nsec3_add_owner calls are made at the same time from here.
-                 *                       Two (not very pretty) ways that should have minimal impact: a global mutex OR a global mutex and a set.
-                 *                       nsec3_add_owner is at most a couple ZALLOC and a few assignations.  The mutex seems a good compromise.
-                 */
                 digestname(closest_provable_encloser, dnsname_len(closest_provable_encloser), salt, salt_len, iterations, &digest[1], TRUE);
-                if((wild_closest_provable_encloser_nsec3 = nsec3_avl_find_interval_start(&n3->items, digest)) != NULL)
-                {
-                    group_mutex_lock(&nsec3_owners_readers_write_locks, GROUP_MUTEX_WRITE);
-                    if(closest_provable_encloser_label->nsec.nsec3->star == NULL)
-                    {
-                        nsec3_add_star(wild_closest_provable_encloser_nsec3, closest_provable_encloser_label);
-                        closest_provable_encloser_label->nsec.nsec3->star = wild_closest_provable_encloser_nsec3; /* @todo 20150928 edf -- check multiples */
-                    }
-                    group_mutex_unlock(&nsec3_owners_readers_write_locks, GROUP_MUTEX_WRITE);
-                }
-            }                
+                wild_closest_provable_encloser_nsec3 = nsec3_avl_find_interval_start(&n3->items, digest);
+            }
+            else
+            {
+                wild_closest_provable_encloser_nsec3 = closest_provable_encloser_label->nsec.nsec3->self;
+            }
 
             *wild_closest_provable_encloser_nsec3p = wild_closest_provable_encloser_nsec3;
-            //OSDEBUG("nsec3_closest_encloser_proof: *.closest_provable_encloser *.%{dnsname}: %{digest32h}",closest_provable_encloser,wild_closest_provable_encloser_nsec3->digest);
         }
     }
     else // the closest is the item itself ...
@@ -1350,35 +415,20 @@ nsec3_closest_encloser_proof(
     }
 }
 
+#if NSEC3_LABEL_DEBUG
+
+/**
+ * This is an internal integrity check
+ * 
+ * For all owners of the NSEC3 record (aka nsec3_zone_item aka nsec3_node)
+ *   Check the label is not under a delegation (log debug only)
+ *   Check the label points back to the NSEC3 record
+ * 
+ * @param item the NSEC3 record
+ * @param param_index_base the index of the chain of the NSEC3 record
+ */
+
 void
-nsec3_check_item_dump_label(zdb_rr_label *label)
-{
-    log_debug("%{dnslabel} %04x", label->name, label->flags);
-
-    int n3i = 0;
-    
-    nsec3_label_extension *n3le = label->nsec.nsec3;
-    
-    while(n3le != NULL)
-    {
-        log_debug("NSEC3PARAM #%i", n3i);
-
-        if(n3le->self != NULL)
-        {
-            log_debug("\tself: %{digest32h}", n3le->self->digest);
-        }
-        if(n3le->star != NULL)
-        {
-            log_debug("\tstar: %{digest32h}", n3le->star->digest);
-        }
-
-        n3i++;
-
-        n3le = n3le->next;
-    }
-}
-
-bool
 nsec3_check_item(nsec3_zone_item *item, u32 param_index_base)
 {
     yassert(item != NULL);
@@ -1473,28 +523,37 @@ nsec3_check_item(nsec3_zone_item *item, u32 param_index_base)
             log_debug("nsec3_check: %{digest32h} (#self=%d/#star=%d) failing %{dnslabel}: no self", item->digest, item->rc, item->sc, label->name);
         }
         
-#if 0 /* fix */
-#else
-        yassert(n3le->star == item);
-        yassert(n3le->self != NULL);
-#endif
+        if(n3le->star != item)
+        {
+            log_debug("nsec3_check: %{digest32h} *.label nsec3 reference does not point back to the nsec3 item (%{dnslabel})", item->digest, label);
+        }
+        if(n3le->self == NULL)
+        {
+            log_debug("nsec3_check: %{digest32h} *.label nsec3 reference self is NULL (%{dnslabel})", item->digest, label);
+        }
     }
-
-    return TRUE;
 }
 
-bool
+/**
+ * This is an internal integrity check
+ * 
+ * Checks all NSEC3 links to their owners back and forth.
+ * 
+ * @param zone
+ */
+
+void
 nsec3_check(zdb_zone *zone)
 {
-    log_debug("nsec3_check: %{dnsname}", zone->origin);
+    log_debug("nsec3_check: %{dnsname}, from the NSEC3's reference", zone->origin);
     
     const nsec3_zone *n3 = zone->nsec.nsec3;
 
     if(n3 == NULL)
     {
-        log_debug("nsec3_check: %{dnsname} : no NSEC3", zone->origin);
+        log_debug("nsec3_check: %{dnsname}: no NSEC3", zone->origin);
         
-        return TRUE;
+        return;
     }
 
     /*
@@ -1519,10 +578,75 @@ nsec3_check(zdb_zone *zone)
         n3 = n3->next;
     }
     
-    log_debug("nsec3_check: %{dnsname} : done", zone->origin);
+    log_debug("nsec3_check: %{dnsname}: from the label's reference", zone->origin);
+    
+    zdb_zone_label_iterator label_iterator;
+    u8 fqdn[MAX_DOMAIN_LENGTH + 1];
+    
+    zdb_zone_label_iterator_init(&label_iterator, zone);
 
-    return TRUE;
+    while(zdb_zone_label_iterator_hasnext(&label_iterator))
+    {
+        zdb_zone_label_iterator_nextname(&label_iterator, fqdn);
+        zdb_rr_label* label = zdb_zone_label_iterator_next(&label_iterator);
+        nsec3_label_extension *n3le = label->nsec.nsec3;
+
+        while(n3le != NULL)
+        {
+            if(n3le->self != NULL)
+            {
+                int found = 0;
+
+                for(s32 i = 0; i < n3le->self->rc; ++i)
+                {
+                    zdb_rr_label* self = nsec3_owner_get(n3le->self, i);
+                    if(self == label)
+                    {
+                        ++found;
+                    }
+                }
+
+                if(found == 0)
+                {
+                    log_debug("nsec3_check: %{dnsname}: %{dnsname} => %{digest32h} is one way", zone->origin, fqdn, n3le->self->digest);
+                }
+                else if(found > 1)
+                {
+                    log_debug("nsec3_check: %{dnsname}: %{dnsname} => %{digest32h} is referenced back multiple times", zone->origin, fqdn, n3le->self->digest);
+                }
+            }
+
+            if(n3le->star != NULL)
+            {
+                int found = 0;
+
+                for(s32 i = 0; i < n3le->star->sc; ++i)
+                {
+                    zdb_rr_label* star = nsec3_star_get(n3le->star, i);
+                    if(star == label)
+                    {
+                        ++found;
+                    }
+                }
+
+                if(found == 0)
+                {
+                    log_debug("nsec3_check: %{dnsname}: *.%{dnsname} => %{digest32h} is one way", zone->origin, fqdn, n3le->star->digest);
+                }
+                else if(found > 1)
+                {
+                    log_debug("nsec3_check: %{dnsname}: *.%{dnsname} => %{digest32h} is referenced back multiple times", zone->origin, fqdn, n3le->star->digest);
+                }
+            }
+            
+            n3le = n3le->next;
+        }
+    }
+    
+    log_debug("nsec3_check: %{dnsname} : done", zone->origin);
 }
+
+#endif
 
 void
 nsec3_compute_digest_from_fqdn_with_len(const nsec3_zone *n3, const u8 *fqdn, u32 fqdn_len, u8 *digest, bool isstar)
@@ -1537,6 +661,127 @@ nsec3_compute_digest_from_fqdn_with_len(const nsec3_zone *n3, const u8 *fqdn, u3
                                     nsec3_zone_get_iterations(n3),
                                     &digest[1],
                                     isstar);
+}
+
+void
+nsec3_zone_label_detach(zdb_rr_label *label)
+{
+    yassert((label != NULL) && (label->flags & ZDB_RR_LABEL_NSEC3) != 0);
+    
+    nsec3_label_extension *n3le = label->nsec.nsec3;
+
+    while(n3le != NULL)
+    {
+        // remove
+        if(n3le->self != NULL)
+        {
+            nsec3_remove_owner(n3le->self, label);
+        }
+        if(n3le->star != NULL)
+        {
+            nsec3_remove_star(n3le->star, label);
+        }
+        label->flags &= ~(ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT);
+        label->nsec.nsec3 = NULL;
+        nsec3_label_extension *tmp = n3le;
+        n3le = n3le->next;
+        nsec3_label_extension_free(tmp);
+    }
+    
+    label->nsec.nsec3 = NULL;
+}
+
+ya_result
+nsec3_get_next_digest_from_rdata(const u8 *rdata, u32 rdata_size, u8 *digest, u32 digest_size)
+{
+    if((NSEC3_RDATA_ALGORITHM(rdata) == NSEC3_DIGEST_ALGORITHM_SHA1) && (rdata_size > 5 + 21))
+    {
+        u8 salt_size = rdata[4];
+        u8 hash_size = rdata[5 + salt_size];
+        if((hash_size < digest_size) && (hash_size + salt_size + 5 < rdata_size))
+        {
+            memcpy(digest, &rdata[5 + salt_size], hash_size + 1);
+            return hash_size +1;
+        }
+    }
+    
+    return ERROR;
+}
+
+void
+nsec3_zone_label_update_chain0_links(nsec3_zone *n3, zdb_rr_label* label, const u8 *fqdn)
+{
+    nsec3_label_extension *n3le = label->nsec.nsec3;
+    u8 digest[1 + MAX_DIGEST_LENGTH];
+
+    if(label->flags & (ZDB_RR_LABEL_N3OCOVERED|ZDB_RR_LABEL_N3COVERED))
+    {
+        if(n3le == NULL)
+        {
+            n3le = nsec3_label_extension_alloc();
+            ZEROMEMORY(n3le, sizeof(nsec3_label_extension));
+            label->nsec.nsec3 = n3le;
+            if(label->flags & ZDB_RR_LABEL_N3OCOVERED)
+            {
+                label->flags |= ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT;
+            }
+            else
+            {
+                label->flags |= ZDB_RR_LABEL_NSEC3;
+            }
+        }
+
+        if(n3le->self == NULL || n3le->star == NULL)
+        {
+            s32 fqdn_len = dnsname_len(fqdn);
+
+            if(n3le->self == NULL)
+            {
+                nsec3_zone_item *self = nsec3_label_link_seeknode(n3, fqdn, fqdn_len, digest);
+                if(self != NULL)
+                {
+                    nsec3_add_owner(self, label);
+                    n3le->self = self;
+#if HAS_SUPERDUMP
+                    nsec3_superdump_integrity_check_label_nsec3_self_points_back(label,0);
+                    nsec3_superdump_integrity_check_nsec3_owner_self_points_back(self,0);
+#endif
+                }
+            }
+            if(n3le->star == NULL)
+            {
+                nsec3_zone_item *star = nsec3_label_link_seekstar(n3, fqdn, fqdn_len, digest);
+                if(star != NULL)
+                {
+                    //nsec3_superdump_integrity_check_label_nsec3_star_points_back(label,0);
+                    nsec3_add_star(star, label);
+                    n3le->star = star;
+#if HAS_SUPERDUMP
+                    nsec3_superdump_integrity_check_label_nsec3_star_points_back(label,0);
+                    nsec3_superdump_integrity_check_nsec3_owner_star_points_back(star,0);
+#endif
+                }
+            }
+        }
+    }
+    else
+    {
+        if(n3le != NULL)
+        {
+            // remove
+            if(n3le->self != NULL)
+            {
+                nsec3_remove_owner(n3le->self, label);
+            }
+            if(n3le->star != NULL)
+            {
+                nsec3_remove_star(n3le->star, label);
+            }
+            nsec3_label_extension_free(n3le);
+            label->flags &= ~(ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT);
+            label->nsec.nsec3 = NULL;
+        }
+    }
 }
 
 /**
@@ -1557,6 +802,17 @@ nsec3_zone_update_chain0_links(zdb_zone *zone)
         return;
     }
     
+    u16 coverage_mask;
+    u8 maintain_mode = zone_get_maintain_mode(zone);
+    if(maintain_mode & ZDB_ZONE_HAS_OPTOUT_COVERAGE)
+    {
+        coverage_mask = ZDB_RR_LABEL_N3OCOVERED;
+    }
+    else
+    {
+        coverage_mask = ZDB_RR_LABEL_N3COVERED;
+    }
+    
     zdb_zone_label_iterator label_iterator;
     u8 fqdn[MAX_DOMAIN_LENGTH + 1];
     u8 digest[1 + MAX_DIGEST_LENGTH];
@@ -1569,8 +825,23 @@ nsec3_zone_update_chain0_links(zdb_zone *zone)
         zdb_rr_label* label = zdb_zone_label_iterator_next(&label_iterator);
         nsec3_label_extension *n3le = label->nsec.nsec3;
         
-        if(n3le != NULL)
+        if((label->flags & coverage_mask) != 0)
         {
+            if(n3le == NULL)
+            {
+                n3le = nsec3_label_extension_alloc();
+                ZEROMEMORY(n3le, sizeof(nsec3_label_extension));
+                label->nsec.nsec3 = n3le;
+                if(label->flags & ZDB_RR_LABEL_N3OCOVERED)
+                {
+                    label->flags |= ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT;
+                }
+                else
+                {
+                    label->flags |= ZDB_RR_LABEL_NSEC3;
+                }
+            }
+        
             if(n3le->self == NULL || n3le->star == NULL)
             {
                 s32 fqdn_len = dnsname_len(fqdn);
@@ -1582,7 +853,7 @@ nsec3_zone_update_chain0_links(zdb_zone *zone)
                     {
                         nsec3_add_owner(self, label);
                         n3le->self = self;
-#if SUPERDUMP
+#if HAS_SUPERDUMP
                         nsec3_superdump_integrity_check_label_nsec3_self_points_back(label,0);
                         nsec3_superdump_integrity_check_nsec3_owner_self_points_back(self,0);
 #endif
@@ -1596,7 +867,7 @@ nsec3_zone_update_chain0_links(zdb_zone *zone)
                         //nsec3_superdump_integrity_check_label_nsec3_star_points_back(label,0);
                         nsec3_add_star(star, label);
                         n3le->star = star;
-#if SUPERDUMP
+#if HAS_SUPERDUMP
                         nsec3_superdump_integrity_check_label_nsec3_star_points_back(label,0);
                         nsec3_superdump_integrity_check_nsec3_owner_star_points_back(star,0);
 #endif
@@ -1604,12 +875,848 @@ nsec3_zone_update_chain0_links(zdb_zone *zone)
                 }
             }
         }
+        else
+        {
+            if(n3le != NULL)
+            {
+                // remove
+                if(n3le->self != NULL)
+                {
+                    nsec3_remove_owner(n3le->self, label);
+                }
+                if(n3le->star != NULL)
+                {
+                    nsec3_remove_star(n3le->star, label);
+                }
+                nsec3_label_extension_free(n3le);
+                label->flags &= ~(ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT);
+                label->nsec.nsec3 = NULL;
+            }
+        }
     }
 }
 
+#if HAS_SUPERDUMP
+/*
+static int nsicnospb_c = 0;
+*/
+static bool
+nsec3_superdump_integrity_check_nsec3_owner_star_points_back(const nsec3_zone_item *n3i, int depth)
+{
+    /*
+    ++nsicnospb_c;
+    if(nsicnospb_c == 37)
+    {
+        log_debug("");
+    }
+    */
+    u16 n = n3i->sc;
+    bool ret = FALSE;
+    switch(n)
+    {
+        case 0:
+        {
+            // possible
+            ret = TRUE;
+            break;
+        }
+        case 1:
+        {
+            // oopsie
+            const zdb_rr_label *label = n3i->star_label.owner;
+            nsec3_label_extension *n3e = label->nsec.nsec3;
+            while(!ret && n3e != NULL)
+            {
+                ret = n3e->star == n3i;
+                n3e = n3e->next;
+            }
+            break;
+        }
+        default:
+        {
+            for(u16 i = 0; !ret && i < n; ++i)
+            {
+                const zdb_rr_label *label = n3i->star_label.owners[i];
+                nsec3_label_extension *n3e = label->nsec.nsec3;
+                while(!ret && n3e != NULL)
+                {
+                    ret = n3e->star == n3i;
+                    n3e = n3e->next;
+                }
+            }
+            break;
+        }
+    }
+    
+    if(!ret)
+    {
+        log_err("star integrity failed on %{digest32h} %hu", n3i->digest, n);
+        //logger_flush();
+        switch(n)
+        {
+            case 1:
+            {
+                // oopsie
+                const zdb_rr_label *label = n3i->star_label.owner;
+                nsec3_label_extension *n3e = label->nsec.nsec3;
+                
+                while(n3e != NULL)
+                {
+                    if(n3e->star != NULL)
+                    {
+                        log_err("  the label *.%{dnslabel} pointed by %{digest32h} %hu instead points to %{digest32h} @ %p", label->name, n3i->digest, n, n3e->star->digest, n3e->star);
+                    }
+                    else
+                    {
+                        log_err("  the label *.%{dnslabel} pointed by %{digest32h} %hu instead points to NULL", label->name, n3i->digest, n);
+                    }
+                    n3e = n3e->next;
+                }
+                break;
+            }
+            default:
+            {
+                for(u16 i = 0; i < n; ++i)
+                {
+                    const zdb_rr_label *label = n3i->star_label.owners[i];
+                    nsec3_label_extension *n3e = label->nsec.nsec3;
+                    while(n3e != NULL)
+                    {
+                        if(n3e->star != NULL)
+                    {
+                        log_err("  the label *.%{dnslabel} pointed by %{digest32h} %hu instead points to %{digest32h} @ %p", label->name, n3i->digest, n, n3e->star->digest, n3e->star);
+                    }
+                    else
+                    {
+                        log_err("  the label *.%{dnslabel} pointed by %{digest32h} %hu instead points to NULL", label->name, n3i->digest, n);
+                    }
+                        n3e = n3e->next;
+                    }
+                }
+                break;
+            }
+        }
+        //logger_flush();
+    }
+    
+    return ret;
+}
 
+static int nsicnotpb_c = 0;
+
+static bool
+nsec3_superdump_integrity_check_nsec3_owner_self_points_back(const nsec3_zone_item *n3i, int depth)
+{
+    ++nsicnotpb_c;
+    if(nsicnotpb_c == 445)
+    {
+        log_debug("");
+    }
+    
+    u16 n = n3i->rc;
+    bool ret = FALSE;
+    switch(n)
+    {
+        case 0:
+        {
+            // oopsie
+            ret = FALSE;
+            break;
+        }
+        case 1:
+        {
+            // oopsie
+            const zdb_rr_label *label = n3i->label.owner;
+            nsec3_label_extension *n3e = label->nsec.nsec3;
+            while(!ret && n3e != NULL)
+            {
+                ret = n3e->self == n3i;
+                n3e = n3e->next;
+            }
+            break;
+        }
+        default:
+        {
+            for(u16 i = 0; !ret && i < n; ++i)
+            {
+                const zdb_rr_label *label = n3i->label.owners[i];
+                nsec3_label_extension *n3e = label->nsec.nsec3;
+                while(!ret && n3e != NULL)
+                {
+                    ret = n3e->self == n3i;
+                    n3e = n3e->next;
+                }
+            }
+            break;
+        }
+    }
+    
+    if(!ret)
+    {
+        log_err("self integrity failed on %{digest32h} %hu", n3i->digest, n);
+        //logger_flush();
+        switch(n)
+        {
+            case 1:
+            {
+                // oopsie
+                const zdb_rr_label *label = n3i->star_label.owner;
+                nsec3_label_extension *n3e = label->nsec.nsec3;
+                
+                while(n3e != NULL)
+                {
+                    log_err("  the label %{dnslabel} pointed by %{digest32h} %hu instead points to %{digest32h} @ %p", label->name, n3i->digest, n, n3e->self->digest, n3e->self);
+                    n3e = n3e->next;
+                }
+                break;
+            }
+            default:
+            {
+                for(u16 i = 0; !ret && i < n; ++i)
+                {
+                    const zdb_rr_label *label = n3i->star_label.owners[i];
+                    nsec3_label_extension *n3e = label->nsec.nsec3;
+                    while(n3e != NULL)
+                    {
+                        log_err("  the label %{dnslabel} pointed by %{digest32h} %hu instead points to %{digest32h} @ %p", label->name, n3i->digest, n, n3e->self->digest, n3e->self);
+                        n3e = n3e->next;
+                    }
+                }
+                break;
+            }
+        }
+        //logger_flush();
+    }
+        
+    return ret;
+}
+
+static bool
+nsec3_superdump_integrity_check_label_nsec3_star_points_back(const zdb_rr_label *label, int depth)
+{
+    struct nsec3_label_extension* n3e = label->nsec.nsec3;
+    u16 n = 65535;
+    bool ret = (n3e == NULL);
+    int n3e_count = 0;
+    int self_count = 0;
+    int star_count = 0;
+    
+    while(!ret && n3e != NULL)
+    {
+        n = 65535;
+        
+        ++n3e_count;
+        
+        if(n3e->self != NULL)
+        {
+            ++self_count;
+        }
+        
+        nsec3_zone_item* star = n3e->star;
+                
+        if(star != NULL)
+        {
+            ++star_count;
+            
+            n = star->sc;
+            
+            switch(n)
+            {
+                case 0:
+                {
+                    ret = FALSE;
+                    break;
+                }
+                case 1:
+                {
+                    ret = star->star_label.owner == label;
+                    break;
+                }
+                default:
+                {
+                    for(u16 i = 0; i < n; ++i)
+                    {
+                        if(star->star_label.owners[i] == label)
+                        {
+                            ret = TRUE;
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        else
+        {
+            ret = n3e->self == NULL;
+        }
+        
+        n3e = n3e->next;
+    }
+    
+    if(!ret)
+    {
+        if(label->nsec.nsec3 == NULL)
+        {
+            log_warn("star integrity failed on %{dnslabel}: there is no nsec3 label extension", label->name);
+        }
+        else
+        {
+            if(n != 65535)
+            {
+                log_warn("star integrity failed on %{dnslabel}: could not find *label->nsec3 link among the %hu known owners (%i: %i & %i)", label->name, n, n3e_count, self_count, star_count);
+            }
+            else
+            {
+                log_warn("star integrity failed on %{dnslabel}: could not find *label->nsec3 link (%i: %i & %i)", label->name, n3e_count, self_count, star_count);
+            }
+        }
+    }
+    
+    return ret;
+}
+
+static bool
+nsec3_superdump_integrity_check_label_nsec3_self_points_back(const zdb_rr_label *label, int depth)
+{
+    (void)depth;
+    struct nsec3_label_extension* n3e;
+    u16 n = ~0;
+    bool ret = label->nsec.nsec3 == NULL;
+    n3e = label->nsec.nsec3;
+    
+    while(!ret && n3e != NULL)
+    {
+        nsec3_zone_item* self = n3e->self;
+        if(self != NULL)
+        {
+            n = self->rc;
+            switch(n)
+            {
+                case 0:
+                {
+                    ret = FALSE;
+                    break;
+                }
+                case 1:
+                {
+                    ret = self->label.owner == label;
+                    break;
+                }
+                default:
+                {
+                    for(u16 i = 0; i < n; ++i)
+                    {
+                        if(self->label.owners[i] == label)
+                        {
+                            ret = TRUE;
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        else
+        {
+            ret = n3e->star == NULL;
+        }
+                
+        n3e = n3e->next;
+    }
+    
+    if(!ret)
+    {
+        log_err("self integrity failed on %{dnslabel} %hu", label->name, n);
+        //logger_flush();
+    }
+            
+    return ret;
+}
+/*
+static bool
+nsec3_superdump_integrity_check(const zdb_rr_label *label, nsec3_zone_item *self_or_star)
+{
+    bool ret = (label->nsec.dnssec != NULL) && ((label->nsec.nsec3->self == self_or_star) || (label->nsec.nsec3->star == self_or_star));
+    if(!ret)
+    {
+        log_err("integrity failed!");
+        logger_flush();
+    }
+    return ret;
+}
+*/
+static bool
+nsec3_superdump_nsec3_label_pointer_array(nsec3_zone_item *n3i /* or star */, bool star, const char *hdr)
+{
+    nsec3_label_pointer_array p;
+    const char *pfx;
+    int n;
+    bool self_check;
+    
+    if(!star)
+    {
+         p = n3i->label;
+         n = n3i->rc;
+         pfx = "";
+         self_check = nsec3_superdump_integrity_check_nsec3_owner_self_points_back(n3i,0);
+    }
+    else
+    {
+        p = n3i->star_label;
+        n = n3i->sc;
+        pfx = "*.";
+        self_check = nsec3_superdump_integrity_check_nsec3_owner_star_points_back(n3i,0);
+    }
+        
+    if(n == 0)
+    {
+        log_debug3("%s:        [0] <- NULL", hdr);
+    }
+    else if(n == 1)
+    {
+        log_debug3("%s:        [%i] <- %s%{dnslabel}@%p (%i)", hdr, n, pfx, p.owner->name, p.owner, self_check);
+    }
+    else
+    {
+        for(int i = 0; i < n; ++i)
+        {
+            log_debug3("%s:        [%i] <- %s%{dnslabel}@%p (%i)", hdr, i, pfx, p.owners[i]->name, p.owners[i], self_check);
+        }
+    }
+    
+    return self_check;
+}
+
+static void
+nsec3_superdump_hash(zdb_zone *zone, nsec3_zone* n3, zdb_rr_label *label, bool star, u8 *digest)
+{
+    u32 name_len = 0;
+    u8 name[MAX_DOMAIN_LENGTH];
+    name_len = 0;
+    name_len += label->name[0] + 1;
+    memcpy(name, label->name, name_len);
+    name_len += dnsname_copy(&name[name_len], zone->origin);
+    
+    digest[0] = nsec3_hash_len(NSEC3_ZONE_ALGORITHM(n3));
+
+            /*
+                * Retrieve the NSEC3 hash algorithm function and compute the digest for this fqdn
+                */
+
+    nsec3_hash_get_function(NSEC3_ZONE_ALGORITHM(n3))(
+            name,
+            name_len,
+            NSEC3_ZONE_SALT(n3),
+            NSEC3_ZONE_SALT_LEN(n3),
+            nsec3_zone_get_iterations(n3),
+            &digest[1],
+            star);
+}
+
+#endif
+
+/**
+ * Sets the NSEC3 maintenance status for a specific chain.
+ * Marks the zone using private records.
+ * 
+ * The zone must be double-locked.
+ * 
+ * @param zone
+ * @param secondary_lock the secondary lock owner
+ * @param algorithm
+ * @param optout
+ * @param salt
+ * @param salt_len
+ * @param iterations
+ * @param status
+ * @return 
+ */
+
+ya_result
+nsec3_zone_set_status(zdb_zone *zone, u8 secondary_lock, u8 algorithm, u8 optout, u16 iterations, const u8 *salt, u8 salt_len, u8 status)
+{
+    dynupdate_message dmsg;
+    packet_unpack_reader_data reader;
+    dynupdate_message_init(&dmsg, zone->origin, CLASS_IN);
+    
+    u8 prev_status = 0;    
+    u8 nsec3paramadd_rdata[5 + salt_len + 1];
+    nsec3paramadd_rdata[0] = algorithm;
+    nsec3paramadd_rdata[1] = optout;
+    SET_U16_AT(nsec3paramadd_rdata[2], htons(iterations));
+    nsec3paramadd_rdata[4] = salt_len;
+    memcpy(&nsec3paramadd_rdata[5], salt, salt_len);
+    nsec3paramadd_rdata[5 + salt_len] = status;
+    
+    // look for the matching record
+    if(nsec3_zone_get_status(zone, algorithm, optout, iterations, salt, salt_len, &prev_status) == 1)
+    {
+        // if the record exists, remove it and add it
+        nsec3paramadd_rdata[5 + salt_len] = prev_status;
+        if(prev_status == status)
+        {
+            // already set
+            
+            return SUCCESS;
+        }
+        dynupdate_message_del_record(&dmsg, zone->origin, TYPE_NSEC3CHAINSTATE, 0, 6 + salt_len, nsec3paramadd_rdata);
+        nsec3paramadd_rdata[5 + salt_len] = status;
+    }
+    
+    dynupdate_message_add_record(&dmsg, zone->origin, TYPE_NSEC3CHAINSTATE, 0, 6 + salt_len, nsec3paramadd_rdata);
+    
+    dynupdate_message_set_reader(&dmsg, &reader);
+    u16 count = dynupdate_message_get_count(&dmsg);
+
+    packet_reader_skip(&reader, DNS_HEADER_LENGTH);
+    packet_reader_skip_fqdn(&reader);
+    packet_reader_skip(&reader, 4);
+    
+    ya_result ret;
+    
+    ret = dynupdate_diff(zone, &reader, count, secondary_lock, FALSE); // TODO
+    
+    dynupdate_message_finalise(&dmsg);
+        
+    return ret;
+}
+
+/**
+ * Gets the NSEC3 maintenance status for a specific chain.
+ * Get the information from the zone using private records.
+ * 
+ * The zone must be locked.
+ * 
+ * @param zone
+ * @param algorithm
+ * @param optout
+ * @param salt
+ * @param salt_len
+ * @param iterations
+ * @param status
+ * @return 
+ */
+
+ya_result nsec3_zone_get_status(zdb_zone *zone, u8 algorithm, u8 optout, u16 iterations, const u8 *salt, u8 salt_len, u8 *statusp)
+{
+    // get the TYPE_NSEC3PARAMADD record set
+    // search for a record matching the chain
+    zdb_packed_ttlrdata *rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_NSEC3CHAINSTATE);
+    while(rrset != NULL)
+    {
+        if(rrset->rdata_size == 6 + salt_len)
+        {
+            if(rrset->rdata_start[0] == algorithm)
+            {
+                if(rrset->rdata_start[1] == optout)
+                {
+                    if(GET_U16_AT(rrset->rdata_start[2]) == htons(iterations))
+                    {
+                        if(rrset->rdata_start[4] == salt_len)
+                        {
+                            if(memcmp(&rrset->rdata_start[5], salt, salt_len) == 0)
+                            {
+                                *statusp = rrset->rdata_start[5 + salt_len];
+                                return 1;
+                            }
+                        }
+                    }
+                }
+            }
+            rrset = rrset->next;
+        }
+    }
+    
+    return 0;
+}
+
+/**
+ * Gets the NSEC3 maintenance status for a specific chain.
+ * Get the information from the zone using private records.
+ * 
+ * The zone must be locked.
+ * 
+ * @param zone
+ * @param rdata
+ * @param rdata_size
+ * @param statusp
+ * @return 
+ */
+
+ya_result
+nsec3_zone_get_status_from_rdata(zdb_zone *zone, const u8* rdata, u16 rdata_size, u8 *statusp)
+{
+    // get the TYPE_NSEC3PARAMADD record set
+    // search for a record matching the chain
+    zdb_packed_ttlrdata *rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_NSEC3CHAINSTATE);
+    while(rrset != NULL)
+    {
+        if(rrset->rdata_size == rdata_size + 1)
+        {
+            if(rrset->rdata_start[0] == rdata[0])
+            {
+                if(GET_U16_AT(rrset->rdata_start[2]) == GET_U16_AT(rdata[2]))
+                {
+                    if(rrset->rdata_start[4] == rdata[4])
+                    {
+                        if(memcmp(&rrset->rdata_start[5], &rdata[5], rdata[4]) == 0)
+                        {
+                            *statusp = rrset->rdata_start[5 + rdata[4]];
+                            return 1;
+                        }
+                    }
+                }
+            }
+            rrset = rrset->next;
+        }
+    }
+    
+    return 0;
+}
+
+/**
+ * Returns the number of known chains in the zone.
+ * Inactive chains are also counted.
+ * Zone must be locked.
+ * 
+ * @param zone
+ * @return 
+ */
+
+int
+nsec3_zone_get_chain_count(zdb_zone *zone)
+{
+    int ret = 0;
+    nsec3_zone *n3 = zone->nsec.nsec3;
+    while(n3 != NULL)
+    {
+        ++ret;
+        n3 = n3->next;
+    }
+    return ret;
+}
+
+/**
+ * Returns pointers to the chains from the zone.
+ * Inactive chains are also counted.
+ * Zone must be locked.
+ * 
+ * @param zone
+ * @param n3p
+ * @param max_count
+ * @return 
+ */
+
+int
+nsec3_zone_get_chains(zdb_zone *zone, nsec3_zone **n3p, int max_count)
+{
+    int ret = 0;
+    nsec3_zone *n3 = zone->nsec.nsec3;
+    while(n3 != NULL)
+    {
+        *n3p++ = n3;
+        if(++ret == max_count)
+        {
+            break;
+        }
+        n3 = n3->next;
+    }
+    return ret;
+}
+
+void
+nsec3_superdump(zdb_zone *zone)
+{
+#if HAS_SUPERDUMP
+    u32 serial;
+    u8 label_name[256];
+    u8 digest[1 + MAX_DIGEST_LENGTH];
+    u8 digest_star[1 + MAX_DIGEST_LENGTH];
+    
+    zdb_zone_getserial(zone, &serial);
+    if(serial < 1031434905)
+    //if(serial < 1031434844)
+    //if(serial < 1031404990)
+    //if(serial < 1031387596)//1031387657//1031405085
+    {
+        return;
+    }
+    
+    log_debug("SUPERDUMP: %{dnsname}/%d: checking NSEC3 links integrity", zone->origin, serial);
+    
+    zdb_zone_label_iterator iter;
+    zdb_zone_label_iterator_init(&iter, zone);
+    while(zdb_zone_label_iterator_hasnext(&iter))
+    {
+        u32 n = zdb_zone_label_iterator_nextname(&iter, label_name);
+        (void)n;
+        
+        zdb_rr_label *label = zdb_zone_label_iterator_next(&iter);
+
+        bool self_check = nsec3_superdump_integrity_check_label_nsec3_self_points_back(label, 0);
+        bool star_check = nsec3_superdump_integrity_check_label_nsec3_star_points_back(label, 0);
+        
+        bool showme = !(self_check&star_check);
+                
+        if(showme)
+        {
+            nsec3_zone* n3 = zone->nsec.nsec3;
+            //nsec3_label_extension *n3e = label->nsec.nsec3;
+            int error_count = 0;
+
+            while(n3 != NULL)
+            {
+                nsec3_superdump_hash(zone, n3, label, FALSE, digest);
+                nsec3_superdump_hash(zone, n3, label, TRUE, digest_star);
+                
+                nsec3_zone_item *self_node = nsec3_avl_find(&n3->items, digest);
+                
+                if(self_node)
+                {
+                    bool pointed_back = nsec3_superdump_nsec3_label_pointer_array(self_node, FALSE, "SUPERDUMP");
+                    
+                    if(!pointed_back)
+                    {
+                        log_err("SUPERDUMP: %{dnsname}/%d: %{dnsname}@%p: %{digest32h} did not point back",
+                                zone->origin, serial, label_name, label,
+                                digest);
+                        ++error_count;
+                    }
+                }
+                
+                nsec3_zone_item *star_node = nsec3_zone_item_find_encloser_start(n3, digest_star);
+                
+                if(star_node != NULL)
+                {
+                    bool pointed_back = nsec3_superdump_nsec3_label_pointer_array(star_node, TRUE, "SUPERDUMP");
+                    
+                    if(!pointed_back)
+                    {
+                        log_err("SUPERDUMP: %{dnsname}/%d: %{dnsname}@%p: %{digest32h} did not point back",
+                                zone->origin, serial, label_name, label,
+                                digest_star);
+                        ++error_count;
+                    }
+                }
+                
+                n3 = n3->next;
+            }
+            
+            if(error_count > 0)
+            {            
+                log_err("SUPERDUMP: %{dnsname}/%d: %{dnsname}@%p: self: %c star: %c",
+                        zone->origin, serial, label_name, label,
+                        self_check?'Y':'N', star_check?'Y':'N');
+
+                // again, so I can debug it
+                nsec3_superdump_integrity_check_label_nsec3_self_points_back(label, 0);
+                nsec3_superdump_integrity_check_label_nsec3_star_points_back(label, 0);
+
+                log_err("SUPERDUMP: %{dnsname}/%d: %{dnsname}@%p: flags=%x #subdomain=%i",
+                        zone->origin, serial, label_name, label,
+                        label->flags, dictionary_size(&label->sub));
+
+                btree_iterator iter;
+                btree_iterator_init(label->resource_record_set, &iter);
+
+                /* Sign only APEX and DS and NSEC records at delegation */
+
+                while(btree_iterator_hasnext(&iter))
+                {
+                    btree_node *rr_node = btree_iterator_next_node(&iter);
+                    u16 type = (u16)rr_node->hash;
+                    zdb_packed_ttlrdata *record = (zdb_packed_ttlrdata*)rr_node->data;
+
+                    if(record == NULL)
+                    {
+                        log_err("SUPERDUMP: %{dnsname}/%d: %{dnsname}@%p: %{dnstype} <EMPTY-SET>",
+                            zone->origin, serial, label_name, label, &type);
+                    }
+
+                    while(record != NULL)
+                    {
+                        rdata_desc rdatadesc = {type, record->rdata_size, record->rdata_start};                
+                        log_err("SUPERDUMP: %{dnsname}/%d: %{dnsname}@%p: %{typerdatadesc}",
+                            zone->origin, serial, label_name, label, &rdatadesc);
+                        record = record->next;
+                    }
+                }
+            }
+            else
+            {
+                showme = FALSE;
+            }
+        }
+        
+        nsec3_zone* n3 = zone->nsec.nsec3;
+        nsec3_label_extension *n3e = label->nsec.nsec3;
+        
+        while(n3e != NULL)
+        {
+            nsec3_superdump_hash(zone, n3, label, FALSE, digest);
+            nsec3_superdump_hash(zone, n3, label, TRUE, digest_star);
+            
+            if(showme)
+            {
+                log_debug("SUPERDUMP: %{dnsname}/%d: %{dnsname}@%p: n3e@%p %{digest32h} self@%p %{digest32h} star@%p",
+                        zone->origin, serial, label_name, label,
+                        n3e, digest, n3e->self, digest_star, n3e->star);
+            }
+            
+            nsec3_zone_item *self = n3e->self;
+            
+            if(self != NULL)
+            {
+                nsec3_zone_item *self_next = nsec3_avl_node_mod_next(self);
+                nsec3_zone_item *self_prev = nsec3_avl_node_mod_prev(self);
+                if(showme)
+                {
+                    log_debug("SUPERDUMP: %{dnsname}/%d: %{dnsname}@%p: %{digest32h} R=%2i *=%2i (-> %{digest32h}) (<- %{digest32h})",
+                            zone->origin, serial, label_name, label,
+                            self->digest, self->rc, self->sc, self_next->digest, self_prev->digest);
+                }
+                
+                nsec3_superdump_nsec3_label_pointer_array(self, FALSE, "SUPERDUMP");
+                nsec3_superdump_nsec3_label_pointer_array(self, TRUE, "SUPERDUMP");
+            }
+            else
+            {
+                if(showme)
+                {
+                    log_debug("SUPERDUMP: %{dnsname}/%d: %{dnsname}@%p: NULL self", zone->origin, serial, label_name, label);
+                }
+            }
+            
+            nsec3_zone_item *star = n3e->star;
+            if(star != NULL)
+            {
+                nsec3_zone_item *star_next = nsec3_avl_node_mod_next(star);
+                nsec3_zone_item *star_prev = nsec3_avl_node_mod_prev(star);
+                if(showme)
+                {
+                    log_debug("SUPERDUMP*: %{dnsname}/%d: %{dnsname}@%p: %{digest32h} R=%2i *=%2i -> %{digest32h} <- %{digest32h}",
+                            zone->origin, serial, label_name, label,
+                            star->digest, star->rc, star->sc, star_next->digest, star_prev->digest);
+                }
+                nsec3_superdump_nsec3_label_pointer_array(star, FALSE, "SUPERDUMP*");
+                nsec3_superdump_nsec3_label_pointer_array(star, TRUE, "SUPERDUMP*");
+            }
+            else
+            {
+                if(showme)
+                {
+                    log_debug("SUPERDUMP: %{dnsname}/%d: %{dnsname}@%p: NULL star", zone->origin, serial, label_name, label);
+                }
+            }
+            
+            n3 = n3->next;
+            n3e = n3e->next;
+        }
+    }
+    
+    log_debug("SUPERDUMP: %{dnsname}/%d: checking NSEC3 links integrity checked", zone->origin, serial);
+#endif
+}
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

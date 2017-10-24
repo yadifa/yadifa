@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2011-2016, EURid. All rights reserved.
+# Copyright (c) 2011-2017, EURid. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without 
@@ -28,6 +28,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#	YADIFA server Makefile.am script
+#
+#      	Makefile.am script
+#
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/sbin/yadifad/Makefile.am $
+#
+#       $Date: 2017-09-26 12:32:40 +0200 (Tue, 26 Sep 2017) $
+#
+#       $Revision: 7310 $
+#
+#	$Author: ericdf $
+#
+##############################################################################
 
 ACLOCAL_AMFLAGS = -I ../../m4
 
@@ -156,9 +170,9 @@ noinst_HEADERS += database-service-zone-resignature.h \
 endif
 endif
 
-features:
-
 include ../../mk/common-settings.mk
 
 include ../../mk/common-labels.mk
+
+features:
 

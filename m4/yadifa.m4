@@ -1,6 +1,6 @@
 
 dnl 
-dnl Copyright (c) 2011-2016, EURid. All rights reserved.
+dnl Copyright (c) 2011-2017, EURid. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl  
 dnl Redistribution and use in source and binary forms, with or without 
@@ -29,6 +29,18 @@ dnl CONTRACT, STRICT LIABILITY,OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
+dnl ############################################################################
+dnl
+dnl       SVN Program:
+dnl               $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/bin/yadifa/configure.ac $
+dnl
+dnl       Last Update:
+dnl               $Date: 2012-03-27 16:56:49 +0200 (Tue, 27 Mar 2012) $
+dnl               $Revision: 1868 $
+dnl
+dnl       Purpose:
+dnl              common yadifa m4 macros
+dnl
 dnl ############################################################################
 
 
@@ -96,19 +108,6 @@ AC_SUBST(HAS_$2)
 # AC_HAS_ENABLE $1 DONE
 ])
 
-AC_DEFUN([AC_HAS_ENABLE_HOLD], [
-#
-# AC_HAS_ENABLE_HOLD $1
-#
-AM_CONDITIONAL(HAS_$2, [false])
-AC_DEFINE_UNQUOTED([HAS_$2], [0], ifelse($4,,[$3 disabled.],$4))
-AM_CONDITIONAL([HAS_$2], [false])
-enable_[$1]="no"
-$6
-AC_SUBST(HAS_$2)
-])
-
-
 dnl ####################################################
 dnl
 dnl AC_HAS_DISABLE(low-case --disable-*, up-case HAS_*, text, config.h text,ifyes,ifno)
@@ -139,7 +138,7 @@ AC_MSG_CHECKING(if [$2] has been disabled)
 # ARG ENABLE
 AC_ARG_ENABLE([$1], AS_HELP_STRING([--disable-[translit($1,[_],[-])]],[Disable $3]))
 # MSG RESULT
-dnl echo;echo "disabled: '$enable_[$1]'";echo
+dnl echo "enabled: '$enable_[$1]'"
 # CASE
 case "y$enable_[$1]" in
 	yyes|y)
@@ -153,7 +152,7 @@ case "y$enable_[$1]" in
         $5
 # ENDIF
 		;;
-	yno)
+	yno|*)
 # DEFINE N
 		AC_DEFINE_UNQUOTED([HAS_$2], [0], ifelse($4,,[$3 disabled.],$4))
 # CONDITIONAL N
@@ -200,10 +199,10 @@ AM_CONDITIONAL(HAS_$2, [false])
 # CHECKING
 AC_MSG_CHECKING(if [$1] has been given)
 # ARG WITH
-AC_ARG_WITH([$1], AS_HELP_STRING([--with-[translit($1,[_],[-])]], [build $3]),
+AC_ARG_WITH([$1], AS_HELP_STRING([--with-[translit($1,[_],[-])]], [With $3]),
 [
 # DEFINE Y
-		AC_DEFINE_UNQUOTED([HAS_$2], [1], ifelse($4,,[build $3.],$4))
+		AC_DEFINE_UNQUOTED([HAS_$2], [1], ifelse($4,,[With $3.],$4))
 # CONDITIONAL Y
 		AM_CONDITIONAL([HAS_$2], [true])
         AC_DEFINE_UNQUOTED([HAS_WITH_$2], "$with_[$1]" // $withval, ifelse($4,,[build $3.],$4))
@@ -216,7 +215,7 @@ AC_ARG_WITH([$1], AS_HELP_STRING([--with-[translit($1,[_],[-])]], [build $3]),
 ,
 [
 # DEFINE N
-		AC_DEFINE_UNQUOTED([HAS_$2], [0], ifelse($4,,[don't build $3.],$4))
+		AC_DEFINE_UNQUOTED([HAS_$2], [0], ifelse($4,,[Without $3.],$4))
 # CONDITIONAL N
         AM_CONDITIONAL([HAS_$2], [false])
         with_[$1]="no"
@@ -258,13 +257,13 @@ AM_CONDITIONAL(HAS_$2, [true])
 # CHECKING
 AC_MSG_CHECKING(if [$1] has to be build)
 # ARG WITH
-AC_ARG_WITH([$1], AS_HELP_STRING([--without-[translit($1,[_],[-])]],[build $3]))
+AC_ARG_WITH([$1], AS_HELP_STRING([--without-[translit($1,[_],[-])]],[Without $3]))
 
 # MSG RESULT
 case "y$with_[$1]" in
     yyes|y)
 # DEFINE Y
-		AC_DEFINE_UNQUOTED([HAS_$2], [1], ifelse($4,,[build $3.],$4))
+		AC_DEFINE_UNQUOTED([HAS_$2], [1], ifelse($4,,[With $3.],$4))
 # CONDITIONAL Y
 		AM_CONDITIONAL([HAS_$2], [true])
         with_[$1]=yes
@@ -276,7 +275,7 @@ case "y$with_[$1]" in
 
     yno|*)
 # DEFINE N
-		AC_DEFINE_UNQUOTED([HAS_$2], [0], ifelse($4,,[don't build $3.],$4))
+		AC_DEFINE_UNQUOTED([HAS_$2], [0], ifelse($4,,[Without $3.],$4))
 # CONDITIONAL N
         AM_CONDITIONAL([HAS_$2], [false])
         with_[$1]=no
@@ -294,44 +293,6 @@ AC_SUBST(HAS_$2)
 # AC_HAS_WITHOUT $1 DONE
 ])
 
-dnl dnl ####################################################
-dnl dnl
-dnl dnl COMPILER SUPPORT
-dnl dnl
-dnl dnl ####################################################
-dnl 
-dnl AC_DEFUN([AC_COMPILER_SUPPORTS], [
-dnl #
-dnl # AC_COMPILER_SUPPORTS $1
-dnl #
-dnl # CHECKING
-dnl AC_MSG_CHECKING(if compiler supports [$1])
-dnl cat > test-gcc-$2.c <<_ACEOF
-dnl #include <stdlib.h>
-dnl int main(int argc,char** argv)
-dnl {
-dnl     (void)argc;
-dnl     (void)argv;
-dnl     puts("Hello World!");
-dnl     return 0;
-dnl }
-dnl _ACEOF
-dnl ${CC} $1 test-gcc-$2.c -o test-gcc-$2
-dnl if [[ $? -ne 0]]
-dnl then
-dnl     AM_CONDITIONAL(HAS_CC_$2, [false])
-dnl     AC_MSG_RESULT([no])
-dnl else
-dnl     AM_CONDITIONAL(HAS_CC_$2, [true])
-dnl     AC_MSG_RESULT([yes])
-dnl fi
-dnl AC_SUBST(HAS_CC_$2)
-dnl rm -f test-gcc-$2.c
-dnl 
-dnl ])
-dnl
-dnl dnl ####################################################
-
 dnl CTRL class
 dnl
 
@@ -339,16 +300,6 @@ AC_DEFUN([AC_CHECK_ENABLE_CTRL], [
 
 AC_HAS_ENABLE(ctrl,CTRL,[remote control])
 
-])
-
-dnl DYNAMIC_PROVISIONING
-
-AC_DEFUN([AC_CHECK_ENABLE_CTRL_DYNAMIC_PROVISIONING], [
-
-AC_HAS_ENABLE_HOLD(ctrl_dynamic_provisioning,CTRL_DYNAMIC_PROVISIONING,[dynamic provisioning],,
-    AM_CONDITIONAL([HAS_CTRL], [true])
-    ,
-    )
 ])
 
 dnl DNS_RRL
@@ -361,17 +312,12 @@ AC_HAS_DISABLE(rrl,RRL_SUPPORT,[DNS Response Rate Limiter])
 
 dnl SSL DNSCORE DNSDB DNSZONE (all defaulted to FALSE)
 
-requires_tcl=0
 requires_ssl=0
 requires_dnscore=0
 requires_dnsdb=0
 requires_dnszone=0
 requires_dnslg=0
 requires_dnstcl=0
-
-AC_DEFUN([AC_YADIFA_ENABLE_TCL], [
-	requires_tcl=1
-])
 
 AC_DEFUN([AC_YADIFA_ENABLE_SSL], [
 	requires_ssl=1
@@ -397,16 +343,7 @@ AC_DEFUN([AC_YADIFA_ENABLE_DNSLG], [
 	requires_dnscore=1
 ])
 
-AC_DEFUN([AC_YADIFA_ENABLE_DNSTCL], [
-	requires_dnstcl=0
-	requires_dnszone=0
-	requires_dnsdb=0
-	requires_dnslg=0
-	requires_dnscore=0
-])
-
 AC_DEFUN([AC_YADIFA_ADD_SSL], [
-
     SSLDEPS=""
     echo "Finding the SSL dependencies"
     AC_SEARCH_LIBS([deflate],[z])
@@ -417,7 +354,7 @@ AC_DEFUN([AC_YADIFA_ADD_SSL], [
 
     ac_check_lib_ssl=0
 
-    AC_ARG_WITH(openssl_lib, AS_HELP_STRING([--with-openssl-lib=DIR], [Use the openssl library from directory DIR]),
+    AC_ARG_WITH(openssl_lib, AS_HELP_STRING([--with-openssl-lib=DIR], [the openssl library from directory DIR]),
         [
             AC_MSG_RESULT([yes])
             LDFLAGS="-L$with_openssl_lib $SSLDEPS $LDFLAGS"
@@ -425,7 +362,7 @@ AC_DEFUN([AC_YADIFA_ADD_SSL], [
             ac_check_lib_ssl=1
         ])
 
-    AC_ARG_WITH(openssl_include, AS_HELP_STRING([--with-openssl-include=DIR], [Use the openssl headers from directory DIR]),
+    AC_ARG_WITH(openssl_include, AS_HELP_STRING([--with-openssl-include=DIR], [the openssl headers from directory DIR]),
         [
             AC_MSG_RESULT([yes])
             CFLAGS="-I$with_openssl_include $CFLAGS $CFLAGS3264"
@@ -434,7 +371,7 @@ AC_DEFUN([AC_YADIFA_ADD_SSL], [
         ])
 
 
-	AC_ARG_WITH(openssl, AS_HELP_STRING([--with-openssl=DIR], [Use the openssl from directory DIR]),
+	AC_ARG_WITH(openssl, AS_HELP_STRING([--with-openssl=DIR], [the openssl from directory DIR]),
 		[
 			echo "yes"
 
@@ -466,9 +403,8 @@ dnl		AC_CHECK_LIB([ssl], [SSL_library_init],,[exit],[$SSLDEPS])
     fi
 
 	AC_SUBST(OPENSSL)
-
-
 ])
+
 
 AC_DEFUN([AC_YADIFA_ADD_LIBS], [
 
@@ -492,12 +428,9 @@ AC_SEARCH_LIBS([gethostbyname],[nsl],,[exit 1])
 AC_SEARCH_LIBS([socket],[socket],,[exit 1])
 AC_SEARCH_LIBS([dlopen],[dl],,[exit 1])
 AC_SEARCH_LIBS([pthread_self],[pthread],,[exit 1])
-
 dnl AC_GETHOSTBYNAME_CHECK
 
 dnl SSL
-
-AC_YADIFA_ENABLE_SSL
 
 if [[ $requires_ssl -eq 1 ]]
 then
@@ -631,13 +564,12 @@ dnl Features
 
 AC_DEFUN([AC_YADIFA_FEATURES], [
 
-AC_CHECK_ENABLE_CTRL_DYNAMIC_PROVISIONING
 AC_CHECK_ENABLE_RRL
 
 dnl SENDMSG / SENDTO : send messages with sendmsg instead of sendto
 dnl ==========================================================================
 
-AC_HAS_ENABLE(messages,MESSAGES_SUPPORT,[use messages instead of send (needed if you use more than one IP aliased on the same network interface)])
+AC_HAS_DISABLE(messages,MESSAGES_SUPPORT,[usage of message structure API (not recommended)])
 
 dnl MASTER
 dnl ==========================================================================
@@ -645,6 +577,7 @@ dnl ==========================================================================
 dnl NOTE: Putting the empty optional text (,,) is mandatory
 
 AC_HAS_DISABLE(master,MASTER_SUPPORT,[DNS master],,
+
     AC_YADIFA_ENABLE_SSL
     ,
     enable_dynupdate='no'
@@ -660,6 +593,23 @@ dnl ==========================================================================
 
 AC_HAS_DISABLE(nsid,NSID_SUPPORT,[NSID support])
 
+dnl OOZRR a.k.a CACHE : outsize-of-zone records (caching, devs only)
+dnl ==========================================================================
+
+AM_CONDITIONAL([HAS_RRCACHE_ENABLED], [true])
+AC_DEFINE_UNQUOTED([HAS_RRCACHE_ENABLED], [1], [always on])
+
+dnl ACL
+dnl ==========================================================================
+
+AM_CONDITIONAL([HAS_ACL_SUPPORT], [true])
+AC_DEFINE_UNQUOTED([HAS_ACL_SUPPORT], [1], [always on])
+
+dnl TSIG
+dnl ==========================================================================
+
+AM_CONDITIONAL([HAS_TSIG_SUPPORT], [true])
+AC_DEFINE_UNQUOTED([HAS_TSIG_SUPPORT], [1], [always on])
 
 dnl DYNUPDATE
 dnl ==========================================================================
@@ -677,12 +627,18 @@ AC_HAS_DISABLE(rrsig_management,RRSIG_MANAGEMENT_SUPPORT,[RRSIG verification and
 dnl RDTSC
 dnl ==========================================================================
 
-AC_HAS_ENABLE_HOLD(rdtsc,RDTSC,[RDTSC usage for profiling (devs only)])
+AM_CONDITIONAL([HAS_RDTSC_SUPPORT], [false])
+AC_DEFINE_UNQUOTED([HAS_RDTSC_SUPPORT], [0], [always on])
 
-dnl DYNCONF
-dnl ==========================================================================
+dnl NSEC3
 
-AC_HAS_ENABLE_HOLD(dynconf,DYNCONF_SUPPORT,[dynamic configuration])
+AM_CONDITIONAL([HAS_DNSSEC_SUPPORT], [true])
+AC_DEFINE_UNQUOTED([HAS_DNSSEC_SUPPORT], [1], [always on])
+AM_CONDITIONAL([HAS_NSEC_SUPPORT], [true])
+AC_DEFINE_UNQUOTED([HAS_NSEC_SUPPORT], [1], [always on])
+AM_CONDITIONAL([HAS_NSEC3_SUPPORT], [true])
+AC_DEFINE_UNQUOTED([HAS_NSEC3_SUPPORT], [1], [always on])
+AC_YADIFA_ENABLE_SSL
 
 dnl ZALLOC
 dnl ==========================================================================
@@ -697,12 +653,17 @@ AC_HAS_ENABLE(zalloc_statistics,ZALLOC_STATISTICS_SUPPORT,[zalloc statistics sup
 dnl ZALLOC DEBUG
 dnl ============
 
-AC_HAS_ENABLE(zalloc_debug,ZALLOC_DEBUG_SUPPORT,[zalloc debug support])
+AC_HAS_ENABLE(zalloc_debug,ZALLOC_DEBUG_SUPPORT,[zalloc debug support for yadifa objects])
 
 dnl MALLOC DEBUG
 dnl ============
 
-AC_HAS_ENABLE(malloc_debug,MALLOC_DEBUG_SUPPORT,[malloc debug support])
+AC_HAS_ENABLE(malloc_debug,MALLOC_DEBUG_SUPPORT,[malloc debug support for yadifa objects])
+
+dnl LIBC MALLOC DEBUG
+dnl ============
+
+AC_HAS_ENABLE(libc_malloc_debug,LIBC_MALLOC_DEBUG_SUPPORT,[libc malloc debug support monitors program-wide allocations])
 
 dnl BFD STACKTRACE DEBUG
 dnl ====================
@@ -727,92 +688,64 @@ AC_HAS_ENABLE(mutex_debug,MUTEX_DEBUG_SUPPORT,[mutex debug support])
 dnl INSTANCIATED ZONES DEBUG
 dnl ========================
 
-AC_HAS_ENABLE(track_zones_debug,TRACK_ZONES_DEBUG_SUPPORT,[Tracks the instanciated zones for detecting zones potentially not released.  Relatively cheap with a small (<100) amount of zones.])
+AC_HAS_ENABLE(track_zones_debug,TRACK_ZONES_DEBUG_SUPPORT,[tracking of the instanciated zones for detecting potential leaks.  Relatively cheap with a small (<100) amount of zones.])
 
 dnl LOG THREAD ID
 dnl =============
 
-AC_HAS_ENABLE(log_thread_id,LOG_THREAD_ID_ALWAYS_ON,[write the thread id in each line of log])
+AC_HAS_ENABLE(log_thread_id,LOG_THREAD_ID_ALWAYS_ON,[a column with an alphanumeric id consistent in the lowest 32 bits of a thread id in each log line])
+
+dnl LOG THREAD TAG
+dnl ==============
+
+AC_HAS_ENABLE(log_thread_tag,LOG_THREAD_TAG_ALWAYS_ON,[a column with a 8 letters human-readable tag identifying a thread in each log line])
 
 dnl LOG PID
 dnl =======
 
-AC_HAS_ENABLE(log_pid,LOG_PID_ALWAYS_ON,[write the pid in each line of log])
+AC_HAS_ENABLE(log_pid,LOG_PID_ALWAYS_ON,[a column with the pid in each line of log])
 
 dnl ASCII 7
 dnl =======
 
-AC_HAS_ENABLE(full_ascii7,FULL_ASCII7,[YADIFA will now accept ASCII7 characters in DNS names (not recommended)])
+AC_HAS_ENABLE(full_ascii7,FULL_ASCII7,[acceptance of ASCII7 characters in DNS names (not recommended)])
 
 dnl ECDSA
 dnl =====
-AC_HAS_DISABLE(ecdsa,ECDSA_SUPPORT,[Disables Elliptic Curve (ECDSA) support (ie: the available OpenSSL does not supports it)])
-
-
+AC_HAS_DISABLE(ecdsa,ECDSA_SUPPORT,[Elliptic Curve (ECDSA) support (ie: the available OpenSSL does not supports it)])
+ 
 dnl NON-AA AXFR (non-AA AXFR as sent by MS DNS)
 dnl ==========================================================================
 
-AC_HAS_ENABLE(non_aa_axfr_support,NON_AA_AXFR_SUPPORT,[Allows AXFR answer from master without AA bit set (Microsoft DNS)])
-
-dnl EXPERIMENTAL
-dnl ==========================================================================
-
-AC_HAS_ENABLE_HOLD(experimental,EXPERIMENTAL,[experimental stuff])
-
-dnl MIRROR debug 
-dnl ==========================================================================
-
-AC_HAS_ENABLE_HOLD(mirror,MIRROR_SUPPORT,[mirror mode (devs only)],[MIRROR mode will only reply what has been read (debug/bench)])
+AC_HAS_ENABLE(non_aa_axfr_support,NON_AA_AXFR_SUPPORT,[lenient acceptance of AXFR answer from master that do not have AA bit set (Microsoft DNS)])
 
 dnl DROPALL debug 
 dnl ==========================================================================
 
-AC_HAS_ENABLE_HOLD(dropall,DROPALL_SUPPORT,[Enable DROPALL mode (devs only)],[DROPALL mode will not actually send back the answer (debug/bench)])
+AC_HAS_ENABLE(dropall,DROPALL_SUPPORT,[DROPALL mode (devs only)],[DROPALL mode will not actually send back the answer (debug/bench)])
 
 dnl logdir
 dnl ==========================================================================
 
-AC_HAS_WITH(logdir, LOGDIR, [sets the directory where to put the log files], [where to put the log files],
+AC_HAS_WITH(logdir, LOGDIR, [the log file directory set to this], [where to put the log files],
 logdir="$withval"
 ,
 logdir=${localstatedir}/log/yadifa
 )
 AC_SUBST(logdir)
 
-AC_SOCKADDR_SA_LEN_CHECK
-AC_SOCKADDR_IN_SIN_LEN_CHECK
-AC_SOCKADDR_IN6_SIN6_LEN_CHECK
-
-AM_CONDITIONAL([HAS_ACL_SUPPORT], [true])
-AC_DEFINE_UNQUOTED([HAS_ACL_SUPPORT], [1], [always on])
-AM_CONDITIONAL([HAS_TSIG_SUPPORT], [true])
-AC_DEFINE_UNQUOTED([HAS_TSIG_SUPPORT], [1], [always on])
-AM_CONDITIONAL([HAS_DNSSEC_SUPPORT], [true])
-AC_DEFINE_UNQUOTED([HAS_DNSSEC_SUPPORT], [1], [always on])
-AM_CONDITIONAL([HAS_NSEC3_SUPPORT], [true])
-AC_DEFINE_UNQUOTED([HAS_NSEC3_SUPPORT], [1], [always on])
-AM_CONDITIONAL([HAS_NSEC_SUPPORT], [true])
-AC_DEFINE_UNQUOTED([HAS_NSEC_SUPPORT], [1], [always on])
-dnl AM_CONDITIONAL([HAS_MIRROR_SUPPORT], [false])
-dnl AC_DEFINE_UNQUOTED([HAS_MIRROR_SUPPORT], [0], [always off])
-dnl AM_CONDITIONAL([HAS_DROPALL_SUPPORT], [false])
-dnl AC_DEFINE_UNQUOTED([HAS_DROPALL_SUPPORT], [0], [always off])
-AM_CONDITIONAL([HAS_TCL], [false])
-AC_DEFINE_UNQUOTED([HAS_TCL], [0], [always off])
-AM_CONDITIONAL([HAS_RDTSC], [false])
-AC_DEFINE_UNQUOTED([HAS_RDTSC], [0], [always off])
-AM_CONDITIONAL([HAS_RRCACHE_ENABLED], [false])
-AC_DEFINE_UNQUOTED([HAS_RRCACHE_ENABLED], [0], [always off])
-])
 # DNSQ
 
-AC_HAS_ENABLE_HOLD(dnsq,DNSQ,[DNS Quality support (devs only)],[DNSQ support enabled])
+# AC_HAS_ENABLE_HOLD(dnsq,DNSQ,[DNS Quality support (devs only)],[DNSQ support enabled])
+# AC_HAS_ENABLE_HOLD(gery,GERY,[code not to be released yet, specific to Gery (devs only)],[Gery's code is enabled])
+# AC_HAS_ENABLE_HOLD(edf,EDF,[code not to be released yet, specific to Eric (devs only)],[Eric's code is enabled])
+# AC_HAS_ENABLE_HOLD(thx,THX,[code not to be released yet, specific to Tim (devs only)],[Tim's code is enabled])
 
-# DEV
+])
 
-AC_HAS_ENABLE_HOLD(gery,GERY,[code not to be released yet, specific to Gery (devs only)],[Gery's code is enabled])
-AC_HAS_ENABLE_HOLD(edf,EDF,[code not to be released yet, specific to Eric (devs only)],[Eric's code is enabled])
-AC_HAS_ENABLE_HOLD(thx,THX,[code not to be released yet, specific to Tim (devs only)],[Tim's code is enabled])
+# NOTIMESTAMP
+
+AC_HAS_DISABLE(build_timestamp,BUILD_TIMESTAMP,[Disable timestamps in the build])
 
 
 AC_DEFUN([AC_YADIFA_SUMMARY], [
@@ -845,12 +778,6 @@ echo CTRL .............. : $enable_ctrl
 echo NSEC .............. : $enable_nsec
 echo NSEC3 ............. : $enable_nsec3
 echo RRL ............... : $enable_rrl
-echo
-echo TCL ............... : $with_tcl
-if [[ "$with_tcl" = "yes" ]]; then 
-echo TCL used ............................ : $tcl_version
-echo TCL library ......................... : $tcl_libdir
-echo "TCL includes ........................ : $tcl_includedir"
 fi
 echo
 

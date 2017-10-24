@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -117,6 +117,13 @@ file_input_stream_read(input_stream* stream_, u8* buffer, u32 len)
                 continue;
             }
             
+#ifdef DEBUG
+            if(err == EBADF)
+            {
+                fprintf(stderr, "bad file descriptor %i", stream->data.fd);
+            }
+#endif
+            
             if(buffer - start > 0)
             {
                 return buffer - start;
@@ -149,10 +156,23 @@ file_input_stream_close(input_stream* stream_)
     
     assert((stream->data.fd < 0)||(stream->data.fd >2));
     
-    if(stream->data.fd != ~0)
+    if(stream->data.fd != -1)
     {
         close_ex(stream->data.fd);
+        stream->data.fd = -1;
     }
+    
+    input_stream_set_void(stream_);
+}
+
+static void
+file_input_stream_noclose(input_stream* stream_)
+{
+    file_input_stream* stream = (file_input_stream*)stream_;
+    
+    assert((stream->data.fd < 0)||(stream->data.fd >2));
+    
+    stream->data.fd = -1;
     
     input_stream_set_void(stream_);
 }
@@ -176,6 +196,13 @@ static const input_stream_vtbl file_input_stream_vtbl ={
     "file_input_stream"
 };
 
+static const input_stream_vtbl file_input_stream_noclose_vtbl ={
+    file_input_stream_read,
+    file_input_stream_skip,
+    file_input_stream_noclose,
+    "file_input_stream-noclose"
+};
+
 ya_result
 fd_input_stream_attach(input_stream *stream_, int fd)
 {
@@ -188,6 +215,22 @@ fd_input_stream_attach(input_stream *stream_, int fd)
 
     stream->data.fd = fd;
     stream->vtbl = &file_input_stream_vtbl;
+
+    return SUCCESS;
+}
+
+ya_result
+fd_input_stream_attach_noclose(input_stream *stream_, int fd)
+{
+    file_input_stream* stream = (file_input_stream*)stream_;
+
+    if(fd < 0)
+    {
+        return ERRNO_ERROR;
+    }
+
+    stream->data.fd = fd;
+    stream->vtbl = &file_input_stream_noclose_vtbl;
 
     return SUCCESS;
 }
@@ -269,7 +312,7 @@ bool
 is_fd_input_stream(input_stream* stream_)
 {
     file_input_stream* stream = (file_input_stream*)stream_;
-    return (stream != NULL) && (stream->vtbl == &file_input_stream_vtbl);
+    return (stream != NULL) && (stream->vtbl->read == file_input_stream_read);
 }
 
 void file_input_steam_advise_sequential(input_stream* stream_)

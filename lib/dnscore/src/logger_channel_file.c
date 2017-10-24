@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup logger Logging functions
  *  @ingroup dnscore
  *  @brief
@@ -58,6 +58,7 @@
 #include "dnscore/format.h"
 #include "dnscore/chroot.h"
 #include "dnscore/fdtools.h"
+#include "dnscore/thread_pool.h"
 
 /*
  * The new logger model does not requires MT protection on the channels
@@ -209,6 +210,10 @@ logger_channel_file_reopen(logger_channel* chan)
     file_data* sd = (file_data*)chan->data;
     struct timeval tv;
     struct tm t;
+    
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+    char thread_tag_buffer[9];
+#endif
 
     output_stream_flush(&sd->os);
 
@@ -276,14 +281,22 @@ logger_channel_file_reopen(logger_channel* chan)
     gettimeofday(&tv, NULL);
     localtime_r(&tv.tv_sec, &t);
     
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+    thread_copy_tag(pthread_self(), thread_tag_buffer);
+#endif
+    
     logger_channel_file_msg(chan, LOG_NOTICE,
 
-#if defined(DEBUG) || (HAS_LOG_PID_ALWAYS_ON && HAS_LOG_THREAD_ID_ALWAYS_ON)
+#if (defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON) && DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %s | %8s | N | reopening '%s'",
+#elif defined(DEBUG) || (HAS_LOG_PID_ALWAYS_ON && HAS_LOG_THREAD_ID_ALWAYS_ON)
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | N | reopening '%s'",
-#elif HAS_LOG_PID_ALWAYS_ON
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %8s | N | reopening '%s'",
+#elif DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %s | %8s | N | reopening '%s'",
 #elif HAS_LOG_THREAD_ID_ALWAYS_ON
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %08x | %8s | N | reopening '%s'",
+#elif HAS_LOG_PID_ALWAYS_ON
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %8s | N | reopening '%s'",
 #else
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %8s | N | reopening '%s'",
 #endif
@@ -292,8 +305,12 @@ logger_channel_file_reopen(logger_channel* chan)
 #if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
                             getpid(),
 #endif
-#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+                            thread_tag_buffer,
+#else
+    #if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
                             pthread_self(),
+    #endif
 #endif
                             "system",
                             sd->file_name);
@@ -315,12 +332,17 @@ logger_channel_file_reopen(logger_channel* chan)
     localtime_r(&tv.tv_sec, &t);
 
     logger_channel_file_msg(chan, LOG_NOTICE,
-#if defined(DEBUG) || (HAS_LOG_PID_ALWAYS_ON && HAS_LOG_THREAD_ID_ALWAYS_ON)
+    
+#if (defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON) && DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %s | %8s | N | reopened '%s'",
+#elif defined(DEBUG) || (HAS_LOG_PID_ALWAYS_ON && HAS_LOG_THREAD_ID_ALWAYS_ON)
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | N | reopened '%s'",
-#elif HAS_LOG_PID_ALWAYS_ON
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %8s | N | reopened '%s'",
+#elif DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %s | %8s | N | reopened '%s'",
 #elif HAS_LOG_THREAD_ID_ALWAYS_ON
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %08x | %8s | N | reopened '%s'",
+#elif HAS_LOG_PID_ALWAYS_ON
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %8s | N | reopened '%s'",
 #else
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %8s | N | reopened '%s'",
 #endif
@@ -329,8 +351,12 @@ logger_channel_file_reopen(logger_channel* chan)
 #if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
                             getpid(),
 #endif
-#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+                            thread_tag_buffer,
+#else
+    #if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
                             pthread_self(),
+    #endif
 #endif
                             "system",
                             sd->file_name);
@@ -354,15 +380,11 @@ logger_channel_file_sink(logger_channel* chan)
 
         int dev_null = open_ex("/dev/null", O_WRONLY);
         
-        while(dup2(dev_null, sd->fd) < 0)
+        if(dup2_ex(dev_null, sd->fd) < 0)
         {
             ret = errno;
-            if(ret != EINTR)
-            {
-                break;
-            }
-            ret = 0;
         }
+        
         close_ex(dev_null);
         if(ret != 0)
         {
@@ -431,8 +453,4 @@ logger_channel_file_rename(logger_channel *chan, const char *newpath)
     return INVALID_STATE_ERROR;
 }
 
-
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

@@ -16,7 +16,7 @@
 
 ################################################################################
 #
-# Copyright (c) 2011-2016, EURid. All rights reserved.
+# Copyright (c) 2011-2017, EURid. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without 
@@ -44,10 +44,24 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ##############################################################################
+#
+#	YADIFA dnscore Makefile.am script
+#
+#		Makefile.am script
+#
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/lib/dnscore/Makefile.am $
+#
+#	   $Date: 2017-09-26 11:33:35 +0200 (Tue, 26 Sep 2017) $
+#
+#	   $Revision: 7307 $
+#
+#	$Author: ericdf $
+#
+##############################################################################
 
 ################################################################################
 #
-# Copyright (c) 2011-2016, EURid. All rights reserved.
+# Copyright (c) 2011-2017, EURid. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without 
@@ -94,7 +108,7 @@
 
 ################################################################################
 #
-# Copyright (c) 2011-2016, EURid. All rights reserved.
+# Copyright (c) 2011-2017, EURid. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without 
@@ -214,34 +228,30 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 	$(dist_noinst_DATA) $(am__pkginclude_HEADERS_DIST) COPYING \
 	ar-lib compile config.guess config.sub install-sh missing \
 	ltmain.sh
-@HAS_DNSQ_TRUE@am__append_7 = -DHAS_DNSQ
-@HAS_GERY_TRUE@am__append_8 = -DGERY
-@HAS_EDF_TRUE@am__append_9 = -DEDF
-@HAS_THX_TRUE@am__append_10 = -DTHX
-@USES_SUNC_TRUE@am__append_11 = 
-@USES_SUNC_FALSE@am__append_12 = -O0
-@IS_DARWIN_OS_TRUE@am__append_13 = -Wno-deprecated
-@HAS_CC_NO_IDENT_TRUE@am__append_14 = -fno-ident
-@HAS_CC_ANSI_TRUE@am__append_15 = -ansi
-@HAS_CC_PEDANTIC_TRUE@am__append_16 = -pedantic
-@HAS_CC_WALL_TRUE@am__append_17 = -Wall -Wno-unknown-pragmas
-@HAS_CC_MISSING_FIELD_INITIALIZERS_TRUE@am__append_18 = -Werror=missing-field-initializers
-@HAS_CC_STD_GNU99_TRUE@am__append_19 = -std=gnu99
-@HAS_CC_STD_C99_TRUE@@HAS_CC_STD_GNU99_FALSE@am__append_20 = -std=c99
-@HAS_CC_STD_GNU99_FALSE@@HAS_CC_XC99_TRUE@am__append_21 = -xc99
-@HAS_CC_TUNE_NATIVE_TRUE@am__append_22 = -mtune=native
-@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_23 = -m64
-@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_24 = -m64
-@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_25 = -m32
-@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_26 = -m32
+@USES_SUNC_TRUE@am__append_7 = 
+@USES_SUNC_FALSE@am__append_8 = -O0
+@IS_DARWIN_OS_TRUE@am__append_9 = -Wno-deprecated
+@HAS_CC_NO_IDENT_TRUE@am__append_10 = -fno-ident
+@HAS_CC_ANSI_TRUE@am__append_11 = -ansi
+@HAS_CC_PEDANTIC_TRUE@am__append_12 = -pedantic
+@HAS_CC_WALL_TRUE@am__append_13 = -Wall -Wno-unknown-pragmas
+@HAS_CC_MISSING_FIELD_INITIALIZERS_TRUE@am__append_14 = -Werror=missing-field-initializers
+@HAS_CC_STD_GNU99_TRUE@am__append_15 = -std=gnu99
+@HAS_CC_STD_C99_TRUE@@HAS_CC_STD_GNU99_FALSE@am__append_16 = -std=c99
+@HAS_CC_STD_GNU99_FALSE@@HAS_CC_XC99_TRUE@am__append_17 = -xc99
+@HAS_CC_TUNE_NATIVE_TRUE@am__append_18 = -mtune=native
+@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_19 = -m64
+@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_20 = -m64
+@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_21 = -m32
+@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_22 = -m32
 
 #
 # DEBUG
 #
-@HAS_CC_G3_TRUE@am__append_27 = -g3
-@HAS_CC_G3_FALSE@@HAS_CC_G_TRUE@am__append_28 = -g
-@HAS_CC_DWARF4_TRUE@am__append_29 = -gdwarf-4
-@HAS_CC_DWARF3_TRUE@@HAS_CC_DWARF4_FALSE@am__append_30 = -gdwarf-3
+@HAS_CC_G3_TRUE@am__append_23 = -g3
+@HAS_CC_G3_FALSE@@HAS_CC_G_TRUE@am__append_24 = -g
+@HAS_CC_DWARF4_TRUE@am__append_25 = -gdwarf-4
+@HAS_CC_DWARF3_TRUE@@HAS_CC_DWARF4_FALSE@am__append_26 = -gdwarf-3
 
 #
 # Intel C Compiler
@@ -250,11 +260,11 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 
 #ICC
 #IPO= -ipo (need to use the intel xiar instead of ar)
-@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_31 = -DLTO -ipo
-@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_32 = -ipo
-@USES_ICC_TRUE@am__append_33 = -DUSES_ICC 
-@HAS_CC_ANSI_ALIAS_TRUE@@USES_ICC_TRUE@am__append_34 = -ansi-alias -U__STRICT_ANSI__ 
-@USES_ICC_TRUE@am__append_35 = -DMODE_DEBUG_ICC
+@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_27 = -DLTO -ipo
+@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_28 = -ipo
+@USES_ICC_TRUE@am__append_29 = -DUSES_ICC 
+@HAS_CC_ANSI_ALIAS_TRUE@@USES_ICC_TRUE@am__append_30 = -ansi-alias -U__STRICT_ANSI__ 
+@USES_ICC_TRUE@am__append_31 = -DMODE_DEBUG_ICC
 
 #
 # LLVM Clang
@@ -262,10 +272,10 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 ###############################################################################
 
 # CLANG
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_36 = -DLTO -flto
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_37 = -flto
-@USES_CLANG_TRUE@am__append_38 = -DUSES_LLVM
-@USES_CLANG_TRUE@am__append_39 = -DMODE_DEBUG_CLANG -fsanitize=address -fsanitize=bounds
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_32 = -DLTO -flto
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_33 = -flto
+@USES_CLANG_TRUE@am__append_34 = -DUSES_LLVM -Wno-gnu -Wno-extended-offsetof
+@USES_CLANG_TRUE@am__append_35 = -DMODE_DEBUG_CLANG -fsanitize=address -fsanitize=bounds
 
 # Note: add a _d suffix for debug builds ?
 
@@ -275,13 +285,18 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 ###############################################################################
 
 #GCC
-@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_40 = -mcpu=niagara
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_41 = -DLTO -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_42 = -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
-@USES_GCC_TRUE@am__append_43 = -DUSES_GCC
-@USES_GCC_TRUE@am__append_44 = -DMODE_DEBUG_GCC -fstack-check -fstack-protector-strong
-@USES_SUNC_TRUE@am__append_45 = -DUSES_SUNC
-@USES_SUNC_TRUE@am__append_46 = -DMODE_DEBUG_SUNC
+@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_36 = -mcpu=niagara
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_37 = -DLTO -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_38 = -flto \
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-fwhole-program \
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-fno-fat-lto-objects \
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-fuse-linker-plugin \
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-Wl,-Map=module.map \
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-Wl,--cref
+@USES_GCC_TRUE@am__append_39 = -DUSES_GCC
+@USES_GCC_TRUE@am__append_40 = -DMODE_DEBUG_GCC -fstack-check -fstack-protector-strong
+@USES_SUNC_TRUE@am__append_41 = -DUSES_SUNC
+@USES_SUNC_TRUE@am__append_42 = -DMODE_DEBUG_SUNC
 
 # Note: add a _d suffix for debug builds ?
 
@@ -291,19 +306,19 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 ###############################################################################
 
 # if an unknown compiler is used, it should have its own section
-@USES_UNKNOWN_TRUE@am__append_47 = -DUSES_UNKNOWN_COMPILER
-@USES_UNKNOWN_TRUE@am__append_48 = -DMODE_DEBUG_UNKNOWN
+@USES_UNKNOWN_TRUE@am__append_43 = -DUSES_UNKNOWN_COMPILER
+@USES_UNKNOWN_TRUE@am__append_44 = -DMODE_DEBUG_UNKNOWN
 
 #
 # Some BSD-based OSes need this
 #
-@IS_BSD_FAMILY_TRUE@am__append_49 = -I./include
-@IS_SOLARIS_FAMILY_TRUE@am__append_50 = -D_POSIX_PTHREAD_SEMANTICS
-@HAS_CC_RDYNAMIC_TRUE@am__append_51 = -rdynamic
-@HAS_CC_RDYNAMIC_TRUE@am__append_52 = -rdynamic
+@IS_BSD_FAMILY_TRUE@am__append_45 = -I./include
+@IS_SOLARIS_FAMILY_TRUE@am__append_46 = -D_POSIX_PTHREAD_SEMANTICS
+@HAS_CC_RDYNAMIC_TRUE@am__append_47 = -rdynamic
+@HAS_CC_RDYNAMIC_TRUE@am__append_48 = -rdynamic
 
 # workaround a bug where clang does not handle properly profiling and optimizations
-@USES_CLANG_TRUE@am__append_53 = -mno-omit-leaf-frame-pointer -fno-omit-frame-pointer
+@USES_CLANG_TRUE@am__append_49 = -mno-omit-leaf-frame-pointer -fno-omit-frame-pointer
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
@@ -364,18 +379,18 @@ am__libdnscore_la_SOURCES_DIST = src/alarm.c src/allocator.c \
 	src/dns-udp.c src/dns_resource_record.c src/dnscore.c \
 	src/dnsformat.c src/dnskey.c src/dnskey-keyring.c \
 	src/dnskey_dsa.c src/dnskey_ecdsa.c src/dnskey_rsa.c \
-	src/dnsname.c src/empty-input-stream.c src/fdtools.c \
-	src/file_input_stream.c src/file_output_stream.c src/format.c \
-	src/host_address.c src/hsdllist.c src/identity.c \
-	src/input_stream.c src/limited_input_stream.c src/list-dl.c \
-	src/list-sl.c src/list-sl-debug.c src/logger-output-stream.c \
-	src/logger.c src/logger_channel_file.c \
-	src/logger_channel_stream.c src/logger_channel_syslog.c \
-	src/logger_handle.c src/message-buffer.c src/message-viewer.c \
-	src/message.c src/message_print_format_dig.c \
-	src/message_verify_rrsig.c src/message_dnsupdate.c \
-	src/mt_output_stream.c src/mutex.c src/name.c \
-	src/output_stream.c src/pace.c src/packet_reader.c \
+	src/dnskey-signature.c src/dnsname.c src/empty-input-stream.c \
+	src/fdtools.c src/file_input_stream.c src/file_output_stream.c \
+	src/format.c src/host_address.c src/hsdllist.c src/identity.c \
+	src/input_stream.c src/limited_input_stream.c src/limiter.c \
+	src/list-dl.c src/list-sl.c src/list-sl-debug.c \
+	src/logger-output-stream.c src/logger.c \
+	src/logger_channel_file.c src/logger_channel_stream.c \
+	src/logger_channel_syslog.c src/logger_handle.c \
+	src/message-buffer.c src/message-viewer.c src/message.c \
+	src/message_print_format_dig.c src/message_verify_rrsig.c \
+	src/message_dnsupdate.c src/mt_output_stream.c src/mutex.c \
+	src/name.c src/output_stream.c src/pace.c src/packet_reader.c \
 	src/packet_writer.c src/parser.c src/parsing.c src/pid.c \
 	src/pipe_stream.c src/pool.c src/ptr_set.c src/ptr_set_debug.c \
 	src/ptr_vector.c src/queue-sl.c src/random.c src/rc.c \
@@ -409,12 +424,14 @@ am_libdnscore_la_OBJECTS = src/alarm.lo src/allocator.lo src/async.lo \
 	src/digest_sha512.lo src/dns-udp.lo src/dns_resource_record.lo \
 	src/dnscore.lo src/dnsformat.lo src/dnskey.lo \
 	src/dnskey-keyring.lo src/dnskey_dsa.lo src/dnskey_ecdsa.lo \
-	src/dnskey_rsa.lo src/dnsname.lo src/empty-input-stream.lo \
-	src/fdtools.lo src/file_input_stream.lo \
-	src/file_output_stream.lo src/format.lo src/host_address.lo \
-	src/hsdllist.lo src/identity.lo src/input_stream.lo \
-	src/limited_input_stream.lo src/list-dl.lo src/list-sl.lo \
-	src/list-sl-debug.lo src/logger-output-stream.lo src/logger.lo \
+	src/dnskey_rsa.lo src/dnskey-signature.lo src/dnsname.lo \
+	src/empty-input-stream.lo src/fdtools.lo \
+	src/file_input_stream.lo src/file_output_stream.lo \
+	src/format.lo src/host_address.lo src/hsdllist.lo \
+	src/identity.lo src/input_stream.lo \
+	src/limited_input_stream.lo src/limiter.lo src/list-dl.lo \
+	src/list-sl.lo src/list-sl-debug.lo \
+	src/logger-output-stream.lo src/logger.lo \
 	src/logger_channel_file.lo src/logger_channel_stream.lo \
 	src/logger_channel_syslog.lo src/logger_handle.lo \
 	src/message-buffer.lo src/message-viewer.lo src/message.lo \
@@ -500,17 +517,18 @@ am__pkginclude_HEADERS_DIST = $(I)/$(FEATURESFILE) $(I)/alarm.h \
 	$(I)/dns_resource_record.h $(I)/dnscore-config.h \
 	$(I)/dnscore.h $(I)/dnsformat.h $(I)/dnskey.h \
 	$(I)/dnskey-keyring.h $(I)/dnskey_dsa.h $(I)/dnskey_ecdsa.h \
-	$(I)/dnskey_rsa.h $(I)/dnsname.h $(I)/dnsname_set.h \
-	$(I)/dnssec_errors.h $(I)/empty-input-stream.h $(I)/fdtools.h \
+	$(I)/dnskey_rsa.h $(I)/dnskey-signature.h $(I)/dnsname.h \
+	$(I)/dnsname_set.h $(I)/dnssec_errors.h \
+	$(I)/empty-input-stream.h $(I)/fdtools.h \
 	$(I)/file_input_stream.h $(I)/file_output_stream.h \
 	$(I)/fingerprint.h $(I)/format.h $(I)/host_address.h \
 	$(I)/hsdllist.h $(I)/identity.h $(I)/input_stream.h \
-	$(I)/io_stream.h $(I)/limited_input_stream.h $(I)/list-dl.h \
-	$(I)/list-sl.h $(I)/list-sl-debug.h $(I)/logger.h \
-	$(I)/logger_channel_file.h $(I)/logger_channel_stream.h \
-	$(I)/logger_channel_syslog.h $(I)/logger_handle.h \
-	$(I)/logger-output-stream.h $(I)/message-buffer.h \
-	$(I)/message-viewer.h $(I)/message.h \
+	$(I)/io_stream.h $(I)/limited_input_stream.h $(I)/limiter.h \
+	$(I)/list-dl.h $(I)/list-sl.h $(I)/list-sl-debug.h \
+	$(I)/logger.h $(I)/logger_channel_file.h \
+	$(I)/logger_channel_stream.h $(I)/logger_channel_syslog.h \
+	$(I)/logger_handle.h $(I)/logger-output-stream.h \
+	$(I)/message-buffer.h $(I)/message-viewer.h $(I)/message.h \
 	$(I)/message_verify_rrsig.h $(I)/message_dnsupdate.h \
 	$(I)/mt_output_stream.h $(I)/mutex.h $(I)/name.h \
 	$(I)/network.h $(I)/output_stream.h $(I)/pace.h \
@@ -603,6 +621,7 @@ FGREP = @FGREP@
 GREP = @GREP@
 HAS_BFD_DEBUG_SUPPORT = @HAS_BFD_DEBUG_SUPPORT@
 HAS_BIG_ENDIAN = @HAS_BIG_ENDIAN@
+HAS_BUILD_TIMESTAMP = @HAS_BUILD_TIMESTAMP@
 HAS_CC_ADDRESS_SANITIZER_CHECK = @HAS_CC_ADDRESS_SANITIZER_CHECK@
 HAS_CC_ANSI = @HAS_CC_ANSI@
 HAS_CC_ANSI_ALIAS = @HAS_CC_ANSI_ALIAS@
@@ -628,32 +647,25 @@ HAS_CC_TUNE_NATIVE = @HAS_CC_TUNE_NATIVE@
 HAS_CC_WALL = @HAS_CC_WALL@
 HAS_CC_XC99 = @HAS_CC_XC99@
 HAS_CTRL = @HAS_CTRL@
-HAS_CTRL_DYNAMIC_PROVISIONING = @HAS_CTRL_DYNAMIC_PROVISIONING@
-HAS_DNSQ = @HAS_DNSQ@
 HAS_DROPALL_SUPPORT = @HAS_DROPALL_SUPPORT@
-HAS_DYNCONF_SUPPORT = @HAS_DYNCONF_SUPPORT@
 HAS_DYNUPDATE_SUPPORT = @HAS_DYNUPDATE_SUPPORT@
 HAS_ECDSA_SUPPORT = @HAS_ECDSA_SUPPORT@
-HAS_EDF = @HAS_EDF@
-HAS_EXPERIMENTAL = @HAS_EXPERIMENTAL@
 HAS_FULL_ASCII7 = @HAS_FULL_ASCII7@
-HAS_GERY = @HAS_GERY@
+HAS_LIBC_MALLOC_DEBUG_SUPPORT = @HAS_LIBC_MALLOC_DEBUG_SUPPORT@
 HAS_LITTLE_ENDIAN = @HAS_LITTLE_ENDIAN@
 HAS_LOGDIR = @HAS_LOGDIR@
 HAS_LOG_PID_ALWAYS_ON = @HAS_LOG_PID_ALWAYS_ON@
 HAS_LOG_THREAD_ID_ALWAYS_ON = @HAS_LOG_THREAD_ID_ALWAYS_ON@
+HAS_LOG_THREAD_TAG_ALWAYS_ON = @HAS_LOG_THREAD_TAG_ALWAYS_ON@
 HAS_MALLOC_DEBUG_SUPPORT = @HAS_MALLOC_DEBUG_SUPPORT@
 HAS_MASTER_SUPPORT = @HAS_MASTER_SUPPORT@
 HAS_MEMALIGN_ISSUES = @HAS_MEMALIGN_ISSUES@
 HAS_MESSAGES_SUPPORT = @HAS_MESSAGES_SUPPORT@
-HAS_MIRROR_SUPPORT = @HAS_MIRROR_SUPPORT@
 HAS_MUTEX_DEBUG_SUPPORT = @HAS_MUTEX_DEBUG_SUPPORT@
 HAS_NON_AA_AXFR_SUPPORT = @HAS_NON_AA_AXFR_SUPPORT@
 HAS_NSID_SUPPORT = @HAS_NSID_SUPPORT@
-HAS_RDTSC = @HAS_RDTSC@
 HAS_RRL_SUPPORT = @HAS_RRL_SUPPORT@
 HAS_RRSIG_MANAGEMENT_SUPPORT = @HAS_RRSIG_MANAGEMENT_SUPPORT@
-HAS_THX = @HAS_THX@
 HAS_TRACK_ZONES_DEBUG_SUPPORT = @HAS_TRACK_ZONES_DEBUG_SUPPORT@
 HAS_ZALLOC_DEBUG_SUPPORT = @HAS_ZALLOC_DEBUG_SUPPORT@
 HAS_ZALLOC_STATISTICS_SUPPORT = @HAS_ZALLOC_STATISTICS_SUPPORT@
@@ -775,18 +787,18 @@ libdnscore_la_SOURCES = src/alarm.c src/allocator.c src/async.c \
 	src/dns-udp.c src/dns_resource_record.c src/dnscore.c \
 	src/dnsformat.c src/dnskey.c src/dnskey-keyring.c \
 	src/dnskey_dsa.c src/dnskey_ecdsa.c src/dnskey_rsa.c \
-	src/dnsname.c src/empty-input-stream.c src/fdtools.c \
-	src/file_input_stream.c src/file_output_stream.c src/format.c \
-	src/host_address.c src/hsdllist.c src/identity.c \
-	src/input_stream.c src/limited_input_stream.c src/list-dl.c \
-	src/list-sl.c src/list-sl-debug.c src/logger-output-stream.c \
-	src/logger.c src/logger_channel_file.c \
-	src/logger_channel_stream.c src/logger_channel_syslog.c \
-	src/logger_handle.c src/message-buffer.c src/message-viewer.c \
-	src/message.c src/message_print_format_dig.c \
-	src/message_verify_rrsig.c src/message_dnsupdate.c \
-	src/mt_output_stream.c src/mutex.c src/name.c \
-	src/output_stream.c src/pace.c src/packet_reader.c \
+	src/dnskey-signature.c src/dnsname.c src/empty-input-stream.c \
+	src/fdtools.c src/file_input_stream.c src/file_output_stream.c \
+	src/format.c src/host_address.c src/hsdllist.c src/identity.c \
+	src/input_stream.c src/limited_input_stream.c src/limiter.c \
+	src/list-dl.c src/list-sl.c src/list-sl-debug.c \
+	src/logger-output-stream.c src/logger.c \
+	src/logger_channel_file.c src/logger_channel_stream.c \
+	src/logger_channel_syslog.c src/logger_handle.c \
+	src/message-buffer.c src/message-viewer.c src/message.c \
+	src/message_print_format_dig.c src/message_verify_rrsig.c \
+	src/message_dnsupdate.c src/mt_output_stream.c src/mutex.c \
+	src/name.c src/output_stream.c src/pace.c src/packet_reader.c \
 	src/packet_writer.c src/parser.c src/parsing.c src/pid.c \
 	src/pipe_stream.c src/pool.c src/ptr_set.c src/ptr_set_debug.c \
 	src/ptr_vector.c src/queue-sl.c src/random.c src/rc.c \
@@ -814,17 +826,18 @@ pkginclude_HEADERS = $(FEATURES) $(I)/alarm.h $(I)/allocator.h \
 	$(I)/dns_resource_record.h $(I)/dnscore-config.h \
 	$(I)/dnscore.h $(I)/dnsformat.h $(I)/dnskey.h \
 	$(I)/dnskey-keyring.h $(I)/dnskey_dsa.h $(I)/dnskey_ecdsa.h \
-	$(I)/dnskey_rsa.h $(I)/dnsname.h $(I)/dnsname_set.h \
-	$(I)/dnssec_errors.h $(I)/empty-input-stream.h $(I)/fdtools.h \
+	$(I)/dnskey_rsa.h $(I)/dnskey-signature.h $(I)/dnsname.h \
+	$(I)/dnsname_set.h $(I)/dnssec_errors.h \
+	$(I)/empty-input-stream.h $(I)/fdtools.h \
 	$(I)/file_input_stream.h $(I)/file_output_stream.h \
 	$(I)/fingerprint.h $(I)/format.h $(I)/host_address.h \
 	$(I)/hsdllist.h $(I)/identity.h $(I)/input_stream.h \
-	$(I)/io_stream.h $(I)/limited_input_stream.h $(I)/list-dl.h \
-	$(I)/list-sl.h $(I)/list-sl-debug.h $(I)/logger.h \
-	$(I)/logger_channel_file.h $(I)/logger_channel_stream.h \
-	$(I)/logger_channel_syslog.h $(I)/logger_handle.h \
-	$(I)/logger-output-stream.h $(I)/message-buffer.h \
-	$(I)/message-viewer.h $(I)/message.h \
+	$(I)/io_stream.h $(I)/limited_input_stream.h $(I)/limiter.h \
+	$(I)/list-dl.h $(I)/list-sl.h $(I)/list-sl-debug.h \
+	$(I)/logger.h $(I)/logger_channel_file.h \
+	$(I)/logger_channel_stream.h $(I)/logger_channel_syslog.h \
+	$(I)/logger_handle.h $(I)/logger-output-stream.h \
+	$(I)/message-buffer.h $(I)/message-viewer.h $(I)/message.h \
 	$(I)/message_verify_rrsig.h $(I)/message_dnsupdate.h \
 	$(I)/mt_output_stream.h $(I)/mutex.h $(I)/name.h \
 	$(I)/network.h $(I)/output_stream.h $(I)/pace.h \
@@ -850,24 +863,22 @@ libdnscore_la_LDFLAGS = -version-info 3:0:0
 #
 #
 AM_CFLAGS = -D_THREAD_SAFE -D_REENTRANT -D_FILE_OFFSET_BITS=64 \
-	-I$(abs_builddir) -I$(abs_srcdir)/include $(am__append_7) \
-	$(am__append_8) $(am__append_9) $(am__append_10) \
+	-I$(abs_builddir) -I$(abs_srcdir)/include $(am__append_9) \
+	$(am__append_10) $(am__append_11) $(am__append_12) \
 	$(am__append_13) $(am__append_14) $(am__append_15) \
 	$(am__append_16) $(am__append_17) $(am__append_18) \
-	$(am__append_19) $(am__append_20) $(am__append_21) \
-	$(am__append_22) $(am__append_23) $(am__append_25) \
-	$(am__append_31) $(am__append_33) $(am__append_34) \
-	$(am__append_36) $(am__append_38) $(am__append_40) \
-	$(am__append_41) $(am__append_43) $(am__append_45) \
-	$(am__append_47) $(am__append_49) $(am__append_50) \
-	$(LOCALFLAGS) $(YCFLAGS)
-AM_LDFLAGS = $(am__append_24) $(am__append_26) $(am__append_32) \
-	$(am__append_37) $(am__append_42) $(YLDFLAGS)
-DEBUGFLAGS = $(am__append_11) $(am__append_12) $(am__append_27) \
-	$(am__append_28) $(am__append_29) $(am__append_30) \
-	$(am__append_35) $(am__append_39) $(am__append_44) \
-	$(am__append_46) $(am__append_48)
-LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"' -DTCLDIR='"$(tcldir)"'
+	$(am__append_19) $(am__append_21) $(am__append_27) \
+	$(am__append_29) $(am__append_30) $(am__append_32) \
+	$(am__append_34) $(am__append_36) $(am__append_37) \
+	$(am__append_39) $(am__append_41) $(am__append_43) \
+	$(am__append_45) $(am__append_46) $(LOCALFLAGS) $(YCFLAGS)
+AM_LDFLAGS = $(am__append_20) $(am__append_22) $(am__append_28) \
+	$(am__append_33) $(am__append_38) $(YLDFLAGS)
+DEBUGFLAGS = $(am__append_7) $(am__append_8) $(am__append_23) \
+	$(am__append_24) $(am__append_25) $(am__append_26) \
+	$(am__append_31) $(am__append_35) $(am__append_40) \
+	$(am__append_42) $(am__append_44)
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"'
 @HAS_LTO_SUPPORT_FALSE@@USES_CLANG_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_FALSE@@USES_GCC_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@AM_AR = llvm-ar
@@ -888,12 +899,12 @@ LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATED
 @USES_SUNC_TRUE@AM_LD = ld
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@AM_RANLIB = gcc-ranlib
 YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -g -DCMR
-YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP $(am__append_53)
+YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP $(am__append_49)
 YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
 YSCFLAGS = $(YRCFLAGS)
 YRLDFLAGS = -g
-YPLDFLAGS = -pg $(am__append_51)
-YDLDFLAGS = -g $(am__append_52)
+YPLDFLAGS = -pg $(am__append_47)
+YDLDFLAGS = -g $(am__append_48)
 YSLDFLAGS = $(YRLDFLAGS)
 AM_MAKEFLAGS = MODE_CFLAGS="$(AM_CFLAGS)" CC=$(CC) AR=$(AM_AR) LD=$(AM_LD)
 YCFLAGS = $(YSCFLAGS)
@@ -1051,6 +1062,8 @@ src/dnskey-keyring.lo: src/$(am__dirstamp) \
 src/dnskey_dsa.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/dnskey_ecdsa.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/dnskey_rsa.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/dnskey-signature.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 src/dnsname.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/empty-input-stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
@@ -1066,6 +1079,7 @@ src/identity.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/input_stream.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/limited_input_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
+src/limiter.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/list-dl.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/list-sl.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/list-sl-debug.lo: src/$(am__dirstamp) \
@@ -1204,6 +1218,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnscore.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnsformat.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey-keyring.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey-signature.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey_dsa.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey_ecdsa.Plo@am__quote@
@@ -1219,6 +1234,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/identity.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/input_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/limited_input_stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/limiter.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/list-dl.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/list-sl-debug.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/list-sl.Plo@am__quote@
@@ -1714,7 +1730,10 @@ release-install: release install
 
 profile-install: profile install
 
-debug-install: debug install
+debug-install:
+	echo YCFLAGS=$(YDCFLAGS)
+	echo YLDFLAGS=$(YDLDFLAGS)
+	$(MAKE) install "YCFLAGS=$(YDCFLAGS)" "YLDFLAGS=$(YDLDFLAGS)"
 
 buildinfo.h: config.log
 	echo \#pragma once > buildinfo.h 2> /dev/null
@@ -1734,8 +1753,6 @@ $(FEATURES): config.log REVISION VERSION
 	echo "#pragma once" > $(FEATURES)
 @HAS_TSIG_SUPPORT_TRUE@	echo "#define DNSCORE_HAS_TSIG_SUPPORT 1" >> $(FEATURES)
 @HAS_TSIG_SUPPORT_FALSE@	echo "#define DNSCORE_HAS_TSIG_SUPPORT 0" >> $(FEATURES)
-@HAS_RDTSC_TRUE@	echo "#define DNSCORE_HAS_RDTSC 1" >> $(FEATURES)
-@HAS_RDTSC_FALSE@	echo "#define DNSCORE_HAS_RDTSC 0" >> $(FEATURES)
 @HAS_ACL_SUPPORT_TRUE@	echo "#define DNSCORE_HAS_ACL_SUPPORT 1" >> $(FEATURES)
 @HAS_ACL_SUPPORT_FALSE@	echo "#define DNSCORE_HAS_ACL_SUPPORT 0" >> $(FEATURES)
 @HAS_NSEC3_SUPPORT_TRUE@	echo "#define DNSCORE_HAS_NSEC3_SUPPORT 1" >> $(FEATURES)
@@ -1756,6 +1773,8 @@ $(FEATURES): config.log REVISION VERSION
 @HAS_MUTEX_DEBUG_SUPPORT_FALSE@	echo "#define DNSCORE_HAS_MUTEX_DEBUG_SUPPORT 0" >> $(FEATURES)
 @HAS_MEMALIGN_ISSUES_TRUE@	echo "#define DNSCORE_HAS_MEMALIGN_ISSUES 1" >> $(FEATURES)
 @HAS_MEMALIGN_ISSUES_FALSE@	echo "#define DNSCORE_HAS_MEMALIGN_ISSUES 0" >> $(FEATURES)
+@HAS_LOG_THREAD_TAG_ALWAYS_ON_TRUE@	echo "#define DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON 1" >> $(FEATURES)
+@HAS_LOG_THREAD_TAG_ALWAYS_ON_FALSE@	echo "#define DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON 0" >> $(FEATURES)
 	which printf > /dev/null 2>&1
 	if [ $$? -eq 0 ];then \
 		printf '// version %i.%i.%i.%i-%i\n' $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/') 0 $$(cat REVISION) >> $(FEATURES) ; \

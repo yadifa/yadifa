@@ -1,6 +1,6 @@
 dnl ############################################################################
 dnl 
-dnl Copyright (c) 2011-2016, EURid. All rights reserved.
+dnl Copyright (c) 2011-2017, EURid. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl  
 dnl Redistribution and use in source and binary forms, with or without 
@@ -30,9 +30,22 @@ dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
 dnl ##############################################################################
+dnl
+dnl      SVN Program:
+dnl             $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/lib/dnscore/configure.ac $
+dnl
+dnl      Last Update:
+dnl             $Date: 2017-04-06 09:34:12 +0200 (Thu, 06 Apr 2017) $
+dnl             $Revision: 6922 $
+dnl
+dnl      Purpose:
+dnl		Common tools (collections, streams, ...)
+dnl		DNS core functions
+dnl
+dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 6237 $])
+AC_REVISION([$Revision: 6922 $])
 AC_INIT([dnscore],m4_esyscmd([svn info 2> /dev/null | grep 'Last Changed Rev: ' | sed -re 's/.*: (.*)/Revision: \1 $/' -e 's/^/$/' >> revision.txt;echo $(cat VERSION)-$(grep \$Revision: * | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[bugreport@yadifa.eu])
 
 echo
@@ -129,6 +142,10 @@ AC_PTHREAD_SETNAME_NP_CHECK
 AC_PTHREAD_SETAFFINITY_NP_CHECK
 AC_TIMEGM_CHECK
 
+AC_YADIFA_ENABLE_SSL
+
+AC_YADIFA_ADD_SSL
+
 AC_YADIFA_FEATURES
 
 AC_YADIFA_ADD_LIBS
@@ -179,10 +196,14 @@ echo
 echo "ZALLOC .............................. : $enable_zalloc"
 echo "ZALLOC STATISTICS ................... : $enable_zalloc_statistics"
 echo "ZALLOC DEBUG ........................ : $enable_zalloc_debug"
+echo "ACL ................................. : $enable_acl"
+echo "TSIG ................................ : $enable_tsig"
 echo "MASTER .............................. : $enable_master"
 echo "DYNUPDATE ........................... : $enable_dynupdate"
 echo "RRSIG MANAGEMENT .................... : $enable_rrsig_management"
 echo "CTRL ................................ : $enable_ctrl"
+echo "NSEC ................................ : $enable_nsec"
+echo "NSEC3 ............................... : $enable_nsec3"
 echo "RRL ................................. : $enable_rrl"
 
 echo

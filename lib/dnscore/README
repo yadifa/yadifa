@@ -1,6 +1,6 @@
 ################################################################################
 # 
-#  Copyright (c) 2011-2016, EURid. All rights reserved.
+#  Copyright (c) 2011-2017, EURid. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 #  Redistribution and use in source and binary forms, with or without 
@@ -29,13 +29,40 @@
 # 
 ################################################################################
 
+2017xxxx:
+    YADIFA 2.3.3
+        Messages are now default (--enable-messages). Disable them using --disable-messages.
+        Adds a build option to remove compile date and time from various help messages (--disable-build-timestamp)
+        Adds more (dynamic) update validation.
+        From now on, both master and slaves are updating the zone in the same manner (journal transactions)
+        Fixes an issue where closing an (a)XFR stream could lead to a race over the file descriptors.
+        Fixes an issue where an AXFR query would return a version of the zone too old to be upgradable by following incremntal updates.
+        Fixes an issue where zones with big-enough NSEC3 coverage (several millions NSEC3 record) could potentially reach an internal limit of the database.
+        Fixes an issue where shutting down YADIFA while a zone is being downloaded (AXFR) may make it wait forever.
+        Fixes an issue where the slave would complain about a missing private key.
+        Fixes an issue where a specifically truncated IXFR query may make YADIFA replying with an AXFR.
+        
+20170912:
+    YADIFA 2.2.6
+        Fixes an issue where a maliciously crafted message may block the server. (CVE-2017-14339)
+
+20170420:
+    YADIFA 2.2.5
+        Fixes an issue on message-enabled servers where the return address would not be captured
+        Increased the maximum number of network interfaces to 256
+
+20170406:
+    YADIFA 2.2.4
+        Fixes an issue with relative include names that would not always be properly computed
+        Fixes an issue where concurrent configuration reloads could lead to a crash
+
 20170223:
-    YADIFA 2.3.1
+    YADIFA 2.3.1 (internal)
         Added thread_pool_try_enqueue_call to give up if a queue is full or overworked (distance project)
         Fixes an issue with the CW queuing mechanism when trying to fill a full queue.
 
 20161124:
-    YADIFA 2.3.0
+    YADIFA 2.3.0 (internal)
 
         ECDSA can now be disabled at ./configure time.
             The support of ECDSA is not available in the openssl package of older Linux distributions.

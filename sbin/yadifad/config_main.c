@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup config Configuration handling
  *  @ingroup yadifad
  *  @brief
@@ -95,128 +95,121 @@ config_data						       *g_config = NULL;
 
 CONFIG_BEGIN(config_main_desc)
 
-CONFIG_FILE(     config_file                 , S_CONFIGDIR S_CONFIGFILE   )
+CONFIG_FILE(     config_file                 , S_CONFIGDIR S_CONFIGFILE   ) // doc
 
-/* Path to chroot, will be used if chroot is on */
-CONFIG_CHROOT(   chroot_path                 , S_CHROOTPATH               )
 /* Path to data which will be used for relative data */
-CONFIG_PATH(     data_path                   , S_DATAPATH                 )
+CONFIG_PATH(     data_path                   , S_DATAPATH                 ) // doc
 /* Path which will be used for relative logs   */
-CONFIG_LOGPATH(  log_path                    , S_LOGPATH                  )
-CONFIG_PATH(     xfr_path                    , S_XFRPATH                  )
+CONFIG_LOGPATH(  log_path                    , S_LOGPATH                  ) // doc
+CONFIG_PATH(     xfr_path                    , S_XFRPATH                  ) // doc
 /* Path to keys                                */
-CONFIG_PATH(     keys_path                   , S_KEYSPATH                 )
+CONFIG_PATH(     keys_path                   , S_KEYSPATH                 ) // doc
 /* PID file */
-CONFIG_STRING(   pid_file                    , S_PIDFILE                  )
-/* Switch for turning chroot, uid & gid off   */
-CONFIG_FLAG16(   daemon                      , S_DAEMONRUN               , server_flags,  SERVER_FL_DAEMON              )
-CONFIG_FLAG16(   chroot                      , S_CHROOT                  , server_flags,  SERVER_FL_CHROOT              )
+CONFIG_STRING(   pid_file                    , S_PIDFILE                  ) // doc
+/* Switch for turning on chroot */
+CONFIG_FLAG16(   chroot                      , S_CHROOT                  , server_flags,  SERVER_FL_CHROOT              ) // doc
+/* Path to chroot, will be used if chroot is on */
+CONFIG_CHROOT(   chroot_path                 , S_CHROOTPATH               ) // doc
+CONFIG_FLAG16(   daemon                      , S_DAEMONRUN               , server_flags,  SERVER_FL_DAEMON              ) // doc
 #ifdef DEBUG
-CONFIG_FLAG16(   log_unprocessable           , S_LOG_UNPROCESSABLE       , server_flags,  SERVER_FL_LOG_UNPROCESSABLE   )
+CONFIG_FLAG16(   log_unprocessable           , S_LOG_UNPROCESSABLE       , server_flags,  SERVER_FL_LOG_UNPROCESSABLE   ) // doc
 #endif
 
-CONFIG_FLAG16(   log_from_start              , S_LOG_FROM_START          , server_flags,  SERVER_FL_LOG_FROM_START      )
-CONFIG_UID(      uid                         , S_UID                      )
-CONFIG_GID(      gid                         , S_GID                      )
+CONFIG_FLAG16(   log_from_start              , S_LOG_FROM_START          , server_flags,  SERVER_FL_LOG_FROM_START      ) // doc
+CONFIG_UID(      uid                         , S_UID                      ) // doc
+CONFIG_GID(      gid                         , S_GID                      ) // doc
 
 // Above settings probably cannot be changed at run time
 
 // Below settings may be changed at runtime
 
  /* string used for query of version            */
-CONFIG_STRING(   version_chaos               , S_VERSION_CHAOS            )
-CONFIG_STRING(   hostname_chaos              , S_HOSTNAME_CHAOS           )
-CONFIG_STRING(   serverid_chaos              , S_SERVERID_CHAOS           )
+CONFIG_STRING(   version_chaos               , S_VERSION_CHAOS            ) // doc
+CONFIG_STRING(   hostname_chaos              , S_HOSTNAME_CHAOS           ) // doc
+CONFIG_STRING(   serverid_chaos              , S_SERVERID_CHAOS           ) // doc
 #if ZDB_HAS_ACL_SUPPORT
-CONFIG_ACL(      allow_query                 , S_ALLOW_QUERY              )
-CONFIG_ACL(      allow_update                , S_ALLOW_UPDATE             )
-CONFIG_ACL(      allow_transfer              , S_ALLOW_TRANSFER           )
-CONFIG_ACL(      allow_update_forwarding     , S_ALLOW_UPDATE_FORWARDING  )
-CONFIG_ACL(      allow_notify                , S_ALLOW_NOTIFY             )
-CONFIG_ACL(      allow_control               , S_ALLOW_CONTROL            )
+CONFIG_ACL(      allow_control               , S_ALLOW_CONTROL            ) // doc
+CONFIG_ACL(      allow_notify                , S_ALLOW_NOTIFY             ) // doc
+CONFIG_ACL(      allow_query                 , S_ALLOW_QUERY              ) // doc
+CONFIG_ACL(      allow_transfer              , S_ALLOW_TRANSFER           ) // doc
+CONFIG_ACL(      allow_update                , S_ALLOW_UPDATE             ) // doc
+CONFIG_ACL(      allow_update_forwarding     , S_ALLOW_UPDATE_FORWARDING  ) // doc
 #endif
-
 /* Listening to interfaces                     */
-CONFIG_HOST_LIST(listen                      , S_LISTEN                   )
+CONFIG_HOST_LIST(listen                      , S_LISTEN                   ) // doc
 /* size of an EDNS0 packet */
-CONFIG_U32_RANGE(edns0_max_size              , S_EDNS0_MAX_SIZE          ,EDNS0_MIN_LENGTH, EDNS0_MAX_LENGTH )
+CONFIG_U32_RANGE(edns0_max_size              , S_EDNS0_MAX_SIZE          ,EDNS0_MIN_LENGTH, EDNS0_MAX_LENGTH ) // doc
 // overrides the cpu detection
-CONFIG_U32(      cpu_count_override          , S_CPU_COUNT_OVERRIDE       )
+CONFIG_U32(      cpu_count_override          , S_CPU_COUNT_OVERRIDE       ) // doc
 // how many threads by address (UDP)
-CONFIG_U32(      thread_count_by_address     , S_THREAD_COUNT_BY_ADDRESS  )
+CONFIG_U32(      thread_count_by_address     , S_THREAD_COUNT_BY_ADDRESS  ) // doc
 
-CONFIG_U32_RANGE(thread_affinity_base        , "0", 0, 3  )                 // first virtual cpu
-CONFIG_U32_RANGE(thread_affinity_multiplier  , "0", 0, 4  )                 // dual thread
+CONFIG_U32_RANGE(thread_affinity_base        , "0", 0, 3  )                 // first virtual cpu // doc
+CONFIG_U32_RANGE(thread_affinity_multiplier  , "0", 0, 4  )                 // dual thread // doc
 
 // how many threads for the dnssec processing)
-CONFIG_U32(      dnssec_thread_count         , S_DNSSEC_THREAD_COUNT      )
-CONFIG_U32(      zone_load_thread_count      , S_ZONE_LOAD_THREAD_COUNT      )
-CONFIG_U32(      zone_download_thread_count  , S_ZONE_DOWNLOAD_THREAD_COUNT  )
+CONFIG_U32(      dnssec_thread_count         , S_DNSSEC_THREAD_COUNT      ) // doc
+CONFIG_U32(      zone_load_thread_count      , S_ZONE_LOAD_THREAD_COUNT   ) // doc
+CONFIG_U32(      zone_download_thread_count  , S_ZONE_DOWNLOAD_THREAD_COUNT  ) // doc
 CONFIG_U32_RANGE(network_model               , S_NETWORK_MODEL, 0, 1      )
-
 /* Max number of TCP queries  */
-CONFIG_U32_RANGE(max_tcp_queries             , S_MAX_TCP_QUERIES          ,TCP_QUERIES_MIN, TCP_QUERIES_MAX)
-CONFIG_U32(      tcp_query_min_rate          , S_TCP_QUERY_MIN_RATE       )
+CONFIG_U32_RANGE(max_tcp_queries             , S_MAX_TCP_QUERIES          ,TCP_QUERIES_MIN, TCP_QUERIES_MAX) // doc
+CONFIG_U32(      tcp_query_min_rate          , S_TCP_QUERY_MIN_RATE       ) // doc
 /* Ignores messages that would be answered by a FORMERR */ 
-CONFIG_FLAG16(   answer_formerr_packets      , S_ANSWER_FORMERR_PACKETS  , server_flags,  SERVER_FL_ANSWER_FORMERR)
+CONFIG_FLAG16(   answer_formerr_packets      , S_ANSWER_FORMERR_PACKETS  , server_flags,  SERVER_FL_ANSWER_FORMERR) // doc
 /* Listen to port (eg 53)                      */
-CONFIG_STRING(   server_port                 , S_SERVERPORT               )
+CONFIG_STRING(   server_port                 , S_SERVERPORT               ) // doc
 /* Switch for cache server or not              */
 
-CONFIG_FLAG16(   statistics                  , S_STATISTICS              , server_flags,  SERVER_FL_STATISTICS) /* Maximum number of seconds between two statistics lines */
+CONFIG_FLAG16(   statistics                  , S_STATISTICS              , server_flags,  SERVER_FL_STATISTICS) /* Maximum number of seconds between two statistics lines */ // doc
 
-CONFIG_U32(      statistics_max_period       , S_STATISTICS_MAX_PERIOD    )
-CONFIG_U32(      xfr_connect_timeout         , S_XFR_CONNECT_TIMEOUT      )
-CONFIG_U32(      queries_log_type            , S_QUERIES_LOG_TYPE         )
+CONFIG_U32(      statistics_max_period       , S_STATISTICS_MAX_PERIOD    ) // doc
+CONFIG_U32(      xfr_connect_timeout         , S_XFR_CONNECT_TIMEOUT      ) // doc
+CONFIG_U32(      queries_log_type            , S_QUERIES_LOG_TYPE         ) // doc
 
 #if HAS_DNSSEC_SUPPORT
-CONFIG_U16(      sig_signing_type            , S_SIG_SIGNING_TYPE          )
-CONFIG_U32_RANGE(sig_validity_interval       , S_SIG_VALIDITY_INTERVAL    , SIGNATURE_VALIDITY_INTERVAL_MIN     , SIGNATURE_VALIDITY_INTERVAL_MAX    ) /* 7 to 366 days = 30 */
-CONFIG_U32_RANGE(sig_validity_regeneration   , S_SIG_VALIDITY_REGENERATION, SIGNATURE_VALIDITY_REGENERATION_MIN , SIGNATURE_VALIDITY_REGENERATION_MAX) /* 24 hours to 168 hours */
-CONFIG_U32_RANGE(sig_validity_jitter         , S_SIG_VALIDITY_JITTER      , SIGNATURE_VALIDITY_JITTER_MIN       , SIGNATURE_VALIDITY_JITTER_MAX      ) /* 0 to 86400 = 3600*/
-CONFIG_ALIAS(sig_jitter, sig_validity_jitter)
+CONFIG_U16(      sig_signing_type            , S_SIG_SIGNING_TYPE          ) // doc
+CONFIG_U32_RANGE(sig_validity_interval       , S_SIG_VALIDITY_INTERVAL    , SIGNATURE_VALIDITY_INTERVAL_MIN     , SIGNATURE_VALIDITY_INTERVAL_MAX    ) /* 7 to 366 days = 30 */ // doc
+CONFIG_U32_RANGE(sig_validity_jitter         , S_SIG_VALIDITY_JITTER      , SIGNATURE_VALIDITY_JITTER_MIN       , SIGNATURE_VALIDITY_JITTER_MAX      ) /* 0 to 86400 = 3600*/ // doc
+CONFIG_U32_RANGE(sig_validity_regeneration   , S_SIG_VALIDITY_REGENERATION, SIGNATURE_VALIDITY_REGENERATION_MIN , SIGNATURE_VALIDITY_REGENERATION_MAX) /* 24 hours to 168 hours */ // doc
+CONFIG_ALIAS(sig_jitter, sig_validity_jitter) // doc
 #endif
 
-CONFIG_U32_RANGE(axfr_max_record_by_packet   , S_AXFR_MAX_RECORD_BY_PACKET , AXFR_RECORD_BY_PACKET_MIN , AXFR_RECORD_BY_PACKET_MAX )
-CONFIG_U32_RANGE(axfr_max_packet_size        , S_AXFR_PACKET_SIZE_MAX      , AXFR_PACKET_SIZE_MIN      , AXFR_PACKET_SIZE_MAX      )
-CONFIG_BOOL(axfr_compress_packets            , S_AXFR_COMPRESS_PACKETS    )
-CONFIG_U32_RANGE(axfr_retry_delay            , S_AXFR_RETRY_DELAY          , AXFR_RETRY_DELAY_MIN      , AXFR_RETRY_DELAY_MAX      )
-CONFIG_U32(      axfr_retry_jitter           , S_AXFR_RETRY_JITTER        )
-CONFIG_U32_RANGE(axfr_retry_failure_delay_multiplier, S_AXFR_RETRY_FAILURE_DELAY_MULTIPLIER, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MIN, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX)
-CONFIG_U32_RANGE(axfr_retry_failure_delay_max, S_AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX_MIN, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX_MAX)
-//CONFIG_U32_RANGE(multimaster_
+CONFIG_BOOL(axfr_compress_packets            , S_AXFR_COMPRESS_PACKETS    ) // doc
+CONFIG_U32_RANGE(axfr_max_packet_size        , S_AXFR_PACKET_SIZE_MAX      , AXFR_PACKET_SIZE_MIN      , AXFR_PACKET_SIZE_MAX      ) // doc
+CONFIG_U32_RANGE(axfr_max_record_by_packet   , S_AXFR_MAX_RECORD_BY_PACKET , AXFR_RECORD_BY_PACKET_MIN , AXFR_RECORD_BY_PACKET_MAX ) // doc
+CONFIG_U32_RANGE(axfr_retry_delay            , S_AXFR_RETRY_DELAY          , AXFR_RETRY_DELAY_MIN      , AXFR_RETRY_DELAY_MAX      ) // doc
+CONFIG_U32(      axfr_retry_jitter           , S_AXFR_RETRY_JITTER        ) // doc
+CONFIG_U32_RANGE(axfr_retry_failure_delay_max, S_AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX_MIN, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX_MAX) // doc
+CONFIG_U32_RANGE(axfr_retry_failure_delay_multiplier, S_AXFR_RETRY_FAILURE_DELAY_MULTIPLIER, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MIN, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX) // doc
 
-          /* alias, aliased */
-CONFIG_ALIAS(port, server_port)
-CONFIG_ALIAS(version, version_chaos)
-CONFIG_ALIAS(hostname, hostname_chaos)
-CONFIG_ALIAS(serverid, serverid_chaos)
-CONFIG_ALIAS(chrootpath, chroot_path)
-//CONFIG_ALIAS(basepath, chroot_path)
-CONFIG_ALIAS(configfile, config_file)
-CONFIG_ALIAS(keyspath, keys_path)
-CONFIG_ALIAS(datapath, data_path)
-CONFIG_ALIAS(xfrpath, xfr_path)
-CONFIG_ALIAS(logpath, log_path)
-CONFIG_ALIAS(pidpath, pid_path)
-CONFIG_ALIAS(pidfile, pid_file)
-CONFIG_ALIAS(daemonize, daemon)
+// alias, aliased
 
-CONFIG_ALIAS(axfr_maxrecordbypacket, axfr_max_record_by_packet)
-CONFIG_ALIAS(axfr_maxpacketsize, axfr_max_packet_size)
-CONFIG_ALIAS(axfr_compresspackets, axfr_compress_packets)
-
-CONFIG_ALIAS(xfr_maxrecordbypacket, axfr_max_record_by_packet)
-CONFIG_ALIAS(xfr_maxpacketsize, axfr_max_packet_size)
-CONFIG_ALIAS(xfr_compresspackets, axfr_compress_packets)
-CONFIG_ALIAS(xfr_retry_delay, axfr_retry_delay)
-CONFIG_ALIAS(xfr_retry_jitter, axfr_retry_jitter)
-CONFIG_ALIAS(xfr_retry_failure_delay_multiplier, axfr_retry_failure_delay_multiplier)
-CONFIG_ALIAS(xfr_retry_failure_delay_max, axfr_retry_failure_delay_max)
-
-CONFIG_ALIAS(user, uid)
-CONFIG_ALIAS(group, gid)
-CONFIG_ALIAS(max_tcp_connections, max_tcp_queries)
+CONFIG_ALIAS(axfr_compresspackets, axfr_compress_packets) // doc
+CONFIG_ALIAS(axfr_maxpacketsize, axfr_max_packet_size) // doc
+CONFIG_ALIAS(axfr_maxrecordbypacket, axfr_max_record_by_packet) // doc
+CONFIG_ALIAS(chrootpath, chroot_path) // doc
+CONFIG_ALIAS(configfile, config_file) // doc
+CONFIG_ALIAS(daemonize, daemon) // doc
+CONFIG_ALIAS(datapath, data_path) // doc
+CONFIG_ALIAS(group, gid) // doc
+CONFIG_ALIAS(hostname, hostname_chaos) // doc
+CONFIG_ALIAS(keyspath, keys_path) // doc
+CONFIG_ALIAS(logpath, log_path) // doc
+CONFIG_ALIAS(max_tcp_connections, max_tcp_queries) // doc
+CONFIG_ALIAS(pidfile, pid_file) // doc
+CONFIG_ALIAS(port, server_port) // doc
+CONFIG_ALIAS(serverid, serverid_chaos) // doc
+CONFIG_ALIAS(user, uid) // doc
+CONFIG_ALIAS(version, version_chaos) // doc
+CONFIG_ALIAS(xfr_compresspackets, axfr_compress_packets) // doc
+CONFIG_ALIAS(xfr_maxpacketsize, axfr_max_packet_size) // doc
+CONFIG_ALIAS(xfr_maxrecordbypacket, axfr_max_record_by_packet) // doc
+CONFIG_ALIAS(xfr_retry_delay, axfr_retry_delay) // doc
+CONFIG_ALIAS(xfr_retry_failure_delay_max, axfr_retry_failure_delay_max) // doc
+CONFIG_ALIAS(xfr_retry_failure_delay_multiplier, axfr_retry_failure_delay_multiplier) // doc
+CONFIG_ALIAS(xfr_retry_jitter, axfr_retry_jitter) // doc
+CONFIG_ALIAS(xfrpath, xfr_path) // doc
 
 CONFIG_END(config_main_desc)
 #undef CONFIG_TYPE
@@ -229,14 +222,14 @@ config_main_verify_and_update_directory(const char *base_path, char **dirp)
     
     if(dirp == NULL)
     {
-        return ERROR;
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
     
     char *dir = *dirp;
     
     if(dir == NULL)
     {
-        return ERROR;
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
 
     ya_result fullpath_len = snprintf(fullpath, sizeof(fullpath),"/%s/%s", base_path, dir);
@@ -270,16 +263,17 @@ config_main_verify_and_update_directory(const char *base_path, char **dirp)
 
     if(stat(fullpath, &ds) < 0)
     {
-        ttylog_err("error: '%s': %s", fullpath, strerror(errno));
+        int err = errno;
+        ttylog_err("error: '%s': %s", fullpath, strerror(err));
 
-        return ERROR;
+        return MAKE_ERRNO_ERROR(err);
     }
 
     if((ds.st_mode & S_IFMT) != S_IFDIR)
     {
         ttylog_err("error: '%s' is not a directory", dir);
         
-        return ERROR;
+        return INVALID_PATH;
     }
     
     snformat(tempfile, sizeof(tempfile), "%s/ydf.XXXXXX", fullpath);
@@ -308,14 +302,14 @@ config_main_verify_and_update_file(const char *base_path, char **dirp)
 {
     if(dirp == NULL)
     {
-        return ERROR;
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
     
     char *p = *dirp;
     
     if(p == NULL)
     {
-        return ERROR;
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
     
     char *e = p + strlen(p) - 1;
@@ -341,8 +335,9 @@ config_main_verify_and_update_file(const char *base_path, char **dirp)
             *e = '\0';
         }
         
+        ya_result ret;
         
-        if(ISOK(config_main_verify_and_update_directory(base_path, dirp)))
+        if(ISOK(ret = config_main_verify_and_update_directory(base_path, dirp)))
         {        
             chroot_unmanage_path(dirp);
             int pathlen = strlen(*dirp);
@@ -355,8 +350,10 @@ config_main_verify_and_update_file(const char *base_path, char **dirp)
             
             return SUCCESS;
         }
-        
-        return ERROR;
+        else
+        {
+            return ret;
+        }
     }
     
     return SUCCESS;
@@ -367,7 +364,10 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
 {
     u32 port = 0;
     u32 cpu_per_core = (sys_has_hyperthreading())?2:1;
+    int ret;
     char tmp[PATH_MAX];
+
+
 
     if(FAIL(parse_u32_check_range(g_config->server_port, &port, 1, MAX_U16, 10)))
     {
@@ -410,7 +410,7 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
         if(euid != 0)
         {
             ttylog_err("config: main: chroot has been enabled but euid is not root (%i != 0)", (int)euid);
-            return ERROR;
+            return INVALID_STATE_ERROR;
         }
     }
     else // disables the base-path/chroot-path feature
@@ -430,14 +430,14 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
     if(g_config->total_interfaces > MAX_INTERFACES)
     {
         ttylog_err("error: more than %d listening addresses defined.", MAX_INTERFACES);
-        return ERROR;
+        return CONFIG_TOO_MANY_HOSTS;
     }
 
 #ifndef SO_REUSEPORT
     if(g_config->network_model == 1)
     {
         ttylog_err("error: network-model 1 requires features not available on this system (SO_REUSEPORT)");
-        return ERROR;
+        return FEATURE_NOT_SUPPORTED;
     }
 #endif
     
@@ -505,25 +505,25 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
     
     const char *base_path = g_config->chroot_path;
 
-    if(FAIL(config_main_verify_and_update_directory(base_path, &g_config->data_path)))
+    if(FAIL(ret = config_main_verify_and_update_directory(base_path, &g_config->data_path)))
     {
-        return ERROR;
+        return ret;
     }
     
-    if(FAIL(config_main_verify_and_update_directory(base_path, &g_config->keys_path)))
+    if(FAIL(ret = config_main_verify_and_update_directory(base_path, &g_config->keys_path)))
     {
-        return ERROR;
+        return ret;
     }
     
-    if(FAIL(config_main_verify_and_update_directory(base_path, &g_config->log_path)))
+    if(FAIL(ret = config_main_verify_and_update_directory(base_path, &g_config->log_path)))
     {
-        return ERROR;
+        return ret;
     }
 #if 0 /* fix */
 #else
-    if(FAIL(config_main_verify_and_update_file(base_path, &g_config->pid_file)))
+    if(FAIL(ret = config_main_verify_and_update_file(base_path, &g_config->pid_file)))
     {
-        return ERROR;
+        return ret;
     }
 #endif
     
@@ -538,9 +538,9 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
         }
     }
     
-    if(FAIL(config_main_verify_and_update_directory(base_path, &g_config->xfr_path)))
+    if(FAIL(ret = config_main_verify_and_update_directory(base_path, &g_config->xfr_path)))
     {
-        return ERROR;
+        return ret;
     }
     
 #if ZDB_HAS_DNSSEC_SUPPORT

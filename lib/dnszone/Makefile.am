@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2011-2016, EURid. All rights reserved.
+# Copyright (c) 2011-2017, EURid. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without 
@@ -28,6 +28,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 ################################################################################
+#
+#	YADIFA dnszone Makefile.am script
+#
+#      	Makefile.am script
+#
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/lib/dnszone/Makefile.am $
+#
+#       $Date: 2017-04-06 09:34:12 +0200 (Thu, 06 Apr 2017) $
+#
+#       $Revision: 6922 $
+#
+#	$Author: ericdf $
+#
+##############################################################################
 
 srcdir =        @srcdir@
 libdir =	@libdir@
@@ -72,7 +86,7 @@ all: REVISION
 REVISION:
 	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
-src/dnszone.c: $(FEATURES)
+src/dnszone.c: features
 
 features: $(FEATURES)
 

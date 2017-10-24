@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief AVL structure and functions
@@ -1008,7 +1008,7 @@ avl_iterator_init(avl_tree tree, avl_iterator* iter)
     }
 }
 
-void
+avl_node*
 avl_iterator_init_from(avl_tree tree, avl_iterator* iter, hashcode obj_hash)
 {
     /* Do we have a tree to iterate ? */
@@ -1036,12 +1036,27 @@ avl_iterator_init_from(avl_tree tree, avl_iterator* iter, hashcode obj_hash)
             }
             else
             {
-                iter->stack[++iter->stack_pointer] = node;
+                if(RIGHT_CHILD(node) != NULL)
+                {
+                    // one right, full left
+                    register avl_node* next_node = RIGHT_CHILD(node);
+                    
+                    do
+                    {
+                        iter->stack[++iter->stack_pointer] = next_node;
+                        next_node = LEFT_CHILD(next_node);
+                    }
+                    while(next_node != NULL);
+                    
+                    return node;
+                }
                 
-                break;
+                return node;
             }
         }
     }
+    
+    return NULL;
 }
 
 #if ZDB_INLINES_AVL_FIND == 0
@@ -1079,6 +1094,10 @@ avl_iterator_next(avl_iterator* iter)
 
         return datapp;
     }
+    
+#ifdef DEBUG
+    iter->stack[iter->stack_pointer] = (avl_node*)(intptr)0xfefefefefefefefeLL;
+#endif
 
     iter->stack_pointer--;
 
@@ -1112,6 +1131,10 @@ avl_iterator_next_node(avl_iterator* iter)
 
         return current;
     }
+    
+#ifdef DEBUG
+    iter->stack[iter->stack_pointer] = (avl_node*)(intptr)0xfefefefefefefefeLL;
+#endif
 
     iter->stack_pointer--;
 
@@ -1121,7 +1144,7 @@ avl_iterator_next_node(avl_iterator* iter)
 /* <- Iterators */
 
 static void
-avl_callback_and_destroy_(avl_node* node, callback_function callback)
+avl_callback_and_destroy_(avl_node* node, void (*callback)(void*))
 {
     avl_node* child = LEFT_CHILD(node);
     if(child != NULL)
@@ -1150,7 +1173,7 @@ avl_callback_and_destroy_(avl_node* node, callback_function callback)
  */
 
 void
-avl_callback_and_destroy(avl_tree tree, callback_function callback)
+avl_callback_and_destroy(avl_tree tree, void (*callback)(void*))
 {
     if(tree != NULL)
     {

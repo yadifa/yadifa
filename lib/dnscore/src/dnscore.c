@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnscore System core functions
  *  @brief System core functions
  *
@@ -102,10 +102,18 @@
 #define __TIME__ "time?"
 #endif
 
+#if HAS_BUILD_TIMESTAMP
 #ifdef DEBUG
 const char *dnscore_lib = "dnscore " __DATE__ " " __TIME__ " debug";
 #else
 const char *dnscore_lib = "dnscore " __DATE__ " " __TIME__ " release";
+#endif
+#else
+#ifdef DEBUG
+const char *dnscore_lib = "dnscore debug";
+#else
+const char *dnscore_lib = "dnscore release";
+#endif
 #endif
 
 static const char* ARCH_RECOMPILE_WARNING = "Please recompile with the correct settings.";
@@ -123,11 +131,23 @@ void dnskey_init();
 
 static smp_int g_shutdown = SMP_INT_INITIALIZER;
 
+/**
+ * Tests the architecture:
+ * 
+ * Ensures that types sizes are exactly what they are expected to be.
+ * Ensures that signed types are signed and unsigned types are unsigned.
+ * Ensures that endianness is as expected.
+ * Ensures that structure alignment is as expected.
+ * 
+ * Will kill the program if an inconsistency is detected.
+ */
+
 static void
 dnscore_arch_checkup()
 {
-    /* Test the archi=tecture */
-#pragma message("Don't worry about the possible warnings below")
+/// @note 20170413 edf -- older compilers (gcc 4.6 and such) used to complain a lot about this
+///
+/// # pragma message("Don't worry about the possible warnings below")
     ARCH_CHECK_SIZE(__SIZEOF_POINTER__, sizeof(void*));
     ARCH_CHECK_SIZE(sizeof(u8), 1);
     ARCH_CHECK_SIZE(sizeof(s8), 1);
@@ -156,14 +176,14 @@ dnscore_arch_checkup()
         DIE(ERROR);
     }
 
-#pragma message("You can resume worrying about warnings ...")
+/// # pragma message("You can resume worrying about warnings ...")
     
 #if WORDS_BIGENDIAN==1
-    u8 endian[4] = {1, 2, 3, 4}; /* BIG    */
-    char* endian_name = "BIG";
+    static const u8 endian[4] = {1, 2, 3, 4}; /* BIG    */
+    static const char* endian_name = "BIG";
 #else
-    u8 endian[4] = {4, 3, 2, 1}; /* LITTLE */
-    char* endian_name = "LITTLE";
+    static const u8 endian[4] = {4, 3, 2, 1}; /* LITTLE */
+    static const char* endian_name = "LITTLE";
 #endif
 
     u32 endian_match = GET_U32_AT(endian[0]);
@@ -343,6 +363,10 @@ dnscore_timer_thread(void * unused0)
 #endif
 #endif
     
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+    thread_set_tag(pthread_self(), "timer");
+#endif
+    
     log_debug5("dnscore_timer_thread started");
 
     // if the counter reaches 0 then we have to stop
@@ -384,6 +408,10 @@ dnscore_timer_thread(void * unused0)
     thread_pool_destroy_random_ctx();
     
     log_debug5("dnscore_timer_thread stopped");
+    
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+    thread_clear_tag(pthread_self());
+#endif
     
     pthread_exit(NULL); /* not from the pool, so it's the way */
 
@@ -436,12 +464,18 @@ dnscore_init_ex(u32 features)
         dnscore_arch_checked = TRUE;
     }
     
+    debug_malloc_hooks_init();
+    
     if(!dnscore_tty_init)
     {
         output_stream_set_void(&__termout__);
         output_stream_set_void(&__termerr__);
         dnscore_tty_init = TRUE;
     }
+    
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+    thread_set_tag(pthread_self(), "main");
+#endif
     
 #if DNSCORE_HAS_ZALLOC_SUPPORT
     if((features & DNSCORE_ZALLOC) && !(dnscore_features & DNSCORE_ZALLOC))
@@ -468,7 +502,7 @@ dnscore_init_ex(u32 features)
     }
         
     if(!dnscore_random_set)
-    {    
+    {
         thread_pool_setup_random_ctx();
         random_ctx rnd = thread_pool_get_random_ctx();
 
@@ -734,6 +768,8 @@ dnscore_finalize()
     output_stream_close(&__termout__);
     
     debug_stacktrace_clear();
+    
+    debug_malloc_hooks_finalise();
 }
 
 static void

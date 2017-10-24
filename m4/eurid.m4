@@ -1,6 +1,6 @@
 dnl ############################################################################
 dnl 
-dnl Copyright (c) 2011-2016, EURid. All rights reserved.
+dnl Copyright (c) 2011-2017, EURid. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl  
 dnl Redistribution and use in source and binary forms, with or without 
@@ -29,6 +29,18 @@ dnl CONTRACT, STRICT LIABILITY,OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
+dnl ############################################################################
+dnl
+dnl       SVN Program:
+dnl               $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/bin/yadifa/configure.ac $
+dnl
+dnl       Last Update:
+dnl               $Date: 2012-03-27 16:56:49 +0200 (Tue, 27 Mar 2012) $
+dnl               $Revision: 1868 $
+dnl
+dnl       Purpose:
+dnl              common generic m4 macros
+dnl
 dnl ############################################################################
 
 dnl Assume it is true
@@ -221,6 +233,21 @@ AC_SUBST(HAS_CC_$2)
 rm -rf test-gcc-$2*
 ])
 
+dnl setgroups support
+
+AC_DEFUN([AC_SETGROUPS_CHECK], [
+AC_MSG_CHECKING([checking for setgroups])
+AC_CHECK_LIB(c,setgroups,
+    [
+        AC_DEFINE_UNQUOTED([HAS_SETGROUPS], [1], [The system supports setgroups])
+        AC_MSG_RESULT([yes])
+    ],
+    [
+        AC_MSG_RESULT([no])
+    ]
+)
+])
+
 dnl Memory aligment issues (T1000)
 
 AC_DEFUN([AC_MEMALIGN_CHECK], [
@@ -265,7 +292,7 @@ dnl Architecture
 
 AC_DEFUN([AC_CPU_CHECK], [
 
-AC_DEFINE_UNQUOTED([DEFAULT_ASSUMED_CPU_COUNT], [2], [number of harware core if the auto-detect fails])
+AC_DEFINE_UNQUOTED([DEFAULT_ASSUMED_CPU_COUNT], [2], [number of hardware core if the auto-detect fails])
 
 cpu_intel_compatible=1
 
@@ -735,6 +762,8 @@ AC_COMPILER_SUPPORTS([-rdynamic],RDYNAMIC)
 
 AC_MEMALIGN_CHECK
 
+AC_SETGROUPS_CHECK
+
 AC_ENDIANNESS
 AC_CHECK_HEADERS([stdlib.h])
 AC_CHECK_HEADERS([stdio.h])
@@ -755,6 +784,7 @@ AC_CHECK_HEADERS([sys/socket.h])
 AC_CHECK_HEADERS([netinet/in.h])
 AC_CHECK_HEADERS([netinet6/in6.h])
 AC_CHECK_HEADERS([cpuid.h])
+AC_CHECK_HEADERS([grp.h])
 ])
 
 dnl timegm support

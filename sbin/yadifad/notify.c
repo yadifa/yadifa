@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup 
  *  @ingroup yadifad
  *  @brief 
@@ -600,7 +600,11 @@ notify_send(host_address* ha, message_data *msgdata, u16 id, const u8 *origin, u
             }
             else
             {
-                log_err("notify: %{dnsname}: failed to send notify to %{sockaddr}: %r", origin, &sa.sa, ERRNO_ERROR);
+                int err = errno;
+                if(err != ENOTSOCK)
+                {
+                    log_err("notify: %{dnsname}: failed to send notify to %{sockaddr}: %r", origin, &sa.sa, MAKE_ERRNO_ERROR(err));
+                }
             }
         }
         else
@@ -693,38 +697,6 @@ notify_process_masterquery_in(message_data *mesg, packet_unpack_reader_data *rea
             }
 #endif
             
-#if OBSOLETE
-            if(host_address_list_contains_ip(zone_desc->masters, &mesg->other))
-            {
-                if(zone_isidle(zone_desc) && !zone_isfrozen(zone_desc) && !zone_is_obsolete(zone_desc))
-                {
-                    return_value = notify_masterquery(mesg, reader); // thread-safe
-                    
-                    zone_release(zone_desc);
-                    
-                    return return_value;
-                }
-                else
-                {
-                    log_info("notify: slave: zone %{dnsname} is busy", zone_desc->origin);
-                    /* or not */
-                    database_zone_refresh_maintenance(g_config->database, zone_desc->origin, time(NULL) + 5); // thread-safe
-                    
-                    zone_release(zone_desc);
-
-                    return SUCCESS;
-                }
-            }
-            else
-            {
-                log_warn("notify: slave: notification from %{sockaddr}: not in the master list for zone %{dnsname}",
-                        &mesg->other.sa, mesg->qname);
-
-                mesg->status = FP_NONMASTER_NOTIFIES_SLAVE;
-                mesg->send_length = mesg->received;
-                return_value = NOTIFY_QUERY_FROM_UNKNOWN;
-            }
-#else
             if(!zone_isfrozen(zone_desc))
             {
                 return_value = notify_masterquery(mesg, reader); // thread-safe
@@ -733,7 +705,6 @@ notify_process_masterquery_in(message_data *mesg, packet_unpack_reader_data *rea
             {
                 log_info("notify: slave: %{dnsname}: %{sockaddr}: zone is frozen", mesg->qname, &mesg->other.sa);
             }
-#endif
         }   /* type = SLAVE */
         else
         {
@@ -1044,7 +1015,7 @@ notify_service(struct service_worker_s *worker)
 
     log_debug("notify: notification service main loop reached");
 
-    while(service_shouldrun(worker) || !async_queue_emtpy(&notify_handler_queue))
+    while(service_shouldrun(worker) || !async_queue_empty(&notify_handler_queue))
     {
         {   /* what happens in here should not interfere with the rest of the function */
                 
@@ -1126,6 +1097,13 @@ notify_service(struct service_worker_s *worker)
                 async_message_release(async);
                 
                 break;
+            }
+            
+            if(dnscore_shuttingdown())
+            {
+                notify_message_free(message);
+                async_message_release(async);
+                continue;
             }
 
             switch(message->payload.type)
@@ -1373,11 +1351,16 @@ notify_service(struct service_worker_s *worker)
         while(ptr_set_avl_iterator_hasnext(&zones_iter))
         {
             ptr_node *zone_node = ptr_set_avl_iterator_next_node(&zones_iter);
-
             notify_message *message = zone_node->value;
 
             if(message->payload.notify.epoch > now)
             {
+                continue;
+            }
+            
+            if(dnscore_shuttingdown())
+            {
+                ptr_vector_append(&todelete, message);
                 continue;
             }
 
@@ -1892,6 +1875,8 @@ notify_host_list(zone_desc_s *zone_desc, host_address *hosts, u16 zclass)
     async_message_call(&notify_handler_queue, async);
 }
 
+
+
 ya_result
 notify_service_init()
 {
@@ -1900,15 +1885,15 @@ notify_service_init()
     {
         if(notify_thread_pool == NULL)
         {
-            if((notify_thread_pool = thread_pool_init_ex(10, 4096, "notify-tp")) == NULL)
+            if((notify_thread_pool = thread_pool_init_ex(10, 4096, "notify")) == NULL)
             {
-                return ERROR;
+                return THREAD_CREATION_ERROR;
             }
         }
         
-        if(ISOK(err = service_init_ex(&notify_handler, notify_service, "yadifad-notify", 1)))
+        if(ISOK(err = service_init_ex(&notify_handler, notify_service, "Notify", 1)))
         {
-            async_queue_init(&notify_handler_queue, 4096, 1, 1000000, "yadifad-notify");
+            async_queue_init(&notify_handler_queue, 4096, 1, 1000000, "notify");
             
             notify_service_initialised = TRUE;
         }

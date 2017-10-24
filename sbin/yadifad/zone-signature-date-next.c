@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -331,23 +331,38 @@ zone_policy_date_next_minute(zone_policy_date *date, const zone_policy_rule_defi
 void
 zone_policy_date_init_at_next_rule(zone_policy_date *date, const zone_policy_date *from, const zone_policy_date *rule)
 {
-    yassert((from->type.type == ZONE_POLICY_ABSOLUTE) && (rule->type.type == ZONE_POLICY_RULE));
-    const zone_policy_rule_definition_s *def = zone_policy_rule_definition_get_from_rule(rule);
-    
-    time_t epoch;
-    zone_policy_date_get_epoch(from, &epoch);
+    yassert(from->type.type == ZONE_POLICY_ABSOLUTE);
     
     if(rule->type.type == ZONE_POLICY_RULE)
-    {
-        epoch += 60;
+    {    
+        const zone_policy_rule_definition_s *def = zone_policy_rule_definition_get_from_rule(rule);
+
+        time_t epoch;
+        zone_policy_date_get_epoch(from, &epoch);
+
+        if(rule->type.type == ZONE_POLICY_RULE)
+        {
+            epoch += 60;
+        }
+
+        zone_policy_date_init_from_epoch(date, epoch);
+
+        zone_policy_date_next_month(date, def);
+        zone_policy_date_next_day(date, def);
+        zone_policy_date_next_hour(date, def);
+        zone_policy_date_next_minute(date, def);
     }
-    
-    zone_policy_date_init_from_epoch(date, epoch);
-    
-    zone_policy_date_next_month(date, def);
-    zone_policy_date_next_day(date, def);
-    zone_policy_date_next_hour(date, def);
-    zone_policy_date_next_minute(date, def);
+    else if(rule->type.type == ZONE_POLICY_RELATIVE)
+    {
+        time_t epoch;
+        zone_policy_date_get_epoch(from, &epoch);
+        epoch += rule->relative.seconds;
+        zone_policy_date_init_from_epoch(date, epoch);
+    }
+    else
+    {
+        abort();
+    }
 }
 
 /**

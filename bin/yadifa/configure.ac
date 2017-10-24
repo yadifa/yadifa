@@ -1,6 +1,6 @@
 dnl ############################################################################
 dnl 
-dnl Copyright (c) 2011-2016, EURid. All rights reserved.
+dnl Copyright (c) 2011-2017, EURid. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl  
 dnl Redistribution and use in source and binary forms, with or without 
@@ -30,9 +30,21 @@ dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
 dnl ##############################################################################
+dnl
+dnl      SVN Program:
+dnl              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/bin/yadifa/configure.ac $
+dnl
+dnl      Last Update:
+dnl              $Date: 2017-09-26 11:33:35 +0200 (Tue, 26 Sep 2017) $
+dnl              $Revision: 7307 $
+dnl
+dnl      Purpose:
+dnl              YADIFA -- tools for YADIFAD
+dnl
+dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 6237 $])
+AC_REVISION([$Revision: 7307 $])
 # 1
 # svn log 2> /dev/null|head -2|grep ^r|sed 's/.\([1-9]*\).*/\1/'
 
@@ -81,7 +93,6 @@ dnl Checks for libraries.
 AC_CHECK_LIB([c], [printf])
 AC_CHECK_LIB([pthread], [pthread_mutex_init])
 
-
 dnl Checks for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdlib.h string.h sys/time.h syslog.h unistd.h])
@@ -108,9 +119,6 @@ AC_CHECK_TYPES(uint64_t)
 AC_CHECK_TYPES(int64_t) 
 AC_CHECK_TYPES(long long)
 AC_CHECK_TYPES(u_char)
-
-#AC_TYPE_PATH_MAX 
-#AC_TYPE_POSIX_PATH_MAX
 
 dnl Add some defines.
 
@@ -183,14 +191,18 @@ echo
 echo "ZALLOC .............................. : $enable_zalloc"
 echo "ZALLOC STATISTICS ................... : $enable_zalloc_statistics"
 echo "ZALLOC DEBUG ........................ : $enable_zalloc_debug"
+echo "ACL ................................. : $enable_acl"
+echo "TSIG ................................ : $enable_tsig"
 echo "MASTER .............................. : $enable_master"
 echo "DYNUPDATE ........................... : $enable_dynupdate"
 echo "RRSIG MANAGEMENT .................... : $enable_rrsig_management"
 echo "CTRL ................................ : $enable_ctrl"
+echo "NSEC ................................ : $enable_nsec"
+echo "NSEC3 ............................... : $enable_nsec3"
 echo "RRL ................................. : $enable_rrl"
 
 if [[ ! "${OPENSSL}" = "" ]]
-	then
+then
 	echo
         echo "Using OpenSLL from .................. : ${OPENSSL}"
 fi

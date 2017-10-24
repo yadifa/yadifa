@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief Dictionary module based on an hash table of binary trees
@@ -63,7 +63,7 @@ ya_result dictionary_htbt_process(dictionary* dico, hashcode key, void* record_m
 void dictionary_htbt_iterator_init(const dictionary* dico, dictionary_iterator* iter);
 bool dictionary_htbt_iterator_hasnext(dictionary_iterator* dico);
 void** dictionary_htbt_iterator_next(dictionary_iterator* dico);
-void dictionary_htbt_iterator_init_from(const dictionary* dico, dictionary_iterator* iter, hashcode key);
+void dictionary_htbt_iterator_init_from(const dictionary* dico, dictionary_iterator* iter, const u8 *name);
 
 void dictionary_htbt_empties(dictionary* dico, void* bucket, dictionary_bucket_record_function destroy);
 void
@@ -345,11 +345,26 @@ dictionary_htbt_iterator_init(const dictionary* dico, dictionary_iterator* iter)
 }
 
 void
-dictionary_htbt_iterator_init_from(const dictionary* dico, dictionary_iterator* iter, hashcode key)
+dictionary_htbt_iterator_init_from(const dictionary* dico, dictionary_iterator* iter, const u8 *name)
 {
     iter->vtbl = &dictionary_iterator_htbt_vtbl;
     iter->sll = NULL;
-    htbt_iterator_init_from(dico->ct.htbt_collection, &(iter->ct.as_htbt), key);
+    //avl_node *node = htbt_iterator_init_from(dico->ct.htbt_collection, &(iter->ct.as_htbt), key);
+    hashcode key = hash_dnslabel(name);
+    avl_node *node = htbt_iterator_init_from(dico->ct.htbt_collection, &(iter->ct.as_htbt), key);
+    
+    zdb_rr_label *label = (zdb_rr_label*)node->data;
+    
+    while(label != NULL)
+    {
+        if(dnslabel_equals(label->name, name))
+        {
+            iter->sll = (dictionary_node*)label;
+            break;
+        }
+
+        label = label->next;
+    }
 }
 
 bool

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnskey DNSSEC keys functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -70,8 +70,6 @@
 #include "dnsdb/dnssec.h"
 #include "dnsdb/dnssec_config.h"
 #include "dnsdb/dnssec-keystore.h"
-
-#include "dnsdb/zdb_listener.h"
 
 #define MODULE_MSG_HANDLE g_dnssec_logger
 extern logger_handle *g_dnssec_logger;
@@ -197,23 +195,6 @@ dnssec_keystore_get_domain(dnssec_keystore *ks, const u8 *domain)
     mutex_unlock(&ks->lock);
     return ret;
 }
-
-#if OBSOLETE
-static dnssec_keystore_domain_s*
-dnssec_keystore_get_domain_from_name(dnssec_keystore *ks, const char *name)
-{
-    dnssec_keystore_domain_s *ret = NULL;
-
-    u8 fqdn[MAX_DOMAIN_LENGTH];
-    
-    if(ISOK(cstr_to_dnsname(fqdn, name)))
-    {
-        ret = dnssec_keystore_get_domain(ks, fqdn);
-    }
-    
-    return ret;
-}
-#endif
 
 /**
  * Adds the knowledge of domain<->path
@@ -542,6 +523,11 @@ dnssec_keystore_delete_key(dnssec_key *key)
                                 fqdn, path, path_new, ret);
                     }
                 }
+                else
+                {
+                    log_info("dnskey-keystore: %{dnsname}: delete: private key file content does not matches key: renaming file '%s' to '%s'",
+                            fqdn, path, path_new);
+                }
 
                 dnskey_release(key_from_file);
                 key_from_file = NULL;
@@ -603,7 +589,11 @@ dnssec_keystore_delete_key(dnssec_key *key)
                         ret = ERRNO_ERROR;
                         log_err("dnskey-keystore: %{dnsname}: delete: could not rename file '%s' to '%s': ret", fqdn, path, path_new, ret);
                     }
-                }    
+                }
+                else
+                {
+                    log_info("dnskey-keystore: %{dnsname}: delete: public key file content does not matches key: renaming file '%s' to '%s'", fqdn, path, path_new);
+                }
 
                 dnskey_release(key_from_file);
                 key_from_file = NULL;
@@ -755,6 +745,89 @@ dnssec_keystore_acquire_key_from_fqdn_by_index(const u8 *domain, int idx)
 }
 
 /**
+ * Acquires all the currently activated keys and store them to the appropriate
+ * KSK or ZSK collection ptr_vector.
+ * 
+ * @param domain
+ * @param ksks
+ * @param zsks
+ * @return 
+ */
+
+int
+dnssec_keystore_acquire_activated_keys_from_fqdn_to_vectors(const u8 *domain, ptr_vector *ksks, ptr_vector *zsks)
+{
+    time_t now = time(NULL);
+    
+    for(int i = 0; ;++i)
+    {
+        dnssec_key *key = dnssec_keystore_acquire_key_from_fqdn_by_index(domain, i);
+        
+        if(key == NULL)
+        {
+            break;
+        }
+        
+        if(dnskey_is_activated(key, now))
+        {
+            if(!dnssec_key_is_private(key))
+            {
+                continue;
+            }
+            
+            if(key->flags == (DNSKEY_FLAG_ZONEKEY | DNSKEY_FLAG_KEYSIGNINGKEY))
+            {
+                if(ksks != NULL)
+                {
+                    ptr_vector_append(ksks, key);
+                    continue;
+                }
+            }
+            else if(key->flags == DNSKEY_FLAG_ZONEKEY)
+            {
+                if(zsks != NULL)
+                {
+                    ptr_vector_append(zsks, key);
+                    continue;
+                }
+            }
+        }
+        
+        dnskey_release(key);
+    }
+    
+    int ret = 0;
+    
+    if(ksks != NULL)
+    {
+        ret += ptr_vector_size(ksks);
+    }
+    
+    if(zsks != NULL)
+    {
+        ret += ptr_vector_size(zsks);
+    }
+    
+    return  ret;
+}
+
+/**
+ * Releases all the keys from a vector.
+ * 
+ * @param keys
+ */
+
+void
+dnssec_keystore_release_keys_from_vector(ptr_vector *keys)
+{
+    for(int i = 0; i <= ptr_vector_last_index(keys); ++i)
+    {
+        dnssec_key *key = (dnssec_key*)ptr_vector_get(keys, i);
+        dnskey_release(key);
+    }
+}
+
+/**
  * 
  * Retrieves a key from the keystore
  * 
@@ -862,7 +935,7 @@ dnssec_keystore_reload_readdir_callback(const char *basedir, const char* filenam
     if(dlen + flen >= sizeof(file))
     {
         log_err("path too long for '%s'/'%s'", basedir, filename);
-        return ERROR;
+        return INVALID_PATH;
     }
     
     memcpy(file, basedir, dlen);
@@ -872,7 +945,7 @@ dnssec_keystore_reload_readdir_callback(const char *basedir, const char* filenam
     }
     memcpy(&file[dlen], filename, flen + 1);
     
-    if(sscanf(filename, "K%255[^+]+%03d+%05d.%16s", domain, &algorithm, &tag, extension) == 4)
+    if(sscanf(filename, "K%255[^+]+%03d+%05d.%15s", domain, &algorithm, &tag, extension) == 4)
     {
         if((args->domain == NULL) || (strcmp(domain, args->domain) == 0))
         {
@@ -910,6 +983,10 @@ dnssec_keystore_reload_readdir_callback(const char *basedir, const char* filenam
 
                     if(ISOK(ret = dnskey_new_private_key_from_file(file, &key)))
                     {
+                        if((key->epoch_publish == 0) || (key->epoch_activate == 0) || (key->epoch_inactive == 0) || (key->epoch_delete == 0))
+                        {
+                            log_warn("key from '%s' is missing smart fields", file);
+                        }
 #ifdef DEBUG
                         log_debug1("dnssec_keystore_reload_readdir_callback: private key generated from file '%s'", file);
 #endif               
@@ -1164,10 +1241,6 @@ dnssec_keystore_setpath(const char* path)
     }
 }
 
-
-
-
-
 void
 dnssec_keystore_destroy()
 {
@@ -1266,7 +1339,6 @@ dnssec_keystore_new_key(u8 algorithm, u32 size, u16 flags, const char *origin, d
         }
         
         dnskey_release(key);
-
     }
     
     *out_key = key;
@@ -1330,7 +1402,7 @@ dnssec_keystore_load_private_key_from_rdata(const u8 *rdata, u16 rdata_size, con
 {    
     if(rdata_size < 4)
     {
-        return ERROR;
+        return INVALID_ARGUMENT_ERROR;
     }
     
     u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size);
@@ -1632,21 +1704,111 @@ dnssec_keystore_add_valid_keys_from_fqdn(const u8 *fqdn, time_t at_time, struct 
     return count;
 }
 
-/*
-dnssec_key* dnskey_key_clone_container(dnssec_key* original_key)
+/**
+ * Returns all the active keys, chained in a single linked list whose nodes need to be freed,
+ * 
+ * @param zone
+ * @param out_keys
+ * @param out_ksk_count
+ * @param out_zsk_count
+ * @return 
+ */
+
+ya_result
+zdb_zone_get_active_keys(zdb_zone *zone, dnssec_key_sll **out_keys, int *out_ksk_count, int *out_zsk_count)
 {
-    dnssec_key* key;
-    ZALLOC_OR_DIE(dnssec_key*, key, dnssec_key, ZDB_DNSKEY_TAG);
-    MEMCOPY(key, original_key, sizeof(dnssec_key));
-    key->next = NULL;
-    return key;
+    yassert(out_keys != NULL);
+    
+    ya_result ret = SUCCESS;
+    int ksk_count = 0;
+    int zsk_count = 0;
+    
+    zdb_packed_ttlrdata* dnskey_rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_DNSKEY); // zone is locked
+
+    if(dnskey_rrset == NULL)
+    {
+        return DNSSEC_ERROR_RRSIG_NOZONEKEYS;
+    }
+    
+    dnssec_key_sll *keys = NULL;
+    
+    for(zdb_packed_ttlrdata* key = dnskey_rrset ;key != NULL ;key = key->next)
+    {
+        u8 algorithm = DNSKEY_ALGORITHM(*key);
+        u16 tag = DNSKEY_TAG(*key);
+        u16 flags = DNSKEY_FLAGS(*key);
+        
+        if((flags != DNSKEY_FLAGS_KSK) && (flags != DNSKEY_FLAGS_ZSK))
+        {
+            // ignore the key
+            
+            continue;
+        }
+        
+        dnssec_key* priv_key;
+        // from disk or from global keyring
+        ret = dnssec_keystore_load_private_key_from_parameters(algorithm, tag, flags, zone->origin, &priv_key); // converted
+
+        if(priv_key != NULL)
+        {
+            if(dnskey_is_activated(priv_key, time(NULL)))
+            {
+                log_debug("rrsig: %{dnsname}: private key algorithm=%d tag=%05d flags=%3d is active", zone->origin, algorithm, tag, ntohs(flags));
+                
+               /*
+                * We can sign with this key : chain it
+                */
+                
+                if(flags == DNSKEY_FLAGS_KSK)
+                {
+                    ++ksk_count;
+                }
+                else // flags == DNSKEY_FLAGS_ZSK
+                {
+                    ++zsk_count;
+                }
+
+               dnssec_key_sll* key_node;
+               ZALLOC_OR_DIE(dnssec_key_sll*, key_node, dnssec_key_sll, DNSSEC_KEY_SLL_TAG);
+               key_node->next = keys;
+               key_node->key = priv_key;
+               keys = key_node;
+            }
+            else
+            {
+                log_debug("rrsig: %{dnsname}: private key algorithm=%d tag=%05d flags=%3d is not active", zone->origin, algorithm, tag, ntohs(flags));
+            }
+        }
+    }
+    
+    if(out_ksk_count != NULL)
+    {
+        *out_ksk_count = ksk_count;
+    }
+    
+    if(out_zsk_count != NULL)
+    {
+        *out_zsk_count = zsk_count;
+    }
+    
+    *out_keys = keys;
+    
+    return ret;
 }
 
-dnssec_key* dnskey_key_destroy_container(dnssec_key* key)
-{
-    ZFREE(key, dnssec_key);
-}
-*/
+/**
+ * 
+ * @param keys
+ */
 
+void
+zdb_zone_release_active_keys(dnssec_key_sll *keys)
+{
+    while(keys != NULL)
+    {
+        dnskey_release(keys->key);
+        keys = keys->next;
+    }
+}
 
 /** @} */

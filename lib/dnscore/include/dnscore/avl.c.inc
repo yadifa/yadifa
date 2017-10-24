@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -29,7 +29,24 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  *------------------------------------------------------------------------------
- */
+ *
+ *
+ *      SVN Program:
+ *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/lib/dnscore/include/dnscore/avl.c.inc $
+ *
+ *      Creation Date:
+ *              2009-01-07
+ *
+ *      Last Update:
+ *              $Date: 2017-09-26 11:33:35 +0200 (Tue, 26 Sep 2017) $
+ *              $Revision: 7307 $
+ *
+ *      Last Change:
+ *              $Author: ericdf $
+ *
+ *------------------------------------------------------------------------------
+ *
+ * DOCUMENTATION */
 /** @defgroup collections Generic collections functions
  *  @ingroup dnscore
  *  @brief AVL structure and functions
@@ -966,7 +983,7 @@ AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_
 
     while(level >= 0) /* level points to the parent */
     {
-        if(AVL_BALANCE(node) == balances[level]) /* balance of the node */
+        if(AVL_BALANCE(node) == balances[level]) /* balance of the node, scan-build false positive */
         {
             /* this branch will exit */
             /* The node's balance has not been changed */
@@ -1221,7 +1238,7 @@ AVL_PREFIXED(avl_iterator_next_node)(AVL_PREFIXED(avl_iterator*) iter)
 /* <- Iterators */
 
 static void
-avl_callback_and_destroy_(AVL_NODE_TYPE *node, callback_function callback)
+avl_callback_and_destroy_(AVL_NODE_TYPE *node, void (*callback)(AVL_NODE_TYPE *))
 {
     AVL_NODE_TYPE* AVL_CHILD = AVL_LEFT_CHILD(node);
     if(AVL_CHILD != NULL)
@@ -1250,11 +1267,12 @@ avl_callback_and_destroy_(AVL_NODE_TYPE *node, callback_function callback)
  */
 
 void
-AVL_PREFIXED(avl_callback_and_destroy)(AVL_TREE_TYPE *tree, callback_function callback)
+AVL_PREFIXED(avl_callback_and_destroy)(AVL_TREE_TYPE *tree, void (*callback)(AVL_NODE_TYPE *))
 {
     if(AVL_TREE_ROOT(tree) != NULL)
     {
         avl_callback_and_destroy_(AVL_TREE_ROOT(tree), callback);
+        AVL_TREE_ROOT(tree) = NULL;
     }
 }
 
@@ -1438,7 +1456,7 @@ AVL_NODE_TYPE*
 AVL_PREFIXED(avl_node_mod_prev)(const AVL_NODE_TYPE *node)
 {
     AVL_NODE_TYPE* prev;
-
+    
     prev = AVL_LEFT_CHILD(node);
 
     if(prev != NULL)
@@ -1453,54 +1471,46 @@ AVL_PREFIXED(avl_node_mod_prev)(const AVL_NODE_TYPE *node)
         {
             prev = AVL_RIGHT_CHILD(prev);
         }
-        
-        // at this point prev cannot be NULL
     }
     else
     {
         /* Leaf */
 
-        for(;;)
+        /*
+         * Go up until we are the right child
+         */
+
+        prev = AVL_PARENT(node);
+
+        while(prev != NULL)
         {
-            prev = AVL_PARENT(node);
-
-            if(prev == NULL)
-            {
-                /* We are at the root AND we have no left children
-                 *
-                 * Since it is an AVL, the last one is the right child.
-                 * And if we have none ... ourself ...
-                 */
-
-                prev = AVL_RIGHT_CHILD(node);
-
-                if(prev == NULL)
-                {
-                    prev = (AVL_NODE_TYPE*)node; // node is not the starting point anymore, so casting to not-const is ok
-                }
-                
-                // prev is not NULL
-
-                break;
-            }
-            
-            // prev is not NULL
-
             if(AVL_RIGHT_CHILD(prev) == node)
             {
-                // prev is not NULL
-                
                 break;
             }
 
             node = prev;
+
+            prev = AVL_PARENT(node);
         }
-        
-        // prev cannot be NULL
+
+        if(prev == NULL)
+        {
+            /* Modulo */
+
+            /* We are at the root, the prev one is the one most on the right
+             * or ourself.
+             */
+
+            prev = (AVL_NODE_TYPE*)node; // node is not the starting point anymore, so casting to not-const is ok
+
+            while(AVL_RIGHT_CHILD(prev) != NULL)
+            {
+                prev = AVL_RIGHT_CHILD(prev);
+            }
+        }
     }
-    
-    // not NULL
-    
+
     return prev;
 }
 

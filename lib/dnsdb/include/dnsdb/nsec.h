@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup nsec NSEC functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -60,17 +60,6 @@ extern "C"
 #define ZDB_NSECLABEL_TAG 0x4c42414c4345534e
 
 #define NSEC_NEXT_DOMAIN_NAME(x__) (&(x__).rdata_start[0])
-
-/*
-struct nsec_label_extension
-{
-    nsec_node* node;
-};
-*/
-struct nsec_zone
-{
-    nsec_label* last_nsec_label;
-};
 
 /**
  * Reverses the labels of the fqdn
@@ -168,49 +157,38 @@ void nsec_name_error(const zdb_zone* zone, const dnsname_vector *qname_not_const
 
 void nsec_destroy_zone(zdb_zone* zone);
 
-struct nsec_icmtl_replay
-{
-    ptr_set nsec_del;
-    ptr_set nsec_add;
-    zdb_zone *zone;
-};
-
-typedef struct nsec_icmtl_replay nsec_icmtl_replay;
-
-/**
- * Initialises the replay structure
- *
- * @param replay
- * @param zone
- */
-
-void nsec_icmtl_replay_init(nsec_icmtl_replay *replay, zdb_zone *zone);
-
-void nsec_icmtl_replay_destroy(nsec_icmtl_replay *replay);
-
-/**
- * Appends a NSEC del to the replay structure
- *
- * @param replay
- * @param fqdn
- * @param ttlrdata
- */
-void nsec_icmtl_replay_nsec_del(nsec_icmtl_replay *replay, const u8* fqdn);
-
-/**
- * Appends a NSEC add to the replay structure
- *
- * @param replay
- * @param fqdn
- * @param ttlrdata
- */
-void nsec_icmtl_replay_nsec_add(nsec_icmtl_replay *replay, const u8* fqdn);
-
-void nsec_icmtl_replay_execute(nsec_icmtl_replay *replay);
-
 void nsec_logdump_tree(zdb_zone *zone);
 
-#define ZONE_NSEC_AVAILABLE(zone_) ( ((zone_)->apex->flags & (ZDB_RR_LABEL_DNSSEC_EDIT|ZDB_RR_LABEL_NSEC)) == ZDB_RR_LABEL_NSEC)
+#define NSEC_ZONE_DISABLED      0
+#define NSEC_ZONE_ENABLED       1
+#define NSEC_ZONE_GENERATING    2
+#define NSEC_ZONE_REMOVING      4
+
+#define TYPE_NSECCHAINSTATE NU16(0xff03)
+
+/**
+ * marks the zone with private records
+ * 
+ * @param zone
+ * @param status
+ * 
+ * @return an error code
+ */
+
+ya_result nsec_zone_set_status(zdb_zone *zone, u8 secondary_lock, u8 status);
+
+/**
+ * gets the zone status from private records
+ * 
+ * @param zone
+ * @param statusp
+ * 
+ * @return an error code
+ */
+
+ya_result nsec_zone_get_status(zdb_zone *zone, u8 *statusp);
+
+#define ZONE_NSEC_AVAILABLE(zone_) (((zone_)->apex->flags & ZDB_RR_LABEL_NSEC) != 0)
 
 #ifdef	__cplusplus
 }

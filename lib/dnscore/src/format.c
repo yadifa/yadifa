@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup format C-string formatting
  *  @ingroup dnscore
  *  @brief
@@ -58,7 +58,7 @@
 
 #ifdef __linux__
 #ifdef __GNUC__
-// #pragma message "linux + gnu: Enabling enhanced function address translation"
+// linux + gnu: Enabling enhanced function address translation
 #define __USE_GNU
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -731,7 +731,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                             fprintf(stderr, "Invalid type size '%i' in string '%s'", type_size, fmt); /* Keep native */
                             fflush(stderr);
 
-                            exit(EXIT_CODE_FORMAT_ERROR);
+                            abort();
                         }
                     }
 
@@ -827,7 +827,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                             fprintf(stderr, "Invalid type size '%i' in string '%s'", type_size, fmt); /* Keep native */
                             fflush(stderr);
 
-                            exit(EXIT_CODE_FORMAT_ERROR);
+                            abort();
                         }
                     }
 
@@ -933,7 +933,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
 
                             fprintf(stderr, "PANIC: Invalid format type in string '%s' : '}' expected.", fmt); /* Keep native */
                             fflush(stderr);
-                            exit(EXIT_CODE_FORMAT_ERROR);
+                            abort();
                         }
                     }
                     while(c != '}');
@@ -995,7 +995,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                         case sizeof(s64):
                         {
 
-                            u64 val = (s16)va_arg(args, u64);
+                            s64 val = (s64)va_arg(args, s64);
                             localdatetimeus_format_handler_method((void*)(intptr)val, &os, 0, 0, FALSE, NULL);
                             break;
                         }
@@ -1022,7 +1022,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                         case sizeof(s64):
                         {
 
-                            u64 val = (s16)va_arg(args, u64);
+                            s64 val = (s64)va_arg(args, s64);
                             datetimeus_format_handler_method((void*)(intptr)val, &os, 0, 0, FALSE, NULL);
                             break;
                         }
@@ -1942,8 +1942,14 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             return INCORRECT_RDATA;
         }
 
+// @todo 20150520 timh -- !!!! NOTE THAT THIS IS AN ifndef AND NOT AN ifdef !!!!
+#ifndef THX
         case TYPE_A6:
+#endif  // THX NDEF A6
+#ifndef THX /* @todo 20150520 timh -- This type is similar to MX record, so added there instead */
         case TYPE_AFSDB:
+#endif  // THX NDEF AFSDB
+
         case TYPE_TSIG:
         case TYPE_IXFR:
         case TYPE_AXFR:

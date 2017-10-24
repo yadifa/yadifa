@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2011-2016, EURid. All rights reserved.
+# Copyright (c) 2011-2017, EURid. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 # Redistribution and use in source and binary forms, with or without 
@@ -26,6 +26,19 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+################################################################################
+#
+#       SVN Program:
+#               $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/lib/dnslg/Makefile.am $
+#
+#       Last Update:
+#               $Date: 2017-04-06 09:34:12 +0200 (Thu, 06 Apr 2017) $
+#
+#               $Revision: 6922 $
+#
+#       Purpose:
+#               YADIFA dnslg Makefile.am script
 #
 ################################################################################
 
@@ -74,13 +87,18 @@ all: REVISION
 REVISION:
 	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
-src/config-resolver.c: $(FEATURES)
+src/config-resolver.c: features
 
 features: $(FEATURES)
 
 $(FEATURES): config.log REVISION VERSION
 	echo "#pragma once" > $(FEATURES)
 VP=DNSLG
+if HAS_TSIG_SUPPORT
+	echo "#define DNSLG_HAS_TSIG_SUPPORT 1" >> $(FEATURES)
+else
+	echo "#define DNSLG_HAS_TSIG_SUPPORT 0" >> $(FEATURES)
+endif
 	which printf > /dev/null 2>&1
 	if [ $$? -eq 0 ];then \
 		printf '// version %i.%i.%i.%i-%i\n' $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/') 0 $$(cat REVISION) >> $(FEATURES) ; \

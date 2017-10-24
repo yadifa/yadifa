@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup query_ex Database top-level query function
  *  @ingroup dnsdb
  *  @brief Database top-level query function
@@ -56,13 +56,13 @@
 #include "dnsdb/zdb_rr_label.h"
 #include "dnsdb/zdb_record.h"
 #include "dnsdb/dictionary.h"
-#if ZDB_HAS_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT
 #include "dnsdb/nsec.h"
 #endif
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
 #include "dnsdb/nsec3.h"
 #endif
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
 #include "dnsdb/rrsig.h"
 #endif
 #if ZDB_EXPLICIT_READER_ZONE_LOCK == 1
@@ -305,6 +305,7 @@ zdb_query_ex_answer_appendlist_ttl(const zdb_packed_ttlrdata* source, const u8* 
     yassert(source != NULL && label != NULL);
 
     zdb_resourcerecord* next = *headp;
+    int countdown = 32;
     while(source != NULL)
     {
         zdb_resourcerecord* node = zdb_query_ex_answer_make_ttl(source, label, 
@@ -313,6 +314,10 @@ zdb_query_ex_answer_appendlist_ttl(const zdb_packed_ttlrdata* source, const u8* 
         node->next = next;
         next = node;
         source = source->next;
+        if(--countdown == 0)
+        {
+            break;
+        }
     }
     *headp = next;
 }
@@ -727,7 +732,7 @@ zdb_query_ex_answer_append_ips(const zdb_zone* zone, const u8* dns_name,
             zdb_query_ex_answer_appendlist(a, dns_name, 
                                            PASS_ZCLASS_PARAMETER
                                            TYPE_A, headp, pool);
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
             if(dnssec)
             {
                 zdb_query_ex_answer_append_type_rrsigs(rr_label, dns_name, TYPE_A, 
@@ -744,7 +749,7 @@ zdb_query_ex_answer_append_ips(const zdb_zone* zone, const u8* dns_name,
             zdb_query_ex_answer_appendlist(aaaa, dns_name, 
                                            PASS_ZCLASS_PARAMETER
                                            TYPE_AAAA, headp, pool);
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
             if(dnssec)
             {
                 zdb_query_ex_answer_append_type_rrsigs(rr_label, dns_name, TYPE_AAAA, 
@@ -876,7 +881,7 @@ append_authority(const u8 * qname,
         zdb_query_ex_answer_appendrndlist(authority, qname, 
                                        PASS_ZCLASS_PARAMETER
                                        TYPE_NS, headp, pool);
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
         if(dnssec)
         {
             zdb_query_ex_answer_append_type_rrsigs(rr_label_info->authority, qname, TYPE_NS, 
@@ -901,7 +906,7 @@ append_authority(const u8 * qname,
 
     return authority;
 }
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
 
 /**
  * @brief Appends the NSEC3 - NODATA answer to the section
@@ -1247,7 +1252,7 @@ zdb_query_ex_append_nsec3_delegation(const zdb_zone *zone, const zdb_rr_label_fi
     }
 }
 #endif
-#if ZDB_HAS_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT
 
 /**
  * @brief Appends the NSEC records of a label to the section
@@ -1328,7 +1333,7 @@ zdb_query_ex_record_not_found(const zdb_zone *zone,
     zdb_rr_label *rr_label = rr_label_info->answer;
     
     // NXRRSET
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
     if(dnssec && ZONE_NSEC3_AVAILABLE(zone))
     {
         zdb_packed_ttlrdata *zone_soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);
@@ -1483,7 +1488,7 @@ zdb_query_ex_record_not_found(const zdb_zone *zone,
                 zdb_query_ex_answer_append_soa_rrsig_nttl(zone, &ans_auth_add->authority, pool);
             }
         }
-#if ZDB_HAS_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT
         if(dnssec && ZONE_NSEC_AVAILABLE(zone))
         {
             zdb_rr_label* rr_label_authority = rr_label_info->authority;
@@ -1899,8 +1904,6 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                      * The answer WILL be a referral ...
                      */
                     
-                    ans_auth_add->delegation = 1;
-                    
                     switch(type)
                     {
                         /* for these ones : give the rrset for the type and clear AA */
@@ -1919,6 +1922,8 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                         }
                         case TYPE_NSEC:
                         {
+                            ans_auth_add->delegation = 1; // no answer, and we will answer with NS (as at or under delegation)
+                            
                             if((rr_label->flags & ZDB_RR_LABEL_UNDERDELEGATION) == 0)
                             {
                                 MESSAGE_HIFLAGS(mesg->buffer) |= AA_BITS;
@@ -1927,9 +1932,11 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                         }   
                         /* for these ones : give the rrset for the type */
                         case TYPE_NS:
+                            ans_auth_add->delegation = 1; // no answer, and we will answer with NS (as at or under delegation)
                             break;
                         /* for this one : present the delegation */
                         case TYPE_ANY:
+                            ans_auth_add->delegation = 1; // no answer, and we will answer with NS (as at or under delegation)
                             authority_required = FALSE;
                             break;
                         /* for the rest : NSEC ? */
@@ -2443,7 +2450,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                         return FP_BASIC_RECORD_FOUND;
                     }
                 }
-            }       /* end of if rr_label!=NULL => */
+            }       /* end of if rr_label != NULL => */
             else    /* rr_label == NULL */
             {
                 zdb_rr_label* rr_label_authority = rr_label_info.authority;
@@ -2526,7 +2533,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
                             }
                         }
                         
-                        ans_auth_add->delegation = 1;
+                        ans_auth_add->delegation = 1; // no answer, NS records in authority : referral
 #ifdef DEBUG
                         log_debug("zdb_query_ex: FP_BASIC_LABEL_NOTFOUND (done)");
 #endif
@@ -3209,8 +3216,6 @@ zdb_query_and_update(zdb *db, message_data *mesg, u8 * restrict pool_buffer)
                      * The answer WILL be a referral ...
                      */
                     
-                    ans_auth_add.delegation = 1;
-                    
                     switch(type)
                     {
                         /* for these ones : give the rrset for the type and clear AA */
@@ -3237,14 +3242,16 @@ zdb_query_and_update(zdb *db, message_data *mesg, u8 * restrict pool_buffer)
                         }   
                         /* for these ones : give the rrset for the type */
                         case TYPE_NS:
+                            ans_auth_add.delegation = 1;
                             break;
                         /* for this one : present the delegation */
                         case TYPE_ANY:
+                            ans_auth_add.delegation = 1;
                             authority_required = FALSE;
                             break;
                         /* for the rest : NSEC ? */
                         default:
-                            
+                            ans_auth_add.delegation = 1;
                             /* 
                              * do not try to look for it
                              * 
@@ -3859,8 +3866,8 @@ zdb_query_and_update(zdb *db, message_data *mesg, u8 * restrict pool_buffer)
 #endif
                             }
                         }
-                        
-                        ans_auth_add.delegation = 1;
+
+                        ans_auth_add.delegation = 1; // no answer, NS records in authority : referral
 #ifdef DEBUG
                         log_debug("zdb_query_and_update: FP_BASIC_LABEL_NOTFOUND (done)");
 #endif
@@ -4574,8 +4581,6 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                      * The answer WILL be a referral ...
                      */
                     
-                    ans_auth_add.delegation = 1;
-                    
                     switch(type)
                     {
                         /* for these ones : give the rrset for the type and clear AA */
@@ -4602,14 +4607,16 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                         }   
                         /* for these ones : give the rrset for the type */
                         case TYPE_NS:
+                            ans_auth_add.delegation = 1;
                             break;
                         /* for this one : present the delegation */
                         case TYPE_ANY:
+                            ans_auth_add.delegation = 1;
                             authority_required = FALSE;
                             break;
                         /* for the rest : NSEC ? */
                         default:
-                            
+                            ans_auth_add.delegation = 1;
                             /* 
                              * do not try to look for it
                              * 
@@ -5223,7 +5230,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                             }
                         }
                         
-                        ans_auth_add.delegation = 1;
+                        ans_auth_add.delegation = 1; // no answer, NS records in authority : referral
 #ifdef DEBUG
                         log_debug("zdb_query_and_update_with_rrl: FP_BASIC_LABEL_NOTFOUND (done)");
 #endif

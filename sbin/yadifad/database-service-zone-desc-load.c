@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup database Routines for database manipulations
  *  @ingroup yadifad
  *  @brief database functions
@@ -77,12 +77,11 @@ database_load_zone_desc(zone_desc_s *zone_desc)
     
     log_debug1("database_load_zone_desc(%{dnsname}@%p=%i)", zone_desc->origin, zone_desc, zone_desc->rc);
     
-    
     s32 err = zone_register(&database_zone_desc, zone_desc);
 
     if(ISOK(err))
     {
-        log_info("zone: the zone %{dnsname} has been registered", zone_desc->origin);
+        log_info("zone: %{dnsname}: %p: config: registered", zone_desc->origin, zone_desc);
         
         zone_lock(zone_desc, ZONE_LOCK_LOAD_DESC);
         zone_set_status(zone_desc, ZONE_STATUS_REGISTERED);
@@ -101,7 +100,7 @@ database_load_zone_desc(zone_desc_s *zone_desc)
             {
                 if(!host_address_empty(zone_desc->slaves))
                 {
-                    log_info("zone load desc: notifying slaves for '%{dnsname}'", zone_desc->origin);
+                    log_info("zone: %{dnsname}: %p: config: notifying slaves", zone_desc->origin, zone_desc);
                     host_address *slaves = host_address_copy_list(zone_desc->slaves);
                     notify_host_list(zone_desc, slaves, CLASS_CTRL);
                 }
@@ -119,11 +118,11 @@ database_load_zone_desc(zone_desc_s *zone_desc)
         {
             case DATABASE_ZONE_MISSING_DOMAIN:
             {
-                log_err("config: zone: ?: no domain set (not loaded)", zone_desc->domain);
+                log_err("zone: ?: %p: config: no domain set (not loaded)", zone_desc);
                 
                 if(zone_get_status(zone_desc) & ZONE_STATUS_PROCESSING)
                 {
-                    log_err("destroying desc@%p being processed by %s", zone_desc, database_service_operation_get_name(zone_desc->last_processor));
+                    log_err("zone: ?: %p: is processed by %s (releasing)", zone_desc, database_service_operation_get_name(zone_desc->last_processor));
                 }
                 
                 zone_release(zone_desc);
@@ -132,11 +131,11 @@ database_load_zone_desc(zone_desc_s *zone_desc)
             }
             case DATABASE_ZONE_MISSING_MASTER:
             {
-                log_err("config: zone: %{dnsname} has no master setting (not loaded)", zone_desc->origin);
+                log_err("zone: %{dnsname}: %p: config: slave but no master setting (not loaded)", zone_desc->origin, zone_desc);
                 
                 if(zone_get_status(zone_desc) & ZONE_STATUS_PROCESSING)
                 {
-                    log_err("destroying desc@%p being processed by %s", zone_desc, database_service_operation_get_name(zone_desc->last_processor));
+                    log_err("zone: ?: %p: is processed by %s (releasing)", zone_desc, database_service_operation_get_name(zone_desc->last_processor));
                 }
                 
                 zone_release(zone_desc);
@@ -145,7 +144,7 @@ database_load_zone_desc(zone_desc_s *zone_desc)
             }
             case DATABASE_ZONE_CONFIG_CLONE: // Exact copy
             {
-                log_debug("config: zone: the zone %{dnsname} has already been set like this", zone_desc->origin);
+                log_debug("zone: %{dnsname}: %p: config: has already been set (same settings)", zone_desc->origin, zone_desc);
                 
                 zone_desc_s* current = zone_acquirebydnsname(zone_desc->origin);
                 
@@ -153,7 +152,6 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                 zone_clear_status(current, ZONE_STATUS_DROP_AFTER_RELOAD);
                 zone_unlock(current, ZONE_LOCK_REPLACE_DESC);
                 zone_release(current);
-                
                 
                 // whatever has been decided above, loading the zone file (if it changed) should be queued
                 database_zone_load(zone_desc->origin);
@@ -164,7 +162,7 @@ database_load_zone_desc(zone_desc_s *zone_desc)
             }
             case DATABASE_ZONE_CONFIG_DUP: // Not an exact copy
             {
-                log_err("config: zone: the zone %{dnsname} has already been set", zone_desc->origin);
+                log_debug("zone: %{dnsname}: %p: config: has already been set (different settings)", zone_desc->origin, zone_desc);
                 
                 // basically, most of the changes require a stop, restart of
                 // any task linked to the zone
@@ -186,7 +184,7 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                     
                     if(zone_get_status(current) & ZONE_STATUS_PROCESSING)
                     {
-                        log_err("overwriting a desc@%p being processed by %s, with %p", current, database_service_operation_get_name(current->last_processor), zone_desc);
+                        log_err("zone: ?: %p: is processed by %s (overwriting)", zone_desc, database_service_operation_get_name(zone_desc->last_processor));
                     }
                     
                     // what happens if the change is on :
@@ -386,16 +384,17 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                 
                 if(current->dnssec_policy != zone_desc->dnssec_policy)
                 {
-                    log_info("zone load desc: %{dnsname}: dnssec-policy modified", zone_desc->origin);
+                    log_info("zone: %{dnsname}: %p: config: dnssec-policy modified", zone_desc->origin, zone_desc);
                     
                     if(zone_desc->dnssec_policy != NULL)
                     {
                         if(current->dnssec_policy != NULL)
                         {
-                            log_warn("zone load desc: %{dnsname}: changing dnssec-policy at runtime (%s to %s)", zone_desc->origin, current->dnssec_policy->name, zone_desc->dnssec_policy->name);
+                            log_warn("zone: %{dnsname}: %p: config: changing dnssec-policy at runtime (%s to %s)", zone_desc->origin, zone_desc, current->dnssec_policy->name, zone_desc->dnssec_policy->name);
+                            
                             if(current->dnssec_policy->denial != zone_desc->dnssec_policy->denial)
                             {
-                                log_warn("zone load desc: %{dnsname}: modifications of the dnssec-policy denial setting may be ignored", zone_desc->origin);
+                                log_warn("zone: %{dnsname}: %p: config: modifications of the dnssec-policy denial setting may be ignored", zone_desc->origin, zone_desc);
                             }
                         
                             dnssec_policy_release(current->dnssec_policy);
@@ -403,13 +402,13 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                         }
                         else
                         {
-                            log_info("zone load desc: %{dnsname}: dnssec-policy %s enabled", zone_desc->origin, zone_desc->dnssec_policy->name);
+                            log_info("zone: %{dnsname}: %p: config: dnssec-policy %s enabled", zone_desc->origin, zone_desc, zone_desc->dnssec_policy->name);
                             current->dnssec_policy = dnssec_policy_acquire_from_name(zone_desc->dnssec_policy->name);
                         }
                     }
                     else
                     {
-                        log_warn("zone load desc: %{dnsname}: removing policy at runtime", zone_desc->origin);
+                        log_warn("zone: %{dnsname}: %p: config: removing policy at runtime", zone_desc->origin, zone_desc);
                         dnssec_policy_release(current->dnssec_policy);
                         current->dnssec_policy = NULL;
                     }
@@ -428,6 +427,11 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                 
                 break;
             } // DUP
+            default:
+            {
+                log_err("zone: %{dnsname}: %p: failed to register", zone_desc->origin, zone_desc);
+                break;
+            }
         } // switch
     }
     
@@ -437,4 +441,3 @@ database_load_zone_desc(zone_desc_s *zone_desc)
 /**
  * @}
  */
-

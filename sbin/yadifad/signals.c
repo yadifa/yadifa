@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -67,12 +67,22 @@
 #include <dnscore/format.h>
 #include <dnscore/fdtools.h>
 #include <dnscore/timems.h>
+#include <dnscore/thread_pool.h>
 
 #include "signals.h"
 #include "server_context.h"
 #include "server.h"
 #if HAS_RRSIG_MANAGEMENT_SUPPORT && HAS_DNSSEC_SUPPORT
 #include "database-service-zone-resignature.h"
+#endif
+
+#ifdef DEBUG
+#include <sys/types.h>
+#include <asm/unistd.h>
+static inline long int gettid()
+{
+    return (long int)syscall(__NR_gettid);
+}
 #endif
 
 #define MODULE_MSG_HANDLE g_server_logger
@@ -338,6 +348,10 @@ signal_handler_thread(void* parms)
 {
     (void)parms;
     
+#ifdef DEBUG
+    log_debug7("thread started: self=%p, tid=%i", pthread_self(), gettid());
+#endif
+
 #if HAS_PTHREAD_SETNAME_NP
 #ifdef DEBUG
 #if __APPLE__
@@ -346,6 +360,10 @@ signal_handler_thread(void* parms)
     pthread_setname_np(pthread_self(), "signal-handler");
 #endif // __APPLE__
 #endif
+#endif
+    
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+    thread_set_tag(pthread_self(), "signal");
 #endif
     
     log_info("signal: thread started");
@@ -404,6 +422,7 @@ signal_handler_thread(void* parms)
                 }
                 break;
             }
+
             case SIGINT:
             {
                 log_info("signal: INT");
@@ -438,6 +457,11 @@ signal_handler_thread(void* parms)
     mutex_lock(&signal_mutex);
     signal_thread = 0;
     mutex_unlock(&signal_mutex);
+    
+    
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+    thread_clear_tag(pthread_self());
+#endif
     
     return NULL;
 }
@@ -481,6 +505,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
         }
         case SIGHUP:
         case SIGUSR1:
+
         {
             logger_sink_noblock();
             
@@ -548,7 +573,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     if(source == 0)
                     {
                         writefully(fd, filepath, len);
-                        fsync(fd);
+                        fsync_ex(fd);
                     }
                     else
                     {
@@ -578,7 +603,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     if(source == 0)
                     {
                         writefully(fd, filepath, len);
-                        fsync(fd);
+                        fsync_ex(fd);
                     }
                     else
                     {
@@ -597,7 +622,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     if(source == 0)
                     {
                         writefully(fd, filepath, len);
-                        fsync(fd);
+                        fsync_ex(fd);
                     }
                     else
                     {
@@ -652,7 +677,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                         if(source == 0)
                         {
                             writefully(fd, filepath, len);
-                            fsync(fd);
+                            fsync_ex(fd);
                         }
                         else
                         {
@@ -692,7 +717,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                         if(source == 0)
                         {
                             writefully(fd, filepath, len);
-                            fsync(fd);
+                            fsync_ex(fd);
                         }
                         else
                         {
@@ -721,7 +746,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                             if(source == 0)
                             {
                                 writefully(fd, filepath, len);
-                                fsync(fd);
+                                fsync_ex(fd);
                             }
                             else
                             {
@@ -740,7 +765,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                         if(source == 0)
                         {
                             writefully(fd, filepath, len);
-                            fsync(fd);
+                            fsync_ex(fd);
                         }
                         else
                         {
@@ -772,7 +797,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     if(source == 0)
                     {
                         writefully(fd, filepath, len);
-                        fsync(fd); // fd IS initialised : (source == 0) => fd set
+                        fsync_ex(fd); // fd IS initialised : (source == 0) => fd set
                     }
                     else
                     {
@@ -820,7 +845,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                                 if(source == 0)
                                 {
                                     writefully(fd, filepath, len);
-                                    fsync(fd); // fd IS initialised : (source == 0) => fd set
+                                    fsync_ex(fd); // fd IS initialised : (source == 0) => fd set
                                 }
                                 else
                                 {
@@ -863,7 +888,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                             if(source == 0)
                             {
                                 writefully(fd, filepath, len);
-                                fsync(fd); // fd IS initialised : (source == 0) => fd set
+                                fsync_ex(fd); // fd IS initialised : (source == 0) => fd set
                             }
                             else
                             {
@@ -887,7 +912,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     {
                         writefully(fd, filepath, len);
                         printstack(fd);
-                        fsync(fd);
+                        fsync_ex(fd);
                     }
                     else
                     {
@@ -913,7 +938,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     if(source == 0)
                     {
                         writefully(fd, filepath, len);
-                        fsync(fd);
+                        fsync_ex(fd);
                     }
                     else
                     {
@@ -944,6 +969,9 @@ signal_handler(int signo, siginfo_t* info, void* context)
                 log_err("CRITICAL ERROR");
                 logger_flush();
             }
+            
+            debug_malloc_hook_tracked_dump();
+            flushout();
 
             errno = errno_value;
 

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 #include "dnscore/dnscore-config.h"
 #include "dnscore/sys_types.h"
 #include "dnscore/message_verify_rrsig.h"
@@ -164,7 +164,8 @@ message_verify_canonize_sort_rdata_compare(const void *a, const void *b)
     ptr_a += 2;
     ptr_b += 2;
 
-    int diff_len = rr_a_size - rr_b_size;
+    int diff_len = rr_a_size;
+    diff_len -= rr_b_size;
 
     if(diff_len != 0)
     {
@@ -255,9 +256,8 @@ message_verify_rrsig_set_flag(ptr_set *section_type_fqdn, const u8 *type_record_
 }
 
 static void
-message_verify_rrsig_clear_callback(void *node)
+message_verify_rrsig_clear_callback(ptr_node *type_fqdn_node)
 {
-    ptr_node *type_fqdn_node = (ptr_node*) node;
     free(type_fqdn_node->key);
 }
 
@@ -267,6 +267,15 @@ message_verify_rrsig_clear(ptr_set *section_type_fqdn)
     // create the type-fqdn entry if needed
     ptr_set_avl_callback_and_destroy(section_type_fqdn, message_verify_rrsig_clear_callback);
 }
+
+/**
+ * 
+ * @param mesg
+ * @param keyring
+ * @param feedback see the definition of message_verify_rrsig_result
+ * @param args argument for the feedback function
+ * @return 
+ */
 
 ya_result
 message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, message_verify_rrsig_result *feedback, void *args)
@@ -452,7 +461,7 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
             const u8 * type_fqdn = (u8*)types_fqdn_node->key;
             u16 ctype = GET_U16_AT_P(type_fqdn);
             type_fqdn += 2;
-            u8 flags = (u8)(intptr)types_fqdn_node->value; // double cast just to explicitely show what is happening
+            u8 flags = (u8)(intptr)types_fqdn_node->value; // double cast just to explicitly show what is happening
             
 #ifdef DEBUG
             log_debug6("message_verify_rrsig: %{dnsname} %{dnstype} (%x)", type_fqdn, &ctype, flags);
@@ -549,7 +558,7 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
 
             u32 saved_offset = pr.offset;
 
-            u8 sha1_digest[DIGEST_BUFFER_SIZE];
+            u8 digest_buffer[DIGEST_BUFFER_SIZE];
 
             // rewind to the beginning of the section
 
@@ -606,7 +615,7 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
                                     s32 digest_size = message_verify_rrsig_compute_digest(fqdn, ctype, tctr->qclass,
                                                                                           rdata, rdata_size,
                                                                                           &rrset,
-                                                                                          sha1_digest, sizeof(sha1_digest));
+                                                                                          digest_buffer, sizeof(digest_buffer));
                                     assert(digest_size > 0);
 
                                     u32 rrsig_signer_name_len = dnsname_len(rrsig_header.signer_name);
@@ -615,7 +624,7 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
                                     u8 *signature = &rdata[rrsig_header_len];
                                     u32 signature_len = rdata_size - rrsig_header_len;
 
-                                    if(key->vtbl->dnssec_key_verify_digest(key, sha1_digest, digest_size, signature, signature_len))
+                                    if(key->vtbl->dnssec_key_verify_digest(key, digest_buffer, digest_size, signature, signature_len))
                                     {
                                         // verified signature with origin/algorithm/tag
 

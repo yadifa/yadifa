@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup config Configuration handling
  *  @ingroup yadifad
  *  @brief
@@ -83,8 +83,7 @@ extern "C" {
 
 #define     PROGRAM_NAME                PACKAGE
 #define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASEDATE                 "2017-02-23"
-#define     COMPILEDATE                 __DATE__
+#define     RELEASEDATE                 "2017-09-25"
 
     /* List of default values for the different configuration parameters */
 #define     S_CONFIGDIR                 SYSCONFDIR "/"
@@ -139,8 +138,6 @@ extern "C" {
 #define     S_TOTALINTERFACES           1
 #define     S_MAX_TCP_QUERIES           "16"    /* max 512 */
 #define     S_TCP_QUERY_MIN_RATE        "512"   /* bytes per second minimum rate */
-
-#define     S_MAX_AXFR                  "10"
 
 #define     S_AXFR_MAX_RECORD_BY_PACKET "0"    /** No limit.  Old applications can only work with this set to 1 */
 #define     S_AXFR_PACKET_SIZE_MAX      "4096" /** plus TSIG */
@@ -201,7 +198,7 @@ extern "C" {
 #define     S_ZONE_NO_MASTER_UPDATES     "0"
 #define     S_ZONE_FLAG_MAINTAIN_DNSSEC  "1"
 #define     S_ZONE_FLAG_TRUE_MULTIMASTER "0"
-    
+#define     S_ZONE_FLAG_RRSIG_NSUPDATE_ALLOWED "0"    
 #define     S_MULTIMASTER_RETRIES       "0"             // in a multimaster setup, how many retries before changing master
                                                         // 0 is perfectly fine except in true-multimaster mode where the resource cost
                                                         // asks for some caution.  In that case 60 would be a good choice. Maximum is 255
@@ -339,7 +336,6 @@ struct config_data
     char                                                     *keys_path; /* keys */
     char                                                   *config_file; /* config */
 
-    //char                                                      *pid_path; /* OBSOLETE: pid file path */
     char                                                      *pid_file; /* pid file path and name */
 
     char                                                 *version_chaos;
@@ -444,7 +440,8 @@ ya_result yadifad_config_read(const char *config_file);
 ya_result yadifad_config_finalise();
 
 ya_result yadifad_config_update(const char *config_file);
-ya_result yadifad_config_update_zone(const char *config_file, const u8 *fqdn);
+
+ya_result yadifad_config_update_zone(const char *config_file, const ptr_set *fqdn);
 
 /*    ------------------------------------------------------------    */
 

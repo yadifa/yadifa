@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 
 #include "dnszone/dnszone-config.h"
 
@@ -226,6 +226,7 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             }
 
 
+#ifndef THX /* @todo 20150604 timh -- SAME TYPE AS MX, so why different case ??? */
             case TYPE_AFSDB:
             {
                  u16 sub_type;
@@ -247,8 +248,12 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 break;
             }
-
+#endif  // THX AFSDB should be "alias" for MX
             case TYPE_MX:
+
+
+
+
             {
                 u16 preference;
 
@@ -567,14 +572,14 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 // type bitmap
 
-                if(FAIL(return_code = parser_type_bit_maps_initialize(p, &tbmctx)))
+                if(FAIL(return_code = parser_type_bit_maps_initialise(p, &tbmctx)))
                 {
                     break;
                 }
 
                 if(return_code > 0)
                 {
-                    type_bit_maps_write(rdata, &tbmctx);
+                    type_bit_maps_write(&tbmctx, rdata);
                     rdata += return_code;
                 }
 
@@ -598,12 +603,12 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 // type bitmap
 
-                if(FAIL(return_code = parser_type_bit_maps_initialize(p, &tbmctx)))
+                if(FAIL(return_code = parser_type_bit_maps_initialise(p, &tbmctx)))
                 {
                     break;
                 }
 
-                type_bit_maps_write(rdata, &tbmctx);
+                type_bit_maps_write(&tbmctx, rdata);
 
                 rdata += return_code;
 
@@ -1047,6 +1052,35 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 break;
             }
 
+
+
+#ifndef THX /* @todo 20150604 timh -- WHY AFSDB AGAIN as separate type? It was already separately declared above MX */
+#ifdef NEW_TYPES
+            case TYPE_AFSDB:
+            {
+                u16 tmp16;
+
+
+                if(FAIL(return_code = parser_get_u16(text, text_len, &tmp16)))
+                {
+                    break;
+                }
+                tmp16 = htons(tmp16);
+                SET_U16_AT_P(rdata, tmp16);
+                rdata += 2;
+
+                if(FAIL(return_code = parser_copy_next_fqdn_with_origin(p, rdata, origin)))
+                {
+                    break;
+                }
+
+                return_code += 2;  // 2 bytes + length of FQDN
+
+                break;
+            }
+#endif // NEW_TYPES
+#endif // THX duplicate  AFSDB
+
             case TYPE_OPT:
             case TYPE_TSIG:
             case TYPE_IXFR:
@@ -1056,24 +1090,37 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 return_code = ZONEFILE_INVALID_TYPE;
                 break;
             }
+#ifndef THX /* @todo 20150604 timh -- same format as CNAME, so added there */
+// NOTE: even if we do not fully support DNAME, should we not at least read it ??
             case TYPE_DNAME:
+#endif // THX implemented
             case TYPE_NULL:
             case TYPE_MINFO:
             case TYPE_X25:
             case TYPE_ISDN:
+#ifndef THX /* @todo 20150604 timh -- same format as MX, so added there */
             case TYPE_RT:
+#endif // THX implemented
             case TYPE_NSAP:
+#ifndef THX /* @todo 20150604 timh -- same format as PTR, so added there */
             case TYPE_NSAP_PTR:
+#endif  // THX implemented
             case TYPE_SIG:
+#ifndef THX /* @todo 20150640 timh -- same format as DNSKEY so added there */
             case TYPE_KEY:
+#endif  // THX implemented
             case TYPE_PX:
             case TYPE_GPOS:
             case TYPE_LOC:
+#ifndef THX /* @todo 20150640 timh -- same format as NSEC so added there */
             case TYPE_NXT:
+#endif  // THX implemented
             case TYPE_EID:
             case TYPE_NIMLOC:
             case TYPE_ATMA:
+#ifndef THX /* @todo 20150604 timh -- same format as MX, so added there */
             case TYPE_KX:
+#endif // THX implemented
             case TYPE_CERT:
             case TYPE_A6:
             case TYPE_SINK:
@@ -1081,11 +1128,19 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             case TYPE_IPSECKEY:
             case TYPE_DHCID:
             case TYPE_HIP:
+#ifndef THX /* @todo 20150604 timh -- same format as TXT so added there */
             case TYPE_NINFO:
+#endif // THX implemented
+#ifndef THX /* @todo 20150604 timh -- same format as DNSKEY so added there */
             case TYPE_RKEY:
+#endif // THX implemented
             case TYPE_TALINK:
+#ifndef THX /* @todo 20150604 timh -- same format as DS so added there */
             case TYPE_CDS:
+#endif // THX implemented
+#ifndef THX /* @todo 20150604 timh -- same format as TXT so added there */
             case TYPE_SPF:
+#endif // THX implemented
             case TYPE_UINFO:
             case TYPE_UID:
             case TYPE_GID:
@@ -1093,7 +1148,9 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             case TYPE_NID:
             case TYPE_L32:
             case TYPE_L64:
+#ifndef THX /* @todo 20150604 timh -- same format as MX, so added there */
             case TYPE_LP:
+#endif // THX implemented
             case TYPE_EUI48:
             case TYPE_EUI64:
             case TYPE_TKEY:
@@ -1101,8 +1158,12 @@ zone_file_reader_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             case TYPE_MAILA:
             case TYPE_URI:
             case TYPE_CAA:
+#ifndef THX /* @todo 20150604 timh -- same format as DS so added there */
             case TYPE_DLV:
             case TYPE_TA:
+#endif // THX implemented
+
+
             {
                 return_code = ZONEFILE_UNSUPPORTED_TYPE;    /** unsupported type, TYPE## */
                 break;
@@ -1232,7 +1293,17 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                     println("[EOF]");
 #endif
                     input_stream *completed_stream = parser_pop_stream(p);
+                 /// @todo 20150410 edf -- EDF NOW !
+                    /*
+#if (DNSDB_USE_POSIX_ADVISE != 0) && (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
 
+                    input_stream *file_stream = buffer_input_stream_get_filtered(completed_stream);
+
+                    int fd = fd_input_stream_get_filedescriptor(file_stream);
+                    fdatasync_ex(fd);
+                    posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
+#endif
+                     */
                     input_stream_close(completed_stream);
 
                     if(parser_stream_count(p) > 0)
@@ -1341,7 +1412,7 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
 /*
 #if (DNSDB_USE_POSIX_ADVISE != 0) && (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
                                 int fd = fd_input_stream_get_filedescriptor(&zfr->includes[zfr->includes_count]);
-                                fdatasync(fd);
+                                fdatasync_ex(fd);
                                 posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
 #endif
 */
@@ -1437,7 +1508,7 @@ zone_file_reader_read_record(zone_reader *zr, resource_record *entry)
                                     return return_code;
                                 }
 
-                                return_code = dnsname_copy(&domain[return_code - 1], zfr->origin); /// @note: cannot fail
+                                /*return_code =*/ dnsname_copy(&domain[return_code - 1], zfr->origin); /// @note: cannot fail
                             }
                             else
                             {
@@ -1603,7 +1674,7 @@ zone_file_reader_close(zone_reader *zr)
 /*
 #if (DNSDB_USE_POSIX_ADVISE != 0) && (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
     int fd = fd_input_stream_get_filedescriptor(&zfr->includes[0]);
-    fdatasync(fd);
+    fdatasync_ex(fd);
     posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
 #endif
 */
@@ -1782,7 +1853,7 @@ zone_file_reader_open(const char* fullpath, zone_reader *zr)
 /*
 #if (DNSDB_USE_POSIX_ADVISE != 0) && (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
             int fd = fd_input_stream_get_filedescriptor(&zfr->includes[0]);
-            fdatasync(fd);
+            fdatasync_ex(fd);
             posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
 #endif
 */

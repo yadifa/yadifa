@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /*******************************************************************************
  * 
  * Indexes table handling functions
@@ -158,19 +158,7 @@ journal_cjf_idxt_create(journal_cjf *jnl, s16 entries)
     jnl->first_page_offset = jnl->last_page.file_offset;
 }
 
-#if 0
-static ya_result
-journal_cjf_scan(journal_cjf *jnl)
-{
-    // from position CJF_HEADER_SIZE
-    // read the page
-    // read the records of the page
-    // if everything matches, put the page on the side
-    // after the page+records, scan for the next page
-    
-    // with all the gathered pages, make the longest latest chain
-}
-#endif
+
 
 /**
  * Verifies the page table chain
@@ -208,7 +196,7 @@ journal_cjf_idxt_verify(journal_cjf *jnl)
         
         if(page > 0)
         {
-            if(entry->file_offset != next_page_offset)
+            if(entry->file_offset != next_page_offset) // gcc false positive: next_page_offset is initialised when page == 0
             {
                 // page do not start at the expected position
                 log_err("cjf: %{dnsname}: page[%i] starts at an unexpected position (%u != expected %u)", jnl->origin, page, entry->file_offset, next_page_offset);
@@ -330,7 +318,7 @@ journal_cjf_idxt_verify(journal_cjf *jnl)
     
     if(size > 0)
     {
-        if(next_page_offset != 0)
+        if(next_page_offset != 0) // gcc false positive: size > 0 => next_page_offset has been set to page_hdr.next_page_offset (read from the disk)
         {
             // chain end was not marked
             log_err("cjf: %{dnsname}: page[%i] is last but points to a next at %u", jnl->origin, size - 1, next_page_offset);
@@ -622,7 +610,7 @@ journal_cjf_idxt_flush(journal_cjf *jnl)
 #if DO_SYNC
     log_debug3("cjf: syncing to disk");
     
-    fsync(jnl->fd);
+    fsync_ex(jnl->fd);
 #endif
     
     jnl->idxt.dirty = FALSE;
@@ -794,7 +782,7 @@ journal_cjf_idxt_append_page_nogrow(journal_cjf *jnl)
 #if DO_SYNC
     log_debug3("cjf: syncing to disk");
     
-    fsync(jnl->fd);
+    fsync_ex(jnl->fd);
 #endif
     
     log_debug_jnl(jnl, "cjf: journal_cjf_idxt_append_page_nogrow: AFTER");

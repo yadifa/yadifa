@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnsdb Zone database
  *  @brief The zone database
  *
@@ -182,22 +182,6 @@ zdb_zone *zdb_remove_zone(zdb *db, dnsname_vector *name);
 
 zdb_zone *zdb_remove_zone_from_dnsname(zdb *db, const u8 *dnsname);
 
-/** @brief Search for a single match in the database
- *
- *  Search for a match in the database.
- *  Only the most relevant match will be returned (ONE record set)
- *
- *  @param[in]  db the database
- *  @param[in]  dnsname_name the name dnsname to search for
- *  @param[in]  class the class to match
- *  @param[in]  type the type to match
- *  @param[out] ttl_rdara_out a pointer to a pointer set of results (single linked list)
- *
- *  @return SUCCESS in case of success.
- */
-
-ya_result zdb_query(zdb* db, const u8 *dnsname_name, u16 type, zdb_packed_ttlrdata** ttlrdara_out);
-
 static inline void zdb_query_ex_answer_create(zdb_query_ex_answer *ans_auth_add)
 {
     ZEROMEMORY(ans_auth_add, sizeof(zdb_query_ex_answer));
@@ -247,11 +231,11 @@ finger_print zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * res
 
 /**
  * Destroys a zdb_query_ex_answer structure created with zdb_query_ex
- *
+ * Kept for compatibility.
+ * 
  * @param ans_auth_add
  */
 
-// void zdb_query_ex_answer_destroy(zdb_query_ex_answer* ans_auth_add);
 #define zdb_query_ex_answer_destroy(unused__) ((void)unused__)
 
 /**
@@ -312,46 +296,6 @@ ya_result zdb_query_ip_records(zdb* db, const u8* name_, zdb_packed_ttlrdata **t
  */
 
 ya_result zdb_append_ip_records(zdb* db, const u8* name_, host_address *target_list);
-
-
-#if OBSOLETE
-/** @brief Adds an entry in a zone of the database
- *
- *  Adds an entry in a zone of the database
- *
- *  @param[in]  db the database
- *  @param[in]  origin_ the zone where to add the record
- *  @param[in]  name_ the full name of the record (dns form)
- *  @param[in]  zclass the class of the record
- *  @param[in]  type the type of the record
- *  @param[in]  ttl the ttl of the record
- *  @param[in]  rdata_size the size of the rdata of the record
- *  @param[in]  rdata a pointer to the rdata of the record
- *
- *  @return SUCCESS in case of success.
- */
-
-ya_result zdb_add(zdb* db, u8* origin_, u8* name_, u16 type, u32 ttl, u16 rdata_size, void* rdata); /* 4 match, add    1 */
-
-/** @brief Deletes an entry from a zone in the database
- *
- *  Matches and deletes an entry from a zone in the database
- *
- *  @param[in]  db the database
- *  @param[in]  origin_ the zone from which to remove the record
- *  @param[in]  name_ the name of the record
- *  @param[in]  zclass the class of the record
- *  @param[in]  type the type of the record
- *  @param[in]  ttl the ttl of the record
- *  @param[in]  rdata_size the size of the rdata of the record
- *  @param[in]  rdata a pointer to the rdata of the record
- *
- *  @return SUCCESS in case of success.
- */
-
-ya_result zdb_delete(zdb* db, u8* origin, u8* name, u16 type, u32 ttl, u16 rdata_size, void* rdata); /* 5 match, delete 1 */
-
-#endif
 
 /** @brief Destroys the database
  *

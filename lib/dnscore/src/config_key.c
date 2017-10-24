@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 #include "dnscore/dnscore-config.h"
 #include "dnscore/tsig.h"
 #include "dnscore/base64.h"
@@ -108,6 +108,19 @@ config_section_key_start(struct config_section_descriptor_s *csd)
     return SUCCESS;
 }
 
+static void
+config_section_key_delete(struct config_section_descriptor_s *csd)
+{
+    if(csd != NULL)
+    {
+        if(csd->base != NULL)
+        {
+            free(csd->base);
+        }
+        csd->base = NULL;
+    }
+}
+
 static ya_result
 config_section_key_stop(struct config_section_descriptor_s *csd)
 {
@@ -126,10 +139,13 @@ config_section_key_stop(struct config_section_descriptor_s *csd)
            csk->algorithm[0] == '\0'    &&
            csk->secret[0] == '\0' )
         {
+            config_section_key_delete(csd);
+            
             return SUCCESS; // empty key, ignored
         }
         else
         {
+            config_section_key_delete(csd);
             return CONFIG_KEY_INCOMPLETE_KEY;
         }
     }
@@ -142,6 +158,8 @@ config_section_key_stop(struct config_section_descriptor_s *csd)
     table._voidp = hmac_digest_enum;
     if(FAIL(config_set_enum_value(csk->algorithm, &hmac_digest, table))) // dest must be 32 bits
     {
+        config_section_key_delete(csd);
+        
         return CONFIG_KEY_UNSUPPORTED_ALGORITHM;
     }
     
@@ -154,17 +172,17 @@ config_section_key_stop(struct config_section_descriptor_s *csd)
     u8 fqdn[MAX_DOMAIN_LENGTH];
     u8 secret_buffer[512];
     
-    if(FAIL(return_code = base64_decode(csk->secret, len, secret_buffer)))
+    if(ISOK(return_code = base64_decode(csk->secret, len, secret_buffer)))
     {
-        return return_code;
-    }
+        secret_len = return_code;
 
-    secret_len = return_code;
-
-    if(ISOK(return_code = cstr_to_dnsname_with_check(fqdn, csk->name)))
-    {
-        return_code = tsig_register(fqdn, secret_buffer, secret_len, hmac_digest);
+        if(ISOK(return_code = cstr_to_dnsname_with_check(fqdn, csk->name)))
+        {
+            return_code = tsig_register(fqdn, secret_buffer, secret_len, hmac_digest);
+        }
     }
+    
+    config_section_key_delete(csd);
     
 #if CONFIG_SETTINGS_DEBUG
     formatln("tsig_register(%s,%s,%s) = %r", csk->name, csk->algorithm, csk->secret, return_code);
@@ -185,13 +203,9 @@ config_section_key_finalise(struct config_section_descriptor_s *csd)
 {
     if(csd != NULL)
     {
-        if(csd->base != NULL)
-        {
-            free(csd->base);
-        }
+        config_section_key_delete(csd);
         free(csd);
     }
-    
     return SUCCESS;
 }
 

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief
@@ -195,154 +195,153 @@ zdb_zone_store_axfr(zdb_zone* zone, output_stream* os)
         }
     }
 
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
 
     /*
      * NSEC3 part of the DB
      */
 
-    if((zone->apex->flags & ZDB_RR_LABEL_NSEC3) != 0)
-    {
-        u32 origin_len = dnsname_len(zone->origin);
+    u32 origin_len = dnsname_len(zone->origin);
 
+    /*
+     * For each NSEC3PARAM struct ...
+     * 
+     * Note that from the 'transaction' update, the dnssec zone collections have to be read without checking for the NSEC3 flag
+     */
+
+    nsec3_zone* n3 = zone->nsec.nsec3;
+
+    while(n3 != NULL)
+    {
         /*
-         *  For each NSEC3PARAM struct ...
+         *  Iterate the NSEC3 nodes
          */
 
-        nsec3_zone* n3 = zone->nsec.nsec3;
+        nsec3_avl_iterator nsec3_items_iter;
+        nsec3_avl_iterator_init(&n3->items, &nsec3_items_iter);
 
-        while(n3 != NULL)
+        if(nsec3_avl_iterator_hasnext(&nsec3_items_iter))
         {
-            /*
-             *  Iterate the NSEC3 nodes
-             */
+            nsec3_zone_item *first = nsec3_avl_iterator_next_node(&nsec3_items_iter);
+            nsec3_zone_item *item = first;
+            nsec3_zone_item *next_item;
 
-            nsec3_avl_iterator nsec3_items_iter;
-            nsec3_avl_iterator_init(&n3->items, &nsec3_items_iter);
+            u8 digest_len = NSEC3_NODE_DIGEST_SIZE(first);
+            u32 rdata_hash_offset = NSEC3_ZONE_RDATA_SIZE(n3);
+            u32 encoded_digest_len = BASE32HEX_ENCODED_LEN(digest_len);
 
-            if(nsec3_avl_iterator_hasnext(&nsec3_items_iter))
+            do
             {
-                nsec3_zone_item *first = nsec3_avl_iterator_next_node(&nsec3_items_iter);
-                nsec3_zone_item *item = first;
-                nsec3_zone_item *next_item;
-
-                u8 digest_len = NSEC3_NODE_DIGEST_SIZE(first);
-                u32 rdata_hash_offset = NSEC3_ZONE_RDATA_SIZE(n3);
-                u32 encoded_digest_len = BASE32HEX_ENCODED_LEN(digest_len);
-
-                do
+                if(nsec3_avl_iterator_hasnext(&nsec3_items_iter))
                 {
-                    if(nsec3_avl_iterator_hasnext(&nsec3_items_iter))
-                    {
-                        next_item = nsec3_avl_iterator_next_node(&nsec3_items_iter);
-                    }
-                    else
-                    {
-                        next_item = first;
-                    }
-
-                    /* Writes the nsec3 item, wire format, to an output stream */
-
-                    u32 rdata_size = rdata_hash_offset + digest_len + 1 + item->type_bit_maps_size;
-
-                    if(rdata_size > RDATA_MAX_LENGTH)
-                    {
-                        return ZDB_ERROR_GENERAL;
-                    }
-
-                    /* FQDN */
-
-                    fqdn[0] = encoded_digest_len;
-                    base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), digest_len, (char*)&fqdn[1]);
-
-                    if(FAIL(err = output_stream_write(os, fqdn, encoded_digest_len + 1)))
-                    {
-                        return err;
-                    }
-
-                    if(FAIL(err = output_stream_write(os, zone->origin, origin_len)))
-                    {
-                        return err;
-                    }
-
-                    if(FAIL(err = output_stream_write_u16(os, TYPE_NSEC3))) /** @note NATIVETYPE */
-                    {
-                        return err;
-                    }
-
-                    if(FAIL(err = output_stream_write_u16(os, CLASS_IN))) /** @note NATIVECLASS */
-                    {
-                        return err;
-                    }
-
-                    if(FAIL(err = output_stream_write_nu32(os, minimum_ttl)))
-                    {
-                        return err;
-                    }
-
-                    /* Write the data */
-
-                    if(FAIL(err = output_stream_write_nu16(os, rdata_size)))
-                    {
-                        return err;
-                    }
-
-                    if(FAIL(err = output_stream_write_u8(os, n3->rdata[0])))
-                    {
-                        return err;
-                    }
-
-                    if(FAIL(err = output_stream_write_u8(os, item->flags)))
-                    {
-                        return err;
-                    }
-
-                    if(FAIL(err = output_stream_write(os, &n3->rdata[2], rdata_hash_offset - 2)))
-                    {
-                        return err;
-                    }
-
-                    if(FAIL(err = output_stream_write(os, next_item->digest, digest_len + 1)))
-                    {
-                        return err;
-                    }
-
-                    if(FAIL(err = output_stream_write(os, item->type_bit_maps, item->type_bit_maps_size)))
-                    {
-                        return err;
-                    }
-
-                    zdb_packed_ttlrdata* rrsig = item->rrsig;
-
-                    while(rrsig != NULL)
-                    {
-                        output_stream_write(os, fqdn, encoded_digest_len + 1);
-                        output_stream_write(os, zone->origin, origin_len);
-
-                        output_stream_write_u16(os, TYPE_RRSIG); /** @note NATIVETYPE */
-                        output_stream_write_u16(os, CLASS_IN); /** @note NATIVECLASS */
-                        output_stream_write_nu32(os, rrsig->ttl);
-                        output_stream_write_nu16(os, rrsig->rdata_size);
-                        output_stream_write(os, rrsig->rdata_start, rrsig->rdata_size);
-
-                        rrsig = rrsig->next;
-                    }
-
-                    /*
-                     * nsec3 item written with its signatures
-                     *
-                     * Wire format
-                     *
-                     */
-
-                    item = next_item;
+                    next_item = nsec3_avl_iterator_next_node(&nsec3_items_iter);
                 }
-                while(next_item != first);
+                else
+                {
+                    next_item = first;
+                }
 
-            } /* If there is a first item*/
+                /* Writes the nsec3 item, wire format, to an output stream */
 
-            n3 = n3-> next;
-        }
+                u32 rdata_size = rdata_hash_offset + digest_len + 1 + item->type_bit_maps_size;
+
+                if(rdata_size > RDATA_MAX_LENGTH)
+                {
+                    return ZDB_ERROR_GENERAL;
+                }
+
+                /* FQDN */
+
+                fqdn[0] = encoded_digest_len;
+                base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), digest_len, (char*)&fqdn[1]);
+
+                if(FAIL(err = output_stream_write(os, fqdn, encoded_digest_len + 1)))
+                {
+                    return err;
+                }
+
+                if(FAIL(err = output_stream_write(os, zone->origin, origin_len)))
+                {
+                    return err;
+                }
+
+                if(FAIL(err = output_stream_write_u16(os, TYPE_NSEC3))) /** @note NATIVETYPE */
+                {
+                    return err;
+                }
+
+                if(FAIL(err = output_stream_write_u16(os, CLASS_IN))) /** @note NATIVECLASS */
+                {
+                    return err;
+                }
+
+                if(FAIL(err = output_stream_write_nu32(os, minimum_ttl)))
+                {
+                    return err;
+                }
+
+                /* Write the data */
+
+                if(FAIL(err = output_stream_write_nu16(os, rdata_size)))
+                {
+                    return err;
+                }
+
+                if(FAIL(err = output_stream_write_u8(os, n3->rdata[0])))
+                {
+                    return err;
+                }
+
+                if(FAIL(err = output_stream_write_u8(os, item->flags)))
+                {
+                    return err;
+                }
+
+                if(FAIL(err = output_stream_write(os, &n3->rdata[2], rdata_hash_offset - 2)))
+                {
+                    return err;
+                }
+
+                if(FAIL(err = output_stream_write(os, next_item->digest, digest_len + 1)))
+                {
+                    return err;
+                }
+
+                if(FAIL(err = output_stream_write(os, item->type_bit_maps, item->type_bit_maps_size)))
+                {
+                    return err;
+                }
+
+                zdb_packed_ttlrdata* rrsig = item->rrsig;
+
+                while(rrsig != NULL)
+                {
+                    output_stream_write(os, fqdn, encoded_digest_len + 1);
+                    output_stream_write(os, zone->origin, origin_len);
+
+                    output_stream_write_u16(os, TYPE_RRSIG); /** @note NATIVETYPE */
+                    output_stream_write_u16(os, CLASS_IN); /** @note NATIVECLASS */
+                    output_stream_write_nu32(os, rrsig->ttl);
+                    output_stream_write_nu16(os, rrsig->rdata_size);
+                    output_stream_write(os, rrsig->rdata_start, rrsig->rdata_size);
+
+                    rrsig = rrsig->next;
+                }
+
+                /*
+                 * nsec3 item written with its signatures
+                 *
+                 * Wire format
+                 *
+                 */
+
+                item = next_item;
+            }
+            while(next_item != first);
+
+        } /* If there is a first item*/
+
+        n3 = n3-> next;
     }
 
 #endif

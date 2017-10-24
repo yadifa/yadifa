@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup config Configuration handling
  *  @ingroup yadifad
  *  @brief
@@ -99,61 +99,69 @@ static value_name_table dnssec_enum[]=
 #define CONFIG_TYPE zone_desc_s
 
 CONFIG_BEGIN(config_section_zone_desc)
-CONFIG_STRING(domain, NULL)
-CONFIG_STRING(file_name, NULL)
-CONFIG_PATH(keys_path, NULL)
-CONFIG_HOST_LIST(masters, NULL)
-CONFIG_HOST_LIST(notifies, NULL)
-CONFIG_ENUM(type, NULL, zone_type_enum_table)
+CONFIG_STRING(domain, NULL) // doc
+CONFIG_STRING(file_name, NULL) // doc
+CONFIG_PATH(keys_path, NULL) // doc
+CONFIG_HOST_LIST(masters, NULL) // doc
+CONFIG_HOST_LIST(notifies, NULL) // doc
+CONFIG_ENUM(type, NULL, zone_type_enum_table) // doc
 
 #if ZDB_HAS_ACL_SUPPORT
-CONFIG_ACL(allow_query, NULL)
-CONFIG_ACL(allow_update, NULL)
-CONFIG_ACL(allow_transfer, NULL)
-CONFIG_ACL(allow_update_forwarding, NULL)
-CONFIG_ACL(allow_notify, NULL)
-CONFIG_ACL(allow_control, NULL)
+CONFIG_ACL(allow_control, NULL) // doc
+CONFIG_ACL(allow_notify, NULL) // doc
+CONFIG_ACL(allow_query, NULL) // doc
+CONFIG_ACL(allow_transfer, NULL) // doc
+CONFIG_ACL(allow_update, NULL) // doc
+CONFIG_ACL(allow_update_forwarding, NULL) // doc
 #endif
 
 // master
 
-CONFIG_FLAG32(notify_auto , S_ZONE_NOTIFY_AUTO, flags, ZONE_FLAG_NOTIFY_AUTO)
-CONFIG_FLAG32(drop_before_load, S_ZONE_FLAG_DROP_BEFORE_LOAD, flags, ZONE_FLAG_DROP_BEFORE_LOAD)
-CONFIG_FLAG32(no_master_updates , S_ZONE_NO_MASTER_UPDATES, flags, ZONE_FLAG_NO_MASTER_UPDATES)
-CONFIG_FLAG32(maintain_dnssec, S_ZONE_FLAG_MAINTAIN_DNSSEC, flags, ZONE_FLAG_MAINTAIN_DNSSEC)
-CONFIG_FLAG32(true_multimaster, S_ZONE_FLAG_TRUE_MULTIMASTER, flags, ZONE_FLAG_TRUE_MULTIMASTER)
-CONFIG_U32_RANGE(notify.retry_count, S_NOTIFY_RETRY_COUNT, NOTIFY_RETRY_COUNT_MIN, NOTIFY_RETRY_COUNT_MAX)
-CONFIG_U32_RANGE(notify.retry_period, S_NOTIFY_RETRY_PERIOD, NOTIFY_RETRY_PERIOD_MIN, NOTIFY_RETRY_PERIOD_MAX)
-CONFIG_U32_RANGE(notify.retry_period_increase, S_NOTIFY_RETRY_PERIOD_INCREASE, NOTIFY_RETRY_PERIOD_INCREASE_MIN, NOTIFY_RETRY_PERIOD_INCREASE_MAX)
+CONFIG_FLAG32(drop_before_load, S_ZONE_FLAG_DROP_BEFORE_LOAD, flags, ZONE_FLAG_DROP_BEFORE_LOAD) // doc
+CONFIG_FLAG32(maintain_dnssec, S_ZONE_FLAG_MAINTAIN_DNSSEC, flags, ZONE_FLAG_MAINTAIN_DNSSEC) // doc
+CONFIG_FLAG32(no_master_updates , S_ZONE_NO_MASTER_UPDATES, flags, ZONE_FLAG_NO_MASTER_UPDATES) // doc
+CONFIG_FLAG32(notify_auto , S_ZONE_NOTIFY_AUTO, flags, ZONE_FLAG_NOTIFY_AUTO) // doc
+CONFIG_FLAG32(true_multimaster, S_ZONE_FLAG_TRUE_MULTIMASTER, flags, ZONE_FLAG_TRUE_MULTIMASTER) // doc
+CONFIG_U32_RANGE(notify.retry_count, S_NOTIFY_RETRY_COUNT, NOTIFY_RETRY_COUNT_MIN, NOTIFY_RETRY_COUNT_MAX) // doc
+CONFIG_U32_RANGE(notify.retry_period, S_NOTIFY_RETRY_PERIOD, NOTIFY_RETRY_PERIOD_MIN, NOTIFY_RETRY_PERIOD_MAX) // doc
+CONFIG_U32_RANGE(notify.retry_period_increase, S_NOTIFY_RETRY_PERIOD_INCREASE, NOTIFY_RETRY_PERIOD_INCREASE_MIN, NOTIFY_RETRY_PERIOD_INCREASE_MAX) // doc
+
+CONFIG_ALIAS(retry_count,notify.retry_count) // doc
+CONFIG_ALIAS(retry_period,notify.retry_period) // doc
+CONFIG_ALIAS(retry_period_increase,notify.retry_period_increase) // doc
         
-CONFIG_U8(multimaster_retries, S_MULTIMASTER_RETRIES)
+CONFIG_U8(multimaster_retries, S_MULTIMASTER_RETRIES) // doc
 
 #if HAS_DNSSEC_SUPPORT
         
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
         
 #if HAS_MASTER_SUPPORT
-CONFIG_DNSSEC_POLICY(dnssec_policy)
+CONFIG_DNSSEC_POLICY(dnssec_policy) // doc
 #endif
         
-CONFIG_U32_RANGE(signature.sig_validity_interval, S_S32_VALUE_NOT_SET, SIGNATURE_VALIDITY_INTERVAL_MIN, SIGNATURE_VALIDITY_INTERVAL_MAX)
-CONFIG_U32_RANGE(signature.sig_validity_regeneration, S_S32_VALUE_NOT_SET, SIGNATURE_VALIDITY_REGENERATION_MIN, SIGNATURE_VALIDITY_REGENERATION_MAX)
-CONFIG_U32_RANGE(signature.sig_validity_jitter, S_S32_VALUE_NOT_SET, SIGNATURE_VALIDITY_JITTER_MIN, SIGNATURE_VALIDITY_JITTER_MAX)
-CONFIG_ALIAS(signature_validity_interval, signature.sig_validity_interval)
-CONFIG_ALIAS(signature_regeneration, signature.sig_validity_regeneration)
-CONFIG_ALIAS(signature_jitter, signature.sig_validity_jitter)
+CONFIG_U32_RANGE(signature.sig_validity_interval, S_S32_VALUE_NOT_SET, SIGNATURE_VALIDITY_INTERVAL_MIN, SIGNATURE_VALIDITY_INTERVAL_MAX) // doc
+CONFIG_U32_RANGE(signature.sig_validity_jitter, S_S32_VALUE_NOT_SET, SIGNATURE_VALIDITY_JITTER_MIN, SIGNATURE_VALIDITY_JITTER_MAX) // doc
+CONFIG_U32_RANGE(signature.sig_validity_regeneration, S_S32_VALUE_NOT_SET, SIGNATURE_VALIDITY_REGENERATION_MIN, SIGNATURE_VALIDITY_REGENERATION_MAX) // doc
+        
+CONFIG_FLAG32(rrsig_nsupdate_allowed, S_ZONE_FLAG_RRSIG_NSUPDATE_ALLOWED, flags, ZONE_FLAG_RRSIG_NSUPDATE_ALLOWED) // doc
+        
+CONFIG_ALIAS(signature_jitter, signature.sig_validity_jitter) // doc
+CONFIG_ALIAS(signature_regeneration, signature.sig_validity_regeneration) // doc
+CONFIG_ALIAS(signature_validity_interval, signature.sig_validity_interval) // doc
 #endif
 
-CONFIG_ENUM(dnssec_mode, S_ZONE_DNSSEC_DNSSEC, dnssec_enum)
+CONFIG_ENUM(dnssec_mode, S_ZONE_DNSSEC_DNSSEC, dnssec_enum) // doc
 
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
-CONFIG_ALIAS(signature.sig_jitter, sig_validity_jitter)
+CONFIG_ALIAS(signature.sig_jitter, sig_validity_jitter) // doc
 #endif
 
-CONFIG_ALIAS(dnssec,dnssec_mode)
+CONFIG_ALIAS(dnssec,dnssec_mode) // doc
+CONFIG_ALIAS(rrsig_push_allowed, rrsig_nsupdate_allowed) // doc
 #endif
 
-CONFIG_U32_RANGE(journal_size_kb, S_JOURNAL_SIZE_KB_DEFAULT, S_JOURNAL_SIZE_KB_MIN, S_JOURNAL_SIZE_KB_MAX)
+CONFIG_U32_RANGE(journal_size_kb, S_JOURNAL_SIZE_KB_DEFAULT, S_JOURNAL_SIZE_KB_MIN, S_JOURNAL_SIZE_KB_MAX) // doc
 
 #if HAS_CTRL
 //CONFIG_U8(ctrl_flags, "0")  // SHOULD ONLY BE IN THE DYNAMIC CONTEXT
@@ -162,13 +170,13 @@ CONFIG_HOST_LIST(slaves, NULL)
 #endif // HAS_CTRL
 
 /* CONFIG ALIAS: alias , aliased-real-name */
-CONFIG_ALIAS(also_notify,notifies)
-CONFIG_ALIAS(file,file_name)
-CONFIG_ALIAS(keyspath, keys_path)
-CONFIG_ALIAS(journal_size,journal_size_kb)
-CONFIG_ALIAS(master,masters)
-CONFIG_ALIAS(notify,notifies)
+CONFIG_ALIAS(also_notify,notifies) // doc
 CONFIG_ALIAS(auto_notify,notify_auto)
+CONFIG_ALIAS(file,file_name) // doc
+CONFIG_ALIAS(journal_size,journal_size_kb) // doc
+CONFIG_ALIAS(keyspath, keys_path) // doc
+CONFIG_ALIAS(master,masters) // doc
+CONFIG_ALIAS(notify,notifies) // doc
 CONFIG_END(config_section_zone_desc)
 
 #undef CONFIG_TYPE
@@ -251,13 +259,42 @@ config_section_zone_stop(struct config_section_descriptor_s *csd)
     // ensure the descriptor is valid
     
     if(ISOK(return_code = zone_complete_settings(zone_desc)))
-    {            
+    {
         zone_setdefaults(zone_desc);
+        
+        if(logger_is_running())
+        {
+            log_debug("config: %{dnsname}: zone section parsed", zone_desc->origin);
+        }
+        
         // load the descriptor (most likely offline)
 
         if(config_section_zone_filter(zone_desc, config_section_zone_filter_params) == 1)
         {
+            if(logger_is_running())
+            {
+                log_debug("config: %{dnsname}: sending zone to service", zone_desc->origin);
+            }
             database_zone_desc_load(zone_desc);
+        }
+        else
+        {
+            
+            zone_desc_s *current_zone_desc = zone_acquirebydnsname(zone_desc->origin);
+            if(current_zone_desc != NULL)
+            {
+                if(logger_is_running())
+                {
+                    log_debug("config: %{dnsname}: clearing original zone drop status", zone_desc->origin);
+                }
+                zone_lock(current_zone_desc, ZONE_LOCK_REPLACE_DESC);
+                zone_clear_status(current_zone_desc, ZONE_STATUS_DROP_AFTER_RELOAD);
+                zone_unlock(current_zone_desc, ZONE_LOCK_REPLACE_DESC);
+                
+                zone_release(current_zone_desc);
+            }
+            
+            zone_release(zone_desc);
         }
     }
     else

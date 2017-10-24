@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -196,7 +196,7 @@ struct journal_ix
     /* common points with journal base */
     volatile struct journal_vtbl *vtbl;
     volatile zdb_zone            *zone;    
-    volatile list_dl_node_s   mru_node;
+    volatile struct journal      *prev;
     volatile unsigned int forget:1,mru:1;
     
     /* ******************************* */
@@ -931,7 +931,7 @@ static ya_result
 journal_ix_reopen(journal *jh)
 {
     journal_ix *jix = (journal_ix*)jh;
-    ya_result ret;
+    ya_result ret = SUCCESS;
     journal_ix_writelock(jix);
     if(jix->fd < 0)
     {
@@ -958,7 +958,7 @@ journal_ix_flush(journal *jh)
     journal_ix *jix = (journal_ix*)jh;
     
     journal_ix_writelock(jix);    
-    fsync(jix->fd);
+    fsync_ex(jix->fd);
     journal_ix_writeunlock(jix);
 }
 
@@ -1197,9 +1197,153 @@ journal_ix_readunlock(journal_ix *jix)
  */
 
 
+struct journal_ix_open_ctx
+{
+    journal **jh;
+    const u8* origin;
+    const char *workingdir;
+    u32    from;
+    u32    to;
+    u32    fqdn_len;
+    ya_result return_value;
+    bool   create;
+    char   fqdn[MAX_DOMAIN_LENGTH + 1];
+    char   filename[PATH_MAX];
+};
+
+static ya_result
+journal_ix_open_readdir_callback(const char *workingdir, const char *d_name, u8 d_type, void *args)
+{
+    struct journal_ix_open_ctx *ctx = (struct journal_ix_open_ctx*)args;
+    
+    if(d_type != DT_REG )
+    {
+        /* not a regular file */
+
+        return READDIR_CALLBACK_CONTINUE;
+    }
+
+    if(memcmp(d_name, ctx->fqdn, ctx->fqdn_len) != 0)
+    {
+        return READDIR_CALLBACK_CONTINUE;
+    }
+
+    const char *serials = &d_name[ctx->fqdn_len];
+
+    if(strlen(serials) != 8 + 1 + 8 + 1 + IX_EXT_STRLEN)
+    {
+        return READDIR_CALLBACK_CONTINUE;
+    }
+
+    int converted = sscanf(serials, "%08x-%08x", &ctx->from, &ctx->to);
+
+    if(converted != 2)
+    {
+        return READDIR_CALLBACK_CONTINUE;
+    }
+
+    snprintf(ctx->filename, sizeof(ctx->filename), "%s/%s", workingdir, d_name);
+
+    /* got a valid one :
+        * open the file
+        */
+
+    int fd = open_ex(ctx->filename, O_RDWR);
+
+    if(fd >= 0)
+    {
+        ctx->return_value = SUCCESS;
+
+        /*
+         * Got a journal file, initialise the handling structure
+         */
+
+        journal_ix *jix;
+
+        MALLOC_OR_DIE(journal_ix*, jix, sizeof(journal_ix), JRNLIX_TAG);
+        ZEROMEMORY(jix, sizeof(journal_ix));
+        jix->vtbl = &journal_ix_vtbl;
+        jix->flags = LOCK_NONE;
+        jix->first_serial = ctx->from;
+        jix->last_serial = ctx->to;
+        jix->journal_name = strdup(ctx->filename);
+        jix->journal_name_len = strlen(ctx->filename);
+        jix->fd = fd; // file opened
+
+        // get the information from the file
+
+#ifdef DEBUG
+        log_debug("journal: ix: got a journal file");
+#endif
+        input_stream fis;
+        input_stream bis;
+
+        if(ISOK(ctx->return_value = fd_input_stream_attach(&fis, jix->fd)))
+        {
+            buffer_input_stream_init(&fis, &bis, BUFFER_INPUT_STREAM_DEFAULT_BUFFER_SIZE);
+            s64 soa_offset = journal_ix_find_last_soa_record(&bis);
+            if(soa_offset >= 0)
+            {
+                jix->last_page_offset = soa_offset;
+            }
+            else
+            {
+                ctx->return_value = (s32)soa_offset; // an error occurred
+            }
+            fd_input_stream_detach(buffer_input_stream_get_filtered(&bis));
+            input_stream_close(&bis);
+        }
+
+        if(FAIL(ctx->return_value)) // mostly: unable to open the file or unable to find the SOA in the file
+        {
+            /* parsing for SOA failed */
+            journal_ix_close((journal*)jix);
+            jix = NULL;
+        }
+
+        *ctx->jh = (journal*)jix;
+        return READDIR_CALLBACK_EXIT;
+    }
+    else
+    {
+        /* something is wrong with this one */
+
+        log_err("journal: ix: an error occurred opening journal file '%s': %r", ctx->filename, ERRNO_ERROR);
+        return READDIR_CALLBACK_CONTINUE;
+    }
+}
+
 ya_result
 journal_ix_open(journal **jh, const u8* origin, const char *workingdir, bool create)
 {
+    /*
+    journal **jh;
+    const u8* origin;
+    const char *workingdir;
+    u32    from;
+    u32    to;
+    u32    fqdn_len;
+    ya_result return_value;
+    bool   create;
+    char   fqdn[MAX_DOMAIN_LENGTH + 1];
+    char   filename[PATH_MAX];
+    */
+    struct journal_ix_open_ctx ctx =
+    {
+        jh,
+        origin,
+        workingdir,
+        0,
+        0,
+        0,
+        0,
+        create,
+        "",
+        ""
+    };
+    
+    ctx.fqdn_len = dnsname_to_cstr(ctx.fqdn, origin);
+    
     /*
      * try to open the journal file
      * if it exists, create the structure for the handle
@@ -1208,14 +1352,6 @@ journal_ix_open(journal **jh, const u8* origin, const char *workingdir, bool cre
 #ifdef DEBUG
     log_debug("journal: ix: open(%p, '%{dnsname}', \"%s\", %d)", jh, origin, workingdir, (create)?1:0);
 #endif
-    
-    struct dirent entry;
-    struct dirent *result;
-    DIR    *dir;
-    u32    from;
-    u32    to;
-    char   fqdn[MAX_DOMAIN_LENGTH + 1];
-    char   filename[PATH_MAX];
     
     if((jh == NULL) || (origin == NULL) || (workingdir == NULL))
     {
@@ -1230,136 +1366,24 @@ journal_ix_open(journal **jh, const u8* origin, const char *workingdir, bool cre
     
     *jh = NULL;
     
-    // open the working directory
+    ya_result ret;
     
-    dir = opendir(workingdir);
-    
-    if(dir == NULL)
+    if(FAIL(ret = readdir_forall(workingdir, journal_ix_open_readdir_callback, &ctx)))
     {
 #ifdef DEBUG
-        log_debug("journal: ix: trying to open directory for %{dnsname} in '%s' failed: %r", origin, workingdir, ERRNO_ERROR);
+        log_debug("journal: ix: trying to open directory for %{dnsname} in '%s' failed: %r", origin, workingdir, ret);
 #endif
         return ZDB_ERROR_ICMTL_NOTFOUND;
     }
-    
-    u32 fqdn_len = dnsname_to_cstr(fqdn, origin);    
-    result = NULL;
-    
+
     // scan for the journal file
     
-    ya_result return_value = SUCCESS;
+    ret = ctx.return_value;
     
-    do
+    if(FAIL(ret))
     {
-        readdir_r(dir, &entry, &result);
-        
-        if(result == NULL)
-        {
-            return_value = ZDB_ERROR_ICMTL_NOTFOUND;
-            
-            break;
-        }
-        
-        u8 d_type = dirent_get_file_type(workingdir, result);
-
-        if(d_type != DT_REG )
-        {
-            /* not a regular file */
-            
-            continue;
-        }
-        
-        if(memcmp(result->d_name, fqdn, fqdn_len) != 0)
-        {
-            continue;
-        }
-        
-        const char *serials = &result->d_name[fqdn_len];
-        
-        if(strlen(serials) != 8 + 1 + 8 + 1 + IX_EXT_STRLEN)
-        {
-            continue;
-        }
-        
-        int converted = sscanf(serials, "%08x-%08x", &from, &to);
-        
-        if(converted != 2)
-        {
-            continue;
-        }
-        
-        snprintf(filename, sizeof(filename), "%s/%s", workingdir, result->d_name);
-        
-        /* got a valid one :
-            * open the file
-            */
-
-        int fd = open_ex(filename, O_RDWR);
-
-        if(fd >= 0)
-        {
-            return_value = SUCCESS;
-
-            /*
-             * Got a journal file, initialise the handling structure
-             */
-
-            journal_ix *jix;
-
-            MALLOC_OR_DIE(journal_ix*, jix, sizeof(journal_ix), JRNLIX_TAG);
-            ZEROMEMORY(jix, sizeof(journal_ix));
-            jix->vtbl = &journal_ix_vtbl;
-            jix->mru_node.data = jix;
-            jix->flags = LOCK_NONE;
-            jix->first_serial = from;
-            jix->last_serial = to;
-            jix->journal_name = strdup(filename);
-            jix->journal_name_len = strlen(filename);
-            jix->fd = fd; // file opened
-            
-            // get the information from the file
-            
-#ifdef DEBUG
-            log_debug("journal: ix: got a journal file");
-#endif
-            input_stream fis;
-            input_stream bis;
-            
-            if(ISOK(return_value = fd_input_stream_attach(&fis, jix->fd)))
-            {
-                buffer_input_stream_init(&fis, &bis, BUFFER_INPUT_STREAM_DEFAULT_BUFFER_SIZE);
-                s64 soa_offset = journal_ix_find_last_soa_record(&bis);
-                if(soa_offset >= 0)
-                {
-                    jix->last_page_offset = soa_offset;
-                }
-                else
-                {
-                    return_value = (s32)soa_offset; // an error occurred
-                }
-                fd_input_stream_detach(buffer_input_stream_get_filtered(&bis));
-                input_stream_close(&bis);
-            }
-
-            if(FAIL(return_value)) // mostly: unable to open the file or unable to find the SOA in the file
-            {
-                /* parsing for SOA failed */
-                journal_ix_close((journal*)jix);
-                jix = NULL;
-            }
-            
-            *jh = (journal*)jix;
-        }
-        else
-        {
-            /* something is wrong with this one */
-
-            log_err("journal: ix: an error occurred opening journal file '%s': %r", filename, ERRNO_ERROR);
-        }
+        return ret;
     }
-    while(*jh == NULL);
-    
-    closedir(dir);
     
     // if the journal was not found and we can create it
     
@@ -1376,7 +1400,6 @@ journal_ix_open(journal **jh, const u8* origin, const char *workingdir, bool cre
         MALLOC_OR_DIE(journal_ix*, jix, sizeof(journal_ix), JRNLIX_TAG);
         ZEROMEMORY(jix, sizeof(journal_ix));
         jix->vtbl = &journal_ix_vtbl;
-        jix->mru_node.data = jix;
         jix->flags = LOCK_NONE;
         jix->first_serial = 0;
         jix->last_serial = 0;
@@ -1388,14 +1411,14 @@ journal_ix_open(journal **jh, const u8* origin, const char *workingdir, bool cre
         
         *jh = (journal*)jix;
         
-        return_value = SUCCESS; /* newly created journal structure */
+        ret = SUCCESS; /* newly created journal structure */
     }
     
 #ifdef DEBUG
-    log_debug("journal: ix: returning %r", return_value);
+    log_debug("journal: ix: returning %r", ret);
 #endif
     
-    return return_value;
+    return ret;
 }
 
 /** @} */

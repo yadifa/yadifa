@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2011-2016, EURid. All rights reserved.
+# Copyright (c) 2011-2017, EURid. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without 
@@ -66,7 +66,10 @@ release-install: release install
 
 profile-install: profile install
 
-debug-install: debug install
+debug-install:
+	echo YCFLAGS=$(YDCFLAGS)
+	echo YLDFLAGS=$(YDLDFLAGS)
+	$(MAKE) install "YCFLAGS=$(YDCFLAGS)" "YLDFLAGS=$(YDLDFLAGS)"
 
 buildinfo.h: config.log
 	echo \#pragma once > buildinfo.h 2> /dev/null

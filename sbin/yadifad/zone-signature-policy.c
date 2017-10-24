@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -57,12 +57,27 @@
 #include <dnsdb/dnssec-keystore.h>
 #include <dnsdb/zdb_icmtl.h>
 #include <dnsdb/nsec.h>
-#include <dnsdb/nsec3-chain-create.h>
+#include <dnsdb/nsec3.h>
 
 #include "database-service-zone-resignature.h"
 
+#ifndef HAS_DYNUPDATE_DIFF_ENABLED
+#error "HAS_DYNUPDATE_DIFF_ENABLED not defined"
+#endif
+
 #define MODULE_MSG_HANDLE g_dnssec_logger
 extern logger_handle *g_dnssec_logger;
+
+#include "server_error.h"
+
+#define DNSECPOL_TAG 0x4c4f504345534e44
+#define DPOLKYST_TAG 0x5453594b4c4f5044
+#define DPOLKEY_TAG  0x0059454b4c4f5044
+#define DPOLDNIL_TAG 0x4c494e444c4f5044
+#define DPOLSALT_TAG 0x544c41534c4f5044
+#define DPOLROLL_TAG 0x4c4c4f524c4f5044
+#define DPOLRULE_TAG 0x454c55524c4f5044
+#define DPOLQUEU_TAG 0x554555514c4f5044
 
 #define KEY_POLICY_EPOCH_MATCH_MARGIN 180 // how close two epochs have to be to be considered a match
 
@@ -121,7 +136,7 @@ dnssec_policy_queue*
 dnssec_policy_queue_new(const u8 *fqdn)
 {
     dnssec_policy_queue *cmd;
-    ZALLOC_OR_DIE(dnssec_policy_queue*, cmd, dnssec_policy_queue, GENERIC_TAG);
+    ZALLOC_OR_DIE(dnssec_policy_queue*, cmd, dnssec_policy_queue, DPOLQUEU_TAG);
     ZEROMEMORY(cmd, sizeof(dnssec_policy_queue));
     cmd->origin = dnsname_zdup(fqdn); // weak
     return cmd;
@@ -521,7 +536,7 @@ zone_policy_date_compare(const zone_policy_date *d1, const zone_policy_date *d2)
         return ret;
     }
     
-    return ERROR;
+    return POLICY_ILLEGAL_DATE_COMPARE;
 }
 
 /**
@@ -568,7 +583,7 @@ zone_policy_get_mday_from_year_month_week_wday(int year, int month, int week, in
     }
     else
     {
-        return ERROR;
+        return POLICY_ILLEGAL_DATE;
     }
 }
 
@@ -644,7 +659,7 @@ zone_policy_date_init_from_year_month_week_wday(zone_policy_date *date, int year
         }
     }
     
-    return ERROR;
+    return POLICY_ILLEGAL_DATE_PARAMETERS;
 }
 
 /**
@@ -675,7 +690,7 @@ zone_policy_date_init_from_epoch(zone_policy_date *date, time_t epoch)
         return SUCCESS;
     }
     
-    return ERROR;
+    return POLICY_ILLEGAL_DATE_PARAMETERS;
 }
 
 /**
@@ -696,7 +711,7 @@ zone_policy_date_get_epoch(const zone_policy_date *date, time_t *epoch)
     
     if(date->type.type != ZONE_POLICY_ABSOLUTE) // only works with absolute dates
     {
-        return ERROR;
+        return POLICY_ILLEGAL_DATE_TYPE;
     }
     
     ZEROMEMORY(&d, sizeof(struct tm));
@@ -717,7 +732,7 @@ zone_policy_date_get_epoch(const zone_policy_date *date, time_t *epoch)
     }
     else
     {
-        return ERROR;
+        return MAKE_ERRNO_ERROR(EOVERFLOW);
     }
 }
 
@@ -849,7 +864,7 @@ zone_policy_rule_init(zone_policy_rule_s *rule, const zone_policy_rule_definitio
             rule->type = ZONE_POLICY_RULE;
 
             zone_policy_rule_definition_s *new_rule_definition;
-            ZALLOC_OR_DIE(zone_policy_rule_definition_s *, new_rule_definition, zone_policy_rule_definition_s, GENERIC_TAG);
+            ZALLOC_OR_DIE(zone_policy_rule_definition_s *, new_rule_definition, zone_policy_rule_definition_s, DPOLRULE_TAG);
             memcpy(new_rule_definition, rule_definition, sizeof(zone_policy_rule_definition_s));
             node->value = new_rule_definition;
             break;
@@ -907,7 +922,7 @@ zone_policy_date_init_at_next_date(zone_policy_date *date, const zone_policy_dat
 #ifdef DEBUG
         log_debug1("zone_policy_date_init_at_next_date(%p, %w, %w): can only work from an absolute time", date, &from_fw, &rule_fw);
 #endif
-        return ERROR;
+        return POLICY_ILLEGAL_DATE_TYPE;
     }
     
     switch(rule->type.type)
@@ -940,7 +955,7 @@ zone_policy_date_init_at_next_date(zone_policy_date *date, const zone_policy_dat
 #ifdef DEBUG
             log_debug1("zone_policy_date_init_at_next_date(%p, %w, %w): unexpected type", date, &from_fw, &rule_fw);
 #endif
-            return ERROR;
+            return POLICY_ILLEGAL_DATE_TYPE;
         }
     }
     
@@ -1050,7 +1065,7 @@ zone_policy_table_init_from_date(zone_policy_table_s *tbl, zone_policy_table_s *
     }
     else
     {
-        ret = ERROR;
+        ret = POLICY_ILLEGAL_DATE_TYPE;
     }
     
     return ret;
@@ -1129,7 +1144,7 @@ zone_policy_table_init_from_created_epoch(zone_policy_table_s *tbl, zone_policy_
     }
     else
     {
-        ret = ERROR;
+        ret = POLICY_ILLEGAL_DATE_TYPE;
     }
     
     return ret;
@@ -1160,6 +1175,7 @@ zone_policy_key_roll_matches(const struct dnssec_policy_key_suite *kr, const dns
         if((dnssec_key_get_flags(key) & kr->key->flags) == kr->key->flags)
         {
             int key_size = dnskey_get_size(key);
+            
             if((key_size - kr->key->size) < 48)
             {
                 // algorithm, flags and size are matching
@@ -1171,13 +1187,11 @@ zone_policy_key_roll_matches(const struct dnssec_policy_key_suite *kr, const dns
                    (key->epoch_inactive != 0) &&
                    (key->epoch_delete != 0))
                 {
-#ifdef DEBUG
-                    log_debug("dnssec-policy: %s: %s: key %05i/%i timings: %T %T %T %T %T",
+                    log_debug1("dnssec-policy: %s: %s: key %05i/%i timings: %T %T %T %T %T c",
                             key->origin,
                             kr->name,
                             dnssec_key_get_tag_const(key), ntohs(key->flags),
                             key->epoch_created, key->epoch_publish, key->epoch_activate, key->epoch_inactive, key->epoch_delete);
-#endif
                     
                     zone_policy_table_s key_tbl;
                     // kr->roll->time_table.created.type
@@ -1199,23 +1213,48 @@ zone_policy_key_roll_matches(const struct dnssec_policy_key_suite *kr, const dns
                                         
                     bool match = (dc < KEY_POLICY_EPOCH_MATCH_MARGIN && dp < KEY_POLICY_EPOCH_MATCH_MARGIN && da < KEY_POLICY_EPOCH_MATCH_MARGIN && di < KEY_POLICY_EPOCH_MATCH_MARGIN && dd < KEY_POLICY_EPOCH_MATCH_MARGIN);
                     
-#ifdef DEBUG
-                    log_debug("dnssec-policy: %s: %s: key %05i/%i expects: %T %T %T %T %T : %s",
+                    log_debug1("dnssec-policy: %s: %s: key %05i/%i expects: %T %T %T %T %T : %s",
                             key->origin,
                             kr->name,
                             dnssec_key_get_tag_const(key), ntohs(key->flags),
                             key_created, key_publish, key_activate, key_inactive, key_delete,
                             ((match)?"MATCH":"DIFFERS"));
-#endif
                     return match;
                 }
+                else
+                {
+                    log_debug1("dnssec-policy: %s: %s: key %05i/%i is not a match as it has no time table (skipping)",
+                            key->origin,
+                            kr->name,
+                            dnssec_key_get_tag_const(key), ntohs(key->flags));
+                }
+            }
+            else
+            {
+                log_debug1("dnssec-policy: %s: %s: key %05i/%i of size %i is not a match as the expected size is %i (skipping for this key roll)",
+                            key->origin,
+                            kr->name,
+                            dnssec_key_get_tag_const(key), ntohs(key->flags), key_size, kr->key->size);
             }
         }
+        else
+        {
+            log_debug1("dnssec-policy: %s: %s: key %05i/%i is not a match as the expected flags is %i (skipping for this key roll)",
+                            key->origin,
+                            kr->name,
+                            dnssec_key_get_tag_const(key), ntohs(key->flags), kr->key->flags);
+        }
+    }
+    else
+    {
+        log_debug1("dnssec-policy: %s: %s: key %05i/%i is not a match as the expected algorithm is %i (skipping for this key roll)",
+                            key->origin,
+                            kr->name,
+                            dnssec_key_get_tag_const(key), ntohs(key->flags), kr->key->algorithm);
     }
     
     return FALSE;
 }
-
 
 /**
  * Compares keys by activation time, inactivation time and tag.
@@ -1329,9 +1368,9 @@ dnssec_policy_alarm_command_generate_key(dnssec_policy_queue *cmd)
         dnssec_keystore_store_private_key(key);
         dnssec_keystore_store_public_key(key);
         
-        log_info("dnssec-policy: %{dnsname}: key K%{dnsname}+%03d+%05d/%i generated for %T, publish at %T, activate at %T, inactive at %T, delete at %T",
+        log_info("dnssec-policy: %{dnsname}: key K%{dnsname}+%03d+%05d/%i generated from %T: created at %T, publish at %T, activate at %T, inactive at %T, delete at %T",
                 cmd->origin, cmd->origin, key->algorithm, dnssec_key_get_tag(key), ntohs(key->flags), cmd->epoch,
-                key->epoch_publish, key->epoch_activate, key->epoch_inactive, key->epoch_delete
+                key->epoch_created, key->epoch_publish, key->epoch_activate, key->epoch_inactive, key->epoch_delete
                 );
         
         zdb_zone* zone = zdb_acquire_zone_read_from_fqdn(g_config->database, cmd->origin);
@@ -1399,21 +1438,9 @@ static void
 zone_policy_nsec_enable(zdb_zone *zone)
 {
     //zdb_zone_double_lock();
-
-    zdb_icmtl icmtl;
-    ya_result ret;
-    
     zdb_zone_double_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
-
-    if(ISOK(ret = zdb_icmtl_begin(&icmtl, zone)))
-    {
-        icmtl.can_ignore_signatures = TRUE;
-        
-        zone->apex->flags |= ZDB_RR_LABEL_NSEC;
-        nsec_update_zone(zone, false);
-        zdb_icmtl_end(&icmtl);
-    }
-    
+    zone->apex->flags |= ZDB_RR_LABEL_NSEC;
+    nsec_zone_set_status(zone, ZDB_ZONE_MUTEX_DYNUPDATE, NSEC_ZONE_ENABLED|NSEC_ZONE_GENERATING);
     zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
 }
 
@@ -1444,53 +1471,20 @@ zone_policy_nsec3_enable(zdb_zone *zone, dnssec_denial *denial)
     }
     
     u8 flags = (denial->optout)?1:0;
+    u8 current_status = 0;
     
-    if(flags)
-    {
-        zone->apex->flags |= ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT;
-    }
-    else
-    {
-        zone->apex->flags |= ZDB_RR_LABEL_NSEC3;
-    }    
-
-    //dnsname_to_dnsname_vector(mesg.qname, &name);
     zdb_zone_double_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
     
-    zdb_icmtl icmtl;
-    ya_result ret;
-
-    if(ISOK(ret = zdb_icmtl_begin(&icmtl, zone)))
+    if(nsec3_zone_get_status(zone, denial->algorithm, flags, denial->iterations, salt, salt_len, &current_status) == 1)
     {
-        icmtl.can_ignore_signatures = TRUE;
-        
-        log_debug("dnssec-policy: adding nsec3param");
-
-        ret = nsec3_add_nsec3param(zone, denial->algorithm, 0, denial->iterations, salt_len, salt);      
-        
-        //ret = nsec3_zone_chain_add_with_rdata(zone, nsec3param_rdata, nsec3param_rdata_size);
-        
-        if(ISOK(ret))
+        if(current_status & NSEC3_ZONE_ENABLED)
         {
-            /** @todo 20140430 edf -- I have to be able to cancel the icmtl if it failed */
-
-            log_debug("dnssec-policy: nsec3param record added", zone->origin);
+            zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
+            return;
         }
-        else
-        {
-            log_err("dnssec-policy: failed to add nsec3param record: %r", ret);
-        }
-
-
-        ret = zdb_icmtl_end(&icmtl);
     }
 
-    nsec3_chain_create_now(zone, 0, denial->optout, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
-    
-    zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
-    nsec3_zone_update_chain0_links(zone);
-    zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_DYNUPDATE, ZDB_ZONE_MUTEX_SIMPLEREADER);
-    
+    nsec3_zone_set_status(zone, ZDB_ZONE_MUTEX_DYNUPDATE, denial->algorithm, flags, denial->iterations, salt, salt_len, NSEC3_ZONE_ENABLED|NSEC3_ZONE_GENERATING);
     zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
 }
 
@@ -1511,7 +1505,7 @@ zone_policy_roll_create_from_rules(const char *id,
     log_debug("dnssec-policy-roll: %s: (rules stuff)", id);
     
     dnssec_policy_roll *dpr;
-    ZALLOC_OR_DIE(dnssec_policy_roll*, dpr, dnssec_policy_roll, GENERIC_TAG);
+    ZALLOC_OR_DIE(dnssec_policy_roll*, dpr, dnssec_policy_roll, DPOLROLL_TAG);
     dpr->name = strdup(id);
     
     group_mutex_write_lock(&dnssec_policy_roll_set_mtx);
@@ -1531,6 +1525,9 @@ zone_policy_roll_create_from_rules(const char *id,
 #if HAS_DS_PUBLICATION_SUPPORT
     zone_policy_rule_init(&dpr->time_table.ds_add.rule, ds_publish);
     zone_policy_rule_init(&dpr->time_table.ds_del.rule, ds_remove);
+#else
+    (void)ds_publish;
+    (void)ds_remove;
 #endif
     dpr->rc = 1;
     node->value = dpr;
@@ -1565,13 +1562,13 @@ zone_policy_roll_create_from_relatives(const char *id,
     if(generate->seconds < 60)
     {
         log_err("dnssec-policy: %s: generate parameter cannot be less than one minute", id);
-        return ERROR;
+        return POLICY_ILLEGAL_DATE_PARAMETERS;
     }
     
     if(inactive->seconds - activate->seconds < 60)
     {
         log_err("dnssec-policy: %s: key appears to not be activated for even one minute", id);
-        return ERROR;
+        return POLICY_ILLEGAL_DATE_PARAMETERS;
     }
        
     if(generate->seconds < 3600)
@@ -1585,7 +1582,7 @@ zone_policy_roll_create_from_relatives(const char *id,
     }
     
     dnssec_policy_roll *dpr;
-    ZALLOC_OR_DIE(dnssec_policy_roll*, dpr, dnssec_policy_roll, GENERIC_TAG);
+    ZALLOC_OR_DIE(dnssec_policy_roll*, dpr, dnssec_policy_roll, DPOLROLL_TAG);
     dpr->name = strdup(id);
     
     group_mutex_write_lock(&dnssec_policy_roll_set_mtx);
@@ -1726,11 +1723,11 @@ dnssec_policy_denial_create(const char *id, u8 algorithm, u16 iterations, const 
             id, algorithm, iterations, salt, salt_length, resalting);
     
     dnssec_denial *dd = NULL;
-    ZALLOC_OR_DIE(dnssec_denial*, dd, dnssec_denial, GENERIC_TAG);
+    ZALLOC_OR_DIE(dnssec_denial*, dd, dnssec_denial, DPOLDNIL_TAG);
     dd->name = strdup(id);
     if(salt != NULL && salt_length > 0)
     {
-        ZALLOC_ARRAY_OR_DIE(u8*, dd->salt, salt_length, GENERIC_TAG);
+        ZALLOC_ARRAY_OR_DIE(u8*, dd->salt, salt_length, DPOLSALT_TAG);
         memcpy(dd->salt, salt, salt_length);
     }
     else
@@ -1802,7 +1799,7 @@ dnssec_policy_key_create(const char *id, u8 algorithm, u16 size, bool ksk, char*
     (void)engine;
     dnssec_policy_key *dpk = NULL;
 
-    ZALLOC_OR_DIE(dnssec_policy_key*, dpk, dnssec_policy_key, GENERIC_TAG);
+    ZALLOC_OR_DIE(dnssec_policy_key*, dpk, dnssec_policy_key, DPOLKEY_TAG);
     dpk->name = strdup(id);
     
     dpk->flags = (ksk)?DNSKEY_FLAGS_KSK:DNSKEY_FLAGS_ZSK;
@@ -1864,7 +1861,7 @@ dnssec_policy_key_suite_create(const char *id, dnssec_policy_key *dpk, dnssec_po
     
     dnssec_policy_key_suite *dpks = NULL;
 
-    ZALLOC_OR_DIE(dnssec_policy_key_suite*, dpks, dnssec_policy_key_suite, GENERIC_TAG);
+    ZALLOC_OR_DIE(dnssec_policy_key_suite*, dpks, dnssec_policy_key_suite, DPOLKYST_TAG);
     dpks->name = strdup(id);
     dpks->key = dnssec_policy_key_acquire_from_name(dpk->name);
     dpks->roll = dnssec_policy_roll_acquire_from_name(dpr->name);
@@ -1935,7 +1932,7 @@ dnssec_policy_create(char *name, dnssec_denial *dd, ptr_vector *key_suite)
 
     log_debug("dnssec-policy: %s: denial=%s", name, (dd!=NULL)?dd->name:"nsec");
     bool has_zsk = FALSE;
-    ZALLOC_OR_DIE(dnssec_policy*, dp, dnssec_policy, GENERIC_TAG);
+    ZALLOC_OR_DIE(dnssec_policy*, dp, dnssec_policy, DNSECPOL_TAG);
     dp->name = strdup(name);
     dp->denial= (dd!=NULL)?dnssec_policy_denial_acquire(dd->name):NULL;
     ptr_vector_init_ex(&dp->key_suite, ptr_vector_size(key_suite));
@@ -2044,11 +2041,11 @@ dnssec_policy_zone_desc_config(const char *value, void *dest, anytype sizeoftarg
     if(value != NULL)
     {
         *dp = dnssec_policy_acquire_from_name(value);
-        return (*dp != NULL)?SUCCESS:ERROR;
+        return (*dp != NULL)?SUCCESS:POLICY_UNDEFINED;
     }
     else
     {
-        return ERROR;
+        return POLICY_NULL_REQUESTED;
     }
 }
 
@@ -2058,6 +2055,11 @@ zone_policy_process(zone_desc_s *zone_desc)
     // the policy is referenced by the zone desc
     // and the zone desc by the parent
     // no need to acquire anything here
+    
+    if(zone_desc->type != ZT_MASTER)
+    {
+        return ERROR;   // not a master zone
+    }
     
     const dnssec_policy *policy = zone_desc->dnssec_policy;
 
@@ -2089,33 +2091,23 @@ zone_policy_process(zone_desc_s *zone_desc)
     }
     else
     {
-        log_err("dnssec-policy: %{dnsname}: settings are not linked to a loaded zone", zone_desc->origin);
+        log_warn("dnssec-policy: %{dnsname}: settings are not linked to a loaded zone", zone_desc->origin);
         zone_unlock(zone_desc, ZONE_LOCK_READONLY);
-        return ERROR;
+        return POLICY_ZONE_NOT_READY;
     }
     
     if(zdb_zone_isvalid(zone))
-    {        
-        u8 zone_dnssec_type = ZONE_DNSSEC_FL_NOSEC;
-        if(zdb_zone_is_nsec(zone))
-        {
-            zone_dnssec_type = ZONE_DNSSEC_FL_NSEC;
-        }
-        else if(zdb_zone_is_nsec3(zone))
-        {
-            if(zdb_zone_is_nsec3_optout(zone))
-            {
-                zone_dnssec_type = ZONE_DNSSEC_FL_NSEC3_OPTOUT;
-            }
-            else
-            {
-                 zone_dnssec_type = ZONE_DNSSEC_FL_NSEC3;
-            }
-        }
+    {
+        zdb_zone_set_maintained(zone, TRUE);
+        
+        u8 zone_dnssec_type = zone_policy_guess_dnssec_type(zone);
         
         if(policy->denial == NULL)
         {
             // zone is expected to be NSEC
+            
+            zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC);
+            
             switch(zone_dnssec_type)
             {
                 case ZONE_DNSSEC_FL_NOSEC:
@@ -2141,6 +2133,15 @@ zone_policy_process(zone_desc_s *zone_desc)
         }
         else
         {
+            if(policy->denial->optout)
+            {
+                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT);
+            }
+            else
+            {
+                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3);
+            }
+            
             // zone is expected to be NSEC3
             switch(zone_dnssec_type)
             {
@@ -2245,6 +2246,8 @@ zone_policy_process(zone_desc_s *zone_desc)
         dnskey_release(key);
     }
 
+
+    
     /*
      * sort-out the remaining keys
      * trigger the generation of keys
@@ -2269,8 +2272,9 @@ zone_policy_process(zone_desc_s *zone_desc)
             // ensure we have continuity
             // start with a base period
 
-            //s64 begin_period;
             dnssec_key *last_key = NULL;
+            s64 begin_period;
+            s64 next_period;
             s64 end_period;
 
             {
@@ -2284,7 +2288,8 @@ zone_policy_process(zone_desc_s *zone_desc)
                         last_key->epoch_created, last_key->epoch_publish, last_key->epoch_activate, last_key->epoch_inactive, last_key->epoch_delete);
 #endif
                 
-                //begin_period = last_key->epoch_activate;
+                begin_period = last_key->epoch_activate;
+                next_period = begin_period;
                 end_period = last_key->epoch_inactive;
             }
             
@@ -2293,7 +2298,6 @@ zone_policy_process(zone_desc_s *zone_desc)
             for(int i = 1; i <= ptr_vector_last_index(&key_roll_keys[ksi]); ++i)
             {
                 dnssec_key *key = (dnssec_key*)ptr_vector_get(&key_roll_keys[ksi], i);
-                
 #ifdef DEBUG
                 log_debug("dnssec-policy: %s: %s: key %05i/%i timings: %T %T %T %T %T",
                         key->origin,
@@ -2301,6 +2305,7 @@ zone_policy_process(zone_desc_s *zone_desc)
                         dnssec_key_get_tag_const(key), ntohs(key->flags),
                         key->epoch_created, key->epoch_publish, key->epoch_activate, key->epoch_inactive, key->epoch_delete);
 #endif
+                next_period = key->epoch_activate;
                 
                 // ensure the key chains with this interval
                 if(key->epoch_activate > end_period /*|| key->epoch_inactive < begin_period irrelevant because of the sort */)
@@ -2338,11 +2343,25 @@ zone_policy_process(zone_desc_s *zone_desc)
             
             ptr_vector_destroy(&key_roll_keys[ksi]);
             
-            log_debug("dnssec-policy: %{dnsname}: %s: last key will be inactive at %T", zone_desc->origin, kr->name, end_period);
+            log_debug("dnssec-policy: %{dnsname}: %s: covered from %T to %T, last key activates at %T", zone_desc->origin, kr->name, begin_period, end_period, next_period);
             
-            dnssec_policy_queue_add_generate_key_create_at(zone_desc, kr, last_key->epoch_created);
-
-            // dnssec_policy_queue_add_generate_key_active_at(zone_desc, kr, end_period);
+            time_t now = time(NULL);
+            
+            if(last_key->epoch_created <= now)
+            {
+                if(kr->roll->time_table.created.type.type == ZONE_POLICY_RELATIVE)
+                {
+                    dnssec_policy_queue_add_generate_key_create_at(zone_desc, kr, last_key->epoch_created);
+                }
+                else if(kr->roll->time_table.created.type.type == ZONE_POLICY_RULE)
+                {
+                    dnssec_policy_queue_add_generate_key_active_at(zone_desc, kr, end_period);
+                }
+                else
+                {
+                    log_err("dnssec-policy: %{dnsname}: %s: is not supported by this version of the policies", zone_desc->origin, kr->name);
+                }
+            }
             
             dnskey_release(last_key);
         }

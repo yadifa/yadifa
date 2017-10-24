@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 
 /** @defgroup yadifad
  *  @ingroup configuration
@@ -61,6 +61,8 @@
 extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
 
+#define POLICYCF_TAG 0x46435943494c4f50
+
 static ptr_set dnssec_policy_desc_set = PTR_SET_ASCIIZ_EMPTY;
 
 /*----------------------------------------------------------------------------*/
@@ -78,7 +80,7 @@ CONFIG_STRING_ARRAY(  key_suite,            NULL,   DP_KEY_SUITE_SIZE           
 CONFIG_U32_RANGE(     ds_ttl,               "3600", 0, MAX_S32                  )
 CONFIG_FLAG8(         weaker_key_removal,   "0",    flags, DP_FLAGS_WEAKER_KEY  )
 CONFIG_FLAG8(         stronger_key_removal, "0",    flags, DP_FLAGS_STRONGER_KEY)
-CONFIG_U8(            max_key,              "2"                                 )
+CONFIG_U8(            max_key,              "2"                                 ) /// @todo 20160520 gve -- check if this per key or key_suite
 
          /*           alias,                aliased */
 CONFIG_ALIAS(         max_keys,             max_key                             )
@@ -94,6 +96,10 @@ CONFIG_END(config_section_dnssec_policy_desc)
 static ya_result
 config_section_dnssec_policy_set_wild(struct config_section_descriptor_s *csd, const char *key, const char *value)
 {
+    (void)csd;
+    (void)key;
+    (void)value;
+    
     return CONFIG_UNKNOWN_SETTING;
 }
 
@@ -101,6 +107,9 @@ config_section_dnssec_policy_set_wild(struct config_section_descriptor_s *csd, c
 static ya_result
 config_section_dnssec_policy_print_wild(struct config_section_descriptor_s *csd, output_stream *os, const char *key)
 {
+    (void)csd;
+    (void)os;
+    
     if(key != NULL)
     {
         return ERROR;
@@ -131,7 +140,7 @@ config_section_dnssec_policy_init(struct config_section_descriptor_s *csd)
 
     if(csd->base != NULL)
     {
-        return ERROR; // base SHOULD be NULL at init
+        return INVALID_STATE_ERROR; // base SHOULD be NULL at init
     }
 
     return SUCCESS;
@@ -161,11 +170,11 @@ config_section_dnssec_policy_start(struct config_section_descriptor_s *csd)
 #endif
     if(csd->base != NULL)
     {
-        return ERROR;
+        return INVALID_STATE_ERROR;
     }
-
+    
     dnssec_policy_desc_s *dnssec_policy;
-    MALLOC_OR_DIE(dnssec_policy_desc_s*, dnssec_policy, sizeof(dnssec_policy_desc_s), GENERIC_TAG);
+    MALLOC_OR_DIE(dnssec_policy_desc_s*, dnssec_policy, sizeof(dnssec_policy_desc_s), POLICYCF_TAG);
     ZEROMEMORY(dnssec_policy, sizeof(dnssec_policy_desc_s));
     ptr_vector_init(&dnssec_policy->key_suite);
     csd->base = dnssec_policy;
@@ -273,6 +282,7 @@ config_section_dnssec_policy_postprocess(struct config_section_descriptor_s *csd
 
         // get the <denial> section from <dnssec-policy> configuration
         dnssec_denial *dd = dnssec_policy_denial_acquire(dnssec_policy_desc->denial);
+        /// @todo 20160614 gve -- check if 'dd' can be zero (I think not) before release 2.2.0
         
         bool has_zsk = FALSE;
                 
@@ -284,6 +294,7 @@ config_section_dnssec_policy_postprocess(struct config_section_descriptor_s *csd
             // get 'key-suite' name and check if it exists, if not return 'ERROR'
             const char *key_suite_name = (char*)ptr_vector_get(&dnssec_policy_desc->key_suite, i);
             dnssec_policy_key_suite *dpks = dnssec_policy_key_suite_acquire_from_name(key_suite_name);
+            
             if(dpks != NULL)
             {
                 if((dpks->key->flags & DNSKEY_FLAGS_KSK) == DNSKEY_FLAGS_ZSK)
@@ -297,7 +308,7 @@ config_section_dnssec_policy_postprocess(struct config_section_descriptor_s *csd
             {
                 ttylog_err("config: dnssec-policy: %s: key suite '%s' not defined", dnssec_policy_desc->id, key_suite_name);
 
-                return ERROR;
+                return POLICY_KEY_SUITE_UNDEFINED;
             }
         }
         

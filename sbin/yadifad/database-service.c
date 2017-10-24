@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup database Routines for database manipulations
  *  @ingroup yadifad
  *  @brief database functions
@@ -77,9 +77,6 @@
 #include <dnsdb/zdb-zone-dnssec.h>
 
 #include <dnsdb/zdb_zone_load.h>
-#if ZDB_HAS_DNSSEC_SUPPORT
-#include <dnsdb/dnssec_task.h>
-#endif
 #include <dnsdb/zdb_zone_label.h>
 #include <dnsdb/zdb-lock.h>
 #include <dnsdb/zdb.h>
@@ -119,6 +116,10 @@ extern logger_handle *g_server_logger;
 #include "zone_desc.h"
 #include "config_error.h"
 
+#ifndef HAS_DYNUPDATE_DIFF_ENABLED
+#error "HAS_DYNUPDATE_DIFF_ENABLED not defined"
+#endif
+
 #define DBLOADQ_TAG 0x5144414f4c4244
 
 //#define DATABASE_SERVICE_QUEUE_SIZE 0x4000
@@ -128,7 +129,7 @@ extern logger_handle *g_server_logger;
 #define DATABASE_SERVICE_UNLOAD_QUEUE_SIZE 0x10000
 #define DATABASE_SERVICE_SAVE_QUEUE_SIZE 0x10000
 #define DATABASE_SERVICE_RESIGN_QUEUE_SIZE 0x10000
-
+#define DATABASE_SERVICE_CALLBACK_QUEUE_SIZE 0x1000
 
 #ifdef DEBUG
 #define DATABASE_SERVICE_BENCH_MESSAGES_PER_SECOND 1
@@ -150,6 +151,7 @@ static struct thread_pool_s *database_zone_load_thread_pool = NULL;
 static struct thread_pool_s *database_zone_save_thread_pool = NULL;
 static struct thread_pool_s *database_zone_unload_thread_pool = NULL;
 static struct thread_pool_s *database_zone_download_thread_pool = NULL;
+static struct thread_pool_s *database_callback_thread_pool = NULL;
 
 #if ZDB_HAS_DNSSEC_SUPPORT
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
@@ -163,42 +165,47 @@ static const u8 database_all_origins[] = "\003ALL\005ZONES";
 static const char* database_service_operation[DATABASE_SERVICE_OPERATION_COUNT]=
 {
     "NOTHING",
-    
-    // messages queue
-    
+
     "ZONE-DESC-LOAD",
     "ZONE-DESC-UNLOAD",
-    "ZONE-DESC-DESTROY",
-    "ZONE-DESC-PROCESS",
-    
-    "ORIGIN-PROCESS", // not used
-    
-    // zone desc queue
     
     "ZONE-LOAD",
+    "ZONE-LOADED-EVENT",
+    
     "ZONE-MOUNT",
+    "ZONE-MOUNTED-EVENT",
+    
     "ZONE-UNMOUNT",
+    "ZONE-UNMOUNTED-EVENT",
+    
     "ZONE-UNLOAD",
-    "ZONE-WRITE-TEXT",
+    "ZONE-UNLOADED-EVENT",
+    
+    "ZONE-SAVE-TEXT",
     
     "ZONE-QUERY-AXFR",
     "ZONE-QUERY-IXFR",
     
-    "SET-DROP-AFTER-RELOAD",
-    "DO-DROP-AFTER-RELOAD",
-    "ZONE-MOUNTED-EVENT",
-    "ZONE-LOADED-EVENT",
-    "ZONE-UNLOADED-EVENT",
-    "ZONE-UNMOUNTED-EVENT",
     "ZONE-DOWNLOADED-EVENT",
+    
+    "SET-DROP-AFTER-RELOAD",
+    "CLEAR-DROP-AFTER-RELOAD",
+    "DO-DROP-AFTER-RELOAD",
     
     "ZONE-RECONFIGURE-BEGIN",
     "ZONE-RECONFIGURE-END",
     
-    "ZONE-UPDATE-SIGNATURES"
+    "ZONE-UPDATE-SIGNATURES",
+    
+    "ZONE-FREEZE",
+    "ZONE-UNFREEZE",
+    
+    "ZONE-PROCESS",
+    
+    "CALLBACK"
 };
 
-static volatile bool database_reconfigure_enabled = FALSE;
+static smp_int database_reconfigure_enable_count = SMP_INT_INITIALIZER;
 
 const char*
 database_service_operation_get_name(u32 id)
@@ -228,39 +235,16 @@ database_load_message_alloc(const u8 *origin, u8 type)
 static void
 database_load_message_free(database_message *message)
 {
-    free(message->origin);    
-    free(message);
-}
-
-static void
-database_service_icmtl_listener_callback(u8 state, const zdb_icmtl* icmtl, void *args)
-{
-    (void)args;
-    
-    switch(state)
+    if(message != NULL)
     {
-        case ZDB_ICMTL_LISTENER_BEGIN:
-#ifdef DEBUG
-            log_debug("database: icmtl %{dnsname} begin", icmtl->zone->origin);
-#endif
-            break;
-        case ZDB_ICMTL_LISTENER_CANCEL:
-#ifdef DEBUG
-            log_debug("database: icmtl %{dnsname} cancel", icmtl->zone->origin);
-#endif
-            break;
-        case ZDB_ICMTL_LISTENER_END:
-#ifdef DEBUG
-            log_debug("database: icmtl %{dnsname} end", icmtl->zone->origin);
-#endif
-            // notify slaves
-            if(icmtl->modified)
-            {
-                notify_slaves(icmtl->zone->origin); // if the zone is locked ...
-            }
-            break;
+        free(message->origin);
+        free(message);
     }
 }
+
+static void database_callback_run(database_message *message);
+static void database_clear_drop_after_reload();
+static void database_do_drop_after_reload();
 
 /**********************************************************************************************************************/
 
@@ -273,7 +257,7 @@ database_service_init()
     {
         if(database_zone_load_thread_pool == NULL)
         {
-            database_zone_load_thread_pool = thread_pool_init_ex(g_config->zone_load_thread_count, DATABASE_SERVICE_LOAD_QUEUE_SIZE, "db-zone-load-tp"); /// @todo 20150415 edf -- configure parameters
+            database_zone_load_thread_pool = thread_pool_init_ex(g_config->zone_load_thread_count, DATABASE_SERVICE_LOAD_QUEUE_SIZE, "dbzload"); /// @todo 20150415 edf -- configure parameters
 
             if(database_zone_load_thread_pool == NULL)
             {
@@ -283,7 +267,7 @@ database_service_init()
         
         if(database_zone_save_thread_pool == NULL)
         {
-            database_zone_save_thread_pool = thread_pool_init_ex(1, DATABASE_SERVICE_SAVE_QUEUE_SIZE, "db-zone-save-tp"); /// @todo 20150415 edf -- configure parameters
+            database_zone_save_thread_pool = thread_pool_init_ex(1, DATABASE_SERVICE_SAVE_QUEUE_SIZE, "dbzsave"); /// @todo 20150415 edf -- configure parameters
 
             if(database_zone_save_thread_pool == NULL)
             {
@@ -293,7 +277,7 @@ database_service_init()
         
         if(database_zone_unload_thread_pool == NULL)
         {
-            database_zone_unload_thread_pool = thread_pool_init_ex(1, DATABASE_SERVICE_UNLOAD_QUEUE_SIZE, "db-zone-unload-tp"); /// @todo 20150415 edf -- configure parameters
+            database_zone_unload_thread_pool = thread_pool_init_ex(1, DATABASE_SERVICE_UNLOAD_QUEUE_SIZE, "dbzunlod"); /// @todo 20150415 edf -- configure parameters
 
             if(database_zone_unload_thread_pool == NULL)
             {
@@ -303,18 +287,29 @@ database_service_init()
         
         if(database_zone_download_thread_pool == NULL)
         {
-            database_zone_download_thread_pool = thread_pool_init_ex(g_config->zone_download_thread_count, DATABASE_SERVICE_DOWNLOAD_QUEUE_SIZE, "db-download-tp"); /// @todo 20150415 edf -- configure parameters
+            database_zone_download_thread_pool = thread_pool_init_ex(g_config->zone_download_thread_count, DATABASE_SERVICE_DOWNLOAD_QUEUE_SIZE, "dbdownld"); /// @todo 20150415 edf -- configure parameters
 
             if(database_zone_download_thread_pool == NULL)
             {
                 return ERROR;
             }
-        }       
+        }
+        
+        if(database_callback_thread_pool == NULL)
+        {
+            database_callback_thread_pool = thread_pool_init_ex(1, DATABASE_SERVICE_CALLBACK_QUEUE_SIZE, "callback"); /// @todo 20150415 edf -- configure parameters
+
+            if(database_callback_thread_pool == NULL)
+            {
+                return ERROR;
+            }
+        }
+        
 #if ZDB_HAS_DNSSEC_SUPPORT                
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
         if(database_zone_resignature_thread_pool == NULL)
         {
-            database_zone_resignature_thread_pool = thread_pool_init_ex(1, DATABASE_SERVICE_RESIGN_QUEUE_SIZE, "db-resign-tp"); /// @todo 20150415 edf -- configure parameters
+            database_zone_resignature_thread_pool = thread_pool_init_ex(1, DATABASE_SERVICE_RESIGN_QUEUE_SIZE, "dbresign"); /// @todo 20150415 edf -- configure parameters
 
             if(database_zone_resignature_thread_pool == NULL)
             {
@@ -324,27 +319,23 @@ database_service_init()
         
         if(database_zone_rrsig_thread_pool == NULL)
         {
-            database_zone_rrsig_thread_pool = thread_pool_init_ex(/*g_config->dnssec_thread_count + 1*/2, 32, "db-rrsig-tp"); /// @todo 20140205 edf -- configure parameters
+            database_zone_rrsig_thread_pool = thread_pool_init_ex(/*g_config->dnssec_thread_count + 1*/2, 32, "dbrrsig"); /// @todo 20140205 edf -- configure parameters
 
             if(database_zone_rrsig_thread_pool == NULL)
             {
                 return ERROR;
             }
-            
-            dnssec_process_set_default_pool(database_zone_rrsig_thread_pool);
         }  
 #endif
 #endif
         
         async_message_pool_init();
         
-        if(ISOK(err = service_init_ex(&database_handler, database_service, "database", 1)))
+        if(ISOK(err = service_init_ex(&database_handler, database_service, "DBsrvice", 1)))
         {
-            async_queue_init(&database_handler_queue, DATABASE_SERVICE_QUEUE_SIZE, 1, 100000, "database");
+            async_queue_init(&database_handler_queue, DATABASE_SERVICE_QUEUE_SIZE, 1, 100000, "dbsrvice");
             database_handler_initialised = TRUE;
         }
-        
-        zdb_icmtl_listener_add(database_service_icmtl_listener_callback, NULL);
     }
     
     return err;
@@ -396,8 +387,6 @@ database_service_finalise()
     
     if(database_handler_initialised)
     {
-        zdb_icmtl_listener_remove(database_service_icmtl_listener_callback);
-        
         zone_set_lock(&database_zone_desc);
 
         ptr_set_avl_iterator iter;
@@ -447,6 +436,11 @@ database_service_finalise()
             database_zone_download_thread_pool = NULL;
         }
    
+        if(database_callback_thread_pool != NULL)
+        {
+            thread_pool_destroy(database_callback_thread_pool);
+            database_callback_thread_pool = NULL;
+        }
 
 #if ZDB_HAS_DNSSEC_SUPPORT
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
@@ -459,7 +453,6 @@ database_service_finalise()
         
         if(database_zone_rrsig_thread_pool != NULL)
         {
-            dnssec_process_set_default_pool(NULL);
             thread_pool_destroy(database_zone_rrsig_thread_pool);
             database_zone_rrsig_thread_pool = NULL;
         }
@@ -544,6 +537,63 @@ database_service_set_drop_after_reload()
 }
 
 static void
+database_service_set_drop_after_reload_for_set(const ptr_set *fqdn_set)
+{
+    if(fqdn_set != NULL)
+    {
+        zone_set_lock(&database_zone_desc);
+    
+        ptr_set_avl_iterator iter;
+        ptr_set_avl_iterator_init(fqdn_set, &iter);
+
+        while(ptr_set_avl_iterator_hasnext(&iter))
+        {
+            ptr_node *fqdn_node = ptr_set_avl_iterator_next_node(&iter);
+            ptr_node *zone_node = ptr_set_avl_find(&database_zone_desc.set, fqdn_node->key);
+            if(zone_node != NULL)
+            {
+                zone_desc_s *zone_desc = (zone_desc_s *)zone_node->value;
+                if(zone_desc != NULL)
+                {
+                    zone_set_status(zone_desc, ZONE_STATUS_DROP_AFTER_RELOAD);
+                    if(zone_desc->loaded_zone != NULL)
+                    {
+                        zdb_zone_set_maintained(zone_desc->loaded_zone, (zone_desc->loaded_zone->apex->flags & ZDB_ZONE_IS_SLAVE) == 0);
+                    }
+                }
+            }
+        }
+
+        zone_set_unlock(&database_zone_desc);
+    }
+    else
+    {
+        database_service_set_drop_after_reload();
+    }
+}
+
+static void
+database_service_clear_drop_after_reload()
+{
+    zone_set_lock(&database_zone_desc);
+
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&database_zone_desc.set, &iter);
+
+    while(ptr_set_avl_iterator_hasnext(&iter))
+    {
+        ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
+        zone_desc_s *zone_desc = (zone_desc_s *)zone_node->value;
+
+        zone_clear_status(zone_desc, ZONE_STATUS_DROP_AFTER_RELOAD);
+    }
+
+    zone_set_unlock(&database_zone_desc);
+}
+
+
+
+static void
 database_service_do_drop_after_reload()
 {
     log_debug1("database_service_do_drop_after_reload()");
@@ -608,7 +658,7 @@ database_service_process_command(zone_desc_s *zone_desc, zone_command_s* command
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
         case DATABASE_SERVICE_UPDATE_ZONE_SIGNATURES:
         {
-            database_service_zone_resignature(zone_desc);
+            database_service_zone_dnssec_maintenance(zone_desc);
             break;
         }
 #endif
@@ -642,9 +692,112 @@ database_service_process_command(zone_desc_s *zone_desc, zone_command_s* command
             }
             break;
         }
+        case DATABASE_SERVICE_ZONE_PROCESSED:
+        {
+            break;
+        }
         default:
         {
             log_err("unexpected command %d", command->id);
+        }
+    }
+}
+
+static void database_service_message_clear_free_fqdn_node(ptr_node *node)
+{
+    dnsname_zfree(node->key);
+}
+
+static void
+database_service_message_clear(database_message *message)
+{
+    switch(message->payload.type)
+    {
+        case DATABASE_SERVICE_ZONE_DESC_LOAD:
+        {
+            zone_release(message->payload.zone_desc_load.zone_desc);
+            message->payload.zone_desc_load.zone_desc = NULL;
+            break;
+        }
+        case DATABASE_SERVICE_ZONE_DESC_UNLOAD:
+        case DATABASE_SERVICE_ZONE_LOAD:
+        case DATABASE_SERVICE_ZONE_UNLOAD:
+        case DATABASE_SERVICE_ZONE_FREEZE:
+        case DATABASE_SERVICE_ZONE_UNFREEZE:            
+        case DATABASE_SERVICE_QUERY_AXFR:
+        case DATABASE_SERVICE_QUERY_IXFR:
+        {
+            break;
+        }
+        case DATABASE_SERVICE_SET_DROP_AFTER_RELOAD:
+        {
+            if(message->payload.drop_after_reload.do_subset)
+            {
+                ptr_set_avl_callback_and_destroy(&message->payload.drop_after_reload.zone_set, database_service_message_clear_free_fqdn_node);
+            }
+            break;
+        }
+        case DATABASE_SERVICE_DO_DROP_AFTER_RELOAD:
+        {
+            break;
+        }
+        case DATABASE_SERVICE_UPDATE_ZONE_SIGNATURES:
+        {
+            if(message->payload.zone_update_signatures.expected_zone != NULL)
+            {
+                zdb_zone_release(message->payload.zone_update_signatures.expected_zone);
+                message->payload.zone_update_signatures.expected_zone = NULL;
+            }
+            zone_release(message->payload.zone_update_signatures.expected_zone_desc);
+            message->payload.zone_update_signatures.expected_zone_desc = NULL;
+            break;
+        }
+        case DATABASE_SERVICE_ZONE_LOADED_EVENT:
+        {
+            if(message->payload.zone_loaded_event.zone != NULL)
+            {
+                zdb_zone_release(message->payload.zone_loaded_event.zone);
+                message->payload.zone_loaded_event.zone = NULL;
+            }
+            break;
+        }
+        case DATABASE_SERVICE_ZONE_MOUNTED_EVENT:
+        {
+            if(message->payload.zone_mounted_event.zone != NULL)
+            {
+                zdb_zone_release(message->payload.zone_mounted_event.zone);
+                message->payload.zone_mounted_event.zone = NULL;
+            }
+            zone_release(message->payload.zone_mounted_event.zone_desc);
+            message->payload.zone_mounted_event.zone_desc = NULL;
+            break;
+        }
+        case DATABASE_SERVICE_ZONE_UNMOUNTED_EVENT:
+        {
+            zone_release(message->payload.zone_unmounted_event.zone_desc);
+            message->payload.zone_unmounted_event.zone_desc = NULL;
+            break;
+        }
+        case DATABASE_SERVICE_ZONE_UNLOADED_EVENT:
+        {
+            zone_release(message->payload.zone_unloaded_event.zone_desc);
+            message->payload.zone_unloaded_event.zone_desc = NULL;
+            break;
+        }
+        case DATABASE_SERVICE_ZONE_DOWNLOADED_EVENT:
+        default:
+        {
+            break;
+        }
+        case DATABASE_SERVICE_ZONE_SAVE_TEXT:
+        case DATABASE_SERVICE_ZONE_PROCESSED:
+        {
+            break;
+        }
+        case DATABASE_SERVICE_CALLBACK:
+        {
+            message->payload.callback.callback(message->payload.callback.args, TRUE);
+            break;
         }
     }
 }
@@ -668,7 +821,7 @@ database_service(struct service_worker_s *worker)
     
     log_info("database: service started");
     
-    while(service_shouldrun(worker) || !async_queue_emtpy(&database_handler_queue))
+    while(service_shouldrun(worker) || !async_queue_empty(&database_handler_queue))
     {
         if(!zdb_zone_garbage_empty())
         {
@@ -730,6 +883,42 @@ database_service(struct service_worker_s *worker)
          * NULL => shutdown the thread
          */
         
+        if(dnscore_shuttingdown())
+        {
+            switch(message->payload.type)
+            {
+                case DATABASE_SERVICE_ZONE_DESC_LOAD:
+                case DATABASE_SERVICE_ZONE_DESC_UNLOAD:
+                case DATABASE_SERVICE_ZONE_LOAD:
+                case DATABASE_SERVICE_ZONE_UNLOAD:
+                case DATABASE_SERVICE_ZONE_FREEZE:
+                case DATABASE_SERVICE_ZONE_UNFREEZE:            
+                case DATABASE_SERVICE_QUERY_AXFR:
+                case DATABASE_SERVICE_QUERY_IXFR:
+                case DATABASE_SERVICE_SET_DROP_AFTER_RELOAD:
+                case DATABASE_SERVICE_DO_DROP_AFTER_RELOAD:
+                case DATABASE_SERVICE_UPDATE_ZONE_SIGNATURES:
+                case DATABASE_SERVICE_ZONE_LOADED_EVENT:
+                case DATABASE_SERVICE_ZONE_MOUNTED_EVENT:
+                case DATABASE_SERVICE_ZONE_UNMOUNTED_EVENT:
+                case DATABASE_SERVICE_ZONE_UNLOADED_EVENT:
+                case DATABASE_SERVICE_ZONE_DOWNLOADED_EVENT:
+                case DATABASE_SERVICE_CALLBACK:
+                default:
+                {
+                    database_service_message_clear(message);
+                    database_load_message_free(message);
+                    async_message_release(async);
+                    continue;
+                }
+                case DATABASE_SERVICE_ZONE_SAVE_TEXT:
+                case DATABASE_SERVICE_ZONE_PROCESSED:
+                {
+                    break;
+                }
+            }
+        }
+        
         /*
          * load command ?
          */
@@ -739,8 +928,9 @@ database_service(struct service_worker_s *worker)
             case DATABASE_SERVICE_ZONE_DESC_LOAD:
             {
                 // desc
-                database_load_zone_desc(message->payload.zone_desc_load.zone_desc);
+                database_load_zone_desc(message->payload.zone_desc_load.zone_desc); // foreground
                 zone_release(message->payload.zone_desc_load.zone_desc);
+                message->payload.zone_desc_load.zone_desc = NULL;
                 break;
             }
             
@@ -768,7 +958,6 @@ database_service(struct service_worker_s *worker)
                 }
                 break;
             }
-            
             case DATABASE_SERVICE_ZONE_LOAD:
             {
                 // no desc
@@ -784,7 +973,7 @@ database_service(struct service_worker_s *worker)
                     }
                     else
                     {
-                        log_warn("database: %{dnsname}: ignoring load command for: already loading", message->origin);
+                        log_debug("database: %{dnsname}: ignoring load command for: already loading", message->origin);
                     }
                 }
                 else
@@ -863,71 +1052,59 @@ database_service(struct service_worker_s *worker)
             }
             case DATABASE_SERVICE_QUERY_AXFR:
             {
-                database_service_zone_axfr_query(message->origin);
+                // no desc
+                database_service_zone_axfr_query(message->origin); // background, triggers 'downloaded' event
                 
                 break;
             }
             
             case DATABASE_SERVICE_QUERY_IXFR:
             {
-                database_service_zone_ixfr_query(message->origin);
+                // no desc
+                database_service_zone_ixfr_query(message->origin); // background, triggers 'downloaded' event
                 
                 break;
             }
             
             case DATABASE_SERVICE_SET_DROP_AFTER_RELOAD:
             {
+                // no desc
                 // ZONE_STATUS_DROP_AFTER_RELOAD
                 
-                database_service_set_drop_after_reload();
+                if(message->payload.drop_after_reload.do_subset)
+                {
+                    database_service_set_drop_after_reload_for_set(&message->payload.drop_after_reload.zone_set); // foreground
+                    
+                    if(message->payload.drop_after_reload.do_subset)
+                    {
+                        ptr_set_avl_callback_and_destroy(&message->payload.drop_after_reload.zone_set, database_service_message_clear_free_fqdn_node);
+                    }
+                }
+                else
+                {
+                    database_service_set_drop_after_reload();
+                }
                                 
                 break;
             }
             
             case DATABASE_SERVICE_DO_DROP_AFTER_RELOAD:
             {
-                database_service_do_drop_after_reload();
+                // no desc
+                database_service_do_drop_after_reload(); // foreground
+                
+                break;
+            }
+            
+            case DATABASE_SERVICE_CLEAR_DROP_AFTER_RELOAD:
+            {
+                database_service_clear_drop_after_reload(); // foreground
                 
                 break;
             }
             
             //
-            
-            case DATABASE_SERVICE_RECONFIGURE_BEGIN:
-            {
-                if(!database_reconfigure_enabled)
-                {
-                    log_debug("database: re-configuration enabled");
-                    
-                    database_reconfigure_enabled = TRUE;
-                }
-                else
-                {
-                    log_debug("database: re-configuration already enabled");
-                }
-                
-                break;
-            }
-            
-            case DATABASE_SERVICE_RECONFIGURE_END:
-            {
-                if(database_reconfigure_enabled)
-                {
-#ifdef DEBUG
-                    zone_dump_allocated();
-#endif        
-                    log_debug("database: re-configuration disabled");
-                    
-                    database_reconfigure_enabled = FALSE;
-                }
-                else
-                {
-                    log_debug("database: re-configuration already disabled");
-                }
-                
-                break;
-            }
-            
+
 #if ZDB_HAS_DNSSEC_SUPPORT
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
             
@@ -938,7 +1115,7 @@ database_service(struct service_worker_s *worker)
                 
                 // current zone desc is the one we wanted to update the signatures on ?
                 
-                if(zone_desc == NULL) // ie: shutdown, reconfigure
+                if(zone_desc != NULL)
                 {
                     if(zone_desc == message->payload.zone_update_signatures.expected_zone_desc)
                     {
@@ -978,20 +1155,15 @@ database_service(struct service_worker_s *worker)
 #endif
                     }
                 }
-                else
+                else  // zone_desc == NULL ie: shutdown, reconfigure
                 {
                     log_warn("database: %{dnsname}: zone signature triggered but zone settings are not available, ignoring", message->payload.zone_update_signatures.expected_zone_desc->origin);
                 }
                 
                 zdb_zone_release(message->payload.zone_update_signatures.expected_zone);
-#ifdef DEBUG
                 message->payload.zone_update_signatures.expected_zone = NULL;
-#endif
                 zone_release(message->payload.zone_update_signatures.expected_zone_desc);
-#ifdef DEBUG
                 message->payload.zone_update_signatures.expected_zone_desc = NULL;
-#endif
-
                 break;
             }
             
@@ -1014,7 +1186,7 @@ database_service(struct service_worker_s *worker)
                     }
                     else
                     {
-                        log_info("database: %{dnsname}: there was no need to load the zone", message->origin);
+                        log_debug("database: %{dnsname}: there was no need to load the zone", message->origin);
                     }
                 }
                 else if((message->payload.zone_loaded_event.result_code == ZRE_NO_VALID_FILE_FOUND) && (zone_desc->type == ZT_SLAVE))
@@ -1023,7 +1195,14 @@ database_service(struct service_worker_s *worker)
                 }
                 else
                 {
-                    log_err("database: %{dnsname}: failed to load the zone: %r", message->origin, message->payload.zone_loaded_event.result_code);
+                    if(message->payload.zone_loaded_event.result_code != STOPPED_BY_APPLICATION_SHUTDOWN)
+                    {
+                        log_err("database: %{dnsname}: failed to load the zone: %r", message->origin, message->payload.zone_loaded_event.result_code);
+                    }
+                    else
+                    {
+                        log_debug("database: %{dnsname}: zone load cancelled by shutdown", message->origin);
+                    }
                 }
                 
                 if(message->payload.zone_loaded_event.zone != NULL)
@@ -1053,7 +1232,7 @@ database_service(struct service_worker_s *worker)
                         
                         //
                         
-                        if(zdb_zone_is_dnssec(message->payload.zone_mounted_event.zone))
+                        if(zdb_zone_is_maintained(message->payload.zone_mounted_event.zone))
                         {
                             if(zone_maintains_dnssec(zone_desc))
                             {
@@ -1066,10 +1245,11 @@ database_service(struct service_worker_s *worker)
                                     if(dnskey_rrset != NULL)
                                     {
                                         log_info("database: %{dnsname}: signature maintenance initialisation", message->origin);
-
-                                        database_service_zone_resignature_init(
+                                        database_zone_update_signatures(
+                                                message->origin,
                                                 message->payload.zone_mounted_event.zone_desc,
-                                                message->payload.zone_mounted_event.zone);
+                                                message->payload.zone_mounted_event.zone
+                                                );
                                     }
                                     else
                                     {
@@ -1091,6 +1271,30 @@ database_service(struct service_worker_s *worker)
 #endif
                     if(zone_desc->type == ZT_SLAVE)
                     {
+
+#if ZDB_HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT
+                        zdb_zone *zone = message->payload.zone_mounted_event.zone;
+                        
+                        u8 zone_dnssec_type = zone_policy_guess_dnssec_type(zone);
+
+                        switch(zone_dnssec_type)
+                        {
+                            case ZONE_DNSSEC_FL_NOSEC:
+                                log_debug("database: %{dnsname}: slave zone is not DNSSEC", message->origin);
+                                break;
+                            case ZONE_DNSSEC_FL_NSEC:
+                                log_debug("database: %{dnsname}: slave zone is NSEC", message->origin);
+                                break;
+                            case ZONE_DNSSEC_FL_NSEC3:
+                                log_debug("database: %{dnsname}: slave zone is NSEC3", message->origin);
+                                break;
+                            case ZONE_DNSSEC_FL_NSEC3_OPTOUT:
+                                log_debug("database: %{dnsname}: slave zone is NSEC3 OPT-OUT", message->origin);
+                                break;
+                        }
+                        
+                        zone_dnssec_status_update(zone);
+#endif
                         database_zone_refresh_maintenance(g_config->database, message->origin, 0); // means next refresh from now // database_zone_refresh_maintenance_wih_zone(zone_desc->loaded_zone, 0);
                     }
                 }
@@ -1104,10 +1308,10 @@ database_service(struct service_worker_s *worker)
                     zdb_zone_release(message->payload.zone_mounted_event.zone);
                     message->payload.zone_mounted_event.zone = NULL;
                 }
-#ifdef DEBUG
-                //zone_release(message->payload.zone_mounted_event.zone_desc);
+
+                // do NOT release zone_desc
                 message->payload.zone_mounted_event.zone_desc = NULL;
-#endif
+                
                 // do not release zone_desc because we will try to push the event
                 break;
             }
@@ -1135,7 +1339,6 @@ database_service(struct service_worker_s *worker)
                 /// @todo 20140425 edf -- WHAT IF THE EVENT FAILED ? WHAT ABOUT THE REMAINING OF THE QUEUE ???
                 ///       WE FORGOT TO TAKE THIS INTO ACCOUNT : THERE IS SOME SORT OF RETRY OR
                 ///       CANCEL ALL MECHANISM NEEDED ...
-                
                 // desc (both)
                 zone_desc = zone_acquirebydnsname(message->origin);
                 
@@ -1176,6 +1379,7 @@ database_service(struct service_worker_s *worker)
             
             case DATABASE_SERVICE_ZONE_PROCESSED:
             {
+                // no desc
                 zone_desc = zone_acquirebydnsname(message->origin);
                 if(zone_desc != NULL)
                 {
@@ -1185,6 +1389,13 @@ database_service(struct service_worker_s *worker)
                 {
                     log_debug("database: %{dnsname}: processed zone is not configured", message->origin);
                 }
+                break;
+            }
+            
+            case DATABASE_SERVICE_CALLBACK:
+            {
+                log_debug("database: queuing %s callback from %llT", message->payload.callback.name, message->payload.callback.timestamp);
+                database_callback_run(message);
                 break;
             }
             
@@ -1249,7 +1460,6 @@ database_service(struct service_worker_s *worker)
         }
         
         database_load_message_free(message);
-        
         async_message_release(async);
     }
     
@@ -1363,6 +1573,47 @@ database_zone_update_signatures(const u8 *origin, zone_desc_s *expected_zone_des
     async->handler = NULL;
     async->handler_args = NULL;
     async_message_call(&database_handler_queue, async);
+}
+
+static ya_result
+database_zone_update_signatures_alarm(void *args_, bool cancel)
+{
+    zdb_zone *zone = (zdb_zone*)args_;
+    if(!cancel)
+    {
+        zone_desc_s *zone_desc = zone_acquirebydnsname(zone->origin);
+        
+        if(zone_desc != NULL)
+        {
+            database_zone_update_signatures(zone->origin, zone_desc, zone);
+            zone_release(zone_desc);
+        }
+    }
+    return SUCCESS;
+}
+
+/**
+ * 
+ * Sets an alarm to enqueue a zone maintenance at a given time (best effort)
+ * 
+ * @param zone
+ * @param at
+ */
+
+void
+database_zone_update_signatures_at(zdb_zone *zone, u32 at)
+{
+    log_debug("database: %{dnsname}: will enqueue operation DATABASE_SERVICE_UPDATE_ZONE_SIGNATURES at %T", zone->origin, at);
+    
+    alarm_event_node *event = alarm_event_new(
+                        at,
+                        ALARM_KEY_ZONE_SIGNATURE_UPDATE,
+                        database_zone_update_signatures_alarm,
+                        zone,
+                        ALARM_DUP_REMOVE_LATEST,
+                        "database-service-zone-maintenance");
+
+    alarm_set(zone->alarm_handle, event);
 }
 
 #endif
@@ -1618,59 +1869,245 @@ database_zone_ixfr_query_at(const u8 *origin, time_t at)
     zdb_zone_release(zone);
 }
 
-void
-database_zone_reconfigure_begin()
-{
-    if(database_service_is_running())
-    {
-        log_debug("database: enqueue operation DATABASE_SERVICE_RECONFIGURE_BEGIN");
-        database_message *message = database_load_message_alloc(database_all_origins, DATABASE_SERVICE_RECONFIGURE_BEGIN);
 
-        async_message_s *async = async_message_alloc();
-        async->id = message->payload.type;
-        async->args = message;
-        async->handler = NULL;
-        async->handler_args = NULL;
-        async_message_call(&database_handler_queue, async);
-    }
-    else
-    {
-        database_reconfigure_enabled = TRUE;
-    }
-}
 
-void
-database_zone_reconfigure_end()
-{
-    if(database_service_is_running())
-    {
-        log_debug("database: enqueue operation DATABASE_SERVICE_RECONFIGURE_END");
-        database_message *message = database_load_message_alloc(database_all_origins, DATABASE_SERVICE_RECONFIGURE_END);
+#define DATABASE_ZONE_RECONFIGURE_ALL   3
+#define DATABASE_ZONE_RECONFIGURE_ZONES 2
+#define DATABASE_ZONE_RECONFIGURE_ZONE  1
 
-        async_message_s *async = async_message_alloc();
-        async->id = message->payload.type;
-        async->args = message;
-        async->handler = NULL;
-        async->handler_args = NULL;
-        async_message_call(&database_handler_queue, async);
-    }
-    else
-    {
-        database_reconfigure_enabled = FALSE;
-    }
-}
+// keys+zones (a.k.a everything), zones, zone
+static smp_int database_zone_reconfigure_queued = SMP_INT_INITIALIZER;
+static ptr_set database_zone_reconfigure_fqdn = PTR_SET_DNSNAME_EMPTY;
 
 bool
 database_zone_is_reconfigure_enabled()
 {
-    return database_reconfigure_enabled;
+    return smp_int_get(&database_reconfigure_enable_count) > 0;
+}
+
+bool
+database_zone_try_reconfigure_enable()
+{
+    bool ret = smp_int_setifequal(&database_reconfigure_enable_count, 0, 1);
+    if(ret)
+    {
+        log_info("database: reconfigure started");
+    }
+    else
+    {
+        log_info("database: reconfigure already running");
+    }
+    return ret;
+}
+
+static void
+database_zone_postpone_reconfigure_fqdn_destroy_cb(ptr_node *node)
+{
+    dnsname_zfree(node->key);
+    node->key = NULL;
+    node->value = NULL;
+}
+
+static void
+database_zone_postpone_reconfigure_fqdn_destroy()
+{
+    ptr_set_avl_callback_and_destroy(&database_zone_reconfigure_fqdn, database_zone_postpone_reconfigure_fqdn_destroy_cb);
 }
 
 void
-database_set_drop_after_reload()
+database_zone_postpone_reconfigure_all()
 {
-    log_debug("database: enqueue operation DATABASE_SERVICE_SET_DROP_AFTER_RELOAD");
+    log_info("database: postponing reconfigure all");
+    
+    pthread_mutex_lock(&database_zone_reconfigure_queued.mutex);
+    database_zone_reconfigure_queued.value = DATABASE_ZONE_RECONFIGURE_ALL;
+    database_zone_postpone_reconfigure_fqdn_destroy();
+    pthread_mutex_unlock(&database_zone_reconfigure_queued.mutex);
+}
+
+void
+database_zone_postpone_reconfigure_zones()
+{
+    log_info("database: postponing reconfigure zones");
+    
+    pthread_mutex_lock(&database_zone_reconfigure_queued.mutex);
+    if(database_zone_reconfigure_queued.value < DATABASE_ZONE_RECONFIGURE_ZONES)
+    {
+        database_zone_reconfigure_queued.value = DATABASE_ZONE_RECONFIGURE_ZONES;
+        database_zone_postpone_reconfigure_fqdn_destroy();
+    }
+    pthread_mutex_unlock(&database_zone_reconfigure_queued.mutex);
+}
+
+void
+database_zone_postpone_reconfigure_zone(const ptr_set *fqdn_set)
+{
+    log_info("database: postponing reconfigure of a set of zones");
+    
+    pthread_mutex_lock(&database_zone_reconfigure_queued.mutex);
+    if(database_zone_reconfigure_queued.value <= DATABASE_ZONE_RECONFIGURE_ZONE)
+    {
+        database_zone_reconfigure_queued.value = DATABASE_ZONE_RECONFIGURE_ZONE;
+        ptr_set_avl_iterator iter;
+        ptr_set_avl_iterator_init(fqdn_set, &iter);
+        while(ptr_set_avl_iterator_hasnext(&iter))
+        {
+            ptr_node *src_node = ptr_set_avl_iterator_next_node(&iter);
+            ptr_node *node = ptr_set_avl_insert(&database_zone_reconfigure_fqdn, src_node->key);
+            if(node->value == NULL)
+            {
+                node->key = dnsname_zdup((const u8*)src_node->key);
+                node->value = node->key;
+            }
+        }
+    }
+    pthread_mutex_unlock(&database_zone_reconfigure_queued.mutex);
+}
+
+
+
+static void
+database_service_config_update_callback(void *args_, bool delete_only)
+{
+    (void)args_;
+    if(!delete_only)
+    {
+        log_debug("database: try running postponed reconfigure");
+        yadifad_config_update(g_config->config_file);
+    }
+}
+
+void
+database_service_config_update()
+{
+    log_debug("database: will run postponed reconfigure");
+    database_post_callback(database_service_config_update_callback, NULL, "reconfigure-update-all");
+}
+
+static void
+database_service_config_update_all_zones_callback(void *args_, bool delete_only)
+{
+    (void)args_;
+    if(!delete_only)
+    {
+        log_debug("database: try running postponed reconfigure all zones");
+        yadifad_config_update_zone(g_config->config_file, NULL);
+    }
+}
+
+void
+database_service_config_update_all_zones()
+{
+    log_debug("database: will run postponed reconfigure all zones");
+    database_post_callback(database_service_config_update_all_zones_callback, NULL, "reconfigure-update-all-zones");
+}
+
+static void
+database_service_config_update_zones_callback(void *args_, bool delete_only)
+{
+    ptr_set fqdn_set = {args_, ptr_set_dnsname_node_compare};
+    
+    if(!delete_only)
+    {
+        log_debug("database: try running postponed reconfigure some zones");        
+        
+        yadifad_config_update_zone(g_config->config_file, &fqdn_set);
+    }
+    
+    ptr_set_avl_callback_and_destroy(&fqdn_set, database_zone_postpone_reconfigure_fqdn_destroy_cb);
+}
+
+void
+database_service_config_update_zones(ptr_set *fqdn_set)
+{
+    yassert(fqdn_set->compare == ptr_set_dnsname_node_compare);
+    log_debug("database: running postponed reconfigure of a set of zones");
+    database_post_callback(database_service_config_update_zones_callback, fqdn_set->root, "reconfigure-update-some-zones");
+}
+
+void
+database_zone_reconfigure_disable()
+{
+    log_info("database: reconfigure done");
+    
+    pthread_mutex_lock(&database_zone_reconfigure_queued.mutex);
+    
+    int queue = database_zone_reconfigure_queued.value;
+    database_zone_reconfigure_queued.value = 0;
+    
+    ptr_set fqdn_set = database_zone_reconfigure_fqdn;  // move the tree
+    database_zone_reconfigure_fqdn.root = NULL;
+    
+    pthread_mutex_unlock(&database_zone_reconfigure_queued.mutex);
+    
+    // a copy of the queue and the fqdns is ready
+    
+    smp_int_set(&database_reconfigure_enable_count, 0);
+    
+    switch(queue)
+    {
+        case DATABASE_ZONE_RECONFIGURE_ALL:
+        {
+            database_service_config_update();
+            break;
+        }
+        case DATABASE_ZONE_RECONFIGURE_ZONES:
+        {
+            database_service_config_update_all_zones();
+            break;
+        }
+        case DATABASE_ZONE_RECONFIGURE_ZONE:
+        default:
+        {
+            if(!ptr_set_avl_isempty(&fqdn_set))
+            {
+                database_service_config_update_all_zones(&fqdn_set);
+            }
+            break;
+        }
+    }
+    
+    ptr_set_avl_callback_and_destroy(&fqdn_set, database_zone_postpone_reconfigure_fqdn_destroy_cb);
+}
+
+void
+database_set_drop_after_reload_for_set(const ptr_set* set)
+{
+    log_debug("database: enqueue operation DATABASE_SERVICE_SET_DROP_AFTER_RELOAD of a subset");
     database_message *message = database_load_message_alloc(database_all_origins, DATABASE_SERVICE_SET_DROP_AFTER_RELOAD);
+
+    if(set != NULL)
+    {
+        message->payload.drop_after_reload.zone_set.root = NULL;
+        message->payload.drop_after_reload.zone_set.compare = ptr_set_dnsname_node_compare;
+        message->payload.drop_after_reload.do_subset = TRUE;
+
+        ptr_set_avl_iterator iter;
+        ptr_set_avl_iterator_init(set, &iter);
+        while(ptr_set_avl_iterator_hasnext(&iter))
+        {
+            ptr_node *node = ptr_set_avl_insert(&message->payload.drop_after_reload.zone_set, ptr_set_avl_iterator_next_node(&iter)->key);
+            node->key = dnsname_zdup(node->key);
+        }
+    }
+    else
+    {
+        message->payload.drop_after_reload.do_subset = FALSE;
+    }
+    
+    async_message_s *async = async_message_alloc();
+    async->id = message->payload.type;
+    async->args = message;
+    async->handler = NULL;
+    async->handler_args = NULL;
+    async_message_call(&database_handler_queue, async);
+}
+
+static void
+database_clear_drop_after_reload()
+{
+    log_debug("database: enqueue operation DATABASE_SERVICE_CLEAR_DROP_AFTER_RELOAD");
+    database_message *message = database_load_message_alloc(database_all_origins, DATABASE_SERVICE_CLEAR_DROP_AFTER_RELOAD);
 
     async_message_s *async = async_message_alloc();
     async->id = message->payload.type;
@@ -1680,7 +2117,7 @@ database_set_drop_after_reload()
     async_message_call(&database_handler_queue, async);
 }
 
-void
+static void
 database_do_drop_after_reload()
 {
     log_debug("database: enqueue operation DATABASE_SERVICE_DO_DROP_AFTER_RELOAD");
@@ -1693,6 +2130,67 @@ database_do_drop_after_reload()
     async->handler_args = NULL;
     async_message_call(&database_handler_queue, async);
 }
+
+/// Chain of events: reconfigure end (last part)
+
+static void
+database_zone_reconfigure_disable_when_processed_part2(void *args_, bool delete_only)
+{
+    (void)args_;
+    (void)delete_only;
+    database_zone_reconfigure_disable();
+}
+
+/// Chain of events: reconfigure end (first part)
+
+static void
+database_zone_reconfigure_disable_when_processed_part1(void *args_, bool delete_only)
+{
+    if(!delete_only)
+    {
+        if(args_ != NULL)
+        {
+            log_info("database: will drop zones not defined in current configuration");
+            database_do_drop_after_reload();
+        }
+        else
+        {
+            log_info("database: will clear drop zone status");
+            database_clear_drop_after_reload();
+        }
+    }
+    else
+    {
+        log_info("database: deleting event ?");
+    }
+    
+    database_post_callback(database_zone_reconfigure_disable_when_processed_part2, NULL, "reconfigure-queue-disable");
+}
+
+/**
+ * Chain of events: reconfigure end (init)
+ * 
+ * When the database will have finished processing the queue at its current state, a callback handling drop-after-reload will be called
+ * Then, after this handling has been done, the reconfigure mode will be disabled (enabling configure again)
+ * 
+ * @param do_drop_after_reload
+ */
+
+void
+database_zone_reconfigure_do_drop_and_disable(bool do_drop_after_reload)
+{
+    if(do_drop_after_reload)
+    {
+        log_debug("database: will run reconfigure do drop and disable");
+    }
+    else
+    {
+        log_debug("database: will run reconfigure clear drop and disable");
+    }
+    void *args = do_drop_after_reload?(void*)1:(void*)0;
+    database_post_callback(database_zone_reconfigure_disable_when_processed_part1, args, "reconfigure-queue-handle-drop-after-reload");
+}
+
 
 void
 database_fire_zone_loaded(zone_desc_s *zone_desc, zdb_zone *zone, ya_result result_code)
@@ -1786,7 +2284,23 @@ database_fire_zone_processed(zone_desc_s *zone_desc)
     log_debug("database: %{dnsname}: enqueue operation DATABASE_SERVICE_ZONE_PROCESSED", zone_desc->origin);
     database_message *message = database_load_message_alloc(zone_desc->origin, DATABASE_SERVICE_ZONE_PROCESSED);
     
-    zone_acquire(zone_desc);
+    async_message_s *async = async_message_alloc();
+    async->id = message->payload.type;
+    async->args = message;
+    async->handler = NULL;
+    async->handler_args = NULL;
+    async_message_call(&database_handler_queue, async);
+}
+
+void
+database_post_callback(database_message_callback_function callback, void *args, const char * const name)
+{
+    log_debug("database: enqueue operation DATABASE_SERVICE_CALLBACK %s", name);
+    database_message *message = database_load_message_alloc(database_all_origins, DATABASE_SERVICE_CALLBACK);
+    message->payload.callback.callback = callback;
+    message->payload.callback.args = args;
+    message->payload.callback.timestamp = timeus();
+    message->payload.callback.name = name;
     
     async_message_s *async = async_message_alloc();
     async->id = message->payload.type;
@@ -1852,6 +2366,35 @@ database_service_run_garbage_collector()
 {
     thread_pool_enqueue_call(database_zone_unload_thread_pool, database_service_run_garbage_collector_thread, NULL, NULL, "garbage");
 }
+
+static void*
+database_callback_thread(void *parms_)
+{
+    database_message_callback_s *callback = (database_message_callback_s*)parms_;
+    
+    if(callback->type == DATABASE_SERVICE_CALLBACK)
+    {
+        log_debug("database: executing %s callback from %llT", callback->name, callback->timestamp);
+        callback->callback(callback->args, FALSE);
+        ZFREE(callback, database_message_callback_s);
+    }
+    else
+    {
+        log_err("database: got an invalid callback");
+    }
+    return NULL;
+}
+
+static void
+database_callback_run(database_message *message)
+{
+    database_message_callback_s *cb;
+    ZALLOC_OR_DIE(database_message_callback_s*, cb, database_message_callback_s, DBCB_TAG);
+    *cb = message->payload.callback;
+    thread_pool_enqueue_call(database_callback_thread_pool, database_callback_thread, cb, NULL, "callback");
+}
+
+//
 
 void
 database_service_zone_download_queue_thread(thread_pool_function func, void *parm, thread_pool_task_counter *counter, const char* categoryname)

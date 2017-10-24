@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup types The types used in the database
  *  @ingroup dnsdb
  *  @brief The types used in the database
@@ -66,23 +66,12 @@ struct journal;
     
 #define ROOT_LABEL                  ((u8*)"")
 
-/* zdb_ttlrdata
- *
- * This record is allocated in:
- *
- * zdb_zone_load
- * zdb_add_global
- *
- *
- */
-
 typedef struct zdb_packed_ttlrdata zdb_packed_ttlrdata;
-
 
 struct zdb_packed_ttlrdata
 { /* DO NOT CHANGE THE ORDER OF THE FIELDS !!! */
     zdb_packed_ttlrdata* next; /*  4  8 */
-    u32 ttl; /*  4  4 */
+    s32 ttl; /*  4  4 */
     u16 rdata_size; /*  2  2 */
     u8 rdata_start[1];
 };
@@ -103,12 +92,7 @@ struct zdb_packed_ttlrdata_soa
 #define ZDB_RECORD_SIZE_FROM_RDATASIZE(rdata_size_) (sizeof(zdb_packed_ttlrdata)-1+(rdata_size_))
 #define ZDB_RECORD_SIZE(record_)                    ZDB_RECORD_SIZE_FROM_RDATASIZE((record_)->rdata_size)
 
-#if DNSCORE_HAS_ZALLOC==0
-
-#define ZDB_MEMORY_ZALLOC(cast_,data_,size_)                            \
-    {                                                                   \
-        MALLOC_OR_DIE(cast_,data_,size_, GENERIC_TAG); /* ZALLOC IMPOSSIBLE */    \
-    }
+#if !DNSCORE_HAS_ZALLOC
 
 #define ZDB_RECORD_ZALLOC(record,ttl_,len_,rdata_)                   \
     {                                                                \
@@ -139,22 +123,6 @@ struct zdb_packed_ttlrdata_soa
 #define ZDB_RECORD_SAFE_ZFREE(record) free(record)
 
 #else
-
-/* Do not forget that ZALLOC can only be used where the size of the record
- * can be found from the allocated memory.
- */
-
-#define ZDB_MEMORY_ZALLOC(cast_,data_,size_)                            \
-    {                                                                   \
-        if(size_<=ZALLOC_PG_PAGEABLE_MAXSIZE)                        \
-        {                                                               \
-            (data_)=(cast_)zalloc_line(((size_)-1)>>3);                  \
-        }                                                               \
-        else                                                            \
-        {                                                               \
-            MALLOC_OR_DIE(cast_,data_,size_, GENERIC_TAG); /* ZALLOC IMPOSSIBLE */ \
-        }                                                               \
-    }
 
 #define ZDB_RECORD_ZALLOC(record_,ttl_,len_,rdata_)                     \
     {                                                                   \
@@ -329,11 +297,11 @@ typedef struct nsec3_zone nsec3_zone;
 
 #endif
 
-typedef union nsec_zone_union nsec_zone_union;
+typedef struct dnssec_zone_extension dnssec_zone_extension;
 
-union nsec_zone_union
+struct dnssec_zone_extension
 {
-#if ZDB_HAS_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT
     /*
      * A pointer to an array of nsec_label (nsec_label buffer[])
      * The size is the same as the dictionnary
@@ -341,7 +309,7 @@ union nsec_zone_union
     nsec_zone* nsec;
 #endif
     
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
     nsec3_zone* nsec3;
 #endif
 };
@@ -356,12 +324,12 @@ struct nsec_label_extension
 union nsec_label_union
 {
     /* NSEC */
-#if ZDB_HAS_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT
     nsec_label_extension nsec;
 #endif
 
     /* NSEC3 */
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
     struct nsec3_label_extension* nsec3;
 #endif
 
@@ -375,74 +343,61 @@ union nsec_label_union
  * RR_LABEL flags
  */
 
-// dff7
-// unused : 2008
-
-#define ZDB_RR_LABEL_RESERVED_0     0x0008
-#define ZDB_RR_LABEL_RESERVED_1     0x2000
-
 /*
- * For any label : marks that one owns a '*' label
+ * Zone security is managed
  */
-#define ZDB_RR_LABEL_GOT_WILD       0x0010
-
-/*
- * For any label but the apex : marks it as being a delegation (contains an NS record)
- */
-
-#define ZDB_RR_LABEL_DELEGATION     0x0020
+#define ZDB_RR_LABEL_MAINTAINED     0x8000 // should be moved
 
 /*
  * Forbid updates to the apex
  */
-#define ZDB_RR_APEX_LABEL_FROZEN    0x0040
-/**
- * For the apex, marks the zone as being loaded
- * (no NSEC3/RRSIG must be computed while the flag is on)
- */
-#define ZDB_RR_APEX_LABEL_LOADING   0x0040
-
-/*
- * For any label, marks it as having been updated (for DNSSEC post processing in a dynamic update)
- */
-
-#define ZDB_RR_LABEL_UPDATING       0x0040
-
-/*
- * For the apex, marks a label as being the apex
- */
-
-#define ZDB_RR_LABEL_APEX           0x0080
-
-/*
- * Explicitly mark a label as owner of a (single) CNAME
- */
-
-#define ZDB_RR_LABEL_HASCNAME       0x0100
-
-/*
- * Explicitly mark a label as owner of a something that is not a CNAME nor RRSIG nor NSEC
- */
-
-#define ZDB_RR_LABEL_DROPCNAME      0x0200
-
-/*
- * For any label, means there is a delegation (somewhere) above
- */
-
-#define ZDB_RR_LABEL_UNDERDELEGATION 0x0400
+#define ZDB_RR_APEX_LABEL_FROZEN    0x4000  // should be moved
 
 /*
  * When a zone has expired, the apex is marked with this flag
  */
 
-#define ZDB_RR_LABEL_INVALID_ZONE   0x0800
+#define ZDB_RR_LABEL_INVALID_ZONE   0x2000  // should be moved
 
-/**
- * This is a virtual label, most likely a translation of NSEC3 nodes
+/*
+ * For the apex, marks a label as being the apex
  */
 
-#define ZDB_RR_LABEL_VIRTUAL        0x4000
+#define ZDB_RR_LABEL_APEX           0x0001
+
+/*
+ * For any label but the apex : marks it as being a delegation (contains an NS record)
+ */
+
+#define ZDB_RR_LABEL_DELEGATION     0x0002
+
+/*
+ * For any label, means there is a delegation (somewhere) above
+ */
+
+#define ZDB_RR_LABEL_UNDERDELEGATION 0x0004
+
+/*
+ * For any label : marks that one owns a '*' label
+ */
+
+#define ZDB_RR_LABEL_GOT_WILD       0x0008
+
+/*
+ * Explicitly mark a label as owner of a (single) CNAME
+ */
+
+#define ZDB_RR_LABEL_HASCNAME       0x0010
+
+/*
+ * Explicitly mark a label as owner of a something that is not a CNAME nor RRSIG nor NSEC
+ */
+
+#define ZDB_RR_LABEL_DROPCNAME      0x0020
+
+#define ZDB_RR_LABEL_N3COVERED      0x0040
+#define ZDB_RR_LABEL_N3OCOVERED     0x0080
+
 
 #if ZDB_HAS_DNSSEC_SUPPORT
 /*
@@ -450,30 +405,24 @@ union nsec_label_union
  *
  * IT IS NOT VALID TO CHECK THIS TO SEE IF A ZONE IS NSEC
  */
-#define ZDB_RR_LABEL_NSEC           0x0001
+#define ZDB_RR_LABEL_NSEC           0x0100
 
 /*
  * This flag means that the label has a valid NSEC3 structure
  *
  * IT IS NOT VALID TO CHECK THIS TO SEE IF A ZONE IS NSEC3
  */
-#define ZDB_RR_LABEL_NSEC3          0x0002
-
-#define ZDB_RR_LABEL_DNSSEC_EDIT    0x0004
+#define ZDB_RR_LABEL_NSEC3          0x0200
 
 /*
  * The zone is (NSEC3) + OPTOUT (NSEC3 should also be set)
+ * 
+ * IT IS NOT VALID TO CHECK THIS TO SEE IF A ZONE IS NSEC3
  */
 
-#define ZDB_RR_LABEL_NSEC3_OPTOUT   0x1000
+#define ZDB_RR_LABEL_NSEC3_OPTOUT   0x0400
 
 #endif
-
-/**
- * Reserved for zone wide processing
- */
-
-#define ZDB_RR_LABEL_MARK           0x8000
 
 #define ZDB_ZONE_VALID(__z__) ((((__z__)->apex->flags)&ZDB_RR_LABEL_INVALID_ZONE) == 0)
 #define ZDB_ZONE_INVALID(__z__) ((((__z__)->apex->flags)&ZDB_RR_LABEL_INVALID_ZONE) != 0)
@@ -503,6 +452,7 @@ struct zdb_rr_label
 
 #define ZDB_ZONE_MUTEX_EXCLUSIVE_FLAG   0x80
 #define ZDB_ZONE_MUTEX_LOCKMASK_FLAG    0x7f
+
 #define ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG  0x7f
 
 #define ZDB_ZONE_MUTEX_NOBODY           GROUP_MUTEX_NOBODY
@@ -537,9 +487,40 @@ typedef ya_result zdb_zone_access_filter(const message_data* /*mesg*/, const voi
 #define ZDB_ZONE_STATUS_DUMPING_AXFR    2
 #define ZDB_ZONE_STATUS_WILL_NOTIFY     4 // in the queue
 
-struct dnskey_keyring;
+#define ZDB_ZONE_HAS_OPTOUT_COVERAGE    1   // assumed true, until something else is found
+#define ZDB_ZONE_MAINTAIN_NSEC          2
+#define ZDB_ZONE_MAINTAIN_NSEC3         4
+#define ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT  5
+#define ZDB_ZONE_MAINTAIN_MASK          7
 
+#define ZDB_ZONE_RRSIG_PUSH_ALLOWED     8   // feature requested internally
+
+
+
+struct dnskey_keyring;
+/*
+#define UNSIGNED_TYPE_VALUE_MAX(__type__)    ((__type__)~0)
+#define SIGNED_TYPE_VALUE_MAX(__type__)      (((__type__)~0)>>1)
+#define SIGNED_TYPE_VALUE_MIN(__type__)      (((__type__)~0) - (((__type__)~0)>>1))
+
+#define UNSIGNED_VAR_VALUE_MAX(__var__)     ((~0ULL)>>((sizeof(~0ULL) - sizeof(__var__)) * 8LL))
+#define SIGNED_VAR_VALUE_MAX(__var__)      (UNSIGNED_VAR_VALUE_MAX(__var__)>>1)
+#define SIGNED_VAR_VALUE_MIN(__var__)      (UNSIGNED_VAR_VALUE_MAX(__var__) - SIGNED_VAR_VALUE_MAX(__var__))
+
+#define UNSIGNED_VAR_VALUE_IS_MAX(__var__) (__var__ == UNSIGNED_VAR_VALUE_MAX(__var__))
+#define SIGNED_VAR_VALUE_IS_MAX(__var__) (__var__ == SIGNED_VAR_VALUE_MAX(__var__))
+*/
 #define ZDB_ZONE_HAS_JNL_REFERENCE 0
+
+struct zdb_zone_update_signatures_ctx
+{
+    u8 *current_fqdn;
+    u32 earliest_signature_expiration;
+    u16 labels_at_once;
+
+};
+
+typedef struct zdb_zone_update_signatures_ctx zdb_zone_update_signatures_ctx;
 
 struct zdb_zone
 {
@@ -547,7 +528,7 @@ struct zdb_zone
     zdb_rr_label *apex; /* pointer to the zone cut, 1 name for : SOA, NS, ... */
     
 #if ZDB_HAS_DNSSEC_SUPPORT
-    nsec_zone_union nsec;
+    dnssec_zone_extension nsec;
 #endif
 
     zdb_zone_access_filter* query_access_filter;
@@ -558,8 +539,7 @@ struct zdb_zone
                          */
     
 #if ZDB_HAS_DNSSEC_SUPPORT
-    //struct dnskey_keyring *keyring;
-    u8 *sig_last_processed_node;
+    zdb_zone_update_signatures_ctx progressive_signature_update;
 #endif
     
     s32 min_ttl;        /* a copy of the min-ttl from the SOA */
@@ -583,7 +563,7 @@ struct zdb_zone
     volatile u32 axfr_timestamp;        // The last time when an AXFR has ENDED to be written on disk, if 0, an AXFR is being written right now
     volatile u32 axfr_serial;           // The serial number of the AXFR (being written) on disk
     
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
     u32 sig_validity_regeneration_seconds;
     u32 sig_validity_interval_seconds;
     u32 sig_validity_jitter_seconds;
@@ -595,9 +575,9 @@ struct zdb_zone
     volatile s32 lock_count;            // the number of owners with the current lock ID
     volatile u8 lock_owner;             // the ID of who can manipulate the zone
     volatile u8 lock_reserved_owner;    // to the next-owner mechanism (reserve an ownership change)
-    volatile u8 _status;                // extended status flags for background tasks not part of the normal operations
     
-        
+    volatile u8 _status;                // extended status flags for background tasks not part of the normal operations        
+    volatile u8 _flags;                 // extended flags (optout coverage)
 #if ZDB_RECORDS_MAX_CLASS != 1
     u16 zclass;
 #endif
@@ -621,7 +601,7 @@ struct zdb_zone
     struct journal *_journal;
 #endif
         
-    dnsname_vector origin_vector;       // note: the origin vector is truncated to it's used lenght (sparing quite a lot of memory)
+    dnsname_vector origin_vector;       // note: the origin vector is truncated to it's used length (sparing quite a lot of memory)
 
 }; /* 18 34 => 20 40 */
 
@@ -682,13 +662,17 @@ struct zdb_query_ex_answer
 
 typedef struct zdb_zone_label_iterator zdb_zone_label_iterator;
 
+#define ZDB_ZONE_LABEL_ITERATOR_CAN_SKIP_CHILDREN 0
+
 struct zdb_zone_label_iterator /// 47136 bytes on a 64 bits architecture
 {
     const zdb_zone* zone;
     zdb_rr_label* current_label;
     s32 top;
     s32 current_top;    /* "top" of the label pointer by current_label  */
+#if ZDB_ZONE_LABEL_ITERATOR_CAN_SKIP_CHILDREN
     s32 prev_top;       /* "top" of the label returned with "_next"     */
+#endif
     s32 __reserved__;
     dnslabel_stack dnslabels;
     dictionary_iterator stack[DNSNAME_MAX_SECTIONS];

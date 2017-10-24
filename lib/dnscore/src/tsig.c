@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup ### #######
  *  @ingroup dnscore
  *  @brief
@@ -48,7 +48,11 @@
 #include "dnscore/tsig.h"
 #include "dnscore/packet_reader.h"
 
-//#if DNSCORE_HAS_TSIG_SUPPORT
+#ifndef SSL_API
+#error "SSL_API not defined"
+#endif
+
+#if DNSCORE_HAS_TSIG_SUPPORT
 
 #define TSIGNODE_TAG 0x45444f4e47495354
 #define TSIGPAYL_TAG 0x4c59415047495354
@@ -74,10 +78,10 @@
  *
  * Depth 0 is one node.
  *
- * Worst case : N is enough for sum[n = 0,N](Fn) where F is Fibonacci
+ * Worst case : N is enough for sum[n = 0,N](Fn) where Fn is Fibonacci(n+1)
  * Best case : N is enough for (2^(N+1))-1
  */
-#define AVL_MAX_DEPTH   32	/* worst case scenario : about 9M keys */
+#define AVL_MAX_DEPTH 40 // no need for more
 
 /*
  * The previx that will be put in front of each function name
@@ -230,12 +234,14 @@
  * This layer has been added for openssl-1.1.0 compatibility
  */
 
+#define HMACCTX_TAG 0x58544343414d48
+
 tsig_hmac_t
 tsig_hmac_allocate()
 {
-#if OPENSSL_VERSION_NUMBER < 0x10100000L // ie: 0.9.x
+#if SSL_API_LT_110 // ie: 0.9.x
     HMAC_CTX *hmac;
-    ZALLOC_OR_DIE(HMAC_CTX*, hmac, HMAC_CTX, GENERIC_TAG);
+    ZALLOC_OR_DIE(HMAC_CTX*, hmac, HMAC_CTX, HMACCTX_TAG);
     HMAC_CTX_init(hmac);
 #else
     HMAC_CTX *hmac = HMAC_CTX_new();
@@ -257,7 +263,7 @@ tsig_hmac_free(tsig_hmac_t t)
 {
     HMAC_CTX *hmac = (HMAC_CTX*)t;
     yassert(hmac != NULL);
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#if SSL_API_LT_110
     HMAC_CTX_cleanup(hmac);
     ZFREE(t, HMAC_CTX);
 #else
@@ -268,7 +274,7 @@ tsig_hmac_free(tsig_hmac_t t)
 void tsig_hmac_reset(tsig_hmac_t t)
 {
     HMAC_CTX *hmac = (HMAC_CTX*)t;
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#if SSL_API_LT_110
     HMAC_CTX_cleanup(hmac);
     HMAC_CTX_init(hmac);
 #else
@@ -279,7 +285,7 @@ void tsig_hmac_reset(tsig_hmac_t t)
 void tsig_hmac_init(tsig_hmac_t t, const void *key, int len, const EVP_MD *md)
 {
     HMAC_CTX *hmac = (HMAC_CTX*)t;
-#if OPENSSL_VERSION_NUMBER < 0x10000000L
+#if SSL_API_LT_100
     HMAC_Init(hmac, key, len, md);
 #else
     HMAC_Init_ex(hmac, key, len, md, NULL);
@@ -289,7 +295,7 @@ void tsig_hmac_init(tsig_hmac_t t, const void *key, int len, const EVP_MD *md)
 int
 tsig_hmac_update(tsig_hmac_t hmac, const void *data, size_t len)
 {
-#if OPENSSL_VERSION_NUMBER < 0x10000000L
+#if SSL_API_LT_100
     HMAC_Update((HMAC_CTX*)hmac, (const unsigned char*)data, len);
     return 1;
 #else
@@ -301,7 +307,7 @@ tsig_hmac_update(tsig_hmac_t hmac, const void *data, size_t len)
 int
 tsig_hmac_final(tsig_hmac_t hmac, void *out_data, unsigned int *out_len)
 {
-#if OPENSSL_VERSION_NUMBER < 0x10000000L
+#if SSL_API_LT_100
     HMAC_Final((HMAC_CTX*)hmac, (unsigned char*)out_data, out_len);
     return 1;
 #else
@@ -345,6 +351,8 @@ tsig_register(const u8 *name, const u8 *mac, u16 mac_size, u8 mac_algorithm)
             
             if(node->item.load_serial != tsig_serial)
             {
+                node->item.load_serial = tsig_serial; // else every 256 updates will see a duplicate
+                        
                 if(same)
                 {
                     // same key, different instances ... nothing to do
@@ -1755,7 +1763,7 @@ tsig_message_extract(struct message_data *mesg)
     return 1;   /* got 1 signature */
 }
 
-//#endif
+#endif
 
 /** @} */
 

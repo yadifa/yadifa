@@ -1,6 +1,6 @@
 /* 
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -239,7 +239,7 @@ AVL_NODE_TYPE* AVL_PREFIXED(avl_iterator_next_node)(AVL_PREFIXED(avl_iterator*) 
  *  @param[in] tree the tree to empty
  */
 
-void AVL_PREFIXED(avl_callback_and_destroy)(AVL_TREE_TYPE *tree,callback_function callback);
+void AVL_PREFIXED(avl_callback_and_destroy)(AVL_TREE_TYPE *tree, void (*callback)(AVL_NODE_TYPE*));
 
 /**
  * Returns the first element in the tree (with the key having the smallest value)

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup server Server
  *  @ingroup yadifad
  *  @brief
@@ -66,6 +66,8 @@
 
 extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
+
+#define SCTXSOCK_TAG 0x4b434f5358544353
 
 struct itf_name
 {
@@ -398,7 +400,7 @@ server_context_start(host_address *interfaces)
     
     if(server_context.ready == 0)
     {
-        return ERROR; // unacceptable
+        return INVALID_STATE_ERROR; // unacceptable
     }
     
     if(config_update_network_done)
@@ -415,7 +417,7 @@ server_context_start(host_address *interfaces)
     /* Copy stuff from the config file and command line options */
 
     server_context.listen_count = host_address_count(interfaces);
-    MALLOC_OR_DIE(host_address**, server_context.listen, sizeof(host_address*) * server_context.listen_count, GENERIC_TAG);
+    MALLOC_OR_DIE(host_address**, server_context.listen, sizeof(host_address*) * server_context.listen_count, HOSTADDR_TAG);
     {
         host_address *ha= interfaces;
         for(int i = 0; i < server_context.listen_count; ++i, ha = ha->next)
@@ -426,26 +428,26 @@ server_context_start(host_address *interfaces)
 
     server_context.udp_interface_count = server_context.listen_count;
     assert(server_context.udp_interface_count > 0);
-    MALLOC_OR_DIE(struct addrinfo**, server_context.udp_interface, sizeof(struct addrinfo*) * server_context.udp_interface_count, GENERIC_TAG);
+    MALLOC_OR_DIE(struct addrinfo**, server_context.udp_interface, sizeof(struct addrinfo*) * server_context.udp_interface_count, ADDRINFO_TAG);
     memset(server_context.udp_interface, 0, sizeof(struct addrinfo**) * server_context.udp_interface_count);
     
     server_context.tcp_interface_count = server_context.listen_count;
     assert(server_context.tcp_interface_count > 0);
-    MALLOC_OR_DIE(struct addrinfo**, server_context.tcp_interface, sizeof(struct addrinfo*) * server_context.tcp_interface_count, GENERIC_TAG);
+    MALLOC_OR_DIE(struct addrinfo**, server_context.tcp_interface, sizeof(struct addrinfo*) * server_context.tcp_interface_count, ADDRINFO_TAG);
     memset(server_context.tcp_interface, 0, sizeof(struct addrinfo**) * server_context.tcp_interface_count);
         
     server_context.udp_socket_count = server_context.udp_interface_count;
         
     if(server_context.reuse) server_context.udp_socket_count *= server_context.udp_unit_per_interface; // times workers
-
+    
     assert(server_context.udp_socket_count > 0);
-    MALLOC_OR_DIE(int*, server_context.udp_socket, sizeof(int) * server_context.udp_socket_count, GENERIC_TAG);
+    MALLOC_OR_DIE(int*, server_context.udp_socket, sizeof(int) * server_context.udp_socket_count, SCTXSOCK_TAG);
     memset(server_context.udp_socket, 0xff, sizeof(int) * server_context.udp_socket_count);
     
     server_context.tcp_socket_count = server_context.tcp_interface_count * server_context.tcp_unit_per_interface;
     //if(server_context.reuse) server_context.tcp_socket_count *= server_context.tcp_unit_per_interface;
     assert(server_context.tcp_socket_count > 0);
-    MALLOC_OR_DIE(int*, server_context.tcp_socket, sizeof(int) * server_context.tcp_socket_count, GENERIC_TAG);
+    MALLOC_OR_DIE(int*, server_context.tcp_socket, sizeof(int) * server_context.tcp_socket_count, SCTXSOCK_TAG);
     memset(server_context.tcp_socket, 0xff, sizeof(int) * server_context.tcp_socket_count);
     
     int udp_sockfd_idx = 0;

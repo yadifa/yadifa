@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -66,6 +66,7 @@
 #include "ixfr.h"
 #include "confs.h"
 #include "notify.h"
+#include "dnssec-policy.h"
 #include "database-service-zone-download.h"
 
 extern logger_handle *g_server_logger;
@@ -425,59 +426,97 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
                 {
                     log_info("ixfr: %{dnsname}: %{hostaddr}: writing stream into the journal", zone->origin, servers);
                     
-                    if(ISOK(return_value = zdb_zone_journal_append_ixfr_stream(zone, &xfris)))
+                    for(;;)
                     {
-                        u32 ixfr_from_serial;
-
-                        zdb_zone_journal_get_serial_range(zone, &ixfr_from_serial, out_loaded_serial);
-
-                        u32 expected_serial = xfr_input_stream_get_serial(&xfris);
+                        return_value = zdb_zone_journal_append_ixfr_stream(zone, &xfris);
                     
+                        if(ISOK(return_value) || (return_value == ZDB_JOURNAL_MUST_BE_REPLAYED))
+                        {
+                            if(return_value == ZDB_JOURNAL_MUST_BE_REPLAYED)
+                            {
+                                log_notice("ixfr: %{dnsname}: writing the journal was interrupted, operation will be restarted after replay", zone->origin);
+                            }
+                            
+                            u32 ixfr_from_serial;
+
+                            zdb_zone_journal_get_serial_range(zone, &ixfr_from_serial, out_loaded_serial);
+
+                            u32 expected_serial = xfr_input_stream_get_serial(&xfris);
 #ifdef DEBUG
-                        log_debug("ixfr: %{dnsname}: journal_append_ixfr_stream returned %r", zone->origin, return_value);
+                            log_debug("ixfr: %{dnsname}: journal_append_ixfr_stream returned %r", zone->origin, return_value);
 #endif
+                            ya_result ret;
 
-                        ya_result ret;
+                            log_info("ixfr: %{dnsname}: replaying journal (%u;%u)", zone->origin, ixfr_from_serial, *out_loaded_serial);
+                            
+                            u8 prev_zone_dnssec_type = zone_policy_guess_dnssec_type(zone);
+                            
+                            if(ISOK(ret = zdb_icmtl_replay(zone)))
+                            {
+                                log_info("ixfr: %{dnsname}: journal replayed", zone->origin);
+                                
+#if ZDB_HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT
+                                u8 zone_dnssec_type = zone_policy_guess_dnssec_type(zone);
+                                
+                                if(prev_zone_dnssec_type != zone_dnssec_type)
+                                {
+                                    switch(zone_dnssec_type)
+                                    {
+                                        case ZONE_DNSSEC_FL_NOSEC:
+                                            log_debug("ixfr: %{dnsname}: slave zone is not DNSSEC", zone->origin);
+                                            break;
+                                        case ZONE_DNSSEC_FL_NSEC:
+                                            log_debug("ixfr: %{dnsname}: slave zone is NSEC", zone->origin);
+                                            break;
+                                        case ZONE_DNSSEC_FL_NSEC3:
+                                            log_debug("ixfr: %{dnsname}: slave zone is NSEC3", zone->origin);
+                                            break;
+                                        case ZONE_DNSSEC_FL_NSEC3_OPTOUT:
+                                            log_debug("ixfr: %{dnsname}: slave zone is NSEC3 OPT-OUT", zone->origin);
+                                            break;
+                                    }
+                                    
+                                    zone_dnssec_status_update(zone);
+                                }
+#endif
+                            }
+                            else
+                            {
+                                return_value = ret;
+                                log_err("ixfr: %{dnsname}: journal replay returned %r", zone->origin, return_value);
+                            }
 
-                        log_info("ixfr: %{dnsname}: replaying journal (%u;%u)", zone->origin, ixfr_from_serial, *out_loaded_serial);
-                        if(ISOK(ret = zdb_icmtl_replay(zone)))
-                        {
-                            log_info("ixfr: %{dnsname}: journal replayed", zone->origin);
-                        }
+                            if(ISOK(ret) && serial_lt(*out_loaded_serial, expected_serial))
+                            {
+                                // should redo an IXFR asap
+
+                                log_info("ixfr: %{dnsname}: loaded serial %u below expected serial: querying IXFR again", zone->origin, *out_loaded_serial, expected_serial);
+                                database_service_zone_ixfr_query(zone->origin);
+                            }
+                        } 
                         else
                         {
-                            return_value = ret;
-                            log_err("ixfr: %{dnsname}: journal replay returned %r", zone->origin, return_value);
+                            if(return_value == ZDB_JOURNAL_SERIAL_OUT_OF_KNOWN_RANGE)
+                            {
+                                /// @note 20161018 edf -- we are slave, so it's OK
+                                log_warn("ixfr: %{dnsname}: %{hostaddr}: no continuity with the journal, resetting", zone->origin, servers, return_value);
+                                // hole in the journal : reset
+                                zdb_zone_journal_delete(zone);
+                            }
+                            else
+                            {
+                                log_err("ixfr: %{dnsname}: %{hostaddr}: failed to write the stream into the journal: %r", zone->origin, servers, return_value);
+                            }
                         }
-
-                        if(ISOK(ret) && serial_lt(*out_loaded_serial, expected_serial))
-                        {
-                            // should redo an IXFR asap
-
-                            log_info("ixfr: %{dnsname}: loaded serial %u below expected serial: querying IXFR again", zone->origin, *out_loaded_serial, expected_serial);
-                            database_service_zone_ixfr_query(zone->origin);
-                        }
-                    }
-                    else
-                    {
-                        if(return_value == ZDB_JOURNAL_SERIAL_OUT_OF_KNOWN_RANGE)
-                        {
-                            /// @note 20161018 edf -- we are slave, so it's OK
-                            log_warn("ixfr: %{dnsname}: %{hostaddr}: no continuity with the journal, resetting", zone->origin, servers, return_value);
-                            // hole in the journal : reset
-                            zdb_zone_journal_delete(zone);
-                        }
-                        else
-                        {
-                            log_err("ixfr: %{dnsname}: %{hostaddr}: failed to write the stream into the journal: %r", zone->origin, servers, return_value);
-                        }
+                        
+                        break; // for
                     }
                     
                     break;
                 }
                 default:
                 {
-                    return_value = ERROR;
+                    return_value = SERVER_ERROR_CODE(RCODE_FORMERR);
                     break;
                 }
             }

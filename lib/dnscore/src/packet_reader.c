@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnspacket DNS Messages
  *  @ingroup dnscore
  *  @brief
@@ -101,7 +101,7 @@ packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8 *output_buffer, u3
             return buffer - output_buffer;
         }
 
-        if((p + len > p_limit) || (buffer + len > buffer_limit))
+        if((p + len >= p_limit) || (buffer + len >= buffer_limit))
         {
             return UNEXPECTED_EOF;
         }
@@ -120,18 +120,24 @@ packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8 *output_buffer, u3
 
     for(;;)
     {
-        u8 len = *p++;
+        u8 len = *p;
 
         if((len & 0xc0) == 0xc0) /* EDF: better yet: cmp len, 192; jge  */
         {
             /* reposition the pointer */
             u32 new_offset = len & 0x3f;
             new_offset   <<= 8;
-            new_offset    |= *p;
+            new_offset    |= p[1];
 
-            p             = &reader->packet[new_offset];
-
-            continue;
+            const u8* q = &reader->packet[new_offset];
+            
+            if(q < p)
+            {
+                p = q;
+                continue;
+            }
+            
+            return SERVER_ERROR_CODE(RCODE_FORMERR);
         }
 
         *buffer++ = len;
@@ -140,13 +146,16 @@ packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8 *output_buffer, u3
         {
             return buffer - output_buffer;
         }
+        
+        ++p;
 
-        if((p + len > p_limit) || (buffer + len > buffer_limit))
+        if((p + len >= p_limit) || (buffer + len >= buffer_limit))
         {
             return UNEXPECTED_EOF;
         }
 
         u8* buffer_limit = &buffer[len];
+        
         do
         {
             *buffer++ = tolower(*p++);
@@ -728,7 +737,7 @@ packet_reader_read_utf8(packet_unpack_reader_data *reader, u16 rdatasize, u16 rc
     {
         if(rdatasize != 0)
         {
-            return ERROR; /* formerr */
+            return SERVER_ERROR_CODE(RCODE_FORMERR); /* formerr */
         }
         
         if(!dryrun)
@@ -810,7 +819,7 @@ packet_reader_read_remote_server(packet_unpack_reader_data *reader, u16 rdatasiz
     {
         if(rdatasize != 0)
         {
-            return ERROR; /* formerr */
+            return SERVER_ERROR_CODE(RCODE_FORMERR); /* formerr */
         }
         
         if(!dryrun)
@@ -868,7 +877,7 @@ packet_reader_read_remote_server(packet_unpack_reader_data *reader, u16 rdatasiz
 
                 if((tsig = tsig_get(tsig_name)) == NULL)
                 {
-                    return ERROR;
+                    return SERVER_ERROR_CODE(TSIG_BADKEY);
                 }                
             }
 

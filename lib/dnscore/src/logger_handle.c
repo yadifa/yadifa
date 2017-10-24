@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup logger Logging functions
  *  @ingroup dnscore
  *  @brief
@@ -41,7 +41,6 @@
  *
  *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
 #include "dnscore/dnscore-config.h"
 
 #if HAS_PTHREAD_SETNAME_NP
@@ -76,6 +75,7 @@
 #include "dnscore/async.h"
 
 #include "dnscore/ptr_set.h"
+#include "dnscore/thread_pool.h"
 
 #define LOGGER_HANDLE_TAG 0x4c444e48474f4c /* LOGHNDL */
 
@@ -87,7 +87,7 @@
 #define DEBUG_LOG_MESSAGES 0
 
 #if DEBUG_LOG_MESSAGES == 1
-#pragma message("DEBUG_LOG_MESSAGES")
+# pragma message("DEBUG_LOG_MESSAGES") // the space after the '#' is to ignore it on pragma search
 #endif
 
 #define COLUMN_SEPARATOR " | "
@@ -139,7 +139,7 @@ struct logger_message_text_s
 #if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
     pid_t pid;                      // 32 44
 #endif
-#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON || DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
     pthread_t thread_id;            // 36 48
 #endif
                                     // 40 56
@@ -554,6 +554,7 @@ logger_service_channel_register(const char *channel_name, logger_channel *channe
         osformatln(termout, "logger_service_channel_register(%s,%p) NAME ALREADY USED", channel_name, channel);
         flushout();
 #endif
+        logger_channel_free(channel);
         return LOGGER_CHANNEL_ALREADY_REGISTERED;
     }
     
@@ -1005,7 +1006,6 @@ static void*
 logger_dispatcher_thread(void* context)
 {
     (void)context;
-    
 #if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_dispatcher_thread(%p)", context);
     flushout();
@@ -1021,6 +1021,10 @@ logger_dispatcher_thread(void* context)
 #endif
 #endif
     
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+    thread_set_tag(pthread_self(), "logger");
+#endif
+    
     output_stream baos;
     bytearray_output_stream_context baos_context;
     
@@ -1033,6 +1037,10 @@ logger_dispatcher_thread(void* context)
     output_stream_write_method *baos_write = baos.vtbl->write;
     
     char repeat_text[128];
+    
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+    char thread_tag_buffer[12];
+#endif
 
     bool must_run = TRUE; 
     
@@ -1109,9 +1117,13 @@ logger_dispatcher_thread(void* context)
                     osprint_u16(&baos, message->text.pid);
                     baos_write(&baos, (const u8*)COLUMN_SEPARATOR, COLUMN_SEPARATOR_SIZE);
 #endif
-#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON || DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+                    baos_write(&baos, (const u8*)thread_get_tag(message->text.thread_id), 8);
+#else
                     osprint_u32_hex(&baos, (u32)message->text.thread_id);
-                    baos_write(&baos, (const u8*)COLUMN_SEPARATOR, COLUMN_SEPARATOR_SIZE);
+#endif
+                    baos_write(&baos, (const u8*)COLUMN_SEPARATOR, COLUMN_SEPARATOR_SIZE);                    
 #endif
 
                     baos_write(&baos, (u8*)handle->formatted_name, handle->formatted_name_len);
@@ -1170,6 +1182,41 @@ logger_dispatcher_thread(void* context)
 
                             struct tm t;
                             localtime_r(&message->text.tv.tv_sec, &t);
+             
+#if 1
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+                            thread_copy_tag(channel->last_message->text.thread_id, thread_tag_buffer);
+#endif
+                            
+                            return_code = snformat(repeat_text, sizeof(repeat_text), 
+                                    
+#if (defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON) && DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %s | -------- | N | last message repeated %d times",
+#elif defined(DEBUG) || (HAS_LOG_PID_ALWAYS_ON && HAS_LOG_THREAD_ID_ALWAYS_ON)
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | -------- | N | last message repeated %d times",
+#elif DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %s | -------- | N | last message repeated %d times",
+#elif HAS_LOG_THREAD_ID_ALWAYS_ON
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %08x | -------- | N | last message repeated %d times",
+#elif HAS_LOG_PID_ALWAYS_ON
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | -------- | N | last message repeated %d times",
+#else
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | -------- | N | last message repeated %d times",
+#endif
+                            t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
+                                    t.tm_hour, t.tm_min, t.tm_sec, message->text.tv.tv_usec,
+#if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
+                            getpid(),
+#endif
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+                            thread_tag_buffer,
+#else
+    #if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
+                            channel->last_message->text.thread_id,
+    #endif
+#endif
+                            channel->last_message_count);
+#else
                             
                             return_code = snformat(repeat_text, sizeof(repeat_text), "%04d-%02d-%02d %02d:%02d:%02d.%06d" COLUMN_SEPARATOR 
 #ifdef DEBUG
@@ -1184,15 +1231,15 @@ logger_dispatcher_thread(void* context)
 #if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
                                     channel->last_message->text.pid,
 #endif
-#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON || DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
                                     channel->last_message->text.thread_id,
 #endif
                                     channel->last_message_count);
+#endif
+                            
 
                             if(ISOK(return_code))
                             {
-                                /// @todo 20150713 edf -- verify that generated code is not slower than an 'if'
-                                
                                 while(FAIL(return_code = logger_channel_msg(channel, level, repeat_text, return_code, 29)))
                                 {
                                     if(stdstream_is_tty(termerr))
@@ -1558,6 +1605,10 @@ logger_dispatcher_thread(void* context)
 #if DEBUG_LOG_HANDLER
     osformatln(termout, "logger_dispatcher_thread(%p) END", context);
     flushout();
+#endif
+    
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+    thread_clear_tag(pthread_self());
 #endif
 
     return NULL;
@@ -2387,7 +2438,7 @@ logger_handle_vmsg(logger_handle* handle, u32 level, const char* fmt, va_list ar
 #if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
     message->text.pid = getpid();
 #endif
-#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON || DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
     message->text.thread_id = pthread_self();
 #endif
     
@@ -2497,7 +2548,7 @@ logger_handle_msg(logger_handle* handle, u32 level, const char* fmt, ...)
 #if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
     message->text.pid = getpid();
 #endif
-#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON || DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
     message->text.thread_id = pthread_self();
 #endif
     
@@ -2583,7 +2634,7 @@ logger_handle_msg_text(logger_handle* handle, u32 level, const char* text, u32 t
 #if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
     message->text.pid = getpid();
 #endif
-#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON || DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
     message->text.thread_id = pthread_self();
 #endif
     
@@ -2662,7 +2713,7 @@ logger_handle_msg_text_ext(logger_handle* handle, u32 level, const char* text, u
 #if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
     message->text.pid = getpid();
 #endif
-#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON || DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
     message->text.thread_id = pthread_self();
 #endif
     
@@ -2769,7 +2820,7 @@ logger_handle_try_msg(logger_handle* handle, u32 level, const char* fmt, ...)
 #if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
     message->text.pid = getpid();
 #endif
-#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON || DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
     message->text.thread_id = pthread_self();
 #endif
     
@@ -2861,7 +2912,7 @@ logger_handle_try_msg_text(logger_handle* handle, u32 level, const char* text, u
 #if defined(DEBUG) || HAS_LOG_PID_ALWAYS_ON
     message->text.pid = getpid();
 #endif
-#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON
+#if defined(DEBUG) || HAS_LOG_THREAD_ID_ALWAYS_ON || DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
     message->text.thread_id = pthread_self();
 #endif
     

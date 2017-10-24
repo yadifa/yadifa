@@ -1,6 +1,6 @@
 ################################################################################
 # 
-#  Copyright (c) 2011-2016, EURid. All rights reserved.
+#  Copyright (c) 2011-2017, EURid. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 #  Redistribution and use in source and binary forms, with or without 
@@ -28,6 +28,18 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 ################################################################################
+# 
+#        SVN Program:
+#                $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/bin/yadifa/Makefile.am $
+# 
+#        Last Update:
+#                $Date: 2017-09-26 11:54:55 +0200 (Tue, 26 Sep 2017) $
+#                $Revision: 7308 $
+# 
+#        Purpose:
+#                YADIFA main Makefile.am script
+# 
+################################################################################
 
 #CPU_FLAGS=
 ACLOCAL_AMFLAGS = -I m4
@@ -38,18 +50,38 @@ bin_PROGRAMS = yadifa
 
 yadifa_SOURCES  = \
 		  main.c \
+		  message-viewer-dig.c \
+		  message-viewer-json.c \
+		  message-viewer-parse.c \
+		  message-viewer-wire.c \
+		  message-viewer-xml.c \
 		  query-result.c
 
 noinst_HEADERS  = \
 		  common-config.h \
+		  message-viewer-dig.h \
+		  message-viewer-json.h \
+		  message-viewer-parse.h \
+		  message-viewer-wire.h \
+		  message-viewer-xml.h \
 		  query-result.h
 
-yadifa_SOURCES += yadifa.c yadifa-config.c message-viewer-dig.c
-noinst_HEADERS += yadifa.h yadifa-config.h message-viewer-dig.h
+yadifa_SOURCES += yadifa.c             yadifa-config.c
+noinst_HEADERS += yadifa.h             yadifa-config.h
 
-features:
+	yadifa_SOURCES += yao.c        yao-config.c
+	noinst_HEADERS += yao.h        yao-config.h
+
+# this will probably be removed afterwards
+#yadifa_SOURCES += dnssec-test.c
+
+# this will probably be removed afterwards
+noinst_HEADERS += dnssec-test.h
+
 
 include ../../mk/common-settings.mk
 
 include ../../mk/common-labels.mk
+
+features:
 

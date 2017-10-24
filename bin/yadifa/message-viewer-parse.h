@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -30,4 +30,32 @@
  *
  *------------------------------------------------------------------------------
  *
+ *      SVN Program:
+ *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/bin/yadifa/message-viewer-parse.h $
+ *
+ *      Last Update:
+ *              $Date: 2017-10-03 15:40:30 +0200 (Tue, 03 Oct 2017) $
+ *              $Revision: 7328 $
+ *
+ *      Last Change:
+ *              $Author: ericdf $
+ *
+ *------------------------------------------------------------------------------
+ *
+ * DOCUMENTATION */
+/** @defgroup 
+ *  @ingroup 
+ *  @brief 
+ *
+ * @{
  */
+
+#pragma once
+
+#include <dnscore/message-viewer.h>
+
+void message_viewer_parse_set(message_viewer *view);
+void message_viewer_parse_init(message_viewer *mv, output_stream *os, u16 view_mode_with);
+
+/** @} */
+

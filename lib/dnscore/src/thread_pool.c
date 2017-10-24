@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief
@@ -41,7 +41,6 @@
  *
  *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
 #include "dnscore/dnscore-config.h"
 
 #if HAS_PTHREAD_SETNAME_NP
@@ -101,7 +100,8 @@ struct thread_descriptor_s
     struct thread_pool_s *pool;
     pthread_t id;
     volatile u8 status;
-    char info[255];
+    u8 index;
+    char info[46];
 };
 
 /* The array of thread descriptors*/
@@ -227,6 +227,7 @@ thread_pool_thread(void *args)
      */
 
     thread_descriptor_s* desc = (thread_descriptor_s*)args;
+
     threaded_queue *queue = &desc->pool->queue;
 
 #if VERBOSE_THREAD_LOG > 1
@@ -245,7 +246,13 @@ thread_pool_thread(void *args)
         {
             log_quit("pthread_setspecific = %r", ERRNO_ERROR);
         }
-    }
+    }   
+    
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+    char service_tag[8];
+    thread_make_tag(STRNULL(desc->pool->pool_name), desc->index, desc->pool->thread_pool_size, service_tag);
+    thread_set_tag(pthread_self(), service_tag);
+#endif
 
 #if VERBOSE_THREAD_LOG > 2
     log_debug("thread: %x random thread-local variable ready", desc->id);
@@ -358,6 +365,10 @@ thread_pool_thread(void *args)
 
 
     
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+    thread_clear_tag(pthread_self());
+#endif
+    
     pthread_exit(NULL); // end of the thread from the pool
 
     return NULL;
@@ -426,7 +437,7 @@ thread_pool_destroy_random_ctx()
 }
 
 static thread_descriptor_s*
-thread_pool_create_thread(thread_pool_s *tp)
+thread_pool_create_thread(thread_pool_s *tp, int index)
 {
     thread_descriptor_s *td = NULL;
     
@@ -435,7 +446,8 @@ thread_pool_create_thread(thread_pool_s *tp)
 
     td->pool = tp;
     td->status = THREAD_STATUS_STARTING;
-
+    td->index = (u8)index;
+    
     int ret;
     if((ret = pthread_create(&td->id, NULL, thread_pool_thread, td)) != 0)
     {
@@ -501,7 +513,7 @@ thread_pool_init_ex(u8 thread_count, u32 queue_size, const char *pool_name)
     {
         thread_descriptor_s *td;
         
-        if((td = thread_pool_create_thread(tp)) == NULL)
+        if((td = thread_pool_create_thread(tp, i)) == NULL)
         {
             log_err("thread-pool: '%s' failed to create thread #%i/%i", pool_name, i, thread_count);
 
@@ -655,7 +667,7 @@ thread_pool_try_enqueue_call(struct thread_pool_s* tp, thread_pool_function func
     else
     {
         ZFREE(task, threaded_queue_task);
-        return ERROR;   // full
+        return LOCK_TIMEOUT;   // full
     }
 }
 
@@ -885,7 +897,7 @@ thread_pool_start(struct thread_pool_s* tp)
         int ret;
         
         thread_descriptors[i]->status = THREAD_STATUS_STARTING;
-        
+        thread_descriptors[i]->index = (u8)tps;
         if((ret = pthread_create(&thread_descriptors[i]->id, NULL, thread_pool_thread, thread_descriptors[i])) != 0)
         {
             return ret;
@@ -946,7 +958,7 @@ thread_pool_resize(struct thread_pool_s* tp, u8 new_size)
         {
             thread_descriptor_s *td;
 
-            if((td = thread_pool_create_thread(tp)) == NULL)
+            if((td = thread_pool_create_thread(tp, i)) == NULL)
             {
                 // failed to allocate one thread ...
                 // it's bad.  keep what we have.
@@ -1268,6 +1280,186 @@ thread_pool_start_all()
     return err;
 }
 
-/** @} */
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
 
-/*----------------------------------------------------------------------------*/
+#define THREAD_TAG_HASH_PRIME 8191
+#define THREAD_TAG_HASH_SIZE (THREAD_TAG_HASH_PRIME + 1)
+
+struct thread_tag_entry_s
+{
+    pthread_t id;
+    char tag[8];
+};
+
+typedef struct thread_tag_entry_s thread_tag_entry_s;
+
+static const char thread_tag_unknown[8] = {'u','n','k','n','o','w','n',' '};
+static thread_tag_entry_s thread_tag_entry[THREAD_TAG_HASH_SIZE] = {0};
+static mutex_t thread_tag_mtx = MUTEX_INITIALIZER;
+
+static int thread_id_key(pthread_t id)
+{
+    unsigned int key = (u32)id;
+    if(sizeof(id) == 8)
+    {
+        key ^= (u32)(id >> 32);
+    }
+    return key % THREAD_TAG_HASH_PRIME;
+}
+
+const char *thread_get_tag(pthread_t id)
+{
+    int key = thread_id_key(id);
+    
+    for(int c = THREAD_TAG_HASH_SIZE;;)
+    {
+        if(thread_tag_entry[key].id == id)
+        {
+            return thread_tag_entry[key].tag;
+        }
+        
+        if(--c == 0)
+        {
+            return thread_tag_unknown;
+        }
+        
+        key = (key + 1) & THREAD_TAG_HASH_PRIME;
+    }
+}
+
+char *thread_copy_tag(pthread_t id, char *out_9_bytes)
+{
+    memcpy(out_9_bytes, thread_get_tag(id), 9);
+    out_9_bytes[8] = '\0';
+    return out_9_bytes;
+}
+
+void thread_set_tag(pthread_t id, const char *tag8chars)
+{
+    int key = thread_id_key(id);
+    
+
+    
+    mutex_lock(&thread_tag_mtx);
+    for(int c = THREAD_TAG_HASH_SIZE;;)
+    {
+        if(thread_tag_entry[key].id == 0)
+        {
+            thread_tag_entry[key].id = id;
+            
+            int i;
+            for(i = 0; i < 8; ++i)
+            {
+                if(tag8chars[i] == '\0')
+                {
+                    break;
+                }
+                thread_tag_entry[key].tag[i] = tag8chars[i];
+            }
+            for(; i < 8; ++i)
+            {
+                thread_tag_entry[key].tag[i] = ' ';
+            }
+            
+            mutex_unlock(&thread_tag_mtx);
+            
+
+            
+            return;
+        }
+        
+        if(--c == 0)
+        {
+            mutex_unlock(&thread_tag_mtx);
+            return; // ignore
+        }
+        
+        key = (key + 1) & THREAD_TAG_HASH_PRIME;
+    }
+}
+
+void thread_clear_tag(pthread_t id)
+{
+    int key = thread_id_key(id);
+    
+    mutex_lock(&thread_tag_mtx);
+    for(int c = THREAD_TAG_HASH_SIZE;;)
+    {
+        if(thread_tag_entry[key].id == id)
+        {
+            thread_tag_entry[key].id = 0;
+            thread_tag_entry[key].tag[0] = 0;
+            mutex_unlock(&thread_tag_mtx);
+            return;
+        }
+        
+        if(--c == 0)
+        {
+            mutex_unlock(&thread_tag_mtx);
+            return; // ignore
+        }
+        
+        key = (key + 1) & THREAD_TAG_HASH_PRIME;
+    }
+}
+
+void thread_make_tag(const char *prefix, u32 index, u32 count, char *out_service_tag)
+{
+    char service_tag[9];
+    
+    if(prefix == NULL)
+    {
+        memcpy(out_service_tag, "unnamed", 8);
+        return;
+    }
+    
+    memset(out_service_tag, 0, 8);
+    
+    size_t prefix_len = strlen(prefix);
+    
+    if(prefix_len > 8)
+    {
+        prefix_len = 8;
+    }
+    memcpy(service_tag, prefix, prefix_len);
+    for(size_t i = prefix_len; i < 8; ++i)
+    {
+        service_tag[i] = ' ';
+    }
+    service_tag[8] = '\0';
+    
+    if(count <= 1)
+    {
+        // good as it is
+    }
+    else if(count <= 0x10) // [ 0 ; 0x10 [ => 1 byte
+    {
+        snformat(&service_tag[7], 2, "%x", index);
+    }
+    else if(count <= 0x100)
+    {
+        snformat(&service_tag[6], 3, "%02x", index);
+    }
+    else if(count <= 0x1000)
+    {
+        snformat(&service_tag[5], 4, "%03x", index);
+    }
+    else if(count <= 0x10000)
+    {
+        snformat(&service_tag[4], 5, "%04x", index);
+    }
+    else if(count <= 0x100000)
+    {
+        snformat(&service_tag[3], 6, "%05x", index);
+    }
+    else
+    {
+        snformat(&service_tag[1], 8, "%x", index);
+    }
+    
+    memcpy(out_service_tag, service_tag, 8);
+}
+
+#endif
+
+/** @} */

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup systemtypes Definition of types in order to ensure architecture-independence
  *  @ingroup dnscore
  *  @brief Definition of types in order to ensure architecture-independence
@@ -169,6 +169,7 @@ typedef int bool;
 #define SIGNED_VAR_VALUE_MIN(__var__)      (UNSIGNED_VAR_VALUE_MAX(__var__) - SIGNED_VAR_VALUE_MAX(__var__))
 
 #define UNSIGNED_VAR_VALUE_IS_MAX(__var__) (__var__ == UNSIGNED_VAR_VALUE_MAX(__var__))
+#define SIGNED_VAR_VALUE_IS_MAX(__var__) (__var__ == SIGNED_VAR_VALUE_MAX(__var__))
 
 /* This is the basic type definition set                        */
 /* Tweaks will be added for each setup (using the preprocessor) */
@@ -615,11 +616,15 @@ typedef u32 process_flags_t;
 
 #ifndef DEBUG
 #define MALLOC_OR_DIE(cast,target,size,tag) if(((target)=(cast)malloc(size))==NULL){perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
+#define MALLOC_OBJECT_OR_DIE(target__,object__,tag__) if(((target__)=(object__*)malloc(sizeof(object__)))==NULL){perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
+#define MALLOC_OBJECT_ARRAY_OR_DIE(target__,object__,count__,tag__) if(((target__)=(object__*)malloc(sizeof(object__)*(count__)))==NULL){perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
 #else
 #define MALLOC_OR_DIE(cast,target,size,tag) if(((target)=(cast)malloc(size))!=NULL){memset((void*)(target),0xac,(size));}else{perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
+#define MALLOC_OBJECT_OR_DIE(target__,object__,tag__) if(((target__)=(object__*)malloc(sizeof(object__)))!=NULL){memset((void*)(target__),0xac,(sizeof(object__)));}else{perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
+#define MALLOC_OBJECT_ARRAY_OR_DIE(target__,object__,count__,tag__) if(((target__)=(object__*)malloc(sizeof(object__)*(count__)))!=NULL){memset((void*)(target__),0xac,(sizeof(object__)*(count__)));}else{perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
 #endif
 
-#define REALLOC_OR_DIE(cast,src_and_target,newsize,tag) if(((src_and_target)=(cast)realloc((src_and_target),(newsize)))==NULL){perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
+#define REALLOC_OR_DIE(cast,src_and_target,newsize,tag) if(((src_and_target)=(cast)realloc((src_and_target),(newsize)))==NULL){perror(__FILE__);abort();}
 
 // the string if not NULL, else a empty string
 

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup zone Functions used to sanitize a zone
  *  @ingroup dnsdb
  *  @brief Functions used to sanitize a zone
@@ -332,7 +332,7 @@ zdb_sanitize_rr_set_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsname_
                         not_a_aaaa++;                        
                         break;
                     case TYPE_NS:
-                    case TYPE_DS:                    
+                    case TYPE_DS:
                         not_cname_rrsig_nsec++;
                         not_a_aaaa++;
                         break;
@@ -445,12 +445,19 @@ zdb_sanitize_rr_set_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsname_
              * MUST have an NS with a DS
              */
             
-            if(!HAS_TYPE(NS_TYPE))
+            if(HAS_TYPE(NS_TYPE))
+            {
+                label->flags |= ZDB_RR_LABEL_N3COVERED|ZDB_RR_LABEL_N3OCOVERED;
+            }
+            else
             {
                 return_value |= SANITY_EXPECTEDNS;
+                label->flags &= ~(ZDB_RR_LABEL_N3COVERED|ZDB_RR_LABEL_N3OCOVERED);
 
                 zdb_record_delete(&label->resource_record_set, TYPE_DS);
             }
+            
+            
         }
         else
         {
@@ -467,17 +474,21 @@ zdb_sanitize_rr_set_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsname_
             zdb_record_delete(&label->resource_record_set, TYPE_DS);
         }
     }
-
-    /*
-     */
-
-    if(HAS_TYPE(NS_TYPE))
+    else
     {
         /*
-         * Need glue ?
-         *
-         * Has glue ?
          */
+
+        if(HAS_TYPE(NS_TYPE))
+        {
+            label->flags |= ZDB_RR_LABEL_N3COVERED;
+
+            /*
+             * Need glue ?
+             *
+             * Has glue ?
+             */
+        }
     }
 
     if(isapex)
@@ -494,6 +505,8 @@ zdb_sanitize_rr_set_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsname_
              * Just report it
              */
         }
+        
+        label->flags |= ZDB_RR_LABEL_N3COVERED|ZDB_RR_LABEL_N3OCOVERED;
     }
     else
     {
@@ -582,6 +595,8 @@ zdb_sanitize_rr_set_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsname_
                     return_value |= SANITY_TRASHATDELEGATION;
                 }
             }
+            
+            label->flags |= ZDB_RR_LABEL_N3COVERED;
         }
         else if(flags & ZDB_RR_LABEL_UNDERDELEGATION)
         {    
@@ -593,6 +608,10 @@ zdb_sanitize_rr_set_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsname_
             {
                 return_value |= SANITY_TRASHUNDERDELEGATION;
             }
+        }
+        else // not under delegation either
+        {
+            label->flags |= ZDB_RR_LABEL_N3COVERED|ZDB_RR_LABEL_N3OCOVERED;
         }
     }
 
@@ -644,7 +663,7 @@ zdb_sanitize_rr_label_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsnam
         parent++;
         *parent = label;
     }
-       
+    
     if(FAIL(return_value = zdb_sanitize_rr_set_ext(parms, label, name, label->flags, parent)))
     {
         zdb_sanitize_log(name, return_value);
@@ -878,13 +897,18 @@ zdb_sanitize_zone(zdb_zone *zone)
     dnsname_to_dnsname_stack(zone->origin, &name);
 
     ya_result return_code = zdb_sanitize_rr_label_ext(&parms, zone->apex, &name, 0, label_stack);
-
-#if HAS_NSEC3_SUPPORT 
-    if(zdb_zone_is_nsec3(zone))
+    if(ISOK(return_code))
     {
-        return_code = zdb_sanitize_zone_nsec3(&parms);
-    }
+#if HAS_NSEC3_SUPPORT 
+        if((zone_get_maintain_mode(zone) & ZDB_ZONE_MAINTAIN_NSEC3) != 0)
+        {
+            if(zdb_zone_is_nsec3(zone))
+            {
+                return_code = zdb_sanitize_zone_nsec3(&parms);
+            }
+        }
 #endif
+    }
     
     zdb_sanitize_parms_finalise(&parms);
     

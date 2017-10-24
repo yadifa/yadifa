@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup zalloc very fast, no-overhead specialised memory allocation functions
  *  @ingroup dnscore
  *  @brief no-overhead specialised allocation functions
@@ -68,6 +68,7 @@
 #include "dnscore/logger.h"
 #include "dnscore/format.h"
 #include "dnscore/zalloc.h"
+#include "dnscore/mutex.h"
 
 extern logger_handle* g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
@@ -110,7 +111,7 @@ extern logger_handle* g_system_logger;
 #define ZALLOC_LAZY 1        /// @note edf -- do NOT disable this
 
 #if !ZALLOC_LAZY
-#pragma message("zalloc: there is no reason to disable the ZALLOC_LAZY variant beside for testing.")
+# pragma message("zalloc: there is no reason to disable the ZALLOC_LAZY variant beside for testing.")
 #endif
 
 #ifndef MAP_ANONYMOUS
@@ -234,7 +235,8 @@ zalloc_init()
     {
         fprintf(stderr, "System page size bigger than the internal allocation size (%d > %d)\n", system_page_size, ZALLOC_MMAP_BLOC_SIZE);
         fprintf(stderr, "Please reduce the page size to a smaller value or rebuild disabling the internal allocation using --disable-zalloc\n");
-        exit(-1);
+        fflush(stderr);
+        abort();
     }
     
     yassert(system_page_size > 0);
@@ -518,11 +520,21 @@ zfree_line(void* ptr, u32 page_index)
         
         if(node == NULL)
         {
+            fprintf(stderr, "address %p is not part of any of our allocated pages",
+                    ptr);
+            fflush(stderr);
             abort(); // memory not part of the zalloc pages
         }
         
         if(node->value != (void*)(intptr)page_index)
         {
+            int real_page_index = (int)(intptr)page_index;
+            fprintf(stderr, "address %p is not part of pool %i (%i bytes) but of pool %i (%i bytes)",
+                    ptr,
+                    page_index - 1, (page_index - 1) << 3,
+                    real_page_index, real_page_index << 3
+                    );
+            fflush(stderr);
             abort(); // memory not of the right size
         }
 #endif
@@ -531,12 +543,16 @@ zfree_line(void* ptr, u32 page_index)
         
         if((magic & 0xffffffff00000000LL) != 0x2a110c0000000000LL)
         {
+            fprintf(stderr, "address %p has wrong magic (buffer overrun symptom)",ptr);
+            fflush(stderr);
             abort();
         }
         magic &= 0xffffffffLL;
 
         if(magic != page_index - 1)
         {
+            fprintf(stderr, "address %p was tagged with the wrong index (buffer overrun symptom)",ptr);
+            fflush(stderr);
             abort();
         }
         

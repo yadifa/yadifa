@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2011-2016, EURid. All rights reserved.
+# Copyright (c) 2011-2017, EURid. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without 
@@ -26,6 +26,20 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+##############################################################################
+#
+#	YADIFA dnscore Makefile.am script
+#
+#		Makefile.am script
+#
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/lib/dnscore/Makefile.am $
+#
+#	   $Date: 2017-09-26 11:33:35 +0200 (Tue, 26 Sep 2017) $
+#
+#	   $Revision: 7307 $
+#
+#	$Author: ericdf $
 #
 ##############################################################################
 
@@ -86,6 +100,7 @@ libdnscore_la_SOURCES = \
 	src/dnskey_dsa.c \
     src/dnskey_ecdsa.c \
 	src/dnskey_rsa.c \
+	src/dnskey-signature.c \
 	src/dnsname.c \
 	src/empty-input-stream.c \
 	src/fdtools.c \
@@ -97,6 +112,7 @@ libdnscore_la_SOURCES = \
 	src/identity.c \
 	src/input_stream.c \
 	src/limited_input_stream.c \
+    src/limiter.c \
 	src/list-dl.c \
 	src/list-sl.c \
 	src/list-sl-debug.c \
@@ -195,6 +211,7 @@ pkginclude_HEADERS = \
 	$(I)/dnskey_dsa.h \
     $(I)/dnskey_ecdsa.h \
 	$(I)/dnskey_rsa.h \
+	$(I)/dnskey-signature.h \
 	$(I)/dnsname.h \
 	$(I)/dnsname_set.h \
 	$(I)/dnssec_errors.h \
@@ -210,6 +227,7 @@ pkginclude_HEADERS = \
 	$(I)/input_stream.h \
 	$(I)/io_stream.h \
 	$(I)/limited_input_stream.h \
+    $(I)/limiter.h \
 	$(I)/list-dl.h \
 	$(I)/list-sl.h \
 	$(I)/list-sl-debug.h \
@@ -310,11 +328,6 @@ if HAS_TSIG_SUPPORT
 else
 	echo "#define DNSCORE_HAS_TSIG_SUPPORT 0" >> $(FEATURES)
 endif
-if HAS_RDTSC
-	echo "#define DNSCORE_HAS_RDTSC 1" >> $(FEATURES)
-else
-	echo "#define DNSCORE_HAS_RDTSC 0" >> $(FEATURES)
-endif
 if HAS_ACL_SUPPORT
 	echo "#define DNSCORE_HAS_ACL_SUPPORT 1" >> $(FEATURES)
 else
@@ -365,6 +378,12 @@ if HAS_MEMALIGN_ISSUES
 else
 	echo "#define DNSCORE_HAS_MEMALIGN_ISSUES 0" >> $(FEATURES)
 endif
+if HAS_LOG_THREAD_TAG_ALWAYS_ON
+	echo "#define DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON 1" >> $(FEATURES)
+else
+	echo "#define DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON 0" >> $(FEATURES)
+endif
+
 VP=DNSCORE
 	which printf > /dev/null 2>&1
 	if [ $$? -eq 0 ];then \

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief AVL structure and functions
@@ -123,9 +123,27 @@ F# 42  Value= 433494437  Items= 1134903169  Log2= 30.0799220647
 F# 43  Value= 701408733  Items= 1836311902  Log2= 30.7741639788
 F# 44  Value= 1134903170  Items= 2971215072  Log2= 31.4684058927
 F# 45  Value= 1836311903  Items= 4807526975  Log2= 32.1626478065
- */
+F# 46  Value= 2971215073  Items= 7778742048  Log2= 32.8568897203
+F# 47  Value= 4807526976  Items= 12586269024  Log2= 33.551131634
+F# 48  Value= 7778742049  Items= 20365011073  Log2= 34.2453735476
+F# 49  Value= 12586269025  Items= 32951280098  Log2= 34.9396154613
+F# 50  Value= 20365011074  Items= 53316291172  Log2= 35.633857375
+F# 51  Value= 32951280099  Items= 86267571271  Log2= 36.3280992886
+F# 52  Value= 53316291173  Items= 139583862444  Log2= 37.0223412022
+F# 53  Value= 86267571272  Items= 225851433716  Log2= 37.7165831159
+F# 54  Value= 139583862445  Items= 365435296161  Log2= 38.4108250295
+F# 55  Value= 225851433717  Items= 591286729878  Log2= 39.1050669431
+F# 56  Value= 365435296162  Items= 956722026040  Log2= 39.7993088568
+F# 57  Value= 591286729879  Items= 1548008755919  Log2= 40.4935507704
+F# 58  Value= 956722026041  Items= 2504730781960  Log2= 41.187792684
+F# 59  Value= 1548008755920  Items= 4052739537880  Log2= 41.8820345977
+F# 60  Value= 2504730781961  Items= 6557470319841  Log2= 42.5762765113
+F# 61  Value= 4052739537881  Items= 10610209857722  Log2= 43.2705184249
+F# 62  Value= 6557470319842  Items= 17167680177564  Log2= 43.9647603385
+F# 63  Value= 10610209857723  Items= 27777890035287  Log2= 44.6590022522
+*/
 
-#define AVL_MAX_DEPTH 40    /* Covers more than enough (433494436 items) */
+#define AVL_MAX_DEPTH 52 // 139*10^9 items max (worst case)*/
 
 struct avl_leftrightchildren
 {
@@ -300,9 +318,20 @@ void* avl_delete(avl_tree* tree, hashcode obj_hash);
 void avl_destroy(avl_tree* tree);
 
 void avl_iterator_init(avl_tree tree, avl_iterator* iter);
-void avl_iterator_init_from(avl_tree tree, avl_iterator* iter, hashcode obj_hash);
 
-#if ZDB_INLINES_AVL_FIND == 0
+/**
+ * Initialises an iterator from a given key.
+ * Returns the node, or NULL if the node does not exist.
+ * 
+ * @param tree
+ * @param iter
+ * @param obj_hash
+ * @return 
+ */
+
+avl_node* avl_iterator_init_from(avl_tree tree, avl_iterator* iter, hashcode obj_hash);
+
+#if !ZDB_INLINES_AVL_FIND
 bool avl_iterator_hasnext(avl_iterator* iter);
 #else
 static inline bool
@@ -311,6 +340,7 @@ avl_iterator_hasnext(avl_iterator* iter)
     return iter->stack_pointer >= 0;
 }
 #endif
+
 void** avl_iterator_next(avl_iterator* iter);
 avl_node* avl_iterator_next_node(avl_iterator* iter);
 
@@ -324,7 +354,7 @@ avl_node* avl_iterator_next_node(avl_iterator* iter);
  *  @param[in] tree the tree to empty
  */
 
-void avl_callback_and_destroy(avl_tree tree, callback_function callback);
+void avl_callback_and_destroy(avl_tree tree, void (*callback)(void*));
 
 #ifdef DEBUG
 

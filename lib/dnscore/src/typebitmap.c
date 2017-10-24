@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup
  *  @ingroup dnscore
  *  @brief
@@ -41,9 +41,10 @@
  *
  *----------------------------------------------------------------------------*/
 
-//#include "dnscore/dnscore-config.h"
-
 #include "dnscore/dnscore-config.h"
+
+#include <arpa/inet.h>
+
 #include "dnscore/rfc.h"
 #include "dnscore/typebitmap.h"
 
@@ -52,14 +53,14 @@
  */
 
 void
-type_bit_maps_write(u8* output, type_bit_maps_context* context)
+type_bit_maps_write(const type_bit_maps_context *context, u8 *output)
 {
     /* No types at all ? Should NOT have been called */
 
-    yassert(context->type_bit_maps_size > 2);
+    //yassert(context->type_bit_maps_size > 2);
 
-    u8* type_bitmap_field = context->type_bitmap_field;
-    u8* window_size = context->window_size;
+    const u8* type_bitmap_field = context->type_bitmap_field;
+    const u8* window_size = context->window_size;
 
     for(s32 i = 0; i <= context->last_type_window; i++)
     {
@@ -148,7 +149,7 @@ type_bit_maps_merge(type_bit_maps_context* context, u8* type_bitmap_a, u32 a_siz
 }
 
 void
-type_bit_maps_output_stream_write(output_stream* os, type_bit_maps_context* context)
+type_bit_maps_output_stream_write(const type_bit_maps_context* context, output_stream* os)
 {
     /* No types at all */
 
@@ -157,8 +158,8 @@ type_bit_maps_output_stream_write(output_stream* os, type_bit_maps_context* cont
         return;
     }
 
-    u8* type_bitmap_field = context->type_bitmap_field;
-    u8* window_size = context->window_size;
+    const u8* type_bitmap_field = context->type_bitmap_field;
+    const u8* window_size = context->window_size;
 
     for(s32 i = 0; i <= context->last_type_window; i++)
     {
@@ -208,6 +209,91 @@ type_bit_maps_gettypestatus(u8* packed_type_bitmap, u32 size, u16 type)
 
     return FALSE;
 
+}
+
+/*
+ * Force RRSIG: because the signatures could not be available yet.
+ * Force NSEC: because the NSEC record is not available at first init.
+ *
+ */
+
+void
+type_bit_maps_init(type_bit_maps_context *context)
+{
+    ZEROMEMORY(context, sizeof(type_bit_maps_context));
+    context->last_type_window = -1;
+}
+
+void type_bit_maps_set_type(type_bit_maps_context *context, u16 rtype)
+{
+    u8 *type_bitmap_field = context->type_bitmap_field;
+    u8 *window_size = context->window_size;
+
+    /* Network bit order */
+    rtype = (u16)ntohs(rtype);
+    
+    const u8 mask = 1 << (7 - (rtype & 7));
+    
+    if((type_bitmap_field[rtype >> 3] & mask) == 0)
+    {
+        type_bitmap_field[rtype >> 3] |= mask;
+        window_size[rtype >> 8] = MAX(((rtype & 0xf8) >> 3) + 1, window_size[rtype >> 8]);
+
+        context->last_type_window = MAX(rtype >> 8, context->last_type_window);
+    }
+}
+
+
+
+u16 type_bit_maps_update_size(type_bit_maps_context *context)
+{
+    const u8 *window_size = context->window_size;
+    u32 type_bit_maps_size = 0;
+
+    for(s32 i = 0; i <= context->last_type_window; i++)
+    {
+        u8 ws = window_size[i];
+
+        if(ws > 0)
+        {
+            type_bit_maps_size += 1 + 1 + ws;
+        }
+    }
+
+    context->type_bit_maps_size = type_bit_maps_size;
+
+    return type_bit_maps_size;
+}
+
+/**
+ * Compares two types bit maps.
+ * 
+ * type_bit_maps_update_size(a) must have been called before.
+ * type_bit_maps_update_size(b) must have been called before.
+ * 
+ * @param a
+ * @param b
+ * @return 
+ */
+
+int type_bit_maps_compare(const type_bit_maps_context *a, const type_bit_maps_context *b)
+{
+    int d = a->last_type_window;
+    d -= b->last_type_window;
+    if(d == 0)
+    {
+        d = a->type_bit_maps_size;
+        d -= b->type_bit_maps_size;
+        if(d == 0)
+        {
+            if(a->last_type_window > 0)
+            {
+                d = memcmp(a->type_bitmap_field, b->type_bitmap_field, a->last_type_window << 5);
+            }
+        }
+    }
+    
+    return d;
 }
 
 /** @} */

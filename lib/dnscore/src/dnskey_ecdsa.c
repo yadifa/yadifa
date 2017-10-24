@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnskey DNSSEC keys functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -70,16 +70,22 @@
 #include "dnscore/dnskey_ecdsa.h"
 #include "dnscore/dnssec_errors.h"
 
-#include "dnscore/dnskey.h"
-
 #include "dnscore/zalloc.h"
 
+
+
 #define MODULE_MSG_HANDLE g_system_logger
+
+#define KEYECDSA_TAG 0x415344434559454b
+
+#ifndef SSL_API
+#error "SSL_API not defined"
+#endif
 
 #define DNSKEY_ALGORITHM_ECDSAP256SHA256_NID NID_X9_62_prime256v1
 #define DNSKEY_ALGORITHM_ECDSAP384SHA384_NID NID_secp384r1
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#if SSL_API_LT_110
 
 #define SSL_FIELD_GET(st_,f_) if(f_ != NULL) { *f_ = st_->f_; }
 #define SSL_FIELD_SET(st_,f_) if(f_ != NULL) { BN_free(st_->f_); st_->f_ = f_; }
@@ -149,7 +155,7 @@ static void dnskey_ecdsa_finalise(struct dnskey_ecdsa *yecdsa)
 static const struct dnskey_field_access ECDSA_field_access[] =
 {
     {"PrivateKey", offsetof(struct dnskey_ecdsa,private_key), STRUCTDESCRIPTOR_BN},
-    {NULL, 0, 0}
+    {"", 0, 0}
 };
 
 static int
@@ -318,8 +324,6 @@ dnskey_ecdsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_le
 
     int err = ECDSA_do_verify(digest, digest_len, sig, key->key.ec);
     
-    ECDSA_SIG_free(sig);
-    
     if(err != 1)
     {
         unsigned long ssl_err;
@@ -331,10 +335,13 @@ dnskey_ecdsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_le
             log_debug("digest verification returned an ssl error %08x %s", ssl_err, buffer);
         }
 
+        ECDSA_SIG_free(sig);
         ERR_clear_error();
 
         return FALSE;
     }
+    
+    ECDSA_SIG_free(sig);
 
     return TRUE;
 }
@@ -398,16 +405,32 @@ dnskey_ecdsa_dnskey_public_store(const dnssec_key* key, u8* rdata)
     return len;
 }
 
+static u32
+dnskey_ecdsa_size(const dnssec_key* key)
+{
+    const EC_GROUP *group = EC_KEY_get0_group(key->key.ec);
+    const EC_POINT *point = EC_KEY_get0_public_key(key->key.ec);    
+    BN_CTX *ctx = BN_CTX_new();
+    u8 tmp[512];
+    
+    size_t size = EC_POINT_point2oct(group, point, POINT_CONVERSION_UNCOMPRESSED, tmp, sizeof(tmp), ctx);
+    
+    assert((size > 0) && (tmp[0] == 4));
+        
+    BN_CTX_free(ctx);
+    
+    return (size - 1) << 2;
+}
+
 /**
  * Returns the size in byte of the public key.
- * @todo 20160209 edf -- This is very inneficient.  Have to find a better way than writing the key.
  * 
  * @param ecdsa
  * @return 
  */
 
 static u32
-dnskey_ecdsa_public_getsize(const EC_KEY* ecdsa)
+dnskey_ecdsa_public_size(const EC_KEY* ecdsa)
 {
     const EC_GROUP *group = EC_KEY_get0_group(ecdsa);
     const EC_POINT *point = EC_KEY_get0_public_key(ecdsa);    
@@ -424,9 +447,9 @@ dnskey_ecdsa_public_getsize(const EC_KEY* ecdsa)
 }
 
 static u32
-dnskey_ecdsa_dnskey_public_getsize(const dnssec_key* key)
+dnskey_ecdsa_dnskey_rdatasize(const dnssec_key* key)
 {
-    u32 size = dnskey_ecdsa_public_getsize(key->key.ec) + 4;
+    u32 size = dnskey_ecdsa_public_size(key->key.ec) + 4;
     return size;
 }
 
@@ -499,11 +522,12 @@ dnskey_ecdsa_print_fields(dnssec_key *key, output_stream *os)
 static const dnssec_key_vtbl ecdsa_vtbl = {
     dnskey_ecdsa_signdigest,
     dnskey_ecdsa_verifydigest,
-    dnskey_ecdsa_dnskey_public_getsize,
+    dnskey_ecdsa_dnskey_rdatasize,
     dnskey_ecdsa_dnskey_public_store,
     dnskey_ecdsa_free,
     dnskey_ecdsa_equals,
     dnskey_ecdsa_print_fields,
+    dnskey_ecdsa_size,
     "ECDSA"
 };
 
@@ -525,7 +549,7 @@ dnskey_ecdsa_initinstance(EC_KEY *ecdsa, u8 algorithm, u16 flags, const char *or
     memset(rdata, 0xff, sizeof(rdata));
 #endif
 
-    u32 public_key_size = dnskey_ecdsa_public_getsize(ecdsa);
+    u32 public_key_size = dnskey_ecdsa_public_size(ecdsa);
 
     if(public_key_size > DNSSEC_MAXIMUM_KEY_SIZE_BYTES)
     {
@@ -591,7 +615,7 @@ dnskey_ecdsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
     
     if(yecdsa->private_key == NULL)
     {
-        return ERROR;
+        return DNSSEC_ERROR_INCOMPLETEKEY;
     }
     
     int nid;
@@ -609,14 +633,14 @@ dnskey_ecdsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
         
         if(ecdsa == NULL)
         {
-            return ERROR;
+            return DNSSEC_ERROR_INCOMPLETEKEY;
         }
         
         group = EC_KEY_get0_group(ecdsa);
         
         if(group == NULL)
         {
-            return ERROR;
+            return DNSSEC_ERROR_INCOMPLETEKEY;
         }
         
         key->key.ec = ecdsa;
@@ -628,7 +652,7 @@ dnskey_ecdsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
         
         if(group == NULL)
         {
-            return ERROR;
+            return DNSSEC_ERROR_INCOMPLETEKEY;
         }
     }
         
@@ -653,7 +677,7 @@ dnskey_ecdsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
         {
             // at this point, yecdsa has been emptied
             
-            u32 rdata_size = dnskey_ecdsa_public_getsize(ecdsa);
+            u32 rdata_size = dnskey_ecdsa_public_size(ecdsa);
 
             u16 tag;
 
@@ -688,7 +712,7 @@ dnskey_ecdsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
         }
     }
 
-    return ERROR;
+    return DNSSEC_ERROR_INCOMPLETEKEY;
 }
 
 static void
@@ -708,14 +732,14 @@ static const struct dnskey_field_parser_vtbl dsa_field_parser_vtbl =
     dnskey_ecdsa_parse_field,
     dnskey_ecdsa_parse_set_key,
     dnskey_ecdsa_parse_finalise,
-    "DSA"
+    "ECDSA"
 };
 
 void
 dnskey_ecdsa_parse_init(dnskey_field_parser *fp)
 {
     struct dnskey_ecdsa *ydsa;
-    ZALLOC_OR_DIE(struct dnskey_ecdsa *, ydsa, struct dnskey_ecdsa, GENERIC_TAG);
+    ZALLOC_OR_DIE(struct dnskey_ecdsa *, ydsa, struct dnskey_ecdsa, KEYECDSA_TAG);
     ZEROMEMORY(ydsa, sizeof(struct dnskey_ecdsa));
     fp->data = ydsa;
     fp->vtbl = &dsa_field_parser_vtbl;

@@ -1,6 +1,6 @@
 dnl ############################################################################
 dnl 
-dnl Copyright (c) 2011-2016, EURid. All rights reserved.
+dnl Copyright (c) 2011-2017, EURid. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl  
 dnl Redistribution and use in source and binary forms, with or without 
@@ -30,9 +30,21 @@ dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl 
 dnl ##############################################################################
+dnl
+dnl      SVN Program:
+dnl              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/sbin/yadifad/configure.ac $
+dnl
+dnl      Last Update:
+dnl              $Date: 2017-09-26 11:33:35 +0200 (Tue, 26 Sep 2017) $
+dnl              $Revision: 7307 $
+dnl
+dnl      Purpose:
+dnl      	 YADIFA -- Domain Name Server        
+dnl
+dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 6237 $])
+AC_REVISION([$Revision: 7307 $])
 # 1
 # svn log 2> /dev/null|head -2|grep ^r|sed 's/.\([1-9]*\).*/\1/'
 
@@ -107,7 +119,7 @@ AC_CHECK_TYPES(u_char)
 dnl Add some defines.
 
 AC_DEFINE_UNQUOTED([TCP_LISTENQ], [1024],[TCP queue])
-AC_DEFINE_UNQUOTED([MAX_INTERFACES], [16],[max nic interfaces])
+AC_DEFINE_UNQUOTED([MAX_INTERFACES], [256],[max nic interfaces])
 
 dnl Add some macros
 AH_BOTTOM([
@@ -175,10 +187,14 @@ echo
 echo "ZALLOC .............................. : $enable_zalloc"
 echo "ZALLOC STATISTICS ................... : $enable_zalloc_statistics"
 echo "ZALLOC DEBUG ........................ : $enable_zalloc_debug"
+echo "ACL ................................. : $enable_acl"
+echo "TSIG ................................ : $enable_tsig"
 echo "MASTER .............................. : $enable_master"
 echo "DYNUPDATE ........................... : $enable_dynupdate"
 echo "RRSIG MANAGEMENT .................... : $enable_rrsig_management"
 echo "CTRL ................................ : $enable_ctrl"
+echo "NSEC ................................ : $enable_nsec"
+echo "NSEC3 ............................... : $enable_nsec3"
 echo "RRL ................................. : $enable_rrl"
 
 if [[ ! "${OPENSSL}" = "" ]]

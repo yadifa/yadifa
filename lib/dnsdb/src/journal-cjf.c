@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -89,7 +89,7 @@
 #include <dnscore/fdtools.h>
 
 #include <dnscore/u32_set.h>
-#include <dnscore/u64_set.h>
+//#include <dnscore/u64_set.h>
 #include <dnscore/list-dl.h>
 
 #include <dnscore/ctrl-rfc.h>
@@ -114,8 +114,6 @@ extern logger_handle* g_database_logger;
 #define DEBUG_JOURNAL 0
 #endif
 
-#define CJF_CYCLING_ENABLED 1
-
 #define JOURNAL_FORMAT_NAME "cyclic"
 #define VERSION_HI 0
 #define VERSION_LO 1
@@ -133,6 +131,14 @@ extern logger_handle* g_database_logger;
 #define DO_SYNC 1
 
 #define JRNLCJF_TAG 0x58494c4e524a
+
+/**
+ * Two steps means that the journal is written in two passes.
+ * Pass 1 gathers a full page from input and validates it.
+ * Pass 2 stores it to the journal file.
+ */
+
+#define CJF_USE_TWO_STEPS 1
 
 /*
  * Contains the journal (almost: not the matching start and end SOA)
@@ -170,6 +176,13 @@ extern logger_handle* g_database_logger;
  * That's where the PAGE will be stored
  * I'm not sure of what the ratio between allowed FDs and allowed PAGE pages should be.
  */
+
+#define EDF_DEBUG 0
+
+#if EDF_DEBUG
+static ptr_set journal_cjf_set = PTR_SET_ASCIIZ_EMPTY;
+static mutex_t journal_cjf_set_mtx = MUTEX_INITIALIZER;
+#endif
 
 static shared_group_shared_mutex_t journal_shared_mtx;
 static bool journal_shared_mtx_initialized = FALSE;
@@ -406,7 +419,8 @@ journal_cjf_create_file(journal_cjf **jnlp, const u8 *origin, const char *filena
 /**
  * 
  * Does NOT set the fd field in jnl
-
+ * MUST return -1 in case of error
+ * 
  * @param jnl
  * @param create
  * @return the file descriptor or an error code
@@ -496,7 +510,7 @@ journal_cjf_init_from_file(journal_cjf **jnlp, const u8 *origin, const char *fil
 
         log_debug("cjf: %{dnsname}: journal expected to cover serials from %i to %i", jnl->origin, hdr.serial_begin, hdr.serial_end);
         log_debug("cjf: %{dnsname}: journal table index located at %x%s", jnl->origin, hdr.table_index_offset,
-            (hdr.table_index_offset!=0)?"":", which means it has not been closed properly");
+                (hdr.table_index_offset != 0)?"":", which means it has not been closed properly");
         
         *jnlp = jnl;
 
@@ -776,7 +790,15 @@ journal_jcf_read_ixfr_finalize(journal_jcf_read_ixfr_s *ixfrinc)
     ixfrinc->size = 0;
 }
 
-ya_result
+/**
+ * 
+ * Reads a single page of incremental changes (-SOA ... +SOA ...)
+ * 
+ * @param ixfrinc
+ * @return the size of the page (0 if there is nothing to be read), or an error code
+ */
+
+static ya_result
 journal_jcf_read_ixfr_read(journal_jcf_read_ixfr_s *ixfrinc)
 {
     if(ixfrinc->eof)
@@ -814,7 +836,6 @@ journal_jcf_read_ixfr_read(journal_jcf_read_ixfr_s *ixfrinc)
 #ifdef DEBUG
             log_debug2("cjf: ---: %4i: %{dnsrr}", idx, rr); 
 #endif
-            
             dns_resource_record_write(rr, baos);
 
             if((ret = dns_resource_record_read(rr, ixfr_wire_is)) <= 0)
@@ -857,7 +878,7 @@ journal_jcf_read_ixfr_read(journal_jcf_read_ixfr_s *ixfrinc)
                     if(FAIL(ret = rr_soa_get_serial(rr->rdata, rr->rdata_size, &ixfrinc->serial_to)))
                     {
 #ifdef DEBUG
-                        log_debug2("cjf: ===: failed parse serial from  record: %r", ret);
+                        log_debug2("cjf: ===: failed parse serial from record: %r", ret);
 #endif
                         break;
                     }
@@ -885,7 +906,7 @@ journal_jcf_read_ixfr_read(journal_jcf_read_ixfr_s *ixfrinc)
 
 /**
  * The caller will take action that will end up removing the first page.
- * Either explicitely, either overwriting it (ie: looping).
+ * Either explicitly, either overwriting it (ie: looping).
  * 
  * This function ensures that it's OK to do so.
  * 
@@ -1159,23 +1180,34 @@ journal_cjf_append_ixfr_stream_per_page(journal *jh, input_stream *ixfr_wire_is,
         
         if(!journal_is_empty)
         {
+            // if the journal is not empty, ensure the page follows the last journal page
+            
             if(serial_lt(ixfrinc.serial_from, jnl->serial_end))
             {
                 log_info("cjf: %{dnsname}: ignoring changes before serial %u", jnl->origin, jnl->serial_end);
                 
-                continue;
+                continue;   // read next page
             }
             else if(serial_gt(ixfrinc.serial_from, jnl->serial_end))
             {
                 log_warn("cjf: %{dnsname}: missing changes between serials %u and %u", jnl->origin, jnl->serial_end, ixfrinc.serial_from);
                 
-                break;
+                break;      // full stop
             }
         }
         else
         {
+            // create a journal with one entry
+            
             journal_cjf_idxt_create(jnl, 1);
         }
+        
+        /***/
+        
+        // reserve the known size of this single page with the serial range
+        // write the page
+        
+        /***/
         
 journal_cjf_append_ixfr_stream_master_accum_tryagain:
         
@@ -1537,7 +1569,7 @@ journal_cjf_input_stream_read(input_stream* stream, u8 *buffer, u32 len)
             u32 page_offset = journal_cjf_idxt_get_file_offset(data->jnl, data->idxt_index);
             u32 stream_offset;
             u32 stream_limit_offset;
-
+            
             // look for the first SOA requested
             
             if(!data->first_stream)
@@ -1560,6 +1592,13 @@ journal_cjf_input_stream_read(input_stream* stream, u8 *buffer, u32 len)
             
             journal_cjf_page_tbl_header page_header;
             journal_cjf_page_cache_read_header(data->jnl->fd, page_offset, &page_header);
+            
+            if(page_header.count == 0)
+            {
+                // empty page, proably not flushed
+                break;
+            }
+            
             stream_limit_offset = page_header.stream_end_offset;
                         
             // we know where to start ...
@@ -1577,7 +1616,7 @@ journal_cjf_input_stream_read(input_stream* stream, u8 *buffer, u32 len)
 #endif
             
             yassert(stream_limit_offset != 0);
-            yassert(stream_limit_offset > page_offset); /// @todo 20150115 edf -- fix this when a cycle occurs
+            yassert(stream_limit_offset > page_offset);
  
             data->available = page_header.stream_end_offset - stream_offset;
             data->page_next = page_header.next_page_offset;
@@ -1689,7 +1728,6 @@ journal_cjf_get_ixfr_stream_at_serial(journal *jh, u32 serial_from, input_stream
     dns_resource_record rr;
     
     dns_resource_record_init(&rr);
-    
     
     // increment the reference count of the journal
     // lock the range in the file so it cannot be overwritten
@@ -2013,6 +2051,12 @@ journal_cjf_flush(journal *jh)
     }
 #endif
     
+#if EDF_DEBUG
+    mutex_lock(&journal_cjf_set_mtx);
+    ptr_set_avl_delete(&journal_cjf_set, jnl->journal_file_name);
+    mutex_unlock(&journal_cjf_set_mtx);
+#endif
+    
     log_debug3("cjf: %s,%i: flushing to file", jnl->journal_file_name, jnl->fd);
     
     if(jnl->fd >= 0)
@@ -2044,6 +2088,12 @@ journal_cjf_close(journal *jh)
         yassert(zone->journal == jh);
         zone->journal = NULL;
     }
+#endif
+    
+#if EDF_DEBUG
+    mutex_lock(&journal_cjf_set_mtx);
+    ptr_set_avl_delete(&journal_cjf_set, jnl->journal_file_name);
+    mutex_unlock(&journal_cjf_set_mtx);
 #endif
     
     log_debug3("cjf: %s,%i: closing file", jnl->journal_file_name, jnl->fd);
@@ -2186,6 +2236,19 @@ static void
 journal_cjf_destroy(journal *jh)
 {
     journal_cjf *jnl = (journal_cjf*)jh;
+#if EDF_DEBUG
+    mutex_lock(&journal_cjf_set_mtx);
+    ptr_node *node = ptr_set_avl_find(&journal_cjf_set, jnl->journal_file_name);
+    if(node == NULL)
+    {
+        log_debug("cjf: node of %s already removed", jnl->journal_file_name);
+    }
+    else
+    {
+        ptr_set_avl_delete(&journal_cjf_set, jnl->journal_file_name);
+    }
+    mutex_unlock(&journal_cjf_set_mtx);
+#endif
     
     yassert(jnl->rc == 0);
     
@@ -2331,6 +2394,13 @@ journal_cjf_open(journal **jhp, const u8* origin, const char *workingdir, bool c
         return ret;
     }
     
+#if EDF_DEBUG
+    mutex_lock(&journal_cjf_set_mtx);
+    ptr_node *node = ptr_set_avl_find(&journal_cjf_set, filename);
+    yassert(node == NULL);
+    mutex_unlock(&journal_cjf_set_mtx);
+#endif
+    
     if(file_exists(filename) || create)
     {
         // instantiate and open the journal
@@ -2342,7 +2412,7 @@ journal_cjf_open(journal **jhp, const u8* origin, const char *workingdir, bool c
         {
             //jnl->fd = ret;
 
-            if(!((jnl->serial_begin == 0) && (jnl->serial_begin == jnl->serial_end)))
+            if(!((jnl->serial_begin == 0) && (jnl->serial_begin == jnl->serial_end))) // scan-build false-positive : if ISOK(ret) => jnl != NULL
             {
                 journal_cjf_load_idxt(jnl);
             }
@@ -2368,6 +2438,13 @@ journal_cjf_open(journal **jhp, const u8* origin, const char *workingdir, bool c
             
             return ZDB_ERROR_ICMTL_NOTFOUND;
         }
+        
+#if EDF_DEBUG
+        mutex_lock(&journal_cjf_set_mtx);
+        ptr_node *node = ptr_set_avl_insert(&journal_cjf_set, filename);
+        node->value = jnl;
+        mutex_unlock(&journal_cjf_set_mtx);
+#endif
         
 #ifdef DEBUG
         log_debug("cjf: %{dnsname}: journal opened", origin);

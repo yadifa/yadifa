@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnsdb Zone database
  *  @brief The zone dataBase
  *
@@ -40,6 +40,7 @@
 #define ZDB_JOURNAL_CODE 1
 
 #include "dnsdb/dnsdb-config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
@@ -60,7 +61,7 @@ extern logger_handle* g_database_logger;
 
 #include "dnsdb/zdb.h"
 
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
 #include "dnsdb/dnssec-keystore.h"
 #endif
 
@@ -73,9 +74,14 @@ extern logger_handle* g_database_logger;
 #include "dnsdb/journal.h"
 #include "dnsdb/zdb-zone-garbage.h"
 
-#if ZDB_OPENSSL_SUPPORT!=0
+#if ZDB_OPENSSL_SUPPORT
 #include <openssl/ssl.h>
 #include <openssl/engine.h>
+#include <dnscore/dnskey.h> // needed
+
+#ifndef SSL_API
+#error "SSL_API not defined"
+#endif
 
 /*
  * Required to handle openssl with multiple threads
@@ -91,15 +97,23 @@ extern logger_handle* g_database_logger;
 #define __TIME__ "time?"
 #endif
 
+#if HAS_BUILD_TIMESTAMP
 #ifdef DEBUG
 const char *dnsdb_lib = "dnsdb " __DATE__ " " __TIME__ " debug";
 #else
 const char *dnsdb_lib = "dnsdb " __DATE__ " " __TIME__ " release";
 #endif
+#else
+#ifdef DEBUG
+const char *dnsdb_lib = "dnsdb debug";
+#else
+const char *dnsdb_lib = "dnsdb release";
+#endif
+#endif
 
 void dnssec_keystore_init();
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#if SSL_API_LT_110
 
 static pthread_mutex_t *ssl_mutex = NULL;
 static int ssl_mutex_count = 0;
@@ -147,7 +161,7 @@ static volatile bool zdb_init_done = FALSE;
 
 dnsdb_fingerprint dnsdb_getfingerprint()
 {
-    dnscore_fingerprint ret = dnsdb_getmyfingerprint();
+    dnsdb_fingerprint ret = dnsdb_getmyfingerprint();
     return ret;
 }
 
@@ -174,9 +188,9 @@ zdb_init_ex(u32 thread_pool_count)
     {
         flushout();
         flusherr();
-        printf("dnsdb: the linked dnscore features are %08x but the the lib has been compiled against one with %08x", dnscore_getfingerprint(), dnscore_getmyfingerprint());
+        printf("dnsdb: the linked dnscore features are %08x but the lib has been compiled against one with %08x", dnscore_getfingerprint(), dnscore_getmyfingerprint());
         fflush(NULL);
-        exit(-1);
+        abort(); // binary incompatiblity : full stop
     }
 
     zdb_init_done = TRUE;
@@ -197,17 +211,17 @@ zdb_init_ex(u32 thread_pool_count)
 
     hash_init();
 
-#if ZDB_OPENSSL_SUPPORT!=0
+#if ZDB_OPENSSL_SUPPORT
 
     /* Init openssl */
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#if SSL_API_LT_110
     ENGINE_load_openssl();
 #endif
     
     ENGINE_load_builtin_engines();
     
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#if SSL_API_LT_110
     SSL_load_error_strings();
 
     ssl_mutex_count = CRYPTO_num_locks();
@@ -228,7 +242,7 @@ zdb_init_ex(u32 thread_pool_count)
     dnssec_keystore_init();
 #endif
 
-    journal_init(0);    // uses the default mru size (128)
+    journal_init(0);    // uses the default mru size (512)
     
     logger_start();
 }
@@ -262,7 +276,7 @@ zdb_finalize()
 
 #if ZDB_OPENSSL_SUPPORT
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#if SSL_API_LT_110
     ERR_remove_state(0);
 
     /* Init openssl */
@@ -368,80 +382,6 @@ zdb_remove_zone_from_dnsname(zdb *db, const u8 *fqdn)
     zdb_zone *zone = zdb_remove_zone(db, &origin);
     
     return zone;
-}
-
-/** @brief Search for a match in the database
- *
- *  Search for a match in the database.
- *  Only the most relevant match will be returned.
- *
- *  @param[in]  db the database
- *  @param[in]  dnsname_name the name dnsname to search for
- *  @param[in]  class the class to match
- *  @param[in]  type the type to match
- *  @param[out] ttl_rdara_out a pointer to a pointer set of results (single linked list)
- *
- *  @return SUCCESS in case of success.
- */
-
-ya_result
-zdb_query_OBSOLETE(zdb* db, const u8 *name_, u16 type, zdb_packed_ttlrdata** ttlrdata_out)
-{
-    yassert(ttlrdata_out != NULL);
-
-#ifdef HAS_DYNAMIC_PROVISIONING
-    zdb_lock(db, ZDB_MUTEX_READER); // zdb_query
-#endif
-    
-    dnsname_vector name;
-    DEBUG_RESET_dnsname(name);
-
-    dnsname_to_dnsname_vector(name_, &name);
-
-
-    /* Find closest matching label
-     * Should return a stack of zones
-     */
-
-    zdb_zone_label_pointer_array zone_label_stack;
-
-    s32 top = zdb_zone_label_match(db, &name, zone_label_stack);
-    s32 sp = top;
-
-    /* Got a stack of zone labels with and without zone cuts */
-    /* Search the label on the zone files */
-
-    while(sp >= 0)
-    {
-        zdb_zone_label* zone_label = zone_label_stack[sp];
-
-        if(zone_label->zone != NULL)
-        {
-            if((*ttlrdata_out = zdb_zone_record_find(zone_label->zone, name.labels, name.size - sp, type)) != NULL) // in obsolete
-            {
-                /* *ttlrdata_out for the answer */
-                /* zone_label->zone for the authority section */
-                /* subsequent searchs for the additional */
-                
-
-#ifdef HAS_DYNAMIC_PROVISIONING
-                zdb_unlock(db, ZDB_MUTEX_READER); // zdb_query
-#endif                
-
-                return SUCCESS;
-            }
-        }
-
-        sp--;
-    }
-
-
-    
-#ifdef HAS_DYNAMIC_PROVISIONING
-    zdb_unlock(db, ZDB_MUTEX_READER); // zdb_query
-#endif
-
-    return ZDB_ERROR_KEY_NOTFOUND;
 }
 
 /** @brief Search for a match in the database

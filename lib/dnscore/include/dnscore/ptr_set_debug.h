@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief 
@@ -115,10 +115,10 @@ struct ptr_node_debug
  *
  * Depth 0 is one node.
  *
- * Worst case : N is enough for sum[n = 0,N](Fn) where F is Fibonacci
+ * Worst case : N is enough for sum[n = 0,N](Fn) where Fn is Fibonacci(n+1)
  * Best case : N is enough for (2^(N+1))-1
  */
-#define AVL_MAX_DEPTH   40 /* 64 */
+#define AVL_MAX_DEPTH 52 // 139*10^9 items max (worst case)64
 
 /*
  * The previx that will be put in front of each function name
@@ -171,7 +171,7 @@ extern "C"
 #endif
 
 /*
- * I recommand setting a define to identify the C part of the template
+ * I recommend setting a define to identify the C part of the template
  * So it can be used to undefine what is not required anymore for every
  * C file but that one.
  *
@@ -225,18 +225,18 @@ int ptr_set_debug_nullable_dnsname_node_compare(const void *node_a, const void *
 
 int ptr_set_debug_host_address_node_compare(const void *node_a, const void *node_b);
 
-#define PTR_SET_EMPTY {NULL, ptr_set_debug_default_node_compare}
-#define PTR_SET_ASCIIZ_EMPTY {NULL, ptr_set_debug_asciizp_node_compare}
-#define PTR_SET_DNSNAME_EMPTY {NULL, ptr_set_debug_dnsname_node_compare}
-#define PTR_SET_NULLABLE_ASCIIZ_EMPTY {NULL, ptr_set_debug_nullable_asciizp_node_compare}
-#define PTR_SET_NULLABLE_DNSNAME_EMPTY {NULL, ptr_set_debug_nullable_dnsname_node_compare}
-#define PTR_SET_PTR_EMPTY {NULL, ptr_set_debug_ptr_node_compare}
-#define PTR_SET_CUSTOM(comparator___) {NULL, (comparator___)}
-#define PTR_SET_HOST_ADDRESS_EMPTY {NULL, ptr_set_debug_host_address_node_compare}
+#define PTR_SET_DEBUG_EMPTY {NULL, ptr_set_debug_default_node_compare}
+#define PTR_SET_DEBUG_ASCIIZ_EMPTY {NULL, ptr_set_debug_asciizp_node_compare}
+#define PTR_SET_DEBUG_DNSNAME_EMPTY {NULL, ptr_set_debug_dnsname_node_compare}
+#define PTR_SET_DEBUG_NULLABLE_ASCIIZ_EMPTY {NULL, ptr_set_debug_nullable_asciizp_node_compare}
+#define PTR_SET_DEBUG_NULLABLE_DNSNAME_EMPTY {NULL, ptr_set_debug_nullable_dnsname_node_compare}
+#define PTR_SET_DEBUG_PTR_EMPTY {NULL, ptr_set_debug_ptr_node_compare}
+#define PTR_SET_DEBUG_CUSTOM(comparator___) {NULL, (comparator___)}
+#define PTR_SET_DEBUG_HOST_ADDRESS_EMPTY {NULL, ptr_set_debug_host_address_node_compare}
 
 void *ptr_set_debug_avl_iterator_hasnext_next_value(ptr_set_debug_avl_iterator *iterp);
 
-#define FOREACH_PTR_SET(cast__,var__,ptr_set_debug__) ptr_set_debug_avl_iterator PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_debug_iter,__LINE__); ptr_set_debug_avl_iterator_init((ptr_set_debug__), &PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_debug_iter,__LINE__)); for(cast__ var__;((var__) = (cast__)ptr_set_debug_avl_iterator_hasnext_next_value(&PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_debug_iter,__LINE__))) != NULL;)
+#define FOREACH_PTR_SET_DEBUG(cast__,var__,ptr_set_debug__) ptr_set_debug_avl_iterator PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_debug_iter,__LINE__); ptr_set_debug_avl_iterator_init((ptr_set_debug__), &PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_debug_iter,__LINE__)); for(cast__ var__;((var__) = (cast__)ptr_set_debug_avl_iterator_hasnext_next_value(&PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_debug_iter,__LINE__))) != NULL;)
 //#define FOREACH_PTR_SET_KEY_VALUE(castk__,vark__,castv__,varv__,ptr_set_debug__) ptr_set_debug_avl_iterator PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_debug_iter,__LINE__); ptr_set_debug_avl_iterator_init((ptr_set_debug__), &PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_debug_iter,__LINE__)); for(varv__ varv__;((varc__) = (cast__)ptr_set_debug_avl_iterator_hasnext_next_key_value(&PREPROCESSOR_CONCAT_EVAL(foreach_ptr_set_debug_iter,__LINE__))) != NULL;)
 
 /*

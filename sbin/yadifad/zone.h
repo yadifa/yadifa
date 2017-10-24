@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -88,6 +88,8 @@ struct zone_data_set
 
 #define ZONECMD_TAG 0x444d43454e4f5a
 
+#if 0 /* fix */
+#else
 struct zone_command_s
 {
     union
@@ -101,7 +103,7 @@ struct zone_command_s
 };
 
 typedef struct zone_command_s zone_command_s;
-
+#endif
 
 typedef bool zone_data_matching_callback(zone_desc_s*);
 
@@ -292,6 +294,19 @@ zone_maintains_dnssec(zone_desc_s *zone_desc)
     return (zone_desc->flags & ZONE_FLAG_MAINTAIN_DNSSEC) != 0;
 }
 
+static inline void
+zone_maintains_dnssec_set(zone_desc_s *zone_desc, bool enable)
+{
+    if(enable)
+    {
+        zone_desc->flags |= ZONE_FLAG_MAINTAIN_DNSSEC;
+    }
+    else
+    {
+        zone_desc->flags &= ~ZONE_FLAG_MAINTAIN_DNSSEC;
+    }
+}
+
 static inline bool
 zone_is_auto_notify(zone_desc_s *zone_desc)
 {
@@ -315,6 +330,12 @@ static inline bool
 zone_is_drop_before_load(zone_desc_s *zone_desc)
 {
     return (zone_desc->flags & ZONE_FLAG_DROP_BEFORE_LOAD) != 0;
+}
+
+static inline bool
+zone_rrsig_nsupdate_allowed(zone_desc_s *zone_desc)
+{
+    return (zone_desc->flags & ZONE_FLAG_RRSIG_NSUPDATE_ALLOWED) != 0;
 }
 
 void zone_enqueue_command(zone_desc_s *zone_desc, u32 id, void* parm, bool has_priority);
@@ -368,6 +389,9 @@ void zone_set_status(zone_desc_s *zone_desc, u32 flags);
 void zone_clear_status(zone_desc_s *zone_desc, u32 flags);
 u32 zone_get_status(const zone_desc_s *zone_desc);
 
-/*    ------------------------------------------------------------    */
+void zone_dnssec_status_update(zdb_zone *zone);
+
+u8 zone_policy_guess_dnssec_type(zdb_zone *zone);
 
 /** @} */
+

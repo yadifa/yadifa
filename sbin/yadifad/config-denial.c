@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 
 /** @defgroup yadifad
  *  @ingroup ###
@@ -54,6 +54,8 @@
 extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
 
+#define DENIALCF_TAG 0x46434c41494e4544
+
 static value_name_table dnssec_enum[]=
 {
     {ZONE_DNSSEC_FL_NSEC3       , "nsec3"       },
@@ -74,6 +76,7 @@ CONFIG_BEGIN(config_section_denial_desc)
 
 CONFIG_STRING(   id,          NULL                    )
 CONFIG_ENUM(     type,        "nsec3", dnssec_enum    )
+CONFIG_U32(      resalting,   "0"                     )   /// @todo 20160520 gve -- does not work in version 2.2.0
 CONFIG_STRING(   salt,        NULL                    )
 CONFIG_STRING(   algorithm,   "sha1"                  )
 CONFIG_U16(      iterations,  "1"                     )
@@ -162,9 +165,9 @@ config_section_denial_start(struct config_section_descriptor_s *csd)
     {
         return ERROR;
     }
-
+    
     denial_desc_s *denial;
-    MALLOC_OR_DIE(denial_desc_s*, denial, sizeof(denial_desc_s), GENERIC_TAG);
+    MALLOC_OR_DIE(denial_desc_s*, denial, sizeof(denial_desc_s), DENIALCF_TAG);
     ZEROMEMORY(denial, sizeof(denial_desc_s));
     csd->base = denial;
     
@@ -199,7 +202,7 @@ config_section_denial_stop(struct config_section_descriptor_s *csd)
 #if CONFIG_SETTINGS_DEBUG
     formatln("config: section: denial: stop");
 #endif
-
+    
     // NOP
     denial_desc_s *denial = (denial_desc_s *) csd->base;
     csd->base = NULL;
@@ -224,12 +227,15 @@ config_section_denial_stop(struct config_section_descriptor_s *csd)
         }
     }
 
+#if 0 /* fix */
+#else
     size_t salt_length = (denial->salt != NULL) ? strlen(denial->salt) : 0;
-
+    
     if((denial->salt_length > 0) == (salt_length > 0))
     {
        return CONFIG_SECTION_ERROR;
     }
+#endif // if 0
 
 
     ptr_node *node = ptr_set_avl_insert(&denial_desc_set, denial->id);

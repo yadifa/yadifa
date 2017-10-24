@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup nsec NSEC functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -52,15 +52,18 @@
 
 #include "dnscore/ptr_set.h"
 
+#include "dnsdb/zdb_zone.h"
+#include "dnsdb/zdb-zone-lock.h"
 #include "dnsdb/zdb_rr_label.h"
 #include "dnsdb/zdb_zone_label_iterator.h"
 #include "dnsdb/zdb_record.h"
-#include "dnsdb/zdb_listener.h"
 
 #include "dnsdb/rrsig.h"
 
 #include "dnsdb/nsec.h"
 #include "dnsdb/nsec_common.h"
+
+#include "dnsdb/dynupdate-diff.h"
 
 /*
    Note : (rfc 4034)
@@ -173,6 +176,19 @@ extern logger_handle *g_dnssec_logger;
 
 static int nsec_update_zone_count = 0;
 
+
+void
+nsec_zone_label_detach(zdb_rr_label *rr_label)
+{
+    yassert((rr_label != NULL) && (rr_label->flags & ZDB_RR_LABEL_NSEC) != 0);
+    
+    if((rr_label->nsec.dnssec != NULL) && (rr_label->nsec.nsec.node != NULL))
+    {
+       rr_label->nsec.nsec.node->label = NULL;
+       rr_label->nsec.nsec.node = NULL;
+    }
+}
+
 ya_result
 nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
 {
@@ -271,9 +287,15 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
              */
 
             zdb_rr_label *label = node->label;
+            
+            if(label == NULL)
+            {
+                node = next_node;
+                continue;
+            }
 
-            u32 tbm_size = type_bit_maps_initialize(&tbmctx, label, TRUE, TRUE);
-            type_bit_maps_write(tmp_bitmap, &tbmctx);
+            u32 tbm_size = type_bit_maps_initialise_from_label(&tbmctx, label, TRUE, TRUE);
+            type_bit_maps_write(&tbmctx, tmp_bitmap);
             
             u8 *tmp_name = prev_name;
             prev_name = name;
@@ -366,8 +388,9 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
                     if(!read_only)
                     {
                         log_warn("nsec: %{dnsname}: del: %{dnsname} %{typerdatadesc}", zone->origin, prev_name, &nsec_desc);
-
+#if ZDB_CHANGE_FEEDBACK_SUPPORT
                         zdb_listener_notify_remove_record(zone, name, TYPE_NSEC, &unpacked_ttlrdata);
+#endif
                     }
                     else
                     {
@@ -414,6 +437,7 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
 #ifdef DEBUG
                     log_debug("nsec: %{dnsname}: add: %{dnsname} %{typerdatadesc}", zone->origin, prev_name, &nsec_desc);
 #endif
+#if ZDB_CHANGE_FEEDBACK_SUPPORT
                     if(zdb_listener_notify_enabled())
                     {        
                         dnsname_vector name_path;
@@ -425,9 +449,9 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
                         unpacked_ttlrdata.rdata_pointer = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_record);
 
                         dnsname_to_dnsname_vector(name, &name_path);
-
                         zdb_listener_notify_add_record(zone, name_path.labels, name_path.size, TYPE_NSEC, &unpacked_ttlrdata);
                     }
+#endif
                     
                     /*
                      * Schedule a signature
@@ -455,7 +479,7 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
         {
             log_err("nsec: missing records: %u, nsec with siblings: %u, nsec under delegation: %u", missing_nsec_records, sibling_count, nsec_under_delegation);
             
-            return DNSSEC_ERROR_NSEC_INVALIDZONESTATE;
+            //return DNSSEC_ERROR_NSEC_INVALIDZONESTATE;
         }
     }
     else
@@ -512,9 +536,9 @@ nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *item, n
     
     type_bit_maps_context tbmctx;
     u8 tmp_bitmap[256 * (1 + 1 + 32)]; /* 'max window count' * 'max window length' */
-    u32 tbm_size = type_bit_maps_initialize(&tbmctx, label, TRUE, TRUE);
+    u32 tbm_size = type_bit_maps_initialise_from_label(&tbmctx, label, TRUE, TRUE);
     u32 ttl = zone->min_ttl;
-    type_bit_maps_write(tmp_bitmap, &tbmctx);
+    type_bit_maps_write(&tbmctx, tmp_bitmap);
 
     /*
      * Get the NSEC record
@@ -571,6 +595,7 @@ nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *item, n
             }    
         }
 
+#if ZDB_CHANGE_FEEDBACK_SUPPORT
         if(zdb_listener_notify_enabled())
         {
             zdb_packed_ttlrdata *nsec_rec = nsec_record;
@@ -589,7 +614,7 @@ nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *item, n
             }
             while(nsec_rec != NULL);
         }
-
+#endif
         zdb_record_delete(&label->resource_record_set, TYPE_NSEC);
 
         rrsig_delete(zone, name, label, TYPE_NSEC);
@@ -622,6 +647,7 @@ nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *item, n
 
         zdb_record_insert(&label->resource_record_set, TYPE_NSEC, nsec_record);
         
+#if ZDB_CHANGE_FEEDBACK_SUPPORT
         if(zdb_listener_notify_enabled())
         {        
             dnsname_vector name_path;
@@ -636,7 +662,7 @@ nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *item, n
 
             zdb_listener_notify_add_record(zone, name_path.labels, name_path.size, TYPE_NSEC, &unpacked_ttlrdata);
         }
-
+#endif
         /*
          * Schedule a signature
          */
@@ -667,6 +693,7 @@ nsec_update_label_node(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_refe
     nsec_node *node = nsec_avl_insert(&zone->nsec.nsec, inverse_name);
     node->label = label;
     label->nsec.nsec.node = node;
+    label->flags |= ZDB_RR_LABEL_NSEC;
 
 #ifdef DEBUG
     memset(inverse_name, 0xff, sizeof(inverse_name));
@@ -698,8 +725,13 @@ nsec_delete_label_node(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_refe
     
     if(node != NULL)
     {
-        node->label->nsec.nsec.node = NULL;
-        node->label = NULL;
+        if(node->label != NULL)
+        {
+            node->label->flags &= ~ZDB_RR_LABEL_NSEC;
+            node->label->nsec.nsec.node = NULL;
+            node->label = NULL;
+        }
+        
         nsec_avl_delete(&zone->nsec.nsec, inverse_name);
 
         log_debug("nsec_delete_label_node: %{dnsname}", inverse_name);
@@ -744,189 +776,22 @@ nsec_update_label(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_reference
 void
 nsec_destroy_zone(zdb_zone *zone)
 {
-    nsec_avl_iterator iter;
-    nsec_avl_iterator_init(&zone->nsec.nsec,&iter);
-
-    while(nsec_avl_iterator_hasnext(&iter))
+    if(!nsec_avl_isempty(&zone->nsec.nsec))
     {
-        nsec_node *node = nsec_avl_iterator_next_node(&iter);
-        node->label->nsec.nsec.node = NULL;
-        node->label->flags &= ~ZDB_RR_LABEL_NSEC;
-    }
+        nsec_avl_iterator iter;
+        nsec_avl_iterator_init(&zone->nsec.nsec,&iter);
 
-    nsec_avl_destroy(&zone->nsec.nsec);    
-}
-
-/**/
-
-void
-nsec_icmtl_replay_init(nsec_icmtl_replay *replay, zdb_zone *zone)
-{
-    ZEROMEMORY(replay, sizeof(nsec_icmtl_replay));
-
-    replay->nsec_add.compare = ptr_set_dnsname_node_compare;
-    replay->nsec_del.compare = ptr_set_dnsname_node_compare;
-    replay->zone = zone;
-}
-
-static void
-nsec3_icmtl_destroy_nsec(ptr_set *tree)
-{
-    if(!ptr_set_avl_isempty(tree))
-    {
-        ptr_set_avl_iterator n3p_avl_iter;
-        ptr_set_avl_iterator_init(tree, &n3p_avl_iter);
-
-        while(ptr_set_avl_iterator_hasnext(&n3p_avl_iter))
+        while(nsec_avl_iterator_hasnext(&iter))
         {
-            ptr_node *node = ptr_set_avl_iterator_next_node(&n3p_avl_iter);
-            free(node->key);
-            node->key = NULL;
-            node->value = NULL;
-        }
-        
-        ptr_set_avl_destroy(tree);
-    }
-}
-
-void
-nsec_icmtl_replay_destroy(nsec_icmtl_replay *replay)
-{
-    nsec3_icmtl_destroy_nsec(&replay->nsec_add);
-    nsec3_icmtl_destroy_nsec(&replay->nsec_del);
-    
-    replay->zone = NULL;
-}
-
-void
-nsec_icmtl_replay_nsec_del(nsec_icmtl_replay *replay, const u8* fqdn)
-{
-    ptr_node *node = ptr_set_avl_insert(&replay->nsec_del, (u8*)fqdn);
-    
-    node->key = dnsname_dup(fqdn);
-    node->value = NULL;
-}
-
-void
-nsec_icmtl_replay_nsec_add(nsec_icmtl_replay *replay, const u8* fqdn)
-{
-    ptr_node *node = ptr_set_avl_insert(&replay->nsec_add, (u8*)fqdn);
-
-    node->key = dnsname_dup(fqdn);
-    node->value = NULL;
-}
-
-void
-nsec_icmtl_replay_execute(nsec_icmtl_replay *replay)
-{
-    if(!ptr_set_avl_isempty(&replay->nsec_del))
-    {
-        /* stuff to delete */
-
-        ptr_set_avl_iterator ts_avl_iter;
-        ptr_set_avl_iterator_init(&replay->nsec_del, &ts_avl_iter);
-
-        while(ptr_set_avl_iterator_hasnext(&ts_avl_iter))
-        {
-            ptr_node *node = ptr_set_avl_iterator_next_node(&ts_avl_iter);
-            u8 *fqdn = (u8*)node->key;
-
-            log_debug("icmtl replay: NSEC: post/del %{dnsname}", fqdn);
-
-            ptr_node *add_node;
-
-            if((add_node = ptr_set_avl_find(&replay->nsec_add, fqdn)) != NULL)
+            nsec_node *node = nsec_avl_iterator_next_node(&iter);
+            if(node->label != NULL)
             {
-                /*
-                 *  del and add => nothing to do (almost)
-                 *
-                 *  NOTE: I have to ensure that the label link is right (if the label has ENTIERLY been destroyed,
-                 *        then re-made, this will break)
-                 */
-
-                log_debug("icmtl replay: NSEC: upd %{dnsname}", fqdn);
-
-                /*
-                 *
-                 */
-
-                u8* add_key = add_node->key;
-                ptr_set_avl_delete(&replay->nsec_add, fqdn);
-                
-                free(add_key);
+                node->label->nsec.nsec.node = NULL;
+                node->label->flags &= ~ZDB_RR_LABEL_NSEC;
             }
-            else
-            {
-                log_debug("icmtl replay: NSEC: del %{dnsname}", fqdn);
-
-                /*
-                 * The node has to be deleted
-                 */
-
-                dnslabel_vector labels;
-                s32 labels_top = dnsname_to_dnslabel_vector(fqdn, labels);
-                ya_result err;
-                zdb_rr_label* label = zdb_rr_label_find_exact(replay->zone->apex, labels, labels_top);
-
-                if(label != NULL)
-                {
-                    nsec_delete_label_node(replay->zone, label, labels, labels_top);
-
-                    if(RR_LABEL_IRRELEVANT(label))
-                    {
-                        if(FAIL(err = zdb_rr_label_delete_record(replay->zone, labels, labels_top, TYPE_ANY)))
-                        {
-                            log_err("icmtl replay: NSEC: %r", err);
-                        }
-                    }
-                }
-                else
-                {
-                    log_err("icmtl replay: NSEC: %{dnsname} not found in zone !", fqdn);
-                }
-            }
-
-            free(fqdn);
         }
 
-        ptr_set_avl_destroy(&replay->nsec_del);
-    }
-    if(!ptr_set_avl_isempty(&replay->nsec_add))
-    {
-        /* stuff to add */
-
-        ptr_set_avl_iterator ts_avl_iter;
-        ptr_set_avl_iterator_init(&replay->nsec_add, &ts_avl_iter);
-
-        while(ptr_set_avl_iterator_hasnext(&ts_avl_iter))
-        {
-            ptr_node *node = ptr_set_avl_iterator_next_node(&ts_avl_iter);
-            u8 *fqdn = (u8*)node->key;
-
-            log_debug("icmtl replay: NSEC: add %{dnsname}", fqdn);
-
-            /*
-             * The node must be added.  It should not exist already.
-             * After all changes (del/upd/add) all the added records should be matched again (check)
-             */
-
-            dnslabel_vector labels;
-            s32 labels_top = dnsname_to_dnslabel_vector(fqdn, labels);
-
-            zdb_rr_label* label = zdb_rr_label_find_exact(replay->zone->apex, labels, labels_top - replay->zone->origin_vector.size - 1);
-            if(label != NULL)
-            {
-                nsec_update_label_node(replay->zone, label, labels, labels_top);
-            }
-            else
-            {
-                log_err("icmtl replay: NSEC: %{dnsname} not found in zone !!", fqdn);;
-            }
-
-            free(fqdn);
-        }
-
-        ptr_set_avl_destroy(&replay->nsec_add);
+        nsec_avl_destroy(&zone->nsec.nsec);
     }
 }
 
@@ -956,33 +821,7 @@ nsec_find_interval(const zdb_zone *zone, const dnsname_vector *name_vector, u8 *
 
     return node->label;
 }
-/*
-void
-nsec_find_interval_and_wild(zdb_zone *zone, const dnsname_vector *name_vector, zdb_rr_label **label, u8 *dname_out, zdb_rr_label **wild_label, u8 *wild_dname_out)
-{
-    u8 dname_inverted[MAX_DOMAIN_LENGTH + 2];
-    
-    s32 len = dnslabel_stack_to_dnsname(name_vector->labels, name_vector->size, dname_inverted);
-    
-    nsec_node *node = nsec_avl_find_interval_start(&zone->nsec.nsec, dname_inverted);
-    
-    nsec_inverse_name(dname_out, node->inverse_relative_name);
-    
-    dname_inverted[len-1] = (u8)1;
-    dname_inverted[len+0] = (u8)'*';
-    dname_inverted[len+1] = (u8)0;
-    
-    nsec_node *wild_node = nsec_avl_find_interval_start(&zone->nsec.nsec, dname_inverted);
-    
-    if(wild_node != node)
-    {
-        nsec_inverse_name(wild_dname_out, wild_node->inverse_relative_name);
-    }
-    
-    *label = node->label;
-    *wild_label = wild_node->label;
-}
-*/
+
 void
 nsec_name_error(const zdb_zone* zone, const dnsname_vector *name, s32 closest_index,
                 u8 * restrict * pool,
@@ -1036,7 +875,72 @@ nsec_logdump_tree(zdb_zone *zone)
     log_debug("done dumping zone %{dnsname} nsec tree", zone->origin);
 }
 
+/**
+ * marks the zone with private records
+ * 
+ * @param zone
+ * @param status
+ * 
+ * @return an error code
+ */
+
+
+ya_result
+nsec_zone_set_status(zdb_zone *zone, u8 secondary_lock, u8 status)
+{
+    dynupdate_message dmsg;
+    packet_unpack_reader_data reader;
+    dynupdate_message_init(&dmsg, zone->origin, CLASS_IN);
+    
+    u8 prev_status = 0;    
+    u8 nsecparamadd_rdata[1];
+    
+    nsecparamadd_rdata[0] = status;
+    
+    // look for the matching record
+    if(nsec_zone_get_status(zone, &prev_status) == 1)
+    {
+        // if the record exists, remove it and add it
+        dynupdate_message_del_record_set(&dmsg, zone->origin, TYPE_NSECCHAINSTATE);
+    }
+    dynupdate_message_add_record(&dmsg, zone->origin, TYPE_NSECCHAINSTATE, 0, 1, nsecparamadd_rdata);
+    dynupdate_message_set_reader(&dmsg, &reader);
+    u16 count = dynupdate_message_get_count(&dmsg);
+
+    packet_reader_skip(&reader, DNS_HEADER_LENGTH);
+    packet_reader_skip_fqdn(&reader);
+    packet_reader_skip(&reader, 4);
+    
+    ya_result ret;
+    
+    ret = dynupdate_diff(zone, &reader, count, secondary_lock, FALSE); // TODO
+    
+    dynupdate_message_finalise(&dmsg);
+        
+    return ret;
+}
+
+/**
+ * gets the zone status from private records
+ * 
+ * @param zone
+ * @param statusp
+ * 
+ * @return an error code
+ */
+
+ya_result
+nsec_zone_get_status(zdb_zone *zone, u8 *statusp)
+{
+    // get the TYPE_NSEC3PARAMADD record set
+    // search for a record matching the chain
+    zdb_packed_ttlrdata *rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_NSECCHAINSTATE);
+    if(rrset != NULL)
+    {
+        *statusp = rrset->rdata_start[0];
+        return 1;
+    }
+    return 0;
+}
+
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

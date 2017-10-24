@@ -4,7 +4,7 @@
 /* Define if building universal (internal helper macro) */
 /* #undef AC_APPLE_UNIVERSAL_BUILD */
 
-/* number of harware core if the auto-detect fails */
+/* number of hardware core if the auto-detect fails */
 #define DEFAULT_ASSUMED_CPU_COUNT 2
 
 /* always on */
@@ -12,6 +12,9 @@
 
 /* bfd debug support disabled. */
 #define HAS_BFD_DEBUG_SUPPORT 0
+
+/* Disable timestamps in the build disabled. */
+#define HAS_BUILD_TIMESTAMP 1
 
 /* i386, Athlon, Opteron, Core2, i3, i5, i7, ... */
 #define HAS_CPU_AMDINTEL 1
@@ -22,51 +25,40 @@
 /* remote control disabled. */
 #define HAS_CTRL 0
 
-/* dynamic provisioning disabled. */
-#define HAS_CTRL_DYNAMIC_PROVISIONING 0
-
-/* DNSQ support enabled */
-#define HAS_DNSQ 0
-
 /* always on */
 #define HAS_DNSSEC_SUPPORT 1
 
 /* DROPALL mode will not actually send back the answer (debug/bench) */
 #define HAS_DROPALL_SUPPORT 0
 
-/* dynamic configuration disabled. */
-#define HAS_DYNCONF_SUPPORT 0
-
 /* dynamic update support disabled. */
 #define HAS_DYNUPDATE_SUPPORT 1
 
-/* Disables Elliptic Curve (ECDSA) support (ie: the available OpenSSL does not
-   supports it) disabled. */
+/* Elliptic Curve (ECDSA) support (ie: the available OpenSSL does not supports
+   it) disabled. */
 #define HAS_ECDSA_SUPPORT 1
 
-/* Eric's code is enabled */
-#define HAS_EDF 0
-
-/* experimental stuff disabled. */
-#define HAS_EXPERIMENTAL 0
-
-/* YADIFA will now accept ASCII7 characters in DNS names (not recommended)
-   disabled. */
+/* acceptance of ASCII7 characters in DNS names (not recommended) disabled. */
 #define HAS_FULL_ASCII7 0
 
-/* Gery's code is enabled */
-#define HAS_GERY 0
+/* libc malloc debug support monitors program-wide allocations disabled. */
+#define HAS_LIBC_MALLOC_DEBUG_SUPPORT 0
 
 /* where to put the log files */
 #define HAS_LOGDIR 0
 
-/* write the pid in each line of log disabled. */
+/* a column with the pid in each line of log disabled. */
 #define HAS_LOG_PID_ALWAYS_ON 0
 
-/* write the thread id in each line of log disabled. */
+/* a column with an alphanumeric id consistent in the lowest 32 bits of a
+   thread id in each log line disabled. */
 #define HAS_LOG_THREAD_ID_ALWAYS_ON 0
 
-/* malloc debug support disabled. */
+/* a column with a 8 letters human-readable tag identifying a thread in each
+   log line disabled. */
+#define HAS_LOG_THREAD_TAG_ALWAYS_ON 0
+
+/* malloc debug support for yadifa objects disabled. */
 #define HAS_MALLOC_DEBUG_SUPPORT 0
 
 /* DNS master disabled. */
@@ -75,18 +67,14 @@
 /* Define this to enable slow but safe unaligned memory accesses */
 #define HAS_MEMALIGN_ISSUES 0
 
-/* use messages instead of send (needed if you use more than one IP aliased on
-   the same network interface) disabled. */
-#define HAS_MESSAGES_SUPPORT 0
-
-/* MIRROR mode will only reply what has been read (debug/bench) */
-#define HAS_MIRROR_SUPPORT 0
+/* usage of message structure API (not recommended) disabled. */
+#define HAS_MESSAGES_SUPPORT 1
 
 /* mutex debug support disabled. */
 #define HAS_MUTEX_DEBUG_SUPPORT 0
 
-/* Allows AXFR answer from master without AA bit set (Microsoft DNS) disabled.
-   */
+/* lenient acceptance of AXFR answer from master that do not have AA bit set
+   (Microsoft DNS) disabled. */
 #define HAS_NON_AA_AXFR_SUPPORT 0
 
 /* always on */
@@ -107,11 +95,11 @@
 /* The system supports spinlocks */
 #define HAS_PTHREAD_SPINLOCK 1
 
-/* always off */
-#define HAS_RDTSC 0
+/* always on */
+#define HAS_RDTSC_SUPPORT 0
 
-/* always off */
-#define HAS_RRCACHE_ENABLED 0
+/* always on */
+#define HAS_RRCACHE_ENABLED 1
 
 /* DNS Response Rate Limiter disabled. */
 #define HAS_RRL_SUPPORT 1
@@ -119,22 +107,10 @@
 /* RRSIG verification and generation for zones disabled. */
 #define HAS_RRSIG_MANAGEMENT_SUPPORT 1
 
-/* The sockaddr_in6 struct has an sin6_len field */
-#define HAS_SOCKADDR_IN6_SIN6_LEN 0
+/* The system supports setgroups */
+#define HAS_SETGROUPS 1
 
-/* The sockaddr_in struct has an sin_len field */
-#define HAS_SOCKADDR_IN_SIN_LEN 0
-
-/* The sockaddr struct has an sa_len field */
-#define HAS_SOCKADDR_SA_LEN 0
-
-/* always off */
-#define HAS_TCL 0
-
-/* Tim's code is enabled */
-#define HAS_THX 0
-
-/* Tracks the instanciated zones for detecting zones potentially not released.
+/* tracking of the instanciated zones for detecting potential leaks.
    Relatively cheap with a small (<100) amount of zones. disabled. */
 #define HAS_TRACK_ZONES_DEBUG_SUPPORT 0
 
@@ -144,7 +120,7 @@
 /* where to put the log files */
 /* #undef HAS_WITH_LOGDIR */
 
-/* zalloc debug support disabled. */
+/* zalloc debug support for yadifa objects disabled. */
 #define HAS_ZALLOC_DEBUG_SUPPORT 0
 
 /* zalloc statistics support disabled. */
@@ -176,6 +152,9 @@
 
 /* Define to 1 if you have the `fork' function. */
 /* #undef HAVE_FORK */
+
+/* Define to 1 if you have the <grp.h> header file. */
+#define HAVE_GRP_H 1
 
 /* Define to 1 if you have the <i386/limits.h> header file. */
 /* #undef HAVE_I386_LIMITS_H */
@@ -334,7 +313,7 @@
 #define PACKAGE_NAME "dnszone"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "dnszone 2.3.1-6831"
+#define PACKAGE_STRING "dnszone 2.3.3-7373"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "dnszone"
@@ -343,7 +322,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.3.1-6831"
+#define PACKAGE_VERSION "2.3.3-7373"
 
 /* Define as the return type of signal handlers (`int' or `void'). */
 #define RETSIGTYPE void
@@ -364,7 +343,7 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* Version number of package */
-#define VERSION "2.3.1-6831"
+#define VERSION "2.3.3-7373"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */

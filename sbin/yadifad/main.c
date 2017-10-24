@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup yadifad Yet Another DNS Implementation for all
  * 
  *  @brief Yet Another DNS Implementation for all
@@ -89,6 +89,10 @@
 
 #if HAS_DYNUPDATE_SUPPORT
 #include "dynupdate_query_service.h"
+#endif
+
+#if HAS_DYNCONF_SUPPORT
+#include "dynconf.h"
 #endif
 
 #include "buildinfo.h"
@@ -166,6 +170,14 @@ server_register_errors()
     error_register(NOTIFY_QUERY_TO_MASTER, "NOTIFY_QUERY_TO_MASTER");
     error_register(NOTIFY_QUERY_TO_UNKNOWN, "NOTIFY_QUERY_TO_UNKNOWN");
     error_register(NOTIFY_QUERY_FROM_UNKNOWN, "NOTIFY_QUERY_FROM_UNKNOWN");
+    
+    error_register(POLICY_ILLEGAL_DATE, "POLICY_ILLEGAL_DATE");
+    error_register(POLICY_ILLEGAL_DATE_TYPE, "POLICY_ILLEGAL_DATE_TYPE");
+    error_register(POLICY_ILLEGAL_DATE_PARAMETERS, "POLICY_ILLEGAL_DATE_PARAMETERS");
+    error_register(POLICY_ILLEGAL_DATE_COMPARE, "POLICY_ILLEGAL_DATE_COMPARE");
+    error_register(POLICY_UNDEFINED, "POLICY_UNDEFINED");
+    error_register(POLICY_NULL_REQUESTED, "POLICY_NULL_REQUESTED");
+    error_register(POLICY_ZONE_NOT_READY, "POLICY_ZONE_NOT_READY");    
 }
 
 static void
@@ -193,6 +205,8 @@ main_dump_info()
 static ya_result
 yadifad_config_on_section_loggers_read(const char* name, int index)
 {
+    //formatln("yadifad_config_on_section_main_read(%s,%i)", name, index);
+
     ya_result                                                   ret;
     
     if(FAIL(ret = pid_check_running_program(PROGRAM_NAME, g_config->pid_file))) /// @todo 20160127 edf -- needs to add pid_file stuff
@@ -284,7 +298,7 @@ main_config(int argc, char *argv[])
         osformatln(termerr, "error: %r", ret);
         flusherr();
 
-        return ERROR;
+        return ret;
     }
     
     // channels then loggers
@@ -294,7 +308,7 @@ main_config(int argc, char *argv[])
     {
         if(FAIL(ret))
         {
-            return ERROR;
+            return ret;
         }
         
         return 1;
@@ -305,7 +319,7 @@ main_config(int argc, char *argv[])
         osformatln(termerr, "error: %r", ret);
         flusherr();
 
-        return ERROR;
+        return ret;
     }
     
     if(FAIL(ret = yadifad_config_finalise()))
@@ -313,8 +327,13 @@ main_config(int argc, char *argv[])
         osformatln(termerr, "error: %r", ret);
         flusherr();
 
-        return ERROR;
+        return ret;
     }
+        
+#if 0 && defined(DEBUG)
+    config_print(termout);    
+    osformatln(termout, "starting logging service");
+#endif
     
     /*
      * flushes whatever is in the buffers
@@ -341,7 +360,7 @@ main_final_tests_is_directory_writable(const char* dir)
     
     snformat(tempfile, sizeof(tempfile), "%s/ydf.XXXXXX", dir);
     int tempfd;
-    if((tempfd = mkstemp(tempfile)) < 0)
+    if((tempfd = mkstemp_ex(tempfile)) < 0)
     {        
         ttylog_err("error: '%s' is not writable: %r", dir, ERRNO_ERROR);
         
@@ -362,19 +381,19 @@ main_final_tests()
 {
     if(!main_final_tests_is_directory_writable(g_config->data_path))
     {
-        return ERROR;
+        return DIRECTORY_NOT_WRITABLE;
     }
     if(!main_final_tests_is_directory_writable(g_config->keys_path))
     {
-        return ERROR;
+        return DIRECTORY_NOT_WRITABLE;
     }
     if(!main_final_tests_is_directory_writable(g_config->log_path))
     {
-        return ERROR;
+        return DIRECTORY_NOT_WRITABLE;
     }
     if(!main_final_tests_is_directory_writable(g_config->xfr_path))
     {
-        return ERROR;
+        return DIRECTORY_NOT_WRITABLE;
     }
     
     return SUCCESS;
@@ -483,16 +502,16 @@ main_check_build_settings()
 {
     if(dnscore_getfingerprint() != dnscore_getmyfingerprint())
     {
-        printf("yadifad: the linked dnscore features are %08x but the the lib has been compiled against one with %08x", dnscore_getfingerprint(), dnscore_getmyfingerprint());
+        printf("yadifad: the linked dnscore features are %08x but the lib has been compiled against one with %08x", dnscore_getfingerprint(), dnscore_getmyfingerprint());
         fflush(NULL);
-        exit(-1);
+        abort(); // binary incompatiblity : full stop
     }
     
     if(dnsdb_getfingerprint() != dnsdb_getmyfingerprint())
     {
-        printf("yadifad: the linked dnsdb features are %08x but the the lib has been compiled against one with %08x", dnsdb_getfingerprint(), dnsdb_getmyfingerprint());
+        printf("yadifad: the linked dnsdb features are %08x but the lib has been compiled against one with %08x", dnsdb_getfingerprint(), dnsdb_getmyfingerprint());
         fflush(NULL);
-        exit(-1);
+        abort(); // binary incompatiblity : full stop
     }
 }
 
@@ -520,6 +539,8 @@ int
 main(int argc, char *argv[])
 {
     ya_result ret;
+    
+
 
     /*    ------------------------------------------------------------    */
     
@@ -556,12 +577,18 @@ main(int argc, char *argv[])
 
     atexit(main_exit);
     
+#if HAS_DYNCONF_SUPPORT
+    //dynconf_service_init();
+    //dynconf_service_start();
+#endif    
     // configures, exit if ordered to (version/help or error)
     
     if((ret = main_config(argc, argv)) != SUCCESS)
     {
-        return ISOK(ret)?EXIT_SUCCESS:EXIT_FAILURE;
+        return ISOK(ret)?EXIT_SUCCESS:EXIT_CONFIG_ERROR;
     }
+
+
 
     // This is always 'exit' on failure
     if(FAIL(ret = pid_check_running_program(PROGRAM_NAME, g_config->pid_file)))
@@ -643,16 +670,20 @@ main(int argc, char *argv[])
      */
     
     int exit_code;
-        
-    if(ISOK(ret = server_service_start_and_wait()))
-    {
-        exit_code = EXIT_SUCCESS;
-    }
-    else
-    {
-        exit_code = EXIT_FAILURE;
-    }
 
+
+        
+        if(ISOK(ret = server_service_start_and_wait()))
+        {
+            exit_code = EXIT_SUCCESS;
+        }
+        else
+        {
+            exit_code = EXIT_FAILURE;
+        }
+
+
+    
     /// @note DO NOT: logger_finalize() don't, it will be done automatically at exit
 
     return exit_code;

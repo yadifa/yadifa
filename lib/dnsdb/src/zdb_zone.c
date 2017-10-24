@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief Functions used to manipulate a zone
@@ -55,6 +55,7 @@
 #include <dnscore/threaded_dll_cw.h>
 
 #include "dnsdb/dnsdb-config.h"
+#include "dnsdb/dnssec-keystore.h"
 #include "dnsdb/zdb_icmtl.h"
 #include "dnsdb/zdb.h"
 
@@ -68,9 +69,8 @@
 
 #include "dnsdb/dnsrdata.h"
 
-#include "dnsdb/zdb_listener.h"
-
 #include "dnsdb/journal.h"
+#include "dnsdb/dynupdate-diff.h"
 
 #if HAS_DNSSEC_SUPPORT
 #include "dnsdb/rrsig.h"
@@ -82,6 +82,10 @@
 #endif
 #endif
 
+#ifndef HAS_DYNUPDATE_DIFF_ENABLED
+#error "HAS_DYNUPDATE_DIFF_ENABLED not defined"
+#endif
+
 #ifdef DEBUG
 #define ZONE_MUTEX_LOG 0    // set this to 0 to disable in DEBUG
 #else
@@ -90,6 +94,8 @@
 
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
+
+#define TMPRDATA_TAG 0x4154414452504d54
 
 #if HAS_TRACK_ZONES_DEBUG_SUPPORT
 smp_int g_zone_instanciated_count = SMP_INT_INITIALIZER;
@@ -293,7 +299,7 @@ zdb_zone_record_delete_self(zdb_zone *zone, dnslabel_vector_reference labels, s3
     }
     else // ttlrdata.rdata_size > sizeof(tmp_) // scan build does not seem to get this
     {
-        MALLOC_OR_DIE(u8*,tmp,ttlrdata.rdata_size,GENERIC_TAG);
+        MALLOC_OR_DIE(u8*,tmp,ttlrdata.rdata_size,TMPRDATA_TAG);
     }
     memcpy(tmp, ZDB_PACKEDRECORD_PTR_RDATAPTR(packed_ttlrdata), ttlrdata.rdata_size);
     ttlrdata.rdata_pointer = tmp;
@@ -380,7 +386,7 @@ zdb_zone_create(const u8* origin)
     /* zone->axfr_serial = 0; implicit */
 
 #if ZDB_HAS_DNSSEC_SUPPORT != 0
-    ZEROMEMORY(&zone->nsec, sizeof(nsec_zone_union));
+    ZEROMEMORY(&zone->nsec, sizeof(dnssec_zone_extension));
     zone->sig_validity_interval_seconds = 30*24*3600;       /* 1 month */
     zone->sig_validity_regeneration_seconds = 7*24*3600;    /* 1 week */
     zone->sig_validity_jitter_seconds = 86400;              /* 1 day */
@@ -396,7 +402,7 @@ zdb_zone_create(const u8* origin)
     zone->query_access_filter = zdb_default_query_access_filter;
     zone->extension = NULL;
 #if ZDB_HAS_DNSSEC_SUPPORT
-    zone->sig_last_processed_node = NULL;
+    zone->progressive_signature_update.current_fqdn = NULL;
 #endif
     mutex_init(&zone->lock_mutex);
     cond_init(&zone->lock_cond);
@@ -405,7 +411,8 @@ zdb_zone_create(const u8* origin)
     zone->lock_count = 0;
     zone->lock_reserved_owner = ZDB_ZONE_MUTEX_NOBODY;
     zone->_status = 0;
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    zone->_flags = 0;
+#if ZDB_HAS_OLD_MUTEX_DEBUG_SUPPORT
     zone->lock_trace = NULL;
     zone->lock_id = 0;
     zone->lock_timestamp = 0;
@@ -445,18 +452,12 @@ zdb_zone_truncate_invalidate(zdb_zone *zone)
         // empty the zone records
         if(zone->apex != NULL)
         {
-#if ZDB_HAS_NSEC_SUPPORT != 0
-            if(zdb_zone_is_nsec(zone))
-            {
-                nsec_destroy_zone(zone);
-            }
+#if ZDB_HAS_NSEC_SUPPORT
+            nsec_destroy_zone(zone);
 #endif
 
-#if ZDB_HAS_NSEC3_SUPPORT != 0
-            if(zdb_zone_is_nsec3(zone))
-            {
-                nsec3_destroy_zone(zone);
-            }
+#if ZDB_HAS_NSEC3_SUPPORT
+            nsec3_destroy_zone(zone);
 #endif
             
             // zdb_rr_label_destroy(zone, &zone->apex);
@@ -536,19 +537,12 @@ zdb_zone_destroy(zdb_zone *zone)
             if(zone->apex != NULL)
             {
 
-#if ZDB_HAS_NSEC_SUPPORT != 0
-                if(zdb_zone_is_nsec(zone))
-                {
-                    nsec_destroy_zone(zone);
-                }
+#if ZDB_HAS_NSEC_SUPPORT
+                nsec_destroy_zone(zone);
 #endif
 
-#if ZDB_HAS_NSEC3_SUPPORT != 0
-                if(zdb_zone_is_nsec3(zone))
-                {
-                    nsec3_destroy_zone(zone);
-                }
-
+#if ZDB_HAS_NSEC3_SUPPORT
+                nsec3_destroy_zone(zone);
 #endif
                 zdb_rr_label_destroy(zone, &zone->apex);
                 zone->apex = NULL;
@@ -560,10 +554,10 @@ zdb_zone_destroy(zdb_zone *zone)
         dnsname_zfree(zone->origin);
         
 #if HAS_DNSSEC_SUPPORT
-        if(zone->sig_last_processed_node != NULL)
+        if(zone->progressive_signature_update.current_fqdn != NULL)
         {
-            ZFREE_STRING(zone->sig_last_processed_node);
-            zone->sig_last_processed_node = NULL;
+            dnsname_zfree(zone->progressive_signature_update.current_fqdn);
+            zone->progressive_signature_update.current_fqdn = NULL;
         }
 #endif
 
@@ -706,71 +700,6 @@ zdb_zone_get_dnskey_rrset(zdb_zone *zone)
     return zdb_record_find(&zone->apex->resource_record_set, TYPE_DNSKEY); // zone is locked
 }
 
-#if OBSOLETE
-
-zdb_zone*
-zdb_zone_xchg_with_invalid(zdb *db, const u8 *origin, u16 or_flags) // lock checked
-{
-    dnsname_vector name;    
-    dnsname_to_dnsname_vector(origin, &name);
-        
-    zdb_lock(db, ZDB_MUTEX_WRITER);
-    
-    zdb_zone_label *zone_label = zdb_zone_label_add_nolock(db, &name); // xchg with invalid (obsolete)
-    zdb_zone *old_zone = zone_label->zone;
-    
-    /*
-     * If the zone exists and is invalid already : skip
-     */
-    
-    if(old_zone != NULL)
-    {
-        zdb_zone_lock(old_zone, ZDB_ZONE_MUTEX_INVALIDATE);
-        
-        alarm_close(old_zone->alarm_handle);
-        old_zone->alarm_handle = ALARM_HANDLE_INVALID;
-        
-        if((old_zone->apex->flags & ZDB_RR_LABEL_INVALID_ZONE) == 0)
-        {
-            // create a dummy invalid zone
-            zdb_zone *zone = zdb_zone_create(origin); // obsolete
-
-            if(zone != NULL)
-            {
-                // mark the dummy zone as invalid
-                zone->apex->flags |= ZDB_RR_LABEL_INVALID_ZONE;
-
-                // locks so that only readers can access it
-                zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // see scheduler_database_replace_zone_init
-                
-                // so here is a rule : an invalid zone is always locked, and is only unlocked to be destroyed
-            }
-
-            log_debug("zdb_zone_xchg_with_invalid: replacing %p with %p", zone_label->zone, zone);
-
-            zone_label->zone = zone;
-        }
-        
-        zdb_zone_unlock(old_zone, ZDB_ZONE_MUTEX_INVALIDATE);
-    }
-    else
-    {
-        if(old_zone == NULL)
-        {
-            log_err("zdb_zone_xchg_with_invalid: no zone %{dnsname} found", origin);
-        }
-        else
-        {
-            log_err("zdb_zone_xchg_with_invalid: zone %{dnsname}@%p is invalid already", old_zone->origin, old_zone);
-            old_zone = NULL;
-        }
-    }
-    
-    return old_zone;
-}
-
-#endif
-
 bool
 zdb_zone_isinvalid(zdb_zone *zone)
 {
@@ -807,12 +736,13 @@ zdb_zone_add_dnskey_from_key(zdb_zone *zone, const dnssec_key *key)
 
     if(zdb_record_insert_checked(&zone->apex->resource_record_set, TYPE_DNSKEY, dnskey_record)) /* FB done */
     {
+#if ZDB_CHANGE_FEEDBACK_SUPPORT
         zdb_ttlrdata unpacked_dnskey_record;
         unpacked_dnskey_record.rdata_pointer = ZDB_PACKEDRECORD_PTR_RDATAPTR(dnskey_record);
         unpacked_dnskey_record.rdata_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(dnskey_record);
         unpacked_dnskey_record.ttl = dnskey_record->ttl;
         zdb_listener_notify_add_record(zone, zone->origin_vector.labels, zone->origin_vector.size, TYPE_DNSKEY, &unpacked_dnskey_record);
-        
+#endif
         return TRUE;
     }
     else
@@ -850,8 +780,18 @@ zdb_zone_remove_dnskey_from_key(zdb_zone *zone, const dnssec_key *key)
 
     if(zdb_record_delete_self_exact(&zone->apex->resource_record_set, TYPE_DNSKEY, &unpacked_dnskey_record) >= 0)
     {
+#if ZDB_CHANGE_FEEDBACK_SUPPORT
         zdb_listener_notify_remove_record(zone, zone->origin, TYPE_DNSKEY, &unpacked_dnskey_record);
+#endif
+        // remove all RRSIG on DNSKEY
+        rrsig_delete(zone, zone->origin,zone->apex, TYPE_DNSKEY);
+        
+        rrsig_delete_by_tag(zone, dnssec_key_get_tag_const(key));
+                
+        // zdb_listener_notify_remove_type(zone, zone->origin, &zone->apex->resource_record_set, TYPE_RRSIG);
+
         ZDB_RECORD_ZFREE(dnskey_record);
+        
         return TRUE;
     }
     else
@@ -927,8 +867,107 @@ zdb_zone_apex_contains_rrsig_record_by_key(zdb_zone *zone, const dnssec_key *key
     return FALSE;
 }
 
+static ya_result
+zdb_zone_update_zone_remove_add_dnskeys(zdb_zone *zone, ptr_vector *removed_keys, ptr_vector *added_keys, u8 secondary_lock)
+{
+    dynupdate_message dmsg;
+    packet_unpack_reader_data reader;
+    const u8 *fqdn = NULL;
+    
+    if(!ptr_vector_isempty(removed_keys))
+    {
+        dnssec_key *key = (dnssec_key*)ptr_vector_get(removed_keys, 0);
+        yassert(key != NULL);
+        fqdn = dnssec_key_get_domain(key);
+    }
+    else if(!ptr_vector_isempty(added_keys))
+    {
+        dnssec_key *key = (dnssec_key*)ptr_vector_get(added_keys, 0);
+        yassert(key != NULL);
+        fqdn = dnssec_key_get_domain(key);
+    }
+    else
+    {
+        return 0;   // EMPTY
+    }
+    
+    ya_result ret;
+    int add_index = 0;
+    int del_index = 0;
+    bool work_to_do = FALSE;
+    
+    do
+    {
+        dynupdate_message_init(&dmsg, fqdn, CLASS_IN);
+        
+        for(; add_index <= ptr_vector_last_index(added_keys); ++add_index)
+        {
+            dnssec_key *key = (dnssec_key*)ptr_vector_get(added_keys, add_index);
+            if(FAIL(ret = dynupdate_message_add_dnskey(&dmsg, zone->min_ttl, key)))
+            {
+                log_debug("dnskey: %{dnsname}: +%03d+%05d/%d key cannot be sent with this update, postponing", dnssec_key_get_domain(key), dnssec_key_get_algorithm(key), dnssec_key_get_tag_const(key), ntohs(dnssec_key_get_flags(key)), ret);
+                work_to_do = TRUE;
+                break;
+            }
+
+            log_info("dnskey: %{dnsname}: +%03d+%05d/%d key will be added", dnssec_key_get_domain(key), dnssec_key_get_algorithm(key), dnssec_key_get_tag_const(key), ntohs(dnssec_key_get_flags(key)));
+        }
+
+        if(!work_to_do)
+        {
+            for(; del_index <= ptr_vector_last_index(removed_keys); ++del_index)
+            {
+                dnssec_key *key = (dnssec_key*)ptr_vector_get(removed_keys, del_index);
+                if(FAIL(ret = dynupdate_message_del_dnskey(&dmsg, key)))
+                {
+                    log_debug("dnskey: %{dnsname}: +%03d+%05d/%d key cannot be sent with this update, postponing", dnssec_key_get_domain(key), dnssec_key_get_algorithm(key), dnssec_key_get_tag_const(key), ntohs(dnssec_key_get_flags(key)), ret);
+                    work_to_do = TRUE;
+                    break;
+                }
+
+                log_info("dnskey: %{dnsname}: +%03d+%05d/%d key will be removed", dnssec_key_get_domain(key), dnssec_key_get_algorithm(key), dnssec_key_get_tag_const(key), ntohs(dnssec_key_get_flags(key)));
+            }
+        }
+    
+        dynupdate_message_set_reader(&dmsg, &reader);
+        u16 count = dynupdate_message_get_count(&dmsg);
+
+        packet_reader_skip(&reader, DNS_HEADER_LENGTH);
+        packet_reader_skip_fqdn(&reader);
+        packet_reader_skip(&reader, 4);
+
+        // the update is ready : push it
+
+        if(ISOK(ret = dynupdate_diff(zone, &reader, count, secondary_lock, DYNUPDATE_UPDATE_RUN)))
+        {
+            // done
+            log_info("dnskey: %{dnsname}: keys update successfull", fqdn);
+        }
+
+        if(FAIL(ret))
+        {
+            log_err("dnskey: %{dnsname}: keys update failed", fqdn);
+            break;
+        }
+
+        dynupdate_message_finalise(&dmsg);
+    }
+    while(work_to_do);
+    
+    return ret;
+}
+
+/**
+ * From the keystore (files/pkcs12) for that zone
+ * 
+ * Remove the keys that should not be in the zone anymore.
+ * Add the keys that should be in the zone.
+ * 
+ * @param zone
+ */
+
 void
-zdb_zone_update_keystore_keys_from_zone(zdb_zone *zone)
+zdb_zone_update_keystore_keys_from_zone(zdb_zone *zone, u8 secondary_lock)
 {
     // keystore keys with a publish time that did not expire yet have to be added
     // keystore keys with an unpublish time that passed have to be removed
@@ -976,7 +1015,7 @@ zdb_zone_update_keystore_keys_from_zone(zdb_zone *zone)
             if(dnskey_is_unpublished(key, time(NULL)))
             {
                 // need to unpublish
-                ptr_vector_append(&dnskey_del, dnskey_record);
+                ptr_vector_append(&dnskey_del, key);
             }
 
             dnskey_release(key);
@@ -987,28 +1026,13 @@ zdb_zone_update_keystore_keys_from_zone(zdb_zone *zone)
 
     if(ptr_vector_size(&dnskey_add) + ptr_vector_size(&dnskey_del) > 0)
     {
-        zdb_icmtl icmtl;
-        dnsname_vector apex_name;
-        DEBUG_RESET_dnsname(apex_name);
-        dnsname_to_dnsname_vector(zone->origin, &apex_name);
-        ya_result ret;
-
-        if(ISOK(ret = zdb_icmtl_begin(&icmtl, zone)))
+        if(ISOK(zdb_zone_update_zone_remove_add_dnskeys(zone, &dnskey_del, &dnskey_add, secondary_lock)))
         {
-            for(int i = 0; i <= ptr_vector_last_index(&dnskey_del); ++i)
-            {
-                zdb_packed_ttlrdata *dnskey_record = (zdb_packed_ttlrdata*)ptr_vector_get(&dnskey_del, i);
-
-                zdb_zone_record_delete_self(zone, apex_name.labels, -1, TYPE_DNSKEY, dnskey_record);
-            }
-
-            for(int i = 0; i <= ptr_vector_last_index(&dnskey_add); ++i)
-            {
-                dnssec_key *key = (dnssec_key*)ptr_vector_get(&dnskey_add, i);
-                zdb_zone_add_dnskey_from_key(zone, key);
-            }
-
-            zdb_icmtl_end(&icmtl);
+            log_info("zone: %{dnsname}: keys added: %i, keys deleted: %i", zone->origin, ptr_vector_size(&dnskey_add), ptr_vector_size(&dnskey_del));
+        }
+        else
+        {
+            log_warn("zone: %{dnsname}: failed to update keys", zone->origin, ptr_vector_size(&dnskey_add), ptr_vector_size(&dnskey_del));
         }
     }
 }

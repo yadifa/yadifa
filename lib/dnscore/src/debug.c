@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup debug Debug functions
  *  @ingroup dnscore
  *  @brief Debug functions.
@@ -43,6 +43,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
+#include <malloc.h>
 
 #include <unistd.h>
 #include <sys/mman.h>
@@ -93,6 +94,49 @@ extern output_stream __termerr__;
 
 extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
+
+#if HAS_LIBC_MALLOC_DEBUG_SUPPORT
+
+typedef void *malloc_hook_t(size_t, const void *);
+typedef void *realloc_hook_t(void *, size_t, const void *);
+typedef void free_hook_t(void *, const void *);
+typedef void *memalign_hook_t(size_t, size_t, const void *);
+
+static bool _real_malloc_initialised = FALSE;
+
+malloc_hook_t *_real_malloc;
+realloc_hook_t *_real_realloc;
+free_hook_t *_real_free;
+memalign_hook_t *_real_memalign;
+
+static pthread_mutex_t malloc_hook_mtx = PTHREAD_MUTEX_INITIALIZER;
+static ptr_set_debug malloc_hook_tracked_set = PTR_SET_DEBUG_PTR_EMPTY;
+static ptr_set_debug malloc_hook_caller_set = PTR_SET_DEBUG_PTR_EMPTY;
+static pthread_mutex_t libc_hook_mtx = PTHREAD_MUTEX_INITIALIZER;
+volatile size_t malloc_hook_total = 0;
+volatile size_t malloc_hook_malloc = 0;
+volatile size_t malloc_hook_free = 0;
+volatile size_t malloc_hook_realloc = 0;
+volatile size_t malloc_hook_memalign = 0;
+
+struct malloc_hook_header_t
+{
+    u64 begin;
+    u32 magic;
+    u32 size;
+    const void* caller;
+#if __SIZEOF_POINTER__ == 4
+    u32 padding;
+#endif
+    u64 end;
+};
+
+typedef struct malloc_hook_header_t malloc_hook_header_t;
+
+void debug_malloc_hook_tracked_dump();
+void debug_malloc_hook_caller_dump();
+
+#endif
 
 
 
@@ -184,7 +228,7 @@ typedef struct bfd_node bfd_node;
 
 static pthread_mutex_t bfd_mtx = PTHREAD_MUTEX_INITIALIZER;
 static bool bfd_initialised = FALSE;
-static ptr_set_debug bfd_collection = PTR_SET_ASCIIZ_EMPTY;
+static ptr_set_debug bfd_collection = PTR_SET_DEBUG_ASCIIZ_EMPTY;
 static char *proc_self_exe = NULL;
 
 static char *
@@ -485,9 +529,8 @@ debug_bfd_resolve_address(void *address, const char *binary_file_path, const cha
 }
 
 static void
-debug_bfd_clear_delete(void *node_)
+debug_bfd_clear_delete(ptr_node_debug *node)
 {
-    ptr_node_debug *node = (ptr_node_debug*)node_;
     bfd_node *bfd = (bfd_node*)node->value;
     if(bfd != NULL)
     {
@@ -552,9 +595,12 @@ stacktrace
 debug_stacktrace_get()
 {
 #ifdef __linux__
-    void* buffer[1024];
+    void* buffer_[1024];
 
-    int n = backtrace(buffer, sizeof(buffer) / sizeof(void*));
+    int n = backtrace(buffer_, sizeof(buffer_) / sizeof(void*));
+    
+    void* buffer = &buffer_[1];
+    n -= 1; // minus this function
 
     // backtrace to key
     
@@ -610,9 +656,8 @@ debug_stacktrace_get()
  */
 
 static void
-debug_stacktrace_clear_delete(void *node_)
+debug_stacktrace_clear_delete(u64_node_debug *node)
 {
-    u64_node_debug *node = (u64_node_debug*)node_;
     list_sl_debug_s *sll = (list_sl_debug_s *)node->value;
     if(sll != NULL)
     {
@@ -700,6 +745,66 @@ debug_stacktrace_log(logger_handle* handle, u32 level, stacktrace trace)
     }
 #else
     logger_handle_msg(handle, level, "backtrace not supported");
+#endif
+}
+
+void
+debug_stacktrace_try_log(logger_handle* handle, u32 level, stacktrace trace)
+{
+#ifdef __linux__
+    int n = 0;
+
+    if(trace != NULL)
+    {
+        while(trace[n] != 0)
+        {
+            ++n;
+        }
+    
+        char **trace_strings = (char**)trace[n + 1];
+        for(int i = 0; i < n; i++)
+        {
+            void *address = (void*)trace[i];
+            const char *text = (trace_strings != NULL) ? trace_strings[i] : "???";
+        
+#if HAS_BFD_DEBUG_SUPPORT
+            char *parenthesis = strchr(text, '(');
+            if(parenthesis != NULL)
+            {
+                u32 n = parenthesis - text;
+
+                assert(n < PATH_MAX);
+
+                char binary[PATH_MAX];            
+                memcpy(binary, text, n);
+                binary[n] = '\0';
+
+                const char *file = NULL;
+                const char *function = NULL;
+                u32 line;
+
+                debug_bfd_resolve_address(address, binary, &file, &function, &line);
+
+                if((file != NULL) && (*file != '\0'))
+                {                    
+                    logger_handle_msg(handle, level, "%p: %s (%s:%i)", address, function, file, line);
+                }
+                else
+                {
+                    logger_handle_msg(handle, level, "%p: %s", address, text);
+                }
+            }
+            else
+            {
+#endif
+                logger_handle_try_msg(handle, level, "%p %s", address, text);
+#if HAS_BFD_DEBUG_SUPPORT     
+           }
+#endif
+        }
+    }
+#else
+    logger_handle_try_msg(handle, level, "backtrace not supported");
 #endif
 }
 
@@ -795,9 +900,9 @@ debug_dump_ex(void* data_pointer_, size_t size_, size_t line_size, bool hex, boo
     }
     
     osprint_dump(termout, data_pointer_, size_, line_size,
-        (address)?OSPRINT_DUMP_ADDRESS:0    |
-        (hex)?OSPRINT_DUMP_HEX:0            |
-        (text)?OSPRINT_DUMP_TEXT:0);
+        ((address)?OSPRINT_DUMP_ADDRESS:0)  |
+        ((hex)?OSPRINT_DUMP_HEX:0)          |
+        ((text)?OSPRINT_DUMP_TEXT:0));
 }
 
 /****************************************************************************/
@@ -917,7 +1022,7 @@ debug_malloc(
             format("DB_MAX_ALLOC reached !!! (%u)", ZDB_DEBUG_ALLOC_MAX);
         }
 
-        exit(EXIT_CODE_SELFCHECK_ERROR);
+        abort();
     }
 
     db_header* ptr = (db_header*)malloc(size + HEADER_SIZE); /* Header */
@@ -928,7 +1033,7 @@ debug_malloc(
 
         fflush(NULL);
 
-        exit(EXIT_CODE_SELFCHECK_ERROR);
+        abort();
     }
 
     pthread_mutex_lock(&alloc_mutex);
@@ -1068,7 +1173,7 @@ debug_free(void* ptr_, const char* file, int line)
 
         debug_dump(ptr, 64, 32, TRUE, TRUE);
 
-        exit(EXIT_CODE_SELFCHECK_ERROR);
+        abort();
     }
 
     size_t size = ptr->size;
@@ -1204,7 +1309,7 @@ debug_mtest(void* ptr_)
 
         debug_dump(ptr, 64, 32, TRUE, TRUE);
 
-        exit(EXIT_CODE_SELFCHECK_ERROR);
+        abort();
     }
 
 }
@@ -1222,12 +1327,24 @@ debug_stat(int mask)
         return;
     }
     
+    pthread_mutex_lock(&alloc_mutex);
+    
     formatln("%16llx | DB: MEM: Total Allocated=%llu", timeus(), db_total_allocated);
     formatln("%16llx | DB: MEM: Total Freed=%llu", timeus(), db_total_freed);
     formatln("%16llx | DB: MEM: Peak Usage=%llu", timeus(), db_peak_allocated);
     formatln("%16llx | DB: MEM: Allocated=%llu", timeus(), db_current_allocated);
     formatln("%16llx | DB: MEM: Blocks=%llu", timeus(), db_current_blocks);
     formatln("%16llx | DB: MEM: Monitoring Overhead=%llu (%i)", timeus(), (u64)(db_current_blocks * HEADER_SIZE), (int)HEADER_SIZE);
+
+#if HAS_LIBC_MALLOC_DEBUG_SUPPORT
+    formatln("%16llx | C ALLOC: total: %llu malloc=%llu free=%llu realloc=%llu memalign=%llu",
+        timeus(),
+        malloc_hook_total,
+        malloc_hook_malloc,
+        malloc_hook_free,
+        malloc_hook_realloc,
+        malloc_hook_memalign);
+#endif
 
 #if ZDB_DEBUG_ENHANCED_STATISTICS
     if(mask & DEBUG_STAT_SIZES)
@@ -1376,8 +1493,15 @@ debug_stat(int mask)
             ptr = ptr->next;
             index++;
         }
+        
+        flushout();
+        flusherr();
+        //malloc_stats();
+        //malloc_info(0, stdout);
     }
 #endif
+    
+    pthread_mutex_unlock(&alloc_mutex);
 }
 
 void
@@ -1437,6 +1561,460 @@ debug_mallocated(void* ptr)
         return FALSE;
     }
 }
+
+#if HAS_LIBC_MALLOC_DEBUG_SUPPORT
+
+#ifdef __MALLOC_DEPRECATED
+
+extern void *__libc_malloc(size_t size);
+extern void *__libc_realloc(void* ptr, size_t size);
+extern void __libc_free(void* ptr);
+extern void *__libc_memalign(size_t alignment, size_t size);
+
+static void* debug_malloc_hook_base(size_t size, const void* caller)
+{
+    (void)caller;
+    void *ptr = __libc_malloc(size);
+    return ptr;
+}
+
+static void* debug_realloc_hook_base(void *ptr, size_t size, const void* caller)
+{
+    (void)caller;
+    ptr = __libc_realloc(ptr, size);
+    return ptr;
+}
+
+static void debug_free_hook_base(void *ptr, const void* caller)
+{
+    (void)caller;
+    __libc_free(ptr);
+}
+
+static void* debug_memalign_hook_base(size_t alignment, size_t size, const void* caller)
+{
+    (void)caller;
+    void *ptr = __libc_memalign(alignment, size);
+    return ptr;
+}
+
+static malloc_hook_t *__yadifa_malloc_hook = debug_malloc_hook_base;
+static realloc_hook_t *__yadifa_realloc_hook = debug_realloc_hook_base;
+static free_hook_t *__yadifa_free_hook = debug_free_hook_base;
+static memalign_hook_t *__yadifa_memalign_hook = debug_memalign_hook_base;
+
+void* malloc(size_t size)
+{
+    void *caller = __builtin_return_address(0);
+    pthread_mutex_lock(&libc_hook_mtx);
+    void *ptr = __yadifa_malloc_hook(size, caller);
+    pthread_mutex_unlock(&libc_hook_mtx);
+    return ptr;
+}
+
+void* realloc(void* ptr, size_t size)
+{
+    void *caller = __builtin_return_address(0);
+    pthread_mutex_lock(&libc_hook_mtx);
+    ptr = __yadifa_realloc_hook(ptr, size, caller);
+    pthread_mutex_unlock(&libc_hook_mtx);
+    return ptr;
+}
+
+void free(void* ptr)
+{
+    void *caller = __builtin_return_address(0);
+    pthread_mutex_lock(&libc_hook_mtx);
+    __yadifa_free_hook(ptr, caller);
+    pthread_mutex_unlock(&libc_hook_mtx);
+}
+
+void* memalign(size_t alignment, size_t size)
+{
+    void *caller = __builtin_return_address(0);
+    pthread_mutex_lock(&libc_hook_mtx);
+    void *ptr = __yadifa_memalign_hook(alignment, size, caller);
+    pthread_mutex_unlock(&libc_hook_mtx);
+    return ptr;
+}
+
+#else
+
+#define __yadifa_malloc_hook __malloc_hook
+#define __yadifa_realloc_hook __realloc_hook
+#define __yadifa_free_hook __free_hook
+#define __yadifa_memalign_hook __memalign_hook
+
+#endif
+
+#define DEBUG_MALLOC_HOOK_DUMP 0
+
+static bool debug_malloc_istracked(void* ptr)
+{
+    bool ret; 
+    pthread_mutex_lock(&malloc_hook_mtx);
+    ptr_node_debug *node = ptr_set_debug_avl_find(&malloc_hook_tracked_set, ptr);
+    ret = (node != NULL);
+    pthread_mutex_unlock(&malloc_hook_mtx);
+    return ret;
+}
+
+static void debug_malloc_track_alloc_nolock(void* ptr)
+{
+    //formatln("track alloc %p", ptr);
+    
+    ptr_node_debug *node = ptr_set_debug_avl_insert(&malloc_hook_tracked_set, ptr);
+    
+    intptr flags = (intptr)node->value;
+    if(flags != 0)
+    {
+        // track bug
+        pthread_mutex_unlock(&malloc_hook_mtx);
+        abort();
+    }
+    flags |= 1;
+    node->value = (void*)flags;
+}
+
+static void debug_malloc_track_free_nolock(void* ptr)
+{
+    //formatln("track free  %p", ptr);
+    
+    ptr_node_debug *node = ptr_set_debug_avl_find(&malloc_hook_tracked_set, ptr);
+    
+    if(node == NULL)
+    {
+        // free of non-existing
+        pthread_mutex_unlock(&malloc_hook_mtx);
+        abort();
+    }
+    
+    intptr flags = (intptr)node->value;
+    if((flags & 1) != 1)
+    {
+        // double free
+        pthread_mutex_unlock(&malloc_hook_mtx);
+        abort();
+    }
+    
+    flags &= ~1;
+    node->value = (void*)flags;
+}
+
+void debug_malloc_hook_tracked_dump()
+{
+    pthread_mutex_lock(&malloc_hook_mtx);
+    ptr_set_debug_avl_iterator iter;
+    ptr_set_debug_avl_iterator_init(&malloc_hook_tracked_set, &iter);
+    while(ptr_set_debug_avl_iterator_hasnext(&iter))
+    {
+        const ptr_node_debug *node = ptr_set_debug_avl_iterator_next_node(&iter);
+        if(((intptr)node->value) == 1)
+        {
+            const malloc_hook_header_t *hdr =  (const malloc_hook_header_t*)node->key;
+            --hdr;
+            formatln("%p : size=%llu caller=%p", node->key, hdr->size, hdr->caller);
+        }
+    }
+    pthread_mutex_unlock(&malloc_hook_mtx);
+}
+
+struct malloc_hook_caller_t
+{
+    ssize_t count;
+    ssize_t size;
+    ssize_t peak;
+};
+
+typedef struct malloc_hook_caller_t malloc_hook_caller_t;
+
+void debug_malloc_caller_add(const void* caller_address, ssize_t size)
+{
+    ptr_node_debug *node = ptr_set_debug_avl_insert(&malloc_hook_caller_set, (void*)caller_address);
+    malloc_hook_caller_t *caller = (malloc_hook_caller_t*)node->value;
+    if(caller == NULL)
+    {
+        caller = (malloc_hook_caller_t*)__libc_malloc(sizeof(malloc_hook_caller_t));
+        memset(caller, 0, sizeof(malloc_hook_caller_t));
+        node->value = caller;
+    }
+ 
+    if(size > 0)
+    {
+        ++caller->count;
+    }
+    else if(size < 0)
+    {
+        --caller->count;
+    }
+    caller->size += size;
+    if(caller->size > caller->peak)
+    {
+        caller->peak = caller->size;
+    }
+}
+
+void debug_malloc_hook_caller_dump()
+{
+    formatln("debug_malloc_hook_caller_dump(): begin");
+    ssize_t count_total = 0;
+    ssize_t size_total = 0;
+    pthread_mutex_lock(&malloc_hook_mtx);
+    ptr_set_debug_avl_iterator iter;
+    ptr_set_debug_avl_iterator_init(&malloc_hook_caller_set, &iter);
+    while(ptr_set_debug_avl_iterator_hasnext(&iter))
+    {
+        const ptr_node_debug *node = ptr_set_debug_avl_iterator_next_node(&iter);
+        const malloc_hook_caller_t *caller = (malloc_hook_caller_t*)node->value;
+        ssize_t mean = 0;
+        ssize_t count = caller->count;
+        ssize_t size = caller->size;
+        if(count != 0)
+        {
+            mean = size / count;
+        }
+        formatln("%p : count=%lli size=%lli peak=%lli (mean bloc size=%lli)", node->key, caller->count, caller->size, caller->peak, mean);
+        
+        count_total += caller->count;
+        size_total += caller->size;
+    }
+    pthread_mutex_unlock(&malloc_hook_mtx);
+    formatln("COUNT TOTAL : %lli", count_total);
+    formatln("SIZE TOTAL  : %lli", size_total);
+    formatln("debug_malloc_hook_caller_dump(): end");
+}
+
+static void *debug_malloc_hook(size_t size, const void *caller)
+{
+    void *ret = _real_malloc(size + sizeof(malloc_hook_header_t), caller);
+    if(ret != NULL)
+    {        
+        malloc_hook_header_t *hdr = (malloc_hook_header_t*)ret;
+        hdr->begin = 0x4242424242424242;
+        hdr->magic = 0xd1a27344;
+        hdr->size = size;
+        hdr->caller = caller;
+        hdr->end = 0x4545454545454545;
+        ++hdr;
+        
+        pthread_mutex_lock(&malloc_hook_mtx);
+        malloc_hook_total += size;
+        malloc_hook_malloc++;
+        debug_malloc_caller_add(caller, size);
+        debug_malloc_track_alloc_nolock(hdr);
+        pthread_mutex_unlock(&malloc_hook_mtx);
+#if DEBUG_MALLOC_HOOK_DUMP
+        formatln("malloc(%llu) = %p", size, hdr);
+#endif
+        
+        return hdr;
+    }
+    else
+    {
+        return ret;
+    }
+}
+
+static void *debug_realloc_hook(void *ptr, size_t size, const void *caller)
+{
+    if(ptr != NULL)
+    {
+        if(!debug_malloc_istracked(ptr))
+        {
+#if DEBUG_MALLOC_HOOK_DUMP
+            formatln("realloc(%p, %llu) untracked", ptr, size);
+#endif
+            return _real_realloc(ptr, size, caller);
+        }
+        
+        malloc_hook_header_t *hdr = (malloc_hook_header_t*)ptr;
+        --hdr;
+        if(hdr->magic != 0xd1a27344)
+        {
+            abort();
+        }
+        
+        hdr->begin = 0x6262626262626262;
+        hdr->end = 0x6565656565656565;
+        
+        const void* old_caller = hdr->caller;
+        ssize_t old_size = hdr->size;
+
+        void *ret = _real_realloc(hdr, size + sizeof(malloc_hook_header_t), caller);
+        
+        if(ret != NULL)
+        {
+            hdr = (malloc_hook_header_t*)ret;
+            hdr->begin = 0x4242424242424242;
+            hdr->size = size;
+            hdr->caller = caller;
+            hdr->end = 0x4545454545454545;
+            ++hdr;
+            
+            pthread_mutex_lock(&malloc_hook_mtx);
+            
+            debug_malloc_caller_add(old_caller, -old_size);
+            debug_malloc_track_free_nolock(ptr);
+            
+            malloc_hook_total += size - old_size;
+            malloc_hook_realloc++;
+            
+            debug_malloc_caller_add(caller, size);
+            debug_malloc_track_alloc_nolock(hdr);
+            
+            pthread_mutex_unlock(&malloc_hook_mtx);
+#if DEBUG_MALLOC_HOOK_DUMP
+            formatln("realloc(%p, %llu) = %p", ptr, size, hdr);
+#endif
+            return hdr;
+        }
+        else
+        {
+            return ret;
+        }
+    }
+    else
+    {
+        ptr = debug_malloc_hook(size, caller);
+        return ptr;
+    }
+}
+
+static void debug_free_hook(void *ptr, const void *caller)
+{
+    if(ptr != NULL)
+    {
+        if(!debug_malloc_istracked(ptr))
+        {
+#if DEBUG_MALLOC_HOOK_DUMP
+            formatln("free(%p) untracked", ptr);
+#endif
+            _real_free(ptr, caller);
+            return;
+        }
+        
+        malloc_hook_header_t *hdr = (malloc_hook_header_t*)ptr;
+        --hdr;
+        if(hdr->magic != 0xd1a27344)
+        {
+            abort();
+        }
+        hdr->begin = 0x6262626262626262;
+        hdr->end = 0x6565656565656565;
+        
+        ssize_t size = hdr->size;
+        
+        pthread_mutex_lock(&malloc_hook_mtx);
+        malloc_hook_total -= size;
+        malloc_hook_free++;
+        
+        debug_malloc_caller_add(hdr->caller, -size);
+        debug_malloc_track_free_nolock(ptr);
+        
+        pthread_mutex_unlock(&malloc_hook_mtx);
+        
+        _real_free(hdr, caller);
+#if DEBUG_MALLOC_HOOK_DUMP
+        formatln("free(%p)", ptr);
+#endif
+    }
+}
+
+static void *debug_memalign_hook(size_t alignment, size_t size, const void *caller)
+{
+    void *ret = _real_memalign(alignment, size + sizeof(malloc_hook_header_t), caller);
+    if(ret != NULL)
+    {
+        malloc_hook_header_t *hdr = (malloc_hook_header_t*)ret;
+        hdr->begin = 0x4242424242424242;
+        hdr->magic = 0xd1a27344;
+        hdr->size = size;
+        hdr->caller = caller;
+        hdr->end = 0x4545454545454545;
+        ++hdr;
+        
+        pthread_mutex_lock(&malloc_hook_mtx);
+        malloc_hook_total += size;
+        malloc_hook_memalign++;
+        debug_malloc_caller_add(caller, size);
+        debug_malloc_track_alloc_nolock(hdr);
+        pthread_mutex_unlock(&malloc_hook_mtx);
+#if DEBUG_MALLOC_HOOK_DUMP
+        formatln("memalign(%llu, %llu) = %p", alignment, size, hdr);
+#endif
+        return hdr;
+    }
+    else
+    {
+        return ret;
+    }
+}
+
+void debug_malloc_hooks_init()
+{
+    if(!_real_malloc_initialised)
+    {
+        _real_malloc_initialised = TRUE;
+        
+        _real_malloc = __yadifa_malloc_hook;
+        _real_realloc = __yadifa_realloc_hook;
+        _real_free = __yadifa_free_hook;
+        _real_memalign = __yadifa_memalign_hook;
+        
+        __yadifa_malloc_hook = debug_malloc_hook;
+        __yadifa_realloc_hook = debug_realloc_hook;
+        __yadifa_free_hook = debug_free_hook;
+        __yadifa_memalign_hook = debug_memalign_hook;
+    }
+}
+
+void debug_malloc_hooks_finalise()
+{
+    if(_real_malloc_initialised)
+    {
+        _real_malloc_initialised = FALSE;
+        
+        __yadifa_malloc_hook = _real_malloc;
+        __yadifa_realloc_hook = _real_realloc;
+        __yadifa_free_hook = _real_free;
+        __yadifa_memalign_hook = _real_memalign;
+    }
+}
+
+void *debug_malloc_unmonitored(size_t size)
+{
+    return _real_malloc(size, NULL);
+}
+
+void debug_free_unmonitored(void* ptr)
+{
+    _real_free(ptr, NULL);
+}
+
+#else
+void debug_malloc_hooks_init()
+{
+}
+
+void debug_malloc_hooks_finalise()
+{
+}
+
+void *debug_malloc_unmonitored(size_t size)
+{
+    return malloc(size);
+}
+
+void debug_free_unmonitored(void* ptr)
+{
+    free(ptr);
+}
+
+void debug_malloc_hook_tracked_dump()
+{
+}
+
+#endif
 
 #ifdef DEBUG
 
@@ -1542,25 +2120,6 @@ debug_unicity_release(debug_unicity *dus)
     assert(dus->counter == 0);
     pthread_mutex_unlock(&dus->mutex);
 }
-
-
-void
-debug_vg(const void *b, int len)
-{
-    const char *s = (const char*)b;
-    for(int i = 0; i < len; i++)
-    {
-        if((s[i] >= ' ') && (s[i] < 127))
-        {
-            putchar(s[i]);
-        }
-        else
-        {
-            putchar('.');
-        }
-    }
-}
-
 
 #endif
 

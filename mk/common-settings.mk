@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2011-2016, EURid. All rights reserved.
+# Copyright (c) 2011-2017, EURid. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without 
@@ -47,25 +47,9 @@
 
 AM_CFLAGS  = -D_THREAD_SAFE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -I$(abs_builddir) -I$(abs_srcdir)/include
 
-if HAS_DNSQ
-AM_CFLAGS += -DHAS_DNSQ
-endif
-
-if HAS_GERY
-AM_CFLAGS += -DGERY
-endif
-
-if HAS_EDF
-AM_CFLAGS += -DEDF
-endif
-
-if HAS_THX
-AM_CFLAGS += -DTHX
-endif
-
 AM_LDFLAGS =
 DEBUGFLAGS =
-LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"' -DTCLDIR='"$(tcldir)"'
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"'
 
 if USES_SUNC
 DEBUGFLAGS +=
@@ -196,7 +180,7 @@ AM_AR = ar
 AM_LD = ld
 endif
 
-AM_CFLAGS += -DUSES_LLVM
+AM_CFLAGS += -DUSES_LLVM -Wno-gnu -Wno-extended-offsetof
 
 DEBUGFLAGS += -DMODE_DEBUG_CLANG -fsanitize=address -fsanitize=bounds
 
@@ -220,6 +204,7 @@ endif
 if HAS_LTO_SUPPORT
 AM_CFLAGS += -DLTO -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
 AM_LDFLAGS += -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
+AM_LDFLAGS += -Wl,-Map=module.map -Wl,--cref
 AM_AR = gcc-ar
 AM_RANLIB = gcc-ranlib
 else

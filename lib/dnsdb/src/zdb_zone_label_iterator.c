@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief Functions used to iterate through the labels of a zone
@@ -87,7 +87,9 @@ zdb_zone_label_iterator_init(zdb_zone_label_iterator* iter, const zdb_zone* zone
         iter->top = top;
         iter->current_label = zone->apex;
         iter->zone = zone;
+#if ZDB_ZONE_LABEL_ITERATOR_CAN_SKIP_CHILDREN
         iter->prev_top = -1; // prev_top is used to skip children of the current label
+#endif
         iter->current_top = top;
     }
     else
@@ -97,7 +99,9 @@ zdb_zone_label_iterator_init(zdb_zone_label_iterator* iter, const zdb_zone* zone
         iter->top = 0;
         iter->current_label = zone->apex;
         iter->zone = zone;
+#if ZDB_ZONE_LABEL_ITERATOR_CAN_SKIP_CHILDREN
         iter->prev_top = -1; // prev_top is used to skip children of the current label
+#endif
         iter->current_top = 0;
     }
 }
@@ -111,7 +115,7 @@ zdb_zone_label_iterator_init_from(zdb_zone_label_iterator* iter, const zdb_zone*
     
     dnslabel_stack from_name_stack;
             
-    if(from_name == NULL)
+    if(from_name == NULL) // from not set : initialise from the start
     {
         zdb_zone_label_iterator_init(iter, zone);
         return;
@@ -161,9 +165,11 @@ zdb_zone_label_iterator_init_from(zdb_zone_label_iterator* iter, const zdb_zone*
         }
         
         iter->dnslabels[top + 1] = child->name;
+        /*
         hashcode key = hash_dnslabel(child->name);
         dictionary_iterator_init_from(&parent->sub, &iter->stack[top], key);
-        
+        */
+        dictionary_iterator_init_from(&parent->sub, &iter->stack[top], child->name);
         parent = child;
     }
     while( ++top < real_top);
@@ -173,13 +179,10 @@ zdb_zone_label_iterator_init_from(zdb_zone_label_iterator* iter, const zdb_zone*
     iter->top = top;
     iter->current_label = parent;
     iter->zone = zone;
+#if ZDB_ZONE_LABEL_ITERATOR_CAN_SKIP_CHILDREN
     iter->prev_top = top - 1; // prev_top is used to skip children of the current label
+#endif
     iter->current_top = top;
-    
-    if(zdb_zone_label_iterator_hasnext(iter))
-    {
-        zdb_zone_label_iterator_next(iter);
-    }
 }
 
 /**
@@ -273,7 +276,7 @@ zdb_zone_label_iterator_nextname(zdb_zone_label_iterator* iter, u8* buffer256)
  *
  * @param[in] iter a pointer to the iterator
  *
- * @return a pointer the the next label
+ * @return a pointer to the next label
  *
  */
 
@@ -281,8 +284,10 @@ zdb_rr_label*
 zdb_zone_label_iterator_next(zdb_zone_label_iterator* iter)
 {
     zdb_rr_label* ret = iter->current_label;
+#if ZDB_ZONE_LABEL_ITERATOR_CAN_SKIP_CHILDREN
     iter->prev_top = iter->current_top;
-#if 1
+#endif
+
     iter->current_label = NULL;
 
     while(iter->top >= 0)
@@ -297,49 +302,19 @@ zdb_zone_label_iterator_next(zdb_zone_label_iterator* iter)
 
             break;
         }
+        
+#ifdef DEBUG
+        iter->dnslabels[iter->top] = (u8*)(intptr)0xfefefefefefefefeLL;
+        memset(&iter->stack[iter->top], 0xfe, sizeof(iter->stack[iter->top]));
+#endif
 
         iter->top--;
     }
     
-#if ZLI_DEBUG
-    
-    if(ret != NULL)
-    {
-        log_debug1("zli: %{dnsname} nextlabel=%{dnslabel}@%p", iter->zone->origin, ret->name, ret);
-    }
-    else
-    {
-        log_debug1("zli: %{dnsname} nextlabel=NULL", iter->zone->origin);
-    }
-#endif
-    
-#else
-    do
-    {
-        if(dictionary_iterator_hasnext(iter->current_label))
-        {
-            iter->current_label = *(zdb_rr_label**)dictionary_iterator_next(&iter->stack[iter->top]);
-            iter->current_top = iter->top + 1;
-
-            dictionary_iterator_init(&iter->current_label->sub, &iter->stack[++iter->top]);
-            iter->dnslabels[iter->top] = iter->current_label->name;
-
-            break;
-        }
-        
-        if(iter->top <= 0)
-        {
-            iter->current_label = NULL;
-            break;
-        }
-        
-        
-    }
-    while(--iter->top >= 0);
-#endif
-
     return ret;
 }
+
+#if ZDB_ZONE_LABEL_ITERATOR_CAN_SKIP_CHILDREN
 
 /**
  * @brief Skips the children
@@ -382,5 +357,7 @@ zdb_zone_label_skip_children(zdb_zone_label_iterator* iter)
         iter->top--;
     }
 }
+
+#endif
 
 /** @} */

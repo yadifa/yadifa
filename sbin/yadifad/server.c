@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 
 /**
  *  @defgroup server Server
@@ -370,7 +370,6 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
                     {
                         TCPSTATS(tcp_dropped_count++);
                         tcp_set_agressive_close(mesg->sockfd, 1);
-                        close_ex(mesg->sockfd);
                     }
                 }
 
@@ -422,7 +421,6 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
                     {
                         TCPSTATS(tcp_dropped_count++);
                         tcp_set_agressive_close(mesg->sockfd, 1);
-                        close_ex(mesg->sockfd);
                     }
                 }
                 break;
@@ -500,7 +498,6 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
                     {
                         TCPSTATS(tcp_dropped_count++);
                         tcp_set_agressive_close(mesg->sockfd, 1);
-                        close_ex(mesg->sockfd);
                     }
                 }
                 break;
@@ -545,7 +542,6 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
                     {
                         TCPSTATS(tcp_dropped_count++);
                         tcp_set_agressive_close(mesg->sockfd, 1);
-                        close_ex(mesg->sockfd);
                     }
                 }
                 else // an error occurred : no query to be done at all
@@ -571,14 +567,12 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
                             
                             TCPSTATS(tcp_dropped_count++);
                             tcp_set_agressive_close(mesg->sockfd, 1);
-                            close_ex(mesg->sockfd);
                         }
                     }
                     else
                     {
                         TCPSTATS(tcp_dropped_count++);
                         tcp_set_agressive_close(mesg->sockfd, 1);
-                        close_ex(mesg->sockfd);
                     }
                 }
 
@@ -602,7 +596,6 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
                 {
                     TCPSTATS(tcp_dropped_count++);
                     tcp_set_agressive_close(mesg->sockfd, 1);
-                    close_ex(mesg->sockfd);
                 }
             }
         } // switch operation code
@@ -641,7 +634,18 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
         s64 d = MAX((s64)timeus() - tstart, 0);
         double s = d / 1000000.;
         
-        log_err("tcp: %{sockaddr} connection didn't sent the message size after %5.3fs: %r", &mesg->other.sa, s, next_message_size);
+        if(next_message_size < 0)
+        {
+            log_err("tcp: %{sockaddr} connection didn't sent the message size after %5.3fs: %r", &mesg->other.sa, s, next_message_size);
+        }
+        else if(next_message_size > 0) // a.k.a : 1 
+        {
+            log_err("tcp: %{sockaddr} connection didn't sent the message size after %5.3fs", &mesg->other.sa, s);
+        }
+        else
+        {
+            log_err("tcp: %{sockaddr} connection closed after %5.3fs", &mesg->other.sa, s);
+        }
         
         tcp_set_abortive_close(mesg->sockfd);
     }
@@ -827,8 +831,6 @@ server_init()
 {
     ya_result ret;
     
-    log_info("server model: %s", server_type[g_config->network_model].name);
-    
     server_type[g_config->network_model].context_init(g_config->thread_count_by_address);
     
     log_info("using %i working modules per UDP interface (%i threads per UDP module)", server_context.udp_unit_per_interface, server_context.thread_per_udp_worker_count);
@@ -887,31 +889,31 @@ server_run()
         if(return_code != g_config->max_tcp_queries)
         {
             log_err("could not properly set the TCP handlers");
-            return ERROR;
+            return INVALID_STATE_ERROR;
         }
     }
     
     if(server_tcp_thread_pool == NULL && g_config->max_tcp_queries > 0)
     {
-        server_tcp_thread_pool = thread_pool_init_ex(g_config->max_tcp_queries, g_config->max_tcp_queries * 2, "server-tcp-tp");
+        server_tcp_thread_pool = thread_pool_init_ex(g_config->max_tcp_queries, g_config->max_tcp_queries * 2, "svrtcp");
         
         if(server_tcp_thread_pool == NULL)
         {
             log_err("tcp thread pool init failed");
             
-            return ERROR;
+            return THREAD_CREATION_ERROR;
         }
     }
     
     if(server_disk_thread_pool == NULL)
     {
-        server_disk_thread_pool = thread_pool_init_ex(4, 64, "disk-io");
+        server_disk_thread_pool = thread_pool_init_ex(4, 64, "diskio");
         
         if(server_disk_thread_pool == NULL)
         {
             log_warn("disk thread pool init failed");
             
-            return ERROR;
+            return THREAD_CREATION_ERROR;
         }
     }
 
@@ -991,7 +993,7 @@ server_service_init()
 {
     ya_result ret = ERROR;
     
-    if(!server_handler_initialised && ISOK(ret = service_init_ex(&server_service_handler, server_service_main, "server", 1)))
+    if(!server_handler_initialised && ISOK(ret = service_init_ex(&server_service_handler, server_service_main, "Server", 1)))
     {
         if(ISOK(ret = server_init()))
         {

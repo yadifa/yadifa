@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup collections Generic collections functions
  *  @ingroup dnscore
  *  @brief A dynamic-sized array of pointers
@@ -44,6 +44,9 @@
 
 #include "dnscore/dnscore-config.h"
 #include "dnscore/ptr_vector.h"
+
+#define PTR_QSORT_SMALL 50
+#define PTR_QSORT_DERECURSE_DEPTH 64
 
 /**
  * Initialises a vector structure with a size of PTR_VECTOR_DEFAULT_SIZE entries
@@ -364,6 +367,339 @@ ptr_vector_qsort(ptr_vector* v, ptr_vector_qsort_callback compare)
     if(v->offset > 0) /* at least 2 items */
     {
         qsort(v->data, v->offset + 1, sizeof(void*), compare);
+    }
+}
+
+typedef int ptr_sort3_callback(const void *a, const void *b, void *data);
+
+static int
+ptr_sort_heap_parent(int index)
+{
+    assert(index > 0);
+    return (index - 1) / 2;
+}
+
+static int
+ptr_sort_heap_leftchild(int index)
+{
+    return (index * 2) + 1;
+}
+
+static void
+ptr_sort_siftdown(void** base, int from, size_t n, ptr_sort3_callback *cmp, void *data)
+{
+    int root = from;
+    int child;
+    while((child = ptr_sort_heap_leftchild(root)) <= n)
+    {
+        int swp = root;
+        if(cmp(base[swp], base[child], data) < 0)
+        {
+            swp = child;
+        }
+        if((child + 1 <= n) && (cmp(base[swp], base[child + 1], data) < 0))
+        {
+            swp = child + 1;
+        }
+        if(swp == root)
+        {
+            break;
+        }
+        
+        void **tmp = base[swp];
+        base[swp] = base[root];
+        base[root] = tmp;
+        
+        root = swp;
+    }
+}
+
+static void
+ptr_sort_heapify(void **base, size_t n, ptr_sort3_callback *cmp, void *data)
+{
+    int start = ptr_sort_heap_parent(n - 1);
+    
+    while(start >= 0)
+    {
+        ptr_sort_siftdown(base, start, n - 1, cmp, data);
+        --start;
+    }
+}
+
+void
+ptr_sort_heapsort(void **base, size_t n, ptr_sort3_callback *cmp, void *data)
+{
+    if(n > 2)
+    {
+        ptr_sort_heapify(base, n, cmp, data);
+
+        size_t end = n - 1;
+        while(end > 0)
+        {
+            void **tmp = base[0];
+            base[0] = base[end];
+            base[end] = tmp;
+
+            --end;
+
+            ptr_sort_siftdown(base, 0, end, cmp, data);
+        }
+    }
+    else if(n == 2)
+    {
+        if(cmp(base[0], base[1], data) > 0)
+        {
+            void **tmp = base[0];
+            base[0] = base[1];
+            base[1] = tmp;
+        }
+    }
+}
+
+void
+ptr_sort_insertion(void **base, size_t n, ptr_sort3_callback *cmp, void *data)
+{
+    for(ssize_t i = 1; i < (ssize_t)n; ++i)
+    {
+        void **tmp = base[i];
+        ssize_t j = i - 1;
+        for(; (j >= 0) && (cmp(base[j], tmp, data) > 0); --j)
+        {
+            base[j + 1] = base[j];
+        }
+        base[j + 1] = tmp;
+    }
+}
+
+void
+ptr_sort3_bubble(void **base, size_t n, ptr_sort3_callback *cmp, void *data)
+{
+    for(size_t i = 0; i < n; ++i)
+    {
+        for(size_t j = i + 1; j < n; ++j)
+        {
+            if(cmp(base[i], base[j], data) > 0)
+            {
+                void **tmp = base[j];
+                base[j] = base[i];
+                base[i] = tmp;
+            }
+        }
+    }
+}
+
+struct ptr_sort3_quicksort2_stack_cell
+{
+    void **base;
+    void **limit;
+};
+
+static void
+ptr_sort3_quicksort2(void **base, size_t n_, ptr_sort3_callback *cmp, void *data)
+{
+    void **limit = &base[n_];
+    ssize_t sp = -1;
+    
+    struct ptr_sort3_quicksort2_stack_cell stack[PTR_QSORT_DERECURSE_DEPTH];
+
+    //ssize_t msp = -1;
+    
+    for(;;)
+    {
+        if(limit - base <= PTR_QSORT_SMALL)
+        {
+            //ptr_sort_insertion(base, limit - base, cmp, data);
+            
+            for(void **ip = base + 1; ip < limit; ++ip) //for(ssize_t i = 1; i < (ssize_t)n; ++i)
+            {
+                void *tmp = *ip;
+                void **jp = ip - 1;
+                for(; (jp >= base) && (cmp(*jp, tmp, data) > 0); --jp)
+                {
+                    jp[1] = *jp; // base[j + 1] = base[j];
+                }
+                jp[1] = tmp; //base[j + 1] = tmp;
+            }
+            
+            if(sp >= 0)
+            {
+                //if(sp > msp) msp = sp;
+                
+                base = stack[sp].base;
+                limit = stack[sp--].limit;
+                continue;
+            }
+            
+            return;
+        }
+        
+        // choose a good enough pivot
+        // doing this, start sorting
+
+        void **hip = limit - 1;
+        void **lop = base;
+        void *pivot;
+        
+        {
+            void **middlep = &base[(limit - base) >> 1];
+
+            // A B C
+
+            // A > B ?
+
+            if(cmp(*lop, *middlep, data) > 0)
+            {
+                // A > C ?
+
+                if(cmp(*lop, *hip, data) > 0)
+                {
+                    // A is the highest: ? ? A
+
+                    if(cmp(*middlep, *hip, data) > 0)
+                    {
+                        // C is the smallest: C B A
+
+                        register void *tmp = *lop;  // t = A
+                        *lop = *hip;             // A = C
+                        *hip = tmp;                 // C = t
+                    }
+                    else
+                    {
+                        // B is the smallest: B C A
+
+                        register void *tmp = *lop;  // t = A
+                        *lop = *middlep;         // A = B
+                        *middlep = *hip;        // B = C
+                        *hip = tmp;                 // C = t
+                    }
+                }
+                else // A <= C
+                {
+                    // B A C
+
+                    register void *tmp = *lop;      // t = A
+                    *lop = *middlep;             // A = B
+                    *middlep = tmp;                 // B = t
+                }
+            } // A <= B
+            else
+            {
+                // B > C ?
+
+                if(cmp(*middlep, *hip, data) > 0)
+                {
+                    // B is the highest: ? ? B
+
+                    if(cmp(*lop, *hip, data) > 0)
+                    {
+                        // C is the smallest: C A B
+
+                        register void *tmp = *lop;  // t = A
+                        *lop = *hip;             // A = C
+                        *hip = *middlep;        // C = B
+                        *middlep = tmp;             // B = t
+                    }
+                    else
+                    {
+                        // A is the smallest: A C B
+
+                        register void *tmp = *middlep; // t = B
+                        *middlep = *hip;            // B = C
+                        *hip = tmp;                     // C = t
+                    }
+                }
+                else // B <= C
+                {
+                    // A B C
+                }
+            }
+            
+            pivot = *middlep;
+        }
+
+        // 0 is already < pivot
+        // last is already > pivot
+        // continue from there
+
+        ++lop;
+        --hip;
+    
+        for(;;)
+        {
+            while(cmp(*lop, pivot, data) < 0) // while smaller than pivot
+            {
+                ++lop;
+            }
+
+            while(cmp(*hip, pivot, data) > 0) // while bigger than pivot
+            {
+                --hip;
+            }
+            
+            ssize_t d = hip - lop;
+
+            if(d <= 1)
+            {
+                if(d > 0)
+                {
+                    register void *tmp = *lop;
+                    *lop = *hip;
+                    *hip = tmp;
+                }
+                else
+                {
+                    hip = lop;
+                }
+                break;
+            }
+            
+            // exchange two values (<= pivot with >= pivot)
+
+            register void *tmp = *lop;
+            *lop = *hip;
+            *hip = tmp;
+            
+            ++lop;
+            --hip;
+        }
+ 
+        size_t first = hip - base;
+        size_t second = limit - hip;
+        
+        assert(sp < PTR_QSORT_DERECURSE_DEPTH);
+        
+        if(first > second)
+        {
+            stack[++sp].base = base;
+            stack[sp].limit = hip;
+            
+            base = hip;
+        }
+        else
+        {
+            stack[++sp].base = hip;
+            stack[sp].limit = limit;
+
+            limit = hip;
+        }
+    }
+}
+
+void
+ptr_vector_qsort_r(ptr_vector *v, ptr_vector_qsort_r_callback compare, void *compare_context)
+{
+    if(v->offset > 0) /* at least 2 items */
+    {
+        ptr_sort3_quicksort2(v->data, v->offset + 1, compare, compare_context);
+    }
+}
+
+void
+ptr_vector_insertionsort_r(ptr_vector *v, ptr_vector_qsort_r_callback compare, void *compare_context)
+{
+    if(v->offset > 0) /* at least 2 items */
+    {
+        ptr_sort_insertion(v->data, v->offset + 1, compare, compare_context);
     }
 }
 

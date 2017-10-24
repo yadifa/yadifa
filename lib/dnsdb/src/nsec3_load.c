@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -49,19 +49,24 @@
 #define DEBUG_LEVEL 0
 
 #include <dnscore/dnscore.h>
+#include <dnscore/ptr_set.h>
+
 #include "dnsdb/dnssec.h"
 
 #include "dnsdb/nsec3_load.h"
 #include "dnsdb/nsec3_zone.h"
-#include "dnsdb/nsec3_update.h"
 
 #include <dnscore/base32hex.h>
+
+#define MODULE_MSG_HANDLE g_dnssec_logger
+extern logger_handle *g_dnssec_logger;
 
 #define N3CHNCTX_TAG 0x5854434e4843334e
 #define N3PRDATA_TAG 0x415441445250334e
 
-#define MODULE_MSG_HANDLE g_dnssec_logger
-extern logger_handle *g_dnssec_logger;
+#define N3LCTXRR_TAG 0x52525854434c334e
+#define N3LCTXCN_TAG 0x434e5854434c334e
+#define N3LKEYDG_TAG 0x474459454b4c334e
 
 /******************************************************************************
  *
@@ -69,308 +74,360 @@ extern logger_handle *g_dnssec_logger;
  *
  *****************************************************************************/
 
-typedef struct nsec3_context_record nsec3_context_record;
-
 struct nsec3_context_record
 {
-    u8* digest;
-    u8* rdata;
+    zdb_packed_ttlrdata *rrsig;
     u32 ttl;
     u16 rdata_size;
+    u8 digest_then_rdata[];
 };
 
+typedef struct nsec3_context_record nsec3_context_record;
 
-/*
- * Converts the label of an NSEC3 or an RRSIG(NSEC3) record to a digest.
- * returns a mallocated digest
- *
- * Exclusively used by nsec3_load_add_collection
- *
- */
-
-static u8*
-nsec3_label_to_digest(nsec3_load_context *context, const u8 *entry_name)
+struct nsec3_load_context_chain
 {
-    /*
-     * The first label is BASE32HEX encoded and MUST be of a size & 3 == 0
-     */
+    ptr_vector  nsec3_added;         // array of full of records
+    u16         nsec3param_rdata_size;
+    bool        has_nsec3param;
+    u8          nsec3param_rdata[];
+};
 
-    u8 base32hex_len = entry_name[0];
+typedef struct nsec3_load_context_chain nsec3_load_context_chain;
 
-    if((base32hex_len & 3) != 0)
+static void
+nsec3_load_context_record_delete(nsec3_context_record *r)
+{
+    zdb_packed_ttlrdata *rrsig = r->rrsig;
+    while(rrsig != NULL)
     {
-        return NULL;
+        zdb_packed_ttlrdata *next = rrsig->next;
+        ZDB_RECORD_ZFREE(rrsig);
+        rrsig = next;
     }
-
-    dnsname_vector origin;
-    dnsname_vector name;
-
-    dnsname_to_dnsname_vector(context->zone->origin, &origin);
-    dnsname_to_dnsname_vector(entry_name, &name);
-
-    /*
-     * There MUST be exactly one level of depth between the origin and the name
-     */
-
-    if(name.size - origin.size != 1)
-    {
-        return NULL;
-    }
-
-    /*
-     * Both path MUST match
-     */
-
-    const u8** origin_labelsp = &origin.labels[0];
-    const u8** name_labelsp = &name.labels[1];
-
-    while(name.size-- > 0)
-    {
-        if(!dnslabel_equals(*origin_labelsp++, *name_labelsp++))
-        {
-            return NULL;
-        }
-    }
-
-    u8 bin_len = (base32hex_len >> 3) * 5; /* n<<2 + n */
-
-    u8* digest;
-
-    MALLOC_OR_DIE(u8*, digest, bin_len + 1, NSEC3_DIGEST_TAG);
-
-    if(FAIL(base32hex_decode((char*)& name.labels[0][1], base32hex_len, &digest[1])))
-    {
-        free(digest);
-
-        return NULL;
-    }
-
-    digest[0] = bin_len;
-
-    return digest;
+    size_t digest_len = 1 + r->digest_then_rdata[0];
+    ZFREE_ARRAY(r, sizeof(nsec3_context_record) + digest_len + r->rdata_size);
 }
 
-static ya_result
-nsec3_load_add_collection(nsec3_load_context *context, const u8 *entry_name, u32 entry_ttl, const u8 *entry_rdata, u16 entry_rdata_size, ptr_vector *collection)
+static nsec3_context_record*
+nsec3_load_context_record_new(const u8 *digest, s32 ttl, const u8 *rdata, u16 rdata_size)
 {
-    /*
-     * NOTE: I use MALLOC instead of ZALLOC.
-     *       ZALLOC is typically for persistent or recurrent memory
-     *       I don't know if this bloc size will be highly re-used
-     */
-
-    u8 *digest = nsec3_label_to_digest(context, entry_name);
-
-    if(digest == NULL)
-    {
-        return DNSSEC_ERROR_NSEC3_LABELTODIGESTFAILED;
-    }
-
-    nsec3_context_record *cr;
-    MALLOC_OR_DIE(nsec3_context_record*, cr, sizeof(nsec3_context_record), NSEC3_CONTEXT_RECORD_TAG);
-    cr->digest = digest;
-    MALLOC_OR_DIE(u8*, cr->rdata, entry_rdata_size, NSEC3_RDATA_TAG);
-    MEMCOPY(cr->rdata, entry_rdata, entry_rdata_size);
+    u8 digest_len = BASE32HEX_DECODED_LEN(digest[0]);
+ 
+    nsec3_context_record* record;
+        
+    ZALLOC_ARRAY_OR_DIE(nsec3_context_record*, record, sizeof(nsec3_context_record) + 1 + digest_len + rdata_size, N3LCTXRR_TAG);
+    record->rrsig = NULL;
+    record->ttl = ttl;
+    record->rdata_size = rdata_size;
     
-    cr->ttl = entry_ttl;
-    cr->rdata_size = entry_rdata_size;
-
-    ptr_vector_append(collection, cr);
-
-    return SUCCESS;
-}
-
-/*
- * Used exclusively by nsec3_load_compile
- */
-
-static nsec3_zone_item*
-nsec3_label_search(zdb_zone* zone, u8* digest, nsec3_zone** out_n3)
-{
-    nsec3_zone* n3 = zone->nsec.nsec3;
-
-    for(;;)
+    //memcpy(&record->digest_then_rdata[0], digest, digest_len);
+    record->digest_then_rdata[0] = digest_len;
+    
+    if(ISOK(base32hex_decode((const char*)&digest[1], digest[0], &record->digest_then_rdata[1])))
     {
-        nsec3_zone_item* items = n3->items;
-
-        nsec3_zone_item* item = nsec3_avl_find(&items, digest);
-
-        if(item != NULL)
-        {
-            /*
-             * We found the NSEC3 label
-             */
-
-            if(out_n3 != NULL)
-            {
-                *out_n3 = n3;
-            }
-
-            return item;
-        }
-
-        /*
-         * This item does not exists in the current chain,
-         * try the next NSEC3PARAM chain
-         */
-
-        n3 = n3->next;
-
-        if(n3 == NULL)
-        {
-            /* skip/ignore this signature */
-
-            return NULL;
-        }
+        memcpy(&record->digest_then_rdata[digest_len + 1], rdata, rdata_size);    
+        return record;
     }
-}
-
-/*
- * Context Chain
- */
-
-static nsec3_chain_context*
-nsec3_load_chain_init(const u8 *rdata, u16 rdata_size)
-{
-    nsec3_chain_context *ctx;
-    MALLOC_OR_DIE(nsec3_chain_context*, ctx, sizeof(nsec3_chain_context), N3CHNCTX_TAG);
-    ctx->next = NULL;
-
-    MALLOC_OR_DIE(u8*, ctx->nsec3param_rdata, rdata_size, N3PRDATA_TAG);
-    memcpy(ctx->nsec3param_rdata, rdata, rdata_size);
-    ctx->nsec3param_rdata_size = rdata_size;
-
-    return ctx;
+    else
+    {
+        nsec3_load_context_record_delete(record);
+        return NULL;
+    }
 }
 
 static void
-nsec3_load_chain_destroy(nsec3_chain_context* ctx)
+nsec3_load_context_record_delete_void(void *r)
 {
-    while(ctx != NULL)
+    nsec3_load_context_record_delete((nsec3_context_record*)r);
+}
+
+static const u8*
+nsec3_load_context_record_rdata(const nsec3_context_record *r)
+{
+    size_t digest_len = 1 + r->digest_then_rdata[0];
+    return &r->digest_then_rdata[digest_len];
+}
+
+static const u8*
+nsec3_load_context_record_next_digest(const nsec3_context_record *r)
+{
+    const u8 *rdata = nsec3_load_context_record_rdata(r);
+    size_t nsec3param_size = NSEC3PARAM_RDATA_SIZE_FROM_RDATA(rdata);
+    return &rdata[nsec3param_size];
+}
+
+static int
+nsec3_load_context_record_qsort_callback(const void *a, const void *b)
+{
+    const nsec3_context_record *ra = *(nsec3_context_record**)a;
+    const nsec3_context_record *rb = *(nsec3_context_record**)b;
+    int ra_size = ra->digest_then_rdata[0];
+    int rb_size = rb->digest_then_rdata[0];
+    int d = ra_size - rb_size;
+    if(d == 0)
     {
-        nsec3_chain_context *ctx_next = ctx->next;
-
-        ctx->next = NULL;
-
-        free(ctx->nsec3param_rdata);
-        
-        ctx = ctx_next;
+        d = memcmp(ra->digest_then_rdata, rb->digest_then_rdata, ra_size + 1);
     }
+    return d;
 }
 
 static bool
-nsec3_load_chain_match(nsec3_chain_context *ctx, const u8 *rdata, u16 rdata_size)
+nsec3_load_context_record_linked(const nsec3_context_record *ra, const nsec3_context_record *rb)
 {
-    if(rdata_size >= NSEC3PARAM_MINIMUM_LENGTH)
+    const u8 *next_digest = nsec3_load_context_record_next_digest(ra);
+    int next_size = next_digest[0];
+    int size = rb->digest_then_rdata[0];
+    if(next_size == size)
     {
-        if(ctx->nsec3param_rdata_size == rdata_size)
+        return memcmp(&next_digest[1], &rb->digest_then_rdata[1], size) == 0;
+    }
+    return FALSE;
+}
+
+static nsec3_load_context_chain*
+nsec3_load_context_chain_new(nsec3_context_record *r)
+{
+    nsec3_load_context_chain *chain;
+    
+    const u8 *nsec3param_rdata = nsec3_load_context_record_rdata(r);
+    size_t nsec3param_size = NSEC3PARAM_RDATA_SIZE_FROM_RDATA(nsec3param_rdata);
+        
+    ZALLOC_ARRAY_OR_DIE(nsec3_load_context_chain*, chain, sizeof(nsec3_load_context_chain) + nsec3param_size, N3LCTXCN_TAG);
+    ZEROMEMORY(chain, sizeof(nsec3_load_context_chain));
+    ptr_vector_init_ex(&chain->nsec3_added, 65536);
+    chain->nsec3param_rdata_size = nsec3param_size;
+    memcpy(chain->nsec3param_rdata, nsec3param_rdata, nsec3param_size);
+    
+    return chain;
+}
+
+static void
+nsec3_load_context_chain_delete(nsec3_load_context_chain *chain)
+{
+    ptr_vector_free_empties(&chain->nsec3_added, nsec3_load_context_record_delete_void);
+    ZFREE_ARRAY(chain, sizeof(nsec3_load_context_chain) + chain->nsec3param_rdata_size);
+}
+
+static void
+nsec3_load_context_chain_add_nsec3(nsec3_load_context_chain *chain, nsec3_context_record *r)
+{
+    ptr_vector_append(&chain->nsec3_added, r);
+}
+
+static int
+nsec3_load_context_chain_qsort_callback(const void *a, const void *b)
+{
+    const nsec3_load_context_chain *ca = *(nsec3_load_context_chain**)a;
+    const nsec3_load_context_chain *cb = *(nsec3_load_context_chain**)b;
+    int d = (ca->has_nsec3param?1:0) - (cb->has_nsec3param?1:0);
+    if(d == 0)
+    {
+        d = ca->nsec3param_rdata_size - cb->nsec3param_rdata_size;
+        
+        if(d == 0)
         {
-            if(ctx->nsec3param_rdata[0] == rdata[0])
-            {
-                return memcmp(&ctx->nsec3param_rdata[2], &rdata[2], rdata_size - 2) == 0;
-            }
+            d = memcmp(ca->nsec3param_rdata, cb->nsec3param_rdata, ca->nsec3param_rdata_size);
         }
     }
+    return d;
+}
 
+static bool
+nsec3_load_context_chain_matches(nsec3_load_context_chain *chain, const u8 *rdata, u16 rdata_size)
+{
+    if((chain->nsec3param_rdata_size <= rdata_size) && (chain->nsec3param_rdata[0] == rdata[0]))
+    {
+        if(memcmp(&chain->nsec3param_rdata[2], &rdata[2], chain->nsec3param_rdata_size - 2) == 0)
+        {
+            return TRUE;
+        }
+    }
+    
     return FALSE;
+}
+
+static nsec3_load_context_chain*
+nsec3_load_context_get_chain(nsec3_load_context *context, nsec3_context_record *r)
+{
+    // ptr_node *r_node = ptr_set_avl_insert(&context->nsec3chain, r);
+    for(int i = 0; i <= ptr_vector_last_index(&context->nsec3chain); ++i)
+    {
+        nsec3_load_context_chain *chain = (nsec3_load_context_chain*)ptr_vector_get(&context->nsec3chain, i);
+        if(nsec3_load_context_chain_matches(chain, nsec3_load_context_record_rdata(r), r->rdata_size))
+        {
+            return chain;
+        }
+    }
+    
+    nsec3_load_context_chain *chain = nsec3_load_context_chain_new(r);
+    
+    ptr_vector_append(&context->nsec3chain, chain);
+    
+    return chain;
+}
+
+
+
+static int nsec3_load_postponed_rrsig_node_compare(const void *node_a, const void *node_b)
+{
+    const u8 *key_a = (const u8*)node_a;
+    const u8 *key_b = (const u8*)node_b;
+    int d = key_a[0];
+    d -= key_b[0];
+    if(d == 0)
+    {
+        d = memcmp(&key_a[1], &key_b[1], key_a[0]);
+    }
+    return d;
 }
 
 ya_result
 nsec3_load_init(nsec3_load_context *context, zdb_zone* zone)
 {
-    if(zone->nsec.nsec3 != NULL)
-    {
-        /*
-         * The zone already contains an nsec record.  This is highly unexpexted.
-         */
-
-        return DNSSEC_ERROR_NSEC3_INVALIDZONESTATE;
-    }
-
     ZEROMEMORY(context, sizeof(nsec3_load_context));
-    
-    ptr_vector_init(&context->nsec3);
-    ptr_vector_init(&context->rrsig);
+    ptr_vector_init_ex(&context->nsec3chain, 2);
+    ptr_set_avl_init(&context->postponed_rrsig);
+    context->postponed_rrsig.compare = nsec3_load_postponed_rrsig_node_compare;
     context->zone = zone;
     context->opt_out = TRUE;
 
     return SUCCESS;
 }
 
-/*
- *
- */
-
-static void
-nsec3_load_destroy_free(void* ptr)
-{
-    free(ptr);
-}
-
 void
 nsec3_load_destroy(nsec3_load_context *context)
 {
-    ptr_vector_free_empties(&context->nsec3, nsec3_load_destroy_free);
-    ptr_vector_destroy(&context->nsec3);
+    for(int i = 0; i <= ptr_vector_last_index(&context->nsec3chain); ++i)
+    {
+        nsec3_load_context_chain *chain = (nsec3_load_context_chain*)ptr_vector_get(&context->nsec3chain, i);
+        nsec3_load_context_chain_delete(chain);
+    }
+    
+    if(!ptr_set_avl_isempty(&context->postponed_rrsig))
+    {
+        ptr_set_avl_iterator iter;
+        ptr_set_avl_iterator_init(&context->postponed_rrsig, &iter);
+        while(ptr_set_avl_iterator_hasnext(&iter))
+        {
+            ptr_node *rrsig_node = ptr_set_avl_iterator_next_node(&iter);
+            u8 *key = (u8*)rrsig_node->key;
+            if(rrsig_node->key != NULL)
+            {
+                ZFREE_ARRAY(rrsig_node->key, key[0] + 1);
+            }
+            rrsig_node->key = NULL;
+            rrsig_node->value = NULL;
+        }
 
-    ptr_vector_free_empties(&context->rrsig, nsec3_load_destroy_free);
-    ptr_vector_destroy(&context->rrsig);
-
-    nsec3_load_chain_destroy(context->chain);    
-
+        ptr_set_avl_destroy(&context->postponed_rrsig);
+    }
+    
     context->zone = NULL;
 }
 
 ya_result
-nsec3_load_add_nsec3param(nsec3_load_context *context, const u8 *entry_rdata, u16 entry_rdata_size)
+nsec3_load_add_nsec3param(nsec3_load_context *context, const u8 *rdata, u16 rdata_size)
 {
-    if((entry_rdata_size < 5) || (NSEC3_RDATA_ALGORITHM(entry_rdata) != DNSSEC_DIGEST_TYPE_SHA1))
+    if((rdata_size < 5) || (NSEC3_RDATA_ALGORITHM(rdata) != DNSSEC_DIGEST_TYPE_SHA1))
     {
         return DNSSEC_ERROR_UNSUPPORTEDDIGESTALGORITHM;
     }
-
-    nsec3_chain_context **ctxp = &context->chain;
-    while(*ctxp != NULL)
-    {
-        if(nsec3_load_chain_match(*ctxp, entry_rdata, entry_rdata_size))
-        {
-            /* ignore */
-            return SUCCESS;
-        }
-        ctxp = &(*ctxp)->next;
-    }
-
-    nsec3_zone_add_from_rdata(context->zone, entry_rdata_size, entry_rdata);
-
-    *ctxp = nsec3_load_chain_init(entry_rdata, entry_rdata_size);
+    
+    nsec3_context_record* nsec3param_r = nsec3_load_context_record_new((const u8*)"", 0, rdata, rdata_size);
+    nsec3_load_context_chain* chain = nsec3_load_context_get_chain(context, nsec3param_r);
+    nsec3_load_context_record_delete(nsec3param_r);
+    chain->has_nsec3param = TRUE;
     
     return SUCCESS;
 }
 
 ya_result
-nsec3_load_add_nsec3(nsec3_load_context *context, const  u8 *entry_name, u32 entry_ttl, const  u8 *entry_rdata, u16 entry_rdata_size)
+nsec3_load_add_nsec3(nsec3_load_context *context, const u8 *digest, s32 ttl, const  u8 *rdata, u16 rdata_size)
 {
     /*
      * Get the right chain from the rdata
      * Add the record to the chain
      */
     
-    if((entry_rdata_size < 5) || (NSEC3_RDATA_ALGORITHM(entry_rdata) != DNSSEC_DIGEST_TYPE_SHA1))
+    if((rdata_size < 5) || (NSEC3_RDATA_ALGORITHM(rdata) != DNSSEC_DIGEST_TYPE_SHA1))
     {
         return DNSSEC_ERROR_UNSUPPORTEDDIGESTALGORITHM;
     }
+    
+    nsec3_context_record* nsec3_r = nsec3_load_context_record_new(digest, ttl, rdata, rdata_size);
+    if(nsec3_r != NULL)
+    {
+        nsec3_load_context_chain* chain = nsec3_load_context_get_chain(context, nsec3_r);
+        nsec3_load_context_chain_add_nsec3(chain, nsec3_r);
 
-    return nsec3_load_add_collection(context, entry_name, entry_ttl, entry_rdata, entry_rdata_size, &context->nsec3);
+        context->last_inserted_nsec3 = nsec3_r;
+        
+        if(!ptr_set_avl_isempty(&context->postponed_rrsig))
+        {
+            ptr_node *node = ptr_set_avl_find(&context->postponed_rrsig, nsec3_r->digest_then_rdata);
+            
+            if(node != NULL)
+            {
+                u8 *key = node->key;
+                nsec3_r->rrsig = (zdb_packed_ttlrdata*)node->value;
+                ptr_set_avl_delete(&context->postponed_rrsig, nsec3_r->digest_then_rdata);
+                ZFREE_ARRAY(key, key[0] + 1);
+            }
+        }
+        
+        return SUCCESS;
+    }
+    else
+    {
+        context->last_inserted_nsec3 = NULL;
+        
+        return DNSSEC_ERROR_NSEC3_LABELTODIGESTFAILED;
+    }
 }
 
 ya_result
-nsec3_load_add_rrsig(nsec3_load_context *context, const  u8 *entry_name, u32 entry_ttl, const u8 *entry_rdata, u16 entry_rdata_size)
+nsec3_load_add_rrsig(nsec3_load_context *context, const  u8 *digest_label, s32 ttl, const u8 *rdata, u16 rdata_size)
 {
-    /*
-     * Find a chain that already contains
-     */
-
-    return nsec3_load_add_collection(context, entry_name, entry_ttl, entry_rdata, entry_rdata_size, &context->rrsig);
+    u8 digest_len = BASE32HEX_DECODED_LEN(digest_label[0]);
+    u8 digest[digest_len + 1];
+    digest[0] = digest_len;
+    if(ISOK(base32hex_decode((const char*)&digest_label[1], digest_label[0], &digest[1])))
+    {
+        zdb_packed_ttlrdata *rrsig;
+        ZDB_RECORD_ZALLOC(rrsig,ttl,rdata_size,rdata);
+                
+        if(context->last_inserted_nsec3 != NULL)
+        {
+            nsec3_context_record* nsec3_r = (nsec3_context_record*)context->last_inserted_nsec3;
+            if(memcmp(nsec3_r->digest_then_rdata, digest, 1 + digest[0]) == 0)
+            {
+                rrsig->next = nsec3_r->rrsig;
+                nsec3_r->rrsig = rrsig;
+                
+                return SUCCESS;
+            }
+        }
+        
+        // the records are not nicely ordered : need to postpone the insertion of this record.
+        
+        ptr_node *node = ptr_set_avl_insert(&context->postponed_rrsig, digest);
+                
+        if(node->value == NULL)
+        {
+            u8 *key;
+            ZALLOC_ARRAY_OR_DIE(u8*, key, digest_len + 1, N3LKEYDG_TAG);
+            memcpy(key, digest, digest_len + 1);
+            node->key = key;
+        }
+        rrsig->next = (zdb_packed_ttlrdata*)node->value;
+        node->value = rrsig;
+        
+        return SUCCESS;
+    }
+    else
+    {
+        return DNSSEC_ERROR_NSEC3_LABELTODIGESTFAILED;
+    }
 }
 
 /*
@@ -378,501 +435,127 @@ nsec3_load_add_rrsig(nsec3_load_context *context, const  u8 *entry_name, u32 ent
  */
 
 ya_result
-nsec3_load_compile(nsec3_load_context *context)
+nsec3_load_generate(nsec3_load_context *context)
 {
-    /*
-     * Note: All the nsec3param have already been initialized
-     *
-     * 1)
-     *
-     * Compute the nsec3 for all available nsec3param
-     *
-     * 2)
-     *
-     * Add all loaded rrsig records in the relevant nsec3 record, ignore the dups.
-     *
-     * 3)
-     *
-     * Check that all loaded nsec3 record is a perfect match of the computed nsec3
-     * record.  Destroy the signature of the failed NSEC3 records (issue a warning ?)
-     *
-     * When everything is done, we need to expect an update of the signatures
-     *
-     */
-
-    zdb_zone* zone = context->zone;
-    s32 i;
-
-    /*
-     * NOTE: should I enable the NSEC3 flag here already ?
-     */
+    // for all chains
+    //   sort the records
+    //   ensure the records are following (modulo)
+    //   create the nsec3 chain collection
+    //   add the collection to the zone (enabled or not)
     
-    u32 nsec3_read = context->nsec3.offset;
-    u32 rrsig_read = context->rrsig.offset;
-
-    if(context->chain == NULL)
+    for(int i = 0; i <= ptr_vector_last_index(&context->nsec3chain); ++i)
     {
-        return DNSSEC_ERROR_NSEC3_INVALIDZONESTATE;
-    }
-
-    /* 1) */
-
-    if(context->opt_out)
-    {
-        context->zone->apex->flags |= ZDB_RR_LABEL_NSEC3_OPTOUT|ZDB_RR_LABEL_NSEC3;
-    }
-    else
-    {
-        context->zone->apex->flags &= ~ZDB_RR_LABEL_NSEC3_OPTOUT;
-        context->zone->apex->flags |= ZDB_RR_LABEL_NSEC3;
-    }
-    
-    nsec3_update_zone(context->zone);
-
-    //nsec3_check(context->zone);
-
-    /* 2) */
-
-    u32 rrsig_added = 0;
-    u32 rrsig_ignored = 0;
-    u32 rrsig_discarded = 0;
-
-    ptr_vector* rrsigs = &context->rrsig;
-
-    s32 rrsig_count = rrsigs->offset + 1;
-    
-    u16 shutdown_test_countdown = 1000;
-
-    for(i = 0; i < rrsig_count; i++)
-    {
-        if(--shutdown_test_countdown == 0)
+        nsec3_load_context_chain *chain = (nsec3_load_context_chain*)ptr_vector_get(&context->nsec3chain, i);
+        
+        if(ptr_vector_last_index(&chain->nsec3_added) > 0)
         {
-            if(dnscore_shuttingdown())
+            ptr_vector_qsort(&chain->nsec3_added, nsec3_load_context_record_qsort_callback);
+            nsec3_context_record *p = (nsec3_context_record*)ptr_vector_last(&chain->nsec3_added);
+            
+            for(int j = 0; j <= ptr_vector_last_index(&chain->nsec3_added); ++j)
             {
-                /* Yes, it means there will be a "leak" but the app is shutting down anyway ... */
+                nsec3_context_record *r = (nsec3_context_record*)ptr_vector_get(&chain->nsec3_added, j);
                 
-                return STOPPED_BY_APPLICATION_SHUTDOWN;
+                // the digest in the rdata of p has to be the digest of r
+                                
+                if(!nsec3_load_context_record_linked(p, r))
+                {
+                    // the chain is broken
+                    return ERROR;
+                }
+                p = r;
             }
             
-            shutdown_test_countdown = 1000;
+            if(!nsec3_load_context_record_linked(p, (nsec3_context_record*)ptr_vector_get(&chain->nsec3_added, 0)))
+            {
+                // the chain is broken
+                return ERROR;
+            }
+        }
+    }
+    
+    nsec3_zone **n3p = &context->zone->nsec.nsec3;
+
+    // the chain are valid : create the collections
+    
+    // but first sort the collections to put the ones with NSEC3PARAM with smallest digest/iterations
+    
+    ptr_vector_qsort(&context->nsec3chain, nsec3_load_context_chain_qsort_callback);
+    
+    for(int i = 0; i <= ptr_vector_last_index(&context->nsec3chain); ++i)
+    {
+        nsec3_load_context_chain *chain = (nsec3_load_context_chain*)ptr_vector_get(&context->nsec3chain, i);
+        
+        nsec3_zone *n3 = nsec3_zone_new(chain->nsec3param_rdata, chain->nsec3param_rdata_size);
+        
+        for(int j = 0; j <= ptr_vector_last_index(&chain->nsec3_added); ++j)
+        {
+            nsec3_context_record *r = (nsec3_context_record*)ptr_vector_get(&chain->nsec3_added, j);
+            const u8 *rdata = nsec3_load_context_record_rdata(r);
+            nsec3_node *node = nsec3_avl_insert(&n3->items, r->digest_then_rdata);
+            node->flags = rdata[1];
+            nsec3_zone_item_update_bitmap(node, rdata, r->rdata_size);
+            node->rrsig = r->rrsig;
+            r->rrsig = NULL;
+        }
+        // the chain is complete
+        
+        *n3p = n3;
+        n3p = &n3->next;
+        
+        // if the first chain has an nsec3param, it is visible
+        if(i == 0 && chain->has_nsec3param)
+        {
+            // link the labels
+            nsec3_zone_update_chain0_links(context->zone);
+        }
+    }
+    
+    // finally: add the postponed rrsig records
+    
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&context->postponed_rrsig, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
+    {
+        ptr_node *rrsig_node = ptr_set_avl_iterator_next_node(&iter);
+     
+        bool useless = TRUE;
+        
+        for(nsec3_zone *n3 = context->zone->nsec.nsec3; n3 != NULL; n3 = n3->next)
+        {
+            nsec3_node *nsec3_node = nsec3_avl_find(&n3->items, rrsig_node->key);
+            if(nsec3_node != NULL)
+            {
+                zdb_packed_ttlrdata *rrsig = (zdb_packed_ttlrdata*)rrsig_node->value;
+                
+                nsec3_node->rrsig = rrsig;
+                u8 *key = (u8*)rrsig_node->key;
+                ZFREE_ARRAY(rrsig_node->key, key[0] + 1);
+                rrsig_node->key = NULL;
+                rrsig_node->value = NULL;
+                
+                useless = FALSE;
+                
+                break;
+            }
         }
         
-        nsec3_context_record* cr = (nsec3_context_record*)rrsigs->data[i];
-        /* NSEC3 Label: cr->digest */
-
-        nsec3_zone_item* item = nsec3_label_search(zone, cr->digest, NULL);
-
-        if(item != NULL)
+        if(useless)
         {
-           /*
-            * We found the NSEC3 label
-            *
-            * Build a copy of the ttl/rdata, ignore dups
-            */
-            bool dup = FALSE;
-            
-            zdb_packed_ttlrdata **rrsigp = &item->rrsig;
-
-            while(*rrsigp != NULL)
-            {                
-                if((*rrsigp)->rdata_size == cr->rdata_size)
-                {
-                    if(memcmp((*rrsigp)->rdata_start, cr->rdata, cr->rdata_size) == 0)
-                    {
-                        dup = TRUE;
-                        rrsig_ignored++;
-                        break;
-                    }
-                }
-                
-                rrsigp = &(*rrsigp)->next;
-            }
-            
-            if(!dup)
-            {
-                ZDB_RECORD_ZALLOC(*rrsigp, cr->ttl, cr->rdata_size, cr->rdata);
-                (*rrsigp)->next = NULL;
-
-                rrsig_added++;
-            }
+            // complain
+            log_warn("nsec3: %{dnsname}: %{digest32h}: RRSIG does not covers any known NSEC3 record",
+                    context->zone->origin,
+                    rrsig_node->key);
         }
-        else
-        {
-            rrsig_discarded++;
-        }
-
-        /* Destroy the rrsig */
-
-        free(cr->digest);
-        free(cr->rdata);
-        free(cr);
-
-        rrsigs->data[i] = NULL;
-
     }
-
-    log_debug("nsec3: rrsig: add: %u ignore: %u discard: %u (had %u nsec3 and %u rrsigs)", rrsig_added, rrsig_ignored, rrsig_discarded, nsec3_read, rrsig_read);
-
-    /* 3) */
-
-    ptr_vector* nsec3s = &context->nsec3;
-    u32 nsec3_accepted = 0;
-    u32 nsec3_rejected = 0;
-    u32 nsec3_discarded = 0;
-
-    s32 nsec3_count = nsec3s->offset + 1;
     
-    s32 min_ttl;
-    zdb_zone_getminttl(zone, &min_ttl);
-    
-    shutdown_test_countdown = 1000;
-    
-    for(i = 0; i < nsec3_count; i++)
-    {
-        if(--shutdown_test_countdown == 0)
-        {
-            if(dnscore_shuttingdown())
-            {
-                /* Yes, it means there will be a "leak" but the app is shutting down anyway ... */
-                
-                return STOPPED_BY_APPLICATION_SHUTDOWN;
-            }
-            
-            shutdown_test_countdown = 1000;
-        }
-        
-        nsec3_context_record* cr = (nsec3_context_record*)nsec3s->data[i];
-        /* NSEC3 Label: cr->digest */
-
-
-        nsec3_zone* n3;
-        nsec3_zone_item* item = nsec3_label_search(zone, cr->digest, &n3);
-
-        if(item != NULL)
-        {
-            /*
-             * We found the NSEC3 label, we have to compare it to the one
-             * it was supposed to be
-             */
-
-            if(!nsec3_zone_item_equals_rdata(n3, item, cr->rdata_size, cr->rdata))
-            {
-                /*
-                 * Didn't matched: The signature, if any, will be wrong
-                 */
-
-#ifdef DEBUG
-                rdata_desc nsec3_desc = {TYPE_NSEC3, cr->rdata_size, cr->rdata};
-                log_debug("nsec3: %{digest32h} %{typerdatadesc} rejected (do not agree with rdata value).", item->digest, &nsec3_desc);
-
-                zdb_packed_ttlrdata *nsec3_ttlrdata;
-                const zdb_packed_ttlrdata *nsec3_ttlrdata_rrsig;
-
-                u8 *owner;
-                u8 *pool;
-                u8 pool_buffer[NSEC3_ZONE_ITEM_TO_NEW_ZDB_PACKED_TTLRDATA_SIZE];
-                pool = pool_buffer;
-                
-                nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm nsec3_parms =
-                {
-                    n3,
-                    item,
-                    zone->origin,
-                    &pool,
-                    min_ttl
-                };
-
-                nsec3_zone_item_to_new_zdb_packed_ttlrdata(&nsec3_parms, &owner, &nsec3_ttlrdata, &nsec3_ttlrdata_rrsig);
-
-                if(nsec3_ttlrdata != NULL)
-                {
-                    rdata_desc nsec3_desc = {TYPE_NSEC3, nsec3_ttlrdata->rdata_size, &nsec3_ttlrdata->rdata_start[0]};
-                    log_debug("nsec3: computed: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
-                    nsec3_desc.len = cr->rdata_size;
-                    nsec3_desc.rdata = cr->rdata;
-                    log_debug("nsec3: received: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
-                }
-                
-#endif
-                nsec3_rejected++;
-
-                nsec3_zone_item_rrsig_delete_all(item);
-            }
-            else
-            {
-                nsec3_accepted++;
-            }
-        }
-        else
-        {
-            /*
-             * Threre are no discarded NSEC3 records in the investigated issue, but in case the issue evolves, this information may help.
-             */
-
-            rdata_desc nsec3_desc = {TYPE_NSEC3, cr->rdata_size, cr->rdata};
-            log_warn("nsec3: discarded: %{digest32h} %{typerdatadesc}", cr->digest, &nsec3_desc);
-            
-            nsec3_discarded++;
-        }
-
-
-        /* Destroy the rrsig */
-
-        free(cr->digest);
-        free(cr->rdata);
-        free(cr);
-
-        nsec3s->data[i] = NULL;
-    }
-
-    log_debug("nsec3: accept: %u reject: %u discard: %u", nsec3_accepted, nsec3_rejected, nsec3_discarded);
-
-    /*
-     * The caller needs to destroy the context
-     * A signature update should be called too
-     */
-    
-    context->rrsig_added = rrsig_added;
-    context->rrsig_ignored = rrsig_ignored;
-    context->rrsig_discarded = rrsig_discarded;
-    
-    context->nsec3_accepted = nsec3_accepted;
-    context->nsec3_rejected = nsec3_rejected;
-    context->nsec3_discarded = nsec3_discarded;
-
-
     return SUCCESS;
 }
-
-/*
- * A slave cannot choose what is right or not
- */
-
-ya_result
-nsec3_load_forced(nsec3_load_context *context)
-{
-    /*
-     * Note: All the nsec3param have already been initialized
-     *
-     * 1)
-     *
-     * Compute the nsec3 for all available nsec3param
-     *
-     * 2)
-     *
-     * Add all loaded rrsig records in the relevant nsec3 record, ignore the dups.
-     *
-     * 3)
-     *
-     * Check that all loaded nsec3 record is a perfect match of the computed nsec3
-     * record.  Destroy the signature of the failed NSEC3 records (issue a warning ?)
-     *
-     * When everything is done, we need to expect an update of the signatures
-     *
-     */
-
-    zdb_zone* zone = context->zone;
-    s32 min_ttl;
-    s32 i;
-
-    /*
-     * NOTE: should I enable the NSEC3 flag here already ?
-     */
-    
-    if(context->chain == NULL)
-    {
-        return DNSSEC_ERROR_NSEC3_INVALIDZONESTATE;
-    }
-    
-    zdb_zone_getminttl(zone, &min_ttl);
-
-    /* 1) */
-    
-    if(context->opt_out)
-    {
-        context->zone->apex->flags |= ZDB_RR_LABEL_NSEC3_OPTOUT|ZDB_RR_LABEL_NSEC3;
-    }
-    else
-    {
-        context->zone->apex->flags &= ~ZDB_RR_LABEL_NSEC3_OPTOUT;
-        context->zone->apex->flags |= ZDB_RR_LABEL_NSEC3;
-    }
-
-    nsec3_update_zone(context->zone);
-
-    /* 2) */
-
-    u32 rrsig_added = 0;
-    u32 rrsig_ignored = 0;
-    u32 rrsig_discarded = 0;
-
-    ptr_vector* rrsigs = &context->rrsig;
-
-    s32 rrsig_count = rrsigs->offset + 1;
-
-    for(i = 0; i < rrsig_count; i++)
-    {
-        nsec3_context_record* cr = (nsec3_context_record*)rrsigs->data[i];
-        /* NSEC3 Label: cr->digest */
-
-        nsec3_zone_item* item = nsec3_label_search(zone, cr->digest, NULL);
-
-        if(item != NULL)
-        {
-            /*
-             * We found the NSEC3 label
-             */
-
-            if(item->rrsig == NULL)
-            {
-                /*
-                 * Build a copy of the ttl/rdata, ignore dups
-                 * The macro does not sets the next pointer.
-                 * This is why I have to set it to NULL.
-                 */
-
-                ZDB_RECORD_ZALLOC(item->rrsig, cr->ttl, cr->rdata_size, cr->rdata);
-                item->rrsig->next = NULL;
-
-                rrsig_added++;
-            }
-            else
-            {
-                rrsig_ignored++;
-            }
-        }
-        else
-        {
-            rrsig_discarded++;
-        }
-
-        /* Destroy the rrsig */
-
-        free(cr->digest);
-        free(cr->rdata);
-        free(cr);
-
-        rrsigs->data[i] = NULL;
-
-    }
-
-    log_debug("nsec3: rrsig: add: %u ignore: %u discard: %u", rrsig_added, rrsig_ignored, rrsig_discarded);
-
-    /* 3) */
-
-    ptr_vector* nsec3s = &context->nsec3;
-    u32 nsec3_accepted = 0;
-    u32 nsec3_rejected = 0;
-    u32 nsec3_discarded = 0;
-
-    s32 nsec3_count = nsec3s->offset + 1;
-
-    for(i = 0; i < nsec3_count; i++)
-    {
-        nsec3_context_record* cr = (nsec3_context_record*)nsec3s->data[i];
-        /* NSEC3 Label: cr->digest */
-
-        nsec3_zone* n3;
-        nsec3_zone_item* item = nsec3_label_search(zone, cr->digest, &n3);
-
-        if(item != NULL)
-        {
-            /*
-             * We found the NSEC3 label, we have to compare it to the one
-             * it was supposed to be
-             */
-
-            if(!nsec3_zone_item_equals_rdata_lenient(n3, item, cr->rdata_size, cr->rdata))
-            {
-                nsec3_zone_item_equals_rdata_lenient(n3, item, cr->rdata_size, cr->rdata);
-                /*
-                 * Didn't matched: The signature, if any, will be wrong
-                 */
-
-                /*
-                 * This prints what NSEC3 was computed by YADIFA and what NSEC3 was provided by the zone file.
-                 *
-                 * The rejects are NSEC3 records whose names where expected but with a different content.
-                 * Typically it's because there is an unexpected record from the zone in the NSEC3 chain that implies a different "next" value in previous rdata.
-                 * That happened when a bug in named generated a NSEC3 record for '.' when it was not expected (the named code was fixed in a following release)
-                 * But if it was the case, the "discarded" count would be > 0.
-                 * What remains is an issue with the types bit mask for the covered domain, or maybe an OPT-OUT/OPT-IN mix that would give a bad reaction (but unlikely).
-                 * Since .de has more records types than .eu, the bitmask is most probable cause.
-                 *
-                 * The output will be on the debug channel.
-                 */
-
-                rdata_desc nsec3_desc = {TYPE_NSEC3, cr->rdata_size, cr->rdata};
-                log_warn("nsec3: %{digest32h} %{typerdatadesc} rejected (do not agree with rdata value).", item->digest, &nsec3_desc);
-
-                zdb_packed_ttlrdata *nsec3_ttlrdata;
-                const zdb_packed_ttlrdata *nsec3_ttlrdata_rrsig;
-
-                u8 *owner;
-                u8 *pool;
-                u8 pool_buffer[NSEC3_ZONE_ITEM_TO_NEW_ZDB_PACKED_TTLRDATA_SIZE];
-                pool = pool_buffer;
-                
-                nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm nsec3_parms =
-                {
-                    n3,
-                    item,
-                    zone->origin,
-                    &pool,
-                    min_ttl
-                };
-
-                nsec3_zone_item_to_new_zdb_packed_ttlrdata(&nsec3_parms, &owner, &nsec3_ttlrdata, &nsec3_ttlrdata_rrsig);
-
-                if(nsec3_ttlrdata != NULL)
-                {
-                    rdata_desc nsec3_desc = {TYPE_NSEC3, nsec3_ttlrdata->rdata_size, &nsec3_ttlrdata->rdata_start[0]};
-                    log_debug("nsec3: computed: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
-                    nsec3_desc.len = cr->rdata_size;
-                    nsec3_desc.rdata = cr->rdata;
-                    log_debug("nsec3: received: %{dnsname} %{typerdatadesc}", owner, &nsec3_desc);
-                }
-#ifdef DEBUG
-                nsec3_zone_item_equals_rdata_lenient(n3, item, cr->rdata_size, cr->rdata);
-#endif
-                nsec3_rejected++;
-
-                nsec3_zone_item_rrsig_delete_all(item);
-            }
-            else
-            {
-                nsec3_accepted++;
-            }
-        }
-        else
-        {
-            nsec3_discarded++;
-        }
-
-        /* Destroy the rrsig */
-
-        free(cr->digest);
-        free(cr->rdata);
-        free(cr);
-
-        nsec3s->data[i] = NULL;
-    }
-
-    log_debug("nsec3: nsec3: accept: %u reject: %u discard: %u", nsec3_accepted, nsec3_rejected, nsec3_discarded);
-
-    /*
-     * The caller needs to destroy the context
-     * A signature update should be called too
-     */
-
-    return SUCCESS;
-}
-
 
 bool
-nsec3_load_is_context_empty(nsec3_load_context* ctx)
+nsec3_load_is_context_empty(nsec3_load_context* context)
 {
-    return (ctx->zone == NULL) || ((ctx->nsec3.offset < 0) && (ctx->rrsig.offset < 0));
+    return (context->zone == NULL) || (ptr_vector_last_index(&context->nsec3chain) < 0);
 }
 
 /** @} */

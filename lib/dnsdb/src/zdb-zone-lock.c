@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief Functions used to manipulate a zone
@@ -62,8 +62,6 @@
 
 #include "dnsdb/dnsrdata.h"
 
-#include "dnsdb/zdb_listener.h"
-
 #if ZDB_HAS_NSEC_SUPPORT != 0
 #include "dnsdb/nsec.h"
 #endif
@@ -73,10 +71,11 @@
 
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
 #include <dnscore/ptr_set.h>
+#include <dnsdb/zdb-zone-lock-monitor.h>
 #endif
 
 #ifdef DEBUG
-#define ZONE_MUTEX_LOG 1    // set this to 0 to disable in DEBUG
+#define ZONE_MUTEX_LOG 0    // set this to 0 to disable in DEBUG
 #else
 #define ZONE_MUTEX_LOG 0
 #endif
@@ -236,13 +235,20 @@ zdb_zone_lock(zdb_zone *zone, u8 owner)
     log_debug7("acquiring lock for zone %{dnsname}@%p for %x", zone->origin, zone, owner);
 #endif
     
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    u64 start = timeus();
+#endif
+#if ZDB_HAS_OLD_MUTEX_DEBUG_SUPPORT
     u64 start = timeus();
 #endif
 
     mutex_t *mutex = &zone->lock_mutex;
     
     mutex_lock(mutex);
+    
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    struct zdb_zone_lock_monitor *holder = zdb_zone_lock_monitor_new(zone, owner, 0);
+#endif
     
     for(;;)
     {
@@ -256,7 +262,7 @@ zdb_zone_lock(zdb_zone *zone, u8 owner)
         
         if(co == GROUP_MUTEX_NOBODY || co == owner)
         {
-            yassert(!UNSIGNED_VAR_VALUE_IS_MAX(zone->lock_count));
+            yassert(!SIGNED_VAR_VALUE_IS_MAX(zone->lock_count));
 
             zone->lock_owner = owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
             zone->lock_count++;
@@ -264,7 +270,11 @@ zdb_zone_lock(zdb_zone *zone, u8 owner)
             break;
         }
         
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+        zdb_zone_lock_monitor_waits(holder);
+#endif
+        
+#if ZDB_HAS_OLD_MUTEX_DEBUG_SUPPORT
         s64 d = timeus() - start;
         if(d > MUTEX_WAITED_TOO_MUCH_TIME_US)
         {
@@ -275,11 +285,19 @@ zdb_zone_lock(zdb_zone *zone, u8 owner)
 #else
         cond_wait(&zone->lock_cond, mutex);
 #endif
+        
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+        zdb_zone_lock_monitor_resumes(holder);
+#endif
     }
+    
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    zdb_zone_lock_monitor_locks(holder);
+#endif
     
     mutex_unlock(mutex);
     
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if ZDB_HAS_OLD_MUTEX_DEBUG_SUPPORT
     zone->lock_trace = debug_stacktrace_get();
     zone->lock_id = pthread_self();
     zone->lock_timestamp = timeus();
@@ -297,11 +315,15 @@ zdb_zone_trylock(zdb_zone *zone, u8 owner)
 
     mutex_lock(&zone->lock_mutex);
     
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    struct zdb_zone_lock_monitor *holder = zdb_zone_lock_monitor_new(zone, owner, 0);
+#endif
+
     u8 co = zone->lock_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
     
     if(co == ZDB_ZONE_MUTEX_NOBODY || co == owner)
     {
-        yassert(!UNSIGNED_VAR_VALUE_IS_MAX(zone->lock_count));
+        yassert(!SIGNED_VAR_VALUE_IS_MAX(zone->lock_count));
 
         zone->lock_owner = owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
         zone->lock_count++;
@@ -310,9 +332,13 @@ zdb_zone_trylock(zdb_zone *zone, u8 owner)
         log_debug7("acquired lock for zone %{dnsname}@%p for %x (#%i)", zone->origin, zone, owner, zone->lock_count);
 #endif
         
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+        zdb_zone_lock_monitor_locks(holder);
+#endif
+
         mutex_unlock(&zone->lock_mutex);
         
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if ZDB_HAS_OLD_MUTEX_DEBUG_SUPPORT
         zone->lock_trace = debug_stacktrace_get();
         zone->lock_id = pthread_self();
         zone->lock_timestamp = timeus();
@@ -323,6 +349,10 @@ zdb_zone_trylock(zdb_zone *zone, u8 owner)
         return TRUE;
     }
     
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    zdb_zone_lock_monitor_cancels(holder);
+#endif
+
     mutex_unlock(&zone->lock_mutex);
 
 #if ZONE_MUTEX_LOG
@@ -358,7 +388,7 @@ zdb_zone_trylock_wait(zdb_zone *zone, u64 usec, u8 owner)
         
         if(co == GROUP_MUTEX_NOBODY || co == owner)
         {
-            yassert(!UNSIGNED_VAR_VALUE_IS_MAX(zone->lock_count));
+            yassert(!SIGNED_VAR_VALUE_IS_MAX(zone->lock_count));
 
             zone->lock_owner = owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
             zone->lock_count++;
@@ -408,6 +438,10 @@ zdb_zone_unlock(zdb_zone *zone, u8 owner)
 
     mutex_lock(&zone->lock_mutex);
     
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    struct zdb_zone_lock_monitor *holder = zdb_zone_lock_monitor_get(zone);
+#endif
+
 #ifdef DEBUG
     if(((zone->lock_owner & ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG) != (owner & ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG)) || (zone->lock_count == 0))
     {
@@ -429,7 +463,11 @@ zdb_zone_unlock(zdb_zone *zone, u8 owner)
         cond_notify(&zone->lock_cond);
     }
     
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    zdb_zone_lock_monitor_unlocks(holder);
+#endif
+    
+#if ZDB_HAS_OLD_MUTEX_DEBUG_SUPPORT
     zone->lock_trace = NULL;
     zone->lock_id = 0;
     zone->lock_timestamp = 0;
@@ -453,6 +491,10 @@ zdb_zone_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
     
     mutex_lock(&zone->lock_mutex);
     
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    struct zdb_zone_lock_monitor *holder = zdb_zone_lock_monitor_new(zone, owner, secondary_owner);
+#endif
+    
     for(;;)
     {
         /*
@@ -469,7 +511,7 @@ zdb_zone_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 
             if(co == ZDB_ZONE_MUTEX_NOBODY || co == owner)
             {
-                yassert(!UNSIGNED_VAR_VALUE_IS_MAX(zone->lock_count));
+                yassert(!SIGNED_VAR_VALUE_IS_MAX(zone->lock_count));
 
                 zone->lock_owner = owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
                 zone->lock_count++;
@@ -487,7 +529,11 @@ zdb_zone_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
             // the secondary owner is already taken
         }
 
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+        zdb_zone_lock_monitor_waits(holder);
+#endif
+        
+#if ZDB_HAS_OLD_MUTEX_DEBUG_SUPPORT
         s64 d = timeus() - start;
         if(d > MUTEX_WAITED_TOO_MUCH_TIME_US)
         {
@@ -499,6 +545,10 @@ zdb_zone_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
         cond_wait(&zone->lock_cond, &zone->lock_mutex);
 #endif
     }
+    
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    zdb_zone_lock_monitor_locks(holder);
+#endif
     
     mutex_unlock(&zone->lock_mutex);
     
@@ -520,6 +570,10 @@ zdb_zone_try_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 
     mutex_lock(&zone->lock_mutex);
     
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    struct zdb_zone_lock_monitor *holder = zdb_zone_lock_monitor_new(zone, owner, secondary_owner);
+#endif
+
     u8 so = zone->lock_reserved_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
         
     if(so == ZDB_ZONE_MUTEX_NOBODY || so == secondary_owner)
@@ -528,7 +582,7 @@ zdb_zone_try_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
     
         if(co == ZDB_ZONE_MUTEX_NOBODY || co == owner)
         {
-            yassert(!UNSIGNED_VAR_VALUE_IS_MAX(zone->lock_count));
+            yassert(!SIGNED_VAR_VALUE_IS_MAX(zone->lock_count));
 
             zone->lock_owner = owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
             zone->lock_count++;
@@ -538,6 +592,10 @@ zdb_zone_try_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
             log_debug7("acquired lock for zone %{dnsname}@%p for %x (#%i)", zone->origin, zone, owner, zone->lock_count);
 #endif
             
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+            zdb_zone_lock_monitor_locks(holder);
+#endif
+
             mutex_unlock(&zone->lock_mutex);
 
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
@@ -558,6 +616,10 @@ zdb_zone_try_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
     }
     */
     
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    zdb_zone_lock_monitor_cancels(holder);
+#endif
+
     mutex_unlock(&zone->lock_mutex);
 
 #if ZONE_MUTEX_LOG
@@ -576,20 +638,11 @@ zdb_zone_double_unlock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 
     mutex_lock(&zone->lock_mutex);
 
-#if 0 //def DEBUG
-    if(((zone->lock_owner  & ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG)!= (owner & ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG)) || (zone->lock_count == 0))
-    {
-        mutex_unlock(&zone->lock_mutex);
-        yassert(zone->lock_owner == (owner & ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG));
-        yassert(zone->lock_count != 0);
-    }
-    
-    if(zone->lock_reserved_owner != (secondary_owner & ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG))
-    {
-        mutex_unlock(&zone->lock_mutex);
-        yassert(zone->lock_reserved_owner != (secondary_owner & ZDB_ZONE_MUTEX_UNLOCKMASK_FLAG));
-    }
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    struct zdb_zone_lock_monitor *holder = zdb_zone_lock_monitor_get(zone);
 #endif
+    
+
     
     zone->lock_reserved_owner = ZDB_ZONE_MUTEX_NOBODY;
 
@@ -608,7 +661,11 @@ zdb_zone_double_unlock(zdb_zone *zone, u8 owner, u8 secondary_owner)
         cond_notify(&zone->lock_cond);
     }
     
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    zdb_zone_lock_monitor_unlocks(holder);
+#endif
+    
+#if ZDB_HAS_OLD_MUTEX_DEBUG_SUPPORT
     zone->lock_trace = NULL;
     zone->lock_id = 0;
     zone->lock_timestamp = 0;
@@ -640,26 +697,19 @@ zdb_zone_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 
     mutex_lock(&zone->lock_mutex);
     
-#if 0 //def DEBUG
-    if((zone->lock_owner != (owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG)) || (zone->lock_count == 0))
-    {
-        mutex_unlock(&zone->lock_mutex);
-        yassert(zone->lock_owner == (owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG));
-        yassert(zone->lock_count != 0);
-    }
-    
-    if(zone->lock_reserved_owner != (secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG))
-    {
-        mutex_unlock(&zone->lock_mutex);
-        yassert(zone->lock_reserved_owner != (secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG));
-    }
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    struct zdb_zone_lock_monitor *holder = zdb_zone_lock_monitor_get(zone);
 #endif
-    
+
     // wait to be the last one
     
     while(zone->lock_count != 1)
     {
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+        zdb_zone_lock_monitor_waits(holder);
+#endif
+            
+#if ZDB_HAS_OLD_MUTEX_DEBUG_SUPPORT
         s64 d = timeus() - start;
         if(d > MUTEX_WAITED_TOO_MUCH_TIME_US)
         {
@@ -669,6 +719,10 @@ zdb_zone_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 #endif
         
         cond_timedwait(&zone->lock_cond, &zone->lock_mutex, 100);
+        
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+        zdb_zone_lock_monitor_resumes(holder);
+#endif
     }
     
     zone->lock_owner = secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
@@ -684,9 +738,14 @@ zdb_zone_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
         cond_notify(&zone->lock_cond);
     }
     
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    zdb_zone_lock_monitor_exchanges(holder);
+    zdb_zone_lock_monitor_release(holder);
+#endif
+
     mutex_unlock(&zone->lock_mutex);
     
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if ZDB_HAS_OLD_MUTEX_DEBUG_SUPPORT
     zone->lock_trace = debug_stacktrace_get();
     zone->lock_id = pthread_self();
     zone->lock_timestamp = timeus();
@@ -713,21 +772,10 @@ zdb_zone_try_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
     
     mutex_lock(&zone->lock_mutex);
     
-#if 0 //def DEBUG
-    if((zone->lock_owner != (owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG)) || (zone->lock_count == 0))
-    {
-        mutex_unlock(&zone->lock_mutex);
-        yassert(zone->lock_owner == (owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG));
-        yassert(zone->lock_count != 0);
-    }
-    
-    if(zone->lock_reserved_owner != (secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG))
-    {
-        mutex_unlock(&zone->lock_mutex);
-        yassert(zone->lock_reserved_owner != (secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG));
-    }
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    struct zdb_zone_lock_monitor *holder = zdb_zone_lock_monitor_new(zone, owner, secondary_owner);
 #endif
-        
+
     // wait to be the last one
     
     if(zone->lock_count == 1)
@@ -739,6 +787,11 @@ zdb_zone_try_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
         {
             cond_notify(&zone->lock_cond);
         }
+        
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+        zdb_zone_lock_monitor_exchanges(holder);
+        zdb_zone_lock_monitor_release(holder);
+#endif
         
         mutex_unlock(&zone->lock_mutex);
         
@@ -753,6 +806,10 @@ zdb_zone_try_transfer_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
         return TRUE;
     }
         
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    zdb_zone_lock_monitor_cancels(holder);
+#endif
+    
     mutex_unlock(&zone->lock_mutex);
     
     return FALSE;
@@ -767,10 +824,11 @@ zdb_zone_exchange_locks(zdb_zone *zone, u8 owner, u8 secondary_owner)
     
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
     u64 start = timeus();
+    struct zdb_zone_lock_monitor *holder = zdb_zone_lock_monitor_new(zone, owner, secondary_owner);
 #endif
 
     mutex_lock(&zone->lock_mutex);
-    
+
 #ifdef DEBUG
     if((zone->lock_owner != (owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG)) || (zone->lock_count == 0))
     {
@@ -790,7 +848,11 @@ zdb_zone_exchange_locks(zdb_zone *zone, u8 owner, u8 secondary_owner)
     
     while(zone->lock_count != 1)
     {
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+        zdb_zone_lock_monitor_waits(holder);
+#endif
+        
+#if ZDB_HAS_OLD_MUTEX_DEBUG_SUPPORT
         s64 d = timeus() - start;
         if(d > MUTEX_WAITED_TOO_MUCH_TIME_US)
         {
@@ -800,11 +862,14 @@ zdb_zone_exchange_locks(zdb_zone *zone, u8 owner, u8 secondary_owner)
 #endif
         
         cond_timedwait(&zone->lock_cond, &zone->lock_mutex, 100);
+        
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+        zdb_zone_lock_monitor_resumes(holder);
+#endif
     }
     
     zone->lock_owner = secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
     zone->lock_reserved_owner = owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
-    
 
 #if ZONE_MUTEX_LOG
     log_debug7("exchanged locks for zone %{dnsname}@%p from %x to %x (#%i)", zone->origin, zone, owner, secondary_owner, zone->lock_count);
@@ -815,6 +880,11 @@ zdb_zone_exchange_locks(zdb_zone *zone, u8 owner, u8 secondary_owner)
         cond_notify(&zone->lock_cond);
     }
     
+#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+    zdb_zone_lock_monitor_exchanges(holder);
+    zdb_zone_lock_monitor_release(holder);
+#endif
+
     mutex_unlock(&zone->lock_mutex);
     
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT

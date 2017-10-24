@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief Functions used to manipulate a zone
@@ -149,7 +149,7 @@ zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *e
 #endif
     bool has_nsec3 = FALSE;
     bool has_nsec = FALSE;
-    bool has_nsec3param = FALSE;
+    //bool has_nsec3param = FALSE;
     bool has_rrsig = FALSE;
     bool dynupdate_forbidden = FALSE;
     //bool modified = FALSE;
@@ -248,7 +248,7 @@ zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *e
     has_nsec = FALSE;
     nsec3_keys = FALSE;
     nsec_keys = FALSE;
-    has_nsec3param = FALSE;
+    //has_nsec3param = FALSE;
 #if ZDB_HAS_NSEC3_SUPPORT
     has_optout = 0;
     has_optin = 0;
@@ -281,9 +281,6 @@ zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *e
 #if ZDB_HAS_NSEC3_SUPPORT
     nsec3_load_init(&nsec3_context, zone);
 #endif
-
-    zone->apex->flags |= ZDB_RR_APEX_LABEL_LOADING;
-
     zdb_packed_ttlrdata* ttlrdata;
 
     u32 loop_count;
@@ -361,7 +358,7 @@ zdb_zone_load(zdb *db, zone_reader *zr, zdb_zone **zone_pointer_out, const u8 *e
             ZDB_RECORD_ZALLOC(ttlrdata, /*entry.ttl*/0, rdata_len, rdata);
             zdb_zone_record_add(zone, entry_name.labels, entry_name.size, entry.type, ttlrdata); // verified
 
-            has_nsec3param = TRUE;
+            //has_nsec3param = TRUE;
         }
         else if(entry.type == TYPE_NSEC3)
         {
@@ -600,12 +597,15 @@ zdb_zone_load_loop:
     }
 
     resource_record_freecontent(&entry); /* destroys, not "next" */
+    
+    if(has_nsec3 && (has_optout > 0))
+    {
+        zone->_flags |= ZDB_ZONE_HAS_OPTOUT_COVERAGE;
+    }
 
 #if ZDB_HAS_DNSSEC_SUPPORT
     log_debug7("zone load: has_rrsig=%i has_dnskey=%i", has_rrsig, has_dnskey);
 #endif
-    
-    zone->apex->flags &= ~ZDB_RR_APEX_LABEL_LOADING;
 
     if(dynupdate_forbidden)
     {
@@ -614,54 +614,16 @@ zdb_zone_load_loop:
         zone->apex->flags |= ZDB_RR_APEX_LABEL_FROZEN;
     }
 
-    if(ISOK(return_code))
-    {
-        log_info("zone load: sanity check for %{dnsname}", zone->origin);
-
-        if(FAIL(return_code = zdb_sanitize_zone(zone)))
-        {
-            log_err("zone load: impossible to sanitise %{dnsname}, dropping zone", zone->origin);
-        }
-        else
-        {
-            log_info("zone load: sanity check for %{dnsname} done", zone->origin);
-        }
-    }
-
 #if ZDB_HAS_DNSSEC_SUPPORT
 
     if(ISOK(return_code))
-    {
-        if(has_nsec3 & !has_nsec3param)
-        {
-            log_err("zone load: zone %{dnsname} has NSEC3 but no NSEC3PARAM", zone->origin);
-            
-            return_code = ZDB_READER_NSEC3WITHOUTNSEC3PARAM;
-        }
-        
-        if(has_nsec3param & !has_nsec3)
-        {
-            log_warn("zone load: zone %{dnsname} has NSEC3PARAM but no NSEC3", zone->origin);
-            
-            /* force it for generation */
-            
-            if((flags & ZDB_ZONE_IS_SLAVE) == 0)
-            {
-                has_nsec3 = true;
-            }
-            else
-            {
-                log_err("zone load: slave zone %{dnsname} has NSEC3PARAM but no NSEC3", zone->origin);
-                
-                return_code = ZDB_READER_NSEC3PARAMWITHOUTNSEC3;
-            }
-        }
-        
+    {      
         if(has_nsec && has_nsec3)
         {
             log_err("zone load: zone %{dnsname} has both NSEC and NSEC3 records !", zone->origin);
             
-            return_code = ZDB_READER_MIXED_DNSSEC_VERSIONS;
+            // return_code = ZDB_READER_MIXED_DNSSEC_VERSIONS;
+            has_nsec = FALSE;
             
             /**
              * 
@@ -765,23 +727,13 @@ zdb_zone_load_loop:
             
             /* If there is something in the NSEC3 context ... */
 
-            if(
-                    (has_nsec3param  & ((flags & ZDB_ZONE_IS_SLAVE) == 0)) ||  // MASTER  with NSEC3PARAM
-                    !nsec3_load_is_context_empty(&nsec3_context)               // SLAVE with NSEC3
-                    )
+            if(!nsec3_load_is_context_empty(&nsec3_context))
             {
                 /* ... do it. */
 
                 log_debug("zone load: zone %{dnsname}: NSEC3 post-processing.", zone->origin);
 
-                if((flags & ZDB_ZONE_IS_SLAVE) == 0)
-                {
-                    return_code = nsec3_load_compile(&nsec3_context);
-                }
-                else
-                {
-                    return_code = nsec3_load_forced(&nsec3_context);
-                }
+                return_code = nsec3_load_generate(&nsec3_context);
                 
                 if(((flags & ZDB_ZONE_IS_SLAVE) != 0) && (nsec3_context.nsec3_rejected > 0))
                 {
@@ -790,6 +742,18 @@ zdb_zone_load_loop:
                 
                 if(ISOK(return_code))
                 {
+                    /*
+                    if(nsec3_context.opt_out)
+                    {
+                        zone->apex->flags |= ZDB_RR_LABEL_NSEC3 | ZDB_RR_LABEL_NSEC3_OPTOUT;
+                    }
+                    else
+                    {
+                        zone->apex->flags |= ZDB_RR_LABEL_NSEC3;
+                    }
+                    */
+                    zdb_zone_set_maintained(zone, TRUE);
+    
                     log_debug("zone load: zone %{dnsname}: NSEC3 post-processing done", zone->origin);
                 }
                 else
@@ -803,9 +767,7 @@ zdb_zone_load_loop:
                 has_nsec3 = FALSE;
             }
 
-#ifdef DEBUG
-            if(ISOK(return_code)) { nsec3_check(zone); /* this is an euristic check */ }
-#endif
+
 
 #else // ZDB_HAS_NSEC3_SUPPORT is 0
             log_err("zone load: zone %{dnsname} has NSEC3* record(s) but the server has been compiled without NSEC support", zone->origin);
@@ -823,7 +785,9 @@ zdb_zone_load_loop:
             log_debug("zone load: zone %{dnsname}: NSEC post-processing.", zone->origin);
 
             if(ISOK(return_code = nsec_update_zone(zone, (flags & ZDB_ZONE_IS_SLAVE) != 0)))
-            {
+            {//DNSSEC_ERROR_NSEC_INVALIDZONESTATE
+                zone->apex->flags |= ZDB_RR_LABEL_NSEC;
+                zdb_zone_set_maintained(zone, (flags & ZDB_ZONE_IS_SLAVE) == 0);
             }
 
 #else
@@ -879,11 +843,7 @@ zdb_zone_load_loop:
         return_code = zdb_icmtl_replay(zone);
         zdb_zone_lock(zone, ZDB_ZONE_MUTEX_LOAD);
         
-        if(FAIL(return_code))
-        {
-            log_err("zone load: journal replay returned %r", return_code);
-        }
-        else
+        if(ISOK(return_code))
         {
             if(return_code > 0)
             {
@@ -891,19 +851,27 @@ zdb_zone_load_loop:
                 //modified = TRUE;
             }
 
+            if(!has_nsec3)
+            {
+            }
+            
 #ifdef DEBUG
             log_debug("zone load: post-replay sanity check for %{dnsname}", zone->origin);
 #endif
-            if(FAIL(return_code = zdb_sanitize_zone(zone)))
-            {
-                log_err("zone load: impossible to sanitise %{dnsname}, dropping zone", zone->origin);
-            }
-            else
+            if(ISOK(return_code = zdb_sanitize_zone(zone)))
             {
                 log_info("zone load: post-replay sanity check for %{dnsname} done", zone->origin);
                 
-                // zdb_update_zone_signatures(zone, MAX_S32); /// @todo 20131220 edf -- instead clear the signatures without keys
+                // zdb_zone_update_signatures(zone, MAX_S32); /// @todo 20131220 edf -- instead clear the signatures without keys
             }
+            else
+            {
+                log_err("zone load: impossible to sanitise %{dnsname}, dropping zone", zone->origin);
+            }
+        }
+        else
+        {
+            log_err("zone load: journal replay returned %r", return_code);
         }
 
         /*
@@ -936,9 +904,7 @@ zdb_zone_load_loop:
                 n3 = n3->next;
             }
 
-            /* Check the correlations between the two databases (zone + zone.nsec3) */
-            
-            nsec3_check(zone);
+
 
             /* Check there are no left alone domains that should have been linked to the nsec3 collections */
 
@@ -1061,7 +1027,6 @@ zdb_zone_load_loop:
         {
             zdb_zone_release(zone);
             *zone_pointer_out = NULL;
-            //zdb_zone_destroy(zone);
         }
     }
     

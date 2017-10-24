@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup server
  *  @ingroup yadifad
  *  @brief database functions
@@ -49,9 +49,7 @@
  *
  * USE INCLUDES */
 
-
 #include "server-config.h"
-#include "config.h"
 
 #include <dnscore/packet_reader.h>
 
@@ -62,7 +60,6 @@
 #include <dnscore/chroot.h>
 #include <dnscore/timeformat.h>
 #include <dnscore/fdtools.h>
-#include <dnscore/threaded_ringbuffer.h>
 
 #if ZDB_HAS_DNSSEC_SUPPORT
 #include <dnsdb/dnssec.h>
@@ -80,6 +77,7 @@
 
 #include <dnsdb/xfr_copy.h>
 #include <dnsdb/zdb-zone-path-provider.h>
+#include <dnsdb/dnssec-keystore.h>
 
 #include <dnszone/dnszone.h>
 #include <dnszone/zone_file_reader.h>
@@ -103,6 +101,12 @@
 
 #if HAS_RRL_SUPPORT
 #include "rrl.h"
+#endif
+
+#include "dnsdb/dynupdate-diff.h"
+
+#ifndef HAS_DYNUPDATE_DIFF_ENABLED
+#error "HAS_DYNUPDATE_DIFF_ENABLED not defined"
 #endif
 
 #define DBSCHEDP_TAG 0x5044454843534244
@@ -514,8 +518,6 @@ database_clear_zones(zdb *database, zone_data_set *dset)
 
         dnsname_to_dnsname_vector(zone_desc->origin, &fqdn_vector);
         
-        /// @todo 20141006 edf -- verify zone_desc->qclass
-        
         zdb_zone *myzone = zdb_remove_zone(database, &fqdn_vector);
 
         if(myzone != NULL)
@@ -579,66 +581,6 @@ database_startup(zdb **database)
     
     return return_code;
 }
-
-/****************************************************************************/
-
-/** \brief Get dns answer from database
- *
- *  Get dns answer from database
- *  CANNOT FAIL
- * 
- *  @param mesg
- */
-
-void
-database_query(zdb *db, message_data *mesg)
-{
-#if 0 /* fix */
-#else
-    zdb_query_and_update(db, mesg, mesg->pool_buffer);
-#endif
-    
-#if HAS_TSIG_SUPPORT
-    if(TSIG_ENABLED(mesg))  /* NOTE: the TSIG information is in mesg */
-    {
-        tsig_sign_answer(mesg);
-    }
-#endif
-}
-
-#if HAS_RRL_SUPPORT
-
-/** \brief Get dns answer from database
- *
- *  Get dns answer from database
- * 
- *  @param mesg
- *
- *  @return RRL code
- */
-
-ya_result
-database_query_with_rrl(zdb *db, message_data *mesg)
-{
-#if 0 /* fix */
-#else
-    ya_result rrl = zdb_query_and_update_with_rrl(db, mesg, mesg->pool_buffer, rrl_process);
-#endif
-    
-#if HAS_TSIG_SUPPORT
-    if(TSIG_ENABLED(mesg))  /* NOTE: the TSIG information is in mesg */
-    {
-        tsig_sign_answer(mesg);
-    }
-#endif
-    
-    return rrl;
-}
-
-#endif
-
-/****************************************************************************/
-
 
 #if HAS_DYNUPDATE_SUPPORT
 
@@ -715,14 +657,6 @@ database_zone_ensure_private_keys(zone_desc_s *zone_desc, zdb_zone *zone)
 }
 #endif
 
-
-/** @todo 20101119 edf --  icmtl, checks, fp, soa, ...
- *   - dynupdate_icmtlhook_enable must be called if there are some slave name severs
- *   - check the functions, which is not tested yet
- *   - fingerprint instead of ya_result for return_code
- *   - soa has to be called
- *   - check BUFFER_OVERRUN
- */
 
 finger_print
 database_update(zdb *database, message_data *mesg)
@@ -807,8 +741,8 @@ database_update(zdb *database, message_data *mesg)
                         
                         return_code = SUCCESS;
                         
-#if ZDB_HAS_DNSSEC_SUPPORT
-                        if(zdb_zone_is_dnssec(zone))
+#if ZDB_HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT
+                        if(zdb_zone_is_maintained(zone))
                         {
                             if(zone_maintains_dnssec(zone_desc))
                             {
@@ -817,10 +751,8 @@ database_update(zdb *database, message_data *mesg)
                                     log_info("database: update: %{dnsname} loading keys from keystore", zone->origin);
                                     
                                     dnssec_keystore_reload_domain(zone->origin);
-                                    zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
-                                    zdb_zone_update_keystore_keys_from_zone(zone);
-                                    zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_DYNUPDATE, ZDB_ZONE_MUTEX_SIMPLEREADER);
-                                    database_service_zone_dnskey_set_alarms(zone);
+                                    zdb_zone_update_keystore_keys_from_zone(zone, ZDB_ZONE_MUTEX_DYNUPDATE);
+                                    database_service_zone_dnskey_set_alarms(zone); // we are in a ZT_MASTER case
                                     
                                     return_code = database_zone_ensure_private_keys(zone_desc, zone); // zone is locked
                                 }
@@ -852,145 +784,52 @@ database_update(zdb *database, message_data *mesg)
                                 /* The reader is positioned after the QR section, read AN section */
 
                                 /// @todo 20141008 edf -- this lock is too early, it should be moved just before the actual run
-                                
-                                zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
-                                bool locked = TRUE;
-                                
-                                if(locked)
+
+                                // from this point, the zone is single-locked
+
+                                log_debug("database: update: processing %d prerequisites", count);
+
+                                if(ISOK(return_code = dynupdate_check_prerequisites(zone, &reader, count)))
                                 {
-                                    // from this point, the zone is single-locked
+                                    count = ntohs(MESSAGE_UP(mesg->buffer));
                                     
-                                    log_debug("database: update: processing %d prerequisites", count);
+                                    /*
+                                     * Dry run the update for the section
+                                     * (so the DB will not be broken if the query is bogus)
+                                     */
 
-                                    if(ISOK(return_code = dynupdate_check_prerequisites(zone, &reader, count)))
+                                    if(ISOK(return_code = dynupdate_diff(zone, &reader, count, ZDB_ZONE_MUTEX_DYNUPDATE, DYNUPDATE_UPDATE_RUN)))
                                     {
-                                        count = ntohs(MESSAGE_UP(mesg->buffer));
-
-                                        u32 reader_up_offset = reader.offset;
-                                        /*
-                                         * Dry run the update for the section
-                                         * (so the DB will not be broken if the query is bogus)
-                                         */
-
-                                        log_debug("database: update: dryrun of %d updates", count);
-
-                                        if(ISOK(return_code = dynupdate_update(zone, &reader, count, DYNUPDATE_UPDATE_DRYRUN))) // ARC
-                                        {
-                                            /*
-                                             * Really run the update for the section
-                                             */
-
-                                            reader.offset = reader_up_offset;
-
-                                            /**
-                                             * @todo 20121219 edf -- At this point it should not fail anymore.
-                                             */
-
-                                            log_debug("database: update: opening journal page");
-
-                                            zdb_icmtl icmtl;
-
-                                            if(ISOK(return_code = zdb_icmtl_begin(&icmtl, zone)))
-                                            {
-                                                log_debug("database: update: run of %d updates", count);
-
-                                                ya_result len = dynupdate_update(zone, &reader, count, DYNUPDATE_UPDATE_RUN); // ARC
-
-                                                if(ISOK(len))
-                                                {
-
-                                                    log_info("database: update: update of zone '%{dnsname}' succeeded", zone->origin);
-                                                }
-                                                else
-                                                {
-                                                    log_err("database: update: update of zone '%{dnsname}' failed even if the dryrun succeeded: %r", zone->origin, len);
-                                                }
-
-                                                
-                                                len = zdb_icmtl_end(&icmtl);
-
-                                                if(len > 0)
-                                                {
-                                                    zone_set_status(zone_desc, ZONE_STATUS_MODIFIED);
-                                                    need_to_notify_slaves = TRUE;
-                                                }
-                                                
-                                                log_debug("database: update: closed journal page");
-
-                                                /**
-                                                 * 
-                                                 * @todo 20140430 edf -- postponed after 1.0.0
-                                                 * 
-                                                 * The journal file may exceed limits ...
-                                                 * 
-                                                 * In that case the server will want to:
-                                                 * 
-                                                 * _ disable dynamic updates
-                                                 * _ update the zone file on disk to the current version
-                                                 * _ cut the journal up to the last few serials
-                                                 * _ enable dynamic updates
-                                                 * 
-                                                 * How to define limits:
-                                                 * 
-                                                 * _ size on disk (easy)
-                                                 * _ number of records (hard to keep track in the current journal format so : no)
-                                                 * _ relative size on disk (proportional to the size of zone axfr/text) (easy too)
-                                                 * _ serial range of the incremental file is too big; too big being at most 2^30 but
-                                                 *   practically 2^17 increments of serial is very expensive already.
-                                                 * 
-                                                 * These limits must be made available to the server so it can take measures to
-                                                 * fix them.
-                                                 * 
-                                                 */
-
-                                                mesg->status = FP_MESG_OK; /* @todo 20121219 edf -- handle error codes too */
-                                            }
-                                            else
-                                            {
-                                                mesg->status = (finger_print)RCODE_SERVFAIL;
-                                            }
-                                        }
-                                        else
-                                        {
-                                            /*
-                                             * ZONE CANNOT BE UPDATED (internal error or rejected)
-                                             */
-
-                                            mesg->status = (finger_print)RCODE_SERVFAIL;
-                                        }
-
+                                        zone_set_status(zone_desc, ZONE_STATUS_MODIFIED);
+                                        need_to_notify_slaves = TRUE;
                                     }
                                     else
                                     {
-                                        /*
-                                         * ZONE CANNOT BE UPDATED (prerequisites not met)
-                                         */
-                                        
-                                        log_warn("database: update: prerequisites not met updating %{dnsname}", mesg->qname);
-
-                                        mesg->status = (finger_print)RCODE_SERVFAIL;
+                                        if((return_code & 0xffff0000) == SERVER_ERROR_BASE)
+                                        {
+                                            mesg->status = (finger_print)SERVER_ERROR_GETCODE(return_code);
+                                        }
+                                        else
+                                        {
+                                            mesg->status = (finger_print)RCODE_SERVFAIL;
+                                        }
                                     }
-                                    
-#if 1
-                                    zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_DYNUPDATE, ZDB_ZONE_MUTEX_SIMPLEREADER);
-                                    zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
-#else                               
-                                    zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_DYNUPDATE);
-#endif
-                                    zdb_zone_release(zone);
-                                    
-                                } // lock timeout
+
+                                }
                                 else
                                 {
-                                    // we are still double-locked
+                                    /*
+                                     * ZONE CANNOT BE UPDATED (prerequisites not met)
+                                     */
 
-                                    zdb_zone_exchange_locks(zone, ZDB_ZONE_MUTEX_DYNUPDATE, ZDB_ZONE_MUTEX_SIMPLEREADER);                                    
-                                    zdb_zone_release_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
-                                    
-                                    log_warn("database: update: timeout trying to lock the zone %{dnsname}", mesg->qname);
-                                    
+                                    log_warn("database: update: prerequisites not met updating %{dnsname}", mesg->qname);
+
                                     mesg->status = (finger_print)RCODE_SERVFAIL;
                                 }
+
+                                zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
+
+                                zdb_zone_release(zone);
                             }
                             else
                             {
@@ -1182,7 +1021,6 @@ database_shutdown(zdb *database)
 }
 
 /**
- * @todo 20160623 edf -- This may be pointless as the reaction to notify is doing all the work already.
  * 
  * @param zone_desc
  * @return 
@@ -1248,7 +1086,7 @@ database_zone_refresh_alarm(void *args, bool cancel)
         free((char*)sszra->origin);
         free(sszra);
         
-        return ERROR;
+        return ZONE_NOT_DEFINED;
     }
     
     zone = zdb_acquire_zone_read_from_fqdn(db, zone_desc->origin);
@@ -1273,7 +1111,7 @@ database_zone_refresh_alarm(void *args, bool cancel)
 
                 log_quit("database: refresh: %{dnsname}: get SOA: %r", origin, return_value);
                 
-                return ERROR;
+                return return_value;
             }
             
             now = time(NULL);
@@ -1529,7 +1367,7 @@ database_save_all_zones_to_disk()
     
     if(g_config->database == NULL)
     {
-        return ERROR;
+        return INVALID_STATE_ERROR;
     }
     
     zone_set_lock(&database_zone_desc);
@@ -1627,5 +1465,3 @@ database_disable_all_zone_save_to_disk()
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/

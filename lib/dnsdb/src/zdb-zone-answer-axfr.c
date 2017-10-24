@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup dnsdbscheduler Scheduled tasks of the database
  *  @ingroup dnsdb
  *  @brief
@@ -71,6 +71,9 @@
 
 #include "dnsdb/zdb-zone-answer-axfr.h"
 #include "dnsdb/zdb-zone-path-provider.h"
+
+#define ZDB_JOURNAL_CODE 1
+#include "dnsdb/journal.h"
 
 #define MODULE_MSG_HANDLE g_database_logger
 
@@ -149,6 +152,10 @@ struct scheduler_queue_zone_write_axfr_args
 
     u32 packet_size_limit;
     u32 packet_records_limit;
+    
+    u32 journal_from;
+    u32 journal_to;
+    
     bool compress_dname_rdata;
 };
 
@@ -270,6 +277,8 @@ zdb_zone_answer_axfr_thread(void* data_)
     ya_result ret;
     u32 serial = 0;
     u32 now = time(NULL);
+    u32 journal_from = data->journal_from;
+    u32 journal_to = data->journal_to;
     int path_len;
     
     int tcpfd = data->mesg->sockfd;
@@ -299,6 +308,8 @@ zdb_zone_answer_axfr_thread(void* data_)
         return NULL;
     }
     
+    shutdown(tcpfd, SHUT_RD);
+    
     MESSAGE_SET_AR(mesg->buffer, 0);
 
     zdb_zone_lock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
@@ -310,6 +321,7 @@ zdb_zone_answer_axfr_thread(void* data_)
         log_err("zone write axfr: %{dnsname}: marked as invalid", data_zone->origin);
         
         zdb_zone_answer_axfr_thread_exit(data);
+        tcp_set_abortive_close(tcpfd);
         close_ex(tcpfd);
         free(mesg);        
         return NULL;
@@ -329,6 +341,7 @@ zdb_zone_answer_axfr_thread(void* data_)
         /* @todo 20121219 edf -- send a servfail answer ... */
 
         zdb_zone_answer_axfr_thread_exit(data);
+        tcp_set_abortive_close(tcpfd);
         close_ex(tcpfd);
         free(mesg);
         return NULL;
@@ -349,7 +362,7 @@ zdb_zone_answer_axfr_thread(void* data_)
     {
         packet_records_limit = 0xffffffff;
     }
-
+    
     bool compress_dname_rdata = data->compress_dname_rdata;
 
     dnsname_copy(data_zone_origin, data_zone->origin);
@@ -395,8 +408,8 @@ zdb_zone_answer_axfr_thread(void* data_)
                 log_warn("zone write axfr: %{dnsname}: tcp write error: %r", data_zone_origin, ret);
             }
             
-            tcp_set_abortive_close(mesg->sockfd);
-            close_ex(mesg->sockfd);
+            tcp_set_abortive_close(tcpfd);
+            close_ex(tcpfd);
             
             free(mesg);
 
@@ -419,6 +432,7 @@ zdb_zone_answer_axfr_thread(void* data_)
             /* @todo 20150209 edf -- send a servfail answer ... */
 
             zdb_zone_answer_axfr_thread_exit(data);
+            tcp_set_abortive_close(tcpfd);
             close_ex(tcpfd);
             free(mesg);
             return NULL;
@@ -440,6 +454,7 @@ zdb_zone_answer_axfr_thread(void* data_)
             /* @todo 20121219 edf -- send a servfail answer ... */
             
             zdb_zone_answer_axfr_thread_exit(data); // releases
+            tcp_set_abortive_close(tcpfd);
             close_ex(tcpfd);
             free(mesg);
             return NULL;
@@ -458,8 +473,24 @@ zdb_zone_answer_axfr_thread(void* data_)
         bool have_writing_rights = (zone_axfr_status & ZDB_ZONE_STATUS_DUMPING_AXFR) == 0;
         bool too_old = (axfr_dump_age > ZDB_ZONE_AXFR_MINIMUM_DUMP_PERIOD);
         bool different_serial = (data_zone->axfr_serial != serial);
+        bool cannot_be_followed = FALSE;
         
-        bool should_write = have_writing_rights && (different_serial && too_old);
+        // the too_old rule should be instant if the zone on disk cannot be followed by the journal
+        
+        if(journal_from != journal_to)
+        {
+            if(serial_lt(data_zone->axfr_serial, journal_from))
+            {
+                log_debug("zone write axfr: %{dnsname}: serial of axfr image older than journal start (%u lt %u)", data_zone_origin, data_zone->axfr_serial, journal_from);
+                cannot_be_followed = TRUE;
+            }
+        }
+        else
+        {
+            cannot_be_followed = TRUE;
+        }
+        
+        bool should_write = have_writing_rights && ((different_serial && too_old) || cannot_be_followed);
         
         if(!should_write && have_writing_rights)
         {
@@ -472,7 +503,7 @@ zdb_zone_answer_axfr_thread(void* data_)
             // it has been written a sufficient long time ago ...
             // it is not being written
             
-            log_debug("zone write axfr: %{dnsname}:  serial = %d, zone serial = %d; AXFR timestamp = %d; last written %d seconds ago",
+            log_debug("zone write axfr: %{dnsname}: serial = %d, zone serial = %d; AXFR timestamp = %d; last written %d seconds ago",
                       data_zone_origin,
                       data_zone->axfr_serial,
                       serial,
@@ -512,9 +543,8 @@ zdb_zone_answer_axfr_thread(void* data_)
                 
                 data->return_code = ret;
 
-                /** @todo 20150209 edf -- cannot create error : SERVFAIL ? */
-
                 zdb_zone_answer_axfr_thread_exit(data);
+                tcp_set_abortive_close(tcpfd);
                 close_ex(tcpfd);
                 free(mesg);
                 return NULL;
@@ -675,17 +705,18 @@ zdb_zone_answer_axfr_thread(void* data_)
             {
                 // the error is not that the file does not exists : give up
 
+                if(have_writing_rights)
+                {
+                    zdb_zone_clear_status(data_zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
+                }
+
                 ret = ERRNO_ERROR;
                 zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
                 log_err("zone write axfr: %{dnsname}: error accessing '%s': %r", data_zone_origin, buffer, ret);
 
-                /** @todo 20150209 edf -- error other than "does not exists" : SERVFAIL */
-
                 data->return_code = ret;
 
                 data_zone->axfr_timestamp = 1;
-
-                /* @todo 20150209 edf -- send a servfail answer ... */
 
                 zdb_zone_answer_axfr_thread_exit(data);
                 close_ex(tcpfd);
@@ -736,6 +767,12 @@ zdb_zone_answer_axfr_thread(void* data_)
         struct type_class_ttl_rdlen tctrl;
         ya_result qname_len;
         ya_result n;
+        
+        if(dnscore_shuttingdown())
+        {
+            log_err("zone write axfr: %{dnsname}: stopping transfer because of application shutdown", data_zone_origin);
+            break;
+        }
 
         /* Read the next DNAME from the stored AXFR */
 
@@ -834,7 +871,7 @@ zdb_zone_answer_axfr_thread(void* data_)
             break;
         }
 
-        u32 record_len = qname_len + 10 + rdata_len;
+        s32 record_len = qname_len + 10 + rdata_len;
 
         /* Check if we have enough room available for the next record */
         
@@ -1105,7 +1142,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
                         /*
                          * GOTO !!! (thread carefully )
-                        */
+                         */
 
                         goto scheduler_queue_zone_write_axfr_thread_exit;
                     }
@@ -1195,6 +1232,8 @@ scheduler_queue_zone_write_axfr_thread_exit:
     log_debug("zone write axfr: %{dnsname}: closing socket %i", data_zone_origin, tcpfd);
 #endif
     
+    tcp_set_agressive_close(tcpfd, 3);
+    //shutdown(tcpfd, SHUT_RDWR);
     output_stream_close(&tcpos);
     input_stream_close(&fis);
 
@@ -1218,6 +1257,16 @@ zdb_zone_answer_axfr(zdb_zone *zone, message_data *mesg, struct thread_pool_s *n
     }
         
     MALLOC_OR_DIE(scheduler_queue_zone_write_axfr_args*, args, sizeof(scheduler_queue_zone_write_axfr_args), SHDQZWAA_TAG);
+    
+    ya_result ret;
+    if(FAIL(ret = zdb_zone_journal_get_serial_range(zone, &args->journal_from, &args->journal_to)))
+    {
+        log_debug("zone write axfr: %{dnsname}: could not get serial range from the journal: %r", zone->origin, ret);
+        // ZDB_ERROR_ICMTL_NOTFOUND
+        args->journal_from = 0;
+        args->journal_to = 0;
+    }
+    
     zdb_zone_acquire(zone);
     args->zone = zone;
     

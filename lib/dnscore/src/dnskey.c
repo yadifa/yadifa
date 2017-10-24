@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** 
  *  @defgroup dnskey DNSSEC keys functions
  *  @ingroup dnsdbdnssec
@@ -145,7 +145,7 @@ dnskey_field_parser_dummy_parse_field(struct dnskey_field_parser *parser, struct
 {
     (void)parser;
     (void)p;
-    return ERROR;
+    return FEATURE_NOT_IMPLEMENTED_ERROR;
 }
 
 static ya_result
@@ -153,7 +153,7 @@ dnskey_field_parser_dummy_set_key(struct dnskey_field_parser *parser, dnssec_key
 {
     (void)parser;
     (void)key;
-    return ERROR;
+    return FEATURE_NOT_IMPLEMENTED_ERROR;
 }
 
 static void
@@ -173,14 +173,14 @@ struct dnskey_field_parser_vtbl dnskey_field_dummy_parser =
 ya_result
 dnskey_field_access_parse(const struct dnskey_field_access *sd, void *base, parser_s *p)
 {
-    ya_result ret = ERROR;
+    ya_result ret = INVALID_STATE_ERROR;
 
     u32 label_len = parser_text_length(p);
     const char *label = parser_text(p);
     bool parsed_it = FALSE;
     u8 tmp_out[DNSSEC_MAXIMUM_KEY_SIZE_BYTES];
     
-    for(; sd->name != NULL; sd++)
+    for(; sd->type == STRUCTDESCRIPTOR_BN; sd++)
     {
         if(memcmp(label, sd->name, label_len) == 0)
         {
@@ -231,7 +231,7 @@ dnskey_field_access_print(const struct dnskey_field_access *sd, const void *base
 {
     ya_result ret = SUCCESS;
     
-    for(; sd->name != NULL; sd++)
+    for(; sd->type == STRUCTDESCRIPTOR_BN; sd++)
     {
         const u8 *bn_ptr_ptr = (((const u8*)base) + sd->relative);
         const BIGNUM **bn = (const BIGNUM**)bn_ptr_ptr;
@@ -989,7 +989,7 @@ dnssec_key_get_algorithm(const dnssec_key *key)
     return key->algorithm;
 }
 
-const const u8 *
+const u8 *
 dnssec_key_get_domain(const dnssec_key *key)
 {
     return key->owner_name;
@@ -1106,7 +1106,7 @@ dnskey_new_public_key_from_file(const char *filename, dnssec_key** keyp)
     
     if(keyp == NULL)
     {
-        return ERROR;
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
     
     *keyp = NULL;
@@ -1266,7 +1266,7 @@ dnskey_new_private_key_from_file(const char *filename, dnssec_key **keyp)
     
     if(keyp == NULL)
     {
-        return ERROR;
+        return INVALID_ARGUMENT_ERROR;
     }
     
     const char *name = strrchr(filename,'/');
@@ -1282,7 +1282,7 @@ dnskey_new_private_key_from_file(const char *filename, dnssec_key **keyp)
     if(sscanf(name, "K%255[^+]+%03d+%05d.%15s", domain, &algorithm, &tag, extension) != 4)
     {
         log_err("dnssec: don't know how to parse key file name: '%s'", filename);
-        return ERROR;
+        return PARSESTRING_ERROR;
     }
     
     if(FAIL(ret = cstr_to_dnsname_with_check(origin, domain)))
@@ -1306,7 +1306,7 @@ dnskey_new_private_key_from_file(const char *filename, dnssec_key **keyp)
     else
     {
         log_err("dnssec: expected .private or .key extension for the file: '%s': %r", filename);
-        return ERROR;
+        return INVALID_STATE_ERROR;
     }
     
     memcpy(path, filename, path_len);
@@ -1516,7 +1516,8 @@ dnskey_new_private_key_from_file(const char *filename, dnssec_key **keyp)
                             default:
                             {
                                 ret = DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
-                                break;
+                                goto dnskey_new_private_key_from_file_failure;  /// *** GOTO *** ///
+//                              break;
                             }
                         }
                     }
@@ -1548,6 +1549,8 @@ dnskey_new_private_key_from_file(const char *filename, dnssec_key **keyp)
                     log_err("dnssec: %s cannot be read as a private key", path);
                 }
             }
+
+dnskey_new_private_key_from_file_failure:
             
             dnskey_parser.vtbl->finalise(&dnskey_parser);
             parser_finalize(&parser);   // also closes the stream
@@ -1804,9 +1807,8 @@ dnskey_is_expired(const dnssec_key *key)
 int
 dnskey_get_size(const dnssec_key *key)
 {
-    int rdata_size = key->vtbl->dnskey_key_rdatasize(key);
-    rdata_size -= 4;
-    return rdata_size << 3;
+    int bits_size = key->vtbl->dnskey_key_size(key);
+    return bits_size;
 }
 
 u16
@@ -1870,7 +1872,7 @@ dnskey_is_unpublished(const dnssec_key *key, time_t t)
 {
     // true if and only if there is a removal time that occurred already 
     
-    return ((key->epoch_delete != 0) && (key->epoch_delete < t));
+    return ((key->epoch_delete != 0) && (key->epoch_delete <= t));
 }
 
 /**
@@ -1910,9 +1912,7 @@ dnskey_is_deactivated(const dnssec_key *key, time_t t)
 {
     // there is a inactive time and it has occurred
 
-    return ((key->epoch_inactive != 0) && (key->epoch_inactive < t));
+    return ((key->epoch_inactive != 0) && (key->epoch_inactive <= t));
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/

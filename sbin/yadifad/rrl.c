@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup 
  *  @ingroup yadifad
  *  @brief 
@@ -138,7 +138,7 @@ config_rrl_section_postprocess(struct config_section_descriptor_s *csd)
 
     if(g_rrl_settings.ipv4_prefix_length == 0)
     {
-        log_warn("ipv4-prefix-lenght set to 0, setting to recommended value: " TOSTRING(RRL_IPV4_PREFIX_LENGTH_DEFAULT));
+        log_warn("ipv4-prefix-length set to 0, setting to recommended value: " TOSTRING(RRL_IPV4_PREFIX_LENGTH_DEFAULT));
         g_rrl_settings.ipv4_prefix_length = RRL_IPV4_PREFIX_LENGTH_DEFAULT;
     }
         
@@ -149,7 +149,7 @@ config_rrl_section_postprocess(struct config_section_descriptor_s *csd)
     }
     else
     {
-        log_warn("ipv4-prefix-lenght is wrong, setting to 32");
+        log_warn("ipv4-prefix-length is wrong, setting to 32");
         g_rrl_settings.ipv4_prefix_length = 32;
         g_rrl_settings.ipv4_prefix_mask = MAX_U32;
     }
@@ -158,7 +158,7 @@ config_rrl_section_postprocess(struct config_section_descriptor_s *csd)
     
     if(g_rrl_settings.ipv6_prefix_length == 0)
     {
-        log_warn("ipv6-prefix-lenght set to 0, setting to recommended value: " TOSTRING(RRL_IPV6_PREFIX_LENGTH_DEFAULT));
+        log_warn("ipv6-prefix-length set to 0, setting to recommended value: " TOSTRING(RRL_IPV6_PREFIX_LENGTH_DEFAULT));
         g_rrl_settings.ipv6_prefix_length = RRL_IPV6_PREFIX_LENGTH_DEFAULT;
     }
     
@@ -177,7 +177,7 @@ config_rrl_section_postprocess(struct config_section_descriptor_s *csd)
     }
     else
     {
-        log_warn("ipv6-prefix-lenght is wrong, setting to 128");
+        log_warn("ipv6-prefix-length is wrong, setting to 128");
         
         g_rrl_settings.ipv6_prefix_length = 128;
         mask_h = MAX_U64;
@@ -485,10 +485,10 @@ rrl_payload_copy(rrl_item_s *a, const rrl_item_s *b)
  *
  * Depth 0 is one node.
  *
- * Worst case : N is enough for sum[n = 0,N](Fn) where F is Fibonacci
+ * Worst case : N is enough for sum[n = 0,N](Fn) where Fn is Fibonacci(n+1)1
  * Best case : N is enough for (2^(N+1))-1
  */
-#define AVL_MAX_DEPTH   32 /* 9227464 items max */
+#define AVL_MAX_DEPTH 32 // 9227464 items max (worst case)*/
 
 /*
  * The previx that will be put in front of each function name

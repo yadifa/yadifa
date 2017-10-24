@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup config Configuration handling
  *  @ingroup yadifad
  *  @brief
@@ -68,6 +68,7 @@
 #include <dnscore/logger_channel_stream.h>
 #include <dnscore/config-cmdline.h>
 #include <dnscore/tsig.h>
+#include <dnscore/fdtools.h>
 
 #if HAS_DNSSEC_SUPPORT
 #include <dnsdb/dnssec.h>
@@ -165,7 +166,7 @@ config_logger_setdefault()
     output_stream stdout_os;
     logger_channel *stdout_channel;
 
-    fd_output_stream_attach(&stdout_os, dup(1));
+    fd_output_stream_attach(&stdout_os, dup_ex(1));
     stdout_channel = logger_channel_alloc();
     logger_channel_stream_open(&stdout_os, FALSE, stdout_channel);
     logger_channel_register(default_channel, stdout_channel);
@@ -241,10 +242,18 @@ yadifad_show_version(u8 level)
 	    osformatln(termout, "%s %s (%s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE);
 	    break;
 	case 2:
-	    osformatln(termout, "%s %s (released %s, compiled %s)\n\nbuild settings: %s\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, COMPILEDATE, BUILD_OPTIONS);
+#if HAS_BUILD_TIMESTAMP && defined(__DATE__)
+	    osformatln(termout, "%s %s (released %s, compiled %s)\n\nbuild settings: %s\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, __DATE__, BUILD_OPTIONS);
+#else
+            osformatln(termout, "%s %s (released %s)\n\nbuild settings: %s\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, BUILD_OPTIONS);
+#endif
 	    break;
         case 3:
-	    osformatln(termout, "%s %s (released %s, compiled %s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, COMPILEDATE);
+#if HAS_BUILD_TIMESTAMP && defined(__DATE__)
+	    osformatln(termout, "%s %s (released %s, compiled %s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE, __DATE__);
+#else
+            osformatln(termout, "%s %s (released %s)\n", PROGRAM_NAME, PROGRAM_VERSION, RELEASEDATE);
+#endif
             yadifad_print_authors();
             break;
 	default:
@@ -476,7 +485,7 @@ ya_result
 yadifad_config_read(const char *config_file)
 {
     config_error_s cfgerr;
-    ya_result return_code;
+    ya_result return_code = SUCCESS;
     
     char configuration_file_path[PATH_MAX];
     
@@ -485,24 +494,29 @@ yadifad_config_read(const char *config_file)
     // => bad
     // so a copy is done first
     
-    strncpy(configuration_file_path, config_file, sizeof(configuration_file_path));
-    
-    struct config_source_s sources[1];
-    config_source_set_file(&sources[0], configuration_file_path, CONFIG_SOURCE_FILE);
-    
-    database_zone_reconfigure_begin();
-    
-    return_code =  config_read_from_sources(sources, 1, &cfgerr);
-    
-    if(FAIL(return_code))
+    if(database_zone_try_reconfigure_enable())
     {
-        if(cfgerr.file[0] != '\0')
+        strncpy(configuration_file_path, config_file, sizeof(configuration_file_path));
+
+        struct config_source_s sources[1];
+        config_source_set_file(&sources[0], configuration_file_path, CONFIG_SOURCE_FILE);
+
+        return_code =  config_read_from_sources(sources, 1, &cfgerr);
+
+        if(FAIL(return_code))
         {
-            formatln("%s: parsing error: %s: %u: '%s': %r", config_file, cfgerr.file, cfgerr.line_number, cfgerr.line, return_code);
+            if(cfgerr.file[0] != '\0')
+            {
+                formatln("%s: parsing error: %s: %u: '%s': %r", config_file, cfgerr.file, cfgerr.line_number, cfgerr.line, return_code);
+            }
         }
+
+        database_zone_reconfigure_disable();
     }
-    
-    database_zone_reconfigure_end();
+    else
+    {
+        formatln("could not read configuration: already reading a configuration");
+    }
     
     return return_code;
 }
@@ -530,12 +544,18 @@ yadifad_config_finalise()
 ya_result
 config_read_zones()
 {
-    return ERROR; // not implemented
+    return FEATURE_NOT_IMPLEMENTED_ERROR; // not implemented
 }
 
 ya_result
 yadifad_config_update(const char *config_file)
 {
+    if(dnscore_shuttingdown())
+    {
+        log_try_debug("yadifad_config_update(%s) cancelled by shutdown", config_file);
+        return STOPPED_BY_APPLICATION_SHUTDOWN;
+    }
+    
     log_try_debug("yadifad_config_update(%s) started", config_file);
     
     config_error_s cfgerr;
@@ -546,25 +566,22 @@ yadifad_config_update(const char *config_file)
     /// @todo 20131203 edf -- There MUST be an event that clears a "reloading" status, in order
     ///       to block smashing the HUPs
     
-    if(!database_zone_is_reconfigure_enabled())
+    if(database_zone_try_reconfigure_enable())
     {
-        database_zone_reconfigure_begin();
-        
         journal_close_unused();
         
-        database_set_drop_after_reload();
+        database_set_drop_after_reload_for_set(NULL);
 
         config_set_source(CONFIG_SOURCE_FILE);
         
 #if HAS_TSIG_SUPPORT
         tsig_serial_next();
 #endif
-        
         if(ISOK(return_code =  config_read_section(config_file, &cfgerr, "key")))
         {
             if(ISOK(return_code =  config_read_section(config_file, &cfgerr, "zone")))
             {                
-                database_do_drop_after_reload();
+                log_info("%s: key and zone sections read", config_file);
             }
             else
             {
@@ -590,14 +607,16 @@ yadifad_config_update(const char *config_file)
             }
         }
         
-        database_zone_reconfigure_end();
+        database_zone_reconfigure_do_drop_and_disable(ISOK(return_code));
+        
 #if DNSCORE_HAS_DNSSEC_SUPPORT
         dnssec_keystore_reload();
 #endif
     }
     else
     {
-        ttylog_err("previous reconfigure still running, ignoring this one");
+        log_try_debug("previous reconfigure still running, postponed to run right after");
+        database_zone_postpone_reconfigure_all();
     }
     
     log_try_debug("yadifad_config_update(%s): %r", config_file, return_code);
@@ -608,9 +627,9 @@ yadifad_config_update(const char *config_file)
 static ya_result
 yadifad_config_update_zone_filter(zone_desc_s *zone_desc, void *params)
 {
-    u8 *fqdn = (u8*)params;
+    ptr_set *fqdn_set = (ptr_set*)params;
     
-    if((fqdn == NULL) || dnsname_equals_ignorecase(zone_desc->origin, fqdn))
+    if((fqdn_set == NULL) || (ptr_set_avl_find(fqdn_set, zone_desc->origin) != NULL))
     {
         return 1;
     }
@@ -621,11 +640,11 @@ yadifad_config_update_zone_filter(zone_desc_s *zone_desc, void *params)
 }
 
 ya_result
-yadifad_config_update_zone(const char *config_file, const u8 *fqdn)
+yadifad_config_update_zone(const char *config_file, const ptr_set *fqdn_set)
 {
-    if(fqdn != NULL)
+    if(fqdn_set != NULL)
     {
-        log_debug("yadifad_config_update_zone(%s, %{dnsname}) started", config_file, fqdn);
+        log_debug("yadifad_config_update_zone(%s, <set>) started", config_file);
     }
     else
     {
@@ -634,17 +653,10 @@ yadifad_config_update_zone(const char *config_file, const u8 *fqdn)
     
     config_error_s cfgerr;
     ya_result return_code = ERROR;
-    
-    /// @todo 20140512 edf -- apply ZONE_STATUS_DROP_AFTER_RELOAD
-    
-    /// @todo 20140512 edf -- There MUST be an event that clears a "reloading" status, in order
-    ///       to block smashing the HUPs
-    
-    if(!database_zone_is_reconfigure_enabled())
+
+    if(database_zone_try_reconfigure_enable())
     {
-        database_zone_reconfigure_begin();
-        
-        database_set_drop_after_reload();
+        database_set_drop_after_reload_for_set(fqdn_set);
 
         config_set_source(CONFIG_SOURCE_FILE);
         
@@ -652,9 +664,9 @@ yadifad_config_update_zone(const char *config_file, const u8 *fqdn)
         tsig_serial_next();
 #endif
         
-        if(ISOK(return_code =  config_read_section(config_file, &cfgerr, "key")))
+        if(ISOK(return_code = config_read_section(config_file, &cfgerr, "key")))
         {
-            config_section_zone_set_filter(yadifad_config_update_zone_filter, (void*)fqdn); // the filter will not modify the fqdn
+            config_section_zone_set_filter(yadifad_config_update_zone_filter, (void*)fqdn_set); // the filter will not modify the fqdn
             
             return_code =  config_read_section(config_file, &cfgerr, "zone");
             
@@ -662,7 +674,7 @@ yadifad_config_update_zone(const char *config_file, const u8 *fqdn)
             
             if(ISOK(return_code))
             {
-                database_do_drop_after_reload();
+                log_info("%s: key and a some zone sections read", config_file);
             }
             else
             {
@@ -688,11 +700,20 @@ yadifad_config_update_zone(const char *config_file, const u8 *fqdn)
             }
         }
         
-        database_zone_reconfigure_end();
+        database_zone_reconfigure_do_drop_and_disable(ISOK(return_code));
     }
     else
     {
-        ttylog_err("previous reconfigure still running, ignoring this one");
+        log_debug("previous reconfigure still running, postponed to run right after");
+        
+        if(fqdn_set != NULL)
+        {
+            database_zone_postpone_reconfigure_zone(fqdn_set);
+        }
+        else
+        {
+            database_zone_postpone_reconfigure_zones();
+        }
     }
     
     log_debug("yadifad_config_update_zone(%s, ...): %r", config_file, return_code);

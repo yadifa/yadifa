@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup debug Debug functions
  *  @ingroup dnscore
  *  @brief Debug functions.
@@ -172,8 +172,8 @@ u32 debug_get_block_count();
 #define free(p) debug_free((p),__FILE__,__LINE__)
 #define realloc(p,len) debug_realloc((p),(len),__FILE__,__LINE__)
 
-#define MALLOC_OR_DIE(cast,target,size,tag) if(((target)=(cast)debug_malloc(size,__FILE__,__LINE__))==NULL){perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR); /* NOT TAGGED*/ }
-#define REALLOC_OR_DIE(cast,src_and_target,newsize,tag) if(((src_and_target)=(cast)debug_realloc((src_and_target),(newsize),__FILE__,__LINE__))==NULL){perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR); /* NOT TAGGED */ }
+#define MALLOC_OR_DIE(cast,target,size,tag) if(((target)=(cast)debug_malloc(size,__FILE__,__LINE__))==NULL){perror(__FILE__);abort(); /* NOT TAGGED*/ }
+#define REALLOC_OR_DIE(cast,src_and_target,newsize,tag) if(((src_and_target)=(cast)debug_realloc((src_and_target),(newsize),__FILE__,__LINE__))==NULL){perror(__FILE__);abort(); /* NOT TAGGED */ }
 #else
 
 #define ZDB_MALLOC_TAG	0x434f4c4c414d
@@ -182,8 +182,8 @@ u32 debug_get_block_count();
 #define free(p) debug_free((p),__FILE__,__LINE__)
 #define realloc(p,len) debug_realloc((p),(len),__FILE__,__LINE__)
 
-#define MALLOC_OR_DIE(cast,target,size,tag) if(((target)=(cast)debug_malloc(size,__FILE__,__LINE__,(tag)))==NULL){perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR); /* TAGGED */}
-#define REALLOC_OR_DIE(cast,src_and_target,newsize,tag) if(((src_and_target)=(cast)debug_realloc((src_and_target),(newsize),__FILE__,__LINE__))==NULL){perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR); /* NOT TAGGED */ }
+#define MALLOC_OR_DIE(cast,target,size,tag) if(((target)=(cast)debug_malloc(size,__FILE__,__LINE__,(tag)))==NULL){perror(__FILE__);abort(); /* TAGGED */}
+#define REALLOC_OR_DIE(cast,src_and_target,newsize,tag) if(((src_and_target)=(cast)debug_realloc((src_and_target),(newsize),__FILE__,__LINE__))==NULL){perror(__FILE__);abort(); /* NOT TAGGED */ }
 #endif
 
 #else
@@ -230,6 +230,7 @@ struct output_stream;
 struct logger_handle;
 stacktrace debug_stacktrace_get();
 void debug_stacktrace_log(struct logger_handle *handle, u32 level, stacktrace trace);
+void debug_stacktrace_try_log(struct logger_handle *handle, u32 level, stacktrace trace);
 void debug_stacktrace_print(struct output_stream *os, stacktrace trace);
 /**
  * clears all stacktraces from memory
@@ -270,13 +271,18 @@ void debug_unicity_release(debug_unicity *dus);
 
 #endif
 
-/*
- * This is a helper for valgrind
- * Reads the bytes and prints them using putchar
- * Called to hunt uninitialised bytes
- */
+extern volatile size_t malloc_hook_total;
+extern volatile size_t malloc_hook_malloc;
+extern volatile size_t malloc_hook_free;
+extern volatile size_t malloc_hook_realloc;
+extern volatile size_t malloc_hook_memalign;
 
-void debug_vg(const void* b, int len);
+void debug_malloc_hooks_init();
+void debug_malloc_hooks_finalise();
+void *debug_malloc_unmonitored(size_t size);
+void debug_free_unmonitored(void* ptr);
+void debug_malloc_hook_tracked_dump();
+void debug_malloc_hook_caller_dump();
 
 #ifdef	__cplusplus
 }

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
- *
- * Copyright (c) 2011-2016, EURid. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *        * Redistributions of source code must retain the above copyright 
- *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
- *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
- *          without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *------------------------------------------------------------------------------
- *
- */
+*
+* Copyright (c) 2011-2017, EURid. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+* 
+* Redistribution and use in source and binary forms, with or without 
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright 
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright 
+*          notice, this list of conditions and the following disclaimer in the 
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be 
+*          used to endorse or promote products derived from this software 
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
 /** @defgroup zalloc very fast, no-overhead specialised memory allocation functions
  *  @ingroup dnscore
  *  @brief no-overhead specialised allocation functions
@@ -97,9 +97,10 @@ void mfree_string(void *ptr);
 #define ZALLOC_ARRAY_OR_DIE(cast,label,size,tag) MALLOC_OR_DIE(cast,label,size,tag);assert((label) != NULL)
 #define ZFREE_ARRAY(ptr,size_) (void)(size_);free(ptr)
 
-/* not aligned, max size 256 */
-#define ZALLOC_STRING_OR_DIE(cast_,label_,size_,tag_) (label_)=(cast_)malloc_string_or_die((size_),(tag_))
-#define ZFREE_STRING(label_) mfree_string(label_)
+// 2.4 API, put here to ease back-port
+#define ZALLOC_OBJECT_OR_DIE(label__,object__,tag__) MALLOC_OBJECT_OR_DIE(label__, object__, tag__);assert((label__) != NULL)
+#define ZALLOC_OBJECT_ARRAY_OR_DIE(label__,object__, count__,tag__) MALLOC_OBJECT_ARRAY_OR_DIE(label__, object__, count__, tag__);assert((label__) != NULL)
+#define ZFREE_OBJECT(label__) free((label__))
 
 #define ZALLOC_ARRAY_RESIZE(type_,array_,count_,newcount_)		    \
     {									    \
@@ -240,19 +241,20 @@ void* zalloc_unaligned(u32 size);
 
 void zfree_unaligned(void* ptr);
 
-#define ZALLOC_STRING_OR_DIE(cast,label,size,tag) label=(cast)zalloc_unaligned(size)
-#define ZFREE_STRING(label) zfree_unaligned(label)
-
 /* 
  * THIS SHOULD BE OPTIMIZED BY THE COMPILER AS ONE AND ONLY ONE CALL
  */
 
 #define ZALLOC(object) ((((sizeof(object) + 7) >> 3)-1) < ZALLOC_PG_SIZE_COUNT)?zalloc_line(((sizeof(object) + 7) >> 3)-1):malloc(sizeof(object))
 #define ZFREE(ptr,object) ((((sizeof(object) + 7) >> 3)-1) < ZALLOC_PG_SIZE_COUNT)?zfree_line(ptr,(((sizeof(object) + 7) >> 3)-1)):free(ptr)
+//
 #define ZALLOC_OR_DIE(cast,label,object,tag) if((label=(cast)ZALLOC(object))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label) != NULL)
 #define ZALLOC_ARRAY_OR_DIE(cast,label,size_,tag) if((label = (cast)zalloc(size_)) == NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label) != NULL)
 #define ZFREE_ARRAY(ptr,size_) zfree(ptr,size_)
-
+// 2.4 API, put here to ease back-port
+#define ZALLOC_OBJECT_OR_DIE(label__,object__,tag__) if((label__=(object__*)ZALLOC(object__))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label__) != NULL)
+#define ZALLOC_OBJECT_ARRAY_OR_DIE(label__,object__,count__,tag__) if((label__=(object__*)ZALLOC(object__)*(count__))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label__) != NULL)
+#define ZFREE_OBJECT(label__) zfree((label__), sizeof(*(label__)))
 /**
  * (Z)Allocates a new array of count type elements so it can hold
  * newcount type elements. (It takes granularity into account to avoid
