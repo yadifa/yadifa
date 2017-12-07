@@ -166,6 +166,19 @@ dnssec_key *dnssec_keystore_acquire_key_from_fqdn(const u8 *domain, u16 tag);
 dnssec_key *dnssec_keystore_acquire_key_from_fqdn_by_index(const u8 *domain, int idx);
 
 /**
+ * Returns true iff the key for theddomain+algorithm+tag is active at 'now'
+ * 
+ * @param domain
+ * @param algorithm
+ * @param tag
+ * @param now
+ * 
+ * @return 
+ */
+
+bool dnssec_keystore_is_key_active(const u8 *domain, u8 algorithm, u16 tag, time_t now);
+
+/**
  * Acquires all the currently activated keys and store them to the appropriate
  * KSK or ZSK collection ptr_vector.
  * 

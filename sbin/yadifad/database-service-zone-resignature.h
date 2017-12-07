@@ -46,10 +46,9 @@
 
 #if HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_DNSSEC_SUPPORT
 
-ya_result database_service_zone_resignature_init(zone_desc_s *zone_desc, zdb_zone *zone);
-ya_result database_service_zone_resignature_init_db(zdb *db);
-
 ya_result database_service_zone_dnssec_maintenance(zone_desc_s *zone_desc); // one thread for all the program
+
+void database_service_zone_dnskey_set_alarms_for_key(zdb_zone *zone, dnssec_key *key);
 
 /**
  * 
@@ -68,6 +67,10 @@ void database_service_zone_dnskey_set_alarms(zdb_zone *zone);
  */
 
 void database_service_zone_dnskey_set_alarms_on_all_zones();
+
+ya_result database_service_zone_resignature_init();
+
+ya_result database_service_zone_resignature_finalize();
 
 #else
 #error "no RRSIG management support: database-service-zone-resignature.h should not be included"

@@ -751,8 +751,7 @@ xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin, input_st
                 return_value = MAKE_DNSMSG_ERROR(MESSAGE_RCODE(message->pool_buffer));
             }
         }
-        
-        /* @todo 20121023 edf -- retry ? */
+
         return return_value;
     }
     
@@ -1059,7 +1058,6 @@ xfr_input_stream_get_type(input_stream *in_xfr_input_stream)
     xfr_input_stream_data *data = (xfr_input_stream_data*)in_xfr_input_stream->data;
     return data->xfr_mode;
 }
-
 
 const u8*
 xfr_input_stream_get_origin(input_stream *in_xfr_input_stream)

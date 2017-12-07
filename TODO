@@ -1,3 +1,5 @@
+20171120 edf -- test PowerDNS IXFR fix
+
 20160623 edf -- true multimaster : destroy local zone seems the only way to go
 
 20160623 edf -- This may be pointless as the reaction to notify is doing all the work already.

@@ -90,15 +90,13 @@ file_output_stream_write(output_stream* stream_, const u8* buffer, u32 len)
                 continue;
             }
             
-            if(err == EAGAIN) /// @todo 20150218 edf -- OSX 10.9.4 generates this on unexpected streams
+            if(err == EAGAIN)
             {
 #if __FreeBSD__ || __OpenBSD__ || __APPLE__
                 int oldflags = fcntl (stream->data.fd, F_GETFL, 0);
                 if(oldflags < 0)
                 {
-                    // maybe ?
-                    err = errno;
-                    break;
+                     return MAKE_ERRNO_ERROR(err);
                 }
 #endif
                 continue;
@@ -135,15 +133,13 @@ file_output_stream_writefully(output_stream* stream_, const u8* buffer, u32 len)
                 continue;
             }
             
-            if(err == EAGAIN) /// @todo 20150218 edf -- OSX 10.9.4 generates this on unexpected streams
+            if(err == EAGAIN)
             {
 #if __FreeBSD__ || __OpenBSD__ || __APPLE__
                 int oldflags = fcntl (stream->data.fd, F_GETFL, 0);
                 if(oldflags < 0)
                 {
-                    // maybe ?
-                    err = errno;
-                    break;
+                     return MAKE_ERRNO_ERROR(err);
                 }
 #endif
                 

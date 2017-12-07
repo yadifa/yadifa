@@ -102,6 +102,20 @@ smp_int g_zone_instanciated_count = SMP_INT_INITIALIZER;
 ptr_set g_zone_instanciated_set = PTR_SET_PTR_EMPTY;
 #endif
 
+static void zdb_zone_record_or_flags_to_subdomains(zdb_rr_label *rr_label, u16 orflags)
+{
+    dictionary_iterator iter;
+    dictionary_iterator_init(&rr_label->sub, &iter);
+    while(dictionary_iterator_hasnext(&iter))
+    {
+        zdb_rr_label** sub_labelp = (zdb_rr_label**)dictionary_iterator_next(&iter);
+
+        (*sub_labelp)->flags |= orflags;
+        
+        zdb_zone_record_or_flags_to_subdomains(*sub_labelp, orflags);
+    }
+}
+
 /**
  * @brief Adds a record to a zone
  *
@@ -188,15 +202,8 @@ zdb_zone_record_add(zdb_zone *zone, dnslabel_vector_reference labels, s32 labels
                 flag_mask = ZDB_RR_LABEL_DELEGATION;
 
                 /* all labels under are "under delegation" */
-
-                dictionary_iterator iter;
-                dictionary_iterator_init(&rr_label->sub, &iter);
-                while(dictionary_iterator_hasnext(&iter))
-                {
-                    zdb_rr_label** sub_labelp = (zdb_rr_label**)dictionary_iterator_next(&iter);
-
-                    (*sub_labelp)->flags |= ZDB_RR_LABEL_UNDERDELEGATION;
-                }
+                
+                zdb_zone_record_or_flags_to_subdomains(rr_label, ZDB_RR_LABEL_UNDERDELEGATION);
             }
             
             flag_mask |= ZDB_RR_LABEL_DROPCNAME;
@@ -716,6 +723,74 @@ zdb_zone_isinvalid(zdb_zone *zone)
 #if HAS_DNSSEC_SUPPORT
 
 /**
+ * 
+ * Returns TRUE iff the key is present as a record in the zone
+ * 
+ * @param zone
+ * @param key
+ * @return 
+ */
+
+bool
+zdb_zone_contains_dnskey_record_for_key(zdb_zone *zone, const dnssec_key *key)
+{
+    yassert(zdb_zone_islocked(zone));
+    
+    const zdb_packed_ttlrdata *dnskey_rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_DNSKEY); // zone is locked
+    
+    const zdb_packed_ttlrdata *dnskey_record = dnskey_rrset;
+    
+    while(dnskey_record != NULL)
+    {
+        if(dnskey_matches_rdata(key, ZDB_PACKEDRECORD_PTR_RDATAPTR(dnskey_record), ZDB_PACKEDRECORD_PTR_RDATASIZE(dnskey_record)))
+        {
+            return TRUE;
+        }
+
+        dnskey_record = dnskey_record->next;
+    }
+    
+    return FALSE;
+}
+
+/**
+ * Returns TRUE iff there is at least one RRSIG record with the tag and algorithm of the key
+ * 
+ * @param zone
+ * @param key
+ * @return 
+ */
+
+bool
+zdb_zone_apex_contains_rrsig_record_by_key(zdb_zone *zone, const dnssec_key *key)
+{
+    yassert(zdb_zone_islocked(zone));
+    
+    const zdb_packed_ttlrdata *rrsig_rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_RRSIG); // zone is locked
+    
+    if(rrsig_rrset != NULL)
+    {
+        const zdb_packed_ttlrdata *rrsig_record = rrsig_rrset;
+        u16 tag = dnssec_key_get_tag_const(key);
+        u8 algorithm = dnssec_key_get_algorithm(key);
+        
+        while(rrsig_record != NULL)
+        {
+            if((RRSIG_ALGORITHM(rrsig_record) == algorithm) && (RRSIG_KEY_TAG(rrsig_record) == tag))
+            {
+                return TRUE;
+            }
+
+            rrsig_record = rrsig_record->next;
+        }
+    }
+    
+    return FALSE;
+}
+
+#if HAS_MASTER_SUPPORT
+
+/**
  * Adds a DNSKEY record in a zone from the dnssec_key object.
  * 
  * @param key
@@ -799,72 +874,6 @@ zdb_zone_remove_dnskey_from_key(zdb_zone *zone, const dnssec_key *key)
         ZDB_RECORD_ZFREE(dnskey_record);
         return FALSE;
     }
-}
-
-/**
- * 
- * Returns TRUE iff the key is present as a record in the zone
- * 
- * @param zone
- * @param key
- * @return 
- */
-
-bool
-zdb_zone_contains_dnskey_record_for_key(zdb_zone *zone, const dnssec_key *key)
-{
-    yassert(zdb_zone_islocked(zone));
-    
-    const zdb_packed_ttlrdata *dnskey_rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_DNSKEY); // zone is locked
-    
-    const zdb_packed_ttlrdata *dnskey_record = dnskey_rrset;
-    
-    while(dnskey_record != NULL)
-    {
-        if(dnskey_matches_rdata(key, ZDB_PACKEDRECORD_PTR_RDATAPTR(dnskey_record), ZDB_PACKEDRECORD_PTR_RDATASIZE(dnskey_record)))
-        {
-            return TRUE;
-        }
-
-        dnskey_record = dnskey_record->next;
-    }
-    
-    return FALSE;
-}
-
-/**
- * Returns TRUE iff there is at least one RRSIG record with the tag and algorithm of the key
- * 
- * @param zone
- * @param key
- * @return 
- */
-
-bool
-zdb_zone_apex_contains_rrsig_record_by_key(zdb_zone *zone, const dnssec_key *key)
-{
-    yassert(zdb_zone_islocked(zone));
-    
-    const zdb_packed_ttlrdata *rrsig_rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_RRSIG); // zone is locked
-    
-    if(rrsig_rrset != NULL)
-    {
-        const zdb_packed_ttlrdata *rrsig_record = rrsig_rrset;
-        u16 tag = dnssec_key_get_tag_const(key);
-        u8 algorithm = dnssec_key_get_algorithm(key);
-        
-        while(rrsig_record != NULL)
-        {
-            if((RRSIG_ALGORITHM(rrsig_record) == algorithm) && (RRSIG_KEY_TAG(rrsig_record) == tag))
-            {
-                return TRUE;
-            }
-
-            rrsig_record = rrsig_record->next;
-        }
-    }
-    
-    return FALSE;
 }
 
 static ya_result
@@ -1036,6 +1045,8 @@ zdb_zone_update_keystore_keys_from_zone(zdb_zone *zone, u8 secondary_lock)
         }
     }
 }
+
+#endif // HAS_MASTER_SUPPORT
 
 #endif
 

@@ -52,6 +52,7 @@
 #include "dnscore/list-dl.h"
 #include "dnscore/list-sl.h"
 #include "dnscore/mutex.h"
+#include "dnscore/dnsname.h"
 
 extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
@@ -76,10 +77,15 @@ extern logger_handle *g_system_logger;
 #define DNS_UDP_HOST_BANDWIDTH_MAX      4096    // bytes per second
 #define DNS_UDP_HOST_RATE_MAX           5       // packet per second
 
+#define DNS_UDP_READ_BUFFER_COUNT       4096
+
 static const u8 V4_WRAPPED_IN_V6[12] = {0,0,0,0,0,0,0,0,0,0,255,255};
 
 static struct service_s dns_udp_send_handler = UNINITIALIZED_SERVICE;
-static struct service_s dns_udp_receive_handler = UNINITIALIZED_SERVICE;
+
+static struct service_s dns_udp_receive_read_handler = UNINITIALIZED_SERVICE;
+static struct service_s dns_udp_receive_process_handler = UNINITIALIZED_SERVICE;
+
 static struct service_s dns_udp_timeout_handler = UNINITIALIZED_SERVICE;
 
 static async_queue_s dns_udp_send_handler_queue;
@@ -89,10 +95,19 @@ static bool dns_udp_handler_initialized = FALSE;
 //static smp_int domain_test_count = SMP_INT_INITIALIZER;
 
 static int dns_udp_send_service(struct service_worker_s *worker);
-static int dns_udp_receive_service(struct service_worker_s *worker);
+
+static int dns_udp_receive_read_service(struct service_worker_s *worker);
+static int dns_udp_receive_process_service(struct service_worker_s *worker);
+struct dns_udp_receive_ctx;
+static size_t dns_udp_receive_ctx_available(struct dns_udp_receive_ctx *ctx);
+
 static int dns_udp_timeout_service(struct service_worker_s *worker);
 
 static int *dns_udp_socket = NULL;
+
+struct dns_udp_receive_ctx;
+
+static struct dns_udp_receive_ctx **dns_udp_receive_context = NULL;
 static list_dl_s *volatile dns_udp_high_priority = NULL;
 static u32 dns_udp_socket_count = 0;
 
@@ -134,6 +149,7 @@ static const dns_udp_settings_s default_dns_udp_settings =
     DNS_UDP_PER_DNS_RATE,
     DNS_UDP_PER_DNS_BANDWIDTH,
     DNS_UDP_PER_DNS_FREQ_MIN,
+    DNS_UDP_READ_BUFFER_COUNT,
     DNS_UDP_TCP_THREAD_POOL_SIZE,
     DNS_UDP_TCP_FALLBACK_ON_TIMEOUT
 };
@@ -457,178 +473,6 @@ void dns_udp_handler_host_limit_set(const host_address* name_server,
 }
 
 int 
-dns_udp_handler_init()
-{
-    int err = SUCCESS;
-
-    if(!dns_udp_handler_initialized)
-    {
-        if(dns_udp_settings->port_count == 0)
-        {
-            return INVALID_ARGUMENT_ERROR; // invalid value
-        }
-        
-        error_register(DNS_UDP_TIMEOUT, "query timed out");
-        error_register(DNS_UDP_INTERNAL, "internal error");
-        message_edns0_setmaxsize(4096);
-        
-        limiter_init(&dns_udp_send_bandwidth, dns_udp_settings->send_bandwidth);   // bytes-per-second
-        limiter_init(&dns_udp_send_rate, dns_udp_settings->send_rate);   // bytes-per-second
-        limiter_init(&dns_udp_recv_bandwidth, dns_udp_settings->recv_bandwidth);   // bytes-per-second
-        //dns_udp_settings->port_count != 0
-        u32 worker_count = dns_udp_settings->port_count;
-
-        
-        // open "worker_count" udp sockets (V6)
-        
-        dns_udp_socket_count = worker_count;
-        MALLOC_OR_DIE(int*, dns_udp_socket, sizeof(int) * dns_udp_socket_count, SCKTARRY_TAG); // DON'T POOL
-        
-        for(int i = 0; i < dns_udp_socket_count; i++) // dns_udp_socket_count is guaranteed > 0
-        {
-            int s;
-            
-            if( (s = socket(AF_INET6, SOCK_DGRAM, 0)) < 0)    
-            {
-                for(int j = 0; j < i; j++)
-                {
-                    if(dns_udp_socket[j] != ~0)
-                    {
-                        log_debug1("dns_udp_handler_init: closing socket %i", dns_udp_socket[j]);
-                        close_ex(dns_udp_socket[j]);
-                        dns_udp_socket[j] = ~0;
-                    }
-                }
-                
-                return ERRNO_ERROR;
-            }
-            
-            //
-            
-            dns_udp_socket[i] = s;
-            
-            struct sockaddr_in6 sin6;
-            ZEROMEMORY(&sin6, sizeof(sin6));
-            sin6.sin6_family = AF_INET6;
-            socklen_t sin6len = sizeof(sin6);
-
-            if(bind(s, (struct sockaddr*)&sin6, sin6len) < 0)
-            {
-                err = ERRNO_ERROR;
-                
-                log_err("bind: %r", err);
-                
-                for(int j = 0; j < i; j++)
-                {
-                    if(dns_udp_socket[j] != ~0)
-                    {
-                        log_debug1("dns_udp_handler_init: closing socket %i", dns_udp_socket[j]);
-                        close_ex(dns_udp_socket[j]);
-                        dns_udp_socket[j] = ~0;
-                    }
-                }
-                
-                free(dns_udp_socket);
-                dns_udp_socket = NULL;
-                dns_udp_socket_count = 0;
-                
-                return err;
-            }
-            
-            struct sockaddr_storage assigned_address;
-            socklen_t assigned_address_len = sizeof(assigned_address);
-            if(getsockname(s, (struct sockaddr*)&assigned_address, &assigned_address_len) == 0)
-            {
-                log_info("dns udp: socket[%i]=%i is bound to %{sockaddr}", i, s, &assigned_address);
-            }
-            else
-            {
-                log_warn("dns udp: socket[%i]=%i bound address cannot be found: %r", i, s, ERRNO_ERROR);
-            }
-        }
-        // scan-build false positive: dns_udp_socket_count > 0
-        assert(dns_udp_socket_count > 0);
-        MALLOC_OR_DIE(list_dl_s*, dns_udp_high_priority, sizeof(list_dl_s) * dns_udp_socket_count, LISTDL_TAG); // DON'T POOL, count ALWAYS > 0       
-
-        for(int i = 0; i < dns_udp_socket_count; i++)
-        {
-            list_dl_init(&dns_udp_high_priority[i]);
-        }
-        
-        // each couple of socket will be the responsibility of a writer
-        
-        if(ISOK(err = service_init_ex(&dns_udp_send_handler, dns_udp_send_service, "UdpSend", worker_count)))
-        {
-            async_queue_init(&dns_udp_send_handler_queue, dns_udp_settings->queue_size, 1, 100000, "dns-udp-send");
-        
-            if(ISOK(err = service_init_ex(&dns_udp_receive_handler, dns_udp_receive_service, "UdpRecv", worker_count)))
-            {
-                if(ISOK(err = service_init(&dns_udp_timeout_handler, dns_udp_timeout_service, "dns-udp-timeout")))
-                {
-#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
-                    if((tcp_query_thread_pool = thread_pool_init_ex(dns_udp_settings->tcp_thread_pool_size, 0x4000, "dnstcpqr")) != NULL)
-                    {
-#endif   
-                        pool_init(&dns_simple_message_async_node_pool, dns_simple_message_async_node_pool_alloc, dns_simple_message_async_node_pool_free, NULL, "dns simple message answer");
-                        pool_init(&dns_simple_message_pool, dns_simple_message_pool_alloc, dns_simple_message_pool_free, NULL, "dns simple message");
-                        pool_init(&message_data_pool, message_data_pool_alloc, message_data_pool_free, NULL, "message data");
-                    
-#ifndef VALGRIND_FRIENDLY
-                        pool_set_size(&dns_simple_message_async_node_pool, 0x10000);
-                        pool_set_size(&dns_simple_message_pool, 0x10000);
-                        pool_set_size(&message_data_pool, 0x2000);
-                        
-                        message_data_pool.hard_limit = TRUE;
-#else
-                        // for valgrind
-
-                        pool_set_size(&dns_simple_message_async_node_pool, 0);
-                        pool_set_size(&dns_simple_message_pool, 0);
-                        pool_set_size(&message_data_pool, 0);
-#endif
-                        dns_udp_handler_initialized = TRUE;
-                        
-                        return SUCCESS;
-#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
-                    }
-                    else
-                    {
-                        service_finalize(&dns_udp_timeout_handler);
-                        err = ERROR;
-                    }
-#endif
-                }
-                
-                service_finalize(&dns_udp_receive_handler);
-            }
-            
-            service_finalize(&dns_udp_send_handler);
-        }
-        
-        for(int i = 0; i < dns_udp_socket_count; i++)
-        {
-            if(dns_udp_socket[i] != ~0)
-            {
-                log_debug1("dns_udp_handler_init: closing socket %i", dns_udp_socket[i]);
-                close_ex(dns_udp_socket[i]);
-                dns_udp_socket[i] = ~0;
-            }
-            //list_dl_s *list = &dns_udp_high_priority[i];
-        }
-        
-        free(dns_udp_high_priority);
-        dns_udp_high_priority = NULL;
-
-        free(dns_udp_socket); // One array, don't pool
-
-        dns_udp_socket = NULL;
-        dns_udp_socket_count = 0;
-    }
-
-    return err;
-}
-
-int 
 dns_udp_handler_start()
 {
     int err = ERROR;
@@ -637,15 +481,21 @@ dns_udp_handler_start()
     {
         if(ISOK(err = service_start(&dns_udp_send_handler)))
         {
-            if(ISOK(err = service_start(&dns_udp_receive_handler)))
+            if(ISOK(err = service_start(&dns_udp_receive_read_handler)))
             {
-                if(ISOK(err = service_start(&dns_udp_timeout_handler)))
+                if(ISOK(err = service_start(&dns_udp_receive_process_handler)))
                 {
-                    return err;
-                }
+                    if(ISOK(err = service_start(&dns_udp_timeout_handler)))
+                    {
+                        return err;
+                    }
 
-                service_stop(&dns_udp_receive_handler);
-                service_wait(&dns_udp_receive_handler);
+                    service_stop(&dns_udp_receive_process_handler);
+                    service_wait(&dns_udp_receive_process_handler);
+                }
+            
+                service_stop(&dns_udp_receive_read_handler);
+                service_wait(&dns_udp_receive_read_handler);
             }
             
             service_stop(&dns_udp_send_handler);
@@ -663,6 +513,7 @@ dns_udp_handler_stop()
     int err0 = SUCCESS;
     int err1 = SUCCESS;
     int err2 = SUCCESS;
+    int err2b = SUCCESS;
     int err3 = SUCCESS;
     int err4 = SUCCESS;
     
@@ -693,12 +544,21 @@ dns_udp_handler_stop()
         }
     }
     
-    if(!service_stopped(&dns_udp_receive_handler))
+    if(!service_stopped(&dns_udp_receive_process_handler))
     {
-        if(FAIL(err2 = service_stop(&dns_udp_receive_handler)))
+        if(FAIL(err2 = service_stop(&dns_udp_receive_process_handler)))
         {
-            log_err("failed to stop dns_udp_receive_handler: %r", err2);
+            log_err("failed to stop dns_udp_receive_process_handler: %r", err2);
             err = err2;
+        }
+    }
+    
+    if(!service_stopped(&dns_udp_receive_read_handler))
+    {
+        if(FAIL(err2b = service_stop(&dns_udp_receive_read_handler)))
+        {
+            log_err("failed to stop dns_udp_receive_read_handler: %r", err2);
+            err = err2b;
         }
     }
     
@@ -781,12 +641,14 @@ dns_udp_handler_stop()
     {            
         service_wait(&dns_udp_send_handler);
     }
-    
     if(ISOK(err2))
     {
-        service_wait(&dns_udp_receive_handler);
+        service_wait(&dns_udp_receive_process_handler);
     }
-    
+    if(ISOK(err2b))
+    {
+        service_wait(&dns_udp_receive_read_handler);
+    }
     if(ISOK(err3))
     {
         service_wait(&dns_udp_timeout_handler);
@@ -800,66 +662,6 @@ dns_udp_handler_stop()
     dns_udp_cancel_all_queries();
         
     return err;
-}
-
-int
-dns_udp_handler_finalize()
-{    
-    if(!dns_udp_handler_initialized)
-    {
-        return SUCCESS;
-    }
-    
-    dns_udp_handler_stop();
-
-    service_finalize(&dns_udp_send_handler);    
-    service_finalize(&dns_udp_receive_handler);
-    service_finalize(&dns_udp_timeout_handler);
-    
-    for(int i = 0; i < dns_udp_socket_count; i++)
-    {
-        if(dns_udp_socket[i] != ~0)
-        {
-            log_debug1("dns_udp_handler_finalize: closing socket %i", dns_udp_socket[i]);
-            
-            if(shutdown(dns_udp_socket[i], SHUT_RDWR) < 0)
-            {
-                log_debug1("dns_udp_handler_stop: unable to shutdown socket %i: %r", dns_udp_socket[i], ERRNO_ERROR);
-            }
-            
-            close_ex(dns_udp_socket[i]);
-            dns_udp_socket[i] = ~0;
-        }
-    }
-    
-    free(dns_udp_socket); // One array, don't pool
-    
-    dns_udp_socket = NULL;
-    
-    if(dns_udp_high_priority != NULL)
-    {
-        free(dns_udp_high_priority);
-        dns_udp_high_priority = NULL;
-    }
-    
-    dns_udp_socket_count = 0;
-    
-    async_queue_finalize(&dns_udp_send_handler_queue);
-    
-    ptr_set_avl_callback_and_destroy(&message_collection, dns_udp_handler_message_collection_free_node_callback);
-
-    message_collection_keys = 0;
-    message_collection_size = 0;
-    
-    pool_finalize(&dns_simple_message_async_node_pool);
-    pool_finalize(&dns_simple_message_pool);
-    pool_finalize(&message_data_pool);
-    
-    limiter_finalise(&dns_udp_send_bandwidth);
-    
-    dns_udp_handler_initialized = FALSE;
-    
-    return SUCCESS;
 }
 
 static int
@@ -1013,6 +815,7 @@ dns_udp_tcp_query_thread(void *args)
     if(mesg != NULL)
     {
         simple_message->dns_id = (u16)random_next(rndctx);
+        simple_message->tcp_used = TRUE;
 
         message_make_query_ex(mesg, simple_message->dns_id, simple_message->fqdn, simple_message->qtype, simple_message->qclass, simple_message->flags);
 
@@ -1053,6 +856,7 @@ dns_udp_tcp_query_thread(void *args)
                     simple_message->status &= ~DNS_SIMPLE_MESSAGE_STATUS_COLLECTED;
                     simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_RECEIVED;
                     simple_message->answer = mesg;
+                    simple_message->tcp_replied = TRUE;
                     mesg = NULL;
 
                     dns_udp_simple_message_answer_call_handlers(simple_message);
@@ -1164,6 +968,8 @@ dns_udp_send_simple_message(const host_address* name_server, const u8 *fqdn, u16
     simple_message->status = DNS_SIMPLE_MESSAGE_STATUS_QUEUED;
     simple_message->recurse = FALSE;
     simple_message->tcp = FALSE;
+    simple_message->tcp_used = FALSE;
+    simple_message->tcp_replied = FALSE;
     
     group_mutex_init(&simple_message->mtx);
 #if DNS_SIMPLE_MESSAGE_HAS_WAIT_COND
@@ -1216,6 +1022,8 @@ dns_udp_send_recursive_message(const host_address* name_server, const u8 *fqdn, 
     simple_message->status = DNS_SIMPLE_MESSAGE_STATUS_QUEUED;
     simple_message->recurse = TRUE;
     simple_message->tcp = FALSE;
+    simple_message->tcp_used = FALSE;
+    simple_message->tcp_replied = FALSE;
     
     group_mutex_init(&simple_message->mtx);
 #if DNS_SIMPLE_MESSAGE_HAS_WAIT_COND
@@ -1888,6 +1696,8 @@ dns_udp_send_service(struct service_worker_s *worker)
     
     const int my_socket = dns_udp_socket[worker_index];
     
+    struct dns_udp_receive_ctx *ctx = dns_udp_receive_context[worker->worker_index];
+    
     rndctx = thread_pool_get_random_ctx();
     
     ZEROMEMORY(&sin6, sizeof(sin6));
@@ -1901,6 +1711,14 @@ dns_udp_send_service(struct service_worker_s *worker)
         // timeout high priority list.
         
         async_message_s *domain_message;
+        
+        size_t read_avail = dns_udp_receive_ctx_available(ctx);
+        if(read_avail < 4)
+        {
+            log_debug("send: pausing as the buffer of receiver #%i is almost full: %lli slots available", worker_index, read_avail);
+            usleep(20000);
+            continue;
+        }
         
         // I'm using the worker lock to synchronise with its counterpart,
         // so I don't have to create yet another mutex
@@ -1992,12 +1810,151 @@ dns_udp_send_service(struct service_worker_s *worker)
     return 0;
 }
 
-static int
-dns_udp_receive_service(struct service_worker_s *worker)
+typedef u8 message_4k[4096];
+struct aligned_socketaddress
 {
-    log_debug("receive: service started (%u/%u)", worker->worker_index + 1, worker->service->worker_count);
+    socketaddress sa;
+    socklen_t sa_len;
+    size_t msg_len;
+    time_t epoch;
+    
+    
+    // char padding[1024 - sizeof(socketaddress) - sizeof(size_t) * 2 - sizeof(time_t)];
+};
+typedef struct aligned_socketaddress aligned_socketaddress;
+
+struct dns_udp_receive_ctx
+{
+    mutex_t mtx;
+    cond_t cond;
+    u8* messages_unaligned;
+    u8* addreses_unaligned;
+    message_4k *messages; // = malloc(message_buffer_count * sizeof(message_4k));
+    aligned_socketaddress *addresses; // = malloc(message_buffer_count * sizeof(socketaddress));
+    size_t count;                                   // total number of slots
+    size_t read_index __attribute__((aligned(64))); // where incoming messages can be read
+    size_t proc_index __attribute__((aligned(64))); // where processor can get its next one
+    //size_t read_avail __attribute__((aligned(64))); // how many incoming slots are available
+};
+
+typedef struct dns_udp_receive_ctx dns_udp_receive_ctx;
+
+static dns_udp_receive_ctx*
+dns_udp_receive_ctx_init(size_t count)
+{
+    dns_udp_receive_ctx *ctx;
+    ZALLOC_OBJECT_OR_DIE(ctx, dns_udp_receive_ctx, GENERIC_TAG);
+    //group_mutex_init(&ctx->mtx);
+    mutex_init(&ctx->mtx);
+    cond_init(&ctx->cond);
+    MALLOC_OR_DIE(u8*, ctx->messages_unaligned, count * sizeof(message_4k) + 4095, GENERIC_TAG);
+    MALLOC_OR_DIE(u8*, ctx->addreses_unaligned, count * sizeof(aligned_socketaddress) + 63, GENERIC_TAG);
+    ctx->messages = (message_4k*)(((intptr)ctx->messages_unaligned + 4095) & ~4095);
+    ctx->addresses = (aligned_socketaddress*)(((intptr)ctx->addreses_unaligned + 63) & ~63);
+    ctx->count = count;
+    ctx->read_index = 0; // avail = count - (r - p)
+    ctx->proc_index = 0; // while p!=r: process, ++p
+    for(size_t i = 0; i < count; ++i)
+    {
+        ctx->addresses->sa_len = sizeof(socketaddress);
+        ctx->addresses->msg_len = 0;
+    }
+    //ctx->read_avail = count;
+    
+    return ctx;
+}
+
+static void
+dns_udp_receive_ctx_destroy(dns_udp_receive_ctx *ctx)
+{
+    free(ctx->messages_unaligned);
+    free(ctx->addreses_unaligned);
+    //group_mutex_destroy(&ctx->mtx);
+    cond_finalize(&ctx->cond);
+    mutex_destroy(&ctx->mtx);    
+    ZFREE_OBJECT(ctx);
+}
+
+static size_t
+dns_udp_receive_ctx_available(dns_udp_receive_ctx *ctx)
+{
+    mutex_lock(&ctx->mtx);
+    size_t avail = ctx->count - (ctx->read_index - ctx->proc_index);
+    mutex_unlock(&ctx->mtx);
+    return avail;
+}
+
+static ssize_t
+dns_udp_receive_ctx_wait_to_read(dns_udp_receive_ctx *ctx)
+{
+    mutex_lock(&ctx->mtx);
+    for(;;)
+    {
+        size_t avail = ctx->count - (ctx->read_index - ctx->proc_index);
+        
+        if(avail != 0)
+        {
+            break;
+        }
+        
+        if(cond_timedwait(&ctx->cond, &ctx->mtx, 1000000ULL) != 0)
+        {
+            mutex_unlock(&ctx->mtx);
+            return -1;
+        }
+    }
+    mutex_unlock(&ctx->mtx);
+    
+    return ctx->read_index % ctx->count;
+}
+
+static void
+dns_udp_receive_ctx_notify_read(dns_udp_receive_ctx *ctx)
+{
+    mutex_lock(&ctx->mtx);
+    ++ctx->read_index;
+    cond_notify(&ctx->cond);
+    mutex_unlock(&ctx->mtx);
+}
+
+static ssize_t
+dns_udp_receive_ctx_wait_to_process(dns_udp_receive_ctx *ctx)
+{
+    mutex_lock(&ctx->mtx);
+    for(;;)
+    {
+        if(ctx->proc_index < ctx->read_index)
+        {
+            break;
+        }
+            
+        if(cond_timedwait(&ctx->cond, &ctx->mtx, 1000000ULL) != 0)
+        {
+            mutex_unlock(&ctx->mtx);
+            return -1;
+        }
+    }
+    mutex_unlock(&ctx->mtx);
+    
+    return ctx->proc_index % ctx->count;
+}
+
+static void
+dns_udp_receive_ctx_notify_process(dns_udp_receive_ctx *ctx)
+{
+    mutex_lock(&ctx->mtx);
+    ++ctx->proc_index;
+    cond_notify(&ctx->cond);
+    mutex_unlock(&ctx->mtx);
+}
+
+static int
+dns_udp_receive_read_service(struct service_worker_s *worker)
+{
+    log_debug("receive: service read started (%u/%u)", worker->worker_index + 1, worker->service->worker_count);
     
     int my_socket = dns_udp_socket[worker->worker_index];
+    dns_udp_receive_ctx *ctx = dns_udp_receive_context[worker->worker_index];
     
 
     
@@ -2012,204 +1969,34 @@ dns_udp_receive_service(struct service_worker_s *worker)
     
     tcp_set_recvtimeout(my_socket, dns_udp_settings->timeout / 1000000LL, dns_udp_settings->timeout % 1000000LL);
     
-    // port = sin6.sin6_port;
-    
-    message_data *mesg;
-    
-    for(;;)
-    {
-        mesg = (message_data*)pool_alloc(&message_data_pool);
-        
-        if(mesg != NULL)
-        {
-            ZEROMEMORY(mesg, sizeof(message_data));
-            break;
-        }
-        
-        if(!service_shouldrun(worker))
-        {
-            break;
-        }
-        
-        sleep(1);
-    }
-    
-    host_address sender_host_address;
-    
     while(service_shouldrun(worker))
     {
         int n;
         
-        yassert(mesg != NULL);
+        ssize_t index = dns_udp_receive_ctx_wait_to_read(ctx);
         
-        mesg->addr_len = sizeof(mesg->other);
+        if(index < 0)
+        {
+            continue;
+        }
+        
+        log_debug6("receive: recvfrom(%i, ..., ?) in %lli", my_socket, index);
+        
+        ctx->addresses[index].sa_len = sizeof(socketaddress);
                 
-        if((n = recvfrom(my_socket, mesg->buffer, sizeof(mesg->buffer), 0, &mesg->other.sa, &mesg->addr_len)) >= 0)
+        if((n = recvfrom(my_socket, &ctx->messages[index], sizeof(ctx->messages[index]), 0, &ctx->addresses[index].sa.sa, &ctx->addresses[index].sa_len)) >= 0)
         {
             if(n > 0)
             {
-                log_debug6("receive: recvfrom(%i, ... , %{sockaddr}) = %i", my_socket, &mesg->other, n);
+                log_debug6("receive: recvfrom(%i, ... , %{sockaddr}) = %i", my_socket, &ctx->addresses[index].sa.sa, n);
 
-                mutex_lock(&limiter_recv_wait_mtx);
-                // force add the received bytes to the limit (this feels insufficient)
-                limiter_add_anyway(&dns_udp_recv_bandwidth, n, NULL, NULL);
-                mutex_unlock(&limiter_recv_wait_mtx);
+                ctx->addresses[index].epoch = time(NULL);
+                ctx->addresses[index].msg_len = n;
+                dns_udp_receive_ctx_notify_read(ctx);
             }
             else
             {
-                log_debug6("receive: empty packet");
-            }
-           
-            mesg->received = n;
-            
-            u64 now = time(NULL);
-            
-            mutex_lock(&recvfrom_statistics_mtx);
-            if(recvfrom_epoch == now)
-            {
-                recvfrom_total += n;
-                recvfrom_packets++;
-                mutex_unlock(&recvfrom_statistics_mtx);
-            }
-            else
-            {
-                recvfrom_epoch = now;
-                u32 rt = recvfrom_total;
-                recvfrom_total = n;
-                u32 rq = recvfrom_packets;
-                recvfrom_packets = 0;
-                
-                mutex_unlock(&recvfrom_statistics_mtx);
-                
-                log_debug("receive: recvfrom: %d b/s %d p/s", rt, rq);
-            }
-            
-            ya_result return_code;
-            
-            if(ISOK(return_code = message_process_lenient(mesg)))
-            {
-                // look in the timeout collection
-                
-                host_address_set_with_sockaddr(&sender_host_address, &mesg->other);
-
-                if(sender_host_address.version == 6)
-                {
-                    if(memcmp(sender_host_address.ip.v6.bytes, V4_WRAPPED_IN_V6, sizeof(V4_WRAPPED_IN_V6)) == 0)
-                    {
-                        // unwrap
-                        
-                        u32 ipv4 = sender_host_address.ip.v6.dwords[3];
-                        sender_host_address.ip.v4.value = ipv4;
-                        sender_host_address.version = 4;
-                    }
-                }
-                
-                dns_simple_message_s message;
-                message.name_server = &sender_host_address;
-                message.sent_time_us = MAX_S64;
-                message.received_time_us = 0;
-                message.retries_left = 0;
-
-                
-                int len = dnsname_copy(message.fqdn, mesg->qname);
-                
-                if(ISOK(len))
-                {
-                    message.qtype = GET_U16_AT(mesg->buffer[12 + len]);
-                    message.qclass = GET_U16_AT(mesg->buffer[12 + len + 2]);
-                    
-                    // remove it from the collection
-                
-                    mutex_lock(&message_collection_mtx);
-        
-                    ptr_node *node = ptr_set_avl_find(&message_collection, &message);
-                    
-                    if(node != NULL)
-                    {
-                        // proceed
-                        
-                        bool truncated = MESSAGE_TC(mesg->buffer);
-                        
-                        dns_simple_message_s *simple_message = (dns_simple_message_s*)node->key;
-                                        
-                        dns_udp_simple_message_lock(simple_message);
-
-                        ptr_set_avl_delete(&message_collection, simple_message);
-                        --message_collection_keys;
-                        
-                        // the message is not in the timeout collection anymore
-                        // it should contain an answer, or an error, ... or a message with the TC bit on
-                        
-                        if(!truncated)
-                        {
-                            simple_message->status &= ~DNS_SIMPLE_MESSAGE_STATUS_COLLECTED;
-                            simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_RECEIVED;
-                        }
-                        
-                        dns_udp_simple_message_unlock(simple_message);
-                        
-                        mutex_unlock(&message_collection_mtx);
-                        
-                        // RC is supposed to be 1
-                        
-#ifdef DEBUG
-                        if(simple_message->rc.value != 1)
-                        {
-                            log_warn("receive: message RC is not 1 (%i)", simple_message->rc.value);
-                        }
-#endif
-                        simple_message->received_time_us = timeus();
-                        s64 dt = MAX(simple_message->received_time_us - simple_message->sent_time_us, 0);
-                        double dts = dt;
-                        dts/=1000000.0;
-                        
-#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
-                        if(!truncated)
-                        {
-#endif
-                            simple_message->answer = mesg;
-
-                            log_notice("receive: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) [%6.3fs]", message.fqdn, &message.qtype, &message.qclass, message.name_server, simple_message->status, dts);
-
-                            dns_udp_simple_message_answer_call_handlers(simple_message);
-                            
-                            // allocate the next buffer, handle the hard_limit of the pool:
-                            // when the pool has reached peak capacity, allocation returns NULL
-
-                            mesg = dns_udp_allocate_message_data(worker);
-#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
-                        }
-                        else
-                        {
-                            // the message has been truncated
-                            // it should be queried again using TCP
-                            
-                            log_notice("receive: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) [%6.3fs]: truncated", message.fqdn, &message.qtype, &message.qclass, message.name_server, simple_message->status, dts);
-                            
-                            dns_udp_tcp_query(simple_message, worker);
-                        }
-#endif
-                    }
-                    else
-                    {
-                        mutex_unlock(&message_collection_mtx);
-                        
-                        // unknown
-                        
-                        log_warn("receive: unexpected message %{dnsname} %{dnstype} %{dnsclass}", message.fqdn, &message.qtype, &message.qclass);
-                    }
-                }
-                else
-                {
-                    log_err("receive: an error occurred while copying the name '%{dnsname}': %r", mesg->qname, len);
-                }
-            }
-            else
-            {
-                if(service_shouldrun(worker))
-                {
-                    log_err("receive: cannot handle answer: %r", return_code);
-                }
+                log_debug6("receive: recvfrom(%i, ... , %{sockaddr}) = 0 = empty packet (ignoring)", my_socket, &ctx->addresses[index].sa.sa);
             }
         }
         else
@@ -2235,6 +2022,222 @@ dns_udp_receive_service(struct service_worker_s *worker)
         }
     }
     
+    service_set_stopping(worker);
+
+    log_debug("receive: service read stopped (%u/%u)", worker->worker_index + 1, worker->service->worker_count);
+    
+    return SUCCESS;
+}
+           
+static int
+dns_udp_receive_process_service(struct service_worker_s *worker)
+{
+    log_debug("receive: service process started (%u/%u)", worker->worker_index + 1, worker->service->worker_count);
+    
+    int my_socket = dns_udp_socket[worker->worker_index];
+    dns_udp_receive_ctx *ctx = dns_udp_receive_context[worker->worker_index];
+    
+    struct sockaddr_in6 sin6;
+    ZEROMEMORY(&sin6, sizeof(sin6));
+    socklen_t sin6len = sizeof(sin6);
+    getsockname(my_socket, (struct sockaddr*)&sin6, &sin6len);
+    
+    message_data *mesg;
+    host_address sender_host_address;
+    
+    for(;;)
+    {
+        mesg = (message_data*)pool_alloc(&message_data_pool);
+        
+        if(mesg != NULL)
+        {
+            ZEROMEMORY(mesg, sizeof(message_data));
+            break;
+        }
+        
+        if(!service_shouldrun(worker))
+        {
+            break;
+        }
+        
+        sleep(1);
+    }
+    
+    while(service_shouldrun(worker))
+    {
+        ssize_t index = dns_udp_receive_ctx_wait_to_process(ctx);
+        
+        if(index < 0)
+        {
+            continue;
+        }
+        
+        log_debug("receive: processing %i / %lli", my_socket, index);
+        
+        size_t n = ctx->addresses[index].msg_len;
+        time_t now = ctx->addresses[index].epoch;
+        
+        mutex_lock(&limiter_recv_wait_mtx);
+        // force add the received bytes to the limit (this feels insufficient)
+        limiter_add_anyway(&dns_udp_recv_bandwidth, n, NULL, NULL);
+        mutex_unlock(&limiter_recv_wait_mtx);
+            
+        mutex_lock(&recvfrom_statistics_mtx);
+        if(recvfrom_epoch == now)
+        {
+            recvfrom_total += n;
+            recvfrom_packets++;
+            mutex_unlock(&recvfrom_statistics_mtx);
+        }
+        else
+        {
+            recvfrom_epoch = now;
+            u32 rt = recvfrom_total;
+            recvfrom_total = n;
+            u32 rq = recvfrom_packets;
+            recvfrom_packets = 0;
+
+            mutex_unlock(&recvfrom_statistics_mtx);
+
+            log_debug("receive: recvfrom: %d b/s %d p/s", rt, rq);
+        }
+        
+        memcpy(mesg->buffer, ctx->messages[index], n); // scan-build false-positive: mesg is not NULL, thus buffer cannot be NULL
+        mesg->received = n;
+        mesg->other = ctx->addresses[index].sa;
+        mesg->addr_len = ctx->addresses[index].sa_len;
+            
+        ya_result return_code;
+
+        if(ISOK(return_code = message_process_lenient(mesg)))
+        {
+            // look in the timeout collection
+
+            host_address_set_with_sockaddr(&sender_host_address, &mesg->other);
+
+            if(sender_host_address.version == 6)
+            {
+                if(memcmp(sender_host_address.ip.v6.bytes, V4_WRAPPED_IN_V6, sizeof(V4_WRAPPED_IN_V6)) == 0)
+                {
+                    // unwrap
+
+                    u32 ipv4 = sender_host_address.ip.v6.dwords[3];
+                    sender_host_address.ip.v4.value = ipv4;
+                    sender_host_address.version = 4;
+                }
+            }
+
+            dns_simple_message_s message;
+            message.name_server = &sender_host_address;
+            message.sent_time_us = MAX_S64;
+            message.received_time_us = 0;
+            message.retries_left = 0;
+#if 0
+            message.port = port;
+#endif
+            int len = dnsname_copy(message.fqdn, mesg->qname);
+
+            if(ISOK(len))
+            {
+                message.qtype = GET_U16_AT(mesg->buffer[12 + len]);
+                message.qclass = GET_U16_AT(mesg->buffer[12 + len + 2]);
+
+                // remove it from the collection
+
+                mutex_lock(&message_collection_mtx);
+
+                ptr_node *node = ptr_set_avl_find(&message_collection, &message);
+
+                if(node != NULL)
+                {
+                    // proceed
+
+                    bool truncated = MESSAGE_TC(mesg->buffer);
+
+                    dns_simple_message_s *simple_message = (dns_simple_message_s*)node->key;
+
+                    dns_udp_simple_message_lock(simple_message);
+
+                    ptr_set_avl_delete(&message_collection, simple_message);
+                    --message_collection_keys;
+
+                    // the message is not in the timeout collection anymore
+                    // it should contain an answer, or an error, ... or a message with the TC bit on
+
+                    if(!truncated)
+                    {
+                        simple_message->status &= ~DNS_SIMPLE_MESSAGE_STATUS_COLLECTED;
+                        simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_RECEIVED;
+                    }
+
+                    dns_udp_simple_message_unlock(simple_message);
+
+                    mutex_unlock(&message_collection_mtx);
+
+                    // RC is supposed to be 1
+#ifdef DEBUG
+                    if(simple_message->rc.value != 1)
+                    {
+                        log_warn("receive: message RC is not 1 (%i)", simple_message->rc.value);
+                    }
+#endif
+                    simple_message->received_time_us = timeus();
+                    s64 dt = MAX(simple_message->received_time_us - simple_message->sent_time_us, 0);
+                    double dts = dt;
+                    dts/=1000000.0;
+
+#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
+                    if(!truncated)
+                    {
+#endif
+                        simple_message->answer = mesg;
+
+                        log_notice("receive: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) [%6.3fs]", message.fqdn, &message.qtype, &message.qclass, message.name_server, simple_message->status, dts);
+
+                        dns_udp_simple_message_answer_call_handlers(simple_message);
+
+                        // allocate the next buffer, handle the hard_limit of the pool:
+                        // when the pool has reached peak capacity, allocation returns NULL
+
+                        mesg = dns_udp_allocate_message_data(worker);
+#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
+                    }
+                    else
+                    {
+                        // the message has been truncated
+                        // it should be queried again using TCP
+
+                        log_notice("receive: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr} (%x) [%6.3fs]: truncated", message.fqdn, &message.qtype, &message.qclass, message.name_server, simple_message->status, dts);
+
+                        dns_udp_tcp_query(simple_message, worker);
+                    }
+#endif
+                }
+                else
+                {
+                    mutex_unlock(&message_collection_mtx);
+
+                    // unknown
+
+                    log_warn("receive: unexpected message %{dnsname} %{dnstype} %{dnsclass}", message.fqdn, &message.qtype, &message.qclass);
+                }
+            }
+            else
+            {
+                log_err("receive: an error occurred while copying the name '%{dnsname}': %r", mesg->qname, len);
+            }
+        }
+        else
+        {
+            if(service_shouldrun(worker))
+            {
+                log_err("receive: cannot handle answer: %r", return_code);
+            }
+        }
+        
+        dns_udp_receive_ctx_notify_process(ctx);
+    }
+    
     if(mesg != NULL)
     {
         memset(mesg, 0xd6, sizeof(message_data));
@@ -2243,7 +2246,7 @@ dns_udp_receive_service(struct service_worker_s *worker)
     
     service_set_stopping(worker);
 
-    log_debug("receive: service stopped (%u/%u)", worker->worker_index + 1, worker->service->worker_count);
+    log_debug("receive: service process stopped (%u/%u)", worker->worker_index + 1, worker->service->worker_count);
     
     return 0;
 }
@@ -2749,4 +2752,253 @@ dns_udp_mark_as_timedout(dns_simple_message_s *simple_message)
     simple_message->sent_time_us = timeus() - 10000000; // 10 seconds ago
     simple_message->received_time_us = MAX_S64;
     simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_TIMEDOUT;
+}
+
+int 
+dns_udp_handler_init()
+{
+    int err = SUCCESS;
+
+    if (!dns_udp_handler_initialized) {
+        if (dns_udp_settings->port_count == 0) {
+            return INVALID_ARGUMENT_ERROR; // invalid value
+        }
+
+        error_register(DNS_UDP_TIMEOUT, "query timed out");
+        error_register(DNS_UDP_INTERNAL, "internal error");
+        message_edns0_setmaxsize(4096);
+
+        limiter_init(&dns_udp_send_bandwidth, dns_udp_settings->send_bandwidth); // bytes-per-second
+        limiter_init(&dns_udp_send_rate, dns_udp_settings->send_rate); // bytes-per-second
+        limiter_init(&dns_udp_recv_bandwidth, dns_udp_settings->recv_bandwidth); // bytes-per-second
+        //dns_udp_settings->port_count != 0
+        u32 worker_count = dns_udp_settings->port_count;
+
+        MALLOC_OR_DIE(dns_udp_receive_ctx**, dns_udp_receive_context, sizeof (dns_udp_receive_ctx*) * worker_count, GENERIC_TAG);
+        for (int i = 0; i < worker_count; i++) // dns_udp_socket_count is guaranteed > 0
+        {
+            dns_udp_receive_context[i] = dns_udp_receive_ctx_init(DNS_UDP_READ_BUFFER_COUNT);
+        }
+
+        // open "worker_count" udp sockets (V6)
+
+        dns_udp_socket_count = worker_count;
+        MALLOC_OR_DIE(int*, dns_udp_socket, sizeof (int) * dns_udp_socket_count, SCKTARRY_TAG); // DON'T POOL
+
+        for (int i = 0; i < dns_udp_socket_count; i++) // dns_udp_socket_count is guaranteed > 0
+        {
+            int s;
+
+            if ((s = socket(AF_INET6, SOCK_DGRAM, 0)) < 0) {
+                for (int j = 0; j < i; j++) {
+                    if (dns_udp_socket[j] != ~0) {
+                        log_debug1("dns_udp_handler_init: closing socket %i", dns_udp_socket[j]);
+                        close_ex(dns_udp_socket[j]);
+                        dns_udp_socket[j] = ~0;
+                    }
+                }
+
+                return ERRNO_ERROR;
+            }
+
+            //
+
+            dns_udp_socket[i] = s;
+
+            struct sockaddr_in6 sin6;
+            ZEROMEMORY(&sin6, sizeof (sin6));
+            sin6.sin6_family = AF_INET6;
+            socklen_t sin6len = sizeof (sin6);
+
+            if (bind(s, (struct sockaddr*) &sin6, sin6len) < 0) {
+                err = ERRNO_ERROR;
+
+                log_err("bind: %r", err);
+
+                for (int j = 0; j < i; j++) {
+                    if (dns_udp_socket[j] != ~0) {
+                        log_debug1("dns_udp_handler_init: closing socket %i", dns_udp_socket[j]);
+                        close_ex(dns_udp_socket[j]);
+                        dns_udp_socket[j] = ~0;
+                    }
+                }
+
+                free(dns_udp_socket);
+                dns_udp_socket = NULL;
+                dns_udp_socket_count = 0;
+
+                return err;
+            }
+
+            struct sockaddr_storage assigned_address;
+            socklen_t assigned_address_len = sizeof (assigned_address);
+            if (getsockname(s, (struct sockaddr*) &assigned_address, &assigned_address_len) == 0) {
+                log_info("dns udp: socket[%i]=%i is bound to %{sockaddr}", i, s, &assigned_address);
+            } else {
+                log_warn("dns udp: socket[%i]=%i bound address cannot be found: %r", i, s, ERRNO_ERROR);
+            }
+        }
+        // scan-build false positive: dns_udp_socket_count > 0
+        assert(dns_udp_socket_count > 0);
+        MALLOC_OR_DIE(list_dl_s*, dns_udp_high_priority, sizeof (list_dl_s) * dns_udp_socket_count, LISTDL_TAG); // DON'T POOL, count ALWAYS > 0       
+
+        for (int i = 0; i < dns_udp_socket_count; i++) {
+            list_dl_init(&dns_udp_high_priority[i]);
+        }
+
+        // each couple of socket will be the responsibility of a writer
+
+        if (ISOK(err = service_init_ex(&dns_udp_send_handler, dns_udp_send_service, "UdpSend", worker_count)))
+        {
+            async_queue_init(&dns_udp_send_handler_queue, dns_udp_settings->queue_size, 1, 100000, "dns-udp-send");
+
+            if (ISOK(err = service_init_ex(&dns_udp_receive_read_handler, dns_udp_receive_read_service, "UdpRead", worker_count)))
+            {
+                if (ISOK(err = service_init_ex(&dns_udp_receive_process_handler, dns_udp_receive_process_service, "UdpProc", worker_count)))
+                {
+
+                    if (ISOK(err = service_init(&dns_udp_timeout_handler, dns_udp_timeout_service, "dns-udp-timeout")))
+                    {
+#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
+                        if ((tcp_query_thread_pool = thread_pool_init_ex(dns_udp_settings->tcp_thread_pool_size, 0x4000, "dnstcpqr")) != NULL)
+                        {
+#endif   
+                            pool_init(&dns_simple_message_async_node_pool, dns_simple_message_async_node_pool_alloc, dns_simple_message_async_node_pool_free, NULL, "dns simple message answer");
+                            pool_init(&dns_simple_message_pool, dns_simple_message_pool_alloc, dns_simple_message_pool_free, NULL, "dns simple message");
+                            pool_init(&message_data_pool, message_data_pool_alloc, message_data_pool_free, NULL, "message data");
+
+#ifndef VALGRIND_FRIENDLY
+                            pool_set_size(&dns_simple_message_async_node_pool, 0x10000);
+                            pool_set_size(&dns_simple_message_pool, 0x10000);
+                            pool_set_size(&message_data_pool, 0x2000);
+
+                            message_data_pool.hard_limit = TRUE;
+#else
+                            // for valgrind
+
+                            pool_set_size(&dns_simple_message_async_node_pool, 0);
+                            pool_set_size(&dns_simple_message_pool, 0);
+                            pool_set_size(&message_data_pool, 0);
+#endif
+                            dns_udp_handler_initialized = TRUE;
+
+                            return SUCCESS;
+#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
+                        }
+                        else
+                        {
+                            service_finalize(&dns_udp_timeout_handler);
+                            err = ERROR;
+                        }
+#endif
+                    }
+
+                    service_finalize(&dns_udp_receive_process_handler);
+                }
+                
+                service_finalize(&dns_udp_receive_read_handler);
+            }
+
+            service_finalize(&dns_udp_send_handler);
+        }
+
+        for (int i = 0; i < dns_udp_socket_count; i++)
+        {
+            if (dns_udp_socket[i] != ~0)
+            {
+                log_debug1("dns_udp_handler_init: closing socket %i", dns_udp_socket[i]);
+                close_ex(dns_udp_socket[i]);
+                dns_udp_socket[i] = ~0;
+            }
+            //list_dl_s *list = &dns_udp_high_priority[i];
+        }
+
+        free(dns_udp_high_priority);
+        dns_udp_high_priority = NULL;
+
+        free(dns_udp_socket); // One array, don't pool
+
+        dns_udp_socket = NULL;
+        dns_udp_socket_count = 0;
+    }
+
+    return err;
+}
+
+
+int
+dns_udp_handler_finalize()
+{    
+    if(!dns_udp_handler_initialized)
+    {
+        return SUCCESS;
+    }
+    
+    dns_udp_handler_stop();
+
+    service_finalize(&dns_udp_send_handler);
+
+    service_finalize(&dns_udp_receive_read_handler);
+    service_finalize(&dns_udp_receive_process_handler);
+
+    service_finalize(&dns_udp_timeout_handler);
+    
+    if(dns_udp_socket != NULL)
+    {
+        for(int i = 0; i < dns_udp_socket_count; i++)
+        {
+            if(dns_udp_socket[i] != ~0)
+            {
+                log_debug1("dns_udp_handler_finalize: closing socket %i", dns_udp_socket[i]);
+
+                if(shutdown(dns_udp_socket[i], SHUT_RDWR) < 0)
+                {
+                    log_debug1("dns_udp_handler_stop: unable to shutdown socket %i: %r", dns_udp_socket[i], ERRNO_ERROR);
+                }
+
+                close_ex(dns_udp_socket[i]);
+                dns_udp_socket[i] = ~0;
+            }
+        }
+
+        free(dns_udp_socket); // One array, don't pool
+
+        dns_udp_socket = NULL;
+    }
+    
+    if(dns_udp_receive_context != NULL)
+    {
+        for(int i = 0; i < dns_udp_socket_count; i++) // dns_udp_socket_count is guaranteed > 0
+        {
+            dns_udp_receive_ctx_destroy(dns_udp_receive_context[i]);
+        }
+
+        free(dns_udp_receive_context);
+        dns_udp_receive_context = NULL;
+    }
+    
+    if(dns_udp_high_priority != NULL)
+    {
+        free(dns_udp_high_priority);
+        dns_udp_high_priority = NULL;
+    }
+    
+    dns_udp_socket_count = 0;
+    
+    async_queue_finalize(&dns_udp_send_handler_queue);
+    
+    ptr_set_avl_callback_and_destroy(&message_collection, dns_udp_handler_message_collection_free_node_callback);
+
+    message_collection_keys = 0;
+    message_collection_size = 0;
+    
+    pool_finalize(&dns_simple_message_async_node_pool);
+    pool_finalize(&dns_simple_message_pool);
+    pool_finalize(&message_data_pool);
+    
+    limiter_finalise(&dns_udp_send_bandwidth);
+    
+    dns_udp_handler_initialized = FALSE;
+    
+    return SUCCESS;
 }

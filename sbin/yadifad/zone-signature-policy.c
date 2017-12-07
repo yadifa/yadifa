@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2017, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -2056,8 +2056,12 @@ zone_policy_process(zone_desc_s *zone_desc)
     // and the zone desc by the parent
     // no need to acquire anything here
     
+    log_debug("dnssec-policy: %{dnsname} process", zone_desc->origin);
+    
     if(zone_desc->type != ZT_MASTER)
     {
+        log_debug("dnssec-policy: %{dnsname} is not a master zone", zone_desc->origin);
+        
         return ERROR;   // not a master zone
     }
     
@@ -2065,6 +2069,8 @@ zone_policy_process(zone_desc_s *zone_desc)
 
     if(policy == NULL)
     {
+        log_debug("dnssec-policy: %{dnsname} has no policy", zone_desc->origin);
+        
         return SUCCESS;
     }
     
@@ -2095,6 +2101,8 @@ zone_policy_process(zone_desc_s *zone_desc)
         zone_unlock(zone_desc, ZONE_LOCK_READONLY);
         return POLICY_ZONE_NOT_READY;
     }
+    
+    log_debug("dnssec-policy: %{dnsname} zone acquired", zone->origin);
     
     if(zdb_zone_isvalid(zone))
     {
@@ -2173,8 +2181,11 @@ zone_policy_process(zone_desc_s *zone_desc)
     {
         log_err("dnssec-policy: %{dnsname}: unable to manage DNSSEC status of invalid zone", zone_desc->origin);
     }
-    zdb_zone_release(zone);
     
+    log_debug("dnssec-policy: %{dnsname} released", zone->origin);
+    
+    zdb_zone_release(zone);
+        
     // enumerate the available keys and if they are in the zone and being used and so on.
     
     // KEEP, IGNORE, REMOVE
@@ -2246,7 +2257,7 @@ zone_policy_process(zone_desc_s *zone_desc)
         dnskey_release(key);
     }
 
-
+    log_debug("dnssec-policy: %{dnsname} released", zone_desc->origin);
     
     /*
      * sort-out the remaining keys
@@ -2272,46 +2283,48 @@ zone_policy_process(zone_desc_s *zone_desc)
             // ensure we have continuity
             // start with a base period
 
-            dnssec_key *last_key = NULL;
-            s64 begin_period;
-            s64 next_period;
-            s64 end_period;
+            dnssec_key *previous_key = NULL;
+            s64 previous_begin_period;
+            s64 previous_next_period;
+            s64 previous_end_period;
 
             {
-                last_key = (dnssec_key*)ptr_vector_get(&key_roll_keys[ksi], 0);
+                previous_key = (dnssec_key*)ptr_vector_get(&key_roll_keys[ksi], 0);
                 
 #ifdef DEBUG
-                log_debug("dnssec-policy: %s: %s: key %05i/%i timings: %T %T %T %T %T",
-                        last_key->origin,
+                log_debug("dnssec-policy: %s: %s: key %05i/%i timings: %T %T %T %T %T [0]",
+                        previous_key->origin,
                         kr->name,
-                        dnssec_key_get_tag_const(last_key), ntohs(last_key->flags),
-                        last_key->epoch_created, last_key->epoch_publish, last_key->epoch_activate, last_key->epoch_inactive, last_key->epoch_delete);
+                        dnssec_key_get_tag_const(previous_key), ntohs(previous_key->flags),
+                        previous_key->epoch_created, previous_key->epoch_publish, previous_key->epoch_activate, previous_key->epoch_inactive, previous_key->epoch_delete);
 #endif
                 
-                begin_period = last_key->epoch_activate;
-                next_period = begin_period;
-                end_period = last_key->epoch_inactive;
+                database_service_zone_dnskey_set_alarms_for_key(zone, previous_key);
+                
+                previous_begin_period = previous_key->epoch_activate;
+                previous_next_period = previous_begin_period;
+                previous_end_period = previous_key->epoch_inactive;
             }
             
-            log_debug("dnssec-policy: %{dnsname}: %s: first key will be inactive at %T", zone_desc->origin, kr->name, end_period);
+            log_debug("dnssec-policy: %{dnsname}: %s: first key will be inactive at %T", zone_desc->origin, kr->name, previous_end_period);
 
             for(int i = 1; i <= ptr_vector_last_index(&key_roll_keys[ksi]); ++i)
             {
                 dnssec_key *key = (dnssec_key*)ptr_vector_get(&key_roll_keys[ksi], i);
 #ifdef DEBUG
-                log_debug("dnssec-policy: %s: %s: key %05i/%i timings: %T %T %T %T %T",
+                log_debug("dnssec-policy: %s: %s: key %05i/%i timings: %T %T %T %T %T [%i]",
                         key->origin,
                         kr->name,
                         dnssec_key_get_tag_const(key), ntohs(key->flags),
-                        key->epoch_created, key->epoch_publish, key->epoch_activate, key->epoch_inactive, key->epoch_delete);
+                        key->epoch_created, key->epoch_publish, key->epoch_activate, key->epoch_inactive, key->epoch_delete, i);
 #endif
-                next_period = key->epoch_activate;
+                previous_next_period = key->epoch_activate;
                 
                 // ensure the key chains with this interval
-                if(key->epoch_activate > end_period /*|| key->epoch_inactive < begin_period irrelevant because of the sort */)
+                if(key->epoch_activate > previous_end_period /*|| key->epoch_inactive < begin_period irrelevant because of the sort */)
                 {
                     // bad
-                    log_warn("dnssec-policy: timeline hole of %d seconds from %d to %d", key->epoch_activate - end_period , end_period, key->epoch_activate);
+                    log_warn("dnssec-policy: timeline hole of %d seconds from %d to %d", key->epoch_activate - previous_end_period , previous_end_period, key->epoch_activate);
                     zone_policy_log_debug_key("dnssec-policy: unchained ", key);
 
                     /*
@@ -2326,16 +2339,23 @@ zone_policy_process(zone_desc_s *zone_desc)
 
                     break;
                 }
-                else
+                else // the key chains fine
                 {
-                    if(end_period < key->epoch_inactive)
+                    // if the previous key ends before this one we keep it
+                    
+                    if(previous_end_period < key->epoch_inactive)
                     {
-                        dnskey_release(last_key);
-                        last_key = key;
-                        end_period = key->epoch_inactive;
+                        dnskey_release(previous_key);
+                        
+                        database_service_zone_dnskey_set_alarms_for_key(zone, key);
+                        
+                        previous_key = key;
+                        previous_end_period = key->epoch_inactive;
                     }
                     else
                     {
+                        // else the key is irrelevant for the chain
+                        
                         dnskey_release(key);
                     }
                 }
@@ -2343,19 +2363,19 @@ zone_policy_process(zone_desc_s *zone_desc)
             
             ptr_vector_destroy(&key_roll_keys[ksi]);
             
-            log_debug("dnssec-policy: %{dnsname}: %s: covered from %T to %T, last key activates at %T", zone_desc->origin, kr->name, begin_period, end_period, next_period);
+            log_debug("dnssec-policy: %{dnsname}: %s: covered from %T to %T, last key activates at %T", zone_desc->origin, kr->name, previous_begin_period, previous_end_period, previous_next_period);
             
             time_t now = time(NULL);
             
-            if(last_key->epoch_created <= now)
+            if(previous_key->epoch_created <= now)
             {
                 if(kr->roll->time_table.created.type.type == ZONE_POLICY_RELATIVE)
                 {
-                    dnssec_policy_queue_add_generate_key_create_at(zone_desc, kr, last_key->epoch_created);
+                    dnssec_policy_queue_add_generate_key_create_at(zone_desc, kr, previous_key->epoch_created);
                 }
                 else if(kr->roll->time_table.created.type.type == ZONE_POLICY_RULE)
                 {
-                    dnssec_policy_queue_add_generate_key_active_at(zone_desc, kr, end_period);
+                    dnssec_policy_queue_add_generate_key_active_at(zone_desc, kr, previous_end_period);
                 }
                 else
                 {
@@ -2363,7 +2383,7 @@ zone_policy_process(zone_desc_s *zone_desc)
                 }
             }
             
-            dnskey_release(last_key);
+            dnskey_release(previous_key);
         }
         else
         {
@@ -2411,7 +2431,7 @@ zone_policy_process(zone_desc_s *zone_desc)
     }
     
     ptr_vector_destroy(&valid_keys);
-    
+
     // decide what to do
     
     return SUCCESS;

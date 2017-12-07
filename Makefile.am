@@ -30,7 +30,7 @@
 ################################################################################
 #
 #       SVN Program:
-#               $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/Makefile.am $
+#               $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.7-public/Makefile.am $
 #
 #       Last Update:
 #               $Date: 2017-09-26 11:33:35 +0200 (Tue, 26 Sep 2017) $

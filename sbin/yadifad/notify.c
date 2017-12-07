@@ -92,6 +92,7 @@ extern logger_handle *g_server_logger;
 #define NOTIFY_MESSAGE_TYPE_NOTIFY  1
 #define NOTIFY_MESSAGE_TYPE_ANSWER  2
 #define NOTIFY_MESSAGE_TYPE_DOMAIN  3
+#define NOTIFY_MESSAGE_TYPE_CLEAR   4
 
 #define MESSAGE_QUERY_TIMEOUT 5
 #define MESSAGE_QUERY_TRIES   1
@@ -121,14 +122,15 @@ struct message_query_summary
     u16 id;
     // for answers, ip/port should be kept but they are already in the host list (sa.sa4,sa.sa6,addrlen)
     // times we send the udp packet before giving up
-    s8 tries;     
+    s8 tries;
     // for signed answers, these have to be kept
     u8 mac_size;    // mesg->tsig.mac_size;
+    u8 fqdn[256];
     u8 mac[64];     // mesg->tsig.mac;    
 };
 
 static void
-message_query_summary_init(message_query_summary *mqs, u16 id, host_address *host, const u8 *mac, u8 mac_size)
+message_query_summary_init(message_query_summary *mqs, u16 id, const u8 *fqdn, host_address *host, const u8 *mac, u8 mac_size)
 {
     yassert(mqs != NULL);
 #if HAS_TSIG_SUPPORT
@@ -145,6 +147,8 @@ message_query_summary_init(message_query_summary *mqs, u16 id, host_address *hos
     mqs->id = id;
     // payload
     mqs->tries = MESSAGE_QUERY_TRIES;
+    
+    dnsname_copy(mqs->fqdn, fqdn);
     
 #if HAS_TSIG_SUPPORT
     if(mac_size > 0)
@@ -189,8 +193,13 @@ message_query_summary_compare(const void* va, const void* vb)
     d = (s32)a->id - (s32)b->id;
     
     if(d == 0)
-    {    
+    {
         d = host_address_compare(a->host, b->host);
+        
+        if(d == 0)
+        {
+            d = dnsname_compare(a->fqdn, b->fqdn);
+        }
     }
     
     return d;
@@ -199,6 +208,11 @@ message_query_summary_compare(const void* va, const void* vb)
 typedef struct notify_message notify_message;
 
 struct notify_message_domain
+{
+    u8 type;
+};
+
+struct notify_message_clear
 {
     u8 type;
 };
@@ -238,6 +252,7 @@ struct notify_message
         struct notify_message_notify notify;
         struct notify_message_answer answer;
         struct notify_message_domain domain;
+        struct notify_message_clear  clear;
     } payload;
 };
 
@@ -272,7 +287,6 @@ notify_slaveanswer(message_data *mesg)
         bool aa = MESSAGE_AA(mesg->buffer)!=0;
                 
         ZALLOC_OR_DIE(notify_message*, message, notify_message, NOTFYMSG_TAG);
-
         message->origin = dnsname_zdup(origin);
         message->payload.type = NOTIFY_MESSAGE_TYPE_ANSWER;
         message->payload.answer.rcode = rcode;
@@ -334,7 +348,6 @@ notify_masterquery_read_soa(u8 *origin, packet_unpack_reader_data *reader, u32 *
                     {
                         if(packet_reader_read(reader, tmp, 4) == 4)
                         {
-                            
                             *serial = ntohl(GET_U32_AT_P(tmp));
                             
                             return TRUE;
@@ -526,8 +539,6 @@ notify_send(host_address* ha, message_data *msgdata, u16 id, const u8 *origin, u
     socketaddress sa;
     
     ya_result return_code;
-               
-    /** @todo 20130506 edf -- check if adding the SOA helps bind to update faster */
 
     message_make_notify(msgdata, id, origin, ntype, nclass);
     
@@ -841,6 +852,10 @@ notify_message_free(notify_message *msg)
         return;
     }
     
+#ifdef DEBUG
+    log_debug("notify_message_free({%{dnsname}@%p, %i}@%p)", msg->origin, msg->origin, msg->payload.type, msg);
+#endif
+    
     if(msg->origin != NULL)
     {
         dnsname_zfree(msg->origin);
@@ -868,6 +883,10 @@ notify_message_free(notify_message *msg)
             break;
         }
         case NOTIFY_MESSAGE_TYPE_DOMAIN:
+        {
+            break;
+        }
+        case NOTIFY_MESSAGE_TYPE_CLEAR:
         {
             break;
         }
@@ -918,11 +937,6 @@ notify_service(struct service_worker_s *worker)
     ptr_set current_queries = PTR_SET_EMPTY;
     current_queries.compare = message_query_summary_compare;
     u64 last_current_queries_cleanup_epoch_us = 0;
-
-    /**
-     * @todo 20111216 edf -- the idea here is to get the right interface.
-     *       This loop breaking at the first result is of course wrong.
-     */
 
     const addressv6 localhost6 = {.bytes = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1}};
     socketaddress *sa4 = NULL;
@@ -1045,7 +1059,8 @@ notify_service(struct service_worker_s *worker)
 #ifdef DEBUG
                         double expired_since = last_current_queries_cleanup_epoch_us - mqs->expire_epoch_us;
                         expired_since /= 1000000.0;
-                        log_debug("notify: query (%hx) to %{hostaddr} expired %f seconds ago", mqs->id, mqs->host, expired_since);
+                        log_debug("notify: query (%hx) %{dnsname} to %{hostaddr} expired %f seconds ago",
+                                mqs->id, mqs->fqdn, mqs->host, expired_since);
 #endif                  
                         if(--mqs->tries <= 0)
                         {
@@ -1055,13 +1070,14 @@ notify_service(struct service_worker_s *worker)
                         else
                         {
 #ifdef DEBUG
-                            log_debug("notify: query (%hx) to %{hostaddr} got %hhi tries left (NOT IMPLEMENTED)", mqs->id, mqs->host, mqs->tries);
+                            log_debug("notify: query (%hx) %{dnsname} to %{hostaddr} expired %f seconds ago retrying (%i times remaining)",
+                                    mqs->id, mqs->fqdn, mqs->host, expired_since, mqs->tries);
 #endif                  
                             mqs->expire_epoch_us = tus + MESSAGE_QUERY_TIMEOUT_US;
                             
                             // send the message again
                             
-                            // notify_send(mqs->host, msgdata, mqs->id, origin, ztype, zclass);
+                            notify_send(mqs->host, msgdata, mqs->id, mqs->fqdn, TYPE_SOA, CLASS_IN);
                         }
                     }
                 }
@@ -1074,6 +1090,14 @@ notify_service(struct service_worker_s *worker)
                     message_query_summary* mqs = current;
                     current = current->next;
                     ptr_set_avl_delete(&current_queries, mqs);
+                    
+                    zdb_zone *zone = zdb_acquire_zone_read_from_fqdn(g_config->database, mqs->fqdn); // RC++
+                    if(zone != NULL)
+                    {
+                        zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_WILL_NOTIFY);
+                        zdb_zone_release(zone);
+                    }
+                    
                     message_query_summary_delete(mqs);
                 }
             }
@@ -1108,6 +1132,18 @@ notify_service(struct service_worker_s *worker)
 
             switch(message->payload.type)
             {
+                case NOTIFY_MESSAGE_TYPE_CLEAR:
+                {
+                    notify_message* zone_message = (notify_message*)ptr_set_avl_find(&notify_zones, message->origin);
+                    if(zone_message != NULL)
+                    {
+                        log_info("notify: %{dnsname}: removing slaves notifications", message->origin);
+                        
+                        ptr_set_avl_delete(&notify_zones, message->origin);
+                        notify_message_free(zone_message);
+                    }
+                    break;
+                }
                 case NOTIFY_MESSAGE_TYPE_DOMAIN:
                 {
                     if(!notify_slaves_convert_domain_to_notify(message))
@@ -1163,10 +1199,6 @@ notify_service(struct service_worker_s *worker)
                      * The current queue has been resolved.
                      */
 
-                    /*
-                     * @todo 20111216 edf -- remove myself
-                     */
-
                     /**
                      * The list has to replace the current one for message->origin (because it's starting again)
                      */
@@ -1218,12 +1250,6 @@ notify_service(struct service_worker_s *worker)
                              * Look for the entry and remove it
                              */
                             
-                            /**
-                             * @todo 20121130 edf -- VERIFY THE TSIG HERE
-                             * 
-                             * The possible TSIG in the message has to be verified here
-                             */
-                         
                             /* message->payload.answer.tsig ... */
                             
                             /* all's good so remove the notify query from the list */
@@ -1239,7 +1265,7 @@ notify_service(struct service_worker_s *worker)
                                 if(ha->tsig != NULL)
                                 {
                                     u16 id = MESSAGE_ID(message->payload.answer.message->buffer);
-                                    message_query_summary_init(&tmp, id, ha, NULL, 0);
+                                    message_query_summary_init(&tmp, id, &message->payload.answer.message->buffer[12], ha, NULL, 0);
                                     // try to find the exact match
                                     ptr_node *node = ptr_set_avl_find(&current_queries, &tmp);
                                     message_query_summary_clear(&tmp);
@@ -1384,9 +1410,9 @@ notify_service(struct service_worker_s *worker)
                     ZALLOC_OR_DIE(message_query_summary*, mqs, message_query_summary, MSGQSUMR_TAG);
 
 #if HAS_TSIG_SUPPORT
-                    message_query_summary_init(mqs, id, ha, msgdata->tsig.mac, msgdata->tsig.mac_size);
+                    message_query_summary_init(mqs, id, &msgdata->buffer[12], ha, msgdata->tsig.mac, msgdata->tsig.mac_size);
 #else
-                    message_query_summary_init(mqs, id, ha, NULL, 0);
+                    message_query_summary_init(mqs, id, &msgdata->buffer[12], ha, NULL, 0);
 #endif
                     ptr_node *node = ptr_set_avl_insert(&current_queries, mqs);
 
@@ -1532,6 +1558,8 @@ notify_slaves(const u8 *origin)
 {
     if(!notify_service_initialised)
     {
+        log_warn("notify: %{dnsname}: notification service has not been initialised", origin);
+        
         return;
     }
     
@@ -1559,6 +1587,8 @@ notify_slaves(const u8 *origin)
         
         return;
     }
+    
+    log_info("notify: %{dnsname}: slaves notification will be sent", origin);
     
     zdb_zone_set_status(zone, ZDB_ZONE_STATUS_WILL_NOTIFY);
     zdb_zone_release(zone); // RC--
@@ -1625,6 +1655,11 @@ notify_slaves_alarm(void *args_, bool cancel)
 static bool
 notify_slaves_convert_domain_to_notify(notify_message *message)
 {
+    if(!notify_service_initialised)
+    {
+        return FALSE;
+    }
+
     /*
      * Build a list of IPs to contact
      * The master in the SOA must not be in this list
@@ -1710,43 +1745,12 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
 
                 /* valid candidate : get its IP, later */
             
-#if 1
                 if(zdb_append_ip_records(db, ns_dname, &list) <= 0) // zone is locked
                 {
                     // If no IP has been found, they will have to be resolved using the system ... later
 
                     host_address_append_dname(&list, ns_dname, NU16(DNS_DEFAULT_PORT));
                 }
-#else
-                zdb_packed_ttlrdata *a_records = NULL;
-                zdb_packed_ttlrdata *aaaa_records = NULL;
-
-                zdb_query_ip_records(db, ns_dname, &a_records, &aaaa_records); // zone is locked
-
-                // If there is any bit set in the returned pointers ...
-
-                if(((intptr)a_records|(intptr)aaaa_records) != 0)
-                {
-                    // Add these IPs to the list.
-
-                    while(a_records != NULL)
-                    {
-                        host_address_append_ipv4(&list, ZDB_PACKEDRECORD_PTR_RDATAPTR(a_records), NU16(DNS_DEFAULT_PORT));
-                        a_records = a_records->next;
-                    }
-                    while(aaaa_records != NULL)
-                    {
-                        host_address_append_ipv6(&list, ZDB_PACKEDRECORD_PTR_RDATAPTR(aaaa_records), NU16(DNS_DEFAULT_PORT));
-                        aaaa_records = aaaa_records->next;
-                    }
-                }
-                else
-                {
-                    // If no IP has been found, they will have to be resolved using the system ... later
-
-                    host_address_append_dname(&list, ns_dname, NU16(DNS_DEFAULT_PORT));
-                }
-#endif
             }
 
             zdb_zone_release_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
@@ -1770,6 +1774,8 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
     
     if(!lock_failed && ISOK(zone_try_lock_wait(zone_desc, 1000000, ZONE_LOCK_READONLY)))
     {
+        log_debug("notify: %{dnsname}: preparing notification", message->origin);
+        
         const host_address *also_notifies = zone_desc->notifies;
 
         while(also_notifies != NULL)
@@ -1837,7 +1843,6 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
     return message->payload.type == NOTIFY_MESSAGE_TYPE_NOTIFY;
 }
 
-
 /**
  * Stops all notification for zone with origin
  * 
@@ -1847,8 +1852,18 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
 void
 notify_clear(const u8 *origin)
 {
-    (void)origin;
+    notify_message *message;
+    
+    ZALLOC_OR_DIE(notify_message*, message, notify_message, NOTFYMSG_TAG);
+    message->origin = dnsname_zdup(origin);
+    message->payload.type = NOTIFY_MESSAGE_TYPE_CLEAR;
 
+    async_message_s *async = async_message_alloc();
+    async->id = 0;
+    async->args = message;
+    async->handler = NULL;
+    async->handler_args = NULL;
+    async_message_call(&notify_handler_queue, async);
 }
 
 void
@@ -1968,7 +1983,4 @@ notify_service_finalise()
     return err;
 }
 
-
 /** @} */
-
-/*----------------------------------------------------------------------------*/

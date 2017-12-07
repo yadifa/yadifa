@@ -43,6 +43,7 @@
 #include <dnscore/thread_pool.h>
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/zdb_zone.h>
+#include <dnsdb/zdb_zone_write.h>
 
 #include "server.h"
 
@@ -310,7 +311,12 @@ void database_zone_save_ex(const u8 *origin, bool clear_journal);
  * @return 
  */
 
-ya_result database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonelockowner, bool save_unmodified);
+#define DATABASE_SERVICE_ZONE_SAVE_DEFAULTS ZDB_ZONE_WRITE_TEXT_FILE_DEFAULTS
+#define DATABASE_SERVICE_ZONE_SAVE_FORCE_LABEL ZDB_ZONE_WRITE_TEXT_FILE_FORCE_LABEL
+#define DATABASE_SERVICE_ZONE_SAVE_IGNORE_SHUTDOWN ZDB_ZONE_WRITE_TEXT_FILE_IGNORE_SHUTDOWN
+#define DATABASE_SERVICE_ZONE_SAVE_UNMODIFIED 4
+
+ya_result database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonelockowner, u8 flags);
 
 /// @note HAS_DYNAMIC_PROVISIONING
 

@@ -64,7 +64,9 @@
  * The new logger model does not requires MT protection on the channels
  */
 
-#define FILE_CHANNEL_BUFFER_SIZE 65536   /// @todo 20140523 edf -- make this configurable
+#define FILE_CHANNEL_BUFFER_SIZE 65536
+
+#define DEBUG_LOG_CHANNEL 0
 
 typedef struct file_data file_data;
 
@@ -210,7 +212,7 @@ logger_channel_file_reopen(logger_channel* chan)
     file_data* sd = (file_data*)chan->data;
     struct timeval tv;
     struct tm t;
-    
+        
 #if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
     char thread_tag_buffer[9];
 #endif
@@ -250,11 +252,11 @@ logger_channel_file_reopen(logger_channel* chan)
     /* change ownership of the file */
 
     int fd = fd_output_stream_get_filedescriptor(&errlog_os);
-        
+            
     if((getuid() != sd->uid) || (getgid() != sd->gid))
     {
         if(fchown(fd, sd->uid, sd->gid) < 0)
-        {
+        {            
             return_code = ERRNO_ERROR;
 
             output_stream_close(&errlog_os);
@@ -369,9 +371,13 @@ static void
 logger_channel_file_sink(logger_channel* chan)
 {
     file_data* sd = (file_data*)chan->data;
+    
+//    fcntl(fd, F_GETFD);
+    
     struct stat st;
+    st.st_nlink = 0;
     fstat(sd->fd, &st);
-        
+    
     if(st.st_nlink == 0)
     {
         int ret = 0;
@@ -380,17 +386,44 @@ logger_channel_file_sink(logger_channel* chan)
 
         int dev_null = open_ex("/dev/null", O_WRONLY);
         
-        if(dup2_ex(dev_null, sd->fd) < 0)
+        if(dev_null >= 0)
         {
-            ret = errno;
+            if(ISOK(ret = dup2_ex(dev_null, sd->fd)))
+            {        
+                close_ex(dev_null);
+/*
+                if(ret < 0)
+                {
+                    close_ex(sd->fd);
+                    sd->fd = -1;
+                }
+ */
+            }
+            else
+            {
+                // more involved work
+                    
+                output_stream* fos = buffer_output_stream_get_filtered(&sd->os);
+
+                /* exchange the file descriptors */
+                fd_output_stream_attach(fos, dev_null);
+                if(sd->fd >= 0)
+                {
+                    close_ex(sd->fd);
+                }
+                sd->fd = dev_null;                
+            }
         }
-        
-        close_ex(dev_null);
-        if(ret != 0)
+        else
         {
-            close_ex(sd->fd);
-            sd->fd = -1;
+#if DEBUG_LOG_CHANNEL
+            osformatln(termerr, "logger_channel_file_sink(%s) failed to open /dev/null : cannot sink the output", sd->file_name, ret);
+#endif            
         }
+    }
+    else
+    {
+        // still got references: no need to sink
     }
 }
 

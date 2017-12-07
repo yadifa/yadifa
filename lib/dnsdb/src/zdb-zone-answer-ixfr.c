@@ -145,12 +145,15 @@ zdb_zone_answer_ixfr_read_record(input_stream *is, u8 *qname, u32 *qname_sizep, 
 
     if((return_code = input_stream_read_dnsname(is, qname)) <= 0)
     {
-        if(return_code == 0)
+        if(return_code < 0)
         {
-            return_code = UNEXPECTED_EOF;
+            log_err("zone write ixfr: error reading IXFR qname: %r", return_code);
+        }
+        else
+        {
+            log_debug("zone write ixfr: eof reading IXFR qname: %r", return_code);
         }
         
-        log_err("zone write ixfr: error reading IXFR qname: %r", return_code);
         return return_code;
     }
 
@@ -553,7 +556,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
         
         u32 record_length = return_value;
         
-        if(tctrl.qtype == TYPE_SOA)
+        if((record_length > 0) && (tctrl.qtype == TYPE_SOA))
         {
             // ensure we didn't go too far
             u32 soa_serial;

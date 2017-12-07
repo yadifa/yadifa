@@ -414,6 +414,8 @@ u32 dnsname_canonize(const u8* src, u8* dst);
 
 bool dnsname_is_charspace(u8 c);
 
+s32 dnslabel_compare(const u8 *a, const u8 *b);
+
 /**
  * label DNS charset test
  * 

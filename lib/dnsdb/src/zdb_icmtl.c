@@ -94,6 +94,26 @@ extern logger_handle* g_database_logger;
 #define ZDB_ICMTL_REPLAY_SHUTDOWN_POLL_PERIOD 1000
 #define ZDB_ICMTL_REPLAY_BUFFER_SIZE 4096
 
+#define ICMTL_DUMP_JOURNAL_RECORDS 0
+
+static ya_result
+zdb_icmtl_replay_commit_label_forall_nsec3_del_cb(zdb_rr_label *rr_label, const u8 *rr_label_fqdn, void *data)
+{
+    (void)rr_label;
+    chain_replay *nsec3replayp = (chain_replay*)data;
+    ya_result ret = nsec3replayp->vtbl->record_del(nsec3replayp, rr_label_fqdn, TYPE_NONE, NULL);
+    return ret;
+}
+
+static ya_result
+zdb_icmtl_replay_commit_label_forall_nsec3_add_cb(zdb_rr_label *rr_label, const u8 *rr_label_fqdn, void *data)
+{
+    (void)rr_label;
+    chain_replay *nsec3replayp = (chain_replay*)data;
+    ya_result ret = nsec3replayp->vtbl->record_add(nsec3replayp, rr_label_fqdn, TYPE_NONE, NULL);
+    return ret;
+}
+
 ya_result
 zdb_icmtl_replay_commit(zdb_zone *zone, input_stream *is, u32 *current_serialp)
 {
@@ -184,7 +204,7 @@ zdb_icmtl_replay_commit(zdb_zone *zone, input_stream *is, u32 *current_serialp)
         {
             if(ISOK(ret))
             {
-                log_info("journal: %{dnsname}: reached the end of the journal file", zone->origin);
+                log_info("journal: %{dnsname}: reached the end of the journal page", zone->origin);
             }
             else
             {
@@ -273,6 +293,7 @@ zdb_icmtl_replay_commit(zdb_zone *zone, input_stream *is, u32 *current_serialp)
             log_debug("journal: del %{dnsname} %{typerdatadesc}", fqdn, &type_len_rdata);
             logger_flush();
 #endif
+            bool added_in_chain = FALSE;
 
 #if ZDB_HAS_NSEC3_SUPPORT
             
@@ -280,11 +301,50 @@ zdb_icmtl_replay_commit(zdb_zone *zone, input_stream *is, u32 *current_serialp)
             // 1 : ignore
             // ? : error
             
-            if(nsec3replay.vtbl->record_del(&nsec3replay, fqdn, rr.tctr.qtype, &ttlrdata) != 0)
+            if((added_in_chain = (nsec3replay.vtbl->record_del(&nsec3replay, fqdn, rr.tctr.qtype, &ttlrdata) != 0)))
             {
+                // add everything up until a non-empty terminal is found (the apex will thus be automatically avoided)
+                // if the record is a delegation, add everything down too
+                /*
+                if((top > zone->origin_vector.size) &&
+                        (rr.tctr.qtype != TYPE_NSEC3) &&
+                        (   (rr.tctr.qtype != TYPE_RRSIG) ||
+                            ((rr.tctr.qtype == TYPE_RRSIG) && (GET_U16_AT_P(ZDB_RECORD_PTR_RDATAPTR(&ttlrdata)) != TYPE_NSEC3))
+                        )
+                    )
+                {
+                    
+                }
+                */
                 ++changes;
             }
             else
+            {
+                if(top > zone->origin_vector.size)
+                {
+                    const u8 *above_fqdn = fqdn;
+                    for(int i = 1; i < top - zone->origin_vector.size; ++i)
+                    {
+                        zdb_rr_label *above = zdb_rr_label_find_exact(zone->apex, &labels[i], top - zone->origin_vector.size - 1 - i);
+                        if(above != NULL)
+                        {
+                            if(btree_notempty(above->resource_record_set))
+                            {
+                                break;
+                            }
+                        }
+
+                        above_fqdn += above_fqdn[0] + 1;
+                        nsec3replay.vtbl->record_del(&nsec3replay, above_fqdn, TYPE_NONE, NULL);
+                    }
+
+                    zdb_rr_label *rr_label = zdb_rr_label_find_exact(zone->apex, labels, (top - zone->origin_vector.size) - 1);
+                    if(rr_label != NULL)
+                    {
+                        zdb_rr_label_forall_children_of_fqdn(rr_label, fqdn, zdb_icmtl_replay_commit_label_forall_nsec3_del_cb, &nsec3replay);
+                    }
+                }
+            }
 #endif
 #if ZDB_HAS_NSEC_SUPPORT
             
@@ -292,12 +352,13 @@ zdb_icmtl_replay_commit(zdb_zone *zone, input_stream *is, u32 *current_serialp)
             // 1 : ignore
             // ? : error
             
-            if(nsecreplay.vtbl->record_del(&nsecreplay, fqdn, rr.tctr.qtype, &ttlrdata) != 0)
+            if(!added_in_chain && (added_in_chain = nsecreplay.vtbl->record_del(&nsecreplay, fqdn, rr.tctr.qtype, &ttlrdata) != 0))
             {
                 ++changes;
             }
-            else
+            //else
 #endif
+            if(!added_in_chain)
             switch(rr.tctr.qtype)
             {
                 case TYPE_SOA:
@@ -376,30 +437,66 @@ zdb_icmtl_replay_commit(zdb_zone *zone, input_stream *is, u32 *current_serialp)
              * "TO ADD" record
              */
             
+            bool added_in_chain = FALSE;
+            
 #if ZDB_HAS_NSEC3_SUPPORT
 
+            // returns the number of changes taken into account (0 or 1)
             // 0 : proceed
             // 1 : ignore
             // ? : error
             
-            if(nsec3replay.vtbl->record_add(&nsec3replay, fqdn, rr.tctr.qtype, &ttlrdata) != 0)
+            if((added_in_chain = (nsec3replay.vtbl->record_add(&nsec3replay, fqdn, rr.tctr.qtype, &ttlrdata) != 0)))
             {
                 ++changes;
             }
             else
+            {
+                if( (top > zone->origin_vector.size) &&
+                    (rr.tctr.qtype != TYPE_NSEC3) &&
+                    (   (rr.tctr.qtype != TYPE_RRSIG) ||
+                        ((rr.tctr.qtype == TYPE_RRSIG) && (GET_U16_AT_P(ZDB_RECORD_PTR_RDATAPTR(&ttlrdata)) != TYPE_NSEC3))
+                        )
+                    )
+                {
+                    const u8 *above_fqdn = fqdn;
+                    for(int i = 1; i < top - zone->origin_vector.size; ++i)
+                    {
+                        zdb_rr_label *above = zdb_rr_label_find_exact(zone->apex, &labels[i], top - zone->origin_vector.size - 1 - i);
+                        if(above != NULL)
+                        {
+                            if(btree_notempty(above->resource_record_set))
+                            {
+                                break;
+                            }
+                        }
+
+                        above_fqdn += above_fqdn[0] + 1;
+                        nsec3replay.vtbl->record_add(&nsec3replay, above_fqdn, TYPE_NONE, NULL);
+                    }
+
+                    zdb_rr_label *rr_label = zdb_rr_label_find_exact(zone->apex, labels, (top - zone->origin_vector.size) - 1);
+                    if(rr_label != NULL)
+                    {
+                        zdb_rr_label_forall_children_of_fqdn(rr_label, fqdn, zdb_icmtl_replay_commit_label_forall_nsec3_add_cb, &nsec3replay);
+                    }
+                }
+            }
 #endif
 #if ZDB_HAS_NSEC_SUPPORT
             
+            // returns the number of changes taken into account (0 or 1)
             // 0 : proceed
             // 1 : ignore
             // ? : error
             
-            if(nsecreplay.vtbl->record_add(&nsecreplay, fqdn, rr.tctr.qtype, &ttlrdata) != 0)
+            if(!added_in_chain && (added_in_chain = (nsecreplay.vtbl->record_add(&nsecreplay, fqdn, rr.tctr.qtype, &ttlrdata) != 0)))
             {
                 ++changes;
             }
-            else
+            //else
 #endif
+            if(!added_in_chain)
             switch(rr.tctr.qtype)
             {
 #if ZDB_HAS_NSEC3_SUPPORT
@@ -764,11 +861,7 @@ zdb_icmtl_replay(zdb_zone *zone)
             log_warn("journal: %{dnsname}: expected serial to be %i but it is %i instead",zone->origin, last_serial, serial);
         }
 
-        log_info("journal: %{dnsname}: done", zone->origin);
-
-        zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
-
-#if ICMTL_DUMP_JOURNAL_RECORDS
+#if 0 // ICMTL_DUMP_JOURNAL_RECORDS
         if(is_nsec)
         {
             nsec_logdump_tree(zone);
@@ -776,6 +869,10 @@ zdb_icmtl_replay(zdb_zone *zone)
         }
 #endif
     }
+    
+    zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
+    
+    log_info("journal: %{dnsname}: done", zone->origin);
 
     return return_value;
 }

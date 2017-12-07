@@ -270,10 +270,7 @@ ya_result print_rdata(u16 type, u8 *rdata, u16 rdata_size);
 void osprint_question(output_stream *os, u8 *qname, u16 qclass, u16 qtype);
 void print_question(u8 *qname, u16 qclass, u16 qtype);
 
-#if 0 /* fix */
-#else
 #define FORMAT_BREAK_ON_INVALID(address__, len__)
-#endif
 
 /*
  * This is just a tool function used to test vsnformat.
@@ -304,6 +301,4 @@ struct rdata_desc_s
 };
 
 typedef struct rdata_desc_s rdata_desc;
-
-/*----------------------------------------------------------------------------*/
 

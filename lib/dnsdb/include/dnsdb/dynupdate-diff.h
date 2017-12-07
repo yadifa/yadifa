@@ -59,18 +59,29 @@
 #define DNSSEC_CHAIN_END    0x40    // implies that the node is actually in the chain
 #define DNSSEC_CHAIN_MARK   0x80
 
+struct zone_diff_fqdn;
+struct dnssec_chain;
+
+struct zone_diff_label_tree
+{
+    const u8 *label;
+    struct zone_diff_fqdn *diff_fqdn;
+    ptr_set sub;
+    // maybe some flags ...
+};
+
+typedef struct zone_diff_label_tree zone_diff_label_tree;
+
 struct zone_diff
 {
     ptr_set fqdn;
+    zone_diff_label_tree root;     // contains everything but the apex (that would be nuts resource-wise)
     const u8 *origin;
     u16 nttl;
     bool rrsig_update_allowed;
 };
 
 typedef struct zone_diff zone_diff;
-
-struct zone_diff_fqdn;
-struct dnssec_chain;
 
 struct dnssec_chain_node_t_anon { const int hidden; };
 typedef struct dnssec_chain_node_t_anon* dnssec_chain_node_t;
@@ -206,6 +217,8 @@ void dnssec_chain_finalise(dnssec_chain *dc);
 #define ZONE_DIFF_VOLATILE      8 // V not in the diff set
 #define ZONE_DIFF_IN_ZONE      16 // E
 #define ZONE_DIFF_AUTOMATED    32 // A
+#define ZONE_DIFF_ADDED        64 // . done
+#define ZONE_DIFF_REMOVED     128 // . done
 
 /**
  * Diff changes
@@ -248,17 +261,22 @@ struct zone_diff_fqdn
         all_rrset_added:1,              // completely added
         all_rrset_removed:1,            // completely removed
         is_apex:1,
-        reserved0:1,
+        will_be_removed:1,
         
         at_delegation:1,
         under_delegation:1,
         will_have_ds:1,
-        reserved1:1,
+        will_be_non_empty:1,
+        will_have_children:1,
         
         was_at_delegation:1,
         was_under_delegation:1,
         had_ds:1,
-        reserved2:1;
+        was_non_empty:1,
+        had_children:1,
+    
+        records_flags_set:1,
+        children_flags_set:1;
 };
 
 typedef struct zone_diff_fqdn zone_diff_fqdn;
@@ -358,7 +376,12 @@ void zone_diff_finalise(zone_diff *diff);
 
 zone_diff_label_rr *zone_diff_label_rr_new(const u8 *fqdn, u16 rtype, u16 rclass, s32 ttl, void *rdata, u16 rdata_size, bool copy);
 zone_diff_fqdn *zone_diff_add_fqdn(zone_diff *diff, const u8 *fqdn, zdb_rr_label *label);
+zone_diff_fqdn* zone_diff_add_static_fqdn(zone_diff *diff, const u8 *fqdn, zdb_rr_label *label);
 void zone_diff_add_fqdn_children(zone_diff *diff, const u8 *fqdn, zdb_rr_label *label);
+
+// to detect empty non-terminals
+bool zone_diff_fqdn_has_children(zone_diff *diff, const u8 *fqdn);
+
 zone_diff_fqdn *zone_diff_add_fqdn_from_zone(zone_diff *diff, const u8 *fqdn, const zdb_zone *zone);
 
 /**
@@ -370,7 +393,26 @@ zone_diff_fqdn *zone_diff_add_fqdn_from_zone(zone_diff *diff, const u8 *fqdn, co
 
 void zone_diff_fqdn_rr_set_set_state(zone_diff_fqdn_rr_set *rrset, u8 or_state);
 
+/**
+ * Returns true iff an rrset of the given type will be present after applying
+ * the diff.
+ * 
+ * @param diff_fqdn
+ * @param rtype
+ * @return 
+ */
+
 bool zone_diff_will_have_rrset_type(const zone_diff_fqdn *diff_fqdn, u16 rtype);
+
+
+/**
+ * Releases keys that will not be in the apex after the diff is applied.
+ * 
+ * @param diff
+ * @param keys
+ */
+
+void zone_diff_filter_out_keys(const zone_diff *diff, ptr_vector *keys);
 
 /**
  * Returns the local copy of the specified RRSET

@@ -297,6 +297,3 @@ int type_bit_maps_compare(const type_bit_maps_context *a, const type_bit_maps_co
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

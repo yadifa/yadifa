@@ -431,7 +431,7 @@ database_info_provider(const u8 *origin, zdb_zone_info_provider_data *data, u32 
             zone_desc_s *zone_desc = zone_acquirebydnsname(origin);
             if(zone_desc != NULL)
             {
-                ret = database_service_zone_save_ex(zone_desc, 0, data->_u8, TRUE);
+                ret = database_service_zone_save_ex(zone_desc, 0, data->_u8, DATABASE_SERVICE_ZONE_SAVE_IGNORE_SHUTDOWN);
             }
             else
             {
@@ -657,7 +657,6 @@ database_zone_ensure_private_keys(zone_desc_s *zone_desc, zdb_zone *zone)
 }
 #endif
 
-
 finger_print
 database_update(zdb *database, message_data *mesg)
 {
@@ -814,7 +813,6 @@ database_update(zdb *database, message_data *mesg)
                                             mesg->status = (finger_print)RCODE_SERVFAIL;
                                         }
                                     }
-
                                 }
                                 else
                                 {

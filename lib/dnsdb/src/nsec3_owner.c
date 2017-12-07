@@ -961,7 +961,7 @@ nsec3_move_all_star(nsec3_zone_item* src, nsec3_zone_item* dst)
             ZFREE_ARRAY(src->star_label.owners, len);
         }
 
-        dst->star_label.owner = owners.owner; // owner when 1 item, owners when multiple. False positives from static analysers.
+        dst->star_label.owners = owners.owners; // owner when 1 item, owners when multiple. False positives from static analysers.
         dst->sc = total;
     }
     

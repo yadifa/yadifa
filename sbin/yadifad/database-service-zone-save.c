@@ -78,7 +78,7 @@
  */
 
 ya_result
-database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonelockowner, bool save_unmodified)
+database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonelockowner, u8 flags)
 {
     // not implemented yet
     log_debug("zone save: %{dnsname}@%p#%i", zone_desc->origin, zone_desc, zone_desc->rc);
@@ -89,6 +89,9 @@ database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonel
     //       save the text representation of the zone to the disk
 
     //bool must_be_on = ZONE_STATUS_READONLY|ZONE_STATUS_MODIFIED;
+    
+    bool save_unmodified = flags & DATABASE_SERVICE_ZONE_SAVE_UNMODIFIED;
+    // bool ignore_shutdown = flags & DATABASE_SERVICE_ZONE_SAVE_IGNORE_SHUTDOWN;
     
     const u32 must_be_off  = ZONE_STATUS_TEMPLATE_SOURCE_FILE | ZONE_STATUS_STARTING_UP |
                              ZONE_STATUS_LOADING | ZONE_STATUS_MOUNTING | ZONE_STATUS_UNMOUNTING |
@@ -107,19 +110,23 @@ database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonel
         zone_set_status(zone_desc, ZONE_STATUS_MODIFIED);
     }
     
-    if(!save_unmodified && ((zone_get_status(zone_desc) & ZONE_STATUS_MODIFIED) == 0)) // a "journal" should set modified, or should it be tested here ?
+    if(!save_unmodified)
     {
-        log_info("zone save: %{dnsname} hasn't been modified", zone_desc->origin);
-        zone_clear_status(zone_desc, ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
-        
-        if(desclockowner != 0)
+        if(!zone_ismodified(zone_desc))
         {
-            zone_unlock(zone_desc, desclockowner);
+            log_info("zone save: %{dnsname} hasn't been modified", zone_desc->origin);
+            
+            zone_clear_status(zone_desc, ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
+
+            if(desclockowner != 0)
+            {
+                zone_unlock(zone_desc, desclockowner);
+            }
+
+            database_fire_zone_processed(zone_desc);
+            zone_release(zone_desc);
+            return SUCCESS;
         }
-        
-        database_fire_zone_processed(zone_desc);
-        zone_release(zone_desc);
-        return SUCCESS;
     }
     
     if(zone_desc->file_name == NULL)
@@ -191,7 +198,7 @@ database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonel
     
             log_info("zone save: %{dnsname} saving zone to file '%s'", zone_desc->origin, file_name);
             
-            ret = zdb_zone_write_text_file(zone, file_name, FALSE); // zone is locked
+            ret = zdb_zone_write_text_file(zone, file_name, flags); // zone is locked
             
             if(ISOK(ret))
             {
@@ -254,7 +261,7 @@ static void*
 database_service_zone_save_thread(void *params)
 {
     zone_desc_s *zone_desc = (zone_desc_s*)params;
-    database_service_zone_save_ex(zone_desc, ZONE_LOCK_SAVE, ZDB_ZONE_MUTEX_SIMPLEREADER, FALSE);
+    database_service_zone_save_ex(zone_desc, ZONE_LOCK_SAVE, ZDB_ZONE_MUTEX_SIMPLEREADER, DATABASE_SERVICE_ZONE_SAVE_DEFAULTS);
     return NULL;
 }
 

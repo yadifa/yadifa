@@ -831,7 +831,11 @@ fsync_ex(int fd)
 int
 fdatasync_ex(int fd)
 {
+#if IS_LINUX_FAMILY
     while(fdatasync(fd) < 0)
+#else
+    while(fsync(fd) < 0)
+#endif
     {
         int err = errno;
         if(err != EINTR)
@@ -845,7 +849,8 @@ fdatasync_ex(int fd)
 
 int dup_ex(int fd)
 {
-    while(dup(fd) < 0)
+    int ret;
+    while((ret = dup(fd)) < 0)
     {
         int err = errno;
         if(err != EINTR)
@@ -854,12 +859,13 @@ int dup_ex(int fd)
         }
     }
     
-    return SUCCESS;
+    return ret;
 }
 
 int dup2_ex(int old_fd, int new_fd)
 {
-    while(dup2(old_fd, new_fd) < 0)
+    int ret;
+    while((ret = dup2(old_fd, new_fd)) < 0)
     {
         int err = errno;
         if(err != EINTR)
@@ -868,7 +874,7 @@ int dup2_ex(int old_fd, int new_fd)
         }
     }
     
-    return SUCCESS;
+    return ret;
 }
 
 /**

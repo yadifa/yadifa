@@ -255,6 +255,15 @@ database_service_init()
     
     if(!database_handler_initialised)
     {
+#if ZDB_HAS_DNSSEC_SUPPORT                
+#if HAS_RRSIG_MANAGEMENT_SUPPORT
+        if(FAIL(err = database_service_zone_resignature_init()))
+        {
+            return err;
+        }
+#endif
+#endif
+                
         if(database_zone_load_thread_pool == NULL)
         {
             database_zone_load_thread_pool = thread_pool_init_ex(g_config->zone_load_thread_count, DATABASE_SERVICE_LOAD_QUEUE_SIZE, "dbzload"); /// @todo 20150415 edf -- configure parameters
@@ -387,6 +396,12 @@ database_service_finalise()
     
     if(database_handler_initialised)
     {
+#if ZDB_HAS_DNSSEC_SUPPORT                
+#if HAS_RRSIG_MANAGEMENT_SUPPORT
+        database_service_zone_resignature_finalize();
+#endif
+#endif
+        
         zone_set_lock(&database_zone_desc);
 
         ptr_set_avl_iterator iter;
@@ -1253,7 +1268,7 @@ database_service(struct service_worker_s *worker)
                                     }
                                     else
                                     {
-                                        log_info("database: %{dnsname}: signature maintenance postponed until keys are activated", message->origin);
+                                        log_info("database: %{dnsname}: signature maintenance postponed until keys are published/activated", message->origin);
                                     }
                                 }
                                 else
@@ -1336,19 +1351,15 @@ database_service(struct service_worker_s *worker)
             }
             case DATABASE_SERVICE_ZONE_UNLOADED_EVENT:
             {
-                /// @todo 20140425 edf -- WHAT IF THE EVENT FAILED ? WHAT ABOUT THE REMAINING OF THE QUEUE ???
-                ///       WE FORGOT TO TAKE THIS INTO ACCOUNT : THERE IS SOME SORT OF RETRY OR
-                ///       CANCEL ALL MECHANISM NEEDED ...
-                // desc (both)
                 zone_desc = zone_acquirebydnsname(message->origin);
                 
-                if(ISOK(message->payload.zone_unmounted_event.result_code))
+                if(ISOK(message->payload.zone_unloaded_event.result_code))
                 {
                     log_info("database: %{dnsname}: zone successfully unloaded", message->origin);
                 }
                 else
                 {
-                    log_err("database: %{dnsname}: failed to unload the zone: %r", message->origin, message->payload.zone_unmounted_event.result_code);
+                    log_err("database: %{dnsname}: failed to unload the zone: %r", message->origin, message->payload.zone_unloaded_event.result_code);
                 }
                 
                 zone_release(message->payload.zone_unloaded_event.zone_desc);

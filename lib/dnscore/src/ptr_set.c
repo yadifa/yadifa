@@ -178,13 +178,24 @@ ptr_set_asciizp_node_compare(const void *node_a, const void *node_b)
 int
 ptr_set_fqdn_node_compare(const void *node_a, const void *node_b)
 {
-    int d = dnsname_getdepth((const u8*)node_a);
-    d -= dnsname_getdepth((const u8*)node_b);
+    dnslabel_stack a;
+    dnslabel_stack b;
+    s32 a_top = dnsname_to_dnslabel_stack((const u8*)node_a, a);
+    s32 b_top = dnsname_to_dnslabel_stack((const u8*)node_b, b);
+    s32 d;
     
-    if(d == 0)
-    {    
-        d = dnsname_compare((const u8*)node_a, (const u8*)node_b);
+    s32 top = MIN(a_top, b_top);
+    for(s32 i = 0; i <= top; ++i)
+    {
+        d = dnslabel_compare(a[i], b[i]);
+        
+        if(d != 0)
+        {
+            return d;
+        }
     }
+    
+    d = a_top - b_top;
     
     return d;
 }
@@ -286,5 +297,4 @@ ptr_set_avl_iterator_hasnext_next_value(ptr_set_avl_iterator *iterp)
 
 /** @} */
 
-/*----------------------------------------------------------------------------*/
 

@@ -672,8 +672,8 @@ struct zdb_zone_label_iterator /// 47136 bytes on a 64 bits architecture
     s32 current_top;    /* "top" of the label pointer by current_label  */
 #if ZDB_ZONE_LABEL_ITERATOR_CAN_SKIP_CHILDREN
     s32 prev_top;       /* "top" of the label returned with "_next"     */
-#endif
     s32 __reserved__;
+#endif
     dnslabel_stack dnslabels;
     dictionary_iterator stack[DNSNAME_MAX_SECTIONS];
 };

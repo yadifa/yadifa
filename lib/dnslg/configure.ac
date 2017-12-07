@@ -32,7 +32,7 @@ dnl
 dnl ############################################################################
 dnl
 dnl       SVN Program:
-dnl               $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/lib/dnslg/configure.ac $
+dnl               $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.7-public/lib/dnslg/configure.ac $
 dnl
 dnl       Last Update:
 dnl               $Date: 2017-04-06 09:34:12 +0200 (Thu, 06 Apr 2017) $

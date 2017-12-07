@@ -264,6 +264,7 @@ nsec3_zone_destroy(zdb_zone *zone, nsec3_zone *n3)
         while(zdb_zone_label_iterator_hasnext(&label_iterator))
         {
             zdb_rr_label* label = zdb_zone_label_iterator_next(&label_iterator);
+            
             if(label->flags & ZDB_RR_LABEL_NSEC3)
             {
                 yassert(!ZDB_LABEL_UNDERDELEGATION(label));

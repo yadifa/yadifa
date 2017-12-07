@@ -234,7 +234,7 @@ static inline void cond_init(cond_t *cond)
 u64 timeus();
 #endif
 
-static inline void cond_timedwait(cond_t *cond, mutex_t *mtx, u64 usec)
+static inline int cond_timedwait(cond_t *cond, mutex_t *mtx, u64 usec)
 {
     struct timespec ts;
 #if (defined(_POSIX_TIMERS) && (_POSIX_TIMERS > 0)) || defined(__MACH__)
@@ -257,12 +257,13 @@ static inline void cond_timedwait(cond_t *cond, mutex_t *mtx, u64 usec)
 #endif
     
 #if !DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
-    pthread_cond_timedwait(cond, mtx, &ts);
+    int ret = pthread_cond_timedwait(cond, mtx, &ts);
 #else
     mtx->wait = TRUE;
-    pthread_cond_timedwait(cond, &mtx->mtx, &ts);
+    int ret = pthread_cond_timedwait(cond, &mtx->mtx, &ts);
     mtx->wait = FALSE;
 #endif
+    return ret;
 }
 
 // Only use this if there is only one possible thread waiting on

@@ -341,9 +341,7 @@ dnssec_keystore_add_key_nolock(dnssec_keystore *ks, dnssec_key *key)
     
     // Add a reference in the keys collection
     
-
     ptr_node *key_node = ptr_set_avl_insert(&ks->keys, key);
-
     
     if(key_node->value == NULL)
     {
@@ -365,6 +363,60 @@ dnssec_keystore_add_key_nolock(dnssec_keystore *ks, dnssec_key *key)
 
 /**
  * 
+ * Replace a key from the keystore, release the replaced key
+ * 
+ * RC ok
+ * 
+ * @param ks
+ * @param key
+ */
+
+static bool
+dnssec_keystore_replace_key_nolock(dnssec_keystore *ks, dnssec_key *key)
+{
+    const u8 *domain = dnssec_key_get_domain(key);
+    dnssec_keystore_domain_s *kd;
+
+    kd = dnssec_keystore_get_domain_nolock(ks, domain);
+    if(kd == NULL)
+    {
+        kd = dnssec_keystore_add_domain_nolock(ks, domain, NULL);
+        
+        yassert(kd != NULL);
+    }
+    
+    // Add a reference in the keys collection
+    
+    ptr_node *key_node = ptr_set_avl_insert(&ks->keys, key);
+    
+    dnssec_key *old_key = (dnssec_key*)key_node->value;
+    
+    if(old_key != key)
+    {
+        if(old_key != NULL)
+        {
+            dnskey_key_remove_from_chain(old_key, &kd->key_chain);
+            dnskey_release(old_key);
+        }
+
+        dnskey_acquire(key);
+        key_node->value = key;
+
+        // Add a reference in the domain keys collection
+        // insert, sorted by tag value
+
+        dnskey_key_add_in_chain(key, &kd->key_chain); // RC
+        
+        return TRUE;
+    }
+    // else already known
+    
+    return FALSE;    
+}
+
+
+/**
+ * 
  * Add a key to the keystore, do nothing if a key with the same tag and algorithm is
  * in the keystore for that domain already
  * 
@@ -382,6 +434,28 @@ dnssec_keystore_add_key(dnssec_key *key)
     dnssec_keystore *ks = &g_keystore;
     mutex_lock(&ks->lock);
     bool ret = dnssec_keystore_add_key_nolock(ks, key); // RC
+    mutex_unlock(&ks->lock);
+    return ret;
+}
+
+/**
+ * 
+ * Replace a key from the keystore, release the replaced key
+ * 
+ * RC ok
+ * 
+ * @param ks
+ * @param key
+ * 
+ * @return TRUE iff the key was added
+ */
+
+bool
+dnssec_keystore_replace_key(dnssec_key *key)
+{
+    dnssec_keystore *ks = &g_keystore;
+    mutex_lock(&ks->lock);
+    bool ret = dnssec_keystore_replace_key_nolock(ks, key); // RC
     mutex_unlock(&ks->lock);
     return ret;
 }
@@ -742,6 +816,52 @@ dnssec_keystore_acquire_key_from_fqdn_by_index(const u8 *domain, int idx)
     mutex_unlock(&ks->lock);
     
     return key;
+}
+
+/**
+ * Returns true iff the key for theddomain+algorithm+tag is active at 'now'
+ * 
+ * @param domain
+ * @param algorithm
+ * @param tag
+ * @param now
+ * 
+ * @return 
+ */
+
+bool
+dnssec_keystore_is_key_active(const u8 *domain, u8 algorithm, u16 tag, time_t now)
+{
+    dnssec_keystore *ks = &g_keystore;
+    dnssec_key *key = NULL;
+    mutex_lock(&ks->lock);
+    dnssec_keystore_domain_s* kd = dnssec_keystore_get_domain_nolock(ks, domain);
+    
+    bool ret = FALSE;
+    
+    if(kd != NULL)
+    {    
+        key = kd->key_chain;
+        
+        while(key != NULL)
+        {
+            if(key->algorithm == algorithm)
+            {
+                if(key->tag == tag)
+                {
+                    if((ret = dnskey_is_activated(key, now)))
+                    {
+                        break;
+                    }
+                }
+            }
+            
+            key = key->next;
+        }
+    }
+    mutex_unlock(&ks->lock);
+    
+    return ret;
 }
 
 /**
@@ -1484,14 +1604,13 @@ dnssec_keystore_load_private_key_from_parameters(u8 algorithm, u16 tag, u16 flag
                 /*
                  * remove the old (public) version
                  */
-                /// @todo 20160606 edf -- FIX THIS NOW: load the zone without 63992 on disk, add the key, HUP => it will be destroyed
                 
-                dnssec_key *public_key = dnssec_keystore_remove_key(key); // RC
-                yassert(public_key != NULL);
-                dnskey_release(public_key);
+                dnssec_keystore_replace_key(key); // RC
             }
-            
-            dnssec_keystore_add_key(key); // RC
+            else
+            {
+                dnssec_keystore_add_key(key); // RC
+            }
             
             *out_key = key;
             
@@ -1741,6 +1860,7 @@ zdb_zone_get_active_keys(zdb_zone *zone, dnssec_key_sll **out_keys, int *out_ksk
         if((flags != DNSKEY_FLAGS_KSK) && (flags != DNSKEY_FLAGS_ZSK))
         {
             // ignore the key
+            log_debug("rrsig: %{dnsname}: key with private key algorithm=%d tag=%05d flags=%3d is ignored (flags)", zone->origin, algorithm, tag, ntohs(flags));
             
             continue;
         }

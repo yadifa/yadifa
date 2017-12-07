@@ -107,10 +107,6 @@ database_service_zone_unmount(zone_desc_s *zone_desc)
     zdb *db;
 
     notify_clear(zone_desc->origin);
-    /// @todo 20131002 edf -- signature maintenance clear, ie: dnssec_maintenance_clear(zone_desc->origin);
-    /// @todo 20131002 edf -- retry clearn, ie: retry_clear(zone_desc->origin);
-        
-    /// @todo 20130930 edf -- arm an alarm for refresh
         
     zone_desc_log(MODULE_MSG_HANDLE, MSG_DEBUG1, zone_desc, "database_service_zone_unmount");
 

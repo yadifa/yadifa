@@ -43,7 +43,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
+#if IS_LINUX_FAMILY
 #include <malloc.h>
+#endif
 
 #include <unistd.h>
 #include <sys/mman.h>

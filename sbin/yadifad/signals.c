@@ -77,12 +77,19 @@
 #endif
 
 #ifdef DEBUG
+#if IS_LINUX_FAMILY
 #include <sys/types.h>
 #include <asm/unistd.h>
 static inline long int gettid()
 {
     return (long int)syscall(__NR_gettid);
 }
+#else
+static inline long int gettid()
+{
+    return (long int)~0;
+}
+#endif
 #endif
 
 #define MODULE_MSG_HANDLE g_server_logger
@@ -255,7 +262,7 @@ signal_task_reconfigure_reopen_log()
     u64 now = timeus();
         
     if(now - signal_task_logger_handle_reopen_last_active > LOGGER_REOPEN_MIN_PERIOD_US)
-    {        
+    {
         signal_task_logger_handle_reopen_last_active = now;
         
         log_try_debug1("signal_task_reconfigure_reopen_log(): setting the sink");
@@ -507,7 +514,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
         case SIGUSR1:
 
         {
-            logger_sink_noblock();
+            logger_sink_noblock(); // this allow detaching from a deleted log file on a full partition (thus freeing some space on the disk)
             
             int errno_value = errno;
             u8 signum = (u8)signo;
@@ -1051,7 +1058,13 @@ signal_handler_init()
         return pthread_errcode;
     }
     
-    u8 handled_signals[] =
+#if SIGNAL_HOOK_COREDUMP
+    log_debug("signal_handler_init(): will handle error signals");
+#else
+    log_debug("signal_handler_init(): will not handle error signals");
+#endif
+    
+    static const u8 handled_signals[] =
     {
         SIGHUP,		/* Hangup (POSIX).  */
         SIGINT,		/* Interrupt (ANSI).  */

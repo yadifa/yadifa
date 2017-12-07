@@ -66,7 +66,7 @@
  *
  *
  *      SVN Program:
- *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/lib/dnsdb/include/dnsdb/zdb-zone-lock-monitor.h $
+ *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.7-public/lib/dnsdb/include/dnsdb/zdb-zone-lock-monitor.h $
  *
  *      Creation Date:
  *              22 September 2016, 11:21

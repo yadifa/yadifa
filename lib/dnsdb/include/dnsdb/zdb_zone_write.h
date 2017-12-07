@@ -51,7 +51,12 @@ extern "C" {
 #endif
 
 ya_result zdb_zone_write_text(const zdb_zone* zone, output_stream *fos, bool force_label);
-ya_result zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, bool force_label);
+
+#define ZDB_ZONE_WRITE_TEXT_FILE_DEFAULTS 0
+#define ZDB_ZONE_WRITE_TEXT_FILE_FORCE_LABEL 1
+#define ZDB_ZONE_WRITE_TEXT_FILE_IGNORE_SHUTDOWN 2
+
+ya_result zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, u8 flags);
 ya_result zdb_zone_write_unbound(const zdb_zone* zone, const char* output_file);
 
 #ifdef	__cplusplus

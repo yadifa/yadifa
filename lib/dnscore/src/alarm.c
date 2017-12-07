@@ -1050,7 +1050,7 @@ alarm_run_tick(u32 epoch)
 #endif
             /* EXECUTE EVENT */
 
-            log_debug("alarm: running %p: %p(%p) '%s'", event, event->function, event->args, event->text);
+            log_debug("alarm: '%s': %p: %p(%p) running (expected for %T)", event->text, event, event->function, event->args, event->epoch);
 
             s64 event_run_start = timeus();
 
@@ -1059,11 +1059,10 @@ alarm_run_tick(u32 epoch)
             s64 event_run_stop = timeus();
 
             total_run += event_run_stop - event_run_start;
-
             double event_run_delta_ms = (double)(event_run_stop - event_run_start);
             event_run_delta_ms /= 1000.0;
 
-            log_debug("alarm: %p returned %r (%.3fms elapsed)", event, ret, event_run_delta_ms);
+            log_debug("alarm: '%s': %p: %p(%p) returned %r (%.3fms elapsed)", event->text, event, event->function, event->args, ret, event_run_delta_ms);
 
             alarm_event_node *event_time_next;
 
@@ -1079,18 +1078,25 @@ alarm_run_tick(u32 epoch)
             }
             
             event = event_time_next;
-#if 1
         }
         else
         {
             alarm_event_node *event_time_next = event->time_next;
+                        
+            log_debug("alarm: '%s': %p: %p(%p): cancelling (expected for %T)", event->text, event, event->function, event->args, event->epoch);
             
-            log_debug("alarm: cancelling %p: %p(%p) '%s'", event, event->function, event->args, event->text);
-            event->function(event->args, TRUE);
+            s64 event_run_start = timeus();
+            ya_result ret = event->function(event->args, TRUE);
+            s64 event_run_stop = timeus();
+            
+            total_run += event_run_stop - event_run_start;
+            double event_run_delta_ms = (double)(event_run_stop - event_run_start);
+            event_run_delta_ms /= 1000.0;
+            
+            log_debug("alarm: '%s': %p: %p(%p) cancelled %r (%.3fms elapsed)", event->text, event, event->function, event->args, ret, event_run_delta_ms);
             
             event = event_time_next;
         }
-#endif
     }
     
     for(int i = 0; i <= ptr_vector_last_index(&rearm); ++i)

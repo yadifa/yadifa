@@ -31,7 +31,7 @@
  *------------------------------------------------------------------------------
  *
  *      SVN Program:
- *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/bin/yadifa/message-viewer-parse.h $
+ *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.7-public/bin/yadifa/message-viewer-parse.h $
  *
  *      Last Update:
  *              $Date: 2017-10-03 15:40:30 +0200 (Tue, 03 Oct 2017) $

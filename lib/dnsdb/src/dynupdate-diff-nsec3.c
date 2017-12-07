@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2017, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnsdbupdate Dynamic update functions
  *  @ingroup dnsdb
  *  @brief
@@ -397,7 +397,7 @@ static void dnssec_chain_node_nsec3_publish_record(nsec3_zone *n3,
     fqdn_len = dnsname_len(diff->origin);
     memcpy(&digest_fqdn[b32_len + 1], diff->origin, fqdn_len );
     
-   u32 nsec3param_rdata_size = NSEC3PARAM_RDATA_SIZE_FROM_RDATA(n3->rdata);
+    u32 nsec3param_rdata_size = NSEC3PARAM_RDATA_SIZE_FROM_RDATA(n3->rdata);
         
     if(!dnssec_chain_node_nsec3_has_bits_map(from) || ((mask & ZONE_DIFF_REMOVE) && (from->state & DNSSEC_CHAIN_REMAP)))
     {
@@ -418,7 +418,7 @@ static void dnssec_chain_node_nsec3_publish_record(nsec3_zone *n3,
     
         zone_diff_label_rr *nsec3_rr = zone_diff_label_rr_new(
                 digest_fqdn, TYPE_NSEC3, CLASS_IN, diff->nttl, rdata, rdata_size, TRUE);
-
+        nsec3_rr->state |= ZONE_DIFF_VOLATILE;
         ptr_vector_append(collection, nsec3_rr);
     }
     else // bitmap already present
@@ -436,7 +436,7 @@ static void dnssec_chain_node_nsec3_publish_record(nsec3_zone *n3,
     
         zone_diff_label_rr *nsec3_rr = zone_diff_label_rr_new(
                 digest_fqdn, TYPE_NSEC3, CLASS_IN, diff->nttl, rdata, rdata_size, TRUE);
-
+        nsec3_rr->state |= ZONE_DIFF_VOLATILE;
         ptr_vector_append(collection, nsec3_rr);
     }
     
@@ -447,6 +447,7 @@ static void dnssec_chain_node_nsec3_publish_record(nsec3_zone *n3,
         {
             zone_diff_label_rr *rrsig_rr = zone_diff_label_rr_new(digest_fqdn, TYPE_RRSIG, CLASS_IN, diff->nttl,
                     ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig), ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig), TRUE);
+            rrsig_rr->state |= ZONE_DIFF_VOLATILE;
             ptr_vector_append(collection, rrsig_rr);
             rrsig = rrsig->next;
         }

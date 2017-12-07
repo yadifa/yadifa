@@ -33,11 +33,11 @@
 #
 #      	Makefile.am script
 #
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/lib/dnsdb/Makefile.am $
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.7-public/lib/dnsdb/Makefile.am $
 #
-#       $Date: 2017-10-25 09:42:05 +0200 (Wed, 25 Oct 2017) $
+#       $Date: 2017-12-07 12:34:01 +0100 (Thu, 07 Dec 2017) $
 #
-#       $Revision: 7376 $
+#       $Revision: 7521 $
 #
 #	$Author: ericdf $
 #
@@ -72,8 +72,6 @@ pkginclude_HEADERS = \
 	$(I)/dnssec.h \
 	$(I)/dnssec_config.h \
 	$(I)/dnssec-keystore.h \
-	$(I)/dynupdate.h \
-	$(I)/dynupdate-diff.h \
 	$(I)/hash.h \
 	$(I)/htable.h \
 	$(I)/htbt.h \
@@ -143,11 +141,6 @@ libdnsdb_la_SOURCES = \
 	src/dictionary.c \
 	src/dictionary_btree.c \
 	src/dictionary_htbt.c \
-	src/dynupdate_check_prerequisites.c \
-	src/dynupdate-diff.c \
-	src/dynupdate-diff-nochain.c \
-	src/dynupdate-diff-nsec.c \
-	src/dynupdate-diff-nsec3.c \
 	src/hash.c \
 	src/hash_table_values.c \
 	src/htable.c \
@@ -168,13 +161,9 @@ libdnsdb_la_SOURCES = \
 	src/zdb-zone-garbage.c \
 	src/zdb-zone-journal.c \
 	src/zdb-zone-lock.c \
-    src/zdb-zone-lock-monitor.c \
+        src/zdb-zone-lock-monitor.c \
 	src/zdb-zone-path-provider.c \
 	src/zdb-zone-reader-filter.c \
-	src/zdb-zone-maintenance.c \
-	src/zdb-zone-maintenance-rrsig.c \
-	src/zdb-zone-maintenance-nsec.c \
-	src/zdb-zone-maintenance-nsec3.c \
 	src/zdb.c \
 	src/zdb_cache.c \
 	src/zdb_error.c \
@@ -196,6 +185,24 @@ libdnsdb_la_SOURCES = \
 	src/zdb_zone_write_unbound.c
 
 # DNSSEC is defined if either NSEC3 or NSEC are defined
+
+if HAS_DYNUPDATE_SUPPORT
+
+pkginclude_HEADERS += \
+	$(I)/dynupdate.h \
+	$(I)/dynupdate-diff.h
+
+libdnsdb_la_SOURCES += \
+	src/dynupdate_check_prerequisites.c \
+	src/dynupdate-diff.c \
+	src/dynupdate-diff-nochain.c \
+	src/dynupdate-diff-nsec.c \
+	src/dynupdate-diff-nsec3.c \
+	src/zdb-zone-maintenance.c \
+	src/zdb-zone-maintenance-rrsig.c \
+	src/zdb-zone-maintenance-nsec.c \
+	src/zdb-zone-maintenance-nsec3.c
+endif
 			
 if HAS_DNSSEC_SUPPORT
 libdnsdb_la_SOURCES += \
@@ -230,7 +237,7 @@ libdnsdb_la_SOURCES += \
 	src/nsec_collection.c
 endif
 
-libdnsdb_la_LDFLAGS = -version-info 3:0:0
+libdnsdb_la_LDFLAGS = -version-info 6:3:0
 
 include ../../mk/common-settings.mk
 

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2017, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** 
  *  @defgroup dnskey DNSSEC keys functions
  *  @ingroup dnscorednssec
@@ -54,7 +54,7 @@ struct dnskey_signature_header
     u16 type_covered;
     u8 algorithm;
     u8 labels;
-    u32 original_ttl;
+    s32 original_ttl;
     
     u32 expiration;
     u32 inception;          // 16 bytes
@@ -162,13 +162,14 @@ dnskey_signature_sign(dnskey_signature *ds, const dnssec_key *key, void **out_rr
 {
     u8 *signature;
     const void *rr0;
-    const u8* fqdn;
+    const u8 *fqdn;
     size_t fqdn_len;
     const u8* owner_fqdn;
     size_t owner_fqdn_len;
     digest_s ctx;
     ya_result ret;
     struct dnskey_signature_tctr tctr;
+    u8 fqdn_buffer[256];
     
     union dnskey_signature_header_storage hdr;
         
@@ -210,8 +211,9 @@ dnskey_signature_sign(dnskey_signature *ds, const dnssec_key *key, void **out_rr
 
         rr0 = ptr_vector_get(rrset, 0);
         
-        fqdn = view_vtbl->get_fqdn(data, rr0);
-        fqdn_len = dnsname_len(fqdn);
+        fqdn_len = dnsname_canonize(view_vtbl->get_fqdn(data, rr0), fqdn_buffer);
+        fqdn = fqdn_buffer;
+        //dnsname_len(fqdn);
         hdr.header.labels = 0;
 
         if((fqdn[0] == 1) && (fqdn[1] == (u8)'*'))
@@ -225,7 +227,7 @@ dnskey_signature_sign(dnskey_signature *ds, const dnssec_key *key, void **out_rr
             fqdn += *fqdn + 1;
         }            
             
-        fqdn = view_vtbl->get_fqdn(data, rr0);
+        fqdn = fqdn_buffer;
 
         owner_fqdn = dnssec_key_get_domain(key);
         owner_fqdn_len = dnsname_len(owner_fqdn);
@@ -266,14 +268,19 @@ dnskey_signature_sign(dnskey_signature *ds, const dnssec_key *key, void **out_rr
 
             u16 rdata_size = view_vtbl->get_rdata_size(data, rr);
             tctr.rdata_size = htons(rdata_size);
+            
+            const void *rdata = view_vtbl->get_rdata(data, rr);
 
 #ifdef DEBUG
+            rdata_desc rdd = {tctr.rtype, rdata_size, rdata};
+            log_debug("dnskey_signature_sign: #%i: %{dnsname} %i %{dnsclass} %{typerdatadesc}",
+                    i, fqdn, ntohl(tctr.ttl), &tctr.rclass, &rdd);
             log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, fqdn, fqdn_len, 32);
             log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, &tctr, 2 + 2 + 4 + 2, 32);
-            log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, view_vtbl->get_rdata(data, rr), rdata_size, 32);
+            log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, rdata, rdata_size, 32);
 #endif
             digest_update(&ctx, &tctr, 2 + 2 + 4 + 2);
-            digest_update(&ctx, view_vtbl->get_rdata(data, rr), rdata_size);
+            digest_update(&ctx, rdata, rdata_size);
         }
 
         s32 digest_size = digest_get_size(&ctx);

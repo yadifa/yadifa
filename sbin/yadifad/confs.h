@@ -83,7 +83,7 @@ extern "C" {
 
 #define     PROGRAM_NAME                PACKAGE
 #define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASEDATE                 "2017-09-25"
+#define     RELEASEDATE                 "2017-12-08"
 
     /* List of default values for the different configuration parameters */
 #define     S_CONFIGDIR                 SYSCONFDIR "/"
@@ -198,7 +198,7 @@ extern "C" {
 #define     S_ZONE_NO_MASTER_UPDATES     "0"
 #define     S_ZONE_FLAG_MAINTAIN_DNSSEC  "1"
 #define     S_ZONE_FLAG_TRUE_MULTIMASTER "0"
-#define     S_ZONE_FLAG_RRSIG_NSUPDATE_ALLOWED "0"    
+#define     S_ZONE_FLAG_RRSIG_NSUPDATE_ALLOWED "0"
 #define     S_MULTIMASTER_RETRIES       "0"             // in a multimaster setup, how many retries before changing master
                                                         // 0 is perfectly fine except in true-multimaster mode where the resource cost
                                                         // asks for some caution.  In that case 60 would be a good choice. Maximum is 255

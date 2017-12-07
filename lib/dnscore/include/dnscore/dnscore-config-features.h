@@ -11,6 +11,6 @@
 #define DNSCORE_HAS_MUTEX_DEBUG_SUPPORT 0
 #define DNSCORE_HAS_MEMALIGN_ISSUES 0
 #define DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON 0
-// version 2.3.3.0-7543
-#define DNSCORE_VERSION 0x020303001d77LL// include/dnscore/dnscore-config-features.h
+// version 2.3.7.0-7545
+#define DNSCORE_VERSION 0x020307001d79LL// include/dnscore/dnscore-config-features.h
 

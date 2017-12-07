@@ -133,5 +133,4 @@ bool type_bit_maps_gettypestatus(u8* packed_type_bitmap, u32 size, u16 type);
 #endif	/* _NSEC_COMMON_H */
 /** @} */
 
-/*----------------------------------------------------------------------------*/
 

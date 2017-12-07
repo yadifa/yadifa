@@ -473,16 +473,16 @@ dnscore_init_ex(u32 features)
         dnscore_tty_init = TRUE;
     }
     
-#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
-    thread_set_tag(pthread_self(), "main");
-#endif
-    
 #if DNSCORE_HAS_ZALLOC_SUPPORT
     if((features & DNSCORE_ZALLOC) && !(dnscore_features & DNSCORE_ZALLOC))
     {
         zalloc_init();
         dnscore_features |= DNSCORE_ZALLOC;
     }
+#endif
+
+#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
+    thread_set_tag(pthread_self(), "main");
 #endif
     
     if(((features & DNSCORE_TTY_BUFFERED) && !(dnscore_features & DNSCORE_TTY_BUFFERED)) || !dnscore_tty_set)

@@ -33,13 +33,13 @@
 #
 #      	Makefile.am script
 #
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/doc/Makefile.am $
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.7-public/doc/Makefile.am $
 #
-#       $Date: 2017-12-08 14:49:17 +0100 (Fri, 08 Dec 2017) $
+#       $Date: 2017-04-06 09:34:12 +0200 (Thu, 06 Apr 2017) $
 #
-#       $Revision: 7544 $
+#       $Revision: 6922 $
 #
-#	$Author: timh $
+#	$Author: ericdf $
 #
 ##############################################################################
 

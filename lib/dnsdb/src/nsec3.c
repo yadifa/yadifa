@@ -589,6 +589,7 @@ nsec3_check(zdb_zone *zone)
     {
         zdb_zone_label_iterator_nextname(&label_iterator, fqdn);
         zdb_rr_label* label = zdb_zone_label_iterator_next(&label_iterator);
+        
         nsec3_label_extension *n3le = label->nsec.nsec3;
 
         while(n3le != NULL)
@@ -646,6 +647,20 @@ nsec3_check(zdb_zone *zone)
     log_debug("nsec3_check: %{dnsname} : done", zone->origin);
 }
 
+#else 
+
+void
+nsec3_check_item(nsec3_zone_item *item, u32 param_index_base)
+{
+    log_debug("nsec3_check_item(%p, %d) function has been disabled", item, param_index_base);
+}
+
+void
+nsec3_check(zdb_zone *zone)
+{
+    log_debug("nsec3_check(%p) function has been disabled", zone);
+}
+
 #endif
 
 void
@@ -666,7 +681,7 @@ nsec3_compute_digest_from_fqdn_with_len(const nsec3_zone *n3, const u8 *fqdn, u3
 void
 nsec3_zone_label_detach(zdb_rr_label *label)
 {
-    yassert((label != NULL) && (label->flags & ZDB_RR_LABEL_NSEC3) != 0);
+    yassert((label != NULL) && (label->flags & (ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT)) != 0);
     
     nsec3_label_extension *n3le = label->nsec.nsec3;
 
@@ -1316,6 +1331,7 @@ nsec3_superdump_hash(zdb_zone *zone, nsec3_zone* n3, zdb_rr_label *label, bool s
 
 #endif
 
+#if HAS_MASTER_SUPPORT
 /**
  * Sets the NSEC3 maintenance status for a specific chain.
  * Marks the zone using private records.
@@ -1381,6 +1397,8 @@ nsec3_zone_set_status(zdb_zone *zone, u8 secondary_lock, u8 algorithm, u8 optout
         
     return ret;
 }
+
+#endif
 
 /**
  * Gets the NSEC3 maintenance status for a specific chain.

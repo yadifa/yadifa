@@ -194,7 +194,7 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
 
     ya_result ret;
     
-    u32 current_ttl = DEFAULT_TTL;
+    s32 current_ttl = DEFAULT_TTL;
 #if ZDB_HAS_NSEC3_SUPPORT
     u32 soa_nttl = zone->min_ttl;
 #endif
@@ -327,7 +327,9 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
 
             zdb_packed_ttlrdata* ttlrdata_sll = (zdb_packed_ttlrdata*)node->data;
             
-            u32 rrset_ttl = ttlrdata_sll->ttl;
+            current_ttl = DEFAULT_TTL;
+            
+            s32 rrset_ttl = ttlrdata_sll->ttl;
 
             while(ttlrdata_sll != NULL)
             {
@@ -339,7 +341,6 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
                 {
                     osprint_tab_padded(&bos, NULL, 0, INDENT_TABS);
                 }
-                
                 
                 if(current_ttl != rrset_ttl)
                 {
@@ -377,13 +378,16 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
         {
             osprint(&bos, ";; ");
             output_stream_write(&bos, label_cstr, label_len);
+            
+            status_flags_fw.value = &label->flags;
+            
             if(label->sub.count == 0)
             {
-                osprintln(&bos, " is empty terminal");
+                osformatln(&bos, " is empty terminal ; flags=%w", &status_flags_fw);
             }
             else
             {
-                osprintln(&bos, " is empty non-terminal");
+                osformatln(&bos, " is empty non-terminal ; flags=%w", &status_flags_fw);
             }
         }
 #endif
@@ -442,7 +446,14 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
                     {
                         if(item->label.owner != NSEC3_ZONE_FAKE_OWNER)
                         {
-                            osformatln(&bos, ";; Owner: %{dnslabel}", item->label.owner->name);
+                            if(item->label.owner->name[0] != 0)
+                            {
+                                osformatln(&bos, ";; Owner: %{dnslabel}", item->label.owner->name);
+                            }
+                            else
+                            {
+                                osformatln(&bos, ";; Owner: %{dnslabel} (the apex)", zone->origin);
+                            }
                         }
                         else
                         {
@@ -458,12 +469,19 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
                 {
                     if(item->rc > 0)
                     {
-                        u16 i = item->rc - 1;
+                        s32 i = item->rc - 1;
                         do
                         {
                             if(item->label.owners[i] != NSEC3_ZONE_FAKE_OWNER)
                             {
-                                osformatln(&bos, ";; Owner: %{dnslabel}", item->label.owners[i]->name);
+                                if(item->label.owners[i]->name[0] != 0)
+                                {
+                                    osformatln(&bos, ";; Owner: %{dnslabel}", item->label.owners[i]->name);
+                                }
+                                else
+                                {
+                                    osformatln(&bos, ";; Owner: %{dnslabel} (the apex)", zone->origin);
+                                }
                             }
                             else
                             {
@@ -482,15 +500,29 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
                 {
                     if(item->sc != 0)
                     {
-                        osformatln(&bos, ";; Star: %{dnslabel}", item->star_label.owner->name);
+                        if(item->star_label.owner->name[0] != 0)
+                        {
+                            osformatln(&bos, ";; Star: %{dnslabel}", item->star_label.owner->name);
+                        }
+                        else
+                        {
+                            osformatln(&bos, ";; Star: %{dnslabel} (the apex)", zone->origin);
+                        }
                     }
                 }
                 else
                 {
-                    u16 i = item->sc - 1;
+                    s32 i = item->sc - 1;
                     do
                     {
-                        osformatln(&bos, ";; Star: %{dnslabel}", item->star_label.owners[i]->name);
+                        if(item->star_label.owners[i]->name[0] != 0)
+                        {
+                            osformatln(&bos, ";; Star: %{dnslabel}", item->star_label.owners[i]->name);
+                        }
+                        else
+                        {
+                            osformatln(&bos, ";; Star: %{dnslabel} (the apex)", zone->origin);
+                        }
                     }
                     while(i-- > 0);
                 }
@@ -575,7 +607,7 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
  */
 
 ya_result
-zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, bool force_label)
+zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, u8 flags)
 {
     output_stream fos;
     ya_result ret;
@@ -586,7 +618,8 @@ zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, bool for
         rnd = thread_pool_get_random_ctx();
     }
     
-    bool allow_shutdown = TRUE;
+    bool force_label = flags & ZDB_ZONE_WRITE_TEXT_FILE_FORCE_LABEL;
+    bool allow_shutdown = flags & ZDB_ZONE_WRITE_TEXT_FILE_IGNORE_SHUTDOWN;
     char tmp[PATH_MAX];
     
     size_t output_file_len = strlen(output_file);
@@ -659,6 +692,3 @@ zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, bool for
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

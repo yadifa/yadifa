@@ -33,11 +33,11 @@
 #
 #      	Makefile.am script
 #
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/lib/dnszone/Makefile.am $
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.7-public/lib/dnszone/Makefile.am $
 #
-#       $Date: 2017-04-06 09:34:12 +0200 (Thu, 06 Apr 2017) $
+#       $Date: 2017-12-05 08:55:57 +0100 (Tue, 05 Dec 2017) $
 #
-#       $Revision: 6922 $
+#       $Revision: 7503 $
 #
 #	$Author: ericdf $
 #
@@ -75,7 +75,7 @@ pkginclude_HEADERS = \
 		     $(I)/zone_axfr_reader.h \
 		     $(I)/zone_file_reader.h
 
-libdnszone_la_LDFLAGS = -version-info 2:0:0
+libdnszone_la_LDFLAGS = -version-info 6:3:0
 
 include ../../mk/common-settings.mk
 

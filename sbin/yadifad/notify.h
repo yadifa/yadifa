@@ -91,15 +91,6 @@ void notify_clear(const u8 *origin);
 
 void notify_host_list(zone_desc_s *zone_desc, host_address *hosts, u16 zclass);
 
-
-
-/**
- * @todo 20111216 edf -- before a zone is being unloaded, call this.
- *
- * @param origin
- */
-// void notify_clear(u8 *origin);
-
 ya_result notify_service_init();
 
 /**

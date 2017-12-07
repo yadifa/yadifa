@@ -89,7 +89,6 @@
 #include <dnscore/fdtools.h>
 
 #include <dnscore/u32_set.h>
-//#include <dnscore/u64_set.h>
 #include <dnscore/list-dl.h>
 
 #include <dnscore/ctrl-rfc.h>
@@ -1411,6 +1410,10 @@ journal_cjf_append_ixfr_stream_master_accum_tryagain:
                 }
                 break;
             }
+            
+#ifdef DEBUG
+            log_debug("cjf: %{dnsname}: writing %{dnsrr}", jnl->origin, &rr);
+#endif
             
             if(FAIL(ret = journal_cfj_page_output_stream_write_resource_record(&os, &rr)))
             {

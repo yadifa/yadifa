@@ -37,7 +37,7 @@
 // general defines
 #define     PROGRAM_NAME                            PACKAGE
 #define     PROGRAM_VERSION                         PACKAGE_VERSION
-#define     RELEASEDATE                             "2017-09-25"
+#define     RELEASEDATE                             "2017-12-08"
 
 #define     ROUND_ROBIN                             0x00
 

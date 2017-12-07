@@ -449,7 +449,9 @@ ixfr_query(const host_address *servers, zdb_zone *zone, u32 *out_loaded_serial)
 
                             log_info("ixfr: %{dnsname}: replaying journal (%u;%u)", zone->origin, ixfr_from_serial, *out_loaded_serial);
                             
+#if ZDB_HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT
                             u8 prev_zone_dnssec_type = zone_policy_guess_dnssec_type(zone);
+#endif
                             
                             if(ISOK(ret = zdb_icmtl_replay(zone)))
                             {

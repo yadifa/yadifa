@@ -284,6 +284,19 @@ dnsname_is_charspace(u8 c)
     return cstr_to_dnsname_map[c] == 1;
 }
 
+s32
+dnslabel_compare(const u8 *a, const u8 *b)
+{
+    int len = MIN(*a, *b);
+    int d = memcmp(a+1, b+1, len);
+    if(d == 0)
+    {
+        d = *a;
+        d -= *b;
+    }
+    return d;
+}
+
 /**
  * label DNS charset test
  * 

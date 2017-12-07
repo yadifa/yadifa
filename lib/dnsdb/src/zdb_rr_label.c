@@ -66,6 +66,86 @@ extern logger_handle* g_database_logger;
 
 static void zdb_rr_label_destroy_callback(dictionary_node* rr_label_record, void* arg);
 
+static void zdb_rr_label_clear_underdelegation_under(zdb_rr_label *rr_label)
+{
+    dictionary_iterator iter;
+    dictionary_iterator_init(&rr_label->sub, &iter);
+    while(dictionary_iterator_hasnext(&iter))
+    {
+        zdb_rr_label** sub_labelp = (zdb_rr_label**)dictionary_iterator_next(&iter);
+
+        (*sub_labelp)->flags &= ~ZDB_RR_LABEL_UNDERDELEGATION;
+        
+        zdb_rr_label_clear_underdelegation_under(*sub_labelp);
+    }
+}
+
+//typedef ya_result zdb_rr_label_forall_cb(zdb_rr_label *rr_label, const u8 *rr_label_fqdn, void *data);
+
+struct zdb_rr_label_forall_children_of_fqdn_recurse_parm
+{
+    zdb_rr_label_forall_cb *callback;
+    void *data;
+    u8 *fqdn;
+    u8 fqdn_storage[256];
+};
+
+static ya_result
+zdb_rr_label_forall_children_of_fqdn_recurse(zdb_rr_label *rr_label, struct zdb_rr_label_forall_children_of_fqdn_recurse_parm* parms)
+{
+    ya_result ret = 0;
+    
+    dictionary_iterator iter;
+    dictionary_iterator_init(&rr_label->sub, &iter);
+    while(dictionary_iterator_hasnext(&iter))
+    {
+        zdb_rr_label** sub_labelp = (zdb_rr_label**)dictionary_iterator_next(&iter);
+        
+        u8* sub_fqdn = parms->fqdn;
+        sub_fqdn -= (*sub_labelp)->name[0] + 1;
+        if(sub_fqdn < &parms->fqdn_storage[0])
+        {
+            break;
+        }
+        
+        memcpy(sub_fqdn, (*sub_labelp)->name, (*sub_labelp)->name[0] + 1);
+                
+        parms->callback(*sub_labelp, sub_fqdn, parms->data);
+        
+        if(zdb_rr_label_has_children(rr_label))
+        {
+            parms->fqdn = sub_fqdn;
+            
+            ret += zdb_rr_label_forall_children_of_fqdn_recurse(*sub_labelp, parms);
+            
+            parms->fqdn += sub_fqdn[0] + 1;
+        }
+    }
+    
+    return ret;
+}
+
+ya_result
+zdb_rr_label_forall_children_of_fqdn(zdb_rr_label *rr_label, const u8 *rr_label_fqdn, zdb_rr_label_forall_cb *callback, void *data)
+{
+    if(!zdb_rr_label_has_children(rr_label))
+    {
+        return 0;
+    }
+    
+    struct zdb_rr_label_forall_children_of_fqdn_recurse_parm parms;
+    parms.callback = callback;
+    parms.data = data;
+    
+    int len = dnsname_len(rr_label_fqdn);
+    parms.fqdn = &parms.fqdn_storage[256 - len];
+    memcpy(parms.fqdn, rr_label_fqdn, len);
+    
+    ya_result ret = zdb_rr_label_forall_children_of_fqdn_recurse(rr_label, &parms);
+    
+    return ret;
+}
+
 /**
  *  NSEC3: Zone possible
  *
@@ -632,6 +712,10 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
             {
                 case TYPE_NS:
                     clear_mask = ~ZDB_RR_LABEL_DELEGATION; // will clear "delegation"
+                    
+                    // must clear ZDB_RR_LABEL_UNDERDELEGATION from everything under this one                        
+                    zdb_rr_label_clear_underdelegation_under(rr_label);
+                        
                     break;
                 case TYPE_CNAME:
                     clear_mask = ~ZDB_RR_LABEL_HASCNAME; // will clear "has cname"
@@ -658,7 +742,7 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
             {
                 // remove the extension
                 
-                if(zdb_rr_label_nsec3_linked(rr_label))
+                if(zdb_rr_label_nsec3any_linked(rr_label))
                 {
                     // detach then destroy the ext
                     nsec3_zone_label_detach(rr_label);
@@ -667,6 +751,12 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
                 {
                     nsec_zone_label_detach(rr_label);
                 }
+#ifdef DEBUG
+                else
+                {
+                    yassert(rr_label->nsec.dnssec == NULL);
+                }
+#endif
             }
         }
 
@@ -874,6 +964,10 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
                 {
                     case TYPE_NS:
                         clear_mask = ~ZDB_RR_LABEL_DELEGATION; // will clear "delegation"
+                        
+                        // must clear ZDB_RR_LABEL_UNDERDELEGATION from everything under this one                        
+                        zdb_rr_label_clear_underdelegation_under(rr_label);
+                        
                         break;
                     case TYPE_CNAME:
                         clear_mask = ~ZDB_RR_LABEL_HASCNAME; // will clear "has cname"
@@ -901,7 +995,7 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
             {
                 // remove the extension
                 
-                if(zdb_rr_label_nsec3_linked(rr_label))
+                if(zdb_rr_label_nsec3any_linked(rr_label))
                 {
                     // detach then destroy the ext
                     nsec3_zone_label_detach(rr_label);
@@ -910,6 +1004,12 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
                 {
                     nsec_zone_label_detach(rr_label);
                 }
+#ifdef DEBUG
+                else
+                {
+                    yassert(rr_label->nsec.dnssec == NULL);
+                }
+#endif
             }
         }
 

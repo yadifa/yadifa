@@ -123,6 +123,9 @@ struct dns_udp_settings_s
     u32 per_dns_rate;
     u32 per_dns_bandwidth;
     u32 per_dns_freq_min;
+    
+    u32 udp_read_buffer_count;
+    
     u8 tcp_thread_pool_size;
     bool tcp_fallback_on_timeout;
 };
@@ -167,8 +170,9 @@ struct dns_simple_message_s
     u16 dns_id;
     s8  retries_left;
     u8  status;
-    bool recurse;
-    bool tcp;                       // try TCP
+    u8 recurse:1,tcp:1,tcp_used:1,tcp_replied:1;
+    //bool recurse;
+    //bool tcp;                       // try TCP
     u8 fqdn[MAX_DOMAIN_LENGTH];
 };
 

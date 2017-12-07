@@ -180,7 +180,7 @@ journal_cjf_idxt_verify(journal_cjf *jnl)
     journal_cjf_page_tbl_header page_hdr;
     u32 previous_page_offset;
     u32 stream_end_offset;
-    u32 next_page_offset;
+    u32 next_page_offset; // uninitialised false positive: either size is <= 0, skipping for & if, either it's >= 0 and page_hrd is set and initialises next_page_offset
     u32 prev_serial = jnl->serial_begin;
     int loops = 0;
     bool error = FALSE;

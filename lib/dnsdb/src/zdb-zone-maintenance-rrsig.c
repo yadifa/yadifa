@@ -185,6 +185,10 @@ zdb_zone_maintenance_rrsig(zdb_zone_maintenance_ctx* mctx, zone_diff_fqdn *diff_
 {
     ya_result ret = 0;
     
+#ifdef DEBUG
+    log_debug("maintenance: rrsig: %{dnsname}: %{dnsname}", mctx->zone->origin, diff_fqdn->fqdn);
+#endif
+    
     // for all RRSIG: remove expired ones
     
     if(rrsig_should_label_be_signed(mctx->zone, mctx->fqdn, mctx->label))
@@ -216,6 +220,10 @@ zdb_zone_maintenance_rrsig(zdb_zone_maintenance_ctx* mctx, zone_diff_fqdn *diff_
         zone_diff_fqdn_rr_set *rrsig_set = zone_diff_fqdn_rr_get(diff_fqdn, TYPE_RRSIG);
         if(rrsig_set != NULL)
         {
+#ifdef DEBUG
+            log_debug("maintenance: rrsig: %{dnsname}: %{dnsname}: contains signatures", mctx->zone->origin, diff_fqdn->fqdn);
+#endif
+            
             // for all RRSIG records ...
             
             ptr_set_avl_iterator rr_iter;
@@ -224,9 +232,21 @@ zdb_zone_maintenance_rrsig(zdb_zone_maintenance_ctx* mctx, zone_diff_fqdn *diff_
             {
                 ptr_node *node = ptr_set_avl_iterator_next_node(&rr_iter);
                 zone_diff_label_rr *rr = (zone_diff_label_rr *)node->key;
+                
+#ifdef DEBUG
+                u16 tmp_type = rrsig_get_type_covered_from_rdata(rr->rdata, rr->rdata_size);
+                log_debug("maintenance: rrsig: %{dnsname}: %{dnsname}: RRSIG %02x %{dnstype} %T %T", mctx->zone->origin, diff_fqdn->fqdn,
+                        rr->state, &tmp_type,
+                        rrsig_get_valid_until_from_rdata(rr->rdata, rr->rdata_size), rrsig_get_valid_from_from_rdata(rr->rdata, rr->rdata_size));
+#endif
 
                 if((rr->state & ZONE_DIFF_REMOVE) != 0)
                 {
+#ifdef DEBUG
+                    log_debug("maintenance: rrsig: %{dnsname}: %{dnsname}: RRSIG %02x %{dnstype} %T %T (already being removed)", mctx->zone->origin, diff_fqdn->fqdn,
+                        rr->state, &tmp_type,
+                        rrsig_get_valid_until_from_rdata(rr->rdata, rr->rdata_size), rrsig_get_valid_from_from_rdata(rr->rdata, rr->rdata_size));
+#endif
                     continue; // signature is being removed already: ignore
                 }
 
@@ -235,6 +255,11 @@ zdb_zone_maintenance_rrsig(zdb_zone_maintenance_ctx* mctx, zone_diff_fqdn *diff_
                 (void)valid_from;
                 if(mctx->now >= valid_until) // signature has expired, mark for removal then ignore
                 {
+#ifdef DEBUG
+                    log_debug("maintenance: rrsig: %{dnsname}: %{dnsname}: RRSIG %02x %{dnstype} %T %T (expired, will be removed)", mctx->zone->origin, diff_fqdn->fqdn,
+                        rr->state, &tmp_type,
+                        rrsig_get_valid_until_from_rdata(rr->rdata, rr->rdata_size), rrsig_get_valid_from_from_rdata(rr->rdata, rr->rdata_size));
+#endif
                     rr->state |= ZONE_DIFF_REMOVE;
                     ++ret;
                     continue;
@@ -286,6 +311,11 @@ zdb_zone_maintenance_rrsig(zdb_zone_maintenance_ctx* mctx, zone_diff_fqdn *diff_
                     }
                     else
                     {
+#ifdef DEBUG
+                        log_debug("maintenance: rrsig: %{dnsname}: %{dnsname}: RRSIG %02x %{dnstype} %T %T (no such covered record, will be removed)", mctx->zone->origin, diff_fqdn->fqdn,
+                            rr->state, &tmp_type,
+                            rrsig_get_valid_until_from_rdata(rr->rdata, rr->rdata_size), rrsig_get_valid_from_from_rdata(rr->rdata, rr->rdata_size));
+#endif
                         // covered record set does not exist
                         // delete the rrsig
                         rr->state |= ZONE_DIFF_REMOVE;
@@ -294,6 +324,11 @@ zdb_zone_maintenance_rrsig(zdb_zone_maintenance_ctx* mctx, zone_diff_fqdn *diff_
                 }
                 else
                 {
+#ifdef DEBUG
+                    log_debug("maintenance: rrsig: %{dnsname}: %{dnsname}: RRSIG %02x %{dnstype} %T %T (no such dnskey, will be removed)", mctx->zone->origin, diff_fqdn->fqdn,
+                        rr->state, &tmp_type,
+                        rrsig_get_valid_until_from_rdata(rr->rdata, rr->rdata_size), rrsig_get_valid_from_from_rdata(rr->rdata, rr->rdata_size));
+#endif
                     // unknown key
                     // delete the rrsig
                     rr->state |= ZONE_DIFF_REMOVE;
@@ -304,21 +339,31 @@ zdb_zone_maintenance_rrsig(zdb_zone_maintenance_ctx* mctx, zone_diff_fqdn *diff_
         else
         {
 #ifdef DEBUG
-            log_debug("maintenance: rrsig: %{dnsname}: no RRSIG rrset", mctx->zone->origin);
+            log_debug("maintenance: rrsig: %{dnsname}: %{dnsname}: contains no signatures", mctx->zone->origin, diff_fqdn->fqdn);
 #endif
         }
         
         // masks have been set
         
         if(create_signatures)
-        {        
+        {
+#ifdef DEBUG
+            log_debug("maintenance: rrsig: %{dnsname}: %{dnsname}: will create signatures", mctx->zone->origin, diff_fqdn->fqdn);
+#endif
             ret += zdb_zone_maintenance_rrsig_coverage_finalize(mctx, diff_fqdn, rrset_to_sign, &type_coverage);
         }
         else // opt-out zone and not apex nor delegation with a DS record
-        {        
+        {
+#ifdef DEBUG
+            log_debug("maintenance: rrsig: %{dnsname}: %{dnsname}: removing signatures", mctx->zone->origin, diff_fqdn->fqdn);
+#endif
             zone_diff_fqdn_rr_clear(diff_fqdn, TYPE_RRSIG);
         }
     }
+    
+#ifdef DEBUG
+    log_debug("maintenance: rrsig: %{dnsname}: %{dnsname}: done", mctx->zone->origin, diff_fqdn->fqdn);
+#endif
     
     return ret;
 }

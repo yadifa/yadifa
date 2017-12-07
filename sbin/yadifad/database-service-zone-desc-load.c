@@ -169,8 +169,6 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                 // so let's make this a rule, whatever changed
                 
                 notify_clear(zone_desc->origin);
-                /// @todo 20131203 edf -- signature maintenance clear
-                /// @todo 20131203 edf -- retry clear
                 
                 zone_desc_s *current = zone_acquirebydnsname(zone_desc->origin);
 

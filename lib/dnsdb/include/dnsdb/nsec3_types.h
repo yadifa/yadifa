@@ -205,6 +205,11 @@ static inline bool zdb_rr_label_nsec3optout_linked(const zdb_rr_label *label)
     return (label->flags & ZDB_RR_LABEL_NSEC3_OPTOUT) != 0;
 }
 
+static inline bool zdb_rr_label_nsec3any_linked(const zdb_rr_label *label)
+{
+    return (label->flags & (ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT)) != 0;
+}
+
 static inline nsec3_label_extension *nsec3_label_extension_alloc()
 {
     nsec3_label_extension *n3le;

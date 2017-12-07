@@ -33,11 +33,11 @@
 #
 #		Makefile.am script
 #
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.3-public/lib/dnscore/Makefile.am $
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.7-public/lib/dnscore/Makefile.am $
 #
-#	   $Date: 2017-09-26 11:33:35 +0200 (Tue, 26 Sep 2017) $
+#	   $Date: 2017-12-05 08:55:57 +0100 (Tue, 05 Dec 2017) $
 #
-#	   $Revision: 7307 $
+#	   $Revision: 7503 $
 #
 #	$Author: ericdf $
 #
@@ -306,7 +306,7 @@ pkginclude_HEADERS += $(I)/nsid.h
 libdnscore_la_SOURCES += src/nsid.c
 endif
 
-libdnscore_la_LDFLAGS = -version-info 3:0:0
+libdnscore_la_LDFLAGS = -version-info 6:3:0
 
 include ../../mk/common-settings.mk
 

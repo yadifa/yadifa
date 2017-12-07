@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2017, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 /** @defgroup dnsdbupdate Dynamic update functions
  *  @ingroup dnsdb
  *  @brief
@@ -80,6 +80,8 @@ extern logger_handle *g_database_logger;
 #define ZDFFFQDN_TAG 0x4e4451464646445a
 #define ZDFFRRST_TAG 0x545352524646445a
 #define DMSGPCKT_TAG 0x544b435047534d44
+
+#define DYNUPDATE_DIFF_DETAILLED_LOG 1
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -137,6 +139,18 @@ zone_diff_fqdn_changes_format(const void* data, output_stream* os, s32 a, char b
     output_stream_write_u8(os, diff->had_ds?'1':'0');
     output_stream_write(os, "->", 2);
     output_stream_write_u8(os, diff->will_have_ds?'1':'0');
+    output_stream_write(os, ") ", 2);
+    
+    output_stream_write(os, "CHILDREN(", 9);
+    output_stream_write_u8(os, diff->had_children?'1':'0');
+    output_stream_write(os, "->", 2);
+    output_stream_write_u8(os, diff->will_have_children?'1':'0');
+    output_stream_write(os, ") ", 2);
+    
+    output_stream_write(os, "NON-EMPTY(", 10);
+    output_stream_write_u8(os, diff->was_non_empty?'1':'0');
+    output_stream_write(os, "->", 2);
+    output_stream_write_u8(os, diff->will_be_non_empty?'1':'0');
     output_stream_write(os, ") ", 2);
 }
 
@@ -577,7 +591,24 @@ static void dnssec_chain_store_diff_publish_chain_node(dnssec_chain *dc, zone_di
     ptr_vector rrset = {&add->data[from_offset], 0, to_offset - from_offset};
     
     struct resource_record_view rrv = {NULL, &zone_diff_label_rr_rrv_vtbl};
-    
+    u16 rrset_type = TYPE_NONE;
+    for(int i = 0; i <= ptr_vector_last_index(&rrset); ++i)
+    {
+        void* data = ptr_vector_get(&rrset, i);
+        const void *fqdn = rrv.vtbl->get_fqdn(rrv.data, data);
+        u16 rtype = rrv.vtbl->get_type(rrv.data, data);
+        u16 rclass = rrv.vtbl->get_class(rrv.data, data);
+        s32 ttl = rrv.vtbl->get_ttl(rrv.data, data);
+        u16 rdata_size = rrv.vtbl->get_rdata_size(rrv.data, data);
+        const void *rdata = rrv.vtbl->get_rdata(rrv.data, data);
+        
+        rrset_type = rtype;
+        
+        rdata_desc rdt = {rtype, rdata_size, rdata};
+        log_debug("update: %{dnsname}: will sign chain record #%i: %{dnsname} %i %{dnsclass} %{typerdatadesc}",
+                diff->origin, i, fqdn, ttl, &rclass, &rdt);
+    }
+
     bool canonize = TRUE;
 
     for(int j = 0; j <= ptr_vector_last_index(keys); ++j)
@@ -593,7 +624,11 @@ static void dnssec_chain_store_diff_publish_chain_node(dnssec_chain *dc, zone_di
 
             // add the key to the add set
 
-            log_debug("update: %{dnsname}: signed chain rrset with key %03i %05i",diff->origin, dnssec_key_get_algorithm(key), dnssec_key_get_tag_const(key));
+            rdata_desc rdt = {rrsig_rr->rtype, rrsig_rr->rdata_size, rrsig_rr->rdata};
+            log_debug("update: %{dnsname}: signed chain rrset %{dnstype} with key %03i %05i: %{dnsname} %i %{dnsclass} %{typerdatadesc}",
+                    diff->origin, &rrset_type, dnssec_key_get_algorithm(key), dnssec_key_get_tag_const(key),
+                    rrsig_rr->fqdn, rrsig_rr->ttl, &rrsig_rr->rclass, &rdt
+                    );
 
             rrsig_rr->state |= ZONE_DIFF_VOLATILE;
             ptr_vector_append(add, rrsig_rr);
@@ -601,6 +636,13 @@ static void dnssec_chain_store_diff_publish_chain_node(dnssec_chain *dc, zone_di
             // since we are mapping inside the array and the array could have been replaced by a bigger one ...
             rrset.data = &add->data[from_offset];
         }
+#ifdef DEBUG
+        else
+        {
+            log_debug("update: %{dnsname}: didn not sign rrset %{dnstype} with key %03i %05i: %r",
+                diff->origin, &rrset_type, dnssec_key_get_algorithm(key), dnssec_key_get_tag_const(key), ret);
+        }
+#endif
     }
 }
 
@@ -1111,9 +1153,10 @@ static zone_diff_fqdn *zone_diff_fqdn_new(const u8 *fqdn)
 {
     zone_diff_fqdn *zdl;
     ZALLOC_OBJECT_OR_DIE(zdl, zone_diff_fqdn, ZDFFFQDN_TAG);
+    memset(zdl, 0, sizeof(zone_diff_fqdn));
     u32_set_avl_init(&zdl->rrset);
     zdl->fqdn = dnsname_zdup(fqdn);
-    zdl->type_map_changed = FALSE;
+    //zdl->type_map_changed = FALSE;
     return zdl;
 }
 
@@ -1244,10 +1287,177 @@ bool zone_diff_fqdn_type_map_changed(const zone_diff_fqdn *diff_fqdn)
 void zone_diff_init(zone_diff *diff, const u8 *origin, u16 nttl, bool rrsig_push_allowed)
 {
     ptr_set_avl_init(&diff->fqdn);
+    ptr_set_avl_init(&diff->root.sub);
+    diff->root.sub.compare = ptr_set_dnslabel_node_compare;
     diff->fqdn.compare = ptr_set_fqdn_node_compare;
     diff->origin = origin;
     diff->nttl = nttl;
     diff->rrsig_update_allowed = rrsig_push_allowed;
+}
+
+static zone_diff_label_tree*
+zone_diff_label_tree_add_fqdn(zone_diff *diff, const u8 *fqdn)
+{
+#ifdef DEBUG
+    log_debug("zone-diff: %{dnsname}: label tree add %{dnsname}",
+            diff->origin, fqdn);
+#endif
+    
+    if(fqdn[0] != 0)
+    {
+        zone_diff_label_tree *label_node;
+        ptr_node *label_tree_node;
+        const u8 *parent_fqdn = fqdn + fqdn[0] + 1;
+        zone_diff_label_tree *parent = zone_diff_label_tree_add_fqdn(diff, parent_fqdn);
+        
+        label_tree_node = ptr_set_avl_insert(&parent->sub, (u8*)fqdn);
+        
+        if(label_tree_node->value != NULL)
+        {
+            label_node = (zone_diff_label_tree*)label_tree_node->value;
+        }
+        else
+        {
+            ZALLOC_OBJECT_OR_DIE(label_node, zone_diff_label_tree, GENERIC_TAG);
+            label_node->label = fqdn;
+            label_node->diff_fqdn = (zone_diff_fqdn*)zone_diff_get_fqdn(diff, fqdn);
+            ptr_set_avl_init(&label_node->sub);
+            label_node->sub.compare = ptr_set_dnslabel_node_compare;
+            label_tree_node->value = label_node;
+        }
+        
+        return label_node;
+    }
+    else
+    {
+        return &diff->root;
+    }
+}
+
+static void zone_diff_label_tree_destroy_callback(ptr_node* node)
+{
+    zone_diff_label_tree* dlt = (zone_diff_label_tree*)node->value;
+    if(dlt != NULL)
+    {
+        if(!ptr_set_avl_isempty(&dlt->sub))
+        {
+            ptr_set_avl_callback_and_destroy(&dlt->sub, zone_diff_label_tree_destroy_callback);
+        }
+        ZFREE_OBJECT(dlt);
+    }
+}
+
+static void zone_diff_label_tree_destroy(zone_diff *diff)
+{
+    ptr_set_avl_callback_and_destroy(&diff->root.sub, zone_diff_label_tree_destroy_callback);
+}
+
+static zone_diff_label_tree*
+zone_diff_fqdn_label_find(zone_diff_label_tree* parent, const u8 *fqdn)
+{
+    if(fqdn[0] != 0)
+    {
+        parent = zone_diff_fqdn_label_find(parent, fqdn + fqdn[0] + 1);
+        if(parent != NULL)
+        {
+            ptr_node *node = ptr_set_avl_find(&parent->sub, fqdn);
+            parent = (zone_diff_label_tree*)node->value;
+        }
+    }
+    return parent;
+}
+
+bool
+zone_diff_fqdn_has_children(zone_diff *diff, const u8 *fqdn)
+{
+    zone_diff_label_tree* parent = &diff->root;
+    parent = zone_diff_fqdn_label_find(parent, fqdn);
+    return parent != NULL;
+}
+
+//#define ZONE_DIFF_FQDN_LABEL_STATE_RECORDS_EXISTED 1
+//#define ZONE_DIFF_FQDN_LABEL_STATE_RECORDS_ADDED   2 
+//#define ZONE_DIFF_FQDN_LABEL_STATE_RECORDS_EXISTS  3
+#define ZONE_DIFF_FQDN_LABEL_STATE_NONEMPTY 2
+#define ZONE_DIFF_FQDN_LABEL_STATE_CHILDREN 1
+
+static u8
+zone_diff_fqdn_children_state_find(zone_diff_label_tree* parent)
+{
+    u8 ret = (parent->diff_fqdn != NULL)?parent->diff_fqdn->is_apex:0;
+    
+    ptr_set_avl_iterator iter;
+    ptr_set_avl_iterator_init(&parent->sub, &iter);
+    while(ptr_set_avl_iterator_hasnext(&iter))
+    {
+        ptr_node* node = ptr_set_avl_iterator_next_node(&iter);
+        
+        zone_diff_label_tree* fqdn_node = (zone_diff_label_tree*)node->value;
+        
+        /*
+        if(fqdn_node->diff_fqdn->will_be_non_empty)
+        {
+            // ret |= ZONE_DIFF_FQDN_LABEL_STATE_NONEMPTY;
+        }
+        */
+        if(fqdn_node->diff_fqdn != NULL)
+        {
+            if(!fqdn_node->diff_fqdn->children_flags_set)
+            {
+                if(!ptr_set_avl_isempty(&fqdn_node->sub))
+                {
+                    if(zone_diff_fqdn_children_state_find(fqdn_node) != 0)
+                    {
+                        // ret |= ZONE_DIFF_FQDN_LABEL_STATE_CHILDREN;
+
+                        fqdn_node->diff_fqdn->will_have_children = 1;
+                    }
+                }
+
+                fqdn_node->diff_fqdn->children_flags_set = 1;
+            }
+            
+            ret |= fqdn_node->diff_fqdn->will_be_non_empty | fqdn_node->diff_fqdn->will_have_children;
+        }
+        else
+        {
+            if(!ptr_set_avl_isempty(&fqdn_node->sub))
+            {
+                if(zone_diff_fqdn_children_state_find(fqdn_node) != 0)
+                {
+                    ret |= ZONE_DIFF_FQDN_LABEL_STATE_CHILDREN;
+                }
+            }
+        }
+    }
+    
+    return ret;
+}
+
+u8
+zone_diff_fqdn_children_state(zone_diff *diff, const u8 *fqdn)
+{
+    zone_diff_label_tree* fqdn_node = zone_diff_fqdn_label_find(&diff->root, fqdn);
+    
+    if(fqdn_node != NULL)
+    {       
+/*
+        zone_diff_fqdn_children_state_parm parms;
+        int fqdn_len = dnsname_len(fqdn);
+        parms.fqdn = &parms.fqdn_storage[256 - fqdn_len];
+        memcpy(parms.fqdn, fqdn, fqdn_len);
+*/                
+        // if node has sub, set it
+        // for all sub
+        //      if sub has all records removed, set it
+        //      if sub has records added, set it
+        //      if +- are both set, stop seeking (all needed answers are ready)
+        //      if sub has sub, go deeper
+
+        zone_diff_fqdn_children_state_find(fqdn_node);
+    }
+    
+    return 0;
 }
 
 /**
@@ -1259,6 +1469,7 @@ void zone_diff_init(zone_diff *diff, const u8 *origin, u16 nttl, bool rrsig_push
 void zone_diff_finalise(zone_diff *diff)
 {
     log_debug1("update: %{dnsname}: deleting diff", diff->origin);
+    zone_diff_label_tree_destroy(diff);
     ptr_set_avl_callback_and_destroy(&diff->fqdn, zone_diff_fqdn_delete_void);
 }
 
@@ -1285,6 +1496,10 @@ zone_diff_add_fqdn(zone_diff *diff, const u8 *fqdn, zdb_rr_label *label)
         zone_diff_fqdn *diff_fqdn = zone_diff_fqdn_new(fqdn);
         node->key = diff_fqdn->fqdn; // to guarantee the const
         node->value = diff_fqdn;
+        
+        zone_diff_label_tree *diff_fqdn_label = zone_diff_label_tree_add_fqdn(diff, diff_fqdn->fqdn);
+        diff_fqdn_label->diff_fqdn = diff_fqdn;
+        
         // copy all records
         if(label != NULL)
         {
@@ -1295,6 +1510,10 @@ zone_diff_add_fqdn(zone_diff *diff, const u8 *fqdn, zdb_rr_label *label)
             diff_fqdn->was_at_delegation = diff_fqdn->at_delegation;
             diff_fqdn->was_under_delegation = diff_fqdn->under_delegation;
             diff_fqdn->had_ds = diff_fqdn->will_have_ds;
+            diff_fqdn->was_non_empty = btree_notempty(label->resource_record_set);
+            diff_fqdn->had_children = dictionary_notempty(&label->sub);
+            //diff_fqdn->will_be_non_empty = diff_fqdn->was_non_empty;
+            diff_fqdn->will_have_children = diff_fqdn->is_apex;
             
             btree_iterator iter;
             btree_iterator_init(label->resource_record_set, &iter);
@@ -1331,6 +1550,7 @@ zone_diff_add_fqdn(zone_diff *diff, const u8 *fqdn, zdb_rr_label *label)
 #ifdef DEBUG
             log_debug("update: %{dnsname} (%p) label is not in the zone", fqdn, label);
 #endif
+            /*
             diff_fqdn->is_apex = FALSE;
             diff_fqdn->at_delegation = FALSE;
             diff_fqdn->under_delegation = FALSE;
@@ -1338,6 +1558,8 @@ zone_diff_add_fqdn(zone_diff *diff, const u8 *fqdn, zdb_rr_label *label)
             diff_fqdn->was_at_delegation = FALSE;
             diff_fqdn->was_under_delegation = FALSE;
             diff_fqdn->had_ds = FALSE;
+            diff_fqdn->was_non_empty = FALSE;
+            */
         }
     }
 #ifdef DEBUG
@@ -1348,6 +1570,16 @@ zone_diff_add_fqdn(zone_diff *diff, const u8 *fqdn, zdb_rr_label *label)
 #endif
     
     return (zone_diff_fqdn*)node->value;
+}
+
+zone_diff_fqdn*
+zone_diff_add_static_fqdn(zone_diff *diff, const u8 *fqdn, zdb_rr_label *label)
+{ 
+    zone_diff_fqdn *diff_fqdn = zone_diff_add_fqdn(diff, fqdn, label);
+    diff_fqdn->will_be_non_empty = diff_fqdn->was_non_empty;
+    diff_fqdn->will_have_children = diff_fqdn->will_have_children;
+    diff_fqdn->will_have_ds = diff_fqdn->had_ds;
+    return diff_fqdn;
 }
 
 void
@@ -1362,6 +1594,7 @@ zone_diff_add_fqdn_children(zone_diff *diff, const u8 *fqdn, zdb_rr_label *label
         zdb_rr_label *sub_label =  *(zdb_rr_label**)dictionary_iterator_next(&iter);
         dnsname_copy(&sub_fqdn[dnslabel_copy(sub_fqdn, sub_label->name)], fqdn);
         zone_diff_add_fqdn(diff, sub_fqdn, sub_label);
+                
         if(dictionary_notempty(&sub_label->sub))
         {
             zone_diff_add_fqdn_children(diff, sub_fqdn, sub_label);
@@ -1449,6 +1682,85 @@ zone_diff_will_have_rrset_type(const zone_diff_fqdn *diff_fqdn, u16 rtype)
         }
     }
     return FALSE;
+}
+
+/**
+ * Returns true iff an rrset of the given type will be present after applying
+ * the diff.
+ * 
+ * @param diff_fqdn
+ * @param rtype
+ * @return 
+ */
+
+bool
+zone_diff_will_have_dnskey(const zone_diff_fqdn *diff_fqdn, u8 algorithm, u16 flags, u16 tag)
+{
+    u32_node *rrset_node = u32_set_avl_find(&diff_fqdn->rrset, TYPE_DNSKEY);
+    if(rrset_node != NULL)
+    {
+        zone_diff_fqdn_rr_set *rrset = (zone_diff_fqdn_rr_set*)rrset_node->value;
+
+        // @note 20170228 edf -- issue detection
+        // If this aborts, it's likely somebody called zone_diff_fqdn_rr_get without
+        // the intent of putting records in it.
+        // Find it and call zone_diff_will_have_rrset_type instead.
+        yassert(rrset != NULL);
+        
+        ptr_set_avl_iterator rr_iter;
+        ptr_set_avl_iterator_init(&rrset->rr, &rr_iter);
+        while(ptr_set_avl_iterator_hasnext(&rr_iter))
+        {
+            ptr_node *node = ptr_set_avl_iterator_next_node(&rr_iter);
+            zone_diff_label_rr *rr = (zone_diff_label_rr *)node->key;
+
+            if((rr->state & ZONE_DIFF_REMOVE) == 0)
+            {
+                // this record was present or is being added
+                if(rr->rdata_size > 3)
+                {
+                    if(dnskey_get_algorithm_from_rdata(rr->rdata) == algorithm)
+                    {
+                        if(dnskey_get_flags_from_rdata(rr->rdata) == flags)
+                        {
+                            if(dnskey_get_key_tag_from_rdata(rr->rdata, rr->rdata_size) == tag)
+                            {
+                                return TRUE;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return FALSE;
+}
+
+/**
+ * Releases keys that will not be in the apex after the diff is applied.
+ * 
+ * @param diff
+ * @param keys
+ */
+
+void
+zone_diff_filter_out_keys(const zone_diff *diff, ptr_vector *keys)
+{
+    const zone_diff_fqdn *diff_fqdn = zone_diff_get_fqdn(diff, diff->origin);
+    if(diff_fqdn != NULL)
+    {
+        for(int i = 0; i <= ptr_vector_last_index(keys); ++i)
+        {
+            dnssec_key *key = (dnssec_key*)ptr_vector_get(keys, i);
+
+            if(!zone_diff_will_have_dnskey(diff_fqdn, dnssec_key_get_algorithm(key), dnssec_key_get_flags(key), dnssec_key_get_tag(key)))
+            {
+                ptr_vector_end_swap(keys, i);
+                ptr_vector_pop(keys);
+                dnskey_release(key);
+            }
+        }
+    }
 }
 
 /**
@@ -1635,7 +1947,8 @@ void zone_diff_record_remove_all(zone_diff *diff, zdb_rr_label *rr_label, const 
  * @param rtype
  */
 
-void zone_diff_record_remove_all_sets(zone_diff *diff, zdb_rr_label *rr_label, const u8 *fqdn)
+void
+zone_diff_record_remove_all_sets(zone_diff *diff, zdb_rr_label *rr_label, const u8 *fqdn)
 {
     zone_diff_fqdn *diff_fqdn = zone_diff_add_fqdn(diff, fqdn, rr_label);
     
@@ -1840,8 +2153,8 @@ zone_diff_validate(zone_diff *diff)
                         {
                             log_debug("update: %{dnsname}: %{dnsname} under under delegation %{dnsname}", diff->origin,
                                     diff_fqdn->fqdn, parent->fqdn);
-                            under_delegation = TRUE;
                         }
+                        under_delegation = TRUE;
                         break;
                     }
                     
@@ -1851,8 +2164,8 @@ zone_diff_validate(zone_diff *diff)
                         {
                             log_debug("update: %{dnsname}: %{dnsname} under delegation %{dnsname}", diff->origin,
                                     diff_fqdn->fqdn, parent->fqdn);
-                            under_delegation = TRUE;
                         }
+                        under_delegation = TRUE;
                         break;
                     }
                 }
@@ -1860,7 +2173,7 @@ zone_diff_validate(zone_diff *diff)
             
             if(diff_fqdn->under_delegation && !under_delegation)
             {
-                log_debug("update: %{dnsname}: %{dnsname} not under delegation anymore", diff->origin, diff_fqdn->fqdn);
+                log_debug("update: %{dnsname}: %{dnsname} not under delegation anymore", diff->origin, diff_fqdn->fqdn); // + should be signed ?
             }
             
             diff_fqdn->under_delegation = under_delegation;
@@ -1875,9 +2188,18 @@ zone_diff_validate(zone_diff *diff)
                 
                 // check there will be only glue records under this level
             }
+            else
+            {
+                diff_fqdn->at_delegation = FALSE;
+            }
             
             diff_fqdn->will_have_ds = zone_diff_will_have_rrset_type(diff_fqdn, TYPE_DS);
         }
+        
+        log_debug("update: %{dnsname}: validating %{dnsname}: apex=%i at=%i under=%i ds=%i",
+                diff->origin, diff_fqdn_name,
+                diff_fqdn->is_apex, diff_fqdn->at_delegation, diff_fqdn->under_delegation, diff_fqdn->will_have_ds
+                );
     }
     
     return SUCCESS;
@@ -1889,6 +2211,7 @@ struct zone_diff_get_changes_update_rr_parm
     bool rrset_removed;
     bool all_rrset_added;
     bool all_rrset_removed;
+    bool non_empty;
 };
 
 static void
@@ -1911,7 +2234,7 @@ zone_diff_get_changes_update_rrsig_rr(zone_diff_fqdn_rr_set *rr_set, struct zone
         
         yassert(rr->rtype == TYPE_RRSIG);
         
-        if((rr->state & (ZONE_DIFF_IN_ZONE|ZONE_DIFF_ADD|ZONE_DIFF_REMOVE)) == ZONE_DIFF_ADD)
+        if((rr->state & (ZONE_DIFF_IN_ZONE|ZONE_DIFF_ADD|ZONE_DIFF_REMOVE|ZONE_DIFF_ADDED)) == ZONE_DIFF_ADD)
         {
             // add
 #ifdef DEBUG
@@ -1922,6 +2245,7 @@ zone_diff_get_changes_update_rrsig_rr(zone_diff_fqdn_rr_set *rr_set, struct zone
 #endif
             
             ptr_vector_append(add, rr);
+            rr->state |= ZONE_DIFF_ADDED;
 
             // proceed with the chain if needed
 
@@ -1929,18 +2253,19 @@ zone_diff_get_changes_update_rrsig_rr(zone_diff_fqdn_rr_set *rr_set, struct zone
             rrset_removed = FALSE;
             all_rrset_removed = FALSE;
         }
-        else if((rr->state & (ZONE_DIFF_IN_ZONE|ZONE_DIFF_ADD|ZONE_DIFF_REMOVE)) == (ZONE_DIFF_REMOVE|ZONE_DIFF_IN_ZONE))
+        else if((rr->state & (ZONE_DIFF_IN_ZONE|ZONE_DIFF_ADD|ZONE_DIFF_REMOVE|ZONE_DIFF_REMOVED)) == (ZONE_DIFF_REMOVE|ZONE_DIFF_IN_ZONE))
         {
             // remove
             
 #ifdef DEBUG
             rdata_desc rrsig_rr_rd = {rr->rtype, rr->rdata_size, rr->rdata};
             format_writer temp_fw_0 = {zone_diff_record_state_format, &rr->state};
-            log_debug("update: del %w %{dnsname} %9i %{typerdatadesc}",
+            log_debug("update: del %w %{dnsname} %9i %{typerdatadesc} (rrsig-rr)",
                     &temp_fw_0, rr->fqdn, rr->ttl, &rrsig_rr_rd);
 #endif
 
             ptr_vector_append(remove, rr);
+            rr->state |= ZONE_DIFF_REMOVED;
 
             // proceed with the chain if needed
 
@@ -1988,6 +2313,7 @@ zone_diff_get_changes_update_rr(zone_diff_fqdn_rr_set *rr_set, struct zone_diff_
     bool rrset_removed = parm->rrset_removed;
     bool all_rrset_added = parm->all_rrset_added;
     bool all_rrset_removed = parm->all_rrset_removed;
+    bool non_empty = parm->non_empty;
             
     ptr_set_avl_iterator rr_iter;
     
@@ -1998,12 +2324,19 @@ zone_diff_get_changes_update_rr(zone_diff_fqdn_rr_set *rr_set, struct zone_diff_
     {
         ptr_node *rr_node = ptr_set_avl_iterator_next_node(&rr_iter);
         zone_diff_label_rr *rr = (zone_diff_label_rr*)rr_node->value;
-    
-        if((rr->state & (ZONE_DIFF_ADD|ZONE_DIFF_REMOVE)) == ZONE_DIFF_ADD)
+
+        if((rr->state & (ZONE_DIFF_ADD|ZONE_DIFF_REMOVE|ZONE_DIFF_ADDED)) == ZONE_DIFF_ADD)
         {
             // add
-
+            
+#ifdef DEBUG
+            rdata_desc rrsig_rr_rd = {rr->rtype, rr->rdata_size, rr->rdata};
+            format_writer temp_fw_0 = {zone_diff_record_state_format, &rr->state};
+            log_debug("update: add %w %{dnsname} %9i %{typerdatadesc}",
+                    &temp_fw_0, rr->fqdn, rr->ttl, &rrsig_rr_rd);
+#endif
             ptr_vector_append(add, rr);
+            rr->state |= ZONE_DIFF_ADDED;
 
             if(rr->rtype == TYPE_SOA)
             {
@@ -2015,12 +2348,21 @@ zone_diff_get_changes_update_rr(zone_diff_fqdn_rr_set *rr_set, struct zone_diff_
             changes |= ZONE_DIFF_CHANGES_ADD;
             rrset_removed = FALSE;
             all_rrset_removed = FALSE;
+            non_empty = TRUE;
         }
-        else if((rr->state & (ZONE_DIFF_ADD|ZONE_DIFF_REMOVE)) == ZONE_DIFF_REMOVE)
+        else if((rr->state & (ZONE_DIFF_ADD|ZONE_DIFF_REMOVE|ZONE_DIFF_REMOVED)) == ZONE_DIFF_REMOVE)
         {
             // remove
+            
+#ifdef DEBUG
+            rdata_desc rrsig_rr_rd = {rr->rtype, rr->rdata_size, rr->rdata};
+            format_writer temp_fw_0 = {zone_diff_record_state_format, &rr->state};
+            log_debug("update: del %w %{dnsname} %9i %{typerdatadesc} (rr)",
+                    &temp_fw_0, rr->fqdn, rr->ttl, &rrsig_rr_rd);
+#endif
 
             ptr_vector_append(remove, rr);
+            rr->state |= ZONE_DIFF_REMOVED;
 
             if(rr->rtype == TYPE_SOA)
             {
@@ -2034,11 +2376,19 @@ zone_diff_get_changes_update_rr(zone_diff_fqdn_rr_set *rr_set, struct zone_diff_
         }
         else if((rr->state & (ZONE_DIFF_ADD|ZONE_DIFF_REMOVE)) == 0)
         {
+            
+#ifdef DEBUG
+            rdata_desc rrsig_rr_rd = {rr->rtype, rr->rdata_size, rr->rdata};
+            format_writer temp_fw_0 = {zone_diff_record_state_format, &rr->state};
+            log_debug("update: nop %w %{dnsname} %9i %{typerdatadesc}",
+                    &temp_fw_0, rr->fqdn, rr->ttl, &rrsig_rr_rd);
+#endif
             // stays
             changes |= ZONE_DIFF_CHANGES_KEPT;
             rrset_removed = FALSE;
             all_rrset_removed = FALSE;
             all_rrset_added = FALSE;
+            non_empty = TRUE;
         }
         else if((rr->state & ZONE_DIFF_IN_ZONE) != 0)
         {
@@ -2051,6 +2401,7 @@ zone_diff_get_changes_update_rr(zone_diff_fqdn_rr_set *rr_set, struct zone_diff_
     parm->rrset_removed = rrset_removed;
     parm->all_rrset_added = all_rrset_added;
     parm->all_rrset_removed = all_rrset_removed;
+    parm->non_empty = non_empty;
 }
 
 /**
@@ -2071,6 +2422,8 @@ zone_diff_get_changes(zone_diff *diff, dnssec_chain* dc, ptr_vector *rrset_to_si
 {
     ptr_set_avl_iterator fqdn_iter;
     ptr_set_avl_iterator rr_iter;
+      
+    time_t now = time(NULL);
     
     bool dnskey_set_update = FALSE;
     
@@ -2081,6 +2434,7 @@ zone_diff_get_changes(zone_diff *diff, dnssec_chain* dc, ptr_vector *rrset_to_si
     {
         ptr_node *diff_fqdn_node = ptr_set_avl_iterator_next_node(&fqdn_iter);
         const u8 *diff_fqdn_name = (const u8*)diff_fqdn_node->key;
+               
         zone_diff_fqdn *diff_fqdn = (zone_diff_fqdn*)diff_fqdn_node->value;
                 
         // for all rrset
@@ -2088,6 +2442,7 @@ zone_diff_get_changes(zone_diff *diff, dnssec_chain* dc, ptr_vector *rrset_to_si
         bool type_map_changed = FALSE;
         bool all_rrset_added = TRUE;
         bool all_rrset_removed = TRUE;
+        bool non_empty = FALSE;
         
         zone_diff_fqdn_rr_set *rrsig_rr_set = NULL;
         
@@ -2114,6 +2469,24 @@ zone_diff_get_changes(zone_diff *diff, dnssec_chain* dc, ptr_vector *rrset_to_si
                 continue;
             }
             
+#if DYNUPDATE_DIFF_DETAILLED_LOG
+            {
+                // enumerate records
+                
+                ptr_set_avl_iterator rr_iter;
+                ptr_set_avl_iterator_init(&rr_set->rr, &rr_iter);
+                rdata_desc rdatadesc = {rr_set->rtype, 0, NULL};
+                while(ptr_set_avl_iterator_hasnext(&rr_iter))
+                {
+                    ptr_node *rr_node = ptr_set_avl_iterator_next_node(&rr_iter);
+                    zone_diff_label_rr *rr = (zone_diff_label_rr *)rr_node->key;
+                    rdatadesc.len = rr->rdata_size;
+                    rdatadesc.rdata = rr->rdata;
+                    log_debug("update: %02x %{dnsname} %i %{typerdatadesc}", rr->state, rr->fqdn, rr->ttl, &rdatadesc);
+                }
+            }
+#endif  
+            
             if(rr_set->rtype == TYPE_RRSIG)
             {
                 // if allowed ...
@@ -2123,9 +2496,15 @@ zone_diff_get_changes(zone_diff *diff, dnssec_chain* dc, ptr_vector *rrset_to_si
                     u8 changes = ZONE_DIFF_CHANGES_NONE;
                     bool rrset_removed = TRUE;
 
-                    struct zone_diff_get_changes_update_rr_parm parms = {changes, rrset_removed, all_rrset_added, all_rrset_removed};
+                    struct zone_diff_get_changes_update_rr_parm parms = {changes, rrset_removed, all_rrset_added, all_rrset_removed, non_empty};
                     zone_diff_get_changes_update_rrsig_rr(rr_set, &parms, remove, add);
                 }
+#ifdef DEBUG
+                else
+                {
+                    log_debug("update: not updating rrsig-rr at this point");
+                }
+#endif
                 
                 continue;
             }
@@ -2136,18 +2515,17 @@ zone_diff_get_changes(zone_diff *diff, dnssec_chain* dc, ptr_vector *rrset_to_si
                 continue;
             }
             
-            dnskey_set_update |= rr_set->rtype == TYPE_DNSKEY;
-            
             u8 changes = ZONE_DIFF_CHANGES_NONE;
             bool rrset_removed = TRUE;
             
-            struct zone_diff_get_changes_update_rr_parm parms = {changes, rrset_removed, all_rrset_added, all_rrset_removed};
+            struct zone_diff_get_changes_update_rr_parm parms = {changes, rrset_removed, all_rrset_added, all_rrset_removed, non_empty};
             zone_diff_get_changes_update_rr(rr_set, &parms, remove, add);
             
             changes = parms.changes;
             rrset_removed = parms.rrset_removed;
             all_rrset_added = parms.all_rrset_added;
             all_rrset_removed = parms.all_rrset_removed;
+            non_empty = parms.non_empty;
             
             /*
              * If the status is 0, then all the added records that have been added have also been removed => no map change, and no signature change
@@ -2164,51 +2542,123 @@ zone_diff_get_changes(zone_diff *diff, dnssec_chain* dc, ptr_vector *rrset_to_si
                 type_map_changed = TRUE;
             }
             
+            if((rr_set->rtype == TYPE_DNSKEY) && (changes & (ZONE_DIFF_CHANGES_ADD|ZONE_DIFF_CHANGES_REMOVE)))
+            {
+                dnskey_set_update = TRUE;
+            }
+
             if(rrset_node->key == TYPE_RRSIG)
             {
                 continue;
             }
             
-            if(changes & (ZONE_DIFF_CHANGES_ADD|ZONE_DIFF_CHANGES_REMOVE)) // and dnssec ...
+            bool rrset_updated = (changes & (ZONE_DIFF_CHANGES_ADD|ZONE_DIFF_CHANGES_REMOVE));
+            bool rrset_covered_with_chain_rules = (!rrset_removed && (dc != NULL) && dc->chain->fqdn_is_covered(diff_fqdn));
+            bool came_under_delegation = (!diff_fqdn->was_under_delegation && diff_fqdn->under_delegation);
+            bool came_out_of_delegation = (diff_fqdn->was_under_delegation && !diff_fqdn->under_delegation);
+#if 1
+            // for all rrsig, enumerate properly covered types
+            
+            bool rrset_already_covered = FALSE;
+            
+            if(!rrset_updated && !all_rrset_removed && (rrsig_rr_set != NULL)) // else this would be pointless
             {
-                // remove all signatures for the rrset
-                
-                if(rrsig_rr_set != NULL)
+                ptr_set_avl_iterator_init(&rrsig_rr_set->rr, &rr_iter);
+                while(ptr_set_avl_iterator_hasnext(&rr_iter))
                 {
-                    ptr_set_avl_iterator_init(&rrsig_rr_set->rr, &rr_iter);
-                    while(ptr_set_avl_iterator_hasnext(&rr_iter))
+                    ptr_node *rr_node = ptr_set_avl_iterator_next_node(&rr_iter);
+                    zone_diff_label_rr *rrsig_rr = (zone_diff_label_rr *)rr_node->key;
+                    if(rrsig_rr->rdata_size > 18)
                     {
-                        ptr_node *rr_node = ptr_set_avl_iterator_next_node(&rr_iter);
-                        zone_diff_label_rr *rrsig_rr = (zone_diff_label_rr*)rr_node->value;
-                        
-                        if((rrsig_rr->state & ZONE_DIFF_ADD) != 0)
+                        u16 rtype = GET_U16_AT_P(rrsig_rr->rdata);
+
+                        if(rtype != rr_set->rtype)
                         {
                             continue;
                         }
+                        
+                        // check if the signature is with a valid key and is in its validity period
+                        // if it's not valid yet, keep it
+                        // if its expired, remove it
+                        // if no valid signatures are available, may mark the record for signing
+                        
+                        u8 algorithm = rrsig_get_algorithm_from_rdata(rrsig_rr->rdata, rrsig_rr->rdata_size);
+                        u16 tag = rrsig_get_key_tag_from_rdata(rrsig_rr->rdata, rrsig_rr->rdata_size);
+                        
+                        if(dnssec_keystore_is_key_active(diff->origin, algorithm, tag, now))
+                        {                        
+                            u32 valid_until = rrsig_get_valid_until_from_rdata(rrsig_rr->rdata, rrsig_rr->rdata_size);
+                            u32 valid_from = rrsig_get_valid_from_from_rdata(rrsig_rr->rdata, rrsig_rr->rdata_size);
 
-                        u16 type_covered = GET_U16_AT_P(rrsig_rr->rdata);
-
-                        if(type_covered == rr_set->rtype)
-                        {
-                            rrsig_rr->state |= ZONE_DIFF_REMOVE|ZONE_DIFF_AUTOMATED;
-                            ptr_vector_append(remove, rrsig_rr);
-                            (void)rrsig_rr_set;
+                            if((valid_from <= now) && (valid_until >= now))
+                            {
+                                rrset_already_covered = TRUE;
+                                break;
+                            }
                         }
                     }
                 }
+            }
+#endif
+            
+            bool remove_rrset_signatures =  rrset_updated || came_under_delegation;
+            bool add_rrset_signatures =  !rrset_already_covered && (rrset_covered_with_chain_rules || came_out_of_delegation);
+
+            if(remove_rrset_signatures && (rrsig_rr_set != NULL))
+            {
+                log_debug("update: %{dnsname}: dnssec: %{dnsname} %{dnstype} rrset @%p will have its old signatures removed", diff->origin,
+                        diff_fqdn_name, &rr_set->rtype, rr_set);
                 
-                // If the chain believes it has to handle the fqdn, add the rrset to the "to sign"
-                // This does not work with mixed chains (NSEC & NSEC3)
-                
-                if(!rrset_removed && (dc != NULL) && (rrset_to_sign_vector != NULL) && dc->chain->fqdn_is_covered(diff_fqdn))
+                // remove all signatures for the rrset
+
+                ptr_set_avl_iterator_init(&rrsig_rr_set->rr, &rr_iter);
+                while(ptr_set_avl_iterator_hasnext(&rr_iter))
                 {
-                    // will generate new signatures for the rrset (postponed)
+                    ptr_node *rr_node = ptr_set_avl_iterator_next_node(&rr_iter);
+                    zone_diff_label_rr *rrsig_rr = (zone_diff_label_rr*)rr_node->value;
 
-                    log_debug("update: %{dnsname}: dnssec: %{dnsname} %{dnstype} rrset @%p will be signed", diff->origin,
-                            diff_fqdn_name, &rr_set->rtype, rr_set);
+                    if((rrsig_rr->state & ZONE_DIFF_ADD) != 0)
+                    {
+                        continue;
+                    }
 
-                    ptr_vector_append(rrset_to_sign_vector, rr_set);
+                    u16 type_covered = GET_U16_AT_P(rrsig_rr->rdata);
+
+                    if(type_covered == rr_set->rtype)
+                    {
+                        if((rrsig_rr->state & ZONE_DIFF_REMOVED) == 0)
+                        {
+                            rrsig_rr->state |= ZONE_DIFF_REMOVE|ZONE_DIFF_AUTOMATED;
+                        
+#ifdef DEBUG
+                            {
+                                rdata_desc rrsig_rr_rd = {rrsig_rr->rtype, rrsig_rr->rdata_size, rrsig_rr->rdata};
+                                format_writer temp_fw_0 = {zone_diff_record_state_format, &rrsig_rr->state};
+                                log_debug("update: del %w %{dnsname} %9i %{typerdatadesc} (rrsig)",
+                                        &temp_fw_0, rrsig_rr->fqdn, rrsig_rr->ttl, &rrsig_rr_rd);
+                            }
+#endif
+                        
+                            ptr_vector_append(remove, rrsig_rr);
+                            rrsig_rr->state |= ZONE_DIFF_REMOVED;
+                        }
+                    }
                 }
+            }
+
+            // If the chain believes it has to handle the fqdn, add the rrset to the "to sign"
+            // This does not work with mixed chains (NSEC & NSEC3)
+
+            if(add_rrset_signatures && (rrset_to_sign_vector != NULL))
+            {
+                // will generate new signatures for the rrset (postponed)
+                
+                // verify that signatures are not already present
+
+                log_debug("update: %{dnsname}: dnssec: %{dnsname} %{dnstype} rrset @%p should be signed", diff->origin,
+                        diff_fqdn_name, &rr_set->rtype, rr_set);
+
+                ptr_vector_append(rrset_to_sign_vector, rr_set);
             }
         }
         
@@ -2217,9 +2667,23 @@ zone_diff_get_changes(zone_diff *diff, dnssec_chain* dc, ptr_vector *rrset_to_si
         diff_fqdn->type_map_changed = type_map_changed;
         diff_fqdn->all_rrset_added = all_rrset_added;
         diff_fqdn->all_rrset_removed = all_rrset_removed;
+        diff_fqdn->will_be_non_empty = non_empty;
         
-        if(dc != NULL)
+        diff_fqdn->records_flags_set = 1;
+    }
+
+    if(dc != NULL)
+    {    
+        ptr_set_avl_iterator_init(&diff->fqdn, &fqdn_iter);
+        while(ptr_set_avl_iterator_hasnext(&fqdn_iter))
         {
+            ptr_node *diff_fqdn_node = ptr_set_avl_iterator_next_node(&fqdn_iter);
+            const u8 *diff_fqdn_name = (const u8*)diff_fqdn_node->key;
+
+            zone_diff_fqdn *diff_fqdn = (zone_diff_fqdn*)diff_fqdn_node->value;
+        
+            zone_diff_fqdn_children_state(diff, diff_fqdn->fqdn);
+
             // calling dnssec_chain_del_from_diff_fqdn and dnssec_chain_add_from_diff_fqdn respectively
             // tell to remove or to add a chain node (NSEC/NSEC3) for the given fqdn in the zone.
             
@@ -2253,77 +2717,45 @@ zone_diff_get_changes(zone_diff *diff, dnssec_chain* dc, ptr_vector *rrset_to_si
 #define CHAIN_NODE_NOP 0            
 #define CHAIN_NODE_DEL 1
 #define CHAIN_NODE_ADD 2
-            
-            static const int chain_coverage_table[16]=
-            {
-                CHAIN_NODE_NOP,
-                CHAIN_NODE_NOP,
-                CHAIN_NODE_NOP,
-                CHAIN_NODE_NOP,
-                
-                CHAIN_NODE_ADD,
-                CHAIN_NODE_NOP,
-                CHAIN_NODE_ADD,
-                CHAIN_NODE_ADD,
-                
-                CHAIN_NODE_NOP,
-                CHAIN_NODE_DEL,
-                CHAIN_NODE_DEL,
-                CHAIN_NODE_DEL,
-                
-                CHAIN_NODE_ADD,
-                CHAIN_NODE_DEL,
-                CHAIN_NODE_NOP,
-                CHAIN_NODE_DEL|CHAIN_NODE_ADD
-            };
-
             bool is_covered = dc->chain->fqdn_is_covered(diff_fqdn);
             bool was_covered = dc->chain->fqdn_was_covered(diff_fqdn);
             
-            log_debug("update: %{dnsname}: dnssec: %{dnsname}: +ALL(%i) -ALL(%i) COVERED(%i->%i) UNDER(%i->%i) MAP(%i)",
+            log_debug("update: %{dnsname}: dnssec: %{dnsname}: +ALL(%i) -ALL(%i) COVERED(%i->%i) CHILDREN(%i->%i) AT(%i->%i) UNDER(%i->%i) MAP(%i)",
                     diff->origin,
                     diff_fqdn_name,
-                    all_rrset_added,
-                    all_rrset_removed,
+                    diff_fqdn->all_rrset_added,
+                    diff_fqdn->all_rrset_removed,
                     was_covered, is_covered,
+                    diff_fqdn->had_children, diff_fqdn->will_have_children,
+                    diff_fqdn->was_at_delegation, diff_fqdn->at_delegation,
                     diff_fqdn->was_under_delegation, diff_fqdn->under_delegation,
-                    type_map_changed);
+                    diff_fqdn->type_map_changed);
             
             if(was_covered || is_covered) // quickly cull the first 4 states of the table
             {
-                int ops_index;
+                bool did_exist = diff_fqdn->had_children || diff_fqdn->was_non_empty;
+                bool will_exist = diff_fqdn->will_have_children || diff_fqdn->will_be_non_empty;
+                u8 ops = 0;
                 
-                // get the index in the table from the various states
-                
-                if(all_rrset_added)
+                if( (diff_fqdn->had_children != diff_fqdn->will_have_children) ||
+                    (diff_fqdn->all_rrset_added) ||
+                    (diff_fqdn->all_rrset_removed) ||
+                    (diff_fqdn->type_map_changed))
                 {
-                    ops_index = 0;
+                    if(was_covered && did_exist)
+                    {
+                        ops |= CHAIN_NODE_DEL;
+                    }
+
+                    if(is_covered && will_exist)
+                    {
+                        ops |= CHAIN_NODE_ADD;
+                    }
                 }
-                else if(all_rrset_removed)
-                {
-                    ops_index = 1;
-                }
-                else if(type_map_changed)
-                {
-                    ops_index = 3;
-                }
-                else
-                {
-                    ops_index = 2;
-                }
-                
-                if(was_covered)
-                {
-                    ops_index |= 8;
-                }
-                
-                if(is_covered)
-                {
-                    ops_index |= 4;
-                }
-                
-                int ops = chain_coverage_table[ops_index];
-                
+
+#ifdef DEBUG
+                log_debug("update: %{dnsname}: dnssec: %{dnsname}: operation %x", diff->origin, diff_fqdn_name, ops);
+#endif
                 if(ops & CHAIN_NODE_DEL)
                 {
                     log_debug("update: %{dnsname}: dnssec: %{dnsname}: removing chain node", diff->origin, diff_fqdn_name);
@@ -2370,11 +2802,11 @@ zone_diff_has_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector)
     {
         ptr_node *diff_fqdn_node = ptr_set_avl_iterator_next_node(&fqdn_iter);
         zone_diff_fqdn *diff_fqdn = (zone_diff_fqdn*)diff_fqdn_node->value;
-        
+#if 0
         bool type_map_changed = FALSE;
         bool all_rrset_added = TRUE;
         bool all_rrset_removed = TRUE;
-
+#endif
         // for all records
         
         u32_set_avl_iterator rrset_iter;
@@ -2384,9 +2816,9 @@ zone_diff_has_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector)
             u32_node *rrset_node = u32_set_avl_iterator_next_node(&rrset_iter);
             
             zone_diff_fqdn_rr_set *rr_set = (zone_diff_fqdn_rr_set*)rrset_node->value;
-
+#if 0
             u8 changes = ZONE_DIFF_CHANGES_NONE;
-            
+#endif
             // for all marked rr
             
             ptr_set_avl_iterator_init(&rr_set->rr, &rr_iter);
@@ -2394,12 +2826,10 @@ zone_diff_has_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector)
             {
                 ptr_node *rr_node = ptr_set_avl_iterator_next_node(&rr_iter);
                 zone_diff_label_rr *rr = (zone_diff_label_rr*)rr_node->value;
-                
 #ifdef DEBUG
                 rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
                 log_debug1("update: %{dnsname}: has-changes: state %02x: %{dnsname} %9i %{typerdatadesc}", diff->origin, rr->state, rr->fqdn, rr->ttl, &rd);
 #endif
-                
                 if((rr->state & (ZONE_DIFF_ADD|ZONE_DIFF_REMOVE)) == ZONE_DIFF_ADD)
                 {
                     // add
@@ -2410,6 +2840,7 @@ zone_diff_has_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector)
                     // remove
                     return TRUE;
                 }
+#if 0
                 else if((rr->state & (ZONE_DIFF_ADD|ZONE_DIFF_REMOVE)) == 0)
                 {
                     // stays
@@ -2417,9 +2848,11 @@ zone_diff_has_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector)
                     all_rrset_removed = FALSE;
                     all_rrset_added = FALSE;
                 }
+#endif
             }
         }
         
+#if 0
         // if type_map_changes, the type map has to be updated and the signature too, obviously
         
         if(type_map_changed||all_rrset_added||all_rrset_removed)
@@ -2430,6 +2863,7 @@ zone_diff_has_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector)
 #endif
             return TRUE;
         }
+#endif
     }
     
     return FALSE;
@@ -2458,6 +2892,9 @@ zone_diff_fqdn_log(const u8 *origin, const zone_diff_fqdn* diff_fqdn)
         origin = (const u8 *)"\004NULL";
     }
 
+    format_writer temp_fw_1 = {zone_diff_fqdn_changes_format, diff_fqdn};
+    log_debug("zone-diff: %{dnsname}: %{dnsname}: %w (map changed: %i)", origin, diff_fqdn_name, &temp_fw_1, type_map_changed);
+    
     // for all records
 
     u32_set_avl_iterator rrset_iter;
@@ -2470,13 +2907,9 @@ zone_diff_fqdn_log(const u8 *origin, const zone_diff_fqdn* diff_fqdn)
 
         if(rr_set == NULL)
         {
-            log_debug("zone-diff: %{dnsname}: %{dnsname} has no record set (type map changed: %i)", origin, diff_fqdn_name, type_map_changed);
+            log_debug("zone-diff: %{dnsname}: %{dnsname} has no record set (%i)", origin, diff_fqdn_name, rrset_node->key);
             continue;
         }
-
-        format_writer temp_fw_1 = {zone_diff_fqdn_changes_format, diff_fqdn};
-
-        log_debug("zone-diff: %{dnsname}: %{dnsname}: %w (map changed: %i)", origin, diff_fqdn_name, &temp_fw_1, type_map_changed);
 
         ptr_set_avl_iterator rr_iter;
 
@@ -2656,7 +3089,7 @@ zone_diff_sign(zone_diff *diff, zdb_zone *zone, ptr_vector* rrset_to_sign_vector
                 
                 yassert(rrsig_label_rrset != NULL);
                 
-                rrsig_rr = zone_diff_fqdn_rr_set_add(rrsig_label_rrset, rrsig_rr);
+                rrsig_rr = zone_diff_fqdn_rr_set_add(rrsig_label_rrset, rrsig_rr); /// @note not VOLATILE
                 
                 ptr_vector_append(add, rrsig_rr);
                 //(void)rrsig_rr_set;
@@ -2811,6 +3244,11 @@ zone_diff_store_diff(zone_diff *diff, zdb_zone *zone, ptr_vector *remove, ptr_ve
             // no need to populate the KSKs if we are not working on an DNSKEY anywhere
 
             dnssec_keystore_acquire_activated_keys_from_fqdn_to_vectors(diff->origin, (dnskey_set_update)?&ksks:NULL, &zsks);
+            
+            // the above function returns keys that are supposed to be active
+            // we must also ensure that these keys are/will be in the zone so we can sign using them
+            zone_diff_filter_out_keys(diff, &ksks);
+            zone_diff_filter_out_keys(diff, &zsks);
 
             // sign the records, store the changes in vectors
 
@@ -2989,10 +3427,10 @@ dynupdate_diff_write_to_journal_and_replay(zdb_zone *zone, u8 secondary_lock, pt
         for(int i = 0; i <= ptr_vector_last_index(del_vector); ++i)
         {
             zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(del_vector, i);
-            /*
+#ifdef DEBUG
             rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
-            log_debug("update: %{dnsname}: - %{dnsname} %9i %{typerdatadesc}", zone->origin, rr->fqdn, rr->ttl, &rd);
-            */
+            log_debug("update: %{dnsname}: sending - %{dnsname} %9i %{typerdatadesc}", zone->origin, rr->fqdn, rr->ttl, &rd);
+#endif
             output_stream_write_dnsname(&baos, rr->fqdn);
             output_stream_write_u16(&baos, rr->rtype);
             output_stream_write_u16(&baos, rr->rclass);
@@ -3009,10 +3447,10 @@ dynupdate_diff_write_to_journal_and_replay(zdb_zone *zone, u8 secondary_lock, pt
         for(int i = 0; i <= ptr_vector_last_index(add_vector); ++i)
         {
             zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(add_vector, i);
-            /*
+#ifdef DEBUG
             rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
-            log_debug("update: %{dnsname}: + %{dnsname} %9i %{typerdatadesc}", zone->origin, rr->fqdn, rr->ttl, &rd);
-            */
+            log_debug("update: %{dnsname}: sending + %{dnsname} %9i %{typerdatadesc}", zone->origin, rr->fqdn, rr->ttl, &rd);
+#endif
             output_stream_write_dnsname(&baos, rr->fqdn);
             output_stream_write_u16(&baos, rr->rtype);
             output_stream_write_u16(&baos, rr->rclass);
@@ -3100,7 +3538,7 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
     yassert(zdb_zone_islocked(zone));
     
 #ifdef DEBUG
-    log_debug("dynupdate_diff(%{dnsname}@%p, %p, %i, %x, %i) ///////////////////////////////////////////////",
+    log_debug("dynupdate_diff(%{dnsname}@%p, %p, %i, %x, %i)",
             zone->origin, zone, reader, count, secondary_lock, dryrun);
 #endif    
     
@@ -3378,6 +3816,18 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
                     
                     if(exists)
                     {
+                        if((rr_label != zone->apex) && (rtype == TYPE_NS))
+                        {
+                            // check if some non-glue records are becoming glues ...
+                            // this is a delegation
+
+                            if(dictionary_notempty(&rr_label->sub))
+                            {
+                                // add the labels below
+                                zone_diff_add_fqdn_children(&diff, rname, rr_label);
+                            }
+                        }
+                        
                         zone_diff_record_remove(&diff, rr_label, rname, rtype, rttl, rdata_size, rdata);
                     }
                     else
@@ -3434,6 +3884,17 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
 #endif
                     if(zdb_record_find(&rr_label->resource_record_set, rtype) != NULL)
                     {
+                        if((rtype == TYPE_NS) && (rr_label != zone->apex))
+                        {
+                            // this is a delegation
+
+                            if(dictionary_notempty(&rr_label->sub))
+                            {
+                                // add the labels below
+                                zone_diff_add_fqdn_children(&diff, rname, rr_label);
+                            }
+                        }
+                        
                         zone_diff_record_remove_all(&diff, rr_label, rname, rtype);
                     }
                     else
@@ -3462,6 +3923,18 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
                         log_debug("update: %{dnsname}: %{dnsname} is irrelevant (2)", zone->origin, rname);
                     }
 #endif
+                    if((rr_label != zone->apex) && (zdb_record_find(&rr_label->resource_record_set, TYPE_NS) != NULL))
+                    {
+                        // check if some non-glue records are becoming glues ...
+                        // this is a delegation
+
+                        if(dictionary_notempty(&rr_label->sub))
+                        {
+                            // add the labels below
+                            zone_diff_add_fqdn_children(&diff, rname, rr_label);
+                        }
+                    }
+                    
                     zone_diff_record_remove_all_sets(&diff, rr_label, rname);
                 }
                 else

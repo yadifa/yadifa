@@ -1,37 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2017, EURid. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
-/** @defgroup nsec3 NSEC3 functions
+ *
+ * Copyright (c) 2011-2017, EURid. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright 
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright 
+ *          notice, this list of conditions and the following disclaimer in the 
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be 
+ *          used to endorse or promote products derived from this software 
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ */
+/* DOCUMENTATION
+ * @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
  *
@@ -142,7 +142,7 @@ nsec3_chain_replay_record_delete(nsec3_chain_replay_record *record)
 {
 #if NSEC3_CHAIN_REPLAY_DEBUG
     rdata_desc nsec3_desc = {record->rtype, record->rdata_size, nsec3_chain_replay_record_rdata(record)};
-    log_debug("nsec3-chain: record delete %{dnsname} %i %{typerdatadesc}", nsec3_chain_replay_record_fqdn(record), record->ttl, &nsec3_desc);
+    log_debug("nsec3-chain: record free %{dnsname} %i %{typerdatadesc}", nsec3_chain_replay_record_fqdn(record), record->ttl, &nsec3_desc);
 #endif
     
     ZFREE_ARRAY(record, sizeof(nsec3_chain_replay_record) + record->fqdn_len + record->rdata_size);
@@ -267,11 +267,20 @@ nsec3_chain_replay_record_add_fqdn(nsec3_chain_replay_data *crd, const u8 *fqdn)
 static ya_result
 nsec3_chain_replay_record_del(chain_replay *cr, const u8 *fqdn, u16 rtype, const zdb_ttlrdata *ttlrdata)
 {
+    yassert((ttlrdata != NULL) || ((ttlrdata == NULL) && (rtype == TYPE_NONE)));
+    
     nsec3_chain_replay_data *crd = (nsec3_chain_replay_data*)cr->data;
     
 #ifdef DEBUG
-    rdata_desc type_len_rdata = {rtype, ZDB_RECORD_PTR_RDATASIZE(ttlrdata), ZDB_RECORD_PTR_RDATAPTR(ttlrdata)};
-    log_debug("nsec3-chain: del %{dnsname} %{typerdatadesc}", fqdn, &type_len_rdata);
+    if(ttlrdata != NULL)
+    {
+        rdata_desc type_len_rdata = {rtype, ZDB_RECORD_PTR_RDATASIZE(ttlrdata), ZDB_RECORD_PTR_RDATAPTR(ttlrdata)};
+        log_debug("nsec3-chain: del %{dnsname} %{typerdatadesc}", fqdn, &type_len_rdata);
+    }
+    else
+    {
+        log_debug("nsec3-chain: del %{dnsname} (fqdn)", fqdn);
+    }
 #endif
     
     switch(rtype)
@@ -312,11 +321,20 @@ nsec3_chain_replay_record_del(chain_replay *cr, const u8 *fqdn, u16 rtype, const
 static ya_result
 nsec3_chain_replay_record_add(chain_replay *cr, const u8 *fqdn, u16 rtype, const zdb_ttlrdata *ttlrdata)
 {
+    yassert((ttlrdata != NULL) || ((ttlrdata == NULL) && (rtype == TYPE_NONE)));
+    
     nsec3_chain_replay_data *crd = (nsec3_chain_replay_data*)cr->data;
     
 #ifdef DEBUG
-    rdata_desc type_len_rdata = {rtype, ZDB_RECORD_PTR_RDATASIZE(ttlrdata), ZDB_RECORD_PTR_RDATAPTR(ttlrdata)};
-    log_debug("nsec3-chain: add %{dnsname} %{typerdatadesc}", fqdn, &type_len_rdata);
+    if(ttlrdata != NULL)
+    {
+        rdata_desc type_len_rdata = {rtype, ZDB_RECORD_PTR_RDATASIZE(ttlrdata), ZDB_RECORD_PTR_RDATAPTR(ttlrdata)};
+        log_debug("nsec3-chain: add %{dnsname} %{typerdatadesc}", fqdn, &type_len_rdata);
+    }
+    else
+    {
+        log_debug("nsec3-chain: add %{dnsname} (fqdn)", fqdn);
+    }
 #endif
     
     switch(rtype)
@@ -812,13 +830,6 @@ nsec3_chain_replay_execute(chain_replay *cr)
     ptr_vector_free_empties(&crd->del_nsec3param_records, nsec3_chain_replay_record_delete_cb);
     ptr_vector_free_empties(&crd->add_nsec3param_records, nsec3_chain_replay_record_delete_cb);
     ptr_set_avl_callback_and_destroy(&crd->fqdns, nsec3_chain_replay_fqdn_key_delete);
-    
-#ifdef DEBUG
-    // check the correlations between the two databases (zone + zone.nsec3)
-
-    nsec3_check(crd->zone); // DEBUG BUILD
-   
-#endif
     
     return SUCCESS;
 }

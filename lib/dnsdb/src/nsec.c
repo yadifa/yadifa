@@ -875,6 +875,8 @@ nsec_logdump_tree(zdb_zone *zone)
     log_debug("done dumping zone %{dnsname} nsec tree", zone->origin);
 }
 
+#if HAS_MASTER_SUPPORT
+
 /**
  * marks the zone with private records
  * 
@@ -883,7 +885,6 @@ nsec_logdump_tree(zdb_zone *zone)
  * 
  * @return an error code
  */
-
 
 ya_result
 nsec_zone_set_status(zdb_zone *zone, u8 secondary_lock, u8 status)
@@ -919,6 +920,8 @@ nsec_zone_set_status(zdb_zone *zone, u8 secondary_lock, u8 status)
         
     return ret;
 }
+
+#endif
 
 /**
  * gets the zone status from private records

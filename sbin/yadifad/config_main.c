@@ -161,9 +161,9 @@ CONFIG_FLAG16(   answer_formerr_packets      , S_ANSWER_FORMERR_PACKETS  , serve
 CONFIG_STRING(   server_port                 , S_SERVERPORT               ) // doc
 /* Switch for cache server or not              */
 
-CONFIG_FLAG16(   statistics                  , S_STATISTICS              , server_flags,  SERVER_FL_STATISTICS) /* Maximum number of seconds between two statistics lines */ // doc
+CONFIG_FLAG16(   statistics                  , S_STATISTICS              , server_flags,  SERVER_FL_STATISTICS) /* enable the statistics */ // doc
 
-CONFIG_U32(      statistics_max_period       , S_STATISTICS_MAX_PERIOD    ) // doc
+CONFIG_U32(      statistics_max_period       , S_STATISTICS_MAX_PERIOD    ) /* Maximum number of seconds between two statistics lines */ // doc
 CONFIG_U32(      xfr_connect_timeout         , S_XFR_CONNECT_TIMEOUT      ) // doc
 CONFIG_U32(      queries_log_type            , S_QUERIES_LOG_TYPE         ) // doc
 

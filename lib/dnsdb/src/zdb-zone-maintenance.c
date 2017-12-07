@@ -67,10 +67,34 @@
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
+#define ZDB_ZONE_MAINTENANCE_DETAILED_LOG 1
+
 static void
 zdb_zone_maintenance_validate_sign_chain_store(zdb_zone_maintenance_ctx *mctx, zone_diff *diff, zdb_zone *zone, ptr_vector *rrset_to_sign, ptr_vector *remove, ptr_vector *add)
 {
     ya_result ret;
+    
+    log_debug("maintenance: validate-sign-chain-store: %{dnsname}", zone->origin);
+    
+#if ZDB_ZONE_MAINTENANCE_DETAILED_LOG
+    for(int i = 0; i <= ptr_vector_last_index(remove); ++i)
+    {
+        zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(remove, i);
+        rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+        log_debug("before-validate: %{dnsname}: - %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+    }
+
+    for(int i = 0; i <= ptr_vector_last_index(add); ++i)
+    {
+        zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(add, i);
+        rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+        log_debug("before-validate: %{dnsname}: + %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+    }
+
+    logger_flush();
+#endif
     
     if(ISOK(ret = zone_diff_validate(diff)))
     {
@@ -78,6 +102,26 @@ zdb_zone_maintenance_validate_sign_chain_store(zdb_zone_maintenance_ctx *mctx, z
         log_debug("maintenance: %{dnsname}: diff validated", diff->origin);
 #endif
         // store changes in vectors and get the RR sets to sign
+        
+#if ZDB_ZONE_MAINTENANCE_DETAILED_LOG
+        for(int i = 0; i <= ptr_vector_last_index(remove); ++i)
+        {
+            zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(remove, i);
+            rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+            log_debug("before-get-changes: %{dnsname}: - %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+        }
+
+        for(int i = 0; i <= ptr_vector_last_index(add); ++i)
+        {
+            zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(add, i);
+            rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+            log_debug("before-get-changes: %{dnsname}: + %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+        }
+
+        logger_flush();
+#endif
 
         bool dnskey_set_update = zone_diff_get_changes(diff, NULL, rrset_to_sign, remove, add);
 
@@ -87,14 +131,94 @@ zdb_zone_maintenance_validate_sign_chain_store(zdb_zone_maintenance_ctx *mctx, z
         // no need to populate the KSKs if we are not working on an DNSKEY anywhere
 
         dnssec_keystore_acquire_activated_keys_from_fqdn_to_vectors(diff->origin, (dnskey_set_update)?&ksks:NULL, &zsks);
+        
+        // the above function returns keys that are supposed to be active
+        // we must also ensure that these keys are/will be in the zone so we can sign using them
+        zone_diff_filter_out_keys(diff, &ksks);
+        zone_diff_filter_out_keys(diff, &zsks);
 
         // sign the records, store the changes in vectors
+        
+#if ZDB_ZONE_MAINTENANCE_DETAILED_LOG
+        for(int i = 0; i <= ptr_vector_last_index(remove); ++i)
+        {
+            zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(remove, i);
+            rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+            log_debug("before-diff-sign: %{dnsname}: - %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+        }
+
+        for(int i = 0; i <= ptr_vector_last_index(add); ++i)
+        {
+            zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(add, i);
+            rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+            log_debug("before-diff-sign: %{dnsname}: + %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+        }
+        
+        logger_flush();
+#endif
 
         zone_diff_sign(diff, zone, rrset_to_sign, &ksks, &zsks, remove, add);
 
+#if ZDB_ZONE_MAINTENANCE_DETAILED_LOG
+        for(int i = 0; i <= ptr_vector_last_index(remove); ++i)
+        {
+            zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(remove, i);
+            rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+            log_debug("before-nsec-chain-store-diff: %{dnsname}: - %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+        }
+
+        for(int i = 0; i <= ptr_vector_last_index(add); ++i)
+        {
+            zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(add, i);
+            rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+            log_debug("before-nsec-chain-store-diff: %{dnsname}: + %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+        }
+#endif
+        
         dnssec_chain_store_diff(&mctx->nsec_chain_updater, diff, &mctx->zsks, remove, add);
+        
+#if ZDB_ZONE_MAINTENANCE_DETAILED_LOG
+        for(int i = 0; i <= ptr_vector_last_index(remove); ++i)
+        {
+            zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(remove, i);
+            rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+            log_debug("before-nsec3-chain-store-diff: %{dnsname}: - %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+        }
+
+        for(int i = 0; i <= ptr_vector_last_index(add); ++i)
+        {
+            zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(add, i);
+            rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+            log_debug("before-nsec3-chain-store-diff: %{dnsname}: + %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+        }
+#endif
+        
         dnssec_chain_store_diff(&mctx->nsec3_chains_updater, diff, &mctx->zsks, remove, add);
 
+#if ZDB_ZONE_MAINTENANCE_DETAILED_LOG
+        for(int i = 0; i <= ptr_vector_last_index(remove); ++i)
+        {
+            zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(remove, i);
+            rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+            log_debug("when-all-is-said-and-done: %{dnsname}: - %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+        }
+
+        for(int i = 0; i <= ptr_vector_last_index(add); ++i)
+        {
+            zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(add, i);
+            rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+            log_debug("when-all-is-said-and-done: %{dnsname}: + %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+        }
+#endif
+        
         dnssec_keystore_release_keys_from_vector(&zsks);
         dnssec_keystore_release_keys_from_vector(&ksks);
 
@@ -182,9 +306,20 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
     {
         log_debug("maintenance: %{dnsname}: has %i KSKs and %i ZSKs", zone->origin, mctx.ksk_count, mctx.zsk_count);
         
+#ifdef DEBUG
+        {
+            dnssec_key_sll* key = mctx.keys;
+            while(key != NULL)
+            {
+                log_debug("maintenance: DNSKEY: %{dnsname}-%i-%i/%i", key->key->owner_name, key->key->algorithm, key->key->tag, key->key->flags);
+                key = key->next;
+            }
+        }
+#endif
+        
         ptr_vector rrset_to_sign = EMPTY_PTR_VECTOR;
         
-        zone_diff_fqdn *apex = zone_diff_add_fqdn(&diff, diff.origin, zone->apex);
+        zone_diff_fqdn *apex = zone_diff_add_static_fqdn(&diff, diff.origin, zone->apex);
         
 
         zdb_zone_label_iterator iter;
@@ -270,7 +405,7 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
                 zdb_rr_label *rr_label = zdb_zone_label_iterator_next(&iter);
                 mctx.label = rr_label;
 
-                zone_diff_fqdn *diff_fqdn = zone_diff_add_fqdn(&diff, mctx.fqdn, rr_label);
+                zone_diff_fqdn *diff_fqdn = zone_diff_add_static_fqdn(&diff, mctx.fqdn, rr_label);
                 
                 int action_count;
 
@@ -324,7 +459,43 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
                 ptr_vector_append(&rrset_to_sign, soa_rrset);
             }
             
+#if ZDB_ZONE_MAINTENANCE_DETAILED_LOG
+            for(int i = 0; i <= ptr_vector_last_index(&remove); ++i)
+            {
+                zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(&remove, i);
+                rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+                log_debug("before-validate-sign: %{dnsname}: - %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+            }
+
+            for(int i = 0; i <= ptr_vector_last_index(&add); ++i)
+            {
+                zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(&add, i);
+                rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+                log_debug("before-validate-sign: %{dnsname}: + %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+            }
+#endif
+            
             zdb_zone_maintenance_validate_sign_chain_store(&mctx, &diff, zone, &rrset_to_sign, &remove, &add);
+            
+#if ZDB_ZONE_MAINTENANCE_DETAILED_LOG
+            for(int i = 0; i <= ptr_vector_last_index(&remove); ++i)
+            {
+                zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(&remove, i);
+                rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+                log_debug("after-validate-sign: %{dnsname}: - %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+            }
+
+            for(int i = 0; i <= ptr_vector_last_index(&add); ++i)
+            {
+                zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(&add, i);
+                rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+                log_debug("after-validate-sign: %{dnsname}: + %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+            }
+#endif
         }
         else
         {
@@ -417,7 +588,43 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
                         ptr_vector_append(&rrset_to_sign, soa_rrset);
                     }
                     
+#if ZDB_ZONE_MAINTENANCE_DETAILED_LOG
+                    for(int i = 0; i <= ptr_vector_last_index(&remove); ++i)
+                    {
+                        zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(&remove, i);
+                        rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+                        log_debug("before-validate-sign: %{dnsname}: - %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+                    }
+
+                    for(int i = 0; i <= ptr_vector_last_index(&add); ++i)
+                    {
+                        zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(&add, i);
+                        rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+                        log_debug("before-validate-sign: %{dnsname}: + %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+                    }
+#endif
+                    
                     zdb_zone_maintenance_validate_sign_chain_store(&mctx, &diff, zone, &rrset_to_sign, &remove, &add);
+                    
+#if ZDB_ZONE_MAINTENANCE_DETAILED_LOG
+                    for(int i = 0; i <= ptr_vector_last_index(&remove); ++i)
+                    {
+                        zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(&remove, i);
+                        rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+                        log_debug("after-validate-sign: %{dnsname}: - %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+                    }
+
+                    for(int i = 0; i <= ptr_vector_last_index(&add); ++i)
+                    {
+                        zone_diff_label_rr *rr = (zone_diff_label_rr*)ptr_vector_get(&add, i);
+                        rdata_desc rd = {rr->rtype, rr->rdata_size, rr->rdata};
+
+                        log_debug("after-validate-sign: %{dnsname}: + %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
+                    }
+#endif
                 }
             }
         }

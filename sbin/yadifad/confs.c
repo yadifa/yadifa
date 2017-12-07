@@ -561,11 +561,6 @@ yadifad_config_update(const char *config_file)
     config_error_s cfgerr;
     ya_result return_code = ERROR;
     
-    /// @todo 20130930 edf -- apply ZONE_STATUS_DROP_AFTER_RELOAD
-    
-    /// @todo 20131203 edf -- There MUST be an event that clears a "reloading" status, in order
-    ///       to block smashing the HUPs
-    
     if(database_zone_try_reconfigure_enable())
     {
         journal_close_unused();

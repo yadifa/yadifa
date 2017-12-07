@@ -203,6 +203,18 @@ ya_result zdb_rr_label_delete_record(zdb_zone* zone, dnslabel_vector_reference p
 ya_result zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path, s32 path_index, u16 type, const zdb_ttlrdata* ttlrdata);
 
 /**
+ * For all tool to browse all labels under this one
+ * 
+ * @param rr_label
+ * @param type
+ * @return 
+ */
+
+typedef ya_result zdb_rr_label_forall_cb(zdb_rr_label *rr_label, const u8 *rr_label_fqdn, void *data);
+
+ya_result zdb_rr_label_forall_children_of_fqdn(zdb_rr_label *rr_label, const u8 *rr_label_fqdn, zdb_rr_label_forall_cb *callback, void *data);
+
+/**
  * @brief Deletes an EMPTY label
  *
  * Deletes an EMPTY label an all it's EMPTY parents
@@ -226,7 +238,6 @@ static inline bool zdb_rr_label_has_rrset(const zdb_rr_label *rr_label, u16 type
     bool ret = (zdb_rr_label_get_rrset(rr_label, type) != NULL); // zone is locked
     return ret;
 }
-
 
 /**
  * @brief Destroys a zone label and its contents

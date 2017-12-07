@@ -969,7 +969,7 @@ static void
 logger_service_sink_all_channels()
 {
 #if DEBUG_LOG_HANDLER
-    osformatln(termout, "logger_service_reopen_all_channels()");
+    osformatln(termout, "logger_service_sink_all_channels()");
     flushout();
 #endif
     ptr_set_avl_iterator iter;
@@ -1835,7 +1835,7 @@ s32
 logger_handle_count_channels(const char *logger_name)
 {
 #if DEBUG_LOG_HANDLER
-    osformatln(termout, "logger_handle_remove_channel(%s,%s) ", logger_name, channel_name);
+    osformatln(termout, "logger_handle_count_channels(%s,%s) ", logger_name);
     flushout();
 #endif
     

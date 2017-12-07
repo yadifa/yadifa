@@ -176,7 +176,7 @@ struct zdb_zone_answer_axfr_write_file_args
 static void
 zdb_zone_answer_axfr_thread_exit(scheduler_queue_zone_write_axfr_args* data)
 {
-    log_debug("zone write axfr: ended with: %r", data->return_code);
+    log_debug("zone write axfr: %{dnsname}: ended with: %r", data->zone->origin, data->return_code);
     
     zdb_zone_release(data->zone);
     
@@ -225,7 +225,7 @@ zdb_zone_answer_axfr_write_file_thread(void* data_)
 
     if(ISOK(storage->return_code))
     {
-        log_info("zone write axfr: stored %{dnsname} %d", storage->zone->origin, storage->serial);
+        log_info("zone write axfr: %{dnsname}: stored %d", storage->zone->origin, storage->serial);
 
         if(rename(storage->pathpart, storage->path) >= 0)
         {
@@ -241,12 +241,12 @@ zdb_zone_answer_axfr_write_file_thread(void* data_)
             storage->zone->axfr_timestamp = 1;
             storage->return_code = ERRNO_ERROR;
 
-            log_err("zone write axfr: error renaming '%s' into '%s': %r", storage->pathpart, storage->path, storage->return_code);
+            log_err("zone write axfr: %{dnsname}: error renaming '%s' into '%s': %r", storage->zone->origin, storage->pathpart, storage->path, storage->return_code);
         }
     }
     else
     {
-        log_err("zone write axfr: error writing '%s': %r", storage->pathpart, storage->return_code);
+        log_err("zone write axfr: %{dnsname}: error writing '%s': %r", storage->zone->origin, storage->pathpart, storage->return_code);
 
         // cannot create error : SERVFAIL
         
@@ -295,8 +295,8 @@ zdb_zone_answer_axfr_thread(void* data_)
     /* locks the zone for a reader */
     
 #ifdef DEBUG
-    log_debug("zone write axfr: locking for AXFR");
-    log_debug("zone write axfr: socket is %d", tcpfd);
+    log_debug("zone write axfr: %{dnsname}: locking for AXFR", data->zone->origin);
+    log_debug("zone write axfr: %{dnsname}: socket is %d", data->zone->origin, tcpfd);
 #endif
     
     if(tcpfd < 0)
@@ -333,7 +333,6 @@ zdb_zone_answer_axfr_thread(void* data_)
     
     if(FAIL(zdb_zone_getserial(data_zone, &serial))) // zone is locked
     {
-        /** @todo 20121113 edf -- error other than "does not exists" : SERVFAIL */
         zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
 
         log_err("zone write axfr: %{dnsname}: no SOA", data_zone->origin);
@@ -424,8 +423,6 @@ zdb_zone_answer_axfr_thread(void* data_)
             zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
             log_warn("zone write axfr: %{dnsname}: %r", data_zone_origin, ret);
 
-            /** @todo 20150209 edf -- error other than "does not exists" : SERVFAIL */
-
             data->return_code = ret;
             data_zone->axfr_timestamp = 1;
 
@@ -450,8 +447,6 @@ zdb_zone_answer_axfr_thread(void* data_)
             zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
             log_err("zone write axfr: %{dnsname}: unable to get path: %r", data_zone_origin, ret);
             data->return_code = ret;
-            
-            /* @todo 20121219 edf -- send a servfail answer ... */
             
             zdb_zone_answer_axfr_thread_exit(data); // releases
             tcp_set_abortive_close(tcpfd);
@@ -539,10 +534,9 @@ zdb_zone_answer_axfr_thread(void* data_)
                 
                 zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
                 
-                log_err("zone write axfr: %{dnsname}: file create error for '%s': %r", data_zone_origin, buffer, serial, ret);
+                log_err("zone write axfr: %{dnsname}: file create error for '%s' with serial %d: %r", data_zone_origin, buffer, serial, ret);
                 
                 data->return_code = ret;
-
                 zdb_zone_answer_axfr_thread_exit(data);
                 tcp_set_abortive_close(tcpfd);
                 close_ex(tcpfd);
@@ -728,7 +722,6 @@ zdb_zone_answer_axfr_thread(void* data_)
         }
     } // for(;;)
     
-
     mesg->size_limit = 0x8000; // limit to 32KB, knowing perfectly well the buffer is actually 64KB
 
     log_info("zone write axfr: %{dnsname}: sending AXFR with serial %d", data_zone_origin, serial);
@@ -736,7 +729,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 #ifdef DEBUG
     if(fis.data == NULL)
     {
-        log_err("zone write axfr: %{dnsname}: empty stream");
+        log_err("zone write axfr: %{dnsname}: empty stream", data_zone_origin);
         goto scheduler_queue_zone_write_axfr_thread_exit;
     }
 #endif
@@ -767,7 +760,7 @@ zdb_zone_answer_axfr_thread(void* data_)
         struct type_class_ttl_rdlen tctrl;
         ya_result qname_len;
         ya_result n;
-        
+
         if(dnscore_shuttingdown())
         {
             log_err("zone write axfr: %{dnsname}: stopping transfer because of application shutdown", data_zone_origin);
@@ -901,7 +894,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
                 if(FAIL(ret = tsig_sign_tcp_message(mesg, pos)))
                 {
-                    log_err("zone write axfr: failed to sign the answer: %r", ret);
+                    log_err("zone write axfr: %{dnsname}: failed to sign the answer: %r", data_zone_origin, ret);
                     break;
                 }
             }
@@ -914,7 +907,7 @@ zdb_zone_answer_axfr_thread(void* data_)
             
             if(FAIL(n = write_tcp_packet(&pw, &tcpos)))
             {
-                log_err("zone write axfr: error sending packet: %r", n);
+                log_err("zone write axfr: %{dnsname}: error sending packet: %r", data_zone_origin, n);
                 break;
             }
 
@@ -1292,5 +1285,3 @@ zdb_zone_answer_axfr(zdb_zone *zone, message_data *mesg, struct thread_pool_s *n
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/

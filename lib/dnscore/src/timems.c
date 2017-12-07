@@ -220,8 +220,10 @@ mkgmtime(const struct tm *tm_)
 #else
     struct tm tm;
     memcpy(&tm, tm_, sizeof(struct tm));
+#if !__sun__
     tm.tm_zone = NULL;
     tm.tm_gmtoff = 0;
+#endif
     time_t ret = mktime(&tm);
     ret -= timezone;
 #endif // __FREEBSD__

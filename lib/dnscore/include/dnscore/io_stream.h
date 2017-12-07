@@ -59,7 +59,7 @@ struct io_stream
 
 static inline void io_stream_link(io_stream *ios, input_stream *is, output_stream *os)
 {
-    ios->in.data = is->data;
+    ios->in.data = is->data; // scan-build false-positive (it assumes an error is returned, but still goes through 'ISOK')
     ios->in.vtbl = is->vtbl;
     
     ios->out.data = os->data;
