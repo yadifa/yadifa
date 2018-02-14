@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2017, EURid. All rights reserved.
+* Copyright (c) 2011-2018, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -318,6 +318,11 @@ void message_transform_to_error(message_data *mesg);
 /* global */
 
 void message_edns0_setmaxsize(u16 maxsize);
+
+static inline void message_edns0_clear_undefined_flags(message_data *mesg) // all but DO
+{
+    mesg->rcode_ext &= RCODE_EXT_DNSSEC;
+}
 
 /**
     * 

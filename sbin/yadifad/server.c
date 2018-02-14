@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2017, EURid. All rights reserved.
+* Copyright (c) 2011-2018, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -256,6 +256,8 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
             {
                 if(ISOK(return_code = message_process_query(mesg)))
                 {
+                    message_edns0_clear_undefined_flags(mesg);
+                    
                     mesg->size_limit = DNSPACKET_MAX_LENGTH;
 
                     switch(mesg->qclass)
@@ -380,6 +382,7 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
             {
                 if(ISOK(return_code = message_process(mesg)))
                 {
+                    message_edns0_clear_undefined_flags(mesg);
                     mesg->size_limit = DNSPACKET_MAX_LENGTH;
 
                     switch(mesg->qclass)
@@ -429,6 +432,8 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
             {
                 if(ISOK(return_code = message_process(mesg)))
                 {
+                    message_edns0_clear_undefined_flags(mesg);
+                    
                     switch(mesg->qclass)
                     {
                         case CLASS_IN:
@@ -507,6 +512,8 @@ server_process_tcp_task(zdb *database, message_data *mesg, u16 svr_sockfd)
             {
                 if(ISOK(return_code = message_process(mesg)))
                 {
+                    message_edns0_clear_undefined_flags(mesg);
+                    
                     switch(mesg->qclass)
                     {
                         case CLASS_CTRL:

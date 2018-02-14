@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2017, EURid. All rights reserved.
+* Copyright (c) 2011-2018, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -37,7 +37,7 @@
 // general defines
 #define     PROGRAM_NAME                            PACKAGE
 #define     PROGRAM_VERSION                         PACKAGE_VERSION
-#define     RELEASEDATE                             "2017-12-08"
+#define     RELEASEDATE                             "2018-02-14"
 
 #define     ROUND_ROBIN                             0x00
 

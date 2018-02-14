@@ -1,6 +1,6 @@
 dnl ############################################################################
 dnl 
-dnl Copyright (c) 2011-2017, EURid. All rights reserved.
+dnl Copyright (c) 2011-2018, EURid vzw. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl  
 dnl Redistribution and use in source and binary forms, with or without 
@@ -32,14 +32,14 @@ dnl
 dnl ##############################################################################
 dnl
 dnl      SVN Program:
-dnl              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.7-public/lib/dnsdb/configure.ac $
+dnl              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.8-public/lib/dnsdb/configure.ac $
 dnl
 dnl      Creation Date:
 dnl              2010-01-14
 dnl
 dnl      Last Update:
-dnl              $Date: 2017-04-06 09:34:12 +0200 (Thu, 06 Apr 2017) $
-dnl              $Revision: 6922 $
+dnl              $Date: 2018-02-12 10:54:47 +0100 (Mon, 12 Feb 2018) $
+dnl              $Revision: 7682 $
 dnl
 dnl      Author:
 dnl             G. Van Emelen (Gery@VanEmelen.net)
@@ -54,7 +54,7 @@ dnl
 dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 6922 $])
+AC_REVISION([$Revision: 7682 $])
 AC_INIT([dnsdb],m4_esyscmd([svn info 2> /dev/null | grep 'Last Changed Rev: ' | sed -re 's/.*: (.*)/Revision: \1 $/' -e 's/^/$/' >> revision.txt;echo $(cat VERSION)-$(grep \$Revision: * | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[bugreport@yadifa.eu])
 
 echo

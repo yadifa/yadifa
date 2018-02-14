@@ -1,6 +1,6 @@
 ################################################################################
 # 
-#  Copyright (c) 2011-2017, EURid. All rights reserved.
+#  Copyright (c) 2011-2018, EURid vzw. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 #  Redistribution and use in source and binary forms, with or without 
@@ -30,11 +30,11 @@
 ################################################################################
 # 
 #        SVN Program:
-#                $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.7-public/bin/yadifa/Makefile.am $
+#                $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.8-public/bin/yadifa/Makefile.am $
 # 
 #        Last Update:
-#                $Date: 2017-09-26 11:54:55 +0200 (Tue, 26 Sep 2017) $
-#                $Revision: 7308 $
+#                $Date: 2018-02-12 10:54:47 +0100 (Mon, 12 Feb 2018) $
+#                $Revision: 7682 $
 # 
 #        Purpose:
 #                YADIFA main Makefile.am script

@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFAD\-CONF" "5" "2017\-12\-08" "YADIFA " "YADIFA "
+.TH "YADIFAD\-CONF" "5" "P018\-02\-12" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -157,7 +157,7 @@ Main without includes
     serverid                "yadifad\-01"
 
     # The version returned by a query to version.yadifa. CH TXT (alias: version\-chaos)
-    version                 "2.3.7"
+    version                 "2.3.8"
 
     # Set the maximum UDP packet size.  
     # note: the packetsize cannot be less than 512 or more than 65535.
@@ -805,7 +805,7 @@ from the sources.
 .SH VERSION
 
 .PP
-Version: 2.3.7 of 2017\-12\-08 \&.
+Version: 2.3.8 of 2018\-02\-14 \&.
 .PP
 .SH MAILING LISTS
 
@@ -838,7 +838,7 @@ via:
 .PP
 .TP
 Copyright 
-(C)2011\-2017, EURid
+(C)2011\-2018, EURid
 .br
 B\-1831 Diegem, Belgium
 .br

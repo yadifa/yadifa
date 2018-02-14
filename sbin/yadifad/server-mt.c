@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2017, EURid. All rights reserved.
+* Copyright (c) 2011-2018, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -463,6 +463,8 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
         {
             if(ISOK(return_code = message_process_query(mesg)))
             {
+                message_edns0_clear_undefined_flags(mesg);
+                
                 switch(mesg->qclass)
                 {
                     case CLASS_IN:
@@ -567,7 +569,7 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
                          mesg->status,
                          return_code,
                          &mesg->other.sa);
-
+                
                 local_statistics->udp_fp[mesg->status]++;
                 
 #ifdef DEBUG
@@ -583,6 +585,8 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
                  */
                 if( (return_code != INVALID_MESSAGE) && ((mesg->status != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)))
                 {
+                    message_edns0_clear_undefined_flags(mesg);
+                    
                     if(!MESSAGEP_HAS_TSIG(mesg))
                     {
                         message_transform_to_error(mesg);
@@ -602,6 +606,8 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
         {
             if(ISOK(return_code = message_process(mesg)))
             {
+                message_edns0_clear_undefined_flags(mesg);
+                
                 switch(mesg->qclass)
                 {
                     case CLASS_IN:
@@ -618,6 +624,8 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
                         bool answer = MESSAGE_QR(mesg->buffer);
                         
                         return_value = notify_process(mesg); // thread-safe
+                        
+                        message_edns0_clear_undefined_flags(mesg);
                         
                         local_statistics->udp_fp[mesg->status]++;
                         
@@ -681,6 +689,8 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
                  */
                 if( (return_code != INVALID_MESSAGE) && ((mesg->status != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)))
                 {
+                    message_edns0_clear_undefined_flags(mesg);
+                    
                     if(!MESSAGEP_HAS_TSIG(mesg))
                     {
                         message_transform_to_error(mesg);
@@ -699,6 +709,8 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
         {
             if(ISOK(return_code = message_process(mesg)))
             {
+                message_edns0_clear_undefined_flags(mesg);
+                
                 switch(mesg->qclass)
                 {
                     case CLASS_IN:
@@ -754,6 +766,8 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
                  */
                 if( (return_code != INVALID_MESSAGE) && ((mesg->status != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)))
                 {
+                    message_edns0_clear_undefined_flags(mesg);
+                    
                     if(!MESSAGEP_HAS_TSIG(mesg))
                     {
                         message_transform_to_error(mesg);
@@ -777,6 +791,8 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
                 
             if( (mesg->status != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0))
             {
+                message_edns0_clear_undefined_flags(mesg);
+                
                 if(!MESSAGEP_HAS_TSIG(mesg))
                 {
                     message_transform_to_error(mesg);

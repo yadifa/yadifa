@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2017, EURid. All rights reserved.
+* Copyright (c) 2011-2018, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -1985,7 +1985,12 @@ void debug_malloc_hooks_finalise()
 
 void *debug_malloc_unmonitored(size_t size)
 {
-    return _real_malloc(size, NULL);
+    void *ret = _real_malloc(size, NULL);
+    if(ret == NULL)
+    {
+        abort();
+    }
+    return ret;
 }
 
 void debug_free_unmonitored(void* ptr)
@@ -2004,7 +2009,12 @@ void debug_malloc_hooks_finalise()
 
 void *debug_malloc_unmonitored(size_t size)
 {
-    return malloc(size);
+    void *ret = malloc(size);
+    if(ret == NULL)
+    {
+        abort();
+    }
+    return ret;
 }
 
 void debug_free_unmonitored(void* ptr)

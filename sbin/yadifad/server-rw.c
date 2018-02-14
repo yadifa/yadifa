@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2017, EURid. All rights reserved.
+* Copyright (c) 2011-2018, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -509,6 +509,8 @@ server_rw_udp_sender_process_message(struct network_thread_context_s *ctx, messa
         {
             if(ISOK(return_code = message_process_query(mesg)))
             {
+                message_edns0_clear_undefined_flags(mesg);
+                
                 switch(mesg->qclass)
                 {
                     case CLASS_IN:
@@ -613,6 +615,8 @@ server_rw_udp_sender_process_message(struct network_thread_context_s *ctx, messa
                  */
                 if( (return_code != INVALID_MESSAGE) && ((mesg->status != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)))
                 {
+                    message_edns0_clear_undefined_flags(mesg);
+                    
                     if(!MESSAGEP_HAS_TSIG(mesg))
                     {
                         message_transform_to_error(mesg);
@@ -631,6 +635,8 @@ server_rw_udp_sender_process_message(struct network_thread_context_s *ctx, messa
         {
             if(ISOK(return_code = message_process(mesg)))
             {
+                message_edns0_clear_undefined_flags(mesg);
+                
                 switch(mesg->qclass)
                 {
                     case CLASS_IN:
@@ -710,6 +716,8 @@ server_rw_udp_sender_process_message(struct network_thread_context_s *ctx, messa
                  */
                 if( (return_code != INVALID_MESSAGE) && ((mesg->status != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)))
                 {
+                    message_edns0_clear_undefined_flags(mesg);
+                    
                     if(!MESSAGEP_HAS_TSIG(mesg))
                     {
                         message_transform_to_error(mesg);
@@ -728,6 +736,8 @@ server_rw_udp_sender_process_message(struct network_thread_context_s *ctx, messa
         {
             if(ISOK(return_code = message_process(mesg)))
             {
+                message_edns0_clear_undefined_flags(mesg);
+                
                 switch(mesg->qclass)
                 {
                     case CLASS_IN:
@@ -783,6 +793,8 @@ server_rw_udp_sender_process_message(struct network_thread_context_s *ctx, messa
                  */
                 if( (return_code != INVALID_MESSAGE) && ((mesg->status != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)))
                 {
+                    message_edns0_clear_undefined_flags(mesg);
+                    
                     if(!MESSAGEP_HAS_TSIG(mesg))
                     {
                         message_transform_to_error(mesg);
@@ -811,6 +823,8 @@ server_rw_udp_sender_process_message(struct network_thread_context_s *ctx, messa
             
             if( (mesg->status != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0))
             {
+                message_edns0_clear_undefined_flags(mesg);
+                
                 if(!MESSAGEP_HAS_TSIG(mesg))
                 {
                     message_transform_to_error(mesg);

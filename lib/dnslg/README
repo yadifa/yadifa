@@ -1,6 +1,6 @@
 ################################################################################
 # 
-#  Copyright (c) 2011-2017, EURid. All rights reserved.
+#  Copyright (c) 2011-2018, EURid vzw. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 #  Redistribution and use in source and binary forms, with or without 
@@ -29,55 +29,7 @@
 # 
 ################################################################################
 
-20171208:
-    YADIFA 2.3.0-2.3.7
-        From now on, both master and slaves are updating the zone in the same manner (journal transactions)
-        Messages are now default (--enable-messages). Disable them using --disable-messages.
-        Adds more (dynamic) update validation.
-        Adds a build option to remove compile date and time from various help messages (--disable-build-timestamp)
-        A master can now be configured to allow updating RRSIG records externally (e.g.: update add domain. RRSIG ...)
-        Added thread_pool_try_enqueue_call to give up if a queue is full or overworked.
-
-        Fixes an issue where closing an (a)XFR stream could lead to a race over the file descriptors.
-        Fixes an issue where an AXFR query would return a version of the zone too old to be upgradable by following incremental updates.
-        Fixes an issue where zones with big-enough NSEC3 coverage (several millions NSEC3 record) could potentially reach an internal limit of the database.
-        Fixes an issue where shutting down YADIFA while a zone is being downloaded (AXFR) may make it wait forever.
-        Fixes an issue where the slave would complain about a missing private key.
-        Fixes an issue where a specifically truncated IXFR query may make YADIFA replying with an AXFR.
-        Fixes an issue where an IXFR query returning "not implemented" instead of an AXFR would be retried later as an IXFR.
-        Fixes an issue where hammering reopening the logs on an overloaded server would not work properly.
-        Fixes an issue with the CW queuing mechanism when trying to fill a full queue.
-        Fixes an issue on servers using the network-model 1 model (<main> : network-model 1)
-        Fixes an issue where the removal in a certain order of hash/hash* related domains would end-up triggering an abort
-        Fixes an issue where querying a signed domain that was deleted would answer NOERROR instead of NXDOMAIN
-        Fixes an issue where a zone loaded with a journal would not be marked "dirty" and thus would not be fully dumped on disk upon kill -USR1
-        Fixes an issue with network aliases not configured on all setups of --enable-messages
-        Fixes an issue with the logger not releasing the log files before reconfiguration
-        Fixes an issue with the journal where heavy load would prevent notification to slaves
-
-        Note: SunOS 5.10 requires setting --disable-messages in ./configure
-
-        Note: Altough Debian/Hurd is not officially supported, YADIFA builds and works on the 2017 iso by setting --disable-messages in ./configure 
-
-            ECDSA can now be disabled at ./configure time.
-            The support of ECDSA is not available in the openssl package of older Linux distributions.
-            You can now add --disable-ecdsa at configure time to allow a build on these systems.
-
-        Processed signals are now logged upon processing (info level) to allow the admin to know when a signal has effectively gone through.
-
-        CPU affinity can now be tuned to stick a worker on a core.  In <main>:
-
-            thread-affinity-multiplier can be used to use every (1) or every odd (2) logical CPU.
-
-                Parameter range from 0 to 4.  (default is 0 = autodetect)
-                By default, if hypertheading is detected, the multiplier is set to 2, else to 1.
-            
-            thread-affinity-base can be used to chose the first local CPU to consider.
-
-                Parameter range from 0 to 3. (default is 0)
-
-            In the end, network workers will have their affinity set to (base + multiplier * workerindex).
-
-            The main purpose is to avoid using the hyperthread logical CPU as it can be counterproductive in some setups for high (10Gbps) troughput.
-
+20180214:
+    YADIFA 2.3.8
+        Fixes the OPT record Z flags not being cleared in server answers.
 
