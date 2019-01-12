@@ -1914,7 +1914,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
                 const char *character_to_check = (char *)rdata_pointer;
                 const char * const limit = character_to_check + pstring_len;
                 output_stream_write_u8(os, '"'); /* Opening double quote for the string. */
-                do
+                for(; character_to_check < limit; character_to_check++)
                 {
                     if(memchr("\"\n\\", *character_to_check, 3))
                     {
@@ -1927,7 +1927,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
                         rdata_pointer += preceding_span_len + 1;
                     }
                 }
-                while(++character_to_check < limit);
 
                 /* Output any remaining characters in the Pascal string if rdata_pointer didn't
                  * reach limit (because it ended with a character that didn't have to be escaped).
