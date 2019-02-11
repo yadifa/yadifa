@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFA\-RC" "5" "2018\-02\-14" "YADIFA " "YADIFA "
+.TH "YADIFA\-RC" "5" "2019\-02\-11" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -158,7 +158,7 @@ from the sources.
 .SH VERSION
 
 .PP
-Version: 2.3.8 of 2018\-02\-14\&.
+Version: 2.3.9 of 2019\-02\-11\&.
 .PP
 .SH MAILING LISTS
 

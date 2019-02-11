@@ -1,6 +1,6 @@
 ################################################################################
 # 
-#  Copyright (c) 2011-2018, EURid vzw. All rights reserved.
+#  Copyright (c) 2011-2019, EURid vzw. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 #  Redistribution and use in source and binary forms, with or without 
@@ -28,6 +28,10 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 ################################################################################
+
+20190211:
+    YADIFA 2.3.9
+        Fixes an issue handling some rdata containing a domain set to '.'
 
 20180214:
     YADIFA 2.3.8

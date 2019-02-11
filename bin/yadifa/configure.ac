@@ -1,6 +1,6 @@
 dnl ############################################################################
 dnl 
-dnl Copyright (c) 2011-2018, EURid vzw. All rights reserved.
+dnl Copyright (c) 2011-2019, EURid vzw. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl  
 dnl Redistribution and use in source and binary forms, with or without 
@@ -32,11 +32,11 @@ dnl
 dnl ##############################################################################
 dnl
 dnl      SVN Program:
-dnl              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.8-public/bin/yadifa/configure.ac $
+dnl              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.9-public/bin/yadifa/configure.ac $
 dnl
 dnl      Last Update:
-dnl              $Date: 2018-02-12 10:54:47 +0100 (Mon, 12 Feb 2018) $
-dnl              $Revision: 7682 $
+dnl              $Date: 2019-02-11 11:02:46 +0100 (Mon, 11 Feb 2019) $
+dnl              $Revision: 8497 $
 dnl
 dnl      Purpose:
 dnl              YADIFA -- tools for YADIFAD
@@ -44,7 +44,7 @@ dnl
 dnl ##############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 7682 $])
+AC_REVISION([$Revision: 8497 $])
 # 1
 # svn log 2> /dev/null|head -2|grep ^r|sed 's/.\([1-9]*\).*/\1/'
 

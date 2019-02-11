@@ -1,6 +1,6 @@
 ################################################################################
 # 
-#  Copyright (c) 2011-2018, EURid vzw. All rights reserved.
+#  Copyright (c) 2011-2019, EURid vzw. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 #  Redistribution and use in source and binary forms, with or without 
@@ -29,7 +29,7 @@
 # 
 ################################################################################
 
-20180214:
-    YADIFA 2.3.8
-        Fixes the OPT record Z flags not being cleared in server answers.
+20190211:
+    YADIFA 2.3.9
+        Fixes an issue handling some rdata containing a domain set to '.'
 

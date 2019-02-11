@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2018, EURid vzw. All rights reserved.
+* Copyright (c) 2011-2019, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -34,7 +34,7 @@
 
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2018, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2019, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -66,14 +66,14 @@
  *
  *
  *      SVN Program:
- *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.8-public/lib/dnsdb/src/zdb-zone-lock-monitor.c $
+ *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.9-public/lib/dnsdb/src/zdb-zone-lock-monitor.c $
  *
  *      Creation Date:
  *              22 September 2016, 11:17
  *
  *      Last Update:
- *              $Date: 2018-02-12 10:54:47 +0100 (Mon, 12 Feb 2018) $
- *              $Revision: 7682 $
+ *              $Date: 2019-02-11 11:02:46 +0100 (Mon, 11 Feb 2019) $
+ *              $Revision: 8497 $
  *
  *      Last Change:
  *              $Author: ericdf $

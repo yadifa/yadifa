@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2018, EURid vzw. All rights reserved.
+* Copyright (c) 2011-2019, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -678,25 +678,31 @@ zdb_query_rr_label_find_relative(const zdb_zone* zone, const u8* dns_name)
 
     dnslabel_vector name;
     s32 name_top = dnsname_to_dnslabel_vector(dns_name, name);
-
-    s32 i;
-
-    for(i = 0; i <= origin_top; i++)
+    if(name_top >= origin_top)
     {
-        if(!dnslabel_equals(origin[origin_top - i], name[name_top - i]))
+        s32 i;
+
+        for(i = 0; i <= origin_top; i++)
         {
-            return NULL;
+            if(!dnslabel_equals(origin[origin_top - i], name[name_top - i]))
+            {
+                return NULL;
+            }
         }
+
+        /*
+         * At this point we got the relative path, get the label
+         *
+         */
+
+        zdb_rr_label* rr_label = zdb_rr_label_find(zone->apex, name, (name_top - origin_top) - 1);
+
+        return rr_label;
     }
-
-    /*
-     * At this point we got the relative path, get the label
-     *
-     */
-
-    zdb_rr_label* rr_label = zdb_rr_label_find(zone->apex, name, (name_top - origin_top) - 1);
-
-    return rr_label;
+    else
+    {
+        return NULL;
+    }
 }
 
 /**
