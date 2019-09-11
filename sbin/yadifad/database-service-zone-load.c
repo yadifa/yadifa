@@ -1671,11 +1671,14 @@ database_service_zone_load_thread(void *parms)
         }
         
         database_fire_zone_loaded(zone_desc, zone, return_code);
-        
-        zdb_zone_release(zone);
+
+        if(zone != NULL)
+        {
+            zdb_zone_release(zone);
 #ifdef DEBUG
         zone = NULL;
 #endif
+        }
     }
     else
     {
