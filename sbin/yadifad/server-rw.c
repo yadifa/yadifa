@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -170,7 +170,9 @@ struct network_thread_context_s
     u16 idx;
 
     volatile u8  status;
-        
+#if __FreeBSD__
+    u8 is_any;
+#endif    
     // should be aligned with 64
     
     volatile message_data *next_message __attribute__ ((aligned (L1_DATA_LINE_SIZE)));
@@ -235,6 +237,9 @@ server_rw_udp_receiver_thread(void *parms)
 
     /* UDP messages handling requires more setup */
 #endif
+#if __FreeBSD__
+    bool bound_to_any = ctx->is_any != 0;
+#endif
     
     // const void *nullptr = NULL;
     
@@ -255,9 +260,22 @@ server_rw_udp_receiver_thread(void *parms)
         receiver_iovec.iov_len = MIN(NETWORK_BUFFER_SIZE, sizeof(mesg->buffer));
         receiver_msghdr.msg_name = &mesg->other.sa;
         receiver_msghdr.msg_namelen = sizeof(socketaddress);
+        
+#if !__FreeBSD__
         receiver_msghdr.msg_control = mesg->control_buffer;
         receiver_msghdr.msg_controllen = sizeof(mesg->control_buffer);
-
+#else
+        if(bound_to_any)
+        {
+            receiver_msghdr.msg_control = mesg->control_buffer;
+            receiver_msghdr.msg_controllen = sizeof(mesg->control_buffer);
+        }
+        else
+        {
+            receiver_msghdr.msg_control = NULL;
+            receiver_msghdr.msg_controllen = 0;
+        }
+#endif
         n = recvmsg(fd, &receiver_msghdr, 0);
 #endif
         if(n >= DNS_HEADER_LENGTH)
@@ -858,8 +876,22 @@ server_rw_udp_sender_process_message(struct network_thread_context_s *ctx, messa
     ctx->sender_iovec.iov_len = mesg->send_length;
     ctx->sender_msghdr.msg_name = &mesg->other.sa;
     ctx->sender_msghdr.msg_namelen = mesg->addr_len;
+    
+#if !__FreeBSD__
     ctx->sender_msghdr.msg_control = mesg->control_buffer;
     ctx->sender_msghdr.msg_controllen = mesg->control_buffer_size;
+#else
+    if(ctx->is_any)
+    {
+        ctx->sender_msghdr.msg_control = mesg->control_buffer;
+        ctx->sender_msghdr.msg_controllen = mesg->control_buffer_size;
+    }
+    else
+    {
+        ctx->sender_msghdr.msg_control = NULL;
+        ctx->sender_msghdr.msg_controllen = 0;
+    }
+#endif
     
     ssize_t sent;
     
@@ -1187,6 +1219,9 @@ server_rw_query_loop()
             contextes[sockfd_idx] = ctx;
             ctx->idx = sockfd_idx;
             ctx->sockfd = server_context.udp_socket[sockfd_idx];
+#if __FreeBSD__
+            ctx->is_any = socket_is_any(ctx->sockfd);
+#endif
             ctx->backlog_enqueue = &ctx->backlog_queue[0];
             ctx->backlog_dequeue = &ctx->backlog_queue[0];
             

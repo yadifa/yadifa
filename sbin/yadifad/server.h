@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -215,5 +215,7 @@ ya_result server_service_stop();
  */
 
 ya_result server_service_finalise();
+
+bool socket_is_any(int s);
 
 /** @} */

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -31,11 +31,11 @@
  *------------------------------------------------------------------------------
  *
  *      SVN Program:
- *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.9-public/bin/yadifa/message-viewer-wire.c $
+ *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.10-public/bin/yadifa/message-viewer-wire.c $
  *
  *      Last Update:
- *              $Date: 2019-02-11 11:02:46 +0100 (Mon, 11 Feb 2019) $
- *              $Revision: 8497 $
+ *              $Date: 2020-09-03 11:53:27 +0200 (do, 03 sep 2020) $
+ *              $Revision: 9707 $
  *
  *      Last Change:
  *              $Author: ericdf $

@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+# Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without 
@@ -32,19 +32,19 @@
 ACLOCAL_AMFLAGS = -I m4
 
 OC=yadifad.conf
-OCE=$(OC).example
+OCE=$(srcdir)/$(OC).example
 MC=yadifa.conf
-MCE=$(MC).example
+MCE=$(srcdir)/$(MC).example
 KC=keys.conf
-KCE=$(KC).example
+KCE=$(srcdir)/$(KC).example
 YI=yadifad.init
-YIE=$(YI).example
+YIE=$(srcdir)/$(YI).example
 YS=yadifad.service
-YSE=$(YS).example
+YSE=$(srcdir)/$(YS).example
 YC=yadifa
-YCE=$(YC).bash_completion
+YCE=$(srcdir)/$(YC).bash_completion
 YD=yadifad
-YDE=$(YD).bash_completion
+YDE=$(srcdir)/$(YD).bash_completion
 BC=/etc/bash_completion.d/
 
 doc_DATA = $(OC) $(MC) $(KC) $(YI) $(YS) $(YDE) $(YCE) \

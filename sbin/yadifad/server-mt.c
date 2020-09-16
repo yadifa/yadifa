@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -86,6 +86,8 @@ typedef cpuset_t cpu_set_t;
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/zdb-zone-lock.h>
 
+#include <netinet/in.h>
+
 #ifdef DEBUG
 
 #define ZDB_JOURNAL_CODE 1
@@ -167,6 +169,9 @@ struct synced_thread_t
     u16 idx;
 
     volatile u8  status;
+#if __FreeBSD__
+    u8 bound_to_any;
+#endif
     
     message_data *udp_mesg;
     
@@ -361,20 +366,11 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
     st->udp_msghdr.msg_controllen = ANCILIARY_BUFFER_SIZE;
     */
     
-#if UDP_USE_MESSAGES
-    st->udp_msghdr.msg_namelen = sizeof(socketaddress);
-    st->udp_iovec.iov_len = MIN(NETWORK_BUFFER_SIZE, sizeof(mesg->buffer));
-    st->udp_msghdr.msg_controllen = sizeof(st->udp_mesg->control_buffer);
-#endif
-    
     ssize_t n;
     
     for(;;) // loop until reception, critical failure or shutdown
     {
 #if !UDP_USE_MESSAGES
-        
-
-        
         n = recvfrom(st->fdsock, mesg->buffer, MIN(NETWORK_BUFFER_SIZE, sizeof(mesg->buffer)), 0, (struct sockaddr*)&mesg->other.sa, &mesg->addr_len);
         
         if(n >= 0)
@@ -404,6 +400,11 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
             }
         }
 #else
+
+        st->udp_msghdr.msg_namelen = sizeof(socketaddress);
+        st->udp_iovec.iov_len = MIN(NETWORK_BUFFER_SIZE, sizeof(mesg->buffer));
+        st->udp_msghdr.msg_controllen = sizeof(st->udp_mesg->control_buffer);
+    
         n = recvmsg(st->fdsock, &st->udp_msghdr, 0);
         
         if(n >= 0)
@@ -849,7 +850,15 @@ server_mt_process_udp(zdb *database, synced_thread_t *st)
 #ifdef DEBUG
     log_debug("sendmsg(%d, %p, %d", mesg->sockfd, &st->udp_msghdr, 0);
 #endif
-    
+
+    /**
+ * @note edf 20190403 -- unexpected EINVAL on FreeBSD.
+ * 
+ * Although not in the man page, sendmsg can return an EINVAL.
+ * It's perplexingly linked to the msg_control not being empty.
+ * It turns out FreeBSD rejects the source IP if not bound to an ANY address.
+ */
+
     while( (sent = sendmsg(st->fdsock, &st->udp_msghdr, 0)) < 0)
     {
         int error_code = errno;
@@ -945,7 +954,9 @@ server_mt_udp_messages_thread(void* parm)
 #if UDP_USE_MESSAGES
 
     /* UDP messages handling requires more setup */
-
+#if __FreeBSD__
+    st->bound_to_any = socket_is_any(st->fdsock)?1:0;
+#endif
     st->udp_iovec.iov_base = st->udp_mesg->buffer;
     st->udp_iovec.iov_len = sizeof(st->udp_mesg->buffer);
 
@@ -953,16 +964,8 @@ server_mt_udp_messages_thread(void* parm)
     st->udp_msghdr.msg_namelen = st->udp_mesg->addr_len;
     st->udp_msghdr.msg_iov = &st->udp_iovec;
     st->udp_msghdr.msg_iovlen = 1;
-
-    if(ANCILIARY_BUFFER_SIZE > 0)
-    {
-        MALLOC_OR_DIE(struct msghdr*, st->udp_msghdr.msg_control, ANCILIARY_BUFFER_SIZE, MSGHDR_TAG);
-    }
-    else
-    {
-        st->udp_msghdr.msg_control = NULL;
-    }    
     st->udp_msghdr.msg_control = st->udp_mesg->control_buffer;
+    st->udp_msghdr.msg_controllen = sizeof(st->udp_mesg->control_buffer);
     st->udp_msghdr.msg_flags = 0;
 
 #endif
@@ -973,6 +976,23 @@ server_mt_udp_messages_thread(void* parm)
     {
         st->statistics.input_loop_count++;
         
+#if !__FreeBSD__
+        st->udp_msghdr.msg_control = st->udp_mesg->control_buffer;
+        st->udp_msghdr.msg_controllen = sizeof(st->udp_mesg->control_buffer);
+#else    
+        if(st->bound_to_any == 1)
+        {
+            //log_debug("server-mt: bound-to-any");
+            st->udp_msghdr.msg_control = st->udp_mesg->control_buffer;
+            st->udp_msghdr.msg_controllen = sizeof(st->udp_mesg->control_buffer);
+        }
+        else
+        {
+            //log_debug("server-mt: bound-to-single");
+            st->udp_msghdr.msg_control = NULL;
+            st->udp_msghdr.msg_controllen = 0;
+        }
+#endif
         server_mt_process_udp(g_config->database, st);
     }
     

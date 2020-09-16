@@ -1,6 +1,6 @@
 ################################################################################
 # 
-#  Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 #  Redistribution and use in source and binary forms, with or without 
@@ -28,6 +28,24 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 ################################################################################
+
+20200915:
+    YADIFA 2.3.10
+	Added an autogen.sh script, as we did for YADIFA 2.4.x
+
+        Fixes an issue with IPv6 aliases.
+        Fixes an issue that would happen when building with a gcc version 10 or above.
+        Fixes an issue with FreeBSD aliases.
+        Fixes an issue with strncpy on FreeBSD.
+        Fixes an issue with CNAME queries incorrectly answered with an error code.
+
+20190211:
+    YADIFA 2.3.9
+        Fixes an issue handling some rdata containing a domain set to '.'
+
+20180214:
+    YADIFA 2.3.8
+        Fixes the OPT record Z flags not being cleared in server answers.
 
 20171208:
     YADIFA 2.3.7

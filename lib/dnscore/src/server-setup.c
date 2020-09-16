@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -105,12 +105,11 @@ ttylog_err(const char *format, ...)
  *  @return OK
  *  @return Otherwise log_quit will stop the program
  */
-void
-server_setup_daemon_go()
+int
+server_setup_daemon_go_ex(bool parent_exit, bool child_logger_ownership)
 {
     mode_t                                                         mask = 0;
     pid_t                                                               pid;
-
     struct sigaction                                                     sa;
 
     /*    ------------------------------------------------------------    */
@@ -142,7 +141,7 @@ server_setup_daemon_go()
     {
         osformatln(termerr, "daemonize: unable to stop all thread pools: %r", error_code);
         flusherr();
-        
+
         exit(EXIT_FAILURE);
     }
     
@@ -151,24 +150,47 @@ server_setup_daemon_go()
 
     /* Clear file creation mask */
     umask(mask);
-    
+
+#if DEBUG
+    debug_println("releasing ownership of the logger");
+    flushout();
+#endif
+
     /* Become a session leader to lose controlling TTYs */
     if((pid = fork()) < 0)
     {
-        osformatln(termerr, "cannot fork: %r", ERRNO_ERROR);
+        osformatln(termerr, "[%i] cannot fork: %r", getpid(), ERRNO_ERROR);
         flusherr();
         
         exit(EXIT_FAILURE);
     }
 
+    // if the logger was running, disconnect ownership from the parent and give it to the child
+
     if(pid != 0) /* parent */
     {
-#ifdef DEBUG
-        formatln("first level parent done");
+#if DEBUG
+        formatln("[%i] first level parent done", getpid());
         flushout();
 #endif
-        
-        exit(EXIT_SUCCESS);
+        if(parent_exit)
+        {
+            exit(EXIT_SUCCESS);
+        }
+
+        // else re-enable everything and return
+
+        logger_start();
+
+#if DNSCORE_HAS_LOG_THREAD_TAG
+        thread_tag_log_tags();
+#endif
+        dnscore_reset_timer();
+        thread_pool_start_all();
+        service_start_all();
+        logger_flush();
+
+        return pid;
     }
 
     /* Set program in new session */
@@ -200,15 +222,15 @@ server_setup_daemon_go()
 
     if(pid != 0) /* parent */
     {
-#ifdef DEBUG
-        println("second level parent done");
+#if DEBUG
+        formatln("[%i] second level parent done", getpid());
         flushout();
 #endif
         exit(EXIT_SUCCESS);
     }
-    
-#ifdef DEBUG
-    println("detaching from console");
+
+#if DEBUG
+    osformatln(termout, "taking ownership of the logger (%i)", getpid());
     flushout();
 #endif
     
@@ -217,21 +239,8 @@ server_setup_daemon_go()
     log_debug("daemonize: start timer");
     
     dnscore_reset_timer();
-    
-    log_debug("daemonize: start thread pools");
-    
-    thread_pool_start_all();
-    
-    log_debug("daemonize: start services");
-    
-    service_start_all();
-    
-    /* Change the current working directory to the root so
-     * we won't prevent file systems from being unmounted.
-     */
-    
+
 #ifdef DEBUG
-    
     // It has been asked to fix the "tmpfile vulnerability" on DEBUG builds.
     // Although this mode is meant for us (Gery & I), we can imagine that
     // someone else could have some interest in it too.
@@ -249,18 +258,46 @@ server_setup_daemon_go()
 #endif
 
     /* Attach file descriptors 0, 1, and 2 to /dev/null */
-    
+
     flushout();
     flusherr();
 
-    int tmpfd; 
+    int tmpfd;
     if((tmpfd = open_create_ex(output_file, file_flags, 0660)) < 0)
     {
-        log_err("stdin: %s '%s'", strerror(errno), output_file);
+        fprintf(stderr, "couldn't get file for redirection: %s '%s'\n", strerror(errno), output_file);
+        fflush(NULL);
         exit(EXIT_FAILURE);
     }
 
-    for(int i = 0; i <= 2; i++)
+    int tmpfdin;
+
+#if DEBUG
+    if((tmpfdin = open_create_ex("/dev/null", O_WRONLY, 0440)) < 0)
+    {
+        fprintf(stderr, "couldn't get file for redirection: %s '%s'\n", strerror(errno), output_file);
+        fflush(NULL);
+        exit(EXIT_FAILURE);
+    }
+#else
+    tmpfdin = tmpfd;
+#endif
+
+    {
+        int fd;
+        if((fd = dup2_ex(tmpfdin, 0)) < 0)
+        {
+            log_err("dup2 failed from %i to %i: %s", tmpfdin, 0, strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+        if(fd != 0)
+        {
+            log_err("expected fd %d instead of %d", 0, fd);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    for(int i = 1; i <= 2; i++)
     {
         int fd;
         if((fd = dup2_ex(tmpfd, i)) < 0)
@@ -274,15 +311,40 @@ server_setup_daemon_go()
             exit(EXIT_FAILURE);
         }
     }
+
+#if DEBUG
+    osformatln(termout, "detaching from console");
+    flushout();
+#endif
+
+    log_debug("daemonize: start thread pools");
     
-    stdtream_detach_fd_and_close();
+    thread_pool_start_all();
     
-    logger_output_stream_open(&__termout__, g_system_logger, LOG_INFO, 512);
-    logger_output_stream_open(&__termerr__, g_system_logger, LOG_ERR, 512);
+    log_debug("daemonize: start services");
     
+    service_start_all();
+    
+    /* Change the current working directory to the root so
+     * we won't prevent file systems from being unmounted.
+     */
+
+#if DEBUG
+    println("daemonized");
+    flushout();
+#endif
+
     log_info("daemonized");
     
     logger_flush();
+
+    return pid;
+}
+
+void
+server_setup_daemon_go()
+{
+    server_setup_daemon_go_ex(TRUE, TRUE);
 }
 
 ya_result
@@ -345,3 +407,4 @@ server_setup_env(pid_t *pid, char **pid_file_pathp, uid_t uid, gid_t gid, u32 se
 }
 
 /** @} */
+

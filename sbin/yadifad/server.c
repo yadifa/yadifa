@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -116,8 +116,59 @@ static struct server_desc_s server_type[2] =
     }
 };
 
+bool
+socket_is_any(int s)
+{
+    socketaddress ss;
+    socklen_t ss_size = sizeof(ss);
+    int ret = getsockname(s, &ss.sa, &ss_size);
+    if(ret == 0)
+    {
+        switch(ss.ss.ss_family)
+        {
+            case AF_INET:
+            {
+                if(ss.sa4.sin_addr.s_addr == 0)
+                {
+#if DEBUG
+                    log_debug("socket %i is bound to ANY (v4) (%{sockaddr})", s, &ss);
+#endif
+                    return TRUE;
+                }
+#if DEBUG
+               else
+               {
+                    log_debug("socket %i is NOT bound to ANY (v4) (%{sockaddr})", s, &ss);
+               }
+#endif
+                break;
+            }
+            case AF_INET6:
+            {
+                u64* addr6 = (u64*)&ss.sa6.sin6_addr;
+                if((addr6[0] == 0) && (addr6[1] == 0))
+                {
+#if DEBUG
+                    log_debug("socket %i is bound to ANY (v6) (%{sockaddr})", s, &ss);
+#endif
+                    return TRUE;
+                }
+#if DEBUG
+               else
+               {
+                    log_debug("socket %i is NOT bound to ANY (v6) (%{sockaddr})", s, &ss);
+               }
+#endif
+            }
+        }
+    }
+    else
+    {
+        log_err("could not read back the socket address (%i): %r", s, ERRNO_ERROR);
+    }
 
-
+    return FALSE;
+}
 
 
 /*******************************************************************************************************************

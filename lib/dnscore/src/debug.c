@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -40,10 +40,12 @@
  * @{
  */
 #include "dnscore/dnscore-config.h"
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
-#if IS_LINUX_FAMILY
+
+#if defined(__linux__)
 #include <malloc.h>
 #endif
 

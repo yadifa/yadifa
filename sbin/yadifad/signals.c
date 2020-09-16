@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -79,11 +79,17 @@
 #ifdef DEBUG
 #if IS_LINUX_FAMILY
 #include <sys/types.h>
+
+#if !((__GLIBC__ > 2) || ((__GLIBC__ == 2) && (__GLIBC_MINOR__ >= 30)))
+
 #include <asm/unistd.h>
 static inline long int gettid()
 {
     return (long int)syscall(__NR_gettid);
 }
+
+#endif // GLIBC function not available
+
 #else
 static inline long int gettid()
 {

@@ -1,6 +1,6 @@
 dnl ############################################################################
 dnl 
-dnl Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+dnl Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl  
 dnl Redistribution and use in source and binary forms, with or without 
@@ -773,7 +773,10 @@ AC_CHECK_HEADERS([endian.h])
 AC_CHECK_HEADERS([syslog.h])
 AC_CHECK_HEADERS([fcntl.h])
 AC_CHECK_HEADERS([pthread.h])
-AC_CHECK_HEADERS([linux/limits.h sys/syslimits.h i386/limits.h ppc/limits.h])
+AC_CHECK_HEADERS([linux/limits.h])
+AC_CHECK_HEADERS([sys/syslimits.h])
+AC_CHECK_HEADERS([i386/limits.h])
+AC_CHECK_HEADERS([ppc/limits.h])
 AC_CHECK_HEADERS([byteswap.h])
 AC_CHECK_HEADERS([machine/endian.h])
 AC_CHECK_HEADERS([sys/time.h])

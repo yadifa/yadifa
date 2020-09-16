@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -75,6 +75,14 @@ extern "C"
 # define dstaddr(x) (&(((struct in_pktinfo *)(CMSG_DATA(x)))->ipi_addr))
 #else
 # error "can't determine socket option"
+#endif
+
+#if defined IPV6_PKTINFO
+# define DSTADDR6_SOCKOPT IPV6_PKTINFO
+# define DSTADDR6_DATASIZE (CMSG_SPACE(sizeof(struct in6_pktinfo)))
+# define dstaddr6(x) (&(((struct in6_pktinfo *)(CMSG_DATA(x)))->ipi_addr))
+#else
+#error "can't determine socket v6 option"
 #endif
 
 /*

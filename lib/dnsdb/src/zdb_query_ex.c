@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -1871,7 +1871,7 @@ zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 
 
                         dnsname_copy(mesg->qname, ZDB_PACKEDRECORD_PTR_RDATAPTR(answer));
 
-                        finger_print fp = zdb_query_ex(db, mesg, ans_auth_add, pool_buffer);
+                        finger_print fp = FP_MESG_OK;
 
                         UNLOCK(zone);
 #if HAS_DYNAMIC_PROVISIONING
@@ -3173,7 +3173,7 @@ zdb_query_and_update(zdb *db, message_data *mesg, u8 * restrict pool_buffer)
 
                         dnsname_copy(mesg->qname, ZDB_PACKEDRECORD_PTR_RDATAPTR(answer));
 
-                        finger_print fp = zdb_query_ex(db, mesg, &ans_auth_add, pool_buffer);
+                        finger_print fp = FP_MESG_OK;
                         
                         mesg->status = fp;   
                         mesg->send_length = zdb_query_message_update(mesg, &ans_auth_add);
@@ -4538,7 +4538,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
 
                         dnsname_copy(mesg->qname, ZDB_PACKEDRECORD_PTR_RDATAPTR(answer));
 
-                        finger_print fp = zdb_query_ex(db, mesg, &ans_auth_add, pool_buffer);
+                        finger_print fp = FP_MESG_OK;
                         
                         mesg->status = fp;   
                         ya_result rrl = zdb_query_message_update_with_rrl(mesg, &ans_auth_add, rrl_process);

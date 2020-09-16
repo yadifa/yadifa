@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -50,6 +50,27 @@
 
 #if defined __FreeBSD__
 #include <sys/endian.h>
+
+static inline char *strcpy_freebsd(char *dest, const char *src)
+{
+    size_t src_len = strlen(src) + 1;
+    memcpy(dest, src, src_len);
+    return dest;
+}
+
+static inline char *strncpy_freebsd(char *dest, const char *src, size_t n)
+{
+    size_t src_len = strlen(src) + 1;
+    if(src_len >= n)
+    {
+        src_len = n; // yes, the NUL will be ignored.
+    }
+    memcpy(dest, src, src_len);
+    return dest;
+}
+
+#define strcpy strcpy_freebsd
+#define strncpy strncpy_freebsd
 
 #ifndef __BYTE_ORDER
     #if defined(_BYTE_ORDER)

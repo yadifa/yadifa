@@ -1,6 +1,6 @@
 dnl ############################################################################
 dnl 
-dnl Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+dnl Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl  
 dnl Redistribution and use in source and binary forms, with or without 
@@ -32,11 +32,11 @@ dnl
 dnl ############################################################################
 dnl
 dnl       SVN Program:
-dnl               $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.9-public/configure.ac $
+dnl               $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.10-public/configure.ac $
 dnl
 dnl       Last Update:
-dnl               $Date: 2019-02-11 11:02:46 +0100 (Mon, 11 Feb 2019) $
-dnl               $Revision: 8497 $
+dnl               $Date: 2020-09-03 11:53:27 +0200 (do, 03 sep 2020) $
+dnl               $Revision: 9707 $
 dnl
 dnl       Purpose:
 dnl              configure for YADIFA (domain name server)
@@ -44,7 +44,7 @@ dnl
 dnl ############################################################################
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 8497 $])
+AC_REVISION([$Revision: 9707 $])
 AC_INIT([yadifa],m4_esyscmd([svn info 2> /dev/null | grep 'Last Changed Rev: ' | sed -re 's/.*: (.*)/Revision: \1 $/' -e 's/^/$/' >> revision.txt;echo $(cat VERSION)-$(grep -r \$Revision: revision.txt configure.ac Makefile.am sbin/* lib/*/* bin/* doc/* etc/* | sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' | sort -n | /usr/bin/tail -1 | tr -d '\n') | tr -d '\n']),[info@yadifa.eu])
 
 echo
@@ -79,6 +79,11 @@ dnl @todo 20150119 gve -- can be removed
 dnl AC_CONFIG_HEADERS([yadifa-config.h])
 
 AC_CONFIG_MACRO_DIR([m4])
+
+AM_PROG_AR
+
+# automake version < 1.14
+# AM_PROG_CC_C_O
 
 LT_INIT([disable-shared])
 

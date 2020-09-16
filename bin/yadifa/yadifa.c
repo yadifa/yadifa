@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -60,7 +60,7 @@
 /*----------------------------------------------------------------------------*/
 #pragma mark GLOBAL VARIABLES
 
-logger_handle *g_client_logger;
+extern logger_handle *g_client_logger;
 extern config_main_settings_s       g_yadifa_main_settings;
 
 /*----------------------------------------------------------------------------*/

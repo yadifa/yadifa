@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
 *
-* Copyright (c) 2011-2019, EURid vzw. All rights reserved.
+* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 * The YADIFA TM software product is provided under the BSD 3-clause license:
 * 
 * Redistribution and use in source and binary forms, with or without 
@@ -220,7 +220,7 @@ struct message_tsig
 
 #define MESSAGE_BUFFER_SIZE     0x10500
 
-#define MESSAGE_DATA_CONTROL_BUFFER_SIZE    32  // used in --enable-message for storing the receiver address
+#define MESSAGE_DATA_CONTROL_BUFFER_SIZE    64  // MUST be >= 64, used in --enable-message for storing the receiver address
 
 typedef struct message_data message_data;
 
