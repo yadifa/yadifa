@@ -556,36 +556,48 @@ parser_next_token(parser_s *parser)
                     // find the end char ...
                     // note: see strpbrk
 
-                    char end_char = parser->delimiter_close[b];
+                    const char end_char = parser->delimiter_close[b];
 
-                    char *string_end;
+                    char *string_end = ++needle;
 
                     for(;;)
                     {
-                        needle++;
-
-                        string_end = memchr(needle, end_char, parser->limit - needle);
+                        string_end = memchr(string_end, end_char, parser->limit - string_end);
 
                         if(string_end != NULL)
                         {
-                            if(parser->char_type[(u8)string_end[-1]] != PARSER_CHAR_TYPE_ESCAPE_CHARACTER)
-                            {
-                                break;
+                            /* Check if the string delimiter that was found was escaped. Keep in
+                             * mind that if there was an escape character in front of the string
+                             * delimiter, the escape character itself could have also been escaped
+                             * (and the one before that and the one before that...). What we can do
+                             * is check to see how many consecutive preceding escape characters
+                             * there are (by finding the first preceding nonescape character or the
+                             * opening string delimiter if there isn't one) and if it's an even
+                             * number then the string delimiter we found is unescaped but if it's an
+                             * odd number then it is escaped. Note that this will need to be revised
+                             * if YADIDA later adds support for using \DDD type escape sequences
+                             * between string delimiters.
+                             */
+                            const char *prior_nonescape_character = string_end;
+                            while(--prior_nonescape_character >= needle){
+                                if(parser->char_type[(u8)*prior_nonescape_character] != PARSER_CHAR_TYPE_ESCAPE_CHARACTER)
+                                    break;
                             }
-                            
+                            if((string_end - prior_nonescape_character) % 2 == 1){
+                                break; /* String delimiter was not escaped if we got here. */
+                            }
+
                             // this one was escaped ...
 
                             string_end++;
-                            
+
                             // needle = string_end + 1 and try again ?
-                            
-                            if(string_end > parser->limit)
+
+                            if(string_end >= parser->limit)
                             {
                                 return PARSER_EXPECTED_STRING_END_DELIMITER;
                             }
-                            
-                            needle = string_end;
-                                    
+
                             //string_end = memchr(string_end, end_char, parser->limit - string_end);
                         }
                         else

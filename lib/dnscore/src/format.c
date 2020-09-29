@@ -1885,52 +1885,74 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             return total;
         }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         case TYPE_TXT:
-
-
-
         {
-            u8 c;
+            /* rdata_pointer should be a chain of Pascal strings and the chain should be EXACTLY
+             * rdata_size bytes long. Check the chain to make sure the last Pascal string in the
+             * chain ends at exactly rdata_size bytes, if it doesn't then consider that an error and
+             * return an error code.
+             */
+            u32 pstring_chain_size = 0;
+            while(pstring_chain_size < rdata_size)
+            {
+                pstring_chain_size += 1 + rdata_pointer[pstring_chain_size];
+                if(pstring_chain_size > rdata_size)
+                {
+                    return INCORRECT_RDATA;
+                }
+            }
 
             while(rdata_size > 0)
             {
-                c = *rdata_pointer++;
-
-                if(c > 0)
+                /* Check each character in the Pascal string to see if it is one of the characters
+                 * which needs to be escaped (double quotes, line feeds, and backslashes currently)
+                 * when used in a zone file quoted string. If we find a character which needs to be
+                 * escaped, then output any characters that preceded it which we didn't output
+                 * already, the escape character, and that character which needed to be escaped.
+                 */
+                const u8 pstring_len = *rdata_pointer++;
+                const char *character_to_check = (char *)rdata_pointer;
+                const char * const limit = character_to_check + pstring_len;
+                output_stream_write_u8(os, '"'); /* Opening double quote for the string. */
+                for(; character_to_check < limit; character_to_check++)
                 {
-                    c = MIN(c, rdata_size);
+                    if(memchr("\"\n\\", *character_to_check, 3))
+                    {
+                        const u8 preceding_span_len = character_to_check - (char *)rdata_pointer;
 
-                    output_stream_write(os, rdata_pointer, c);
-                    output_stream_write(os, (u8*)" ", 1);
+                        output_stream_write(os, rdata_pointer, preceding_span_len);
+                        output_stream_write_u8(os, '\\');
+                        output_stream_write_u8(os, *character_to_check);
+
+                        rdata_pointer += preceding_span_len + 1;
+                    }
                 }
 
-                rdata_size--;
-                rdata_pointer += c;
-                rdata_size -= c;
+                /* Output any remaining characters in the Pascal string if rdata_pointer didn't
+                 * reach limit (because it ended with a character that didn't have to be escaped).
+                 */
+                if((char *)rdata_pointer < limit)
+                {
+                    output_stream_write(os, rdata_pointer, limit - (char *)rdata_pointer);
+                    rdata_pointer += limit - (char *)rdata_pointer;
+                }
+
+                output_stream_write_u8(os, '"'); /* Closing double quote for the string. */
+
+                rdata_size -= 1 + pstring_len; /* Decrement by the FULL Pascal string size. */
+
+                /* If there are still more Pascal strings in the chain, then output a space to
+                 * separate them from the one that was just output.
+                 */
+                if(rdata_size > 0)
+                {
+                    output_stream_write_u8(os, ' ');
+                }
             }
 
             return SUCCESS;
         }
+
         case TYPE_CTRL_ZONERELOAD:
         {
             /* ONE NAME record */
