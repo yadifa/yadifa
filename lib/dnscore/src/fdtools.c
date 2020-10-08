@@ -181,8 +181,9 @@ writefully(int fd, const void *buf, size_t count)
             {
                 break;
             }
-
+            
             int err = errno;
+            
             if(err == EINTR)
             {
                 continue;
@@ -190,7 +191,12 @@ writefully(int fd, const void *buf, size_t count)
 
             if(err == EAGAIN) /** @note It is nonsense to call writefully with a non-blocking fd */
             {
-                break;
+                if(current - start > 0)
+                {
+                    break;
+                }
+
+                return MAKE_ERRNO_ERROR(ETIMEDOUT);
             }
             
             if(err == ENOSPC)
@@ -205,7 +211,7 @@ writefully(int fd, const void *buf, size_t count)
                 break;
             }
 
-            return -1;
+            return MAKE_ERRNO_ERROR(err);
         }
 
         current += n;
@@ -222,17 +228,17 @@ writefully(int fd, const void *buf, size_t count)
  */
 
 ssize_t
-readfully(int fd, void *buf, size_t count)
+readfully(int fd, void *buf, size_t length)
 {
     u8* start = (u8*)buf;
     u8* current = start;
     ssize_t n;
 
-    while(count > 0)
+    while(length > 0)
     {
-        if((n = read(fd, current, count)) <= 0)
+        if((n = read(fd, current, length)) <= 0)
         {
-            if(n == 0)
+            if(n == 0) // end of file
             {
                 break;
             }
@@ -248,7 +254,7 @@ readfully(int fd, void *buf, size_t count)
             {
                 break;
             }
-            
+
             if(current - start > 0)
             {
                 break;
@@ -258,7 +264,7 @@ readfully(int fd, void *buf, size_t count)
         }
 
         current += n;
-        count -= n;
+        length -= n;
     }
 
     return current - start;
@@ -271,7 +277,7 @@ readfully(int fd, void *buf, size_t count)
  */
 
 ssize_t
-writefully_limited(int fd, const void *buf, size_t count, double minimum_rate)
+writefully_limited(int fd, const void *buf, size_t count, double minimum_rate_us)
 {
     const u8* start = (const u8*)buf;
     const u8* current = start;
@@ -310,12 +316,25 @@ writefully_limited(int fd, const void *buf, size_t count, double minimum_rate)
                 
                 u64 now = timeus();
 
-                double t = (now - tstart);
-                double b = (current - (u8*)buf)  * 1000000.;
+                u64 time_elapsed_u64 = now - tstart;
 
-                if(b < minimum_rate * t)  /* b/t < minimum_rate */
-                {                           
-                    return TCP_RATE_TOO_SLOW;
+                if(time_elapsed_u64 >= ONE_SECOND_US)
+                {
+                    double time_elapsed_us = time_elapsed_u64;
+
+                    double bytes_written = (current - (u8*)buf)  * ONE_SECOND_US_F;
+
+                    double expected_bytes_written = minimum_rate_us * time_elapsed_us;
+
+                    if(bytes_written < expected_bytes_written)  /* bytes/time < minimum_rate */
+                    {
+#if DEBUG
+                        log_warn("writefully_limited: rate of %fBps < %fBps (%fµs)", bytes_written, expected_bytes_written, time_elapsed_us);
+#else
+                        log_debug("writefully_limited: rate of %fBps < %fBps (%fµs)", bytes_written, expected_bytes_written, time_elapsed_us);
+#endif
+                        return TCP_RATE_TOO_SLOW;
+                    }
                 }
 
                 continue;
@@ -350,7 +369,7 @@ writefully_limited(int fd, const void *buf, size_t count, double minimum_rate)
  */
 
 ssize_t
-readfully_limited(int fd, void *buf, size_t count, double minimum_rate)
+readfully_limited(int fd, void *buf, size_t count, double minimum_rate_us)
 {
     u8* start = (u8*)buf;
     u8* current = start;
@@ -388,17 +407,120 @@ readfully_limited(int fd, void *buf, size_t count, double minimum_rate)
                 u64 now = timeus();
 
                 /* t is in us */
-                
-                double t = (now - tstart);
-                double b = (current - (u8*)buf) * 1000000.;
 
-                double expected_rate = minimum_rate * t;
-                
-                if(b < expected_rate)  /* b/t < minimum_rate */
+                u64 time_elapsed_u64 = now - tstart;
+
+                double time_elapsed_us = time_elapsed_u64;
+
+                if(time_elapsed_u64 >= ONE_SECOND_US)
                 {
-                    log_debug("readfully_limited: rate of %f < %f (%fµs)", b, expected_rate, t);
+                    double bytes_read = (current - (u8*)buf) * ONE_SECOND_US_F;
 
-                    return TCP_RATE_TOO_SLOW;
+                    double expected_bytes_read = minimum_rate_us * time_elapsed_us;
+
+                    if(bytes_read < expected_bytes_read)  // bytes/time < minimum_rate
+                    {
+                        time_elapsed_us /= 1000000.0;
+#if DEBUG
+                        log_warn("readfully_limited: rate of %fBps < %fBps (%fµs) (DEBUG)", bytes_read, expected_bytes_read, time_elapsed_us);
+#else
+                        log_debug("readfully_limited: rate of %fBps < %fBps (%fµs)", bytes_read, expected_bytes_read, time_elapsed_us);
+#endif
+                        return TCP_RATE_TOO_SLOW;
+                    }
+                }
+
+                continue;
+            }
+
+            if(current - start > 0)
+            {
+                break;
+            }
+
+            return -1;  /* EOF */
+        }
+
+        current += n;
+        count -= n;
+    }
+
+    return current - start;
+}
+
+/**
+ * Reads fully the buffer from the fd
+ * It will only return a short count for system errors.
+ * ie: fs full, non-block would block, fd invalid/closed, ...
+ */
+
+ssize_t
+readfully_limited_ex(int fd, void *buf, size_t count, s64 timeout_us, double minimum_rate_us)
+{
+    u8* start = (u8*)buf;
+    u8* current = start;
+    ssize_t n;
+
+    if(timeout_us <= 0)
+    {
+        timeout_us = 1;
+    }
+
+    s64 tstart = timeus();
+
+    // ASSUME : timeout set on fd for read & write
+
+    while(count > 0)
+    {
+        if((n = read(fd, current, count)) <= 0)
+        {
+            if(n == 0)
+            {
+                break;
+            }
+
+            int err = errno;
+
+            if(err == EINTR)
+            {
+                continue;
+            }
+
+            if(err == EAGAIN) /** @note It is nonsense to call readfully with a non-blocking fd */
+            {
+                /*
+                 * Measure the current elapsed time
+                 * Measure the current bytes
+                 * compare with the minimum rate
+                 * act on it
+                 */
+
+                s64 now = timeus();
+
+                /* t is in us */
+
+                s64 time_elapsed_u64 = now - tstart;
+
+                double time_elapsed_us = time_elapsed_u64;
+
+                if(time_elapsed_u64 >= timeout_us)
+                {
+                    double bytes_read = (current - (u8*)buf);
+                    bytes_read *= ONE_SECOND_US_F;
+                    bytes_read /= time_elapsed_u64;
+
+                    double expected_bytes_read = minimum_rate_us * time_elapsed_us;
+
+                    if(bytes_read < expected_bytes_read)  // bytes/time < minimum_rate
+                    {
+                        time_elapsed_us /= 1000000.0;
+#if DEBUG
+                        log_warn("readfully_limited: rate of %fBps < %fBps (%fµs) (DEBUG)", bytes_read, expected_bytes_read, time_elapsed_us);
+#else
+                        log_debug("readfully_limited: rate of %fBps < %fBps (%fµs)", bytes_read, expected_bytes_read, time_elapsed_us);
+#endif
+                        return TCP_RATE_TOO_SLOW;
+                    }
                 }
 
                 continue;
@@ -491,8 +613,8 @@ unlink_ex(const char *folder, const char *filename)
 {
     char fullpath[PATH_MAX];
     
-    int l0 = strlen(folder);
-    int l1 = strlen(filename);
+    size_t l0 = strlen(folder);
+    size_t l1 = strlen(filename);
     if(l0 + l1 < sizeof(fullpath))
     {    
         memcpy(fullpath, folder, l0);

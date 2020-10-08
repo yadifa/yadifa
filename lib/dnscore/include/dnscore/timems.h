@@ -47,6 +47,9 @@
 #include <time.h>
 #include <dnscore/sys_types.h>
 
+#define ONE_SECOND_US 1000000LL
+#define ONE_SECOND_US_F 1000000.0
+
 #ifdef	__cplusplus
 extern "C"
 {

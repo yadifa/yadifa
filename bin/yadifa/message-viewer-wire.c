@@ -31,10 +31,10 @@
  *------------------------------------------------------------------------------
  *
  *      SVN Program:
- *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.10-public/bin/yadifa/message-viewer-wire.c $
+ *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.11-public/bin/yadifa/message-viewer-wire.c $
  *
  *      Last Update:
- *              $Date: 2020-09-03 11:53:27 +0200 (do, 03 sep 2020) $
+ *              $Date: 2020-09-03 11:53:27 +0200 (Thu, 03 Sep 2020) $
  *              $Revision: 9707 $
  *
  *      Last Change:

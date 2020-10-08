@@ -29,13 +29,9 @@
 # 
 ################################################################################
 
-20200915:
-    YADIFA 2.3.10
-	Added an autogen.sh script, as we did for YADIFA 2.4.x
+20201007:
+    YADIFA 2.3.11
+	Applied Debian cross-build fix (helmut@subdivi.de, https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=971605)
 
-        Fixes an issue with IPv6 aliases.
-        Fixes an issue that would happen when building with a gcc version 10 or above.
-        Fixes an issue with FreeBSD aliases.
-        Fixes an issue with strncpy on FreeBSD.
-        Fixes an issue with CNAME queries incorrectly answered with an error code.
+	Fixes an issue where a TCP connection would be closed for inactivity with some flows rates (in some kernel/network settings)
 

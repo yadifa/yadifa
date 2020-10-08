@@ -316,18 +316,15 @@ case "$(uname -i 2>/dev/null)" in
 		;;
 esac
 
-case "$(uname -m)" in
-	x86_64)
+AC_REQUIRE([AC_CANONICAL_HOST])
+AS_IF([test "x$host_cpu" = xx86_64],[
 		AC_DEFINE_UNQUOTED([HAS_CPU_AMDINTEL], [1], [i386, Athlon, Opteron, Core2, i3, i5, i7, ...])
 		AM_CONDITIONAL([HAS_CPU_AMDINTEL], [true])
-		AC_MSG_RESULT([AMD/Intel])
-		CFLAGS3264=-m64
+		AC_MSG_RESULT([AMD/Intel ($host)])
+		AS_IF([test "x$host" = "xx86_64-linux-gnux32"],,[CFLAGS3264=-m64])
 		CPU_UNKNOWN=0
 		cpu_intel_compatible=1
-		;;
-	*)
-		;;
-esac
+])
 
 case "${CPU_UNKNOWN}" in
 	1)

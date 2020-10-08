@@ -49,9 +49,9 @@
 #
 #		Makefile.am script
 #
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.10-public/lib/dnscore/Makefile.am $
+#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.11-public/lib/dnscore/Makefile.am $
 #
-#	   $Date: 2020-09-03 11:53:27 +0200 (do, 03 sep 2020) $
+#	   $Date: 2020-09-03 11:53:27 +0200 (Thu, 03 Sep 2020) $
 #
 #	   $Revision: 9707 $
 #
@@ -321,10 +321,7 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 @USES_CLANG_TRUE@am__append_49 = -mno-omit-leaf-frame-pointer -fno-omit-frame-pointer
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
-	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
-	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
-	$(top_srcdir)/../../m4/eurid.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/../../m4/eurid.m4 \
 	$(top_srcdir)/../../m4/yadifa.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)

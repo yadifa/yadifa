@@ -32,10 +32,10 @@ dnl
 dnl ##############################################################################
 dnl
 dnl      SVN Program:
-dnl             $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.10-public/lib/dnscore/configure.ac $
+dnl             $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.11-public/lib/dnscore/configure.ac $
 dnl
 dnl      Last Update:
-dnl             $Date: 2020-09-03 11:53:27 +0200 (do, 03 sep 2020) $
+dnl             $Date: 2020-09-03 11:53:27 +0200 (Thu, 03 Sep 2020) $
 dnl             $Revision: 9707 $
 dnl
 dnl      Purpose:
