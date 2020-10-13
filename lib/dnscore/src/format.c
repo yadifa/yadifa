@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup format C-string formatting
  *  @ingroup dnscore
  *  @brief
@@ -52,6 +53,7 @@
 #include "dnscore/timeformat.h"
 
 #include "dnscore/ctrl-rfc.h"
+#include "dnscore/hash.h"
 
 // Enables or disables the feature
 #define HAS_DLADDR_SUPPORT 0
@@ -89,6 +91,8 @@
 #include "dnscore/base32hex.h"
 #include "dnscore/sys_error.h"
 
+#define FMTHDESC_TAG 0x4353454448544d46
+
 #define SENTINEL '%'
 #define NULL_STRING_SUBSTITUTE "(NULL)"
 #define NULL_STRING_SUBSTITUTE_LEN (sizeof(NULL_STRING_SUBSTITUTE)-1)
@@ -98,12 +102,62 @@
 static const u8* STREOL = (const u8*)"\n";
 //static const u8* STRCHR0 = (const u8*)"\0";
 static const u8* STRMINUS = (const u8*)"-";
+static const u8* STRESCAPE = (const u8*)"\\";
+static const u8* STRQUOTE = (const u8*)"\"";
+static const u8 STRSEPARATOR[] = {' ', '|', ' '};
+
+static const char ESCAPE_CHARS[] = {'@', '$', '\\', ';', ' ', '\t'};
+
+#define TXT_ESCAPE_TYPE_NONE 0
+#define TXT_ESCAPE_TYPE_CHAR 1
+#define TXT_ESCAPE_TYPE_OCTL 2
+
+static const u8 TXT_ESCAPE_TYPE[256] =
+{
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+
+    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_CHAR,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x20
+    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x28
+    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x30
+    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x38
+    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x40
+    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x48
+    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x50
+    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_CHAR,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x58
+    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x60
+    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x68
+    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x70
+    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x78
+
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+};
 
 /*
  * Linear access to the format handlers.  Accessed through a dichotomy.
  */
 
 static ptr_vector format_handler_descriptor_table = {NULL, -1, -1};
+
+static const format_handler_descriptor** format_handler_descriptor_hash_table = NULL;
+static int format_handler_descriptor_hash_table_size = 0;
 
 //static bool g_format_usable = FALSE;
 
@@ -126,15 +180,17 @@ format_handler_compare(const char* str1, s32 str1_len, const char* str2, s32 str
 static int
 format_handler_qsort_compare(const void* a_, const void* b_)
 {
-    format_handler_descriptor* a = *(format_handler_descriptor**)a_;
-    format_handler_descriptor* b = *(format_handler_descriptor**)b_;
+    format_handler_descriptor* a = (format_handler_descriptor*)a_;
+    format_handler_descriptor* b = (format_handler_descriptor*)b_;
 
     return format_handler_compare(a->name, a->name_len, b->name, b->name_len);
 }
 
-static format_handler_descriptor*
+static const format_handler_descriptor*
 format_get_format_handler(const char* name, u32 name_len)
 {
+#if 0 /* fix */
+#else
     if(format_handler_descriptor_table.data == NULL)
     {
         return NULL; /* Not initialized */
@@ -181,6 +237,7 @@ format_get_format_handler(const char* name, u32 name_len)
     }
 
     return NULL;
+#endif
 }
 
 /* Example of custom format handler -> */
@@ -192,17 +249,22 @@ format_get_format_handler(const char* name, u32 name_len)
 static void
 dummy_format_handler_method(const void* val, output_stream* stream, s32 padding, char pad_char, bool left_justified, void* reserved_for_method_parameters)
 {
+    (void)reserved_for_method_parameters;
+
     intptr ival = (intptr)val;
     format_hex_u64_lo(ival, stream, padding, pad_char, left_justified);
 }
 
-static format_handler_descriptor dummy_format_handler_descriptor ={
+static format_handler_descriptor dummy_format_handler_descriptor =
+{
     "Unsupported",
     11,
     dummy_format_handler_method
 };
 
 /* <- Example of custom format handler */
+
+static void format_grow_hash_table();
 
 void
 format_class_init()
@@ -213,18 +275,74 @@ format_class_init()
     }
 
     ptr_vector_init(&format_handler_descriptor_table);
+    
+    format_grow_hash_table();
 }
 
 void
 format_class_finalize()
 {
     ptr_vector_destroy(&format_handler_descriptor_table);
+    free(format_handler_descriptor_hash_table);
+    format_handler_descriptor_hash_table = NULL;
 }
 
 bool
 format_available()
 {
     return format_handler_descriptor_table.data != NULL;
+}
+
+static void format_grow_hash_table()
+{
+    bool retry;
+    
+    do
+    {
+        if(format_handler_descriptor_hash_table != NULL)
+        {
+            free(format_handler_descriptor_hash_table);
+
+            int next = (format_handler_descriptor_hash_table_size * 2) | 1;
+
+            for(int i = 3; i < next; i += 2)
+            {
+                if((next % i) == 0)
+                {
+                    next += 2;
+                    i = 1;
+                }
+            }
+
+            format_handler_descriptor_hash_table_size = next;
+        }
+        else
+        {
+            format_handler_descriptor_hash_table_size = 1117; // prime
+        }
+        
+        retry = FALSE;
+
+        MALLOC_OBJECT_ARRAY_OR_DIE(format_handler_descriptor_hash_table, const format_handler_descriptor*, format_handler_descriptor_hash_table_size, FMTHDESC_TAG);
+        ZEROMEMORY(format_handler_descriptor_hash_table, format_handler_descriptor_hash_table_size * sizeof(format_handler_descriptor*));
+
+        for(int i = 0; i <= ptr_vector_last_index(&format_handler_descriptor_table); ++i)
+        {
+            const format_handler_descriptor* fhd = (format_handler_descriptor*)ptr_vector_get(&format_handler_descriptor_table, i);
+            hashcode code = hash_chararray(fhd->name, fhd->name_len);
+
+            int slot = code % format_handler_descriptor_hash_table_size;
+
+            if(format_handler_descriptor_hash_table[slot] != NULL)
+            {
+                retry = TRUE;
+                break;
+            }
+
+            format_handler_descriptor_hash_table[slot] = fhd; // VS false positive: slot is unsigned and limited by the modulo of the size of the table
+        }
+    }
+    while(retry);
 }
 
 ya_result
@@ -238,6 +356,18 @@ format_registerclass(const format_handler_descriptor* fhd)
     ptr_vector_append(&format_handler_descriptor_table, (format_handler_descriptor*)fhd);
 
     ptr_vector_qsort(&format_handler_descriptor_table, format_handler_qsort_compare);
+    
+    hashcode code = hash_chararray(fhd->name, fhd->name_len);
+    int slot = code % format_handler_descriptor_hash_table_size;
+    
+    if(format_handler_descriptor_hash_table[slot] == NULL)
+    {
+        format_handler_descriptor_hash_table[slot] = fhd;
+    }
+    else
+    {
+        format_grow_hash_table();
+    }
     
     return SUCCESS;
 }
@@ -497,6 +627,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
     s32 padding = -1;
     s32 float_padding = -1;
     u8 type_size = sizeof(int);
+    u8 size_modifier_count = 0;
     char pad_char = ' ';
     bool left_justified = TRUE;
 
@@ -543,6 +674,8 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
 
         if(c == SENTINEL)
         {
+            size_modifier_count = 0;
+
             /* copy the rest, format */
 
             size_t size = next - fmt;
@@ -658,12 +791,14 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                 c = *next++;
 
                 type_size = sizeof(u32);
+                size_modifier_count = 1;
 
                 if(c == 'l')
                 {
                     c = *next++;
 
                     type_size = sizeof(u64);
+                    size_modifier_count = 2;
                 }
             }
             else if(c == 'L')
@@ -839,7 +974,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
 
                     intptr val = va_arg(args, intptr);
 
-#if HAS_DLADDR_SUPPORT != 0
+#if HAS_DLADDR_SUPPORT
                     Dl_info info;
 
                     if(val != 0)
@@ -944,7 +1079,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
 
                     size_t type_name_len = next - 1 - type_name;
 
-                    format_handler_descriptor* desc = format_get_format_handler(type_name, type_name_len);
+                    const format_handler_descriptor* desc = format_get_format_handler(type_name, type_name_len);
 
                     if(desc == NULL)
                     {
@@ -983,16 +1118,23 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                 
                 case 'T':
                 {
-                    switch(type_size)
+                    switch(size_modifier_count)
                     {
-                        case sizeof(s32):
+                        case 0:
                         {
-                            u32 val = (u32)va_arg(args, u32);
+                            s64 val = (s64)va_arg(args, u32);
                             localepoch_format_handler_method((void*)(intptr)val, &os, 0, 0, FALSE, NULL);
                             break;
                         }
 
-                        case sizeof(s64):
+                        case 1:
+                        {
+                            s64 val = (s64)va_arg(args, s64);
+                            localdatetime_format_handler_method((void*)(intptr)val, &os, 0, 0, FALSE, NULL);
+                            break;
+                        }
+
+                        case 2:
                         {
 
                             s64 val = (s64)va_arg(args, s64);
@@ -1010,16 +1152,23 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                 
                 case 'U':
                 {
-                    switch(type_size)
+                    switch(size_modifier_count)
                     {
-                        case sizeof(s32):
+                        case 0:
                         {
-                            u32 val = (u32)va_arg(args, u32);
+                            s64 val = (s64)va_arg(args, u32);
                             epoch_format_handler_method((void*)(intptr)val, &os, 0, 0, FALSE, NULL);
                             break;
                         }
 
-                        case sizeof(s64):
+                        case 1:
+                        {
+                            s64 val = (s64)va_arg(args, s64);
+                            datetime_format_handler_method((void*)(intptr)val, &os, 0, 0, FALSE, NULL);
+                            break;
+                        }
+
+                        case 2:
                         {
 
                             s64 val = (s64)va_arg(args, s64);
@@ -1104,6 +1253,40 @@ osformatln(output_stream* stream, const char* fmt, ...)
 }
 
 ya_result
+debug_osformatln(output_stream* stream, const char* fmt, ...)
+{
+    s64 now = timeus();
+    localdatetimeus_format_handler_method((void*)(intptr)now, stream, 0, 0, FALSE, NULL);
+    output_stream_write(stream, STRSEPARATOR, sizeof(STRSEPARATOR));
+    format_dec_u64(getpid(), stream, 0, 0, FALSE);
+    output_stream_write(stream, STRSEPARATOR, sizeof(STRSEPARATOR));
+    format_hex_u64_lo(pthread_self(), stream, 0, 0, FALSE);
+    output_stream_write(stream, STRSEPARATOR, sizeof(STRSEPARATOR));
+    va_list args;
+    va_start(args, fmt);
+    ya_result err1 = vosformat(stream, fmt, args);
+    va_end(args);
+    output_stream_write(stream, STREOL, 1);
+    return err1;
+}
+
+ya_result
+debug_println(const char* text)
+{
+    s64 now = timeus();
+    localdatetimeus_format_handler_method((void*)(intptr)now, termout, 0, 0, FALSE, NULL);
+    output_stream_write(termout, STRSEPARATOR, sizeof(STRSEPARATOR));
+    format_dec_u64(getpid(), termout, 0, 0, FALSE);
+    output_stream_write(termout, STRSEPARATOR, sizeof(STRSEPARATOR));
+    format_hex_u64_lo((u64)(intptr)pthread_self(), termout, 0, 0, FALSE);
+    output_stream_write(termout, STRSEPARATOR, sizeof(STRSEPARATOR));
+    ya_result n = strlen(text);
+    output_stream_write(termout, (const u8*)text, n);
+    output_stream_write(termout, STREOL, 1);
+    return n + 1;
+}
+
+ya_result
 print(const char* text)
 {
     return output_stream_write(termout, (const u8*)text, strlen(text));
@@ -1113,7 +1296,6 @@ ya_result
 println(const char* text)
 {
     ya_result n = strlen(text);
-    
     output_stream_write(termout, (const u8*)text, n);
     output_stream_write(termout, STREOL, 1);
     
@@ -1168,7 +1350,7 @@ vsnformat(char* out, size_t out_size, const char* fmt, va_list args)
 
     int ret = vosformat(&baos, fmt, args);
 
-    if(ret < out_size)
+    if(ret < (int)out_size)
     {
         out[ret] = CHR0;
     }
@@ -1202,7 +1384,7 @@ vasnformat(char** outp, size_t out_size, const char* fmt, va_list args)
 
     int ret = vosformat(&baos, fmt, args);
 
-    if(ISOK(ret) && ((out_size == 0) || (ret < out_size)))
+    if(ISOK(ret) && ((out_size == 0) || (ret < (int)out_size)))
     {
         output_stream_write_u8(&baos, 0);
         *outp =(char*)bytearray_output_stream_dup(&baos);
@@ -1329,7 +1511,7 @@ fformat(FILE* out, const char* fmt, ...)
 {
     char tmp[4096];
 
-#ifdef DEBUG
+#if DEBUG
     memset(tmp, '!', sizeof(tmp));
 #endif
 
@@ -1378,6 +1560,35 @@ osprint_char(output_stream* os, char value)
     char tmp[1];
     tmp[0] = value;
     output_stream_write(os, (u8*)tmp, 1);
+}
+
+void osprint_char_times(output_stream *os, char value, int times)
+{
+    char tmp[32];
+
+    if(times < 0)
+    {
+        return;
+    }
+
+    if(times > 32)
+    {
+        memset(tmp, value, 32);
+
+        do
+        {
+            output_stream_write(os, tmp, 32);
+            times -= 32;
+        }
+        while(times >= 32);
+
+        output_stream_write(os, tmp, times);
+    }
+    else
+    {
+        memset(tmp, value, times);
+        output_stream_write(os, tmp, times);
+    }
 }
 
 
@@ -1431,9 +1642,64 @@ osprint_type_bitmap(output_stream* os, const u8* rdata_pointer, u16 rdata_size)
     return SUCCESS;
 }
 
+static const u32 loc_pow10[10] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+static const char loc_ns[2] = {'N','S'};
+static const char loc_ew[2] = {'E','W'};
+
+static bool loc_float(u8 v, u32* out_value)
+{
+    u32 m = v >> 4;
+    u32 e = v & 0x0f;
+    
+    if(!((m > 9) || (e > 9) || ((m == 0) && (e != 0))))
+    {
+        *out_value = m * loc_pow10[e];
+        return TRUE;
+    }
+    else
+    {
+        return FALSE;
+    }
+}
+
+struct loc_coordinate
+{
+    int secfrac;
+    int sec;
+    int min;
+    int deg;
+    int cardinal_index; // N S // E W
+};
+
+static void
+loc_coordinate_init(struct loc_coordinate* c, s32 val)
+{
+    val -= (s32)0x80000000LU;
+    
+    if(val < 0)
+    {
+        val = -val;
+        c->cardinal_index = 1;
+    }
+    else
+    {
+        c->cardinal_index = 0;
+    }
+    
+    c->secfrac = val % 1000;
+    val /= 1000;
+    c->sec = val % 60;
+    val /= 60;
+    c->min = val % 60;
+    val /= 60;
+    c->deg = val;
+}
+
 ya_result
 osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_size)
 {
+    char tmp[16];
+    
     switch(type)
     {
         case TYPE_A:
@@ -1464,13 +1730,13 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         case TYPE_MX:
 
 
-
-
-
+        case TYPE_KX:
+        case TYPE_LP:
+        case TYPE_AFSDB:
             osformat(os, "%hd ", ntohs(GET_U16_AT(*rdata_pointer)));
             rdata_pointer += 2;
             rdata_size -= 2;
-            /* NO BREAK HERE, I WANT TO FALLTHROUGH */;
+            FALLTHROUGH // fall through
         case TYPE_NS:
         case TYPE_CNAME:
         case TYPE_DNAME:
@@ -1487,7 +1753,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             /* ONE NAME record */
             if(rdata_size > 0)
             {
-                osformat(os, "%{dnsname}", rdata_pointer);
+                output_stream_write_dnsname_text(os, rdata_pointer);
                 return SUCCESS;
             }
             return INCORRECT_RDATA;
@@ -1495,21 +1761,236 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
 
 
+        case TYPE_PX:
+        {
+            if(rdata_size >= 4)
+            {
+                osformat(os, "%hd ", ntohs(GET_U16_AT(*rdata_pointer)));
+                rdata_pointer += 2;
+                rdata_size -= 2;
+            }
+            else
+            {
+                return INCORRECT_RDATA;
+            }
+        }
+        FALLTHROUGH // fall through
+        case TYPE_TALINK:
+        {
+            if(rdata_size >= 2)
+            {
+                u32 len = output_stream_write_dnsname_text(os, rdata_pointer);
+                rdata_size -= len;
+
+                if(rdata_size > 0)
+                {
+                    rdata_pointer += len;
+
+                    len = output_stream_write_dnsname_text(os, rdata_pointer);
+                    rdata_size -= len;
+
+                    if(rdata_size == 0)
+                    {
+                        return SUCCESS;
+                    }
+                }
+            }
+
+            return INCORRECT_RDATA;
+        }
+
+        case TYPE_WKS:
+        {
+            if(rdata_size >= 6)
+            {
+                osformat(os, "%d.%d.%d.%d", rdata_pointer[0], rdata_pointer[1], rdata_pointer[2], rdata_pointer[3]);
+
+                rdata_pointer += 4;
+                rdata_size -= 4;
+                
+                ya_result len = protocol_id_to_name(rdata_pointer[0], tmp + 1, sizeof(tmp) - 1);
+                
+                if(len < 0)
+                {
+                    return len;
+                }
+                
+                tmp[0] = ' ';
+                output_stream_write(os, tmp, len + 1);
+
+                rdata_pointer++;
+                rdata_size--;
+
+                for(int index = 0; index < rdata_size; ++index)
+                {
+                    u8 m;
+                    if((m = *rdata_pointer) != 0)
+                    {
+                        for(int i = 7; i >= 0; --i)
+                        {
+                            if((m & (1 << i)) != 0)
+                            {
+                                u16 port = (u16) ((index << 3) + 7 - i);
+                                
+                                len = server_port_to_name(port, tmp + 1, sizeof(tmp) - 1);
+                                
+                                if(len < 0)
+                                {
+                                    return len;
+                                }
+
+                                output_stream_write(os, tmp, len + 1);
+                            }
+                        }
+                    }
+                }
+                
+                return SUCCESS;
+            }
+            return INCORRECT_RDATA;
+        }
+
+        case TYPE_GPOS:
+        {
+            const u8 *limit = &rdata_pointer[rdata_size];
+            
+            for(int i = 0; i < 3; ++i)
+            {
+                u8 len = *rdata_pointer++;
+                
+                if(len == 0)
+                {
+                    return INCORRECT_RDATA;
+                }
+                
+                if(&rdata_pointer[len] >= limit)
+                {
+                    return INCORRECT_RDATA;
+                }
+                
+                output_stream_write_u8(os, (u8)'"');
+                output_stream_write(os, rdata_pointer, len);
+                output_stream_write_u8(os, (u8)'"');
+                
+                rdata_pointer += len;                
+            }
+            
+            return SUCCESS;
+        }
+
+        case TYPE_LOC:
+        {
+            /*
+             * VERSION:  This must be zero.
+             * Implementations are required to check this field and make
+             * no assumptions about the format of unrecognized versions.
+             */
+            if(rdata_size != 16 || rdata_pointer[0] != 0)
+            {
+                return INCORRECT_RDATA;
+            }
+
+            /*
+             * SIZE: The diameter of a sphere enclosing the described entity, in centimeters
+             * format is a pair of four-bit unsigned integers, each ranging from zero to nine
+             * This allows sizes from 0e0 (<1cm) to 9e9 (90,000km) to be expressed.
+             * Four-bit values greater than 9 are undefined, as are values with a base of zero and a non-zero exponent
+             */
+            
+            u32 size, horizp, vertp;
+            
+            if(!loc_float(rdata_pointer[1], &size) || !loc_float(rdata_pointer[2], &horizp) || !loc_float(rdata_pointer[3], &vertp))
+            {
+                return INCORRECT_RDATA;
+            }
+
+            /*
+             * LATITUDE
+             */
+            struct loc_coordinate loc_latitude;            
+            loc_coordinate_init(&loc_latitude, ntohl(GET_U32_AT(rdata_pointer[4])));
+            
+            /*
+             * LONGITUDE
+             */
+
+            struct loc_coordinate loc_longitude;            
+            loc_coordinate_init(&loc_longitude, ntohl(GET_U32_AT(rdata_pointer[8])));
+            
+            /*
+             * ALTITUDE
+             */
+            
+            const u32 wgs84_reference = 10000000; // cm
+            
+            u32 altitude = ntohl(GET_U32_AT(rdata_pointer[12]));
+            int altfrac;
+            if(altitude < wgs84_reference)
+            {
+                altitude = wgs84_reference - altitude;
+                altfrac = altitude % 100;
+                altitude /= -100;
+            }
+            else
+            {
+                altitude = altitude - wgs84_reference;
+                altfrac = altitude % 100;
+                altitude /= 100;
+            }
+                        
+            osformat(os, "%u %u %u.%03u %c %u %u %u.%03u %c %d.%02um %dm %dm %dm",
+                     loc_latitude.deg,                  // degrees latitude [0 .. 90]
+                     loc_latitude.min,                  // minutes latitude [0 .. 59]
+                     loc_latitude.sec,                  // seconds latitude [0 .. 59]
+                     loc_latitude.secfrac,              // fractions of seconds of latitude]
+                     loc_ns[loc_latitude.cardinal_index],// ['N' / 'S']
+                    
+                     loc_longitude.deg,                  // degrees longitude [0 .. 90]
+                     loc_longitude.min,                  // minutes longitude [0 .. 59]
+                     loc_longitude.sec,                  // seconds longitude [0 .. 59]
+                     loc_longitude.secfrac,              // fractions of seconds of longitude]
+                     loc_ew[loc_longitude.cardinal_index],// ['E' / 'W']
+                    
+                     altitude,                    // altitude in meters [-100000.00 .. 42849672.95]
+                     altfrac,
+                    
+                     size, horizp, vertp);
+
+            return SUCCESS;
+        }
+
+        case TYPE_CSYNC:
+        {
+            if(rdata_size > 6)
+            {
+                osformat(os, "%u %hu ",
+                         ntohl(GET_U32_AT(rdata_pointer[0])),
+                         ntohs(GET_U16_AT(rdata_pointer[4]))
+                );
+
+                rdata_pointer += 6;
+                rdata_size -= 6;
+
+                return osprint_type_bitmap(os, rdata_pointer, rdata_size);
+            }
+
+            return INCORRECT_RDATA;
+        }
 
 
 
 
 
+        case TYPE_OPENPGPKEY:
 
+        {
+            if(rdata_size > 0)
+            {
+                return osprint_base64(os, rdata_pointer, rdata_size);
+            }
 
-
-
-
-
-
-
-
-
+            return INCORRECT_RDATA;
+        }
 
 
 
@@ -1545,11 +2026,16 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             return SUCCESS;
         }
 
-
-
         case TYPE_SOA:
         {
-            osformat(os, "%{dnsname} ", rdata_pointer);
+            static u8 dot = (u8)'.';
+            static u8 space = (u8)' ';
+            static u8 escape = (u8)'\\';
+
+            output_stream_write_dnsname_text(os, rdata_pointer);
+
+            output_stream_write(os, &space, 1);
+
             u32 len = dnsname_len(rdata_pointer);
 
             rdata_size -= len;
@@ -1560,9 +2046,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
                 const u8 *label = rdata_pointer;
                 u8 label_len = *label;
-
-                static u8 dot = (u8)'.';
-                static u8 escape = (u8)'\\';
 
                 if(label_len > 0)
                 {
@@ -1639,8 +2122,9 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             rdata_pointer += RRSIG_RDATA_HEADER_LEN;
             rdata_size -= RRSIG_RDATA_HEADER_LEN;
 
-            osformat(os, "%{dnsname} ", rdata_pointer);
+            output_stream_write_dnsname_text(os, rdata_pointer);
             u32 len = dnsname_len(rdata_pointer);
+            output_stream_write_u8(os, ' ');
 
             rdata_pointer += len;
             rdata_size -= len;
@@ -1656,7 +2140,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         case TYPE_KEY:
 
 
-
+        case TYPE_CDNSKEY:
         {
             osformat(os, "%u %u %u ",
                      ntohs(GET_U16_AT(rdata_pointer[0])),
@@ -1671,7 +2155,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             return SUCCESS;
         }
         case TYPE_DS:
-
+        case TYPE_CDS:
 
 
         {
@@ -1693,21 +2177,21 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         case TYPE_NSEC:
 
         {
-            osformat(os, "%{dnsname} ", rdata_pointer);
-
+            output_stream_write_dnsname_text(os, rdata_pointer);
             u32 len = dnsname_len(rdata_pointer);
+            output_stream_write_u8(os, ' ');
 
             rdata_pointer += len;
             rdata_size -= len;
 
-            ya_result return_code;
+            ya_result ret;
 
-            if(ISOK(return_code = osprint_type_bitmap(os, rdata_pointer, rdata_size)))
+            if(ISOK(ret = osprint_type_bitmap(os, rdata_pointer, rdata_size)))
             {
                 return SUCCESS;
             }
 
-            return return_code;
+            return ret;
         }
         case TYPE_NSEC3:
         case TYPE_NSEC3PARAM:
@@ -1737,7 +2221,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
             if(type == TYPE_NSEC3)
             {
-                osprint(os, " ");
+                output_stream_write_u8(os, ' ');
 
                 len = *rdata_pointer++;
 
@@ -1774,13 +2258,82 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
 
 
+        case TYPE_NID:
+        case TYPE_L64:
+        {
+            if(rdata_size == 10)
+            {
+                osformat(os, "%hu %04x:%04x:%04x:%04x",
+                         ntohs(GET_U16_AT(rdata_pointer[0])),
+                         ntohs(GET_U16_AT(rdata_pointer[2])),
+                         ntohs(GET_U16_AT(rdata_pointer[4])),
+                         ntohs(GET_U16_AT(rdata_pointer[6])),
+                         ntohs(GET_U16_AT(rdata_pointer[8]))
+                );
 
+                return SUCCESS;
+            }
 
+            return INCORRECT_RDATA;
+        }
 
+        case TYPE_L32:
+        {
+            if(rdata_size == 6)
+            {
+                osformat(os, "%hu %hhu.%hhu.%hhu.%hhu",
+                         ntohs(GET_U16_AT(rdata_pointer[0])),
+                         rdata_pointer[2],
+                         rdata_pointer[3],
+                         rdata_pointer[4],
+                         rdata_pointer[5]
+                );
 
+                return SUCCESS;
+            }
 
+            return INCORRECT_RDATA;
+        }
 
+        case TYPE_EUI48:
+        {
+            if(rdata_size == 6)
+            {
+                osformat(os, "%02x-%02x-%02x-%02x-%02x-%02x",
+                         rdata_pointer[0],
+                         rdata_pointer[1],
+                         rdata_pointer[2],
+                         rdata_pointer[3],
+                         rdata_pointer[4],
+                         rdata_pointer[5]
+                );
 
+                return SUCCESS;
+            }
+
+            return INCORRECT_RDATA;
+        }
+
+        case TYPE_EUI64:
+        {
+            if(rdata_size == 8)
+            {
+                osformat(os, "%02x-%02x-%02x-%02x-%02x-%02x-%02x-%02x",
+                         rdata_pointer[0],
+                         rdata_pointer[1],
+                         rdata_pointer[2],
+                         rdata_pointer[3],
+                         rdata_pointer[4],
+                         rdata_pointer[5],
+                         rdata_pointer[6],
+                         rdata_pointer[7]
+                );
+
+                return SUCCESS;
+            }
+
+            return INCORRECT_RDATA;
+        }
 
 
 
@@ -1906,51 +2459,155 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
 
         case TYPE_TXT:
-
+        case TYPE_SPF:
 
 
         {
             u8 c;
 
-            while(rdata_size > 0)
+            if(rdata_size > 0)
             {
-                c = *rdata_pointer++;
-
-                if(c > 0)
+                for(;;)
                 {
-                    c = MIN(c, rdata_size);
+                    c = *rdata_pointer++;
 
-                    output_stream_write(os, rdata_pointer, c);
+                    if(c > 0)
+                    {
+                        c = MIN(c, rdata_size);
+                        output_stream_write(os, (u8*)"\"", 1);
+                        output_stream_write(os, rdata_pointer, c);
+                        output_stream_write(os, (u8*)"\"", 1);
+                    }
+
+                    rdata_size--;
+                    rdata_pointer += c;
+                    rdata_size -= c;
+
+                    if(rdata_size == 0)
+                    {
+                        break;
+                    }
+
                     output_stream_write(os, (u8*)" ", 1);
                 }
-
-                rdata_size--;
-                rdata_pointer += c;
-                rdata_size -= c;
             }
 
             return SUCCESS;
         }
+        case TYPE_CTRL_ZONEFREEZE:
+        case TYPE_CTRL_ZONEUNFREEZE:
+        case TYPE_CTRL_ZONENOTIFY:
         case TYPE_CTRL_ZONERELOAD:
+        case TYPE_CTRL_ZONECFGRELOAD:
         {
             /* ONE NAME record */
             if(rdata_size > 0)
             {
-                osformat(os, "%{dnsname}", rdata_pointer);
+                ya_result ret = output_stream_write_dnsname_text(os, rdata_pointer);
+                return ret;
+            }
+            return SUCCESS;
+        }
+        case TYPE_CTRL_SRVLOGLEVEL:
+        case TYPE_CTRL_SRVQUERYLOG:
+        {
+            if(rdata_size == 1)
+            {
+                format_hex_u64_lo(rdata_pointer[0], os, 2, '0', FALSE);
                 return SUCCESS;
             }
             return INCORRECT_RDATA;
         }
+        case TYPE_CTRL_ZONESYNC:
+        {
+            /* ONE NAME record */
+            if(rdata_size > 0)
+            {
+                format_hex_u64_lo(rdata_pointer[0], os, 2, '0', FALSE);
 
-// @todo 20150520 timh -- !!!! NOTE THAT THIS IS AN ifndef AND NOT AN ifdef !!!!
-#ifndef THX
-        case TYPE_A6:
-#endif  // THX NDEF A6
-#ifndef THX /* @todo 20150520 timh -- This type is similar to MX record, so added there instead */
-        case TYPE_AFSDB:
-#endif  // THX NDEF AFSDB
+                if(rdata_size > 1)
+                {
+                    output_stream_write_u8(os, (u8)' ');
+                    ya_result ret = output_stream_write_dnsname_text(os, rdata_pointer + 1);
 
+                    if(ISOK(ret))
+                    {
+                        return ret + 3;
+                    }
+                    else
+                    {
+                        return ret;
+                    }
+                }
+            }
+            return SUCCESS;
+        }
+        
         case TYPE_TSIG:
+        {
+            const u8 *limit = &rdata_pointer[rdata_size];
+            
+            ya_result ret = output_stream_write_dnsname_text(os, rdata_pointer);
+            
+            if(FAIL(ret))
+            {
+                return ret;
+            }
+            
+            rdata_pointer += ret;
+            
+            if(limit - rdata_pointer < 16)
+            {
+                return ERROR;
+            }
+            
+            u16 time_hi = ntohs(GET_U16_AT(rdata_pointer[0]));
+            u32 time_lo = ntohl(GET_U32_AT(rdata_pointer[2]));
+            u16 fudge = ntohs(GET_U16_AT(rdata_pointer[6]));
+            u16 mac_size = ntohs(GET_U16_AT(rdata_pointer[8]));
+            
+            rdata_pointer += 10;
+            
+            if(limit - rdata_pointer < mac_size + 6)
+            {
+                return ERROR;
+            }
+            
+            u64 epoch = time_hi;
+            epoch <<= 32;
+            epoch |= time_lo;
+            
+            osformat(os, " %T +-%hus ", epoch, fudge);
+            
+            for(u16 i = 0; i < mac_size; ++i)
+            {
+                osformat(os, "%02x", rdata_pointer[i]);
+            }
+            
+            rdata_pointer += mac_size;
+            
+            u16 oid = ntohs(GET_U16_AT(rdata_pointer[0]));
+            u16 error = ntohs(GET_U16_AT(rdata_pointer[2]));
+            u16 olen = ntohs(GET_U16_AT(rdata_pointer[4]));
+            
+            rdata_pointer += 6;
+            
+            if(limit - rdata_pointer != olen)
+            {
+                return ERROR;
+            }            
+            
+            osformat(os, " %i %s %i ", oid, dns_message_rcode_get_name(error), olen);
+            
+            for(; rdata_pointer < limit; ++rdata_pointer)
+            {
+                osformat(os, "%02x", rdata_pointer[0]);
+            }
+            
+            break;
+        }
+
+        case TYPE_A6:
         case TYPE_IXFR:
         case TYPE_AXFR:
         case TYPE_SIG:
@@ -1966,6 +2623,309 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
     return INCORRECT_RDATA;
 }
 
+
+
+static int
+osprint_rdata_count_escapes(const u8* name, size_t name_len)
+{
+    int ret = 0;
+    for(size_t i = 0; i < name_len; ++i)
+    {
+        const char c = name[i];
+
+        for(size_t j = 0; j < sizeof(ESCAPE_CHARS); ++j)
+        {
+            if(c == ESCAPE_CHARS[j])
+            {
+                ++ret;
+            }
+        }
+    }
+
+    return ret;
+}
+
+ya_result
+osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_size)
+{
+   switch(type)
+    {
+        case TYPE_MX:
+
+
+        case TYPE_KX:
+        case TYPE_LP:
+        case TYPE_AFSDB:
+            osformat(os, "%hd ", ntohs(GET_U16_AT(*rdata_pointer)));
+            rdata_pointer += 2;
+            rdata_size -= 2;
+            FALLTHROUGH // fall through
+        case TYPE_NS:
+        case TYPE_CNAME:
+        case TYPE_DNAME:
+        case TYPE_PTR:
+        case TYPE_MB:
+        case TYPE_MD:
+        case TYPE_MF:
+        case TYPE_MG:
+        case TYPE_MR:
+
+
+
+        {
+            /* ONE NAME record */
+            if(rdata_size > 0)
+            {
+                output_stream_write_dnsname_text_escaped(os, rdata_pointer);
+                return SUCCESS;
+            }
+            return INCORRECT_RDATA;
+        }
+
+
+
+        case TYPE_TALINK:
+        {
+            if(rdata_size >= 2)
+            {
+                u32 len = output_stream_write_dnsname_text_escaped(os, rdata_pointer);
+                rdata_size -= len;
+
+                if(rdata_size > 0)
+                {
+                    rdata_pointer += len;
+
+                    len = output_stream_write_dnsname_text_escaped(os, rdata_pointer);
+                    rdata_size -= len;
+
+                    if(rdata_size == 0)
+                    {
+                        return SUCCESS;
+                    }
+                }
+            }
+
+            return INCORRECT_RDATA;
+        }
+
+        case TYPE_HINFO:
+        case TYPE_MINFO:
+        {
+            /* Two Pascal String records */
+
+            /*
+             * <character-string> is a single length octet followed by that number
+             * of characters.  <character-string> is treated as binary information,
+             * and can be up to 256 characters in length (including the length octet).
+             *
+             */
+
+            int i;
+
+            for(i = 0; i < 2; i++)
+            {
+                u32 len = (*rdata_pointer) + 1;
+
+                if(len > rdata_size)
+                {
+                    return INCORRECT_RDATA;
+                }
+
+                output_stream_write_dnslabel_text_escaped(os, rdata_pointer);
+
+                rdata_size -= len;
+                rdata_pointer += len;
+            }
+
+            return SUCCESS;
+        }
+
+        case TYPE_SOA:
+        {
+            output_stream_write_dnsname_text_escaped(os, rdata_pointer);
+            output_stream_write_u8(os, ' ');
+
+            u32 len = dnsname_len(rdata_pointer);
+            rdata_size -= len;
+
+            if(rdata_size > 0)
+            {
+                rdata_pointer += len;
+
+                output_stream_write_dnsname_text_escaped(os, rdata_pointer);
+                output_stream_write_u8(os, ' ');
+
+                len = dnsname_len(rdata_pointer);
+                rdata_size -= len;
+
+                if(rdata_size == 20)
+                {
+                    rdata_pointer += len;
+
+                    osformat(os, " %u %u %u %u %u",
+                             ntohl(GET_U32_AT(rdata_pointer[ 0])),
+                             ntohl(GET_U32_AT(rdata_pointer[ 4])),
+                             ntohl(GET_U32_AT(rdata_pointer[ 8])),
+                             ntohl(GET_U32_AT(rdata_pointer[12])),
+                             ntohl(GET_U32_AT(rdata_pointer[16])));
+
+                    return SUCCESS;
+                }
+            }
+
+            return INCORRECT_RDATA;
+        }
+        case TYPE_RRSIG:
+        {
+            struct tm exp;
+            struct tm inc;
+
+            time_t t = (time_t)ntohl(GET_U32_AT(rdata_pointer[8]));
+            gmtime_r(&t, &exp);
+            t = (time_t)ntohl(GET_U32_AT(rdata_pointer[12]));
+            gmtime_r(&t, &inc);
+
+            u16 covered_type = (GET_U16_AT(rdata_pointer[0])); /** @note NATIVETYPE */
+
+            osformat(os, "%{dnstype} %u %u %u %04u%02u%02u%02u%02u%02u %04u%02u%02u%02u%02u%02u %u ",
+                     &covered_type,
+                     U8_AT(rdata_pointer[2]),
+                     U8_AT(rdata_pointer[3]),
+                     ntohl(GET_U32_AT(rdata_pointer[4])),
+                     exp.tm_year + 1900, exp.tm_mon + 1, exp.tm_mday, exp.tm_hour, exp.tm_min, exp.tm_sec,
+                     inc.tm_year + 1900, inc.tm_mon + 1, inc.tm_mday, inc.tm_hour, inc.tm_min, inc.tm_sec,
+                     ntohs(GET_U16_AT(rdata_pointer[16])));
+
+            rdata_pointer += RRSIG_RDATA_HEADER_LEN;
+            rdata_size -= RRSIG_RDATA_HEADER_LEN;
+
+            output_stream_write_dnsname_text_escaped(os, rdata_pointer);
+            u32 len = dnsname_len(rdata_pointer);
+            output_stream_write_u8(os, ' ');
+
+            rdata_pointer += len;
+            rdata_size -= len;
+
+            if(rdata_size > 0)
+            {
+                osprint_base64(os, rdata_pointer, rdata_size);
+            }
+
+            return SUCCESS;
+        }
+
+        case TYPE_NSEC:
+
+        {
+            output_stream_write_dnsname_text_escaped(os, rdata_pointer);
+            u32 len = dnsname_len(rdata_pointer);
+            output_stream_write_u8(os, ' ');
+
+            rdata_pointer += len;
+            rdata_size -= len;
+
+            ya_result ret;
+
+            if(ISOK(ret = osprint_type_bitmap(os, rdata_pointer, rdata_size)))
+            {
+                return SUCCESS;
+            }
+
+            return ret;
+        }
+
+        case TYPE_SRV:
+        {
+            u16 priority = GET_U16_AT(rdata_pointer[0]);
+            u16 weight = GET_U16_AT(rdata_pointer[2]);
+            u16 port = GET_U16_AT(rdata_pointer[4]);
+            const u8 *fqdn = (const u8*)&rdata_pointer[6];
+
+            osformat(os, "%hd %hd %hd ", priority, weight, port);
+
+            ya_result ret = output_stream_write_dnsname_text_escaped(os, fqdn);
+
+            return ret;
+        }
+
+        case TYPE_TXT:
+        case TYPE_SPF:
+
+
+        {
+            u8 pascal_string_size;
+            int space_len = 0;
+
+            while(rdata_size > 0)
+            {
+                pascal_string_size = *rdata_pointer++;
+
+                if(pascal_string_size > 0)
+                {
+                    output_stream_write(os, (u8*)" ", space_len);
+
+                    pascal_string_size = MIN(pascal_string_size, rdata_size);
+
+                    output_stream_write(os, STRQUOTE, 1);
+
+                    for(int i = 0; i < pascal_string_size; ++i)
+                    {
+                        u8 escape_type = TXT_ESCAPE_TYPE[rdata_pointer[i]];
+
+                        switch(escape_type)
+                        {
+                            case TXT_ESCAPE_TYPE_NONE:
+                            {
+                                output_stream_write(os, &rdata_pointer[i], 1);
+                                break;
+                            }
+                            case TXT_ESCAPE_TYPE_CHAR:
+                            {
+                                output_stream_write(os, STRESCAPE, 1);
+                                output_stream_write(os, &rdata_pointer[i], 1);
+                                break;
+                            }
+                            case TXT_ESCAPE_TYPE_OCTL:
+                            {
+                                u8 decimal[4];
+                                decimal[0] = '\\';
+                                decimal[1] = ((rdata_pointer[i] / 100) % 10) + '0';
+                                decimal[2] = ((rdata_pointer[i] / 10) % 10) + '0';
+                                decimal[3] = (rdata_pointer[i] % 10) + '0';
+                                output_stream_write(os, decimal, 4);
+                                break;
+                            }
+                        }
+                    }
+
+                    output_stream_write(os, STRQUOTE, 1);
+                }
+                else
+                {
+                    output_stream_write(os, "\"\"", 2);
+                }
+
+                space_len = 1;
+
+                rdata_size--;
+                rdata_pointer += pascal_string_size;
+                rdata_size -= pascal_string_size;
+            }
+
+            return SUCCESS;
+        }
+        default:
+        {
+            ya_result ret = osprint_rdata(os, type, rdata_pointer, rdata_size);
+
+            return ret;
+        }
+    }
+
+    return INCORRECT_RDATA;
+}
+
+
 ya_result
 print_rdata(u16 type, u8* rdata_pointer, u16 rdata_size)
 {
@@ -1976,25 +2936,32 @@ void
 osprint_dump(output_stream *os, const void* data_pointer_, size_t size_, size_t line_size, u32 flags)
 {
     const u8* data_pointer = (const u8*)data_pointer_;
-    s32 size = size_;
+    size_t size = size_;
     
     bool address = (flags & OSPRINT_DUMP_ADDRESS) != 0;
     bool hex = (flags & OSPRINT_DUMP_HEX) != 0;
     bool text = (flags & OSPRINT_DUMP_TEXT) != 0;
     
-    int group = flags & OSPRINT_DUMP_LAYOUT_GROUP_MASK;
+    size_t group = flags & OSPRINT_DUMP_LAYOUT_GROUP_MASK;
     group >>= OSPRINT_DUMP_LAYOUT_GROUP_SHIFT;
-    int separator = flags & OSPRINT_DUMP_LAYOUT_SEPARATOR_MASK;
+    size_t separator = flags & OSPRINT_DUMP_LAYOUT_SEPARATOR_MASK;
     separator >>= OSPRINT_DUMP_LAYOUT_SEPARATOR_SHIFT;
 
-    int dump_size;
-    int i;
+    size_t dump_size;
+    size_t i;
     
     char hexbyte[2];
 
     do
     {
-        dump_size = MIN(line_size, size);
+        if(line_size != 0)
+        {
+            dump_size = MIN(line_size, size);
+        }
+        else
+        {
+            dump_size = size;
+        }
 
         const u8* data;
 
@@ -2087,6 +3054,3 @@ print_question(u8* qname, u16 qclass, u16 qtype)
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

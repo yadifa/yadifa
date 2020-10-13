@@ -16,47 +16,36 @@
 
 ################################################################################
 #
-# Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-# The YADIFA TM software product is provided under the BSD 3-clause license:
+#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
-# Redistribution and use in source and binary forms, with or without 
-# modification, are permitted provided that the following conditions
-# are met:
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions
+#  are met:
 #
-#        * Redistributions of source code must retain the above copyright 
-#          notice, this list of conditions and the following disclaimer.
-#        * Redistributions in binary form must reproduce the above copyright 
-#          notice, this list of conditions and the following disclaimer in the 
-#          documentation and/or other materials provided with the distribution.
-#        * Neither the name of EURid nor the names of its contributors may be 
-#          used to endorse or promote products derived from this software 
-#          without specific prior written permission.
+#         * Redistributions of source code must retain the above copyright
+#           notice, this list of conditions and the following disclaimer.
+#         * Redistributions in binary form must reproduce the above copyright
+#           notice, this list of conditions and the following disclaimer in the
+#           documentation and/or other materials provided with the distribution.
+#         * Neither the name of EURid nor the names of its contributors may be
+#           used to endorse or promote products derived from this software
+#           without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE 
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+#  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+#  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+#  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+#  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+#  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-################################################################################
-#
-#       SVN Program:
-#               $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.11-public/Makefile.am $
-#
-#       Last Update:
-#               $Date: 2020-09-03 11:53:27 +0200 (Thu, 03 Sep 2020) $
-#               $Revision: 9707 $
-#
-#       Purpose:
-#               YADIFA main Makefile.am script
-#
-################################################################################
+################################################################################        
 
+VPATH = @srcdir@
 am__is_gnu_make = test -n '$(MAKEFILE_LIST)' && test -n '$(MAKELEVEL)'
 am__make_running_with_option = \
   case $${target_option-} in \
@@ -120,13 +109,33 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-@HAS_TOOLS_TRUE@am__append_1 = lib/dnslg
-@HAS_TOOLS_TRUE@am__append_2 = bin/yadifa
+@HAS_TESTS_TRUE@am__append_1 = test/circular-file-test test/cjf-scan \
+@HAS_TESTS_TRUE@	test/cmdline-test test/collection-test \
+@HAS_TESTS_TRUE@	test/daemonised-logger-test test/dnskey-test \
+@HAS_TESTS_TRUE@	test/dnsname-test test/dnssec-test \
+@HAS_TESTS_TRUE@	test/dsfromkey-test test/filepool-test \
+@HAS_TESTS_TRUE@	test/file-test test/freebsd12-test \
+@HAS_TESTS_TRUE@	test/ipc-test test/journal-fusion \
+@HAS_TESTS_TRUE@	test/journal-from-ixfr test/journal-server \
+@HAS_TESTS_TRUE@	test/journal-speed-test test/keygen-test \
+@HAS_TESTS_TRUE@	test/limiter-test test/logger-test \
+@HAS_TESTS_TRUE@	test/message-test test/mutex-test \
+@HAS_TESTS_TRUE@	test/network-interfaces-forall-test \
+@HAS_TESTS_TRUE@	test/notify-test test/nsec3-answer \
+@HAS_TESTS_TRUE@	test/nsec3-hash test/openssl111a-ecdsa-test \
+@HAS_TESTS_TRUE@	test/openssl111a-eddsa-test test/parser-test \
+@HAS_TESTS_TRUE@	test/protocol-test test/query-hammer-test \
+@HAS_TESTS_TRUE@	test/rrsig-test \
+@HAS_TESTS_TRUE@	test/shared-circular-buffer-test \
+@HAS_TESTS_TRUE@	test/shared-heap-test \
+@HAS_TESTS_TRUE@	test/simple-http-server-test test/skeleton \
+@HAS_TESTS_TRUE@	test/stream-test test/threaded-queue \
+@HAS_TESTS_TRUE@	test/update-test test/xfr test/zone-save-test
 subdir = .
 DIST_COMMON = INSTALL NEWS README AUTHORS ChangeLog \
 	$(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(top_srcdir)/configure $(am__configure_deps) \
-	$(srcdir)/config.h.in $(dist_noinst_DATA) COPYING TODO ar-lib \
+	$(srcdir)/config.h.in $(dist_noinst_DATA) COPYING ar-lib \
 	compile config.guess config.sub install-sh missing ltmain.sh
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
@@ -199,8 +208,23 @@ am__define_uniq_tagged_files = \
 ETAGS = etags
 CTAGS = ctags
 CSCOPE = cscope
-DIST_SUBDIRS = lib/dnscore lib/dnsdb lib/dnszone lib/dnslg \
-	sbin/yadifad bin/yadifa etc doc var
+DIST_SUBDIRS = lib/dnscore lib/dnsdb etc doc var sbin/yadifad \
+	sbin/yakeyrolld lib/dnslg bin/yadifa test/circular-file-test \
+	test/cjf-scan test/cmdline-test test/collection-test \
+	test/daemonised-logger-test test/dnskey-test test/dnsname-test \
+	test/dnssec-test test/dsfromkey-test test/filepool-test \
+	test/file-test test/freebsd12-test test/ipc-test \
+	test/journal-fusion test/journal-from-ixfr test/journal-server \
+	test/journal-speed-test test/keygen-test test/limiter-test \
+	test/logger-test test/message-test test/mutex-test \
+	test/network-interfaces-forall-test test/notify-test \
+	test/nsec3-answer test/nsec3-hash test/openssl111a-ecdsa-test \
+	test/openssl111a-eddsa-test test/parser-test \
+	test/protocol-test test/query-hammer-test test/rrsig-test \
+	test/shared-circular-buffer-test test/shared-heap-test \
+	test/simple-http-server-test test/skeleton test/stream-test \
+	test/threaded-queue test/update-test test/xfr \
+	test/zone-save-test
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 distdir = $(PACKAGE)-$(VERSION)
 top_distdir = $(distdir)
@@ -243,7 +267,6 @@ distuninstallcheck_listfiles = find . -type f -print
 am__distuninstallcheck_listfiles = $(distuninstallcheck_listfiles) \
   | sed 's|^\./|$(prefix)/|' | grep -v '$(infodir)/dir$$'
 distcleancheck_listfiles = find . -type f -print
-VPATH = @srcdir@
 ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
 AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
@@ -262,6 +285,9 @@ CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DLLTOOL = @DLLTOOL@
+DNSCORE = @DNSCORE@
+DNSDB = @DNSDB@
+DNSLG = @DNSLG@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
 ECHO_C = @ECHO_C@
@@ -271,6 +297,7 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GREP = @GREP@
+HAS_ACL_SUPPORT = @HAS_ACL_SUPPORT@
 HAS_BFD_DEBUG_SUPPORT = @HAS_BFD_DEBUG_SUPPORT@
 HAS_BIG_ENDIAN = @HAS_BIG_ENDIAN@
 HAS_BUILD_TIMESTAMP = @HAS_BUILD_TIMESTAMP@
@@ -293,36 +320,50 @@ HAS_CC_PEDANTIC = @HAS_CC_PEDANTIC@
 HAS_CC_RDYNAMIC = @HAS_CC_RDYNAMIC@
 HAS_CC_SANITIZE_ADDRESS = @HAS_CC_SANITIZE_ADDRESS@
 HAS_CC_STACK_PROTECTOR = @HAS_CC_STACK_PROTECTOR@
+HAS_CC_STD_C11 = @HAS_CC_STD_C11@
 HAS_CC_STD_C99 = @HAS_CC_STD_C99@
+HAS_CC_STD_GNU11 = @HAS_CC_STD_GNU11@
 HAS_CC_STD_GNU99 = @HAS_CC_STD_GNU99@
 HAS_CC_TUNE_NATIVE = @HAS_CC_TUNE_NATIVE@
 HAS_CC_WALL = @HAS_CC_WALL@
 HAS_CC_XC99 = @HAS_CC_XC99@
+HAS_CLOSE_EX_REF = @HAS_CLOSE_EX_REF@
 HAS_CTRL = @HAS_CTRL@
-HAS_DROPALL_SUPPORT = @HAS_DROPALL_SUPPORT@
+HAS_DNSSEC_TOOLS = @HAS_DNSSEC_TOOLS@
 HAS_DYNUPDATE_SUPPORT = @HAS_DYNUPDATE_SUPPORT@
 HAS_ECDSA_SUPPORT = @HAS_ECDSA_SUPPORT@
+HAS_EVENT_DYNAMIC_MODULE = @HAS_EVENT_DYNAMIC_MODULE@
+HAS_FILEPOOL_CACHE = @HAS_FILEPOOL_CACHE@
 HAS_FULL_ASCII7 = @HAS_FULL_ASCII7@
 HAS_LIBC_MALLOC_DEBUG_SUPPORT = @HAS_LIBC_MALLOC_DEBUG_SUPPORT@
 HAS_LITTLE_ENDIAN = @HAS_LITTLE_ENDIAN@
+HAS_LOCK_DEBUG_SUPPORT = @HAS_LOCK_DEBUG_SUPPORT@
 HAS_LOGDIR = @HAS_LOGDIR@
-HAS_LOG_PID_ALWAYS_ON = @HAS_LOG_PID_ALWAYS_ON@
-HAS_LOG_THREAD_ID_ALWAYS_ON = @HAS_LOG_THREAD_ID_ALWAYS_ON@
-HAS_LOG_THREAD_TAG_ALWAYS_ON = @HAS_LOG_THREAD_TAG_ALWAYS_ON@
+HAS_LOG_PID = @HAS_LOG_PID@
+HAS_LOG_THREAD_ID = @HAS_LOG_THREAD_ID@
+HAS_LOG_THREAD_TAG = @HAS_LOG_THREAD_TAG@
 HAS_MALLOC_DEBUG_SUPPORT = @HAS_MALLOC_DEBUG_SUPPORT@
 HAS_MASTER_SUPPORT = @HAS_MASTER_SUPPORT@
 HAS_MEMALIGN_ISSUES = @HAS_MEMALIGN_ISSUES@
-HAS_MESSAGES_SUPPORT = @HAS_MESSAGES_SUPPORT@
 HAS_MUTEX_DEBUG_SUPPORT = @HAS_MUTEX_DEBUG_SUPPORT@
 HAS_NON_AA_AXFR_SUPPORT = @HAS_NON_AA_AXFR_SUPPORT@
+HAS_NSEC3_SUPPORT = @HAS_NSEC3_SUPPORT@
+HAS_NSEC_SUPPORT = @HAS_NSEC_SUPPORT@
 HAS_NSID_SUPPORT = @HAS_NSID_SUPPORT@
 HAS_RRL_SUPPORT = @HAS_RRL_SUPPORT@
 HAS_RRSIG_MANAGEMENT_SUPPORT = @HAS_RRSIG_MANAGEMENT_SUPPORT@
+HAS_SYNC_BUILTINS = @HAS_SYNC_BUILTINS@
+HAS_SYSTEMD_RESOLVED_AVOIDANCE = @HAS_SYSTEMD_RESOLVED_AVOIDANCE@
+HAS_TESTS = @HAS_TESTS@
 HAS_TOOLS = @HAS_TOOLS@
 HAS_TRACK_ZONES_DEBUG_SUPPORT = @HAS_TRACK_ZONES_DEBUG_SUPPORT@
+HAS_TSIG_SUPPORT = @HAS_TSIG_SUPPORT@
+HAS_YADIFA = @HAS_YADIFA@
 HAS_ZALLOC_DEBUG_SUPPORT = @HAS_ZALLOC_DEBUG_SUPPORT@
 HAS_ZALLOC_STATISTICS_SUPPORT = @HAS_ZALLOC_STATISTICS_SUPPORT@
 HAS_ZALLOC_SUPPORT = @HAS_ZALLOC_SUPPORT@
+HAVE_RECVMMSG = @HAVE_RECVMMSG@
+HAVE_SENDMMSG = @HAVE_SENDMMSG@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -365,6 +406,7 @@ SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 STRIP = @STRIP@
 VERSION = @VERSION@
+ZDB_HAS_DNSSEC_SUPPORT = @ZDB_HAS_DNSSEC_SUPPORT@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -413,16 +455,15 @@ psdir = @psdir@
 sbindir = @sbindir@
 sharedstatedir = @sharedstatedir@
 srcdir = @srcdir@
-subdirs = @subdirs@
 sysconfdir = @sysconfdir@
 target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I m4
-dist_noinst_DATA = VERSION autogen.sh
-SUBDIRS = lib/dnscore lib/dnsdb lib/dnszone $(am__append_1) \
-	sbin/yadifad $(am__append_2) etc doc var
+dist_noinst_DATA = VERSION yadifa.supp autogen.sh m4/contributions/20201002-bug_971605_message_5.mbox
+SUBDIRS = lib/dnscore lib/dnsdb etc doc var sbin/yadifad \
+	sbin/yakeyrolld lib/dnslg bin/yadifa $(am__append_1)
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
@@ -898,26 +939,8 @@ uninstall-am:
 	uninstall-am
 
 
-release:
-	for m in $(SUBDIRS); do $(MAKE) -C $$m release;done
-
-profile:
-	for m in $(SUBDIRS); do $(MAKE) -C $$m profile;done
-
-debug:
-	for m in $(SUBDIRS); do $(MAKE) -C $$m debug;done
-
-showsubdirs:
-	for m in $(SUBDIRS); do echo $$m; done
-
 features:
 	for m in $(SUBDIRS); do $(MAKE) -C $$m features;done
-
-release-install: release install
-
-profile-install: profile install
-
-debug-install: debug install
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

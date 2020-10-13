@@ -1,43 +1,42 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup collections Generic collections functions
  *  @ingroup dnscore
  *  @brief A node-based single linked list
  *
  * A node-based single linked list
- *
- * @{
  */
 /*------------------------------------------------------------------------------
  *
@@ -69,14 +68,55 @@ list_dl_remove(list_dl_s *list, const void *data)
             node->prev->next = node->next;
             node->next->prev = node->prev;
             list->size--;
-            ZFREE(node, list_dl_node_s);
+            ZFREE_OBJECT(node);
             return TRUE;
         }
 
         node = node->next;
     }
     
-    return NULL;
+    return FALSE;
+}
+
+void
+list_dl_move_to_first_position(list_dl_s *list, void *data)
+{
+    list_dl_node_s *node = list->head_sentinel.next;
+    
+    // seek for the data
+
+    while(node->next != NULL)
+    {
+        if(data == node->data)
+        {
+            // ensure it's not already at the first position
+
+            if(node->prev != (list_dl_node_s*)&list->head_sentinel)
+            {
+                // remove part
+
+                node->prev->next = node->next;
+                node->next->prev = node->prev;
+
+                // end of the remove part
+
+                // insert part
+
+                node->next = list->head_sentinel.next;
+                node->prev = (list_dl_node_s*)&list->head_sentinel;
+                list->head_sentinel.next->prev = node;
+                list->head_sentinel.next = node;
+
+                // end of the insert part
+            }
+
+            return;
+        }
+
+        node = node->next;
+    }
+    
+    list_dl_insert(list, data);
 }
 
 /**
@@ -98,6 +138,29 @@ list_dl_remove_node(list_dl_s *list, list_dl_node_s *node)
 }
 
 bool
+list_dl_remove_matching_ptr(list_dl_s *list, void *ptr)
+{
+    list_dl_node_s *node = list->head_sentinel.next;
+
+    while(node->next != NULL)
+    {
+        if(node->data == ptr)
+        {
+            node->prev->next = node->next;
+            node->next->prev = node->prev;
+            list->size--;
+            ZFREE_OBJECT(node);
+            return TRUE;
+        }
+
+        node = node->next;
+    }
+
+    return FALSE;
+}
+
+
+bool
 list_dl_remove_matching(list_dl_s *list, result_callback_function *match, void *args)
 {
     list_dl_node_s *node = list->head_sentinel.next;
@@ -110,14 +173,14 @@ list_dl_remove_matching(list_dl_s *list, result_callback_function *match, void *
             node->prev->next = node->next;
             node->next->prev = node->prev;
             list->size--;
-            ZFREE(node, list_dl_node_s);
+            ZFREE_OBJECT(node);
             return TRUE;
         }
 
         node = node->next;
     }
     
-    return NULL;
+    return FALSE;
 }
 
 bool
@@ -134,13 +197,13 @@ list_dl_remove_all_matching(list_dl_s *list, result_callback_function *match, vo
             node->prev->next = node->next;
             node->next->prev = node->prev;
             list->size--;
-            ZFREE(node, list_dl_node_s);
+            ZFREE_OBJECT(node);
         }
 
         node = node_next;
     }
     
-    return NULL;
+    return FALSE;
 }
 
 /**
@@ -161,7 +224,7 @@ list_dl_clear(list_dl_s *list)
         
         node = node->next;
         
-        ZFREE(tmp, list_dl_node_s);
+        ZFREE_OBJECT(tmp);
     }
     
     list->head_sentinel.next = (list_dl_node_s*)&list->tail_sentinel;
@@ -288,51 +351,7 @@ ya_result list_dl_foreach(list_dl_s *list, result_callback_function *callback, v
     return SUCCESS;
 }
 
-/**
- * Iterates through the nodes of the function, calling the comparator.
- * 
- * The comparator must return:
- * 
- * < 0 : stop processing, return NULL
- * = 0 : no match
- * > 0 : stop processing, return node data
- * 
- * @param list
- * @param comparator
- * 
- * @return a matching node or NULL
- */
 
-bool
-list_dl_remove_match(list_dl_s *list, result_callback_function *comparator, void *parm)
-{
-    list_dl_node_s *node = list->head_sentinel.next;
-    list_dl_node_s *node_next;
-    bool matched = FALSE;
-    
-    while((node_next = node->next) != NULL)
-    {
-        ya_result ret = comparator(node->data, parm);
-        
-        if((ret & COLLECTION_ITEM_PROCESS) != 0)
-        {
-            node->prev->next = node->next;
-            node->next->prev = node->prev;
-            list->size--;
-            ZFREE(node, list_dl_node_s);
-            matched = true;
-        }
-        
-        if((ret & COLLECTION_ITEM_STOP) != 0)
-        {
-            break;
-        }
-        
-        node = node_next;
-    }
-    
-    return matched;
-}
 
 /**
  * Inserts data BEFORE the current node
@@ -347,7 +366,7 @@ list_dl_iterator_insert(list_dl_iterator_s *iter, void *data)
     if(iter->current_node != (list_dl_node_s*)&iter->list->head_sentinel)
     {
         list_dl_node_s *node;
-        ZALLOC_OR_DIE(list_dl_node_s*, node, list_dl_node_s, LISTDLND_TAG);
+        ZALLOC_OBJECT_OR_DIE( node, list_dl_node_s, LISTDLND_TAG);
         node->data = data;
         node->next = iter->current_node;
         node->prev = iter->current_node->prev;
@@ -372,7 +391,7 @@ list_dl_iterator_append(list_dl_iterator_s *iter, void *data)
     if(iter->current_node != (list_dl_node_s*)&iter->list->tail_sentinel)
     {
         list_dl_node_s *node;
-        ZALLOC_OR_DIE(list_dl_node_s*, node, list_dl_node_s, LISTDLND_TAG);
+        ZALLOC_OBJECT_OR_DIE( node, list_dl_node_s, LISTDLND_TAG);
         node->data = data;
         node->next = iter->current_node->next;
         node->prev = iter->current_node;
@@ -383,7 +402,3 @@ list_dl_iterator_append(list_dl_iterator_s *iter, void *data)
     }
     return FALSE;
 }
-
-/** @} */
-
-/*----------------------------------------------------------------------------*/

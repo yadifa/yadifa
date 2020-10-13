@@ -2,35 +2,36 @@
  *
  * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
+ *
+ * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
  *
- *        * Redistributions of source code must retain the above copyright 
+ *        * Redistributions of source code must retain the above copyright
  *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
  *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
  *          without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
  * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
  * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
  *------------------------------------------------------------------------------
  *
  */
+
 /** @defgroup dnsdbupdate Dynamic update functions
  *  @ingroup dnsdb
  *  @brief
@@ -99,34 +100,71 @@ static const u8* dnssec_chain_node_nsec3_get_digest(const dnssec_chain_node_nsec
     return (node->self != NULL)?node->self->digest:node->digest;
 }
 
+static void
+dnssec_chain_node_nsec3_format_handler_method(const void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
+{
+    (void)padding;
+    (void)pad_char;
+    (void)left_justified;
+    (void)reserved_for_method_parameters;
+    dnssec_chain_node_nsec3 *node = (dnssec_chain_node_nsec3*)val;
+    const u8* digest = dnssec_chain_node_nsec3_get_digest(node);
+    output_stream_write_base32hex(stream, &digest[1], *digest);
+    output_stream_write_u8(stream, '(');
+    if(node->fqdn != NULL)
+    {
+        dnsname_format_handler_method(node->fqdn, stream, 0, 0, FALSE, NULL);
+    }
+    else
+    {
+        output_stream_write_u8(stream, '?');
+    }
+    output_stream_write_u8(stream, ')');
+}
+
+static void dnssec_chain_node_nsec3_format_writer_init(dnssec_chain_node_t node_, format_writer *outfw)
+{
+    dnssec_chain_node_nsec3 *node = (dnssec_chain_node_nsec3*)node_;
+    outfw->callback = dnssec_chain_node_nsec3_format_handler_method;
+    outfw->value = node;
+}
+
+//#define NSEC3_HANDLE_SUBDELEGATION 1
+
 static bool dnssec_chain_node_nsec3_fqdn_is_covered(const zone_diff_fqdn *diff_fqdn)
 {
-    return !diff_fqdn->under_delegation;
+    return diff_fqdn->is_apex ||
+           (diff_fqdn->at_delegation && !diff_fqdn->under_delegation)||  // has NS records (but is not below NS records)
+           (!(diff_fqdn->at_delegation || diff_fqdn->under_delegation) && (diff_fqdn->will_be_non_empty || diff_fqdn->will_have_children))
+           // else it's under a delegation
+           ;
 }
 
 static bool dnssec_chain_node_nsec3_fqdn_was_covered(const zone_diff_fqdn *diff_fqdn)
 {
-    return !diff_fqdn->was_under_delegation;
+    return diff_fqdn->is_apex ||
+           (diff_fqdn->was_at_delegation && !diff_fqdn->was_under_delegation) ||  // had NS records (but is not below NS records)
+           (!(diff_fqdn->was_at_delegation || diff_fqdn->was_under_delegation) && (diff_fqdn->was_non_empty || diff_fqdn->had_children))
+            // else it was under a delegation
+        ;
 }
 
 static bool dnssec_chain_node_nsec3_optout_fqdn_is_covered(const zone_diff_fqdn *diff_fqdn)
 {
-    if(!diff_fqdn->under_delegation)
-    {
-        return diff_fqdn->is_apex || (!diff_fqdn->at_delegation) || (diff_fqdn->at_delegation && diff_fqdn->will_have_ds);
-    }
-    
-    return FALSE;
+    return diff_fqdn->is_apex ||
+           (diff_fqdn->at_delegation && !diff_fqdn->under_delegation && diff_fqdn->will_have_ds) ||  // has DS record(s)
+           (!(diff_fqdn->at_delegation || diff_fqdn->under_delegation) && (diff_fqdn->will_be_non_empty || diff_fqdn->will_have_children))
+        // else it's under a delegation
+        ;
 }
 
 static bool dnssec_chain_node_nsec3_optout_fqdn_was_covered(const zone_diff_fqdn *diff_fqdn)
 {
-    if(!diff_fqdn->was_under_delegation)
-    {
-        return diff_fqdn->is_apex || ((!diff_fqdn->all_rrset_added) && ((!diff_fqdn->was_at_delegation) || (diff_fqdn->was_at_delegation && diff_fqdn->had_ds)));
-    }
-    
-    return FALSE;
+    return diff_fqdn->is_apex ||
+           (diff_fqdn->was_at_delegation && !diff_fqdn->was_under_delegation && diff_fqdn->had_ds) ||  // had DS record(s)
+           (!(diff_fqdn->was_at_delegation || diff_fqdn->was_under_delegation) && (diff_fqdn->was_non_empty || diff_fqdn->had_children))
+        // else it was under a delegation
+        ;
 }
 
 /**
@@ -152,14 +190,14 @@ dnssec_chain_node_nsec3_new_from_digest(const u8 *digest, const nsec3_zone *n3)
 
     if(!empty)
     {
-        prev = nsec3_avl_find_interval_prev_mod(&n3->items, (u8*)digest);
-        next = nsec3_avl_node_mod_next(prev);
+        prev = nsec3_find_interval_prev_mod(&n3->items, (u8*)digest);
+        next = nsec3_node_mod_next(prev);
         
         if(memcmp(&next->digest[1], &digest[1], digest[0]) == 0)
         {
             // exists
             self = next;
-            next = nsec3_avl_node_mod_next(self);
+            next = nsec3_node_mod_next(self);
         }
     }
     else
@@ -170,7 +208,7 @@ dnssec_chain_node_nsec3_new_from_digest(const u8 *digest, const nsec3_zone *n3)
     
     dnssec_chain_node_nsec3 *node;
     
-    ZALLOC_OR_DIE(dnssec_chain_node_nsec3*, node, dnssec_chain_node_nsec3, NSC3NODE_TAG);
+    ZALLOC_OBJECT_OR_DIE(node, dnssec_chain_node_nsec3, NSC3NODE_TAG);
     node->prev = prev;
     node->self = self;
     node->next = next;
@@ -252,7 +290,7 @@ static const u8 *dnssec_chain_node_nsec3_get_bits_map(const dnssec_chain_node_ns
     return node->self->type_bit_maps;
 }
 
-static const u16 dnssec_chain_node_nsec3_get_bits_map_size(const dnssec_chain_node_nsec3 *node)
+static u16 dnssec_chain_node_nsec3_get_bits_map_size(const dnssec_chain_node_nsec3 *node)
 {
     return node->self->type_bit_maps_size;
 }
@@ -276,10 +314,10 @@ static dnssec_chain_node_t dnssec_chain_node_nsec3_prev(const dnssec_chain_node_
 {
     dnssec_chain_node_nsec3 *self = (dnssec_chain_node_nsec3*)node_;
     dnssec_chain_node_nsec3 *node;
-    ZALLOC_OR_DIE(dnssec_chain_node_nsec3*, node, dnssec_chain_node_nsec3, NSC3NODE_TAG);
+    ZALLOC_OBJECT_OR_DIE(node, dnssec_chain_node_nsec3, NSC3NODE_TAG);
     node->prev = NULL;
     node->self = self->prev;
-    node->next = self->next;
+    node->next = self->next; // ?
     node->fqdn = (u8*)UNKNOWN_FQDN;
     node->state = DNSSEC_CHAIN_EXISTS|DNSSEC_CHAIN_BEGIN;
     node->digest[0] = 0;
@@ -292,8 +330,8 @@ static dnssec_chain_node_t dnssec_chain_node_nsec3_next(const dnssec_chain_node_
 {
     dnssec_chain_node_nsec3 *self = (dnssec_chain_node_nsec3*)node_;
     dnssec_chain_node_nsec3 *node;
-    ZALLOC_OR_DIE(dnssec_chain_node_nsec3*, node, dnssec_chain_node_nsec3, NSC3NODE_TAG);
-    node->prev = self->prev;
+    ZALLOC_OBJECT_OR_DIE(node, dnssec_chain_node_nsec3, NSC3NODE_TAG);
+    node->prev = self->prev; // ?
     node->self = self->next;
     node->next = NULL;
     node->fqdn = (u8*)UNKNOWN_FQDN;
@@ -323,10 +361,18 @@ static void dnssec_chain_node_nsec3_merge(dnssec_chain_node_t chain_node, dnssec
     
     u8 node_state = dnssec_chain_node_nsec3_state_get(chain_node);
     u8 with_state = dnssec_chain_node_nsec3_state_get(chain_with);
-    
+
+#if DEBUG
+    format_writer node_writer;
+    dnssec_chain_node_nsec3_format_writer_init(chain_node, &node_writer);
+    format_writer with_writer;
+    dnssec_chain_node_nsec3_format_writer_init(chain_with, &with_writer);
+    log_debug2("nsec3_merge: %w (%02x) with %w(%02x)", &node_writer, node_state, &with_writer, with_state);
+#endif
+
     if((node_state & DNSSEC_CHAIN_END) && (with_state & DNSSEC_CHAIN_BEGIN))
     {
-#ifdef DEBUG
+#if DEBUG
         log_debug("dnssec_chain_node_nsec3_merge(%{digest32h},%{digest32h}) end<->begin (%08x %08x)",
                 dnssec_chain_node_nsec3_get_digest(node), dnssec_chain_node_nsec3_get_digest(with),
                 node_state, with_state);
@@ -336,7 +382,7 @@ static void dnssec_chain_node_nsec3_merge(dnssec_chain_node_t chain_node, dnssec
     
     if((node_state & DNSSEC_CHAIN_BEGIN) && (with_state & DNSSEC_CHAIN_END))
     {
-#ifdef DEBUG
+#if DEBUG
         log_debug("dnssec_chain_node_nsec3_merge(%{digest32h},%{digest32h}) begin<->end (%08x %08x)",
                 dnssec_chain_node_nsec3_get_digest(node), dnssec_chain_node_nsec3_get_digest(with),
                 node_state, with_state);
@@ -354,18 +400,11 @@ static void dnssec_chain_node_nsec3_merge(dnssec_chain_node_t chain_node, dnssec
             with->fqdn = (u8*)UNKNOWN_FQDN;
         }
     }
-    else if(with->fqdn == UNKNOWN_FQDN)
-    {
-        with->fqdn = node->fqdn;
-        node->fqdn = (u8*)UNKNOWN_FQDN;
-    }
-        
+
     dnssec_chain_node_nsec3_delete(chain_with);
 }
 
 /**
- * 
- * 
  * 
  * @param n3
  * @param from
@@ -373,11 +412,14 @@ static void dnssec_chain_node_nsec3_merge(dnssec_chain_node_t chain_node, dnssec
  * @param diff
  * @param collection
  * @param mask ZONE_DIFF_REMOVE: get the new state, ZONE_DIFF_ADD: get the old state
+ * @param append_existing_signatures adds the existing signature to the collection (e.g.: to remove them)
+ * @param optout
  */
 
 static void dnssec_chain_node_nsec3_publish_record(nsec3_zone *n3,
         dnssec_chain_node_nsec3 *from, dnssec_chain_node_nsec3 *to,
-        zone_diff *diff, ptr_vector *collection, u8 mask, bool append_signatures, u8 optout)
+        zone_diff *diff, ptr_vector *collection, u8 mask,
+        bool append_existing_signatures, u8 optout)
 {
     
     const u8 *digest = dnssec_chain_node_nsec3_get_digest(from);
@@ -399,33 +441,59 @@ static void dnssec_chain_node_nsec3_publish_record(nsec3_zone *n3,
     
     u32 nsec3param_rdata_size = NSEC3PARAM_RDATA_SIZE_FROM_RDATA(n3->rdata);
         
-    if(!dnssec_chain_node_nsec3_has_bits_map(from) || ((mask & ZONE_DIFF_REMOVE) && (from->state & DNSSEC_CHAIN_REMAP)))
+    if(!dnssec_chain_node_nsec3_has_bits_map(from) || ((mask & ZONE_DIFF_RR_REMOVE) && (from->state & DNSSEC_CHAIN_REMAP))
+    /*
+     * can only modify if (mask & ZONE_DIFF_RR_REMOVE)
+    || ((from->state & (DNSSEC_CHAIN_DELETE|DNSSEC_CHAIN_REMAP|DNSSEC_CHAIN_EXISTS)) == (DNSSEC_CHAIN_DELETE|DNSSEC_CHAIN_REMAP|DNSSEC_CHAIN_EXISTS))
+    */
+            )
     {
         // generate the type map
-
+#if DEBUG
+        log_debug2("update: %{dnsname}: %{digest32h}: %x: %{dnsname} -> %{digest32h} regenerating bitmap (%i || (%i && %i [%02x])",
+                diff->origin, digest, mask, from->fqdn, next_digest,
+                !dnssec_chain_node_nsec3_has_bits_map(from), (mask & ZONE_DIFF_RR_REMOVE), (from->state & DNSSEC_CHAIN_REMAP), from->state);
+#endif
         type_bit_maps_context bitmap;
-        u16 bitmap_size = zone_diff_type_bit_map_generate(diff, from->fqdn, &bitmap, mask | ZONE_DIFF_REMOVE, 0, digest_fqdn);       
+
+        u16 bitmap_size = zone_diff_type_bit_map_generate(diff, from->fqdn, &bitmap, mask | ZONE_DIFF_RR_REMOVE, 0, digest_fqdn, append_existing_signatures);
+
         u16 rdata_size = nsec3param_rdata_size + 1 + next_digest[0] + bitmap_size;
+
+#if C11_VLA_AVAILABLE
         u8 rdata[rdata_size];
+#else
+        u8* const rdata = (u8* const)stack_alloc(rdata_size);
+#endif
 
         memcpy(rdata, n3->rdata, nsec3param_rdata_size);
         rdata[1] = optout;
         memcpy(&rdata[nsec3param_rdata_size], next_digest, 1 + next_digest[0]);    
         type_bit_maps_write(&bitmap, &rdata[nsec3param_rdata_size + 1 + next_digest[0]]);
-        type_bit_maps_finalise(&bitmap);
+        type_bit_maps_finalize(&bitmap);
         
         // the record can be created
     
-        zone_diff_label_rr *nsec3_rr = zone_diff_label_rr_new(
-                digest_fqdn, TYPE_NSEC3, CLASS_IN, diff->nttl, rdata, rdata_size, TRUE);
-        nsec3_rr->state |= ZONE_DIFF_VOLATILE;
+        zone_diff_label_rr *nsec3_rr = zone_diff_label_rr_new(digest_fqdn, TYPE_NSEC3, CLASS_IN, diff->nttl, rdata, rdata_size, TRUE);
+        nsec3_rr->state |= ZONE_DIFF_RR_VOLATILE;
         ptr_vector_append(collection, nsec3_rr);
     }
     else // bitmap already present
     {
+#if DEBUG
+        log_debug2("update: %{dnsname}: %{digest32h}: %x: %{dnsname} -> %{digest32h} keeping bitmap (%i || (%i && %i [%02x])",
+                   diff->origin, digest, mask, from->fqdn, next_digest,
+                   !dnssec_chain_node_nsec3_has_bits_map(from), (mask & ZONE_DIFF_RR_REMOVE), (from->state & DNSSEC_CHAIN_REMAP),
+                   from->state);
+#endif
         u16 bitmap_size = dnssec_chain_node_nsec3_get_bits_map_size(from);
         u16 rdata_size = nsec3param_rdata_size + 1 + next_digest[0] + bitmap_size;
+
+#if C11_VLA_AVAILABLE
         u8 rdata[rdata_size];
+#else
+        u8* const rdata = (u8* const)stack_alloc(rdata_size);
+#endif
 
         memcpy(rdata, n3->rdata, nsec3param_rdata_size);
         rdata[1] = optout;
@@ -436,18 +504,18 @@ static void dnssec_chain_node_nsec3_publish_record(nsec3_zone *n3,
     
         zone_diff_label_rr *nsec3_rr = zone_diff_label_rr_new(
                 digest_fqdn, TYPE_NSEC3, CLASS_IN, diff->nttl, rdata, rdata_size, TRUE);
-        nsec3_rr->state |= ZONE_DIFF_VOLATILE;
+        nsec3_rr->state |= ZONE_DIFF_RR_VOLATILE | (from->state & DNSSEC_CHAIN_EXISTS);
         ptr_vector_append(collection, nsec3_rr);
     }
     
-    if(append_signatures && (from->self != NULL))
+    if(append_existing_signatures && (from->self != NULL))
     {
         zdb_packed_ttlrdata *rrsig = from->self->rrsig;
         while(rrsig != NULL)
         {
             zone_diff_label_rr *rrsig_rr = zone_diff_label_rr_new(digest_fqdn, TYPE_RRSIG, CLASS_IN, diff->nttl,
                     ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig), ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig), TRUE);
-            rrsig_rr->state |= ZONE_DIFF_VOLATILE;
+            rrsig_rr->state |= ZONE_DIFF_RR_VOLATILE;
             ptr_vector_append(collection, rrsig_rr);
             rrsig = rrsig->next;
         }
@@ -477,7 +545,7 @@ static void dnssec_chain_node_nsec3_publish_add(dnssec_chain_head_t chain_, dnss
     dnssec_chain_node_nsec3 *from = (dnssec_chain_node_nsec3*)from_;
     dnssec_chain_node_nsec3 *to = (dnssec_chain_node_nsec3*)to_;
     nsec3_zone *n3 = (nsec3_zone*)chain_;
-    dnssec_chain_node_nsec3_publish_record(n3, from, to, diff, collection, ZONE_DIFF_REMOVE, FALSE, 0);
+    dnssec_chain_node_nsec3_publish_record(n3, from, to, diff, collection, ZONE_DIFF_RR_REMOVE, FALSE, 0);
 }
 
 static void dnssec_chain_node_nsec3_publish_delete(dnssec_chain_head_t chain_, dnssec_chain_node_t from_, dnssec_chain_node_t to_, zone_diff *diff, ptr_vector *collection)
@@ -485,7 +553,7 @@ static void dnssec_chain_node_nsec3_publish_delete(dnssec_chain_head_t chain_, d
     dnssec_chain_node_nsec3 *from = (dnssec_chain_node_nsec3*)from_;
     dnssec_chain_node_nsec3 *to = (dnssec_chain_node_nsec3*)to_;
     nsec3_zone *n3 = (nsec3_zone*)chain_;
-    dnssec_chain_node_nsec3_publish_record(n3, from, to, diff, collection, ZONE_DIFF_ADD, TRUE, 0);
+    dnssec_chain_node_nsec3_publish_record(n3, from, to, diff, collection, ZONE_DIFF_RR_ADD, TRUE, 0);
 }
 
 static void dnssec_chain_node_nsec3_publish_add_optout(dnssec_chain_head_t chain_, dnssec_chain_node_t from_, dnssec_chain_node_t to_, zone_diff *diff, ptr_vector *collection)
@@ -493,7 +561,7 @@ static void dnssec_chain_node_nsec3_publish_add_optout(dnssec_chain_head_t chain
     dnssec_chain_node_nsec3 *from = (dnssec_chain_node_nsec3*)from_;
     dnssec_chain_node_nsec3 *to = (dnssec_chain_node_nsec3*)to_;
     nsec3_zone *n3 = (nsec3_zone*)chain_;
-    dnssec_chain_node_nsec3_publish_record(n3, from, to, diff, collection, ZONE_DIFF_REMOVE, FALSE, 1);
+    dnssec_chain_node_nsec3_publish_record(n3, from, to, diff, collection, ZONE_DIFF_RR_REMOVE, FALSE, 1);
 }
 
 static void dnssec_chain_node_nsec3_publish_delete_optout(dnssec_chain_head_t chain_, dnssec_chain_node_t from_, dnssec_chain_node_t to_, zone_diff *diff, ptr_vector *collection)
@@ -501,48 +569,44 @@ static void dnssec_chain_node_nsec3_publish_delete_optout(dnssec_chain_head_t ch
     dnssec_chain_node_nsec3 *from = (dnssec_chain_node_nsec3*)from_;
     dnssec_chain_node_nsec3 *to = (dnssec_chain_node_nsec3*)to_;
     nsec3_zone *n3 = (nsec3_zone*)chain_;
-    dnssec_chain_node_nsec3_publish_record(n3, from, to, diff, collection, ZONE_DIFF_ADD, TRUE, 1);
+    dnssec_chain_node_nsec3_publish_record(n3, from, to, diff, collection, ZONE_DIFF_RR_ADD, TRUE, 1);
 }
 
 static bool dnssec_chain_nsec3_isempty(dnssec_chain_head_t chain_)
 {
     nsec3_zone *nsec3_chain = (nsec3_zone*)chain_;
-    bool ret = (nsec3_chain != NULL)?nsec3_avl_isempty(&nsec3_chain->items):TRUE;
+    bool ret = (nsec3_chain != NULL)?nsec3_isempty(&nsec3_chain->items):TRUE;
     return ret;
 }
 
-static void dnssec_chain_nsec3_finalise_delete_callback(ptr_node *node)
+static void dnssec_chain_nsec3_finalize_delete_callback(ptr_node *node)
 {
     dnssec_chain_node_nsec3_delete(node->value);
 }
 
-static void
-dnssec_chain_node_nsec3_format_handler_method(const void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
+static bool dnssec_chain_node_nsec3_rrset_should_be_signed(const zone_diff_fqdn *diff_fqdn, const zone_diff_fqdn_rr_set *rr_set)
 {
-    (void)padding;
-    (void)pad_char;
-    (void)left_justified;
-    (void)reserved_for_method_parameters;
-    dnssec_chain_node_nsec3 *node = (dnssec_chain_node_nsec3*)val;
-    const u8* digest = dnssec_chain_node_nsec3_get_digest(node);
-    output_stream_write_base32hex(stream, &digest[1], *digest);
-    output_stream_write_u8(stream, '(');
-    if(node->fqdn != NULL)
+    if(diff_fqdn->at_delegation || diff_fqdn->under_delegation)
     {
-        dnsname_format_handler_method(node->fqdn, stream, 0, 0, FALSE, NULL);
+        return (rr_set->rtype == TYPE_NS) || (rr_set->rtype == TYPE_DS);
     }
     else
     {
-        output_stream_write_u8(stream, '?');
+        return TRUE;
     }
-    output_stream_write_u8(stream, ')');
 }
 
-static void dnssec_chain_node_nsec3_format_writer_init(dnssec_chain_node_t node_, format_writer *outfw)
+
+static bool dnssec_chain_node_nsec3_optout_rrset_should_be_signed(const zone_diff_fqdn *diff_fqdn, const zone_diff_fqdn_rr_set *rr_set)
 {
-    dnssec_chain_node_nsec3 *node = (dnssec_chain_node_nsec3*)node_;
-    outfw->callback = dnssec_chain_node_nsec3_format_handler_method;
-    outfw->value = node;
+    if(diff_fqdn->at_delegation || diff_fqdn->under_delegation)
+    {
+        return (rr_set->rtype == TYPE_DS);
+    }
+    else
+    {
+        return TRUE;
+    }
 }
 
 static dnssec_chain_node_vtbl dnssec_chain_node_nsec3_vtbl = 
@@ -560,9 +624,10 @@ static dnssec_chain_node_vtbl dnssec_chain_node_nsec3_vtbl =
     dnssec_chain_node_nsec3_publish_add,
     dnssec_chain_node_nsec3_publish_log,
     dnssec_chain_node_nsec3_compare,
-    dnssec_chain_nsec3_finalise_delete_callback,
+    dnssec_chain_nsec3_finalize_delete_callback,
     dnssec_chain_nsec3_isempty,
     dnssec_chain_node_nsec3_format_writer_init,
+    dnssec_chain_node_nsec3_rrset_should_be_signed,
     "nsec3"
 };
 
@@ -587,10 +652,11 @@ static dnssec_chain_node_vtbl dnssec_chain_node_nsec3_optout_vtbl =
     dnssec_chain_node_nsec3_publish_add_optout,
     dnssec_chain_node_nsec3_publish_log,
     dnssec_chain_node_nsec3_compare,
-    dnssec_chain_nsec3_finalise_delete_callback,
+    dnssec_chain_nsec3_finalize_delete_callback,
     dnssec_chain_nsec3_isempty,
     dnssec_chain_node_nsec3_format_writer_init,
-    "nsec3"
+    dnssec_chain_node_nsec3_optout_rrset_should_be_signed,
+    "nsec3-optout"
 };
 
 const dnssec_chain_node_vtbl *

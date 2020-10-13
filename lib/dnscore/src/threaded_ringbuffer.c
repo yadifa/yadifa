@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief
@@ -78,13 +79,13 @@ struct threaded_ringbuffer_node
 /*
  * Note:
  *
- * If a pthread_mutex_init fails, it's because of a resource, memory or rights issue.
+ * If a mutex_init fails, it's because of a resource, memory or rights issue.
  * So the application will fail soon enough.
  * I still should check this and exit.
  *
- * pthread_mutex_lock will fail only if the current thread aleady owns the mutex
+ * mutex_lock will fail only if the current thread aleady owns the mutex
  *
- * pthread_mutex_unlock will fail only if the current thread does not owns the mutex
+ * mutex_unlock will fail only if the current thread does not owns the mutex
  *
  */
 
@@ -96,14 +97,14 @@ threaded_ringbuffer_init(threaded_ringbuffer *queue, int max_size)
     queue->write_slot = queue->buffer;
     queue->read_slot = queue->buffer;
 
-    pthread_mutex_init(&queue->mutex, NULL);
-    pthread_mutex_init(&queue->mutex_enqueue, NULL);
-    pthread_mutex_init(&queue->mutex_dequeue, NULL);
+    mutex_init(&queue->mutex);
+    mutex_init(&queue->mutex_enqueue);
+    mutex_init(&queue->mutex_dequeue);
 
     queue->max_size = max_size;
     queue->size = 0;
 
-    pthread_mutex_lock(&queue->mutex_dequeue);
+    mutex_lock(&queue->mutex_dequeue);
 }
 
 void
@@ -118,9 +119,9 @@ threaded_ringbuffer_finalize(threaded_ringbuffer *queue)
     free(queue->buffer);
     queue->buffer = NULL;
 
-    pthread_mutex_destroy(&queue->mutex);
-    pthread_mutex_destroy(&queue->mutex_enqueue);
-    pthread_mutex_destroy(&queue->mutex_dequeue);
+    mutex_destroy(&queue->mutex);
+    mutex_destroy(&queue->mutex_enqueue);
+    mutex_destroy(&queue->mutex_dequeue);
 }
 
 void
@@ -130,13 +131,13 @@ threaded_ringbuffer_enqueue(threaded_ringbuffer* queue, void* constant_pointer)
      * Ensure I'm allowed to enqueue (only one enqueuer and queue not full)
      */
 
-    pthread_mutex_lock(&queue->mutex_enqueue);
+    mutex_lock(&queue->mutex_enqueue);
 
     /*
      * Ensure I'm allowed to work on queue (only one working on it)
      */
 
-    pthread_mutex_lock(&queue->mutex);
+    mutex_lock(&queue->mutex);
 
     /*
      * Set the data to the write position,
@@ -163,7 +164,7 @@ threaded_ringbuffer_enqueue(threaded_ringbuffer* queue, void* constant_pointer)
          * (They will however still be locked until the queue mutex is released)
          */
 
-        pthread_mutex_unlock(&queue->mutex_dequeue);
+        mutex_unlock(&queue->mutex_dequeue);
     }
 
     queue->size++;
@@ -175,14 +176,14 @@ threaded_ringbuffer_enqueue(threaded_ringbuffer* queue, void* constant_pointer)
          * The dequeuers will do that when they see fit. (ie: queue not full anymore)
          */
 
-        pthread_mutex_unlock(&queue->mutex_enqueue);
+        mutex_unlock(&queue->mutex_enqueue);
     }
 
     /*
      * We are done here.
      */
 
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 }
 
 bool
@@ -192,7 +193,7 @@ threaded_ringbuffer_try_enqueue(threaded_ringbuffer* queue, void* constant_point
      * Ensure I'm allowed to enqueue (only one enqueuer and queue not full)
      */
 
-    if(pthread_mutex_trylock(&queue->mutex_enqueue) != 0)
+    if(!mutex_trylock(&queue->mutex_enqueue))
     {
         return FALSE;
     }
@@ -201,9 +202,9 @@ threaded_ringbuffer_try_enqueue(threaded_ringbuffer* queue, void* constant_point
      * Ensure I'm allowed to work on queue (only one working on it)
      */
 
-    if(pthread_mutex_trylock(&queue->mutex) != 0)
+    if(!mutex_trylock(&queue->mutex))
     {
-        pthread_mutex_unlock(&queue->mutex_enqueue);
+        mutex_unlock(&queue->mutex_enqueue);
 
         return FALSE;
     }
@@ -233,7 +234,7 @@ threaded_ringbuffer_try_enqueue(threaded_ringbuffer* queue, void* constant_point
          * (They will however still be locked until the queue mutex is released)
          */
 
-        pthread_mutex_unlock(&queue->mutex_dequeue);
+        mutex_unlock(&queue->mutex_dequeue);
     }
 
     queue->size++;
@@ -245,14 +246,14 @@ threaded_ringbuffer_try_enqueue(threaded_ringbuffer* queue, void* constant_point
          * The dequeuers will do that when they see fit. (ie: queue not full anymore)
          */
 
-        pthread_mutex_unlock(&queue->mutex_enqueue);
+        mutex_unlock(&queue->mutex_enqueue);
     }
 
     /*
      * We are done here.
      */
 
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 
     return TRUE;
 }
@@ -264,7 +265,7 @@ threaded_ringbuffer_try_peek(threaded_ringbuffer *queue)
      * Ensure I'm allowed to dequeue (not empty and only one on it)
      */
 
-    if(pthread_mutex_trylock(&queue->mutex_dequeue) != 0)
+    if(!mutex_trylock(&queue->mutex_dequeue))
     {
         return (void*)~0;
     }
@@ -273,9 +274,9 @@ threaded_ringbuffer_try_peek(threaded_ringbuffer *queue)
      * Ensure I'm allowed to work on queue (only one working on it)
      */
 
-    if(pthread_mutex_trylock(&queue->mutex) != 0)
+    if(!mutex_trylock(&queue->mutex))
     {
-        pthread_mutex_unlock(&queue->mutex_dequeue);
+        mutex_unlock(&queue->mutex_dequeue);
 
         return (void*)~0;
     }
@@ -288,9 +289,9 @@ threaded_ringbuffer_try_peek(threaded_ringbuffer *queue)
 
     void* data = *queue->read_slot;
 
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 
-    pthread_mutex_unlock(&queue->mutex_dequeue);
+    mutex_unlock(&queue->mutex_dequeue);
 
     return data;
 }
@@ -302,13 +303,13 @@ threaded_ringbuffer_peek(threaded_ringbuffer *queue)
      * Ensure I'm allowed to dequeue (not empty and only one on it)
      */
 
-    pthread_mutex_lock(&queue->mutex_dequeue);
+    mutex_lock(&queue->mutex_dequeue);
 
     /*
      * Ensure I'm allowed to work on queue (only one working on it)
      */
 
-    pthread_mutex_lock(&queue->mutex);
+    mutex_lock(&queue->mutex);
     
     /*
      * Get the data from the read position,
@@ -318,9 +319,9 @@ threaded_ringbuffer_peek(threaded_ringbuffer *queue)
 
     void* data = *queue->read_slot;
 
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 
-    pthread_mutex_unlock(&queue->mutex_dequeue);
+    mutex_unlock(&queue->mutex_dequeue);
 
     return data;
 }
@@ -332,13 +333,13 @@ threaded_ringbuffer_dequeue(threaded_ringbuffer *queue)
      * Ensure I'm allowed to dequeue (not empty and only one on it)
      */
 
-    pthread_mutex_lock(&queue->mutex_dequeue);
+    mutex_lock(&queue->mutex_dequeue);
 
     /*
      * Ensure I'm allowed to work on queue (only one working on it)
      */
 
-    pthread_mutex_lock(&queue->mutex);
+    mutex_lock(&queue->mutex);
 
     /*
      * Get the data from the read position,
@@ -360,7 +361,7 @@ threaded_ringbuffer_dequeue(threaded_ringbuffer *queue)
          * (They will however still be locked until the queue mutex is released)
          */
 
-        pthread_mutex_unlock(&queue->mutex_enqueue);
+        mutex_unlock(&queue->mutex_enqueue);
     }
 
     queue->size--;
@@ -372,14 +373,14 @@ threaded_ringbuffer_dequeue(threaded_ringbuffer *queue)
          * The enqueuers will do that when they see fit. (ie: queue not full anymore)
          */
 
-        pthread_mutex_unlock(&queue->mutex_dequeue);
+        mutex_unlock(&queue->mutex_dequeue);
     }
 
     /*
      * We are done here.
      */
 
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 
     return data;
 }
@@ -391,7 +392,7 @@ threaded_ringbuffer_try_dequeue(threaded_ringbuffer *queue)
      * Ensure I'm allowed to dequeue (not empty and only one on it)
      */
 
-    if(pthread_mutex_trylock(&queue->mutex_dequeue) != 0)
+    if(!mutex_trylock(&queue->mutex_dequeue))
     {
         return (void*)~0;
     }
@@ -400,9 +401,9 @@ threaded_ringbuffer_try_dequeue(threaded_ringbuffer *queue)
      * Ensure I'm allowed to work on queue (only one working on it)
      */
 
-    if(pthread_mutex_trylock(&queue->mutex) != 0)
+    if(!mutex_trylock(&queue->mutex))
     {
-        pthread_mutex_unlock(&queue->mutex_dequeue);
+        mutex_unlock(&queue->mutex_dequeue);
 
         return (void*)~0;
     }
@@ -427,7 +428,7 @@ threaded_ringbuffer_try_dequeue(threaded_ringbuffer *queue)
          * (They will however still be locked until the queue mutex is released)
          */
 
-        pthread_mutex_unlock(&queue->mutex_enqueue);
+        mutex_unlock(&queue->mutex_enqueue);
     }
 
     queue->size--;
@@ -439,14 +440,14 @@ threaded_ringbuffer_try_dequeue(threaded_ringbuffer *queue)
          * The enqueuers will do that when they see fit. (ie: queue not full anymore)
          */
 
-        pthread_mutex_unlock(&queue->mutex_dequeue);
+        mutex_unlock(&queue->mutex_dequeue);
     }
 
     /*
      * We are done here.
      */
 
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 
     return data;
 }
@@ -458,13 +459,13 @@ threaded_ringbuffer_dequeue_set(threaded_ringbuffer* queue, void** array, u32 ar
      * Ensure I'm allowed to dequeue (not empty and only one on it)
      */
 
-    pthread_mutex_lock(&queue->mutex_dequeue);
+    mutex_lock(&queue->mutex_dequeue);
 
     /*
      * Ensure I'm allowed to work on queue (only one working on it)
      */
 
-    pthread_mutex_lock(&queue->mutex);
+    mutex_lock(&queue->mutex);
 
     /*
      * Get up to array_size times the data from the read position,
@@ -502,7 +503,7 @@ threaded_ringbuffer_dequeue_set(threaded_ringbuffer* queue, void** array, u32 ar
          * (They will however still be locked until the queue mutex is released)
          */
 
-        pthread_mutex_unlock(&queue->mutex_enqueue);
+        mutex_unlock(&queue->mutex_enqueue);
     }
 
     queue->size -= loops; /* adjust the size */
@@ -514,14 +515,14 @@ threaded_ringbuffer_dequeue_set(threaded_ringbuffer* queue, void** array, u32 ar
          * The enqueuers will do that when they see fit. (ie: queue not full anymore)
          */
 
-        pthread_mutex_unlock(&queue->mutex_dequeue);
+        mutex_unlock(&queue->mutex_dequeue);
     }
 
     /*
      * We are done here.
      */
 
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 
     return loops; /* Return the amount we got from the queue */
 }
@@ -533,11 +534,11 @@ threaded_ringbuffer_wait_empty(threaded_ringbuffer *queue)
 
     for(;;)
     {
-        pthread_mutex_lock(&queue->mutex);
+        mutex_lock(&queue->mutex);
 
         size = queue->size;
 
-        pthread_mutex_unlock(&queue->mutex);
+        mutex_unlock(&queue->mutex);
 
         if(size == 0)
         {
@@ -553,11 +554,11 @@ threaded_ringbuffer_size(threaded_ringbuffer *queue)
 {
     int size;
 
-    pthread_mutex_lock(&queue->mutex);
+    mutex_lock(&queue->mutex);
 
     size = queue->size;
 
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 
     return size;
 
@@ -566,11 +567,11 @@ threaded_ringbuffer_size(threaded_ringbuffer *queue)
 ya_result
 threaded_ringbuffer_set_maxsize(threaded_ringbuffer *queue, int max_size)
 {
-    ya_result ret = ERROR;
+    ya_result ret = SUCCESS;
 
-    pthread_mutex_lock(&queue->mutex);
+    mutex_lock(&queue->mutex);
 
-    if(max_size >= queue->size)
+    if(max_size >= (int)queue->size)
     {
         void** tmp;
         MALLOC_OR_DIE(void**, tmp, sizeof(void*)* max_size, THREADED_QUEUE_TAG);
@@ -615,12 +616,9 @@ threaded_ringbuffer_set_maxsize(threaded_ringbuffer *queue, int max_size)
         queue->max_size = max_size;
     }
 
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 
     return ret;
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup
  *  @ingroup dnscore
  *  @brief
@@ -108,6 +109,8 @@ type_bit_maps_expand(type_bit_maps_context* context, u8* type_bitmap, u32 size)
             *wp++ = *type_bitmap++;
         }
     }
+
+    context->last_type_window = MAX(last_type >> 8, context->last_type_window);
 
     return last_type;
 }
@@ -243,7 +246,46 @@ void type_bit_maps_set_type(type_bit_maps_context *context, u16 rtype)
     }
 }
 
+void type_bit_maps_clear_type(type_bit_maps_context *context, u16 rtype)
+{
+    u8 *type_bitmap_field = context->type_bitmap_field;
+    u8 *window_size = context->window_size;
 
+    /* Network bit order */
+    rtype = (u16)ntohs(rtype);
+
+    const u8 mask = 1 << (7 - (rtype & 7));
+
+    int rtype_byte_offset = rtype >> 3;
+    int rtype_window_offset = rtype >> 8;
+
+    if((type_bitmap_field[rtype_byte_offset] & mask) == 0)
+    {
+        type_bitmap_field[rtype_byte_offset] &= ~mask;
+        s8 ws = window_size[rtype_window_offset];
+        u8 *window_base = &type_bitmap_field[rtype_byte_offset & 0xf8];
+
+        while((ws > 0) && (window_base[ws] == 0))
+        {
+            --ws;
+        }
+
+        window_size[rtype_window_offset] = ws;
+
+        if(ws == 0)
+        {
+            while(rtype_window_offset >= 0)
+            {
+                if(window_size[rtype_window_offset] > 0)
+                {
+                    break;
+                }
+            }
+        }
+
+        context->last_type_window = MAX(rtype >> 8, context->last_type_window);
+    }
+}
 
 u16 type_bit_maps_update_size(type_bit_maps_context *context)
 {
@@ -288,7 +330,7 @@ int type_bit_maps_compare(const type_bit_maps_context *a, const type_bit_maps_co
         {
             if(a->last_type_window > 0)
             {
-                d = memcmp(a->type_bitmap_field, b->type_bitmap_field, a->last_type_window << 5);
+                d = memcmp(a->type_bitmap_field, b->type_bitmap_field, a->last_type_window << 5); // VS complains: 32 bits is more than enough
             }
         }
     }

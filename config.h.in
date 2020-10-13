@@ -1,9 +1,12 @@
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
+/* Define if building universal (internal helper macro) */
+#undef AC_APPLE_UNIVERSAL_BUILD
+
 /* number of hardware core if the auto-detect fails */
 #undef DEFAULT_ASSUMED_CPU_COUNT
 
-/* always on */
+/* acl = ACL_SUPPORT enabled */
 #undef HAS_ACL_SUPPORT
 
 /* bfd debug support disabled. */
@@ -11,6 +14,88 @@
 
 /* Disable timestamps in the build disabled. */
 #undef HAS_BUILD_TIMESTAMP
+
+/* Compiler supports feature */
+#undef HAS_CC_ADDRESS_SANITIZER_CHECK
+
+/* Compiler supports feature */
+#undef HAS_CC_ANSI
+
+/* Compiler supports feature */
+#undef HAS_CC_ANSI_ALIAS
+
+/* Compiler supports feature */
+#undef HAS_CC_CATCH_UNDEFINED_BEHAVIOR
+
+/* Compiler supports feature */
+#undef HAS_CC_DWARF2
+
+/* Compiler supports feature */
+#undef HAS_CC_DWARF3
+
+/* Compiler supports feature */
+#undef HAS_CC_DWARF4
+
+/* Compiler supports feature */
+#undef HAS_CC_EXCEPTIONS
+
+/* Compiler supports feature */
+#undef HAS_CC_G
+
+/* Compiler supports feature */
+#undef HAS_CC_G3
+
+/* Compiler supports feature */
+#undef HAS_CC_M32
+
+/* Compiler supports feature */
+#undef HAS_CC_M64
+
+/* Compiler supports feature */
+#undef HAS_CC_MISSING_FIELD_INITIALIZERS
+
+/* Compiler supports feature */
+#undef HAS_CC_NO_IDENT
+
+/* Compiler supports feature */
+#undef HAS_CC_NO_OMIT_FRAME_POINTER
+
+/* Compiler supports feature */
+#undef HAS_CC_PEDANTIC
+
+/* Compiler supports feature */
+#undef HAS_CC_RDYNAMIC
+
+/* Compiler supports feature */
+#undef HAS_CC_SANITIZE_ADDRESS
+
+/* Compiler supports feature */
+#undef HAS_CC_STACK_PROTECTOR
+
+/* Compiler supports feature */
+#undef HAS_CC_STD_C11
+
+/* Compiler supports feature */
+#undef HAS_CC_STD_C99
+
+/* Compiler supports feature */
+#undef HAS_CC_STD_GNU11
+
+/* Compiler supports feature */
+#undef HAS_CC_STD_GNU99
+
+/* Compiler supports feature */
+#undef HAS_CC_TUNE_NATIVE
+
+/* Compiler supports feature */
+#undef HAS_CC_WALL
+
+/* Compiler supports feature */
+#undef HAS_CC_XC99
+
+/* close_ex(fd) to change the value of fd to detect double-closes issues
+   (debug) disabled. */
+#undef HAS_CLOSE_EX_REF
 
 /* i386, Athlon, Opteron, Core2, i3, i5, i7, ... */
 #undef HAS_CPU_AMDINTEL
@@ -21,18 +106,25 @@
 /* remote control disabled. */
 #undef HAS_CTRL
 
-/* always on */
+/* MUST be enabled if either NSEC3 or NSEC are enabled */
 #undef HAS_DNSSEC_SUPPORT
 
-/* DROPALL mode will not actually send back the answer (debug/bench) */
-#undef HAS_DROPALL_SUPPORT
+/* enable DNSSEC module for yadifa */
+#undef HAS_DNSSEC_TOOLS
 
 /* dynamic update support disabled. */
 #undef HAS_DYNUPDATE_SUPPORT
 
-/* Elliptic Curve (ECDSA) support (ie: the available OpenSSL does not supports
+/* Elliptic Curve (ECDSA) support (ie: the available OpenSSL does not support
    it) disabled. */
 #undef HAS_ECDSA_SUPPORT
+
+/* Adds support for dynamically loaded module that gets events from yadifad
+   and is allowed to fetch some information disabled. */
+#undef HAS_EVENT_DYNAMIC_MODULE
+
+/* file pool uses cache (dev) disabled. */
+#undef HAS_FILEPOOL_CACHE
 
 /* acceptance of ASCII7 characters in DNS names (not recommended) disabled. */
 #undef HAS_FULL_ASCII7
@@ -40,19 +132,22 @@
 /* libc malloc debug support monitors program-wide allocations disabled. */
 #undef HAS_LIBC_MALLOC_DEBUG_SUPPORT
 
+/* zone lock debug support disabled. */
+#undef HAS_LOCK_DEBUG_SUPPORT
+
 /* where to put the log files */
 #undef HAS_LOGDIR
 
 /* a column with the pid in each line of log disabled. */
-#undef HAS_LOG_PID_ALWAYS_ON
+#undef HAS_LOG_PID
 
 /* a column with an alphanumeric id consistent in the lowest 32 bits of a
    thread id in each log line disabled. */
-#undef HAS_LOG_THREAD_ID_ALWAYS_ON
+#undef HAS_LOG_THREAD_ID
 
 /* a column with a 8 letters human-readable tag identifying a thread in each
    log line disabled. */
-#undef HAS_LOG_THREAD_TAG_ALWAYS_ON
+#undef HAS_LOG_THREAD_TAG
 
 /* malloc debug support for yadifa objects disabled. */
 #undef HAS_MALLOC_DEBUG_SUPPORT
@@ -63,24 +158,27 @@
 /* Define this to enable slow but safe unaligned memory accesses */
 #undef HAS_MEMALIGN_ISSUES
 
-/* usage of message structure API (not recommended) disabled. */
-#undef HAS_MESSAGES_SUPPORT
+/* The system supports mremap */
+#undef HAS_MREMAP
 
 /* mutex debug support disabled. */
 #undef HAS_MUTEX_DEBUG_SUPPORT
 
-/* lenient acceptance of AXFR answer from master that do not have AA bit set
-   (Microsoft DNS) disabled. */
+/* defaults axfr-strict-authority to no. Lenient acceptance of AXFR answer
+   from master that do not have AA bit by default (Microsoft DNS) disabled. */
 #undef HAS_NON_AA_AXFR_SUPPORT
 
-/* always on */
+/* NSEC3 enabled */
 #undef HAS_NSEC3_SUPPORT
 
-/* always on */
+/* NSEC enabled */
 #undef HAS_NSEC_SUPPORT
 
 /* NSID support disabled. */
 #undef HAS_NSID_SUPPORT
+
+/* not linked with an OpenSSL compatible API */
+#undef HAS_OPENSSL
 
 /* The system supports thread affinity */
 #undef HAS_PTHREAD_SETAFFINITY_NP
@@ -91,12 +189,6 @@
 /* The system supports spinlocks */
 #undef HAS_PTHREAD_SPINLOCK
 
-/* always on */
-#undef HAS_RDTSC_SUPPORT
-
-/* always on */
-#undef HAS_RRCACHE_ENABLED
-
 /* DNS Response Rate Limiter disabled. */
 #undef HAS_RRL_SUPPORT
 
@@ -106,18 +198,43 @@
 /* The system supports setgroups */
 #undef HAS_SETGROUPS
 
-/* Without the DNS tools built-in. */
+/* The sockaddr_in6 struct has an sin6_len field */
+#undef HAS_SOCKADDR_IN6_SIN6_LEN
+
+/* The sockaddr_in struct has an sin_len field */
+#undef HAS_SOCKADDR_IN_SIN_LEN
+
+/* The sockaddr struct has an sa_len field */
+#undef HAS_SOCKADDR_SA_LEN
+
+/* An alternative to be used if stdatomics is not available */
+#undef HAS_SYNC_BUILTINS
+
+/* to set do-not-listen to "127.0.0.53 port 53" by default (otherwise the list
+   is empty by default) disabled. */
+#undef HAS_SYSTEMD_RESOLVED_AVOIDANCE
+
+/* Without various internal test programs. */
+#undef HAS_TESTS
+
+/* The system supports timegm */
+#undef HAS_TIMEGM
+
+/* Without provided DNS-related tools. */
 #undef HAS_TOOLS
 
 /* tracking of the instanciated zones for detecting potential leaks.
    Relatively cheap with a small (<100) amount of zones. disabled. */
 #undef HAS_TRACK_ZONES_DEBUG_SUPPORT
 
-/* always on */
+/* tsig = TSIG_SUPPORT enabled */
 #undef HAS_TSIG_SUPPORT
 
 /* where to put the log files */
 #undef HAS_WITH_LOGDIR
+
+/* building with controller */
+#undef HAS_YADIFA
 
 /* zalloc debug support for yadifa objects disabled. */
 #undef HAS_ZALLOC_DEBUG_SUPPORT
@@ -128,11 +245,32 @@
 /* zalloc memory system disabled. */
 #undef HAS_ZALLOC_SUPPORT
 
+/* Define to 1 if you have the <arpa/inet.h> header file. */
+#undef HAVE_ARPA_INET_H
+
+/* Define to 1 if you have the <asm/unistd.h> header file. */
+#undef HAVE_ASM_UNISTD_H
+
+/* Define to 1 if you have the <assert.h> header file. */
+#undef HAVE_ASSERT_H
+
+/* Define to 1 if you have the <bfd.h> header file. */
+#undef HAVE_BFD_H
+
 /* Define to 1 if you have the <byteswap.h> header file. */
 #undef HAVE_BYTESWAP_H
 
+/* Define to 1 if you have the `bzero' function. */
+#undef HAVE_BZERO
+
 /* Define to 1 if you have the <cpuid.h> header file. */
 #undef HAVE_CPUID_H
+
+/* Define to 1 if you have the <ctype.h> header file. */
+#undef HAVE_CTYPE_H
+
+/* Define to 1 if you have the <dirent.h> header file. */
+#undef HAVE_DIRENT_H
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #undef HAVE_DLFCN_H
@@ -140,8 +278,17 @@
 /* Define to 1 if you have the <endian.h> header file. */
 #undef HAVE_ENDIAN_H
 
+/* Define to 1 if you have the <errno.h> header file. */
+#undef HAVE_ERRNO_H
+
+/* Define to 1 if you have the <execinfo.h> header file. */
+#undef HAVE_EXECINFO_H
+
 /* Define to 1 if you have the <fcntl.h> header file. */
 #undef HAVE_FCNTL_H
+
+/* Define to 1 if you have the <getopt.h> header file. */
+#undef HAVE_GETOPT_H
 
 /* Define to 1 if you have the <grp.h> header file. */
 #undef HAVE_GRP_H
@@ -149,17 +296,65 @@
 /* Define to 1 if you have the <i386/limits.h> header file. */
 #undef HAVE_I386_LIMITS_H
 
+/* Define to 1 if you have the <i386/types.h> header file. */
+#undef HAVE_I386_TYPES_H
+
+/* Define to 1 if the system has the type `int16_t'. */
+#undef HAVE_INT16_T
+
+/* Define to 1 if the system has the type `int32_t'. */
+#undef HAVE_INT32_T
+
+/* Define to 1 if the system has the type `int64_t'. */
+#undef HAVE_INT64_T
+
+/* Define to 1 if the system has the type `int8_t'. */
+#undef HAVE_INT8_T
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
+
+/* Define to 1 if you have the `c' library (-lc). */
+#undef HAVE_LIBC
+
+/* Define to 1 if you have the `dnscore' library (-ldnscore). */
+#undef HAVE_LIBDNSCORE
+
+/* Define to 1 if you have the `dnsdb' library (-ldnsdb). */
+#undef HAVE_LIBDNSDB
+
+/* Define to 1 if you have the `dnslg' library (-ldnslg). */
+#undef HAVE_LIBDNSLG
+
+/* Define to 1 if you have the <limits.h> header file. */
+#undef HAVE_LIMITS_H
 
 /* Define to 1 if you have the <linux/limits.h> header file. */
 #undef HAVE_LINUX_LIMITS_H
 
+/* Define to 1 if the system has the type `long long'. */
+#undef HAVE_LONG_LONG
+
 /* Define to 1 if you have the <machine/endian.h> header file. */
 #undef HAVE_MACHINE_ENDIAN_H
 
+/* Define to 1 if you have the <mach/clock.h> header file. */
+#undef HAVE_MACH_CLOCK_H
+
+/* Define to 1 if you have the <mach/mach.h> header file. */
+#undef HAVE_MACH_MACH_H
+
+/* Define to 1 if you have the <malloc.h> header file. */
+#undef HAVE_MALLOC_H
+
 /* Define to 1 if you have the <memory.h> header file. */
 #undef HAVE_MEMORY_H
+
+/* Define to 1 if you have the `memset' function. */
+#undef HAVE_MEMSET
+
+/* Define to 1 if you have the <netdb.h> header file. */
+#undef HAVE_NETDB_H
 
 /* Define to 1 if you have the <netinet6/in6.h> header file. */
 #undef HAVE_NETINET6_IN6_H
@@ -167,11 +362,54 @@
 /* Define to 1 if you have the <netinet/in.h> header file. */
 #undef HAVE_NETINET_IN_H
 
+/* Define to 1 if you have the <netinet/tcp.h> header file. */
+#undef HAVE_NETINET_TCP_H
+
+/* Define to 1 if you have the <net/ethernet.h> header file. */
+#undef HAVE_NET_ETHERNET_H
+
+/* Define to 1 if you have the <pcap/pcap.h> header file. */
+#undef HAVE_PCAP_PCAP_H
+
+/* Define to 1 if you have the <poll.h> header file. */
+#undef HAVE_POLL_H
+
 /* Define to 1 if you have the <ppc/limits.h> header file. */
 #undef HAVE_PPC_LIMITS_H
 
 /* Define to 1 if you have the <pthread.h> header file. */
 #undef HAVE_PTHREAD_H
+
+/* Define to 1 if you have the <pwd.h> header file. */
+#undef HAVE_PWD_H
+
+/* Define to 1 if you have the <sched.h> header file. */
+#undef HAVE_SCHED_H
+
+/* Define to 1 if you have the `select' function. */
+#undef HAVE_SELECT
+
+/* Define to 1 if you have the <signal.h> header file. */
+#undef HAVE_SIGNAL_H
+
+/* Define to 1 if you have the `socket' function. */
+#undef HAVE_SOCKET
+
+/* Define to 1 if `stat' has the bug that it succeeds when given the
+   zero-length file name argument. */
+#undef HAVE_STAT_EMPTY_STRING_BUG
+
+/* Define to 1 if you have the <stdarg.h> header file. */
+#undef HAVE_STDARG_H
+
+/* Define to 1 if you have the <stdatomic.h> header file. */
+#undef HAVE_STDATOMIC_H
+
+/* Define to 1 if you have the <stdbool.h> header file. */
+#undef HAVE_STDBOOL_H
+
+/* Define to 1 if you have the <stddef.h> header file. */
+#undef HAVE_STDDEF_H
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
@@ -181,6 +419,9 @@
 
 /* Define to 1 if you have the <stdlib.h> header file. */
 #undef HAVE_STDLIB_H
+
+/* Define to 1 if you have the <stdnoreturn.h> header file. */
+#undef HAVE_STDNORETURN_H
 
 /* Define to 1 if you have the <strings.h> header file. */
 #undef HAVE_STRINGS_H
@@ -194,8 +435,35 @@
 /* Define to 1 if you have the <sys/byteorder.h> header file. */
 #undef HAVE_SYS_BYTEORDER_H
 
+/* Define to 1 if you have the <sys/cpuset.h> header file. */
+#undef HAVE_SYS_CPUSET_H
+
 /* Define to 1 if you have the <sys/endian.h> header file. */
 #undef HAVE_SYS_ENDIAN_H
+
+/* Define to 1 if you have the <sys/file.h> header file. */
+#undef HAVE_SYS_FILE_H
+
+/* Define to 1 if you have the <sys/ipc.h> header file. */
+#undef HAVE_SYS_IPC_H
+
+/* Define to 1 if you have the <sys/mman.h> header file. */
+#undef HAVE_SYS_MMAN_H
+
+/* Define to 1 if you have the <sys/msg.h> header file. */
+#undef HAVE_SYS_MSG_H
+
+/* Define to 1 if you have the <sys/param.h> header file. */
+#undef HAVE_SYS_PARAM_H
+
+/* Define to 1 if you have the <sys/prctl.h> header file. */
+#undef HAVE_SYS_PRCTL_H
+
+/* Define to 1 if you have the <sys/resource.h> header file. */
+#undef HAVE_SYS_RESOURCE_H
+
+/* Define to 1 if you have the <sys/select.h> header file. */
+#undef HAVE_SYS_SELECT_H
 
 /* Define to 1 if you have the <sys/socket.h> header file. */
 #undef HAVE_SYS_SOCKET_H
@@ -212,8 +480,38 @@
 /* Define to 1 if you have the <sys/types.h> header file. */
 #undef HAVE_SYS_TYPES_H
 
+/* Define to 1 if you have the <sys/un.h> header file. */
+#undef HAVE_SYS_UN_H
+
+/* Define to 1 if you have the <sys/wait.h> header file. */
+#undef HAVE_SYS_WAIT_H
+
+/* Define to 1 if you have the <tcl.h> header file. */
+#undef HAVE_TCL_H
+
+/* Define to 1 if you have the <time.h> header file. */
+#undef HAVE_TIME_H
+
+/* Define to 1 if you have the <ucontext.h> header file. */
+#undef HAVE_UCONTEXT_H
+
+/* Define to 1 if the system has the type `uint16_t'. */
+#undef HAVE_UINT16_T
+
+/* Define to 1 if the system has the type `uint32_t'. */
+#undef HAVE_UINT32_T
+
+/* Define to 1 if the system has the type `uint64_t'. */
+#undef HAVE_UINT64_T
+
+/* Define to 1 if the system has the type `uint8_t'. */
+#undef HAVE_UINT8_T
+
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
+
+/* Define to 1 if the system has the type `u_char'. */
+#undef HAVE_U_CHAR
 
 /* BSD */
 #undef IS_BSD_FAMILY
@@ -226,6 +524,10 @@
 
 /* SOLARIS */
 #undef IS_SOLARIS_FAMILY
+
+/* Define to 1 if `lstat' dereferences a symlink specified with a trailing
+   slash. */
+#undef LSTAT_FOLLOWS_SLASHED_SYMLINK
 
 /* Define to the sub-directory in which libtool stores uninstalled libraries.
    */
@@ -255,11 +557,38 @@
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
 
+/* Define as the return type of signal handlers (`int' or `void'). */
+#undef RETSIGTYPE
+
+/* Define to the type of arg 1 for `select'. */
+#undef SELECT_TYPE_ARG1
+
+/* Define to the type of args 2, 3 and 4 for `select'. */
+#undef SELECT_TYPE_ARG234
+
+/* Define to the type of arg 5 for `select'. */
+#undef SELECT_TYPE_ARG5
+
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
 
+/* Define to 1 if your <sys/time.h> declares `struct tm'. */
+#undef TM_IN_SYS_TIME
+
 /* Version number of package */
 #undef VERSION
+
+/* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
+   significant byte first (like Motorola and SPARC, unlike Intel). */
+#if defined AC_APPLE_UNIVERSAL_BUILD
+# if defined __BIG_ENDIAN__
+#  define WORDS_BIGENDIAN 1
+# endif
+#else
+# ifndef WORDS_BIGENDIAN
+#  undef WORDS_BIGENDIAN
+# endif
+#endif
 
 /* Enable large inode numbers on Mac OS X 10.5.  */
 #ifndef _DARWIN_USE_64_BIT_INODE
@@ -271,3 +600,15 @@
 
 /* Define for large files, on AIX-style hosts. */
 #undef _LARGE_FILES
+
+/* Define to empty if `const' does not conform to ANSI C. */
+#undef const
+
+/* Define to `int' if <sys/types.h> does not define. */
+#undef mode_t
+
+/* Define to `int' if <sys/types.h> does not define. */
+#undef pid_t
+
+/* Define to `unsigned int' if <sys/types.h> does not define. */
+#undef size_t

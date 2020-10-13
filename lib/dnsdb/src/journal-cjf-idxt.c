@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /*******************************************************************************
  * 
  * Indexes table handling functions
@@ -44,6 +45,13 @@
 #define JOURNAL_CJF_BASE 1
 
 #include "dnsdb/dnsdb-config.h"
+
+#define ZDB_JOURNAL_CODE 1
+
+#include "dnsdb/journal.h"
+
+#if JOURNAL_CJF_ENABLED
+
 #include "dnsdb/journal-cjf-page-cache.h"
 #include "dnsdb/journal-cjf-idxt.h"
 #include "dnsdb/journal-cjf-common.h"
@@ -255,7 +263,8 @@ journal_cjf_idxt_verify(journal_cjf *jnl)
             }
         }
         
-        ssize_t pos = lseek(jnl->fd, entry->file_offset, SEEK_SET);
+        ssize_t pos = file_pool_seek(jnl->file, entry->file_offset, SEEK_SET);
+        
         if(pos < 0)
         {
             // invalid position (as EBADF should not happen)
@@ -265,8 +274,9 @@ journal_cjf_idxt_verify(journal_cjf *jnl)
             
             return ret;
         }
+
+        int len = file_pool_readfully(jnl->file, &page_hdr, CJF_SECTION_INDEX_SLOT_HEAD);
         
-        int len = readfully(jnl->fd, &page_hdr, CJF_SECTION_INDEX_SLOT_HEAD);
         if(len != CJF_SECTION_INDEX_SLOT_HEAD)
         {
             if(len >= 0)
@@ -363,11 +373,12 @@ journal_cjf_idxt_load(journal_cjf *jnl)
         log_debug1("journal_cjf_idxt_load: loading stored IDXT from '%s'", jnl->journal_file_name);
         
         // load
-        lseek(jnl->fd, jnl->page_table_file_offset, SEEK_SET);
+        file_pool_seek(jnl->file, jnl->page_table_file_offset, SEEK_SET);
         
         input_stream fis;
         input_stream bis;
-        fd_input_stream_attach(&fis, jnl->fd);
+        file_pool_file_input_stream_init(&fis, jnl->file);
+        
         buffer_input_stream_init(&bis, &fis, 512);
         u8 magic[4];
         input_stream_read(&bis, magic, 4);
@@ -381,7 +392,7 @@ journal_cjf_idxt_load(journal_cjf *jnl)
             
             input_stream_read(&bis, (u8*)&jnl->idxt.entries[0], count * CJF_IDXT_SLOT_SIZE);
             
-            fd_input_stream_detach(buffer_input_stream_get_filtered(&bis));
+            file_pool_file_input_stream_detach(buffer_input_stream_get_filtered(&bis));
             input_stream_close(&bis);
             
             jnl->idxt.count = count;
@@ -402,6 +413,9 @@ journal_cjf_idxt_load(journal_cjf *jnl)
             
             return;
         }
+        
+        file_pool_file_input_stream_detach(buffer_input_stream_get_filtered(&bis));
+        input_stream_close(&bis);
         
         // ERROR, need to rebuild
     }
@@ -438,8 +452,8 @@ journal_cjf_idxt_load(journal_cjf *jnl)
         
         log_debug2("journal_cjf_idxt_load: reading '%s' PAGE header at %x", jnl->journal_file_name, index_offset);
         
-        lseek(jnl->fd, index_offset, SEEK_SET);
-        if(readfully(jnl->fd, &page_header, JOURNAL_CJF_PAGE_HEADER_SIZE) != JOURNAL_CJF_PAGE_HEADER_SIZE) // next offset
+        file_pool_seek(jnl->file, index_offset, SEEK_SET);
+        if(file_pool_readfully(jnl->file, &page_header, JOURNAL_CJF_PAGE_HEADER_SIZE) != JOURNAL_CJF_PAGE_HEADER_SIZE) // next offset
         {
             log_err("journal_cjf_idxt_load: '%s' is too corrupt to go on further reading PAGE header at %x", jnl->journal_file_name, index_offset);
             break;
@@ -458,8 +472,8 @@ journal_cjf_idxt_load(journal_cjf *jnl)
 
             // the last serial is on the last slot
 
-            lseek(jnl->fd, tail_offset, SEEK_CUR);
-            if(readfully(jnl->fd, &page_last_item, JOURNAL_CJF_PAGE_ITEM_SIZE) != JOURNAL_CJF_PAGE_ITEM_SIZE)
+            file_pool_seek(jnl->file, tail_offset, SEEK_CUR);
+            if(file_pool_readfully(jnl->file, &page_last_item, JOURNAL_CJF_PAGE_ITEM_SIZE) != JOURNAL_CJF_PAGE_ITEM_SIZE)
             {
                 log_err("journal_cjf_idxt_load: '%s' is too corrupt to go on further reading PAGE tail at %x", jnl->journal_file_name, index_offset + CJF_SECTION_INDEX_SIZE - CJF_SECTION_INDEX_SLOT_HEAD - CJF_SECTION_INDEX_SLOT_SIZE);
                 break;
@@ -550,12 +564,6 @@ journal_cjf_idxt_flush(journal_cjf *jnl)
         return;
     }
     
-    if(jnl->fd < 0)
-    {
-        log_err("cjf: %{dnsname}: no file descriptor but index table is dirty", jnl->origin);
-        return;
-    }
-    
     if(jnl->page_table_file_offset == 0)
     {
         log_debug("cjf: %{dnsname}: table index not set", jnl->origin);
@@ -564,7 +572,7 @@ journal_cjf_idxt_flush(journal_cjf *jnl)
     
     // write the table at the end
     
-    off_t end = lseek(jnl->fd, jnl->page_table_file_offset, SEEK_SET);
+    off_t end = file_pool_seek(jnl->file, jnl->page_table_file_offset, SEEK_SET);
     
     if(end < 0)
     {
@@ -589,8 +597,8 @@ journal_cjf_idxt_flush(journal_cjf *jnl)
     
     log_debug3("cjf: flushing IDXT %u indexes at %08x", jnl->idxt.count, jnl->page_table_file_offset);
     
-    fd_output_stream_attach(&fos, jnl->fd);
-    file_output_stream_set_full_writes(&fos, TRUE);      // this makes the stream "write fully"
+    file_pool_file_output_stream_init(&fos, jnl->file);
+    file_pool_file_output_stream_set_full_writes(&fos, TRUE);      // this makes the stream "write fully"
     buffer_output_stream_init(&bos, &fos, 512);
     output_stream_write(&bos, (const u8*)"IDXT", 4);
     output_stream_write(&bos, (const u8*)&jnl->idxt.count , 2);
@@ -600,7 +608,7 @@ journal_cjf_idxt_flush(journal_cjf *jnl)
     }
     output_stream_write(&bos, (const u8*)"END", 4); // yes, with the '\0' at the end
     output_stream_flush(&bos);
-    fd_output_stream_detach(buffer_output_stream_get_filtered(&bos));
+    file_pool_file_output_stream_detach(buffer_output_stream_get_filtered(&bos));
     output_stream_close(&bos);
     
     // write the table offset
@@ -610,7 +618,7 @@ journal_cjf_idxt_flush(journal_cjf *jnl)
 #if DO_SYNC
     log_debug3("cjf: syncing to disk");
     
-    fsync_ex(jnl->fd);
+    file_pool_flush(jnl->file);
 #endif
     
     jnl->idxt.dirty = FALSE;
@@ -618,7 +626,7 @@ journal_cjf_idxt_flush(journal_cjf *jnl)
     
 #if _BSD_SOURCE || _XOPEN_SOURCE >= 500 || _XOPEN_SOURCE && _XOPEN_SOURCE_EXTENDED || /* Since glibc 2.3.5: */ _POSIX_C_SOURCE >= 200112L
     u32 file_size = jnl->page_table_file_offset + 4 + 2 + 4 + jnl->idxt.count * CJF_IDXT_SLOT_SIZE;
-    ftruncate(jnl->fd, file_size);
+    file_pool_resize(jnl->file, file_size);
 #endif
 }
 
@@ -666,7 +674,6 @@ journal_cjf_idxt_update_last_serial(journal_cjf *jnl, u32 last_serial)
 
 /**
  * Appends an PAGE table after the current one
- * @todo 20160209 edf --  edf update the current PAGE next pointer
  * 
  * @param jcs
  * @param size_hint
@@ -754,15 +761,15 @@ journal_cjf_idxt_append_page_nogrow(journal_cjf *jnl)
     log_debug3("cjf: updating PAGE chain (@%08x = %08x)", page_offset, page->file_offset);
     
     journal_cjf_page_tbl_header current_page_header;
-    journal_cjf_page_cache_read_header(jnl->fd, page_offset, &current_page_header);
+    journal_cjf_page_cache_read_header(jnl->file, page_offset, &current_page_header);
     current_page_header.next_page_offset = page->file_offset;
-    journal_cjf_page_cache_write_header(jnl->fd, page_offset, &current_page_header);
+    journal_cjf_page_cache_write_header(jnl->file, page_offset, &current_page_header);
     
     // writes an empty PAGE table for the current (new) PAGE
     
     log_debug3("cjf: writing new empty PAGE");
     
-    journal_cjf_page_cache_write_new_header(jnl->fd, page->file_offset);
+    journal_cjf_page_cache_write_new_header(jnl->file, page->file_offset);
     // CFJ_PAGE_CACHE <-
 
     // the IDXT had some changes that need flushing
@@ -776,13 +783,13 @@ journal_cjf_idxt_append_page_nogrow(journal_cjf *jnl)
         jnl->idxt.marked = TRUE;
     }
     
-    journal_cjf_page_cache_flush(jnl->fd);
+    journal_cjf_page_cache_flush(jnl->file);
     journal_cjf_header_flush(jnl);
     
 #if DO_SYNC
     log_debug3("cjf: syncing to disk");
     
-    fsync_ex(jnl->fd);
+    file_pool_flush(jnl->file);
 #endif
     
     log_debug_jnl(jnl, "cjf: journal_cjf_idxt_append_page_nogrow: AFTER");
@@ -870,7 +877,7 @@ journal_cjf_idxt_fix_size(journal_cjf *jnl)
             tmp[i] = jnl->idxt.entries[(jnl->idxt.first + i) % jnl->idxt.size];
         }
 
-#ifdef DEBUG
+#if DEBUG
         memset(jnl->idxt.entries, 0xfe, sizeof(journal_cjf_idxt_tbl_item) * jnl->idxt.size);
 #endif
         free(jnl->idxt.entries);
@@ -978,8 +985,6 @@ journal_cjf_idxt_get_page_index_from_serial(const journal_cjf *jnl, u32 serial)
     
     u32 prev_serial = jnl->serial_begin;
     
-    /// @todo 20150115 edf -- do a dichotomy instead
-    
     s16 n = jnl->idxt.count;
     for(s16 i = 0; i < n; i++)
     {
@@ -1034,8 +1039,6 @@ journal_cjf_idxt_get_page_offset_from_serial(const journal_cjf *jnl, u32 serial,
         return ZDB_JOURNAL_SERIAL_OUT_OF_KNOWN_RANGE;
     }
     
-    /// @todo 20150115 edf -- do a dichotomy instead
-    
     s16 n = jnl->idxt.count;
     for(s16 i = 0; i < n; i++)
     {
@@ -1079,3 +1082,4 @@ journal_cjf_idxt_get_page_offset(const journal_cjf *jnl, int idx)
     return entry->file_offset;
 }
 
+#endif

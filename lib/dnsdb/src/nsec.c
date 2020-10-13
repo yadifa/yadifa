@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup nsec NSEC functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -64,6 +65,8 @@
 #include "dnsdb/nsec_common.h"
 
 #include "dnsdb/dynupdate-diff.h"
+#include "dnsdb/dynupdate-message.h"
+#include "dnsdb/zdb-zone-path-provider.h"
 
 /*
    Note : (rfc 4034)
@@ -180,13 +183,19 @@ static int nsec_update_zone_count = 0;
 void
 nsec_zone_label_detach(zdb_rr_label *rr_label)
 {
-    yassert((rr_label != NULL) && (rr_label->flags & ZDB_RR_LABEL_NSEC) != 0);
+    yassert((rr_label != NULL) && zdb_rr_label_flag_isset(rr_label, ZDB_RR_LABEL_NSEC));
     
     if((rr_label->nsec.dnssec != NULL) && (rr_label->nsec.nsec.node != NULL))
     {
-       rr_label->nsec.nsec.node->label = NULL;
-       rr_label->nsec.nsec.node = NULL;
+        rr_label->nsec.nsec.node->label = NULL;
+        rr_label->nsec.nsec.node = NULL;
     }
+    else
+    {
+        yassert((rr_label->nsec.dnssec == NULL) && (rr_label->nsec.nsec.node == NULL));
+    }
+
+    zdb_rr_label_flag_and(rr_label, ~ZDB_RR_LABEL_NSEC);
 }
 
 ya_result
@@ -213,12 +222,12 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
         return return_code;
     }
     
-#ifdef DEBUG
+#if DEBUG
     memset(name_buffer, 0xde, sizeof(name_buffer));
 #endif
     
-    name = name_buffer[0];
-    prev_name = name_buffer[1];
+    name = &name_buffer[0][0];
+    prev_name = &name_buffer[1][0];
     
     zdb_zone_label_iterator label_iterator;
     zdb_zone_label_iterator_init(&label_iterator, zone);
@@ -233,9 +242,7 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
             // we are under a delegation or on an empty (non-terminal) 
             // there should not be an NSEC record here
             
-            zdb_packed_ttlrdata *nsec_record;
-
-            if((nsec_record = zdb_record_find(&label->resource_record_set, TYPE_NSEC)) != NULL) // zone is locked
+            if(zdb_record_find(&label->resource_record_set, TYPE_NSEC) != NULL) // zone is locked
             {
                 nsec_under_delegation++;
                 
@@ -247,7 +254,7 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
 
         nsec_inverse_name(inverse_name, name);
 
-        nsec_node *node = nsec_avl_insert(&nsec_tree, inverse_name);
+        nsec_node *node = nsec_insert(&nsec_tree, inverse_name);
         node->label = label;
         label->nsec.nsec.node = node;
     }
@@ -258,12 +265,12 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
 
     type_bit_maps_context tbmctx;
     
-    nsec_avl_iterator nsec_iter;
-    nsec_avl_iterator_init(&nsec_tree, &nsec_iter);
+    nsec_iterator nsec_iter;
+    nsec_iterator_init(&nsec_tree, &nsec_iter);
 
-    if(nsec_avl_iterator_hasnext(&nsec_iter))
+    if(nsec_iterator_hasnext(&nsec_iter))
     {
-        first_node = nsec_avl_iterator_next_node(&nsec_iter);
+        first_node = nsec_iterator_next_node(&nsec_iter);
 
         node = first_node;
 
@@ -273,9 +280,9 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
 
             nsec_update_zone_count++;
 
-            if(nsec_avl_iterator_hasnext(&nsec_iter))
+            if(nsec_iterator_hasnext(&nsec_iter))
             {
-                next_node = nsec_avl_iterator_next_node(&nsec_iter);
+                next_node = nsec_iterator_next_node(&nsec_iter);
             }
             else
             {
@@ -294,7 +301,7 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
                 continue;
             }
 
-            u32 tbm_size = type_bit_maps_initialise_from_label(&tbmctx, label, TRUE, TRUE);
+            u32 tbm_size = nsec_type_bit_maps_initialise_from_label(&tbmctx, label, TRUE, TRUE);
             type_bit_maps_write(&tbmctx, tmp_bitmap);
             
             u8 *tmp_name = prev_name;
@@ -341,7 +348,7 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
                             {
                                 /* All good */
                                 
-                                label->flags |= ZDB_RR_LABEL_NSEC;
+                                zdb_rr_label_flag_or(label, ZDB_RR_LABEL_NSEC);
 
                                 node = next_node;
                                 continue;
@@ -388,9 +395,6 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
                     if(!read_only)
                     {
                         log_warn("nsec: %{dnsname}: del: %{dnsname} %{typerdatadesc}", zone->origin, prev_name, &nsec_desc);
-#if ZDB_CHANGE_FEEDBACK_SUPPORT
-                        zdb_listener_notify_remove_record(zone, name, TYPE_NSEC, &unpacked_ttlrdata);
-#endif
                     }
                     else
                     {
@@ -434,25 +438,9 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
                 {                    
                     zdb_record_insert(&label->resource_record_set, TYPE_NSEC, nsec_record);
 
-#ifdef DEBUG
+#if DEBUG
                     log_debug("nsec: %{dnsname}: add: %{dnsname} %{typerdatadesc}", zone->origin, prev_name, &nsec_desc);
 #endif
-#if ZDB_CHANGE_FEEDBACK_SUPPORT
-                    if(zdb_listener_notify_enabled())
-                    {        
-                        dnsname_vector name_path;
-
-                        zdb_ttlrdata unpacked_ttlrdata;
-
-                        unpacked_ttlrdata.ttl = nsec_record->ttl;
-                        unpacked_ttlrdata.rdata_size = rdata_size;
-                        unpacked_ttlrdata.rdata_pointer = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_record);
-
-                        dnsname_to_dnsname_vector(name, &name_path);
-                        zdb_listener_notify_add_record(zone, name_path.labels, name_path.size, TYPE_NSEC, &unpacked_ttlrdata);
-                    }
-#endif
-                    
                     /*
                      * Schedule a signature
                      */
@@ -464,7 +452,7 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
                 }
             }
 
-            label->flags |= ZDB_RR_LABEL_NSEC;
+            zdb_rr_label_flag_or(label, ZDB_RR_LABEL_NSEC);
 
             node = next_node;
         }
@@ -536,7 +524,9 @@ nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *item, n
     
     type_bit_maps_context tbmctx;
     u8 tmp_bitmap[256 * (1 + 1 + 32)]; /* 'max window count' * 'max window length' */
-    u32 tbm_size = type_bit_maps_initialise_from_label(&tbmctx, label, TRUE, TRUE);
+
+    u32 tbm_size = nsec_type_bit_maps_initialise_from_label(&tbmctx, label, TRUE, TRUE);
+
     u32 ttl = zone->min_ttl;
     type_bit_maps_write(&tbmctx, tmp_bitmap);
 
@@ -595,26 +585,6 @@ nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *item, n
             }    
         }
 
-#if ZDB_CHANGE_FEEDBACK_SUPPORT
-        if(zdb_listener_notify_enabled())
-        {
-            zdb_packed_ttlrdata *nsec_rec = nsec_record;
-
-            do
-            {
-                zdb_ttlrdata unpacked_ttlrdata;
-
-                unpacked_ttlrdata.ttl = nsec_rec->ttl;
-                unpacked_ttlrdata.rdata_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(nsec_rec);
-                unpacked_ttlrdata.rdata_pointer = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_rec);
-
-                zdb_listener_notify_remove_record(zone, name, TYPE_NSEC, &unpacked_ttlrdata);
-
-                nsec_rec = nsec_rec->next;
-            }
-            while(nsec_rec != NULL);
-        }
-#endif
         zdb_record_delete(&label->resource_record_set, TYPE_NSEC);
 
         rrsig_delete(zone, name, label, TYPE_NSEC);
@@ -646,29 +616,13 @@ nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *item, n
         memcpy(rdata, tmp_bitmap, tbm_size);
 
         zdb_record_insert(&label->resource_record_set, TYPE_NSEC, nsec_record);
-        
-#if ZDB_CHANGE_FEEDBACK_SUPPORT
-        if(zdb_listener_notify_enabled())
-        {        
-            dnsname_vector name_path;
 
-            zdb_ttlrdata unpacked_ttlrdata;
-            
-            unpacked_ttlrdata.ttl = ttl;
-            unpacked_ttlrdata.rdata_size = rdata_size;
-            unpacked_ttlrdata.rdata_pointer = ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec_record);
-
-            dnsname_to_dnsname_vector(name, &name_path);
-
-            zdb_listener_notify_add_record(zone, name_path.labels, name_path.size, TYPE_NSEC, &unpacked_ttlrdata);
-        }
-#endif
         /*
          * Schedule a signature
          */
     }
 
-    label->flags |= ZDB_RR_LABEL_NSEC;
+    zdb_rr_label_flag_or(label, ZDB_RR_LABEL_NSEC);
 
     return TRUE;
 }
@@ -690,12 +644,12 @@ nsec_update_label_node(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_refe
 
     dnslabel_stack_to_dnsname(labels, labels_top, inverse_name);
 
-    nsec_node *node = nsec_avl_insert(&zone->nsec.nsec, inverse_name);
+    nsec_node *node = nsec_insert(&zone->nsec.nsec, inverse_name);
     node->label = label;
     label->nsec.nsec.node = node;
-    label->flags |= ZDB_RR_LABEL_NSEC;
+    zdb_rr_label_flag_or(label, ZDB_RR_LABEL_NSEC);
 
-#ifdef DEBUG
+#if DEBUG
     memset(inverse_name, 0xff, sizeof(inverse_name));
     log_debug("nsec_update_label_node: %{dnsname}", node->inverse_relative_name);
 #endif
@@ -715,33 +669,34 @@ nsec_update_label_node(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_refe
  */
 
 bool
-nsec_delete_label_node(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_reference labels, s32 labels_top)
+nsec_delete_label_node(zdb_zone *zone, dnslabel_vector_reference labels, s32 labels_top)
 {
     u8 inverse_name[MAX_DOMAIN_LENGTH];
 
     dnslabel_stack_to_dnsname(labels, labels_top, inverse_name);
 
-    nsec_node *node = nsec_avl_find(&zone->nsec.nsec, inverse_name);
+    nsec_node *node = nsec_find(&zone->nsec.nsec, inverse_name);
     
     if(node != NULL)
     {
         if(node->label != NULL)
         {
-            node->label->flags &= ~ZDB_RR_LABEL_NSEC;
+            zdb_rr_label_flag_and(node->label, ~ZDB_RR_LABEL_NSEC);
             node->label->nsec.nsec.node = NULL;
             node->label = NULL;
         }
-        
-        nsec_avl_delete(&zone->nsec.nsec, inverse_name);
 
+        nsec_delete(&zone->nsec.nsec, inverse_name);
+#if DEBUG
         log_debug("nsec_delete_label_node: %{dnsname}", inverse_name);
-        
+#endif
         return TRUE;
     }
     else
     {
+#if DEBUG
         log_debug("nsec_delete_label_node: %{dnsname} has not been found", inverse_name);
-        
+#endif
         return FALSE;
     }
 }
@@ -766,7 +721,7 @@ nsec_update_label(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_reference
 
     /* Get the next node */
 
-    nsec_node *next_node = nsec_avl_node_mod_next(node);
+    nsec_node *next_node = nsec_node_mod_next(node);
 
     dnslabel_vector_to_dnsname(labels, labels_top, name);
 
@@ -776,22 +731,22 @@ nsec_update_label(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_reference
 void
 nsec_destroy_zone(zdb_zone *zone)
 {
-    if(!nsec_avl_isempty(&zone->nsec.nsec))
+    if(!nsec_isempty(&zone->nsec.nsec))
     {
-        nsec_avl_iterator iter;
-        nsec_avl_iterator_init(&zone->nsec.nsec,&iter);
+        nsec_iterator iter;
+        nsec_iterator_init(&zone->nsec.nsec,&iter);
 
-        while(nsec_avl_iterator_hasnext(&iter))
+        while(nsec_iterator_hasnext(&iter))
         {
-            nsec_node *node = nsec_avl_iterator_next_node(&iter);
+            nsec_node *node = nsec_iterator_next_node(&iter);
             if(node->label != NULL)
             {
                 node->label->nsec.nsec.node = NULL;
-                node->label->flags &= ~ZDB_RR_LABEL_NSEC;
+                zdb_rr_label_flag_and(node->label, ~ZDB_RR_LABEL_NSEC);
             }
         }
 
-        nsec_avl_destroy(&zone->nsec.nsec);
+        nsec_destroy(&zone->nsec.nsec);
     }
 }
 
@@ -812,7 +767,7 @@ nsec_find_interval(const zdb_zone *zone, const dnsname_vector *name_vector, u8 *
     
     dnslabel_stack_to_dnsname(name_vector->labels, name_vector->size, dname_inverted);
     
-    nsec_node *node = nsec_avl_find_interval_start(&zone->nsec.nsec, dname_inverted);
+    nsec_node *node = nsec_find_interval_start(&zone->nsec.nsec, dname_inverted);
 
     u8 *out_dname = *pool;
     *out_dname_p = out_dname;
@@ -836,7 +791,7 @@ nsec_name_error(const zdb_zone* zone, const dnsname_vector *name, s32 closest_in
     
     dnslabel_stack_to_dnsname(name->labels, name->size, dname_inverted);
     
-    nsec_node *node = nsec_avl_find_interval_start(&zone->nsec.nsec, dname_inverted);
+    nsec_node *node = nsec_find_interval_start(&zone->nsec.nsec, dname_inverted);
     
     u8 *out_encloser_nsec_name = *pool;
     *out_encloser_nsec_name_p = out_encloser_nsec_name;
@@ -845,7 +800,7 @@ nsec_name_error(const zdb_zone* zone, const dnsname_vector *name, s32 closest_in
     
     dnslabel_stack_to_dnsname(&name->labels[closest_index], name->size - closest_index, dname_inverted);
     
-    nsec_node *wild_node = nsec_avl_find_interval_start(&zone->nsec.nsec, dname_inverted);
+    nsec_node *wild_node = nsec_find_interval_start(&zone->nsec.nsec, dname_inverted);
     
     if(wild_node != node)
     {
@@ -864,11 +819,11 @@ nsec_logdump_tree(zdb_zone *zone)
 {
     log_debug("dumping zone %{dnsname} nsec tree", zone->origin);
 
-    nsec_avl_iterator iter;
-    nsec_avl_iterator_init(&zone->nsec.nsec, &iter);
-    while(nsec_avl_iterator_hasnext(&iter))
+    nsec_iterator iter;
+    nsec_iterator_init(&zone->nsec.nsec, &iter);
+    while(nsec_iterator_hasnext(&iter))
     {
-        nsec_node *node = nsec_avl_iterator_next_node(&iter);
+        nsec_node *node = nsec_iterator_next_node(&iter);
 
         log_debug("%{dnsname}", node->inverse_relative_name);
     }
@@ -914,9 +869,16 @@ nsec_zone_set_status(zdb_zone *zone, u8 secondary_lock, u8 status)
     
     ya_result ret;
     
-    ret = dynupdate_diff(zone, &reader, count, secondary_lock, FALSE); // TODO
+    ret = dynupdate_diff(zone, &reader, count, secondary_lock, DYNUPDATE_DIFF_RUN);
     
-    dynupdate_message_finalise(&dmsg);
+    dynupdate_message_finalize(&dmsg);
+    
+    if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
+    {
+        // trigger a background store of the zone
+        
+        zdb_zone_info_background_store_zone(zone->origin);
+    }
         
     return ret;
 }

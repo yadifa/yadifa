@@ -1,0 +1,776 @@
+'\" t
+.\" Manual page created with latex2man on Tue Oct 13 12:59:04 2020
+.\" NOTE: This file is generated, DO NOT EDIT.
+.de Vb
+.ft CW
+.nf
+..
+.de Ve
+.ft R
+
+.fi
+..
+.TH "YAKEYROLLD\-CONF" "5" "2020\-10\-12" "YAKEYROLLD " "YADIFA "
+.SH NAME
+
+.PP
+yakeyrolld.conf
+\- configuration file for \fIyakeyrolld\fP(8)\&.
+.PP
+.SH SYNOPSIS
+
+.PP
+${SYSCONFDIR}/yakeyrolld.conf 
+.PP
+.SH DESCRIPTION
+
+.PP
+The configuration of yakeyrolld
+is consistent in a text file that can optionally include others. 
+The general structure is a a sequence of containers: a sequence of lines of text starting with a <container\-name> and ending with a </container\-name>. 
+Each line between these delimitters is in the form: variable\-name value. 
+The format of the value is determined by the type of the variable. 
+.PP
+There are 7 types: 
+.PP
+.TP
+\fIFQDN\fP
+ A fully\-qualified domain name text string. e.g.: www.eurid.eu. 
+.TP
+\fIGID\fP
+ Group ID. (Can be a number or a name) 
+.TP
+\fIHOST(S)\fP
+ A (list of) host(s). A host is defined by an IP (v4 or v6) and can be followed by the word `port\&' and a port number. Elements of the list are separated by a `,\&' or a `;\&'\&. 
+.TP
+\fIINTEGER / INT\fP
+ A base\-ten integer. 
+.TP
+\fIPATH / FILE\fP
+ A file or directory path. i.e.: "/var/plans". 
+.TP
+\fISTRING / STR\fP
+ A text string. Double quotes can be used but are not mandatory. Without quotes the string will be taken from the first non\-blank charater to the last non\-blank character. 
+.TP
+\fIUID\fP
+ User ID. (Can be a number or a name) 
+.PP
+.SS STANDARD SECTIONS
+.PP
+There are 9 sections: 
+.PP
+.TP
+\fB<yakeyrolld>\fP
+ General container, contains all the configuration parameters needed to start up yakeyrolld\&.
+.RS
+.TP
+\fBdomain \fP\fI FQDN \fP
+ default: \&. 
+
+Names one domain to manage, can be used up to 200 times. In yadifad.conf, each of these domains must have rrsig\-nsupdate\-allowed enabled in their respective <zone> section. 
+.TP
+\fBlog\-path \fP\fI PATH \fP
+ default: ${localstatedir}/log/yakeyrolld 
+
+The directory that will contain the log files. 
+.TP
+\fBkeys\-path \fP\fI PATH \fP
+ default: ${localstatedir}/zones/keys 
+
+The directory the name server uses to read zone key file. 
+.TP
+\fBplan\-path \fP\fI PATH \fP
+ default: ${localstatedir}/plans 
+
+The directory of the step files. 
+.TP
+\fBpid\-path \fP\fI PATH \fP
+ default: ${localstatedir}/run 
+
+The directory of the pid file. 
+.TP
+\fBpid\-file \fP\fI STRING \fP
+ default: yakeyrolld.pid 
+
+The name of the pid file. 
+.TP
+\fBgenerate\-from \fP\fI STRING \fP
+ default: "now" 
+
+For plan generation, when to start the plan, can be overridden by the command line. 
+.TP
+\fBgenerate\-until \fP\fI STRING \fP
+ default: "+1y" 
+
+For plan generation, when to stop the plan, can be overridden by the command line. 
+.TP
+\fBserver \fP\fI HOST \fP
+ default: 127.0.0.1 
+
+The address of the name server for queries and dynamic updates. 
+.TP
+\fBtimeout \fP\fI INT \fP
+ default: 3 
+
+The number of seconds spent trying to communicate with the master until it\&'s considered a time\-out. 
+.TP
+\fBttl \fP\fI INT \fP
+ default: 600 
+
+The default \fIttl\fP
+value to use when generating records. 
+.TP
+\fBupdate\-apply\-verify\-retries \fP\fI INT \fP
+ default: 60 
+
+If an update isn\&'t checked successfully, retries that many times. 
+.TP
+\fBupdate\-apply\-verify\-retries\-delay \fP\fI INT \fP
+ default: 1 
+
+Waits that many seconds between two update apply tries. 
+.TP
+\fBmatch\-verify\-retries \fP\fI INT \fP
+ default: 60 
+
+If a match test fails, retries that many times. 
+.TP
+\fBmatch\-verify\-retries\-delay \fP\fI INT \fP
+ default: 1 
+
+Waits that many seconds between two match test tries. 
+.TP
+\fBpolicy \fP\fI STRING \fP
+ default: undefined 
+
+The name of the policy to use when generating the plan. 
+.TP
+\fBuid \fP\fI UID \fP
+ default: 0 
+
+The uid to swich to. This should match the name server\&'s. 
+.TP
+\fBgid \fP\fI GID \fP
+ default: 0 
+
+The gid to swich to. This should match the name server\&'s. 
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<dnssec\-policy>\fP
+ Description of dnssec policies. 
+.PP
+.RS
+.TP
+\fBid \fP\fISTR \fP
+ default: \- 
+
+\fIid\fP
+of the dnssec\-policy section. 
+.TP
+\fBdescription \fP\fISTR \fP
+ default: \- 
+
+Description for the dnssec\-policy section. 
+.TP
+\fBkey\-suite \fP\fISTR \fP
+ default: \- 
+
+\fIid\fP
+of the \fIkey\-suite\fP
+to be used. 
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<key\-suite>\fP
+ Description of the key\-suites needed if \&'dnssec policies\&' are used. 
+.PP
+.RS
+.TP
+\fBid \fP\fISTR \fP
+ default: \- 
+
+\fIid\fP
+of the key\-suite section. 
+.TP
+\fBkey\-template \fP\fISTR \fP
+ default: \- 
+
+\fIid\fP
+of the \fIkey\-template\fP
+to be used. 
+.TP
+\fBkey\-roll \fP\fISTR \fP
+ default: \- 
+
+\fIid\fP
+of the \fIkey\-roll\fP
+to be used. 
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<key>\fP
+ TSIG keys 
+.PP
+.RS
+.TP
+\fBalgorithm \fP\fIENUM \fP
+ default: \- 
+
+Mandatory. Sets the algorithm of the key. 
+
+.RS
+.PP
+Supported values are: 
+.RS
+.RE
+.TP
+\fB \fP\fB \fP\fB \fP\fIhmac\-md5\fP
+.TP
+\fB \fP\fB \fP\fB \fP\fIhmac\-sha1\fP
+.TP
+\fB \fP\fB \fP\fB \fP\fIhmac\-sha224\fP
+.TP
+\fB \fP\fB \fP\fB \fP\fIhmac\-sha256\fP
+.TP
+\fB \fP\fB \fP\fB \fP\fIhmac\-sha384\fP
+.TP
+\fB \fP\fB \fP\fB \fP\fIhmac\-sha512\fP
+.RE
+.RS
+.PP
+(the algorithm names are case insensitive)} 
+.RE
+.TP
+\fBname \fP\fIFQDN \fP
+ default: \- 
+
+Mandatory. Sets the name of the key. 
+.TP
+\fBsecret \fP\fITEXT \fP
+ default: \- 
+
+Mandatory. Sets the value of the key. BASE64 encoded. 
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<key\-roll>\fP
+ Description of the key\-rolls needed if \&'dnssec policies\&' are used. 
+.PP
+.RS
+.TP
+\fBid \fP\fISTR \fP
+ default: \- 
+
+\fIid\fP
+of the key\-roll section. 
+.TP
+\fBgenerate \fP\fISTR \fP
+ default: \- 
+
+Time when the key must be generated. 
+.TP
+\fBpublish \fP\fISTR \fP
+ default: \- 
+
+Time when the key must be published in the zone. 
+.TP
+\fBactivate \fP\fISTR \fP
+ default: \- 
+
+Time when the key will be used for signing the zone or apex of the zone. 
+.TP
+\fBinactive \fP\fISTR \fP
+ default: \- 
+
+Time when the key will not be used anymore for signing. 
+.TP
+\fBdelete \fP\fISTR \fP
+ default: \- 
+
+Time when the key will be removed out of the zone. 
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<key\-template>\fP
+ Description of the key\-templates needed if \&'dnssec policies\&' are used. 
+.PP
+.RS
+.TP
+\fBid \fP\fISTR \fP
+ default: \- 
+
+\fIid\fP
+of the key\-roll section. 
+.TP
+\fBgenerate \fP\fISTR \fP
+ default: \- 
+
+Time when the key must be generated. 
+.TP
+\fBpublish \fP\fISTR \fP
+ default: \- 
+
+Time when the key must be published in the zone. 
+.TP
+\fBactivate \fP\fISTR \fP
+ default: \- 
+
+Time when the key will be used for signing the zone or apex of the zone. 
+.TP
+\fBinactive \fP\fISTR \fP
+ default: \- 
+
+Time when the key will not be used anymore for signing. 
+.TP
+\fBdelete \fP\fISTR \fP
+ default: \- 
+
+Time when the key will be removed out of the zone. 
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<channels>\fP
+ Description of the logger outputs. 
+.PP
+It contains a list descriptions of user\-defined outputs for the logger. 
+Depending on the kind of output, the format is different. 
+.PP
+The "name" is arbitrary and is used for identification in the <loggers>.
+.br
+The "stream\-name" defines the output type (i.e.: a file name, a program output or syslog).
+.br
+The "arguments" are specific to the output type (i.e.: unix file access rights or syslog options and facilities).
+.br
+.PP
+.RS
+.TP
+.B *
+file output stream 
+channel\-name file\-name access\-rights (octal). 
+.TP
+.B *
+pipe to a program 
+channel\-name "| shell command" 
+channel\-name "| path\-to\-program program arguments >> append\-redirect" 
+.TP
+.B *
+STDOUT, STDERR output stream 
+channel\-name stdout 
+channel\-name stderr 
+.TP
+.B *
+syslog 
+channel\-name syslog syslog\-facility 
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<loggers>\fP
+ Description of the logger outputs sources. 
+.PP
+Sets the output of a pre\-defined logger for yakeyrolld.
+.br
+.PP
+The format of the line is: 
+logger\-name output\-filter comma\-separated\-channel\-names 
+.br
+.PP
+Filters are:
+.br
+\fIDEBUG7\fP,
+\fIDEBUG6\fP,
+\fIDEBUG5\fP,
+\fIDEBUG4\fP,
+\fIDEBUG3\fP,
+\fIDEBUG2\fP,
+\fIDEBUG1\fP,
+\fIDEBUG\fP,
+\fIINFO\fP,
+\fINOTICE\fP,
+\fIWARNING\fP,
+\fIERR\fP,
+\fICRIT\fP,
+\fIALERT\fP,
+\fIEMERG\fP
+.br
+.PP
+Additionally, there are: 
+.br
+.PP
+.RS
+.TP
+.B *
+\fIALL\fP (or \&'\fI*\fP\&') meaning all the filters.
+.TP
+.B *
+\fIPROD\fP means all but the DEBUG filters.
+.RE
+.RS
+.PP
+The defined loggers are: 
+.br
+.PP
+.RS
+.RE
+.TP
+\fBkeyroll\fP
+ contains general messages about the keyroll 
+.TP
+\fBdnssec\fP
+ contains messages about DNSSEC\-related computations during the generation. 
+.TP
+\fBsystem\fP
+ contains low level messages about the system such as memory allocation, threading, IOs, timers and cryptography, \&.\&.\&. 
+.RE
+.RS
+.PP
+System operators will mostly be interested in the info and above messages of the keyroll and dnssec loggers. 
+.PP
+.RE
+.PP
+.SH EXAMPLES
+
+.PP
+Examples of containers defined for a configuration file. 
+.PP
+.TP
+.B *
+Main 
+.RS
+.TP
+1.
+Config with includes 
+.RS
+.PP
+.Vb
+# start yakeyrolld.conf <yakeyrolld> container
+include /etc/yakeyrolld/conf.d/local.conf
+# end yakeyrolld.conf <yakeyrolld> container
+.Ve
+.PP
+.RE
+.TP
+2.
+Main without includes 
+.RS
+.PP
+.Vb
+<yakeyrolld>
+    # Detach from the console (alias: daemonize)
+    daemon                  off
+
+    # The directory to use for the log files
+    log\-path                 "/var/log/yakeyrolld"
+
+    # The directory that yadifad uses to load private keys
+    keys\-path                "/var/lib/yadifa/keys"
+
+    # The directory to use to store the plans
+    plan\-path                "/var/lib/yadifa/plans"
+
+    generate\-from "now"
+
+    generate\-until "+1y"
+
+    server 127.0.0.1
+
+    policy "keyroll\-policy"
+</yakeyrolld>
+.Ve
+.RE
+.RE
+.RS
+.PP
+.RE
+.TP
+.B *
+Key
+.br 
+TSIG\-key configuration
+.br
+.PP
+.RS
+.TP
+1.
+Admin\-key key definition (the name is arbitrary) 
+.RS
+.PP
+.Vb
+<key>
+    name        abroad\-admin\-key
+    algorithm   hmac\-md5
+    secret      WorthlessKeyForExample==
+</key>
+.Ve
+.PP
+.RE
+.TP
+2.
+Master\-slave key definition 
+.RS
+.PP
+.Vb
+<key>
+    name        master\-slave
+    algorithm   hmac\-md5
+    secret      MasterAndSlavesTSIGKey==
+</key>
+.Ve
+.RE
+.RE
+.RS
+.PP
+.RE
+.TP
+.B *
+DNSSEC\-Policy 
+.PP
+DNSSEC\-Policy needs some extra sections: key\-suite, key\-roll, key\-template 
+.PP
+.RS
+.TP
+1.
+dnssec\-policy example with all the needed sections 
+.Vb
+<dnssec\-policy>
+    id              "keyroll\-policy"
+
+    description     "Example of ZSK and KSK"
+    key\-suite       "zsk\-1024"
+    key\-suite       "ksk\-2048"
+</dnssec\-policy>
+.Ve
+.RS
+.PP
+.RE
+.TP
+2.
+key\-suite 
+.Vb
+<key\-suite>                     
+    id              "ksk\-2048"
+
+    key\-template    "ksk\-2048"
+    key\-roll        "yearly\-calendar"
+</key\-suite>                            
+
+<key\-suite>                     
+    id              "zsk\-1024"
+
+    key\-template    "zsk\-1024"
+    key\-roll        "monthly\-calendar"
+</key\-suite>                            
+.Ve
+.TP
+3.
+key\-roll 
+.Vb
+<key\-roll>
+    id                 "yearly\-calendar"
+
+    generate            11        10           *                   1            mon             1 # Januay, Monday of the second week at 10:11
+    publish             11        10           *                   1            tue             * # following Tuesday at 10:11
+    activate            11        10           *                   1            wed             * # following Wednesday at 10:11
+    inactive            11        10           *                   1            mon             * # following Monday, a year after, at 10:11
+    remove              11        10           *                   1            wed             * # following Wednesday at 10:11
+</key\-roll>
+
+<key\-roll>
+    id                 "monthly\-calendar"
+
+    generate            17        10           *                   *            mon             0 # 1st monday the month at 10:17
+    publish             17        10           *                   *            tue             * # following tuesday at 10:17
+    activate            17        10           *                   *            wed             * # following wednesday at 10:17
+    inactive            17        10           *                   *            wed             * # following wednesday at 10:17 (one week after the activation)
+    remove              17        10           *                   *            thu             * # following thursday at 10:17
+</key\-roll>
+.Ve
+.TP
+4.
+key\-template 
+.Vb
+<key\-template>
+    id              "ksk\-2048"
+
+    ksk             true
+    algorithm       RSASHA512
+    size            2048
+</key\-template>
+
+<key\-template>
+    id              "zsk\-1024"
+
+    ksk             false
+    algorithm       RSASHA512
+    size            1024
+</key\-template>
+.Ve
+.RS
+.PP
+.RE
+.RE
+.RS
+.PP
+.RE
+.TP
+.B *
+Channels 
+.PP
+Logging output\-channel configurations: 
+.PP
+It contains a list of user\-defined outputs for the logger. 
+.PP
+The "name" is arbitrary and is used for identification in the <loggers>.
+.br
+The "stream\-name" defines the output type (i.e.: a file name, a program output or syslog).
+.br
+The "arguments" are specific to the output type (i.e.: unix file access rights or syslog options and facilities).
+.br
+.PP
+.RS
+.RS
+.PP
+.RE
+.TP
+1.
+Example: logging channels definition.
+.br 
+.RS
+.PP
+.Vb
+<channels>
+#   name        stream\-name     arguments
+    keyroll     keyroll.log     0644
+    dnssec      dnssec.log      0644
+    system      system.log      0644
+    all         all.log         0644
+</channels>
+.Ve
+.PP
+.RE
+.RE
+.RS
+.PP
+.RE
+.TP
+.B *
+Loggers 
+.PP
+Logging input configurations: 
+.PP
+The "bundle" is the name of the section of yakeyroll being logged, sources are : database, dnssec, queries, server, stats, system, zone.
+.br
+The "debuglevel" uses the same names as syslog. 
+.br
+Additionally, "*" or "all" means all the levels; "prod" means all but the debug levels. 
+.br
+.PP
+The "channels" are a comma\-separated list of channels. 
+.PP
+.RS
+.TP
+1.
+Example logger configuration 
+.RS
+.PP
+.Vb
+<loggers>
+#   bundle          debuglevel                          channels
+    keyroll         prod                                keyroll,all
+    dnssec          prod                                dnssec,all
+    system          prod                                system,all
+</loggers>
+.Ve
+.PP
+.RE
+.RE
+.RS
+.PP
+.RE
+.PP
+.SH SEE ALSO
+
+.PP
+\fIyakeyrolld\fP(8)
+.PP
+.SH NOTES
+
+.PP
+Since unquoted leading whitespace is generally ignored in the yadifad.conf
+you can indent everything to taste. 
+.PP
+.SH CHANGES
+
+.PP
+Please check the file README
+from the sources. 
+.PP
+.SH VERSION
+
+.PP
+Version: 2.4.0 of 2020\-10\-12. 
+.PP
+.SH MAILING LISTS
+
+.PP
+There exists a mailinglist for questions relating to any program in the yadifa package:
+.br
+.TP
+.B *
+\fByadifa\-users@mailinglists.yadifa.eu\fP
+.br
+for submitting questions/answers. 
+.PP
+.TP
+.B *
+\fBhttp://www.yadifa.eu/mailing\-list\-users\fP
+.br
+for subscription requests. 
+.PP
+If you would like to stay informed about new versions and official patches send a subscription request to 
+via: 
+.TP
+.B *
+\fBhttp://www.yadifa.eu/mailing\-list\-announcements\fP
+.PP
+(this is a readonly list). 
+.PP
+.SH LICENSE AND COPYRIGHT
+
+.PP
+.TP
+Copyright 
+(C)2011\-2020, EURid
+.br
+B\-1831 Diegem, Belgium
+.br
+\fBinfo@yadifa.eu\fP
+.PP
+.SH AUTHORS
+
+.PP
+Gery Van Emelen 
+.br
+Email: \fBGery.VanEmelen@EURid.eu\fP
+.br
+Eric Diaz Fernandez 
+.br
+Email: \fBEric.DiazFernandez@EURid.eu\fP
+.PP
+WWW: \fBhttp://www.EURid.eu\fP
+.PP
+.\" NOTE: This file is generated, DO NOT EDIT.

@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup alarm
  *  @ingroup dnscore
  *  @brief Alarm functions
@@ -38,17 +39,19 @@
  * @{
  */
 
+#include <dnscore/timems.h>
 #include "dnscore/dnscore-config.h"
 #include "dnscore/logger.h"
 #include "dnscore/alarm.h"
 #include "dnscore/mutex.h"
 #include "dnscore/zalloc.h"
-#ifdef DEBUG
+#if DEBUG
 #include "dnscore/timeformat.h"
 #endif // DEBUG
 
+#define HAS_ALARM_DUMP 0
+
 #define MODULE_MSG_HANDLE g_system_logger
-extern logger_handle *g_system_logger;
 
 /*
  * List of events (double-linked), sorted by epoch (then insersion time).
@@ -93,13 +96,13 @@ struct alarm_time_node
 
 typedef struct alarm_time_node alarm_time_node;
 
-static ptr_vector alarm_handles = EMPTY_PTR_VECTOR;
+static ptr_vector alarm_handles = PTR_VECTOR_EMPTY;
 static alarm_time_node doomsday = { NULL, {NULL, NULL}, MAX_U32 }; // nothing after this point
 static alarm_time_node time_list = { &doomsday, {NULL, NULL}, 0 };
-static pthread_mutex_t alarm_mutex = PTHREAD_MUTEX_INITIALIZER;
+static mutex_t alarm_mutex = MUTEX_INITIALIZER;
 static int alarm_handles_next_free = -1;
-#ifdef DEBUG
-static volatile bool alarm_pthread_mutex_locked = FALSE;
+#if DEBUG
+static volatile bool alarm_mutex_locked = FALSE;
 static volatile u32 alarm_event_in_handles_count = 0;
 static volatile u32 alarm_event_in_time_count = 0;
 static volatile u32 alarm_event_alarm_set_count = 0;
@@ -109,6 +112,14 @@ static smp_int alarm_event_instanciated = SMP_INT_INITIALIZER;
 static void alarm_handle_close(alarm_handle *handle_struct);
 
 /**/
+
+#if HAS_ALARM_DUMP
+void alarm_log_dump_nolock(bool check);
+void alarm_log_dump();
+#endif
+
+struct timespec __alarm__approximate_time_10s = { 0, 0 };
+struct timespec __alarm__approximate_time_30s = { 0, 0 };
 
 /**
  * Allocates an uninitialised event node.
@@ -120,9 +131,9 @@ static alarm_event_node *
 alarm_event_alloc()
 {
     alarm_event_node *node;
-    ZALLOC_OR_DIE(alarm_event_node*, node, alarm_event_node, ALARM_NODE_DESC_TAG);
+    ZALLOC_OBJECT_OR_DIE(node, alarm_event_node, ALARM_NODE_DESC_TAG);
 
-#ifdef DEBUG
+#if DEBUG
     memset(node, 0xac,sizeof(alarm_event_node));
     int total = smp_int_inc_get(&alarm_event_instanciated);
     log_debug6("alarm_event_alloc(%p) (total=%d)", node, total);
@@ -161,7 +172,7 @@ alarm_event_new(
     event->flags = flags;
     event->text = text;
     
-#ifdef DEBUG
+#if DEBUG
     int total = smp_int_get(&alarm_event_instanciated);
     log_debug6("alarm_event_new(%p %08x '%s' %T) (total=%d)", event, event->key, event->text, event->epoch, total);
 #endif
@@ -178,12 +189,12 @@ alarm_event_new(
 void
 alarm_event_free(alarm_event_node *node)
 {
-#ifdef DEBUG
+#if DEBUG
     int total = smp_int_dec_get(&alarm_event_instanciated);
     log_debug6("alarm_event_free(%p %08x '%s' %T) (total=%d)", node, node->key, node->text, node->epoch, total);
     memset(node, 0xfe,sizeof(alarm_event_node));
 #endif
-    ZFREE(node, alarm_event_node);
+    ZFREE_OBJECT(node);
 }
 
 static void
@@ -192,7 +203,7 @@ alarm_event_list_init(alarm_event_list *head)
     head->first = alarm_event_alloc();
     head->last = head->first;
     ZEROMEMORY(head->first, sizeof(alarm_event_node));
-#ifdef DEBUG
+#if DEBUG
     head->first->text = "ALARM EVENT LIST SENTINEL";
 #endif
 }
@@ -206,7 +217,7 @@ alarm_event_list_finalize(alarm_event_list *head)
         head->first = NULL;
         head->last = NULL;
     }
-#ifdef DEBUG
+#if DEBUG
     else
     {
         log_warn("alarm_event_list_finalize called on an non-empty list");
@@ -217,7 +228,7 @@ alarm_event_list_finalize(alarm_event_list *head)
 static bool
 alarm_event_list_isempty(alarm_event_list *head)
 {
-    assert(alarm_pthread_mutex_locked);
+    assert(alarm_mutex_locked);
     
     return head->first == head->last;
 }
@@ -225,7 +236,7 @@ alarm_event_list_isempty(alarm_event_list *head)
 static alarm_event_node *
 alarm_event_list_removefirst(alarm_event_list *time_event)
 {
-    assert(alarm_pthread_mutex_locked);
+    assert(alarm_mutex_locked);
     assert(!alarm_event_list_isempty(time_event));
     assert((time_event->first != NULL) && (time_event->last != NULL));
     
@@ -237,7 +248,7 @@ alarm_event_list_removefirst(alarm_event_list *time_event)
     time_event->first = time_node->time_next;
     time_event->first->time_prev = NULL;
     
-#ifdef DEBUG
+#if DEBUG
     --alarm_event_in_time_count;
 #endif
 
@@ -261,7 +272,7 @@ alarm_event_list_removefirst(alarm_event_list *time_event)
     
     time_node->hndl_next->hndl_prev = time_node->hndl_prev;
     
-#ifdef DEBUG
+#if DEBUG
     
     time_node->hndl_next = (alarm_event_node*)~0;
     time_node->hndl_prev = (alarm_event_node*)~0;
@@ -272,7 +283,7 @@ alarm_event_list_removefirst(alarm_event_list *time_event)
     --alarm_event_in_handles_count;
 #endif
     
-#ifdef DEBUG
+#if DEBUG
     log_debug6("alarm_event_list_removefirst(%p %08x '%s' %T)", time_node, time_node->key, time_node->text, time_node->epoch);
 #endif
 
@@ -286,13 +297,13 @@ alarm_event_list_removefirst(alarm_event_list *time_event)
 static void
 alarm_event_append(alarm_event_list *handle_list, alarm_event_list *time_list, alarm_event_node *node)
 {
-    assert(alarm_pthread_mutex_locked);
+    assert(alarm_mutex_locked);
     
     /*
      * List not empty ?
      */
     
-#ifdef DEBUG
+#if DEBUG
     log_debug6("alarm_event_append(%p,%p,%p %08x '%s' %T)", handle_list, time_list, node, node->key, node->text, node->epoch);
 #endif
     
@@ -316,7 +327,7 @@ alarm_event_append(alarm_event_list *handle_list, alarm_event_list *time_list, a
         node->hndl_prev = NULL;                     // 0<->F<->L
     }
     
-#ifdef DEBUG
+#if DEBUG
     ++alarm_event_in_handles_count;
 #endif
     
@@ -336,7 +347,7 @@ alarm_event_append(alarm_event_list *handle_list, alarm_event_list *time_list, a
         node->time_prev = NULL;
     }
     
-#ifdef DEBUG
+#if DEBUG
     ++alarm_event_in_time_count;
 #endif
 }
@@ -353,11 +364,11 @@ alarm_event_append(alarm_event_list *handle_list, alarm_event_list *time_list, a
 static void
 alarm_event_remove(alarm_event_list *handle_list, alarm_event_list *time_list, alarm_event_node *node)
 {
-    assert(alarm_pthread_mutex_locked);
+    assert(alarm_mutex_locked);
     assert(time_list != NULL);
     assert(node != NULL);
     
-#ifdef DEBUG
+#if DEBUG
     log_debug6("alarm_event_remove(%p,%p,%p %08x '%s' %T)", handle_list, time_list, node, node->key, node->text, node->epoch);
 #endif
     
@@ -372,7 +383,7 @@ alarm_event_remove(alarm_event_list *handle_list, alarm_event_list *time_list, a
     
     node->hndl_next->hndl_prev = node->hndl_prev;           // 0/A<-?B
     
-#ifdef DEBUG
+#if DEBUG
     --alarm_event_in_handles_count;
 #endif    
 
@@ -390,7 +401,7 @@ alarm_event_remove(alarm_event_list *handle_list, alarm_event_list *time_list, a
 
     node->time_next->time_prev = node->time_prev;
     
-#ifdef DEBUG
+#if DEBUG
     
     node->hndl_next = (alarm_event_node*)~0;
     node->hndl_prev = (alarm_event_node*)~0;
@@ -407,14 +418,14 @@ static alarm_time_node *
 alarm_time_alloc()
 {
     alarm_time_node *time_node;
-    ZALLOC_OR_DIE(alarm_time_node*, time_node, alarm_time_node, ALARM_NODE_TIME_TAG);
+    ZALLOC_OBJECT_OR_DIE(time_node, alarm_time_node, ALARM_NODE_TIME_TAG);
 
-#ifdef DEBUG
-    memset(time_node, 0xff,sizeof(alarm_time_node));
+#if DEBUG
+    memset(time_node, 0xf0,sizeof(alarm_time_node));
     log_debug6("alarm_time_alloc() = %p", time_node);
 #endif
 
-    assert(alarm_pthread_mutex_locked);
+    assert(alarm_mutex_locked);
     
     alarm_event_list_init(&time_node->events); /* newly allocated : NO LOCK */
 
@@ -425,16 +436,16 @@ alarm_time_alloc()
 static void
 alarm_time_free(alarm_time_node *time_node)
 {
-    assert(alarm_pthread_mutex_locked);
+    assert(alarm_mutex_locked);
     assert(time_node->events.first == time_node->events.last);
-#ifdef DEBUG
+#if DEBUG
     log_debug6("alarm_time_free(%p)", time_node);
     
     alarm_event_list_finalize(&time_node->events);
     
     memset(time_node, 0xfe,sizeof(alarm_time_node));
 #endif
-    ZFREE(time_node, alarm_time_node);
+    ZFREE_OBJECT(time_node);
 }
 
 /*
@@ -444,7 +455,7 @@ alarm_time_free(alarm_time_node *time_node)
 static alarm_time_node *
 alarm_time_get(u32 epoch)
 {
-    assert(alarm_pthread_mutex_locked);
+    assert(alarm_mutex_locked);
     assert(epoch != MAX_U32);
 
     alarm_time_node *time_node = time_list.next;
@@ -456,14 +467,14 @@ alarm_time_get(u32 epoch)
 
     if(time_node->epoch == epoch)
     {
-#ifdef DEBUG
+#if DEBUG
         log_debug6("alarm_time_get(%T) = %p", epoch, time_node);
 #endif
         return time_node;
     }
     else
     {
-#ifdef DEBUG
+#if DEBUG
         log_debug6("alarm_time_get(%T) = %p", epoch, NULL);
 #endif
         return NULL;
@@ -473,9 +484,14 @@ alarm_time_get(u32 epoch)
 static alarm_time_node *
 alarm_time_create(u32 epoch)
 {
-    assert(alarm_pthread_mutex_locked);
-    assert(epoch > 0);
+    assert(alarm_mutex_locked);
+
     assert(epoch != MAX_U32);
+    if(epoch == 0)
+
+    {
+        epoch = time(NULL);
+    }
         
     alarm_time_node *time_prev = &time_list;
     alarm_time_node *time_node = time_list.next;
@@ -494,7 +510,7 @@ alarm_time_create(u32 epoch)
 
     if(time_node->epoch == epoch)
     {
-#ifdef DEBUG
+#if DEBUG
         log_debug6("alarm_time_create(%T) = %p", epoch, time_node);
 #endif
 
@@ -508,7 +524,7 @@ alarm_time_create(u32 epoch)
         new_time_node->next = time_node;
         new_time_node->epoch = epoch;
 
-#ifdef DEBUG
+#if DEBUG
         log_debug6("alarm_time_create(%T) = %p", epoch, new_time_node);
 #endif
 
@@ -524,16 +540,22 @@ alarm_init()
         ptr_vector_resize(&alarm_handles, 64);
 
         alarm_event_list_init(&time_list.events); /* init: NO LOCK */
+
+        s32 now_s = time(NULL);
+        now_s += 10;
+        __alarm__approximate_time_10s.tv_sec = now_s;
+        now_s += 20;
+        __alarm__approximate_time_30s.tv_sec = now_s;
     }
 }
 
 void
-alarm_finalise()
+alarm_finalize()
 {
-    ptr_vector to_close = EMPTY_PTR_VECTOR;
-    pthread_mutex_lock(&alarm_mutex);
-#ifdef DEBUG
-    alarm_pthread_mutex_locked = TRUE;
+    ptr_vector to_close = PTR_VECTOR_EMPTY;
+    mutex_lock(&alarm_mutex);
+#if DEBUG
+    alarm_mutex_locked = TRUE;
     
     log_debug("alarm: %u handles, %u times, %u sets, %i events",
             alarm_event_in_handles_count,
@@ -541,15 +563,17 @@ alarm_finalise()
             alarm_event_alarm_set_count,
             smp_int_get(&alarm_event_instanciated));
 #endif
-    
-    if(ptr_vector_size(&alarm_handles) > 0)
+
+    if(ptr_vector_size(&alarm_handles) > 0) // guarantees ptr_vector_last_index(&alarm_handles); is >= 0
     {
-        for(int i = 0; i <= ptr_vector_last_index(&alarm_handles); ++i)
+        intptr alarm_handles_last_index = (intptr)ptr_vector_last_index(&alarm_handles);
+        for(intptr i = 0; i <= alarm_handles_last_index; ++i)
         {
             alarm_handle *handle_struct = (alarm_handle*)ptr_vector_get(&alarm_handles, i);
-            if((intptr)handle_struct > ptr_vector_last_index(&alarm_handles) && (intptr)handle_struct != ALARM_HANDLE_INVALID)
+
+            if(((intptr)handle_struct > alarm_handles_last_index) && ((intptr)handle_struct != (intptr)ALARM_HANDLE_INVALID))
             {
-#ifdef DEBUG
+#if DEBUG
                 log_err("alarm: handle %i was not closed at shutdown", i);
 #else
                 log_debug("alarm: handle %i was not closed at shutdown", i);
@@ -558,7 +582,7 @@ alarm_finalise()
             }
         }
         
-        pthread_mutex_unlock(&alarm_mutex);    
+        mutex_unlock(&alarm_mutex);    
         
         for(int i = 0; i <= ptr_vector_last_index(&to_close); ++i)
         {
@@ -566,7 +590,7 @@ alarm_finalise()
             alarm_handle_close(handle_struct);
         }
         
-        pthread_mutex_lock(&alarm_mutex);
+        mutex_lock(&alarm_mutex);
         
         if(alarm_event_list_isempty(&time_list.events))
         {
@@ -576,38 +600,39 @@ alarm_finalise()
         {
             log_debug("alarm: event list not empty");
         }
-        
-        ptr_vector_destroy(&alarm_handles);
     }
+    
+    ptr_vector_destroy(&alarm_handles);
 
-#ifdef DEBUG
-    alarm_pthread_mutex_locked = FALSE;
+#if DEBUG
+    alarm_mutex_locked = FALSE;
 #endif
-    pthread_mutex_unlock(&alarm_mutex);    
+    mutex_unlock(&alarm_mutex);    
 }
 
 alarm_t
 alarm_open(const u8 *owner_dnsname)
 {
     alarm_handle *handle_struct;
-    ZALLOC_OR_DIE(alarm_handle*, handle_struct, alarm_handle, ALARM_HANDLE_TAG);
+    ZALLOC_OBJECT_OR_DIE(handle_struct, alarm_handle, ALARM_HANDLE_TAG);
 
-#ifdef DEBUG
+#if DEBUG
     memset(handle_struct, 0xac, sizeof(alarm_handle));
 #endif
 
     alarm_event_list_init(&handle_struct->events); /* newly allocated: NO LOCK */
+    handle_struct->owner_dnsname = owner_dnsname;
 
-    pthread_mutex_lock(&alarm_mutex);
-#ifdef DEBUG
-    alarm_pthread_mutex_locked = TRUE;
+    mutex_lock(&alarm_mutex);
+#if DEBUG
+    alarm_mutex_locked = TRUE;
 #endif
     
     intptr h;
     
     if(alarm_handles_next_free >= 0)
     {
-        h = alarm_handles_next_free;
+        h = (intptr)alarm_handles_next_free;    // unsigned value
         // get the next one if any
         alarm_handles_next_free = (intptr)ptr_vector_get(&alarm_handles, h);
         ptr_vector_set(&alarm_handles, (intptr)h, handle_struct);
@@ -618,13 +643,11 @@ alarm_open(const u8 *owner_dnsname)
         h = (intptr)alarm_handles.offset;
     }
     
-#ifdef DEBUG
-    alarm_pthread_mutex_locked = FALSE;
+#if DEBUG
+    alarm_mutex_locked = FALSE;
 #endif
-    pthread_mutex_unlock(&alarm_mutex);
+    mutex_unlock(&alarm_mutex);
 
-    handle_struct->owner_dnsname = owner_dnsname;
-    
     log_debug("alarm_open(%{dnsname}) opened alarm with handle %x", handle_struct->owner_dnsname, (int)h);
     
     return (alarm_t)h;
@@ -633,13 +656,13 @@ alarm_open(const u8 *owner_dnsname)
 static alarm_handle *
 alarm_get_struct_from_handle(alarm_t hndl)
 {
-    assert(alarm_pthread_mutex_locked);
+    assert(alarm_mutex_locked);
     
-    if(hndl > alarm_handles.offset || hndl < 0)
+    if((hndl > alarm_handles.offset) || (hndl < 0))
     {
         /* ERROR ! */
 
-#ifdef DEBUG
+#if DEBUG
         log_debug("invalid alarm handle: %x", hndl);
 #endif
 
@@ -654,13 +677,13 @@ alarm_get_struct_from_handle(alarm_t hndl)
 static void
 alarm_clear_struct_from_handle(alarm_t hndl)
 {
-    assert(alarm_pthread_mutex_locked);
+    assert(alarm_mutex_locked);
     
-    if(hndl > alarm_handles.offset || hndl < 0)
+    if((hndl > alarm_handles.offset) || (hndl < 0))
     {
         /* ERROR ! */
 
-#ifdef DEBUG
+#if DEBUG
         log_debug("invalid alarm handle: %x", hndl);
 #endif
 
@@ -675,7 +698,10 @@ static void
 alarm_handle_close(alarm_handle *handle_struct)
 {    
     alarm_event_node *node = handle_struct->events.first;
-#ifdef DEBUG
+#if DEBUG
+#if HAS_ALARM_DUMP
+    alarm_log_dump_nolock(FALSE);
+#endif
     u32 removed_events = 0;
 #endif
     
@@ -698,7 +724,7 @@ alarm_handle_close(alarm_handle *handle_struct)
                 obsolete_times = TRUE;
             }
             
-#ifdef DEBUG
+#if DEBUG
             ++removed_events;
 #endif
         }
@@ -714,6 +740,12 @@ alarm_handle_close(alarm_handle *handle_struct)
     }
     
     // clear the obsolete times
+    
+#if DEBUG
+#if HAS_ALARM_DUMP
+    alarm_log_dump_nolock(FALSE);
+#endif
+#endif
     
     if(obsolete_times)
     {
@@ -737,7 +769,7 @@ alarm_handle_close(alarm_handle *handle_struct)
         }
     }
     
-#ifdef DEBUG
+#if DEBUG
     log_debug("alarm_handle_close(%p) removed %u events for %{dnsname}",
             handle_struct,
             removed_events,
@@ -745,9 +777,12 @@ alarm_handle_close(alarm_handle *handle_struct)
 
     memset(handle_struct, 0xe4, sizeof(alarm_event_list));
     
+#if HAS_ALARM_DUMP
+    alarm_log_dump_nolock(FALSE);
+#endif
 #endif
 
-    ZFREE(handle_struct, alarm_handle);    
+    ZFREE_OBJECT(handle_struct);
 }
 
 void 
@@ -758,19 +793,19 @@ alarm_close(alarm_t hndl)
         return;
     }
     
-   pthread_mutex_lock(&alarm_mutex);    
+   mutex_lock(&alarm_mutex);    
     
-#ifdef DEBUG
-    alarm_pthread_mutex_locked = TRUE;
+#if DEBUG
+    alarm_mutex_locked = TRUE;
 #endif
     alarm_handle *handle_struct = alarm_get_struct_from_handle(hndl);
     
     if(handle_struct == NULL)
     {
-#ifdef DEBUG
-        alarm_pthread_mutex_locked = FALSE;
+#if DEBUG
+        alarm_mutex_locked = FALSE;
 #endif
-        pthread_mutex_unlock(&alarm_mutex);
+        mutex_unlock(&alarm_mutex);
         
         log_err("alarm_close(%x) invalid alarm handle", hndl);
 
@@ -783,20 +818,20 @@ alarm_close(alarm_t hndl)
     
     alarm_clear_struct_from_handle(hndl);
     
-#ifdef DEBUG
-    alarm_pthread_mutex_locked = FALSE;
+#if DEBUG
+    alarm_mutex_locked = FALSE;
 #endif
     
-    pthread_mutex_unlock(&alarm_mutex);
+    mutex_unlock(&alarm_mutex);
 }
 
 void
 alarm_set(alarm_t hndl, alarm_event_node *desc)
 {
-    pthread_mutex_lock(&alarm_mutex);
+    mutex_lock(&alarm_mutex);
     
-#ifdef DEBUG
-    alarm_pthread_mutex_locked = TRUE;
+#if DEBUG
+    alarm_mutex_locked = TRUE;
     ++alarm_event_alarm_set_count;
 #endif
 
@@ -807,11 +842,11 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
     if(handle_struct == NULL)
     {
         
-#ifdef DEBUG
-        alarm_pthread_mutex_locked = FALSE;
+#if DEBUG
+        alarm_mutex_locked = FALSE;
 #endif
 
-        pthread_mutex_unlock(&alarm_mutex);
+        mutex_unlock(&alarm_mutex);
 
         log_err("alarm_set(%p,%x = '%s') invalid alarm handle", hndl, desc, STRNULL(desc->text));
         
@@ -821,11 +856,11 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
     if(desc->epoch == MAX_U32)
     {
 
-#ifdef DEBUG
-        alarm_pthread_mutex_locked = FALSE;
+#if DEBUG
+        alarm_mutex_locked = FALSE;
 #endif
 
-        pthread_mutex_unlock(&alarm_mutex);
+        mutex_unlock(&alarm_mutex);
 
         log_debug("alarm_set(%p,%x = '%s') alarm set for doomsday.", hndl, desc, STRNULL(desc->text));
         
@@ -834,7 +869,7 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
     
     alarm_event_list *head = &handle_struct->events;
 
-#ifdef DEBUG
+#if DEBUG
     log_debug("alarm_set: %p: at %T, for '%{dnsname}' call key=%x '%s', %p(%p) (call #%i)", desc, desc->epoch, handle_struct->owner_dnsname, desc->key, STRNULL(desc->text), desc->function, desc->args, alarm_event_alarm_set_count);
 #endif
 
@@ -865,11 +900,11 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
                         
                         alarm_event_free(desc);
 
-#ifdef DEBUG
-                        alarm_pthread_mutex_locked = FALSE;
+#if DEBUG
+                        alarm_mutex_locked = FALSE;
 #endif
                         
-                        pthread_mutex_unlock(&alarm_mutex);
+                        mutex_unlock(&alarm_mutex);
                         
                         return;
                     }
@@ -877,7 +912,7 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
                     alarm_event_node *node_next = node->hndl_next;
                     
                     alarm_time_node *events_node_at_epoch = alarm_time_get(node->epoch);
-#ifdef DEBUG
+#if DEBUG
                     log_debug6("about to alarm_event_remove(%p,%p,%p %08x '%s' %T) (earlier)", hndl, &events_node_at_epoch->events, node, node->key, node->text, node->epoch);
 #endif
                     yassert(events_node_at_epoch != NULL);
@@ -885,7 +920,7 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
                     
                     // cancel the event
                     node->function(node->args, TRUE);
-                    ZFREE(node, alarm_event_node);
+                    ZFREE_OBJECT(node);
                     node = node_next;
                 }
                 else
@@ -901,7 +936,7 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
             {
                 if(node->key == desc->key)
                 {
-#ifdef DEBUG
+#if DEBUG
                     log_debug("alarm_set: %p: dropping latest dup", desc);
 #endif
                     if(desc->epoch > node->epoch)
@@ -914,18 +949,18 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
                         }
                         alarm_event_free(desc);
 
-#ifdef DEBUG
-                        alarm_pthread_mutex_locked = FALSE;
+#if DEBUG
+                        alarm_mutex_locked = FALSE;
 #endif
                         
-                        pthread_mutex_unlock(&alarm_mutex);
+                        mutex_unlock(&alarm_mutex);
 
                         return;
                     }
                     
                     alarm_event_node *node_next = node->hndl_next;
                     alarm_time_node *events_node_at_epoch = alarm_time_get(node->epoch);
-#ifdef DEBUG
+#if DEBUG
                     log_debug6("alarm_set: about to alarm_event_remove(%p,%p,%p %08x '%s' %T) (latest)", head, &events_node_at_epoch->events, node, node->key, node->text, node->epoch);
 #endif
                     yassert(events_node_at_epoch != NULL);
@@ -933,7 +968,7 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
                     
                     // cancel the event
                     node->function(node->args, TRUE);
-                    ZFREE(node, alarm_event_node);
+                    ZFREE_OBJECT(node);
                     node = node_next;
                 }
                 else
@@ -944,7 +979,7 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
         }
     }
 
-#ifdef DEBUG
+#if DEBUG
     log_debug("alarm_set: %p: added", desc);
 #endif
 
@@ -957,11 +992,11 @@ alarm_set(alarm_t hndl, alarm_event_node *desc)
     desc->handle = hndl;
     alarm_event_append(head, &time_node->events, desc);
 
-#ifdef DEBUG
-    alarm_pthread_mutex_locked = FALSE;
+#if DEBUG
+    alarm_mutex_locked = FALSE;
 #endif
     
-    pthread_mutex_unlock(&alarm_mutex);
+    mutex_unlock(&alarm_mutex);
 }
 
 void
@@ -969,15 +1004,26 @@ alarm_run_tick(u32 epoch)
 {
     assert(epoch != MAX_U32);
     
-    pthread_mutex_lock(&alarm_mutex);
+    mutex_lock(&alarm_mutex);
     
-#ifdef DEBUG
-    alarm_pthread_mutex_locked = TRUE;
+#if DEBUG
+    alarm_mutex_locked = TRUE;
 #endif
 
-    s64 fetch_start = timeus();
+#if DEBUG
+#if HAS_ALARM_DUMP
+    alarm_log_dump_nolock(TRUE);
+#endif
+#endif
+    s32 now_s;
+    s64 fetch_start = timeus_and_s(&now_s);
     s32 event_count = 0;
-    
+
+    now_s += 10;
+    __alarm__approximate_time_10s.tv_sec = now_s;
+    now_s += 20;
+    __alarm__approximate_time_30s.tv_sec = now_s;
+
     // while the time node is in the past or the present
     
     alarm_event_node event_dummy;
@@ -1015,7 +1061,7 @@ alarm_run_tick(u32 epoch)
         yassert(time_node->events.last->time_next == NULL);
         yassert(time_node->events.first == time_node->events.last);
         
-#ifdef DEBUG
+#if DEBUG
         log_debug("alarm: releasing time node %d@%p, next time node is %d@%p",
                 time_node->epoch, time_node,
                 time_node->next->epoch, time_node->next
@@ -1038,9 +1084,16 @@ alarm_run_tick(u32 epoch)
     
     s64 total_run = 0;
     
-    pthread_mutex_unlock(&alarm_mutex);
+#if DEBUG
+#if HAS_ALARM_DUMP
+    alarm_log_dump_nolock(TRUE);
+    alarm_mutex_locked = FALSE;
+#endif
+#endif
     
-    ptr_vector rearm = EMPTY_PTR_VECTOR;
+    mutex_unlock(&alarm_mutex);
+    
+    ptr_vector rearm = PTR_VECTOR_EMPTY;
     
     for(alarm_event_node *event = event_dummy.time_next; event != NULL; )
     {
@@ -1074,7 +1127,7 @@ alarm_run_tick(u32 epoch)
             else
             {        
                 event_time_next = event->time_next;
-                alarm_event_free(event); /// @todo 20150205 edf -- consistency
+                alarm_event_free(event);
             }
             
             event = event_time_next;
@@ -1116,10 +1169,10 @@ alarm_run_tick(u32 epoch)
 void
 alarm_lock()
 {
-    pthread_mutex_lock(&alarm_mutex);
+    mutex_lock(&alarm_mutex);
     
-#ifdef DEBUG
-    alarm_pthread_mutex_locked = TRUE;
+#if DEBUG
+    alarm_mutex_locked = TRUE;
 #endif
     
 }
@@ -1127,21 +1180,81 @@ alarm_lock()
 void
 alarm_unlock()
 {
-#ifdef DEBUG
-    alarm_pthread_mutex_locked = FALSE;
+#if DEBUG
+    alarm_mutex_locked = FALSE;
 #endif
     
-    pthread_mutex_unlock(&alarm_mutex);
+    mutex_unlock(&alarm_mutex);
 }
 
 alarm_event_node *
 alarm_get_first(alarm_t hndl)
 {
-    assert(alarm_pthread_mutex_locked);
+    assert(alarm_mutex_locked);
     
     alarm_handle *handle_struct = alarm_get_struct_from_handle(hndl);
 
     return handle_struct->events.first;
 }
+
+#if HAS_ALARM_DUMP
+
+void alarm_log_dump_nolock(bool check)
+{
+#if DEBUG
+    u32 handles_count = 0;
+    u32 time_count = 0;
+    int events_count = smp_int_get(&alarm_event_instanciated);
+    log_debug("alarm_log_dump: begin %u / %u ; %u ; instantiated=%d",
+    alarm_event_in_handles_count, alarm_event_in_time_count, alarm_event_alarm_set_count, events_count);
+        
+    for(int i = 0; i <= ptr_vector_last_index(&alarm_handles); ++i)
+    {
+        alarm_handle *handle = (alarm_handle*)ptr_vector_get(&alarm_handles, i);
+        intptr handle_as_index = (intptr)handle;
+        if((handle == NULL) || (handle_as_index <= (intptr)ptr_vector_last_index(&alarm_handles)) || (handle_as_index == MAX_U64))
+        {
+            continue;
+        }
+        log_debug("alarm_handle: %2i@%p: %{dnsname}", i, handle, handle->owner_dnsname);
+        for(alarm_event_node *node = handle->events.first; node != handle->events.last; node = node->hndl_next)
+        {
+            log_debug("alarm_event: %p %08x '%s' %T", node, node->key, node->text, node->epoch);
+            ++handles_count;
+        }
+    }
+    
+    for(alarm_time_node *time_node = &time_list; time_node != NULL; time_node = time_node->next)
+    {
+        log_debug("alarm_time: %T:", time_node->epoch);
+        for(alarm_event_node *node = time_node->events.first; node != time_node->events.last; node = node->time_next)
+        {
+            log_debug("alarm_event: %p %08x '%s' %T", node, node->key, node->text, node->epoch);
+            ++time_count;
+        }
+        
+        yassert(time_node != time_node->next);
+    }
+    
+    log_debug("alarm_log_dump: end %u / %u ; instantiated=%d", handles_count, time_count, events_count);
+    
+    if(check)
+    {
+        yassert(handles_count == alarm_event_in_handles_count);
+        yassert(time_count == alarm_event_in_time_count);
+    }
+#endif
+}
+
+void alarm_log_dump()
+{
+    mutex_lock(&alarm_mutex);
+    
+    alarm_log_dump_nolock(FALSE);
+    
+    mutex_unlock(&alarm_mutex);
+}
+
+#endif
 
 /** @} */

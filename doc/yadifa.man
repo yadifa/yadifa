@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man on Thu Jul 14 18:39:49 CEST 2017
+.\" Manual page created with latex2man on Tue Oct 13 12:59:04 2020
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFA" "8" "2020\-10\-07" "YADIFA " "YADIFA "
+.TH "YADIFA" "8" "2020\-10\-12" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -21,9 +21,11 @@ is an utility for controlling YADIFAD
 
 .PP
 yadifa
+\fBmodule\fP
 [\fB\-\-config|\-c\fP\fI configfile\fP]
-[\fB\-s\fP\fI host\fP]
+[\fB\-\-server|\-s\fP\fI host\fP]
 [\fB@host \fP]
+[\fB\-\-port|\-p\fP\fI port\fP]
 [\fB\-K\fP\fI key\-name\fP]
 [\fB\-\-version|\-V\fP]
 [\fB\-h\fP]
@@ -33,35 +35,133 @@ yadifa
 .PP
 .SH DESCRIPTION
 
-yadifa
-controls the operation of yadifad\&.
 .PP
 yadifa
-communicates with a name server over a TCP connection. The protocol used between client \- server is an extension of the DNS protocol. The authentication is done by a mutual key between client and server. This key has the same format as a TSIG. Authentication is not needed, but provides more secure communication if used. 
+controls the operation of yadifad
+with its control module (ctrl), part of the YADIFA distribution from EURid vzw/asbl. The latest version of YADIFA
+can be found on:
+.br
+.ce 100
+\fBhttp://www.yadifa.eu/download\fP
+.ce 0
+
 .PP
-Several algorithms can be used for creating a TSIG: 
+yadifa
+communicates with a name server over a TCP connection. 
+Messages are authenticated using a TSIG signature. The key is a secret shared between client and server. 
+The key can be defined using a <key> section both in the client and the server. 
+Additionally, the client accepts a full definition as a command line option. 
+Note that using authentication is mandatory when using the control module. 
+.PP
+For details about the key, see the manual or the TSIG section below. 
+.PP
+.SH MODULES
+
+.PP
 .TP
 .B *
-HMAC\-MD5 
+\fBctrl\fP \fIcommand\fP Controls yadifad\&.
+.PP
+.SH SIMPLE USAGE
+
+.PP
+For controlling yadifad
+a command can be: 
+.PP
+.SS NORMAL USE CASE
+.PP
+yadifa ctrl @server \-t command \-q argument 
+.PP
+.SS FRIENDLIER USE CASE
+.PP
+yadifa ctrl @server command argument 
+.PP
 .TP
-.B *
-HMAC\-SHA1 
+\fBctrl\fP Module used for controlling yadifad
+.TP
+\fBserver\fP Is the IP address of the name server to control. If no "server" argument is given yadifa.rc will be checked.
+.TP
+\fBcommand\fP Is the command to be invoked
+.TP
+\fIargument\fP Depending the command this can be e.g. a domain name.
+.PP
+.SS EXAMPLE
+.PP
+yadifa ctrl @127.0.0.1 freeze somedomain.eu 
 .PP
 .SH OPTIONS
 
+.PP
 .TP
 [\fB\-\-config|\-c \fP\fIconfigfile\fP]
  Another config file will be used. 
 .TP
 [\fB\-\-server|\-s \fP\fIhost\fP] | [\fB @host \fP]
  Host is the remote server to operate. 
-If used with a different port: e.g.: \&./yadifa \-\-server "192.0.2.1 port 5353" 
+
+e.g.: 
+
+.RS
 .TP
-[\fB\-k \fP\fIkey\-name\fP]
- Name of the key to be used for the controller. 
+yadifa \-\-server 192.0.2.1
+.TP
+yadifa @192.0.2.1
+.RE
+.RS
+.PP
+
+By default the DNS port is used. A port can be specified along with the IP address: 
+
+e.g.: 
+
+.RS
+.RE
+.TP
+yadifa \-\-server "192.0.2.1 port 5353"
+.TP
+yadifa @"192.0.2.1 port 5353"
+.RE
+.RS
+.PP
+.RE
+.TP
+[\fB\-\-port|\-p \fP\fIport\fP]
+ Changes the DNS port. (default: 53) 
+.TP
+[\fB\-K \fP\fIkey\-name\fP]
+ Name of the key to be used for the controller. It needs to have been defined using a <key> section. (default: \&'ctrl\-key\&')
+.TP
+[\fB\-y \fP\fIhmac\-algorithm:key\-name:base64\-key\fP]
+ Definition of the key to be used for the controller. 
+.RS
+.TP
+\fIhmac\-algorithm\fP
+ Optional, can be: hmac\-md5, hmac\-sha1, hmac\-sha224, hmac\-256, hmac\-384, hmac\-512. (default: hmac\-md5) 
+.TP
+\fIkey\-name\fP
+ is the fqdn of the key. 
+.TP
+\fIbase64\-key\fP
+ is a base64 encoding of the key bytes. 
+.RE
+.RS
+.PP
+
+e.g.: 
+
+.RS
+.RE
+.TP
+\-y hmac\-sha1:our\-shared\-secret:ThisIsASecretShared= 
+.TP
+\-y our\-shared\-secret:ThisIsASecretShared= 
+.RE
+.RS
+.PP
+.RE
 .TP
 [\fB\-\-verbose|\-v\fP]
- verbose output. 
+ Verbose output. 
 .TP
 [\fB\-\-version|\-V\fP]
  Show version information. 
@@ -73,41 +173,130 @@ If used with a different port: e.g.: \&./yadifa \-\-server "192.0.2.1 port 5353"
 
 .PP
 .TP
-[\fB\-t\fP] freeze [\fB\-q\fP] zone
- disables updates to a zone. 
+[\fB\-t\fP] \fBcfgreload\fP
+ Reload the settings from the configuration file on disk. 
+.TP
+[\fB\-t\fP] \fBfreeze\fP [\fB\-q\fP] zone
+ Disables dynamic updates to a zone. 
+.TP
+[\fB\-t\fP] \fBfreezeall\fP [\fB\-q\fP] zone
+ Disables dynamic updates to every zone currently loaded. 
 .PP
 .TP
-[\fB\-t\fP] unfreeze [\fB\-q\fP] zone
- enables updates to a zone. 
+[\fB\-t\fP] \fBloglevel\fP \fIlevel\fP
+ Sets the log level to the given value (0\-15), 6 = INFO, 15 = ALL. 
+.TP
+[\fB\-t\fP] \fBlogreopen\fP
+ Close all log files and reopens them. 
+.TP
+[\fB\-t\fP] \fBnotify\fP
+ Sends notifies to slaves of these zones. 
 .PP
 .TP
-[\fB\-t\fP] reload [\fB\-q\fP] zone
- triggers the loading of the zone file(s) if the serial number is incremented. 
-.TP
-[\fB\-t\fP] cfgreload
- reload the settings from the configuration file. 
+[\fB\-t\fP] \fBquerylog\fP [\fIenable|disable\fP]
+ Sets the log for queries on or off (default: enable). 
 .PP
 .TP
-[\fB\-t\fP] zonecfgreload 
+[\fB\-t\fP] \fBreload\fP [\fB\-q\fP] zone
+ Triggers the loading of the zone file(s) if the serial number is incremented. 
+.PP
+.TP
+[\fB\-t\fP] \fBshutdown\fP
+ Shuts down the server. 
+.PP
+.TP
+[\fB\-t\fP] \fBsync\fP [\fB\-q\fP] [\fIzone\fP] [\fBclean\fP]
+ Write the zone to disk and optionally cleans up the journal. 
+.PP
+.TP
+[\fB\-t\fP] \fBthaw\fP [\fB\-q\fP] [\fIzone\fP]
+ Enables dynamic updates to a zone. 
+.TP
+[\fB\-t\fP] \fBthawall\fP
+ Enables dynamic updates to every zone. 
+.TP
+[\fB\-t\fP] \fBunfreeze\fP [\fB\-q\fP] [\fIzone\fP]
+ Enables dynamic updates to a zone. 
+.PP
+.TP
+[\fB\-t\fP] \fBunfreezeall\fP
+ Enables dynamic updates to every zone. 
+.PP
+.TP
+[\fB\-t\fP] \fBzonecfgreload\fP 
 [\fB\-q \fP\fIzone\fP]
- reload the zone information in the configuration file and reload the zone file(s) with increased serial number. 
-If a zone is specified only that zone section is reloaded. 
+ Reload the zone information in the configuration file and reload the zone file(s) with increased serial number. 
+.PP
+.SH TSIG KEYS
+
+.PP
+TSIG keys are used for authentication of messages. 
+.br
+Their use is mandatory in the controller module. 
+.br
+.PP
+Several digest algorithms are supported for the TSIG key: 
+.RS
 .TP
-[\fB\-t\fP] sync [\fB\-q\fP] zone [\fB\-\-clean\fP]
- write the zone to disk and optionally removes the journal. 
-The extra [\-\-clean] option will remove the journal. 
+.B *
+hmac\-md5 
 .TP
-[\fB\-t\fP] querylog \-\-enable|\-\-disable
- sets the log for queries on or off. 
+.B *
+hmac\-sha1 
 .TP
-[\fB\-t\fP] loglevel {\-\-level|\-l} level
- sets the log level to the given value (0\-15). 
+.B *
+hmac\-sha224 
 .TP
-[\fB\-t\fP] logreopen
- close all log files and reopens them. 
+.B *
+hmac\-sha256 
 .TP
-[\fB\-t\fP] shutdown
- shuts down the server. 
+.B *
+hmac\-sha384 
+.TP
+.B *
+hmac\-sha512 
+.RE
+.RS
+.PP
+.RE
+.PP
+Several methods can be used to generate the base64\-encoded sequence of bytes for the secret: 
+.PP
+.TP
+.B *
+%openssl rand \-base64 32 
+.TP
+.B *
+%dd if=/dev/random count=1 bs=32 2>/dev/null|base64 
+.br 
+.TP
+.B *
+%dd if=/dev/urandom count=1 bs=32 2>/dev/null|base64 
+.br 
+.PP
+e.g.: 
+.br
+.PP
+.Vb
+#!/bin/sh
+# TSIG key generation example
+# can a
+key_algorithm="hmac\-sha256"
+key_name="secretkey"
+key_secret=$(openssl rand \-base64 32)
+if [ ! "x$1" == "x" ]
+then
+	key_name="$1"
+fi
+
+echo "# Encoded for the yadifa command\-line: \-y $key_algorithm:$key_name:$key_secret"
+echo
+echo "<key>"
+echo "algorithm $key_algorithm"
+echo "name $key_name"
+echo "secret $key_secret"
+echo "</key>"
+.Ve
 .PP
 .SH FILES
 
@@ -116,12 +305,15 @@ The extra [\-\-clean] option will remove the journal.
 yadifa
  The name server remote client. 
 .TP
-SYSCONFDIR/yadifa.conf
- The default yadifa configuration file. 
+${SYSCONFDIR}/yadifa.conf
+ default yadifa configuration file. 
 .TP
-$HOME/.yadifa.rc
+${HOME}/.yadifa.rc
  default rcfile. 
 .PP
+.TP
+yadifa.conf.5
+ Configuration man page for yadifa\&.
 .TP
 yadifa.rc.5
  Configuration man page for yadifa\&.
@@ -132,6 +324,7 @@ yadifa.8
 .SH SEE ALSO
 
 .PP
+\fIyadifa.conf\fP(5)
 \fIyadifa.rc\fP(5)
 \fIyadifad\fP(8)
 .PP
@@ -141,22 +334,25 @@ yadifa.8
 .TP
 OpenSSL 
 yadifad
-requires OpenSSL version 0.9.8 or later. 
+requires OpenSSL version 1.1.1 or later. 
 .PP
 .SH CHANGES
 
+.PP
 Please check the ChangeLog
 file from the sources code. 
 .PP
 .SH VERSION
 
 .PP
-Version: 2.3.11 of 2020\-10\-07\&.
+Version: 2.4.0 of 2020-10-12\&.
 .PP
 .SH MAILINGLIST
 
+.PP
 There is a mailinglist for questions relating to any program in the yadifa package:
 .br
+.PP
 .TP
 .B *
 \fByadifa\-users@mailinglists.yadifa.eu\fP
@@ -169,8 +365,8 @@ for submitting questions/answers.
 .br
 for subscription requests. 
 .PP
-If you would like to stay informed about new versions and official patches send a subscription request to 
-via: 
+If you would like to stay informed about new versions and official patches send a subscription request to via: 
+.PP
 .TP
 .B *
 \fBhttp://www.yadifa.eu/mailing\-list\-announcements\fP

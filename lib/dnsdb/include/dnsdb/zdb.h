@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnsdb Zone database
  *  @brief The zone database
  *
@@ -109,10 +110,10 @@ static inline dnsdb_fingerprint dnsdb_getmyfingerprint()
 #if ZDB_HAS_NSEC3_SUPPORT
     | DNSDB_NSEC3
 #endif
-#if HAS_ZALLOC_SUPPORT
+#if ZDB_HAS_ZALLOC_SUPPORT
     | DNSDB_ZALLOC
 #endif
-#ifdef DEBUG
+#if DEBUG
     | DNSDB_DEBUG
 #endif
 
@@ -170,10 +171,9 @@ void zdb_create(zdb *db);
  * This function temporarily locks the database for writing.
  * The zone added gets its RC increased.
  * 
- * @param db
- * @param zone
- * 
- * @return 
+ * @param db the database
+ * @param zone the zone to mount (will be RC++)
+ * @return the previously mounted zone (to be RC--)
  */
 
 zdb_zone *zdb_set_zone(zdb *db, zdb_zone* zone);
@@ -227,7 +227,7 @@ void zdb_query_and_update(zdb *db, message_data *mesg, u8 * restrict pool_buffer
  * @return the RRL status of the message (probably useless)
  */
 
-finger_print zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_buffer, rrl_process_callback *rrl_process);
+ya_result zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_buffer, rrl_process_callback *rrl_process);
 
 /**
  * Destroys a zdb_query_ex_answer structure created with zdb_query_ex
@@ -260,15 +260,21 @@ ya_result zdb_query_message_update(message_data* message, zdb_query_ex_answer* a
  * Writes the content of a zdb_query_ex_answer into a message_data if the RRL callback allows it.
  *
  * Returns the offset in the packet.
- * 
- * CANNOT FAIL !
  *
  * @param message
  * @param answer_set
  * @return
  */
 
-ya_result zdb_query_message_update_with_rrl(message_data* mesg, zdb_query_ex_answer* answer_set, rrl_process_callback *rrl_process);
+#if 0 /* fix */
+#else
+static inline ya_result zdb_query_message_update_with_rrl(message_data* mesg, zdb_query_ex_answer* answer_set, rrl_process_callback *rrl_process)
+{
+    ya_result rrl = rrl_process(mesg, answer_set);
+    
+    return rrl;
+}
+#endif
 
 /**
  * This function should not be used anymore. Please consider using zdb_append_ip_records instead.
@@ -333,7 +339,7 @@ void zdb_signature_check(int so_zdb, int so_zdb_zone, int so_zdb_zone_label, int
 #define ZDB_API_CHECK() zdb_signature_check(sizeof(zdb),sizeof(zdb_zone),sizeof(zdb_zone_label),sizeof(zdb_rr_label),sizeof(mutex_t))
 
 
-#ifdef DEBUG
+#if DEBUG
 /**
  * DEBUG
  */

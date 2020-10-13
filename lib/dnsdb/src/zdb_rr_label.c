@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup records_labels Internal functions for the database: zoned resource records label.
  *  @ingroup dnsdb
  *  @brief Internal functions for the database: zoned resource records label.
@@ -66,6 +67,10 @@ extern logger_handle* g_database_logger;
 
 static void zdb_rr_label_destroy_callback(dictionary_node* rr_label_record, void* arg);
 
+/**
+ * Removes the "under delegation" flag for all labels under rr_label
+ */
+
 static void zdb_rr_label_clear_underdelegation_under(zdb_rr_label *rr_label)
 {
     dictionary_iterator iter;
@@ -73,10 +78,17 @@ static void zdb_rr_label_clear_underdelegation_under(zdb_rr_label *rr_label)
     while(dictionary_iterator_hasnext(&iter))
     {
         zdb_rr_label** sub_labelp = (zdb_rr_label**)dictionary_iterator_next(&iter);
+        zdb_rr_label_flag_and(*sub_labelp, ~ZDB_RR_LABEL_UNDERDELEGATION);
 
-        (*sub_labelp)->flags &= ~ZDB_RR_LABEL_UNDERDELEGATION;
-        
-        zdb_rr_label_clear_underdelegation_under(*sub_labelp);
+
+        if(!zdb_rr_label_has_rrset(*sub_labelp, TYPE_NS))
+        {
+            zdb_rr_label_clear_underdelegation_under(*sub_labelp);
+        }
+        else // we reached a sub-delegation
+        {
+            zdb_rr_label_flag_or(*sub_labelp, ZDB_RR_LABEL_DELEGATION);
+        }
     }
 }
 
@@ -155,27 +167,35 @@ zdb_rr_label_forall_children_of_fqdn(zdb_rr_label *rr_label, const u8 *rr_label_
 static inline void
 zdb_rr_label_free(zdb_zone* zone, zdb_rr_label* label)
 {
+#if DEBUG
+    bool must_keep = zdb_rr_label_must_keep(label);
+    yassert(!must_keep);
+#endif
+
     dictionary_destroy_ex(&(label)->sub, zdb_rr_label_destroy_callback, zone);
     zdb_record_destroy(&(label)->resource_record_set); /// @note not an edition, use only for cleanup/delete
 
-
-#ifdef DEBUG
-#if ZDB_HAS_NSEC_SUPPORT != 0
-    if((label->flags & ZDB_RR_LABEL_NSEC) != 0)
+#if ZDB_HAS_NSEC_SUPPORT
+    if(zdb_rr_label_nsec_linked(label))
     {
         /*
          * Here, if there are NSEC nodes pointing to the label they MUST have been destroyed
          */
 
-#if defined(DEBUG)
+        nsec_zone_label_detach(label);
+
+#if DEBUG
         yassert(label->nsec.nsec.node == NULL);
 #endif
     }
-#endif
-#endif
 
-#if ZDB_HAS_NSEC3_SUPPORT != 0
-    if((label->flags & ZDB_RR_LABEL_NSEC3) != 0)
+#else // ZDB_HAS_NSEC_SUPPORT
+    if(FALSE)
+#endif // ZDB_HAS_NSEC_SUPPORT
+
+#if ZDB_HAS_NSEC3_SUPPORT
+
+    else if(zdb_rr_label_nsec3any_linked(label))
     {
         /*
          * Here, if there are NSEC3 nodes pointing to the label they MUST be destroyed
@@ -183,15 +203,29 @@ zdb_rr_label_free(zdb_zone* zone, zdb_rr_label* label)
 
         if(label->nsec.nsec3 != NULL)
         {
-            yassert(label->nsec.nsec3->self == NULL);
-            yassert(label->nsec.nsec3->star == NULL);
+            //yassert(nsec3_label_extension_self(label->nsec.nsec3) == NULL);
+            //yassert(nsec3_label_extension_star(label->nsec.nsec3) == NULL);
 
             // free the nsec3 label extension of the label being freed
-            nsec3_label_extension_free(label->nsec.nsec3);
+            // nsec3_label_extension_free(label->nsec.nsec3);
+
+            nsec3_zone_label_detach(label);
+
 #if DEBUG
             label->nsec.nsec3 = (nsec3_label_extension*)0xbad;
 #endif
         }
+    }
+#else // ZDB_HAS_NSEC3_SUPPORT
+    else if(FALSE)
+    {
+    }
+#endif // ZDB_HAS_NSEC3_SUPPORT
+
+#if DEBUG
+    else
+    {
+        yassert(label->nsec.dnssec == NULL);
     }
 #endif
     
@@ -200,6 +234,8 @@ zdb_rr_label_free(zdb_zone* zone, zdb_rr_label* label)
     u32 pad = (len > 2)?0:2-len;
 
     ZFREE_ARRAY(label, sizeof(zdb_rr_label) - 1 + len + pad);
+
+    (void)pad; // silence warnings in some setups
 }
 
 /**
@@ -214,7 +250,7 @@ zdb_rr_label_destroy_callback(dictionary_node* rr_label_record, void* zone)
         return;
     }
 
-    zdb_rr_label* rr_label = (zdb_rr_label*)rr_label_record;
+    zdb_rr_label *rr_label = (zdb_rr_label*)rr_label_record;
 
     /* detach is made by destroy */
 
@@ -235,21 +271,21 @@ zdb_rr_label_destroy_callback(dictionary_node* rr_label_record, void* zone)
 static int
 zdb_rr_label_zlabel_match(const void* label, const dictionary_node* node)
 {
-    const zdb_rr_label* rr_label = (const zdb_rr_label*)node;
+    const zdb_rr_label *rr_label = (const zdb_rr_label*)node;
     return dnslabel_equals(rr_label->name, label);
 }
 
 zdb_rr_label*
 zdb_rr_label_new_instance(const u8* label_name)
 {
-    zdb_rr_label* rr_label;
+    zdb_rr_label *rr_label;
 
     u32 len = label_name[0]; /* get the memory required to store the label name */
     len++;
     u32 pad = (len > 2)?0:2-len;
     ZALLOC_ARRAY_OR_DIE(zdb_rr_label*, rr_label, sizeof(zdb_rr_label) - 1 + len + pad, ZDB_RRLABEL_TAG);
     
-#ifdef DEBUG
+#if DEBUG
     memset(rr_label, 0xac, sizeof(zdb_rr_label) - 1 + len);
 #endif
     rr_label->name[1] = (u8)0xee;   // this slot is guaranteed by pad, and used by the wild card 16 bits test
@@ -261,9 +297,9 @@ zdb_rr_label_new_instance(const u8* label_name)
     btree_init(&rr_label->resource_record_set);
     dictionary_init(&rr_label->sub);
 
-    rr_label->flags = 0;
+    rr_label->_flags = 0;
 
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
     /* I have to clean this pointer, the caller will be responsible
      * for setting it up.
      */
@@ -281,7 +317,7 @@ zdb_rr_label_new_instance(const u8* label_name)
 static dictionary_node*
 zdb_rr_label_create_callback(const void* data)
 {
-    zdb_rr_label* rr_label = zdb_rr_label_new_instance((const u8*)data);
+    zdb_rr_label *rr_label = zdb_rr_label_new_instance((const u8*)data);
 
     return (dictionary_node*)rr_label;
 }
@@ -321,7 +357,7 @@ zdb_rr_label_destroy(zdb_zone* zone, zdb_rr_label** rr_labelp)
 
 /* NSEC3: Zone possible */
 void
-zdb_rr_label_truncate(zdb_zone* zone, zdb_rr_label* rr_label)
+zdb_rr_label_truncate(zdb_zone* zone, zdb_rr_label *rr_label)
 {
     if(rr_label != NULL)
     {
@@ -346,7 +382,7 @@ zdb_rr_label_truncate(zdb_zone* zone, zdb_rr_label* rr_label)
 zdb_rr_label*
 zdb_rr_label_find_exact(zdb_rr_label* apex, dnslabel_vector_reference sections, s32 index)
 {
-    zdb_rr_label* rr_label = apex; /* the zone cut */
+    zdb_rr_label *rr_label = apex; /* the zone cut */
 
     /* look into the sub level*/
 
@@ -375,7 +411,7 @@ zdb_rr_label_find_child(zdb_rr_label* parent, const u8* dns_label)
 zdb_rr_label*
 zdb_rr_label_stack_find(zdb_rr_label* apex, const_dnslabel_stack_reference sections, s32 pos, s32 index)
 {
-    zdb_rr_label* rr_label = apex; /* the zone cut */
+    zdb_rr_label *rr_label = apex; /* the zone cut */
 
     /* look into the sub level*/
 
@@ -404,14 +440,13 @@ zdb_rr_label_stack_find(zdb_rr_label* apex, const_dnslabel_stack_reference secti
  *
  * @return the matching label, the * label or NULL if none of them has not been found
  */
-#if 1
 
 zdb_rr_label*
 zdb_rr_label_find(zdb_rr_label* apex, dnslabel_vector_reference sections, s32 index)
 {
     yassert(apex != NULL);
 
-    zdb_rr_label* rr_label = apex; /* the zone cut */
+    zdb_rr_label *rr_label = apex; /* the zone cut */
 
     /* look into the sub level*/
 
@@ -426,7 +461,7 @@ zdb_rr_label_find(zdb_rr_label* apex, dnslabel_vector_reference sections, s32 in
         {
             /* If the label does not exist BUT we got a wildcard, THEN it is what we are looking for */
             
-            if((rr_label->flags & ZDB_RR_LABEL_GOT_WILD) != 0)
+            if(zdb_rr_label_flag_isset(rr_label, ZDB_RR_LABEL_GOT_WILD))
             {
                 rr_label = (zdb_rr_label*)dictionary_find(&rr_label->sub, WILD_HASH, (void*)WILD_LABEL, zdb_rr_label_zlabel_match);
 
@@ -443,45 +478,51 @@ zdb_rr_label_find(zdb_rr_label* apex, dnslabel_vector_reference sections, s32 in
 
     return rr_label;
 }
-#else
 
-zdb_rr_label*
-zdb_rr_label_find(zdb_rr_label* apex, dnslabel_vector_reference label_sections, s32 index)
+int
+zdb_rr_label_find_path(zdb_rr_label* apex, dnslabel_vector_reference sections, s32 index, zdb_rr_label** out_array_64)
 {
     yassert(apex != NULL);
 
-    zdb_rr_label* rr_label = apex; /* the zone cut */
+    zdb_rr_label *rr_label = apex; /* the zone cut */
+
+    zdb_rr_label **p = out_array_64;
 
     /* look into the sub level*/
-    u8** section = &label_sections[index];
 
-    while(section >= label_sections)
+    while(index >= 0)
     {
-        u8* label = *section--;
-
+        const u8* label = sections[index];
         hashcode hash = hash_dnslabel(label);
 
         zdb_rr_label* sub_rr_label = (zdb_rr_label*)dictionary_find(&rr_label->sub, hash, label, zdb_rr_label_zlabel_match);
 
-        if(sub_rr_label == NULL)
+        if(sub_rr_label != NULL)
         {
-            if((rr_label->flags & ZDB_RR_LABEL_GOT_WILD) != 0)
+            *p++ = sub_rr_label;
+            rr_label = sub_rr_label;
+            --index;
+        }
+        else
+        {
+            /* If the label does not exist BUT we got a wildcard, THEN it is what we are looking for */
+
+            if(zdb_rr_label_flag_isset(rr_label, ZDB_RR_LABEL_GOT_WILD))
             {
+                sub_rr_label = (zdb_rr_label*)dictionary_find(&rr_label->sub, WILD_HASH, (void*)WILD_LABEL, zdb_rr_label_zlabel_match); // VS false positive: can't be NULL
 
-                rr_label = (zdb_rr_label*)dictionary_find(&rr_label->sub, WILD_HASH, (void*)WILD_LABEL, zdb_rr_label_zlabel_match);
-
-                return rr_label;
+                if(sub_rr_label != NULL)
+                {
+                    *p++ = sub_rr_label;
+                }
             }
 
-            return sub_rr_label;
+            break;
         }
-
-        rr_label = sub_rr_label;
     }
 
-    return rr_label;
+    return p - out_array_64;
 }
-#endif
 
 zdb_rr_label*
 zdb_rr_label_find_from_name(zdb_zone* zone, const u8 *fqdn)
@@ -494,13 +535,51 @@ zdb_rr_label_find_from_name(zdb_zone* zone, const u8 *fqdn)
     return label;
 }
 
+int
+zdb_rr_label_find_path_from_name(zdb_zone *zone, const u8 *fqdn, zdb_rr_label** out_array_64)
+{
+    s32 top;
+    dnslabel_vector name;
+    top = dnsname_to_dnslabel_vector(fqdn, name);
+    top -= zone->origin_vector.size + 1;
+    int ret = zdb_rr_label_find_path(zone->apex, name, top, out_array_64);
+    return ret;
+}
+
+zdb_rr_label*
+zdb_rr_label_find_from_name_delete_empty_terminal(zdb_zone* zone, const u8 *fqdn)
+{
+    s32 top;
+    dnslabel_vector name;
+    top = dnsname_to_dnslabel_vector(fqdn, name);
+    top -= zone->origin_vector.size + 1;
+    zdb_rr_label *label = zdb_rr_label_find(zone->apex, name, top);
+
+    if((label != NULL) && zdb_rr_label_can_be_deleted(label))
+    {
+        ya_result ret;
+
+        if(ISOK(ret = zdb_rr_label_delete_record_and_empty_terminal(zone, name, top - zone->origin_vector.size, TYPE_ANY)))
+        //if(ISOK(ret = zdb_rr_label_delete_record(zone, name, top - zone->origin_vector.size, TYPE_ANY)))
+        {
+            label = NULL;
+        }
+        else
+        {
+            log_err("zdb_rr_label: %{dnsname} is an empty terminal but could not be removed from the zone: %r", fqdn, ret);
+        }
+    }
+
+    return label;
+}
+
 zdb_rr_label*
 zdb_rr_label_find_ext(zdb_rr_label* apex, dnslabel_vector_reference sections, s32 index_, zdb_rr_label_find_ext_data *ext)
 {
     yassert(apex != NULL && sections != NULL);
 
     s32 index = index_;
-    zdb_rr_label* rr_label = apex; /* the zone cut */
+    zdb_rr_label *rr_label = apex; /* the zone cut */
 
     zdb_rr_label* authority = apex;
     zdb_rr_label* closest = apex;
@@ -520,7 +599,7 @@ zdb_rr_label_find_ext(zdb_rr_label* apex, dnslabel_vector_reference sections, s3
         {
             /* If the label does not exist BUT we got a wildcard, THEN it is what we are looking for */
             
-            if((closest->flags & ZDB_RR_LABEL_GOT_WILD) != 0)
+            if(zdb_rr_label_flag_isset(closest, ZDB_RR_LABEL_GOT_WILD))
             {
                 /* got it all anyway, from previous node ... */
 
@@ -531,7 +610,7 @@ zdb_rr_label_find_ext(zdb_rr_label* apex, dnslabel_vector_reference sections, s3
             break;
         }
 
-        if((rr_label->flags & ZDB_RR_LABEL_DELEGATION) != 0)
+        if(zdb_rr_label_flag_isset(rr_label, ZDB_RR_LABEL_DELEGATION))
         {
             authority = rr_label;
             authority_index = index;
@@ -585,14 +664,14 @@ zdb_rr_label_add(zdb_zone* zone, dnslabel_vector_reference labels, s32 labels_to
 
         if(IS_WILD_LABEL(label))
         {
-            rr_label->flags |= ZDB_RR_LABEL_GOT_WILD;
+            zdb_rr_label_flag_or(rr_label, ZDB_RR_LABEL_GOT_WILD);
         }
         
         rr_label = (zdb_rr_label*)dictionary_add(&rr_label->sub, hash, label, zdb_rr_label_zlabel_match, zdb_rr_label_create_callback);
 
-        rr_label->flags |= or_flags;
+        zdb_rr_label_flag_or(rr_label, or_flags);
 
-        if((rr_label->flags & ZDB_RR_LABEL_DELEGATION) != 0)
+        if(zdb_rr_label_flag_isset(rr_label, ZDB_RR_LABEL_DELEGATION))
         {
             /* the next one down is under a delegation */
             
@@ -626,7 +705,7 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
 {
     yassert(node != NULL);
 
-    zdb_rr_label* rr_label = (zdb_rr_label*)node;
+    zdb_rr_label *rr_label = (zdb_rr_label*)node;
 
     zdb_rr_label_delete_record_process_callback_args* args = (zdb_rr_label_delete_record_process_callback_args*)a;
 
@@ -667,18 +746,23 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
         {
             /* check the node for relevance, return "delete" if irrelevant */
 
-            if(RR_LABEL_IRRELEVANT(rr_label))
+            if(zdb_rr_label_can_be_deleted(rr_label))
             {
                 zdb_rr_label_free(args->zone, rr_label); // valid call because in a delete
 
                 return COLLECTION_PROCESS_DELETENODE;
+            }
+
+            if(rr_label->resource_record_set == NULL)
+            {
+                zdb_rr_label_flag_and(rr_label, ~(ZDB_RR_LABEL_HASCNAME|ZDB_RR_LABEL_DROPCNAME));
             }
             
             /* If the label just removed is a wildcard, then the parent is marked as not having a wildcard. */
              
             if(IS_WILD_LABEL(label))
             {
-                rr_label->flags &= ~ZDB_RR_LABEL_GOT_WILD;
+                zdb_rr_label_flag_and(rr_label, ~ZDB_RR_LABEL_GOT_WILD);
             }
 
             return COLLECTION_PROCESS_STOP;
@@ -691,15 +775,11 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
 
     /* We are at the right place for the record */
 
-#if ZDB_CHANGE_FEEDBACK_SUPPORT
-    zdb_listener_notify_remove_type(args->zone, args->sections[args->top], &rr_label->resource_record_set, args->type);
-#endif
-
     ya_result err;
 
     if(ISOK(err = zdb_record_delete(&rr_label->resource_record_set, args->type))) /* FB done */
     {
-        if(!zdb_rr_label_is_empty_terminal(rr_label))
+        if(zdb_rr_label_cannot_be_deleted(rr_label))
         {
             /* If the type was XXXX and we deleted the last one the flag may change.
              * NS => not a delegation anymore
@@ -712,9 +792,12 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
             {
                 case TYPE_NS:
                     clear_mask = ~ZDB_RR_LABEL_DELEGATION; // will clear "delegation"
-                    
-                    // must clear ZDB_RR_LABEL_UNDERDELEGATION from everything under this one                        
-                    zdb_rr_label_clear_underdelegation_under(rr_label);
+
+                    if(!ZDB_LABEL_UNDERDELEGATION(rr_label))
+                    {
+                        // must clear ZDB_RR_LABEL_UNDERDELEGATION from everything under this one
+                        zdb_rr_label_clear_underdelegation_under(rr_label);
+                    }
                         
                     break;
                 case TYPE_CNAME:
@@ -732,7 +815,7 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
                     break;
             }
 
-            rr_label->flags &= clear_mask; // clears the bits using the mask
+            zdb_rr_label_flag_and(rr_label, clear_mask); // clears the bits using the mask
 
             return COLLECTION_PROCESS_STOP;
         }
@@ -751,7 +834,7 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
                 {
                     nsec_zone_label_detach(rr_label);
                 }
-#ifdef DEBUG
+#if DEBUG
                 else
                 {
                     yassert(rr_label->nsec.dnssec == NULL);
@@ -803,9 +886,6 @@ zdb_rr_label_delete_record(zdb_zone* zone, dnslabel_vector_reference path, s32 p
     
     if(path_index < 0)
     {
-#if ZDB_CHANGE_FEEDBACK_SUPPORT != 0
-        zdb_listener_notify_remove_type(zone, path[0], &apex->resource_record_set, type);
-#endif
         if(ISOK(zdb_record_delete(&apex->resource_record_set, type))) /* FB done, APEX : no delegation */
         {
             return ZDB_RR_LABEL_DELETE_NODE;
@@ -838,7 +918,7 @@ zdb_rr_label_delete_record(zdb_zone* zone, dnslabel_vector_reference path, s32 p
 
         if(IS_WILD_LABEL(args.sections[args.top]))
         {
-            apex->flags &= ~ZDB_RR_LABEL_GOT_WILD;
+            zdb_rr_label_flag_and(apex, ~ZDB_RR_LABEL_GOT_WILD);
         }
 
         return ZDB_RR_LABEL_DELETE_NODE;
@@ -846,6 +926,225 @@ zdb_rr_label_delete_record(zdb_zone* zone, dnslabel_vector_reference path, s32 p
 
     return err;
 }
+
+/**
+ * @brief INTERNAL callback
+ */
+
+static ya_result
+zdb_rr_label_delete_record_and_empty_terminal_process_callback(void* a, dictionary_node* node)
+{
+    yassert(node != NULL);
+
+    zdb_rr_label *rr_label = (zdb_rr_label*)node;
+
+    zdb_rr_label_delete_record_process_callback_args* args = (zdb_rr_label_delete_record_process_callback_args*)a;
+
+    /*
+     * a points to a kind of dnsname and we are going in
+     *
+     * we go down and down each time calling the dictionnary process for the next level
+     *
+     * at the last level we return the "delete" code
+     *
+     * from there, the dictionnary processor will remove the entry
+     *
+     * at that point the calling dictionnary will know if he has to delete his node or not
+     *
+     * and so on and so forth ...
+     *
+     */
+
+    s32 top = args->top;
+    const u8* label = args->sections[top];
+
+    if(!dnslabel_equals(rr_label->name, label))
+    {
+        return COLLECTION_PROCESS_NEXT;
+    }
+
+    /* match */
+
+    if(top > 0)
+    {
+        /* go to the next level */
+
+        label = args->sections[--args->top];
+        hashcode hash = hash_dnslabel(label);
+
+        ya_result err;
+        if((err = dictionary_process(&rr_label->sub, hash, args, zdb_rr_label_delete_record_process_callback)) == COLLECTION_PROCESS_DELETENODE)
+        {
+            /* check the node for relevance, return "delete" if irrelevant */
+
+            if(zdb_rr_label_can_be_deleted(rr_label))
+            {
+                zdb_rr_label_free(args->zone, rr_label); // valid call because in a delete
+
+                return COLLECTION_PROCESS_DELETENODE;
+            }
+
+            if(rr_label->resource_record_set == NULL)
+            {
+                zdb_rr_label_flag_and(rr_label, ~(ZDB_RR_LABEL_HASCNAME|ZDB_RR_LABEL_DROPCNAME));
+            }
+
+            /* If the label just removed is a wildcard, then the parent is marked as not having a wildcard. */
+
+            if(IS_WILD_LABEL(label))
+            {
+                zdb_rr_label_flag_and(rr_label, ~ZDB_RR_LABEL_GOT_WILD);
+            }
+
+            return COLLECTION_PROCESS_STOP;
+        }
+
+        /* or ... stop */
+
+        return err;
+    }
+
+    /* We are at the right place for the record */
+
+    ya_result err;
+
+    if(ISOK(err = zdb_record_delete(&rr_label->resource_record_set, args->type))) /* FB done */
+    {
+        if(zdb_rr_label_cannot_be_deleted(rr_label))
+        {
+            /* If the type was XXXX and we deleted the last one the flag may change.
+             * NS => not a delegation anymore
+             * CNAME => no cname anymore
+             * ANY => nothing anymore (and should not be relevant anymore either ...)
+             */
+
+            u16 clear_mask = 0;
+            switch(args->type)
+            {
+                case TYPE_NS:
+                    clear_mask = ~ZDB_RR_LABEL_DELEGATION; // will clear "delegation"
+
+                    if(!ZDB_LABEL_UNDERDELEGATION(rr_label))
+                    {
+                        // must clear ZDB_RR_LABEL_UNDERDELEGATION from everything under this one
+                        zdb_rr_label_clear_underdelegation_under(rr_label);
+                    }
+
+                    break;
+                case TYPE_CNAME:
+                    clear_mask = ~ZDB_RR_LABEL_HASCNAME; // will clear "has cname"
+                    break;
+                case TYPE_ANY:
+                    clear_mask = ~(ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_DROPCNAME|ZDB_RR_LABEL_HASCNAME); // will clear "delegation", "drop cname" and "has cname"
+                    break;
+                case TYPE_RRSIG:
+                case TYPE_NSEC:
+                    break;
+                default:
+                    // checks if there are any other types than CNAME, RRSIG and NSEC, clears DROPCNAME if it's true
+                    clear_mask = ~ZDB_RR_LABEL_DROPCNAME; // will clear "drop cname"
+                    break;
+            }
+
+            zdb_rr_label_flag_and(rr_label, clear_mask); // clears the bits using the mask
+
+            return COLLECTION_PROCESS_STOP;
+        }
+        else
+        {
+            if(zdb_rr_label_has_dnssec_extension(rr_label))
+            {
+                // remove the extension
+
+                if(zdb_rr_label_nsec3any_linked(rr_label))
+                {
+                    // detach then destroy the ext
+                    nsec3_zone_label_detach(rr_label);
+                }
+                else if(zdb_rr_label_nsec_linked(rr_label))
+                {
+                    nsec_zone_label_detach(rr_label);
+                }
+#if DEBUG
+                else
+                {
+                    yassert(rr_label->nsec.dnssec == NULL);
+                }
+#endif
+            }
+        }
+
+        /* NOTE: the 'detach' is made by destroy : do not touch to the "next" field */
+        /* NOTE: the free of the node is made by destroy : do not do it */
+
+        /* dictionary destroy will take every item in the dictionary and
+         * iterate through it calling the passed function.
+         */
+
+        zdb_rr_label_free(args->zone, rr_label); // valid call because in a delete
+
+        return COLLECTION_PROCESS_DELETENODE;
+    }
+
+    return err /*COLLECTION_PROCESS_RETURNERROR*/;
+}
+
+ya_result
+zdb_rr_label_delete_record_and_empty_terminal(zdb_zone* zone, dnslabel_vector_reference path, s32 path_index, u16 type)
+{
+    yassert(zone != NULL && path != NULL && path_index >= -1);
+    yassert(zdb_zone_iswritelocked(zone));
+
+    zdb_rr_label* apex = zone->apex;
+
+    if(apex == NULL)
+    {
+        return ZDB_ERROR_DELETEFROMEMPTY;
+    }
+
+    if(path_index < 0)
+    {
+        if(ISOK(zdb_record_delete(&apex->resource_record_set, type))) /* FB done, APEX : no delegation */
+        {
+            return ZDB_RR_LABEL_DELETE_NODE;
+        }
+
+        return ZDB_ERROR_KEY_NOTFOUND;
+    }
+
+    zdb_rr_label_delete_record_process_callback_args args;
+    args.sections = path;
+    args.zone = zone;
+    args.top = path_index;
+    args.type = type;
+
+    hashcode hash = hash_dnslabel(args.sections[args.top]);
+
+    ya_result err;
+
+    if((err = dictionary_process(&apex->sub, hash, &args, zdb_rr_label_delete_record_and_empty_terminal_process_callback)) == COLLECTION_PROCESS_DELETENODE)
+    {
+        if(zdb_rr_label_can_be_deleted(apex))
+        {
+            zdb_rr_label_free(zone, apex); // valid call because in a delete
+            zone->apex = NULL;
+
+            return ZDB_RR_LABEL_DELETE_TREE;
+        }
+
+        /* If the label just removed is a wildcard, then the parent is marked as not having a wildcard. */
+
+        if(IS_WILD_LABEL(args.sections[args.top]))
+        {
+            zdb_rr_label_flag_and(apex, ~ZDB_RR_LABEL_GOT_WILD);
+        }
+
+        return ZDB_RR_LABEL_DELETE_NODE;
+    }
+
+    return err;
+}
+
 
 typedef struct zdb_rr_label_delete_record_exact_process_callback_args zdb_rr_label_delete_record_exact_process_callback_args;
 
@@ -869,7 +1168,7 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
 {
     yassert(node != NULL);
 
-    zdb_rr_label* rr_label = (zdb_rr_label*)node;
+    zdb_rr_label *rr_label = (zdb_rr_label*)node;
 
     zdb_rr_label_delete_record_exact_process_callback_args* args = (zdb_rr_label_delete_record_exact_process_callback_args*)a;
 
@@ -911,7 +1210,7 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
         {
             /* check the node for relevance, return "delete" if irrelevant */
 
-            if(RR_LABEL_IRRELEVANT(rr_label))
+            if(zdb_rr_label_can_be_deleted(rr_label))
             {
                 zdb_rr_label_free(args->zone, rr_label); // valid call because in a delete
                 
@@ -919,12 +1218,17 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
 
                 return COLLECTION_PROCESS_DELETENODE;
             }
+
+            if(rr_label->resource_record_set == NULL)
+            {
+                zdb_rr_label_flag_and(rr_label, ~(ZDB_RR_LABEL_HASCNAME|ZDB_RR_LABEL_DROPCNAME));
+            }
             
             /* If the label just removed is a wildcard, then the parent is marked as not having a wildcard. */
 
             if(IS_WILD_LABEL(label))
             {
-                rr_label->flags &= ~ZDB_RR_LABEL_GOT_WILD;
+                zdb_rr_label_flag_and(rr_label, ~ZDB_RR_LABEL_GOT_WILD);
             }
 
             return COLLECTION_PROCESS_STOP;
@@ -945,11 +1249,7 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
          * @NOTE delete_return_code can be either SUCCESS_STILL_RECORDS or SUCCESS_LAST_RECORD
          */
 
-#if ZDB_CHANGE_FEEDBACK_SUPPORT
-        zdb_listener_notify_remove_record(args->zone, args->sections[args->top], args->type, args->ttlrdata);
-#endif
-
-        if(!zdb_rr_label_is_empty_terminal(rr_label))
+        if(zdb_rr_label_cannot_be_deleted(rr_label))
         {
             /* If the type was XXXX and we deleted the last one the flag may change.
              * NS => not a delegation anymore
@@ -964,9 +1264,12 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
                 {
                     case TYPE_NS:
                         clear_mask = ~ZDB_RR_LABEL_DELEGATION; // will clear "delegation"
-                        
-                        // must clear ZDB_RR_LABEL_UNDERDELEGATION from everything under this one                        
-                        zdb_rr_label_clear_underdelegation_under(rr_label);
+
+                        if(!ZDB_LABEL_UNDERDELEGATION(rr_label))
+                        {
+                            // must clear ZDB_RR_LABEL_UNDERDELEGATION from everything under this one
+                            zdb_rr_label_clear_underdelegation_under(rr_label);
+                        }
                         
                         break;
                     case TYPE_CNAME:
@@ -984,7 +1287,7 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
                         break;
                 }
 
-                rr_label->flags &= clear_mask;
+                zdb_rr_label_flag_and(rr_label, clear_mask);
             }
 
             return COLLECTION_PROCESS_STOP;
@@ -1004,7 +1307,7 @@ zdb_rr_label_delete_record_exact_process_callback(void* a, dictionary_node* node
                 {
                     nsec_zone_label_detach(rr_label);
                 }
-#ifdef DEBUG
+#if DEBUG
                 else
                 {
                     yassert(rr_label->nsec.dnssec == NULL);
@@ -1062,9 +1365,6 @@ zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path,
     {
         if(ISOK(zdb_record_delete_exact(&apex->resource_record_set, type, ttlrdata))) /* FB done, APEX : no delegation */
         {
-#if ZDB_CHANGE_FEEDBACK_SUPPORT
-            zdb_listener_notify_remove_record(zone, path[0], type, ttlrdata);
-#endif
             if(RR_LABEL_IRRELEVANT(apex))
             {
                 zdb_rr_label_free(zone, apex); // valid call because in a delete
@@ -1111,7 +1411,7 @@ zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path,
 
             if(IS_WILD_LABEL(args.sections[args.top]))
             {
-                apex->flags &= ~ZDB_RR_LABEL_GOT_WILD;
+                zdb_rr_label_flag_and(apex, ~ZDB_RR_LABEL_GOT_WILD);
             }
         }
         
@@ -1130,10 +1430,46 @@ zdb_rr_label_delete_record_exact(zdb_zone* zone, dnslabel_vector_reference path,
     return err;
 }
 
-void
-zdb_rr_label_print_indented(const zdb_rr_label* rr_label, output_stream *os, int indent)
+u16 zdb_rr_label_bitmap_type_init(zdb_rr_label *rr_label, type_bit_maps_context *bitmap)
 {
-    osformatln(os, "%tl: '%{dnslabel}'(%u) #[%08x]", indent, rr_label->name, rr_label->flags, hash_dnslabel(rr_label->name));
+    const zdb_rr_collection collection = rr_label->resource_record_set;
+
+    type_bit_maps_init(bitmap);
+
+    btree_iterator iter;
+    btree_iterator_init(collection, &iter);
+
+    if(ZDB_LABEL_ATORUNDERDELEGATION(rr_label))
+    {
+        while(btree_iterator_hasnext(&iter))
+        {
+            btree_node* node = btree_iterator_next_node(&iter);
+            u16 type = node->hash;
+            if((type != TYPE_A) && (type != TYPE_AAAA))
+            {
+                type_bit_maps_set_type(bitmap, type);
+            }
+        }
+    }
+    else
+    {
+        while(btree_iterator_hasnext(&iter))
+        {
+            btree_node* node = btree_iterator_next_node(&iter);
+            u16 type = node->hash;
+            type_bit_maps_set_type(bitmap, type);
+        }
+    }
+
+    u16 bitmap_size = type_bit_maps_update_size(bitmap);
+
+    return bitmap_size;
+}
+
+void
+zdb_rr_label_print_indented(const zdb_rr_label *rr_label, output_stream *os, int indent)
+{
+    osformatln(os, "%tl: '%{dnslabel}'(%u) #[%08x]", indent, rr_label->name, zdb_rr_label_flag_get(rr_label), hash_dnslabel(rr_label->name));
 
     indent++;
 
@@ -1150,7 +1486,7 @@ zdb_rr_label_print_indented(const zdb_rr_label* rr_label, output_stream *os, int
 }
 
 void
-zdb_rr_label_print(const zdb_rr_label* rr_label, output_stream *os)
+zdb_rr_label_print(const zdb_rr_label *rr_label, output_stream *os)
 {
     zdb_rr_label_print_indented(rr_label, os, 0);
 }

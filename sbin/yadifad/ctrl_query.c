@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup server
  *  @ingroup yadifad
  *  @brief server
@@ -42,7 +43,6 @@
 /*----------------------------------------------------------------------------*/
 
 #include "server-config.h"
-#include "config.h"
 
 #include <dnscore/file_output_stream.h>
 #include <dnscore/logger.h>
@@ -60,9 +60,11 @@ extern logger_handle *g_server_logger;
 
 #include "confs.h"
 #include "signals.h"
-#include "acl.h"
+#include <dnscore/acl.h>
 
 
+
+#if HAS_CTRL
 
 #include "ctrl_zone.h"
 
@@ -72,7 +74,6 @@ extern logger_handle *g_server_logger;
 
 #include "notify.h"
 
-#ifdef HAS_CTRL
 
 extern zone_data_set database_zone_desc;
 
@@ -122,18 +123,18 @@ ctrl_query_parse_bytes(packet_unpack_reader_data *pr, void *out, u32 out_size)
 {
     struct type_class_ttl_rdlen cmd_tctr;
     packet_reader_skip_fqdn(pr);
-    packet_reader_read(pr, &cmd_tctr, 10);
+    packet_reader_read(pr, &cmd_tctr, 10); // exact
     cmd_tctr.rdlen = ntohs(cmd_tctr.rdlen);
     
     if(cmd_tctr.rdlen <= out_size)
     {
         cmd_tctr.rdlen -= out_size;
-        ya_result return_code = packet_reader_read(pr, out, out_size);
+        ya_result return_code = packet_reader_read(pr, out, out_size); // exact
         return return_code;
     }
     else
     {
-        return ERROR; // not enough bytes
+        return BUFFER_WOULD_OVERFLOW; // not enough bytes
     }
 }
 
@@ -150,59 +151,61 @@ ctrl_query_parse_fqdn_class_view(packet_unpack_reader_data *pr, u8 *fqdn, u32 fq
 {
     struct type_class_ttl_rdlen cmd_tctr;
     packet_reader_skip_fqdn(pr);
-    packet_reader_read(pr, &cmd_tctr, 10);
+    packet_reader_read(pr, &cmd_tctr, 10); // exact
     cmd_tctr.rdlen = ntohs(cmd_tctr.rdlen);
     
     fqdn[0] = '\0';
     *rclass = CLASS_IN;
     view[0] = '\0';
-    
+
+    ya_result return_code = 0;
+
     if(cmd_tctr.rdlen != 0)
     {
-        ya_result return_code;
         u32 from = pr->offset;
         if(ISOK(return_code = packet_reader_read_fqdn(pr, fqdn, fqdn_size)))
         {
             cmd_tctr.rdlen -= pr->offset -from;
+
+            ya_result parameters = 1;
             
             if(cmd_tctr.rdlen > 2)
             {
-                if(ISOK(return_code = packet_reader_read(pr, rclass, 2)))
+                if(ISOK(return_code = packet_reader_read(pr, rclass, 2))) // exact
                 {
+                    ++parameters;
+
                     cmd_tctr.rdlen -= 2;
                     
                     if(cmd_tctr.rdlen > 0)
                     {
                         u32 n = MIN(cmd_tctr.rdlen, view_size - 1);
-                        if(ISOK(return_code = packet_reader_read(pr, view, n)))
+                        if(ISOK(return_code = packet_reader_read(pr, view, n))) // exact
                         {
+                            ++parameters;
                             view[n] = '\0';
+
+                            cmd_tctr.rdlen -= return_code;
                         }
                     }
                 }
             }
-            else
+
+            if(ISOK(return_code))
             {
-                if(cmd_tctr.rdlen != 0)
+                if(cmd_tctr.rdlen == 0)
                 {
-                    return_code = ERROR; // the one forbidden value is 1 byte available
+                    return_code = parameters;
+                }
+                else
+                {
+                    return_code = MAKE_DNSMSG_ERROR(RCODE_FORMERR); // must end on an exact match
                 }
             }
         }
-        
-        return return_code;
     }
-    else
-    {
-        if(cmd_tctr.rdlen == 0)
-        {
-            return 0; // nothing read
-        }
-        else
-        {
-            return ERROR; // not enough bytes
-        }
-    }
+
+    return return_code;
 }
 
 static ya_result
@@ -221,18 +224,30 @@ ctrl_query_parse_byte_fqdn_class_view(packet_unpack_reader_data *pr, u8* one_byt
     {
         ya_result return_code;
         u32 from = pr->offset;
-        
+
+        // read the byte
+
         if(ISOK(return_code = packet_reader_read(pr, one_byte, 1)))
-        {        
+        {
+            // read the fqdn
+
             if(ISOK(return_code = packet_reader_read_fqdn(pr, fqdn, fqdn_size)))
             {
-                cmd_tctr.rdlen -= pr->offset -from;
+                // adjust the remaining bytes to process
+
+                cmd_tctr.rdlen -= pr->offset - from;
+
+                // if there is enough for a class ...
 
                 if(cmd_tctr.rdlen > 2)
                 {
+                    // read the class
+
                     if(ISOK(return_code = packet_reader_read(pr, rclass, 2)))
                     {
                         cmd_tctr.rdlen -= 2;
+
+                        // if there is something left it's the view parameter
 
                         if(cmd_tctr.rdlen > 0)
                         {
@@ -244,11 +259,11 @@ ctrl_query_parse_byte_fqdn_class_view(packet_unpack_reader_data *pr, u8* one_byt
                         }
                     }
                 }
-                else
+                else // the value can only be 0 else it's a format error
                 {
                     if(cmd_tctr.rdlen != 0)
                     {
-                        return_code = ERROR; // the one forbidden value is 1 byte available
+                        return DNS_ERROR_CODE(RCODE_FORMERR); // the one forbidden value is 1 byte available
                     }
                 }
             }
@@ -276,45 +291,54 @@ ctrl_query_server_shutdown(message_data *mesg)
     u16 cmd_type;
     u16 cmd_class;
     
-    packet_reader_init(&pr, mesg->buffer, mesg->received);
-    packet_reader_skip(&pr, DNS_HEADER_LENGTH);
+    packet_reader_init_from_message(&pr, mesg);
+    
     packet_reader_skip_fqdn(&pr);
     packet_reader_read_u16(&pr, &cmd_type);
     
     ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
     
-    u16 qc = ntohs(MESSAGE_QD(mesg->buffer));
-    u16 pc = ntohs(MESSAGE_AN(mesg->buffer));
-    u16 an = ntohs(MESSAGE_NS(mesg->buffer));
+    u16 qc = message_get_query_count(mesg);
+    u16 pc = message_get_answer_count(mesg);
+    u16 an = message_get_authority_count(mesg);
     
     if(ISOK(return_code) && (qc == 1) && (pc == 0) && (an == 0) && (cmd_type == TYPE_CTRL_SRVSHUTDOWN) && (cmd_class == CLASS_CTRL))
     {
         if(ISOK(return_code = ctrl_query_parse_no_parameters(&pr)))
         {
             log_info("ctrl: shutdown");
-            
-            if(!ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac.allow_control)))
+
+            if(!ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac->allow_control)))
             {
-                program_mode = SA_SHUTDOWN;
+                if(!dnscore_shuttingdown())
+                {
+                    log_debug("ctrl: shutdown: in progress");
 
-                dnscore_shutdown();
+                    program_mode = SA_SHUTDOWN;
+                    server_service_stop_nowait();
 
-                mesg->send_length = mesg->received;
+                    dnscore_shutdown();
+                }
+                else
+                {
+                    log_info("ctrl: shutdown: already shutting down");
+                }
             }
             else
             {
-                log_err("ctrl: shutdown: rejected by ACL");
-
+                log_notice("ctrl: shutdown: rejected by ACL");
                 message_make_error(mesg, RCODE_REFUSED);
             }
         }
         else
         {
+            log_notice("ctrl: shutdown: format error");
             message_make_error(mesg, RCODE_FORMERR);
         }
     }
     else
     {
+        log_notice("ctrl: shutdown: format error");
         message_make_error(mesg, RCODE_FORMERR);
     }
 }
@@ -326,16 +350,16 @@ ctrl_query_logger_reopen(message_data *mesg)
     u16 cmd_type;
     u16 cmd_class;
     
-    packet_reader_init(&pr, mesg->buffer, mesg->received);
-    packet_reader_skip(&pr, DNS_HEADER_LENGTH);
+    packet_reader_init_from_message(&pr, mesg);
+    
     packet_reader_skip_fqdn(&pr);
     packet_reader_read_u16(&pr, &cmd_type);
     
     ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
     
-    u16 qc = ntohs(MESSAGE_QD(mesg->buffer));
-    u16 pc = ntohs(MESSAGE_AN(mesg->buffer));
-    u16 an = ntohs(MESSAGE_NS(mesg->buffer));
+    u16 qc = message_get_query_count(mesg);
+    u16 pc = message_get_answer_count(mesg);
+    u16 an = message_get_authority_count(mesg);
     
     if(ISOK(return_code) && (qc == 1) && (pc == 0) && (an == 0) && (cmd_type == TYPE_CTRL_SRVLOGREOPEN) && (cmd_class == CLASS_CTRL))
     {
@@ -343,26 +367,25 @@ ctrl_query_logger_reopen(message_data *mesg)
         {
             log_info("ctrl: logger reopen");
             
-            if(!ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac.allow_control)))
+            if(!ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac->allow_control)))
             {
                 logger_reopen();
-
-                mesg->send_length = mesg->received;
             }
             else
             {
-                log_err("ctrl: logger reopen: rejected by ACL");
-
+                log_notice("ctrl: logger reopen: rejected by ACL");
                 message_make_error(mesg, RCODE_REFUSED);
             }
         }
         else
         {
+            log_notice("ctrl: logger reopen: format error");
             message_make_error(mesg, RCODE_FORMERR);
         }
     }
     else
     {
+        log_notice("ctrl: logger reopen: format error");
         message_make_error(mesg, RCODE_FORMERR);
     }
 }
@@ -374,16 +397,16 @@ ctrl_query_config_reload(message_data *mesg)
     u16 cmd_type;
     u16 cmd_class;
     
-    packet_reader_init(&pr, mesg->buffer, mesg->received);
-    packet_reader_skip(&pr, DNS_HEADER_LENGTH);
+    packet_reader_init_from_message(&pr, mesg);
+    
     packet_reader_skip_fqdn(&pr);
     packet_reader_read_u16(&pr, &cmd_type);
     
     ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
     
-    u16 qc = ntohs(MESSAGE_QD(mesg->buffer));
-    u16 pc = ntohs(MESSAGE_AN(mesg->buffer));
-    u16 an = ntohs(MESSAGE_NS(mesg->buffer));
+    u16 qc = message_get_query_count(mesg);
+    u16 pc = message_get_answer_count(mesg);
+    u16 an = message_get_authority_count(mesg);
     
     if(ISOK(return_code) && (qc == 1) && (pc == 0) && (an == 0) && (cmd_type == TYPE_CTRL_SRVCFGRELOAD) && (cmd_class == CLASS_CTRL))
     {        
@@ -391,26 +414,39 @@ ctrl_query_config_reload(message_data *mesg)
         {
             log_info("ctrl: config reload");
             
-            if(!ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac.allow_control)))
+            if(!ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac->allow_control)))
             {
-                yadifad_config_update(g_config->config_file);
+                if(ISOK(yadifad_config_update(g_config->config_file)))
+                {
+                    logger_reopen();
 
-                mesg->send_length = mesg->received;
+                    if(!server_context_matches_config())
+                    {
+                        log_try_debug1("network configuration has changed");
+
+                        server_service_reconfigure();
+                    }
+                    else
+                    {
+                        log_try_debug1("network configuration has not changed");
+                    }
+                }
             }
             else
             {
-                log_err("ctrl: config reload: rejected by ACL");
-
+                log_notice("ctrl: config reload: rejected by ACL");
                 message_make_error(mesg, RCODE_REFUSED);
             }
         }
         else
         {
+            log_notice("ctrl: config reload: rejected by ACL");
             message_make_error(mesg, RCODE_FORMERR);
         }
     }
     else
     {
+        log_notice("ctrl: config reload: rejected by ACL");
         message_make_error(mesg, RCODE_FORMERR);
     }
 }
@@ -422,16 +458,15 @@ ctrl_query_log_query_enable(message_data *mesg)
     u16 cmd_type;
     u16 cmd_class;
     
-    packet_reader_init(&pr, mesg->buffer, mesg->received);
-    packet_reader_skip(&pr, DNS_HEADER_LENGTH);
+    packet_reader_init_from_message(&pr, mesg);
     packet_reader_skip_fqdn(&pr);
     packet_reader_read_u16(&pr, &cmd_type);
 
     ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
 
-    u16 qc = ntohs(MESSAGE_QD(mesg->buffer));
-    u16 pc = ntohs(MESSAGE_AN(mesg->buffer));
-    u16 an = ntohs(MESSAGE_NS(mesg->buffer));
+    u16 qc = message_get_query_count(mesg);
+    u16 pc = message_get_answer_count(mesg);
+    u16 an = message_get_authority_count(mesg);
     
     if(ISOK(return_code) && (qc == 1) && (pc == 1) && (an == 0) && (cmd_type == TYPE_CTRL_SRVQUERYLOG) && (cmd_class == CLASS_CTRL))
     {        
@@ -441,7 +476,7 @@ ctrl_query_log_query_enable(message_data *mesg)
         {
             log_info("ctrl: log query: %hhu", on_off & 1);
             
-            if(!ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac.allow_control)))
+            if(!ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac->allow_control)))
             {
                 if((on_off & 1) != 0)
                 {
@@ -458,19 +493,22 @@ ctrl_query_log_query_enable(message_data *mesg)
                 {
                     log_query_set_mode(0); // none
                 }
-
-                mesg->send_length = mesg->received;
             }
             else
             {
-                log_err("ctrl: log query enable: rejected by ACL");
-
+                log_notice("ctrl: log query: %s: rejected by ACL", (on_off&1)?"on":"off");
                 message_make_error(mesg, RCODE_REFUSED);
             }
+        }
+        else
+        {
+            log_notice("ctrl: log query: format error");
+            message_make_error(mesg, RCODE_FORMERR);
         }
     }
     else
     {
+        log_notice("ctrl: log query: format error");
         message_make_error(mesg, RCODE_FORMERR);
     }
 }
@@ -482,16 +520,16 @@ ctrl_query_log_level(message_data *mesg)
     u16 cmd_type;
     u16 cmd_class;
     
-    packet_reader_init(&pr, mesg->buffer, mesg->received);
-    packet_reader_skip(&pr, DNS_HEADER_LENGTH);
+    packet_reader_init_from_message(&pr, mesg);
+    
     packet_reader_skip_fqdn(&pr);
     packet_reader_read_u16(&pr, &cmd_type);
     
     ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
     
-    u16 qc = ntohs(MESSAGE_QD(mesg->buffer));
-    u16 pc = ntohs(MESSAGE_AN(mesg->buffer));
-    u16 an = ntohs(MESSAGE_NS(mesg->buffer));
+    u16 qc = message_get_query_count(mesg);
+    u16 pc = message_get_answer_count(mesg);
+    u16 an = message_get_authority_count(mesg);
     
     if(ISOK(return_code) && (qc == 1) && (pc == 1) && (an == 0) && (cmd_type == TYPE_CTRL_SRVLOGLEVEL) && (cmd_class == CLASS_CTRL))
     {
@@ -501,22 +539,25 @@ ctrl_query_log_level(message_data *mesg)
         {
             log_info("ctrl: log level: %hhu", level);
             
-            if(!ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac.allow_control)))
+            if(!ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac->allow_control)))
             {
                 logger_set_level(level);
-
-                mesg->send_length = mesg->received;
             }
             else
             {
-                log_err("ctrl: log level: rejected by ACL");
-
+                log_notice("ctrl: log level: rejected by ACL");
                 message_make_error(mesg, RCODE_REFUSED);
             }
+        }
+        else
+        {
+            log_info("ctrl: log level: format error");
+            message_make_error(mesg, RCODE_FORMERR);
         }
     }
     else
     {
+        log_info("ctrl: log level: format error");
         message_make_error(mesg, RCODE_FORMERR);
     }
 }
@@ -529,7 +570,7 @@ ctrl_query_log_level(message_data *mesg)
 
 /**
  * 
- * Freeze ALL zones (that are controllable by the current sender)
+ * Apply a single command to all zones (that are controllable by the current sender)
  * 
  * The proper way to handle all zones from an external command is to try them one by one
  * (because of the ACL)
@@ -538,50 +579,53 @@ ctrl_query_log_level(message_data *mesg)
  */
 
 static u16
-ctrl_query_zone_freeze_all(message_data *mesg)
+ctrl_query_zone_apply_all(message_data *mesg, ya_result (*ctrl_zone_single)(zone_desc_s *, bool), const char* name)
 {
-    u32 success = 0;
-    u32 error = 0;
-    
-    zone_set_lock(&database_zone_desc);
-    
-    mesg->send_length = mesg->received;
-    
-    ptr_set_avl_iterator iter;
-    ptr_set_avl_iterator_init(&database_zone_desc.set, &iter);
+    u32 success_count = 0;
+    u32 error_count = 0;
 
-    while(ptr_set_avl_iterator_hasnext(&iter))
+    log_info("ctrl: zone %s: all", name);
+
+    zone_set_lock(&database_zone_desc);
+
+    ptr_set_iterator iter;
+    ptr_set_iterator_init(&database_zone_desc.set, &iter);
+
+    while(ptr_set_iterator_hasnext(&iter))
     {
-        ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
+        ptr_node *zone_node = ptr_set_iterator_next_node(&iter);
         zone_desc_s *zone_desc = (zone_desc_s *)zone_node->value;
 
         if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
         {
             ya_result return_value;
 
-            if(ISOK(return_value = ctrl_zone_freeze(zone_desc, FALSE)))
+            if(ISOK(return_value = ctrl_zone_single(zone_desc, FALSE)))
             {
-                success++;
+                ++success_count;
             }
             else
             {
-                error++;
+                ++error_count;
             }
         }
         else
         {
             // no need to handle this, it just means that the controller has no rights on this
+            log_notice("ctrl: zone %s: all: rejected by ACL", name);
         }
     }
-    
+
     zone_set_unlock(&database_zone_desc);
-    
-    if(success > 0)
+
+    log_info("ctrl: zone %s: all: %i successes, %i errors", name, success_count, error_count);
+
+    if(success_count > 0)
     {
         // part was ok
         return RCODE_NOERROR;
     }
-    else if(error > 0)
+    else if(error_count > 0)
     {
         // part was wrong
         return RCODE_SERVFAIL;
@@ -593,150 +637,128 @@ ctrl_query_zone_freeze_all(message_data *mesg)
     }
 }
 
+/**
+ * Decodes a command that applies for one or all zones optionally using an fqdn parameter
+ * No parameter implies "all"
+ */
+
 static void
-ctrl_query_zone_freeze(message_data *mesg)
+ctrl_query_zone_with_fqdn_class_view(message_data *mesg,
+    ya_result (*ctrl_zone_single)(zone_desc_s *, bool),
+    u16 qtype,
+    const char *name
+    )
 {
     packet_unpack_reader_data pr;
     u16 cmd_type;
     u16 cmd_class;
-    u16 rclass;
+    u16 rclass = CLASS_IN;
     u8 fqdn[MAX_DOMAIN_LENGTH];
     char view[32];
-    
-    packet_reader_init(&pr, mesg->buffer, mesg->received);
-    packet_reader_skip(&pr, DNS_HEADER_LENGTH);
+
+    packet_reader_init_from_message(&pr, mesg);
+
     packet_reader_skip_fqdn(&pr);
     packet_reader_read_u16(&pr, &cmd_type);
-    
+
     ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
-    
-    u16 qc = ntohs(MESSAGE_QD(mesg->buffer));
-    u16 pc = ntohs(MESSAGE_AN(mesg->buffer));
-    u16 an = ntohs(MESSAGE_NS(mesg->buffer));
-    
+
+    u16 qc = message_get_query_count(mesg);
+    u16 pc = message_get_answer_count(mesg);
+    u16 an = message_get_authority_count(mesg);
+
     u16 tmp_status = RCODE_FORMERR;
-    
-    if(ISOK(return_code) && (qc == 1) && (an == 0) && (cmd_type == TYPE_CTRL_ZONEFREEZE) && (cmd_class == CLASS_CTRL))
+
+    if(ISOK(return_code) && (qc == 1) && (an == 0) && (cmd_type == qtype) && (cmd_class == CLASS_CTRL))
     {
         if(pc == 1)
         {
             if(ISOK(return_code = ctrl_query_parse_fqdn_class_view(&pr, fqdn, sizeof(fqdn), &rclass, view, sizeof(view))))
             {
-                log_info("ctrl: zone freeze: '%{dnsname}' %{dnsclass}", fqdn, &rclass);
-                
-                zone_desc_s* zone_desc = zone_acquirebydnsname(fqdn);
-                tmp_status = RCODE_REFUSED;
-
-                if((zone_desc != NULL) && (rclass == zone_desc->qclass) && (view[0] == '\0'))
+                if(return_code > 0)
                 {
-                    tmp_status = RCODE_NOTAUTH;
+                    log_info("ctrl: zone %s: '%{dnsname}' %{dnsclass}", name, fqdn, &rclass);
 
-                    if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
+                    zone_desc_s* zone_desc = zone_acquirebydnsname(fqdn);
+                    tmp_status = RCODE_REFUSED;
+
+                    if(zone_desc != NULL)
                     {
-                        ya_result return_value;
-
-                        if(ISOK(return_value = ctrl_zone_freeze(zone_desc, TRUE)))
+                        if((rclass == zone_desc->qclass) && (view[0] == '\0'))
                         {
-                            tmp_status = RCODE_NOERROR;
+                            tmp_status = RCODE_NOTAUTH;
+
+                            if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
+                            {
+                                ya_result return_value;
+
+                                if(ISOK(return_value = ctrl_zone_single(zone_desc, TRUE)))
+                                {
+                                    tmp_status = RCODE_NOERROR;
+                                }
+                                else
+                                {
+                                    tmp_status = return_value & 0x1f;
+                                }
+                            }
+                            else
+                            {
+                                log_notice("ctrl: zone %s: rejected by ACL", name);
+                            }
                         }
                         else
                         {
-                            tmp_status = return_value & 0x1f;
+                            log_warn("ctrl: zone %s: zone '%{dnsname}' doesn't exist in class %{dnsclass}", name, fqdn, &rclass);
                         }
+
+                        zone_release(zone_desc);
                     }
                     else
                     {
-                        log_err("ctrl: zone freeze: rejected by ACL");
+                        log_warn("ctrl: zone %s: zone '%{dnsname}' %{dnsclass} not found", name, fqdn, &rclass);
                     }
-
-                    zone_release(zone_desc);
                 }
                 else
                 {
-                    log_err("ctrl: zone freeze: zone '%{dnsname}' %{dnsclass} not found", fqdn, &rclass);
+                    tmp_status = ctrl_query_zone_apply_all(mesg, ctrl_zone_single, name);
                 }
             }
+            else
+            {
+                // an error occurred (FORMERR is already set)
+            }
         }
-        else if(pc == 0)
+        else if(pc == 0) // no parameter record
         {
-            tmp_status = ctrl_query_zone_freeze_all(mesg);
+            tmp_status = ctrl_query_zone_apply_all(mesg, ctrl_zone_single, name);
+        }
+        else
+        {
+            // an error occurred (FORMERR is already set)
         }
     }
-    
+
     if(tmp_status != RCODE_NOERROR)
     {
+        log_notice("ctrl: zone %s: failure (%s)", name, dns_message_rcode_get_name(tmp_status));
         message_make_error(mesg, tmp_status);
     }
 }
 
 /**
- * 
- * Unfreeze ALL zones (that are controllable by the current sender)
- * 
- * The proper way to handle all zones from an external command is to try them one by one
- * (because of the ACL)
- * 
+ * Freeze zone(s)
+ *
  * @param mesg
  */
 
-static u16
-ctrl_query_zone_unfreeze_all(message_data *mesg)
+static void
+ctrl_query_zone_freeze(message_data *mesg)
 {
-    u32 success = 0;
-    u32 error = 0;
-    
-    zone_set_lock(&database_zone_desc);
-    
-    mesg->send_length = mesg->received;
-    
-    ptr_set_avl_iterator iter;
-    ptr_set_avl_iterator_init(&database_zone_desc.set, &iter);
-
-    while(ptr_set_avl_iterator_hasnext(&iter))
-    {
-        ptr_node *zone_node = ptr_set_avl_iterator_next_node(&iter);
-        zone_desc_s *zone_desc = (zone_desc_s *)zone_node->value;
-
-        if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
-        {
-            ya_result return_value;
-
-            if(ISOK(return_value = ctrl_zone_unfreeze(zone_desc, FALSE)))
-            {
-                success++;
-            }
-            else
-            {
-                error++;
-            }
-        }
-        else
-        {
-            // no need to handle this, it just means that the controller has no rights on this
-        }
-    }
-    
-    zone_set_unlock(&database_zone_desc);
-    
-    if(success > 0)
-    {
-        // part was ok
-        return RCODE_NOERROR;
-    }
-    else if(error > 0)
-    {
-        // part was wrong
-        return RCODE_SERVFAIL;
-    }
-    else
-    {
-        // no zone accepts this controller
-        return RCODE_REFUSED;
-    }
+    ctrl_query_zone_with_fqdn_class_view(mesg, ctrl_zone_freeze, TYPE_CTRL_ZONEFREEZE, "freeze");
 }
 
 /**
- * Unfreeze ONE zone
+ * Unfreeze zone(s)
  * 
  * @param mesg
  */
@@ -744,81 +766,19 @@ ctrl_query_zone_unfreeze_all(message_data *mesg)
 static void
 ctrl_query_zone_unfreeze(message_data *mesg)
 {
-    packet_unpack_reader_data pr;
-    u16 cmd_type;
-    u16 cmd_class;
-    u16 rclass;
-    u8 fqdn[MAX_DOMAIN_LENGTH];
-    char view[32];
-    
-    packet_reader_init(&pr, mesg->buffer, mesg->received);
-    packet_reader_skip(&pr, DNS_HEADER_LENGTH);
-    packet_reader_skip_fqdn(&pr);
-    packet_reader_read_u16(&pr, &cmd_type);
-    
-    ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
-    
-    u16 qc = ntohs(MESSAGE_QD(mesg->buffer));
-    u16 pc = ntohs(MESSAGE_AN(mesg->buffer));
-    u16 an = ntohs(MESSAGE_NS(mesg->buffer));
-    
-    u16 tmp_status = RCODE_FORMERR;
-    
-    if(ISOK(return_code) && (qc == 1) && (an == 0) && (cmd_type == TYPE_CTRL_ZONEUNFREEZE) && (cmd_class == CLASS_CTRL))
-    {
-        if(pc == 1)
-        {
-            if(ISOK(return_code = ctrl_query_parse_fqdn_class_view(&pr, fqdn, sizeof(fqdn), &rclass, view, sizeof(view))))
-            {
-                log_info("ctrl: zone unfreeze: '%{dnsname}' %{dnsclass}", fqdn, &rclass);
-                
-                zone_desc_s* zone_desc = zone_acquirebydnsname(fqdn);
-                tmp_status = RCODE_REFUSED;
+    ctrl_query_zone_with_fqdn_class_view(mesg, ctrl_zone_unfreeze, TYPE_CTRL_ZONEUNFREEZE, "unfreeze");
+}
 
-                if((zone_desc != NULL) && (rclass == zone_desc->qclass) && (view[0] == '\0'))
-                {
-                    tmp_status = RCODE_NOTAUTH;
+static void
+ctrl_query_zone_notify(message_data *mesg)
+{
+    ctrl_query_zone_with_fqdn_class_view(mesg, ctrl_zone_notify, TYPE_CTRL_ZONENOTIFY, "notify");
+}
 
-                    if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
-                    {
-                        ya_result return_value;
-                        
-                        tmp_status = RCODE_SERVFAIL;
-
-                        if(ISOK(return_value = ctrl_zone_unfreeze(zone_desc, TRUE)))
-                        {
-                            tmp_status = RCODE_NOERROR;
-                            mesg->send_length = mesg->received;
-                        }
-                        else
-                        {
-                            tmp_status = return_value & 0x1f;
-                        }
-                    }
-                    else
-                    {
-                        log_err("ctrl: zone unfreeze: rejected by ACL");
-                    }
-
-                    zone_release(zone_desc);
-                }
-                else
-                {
-                    log_err("ctrl: zone unfreeze: zone '%{dnsname}' %{dnsclass} not found", fqdn, &rclass);
-                }
-                
-            }
-        }
-        else if(pc == 0)
-        {
-            tmp_status = ctrl_query_zone_unfreeze_all(mesg);
-        }
-    }
-    
-    if(tmp_status != RCODE_NOERROR)
-    {
-        message_make_error(mesg, tmp_status);
-    }
+static void
+ctrl_query_zonereload(message_data *mesg)
+{
+    ctrl_query_zone_with_fqdn_class_view(mesg, ctrl_zone_reload, TYPE_CTRL_ZONERELOAD, "reload");
 }
 
 static void
@@ -831,183 +791,83 @@ ctrl_query_zone_sync(message_data *mesg)
     u8 fqdn[MAX_DOMAIN_LENGTH];
     char view[32];
     
-    packet_reader_init(&pr, mesg->buffer, mesg->received);
-    packet_reader_skip(&pr, DNS_HEADER_LENGTH);
+    packet_reader_init_from_message(&pr, mesg);
     packet_reader_skip_fqdn(&pr);
     packet_reader_read_u16(&pr, &cmd_type);
     
     ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
     
-    u16 qc = ntohs(MESSAGE_QD(mesg->buffer));
-    u16 pc = ntohs(MESSAGE_AN(mesg->buffer));
-    u16 an = ntohs(MESSAGE_NS(mesg->buffer));
+    u16 qc = message_get_query_count(mesg);
+    u16 pc = message_get_answer_count(mesg);
+    u16 an = message_get_authority_count(mesg);
     
     u16 tmp_status = RCODE_FORMERR;
     
-    if(ISOK(return_code) && (qc == 1) && (pc == 1) && (an == 0) && (cmd_type == TYPE_CTRL_ZONESYNC) && (cmd_class == CLASS_CTRL))
+    if(ISOK(return_code) && (qc == 1) && (an == 0) && (cmd_type == TYPE_CTRL_ZONESYNC) && (cmd_class == CLASS_CTRL))
     {
-        u8 clean;
-        
-        if((return_code = ctrl_query_parse_byte_fqdn_class_view(&pr, &clean, fqdn, sizeof(fqdn), &rclass, view, sizeof(view))) > 0 )
+        if(pc == 1)
         {
-            log_info("ctrl: zone sync: clean=%hhu '%{dnsname}' %{dnsclass}", clean & 1, fqdn, &rclass);
+            u8 clean = 0;
 
-            zone_desc_s* zone_desc = zone_acquirebydnsname(fqdn);
-            tmp_status = RCODE_REFUSED;
-
-            if((zone_desc != NULL) && (rclass == zone_desc->qclass) && (view[0] == '\0'))
+            if(ISOK(return_code = ctrl_query_parse_byte_fqdn_class_view(&pr, &clean, fqdn, sizeof(fqdn), &rclass, view, sizeof(view))))
             {
-                tmp_status = RCODE_NOTAUTH;
-
-                if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
+                if(return_code > 1)
                 {
-                    database_zone_save_ex(fqdn, (clean & 1) != 0);
+                    log_info("ctrl: zone sync: clean=%hhu '%{dnsname}' %{dnsclass}", clean & 1, fqdn, &rclass);
 
-                    tmp_status = RCODE_NOERROR;
-                    mesg->send_length = mesg->received;
+                    zone_desc_s* zone_desc = zone_acquirebydnsname(fqdn);
+                    tmp_status = RCODE_REFUSED;
+
+                    if(zone_desc != NULL)
+                    {
+                        if((rclass == zone_desc->qclass) && (view[0] == '\0'))
+                        {
+                            tmp_status = RCODE_NOTAUTH;
+
+                            if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
+                            {
+                                tmp_status = ctrl_zone_sync(zone_desc, TRUE, (clean & 1) != 0);
+                            }
+                            else
+                            {
+                                log_notice("ctrl: zone sync: '%{dnsname}': rejected by ACL", fqdn);
+                            }
+                        }
+                        else
+                        {
+                            log_notice("ctrl: zone sync: zone '%{dnsname}' not found in class %{dnsclass}", fqdn, &rclass);
+                        }
+
+                        zone_release(zone_desc);
+                    }
+                    else
+                    {
+                        log_notice("ctrl: zone sync: zone '%{dnsname}' %{dnsclass} not found", fqdn, &rclass);
+                    }
                 }
                 else
                 {
-                    log_err("ctrl: zone sync: rejected by ACL");
+                    tmp_status = ctrl_query_zone_apply_all(mesg, ctrl_zone_sync_noclean, "sync");
                 }
-
-                zone_release(zone_desc);
             }
             else
             {
-                log_err("ctrl: zone sync: zone '%{dnsname}' %{dnsclass} not found", fqdn, &rclass);
+                // some error (FORMERR already set)
             }
         }
-    }
-    
-    if(tmp_status != RCODE_NOERROR)
-    {
-        message_make_error(mesg, tmp_status);
-    }
-}
-
-static void
-ctrl_query_zonenotify(message_data *mesg)
-{
-    packet_unpack_reader_data pr;
-    u16 cmd_type;
-    u16 cmd_class;
-    u16 rclass;
-    u8 fqdn[MAX_DOMAIN_LENGTH];
-    char view[32];
-    
-    packet_reader_init(&pr, mesg->buffer, mesg->received);
-    packet_reader_skip(&pr, DNS_HEADER_LENGTH);
-    packet_reader_skip_fqdn(&pr);
-    packet_reader_read_u16(&pr, &cmd_type);
-    
-    ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
-    
-    u16 qc = ntohs(MESSAGE_QD(mesg->buffer));
-    u16 pc = ntohs(MESSAGE_AN(mesg->buffer));
-    u16 an = ntohs(MESSAGE_NS(mesg->buffer));
-    
-    u16 tmp_status = RCODE_FORMERR;
-    
-    if(ISOK(return_code) && (qc == 1) && (pc == 1) && (an == 0) && (cmd_type == TYPE_CTRL_ZONENOTIFY) && (cmd_class == CLASS_CTRL))
-    {
-        if(ISOK(return_code = ctrl_query_parse_fqdn_class_view(&pr, fqdn, sizeof(fqdn), &rclass, view, sizeof(view))))
+        else if(pc == 0)
         {
-            log_info("ctrl: zone notify: '%{dnsname}' %{dnsclass}", fqdn, &rclass);
-            
-            zone_desc_s *zone_desc = zone_acquirebydnsname(fqdn);
-            tmp_status = RCODE_REFUSED;
-
-            if((zone_desc != NULL) && (rclass == zone_desc->qclass) && (view[0] == '\0'))
-            {
-                tmp_status = RCODE_NOTAUTH;
-
-                if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
-                {
-                    notify_slaves(fqdn);
-                    
-                    tmp_status = RCODE_NOERROR;
-                    mesg->send_length = mesg->received;
-                }
-                else
-                {
-                    log_err("ctrl: zone notify: rejected by ACL");
-                }
-
-                zone_release(zone_desc);
-            }
+            tmp_status = ctrl_query_zone_apply_all(mesg, ctrl_zone_sync_noclean, "sync");
         }
         else
         {
-            log_err("ctrl: zone notify: zone '%{dnsname}' %{dnsclass} not found", fqdn, &rclass);
+            // some error (FORMERR already set)
         }
     }
-
+    
     if(tmp_status != RCODE_NOERROR)
     {
-        message_make_error(mesg, tmp_status);
-    }
-}
-
-static void
-ctrl_query_zonereload(message_data *mesg)
-{
-    packet_unpack_reader_data pr;
-    u16 cmd_type;
-    u16 cmd_class;
-    u16 rclass;
-    u8 fqdn[MAX_DOMAIN_LENGTH];
-    char view[32];
-    
-    packet_reader_init(&pr, mesg->buffer, mesg->received);
-    packet_reader_skip(&pr, DNS_HEADER_LENGTH);
-    packet_reader_skip_fqdn(&pr);
-    packet_reader_read_u16(&pr, &cmd_type);
-    
-    ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
-    
-    u16 qc = ntohs(MESSAGE_QD(mesg->buffer));
-    u16 pc = ntohs(MESSAGE_AN(mesg->buffer));
-    u16 an = ntohs(MESSAGE_NS(mesg->buffer));
-    
-    u16 tmp_status = RCODE_FORMERR;
-    
-    if(ISOK(return_code) && (qc == 1) && (pc == 1) && (an == 0) && (cmd_type == TYPE_CTRL_ZONERELOAD) && (cmd_class == CLASS_CTRL))
-    {
-        if(ISOK(return_code = ctrl_query_parse_fqdn_class_view(&pr, fqdn, sizeof(fqdn), &rclass, view, sizeof(view))))
-        {
-            log_info("ctrl: zone reload: '%{dnsname}' %{dnsclass}", fqdn, &rclass);
-            
-            zone_desc_s *zone_desc = zone_acquirebydnsname(fqdn);
-            tmp_status = RCODE_REFUSED;
-
-            if((zone_desc != NULL) && (rclass == zone_desc->qclass) && (view[0] == '\0'))
-            {
-                tmp_status = RCODE_NOTAUTH;
-
-                if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
-                {
-                    database_zone_load(fqdn);
-                    
-                    tmp_status = RCODE_NOERROR;
-                    mesg->send_length = mesg->received;
-                }
-                else
-                {
-                    log_err("ctrl: zone reload: rejected by ACL");
-                }
-
-                zone_release(zone_desc);
-            }
-        }
-        else
-        {
-            log_err("ctrl: zone reload: zone '%{dnsname}' %{dnsclass} not found", fqdn, &rclass);
-        }
-    }
-
-    if(tmp_status != RCODE_NOERROR)
-    {
+        log_notice("ctrl: zone sync: failure (%s)", dns_message_rcode_get_name(tmp_status));
         message_make_error(mesg, tmp_status);
     }
 }
@@ -1015,6 +875,9 @@ ctrl_query_zonereload(message_data *mesg)
 static void
 ctrl_query_zonecfgreload(message_data *mesg)
 {
+    // This doesnt work in a do once/do all once way, hence ...
+    // CANNOT: ctrl_query_zone_with_fqdn_class_view(mesg, ctrl_zone_notify, TYPE_CTRL_ZONECFGRELOAD, "config reload");
+
     packet_unpack_reader_data pr;
     u16 cmd_type;
     u16 cmd_class;
@@ -1022,16 +885,15 @@ ctrl_query_zonecfgreload(message_data *mesg)
     u8 fqdn[MAX_DOMAIN_LENGTH];
     char view[32];
     
-    packet_reader_init(&pr, mesg->buffer, mesg->received);
-    packet_reader_skip(&pr, DNS_HEADER_LENGTH);
+    packet_reader_init_from_message(&pr, mesg);
     packet_reader_skip_fqdn(&pr);
     packet_reader_read_u16(&pr, &cmd_type);
     
     ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
     
-    u16 qc = ntohs(MESSAGE_QD(mesg->buffer));
-    u16 pc = ntohs(MESSAGE_AN(mesg->buffer));
-    u16 an = ntohs(MESSAGE_NS(mesg->buffer));
+    u16 qc = message_get_query_count(mesg);
+    u16 pc = message_get_answer_count(mesg);
+    u16 an = message_get_authority_count(mesg);
     
     u16 tmp_status = RCODE_FORMERR;
     
@@ -1041,53 +903,90 @@ ctrl_query_zonecfgreload(message_data *mesg)
         {
             if(ISOK(return_code = ctrl_query_parse_fqdn_class_view(&pr, fqdn, sizeof(fqdn), &rclass, view, sizeof(view))))
             {
-                log_info("ctrl: zone config reload: '%{dnsname}' %{dnsclass}", fqdn, &rclass);
-
-                zone_desc_s *zone_desc = zone_acquirebydnsname(fqdn);
-                tmp_status = RCODE_REFUSED;
-
-                if((zone_desc != NULL) && (rclass == zone_desc->qclass) && (view[0] == '\0'))
+                if(return_code > 0)
                 {
+                    log_info("ctrl: zone config reload: '%{dnsname}' %{dnsclass}", fqdn, &rclass);
+
+                    zone_desc_s *zone_desc = zone_acquirebydnsname(fqdn);
+                    tmp_status = RCODE_REFUSED;
+
+                    if(zone_desc != NULL)
+                    {
+                        if((rclass == zone_desc->qclass) && (view[0] == '\0'))
+                        {
+                            tmp_status = RCODE_NOTAUTH;
+
+                            if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
+                            {
+                                tmp_status = RCODE_SERVFAIL;
+
+                                // const_ptr_set_of_one is a quick and cheap way to generate constant ptr_set of a single element
+
+                                const_ptr_set_of_one fqdn_set;
+                                const_ptr_set_of_one_init(&fqdn_set, fqdn, fqdn, ptr_set_dnsname_node_compare);
+
+                                ya_result return_code = yadifad_config_update_zone(g_config->config_file, &fqdn_set.set);
+
+                                if(ISOK(return_code))
+                                {
+                                    // tmp_status = RCODE_NOERROR;
+                                    zone_release(zone_desc);
+
+                                    return;
+                                }
+                            }
+                            else
+                            {
+                                log_notice("ctrl: zone config reload: zone '%{dnsname}': rejected by ACL", fqdn);
+                            }
+                        }
+                        else
+                        {
+                            log_warn("ctrl: zone config reload: zone '%{dnsname}' doesn't exist in class %{dnsclass}", fqdn, &rclass);
+                        }
+
+                        zone_release(zone_desc);
+                    }
+                    else
+                    {
+                        log_warn("ctrl: zone config reload: zone '%{dnsname}' %{dnsclass} not found", fqdn, &rclass);
+                    }
+                }
+                else
+                {
+                    log_info("ctrl: zone config reload: all");
+
                     tmp_status = RCODE_NOTAUTH;
 
-                    if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_control)))
+                    if(!ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac->allow_control)))
                     {
                         tmp_status = RCODE_SERVFAIL;
-                        
-                        // const_ptr_set_of_one is a quick and cheap way to generate constant ptr_set of a single element
-                        
-                        const_ptr_set_of_one fqdn_set;
-                        const_ptr_set_of_one_init(&fqdn_set, fqdn, fqdn, ptr_set_dnsname_node_compare);
 
-                        ya_result return_code = yadifad_config_update_zone(g_config->config_file, &fqdn_set.set);
+                        ya_result return_code = yadifad_config_update_zone(g_config->config_file, NULL);
 
                         if(ISOK(return_code))
                         {
                             tmp_status = RCODE_NOERROR;
-                            mesg->send_length = mesg->received;
-                            zone_release(zone_desc);
-
-                            return;
                         }
                     }
                     else
                     {
-                        log_err("ctrl: zone config reload: rejected by ACL");
+                        log_notice("ctrl: zone config reload: all: rejected by ACL");
                     }
-
-                    zone_release(zone_desc);
                 }
             }
             else
             {
-                log_err("ctrl: zone config reload: zone '%{dnsname}' %{dnsclass} not found", fqdn, &rclass);
+                log_warn("ctrl: zone config reload: zone '%{dnsname}' %{dnsclass} not found", fqdn, &rclass);
             }
         }
         else if(pc == 0)
         {
+            log_info("ctrl: zone config reload: all");
+
             tmp_status = RCODE_NOTAUTH;
 
-            if(!ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac.allow_control)))
+            if(!ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac->allow_control)))
             {
                 tmp_status = RCODE_SERVFAIL;
                 
@@ -1096,8 +995,11 @@ ctrl_query_zonecfgreload(message_data *mesg)
                 if(ISOK(return_code))
                 {
                     tmp_status = RCODE_NOERROR;
-                    return;
                 }
+            }
+            else
+            {
+                log_notice("ctrl: zone config reload: all: rejected by ACL");
             }
         }
     }
@@ -1108,32 +1010,40 @@ ctrl_query_zonecfgreload(message_data *mesg)
     }
 }
 
-
+bool
+ctrl_query_is_listened(int sockfd)
+{
+#if 0 /* fix */
+#else
+    (void)sockfd;
+    return TRUE;
+#endif
+}
 
 void
 ctrl_query_process(message_data *mesg)
 {
-    log_info("CTRL (%04hx) %{dnsname} %{dnstype}", ntohs(MESSAGE_ID(mesg->buffer)), mesg->qname, &mesg->qtype);
+    log_info("CTRL (%04hx) %{dnsname} %{dnstype}", ntohs(message_get_id(mesg)), message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg));
 
     if(!ctrl_get_enabled())
     {
         message_make_error(mesg, RCODE_REFUSED);
         
-#if HAS_TSIG_SUPPORT
-        if(TSIG_ENABLED(mesg))  /* NOTE: the TSIG information is in mesg */
+#if DNSCORE_HAS_TSIG_SUPPORT
+        if(message_has_tsig(mesg))  /* NOTE: the TSIG information is in mesg */
         {
             tsig_sign_answer(mesg);
         }
 #endif
         return;
     }
-    
-    if(mesg->qname[0] != '\0')
+
+    if(message_get_canonised_fqdn(mesg)[0] != '\0')
     {
         message_make_error(mesg, RCODE_FORMERR);
         
-#if HAS_TSIG_SUPPORT
-        if(TSIG_ENABLED(mesg))  /* NOTE: the TSIG information is in mesg */
+#if DNSCORE_HAS_TSIG_SUPPORT
+        if(message_has_tsig(mesg))  /* NOTE: the TSIG information is in mesg */
         {
             tsig_sign_answer(mesg);
         }
@@ -1141,13 +1051,12 @@ ctrl_query_process(message_data *mesg)
         return;
     }
     
-    MESSAGE_HIFLAGS(mesg->buffer) |= QR_BITS;
-    mesg->status = RCODE_NOERROR;
-    mesg->send_length = mesg->received;
+    message_set_answer(mesg);
+    message_set_status(mesg, RCODE_NOERROR);
 
     // now can read the command
     
-    switch(mesg->qtype)
+    switch(message_get_query_type(mesg))
     {
         case TYPE_CTRL_SRVSHUTDOWN:
         {
@@ -1191,7 +1100,7 @@ ctrl_query_process(message_data *mesg)
         }
         case TYPE_CTRL_ZONENOTIFY:
         {
-            ctrl_query_zonenotify(mesg);
+            ctrl_query_zone_notify(mesg);
             break;
         }
         case TYPE_CTRL_ZONERELOAD:
@@ -1217,8 +1126,8 @@ ctrl_query_process(message_data *mesg)
         }
     }   /* switch qtype */
     
-#if HAS_TSIG_SUPPORT
-    if(TSIG_ENABLED(mesg))  /* NOTE: the TSIG information is in mesg */
+#if DNSCORE_HAS_TSIG_SUPPORT
+    if(message_has_tsig(mesg))  /* NOTE: the TSIG information is in mesg */
     {
         tsig_sign_answer(mesg);
     }

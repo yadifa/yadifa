@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup database Routines for database manipulations
  *  @ingroup yadifad
  *  @brief database functions
@@ -50,7 +51,6 @@
  * USE INCLUDES */
 
 #include "server-config.h"
-#include "config.h"
 
 #include <dnscore/logger.h>
 #include <dnsdb/zdb_zone.h>
@@ -67,8 +67,8 @@ database_service_zone_unfreeze(zone_desc_s *zone_desc)
 {
     ya_result return_value;
     
-#ifdef DEBUG
-    log_debug("database_service_zone_unfreeze(%{dnsname}@%p=%i)", zone_desc->origin, zone_desc, zone_desc->rc);
+#if DEBUG
+    log_debug("database_service_zone_unfreeze(%{dnsname}@%p=%i)", zone_origin(zone_desc), zone_desc, zone_desc->rc);
 #endif
     
     if(zone_desc == NULL)
@@ -77,11 +77,11 @@ database_service_zone_unfreeze(zone_desc_s *zone_desc)
         return;
     }
     
-    log_debug1("database_service_zone_unfreeze: locking zone '%{dnsname}' for unfreezing", zone_desc->origin);
+    log_debug1("database_service_zone_unfreeze: locking zone '%{dnsname}' for unfreezing", zone_origin(zone_desc));
     
     if(FAIL(return_value = zone_lock(zone_desc, ZONE_LOCK_UNFREEZE)))
     {
-        log_err("database_service_zone_unfreeze: failed to lock zone settings for '%{dnsname}'", zone_desc->origin);
+        log_err("database_service_zone_unfreeze: failed to lock zone settings for '%{dnsname}'", zone_origin(zone_desc));
         return;
     }
     
@@ -89,10 +89,10 @@ database_service_zone_unfreeze(zone_desc_s *zone_desc)
     
     if(zone == NULL)
     {
-        log_err("zone freeze: no zone loaded for '%{dnsname}'", zone_desc->origin);
+        log_err("zone freeze: no zone loaded for '%{dnsname}'", zone_origin(zone_desc));
         zone_clear_status(zone_desc, ZONE_STATUS_PROCESSING);
         
-        log_debug1("database_service_zone_unfreeze: unlocking zone '%{dnsname}' for unfreezing", zone_desc->origin);
+        log_debug1("database_service_zone_unfreeze: unlocking zone '%{dnsname}' for unfreezing", zone_origin(zone_desc));
         
         zone_unlock(zone_desc, ZONE_LOCK_UNFREEZE);
         
@@ -105,20 +105,20 @@ database_service_zone_unfreeze(zone_desc_s *zone_desc)
     
     zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
     
-    if((zone->apex->flags & ZDB_RR_APEX_LABEL_FROZEN) == 0)
+    if(!zdb_zone_is_frozen(zone))
     {
         log_warn("zone freeze: %{dnsname} already unfrozen", zone->origin);
     }
-    
-    zone->apex->flags &= ~ZDB_RR_APEX_LABEL_FROZEN;
-    
+
+    zdb_zone_clear_frozen(zone);
+
     zdb_zone_release_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
     
-    log_info("zone unfreeze: %{dnsname}", zone_desc->origin);
+    log_info("zone unfreeze: %{dnsname}", zone_origin(zone_desc));
     
     zone_clear_status(zone_desc, ZONE_STATUS_FROZEN|ZONE_STATUS_PROCESSING);
     
-    log_debug1("database_service_zone_unfreeze: unlocking zone '%{dnsname}' for unfreezing", zone_desc->origin);
+    log_debug1("database_service_zone_unfreeze: unlocking zone '%{dnsname}' for unfreezing", zone_origin(zone_desc));
     
     zone_unlock(zone_desc, ZONE_LOCK_UNFREEZE);
 }

@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnscoretools Generic Tools
  *  @ingroup dnscore
  *  @brief
@@ -38,7 +39,6 @@
  * @{
  */
 
-#include "dnscore/dnscore-config.h"
 #include "dnscore/dnscore-config.h"
 
 #include <stdio.h>
@@ -48,6 +48,8 @@
 
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <dnscore/timems.h>
+#include <dnscore/config_settings.h>
 
 #include "dnscore/parsing.h"
 
@@ -105,6 +107,8 @@ parse_u32_check_range(const char *src, u32 *dst, u32 min, u32 max, u8 base)
 
     return OK;
 }
+
+
 
 ya_result
 parse_u32_check_range_len_base10(const char *src, u32 src_len, u32 *dst, u32 min, u32 max)
@@ -219,9 +223,6 @@ parse_s32_check_range_len_base10(const char *src, u32 src_len, s32 *dst, s32 min
     return SUCCESS;
 }
 
-#if 0 /* fix */
-#else // THX
-
 ya_result
 parse_u64_check_range_len_base10(const char *src, u32 src_len, u64 *dst, u64 min, u64 max)
 {
@@ -257,9 +258,7 @@ parse_u64_check_range_len_base10(const char *src, u32 src_len, u64 *dst, u64 min
                 return PARSEINT_ERROR;
             }
 
-            output_value *= base_multiplier;
-
-            output_value += value;
+            output_value += value * base_multiplier;
 
             base_multiplier *= 10;
         }
@@ -277,9 +276,7 @@ parse_u64_check_range_len_base10(const char *src, u32 src_len, u64 *dst, u64 min
                 return PARSEINT_ERROR;
             }
 
-            output_value *= base_multiplier;
-
-            output_value += value;
+            output_value += value * base_multiplier;
 
             base_multiplier *= 10;
         }
@@ -300,7 +297,7 @@ parse_u64_check_range_len_base10(const char *src, u32 src_len, u64 *dst, u64 min
                 return PARSEINT_ERROR;
             }
 
-            output_value *= base_multiplier;
+            value *= base_multiplier;
 
             if(output_value > max - value)  // check before addition there will be no 64 bits overflow
             {
@@ -316,11 +313,10 @@ parse_u64_check_range_len_base10(const char *src, u32 src_len, u64 *dst, u64 min
         return PARSEINT_ERROR;
     }
     
-    *dst = (u32)output_value;
+    *dst = output_value;
 
     return SUCCESS;
 }
-#endif // THX
 
 
 
@@ -344,13 +340,13 @@ parse_yyyymmddhhmmss_check_range_len(const char *src, u32 src_len, time_t *dst)
         return PARSEDATE_ERROR;
     }
 
-#ifdef DEBUG
+#if DEBUG
     memset(&thetime, 0xff, sizeof(thetime));
 #endif
     
     u32 tmp_u32;
     
-    if(FAIL(parse_u32_check_range_len_base10(src, 4, &tmp_u32, 1970, 2038)))
+    if(FAIL(parse_u32_check_range_len_base10(src, 4, &tmp_u32, 1970, 2106/*2038*/)))
     {
         return PARSEDATE_ERROR;
     }
@@ -773,7 +769,7 @@ parse_ip_address(const char *src, u32 src_len_, u8 *dst, u32 dst_len)
     }
     
     char tmp[64];
-    src_len = MIN(src_len, sizeof(tmp)-1);
+    src_len = MIN((size_t)src_len, sizeof(tmp)-1);
     memcpy(tmp, src, src_len);
     tmp[src_len] = '\0';
 
@@ -849,6 +845,234 @@ parse_next_token(char *dest, size_t dest_size, const char *from, const char *del
         }
         ++to;
     }
+}
+
+/**
+ *
+ * now
+ * tomorrow
+ * +1y +1year +1years (months,weeks,days,seconds)
+ * -1y -1year -1years (months,weeks,days,seconds)
+ * 2019-04-16
+ * 2019-04-16_12:00:00.123456
+ * 20190416
+ * 20190416120000123456
+ *
+ */
+
+s64
+parse_timeus_from_smarttime(const char *text)
+{
+    s64 epoch = 0;
+    s64 relative = 0;
+    ya_result ret;
+
+    text = parse_skip_spaces(text);
+    if(*text == '+')
+    {
+        relative = 1;
+        ++text;
+    }
+    else if(*text == '-')
+    {
+        relative = -1;
+        ++text;
+    }
+
+    if(isalpha(*text))
+    {
+        // keyword
+        if(memcmp(text, "now", 3))
+        {
+            //relative = 0;
+            epoch = timeus();
+            return epoch;
+        }
+        else if(memcmp(text, "tomorrow", 8))
+        {
+            //relative = 0;
+            epoch = timeus() + ONE_SECOND_US * 86400;
+            return epoch;
+        }
+        else if(memcmp(text, "yesterday", 9))
+        {
+            //relative = 0;
+            epoch = timeus() - ONE_SECOND_US * 86400;
+            return epoch;
+        }
+        else
+        {
+            return CONFIG_PARSE_UNKNOWN_KEYWORD;
+        }
+    }
+
+    if(isdigit(*text))
+    {
+        if(relative)
+        {
+            // integer
+            const char *limit = parse_skip_digits(text);
+            size_t size = limit - text;
+            s64 value;
+            if(FAIL(ret = parse_u64_check_range_len_base10(text, size, (u64*)&value, 0, 504921600)))    // 0 to 16 years expressed in seconds
+            {
+                return ret;
+            }
+
+            epoch = value * relative;
+
+            // multiplier
+            text = limit;
+            if(*text != '\0')
+            {
+                switch(*text)
+                {
+                    case 's':
+                    {
+                        epoch *= ONE_SECOND_US;
+                        break;
+                    }
+                    case 'd': // days
+                    {
+                        epoch *= 86400LL * ONE_SECOND_US;
+                        break;
+                    }
+                    case 'm': // months
+                    {
+                        epoch *= 31LL * 86400LL * ONE_SECOND_US;
+                        break;
+                    }
+                    case 'y': // years
+                    {
+                        epoch *= 366LL * 86400LL * ONE_SECOND_US;
+                        break;
+                    }
+                    default:
+                    {
+                        return PARSEDATE_ERROR;
+                    }
+                }
+            }
+            else
+            {
+                epoch *= ONE_SECOND_US;
+            }
+
+            epoch += timeus();
+
+            return epoch;
+        }
+        else
+        {
+            // read 4 digits, skip non digits
+            // read 2 digits, skip non digits
+            // read 2 digits, skip non digits
+            // this is an acceptable value, but if there is more
+            // read 2 digits, skip non digits
+            // read 2 digits, skip non digits
+            // read 2 digits, skip non digits
+            // this is an acceptable value, but if there is more
+            // read up to 6 digits
+            u32 year = 0, month = 0, day = 0;
+            u32 hours = 0, minutes = 0, seconds = 0;
+            u32 microseconds = 0;
+
+            // parse year, month and day
+
+            if(FAIL(ret = parse_u32_check_range_len_base10(text, 4, &year, 1970, 2034)))
+            {
+                return ret;
+            }
+            text += 4;
+            text = parse_skip_nondigits(text);
+
+            if(FAIL(ret = parse_u32_check_range_len_base10(text, 2, &month, 1, 12)))
+            {
+                return ret;
+            }
+            text += 2;
+            text = parse_skip_nondigits(text);
+
+            if(FAIL(ret = parse_u32_check_range_len_base10(text, 2, &day, 1, 31)))
+            {
+                return ret;
+            }
+            text += 2;
+
+            // skip blanks
+            // if the end of the text hasn't been reached then start parsing hours, minutes and seconds
+
+            text = parse_skip_spaces(text);
+
+            if(*text != 0)
+            {
+                text = parse_skip_nondigits(text);
+
+                if(FAIL(ret = parse_u32_check_range_len_base10(text, 2, &hours, 0, 23)))
+                {
+                    return ret;
+                }
+                text += 2;
+                text = parse_skip_nondigits(text);
+
+                if(FAIL(ret = parse_u32_check_range_len_base10(text, 2, &minutes, 0, 59)))
+                {
+                    return ret;
+                }
+                text += 2;
+                text = parse_skip_nondigits(text);
+
+                if(FAIL(ret = parse_u32_check_range_len_base10(text, 2, &seconds, 0, 59)))
+                {
+                    return ret;
+                }
+                text += 2;
+
+                // skip blanks
+                // if the end of the text hasn't been reached then start parsing fractional time
+
+                text = parse_skip_spaces(text);
+
+                if(*text != 0)
+                {
+                    text = parse_skip_nondigits(text);
+
+                    int digits = 6;
+
+                    while((digits > 0) && isdigit(*text))
+                    {
+                        microseconds *= 10;
+                        microseconds += *text - '0';
+                        ++text;
+                        --digits;
+                    }
+
+                    while(digits > 0)
+                    {
+                        microseconds *= 10;
+                        --digits;
+                    }
+                }
+            }
+
+            struct tm tm;
+            memset(&tm, 0, sizeof(struct tm));
+            tm.tm_year = year - 1900;
+            tm.tm_mon = month - 1;
+            tm.tm_mday = day - 1;
+            tm.tm_hour = hours;
+            tm.tm_min = minutes;
+            tm.tm_sec = seconds;
+            time_t t = timegm(&tm);
+            epoch = t;
+            epoch *= ONE_SECOND_US;
+            epoch += microseconds;
+
+            return epoch;
+        }
+    }
+
+    return PARSEDATE_ERROR;
 }
 
 /** @} */

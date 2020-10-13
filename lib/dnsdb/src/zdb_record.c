@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup records Internal functions for the database: resource records.
  *  @ingroup dnsdb
  *  @brief Internal functions for the database: resource records.
@@ -79,7 +80,7 @@ zdb_record_free(zdb_packed_ttlrdata* record)
     /** MEMORY CANNOT BE TRASHED WHEN USING ZALLOC BECAUSE rdata_size IS USED TO FREE THE MEMORY ! */
     /** DO NOT DO THIS : memset(record,0x8f,sizeof(zdb_packed_ttlrdata)+record->rdata_size-1); */
 
-#ifdef DEBUG
+#if DEBUG
     //yassert((u32)(intptr)(record->next) != 0xfefefefeUL);
     u16 tmp = record->rdata_size;
     memset(record, 0xfe, sizeof(zdb_packed_ttlrdata) + tmp - 1);
@@ -110,7 +111,7 @@ zdb_record_insert(zdb_rr_collection* collection, u16 type, zdb_packed_ttlrdata* 
 {
     zdb_packed_ttlrdata** record_sll = (zdb_packed_ttlrdata**)btree_insert(collection, type);
 
-#ifdef DEBUG
+#if DEBUG
     switch(type)
     {
         case TYPE_A:
@@ -169,7 +170,7 @@ zdb_record_insert_checked(zdb_rr_collection* collection, u16 type, zdb_packed_tt
             {
                 if(memcmp(next->rdata_start, record->rdata_start, record->rdata_size) == 0) /* dup */
                 {
-#ifdef DEBUG
+#if DEBUG
                     switch(type)
                     {
                         case TYPE_A:
@@ -250,7 +251,7 @@ zdb_record_insert_checked_keep_ttl(zdb_rr_collection* collection, u16 type, zdb_
             {
                 if(memcmp(next->rdata_start, record->rdata_start, record->rdata_size) == 0) /* dup */
                 {
-#ifdef DEBUG
+#if DEBUG
                     switch(type)
                     {
                         case TYPE_A:
@@ -268,8 +269,6 @@ zdb_record_insert_checked_keep_ttl(zdb_rr_collection* collection, u16 type, zdb_
                             break;
                     }
 #endif
-                    
-                    next = next->next;
                     
                     return FALSE;
                 }
@@ -291,6 +290,7 @@ zdb_record_insert_checked_keep_ttl(zdb_rr_collection* collection, u16 type, zdb_
     return TRUE;
 }
 
+#if !ZDB_RECORD_USES_INLINE
 
 /** @brief Finds and return all the a resource record matching the class and type
  *
@@ -352,6 +352,8 @@ zdb_record_find_insert(zdb_rr_collection* collection, u16 type)
 
     return record_list;
 }
+
+#endif
 
 /** @brief Deletes all the a resource record matching the class and type
  *
@@ -551,7 +553,10 @@ zdb_record_delete_self_exact(zdb_rr_collection* collection, u16 type, const zdb_
 
     ret = zdb_record_delete_exact(collection, type, &ttlrdata); // safe
     
-    if(ttlrdata.rdata_size > sizeof(tmp_))
+    if(ttlrdata.rdata_size <= sizeof(tmp_))
+    {
+    }
+    else
     {
         free(tmp);
     }
@@ -704,6 +709,7 @@ void zdb_ttlrdata_delete(zdb_ttlrdata* record)
 {
     int size = ((sizeof(zdb_ttlrdata) + 7) & ~7) + record->rdata_size;
     ZFREE_ARRAY(record, size);
+    (void)size; // silences warning in some builds setups
 }
 
 /**
@@ -745,6 +751,29 @@ void
 zdb_record_print(zdb_rr_collection collection, output_stream *os)
 {
     zdb_record_print_indented(collection, os, 0);
+}
+
+u16
+zdb_record_bitmap_type_init(const zdb_rr_collection collection, type_bit_maps_context *bitmap)
+{
+    type_bit_maps_init(bitmap);
+
+    btree_iterator iter;
+    btree_iterator_init(collection, &iter);
+
+    while(btree_iterator_hasnext(&iter))
+    {
+        btree_node* node = btree_iterator_next_node(&iter);
+        u16 type = node->hash;
+        if((type != TYPE_A) && (type != TYPE_AAAA))
+        {
+            type_bit_maps_set_type(bitmap, type);
+        }
+    }
+
+    u16 bitmap_size = type_bit_maps_update_size(bitmap);
+
+    return bitmap_size;
 }
 
 /** @} */

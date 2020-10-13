@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief
@@ -45,6 +46,7 @@
 #include "dnscore/dnscore-config.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <strings.h>
 
 #define _PTR_SET_COLLECTION_C
 
@@ -105,7 +107,7 @@
  */
 
 #define AVL_ALLOC_NODE(node,reference)                                  \
-	ZALLOC_OR_DIE(AVL_NODE_TYPE*, node, AVL_NODE_TYPE, AVL_NODE_TAG);   \
+	ZALLOC_OBJECT_OR_DIE( node, AVL_NODE_TYPE, AVL_NODE_TAG);   \
 	ZEROMEMORY(node,sizeof(AVL_NODE_TYPE));
 /*
  * A macro to free a node
@@ -126,6 +128,10 @@
 #define AVL_REFERENCE(node) (node)->key
 #define AVL_REFERENCE_IS_POINTER TRUE
 #define AVL_REFERENCE_IS_CONST FALSE
+
+#define AVL_TERNARYCMP 1
+
+#if !AVL_TERNARYCMP
 /*
  * A macro to compare two references
  * Returns TRUE if and only if the references are equal.
@@ -136,6 +142,13 @@
  * Returns TRUE if and only if the first one is bigger than the second one.
  */
 #define AVL_ISBIGGER(reference_a,reference_b) (tree->compare((reference_a),(reference_b)) > 0)
+
+#else
+
+#define AVL_COMPARE(reference_a,reference_b) (tree->compare((reference_a),(reference_b)))
+
+#endif
+
 /*
  * Copies the payload of a node
  * It MUST NOT copy the "proprietary" node fields : children, parent, balance
@@ -155,33 +168,49 @@
 #include "dnscore/avl.c.inc"
 
 int
-ptr_set_ptr_node_compare(const void *node_a, const void *node_b)
+ptr_set_ptr_node_compare(const void *key_a, const void *key_b)
 {
-    intptr a = (intptr)node_a;
-    intptr b = (intptr)node_b;
-    intptr d = b - a;
+#if __SIZEOF_POINTER__ == 8
+    s64 a = (s64)key_a;
+    s64 b = (s64)key_b;
+    s64 d = b - a;
 
-    if((d & 0xffffffffULL) == 0)
-    {
-        d >>= 32;   
-    }
+    return (d < 0)?-1:((d > 0)?1:0);
+#elif __SIZEOF_POINTER__ == 4
+    s32 a = (s32)key_a;
+    s32 b = (s32)key_b;
+    s32 d = b - a;
 
     return d;
+#else
+#error "__SIZEOF_POINTER__ not defined"
+#endif
 }
 
 int
-ptr_set_asciizp_node_compare(const void *node_a, const void *node_b)
+ptr_set_asciizp_node_compare(const void *key_a, const void *key_b)
 {
-    return strcmp((const char*)node_a, (const char*)node_b);
+    return strcmp((const char*)key_a, (const char*)key_b);
 }
 
 int
-ptr_set_fqdn_node_compare(const void *node_a, const void *node_b)
+ptr_set_asciizcasep_node_compare(const void *key_a, const void *key_b)
+{
+    //formatln("'%s' ? '%s'", node_a, node_b);flushout();
+    return strcasecmp((const char*)key_a, (const char*)key_b);
+}
+
+/**
+ * Top Down, lexicographically
+ */
+
+int
+ptr_set_fqdn_node_compare(const void *key_a, const void *key_b)
 {
     dnslabel_stack a;
     dnslabel_stack b;
-    s32 a_top = dnsname_to_dnslabel_stack((const u8*)node_a, a);
-    s32 b_top = dnsname_to_dnslabel_stack((const u8*)node_b, b);
+    s32 a_top = dnsname_to_dnslabel_stack((const u8*)key_a, a);
+    s32 b_top = dnsname_to_dnslabel_stack((const u8*)key_b, b);
     s32 d;
     
     s32 top = MIN(a_top, b_top);
@@ -202,31 +231,31 @@ ptr_set_fqdn_node_compare(const void *node_a, const void *node_b)
 
 
 int
-ptr_set_dnsname_node_compare(const void *node_a, const void *node_b)
+ptr_set_dnsname_node_compare(const void *key_a, const void *key_b)
 {
-    return dnsname_compare((const u8*)node_a, (const u8*)node_b);
+    return dnsname_compare((const u8*)key_a, (const u8*)key_b);
 }
 
 // key = fqdn (cannot be NULL)
 
 int
-ptr_set_dnslabel_node_compare(const void *node_a, const void *node_b)
+ptr_set_dnslabel_node_compare(const void *key_a, const void *key_b)
 {
     
-    const u8 *a = (const u8*)node_a;
-    const u8 *b = (const u8*)node_b;
-    int n = MIN(*a, *b) + 1;
-    return memcmp(a, b, n);
+    const u8 *a = (const u8*)key_a; // length of label key_a
+    const u8 *b = (const u8*)key_b; // length of label key_b
+    int n = MIN(*a, *b) + 1; // length of the smallest label with its length
+    return memcmp(a, b, n); // smaller strings first, then lexicographical order
 }
 
 int
-ptr_set_nullable_asciizp_node_compare(const void *node_a, const void *node_b)
+ptr_set_nullable_asciizp_node_compare(const void *key_a, const void *key_b)
 {
-    if(node_a != NULL)
+    if(key_a != NULL)
     {
-        if(node_b != NULL)
+        if(key_b != NULL)
         {
-            return strcmp((const char*)node_a, (const char*)node_b);
+            return strcmp((const char*)key_a, (const char*)key_b);
         }
         else
         {
@@ -235,18 +264,18 @@ ptr_set_nullable_asciizp_node_compare(const void *node_a, const void *node_b)
     }
     else
     {
-        return (node_b == NULL)?0:1;
+        return (key_b == NULL)?0:1;
     }
 }
 
 int
-ptr_set_nullable_dnsname_node_compare(const void *node_a, const void *node_b)
+ptr_set_nullable_dnsname_node_compare(const void *key_a, const void *key_b)
 {
-    if(node_a != NULL)
+    if(key_a != NULL)
     {
-        if(node_b != NULL)
+        if(key_b != NULL)
         {
-            return dnsname_compare((const u8*)node_a, (const u8*)node_b);
+            return dnsname_compare((const u8*)key_a, (const u8*)key_b);
         }
         else
         {
@@ -255,18 +284,18 @@ ptr_set_nullable_dnsname_node_compare(const void *node_a, const void *node_b)
     }
     else
     {
-        return (node_b == NULL)?0:1;
+        return (key_b == NULL)?0:1;
     }
 }
 
 int
-ptr_set_host_address_node_compare(const void *node_a, const void *node_b)
+ptr_set_host_address_node_compare(const void *key_a, const void *key_b)
 {
-    if(node_a != NULL)
+    if(key_a != NULL)
     {
-        if(node_b != NULL)
+        if(key_b != NULL)
         {
-            return host_address_compare((const host_address*)node_a, (const host_address*)node_b);
+            return host_address_compare((const host_address*)key_a, (const host_address*)key_b);
         }
         else
         {
@@ -275,16 +304,16 @@ ptr_set_host_address_node_compare(const void *node_a, const void *node_b)
     }
     else
     {
-        return (node_b == NULL)?0:1;
+        return (key_b == NULL)?0:1;
     }
 }
 
 void*
-ptr_set_avl_iterator_hasnext_next_value(ptr_set_avl_iterator *iterp)
+ptr_set_iterator_hasnext_next_value(ptr_set_iterator *iterp)
 {
-    if(ptr_set_avl_iterator_hasnext(iterp))
+    if(ptr_set_iterator_hasnext(iterp))
     {
-        ptr_node *node = ptr_set_avl_iterator_next_node(iterp);
+        ptr_node *node = ptr_set_iterator_next_node(iterp);
         void *ptr = node->value;
         return ptr;
     }
@@ -296,5 +325,3 @@ ptr_set_avl_iterator_hasnext_next_value(ptr_set_avl_iterator *iterp)
 
 
 /** @} */
-
-

@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup nsec NSEC functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -121,6 +122,10 @@ nsec_free_node(AVL_NODE_TYPE* node)
  * It must be of type REFERENCE_TYPE
  */
 #define AVL_REFERENCE(node) (node)->inverse_relative_name
+
+#define AVL_TERNARYCMP 1
+
+#if !AVL_TERNARYCMP
 /*
  * A macro to compare two references
  * Returns TRUE if and only if the references are equal.
@@ -131,7 +136,9 @@ nsec_free_node(AVL_NODE_TYPE* node)
  * Returns TRUE if and only if the first one is bigger than the second one.
  */
 #define AVL_ISBIGGER(reference_a,reference_b) (dnsname_compare((reference_a),(reference_b))>0)
-
+#else
+#define AVL_COMPARE(reference_a,reference_b) (dnsname_compare((reference_a),(reference_b)))
+#endif
 /*
  * Copies the payload of a node
  * It MUST NOT copy the "proprietary" node fields : children, parent, balance
@@ -150,7 +157,7 @@ nsec_free_node(AVL_NODE_TYPE* node)
 #include <dnscore/avl.c.inc>
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_find_interval_start)(AVL_CONST_TREE_TYPE* root, AVL_REFERENCE_TYPE obj_hash)
+AVL_PREFIXED(find_interval_start)(AVL_CONST_TREE_TYPE* root, AVL_REFERENCE_TYPE obj_hash)
 {
     const AVL_NODE_TYPE* node = *root;
     const AVL_NODE_TYPE* lower_bound = NULL;
@@ -204,7 +211,7 @@ AVL_PREFIXED(avl_find_interval_start)(AVL_CONST_TREE_TYPE* root, AVL_REFERENCE_T
         
         yassert(lower_bound != NULL);
         
-        while((node = AVL_CHILD(lower_bound, DIR_RIGHT)) != NULL)
+        while((node = AVL_CHILD(lower_bound, DIR_RIGHT)) != NULL) // VS false positive: an assert says this can't happen
         {
             lower_bound = node;
         }
@@ -214,7 +221,7 @@ AVL_PREFIXED(avl_find_interval_start)(AVL_CONST_TREE_TYPE* root, AVL_REFERENCE_T
 }
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_find_interval_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_REFERENCE_TYPE obj_hash)
+AVL_PREFIXED(find_interval_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_REFERENCE_TYPE obj_hash)
 {
     AVL_NODE_TYPE* node = *root;
     AVL_NODE_TYPE* lower_bound = NULL;
@@ -241,19 +248,12 @@ AVL_PREFIXED(avl_find_interval_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_RE
          *
          */
 
-#ifdef DEBUG
-        if(h[0] != obj_hash[0])
-        {
-            DIE_MSG("NSEC3 corrupted NSEC3 node");
-        }
-#endif
-
         int cmp = dnsname_compare(obj_hash, h);
 
         /* equals */
         if(cmp == 0)
         {
-            return nsec_avl_node_mod_prev(node);
+            return nsec_node_mod_prev(node);
         }
 
         /* bigger */
@@ -274,7 +274,7 @@ AVL_PREFIXED(avl_find_interval_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_RE
         
         yassert(lower_bound != NULL);
         
-        while((node = AVL_CHILD(lower_bound, DIR_RIGHT)) != NULL)
+        while((node = AVL_CHILD(lower_bound, DIR_RIGHT)) != NULL) // VS false positive: an assert says this can't happen
         {
             lower_bound = node;
         }
@@ -284,6 +284,3 @@ AVL_PREFIXED(avl_find_interval_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_RE
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

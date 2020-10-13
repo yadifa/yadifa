@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnscoretools Generic Tools
  *  @ingroup dnscore
  *  @brief host address (list) functions
@@ -53,6 +54,7 @@
 #include "dnscore/host_address.h"
 #include "dnscore/tsig.h"
 #include "dnscore/zalloc.h"
+#include "dnscore/format.h"
 
 /*------------------------------------------------------------------------------
  * FUNCTIONS */
@@ -61,7 +63,7 @@ host_address
 *host_address_alloc()
 {
     host_address *new_address;
-    ZALLOC_OR_DIE(host_address*, new_address, host_address, HOSTADDR_TAG);
+    ZALLOC_OBJECT_OR_DIE( new_address, host_address, HOSTADDR_TAG);
     new_address->version = 0;
     new_address->next = NULL;
     
@@ -101,16 +103,16 @@ host_address_delete(host_address *address)
 {
     if(address->version == HOST_ADDRESS_DNAME)
     {
-#ifdef DEBUG
+#if DEBUG
         memset(address->ip.dname.dname, 0xff, dnsname_len(address->ip.dname.dname));
 #endif
         free(address->ip.dname.dname);
     }
     
-#ifdef DEBUG
+#if DEBUG
     memset(address, 0xff, sizeof(host_address));
 #endif
-    ZFREE(address, host_address);
+    ZFREE_OBJECT(address);
 }
 
 /**
@@ -136,7 +138,7 @@ host_address *
 host_address_copy(const host_address *address)
 {
     host_address clone_head;
-#ifdef DEBUG
+#if DEBUG
     memset(&clone_head, 0xff, sizeof(clone_head));
 #endif
     /* no need to set TSIG */
@@ -145,7 +147,7 @@ host_address_copy(const host_address *address)
     
     if(address != NULL)
     {
-        host_address_append_host_address(&clone_head, address); // copy made
+        host_address_append_host_address(&clone_head, address); // copy made, or may fail if address is not supported
     }
     
     return clone_head.next;
@@ -155,7 +157,7 @@ host_address *
 host_address_copy_list(const host_address *address)
 {
     host_address clone_head;
-#ifdef DEBUG
+#if DEBUG
     memset(&clone_head, 0xff, sizeof(clone_head));
 #endif
     /* no need to set TSIG */
@@ -166,9 +168,10 @@ host_address_copy_list(const host_address *address)
     
     while(address != NULL)
     {
-        host_address_append_host_address(clone, address); // copy made
-                
-        clone = clone->next;
+        if(ISOK(host_address_append_host_address(clone, address))) // copy made, or may fail is address is not supported
+        {
+            clone = clone->next;
+        }
 
         address = address->next;
     }
@@ -191,7 +194,7 @@ host_address_count(const host_address *address)
 }
 
 ya_result
-host_address2allocated_sockaddr(struct sockaddr **sap, const host_address *address)
+host_address2allocated_sockaddr(const host_address *address, struct sockaddr **sap)
 {
     switch(address->version)
     {
@@ -199,13 +202,13 @@ host_address2allocated_sockaddr(struct sockaddr **sap, const host_address *addre
         {
             struct sockaddr_in *sa_in;
 
-            MALLOC_OR_DIE(struct sockaddr_in*, sa_in, sizeof(struct sockaddr_in), SOCKADD4_TAG); // no ZALLOC
+            MALLOC_OBJECT_OR_DIE(sa_in, struct sockaddr_in, SOCKADD4_TAG); // no ZALLOC
             ZEROMEMORY(sa_in, sizeof(struct sockaddr_in));
             memcpy(&sa_in->sin_addr.s_addr, address->ip.v4.bytes, 4);
             //sa_in->sin_addr.s_addr = htonl(sa_in->sin_addr.s_addr);
             sa_in->sin_port = address->port;
             sa_in->sin_family = AF_INET;
-#if HAS_SOCKADDR_IN_SIN_LEN != 0
+#if HAS_SOCKADDR_IN_SIN_LEN
             sa_in->sin_len = sizeof(struct sockaddr_in);
 #endif
             *sap = (struct sockaddr*)sa_in;
@@ -215,12 +218,12 @@ host_address2allocated_sockaddr(struct sockaddr **sap, const host_address *addre
         {
             struct sockaddr_in6 *sa_in6;
 
-            MALLOC_OR_DIE(struct sockaddr_in6*, sa_in6, sizeof(struct sockaddr_in6), SOCKADD6_TAG); // no ZALLOC
+            MALLOC_OBJECT_OR_DIE(sa_in6, struct sockaddr_in6, SOCKADD6_TAG); // no ZALLOC
             ZEROMEMORY(sa_in6, sizeof(struct sockaddr_in6));
             memcpy(&sa_in6->sin6_addr, address->ip.v6.bytes, 16);
             sa_in6->sin6_port = address->port;
             sa_in6->sin6_family = AF_INET6;
-#if HAS_SOCKADDR_IN6_SIN6_LEN != 0
+#if HAS_SOCKADDR_IN6_SIN6_LEN
             sa_in6->sin6_len = sizeof(struct sockaddr_in6);
 #endif
             /*
@@ -238,7 +241,7 @@ host_address2allocated_sockaddr(struct sockaddr **sap, const host_address *addre
 }
 
 ya_result
-host_address2sockaddr(socketaddress *sap, const host_address *address)
+host_address2sockaddr(const host_address *address, socketaddress *sap)
 {
     switch(address->version)
     {
@@ -252,7 +255,7 @@ host_address2sockaddr(socketaddress *sap, const host_address *address)
             sa_in->sin_port = address->port;
             sa_in->sin_family = AF_INET;
             
-#if HAS_SOCKADDR_IN_SIN_LEN != 0
+#if HAS_SOCKADDR_IN_SIN_LEN
             sa_in->sin_len = sizeof(struct sockaddr_in);
 #endif
 
@@ -267,7 +270,7 @@ host_address2sockaddr(socketaddress *sap, const host_address *address)
             sa_in6->sin6_port = address->port;
             sa_in6->sin6_family = AF_INET6;
             
-#if HAS_SOCKADDR_IN6_SIN6_LEN != 0
+#if HAS_SOCKADDR_IN6_SIN6_LEN
             sa_in6->sin6_len = sizeof(struct sockaddr_in6);
 #endif
 
@@ -281,7 +284,7 @@ host_address2sockaddr(socketaddress *sap, const host_address *address)
 }
 
 void
-host_set_default_port_value(host_address *address, u16 port)
+host_address_set_default_port_value(host_address *address, u16 port)
 {
     /* set the default port on any unset port */
 
@@ -297,12 +300,12 @@ host_set_default_port_value(host_address *address, u16 port)
 }
 
 ya_result
-host_address2addrinfo(struct addrinfo **addrp, const host_address *address)
+host_address2addrinfo(const host_address *address, struct addrinfo **addrp)
 {
     struct addrinfo *addr;
-    ya_result return_value;
+    ya_result ret;
 
-    MALLOC_OR_DIE(struct addrinfo*, addr, sizeof(struct addrinfo), ADDRINFO_TAG); // no ZALLOC (yet)
+    MALLOC_OBJECT_OR_DIE(addr, struct addrinfo, ADDRINFO_TAG); // no ZALLOC (yet)
 
     addr->ai_flags = AI_PASSIVE;
 
@@ -330,9 +333,9 @@ host_address2addrinfo(struct addrinfo **addrp, const host_address *address)
         }
     }
 
-    if(ISOK(return_value = host_address2allocated_sockaddr(&addr->ai_addr, address)))
+    if(ISOK(ret = host_address2allocated_sockaddr(address, &addr->ai_addr)))
     {
-        addr->ai_addrlen = return_value;
+        addr->ai_addrlen = ret;
         *addrp = addr;
     }
     else
@@ -340,7 +343,7 @@ host_address2addrinfo(struct addrinfo **addrp, const host_address *address)
         free(addr);
     }
 
-    return return_value;
+    return ret;
 }
 
 ya_result
@@ -376,10 +379,10 @@ host_address_set_with_sockaddr(host_address *address, const socketaddress *sa)
 }
 
 bool
-host_address_list_contains_ip(host_address *address_list, const socketaddress *sa)
+host_address_list_contains_ip(const host_address *address_list, const socketaddress *sa)
 {
     host_address address;
-#ifdef DEBUG
+#if DEBUG
     memset(&address, 0xff, sizeof(address));
 #endif
     /* no need to set NEXT nor TSIG */
@@ -434,10 +437,10 @@ host_address_list_contains_ip(host_address *address_list, const socketaddress *s
 #if DNSCORE_HAS_TSIG_SUPPORT
 
 bool
-host_address_list_contains_ip_tsig(host_address *address_list, const socketaddress *sa, const tsig_item *tsig)
+host_address_list_contains_ip_tsig(const host_address *address_list, const socketaddress *sa, const tsig_item *tsig)
 {
     host_address address;
-#ifdef DEBUG
+#if DEBUG
     memset(&address, 0xff, sizeof(address));
 #endif
     /* no need to set NEXT nor TSIG */
@@ -498,7 +501,7 @@ host_address_list_contains_ip_tsig(host_address *address_list, const socketaddre
 #endif
 
 bool
-host_address_list_contains_host(host_address *address_list, const host_address *address)
+host_address_list_contains_host(const host_address *address_list, const host_address *address)
 {
     switch(address->version)
     {
@@ -588,7 +591,7 @@ host_address_append_ipv4(host_address *address, const u8 *ipv4, u16 port)
 {
     for(;;)
     {
-        if(address->version == HOST_ADDRESS_IPV4)
+        if((address->version == HOST_ADDRESS_IPV4) && (address->port == port))
         {
             if(memcmp(address->ip.v4.bytes, ipv4, 4) == 0)
             {
@@ -607,7 +610,7 @@ host_address_append_ipv4(host_address *address, const u8 *ipv4, u16 port)
 
     host_address *new_address;
 
-    ZALLOC_OR_DIE(host_address*, new_address, host_address, HOSTADDR_TAG);
+    ZALLOC_OBJECT_OR_DIE( new_address, host_address, HOSTADDR_TAG);
     new_address->next = NULL;
 #if DNSCORE_HAS_TSIG_SUPPORT
     new_address->tsig = NULL;
@@ -623,7 +626,7 @@ host_address_append_ipv6(host_address *address, const u8 *ipv6, u16 port)
 {
     for(;;)
     {
-        if(address->version == HOST_ADDRESS_IPV6)
+        if((address->version == HOST_ADDRESS_IPV6) && (address->port == port))
         {
             if(memcmp(address->ip.v6.bytes, ipv6, 16) == 0)
             {
@@ -642,7 +645,7 @@ host_address_append_ipv6(host_address *address, const u8 *ipv6, u16 port)
 
     host_address *new_address;
 
-    ZALLOC_OR_DIE(host_address*, new_address, host_address, HOSTADDR_TAG);
+    ZALLOC_OBJECT_OR_DIE( new_address, host_address, HOSTADDR_TAG);
     new_address->next = NULL;
 #if DNSCORE_HAS_TSIG_SUPPORT
     new_address->tsig = NULL;
@@ -660,7 +663,7 @@ host_address_append_dname(host_address *address, const u8 *dname, u16 port)
     
     for(;;)
     {
-        if(address->version == HOST_ADDRESS_DNAME)
+        if((address->version == HOST_ADDRESS_DNAME) && (address->port == port))
         {
             if(memcmp(address->ip.dname.dname, dname, dname_len) == 0)
             {
@@ -679,7 +682,7 @@ host_address_append_dname(host_address *address, const u8 *dname, u16 port)
 
     host_address *new_address;
 
-    ZALLOC_OR_DIE(host_address*, new_address, host_address, HOSTADDR_TAG);
+    ZALLOC_OBJECT_OR_DIE( new_address, host_address, HOSTADDR_TAG);
     new_address->next = NULL;
 #if DNSCORE_HAS_TSIG_SUPPORT
     new_address->tsig = NULL;
@@ -690,6 +693,10 @@ host_address_append_dname(host_address *address, const u8 *dname, u16 port)
     return SUCCESS;
 }
 
+/**
+ * Makes a copy of the host_address* ha.
+ */
+
 ya_result
 host_address_append_host_address(host_address *address, const host_address *ha)
 {
@@ -699,7 +706,7 @@ host_address_append_host_address(host_address *address, const host_address *ha)
         {
             for(;;)
             {
-                if(address->version == ha->version)
+                if((address->version == ha->version) && (address->port == ha->port))
                 {
                     if(address->ip.v4.value == ha->ip.v4.value)
                     {
@@ -717,7 +724,7 @@ host_address_append_host_address(host_address *address, const host_address *ha)
 
             host_address *new_address;
 
-            ZALLOC_OR_DIE(host_address*, new_address, host_address, HOSTADDR_TAG);
+            ZALLOC_OBJECT_OR_DIE( new_address, host_address, HOSTADDR_TAG);
             new_address->next = NULL;
 #if DNSCORE_HAS_TSIG_SUPPORT
             new_address->tsig = ha->tsig;
@@ -731,7 +738,7 @@ host_address_append_host_address(host_address *address, const host_address *ha)
         {
             for(;;)
             {
-                if(address->version == ha->version)
+                if((address->version == ha->version) && (address->port == ha->port))
                 {
                     if((address->ip.v6.lohi[0] == ha->ip.v6.lohi[0]) && (address->ip.v6.lohi[1] == ha->ip.v6.lohi[1]))
                     {
@@ -749,7 +756,7 @@ host_address_append_host_address(host_address *address, const host_address *ha)
 
             host_address *new_address;
 
-            ZALLOC_OR_DIE(host_address*, new_address, host_address, HOSTADDR_TAG);
+            ZALLOC_OBJECT_OR_DIE( new_address, host_address, HOSTADDR_TAG);
             new_address->next = NULL;
 #if DNSCORE_HAS_TSIG_SUPPORT
             new_address->tsig = ha->tsig;
@@ -765,7 +772,7 @@ host_address_append_host_address(host_address *address, const host_address *ha)
 
             for(;;)
             {
-                if(address->version == ha->version)
+                if((address->version == ha->version) && (address->port == ha->port))
                 {
                     if(memcmp(address->ip.dname.dname, ha->ip.dname.dname, dname_len) == 0)
                     {
@@ -783,7 +790,7 @@ host_address_append_host_address(host_address *address, const host_address *ha)
 
             host_address *new_address;
 
-            ZALLOC_OR_DIE(host_address*, new_address, host_address, HOSTADDR_TAG);
+            ZALLOC_OBJECT_OR_DIE( new_address, host_address, HOSTADDR_TAG);
             new_address->next = NULL;
 #if DNSCORE_HAS_TSIG_SUPPORT
             new_address->tsig = ha->tsig;
@@ -800,6 +807,63 @@ host_address_append_host_address(host_address *address, const host_address *ha)
     }
     
     return SUCCESS;
+}
+
+ya_result
+host_address_append_sockaddr(host_address *address, const socketaddress *sa)
+{
+    if(sa != NULL)
+    {
+        ya_result ret;
+        host_address new_address;
+        new_address.next = NULL;
+#if DNSCORE_HAS_TSIG_SUPPORT
+        new_address.tsig = NULL;
+#endif
+        if(ISOK(ret = host_address_set_with_sockaddr(&new_address, sa)))
+        {
+            if(ISOK(ret = host_address_append_host_address(address, &new_address)))
+            {
+                return ret;
+            }
+        }
+
+        return ret;
+    }
+    return UNEXPECTED_NULL_ARGUMENT_ERROR;
+}
+
+ya_result
+host_address_append_sockaddr_with_port(host_address *address, const socketaddress *sa, u16 port)
+{
+    if(sa != NULL)
+    {
+        ya_result ret;
+        host_address new_address;
+        new_address.next = NULL;
+#if DNSCORE_HAS_TSIG_SUPPORT
+        new_address.tsig = NULL;
+#endif
+        if(ISOK(ret = host_address_set_with_sockaddr(&new_address, sa)))
+        {
+            new_address.port = port;
+
+            if(ISOK(ret = host_address_append_host_address(address, &new_address)))
+            {
+                return ret;
+            }
+            else
+            {
+                if(ret == COLLECTION_DUPLICATE_ENTRY)
+                {
+                    ret = SUCCESS;
+                }
+            }
+        }
+
+        return ret;
+    }
+    return UNEXPECTED_NULL_ARGUMENT_ERROR;
 }
 
 ya_result
@@ -963,8 +1027,6 @@ host_address_compare(const host_address *a, const host_address *b)
     {
         return v;
     }
-
-    return FALSE;
 }
 
 
@@ -1024,7 +1086,7 @@ host_address_remove_host_address(host_address **address, host_address *ha_match)
 }
 
 bool
-host_address_update_host_address_list(host_address **dp, host_address *s)
+host_address_update_host_address_list(host_address **dp, const host_address *s)
 {    
     host_address* d = *dp;
     bool changed = FALSE;
@@ -1036,19 +1098,24 @@ host_address_update_host_address_list(host_address **dp, host_address *s)
     //          do nothing and it's an error
     //  else
     //       ...
-    
+
     if(d == NULL)
     {
         if(s != NULL)
         {
             d = host_address_copy_list(s);
             *dp = d;
-            return TRUE;
+            return TRUE; // d has changed
         }
         else
         {
-            return FALSE;
+            return FALSE; // d hasn't changed
         }
+    }
+
+    if(s == NULL)
+    {
+        return FALSE; // d hasn't changed
     }
     
     // *dp is not NULL
@@ -1068,17 +1135,19 @@ host_address_update_host_address_list(host_address **dp, host_address *s)
         if(!host_address_list_contains_host(s, ha))
         {
             // remove from d
-            host_address *removed = host_address_remove_host_address(&d, ha);
+            host_address *removed = host_address_remove_host_address(&d, ha); // cannot return NULL in this case (only returns NULL if ha is not found in d)
             // release it
             host_address_delete(removed);
             
-            // if d was ha, then d is now empty
+            // if d was ha (a list with only element, it being ha), then d is now empty
+
             if(d == NULL)
             {
-                break;
+                d = host_address_copy_list(s);
+                *dp = d;
+                return TRUE;
             }
-            
-            // awful, don't care
+
             ha = d;
             changed = TRUE;
         }
@@ -1086,11 +1155,11 @@ host_address_update_host_address_list(host_address **dp, host_address *s)
     
     /// @note host_address_append_host_address checks for duplicate before putting a copy
     
-    for(host_address *ha = s; ha != NULL; ha = ha->next)
+    for(const host_address *ha = s; ha != NULL; ha = ha->next)
     {
         if(ISOK(host_address_append_host_address(d, ha))) // copy made
         {
-            changed = true;
+            changed = TRUE;
         }
     }
     
@@ -1208,5 +1277,23 @@ host_address_to_str(const host_address *ha, char *str, int len, u8 flags)
     return p - str;
 }
 
+bool
+host_address_is_any(const host_address *ha)
+{
+    //bool is_any;
+    if(ha->version == HOST_ADDRESS_IPV4)
+    {
+        return ha->ip.v4.value == INADDR_ANY;
+    }
+    else if(ha->version == HOST_ADDRESS_IPV6)
+    {
+        return (ha->ip.v6.lohi[0]|ha->ip.v6.lohi[1]) == 0;
+    }
+    else
+    {
+        // no supported, so no
+        return FALSE;
+    }
+}
 
 /** @} */

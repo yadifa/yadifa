@@ -1,38 +1,4 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
-
-/*------------------------------------------------------------------------------
  *
  * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
@@ -64,34 +30,23 @@
  *
  *------------------------------------------------------------------------------
  *
- *
- *      SVN Program:
- *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.11-public/lib/dnsdb/src/zdb-zone-lock-monitor.c $
- *
- *      Creation Date:
- *              22 September 2016, 11:17
- *
- *      Last Update:
- *              $Date: 2020-09-03 11:53:27 +0200 (Thu, 03 Sep 2020) $
- *              $Revision: 9707 $
- *
- *      Last Change:
- *              $Author: ericdf $
- *
- *----------------------------------------------------------------------------*/
+ */
 
 #include "dnsdb/dnsdb-config.h"
 #include "dnsdb/zdb-config-features.h"
 
-#include <dnscore/ptr_set.h>
+#include <dnscore/ptr_set_debug.h>
 #include <dnscore/list-dl.h>
+#include <dnscore/logger.h>
 
 #include "dnsdb/zdb-zone-lock-monitor.h"
 
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
-#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+#if ZDB_HAS_LOCK_DEBUG_SUPPORT
+
+#define ZNLCKMNT_TAG 0x544e4d4b434c4e5a
 
 #define log_arc log_debug6
 #define MSG_ARC MSG_DEBUG6
@@ -102,7 +57,7 @@ struct zdb_zone_lock_monitor
     // stack trace
     stacktrace trace;
     // thread
-    pthread_t tid;
+    thread_t tid;
     //
     volatile u8 owner;
     volatile u8 secondary;
@@ -118,9 +73,9 @@ struct zdb_zone_lock_monitor
 
 typedef struct zdb_zone_lock_monitor zdb_zone_lock_monitor;
 
-static ptr_set zdb_zone_arc_set = PTR_SET_EMPTY;
-static pthread_mutex_t zdb_zone_arc_set_mtx = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t zdb_zone_lock_monitor_mtx = PTHREAD_MUTEX_INITIALIZER;
+static ptr_set_debug zdb_zone_arc_set = PTR_SET_DEBUG_EMPTY;
+static mutex_t zdb_zone_arc_set_mtx = MUTEX_INITIALIZER;
+static mutex_t zdb_zone_lock_monitor_mtx = MUTEX_INITIALIZER;
 static s64 zdb_zone_lock_set_monitor_last_duration = 0;
 static s64 zdb_zone_lock_set_monitor_last_time = 0;
 /*
@@ -142,9 +97,9 @@ static const char* zdb_zone_lock_names[11]=
 */
 bool zdb_zone_lock_monitor_release(zdb_zone_lock_monitor *holder)
 {
-    pthread_mutex_lock(&zdb_zone_lock_monitor_mtx);
+    mutex_lock(&zdb_zone_lock_monitor_mtx);
     int rc = --holder->rc;
-    pthread_mutex_unlock(&zdb_zone_lock_monitor_mtx);
+    mutex_unlock(&zdb_zone_lock_monitor_mtx);
     if(rc > 0)
     {
         return FALSE;
@@ -168,8 +123,8 @@ bool zdb_zone_lock_monitor_release(zdb_zone_lock_monitor *holder)
 zdb_zone_lock_monitor *zdb_zone_lock_monitor_new(const zdb_zone *zone, u8 owner, u8 secondary)
 {
     zdb_zone_lock_monitor *holder;
-    pthread_mutex_lock(&zdb_zone_arc_set_mtx);
-    ptr_node *node = ptr_set_avl_insert(&zdb_zone_arc_set, (zdb_zone*)zone);
+    mutex_lock(&zdb_zone_arc_set_mtx);
+    ptr_node_debug *node = ptr_set_debug_insert(&zdb_zone_arc_set, (zdb_zone*)zone);
 
     list_dl_s *list;
 
@@ -179,15 +134,14 @@ zdb_zone_lock_monitor *zdb_zone_lock_monitor_new(const zdb_zone *zone, u8 owner,
     }
     else
     {
-        MALLOC_OR_DIE(list_dl_s*, list, sizeof(list_dl_s), GENERIC_TAG);
-        list_dl_init(list);
+        list = list_dl_new_instance();
         node->value = list;
     }
 
-    MALLOC_OR_DIE(zdb_zone_lock_monitor*,holder,sizeof(zdb_zone_lock_monitor),GENERIC_TAG);
+    MALLOC_OR_DIE(zdb_zone_lock_monitor*,holder,sizeof(zdb_zone_lock_monitor), ZNLCKMNT_TAG);
     holder->zone = zone;
     holder->trace = debug_stacktrace_get();
-    holder->tid = pthread_self();
+    holder->tid = thread_self();
     holder->owner = owner;
     holder->secondary = secondary;
     holder->timestamp = timeus();
@@ -197,7 +151,7 @@ zdb_zone_lock_monitor *zdb_zone_lock_monitor_new(const zdb_zone *zone, u8 owner,
 
     list_dl_append(list, holder);
 
-    pthread_mutex_unlock(&zdb_zone_arc_set_mtx);
+    mutex_unlock(&zdb_zone_arc_set_mtx);
 
     log_arc("zone-lock: %p %{dnsname}@%p (%02x/%02x): locking", holder->tid, zone->origin, zone, holder->owner, holder->secondary);
     debug_stacktrace_log(g_database_logger, MSG_ARC, holder->trace);
@@ -211,8 +165,8 @@ zdb_zone_lock_monitor *zdb_zone_lock_monitor_new(const zdb_zone *zone, u8 owner,
 
 zdb_zone_lock_monitor *zdb_zone_lock_monitor_get(const zdb_zone *zone)
 {
-    pthread_mutex_lock(&zdb_zone_arc_set_mtx);
-    ptr_node *node = ptr_set_avl_find(&zdb_zone_arc_set, zone);
+    mutex_lock(&zdb_zone_arc_set_mtx);
+    ptr_node_debug *node = ptr_set_debug_find(&zdb_zone_arc_set, zone);
 
     if(node != NULL)
     {
@@ -225,7 +179,7 @@ zdb_zone_lock_monitor *zdb_zone_lock_monitor_get(const zdb_zone *zone)
 
                 ++holder->rc;
 
-                pthread_mutex_unlock(&zdb_zone_arc_set_mtx);
+                mutex_unlock(&zdb_zone_arc_set_mtx);
 
                 log_arc("zone-lock: %p %{dnsname}@%p (%02x/%02x): owner for %llu us",
                         holder->tid, zone->origin, zone, holder->owner, holder->secondary,
@@ -251,7 +205,7 @@ zdb_zone_lock_monitor *zdb_zone_lock_monitor_get(const zdb_zone *zone)
         log_err("zone-lock: ? %{dnsname}@%p: zone has no key", zone->origin, zone);
     }
 
-    pthread_mutex_unlock(&zdb_zone_arc_set_mtx);
+    mutex_unlock(&zdb_zone_arc_set_mtx);
     return NULL;
 }
 
@@ -259,15 +213,15 @@ void zdb_zone_lock_monitor_waits(zdb_zone_lock_monitor *holder)
 {
     if(holder != NULL)
     {
-        pthread_mutex_lock(&zdb_zone_lock_monitor_mtx);
+        mutex_lock(&zdb_zone_lock_monitor_mtx);
         int waited = ++holder->waited;
-        pthread_mutex_unlock(&zdb_zone_lock_monitor_mtx);
+        mutex_unlock(&zdb_zone_lock_monitor_mtx);
         zdb_zone_lock_monitor *blocker = zdb_zone_lock_monitor_get(holder->zone);
         if(blocker != NULL)
         {
-            pthread_mutex_lock(&zdb_zone_lock_monitor_mtx);
+            mutex_lock(&zdb_zone_lock_monitor_mtx);
             int blocked = ++blocker->blocks;
-            pthread_mutex_unlock(&zdb_zone_lock_monitor_mtx);
+            mutex_unlock(&zdb_zone_lock_monitor_mtx);
 
             log_arc("zone-lock: %p %{dnsname}@%p (%02x/%02x): waited %i time(s) for %lluus",
                     holder->tid, holder->zone->origin, holder->zone, holder->owner, holder->secondary,
@@ -315,16 +269,16 @@ void zdb_zone_lock_monitor_resumes(zdb_zone_lock_monitor *holder)
 
 void zdb_zone_lock_monitor_exchanges(struct zdb_zone_lock_monitor *holder)
 {
-    pthread_mutex_lock(&zdb_zone_arc_set_mtx);
+    mutex_lock(&zdb_zone_arc_set_mtx);
 
     if(holder == NULL)
     {
         log_err("zone-lock: null holder");
-        pthread_mutex_unlock(&zdb_zone_arc_set_mtx);
+        mutex_unlock(&zdb_zone_arc_set_mtx);
         return;
     }
 
-    ptr_node *node = ptr_set_avl_find(&zdb_zone_arc_set, holder->zone);
+    ptr_node_debug *node = ptr_set_debug_find(&zdb_zone_arc_set, holder->zone);
 
     if(node != NULL)
     {
@@ -333,12 +287,12 @@ void zdb_zone_lock_monitor_exchanges(struct zdb_zone_lock_monitor *holder)
         {
             if(list_dl_size(list) > 0)
             {
-                pthread_mutex_lock(&zdb_zone_lock_monitor_mtx);
+                mutex_lock(&zdb_zone_lock_monitor_mtx);
                 u8 o = holder->owner;
                 u8 s = holder->secondary;
                 holder->secondary = o;
                 holder->owner = s;
-                pthread_mutex_unlock(&zdb_zone_lock_monitor_mtx);
+                mutex_unlock(&zdb_zone_lock_monitor_mtx);
 
                 if((holder->owner & 0x80) != 0)
                 {
@@ -367,8 +321,6 @@ void zdb_zone_lock_monitor_exchanges(struct zdb_zone_lock_monitor *holder)
 
                 // no release here
                 // zdb_zone_lock_monitor_release(holder);
-
-                pthread_mutex_unlock(&zdb_zone_arc_set_mtx);
             }
             else
             {
@@ -390,7 +342,7 @@ void zdb_zone_lock_monitor_exchanges(struct zdb_zone_lock_monitor *holder)
                 holder->tid, holder->zone->origin, holder->zone, holder->owner, holder->secondary);
     }
 
-    pthread_mutex_unlock(&zdb_zone_arc_set_mtx);
+    mutex_unlock(&zdb_zone_arc_set_mtx);
 }
 
 /*
@@ -399,8 +351,8 @@ void zdb_zone_lock_monitor_exchanges(struct zdb_zone_lock_monitor *holder)
 
 void zdb_zone_lock_monitor_locks(zdb_zone_lock_monitor *holder)
 {
-    pthread_mutex_lock(&zdb_zone_arc_set_mtx);
-    ptr_node *node = ptr_set_avl_find(&zdb_zone_arc_set, holder->zone);
+    mutex_lock(&zdb_zone_arc_set_mtx);
+    ptr_node_debug *node = ptr_set_debug_find(&zdb_zone_arc_set, holder->zone);
 
     if(node != NULL)
     {
@@ -435,8 +387,6 @@ void zdb_zone_lock_monitor_locks(zdb_zone_lock_monitor *holder)
                 debug_stacktrace_log(g_database_logger, MSG_ARC, holder->trace);
 
                 zdb_zone_lock_monitor_release(holder);
-
-                pthread_mutex_unlock(&zdb_zone_arc_set_mtx);
             }
             else
             {
@@ -458,7 +408,7 @@ void zdb_zone_lock_monitor_locks(zdb_zone_lock_monitor *holder)
                 holder->tid, holder->zone->origin, holder->zone, holder->owner, holder->secondary);
     }
 
-    pthread_mutex_unlock(&zdb_zone_arc_set_mtx);
+    mutex_unlock(&zdb_zone_arc_set_mtx);
 }
 
 /*
@@ -467,8 +417,8 @@ void zdb_zone_lock_monitor_locks(zdb_zone_lock_monitor *holder)
 
 void zdb_zone_lock_monitor_cancels(zdb_zone_lock_monitor *holder)
 {
-    pthread_mutex_lock(&zdb_zone_arc_set_mtx);
-    ptr_node *node = ptr_set_avl_find(&zdb_zone_arc_set, holder->zone);
+    mutex_lock(&zdb_zone_arc_set_mtx);
+    ptr_node_debug *node = ptr_set_debug_find(&zdb_zone_arc_set, holder->zone);
 
     if(node != NULL)
     {
@@ -498,8 +448,6 @@ void zdb_zone_lock_monitor_cancels(zdb_zone_lock_monitor *holder)
                 {
                     // weird
                 }
-
-                pthread_mutex_unlock(&zdb_zone_arc_set_mtx);
             }
             else
             {
@@ -521,7 +469,7 @@ void zdb_zone_lock_monitor_cancels(zdb_zone_lock_monitor *holder)
                 holder->tid, holder->zone->origin, holder->zone, holder->owner, holder->secondary);
     }
 
-    pthread_mutex_unlock(&zdb_zone_arc_set_mtx);
+    mutex_unlock(&zdb_zone_arc_set_mtx);
 }
 
 /*
@@ -536,8 +484,8 @@ void zdb_zone_lock_monitor_unlocks(zdb_zone_lock_monitor *holder)
         return;
     }
     
-    pthread_mutex_lock(&zdb_zone_arc_set_mtx);
-    ptr_node *node = ptr_set_avl_find(&zdb_zone_arc_set, holder->zone);
+    mutex_lock(&zdb_zone_arc_set_mtx);
+    ptr_node_debug *node = ptr_set_debug_find(&zdb_zone_arc_set, holder->zone);
 
     if(node != NULL)
     {
@@ -571,8 +519,6 @@ void zdb_zone_lock_monitor_unlocks(zdb_zone_lock_monitor *holder)
                     log_err("zone-lock: %p %{dnsname}@%p (%02x/%02x): bogus RC",
                         holder->tid, holder->zone->origin, holder->zone, holder->owner, holder->secondary);
                 }
-
-                pthread_mutex_unlock(&zdb_zone_arc_set_mtx);
             }
             else
             {
@@ -594,28 +540,28 @@ void zdb_zone_lock_monitor_unlocks(zdb_zone_lock_monitor *holder)
                 holder->tid, holder->zone->origin, holder->zone, holder->owner, holder->secondary);
     }
 
-    pthread_mutex_unlock(&zdb_zone_arc_set_mtx);
+    mutex_unlock(&zdb_zone_arc_set_mtx);
 }
 
 void zdb_zone_lock_monitor_log()
 {
-    u64 now = timeus();
+    s64 now = timeus();
 
-    if(now - zdb_zone_lock_set_monitor_last_time < zdb_zone_lock_set_monitor_last_duration)
+    if((now - zdb_zone_lock_set_monitor_last_time) < zdb_zone_lock_set_monitor_last_duration)
     {
         return;
     }
 
     zdb_zone_lock_set_monitor_last_time = now;
 
-    pthread_mutex_lock(&zdb_zone_arc_set_mtx);
+    mutex_lock(&zdb_zone_arc_set_mtx);
 
-    ptr_set_avl_iterator iter;
-    ptr_set_avl_iterator_init(&zdb_zone_arc_set, &iter);
+    ptr_set_debug_iterator iter;
+    ptr_set_debug_iterator_init(&zdb_zone_arc_set, &iter);
 
-    while(ptr_set_avl_iterator_hasnext(&iter))
+    while(ptr_set_debug_iterator_hasnext(&iter))
     {
-        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        ptr_node_debug *node = ptr_set_debug_iterator_next_node(&iter);
 
         list_dl_s *list = (list_dl_s*)node->value;
         if(list != NULL)
@@ -653,10 +599,10 @@ void zdb_zone_lock_monitor_log()
         }
     }
 
-    pthread_mutex_unlock(&zdb_zone_arc_set_mtx);
+    mutex_unlock(&zdb_zone_arc_set_mtx);
 
-    u64 after = timeus();
-    if(after - now > zdb_zone_lock_set_monitor_last_duration)
+    s64 after = timeus();
+    if((after - now) > zdb_zone_lock_set_monitor_last_duration)
     {
         zdb_zone_lock_set_monitor_last_duration = after - now;
     }

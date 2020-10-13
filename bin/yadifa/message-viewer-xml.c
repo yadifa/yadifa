@@ -1,41 +1,43 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 /** @defgroup yadifa
  *  @ingroup ###
  *  @brief
  */
+#include "client-config.h"
+
 #include <dnscore/output_stream.h>
 #include <dnscore/counter_output_stream.h>
 #include <dnscore/format.h>
@@ -43,13 +45,6 @@
 #include <dnscore/message-viewer.h>
 
 //#include message-viewer-xml.h"
-
-#define     VM_WITH_ADDITIONAL                  0x01
-#define     VM_WITH_ANSWER                      0x02
-#define     VM_WITH_AUTHORITY                   0x04
-#define     VM_WITH_QUESTION                    0x08
-#define     VM_WITH_HEADER                      0x10
-#define     VM_WITH_XFR                         0x20
 
 
 
@@ -160,7 +155,7 @@ message_viewer_xml_end(message_viewer *mv, long time_duration)
     osformat(os, "%s<date>%s</date>%s", pretty_print_tab, ctime(&timep), pretty_print_cr);
     // osformat(os, "<when>%s</when>", date_stamp);
 
-    if(mv->view_mode_with & VM_WITH_XFR)
+    if(mv->view_mode_with & MESSAGE_VIEWER_WITH_XFR)
     {
         osformat(os, "%s<records>%lu</records>%s", pretty_print_tab, mv->resource_records_total[1], pretty_print_cr);
         osformat(os, "%s<messages>%lu</messages>%s", pretty_print_tab, mv->messages, pretty_print_cr);
@@ -212,8 +207,8 @@ message_viewer_xml_header(message_viewer *mv, const u8 *buffer)
 
     u8 rcode = MESSAGE_RCODE(buffer);
 
-    const char *opcode_txt = get_opcode(opcode);
-    const char *status_txt = get_rcode(rcode);
+    const char *opcode_txt = dns_message_opcode_get_name(opcode);
+    const char *status_txt = dns_message_rcode_get_name(rcode);
 
     mv->section_name = (opcode != OPCODE_UPDATE) ? message_section_names : message_section_update_names;
 
@@ -221,7 +216,7 @@ message_viewer_xml_header(message_viewer *mv, const u8 *buffer)
     /* if no view with header then inmediately return,
      * xml axfr has no header information so --> return
      */
-    if(mv->view_mode_with & VM_WITH_XFR)
+    if(mv->view_mode_with & MESSAGE_VIEWER_WITH_XFR)
     {
         return;
     }
@@ -256,7 +251,7 @@ message_viewer_xml_header(message_viewer *mv, const u8 *buffer)
 static void
 message_viewer_xml_section_header(message_viewer *mv, u32 section_idx, u16 count)
 {
-    if(mv->view_mode_with & VM_WITH_XFR)
+    if(mv->view_mode_with & MESSAGE_VIEWER_WITH_XFR)
     {
         return;
     }
@@ -268,7 +263,7 @@ message_viewer_xml_section_header(message_viewer *mv, u32 section_idx, u16 count
 
     record_name = message_record_names[section_idx];
 
-//    if ((view_mode_with & message_print_view_with_mode[section_idx]) && count)
+//    if(message_viewer_requires_section(section_idx, view_mode_with) && count)
     {
         osformat(os, "%s<%s amount=\"%d\">%s", pretty_print_tab, section_name , count, pretty_print_cr);
     }
@@ -282,7 +277,7 @@ message_viewer_xml_section_header(message_viewer *mv, u32 section_idx, u16 count
 static void
 message_viewer_xml_section_footer(message_viewer *mv, u32 section_idx, u16 count)
 {
-    if(mv->view_mode_with & VM_WITH_XFR)
+    if(mv->view_mode_with & MESSAGE_VIEWER_WITH_XFR)
     {
         return;
     }
@@ -295,7 +290,7 @@ message_viewer_xml_section_footer(message_viewer *mv, u32 section_idx, u16 count
     /* pretty print output level of tabs -1 */
     level_down(mv);
 
-//    if ((view_mode_with & message_print_view_with_mode[section_idx]) && count[section_idx])
+//    if(message_viewer_requires_section(section_idx, view_mode_with))
     {
         osformat(os, "%s</%s>%s", pretty_print_tab, section_name, pretty_print_cr);
     }
@@ -305,7 +300,7 @@ message_viewer_xml_section_footer(message_viewer *mv, u32 section_idx, u16 count
 static void
 message_viewer_xml_question_record(message_viewer *mv, u8 *record_wire, u16 rclass, u16 rtype)
 {
-    if(mv->view_mode_with & VM_WITH_XFR)
+    if(mv->view_mode_with & MESSAGE_VIEWER_WITH_XFR)
     {
         return;
     }
@@ -348,13 +343,9 @@ message_viewer_xml_question_record(message_viewer *mv, u8 *record_wire, u16 rcla
 
 
 static void
-message_viewer_xml_section_record(message_viewer *mv, u8 *record_wire, u8 view_mode_with)
+message_viewer_xml_section_record(message_viewer *mv, u8 *record_wire, u8 section_idx)
 {
-    if(!(mv->view_mode_with & view_mode_with))
-    {
-        return;
-    }
-
+    (void)section_idx;
 
     /*
      * there is no padding support for formats on complex types (padding is ignored)
@@ -455,4 +446,3 @@ message_viewer_xml_init(message_viewer *mv, output_stream *os, u16 view_mode_wit
     mv->os = os;
     mv->view_mode_with = view_mode_with;
 }
-

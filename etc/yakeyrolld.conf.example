@@ -1,0 +1,140 @@
+#
+# Example yakeyrolld configuration file.
+#
+
+<yakeyrolld>
+	domain example.eu
+
+	# This MUST point into yadifa's keys directory.
+	# Only one key path is supported, one path per zone handling can be implemented if needed
+
+	keys-path "/usr/local/var/zones/keys"
+	plan-path "/usr/local/var/plans"
+	log-path "/usr/local/var/log/yakeyrolld"
+
+	uid yadifad
+	gid yadifad
+
+	generate-from "now"
+	generate-until "+1y"
+	server 127.0.0.1
+	policy "master-policy"
+</yakeyrolld>
+
+#
+# TSIG Key configuration
+#
+
+<key>
+    name        master-slave
+    algorithm   hmac-md5
+    secret      MasterAndSlavesTSIGKey==
+</key>
+
+<channels>
+    dnssec     dnssec.log     0644
+    system     system.log     0644
+    keyroll    keyroll.log    0644
+    all        all.log        0644
+</channels>
+
+<loggers>
+    system     prod system
+    dnssec     prod dnssec
+    keyroll    prod keyroll,all
+</loggers>
+
+################################################################################
+################################################################################
+###
+### POLICIES
+###
+################################################################################
+################################################################################
+
+<dnssec-policy>
+
+    # name of the 'dnssec-policy'
+
+    id                      "master-policy"
+    description             "master zone policy"
+
+    # at least one: key-descriptor "name"
+    # they define KSK & ZSK keys
+
+    key-suite               "zsk-2048"
+    key-suite               "ksk-2048"
+</dnssec-policy>
+
+<key-suite>
+    # name of the key-suite
+
+    id                      "zsk-2048"
+    key-template            "zsk-rsa-sha512-2048"
+
+    # Our yadifamaster01 uses this for it's ZSK for now (it should become monthly)
+
+    key-roll                "weekly-calendar"
+</key-suite>
+
+<key-suite>
+    # name of the key-suite
+
+    id                      "ksk-2048"
+    key-template            "ksk-rsa-sha512-2048"
+
+    key-roll                "yearly-calendar"
+</key-suite>
+
+<key-template>
+    id                      "zsk-rsa-sha512-2048"
+    algorithm               RSASHA512
+    size                    1024
+</key-template>
+
+<key-template>
+    id                      "ksk-rsa-sha512-2048"
+    ksk                     1
+    algorithm               RSASHA512
+    size                    2048
+</key-template>
+
+#
+# Quick note about how the sheduler computes times.
+#
+# The calendar triggers events in this order: Generates, publishes, activates, de-activates, removes.
+# The sheduling always arranges so the de-activation occurs at or after the next sheduled activation.
+# So if generate, publish and activate are relative to each-other, inactive is relative to the activate of the next key.
+#
+
+
+<key-roll>
+    id                 "yearly-calendar"
+
+    generate            11        10           *                   1            mon             1 # Januay, Monday of the second week at 10:11
+    publish             11        10           *                   1            tue             * # following Tuesday at 10:11
+    activate            11        10           *                   1            wed             * # following Wednesday at 10:11
+    inactive            11        10           *                   1            mon             * # following Monday, a year after, at 10:11
+    remove              11        10           *                   1            wed             * # following Wednesday at 10:11
+</key-roll>
+
+<key-roll>
+    id                 "monthly-calendar"
+
+    generate            17        10           *                   *            mon             0 # 1st monday the month at 10:17
+    publish             17        10           *                   *            tue             * # following tuesday at 10:17
+    activate            17        10           *                   *            wed             * # following wednesday at 10:17
+    inactive            17        10           *                   *            wed             * # following wednesday at 10:17 (one week after the activation)
+    remove              17        10           *                   *            thu             * # following thursday at 10:17
+</key-roll>
+
+<key-roll>
+    id                 "weekly-calendar"
+
+    generate            0          9           *                   *            mon             * # Monday at 09:00
+    publish             0          8           *                   *            tue             * # Tuesday at 08:00
+    activate            0          6           *                   *            wed             * # Wednesday at 06:00
+    inactive            0          6           *                   *            wed             * # Wednesday at 06:00 (next Wednesday, if >06:00 the Wednesday in two weeks)
+    remove              0         12           *                   *            fri             * # Friday at 12:00
+</key-roll>
+

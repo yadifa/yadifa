@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 /** @defgroup yadifad
  *  @ingroup configuration
@@ -57,8 +57,6 @@
 /*----------------------------------------------------------------------------*/
 #pragma mark GLOBAL VARIABLES
 
-
-extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
 
 #define POLICYCF_TAG 0x46435943494c4f50
@@ -80,7 +78,7 @@ CONFIG_STRING_ARRAY(  key_suite,            NULL,   DP_KEY_SUITE_SIZE           
 CONFIG_U32_RANGE(     ds_ttl,               "3600", 0, MAX_S32                  )
 CONFIG_FLAG8(         weaker_key_removal,   "0",    flags, DP_FLAGS_WEAKER_KEY  )
 CONFIG_FLAG8(         stronger_key_removal, "0",    flags, DP_FLAGS_STRONGER_KEY)
-CONFIG_U8(            max_key,              "2"                                 )
+CONFIG_U8(            max_key,              "2"                                 ) /// @todo 20160520 gve -- check if this per key or key_suite
 
          /*           alias,                aliased */
 CONFIG_ALIAS(         max_keys,             max_key                             )
@@ -105,14 +103,14 @@ config_section_dnssec_policy_set_wild(struct config_section_descriptor_s *csd, c
 
 
 static ya_result
-config_section_dnssec_policy_print_wild(struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_dnssec_policy_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
 {
     (void)csd;
     (void)os;
     
     if(key != NULL)
     {
-        return ERROR;
+        return INVALID_ARGUMENT_ERROR;
     }
 
     return SUCCESS;
@@ -151,7 +149,7 @@ config_section_dnssec_policy_init(struct config_section_descriptor_s *csd)
  * @fn static ya_result config_section_dnssec_policy_start(struct config_section_descriptor_s *csd)
  *
  * @brief
- * start of a <dnsssec-policy> section csd->base will be initialized
+ * start of a <dnssec-policy> section csd->base will be initialized
  *
  * @details
  * csd->base will be initialized with a new ptr_vector for key-suites
@@ -174,7 +172,7 @@ config_section_dnssec_policy_start(struct config_section_descriptor_s *csd)
     }
     
     dnssec_policy_desc_s *dnssec_policy;
-    MALLOC_OR_DIE(dnssec_policy_desc_s*, dnssec_policy, sizeof(dnssec_policy_desc_s), POLICYCF_TAG);
+    MALLOC_OBJECT_OR_DIE(dnssec_policy, dnssec_policy_desc_s, POLICYCF_TAG);
     ZEROMEMORY(dnssec_policy, sizeof(dnssec_policy_desc_s));
     ptr_vector_init(&dnssec_policy->key_suite);
     csd->base = dnssec_policy;
@@ -187,7 +185,7 @@ config_section_dnssec_policy_start(struct config_section_descriptor_s *csd)
  * @fn static ya_result config_section_dnssec_policy_stop(struct config_section_descriptor_s *csd)
  *
  * @brief
- * stop of a <dnsssec-policy> section csd->base set to NULL --> ready for the
+ * stop of a <dnssec-policy> section csd->base set to NULL --> ready for the
  * next <dnssec-policy> section
  *
  * @details
@@ -230,7 +228,7 @@ config_section_dnssec_policy_stop(struct config_section_descriptor_s *csd)
         return CONFIG_SECTION_ERROR;
     }
     
-    ptr_node *node = ptr_set_avl_insert(&dnssec_policy_desc_set, dnssec_policy->id);
+    ptr_node *node = ptr_set_insert(&dnssec_policy_desc_set, dnssec_policy->id);
 
     if(node->value == NULL)
     {
@@ -264,15 +262,17 @@ config_section_dnssec_policy_stop(struct config_section_descriptor_s *csd)
 static ya_result
 config_section_dnssec_policy_postprocess(struct config_section_descriptor_s *csd)
 {
+    (void)csd;
+
 #if CONFIG_SETTINGS_DEBUG
     formatln("config: section: dnssec-policy: postprocess");
 #endif
-    ptr_set_avl_iterator iter;
-    ptr_set_avl_iterator_init(&dnssec_policy_desc_set, &iter);
+    ptr_set_iterator iter;
+    ptr_set_iterator_init(&dnssec_policy_desc_set, &iter);
 
-    while(ptr_set_avl_iterator_hasnext(&iter))
+    while(ptr_set_iterator_hasnext(&iter))
     {
-        ptr_node *dnssec_policy_node = ptr_set_avl_iterator_next_node(&iter);
+        ptr_node *dnssec_policy_node = ptr_set_iterator_next_node(&iter);
         dnssec_policy_desc_s *dnssec_policy_desc = (dnssec_policy_desc_s *)dnssec_policy_node->value;
         
         if((ptr_vector_size(&dnssec_policy_desc->key_suite) < 1) || (ptr_vector_size(&dnssec_policy_desc->key_suite) > 2))
@@ -288,7 +288,7 @@ config_section_dnssec_policy_postprocess(struct config_section_descriptor_s *csd
                 
         // get all <key-suite> sections for <dnssec-policy> configuration
         // and put it in 'key_suites'
-        ptr_vector key_suites = EMPTY_PTR_VECTOR;
+        ptr_vector key_suites = PTR_VECTOR_EMPTY;
         for(int i = 0; i <= ptr_vector_last_index(&dnssec_policy_desc->key_suite); ++i)
         {
             // get 'key-suite' name and check if it exists, if not return 'ERROR'
@@ -320,6 +320,10 @@ config_section_dnssec_policy_postprocess(struct config_section_descriptor_s *csd
         }
 
         // set the dnssec-policy structure for 'dnssec_policy_desc->id' with 'dd' and 'key_suites'
+
+        // the value returned by dnssec_policy_create is also added to key_suites
+
+
         dnssec_policy_create(dnssec_policy_desc->id, dd, &key_suites);
 
         // if done remove everything <denial> and <key-suite> for '<dnssec-policy> with 'dnssec_policy_desc->id'
@@ -333,6 +337,8 @@ config_section_dnssec_policy_postprocess(struct config_section_descriptor_s *csd
         {
             dnssec_policy_denial_release(dd);
         }
+        
+        ptr_vector_destroy(&key_suites);
     }
 
 
@@ -358,14 +364,14 @@ dnssec_policy_free(dnssec_policy_desc_s *dnssec_policy)
     free(dnssec_policy->id);
     free(dnssec_policy->description);
     free(dnssec_policy->denial);
-    ptr_vector_free_empties(&dnssec_policy->key_suite, free);
+    ptr_vector_callback_and_clear(&dnssec_policy->key_suite, free);
 
     free(dnssec_policy);
 }
 
 
 /**
- * @fn static ya_result config_section_dnssec_policy_finalise(struct config_section_descriptor_s *csd)
+ * @fn static ya_result config_section_dnssec_policy_finalize(struct config_section_descriptor_s *csd)
  *
  * @brief free dnssec_policy_desc_s completely
  *
@@ -380,7 +386,7 @@ dnssec_policy_free(dnssec_policy_desc_s *dnssec_policy)
  * return ya_result
  */
 static ya_result
-config_section_dnssec_policy_finalise(struct config_section_descriptor_s *csd)
+config_section_dnssec_policy_finalize(struct config_section_descriptor_s *csd)
 {
     if(csd != NULL)
     {
@@ -388,7 +394,7 @@ config_section_dnssec_policy_finalise(struct config_section_descriptor_s *csd)
         {
             dnssec_policy_desc_s *dnssec_policy = (dnssec_policy_desc_s*)csd->base;
             dnssec_policy_free(dnssec_policy);
-#ifdef DEBUG
+#if DEBUG
             csd->base = NULL;
 #endif
         }
@@ -414,7 +420,7 @@ static const config_section_descriptor_vtbl_s config_section_dnssec_policy_descr
     config_section_dnssec_policy_start,
     config_section_dnssec_policy_stop,
     config_section_dnssec_policy_postprocess,
-    config_section_dnssec_policy_finalise
+    config_section_dnssec_policy_finalize
 };
 
 
@@ -457,7 +463,7 @@ config_register_dnssec_policy(const char *null_or_key_name, s32 priority)
     // get the correct virtual table and register <dnssec-policy> section from
     // the configuration
     config_section_descriptor_s *desc;
-    MALLOC_OR_DIE(config_section_descriptor_s*, desc, sizeof(config_section_descriptor_s), CFGSDESC_TAG);
+    MALLOC_OBJECT_OR_DIE(desc, config_section_descriptor_s, CFGSDESC_TAG);
     desc->base = NULL;
     desc->vtbl = &config_section_dnssec_policy_descriptor_vtbl;
 

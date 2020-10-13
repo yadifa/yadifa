@@ -1,6 +1,6 @@
 ################################################################################
 # 
-#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  Copyright (c) 2011-2020, EURid. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 #  Redistribution and use in source and binary forms, with or without 
@@ -29,9 +29,28 @@
 # 
 ################################################################################
 
-20201007:
-    YADIFA 2.3.11
-	Applied Debian cross-build fix (helmut@subdivi.de, https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=971605)
+20201012:
+    YADIFA 2.4.0-public
 
-	Fixes an issue where a TCP connection would be closed for inactivity with some flows rates (in some kernel/network settings)
+    Fixes an issue that could happen with multiprocess logging.
+    Fixes an issue parsing a *. domain.
+    Improves support for LibreSSL.
+    Added contributions directories with community-provided patches.
+    Readied the source for the release.
 
+    Many changes have been made since version 2.3.x.
+    
+    Please read the manual for more information.
+
+    YAKEYROLLD 2.4.0
+
+    Since version 2.4.0, yadifad optionally allows dynamic update of RRSIG records.
+    The external key managing tool using this feature is being released along with it.
+   
+    Please read the manual for more information.
+
+    YADIFA CTRL 2.4.0
+
+    The updated version of the command line controller has been made more user-friendly.
+
+    Please read the manual for more information.

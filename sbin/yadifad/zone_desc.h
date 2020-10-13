@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -49,10 +50,21 @@
 
 #include <dnsdb/zdb_types.h>
 
-#include "acl.h"
+#include <dnscore/acl.h>
+#include <dnscore/ptr_set.h>
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#define ZONE_LOCK_HAS_OWNER_ID 0 // debug
+
+#if ZONE_LOCK_HAS_OWNER_ID
+#pragma message("***********************************************************")
+#pragma message("***********************************************************")
+#pragma message("ZONE_LOCK_HAS_OWNER_ID 1")
+#pragma message("***********************************************************")
+#pragma message("***********************************************************")
 #endif
 
 #define     ZT_HINT         0       /**< zone file: hint */
@@ -91,17 +103,22 @@ extern "C" {
                                                              * edf: I added this so I would not hammer
                                                              *      the root servers when doing tests
                                                              */
+#if HAS_MASTER_SUPPORT
 #define     ZONE_FLAG_MAINTAIN_DNSSEC              8
+#endif
 #define     ZONE_FLAG_TRUE_MULTIMASTER            16        // drops a zone whenever changing the master
 #define     ZONE_FLAG_DROP_CURRENT_ZONE_ON_LOAD   32        // only triggered while changing the true master: the current zone will be dropped
+#if HAS_MASTER_SUPPORT
 #define     ZONE_FLAG_RRSIG_NSUPDATE_ALLOWED      64        // allows to push a signature with an update
+#define     ZONE_FLAG_MAINTAIN_ZONE_BEFORE_MOUNT 128        // must finishing applying policies and signature before mounting the zone
+#endif
     
 // status flags
 // iIclLMUdDzZaAsSeERxX#---T---ur/!
 //#define     ZONE_STATUS_IDLE                    0x00000000      /* i nothing happening at ALL */
 
 #define     ZONE_STATUS_STARTING_UP             0x00000001      /* I before we even tried to load it */
-#define     ZONE_STATUS_MODIFIED                0x00000002      /* c has been updated since last write on/load from disk */
+
 #define     ZONE_STATUS_LOAD                    0x00000004      /* l loading of the zone queried */
 #define     ZONE_STATUS_LOADING                 0x00000008      /* L in the process of loading the zone */
 #define     ZONE_STATUS_MOUNTING                0x00000010      /* M loading of the zone queried */
@@ -126,8 +143,12 @@ extern "C" {
 #define     ZONE_STATUS_FROZEN                  0x00100000      /* f zone is read only <-> READONLY ? */
 #define     ZONE_STATUS_TEMPLATE_SOURCE_FILE    0x00200000
 #define     ZONE_STATUS_MUST_CLEAR_JOURNAL      0x00400000
-#define     ZONE_STATUS_RESERVED_01____NOT_USED 0x00800000
+#define     ZONE_STATUS_NOTIFIED                0x00800000
 #define     ZONE_STATUS_DOWNLOADED              0x01000000      /* T the file is on disk, soon to be loaded */
+
+#define     ZONE_STATUS_UPDATE_FROM_MASTER      0x02000000
+#define     ZONE_STATUS_LOAD_AFTER_DROP         0x04000000
+#define     ZONE_STATUS_RESERVED1               0x08000000
 #define     ZONE_STATUS_UNREGISTERING           0x10000000      /* u */
 #define     ZONE_STATUS_REGISTERED              0x20000000      /* r this instance of the zone is registered */
 #define     ZONE_STATUS_MARKED_FOR_DESTRUCTION  0x40000000      /* / a "destroy" command has been put in the queue */
@@ -163,7 +184,6 @@ extern "C" {
 #define     ZONE_LOCK_UNFREEZE           0x8d
 #define     ZONE_LOCK_SAVE               0x8e
 #define     ZONE_LOCK_DYNUPDATE          0x8f
-#define     ZONE_LOCK_UNREGISTER         0xfe
 
 enum zone_type
 {
@@ -193,12 +213,18 @@ typedef enum zone_type zone_type;
 typedef struct zone_refresh_s zone_refresh_s;
 struct zone_refresh_s
 {
-    /* last successful refresh time */
+    // last successful refresh time
     u32 refreshed_time;
-    /* last time we retried */
+    // last time we retried
     u32 retried_time;
-    /* for the sole use of retry.c (updated and used by it) */
+    // for the sole use of retry.c (updated and used by it)
     u32 zone_update_next_time;
+    /*
+    // last advertised serial (notification)
+    u32 advertised_serial;
+    // queued to handle notification
+    bool notification_handling;
+    */
 };
 
 typedef struct zone_notify_s zone_notify_s;
@@ -273,7 +299,7 @@ typedef struct zone_desc_s zone_desc_s;
 struct zone_desc_s
 {
     // fqdn
-    u8                                                            *origin;      // cannot change
+    u8                                                           *_origin;      // cannot change
     // ascii domain name
     char                                                          *domain;      // cannot change
     // name of the file on disk
@@ -296,6 +322,7 @@ struct zone_desc_s
     
 #if HAS_MASTER_SUPPORT
     struct dnssec_policy                                   *dnssec_policy;
+    ptr_set                            dnssec_policy_processed_key_suites;
 #endif
     
     // zone signature settings
@@ -329,7 +356,7 @@ struct zone_desc_s
     ///
     /* marks */
     mutex_t                                                         lock;
-    pthread_cond_t                                             lock_cond;
+    cond_t                                                     lock_cond;
     
     u32                                                    commands_bits;
     
@@ -337,12 +364,26 @@ struct zone_desc_s
     volatile s32                                         lock_wait_count;
     volatile s32                                        lock_owner_count;
     volatile u8                                               lock_owner;
+
+#if ZONE_LOCK_HAS_OWNER_ID
+    volatile thread_t                               lock_last_owner_tid;
+#endif
     
-#ifdef DEBUG
+#if DEBUG
     u64                                                 instance_time_us;
     u64                                                      instance_id;
 #endif
 };
+
+static inline const u8* zone_origin(const zone_desc_s *zone_desc)
+{
+    return zone_desc->_origin;
+}
+
+static inline const char* zone_domain(const zone_desc_s *zone_desc)
+{
+    return zone_desc->domain;
+}
 
 #ifdef __cplusplus
 }
@@ -350,9 +391,4 @@ struct zone_desc_s
 
 #endif /* ZONE_DESC_H */
 
-/*    ------------------------------------------------------------    */
-
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

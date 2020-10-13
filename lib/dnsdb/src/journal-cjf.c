@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -60,11 +61,17 @@
  *  @retval NOK
  */
 
+
+#include "dnsdb/dnsdb-config.h"
+
 #define ZDB_JOURNAL_CODE 1
+
+#include "dnsdb/journal.h"
+
+#if JOURNAL_CJF_ENABLED
 
 #define JOURNAL_CJF_BASE 1
 
-#include "dnsdb/dnsdb-config.h"
 #include "dnsdb/journal-cjf-page.h"
 #include "dnsdb/journal-cjf-page-cache.h"
 #include "dnsdb/journal-cjf-page-output-stream.h"
@@ -95,6 +102,7 @@
 
 #include <dnscore/bytearray_output_stream.h>
 #include <dnscore/bytearray_input_stream.h>
+#include <dnscore/zalloc.h>
 
 #include "dnsdb/zdb_error.h"
 #include "dnsdb/zdb_utils.h"
@@ -108,7 +116,7 @@ extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
 #define DEBUG_JOURNAL 1
-#ifndef DEBUG
+#if !DEBUG
 #undef DEBUG_JOURNAL
 #define DEBUG_JOURNAL 0
 #endif
@@ -176,21 +184,16 @@ extern logger_handle* g_database_logger;
  * I'm not sure of what the ratio between allowed FDs and allowed PAGE pages should be.
  */
 
-#define EDF_DEBUG 0
-
-#if EDF_DEBUG
-static ptr_set journal_cjf_set = PTR_SET_ASCIIZ_EMPTY;
-static mutex_t journal_cjf_set_mtx = MUTEX_INITIALIZER;
-#endif
-
 static shared_group_shared_mutex_t journal_shared_mtx;
-static bool journal_shared_mtx_initialized = FALSE;
+static bool journal_initialized = FALSE;
+
+static file_pool_t journal_file_pool = 0;
 
 void
 log_debug_jnl(journal_cjf *jnl, const char *text)
 {
-    log_debug4("cjf: %s,%i: %s: header SN=[%08x; %08x] F=%08x L=%08x dirty=%i empty=%i",
-                jnl->journal_file_name, jnl->fd, text,
+    log_debug4("cjf: %s,%p: %s: header SN=[%08x; %08x] F=%08x L=%08x dirty=%i empty=%i",
+                jnl->journal_file_name, jnl->file, text,
                 jnl->serial_begin, jnl->serial_end,
                 jnl->first_page_offset, jnl->page_table_file_offset,
                 journal_cjf_is_dirty(jnl),
@@ -203,12 +206,12 @@ log_debug_jnl(journal_cjf *jnl, const char *text)
         n--;
     }
     
-    log_debug4("cjf: %s,%i: %s: idxt %3hi/%3hi [%3hi] dirty=%i marked=%i", 
-        jnl->journal_file_name, jnl->fd, text,
+    log_debug4("cjf: %s,%p: %s: idxt %3hi/%3hi [%3hi] dirty=%i marked=%i", 
+        jnl->journal_file_name, jnl->file, text,
         jnl->idxt.count, jnl->idxt.size, jnl->idxt.first, (jnl->idxt.dirty)?1:0, (jnl->idxt.marked)?1:0);
     
-    log_debug4("cjf: %s,%i: %s: page: SN=[%08x; %08x] count=%3u size=%3u at=%08x next=%08x ... limit=%08x",
-               jnl->journal_file_name, jnl->fd, text,
+    log_debug4("cjf: %s,%p: %s: page: SN=[%08x; %08x] count=%3u size=%3u at=%08x next=%08x ... limit=%08x",
+               jnl->journal_file_name, jnl->file, text,
                jnl->last_page.serial_start, jnl->last_page.serial_end,
                jnl->last_page.count,jnl->last_page.size,
                jnl->last_page.file_offset, jnl->last_page.records_limit,
@@ -218,22 +221,22 @@ log_debug_jnl(journal_cjf *jnl, const char *text)
     {
         journal_cjf_idxt_tbl_item *item = &jnl->idxt.entries[(jnl->idxt.first + idx) % jnl->idxt.size];
         
-        log_debug4("cjf: %s,%i: %s: idxt[%3i] = %08x %08x", jnl->journal_file_name, jnl->fd, text, idx, item->last_serial, item->file_offset);
+        log_debug4("cjf: %s,%p: %s: idxt[%3i] = %08x %08x", jnl->journal_file_name, jnl->file, text, idx, item->last_serial, item->file_offset);
     }
     
     if(jnl->last_page.count == 0)
     {
         journal_cjf_idxt_tbl_item *item = &jnl->idxt.entries[(jnl->idxt.first + n) % jnl->idxt.size];
         
-        log_debug4("cjf: %s,%i: %s: idxt[%3i] =  [empty] %08x", jnl->journal_file_name, jnl->fd, text, n, item->file_offset);
+        log_debug4("cjf: %s,%p: %s: idxt[%3i] =  [empty] %08x", jnl->journal_file_name, jnl->file, text, n, item->file_offset);
     }    
 }
 
 static void
 journal_cjf_writelock(journal_cjf *jnl)
 {
-#ifdef DEBUG
-    log_debug4("cjf: %s,%i: write lock", jnl->journal_file_name, jnl->fd);
+#if DEBUG
+    log_debug4("cjf: %s,%p: write lock", jnl->journal_file_name, jnl->file);
 #endif
     shared_group_mutex_lock(&jnl->mtx, GROUP_MUTEX_WRITE);
 }
@@ -241,8 +244,8 @@ journal_cjf_writelock(journal_cjf *jnl)
 static void
 journal_cjf_writeunlock(journal_cjf *jnl)
 {
-#ifdef DEBUG
-    log_debug4("cjf: %s,%i: write unlock", jnl->journal_file_name, jnl->fd);
+#if DEBUG
+    log_debug4("cjf: %s,%p: write unlock", jnl->journal_file_name, jnl->file);
 #endif
     shared_group_mutex_unlock(&jnl->mtx, GROUP_MUTEX_WRITE);
 }
@@ -250,8 +253,8 @@ journal_cjf_writeunlock(journal_cjf *jnl)
 static void
 journal_cjf_readlock(journal_cjf *jnl)
 {
-#ifdef DEBUG
-    log_debug4("cjf: %s,%i: read lock", jnl->journal_file_name, jnl->fd);
+#if DEBUG
+    log_debug4("cjf: %s,%p: read lock", jnl->journal_file_name, jnl->file);
 #endif
     shared_group_mutex_lock(&jnl->mtx, GROUP_MUTEX_READ);
 }
@@ -259,8 +262,8 @@ journal_cjf_readlock(journal_cjf *jnl)
 static void
 journal_cjf_readunlock(journal_cjf *jnl)
 {
-#ifdef DEBUG
-    log_debug4("cjf: %s,%i: read unlock", jnl->journal_file_name, jnl->fd);
+#if DEBUG
+    log_debug4("cjf: %s,%p: read unlock", jnl->journal_file_name, jnl->file);
 #endif
     shared_group_mutex_unlock(&jnl->mtx, GROUP_MUTEX_READ);
 }
@@ -301,7 +304,7 @@ journal_cjf_load_idxt(journal_cjf *jnl)
     {
         jnl->last_page.file_offset = journal_cjf_idxt_get_last_file_offset(jnl);
         journal_cjf_page_tbl_header current_page_header;
-        journal_cjf_page_cache_read_header(jnl->fd, jnl->last_page.file_offset, &current_page_header);
+        journal_cjf_page_cache_read_header(jnl->file, jnl->last_page.file_offset, &current_page_header);
         jnl->last_page.count = current_page_header.count;
         jnl->last_page.size = current_page_header.size;
 
@@ -328,7 +331,7 @@ journal_cjf_load_idxt(journal_cjf *jnl)
         jnl->idxt.dirty = FALSE;
         jnl->flags |= JOURNAL_CFJ_FLAGS_DIRTY;
 
-        journal_cjf_page_cache_flush(jnl->fd);
+        journal_cjf_page_cache_flush(jnl->file);
 
         journal_cjf_idxt_destroy(jnl);
 
@@ -357,7 +360,7 @@ journal_cjf_load_idxt(journal_cjf *jnl)
         jnl->last_page.file_offset_limit = jnl->file_maximum_size;
 
 #if _BSD_SOURCE || _XOPEN_SOURCE >= 500 || _XOPEN_SOURCE && _XOPEN_SOURCE_EXTENDED || /* Since glibc 2.3.5: */ _POSIX_C_SOURCE >= 200112L        
-        ftruncate(jnl->fd, CJF_HEADER_SIZE);
+        file_pool_resize(jnl->file, CJF_HEADER_SIZE);
 #endif
     }
 }
@@ -367,17 +370,17 @@ journal_cjf_create_file(journal_cjf **jnlp, const u8 *origin, const char *filena
 {
     log_debug3("cjf: %{dnsname}: creating %s", origin, filename);
     
-    int flags = O_RDWR|O_CREAT|O_EXCL;
+    int flags = O_RDWR|O_CREAT|O_EXCL|O_CLOEXEC;
 #ifdef O_NOATIME
     flags |= O_NOATIME;
 #endif
-    int fd;
+    file_pool_file_t file;
     ya_result ret;
     cjf_header hdr;
 
-    fd = open_create_ex(filename, flags, 0644);
+    file = file_pool_open_ex(journal_file_pool, filename, flags, 0644);
 
-    if(fd >= 0)
+    if(file != NULL)
     {
         journal_cjf *jnl = journal_cjf_alloc_default(origin, filename);
         
@@ -391,18 +394,18 @@ journal_cjf_create_file(journal_cjf **jnlp, const u8 *origin, const char *filena
         //hdr.last_page_item_count = 0;
         hdr.flags = JOURNAL_CFJ_FLAGS_MY_ENDIAN; // not dirty
 
-        ssize_t n = writefully(fd, &hdr, CJF_HEADER_SIZE);
+        ssize_t n = file_pool_writefully(file, &hdr, CJF_HEADER_SIZE);
         if(n < 0)
         {
             ret = ERRNO_ERROR;
             return ret;
         }
         
-        jnl->fd = fd;
+        jnl->file = file;
         
         *jnlp = jnl;
 
-        return fd;
+        return SUCCESS;
     }
     else
     {
@@ -430,28 +433,28 @@ journal_cjf_init_from_file(journal_cjf **jnlp, const u8 *origin, const char *fil
 {
     log_debug3("cjf: %{dnsname}: opening%s %s", origin, (create)?"/creating":"", filename);
     
-    int flags = O_RDWR;
+    int flags = O_RDWR|O_CLOEXEC;
 #ifdef O_NOATIME
     flags |= O_NOATIME;
 #endif
-    int fd;
+    file_pool_file_t file;
     ya_result ret;
     bool bad_journal = FALSE;
     cjf_header hdr;
 
-    fd = open_ex(filename, flags);
+    file = file_pool_open_ex(journal_file_pool, filename, flags, 0660);
 
-    if(fd < 0)
+    if(file == NULL)
     {
-        fd = ERRNO_ERROR;
-        log_debug3("cjf: %{dnsname}: failed to open %s: %r", origin, filename, fd);
+        ret = ERRNO_ERROR;
+        log_debug3("cjf: %{dnsname}: failed to open %s: %r", origin, filename, ret);
         
         if(create)
         {
-            fd = journal_cjf_create_file(jnlp, origin, filename);
+            ret = journal_cjf_create_file(jnlp, origin, filename);
         }
         
-        return fd;
+        return ret;
     }
     
     s64 size = filesize(filename);
@@ -462,7 +465,7 @@ journal_cjf_init_from_file(journal_cjf **jnlp, const u8 *origin, const char *fil
     
     // look if the journal makes sense
 
-    if(FAIL(ret = readfully(fd, &hdr, sizeof(hdr))))
+    if(FAIL(ret = file_pool_readfully(file, &hdr, sizeof(hdr))))
     {
         ret = ERRNO_ERROR;
         log_err("cjf: %{dnsname}: could not read header on %s: %r", origin, filename, ret);
@@ -490,7 +493,7 @@ journal_cjf_init_from_file(journal_cjf **jnlp, const u8 *origin, const char *fil
     {
         // it does makes sense
         
-        // note: DO NOT jnl->fd = fd;
+        // note: DO NOT jnl->file = fd;
         
         journal_cjf *jnl = journal_cjf_alloc_default(origin, filename);
 
@@ -505,22 +508,22 @@ journal_cjf_init_from_file(journal_cjf **jnlp, const u8 *origin, const char *fil
         jnl->last_page.serial_end = jnl->serial_end;    
         jnl->last_page.records_limit = hdr.last_page_offset_next;
         
-        jnl->fd = fd;
+        jnl->file = file;
 
         log_debug("cjf: %{dnsname}: journal expected to cover serials from %i to %i", jnl->origin, hdr.serial_begin, hdr.serial_end);
         log_debug("cjf: %{dnsname}: journal table index located at %x%s", jnl->origin, hdr.table_index_offset,
-                (hdr.table_index_offset != 0)?"":", which means it has not been closed properly");
+            (hdr.table_index_offset!=0)?"":", which means it has not been closed properly");
         
         *jnlp = jnl;
 
-        return fd;
+        return SUCCESS;
     }
     else
     {
         // the journal content is unexpected
         
-        close_ex(fd);
-        fd = -1;
+        file_pool_close(file);
+        file = NULL;
 
         char broken_file_path[PATH_MAX];
 
@@ -566,9 +569,9 @@ journal_cjf_init_from_file(journal_cjf **jnlp, const u8 *origin, const char *fil
 
             if(try_again) // we are allowed to create and got no counter-indication
             {
-                fd = journal_cjf_create_file(jnlp, origin, filename); // we are in a branch where "create = TRUE"
+                int ret = journal_cjf_create_file(jnlp, origin, filename); // we are in a branch where "create = TRUE"
 
-                return fd;
+                return ret;
             }
         }
         else
@@ -580,28 +583,21 @@ journal_cjf_init_from_file(journal_cjf **jnlp, const u8 *origin, const char *fil
     return ret;
 }
 
-bool
-journal_cjf_ensure_file_opened(journal_cjf *jnl, bool create)
-{
-    yassert(jnl->fd >= 0);    
-    return TRUE;
-}
-
 void
 journal_cjf_header_flush(journal_cjf *jnl)
 {
-    yassert(jnl->fd >= 0);
-    
     if(journal_cjf_is_dirty(jnl))
     {
-        log_debug("cjf: %s,%i: flushing header SN=[%08x; %08x] F=%08x T=%08x", jnl->journal_file_name, jnl->fd,
+        yassert(jnl->file != NULL);
+        
+        log_debug("cjf: %s,%p: flushing header SN=[%08x; %08x] F=%08x T=%08x", jnl->journal_file_name, jnl->file,
                 jnl->serial_begin, jnl->serial_end, jnl->first_page_offset, jnl->page_table_file_offset);
         
         off_t pos;
         
-        if((pos = lseek(jnl->fd, 4, SEEK_SET)) != 4)
+        if((pos = file_pool_seek(jnl->file, 4, SEEK_SET)) != 4)
         {
-            log_err("cjf: %s,%i: failed to set file position: %lli instead of %i (%r)", jnl->journal_file_name, jnl->fd, pos, 4, ERRNO_ERROR);
+            log_err("cjf: %s,%p: failed to set file position: %lli instead of %i (%r)", jnl->journal_file_name, jnl->file, pos, 4, ERRNO_ERROR);
             logger_flush();
             abort();
         }
@@ -617,7 +613,7 @@ journal_cjf_header_flush(journal_cjf *jnl)
         //hdr.last_page_item_count = jnl->page.count;
         hdr.flags = jnl->flags;
 
-        writefully(jnl->fd, &hdr.serial_begin, CJF_HEADER_SIZE - 4);
+        file_pool_writefully(jnl->file, &hdr.serial_begin, CJF_HEADER_SIZE - 4);
         
         journal_cjf_clear_dirty(jnl);
     }
@@ -647,14 +643,14 @@ journal_cjf_remove_first_page(journal_cjf *jnl)
     
             if(serial_le(stored_serial, jnl->serial_begin))
             {
-                log_debug("cjf: %s,%i: journal page %u will be lost, flushing zone first", jnl->journal_file_name, jnl->fd, jnl->journal_file_name, jnl->serial_begin);
+                log_debug("cjf: %s,%p: journal page %u will be lost, flushing zone first", jnl->journal_file_name, jnl->file, jnl->journal_file_name, jnl->serial_begin);
                 zdb_zone_info_background_store_zone(jnl->origin);
             }
         }
     }
     
     journal_cjf_page_tbl_header first_page_hdr;    
-    journal_cjf_page_cache_read_header(jnl->fd, jnl->first_page_offset,  &first_page_hdr);
+    journal_cjf_page_cache_read_header(jnl->file, jnl->first_page_offset,  &first_page_hdr);
     if(first_page_hdr.next_page_offset < jnl->first_page_offset)
     {
         // this is the last page, of the file, physically
@@ -662,7 +658,7 @@ journal_cjf_remove_first_page(journal_cjf *jnl)
         jnl->idxt.dirty = TRUE;
     }
         
-    journal_cjf_page_cache_clear(jnl->fd, jnl->first_page_offset);
+    journal_cjf_page_cache_clear(jnl->file, jnl->first_page_offset);
     
     jnl->serial_begin = journal_cjf_idxt_get_last_serial(jnl, 0);
     jnl->first_page_offset = journal_cjf_idxt_get_file_offset(jnl, 1);
@@ -683,7 +679,7 @@ journal_cjf_remove_first_page(journal_cjf *jnl)
     
     log_debug_jnl(jnl, "journal_cjf_remove_first_page: AFTER");
 
-    log_debug("cjf: %s,%i: first PAGE now at %u (%08x), journal starts with serial %u (%08x", jnl->journal_file_name, jnl->fd,
+    log_debug("cjf: %s,%p: first PAGE now at %u (%08x), journal starts with serial %u (%08x", jnl->journal_file_name, jnl->file,
                 jnl->first_page_offset, jnl->first_page_offset, jnl->serial_begin, jnl->serial_begin);
 }
 
@@ -724,7 +720,7 @@ journal_cjf_read_soa_record(dns_resource_record *rr, input_stream *ixfr_wire_is)
         return return_value;
     }
     
-#ifdef DEBUG
+#if DEBUG
     rdata_desc rdatadesc = {rr->tctr.qtype, rr->rdata_size, rr->rdata};
     log_debug("cjf: %{dnsname} %{typerdatadesc}", rr->name, &rdatadesc);
 #endif
@@ -739,7 +735,7 @@ journal_cjf_read_soa_record(dns_resource_record *rr, input_stream *ixfr_wire_is)
     return return_value;
 }
 
-struct journal_jcf_read_ixfr_s
+struct journal_cjf_read_ixfr_s
 {
     input_stream *ixfr_wire_is;
     output_stream baos;
@@ -750,10 +746,10 @@ struct journal_jcf_read_ixfr_s
     bool eof;
 };
 
-typedef struct journal_jcf_read_ixfr_s journal_jcf_read_ixfr_s;
+typedef struct journal_cjf_read_ixfr_s journal_cjf_read_ixfr_s;
 
 ya_result
-journal_jcf_read_ixfr_init(journal_jcf_read_ixfr_s *ixfrinc, input_stream *ixfr_wire_is)
+journal_cjf_read_ixfr_init(journal_cjf_read_ixfr_s *ixfrinc, input_stream *ixfr_wire_is)
 {
     ya_result ret;
     ixfrinc->ixfr_wire_is = ixfr_wire_is;
@@ -766,7 +762,7 @@ journal_jcf_read_ixfr_init(journal_jcf_read_ixfr_s *ixfrinc, input_stream *ixfr_
     
     ret = journal_cjf_read_soa_record(&ixfrinc->rr, ixfr_wire_is);
     
-#ifdef DEBUG
+#if DEBUG
     if(ISOK(ret))
     {
         log_debug2("cjf: ---: started with %{dnsrr}", &ixfrinc->rr); 
@@ -777,7 +773,7 @@ journal_jcf_read_ixfr_init(journal_jcf_read_ixfr_s *ixfrinc, input_stream *ixfr_
 }
 
 void
-journal_jcf_read_ixfr_finalize(journal_jcf_read_ixfr_s *ixfrinc)
+journal_cjf_read_ixfr_finalize(journal_cjf_read_ixfr_s *ixfrinc)
 {
     ixfrinc->ixfr_wire_is = NULL;
     
@@ -798,7 +794,7 @@ journal_jcf_read_ixfr_finalize(journal_jcf_read_ixfr_s *ixfrinc)
  */
 
 static ya_result
-journal_jcf_read_ixfr_read(journal_jcf_read_ixfr_s *ixfrinc)
+journal_cjf_read_ixfr_read(journal_cjf_read_ixfr_s *ixfrinc)
 {
     if(ixfrinc->eof)
     {
@@ -832,7 +828,7 @@ journal_jcf_read_ixfr_read(journal_jcf_read_ixfr_s *ixfrinc)
     {
         for(int idx = 0;; ++idx)
         {
-#ifdef DEBUG
+#if DEBUG
             log_debug2("cjf: ---: %4i: %{dnsrr}", idx, rr); 
 #endif
             dns_resource_record_write(rr, baos);
@@ -844,14 +840,14 @@ journal_jcf_read_ixfr_read(journal_jcf_read_ixfr_s *ixfrinc)
                     if(!need_another_soa)
                     {
                         ixfrinc->size = bytearray_output_stream_size(baos);
-#ifdef DEBUG
+#if DEBUG
                         log_debug2("cjf: ===: IXFR incremental change size: %i", ixfrinc->size);
 #endif
                         ret = ixfrinc->size;
                     }
                     else
                     {
-#ifdef DEBUG
+#if DEBUG
                         log_debug2("cjf: ===: still expected an SOA");
 #endif
                         // SOA expected
@@ -862,7 +858,7 @@ journal_jcf_read_ixfr_read(journal_jcf_read_ixfr_s *ixfrinc)
                 }
                 else
                 {
-#ifdef DEBUG
+#if DEBUG
                     log_debug2("cjf: ===: failed to read the next record: %r", ret);
 #endif
                 }
@@ -876,7 +872,7 @@ journal_jcf_read_ixfr_read(journal_jcf_read_ixfr_s *ixfrinc)
                 {
                     if(FAIL(ret = rr_soa_get_serial(rr->rdata, rr->rdata_size, &ixfrinc->serial_to)))
                     {
-#ifdef DEBUG
+#if DEBUG
                         log_debug2("cjf: ===: failed parse serial from record: %r", ret);
 #endif
                         break;
@@ -890,7 +886,7 @@ journal_jcf_read_ixfr_read(journal_jcf_read_ixfr_s *ixfrinc)
                     // this record will written for the next page
                     
                     ixfrinc->size = bytearray_output_stream_size(baos);
-#ifdef DEBUG
+#if DEBUG
                     log_debug2("cjf: ===: IXFR incremental change size: %i (followed ...)", ixfrinc->size);
 #endif
                     ret = ixfrinc->size;
@@ -933,7 +929,7 @@ journal_cjf_append_ixfr_stream_first_page_removal(journal_cjf *jnl)
 
     if(FAIL(ret = zdb_zone_info_get_stored_serial(jnl->origin, &zone_stored_serial)))
     {
-        log_warn("cjf: %{dnsname}: could not get serial of stored zone: %r", jnl->origin, ret);
+        log_warn("cjf: %{dnsname}: could not get the serial of the stored zone: %r", jnl->origin, ret);
         return ret;
     }
     
@@ -972,11 +968,11 @@ journal_cjf_append_ixfr_stream_first_page_removal(journal_cjf *jnl)
 
     // ret is the index of the page, if it is 0 we may need to save the current zone
 
-    bool need_to_save_before_removing_first_page = (ret == 0);
+    bool need_to_store_before_removing_first_page = (ret == 0);
     
     log_debug("cjf: %{dnsname}: zone currently stored up to serial %i, located on page %i of the journal", jnl->origin, zone_stored_serial, ret);
     
-    if(need_to_save_before_removing_first_page)
+    if(need_to_store_before_removing_first_page)
     {
         // we are about to destroy the page of the currently stored serial AND
         // there are steps remaining to be safe
@@ -1014,7 +1010,7 @@ journal_cjf_append_ixfr_stream_first_page_removal(journal_cjf *jnl)
         }
         else
         {
-            ret = ERROR;
+            ret = ERROR; // obsolete
         }
 
         if(FAIL(ret))
@@ -1038,7 +1034,7 @@ static s64 journal_cjf_get_space_left_until_need_storage_page(journal_cjf *jnl)
     
     if(FAIL(ret = zdb_zone_info_get_stored_serial(jnl->origin, &zone_stored_serial)))
     {
-        log_warn("cjf: %{dnsname}: could not get serial of stored zone: %r", jnl->origin, ret);
+        log_warn("cjf: %{dnsname}: could not get teh serial of the stored zone: %r", jnl->origin, ret);
         
         // save asap
         
@@ -1090,19 +1086,19 @@ static s64 journal_cjf_get_space_left_until_need_storage_page(journal_cjf *jnl)
     {
         // we are on the page : we basically have the size of our page minus the file size
         
-        return MAX(jnl->file_maximum_size - (jnl->last_page.records_limit - jnl->last_page.file_offset), 0);
+        return MAX((s32)(jnl->file_maximum_size - (jnl->last_page.records_limit - jnl->last_page.file_offset)), 0);
     }
     else if(jnl->last_page.file_offset < need_storage->file_offset)
     {
         // we have everything until that page
         
-        return MAX(need_storage->file_offset - jnl->last_page.records_limit, 0);
+        return MAX((s32)(need_storage->file_offset - jnl->last_page.records_limit), 0);
     }
     else // if(jnl->last_page.file_offset > need_storage->file_offset)
     {
         // we have the remaining space until the end of the file plus the offset of the page (minus the header)
         
-        return MAX(jnl->file_maximum_size - jnl->last_page.records_limit, 0) + need_storage->file_offset;
+        return MAX((s32)(jnl->file_maximum_size - jnl->last_page.records_limit), 0) + need_storage->file_offset;
     }    
 }
 
@@ -1112,14 +1108,10 @@ journal_cjf_append_ixfr_stream_per_page(journal *jh, input_stream *ixfr_wire_is,
     journal_cjf *jnl = (journal_cjf*)jh;
     ya_result ret;
     
-    log_debug("cjf: %s,%i: append IXFR (master)", jnl->journal_file_name, jnl->fd);
-    
-    if(!journal_cjf_ensure_file_opened(jnl, TRUE))
-    {
-        return ERRNO_ERROR;
-    }
+    log_debug("cjf: %s,%p: append IXFR (master)", jnl->journal_file_name, jnl->file);
     
     // ensure the zone locks are usable : locked by the reader, by nobody, or the reader is a reserved owner
+    if(jnl->zone != NULL)
     {
         zdb_zone *zone = (zdb_zone*)jnl->zone;
         u8 owner = zone->lock_owner;
@@ -1132,7 +1124,7 @@ journal_cjf_append_ixfr_stream_per_page(journal *jh, input_stream *ixfr_wire_is,
                 )
             )
         {
-            log_err("cjf: %s,%i: append IXFR (master) cannot happen because the zone locks are not set properly", jnl->journal_file_name, jnl->fd);
+            log_err("cjf: %s,%p: append IXFR (master) cannot happen because the zone locks are not set properly", jnl->journal_file_name, jnl->file);
             return ERROR;
         }
     }
@@ -1145,14 +1137,14 @@ journal_cjf_append_ixfr_stream_per_page(journal *jh, input_stream *ixfr_wire_is,
     output_stream os;
     output_stream_set_void(&os); // very important
     
-    journal_jcf_read_ixfr_s ixfrinc;
-    journal_jcf_read_ixfr_init(&ixfrinc, ixfr_wire_is);
+    journal_cjf_read_ixfr_s ixfrinc;
+    journal_cjf_read_ixfr_init(&ixfrinc, ixfr_wire_is);
     
     journal_cjf_writelock(jnl);
 
     for(;;)
     {
-        ret = journal_jcf_read_ixfr_read(&ixfrinc);
+        ret = journal_cjf_read_ixfr_read(&ixfrinc);
         
         if(ret <= 0)
         {
@@ -1222,6 +1214,8 @@ journal_cjf_append_ixfr_stream_master_accum_tryagain:
             // if total available is smaller than half the file, the division will be >= 2
             
             s64 total_available = journal_cjf_get_space_left_until_need_storage_page(jnl);
+            
+            // should not store in background. Handle it first-hand (maybe postpone the update) ... (obsolete)
             
             if( ((total_available > 0) && ((jnl->file_maximum_size / total_available) >= 2)) || (total_available == 0))
             {
@@ -1310,6 +1304,7 @@ journal_cjf_append_ixfr_stream_master_accum_tryagain:
                         
                         journal_cjf_page_output_stream_cancel(&os);
                         journal_cjf_idxt_append_page(jnl);
+                        output_stream_close(&os);
                         output_stream_set_void(&os); // very important
                         
                         //journal_cjf_page_output_stream_reopen(&os, jnl);
@@ -1369,6 +1364,7 @@ journal_cjf_append_ixfr_stream_master_accum_tryagain:
                             jnl->file_maximum_size = 0; // force the loop (thus removing the first page)
                             journal_cjf_idxt_append_page(jnl);
                             jnl->file_maximum_size = tmp;
+                            output_stream_close(&os);
                             output_stream_set_void(&os); // very important
                             journal_cjf_page_output_stream_reopen(&os, jnl);
                         }
@@ -1383,6 +1379,7 @@ journal_cjf_append_ixfr_stream_master_accum_tryagain:
                             jnl->file_maximum_size = MAX_U32;
                             journal_cjf_idxt_append_page(jnl);
                             jnl->file_maximum_size = tmp;
+                            output_stream_close(&os);
                             output_stream_set_void(&os); // very important
                             journal_cjf_page_output_stream_reopen(&os, jnl);
                         }
@@ -1411,7 +1408,7 @@ journal_cjf_append_ixfr_stream_master_accum_tryagain:
                 break;
             }
             
-#ifdef DEBUG
+#if DEBUG
             log_debug("cjf: %{dnsname}: writing %{dnsrr}", jnl->origin, &rr);
 #endif
             
@@ -1459,12 +1456,12 @@ journal_cjf_append_ixfr_stream_master_accum_exit:
         output_stream_close(&os);
     }
     
-    journal_jcf_read_ixfr_finalize(&ixfrinc);
+    journal_cjf_read_ixfr_finalize(&ixfrinc);
     dns_resource_record_clear(&rr);
     
     if(written_pages > 0)
     {
-        journal_cjf_page_cache_flush(jnl->fd);
+        journal_cjf_page_cache_flush(jnl->file);
         journal_cjf_header_flush(jnl);
     }
         
@@ -1500,7 +1497,7 @@ journal_cjf_append_ixfr_stream(journal *jh, input_stream *ixfr_wire_is)
                 ret = journal_cjf_append_ixfr_stream_per_page(jh, ixfr_wire_is, TRUE);
                 break;
             default:
-                ret = ERROR;
+                ret = ERROR; // obsolete
                 break;
         }
     }
@@ -1520,7 +1517,7 @@ struct journal_cjf_input_stream_data
 {
     journal_cjf *jnl;
     
-    int fd;
+    file_pool_file_t file;
     u32 available;
     
     u32 serial_from;
@@ -1538,9 +1535,10 @@ struct journal_cjf_input_stream_data
 typedef struct journal_cjf_input_stream_data journal_cjf_input_stream_data;
 
 static ya_result
-journal_cjf_input_stream_read(input_stream* stream, u8 *buffer, u32 len)
+journal_cjf_input_stream_read(input_stream* stream, void *buffer_, u32 len)
 {
     journal_cjf_input_stream_data *data = (journal_cjf_input_stream_data*)stream->data;
+    u8 *buffer = (u8*)buffer_;
     const u8 *base = buffer;
     const u8 *limit = &buffer[len];
     intptr n;
@@ -1548,8 +1546,8 @@ journal_cjf_input_stream_read(input_stream* stream, u8 *buffer, u32 len)
     
     journal_cjf *jnl = data->jnl;
     
-    log_debug("cjf: %s,%i: input: reading %u/%u bytes, pos is %lli", jnl->journal_file_name, jnl->fd,
-            len, data->available, lseek(data->fd, 0, SEEK_CUR));
+    log_debug("cjf: %s,%p: input: reading %u/%u bytes, pos is %lli", jnl->journal_file_name, jnl->file,
+            len, data->available, file_pool_seek(data->file, 0, SEEK_CUR));
 
     // while there is still room in the output buffer
     
@@ -1594,7 +1592,7 @@ journal_cjf_input_stream_read(input_stream* stream, u8 *buffer, u32 len)
             }
             
             journal_cjf_page_tbl_header page_header;
-            journal_cjf_page_cache_read_header(data->jnl->fd, page_offset, &page_header);
+            journal_cjf_page_cache_read_header(data->jnl->file, page_offset, &page_header);
             
             if(page_header.count == 0)
             {
@@ -1610,21 +1608,21 @@ journal_cjf_input_stream_read(input_stream* stream, u8 *buffer, u32 len)
             
             (void)stream_limit_offset;
             
-#ifdef DEBUG
+#if DEBUG
             if(stream_limit_offset == 0)
             {
                 log_err("impossible limit value read from the journal");
-                journal_cjf_page_cache_read_header(data->jnl->fd, page_offset, &page_header);
+                journal_cjf_page_cache_read_header(data->jnl->file, page_offset, &page_header);
             }
 #endif
-            
+
             yassert(stream_limit_offset != 0);
             yassert(stream_limit_offset > page_offset);
  
             data->available = page_header.stream_end_offset - stream_offset;
             data->page_next = page_header.next_page_offset;
             
-            if(lseek(data->fd, stream_offset, SEEK_SET) < 0)
+            if(file_pool_seek(data->file, stream_offset, SEEK_SET) < 0)
             {
                 return ERRNO_ERROR;
             }
@@ -1632,7 +1630,7 @@ journal_cjf_input_stream_read(input_stream* stream, u8 *buffer, u32 len)
         
         n = MIN(n, data->available);
         
-        if(FAIL(ret = readfully(data->fd, buffer, n)))
+        if(FAIL(ret = file_pool_readfully(data->file, buffer, n)))
         {
             return ret;
         }
@@ -1651,7 +1649,7 @@ journal_cjf_input_stream_skip(input_stream* is, u32 len)
     
     journal_cjf_input_stream_data *data = (journal_cjf_input_stream_data*)is->data;
     journal_cjf *jnl = data->jnl;
-    log_debug("cjf: %s,%i: input: skipping %u bytes", jnl->journal_file_name, jnl->fd, len);
+    log_debug("cjf: %s,%p: input: skipping %u bytes", jnl->journal_file_name, jnl->file, len);
     
     while(len > 0)
     {
@@ -1673,11 +1671,11 @@ journal_cjf_input_stream_close(input_stream* is)
 {
     journal_cjf_input_stream_data *data = (journal_cjf_input_stream_data*)is->data;
     
-    log_debug("cjf: %s,%i: input: close (%i)", data->jnl->journal_file_name, data->jnl->fd, data->fd);
+    log_debug("cjf: %s,%p: input: close (%p)", data->jnl->journal_file_name, data->jnl->file, data->file);
     journal_cjf_readunlock(data->jnl);
     journal_cjf_release(data->jnl);
-    close_ex(data->fd);
-    ZFREE(data, journal_cjf_input_stream_data);
+    file_pool_close(data->file);
+    ZFREE_OBJECT(data);
     
     input_stream_set_void(is);    
 }
@@ -1699,28 +1697,24 @@ journal_cjf_get_ixfr_stream_at_serial(journal *jh, u32 serial_from, input_stream
 {
     journal_cjf *jnl = (journal_cjf*)jh;
     
-    log_debug("cjf: %s,%i: get IXFR stream at serial %i", jnl->journal_file_name, jnl->fd, serial_from);
-    
-    if(!journal_cjf_ensure_file_opened(jnl, TRUE))
-    {
-        return ERRNO_ERROR;
-    }
-    
+    log_debug("cjf: %s,%p: get IXFR stream at serial %i", jnl->journal_file_name, jnl->file, serial_from);
+
     journal_cjf_readlock(jnl);
     
     if(serial_lt(serial_from, jnl->serial_begin) || serial_ge(serial_from, jnl->serial_end))
     {
         if(serial_from == jnl->serial_end)
         {
-            log_debug("cjf: %s,%i: the journal ends at %i, returning empty stream", jnl->journal_file_name, jnl->fd, serial_from);
+            log_debug("cjf: %s,%p: the journal ends at %i, returning empty stream", jnl->journal_file_name, jnl->file, serial_from);
             journal_cjf_readunlock(jnl);
             empty_input_stream_init(out_input_stream);
             return SUCCESS; // 0
         }
         else
         {
+            log_debug("cjf: %s,%p: the journal ends at %i, returning empty stream", jnl->journal_file_name, jnl->file, serial_from);
             journal_cjf_readunlock(jnl);
-#ifdef DEBUG
+#if DEBUG
             logger_flush();
 #endif
             return ZDB_JOURNAL_SERIAL_OUT_OF_KNOWN_RANGE;
@@ -1751,15 +1745,16 @@ journal_cjf_get_ixfr_stream_at_serial(journal *jh, u32 serial_from, input_stream
     u16 idxt_index = (u16)ret;
         
     journal_cjf_input_stream_data *data;
-    ZALLOC_OR_DIE(journal_cjf_input_stream_data*, data, journal_cjf_input_stream_data, JCJFISDT_TAG);
+    ZALLOC_OBJECT_OR_DIE(data, journal_cjf_input_stream_data, JCJFISDT_TAG);
     journal_acquire((journal*)jnl);
     data->jnl = jnl;
-    data->fd = open_ex(jnl->journal_file_name, O_RDONLY); /// @todo 20160209 edf --  edf -- open the file, put the pointer at the right place and ret + 1, available = x
     
-    if(data->fd < 0)
+    data->file = file_pool_open_ex(journal_file_pool, jnl->journal_file_name, O_RDONLY|O_CLOEXEC, 0660);
+    
+    if(data->file == NULL)
     {
         // the journal doess not exist (anymore ?)
-        ZFREE(data, journal_cjf_input_stream_data);
+        ZFREE_OBJECT(data);
         
         journal_cjf_readunlock(jnl);
         journal_cjf_release(jnl);
@@ -1774,23 +1769,26 @@ journal_cjf_get_ixfr_stream_at_serial(journal *jh, u32 serial_from, input_stream
         yassert(jnl->last_soa_offset != 0);
         // read the last SOA
         
-        off_t from = lseek(data->fd, 0, SEEK_CUR);
-                
-        lseek(data->fd, jnl->last_soa_offset, SEEK_SET);
-        input_stream tmp;
-        fd_input_stream_attach(&tmp, data->fd);
-        ret = dns_resource_record_read(out_last_soa_rr, &tmp);
-        fd_input_stream_detach(&tmp);
+        size_t from = ~0;
         
-        lseek(data->fd, from, SEEK_SET);
+        file_pool_tell(data->file, &from);
+        
+        file_pool_seek(data->file, jnl->last_soa_offset, SEEK_SET);
+        
+        input_stream tmp;
+        file_pool_file_input_stream_init(&tmp, data->file);
+        ret = dns_resource_record_read(out_last_soa_rr, &tmp);
+        file_pool_file_input_stream_detach(&tmp);
+        
+        file_pool_seek(data->file, from, SEEK_SET);
         
         if(FAIL(ret))
         {
             journal_cjf_readunlock(jnl);
             journal_cjf_release(jnl);
             
-            log_err("cjf: %s,%i: unable to read the SOA at position %u: %r", jnl->journal_file_name, jnl->fd, jnl->last_soa_offset, ret);
-            ZFREE(data, journal_cjf_input_stream_data);
+            log_err("cjf: %s,%p: unable to read the SOA for serial %u at position %u: %r", jnl->journal_file_name, jnl->file, serial_from, jnl->last_soa_offset, ret);
+            ZFREE_OBJECT(data);
             return ret;
         }
     }
@@ -1855,7 +1853,7 @@ journal_cjf_get_ixfr_stream_at_serial(journal *jh, u32 serial_from, input_stream
 static ya_result
 journal_cjf_get_first_serial(journal *jh, u32 *serial)
 {
-    ya_result ret = ERROR;
+    ya_result ret = BUFFER_WOULD_OVERFLOW;
     journal_cjf *jnl = (journal_cjf*)jh;
     
     journal_cjf_readlock(jnl);
@@ -1870,7 +1868,7 @@ journal_cjf_get_first_serial(journal *jh, u32 *serial)
     
     journal_cjf_readunlock(jnl);
     
-    log_debug("cjf: %s,%i: get first serial: %i", jnl->journal_file_name, jnl->fd, value);
+    log_debug("cjf: %s,%p: get first serial: %i", jnl->journal_file_name, jnl->file, value);
     
     return ret;
 }
@@ -1878,7 +1876,7 @@ journal_cjf_get_first_serial(journal *jh, u32 *serial)
 static ya_result
 journal_cjf_get_last_serial(journal *jh, u32 *serial)
 {
-    ya_result ret = ERROR;
+    ya_result ret = BUFFER_WOULD_OVERFLOW;
     journal_cjf *jnl = (journal_cjf*)jh;
     
     journal_cjf_readlock(jnl);
@@ -1891,7 +1889,7 @@ journal_cjf_get_last_serial(journal *jh, u32 *serial)
         ret = SUCCESS;
     }
     
-    log_debug("cjf: %s,%i: get last serial: %i", jnl->journal_file_name, jnl->fd, value);
+    log_debug("cjf: %s,%p: get last serial: %i", jnl->journal_file_name, jnl->file, value);
 
     journal_cjf_readunlock(jnl);
     
@@ -1928,15 +1926,15 @@ journal_cjf_truncate_to_size(journal *jh, u32 size_)
     {
         journal_cjf_writelock(jnl);
         
-        log_debug("cjf: %s,%i: truncate to size 0", jnl->journal_file_name, jnl->fd);
+        log_debug("cjf: %s,%p: truncate to size 0", jnl->journal_file_name, jnl->file);
        
-        if(jnl->fd >= 0)
+        if(jnl->file == NULL)
         {
-            journal_cjf_page_cache_close(jnl->fd);
-            close_ex(jnl->fd);
-            jnl->fd = -1;
+            journal_cjf_page_cache_close(jnl->file);
+            file_pool_close(jnl->file);
+            jnl->file = NULL;
         }
-        unlink(jnl->journal_file_name);
+        file_pool_unlink_from_pool_and_filename(journal_file_pool, jnl->journal_file_name);
 
         jnl->idxt.dirty = FALSE;
         journal_cjf_idxt_destroy(jnl);
@@ -1948,7 +1946,7 @@ journal_cjf_truncate_to_size(journal *jh, u32 size_)
             zdb_zone_info_get_zone_max_journal_size(jnl->origin, &jnl->file_maximum_size);
         }
         
-        jnl->fd = -1;
+        jnl->file = NULL;
             
         jnl->last_page.file_offset = CJF_HEADER_SIZE;
         jnl->last_page.count = 0;
@@ -1981,7 +1979,7 @@ journal_cjf_truncate_to_size(journal *jh, u32 size_)
     }
     else
     {    
-        log_err("cjf: %s,%i: truncate to size != 0 not implemented", jnl->journal_file_name, jnl->fd);
+        log_err("cjf: %s,%p: truncate to size != 0 not implemented", jnl->journal_file_name, jnl->file);
         
         return ZDB_JOURNAL_FEATURE_NOT_SUPPORTED;
     }
@@ -1993,7 +1991,7 @@ journal_cjf_truncate_to_serial(journal *jh, u32 serial_)
     journal_cjf *jnl = (journal_cjf*)jh;
     (void)serial_;
     journal_cjf_readlock(jnl);
-    log_err("cjf: %s,%i: truncate to serial not implemented", jnl->journal_file_name, jnl->fd);
+    log_err("cjf: %s,%p: truncate to serial not implemented", jnl->journal_file_name, jnl->file);
     journal_cjf_readunlock(jnl);
     
     return ZDB_JOURNAL_FEATURE_NOT_SUPPORTED;
@@ -2008,32 +2006,10 @@ journal_cjf_truncate_to_serial(journal *jh, u32 serial_)
 static ya_result
 journal_cjf_reopen(journal *jh)
 {
-    journal_cjf *jnl = (journal_cjf*)jh;
-    int flags = O_RDWR;
-#ifdef O_NOATIME
-    flags |= O_NOATIME;
+#if 0 /* fix */
+#else
+    return SUCCESS;
 #endif
-    
-    ya_result ret;
-    journal_cjf_writelock(jnl);
-    if((ret = jnl->fd) < 0)
-    {
-        if(ISOK(ret = open_ex(jnl->journal_file_name, flags)))
-        {
-            jnl->fd = ret;
-        }
-        else
-        {
-            ret = ERRNO_ERROR;
-            if(ret == MAKE_ERRNO_ERROR(ENOENT))
-            {
-                ret = ZDB_ERROR_ICMTL_NOTFOUND;
-            }
-        }
-    }
-    journal_cjf_writeunlock(jnl);
-    
-    return ret;
 }
 
 static void
@@ -2041,7 +2017,7 @@ journal_cjf_flush(journal *jh)
 {
     journal_cjf *jnl = (journal_cjf*)jh;
 
-    log_debug("cjf: %s,%i: flush", jnl->journal_file_name, jnl->fd);
+    log_debug("cjf: %s,%p: flush", jnl->journal_file_name, jnl->file);
     
     journal_cjf_writelock(jnl);
     
@@ -2054,23 +2030,14 @@ journal_cjf_flush(journal *jh)
     }
 #endif
     
-#if EDF_DEBUG
-    mutex_lock(&journal_cjf_set_mtx);
-    ptr_set_avl_delete(&journal_cjf_set, jnl->journal_file_name);
-    mutex_unlock(&journal_cjf_set_mtx);
-#endif
+    log_debug3("cjf: %s,%p: flushing to file", jnl->journal_file_name, jnl->file);
     
-    log_debug3("cjf: %s,%i: flushing to file", jnl->journal_file_name, jnl->fd);
-    
-    if(jnl->fd >= 0)
-    {
-        log_debug3("cjf: %s,%i: flushing to file: flushing PAGE cache", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
-        journal_cjf_page_cache_flush(jnl->fd);
-        log_debug3("cjf: %s,%i: flushing to file: flushing IDXT", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
-        journal_cjf_idxt_flush(jnl);
-        log_debug3("cjf: %s,%i: flushing to file: flushing header", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
-        journal_cjf_header_flush(jnl);
-    }
+    log_debug3("cjf: %s,%p: flushing to file: flushing PAGE cache", jnl->journal_file_name, jnl->file, jnl->journal_file_name);
+    journal_cjf_page_cache_flush(jnl->file);
+    log_debug3("cjf: %s,%p: flushing to file: flushing IDXT", jnl->journal_file_name, jnl->file, jnl->journal_file_name);
+    journal_cjf_idxt_flush(jnl);
+    log_debug3("cjf: %s,%p: flushing to file: flushing header", jnl->journal_file_name, jnl->file, jnl->journal_file_name);
+    journal_cjf_header_flush(jnl);
     
     journal_cjf_writeunlock(jnl);
 }
@@ -2080,7 +2047,7 @@ journal_cjf_close(journal *jh)
 {
     journal_cjf *jnl = (journal_cjf*)jh;
 
-    log_debug("cjf: %s,%i: close", jnl->journal_file_name, jnl->fd);
+    log_debug("cjf: %s,%p: close", jnl->journal_file_name, jnl->file);
     
     journal_cjf_writelock(jnl);
     
@@ -2093,23 +2060,19 @@ journal_cjf_close(journal *jh)
     }
 #endif
     
-#if EDF_DEBUG
-    mutex_lock(&journal_cjf_set_mtx);
-    ptr_set_avl_delete(&journal_cjf_set, jnl->journal_file_name);
-    mutex_unlock(&journal_cjf_set_mtx);
-#endif
+    log_debug3("cjf: %s,%p: closing file", jnl->journal_file_name, jnl->file);
     
-    log_debug3("cjf: %s,%i: closing file", jnl->journal_file_name, jnl->fd);
-    
-    if(jnl->fd >= 0)
+    if(jnl->file != NULL)
     {
-        log_debug3("cjf: %s,%i: closing file: closing PAGE cache", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
-        journal_cjf_page_cache_close(jnl->fd);
-        log_debug3("cjf: %s,%i: closing file: flushing IDXT", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
+        log_debug3("cjf: %s,%p: closing file: closing PAGE cache", jnl->journal_file_name, jnl->file, jnl->journal_file_name);
+        journal_cjf_page_cache_close(jnl->file);
+        log_debug3("cjf: %s,%p: closing file: flushing IDXT", jnl->journal_file_name, jnl->file, jnl->journal_file_name);
         journal_cjf_idxt_flush(jnl);
-        log_debug3("cjf: %s,%i: closing file: flushing header", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
+        log_debug3("cjf: %s,%p: closing file: flushing header", jnl->journal_file_name, jnl->file, jnl->journal_file_name);
         journal_cjf_header_flush(jnl);
-        log_debug3("cjf: %s,%i: closing file: closing file", jnl->journal_file_name, jnl->fd, jnl->journal_file_name);
+        log_debug3("cjf: %s,%p: closing file: closing file", jnl->journal_file_name, jnl->file, jnl->journal_file_name);
+        
+        journal_cjf_idxt_destroy(jnl);
         
         if(jnl->zone != NULL)
         {
@@ -2120,8 +2083,8 @@ journal_cjf_close(journal *jh)
             log_info("zone: <notset>: closing journal file '%s'", jnl->journal_file_name);
         }
         
-        close_ex(jnl->fd);
-        jnl->fd = -1;
+        file_pool_close(jnl->file);
+        jnl->file = NULL;
     }
     
     journal_cjf_writeunlock(jnl);
@@ -2134,7 +2097,7 @@ journal_cjf_log_dump(journal *jh)
 {
     journal_cjf *jnl = (journal_cjf*)jh;
     journal_cjf_readlock(jnl);
-    log_debug("cjf: %s,%i: [%u; %u] '%s' (%i) lck=%i rc=%i", jnl->journal_file_name, jnl->fd, jnl->serial_begin, jnl->serial_end, jnl->journal_file_name, jnl->fd, jnl->mtx.owner, jnl->mtx.count);
+    log_debug("cjf: %s,%p: [%u; %u] '%s' (%i) lck=%i rc=%i", jnl->journal_file_name, jnl->file, jnl->serial_begin, jnl->serial_end, jnl->journal_file_name, jnl->file, jnl->mtx.owner, jnl->mtx.count);
     journal_cjf_readunlock(jnl);
 }
 
@@ -2162,44 +2125,7 @@ journal_cjf_link_zone(journal *jh, zdb_zone *zone)
     journal_cjf *jnl = (journal_cjf*)jh;
     
     journal_cjf_writelock(jnl);
-    
-#if ZDB_ZONE_HAS_JNL_REFERENCE
-    if(jh->zone != NULL)
-    {
-        if(jh->zone->journal == jh)
-        {
-            log_debug("cjf: %s,%i: updating maximum journal size", jnl->journal_file_name, jnl->fd);
-            jnl->file_maximum_size = jnl->zone->wire_size >> 1;
-            zdb_zone_info_get_zone_max_journal_size(jnl->origin, &jnl->file_maximum_size);
-            return;
-        }
-        else
-        {
-            log_err("cjf: %s,%i: journal (%p) is already linked to a zone (%p) and that zone links to another journal (%p)", jnl->journal_file_name, jnl->fd, jh, jh->zone, jh->zone->journal);
-            logger_flush();
-            abort();
-        }
-    } //jh->zone may be null
-
-    if(zone->journal != NULL)
-    {
-        if(zone->journal == jh)
-        {
-            log_debug("cjf: %s,%i: updating incomplete link", jnl->journal_file_name, jnl->fd);
-            jh->zone = zone;
-            jnl->file_maximum_size = jnl->zone->wire_size >> 1;
-            zdb_zone_info_get_zone_max_journal_size(jnl->origin, &jnl->file_maximum_size);
-            return;
-        }
-        else
-        {
-            log_err("cjf: %s,%i: zone already points to another journal (%p instead of to %p)", jnl->journal_file_name, jnl->fd, zone->journal, jh);
-            logger_flush();
-            abort();
-        }
-    }
-#endif
-    
+        
     if(jnl->zone != zone)
     {
         jnl->file_maximum_size = MAX_U32;
@@ -2207,16 +2133,16 @@ journal_cjf_link_zone(journal *jh, zdb_zone *zone)
 #if !ZDB_ZONE_HAS_JNL_REFERENCE
         if(jnl->zone != NULL)
         {
-            log_debug("cjf: %s,%i: unlinking zone %{dnsname},%p", jnl->journal_file_name, jnl->fd, jnl->zone->origin, jnl->zone);
+            log_debug("cjf: %s,%p: unlinking zone %{dnsname},%p", jnl->journal_file_name, jnl->file, jnl->zone->origin, jnl->zone);
             
-            zdb_zone_release((zdb_zone*)jnl->zone);
+            zdb_zone_release((zdb_zone*)jnl->zone); //jnl->zone = NULL;
         }
         
         if(zone != NULL)
         {
             zdb_zone_acquire(zone);
             
-            log_debug("cjf: %s,%i: linking to zone %{dnsname},%p", jnl->journal_file_name, jnl->fd, zone->origin, zone);
+            log_debug("cjf: %s,%p: linking to zone %{dnsname},%p", jnl->journal_file_name, jnl->file, zone->origin, zone);
             
             jnl->file_maximum_size = zone->wire_size >> 1;
         }
@@ -2228,10 +2154,6 @@ journal_cjf_link_zone(journal *jh, zdb_zone *zone)
         jnl->last_page.file_offset_limit = jnl->file_maximum_size;
     }
     
-#if ZDB_ZONE_HAS_JNL_REFERENCE
-    zone->journal = jh;
-#endif
-    
     journal_cjf_writeunlock(jnl);
 }
 
@@ -2239,23 +2161,10 @@ static void
 journal_cjf_destroy(journal *jh)
 {
     journal_cjf *jnl = (journal_cjf*)jh;
-#if EDF_DEBUG
-    mutex_lock(&journal_cjf_set_mtx);
-    ptr_node *node = ptr_set_avl_find(&journal_cjf_set, jnl->journal_file_name);
-    if(node == NULL)
-    {
-        log_debug("cjf: node of %s already removed", jnl->journal_file_name);
-    }
-    else
-    {
-        ptr_set_avl_delete(&journal_cjf_set, jnl->journal_file_name);
-    }
-    mutex_unlock(&journal_cjf_set_mtx);
-#endif
     
     yassert(jnl->rc == 0);
     
-    log_debug("cjf: %s,%i: destroy", jnl->journal_file_name, jnl->fd);
+    log_debug("cjf: %s,%p: destroy", jnl->journal_file_name, jnl->file);
     
     journal_cjf_link_zone(jh, NULL);
     
@@ -2263,12 +2172,19 @@ journal_cjf_destroy(journal *jh)
     free(jnl->origin);
     free(jnl->journal_file_name);
     
-#ifdef DEBUG    
+#if DEBUG    
     memset(jnl, 0xfe, sizeof(journal_cjf));
     jnl->mru = FALSE;
 #endif
     
-    free(jnl);
+    ZFREE_OBJECT(jnl);
+}
+
+static const u8 *
+journal_cjf_get_domain_const(journal *jh)
+{
+    journal_cjf *jnl = (journal_cjf*)jh;
+    return jnl->origin;
 }
 
 /*******************************************************************************
@@ -2295,6 +2211,7 @@ struct journal_vtbl journal_cjf_vtbl =
     journal_cjf_get_domain,
     journal_cjf_destroy,
     journal_cjf_link_zone,
+    journal_cjf_get_domain_const,
     JOURNAL_CLASS_NAME
 };
 
@@ -2324,11 +2241,11 @@ static journal_cjf*
 journal_cjf_alloc_default(const u8 *origin, const char *filename)
 {
     journal_cjf *jnl;
-    MALLOC_OR_DIE(journal_cjf*, jnl, sizeof(journal_cjf), JRNLCJF_TAG);
+    ZALLOC_OBJECT_OR_DIE(jnl, journal_cjf, JRNLCJF_TAG);
     ZEROMEMORY(jnl, sizeof(journal_cjf));
     jnl->vtbl = &journal_cjf_vtbl;
     jnl->mru_node.data = jnl;
-    jnl->fd = -1;
+    jnl->file = NULL;
     jnl->file_maximum_size = MAX_U32;
     jnl->first_page_offset = CJF_HEADER_SIZE;
     jnl->origin = dnsname_dup(origin);
@@ -2358,62 +2275,32 @@ journal_cjf_alloc_default(const u8 *origin, const char *filename)
  */
 
 ya_result
-journal_cjf_open(journal **jhp, const u8* origin, const char *workingdir, bool create)
+journal_cjf_open_file(journal **jhp, const char *filename, const u8* origin, bool create)
 {
     // CFJ_PAGE_CACHE ->
-    journal_cjf_page_cache_init();
-    if(!journal_shared_mtx_initialized)
+    if(!journal_initialized)
     {
+        journal_cjf_page_cache_init();
+        
         shared_group_shared_mutex_init(&journal_shared_mtx);
-        journal_shared_mtx_initialized = TRUE;
+        
+        journal_file_pool = file_pool_init("journal-file-pool", 256);
+        
+        journal_initialized = TRUE;
     }
-    // CFJ_PAGE_CACHE <-
     
-    journal_cjf *jnl;
+    journal_cjf *jnl = NULL;
     ya_result ret;
-    
-    // generate the file name
-    
-    char filename[PATH_MAX];
-    
-    if((jhp == NULL) || (origin == NULL) || (workingdir == NULL))
-    {
-        return ZDB_JOURNAL_WRONG_PARAMETERS;
-    }
-
-#ifdef DEBUG
-    log_debug("cjf: trying to open journal for %{dnsname} in '%s'", origin, workingdir);
-#endif
-    
-    /* get the soa of the loaded zone */
-    
-    *jhp = NULL;
-    
-    if(FAIL(ret = snformat(filename, sizeof(filename), CJF_WIRE_FILE_FORMAT, workingdir, origin)))
-    {
-#ifdef DEBUG
-        log_debug("cjf: %{dnsname}: journal file name is too long", origin);
-#endif
-        return ret;
-    }
-    
-#if EDF_DEBUG
-    mutex_lock(&journal_cjf_set_mtx);
-    ptr_node *node = ptr_set_avl_find(&journal_cjf_set, filename);
-    yassert(node == NULL);
-    mutex_unlock(&journal_cjf_set_mtx);
-#endif
     
     if(file_exists(filename) || create)
     {
         // instantiate and open the journal
         
-        jnl = NULL;
         ret = journal_cjf_init_from_file(&jnl, origin, filename, create);
 
         if(ISOK(ret))
         {
-            //jnl->fd = ret;
+            yassert(jnl != NULL); // to help scan-build
 
             if(!((jnl->serial_begin == 0) && (jnl->serial_begin == jnl->serial_end))) // scan-build false-positive : if ISOK(ret) => jnl != NULL
             {
@@ -2434,7 +2321,7 @@ journal_cjf_open(journal **jhp, const u8* origin, const char *workingdir, bool c
             if(jnl != NULL)
             {
                 journal_cjf_destroy((journal*)jnl);
-#ifdef DEBUG
+#if DEBUG
                 log_debug("cjf: %{dnsname}: journal file cannot be opened/created", origin);
 #endif
             }
@@ -2442,14 +2329,7 @@ journal_cjf_open(journal **jhp, const u8* origin, const char *workingdir, bool c
             return ZDB_ERROR_ICMTL_NOTFOUND;
         }
         
-#if EDF_DEBUG
-        mutex_lock(&journal_cjf_set_mtx);
-        ptr_node *node = ptr_set_avl_insert(&journal_cjf_set, filename);
-        node->value = jnl;
-        mutex_unlock(&journal_cjf_set_mtx);
-#endif
-        
-#ifdef DEBUG
+#if DEBUG
         log_debug("cjf: %{dnsname}: journal opened", origin);
 #endif
         *jhp = (journal*)jnl;
@@ -2458,11 +2338,73 @@ journal_cjf_open(journal **jhp, const u8* origin, const char *workingdir, bool c
     }
     else
     {
-#ifdef DEBUG
+#if DEBUG
         log_debug("cjf: %{dnsname}: journal file not found", origin);
 #endif
         return ZDB_ERROR_ICMTL_NOTFOUND;
     }
 }
+
+/**
+ * The caller guarantees not to call this on an already opened journal
+ * 
+ * Should not be called directly (only by journal_* functions.
+ * 
+ * Opens or create a journal handling structure.
+ * If the journal did not exist, the structure is returned without a file opened
+ * 
+ * @param jh
+ * @param origin
+ * @param workingdir
+ * @param create
+ * 
+ * @return 
+ */
+
+ya_result
+journal_cjf_open(journal **jhp, const u8* origin, const char *workingdir, bool create)
+{
+    // CFJ_PAGE_CACHE <-
+    
+    ya_result ret;
+    
+    *jhp = NULL;
+    
+    // generate the file name
+    
+    char filename[PATH_MAX];
+    
+    if((jhp == NULL) || (origin == NULL) || (workingdir == NULL))
+    {
+        return ZDB_JOURNAL_WRONG_PARAMETERS;
+    }
+
+#if DEBUG
+    log_debug("cjf: trying to open journal for %{dnsname} in '%s'", origin, workingdir);
+#endif
+    
+    /* get the soa of the loaded zone */
+        
+    if(FAIL(ret = snformat(filename, sizeof(filename), CJF_WIRE_FILE_FORMAT, workingdir, origin)))
+    {
+#if DEBUG
+        log_debug("cjf: %{dnsname}: journal file name is too long", origin);
+#endif
+        return ret;
+    }
+    
+    ret = journal_cjf_open_file(jhp, filename, origin, create);
+    
+    return ret;
+}
+
+void
+journal_cjf_finalize()
+{
+    journal_cjf_page_cache_finalize();
+    file_pool_finalize(journal_file_pool);
+}
+
+#endif
 
 /** @} */

@@ -16,91 +16,65 @@
 
 ################################################################################
 #
-# Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-# The YADIFA TM software product is provided under the BSD 3-clause license:
+#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
-# Redistribution and use in source and binary forms, with or without 
-# modification, are permitted provided that the following conditions
-# are met:
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions
+#  are met:
 #
-#		* Redistributions of source code must retain the above copyright 
-#		  notice, this list of conditions and the following disclaimer.
-#		* Redistributions in binary form must reproduce the above copyright 
-#		  notice, this list of conditions and the following disclaimer in the 
-#		  documentation and/or other materials provided with the distribution.
-#		* Neither the name of EURid nor the names of its contributors may be 
-#		  used to endorse or promote products derived from this software 
-#		  without specific prior written permission.
+#         * Redistributions of source code must retain the above copyright
+#           notice, this list of conditions and the following disclaimer.
+#         * Redistributions in binary form must reproduce the above copyright
+#           notice, this list of conditions and the following disclaimer in the
+#           documentation and/or other materials provided with the distribution.
+#         * Neither the name of EURid nor the names of its contributors may be
+#           used to endorse or promote products derived from this software
+#           without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE 
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+#  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+#  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+#  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+#  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+#  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-##############################################################################
-#
-#	YADIFA dnscore Makefile.am script
-#
-#		Makefile.am script
-#
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.11-public/lib/dnscore/Makefile.am $
-#
-#	   $Date: 2020-09-03 11:53:27 +0200 (Thu, 03 Sep 2020) $
-#
-#	   $Revision: 9707 $
-#
-#	$Author: ericdf $
-#
-##############################################################################
+################################################################################        
 
 ################################################################################
 #
-# Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-# The YADIFA TM software product is provided under the BSD 3-clause license:
+#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
-# Redistribution and use in source and binary forms, with or without 
-# modification, are permitted provided that the following conditions
-# are met:
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions
+#  are met:
 #
-#        * Redistributions of source code must retain the above copyright 
-#          notice, this list of conditions and the following disclaimer.
-#        * Redistributions in binary form must reproduce the above copyright 
-#          notice, this list of conditions and the following disclaimer in the 
-#          documentation and/or other materials provided with the distribution.
-#        * Neither the name of EURid nor the names of its contributors may be 
-#          used to endorse or promote products derived from this software 
-#          without specific prior written permission.
+#         * Redistributions of source code must retain the above copyright
+#           notice, this list of conditions and the following disclaimer.
+#         * Redistributions in binary form must reproduce the above copyright
+#           notice, this list of conditions and the following disclaimer in the
+#           documentation and/or other materials provided with the distribution.
+#         * Neither the name of EURid nor the names of its contributors may be
+#           used to endorse or promote products derived from this software
+#           without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE 
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+#  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+#  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+#  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+#  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+#  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-################################################################################
-#
-#       SVN Program:
-#               $URL: $
-#
-#       Last Update:
-#               $Date:$
-#               $Revision: 1717 $
-#
-#       Purpose:
-#               Settings common to all makefiles
-#
-################################################################################
+################################################################################        
 
 #
 # ALL
@@ -108,49 +82,38 @@
 
 ################################################################################
 #
-# Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-# The YADIFA TM software product is provided under the BSD 3-clause license:
+#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
-# Redistribution and use in source and binary forms, with or without 
-# modification, are permitted provided that the following conditions
-# are met:
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions
+#  are met:
 #
-#        * Redistributions of source code must retain the above copyright 
-#          notice, this list of conditions and the following disclaimer.
-#        * Redistributions in binary form must reproduce the above copyright 
-#          notice, this list of conditions and the following disclaimer in the 
-#          documentation and/or other materials provided with the distribution.
-#        * Neither the name of EURid nor the names of its contributors may be 
-#          used to endorse or promote products derived from this software 
-#          without specific prior written permission.
+#         * Redistributions of source code must retain the above copyright
+#           notice, this list of conditions and the following disclaimer.
+#         * Redistributions in binary form must reproduce the above copyright
+#           notice, this list of conditions and the following disclaimer in the
+#           documentation and/or other materials provided with the distribution.
+#         * Neither the name of EURid nor the names of its contributors may be
+#           used to endorse or promote products derived from this software
+#           without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE 
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+#  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+#  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+#  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+#  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+#  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-################################################################################
-#
-#       SVN Program:
-#               $URL: $
-#
-#       Last Update:
-#               $Date:$
-#               $Revision: 1717 $
-#
-#       Purpose:
-#               Labels common to all makefiles
-#
-################################################################################
+################################################################################        
 
 
 
+VPATH = @srcdir@
 am__is_gnu_make = test -n '$(MAKEFILE_LIST)' && test -n '$(MAKELEVEL)'
 am__make_running_with_option = \
   case $${target_option-} in \
@@ -197,7 +160,6 @@ am__make_running_with_option = \
 am__make_dryrun = (target_option=n; $(am__make_running_with_option))
 am__make_keepgoing = (target_option=k; $(am__make_running_with_option))
 pkgdatadir = $(datadir)/@PACKAGE@
-pkgincludedir = $(includedir)/@PACKAGE@
 pkglibdir = $(libdir)/@PACKAGE@
 pkglibexecdir = $(libexecdir)/@PACKAGE@
 am__cd = CDPATH="$${ZSH_VERSION+.}$(PATH_SEPARATOR)" && cd
@@ -214,44 +176,37 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-@IS_DARWIN_OS_TRUE@am__append_1 = $(I)/osx_clock_gettime.h
-@IS_DARWIN_OS_TRUE@am__append_2 = src/osx_clock_gettime.c
-@HAS_TSIG_SUPPORT_TRUE@am__append_3 = $(I)/tsig.h
-@HAS_TSIG_SUPPORT_TRUE@am__append_4 = src/tsig.c src/tsig_algorithms.c
-@HAS_NSID_SUPPORT_TRUE@am__append_5 = $(I)/nsid.h
-@HAS_NSID_SUPPORT_TRUE@am__append_6 = src/nsid.c
 DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
-	$(srcdir)/../../mk/common-labels.mk INSTALL NEWS README \
-	AUTHORS ChangeLog $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
-	$(top_srcdir)/configure $(am__configure_deps) \
-	$(top_srcdir)/include/dnscore/dnscore-config.h.in depcomp \
-	$(dist_noinst_DATA) $(am__pkginclude_HEADERS_DIST) COPYING \
-	ar-lib compile config.guess config.sub install-sh missing \
-	ltmain.sh
-@USES_SUNC_TRUE@am__append_7 = 
-@USES_SUNC_FALSE@am__append_8 = -O0
-@IS_DARWIN_OS_TRUE@am__append_9 = -Wno-deprecated
-@HAS_CC_NO_IDENT_TRUE@am__append_10 = -fno-ident
-@HAS_CC_ANSI_TRUE@am__append_11 = -ansi
-@HAS_CC_PEDANTIC_TRUE@am__append_12 = -pedantic
-@HAS_CC_WALL_TRUE@am__append_13 = -Wall -Wno-unknown-pragmas
-@HAS_CC_MISSING_FIELD_INITIALIZERS_TRUE@am__append_14 = -Werror=missing-field-initializers
-@HAS_CC_STD_GNU99_TRUE@am__append_15 = -std=gnu99
-@HAS_CC_STD_C99_TRUE@@HAS_CC_STD_GNU99_FALSE@am__append_16 = -std=c99
-@HAS_CC_STD_GNU99_FALSE@@HAS_CC_XC99_TRUE@am__append_17 = -xc99
-@HAS_CC_TUNE_NATIVE_TRUE@am__append_18 = -mtune=native
-@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_19 = -m64
-@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_20 = -m64
-@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_21 = -m32
-@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_22 = -m32
+	$(srcdir)/../../mk/common-labels.mk $(srcdir)/Makefile.in \
+	$(srcdir)/Makefile.am $(top_srcdir)/depcomp \
+	$(dist_noinst_DATA) $(am__pkginclude_HEADERS_DIST) AUTHORS \
+	COPYING ChangeLog INSTALL NEWS README
+@USES_SUNC_TRUE@am__append_1 = 
+@USES_SUNC_FALSE@am__append_2 = -O0
+@IS_DARWIN_OS_TRUE@am__append_3 = -Wno-deprecated
+@HAS_CC_NO_IDENT_TRUE@am__append_4 = -fno-ident
+@HAS_CC_ANSI_TRUE@am__append_5 = -ansi
+@HAS_CC_PEDANTIC_TRUE@am__append_6 = -pedantic
+@HAS_CC_WALL_TRUE@am__append_7 = -Wall -Wno-unknown-pragmas
+@HAS_CC_MISSING_FIELD_INITIALIZERS_TRUE@am__append_8 = -Werror=missing-field-initializers
+@HAS_CC_STD_GNU11_TRUE@am__append_9 = -std=gnu11
+@HAS_CC_STD_C11_TRUE@@HAS_CC_STD_GNU11_FALSE@am__append_10 = -std=c11 -D_GNU_SOURCE
+@HAS_CC_STD_C11_FALSE@@HAS_CC_STD_GNU11_FALSE@@HAS_CC_STD_GNU99_TRUE@am__append_11 = -std=gnu99
+@HAS_CC_STD_C11_FALSE@@HAS_CC_STD_C99_TRUE@@HAS_CC_STD_GNU11_FALSE@@HAS_CC_STD_GNU99_FALSE@am__append_12 = -std=c99
+@HAS_CC_STD_C11_FALSE@@HAS_CC_STD_C99_FALSE@@HAS_CC_STD_GNU11_FALSE@@HAS_CC_STD_GNU99_FALSE@@HAS_CC_XC99_TRUE@am__append_13 = -xc99
+@HAS_CC_TUNE_NATIVE_TRUE@am__append_14 = -mtune=native
+@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_15 = -m64
+@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_16 = -m64
+@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_17 = -m32
+@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_18 = -m32
 
 #
 # DEBUG
 #
-@HAS_CC_G3_TRUE@am__append_23 = -g3
-@HAS_CC_G3_FALSE@@HAS_CC_G_TRUE@am__append_24 = -g
-@HAS_CC_DWARF4_TRUE@am__append_25 = -gdwarf-4
-@HAS_CC_DWARF3_TRUE@@HAS_CC_DWARF4_FALSE@am__append_26 = -gdwarf-3
+@HAS_CC_G3_TRUE@am__append_19 = -g3
+@HAS_CC_G3_FALSE@@HAS_CC_G_TRUE@am__append_20 = -g
+@HAS_CC_DWARF4_TRUE@am__append_21 = -gdwarf-4
+@HAS_CC_DWARF3_TRUE@@HAS_CC_DWARF4_FALSE@am__append_22 = -gdwarf-3
 
 #
 # Intel C Compiler
@@ -260,11 +215,11 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 
 #ICC
 #IPO= -ipo (need to use the intel xiar instead of ar)
-@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_27 = -DLTO -ipo
-@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_28 = -ipo
-@USES_ICC_TRUE@am__append_29 = -DUSES_ICC 
-@HAS_CC_ANSI_ALIAS_TRUE@@USES_ICC_TRUE@am__append_30 = -ansi-alias -U__STRICT_ANSI__ 
-@USES_ICC_TRUE@am__append_31 = -DMODE_DEBUG_ICC
+@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_23 = -DLTO -ipo
+@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_24 = -ipo
+@USES_ICC_TRUE@am__append_25 = -DUSES_ICC 
+@HAS_CC_ANSI_ALIAS_TRUE@@USES_ICC_TRUE@am__append_26 = -ansi-alias -U__STRICT_ANSI__ 
+@USES_ICC_TRUE@am__append_27 = -DMODE_DEBUG_ICC
 
 #
 # LLVM Clang
@@ -272,10 +227,11 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 ###############################################################################
 
 # CLANG
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_32 = -DLTO -flto
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_33 = -flto
-@USES_CLANG_TRUE@am__append_34 = -DUSES_LLVM -Wno-gnu -Wno-extended-offsetof
-@USES_CLANG_TRUE@am__append_35 = -DMODE_DEBUG_CLANG -fsanitize=address -fsanitize=bounds
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_28 = -DLTO -flto
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_29 = -flto
+@USES_CLANG_TRUE@am__append_30 = -DUSES_LLVM -Wno-gnu
+#-Wno-extended-offsetof
+@USES_CLANG_TRUE@am__append_31 = -DMODE_DEBUG_CLANG -fsanitize=address -fsanitize=bounds
 
 # Note: add a _d suffix for debug builds ?
 
@@ -285,18 +241,18 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 ###############################################################################
 
 #GCC
-@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_36 = -mcpu=niagara
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_37 = -DLTO -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_38 = -flto \
+@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_32 = -mcpu=niagara
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_33 = -DLTO -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_34 = -flto \
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-fwhole-program \
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-fno-fat-lto-objects \
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-fuse-linker-plugin \
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-Wl,-Map=module.map \
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-Wl,--cref
-@USES_GCC_TRUE@am__append_39 = -DUSES_GCC
-@USES_GCC_TRUE@am__append_40 = -DMODE_DEBUG_GCC -fstack-check -fstack-protector-strong
-@USES_SUNC_TRUE@am__append_41 = -DUSES_SUNC
-@USES_SUNC_TRUE@am__append_42 = -DMODE_DEBUG_SUNC
+@USES_GCC_TRUE@am__append_35 = -DUSES_GCC
+@USES_GCC_TRUE@am__append_36 = -DMODE_DEBUG_GCC -fstack-check -fstack-protector-strong
+@USES_SUNC_TRUE@am__append_37 = -DUSES_SUNC
+@USES_SUNC_TRUE@am__append_38 = -DMODE_DEBUG_SUNC
 
 # Note: add a _d suffix for debug builds ?
 
@@ -306,29 +262,32 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 ###############################################################################
 
 # if an unknown compiler is used, it should have its own section
-@USES_UNKNOWN_TRUE@am__append_43 = -DUSES_UNKNOWN_COMPILER
-@USES_UNKNOWN_TRUE@am__append_44 = -DMODE_DEBUG_UNKNOWN
+@USES_UNKNOWN_TRUE@am__append_39 = -DUSES_UNKNOWN_COMPILER
+@USES_UNKNOWN_TRUE@am__append_40 = -DMODE_DEBUG_UNKNOWN
 
 #
 # Some BSD-based OSes need this
 #
-@IS_BSD_FAMILY_TRUE@am__append_45 = -I./include
-@IS_SOLARIS_FAMILY_TRUE@am__append_46 = -D_POSIX_PTHREAD_SEMANTICS
-@HAS_CC_RDYNAMIC_TRUE@am__append_47 = -rdynamic
-@HAS_CC_RDYNAMIC_TRUE@am__append_48 = -rdynamic
+@IS_BSD_FAMILY_TRUE@am__append_41 = -I./include
+@IS_SOLARIS_FAMILY_TRUE@am__append_42 = -D_POSIX_PTHREAD_SEMANTICS
 
-# workaround a bug where clang does not handle properly profiling and optimizations
-@USES_CLANG_TRUE@am__append_49 = -mno-omit-leaf-frame-pointer -fno-omit-frame-pointer
-subdir = .
+# $(I)/ipc.h
+# $(I)/name.h
+@IS_DARWIN_OS_TRUE@am__append_43 = $(I)/osx_clock_gettime.h
+@IS_DARWIN_OS_TRUE@am__append_44 = src/osx_clock_gettime.c
+@HAS_NSID_SUPPORT_TRUE@am__append_45 = $(I)/nsid.h
+@HAS_NSID_SUPPORT_TRUE@am__append_46 = src/nsid.c
+subdir = lib/dnscore
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/../../m4/eurid.m4 \
-	$(top_srcdir)/../../m4/yadifa.m4 $(top_srcdir)/configure.ac
+am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
+	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
+	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
+	$(top_srcdir)/m4/eurid.m4 $(top_srcdir)/m4/yadifa.m4 \
+	$(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
-am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
- configure.lineno config.status.lineno
 mkinstalldirs = $(install_sh) -d
-CONFIG_HEADER = $(top_builddir)/include/dnscore/dnscore-config.h
+CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
@@ -361,14 +320,15 @@ am__uninstall_files_from_dir = { \
 am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(pkgincludedir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
 libdnscore_la_LIBADD =
-am__libdnscore_la_SOURCES_DIST = src/alarm.c src/allocator.c \
-	src/async.c src/base16.c src/base32.c src/base32hex.c \
-	src/base64.c src/basic-priority-queue.c \
-	src/buffer_input_stream.c src/buffer_output_stream.c \
+am__libdnscore_la_SOURCES_DIST = src/alarm.c src/acl.c \
+	src/acl-config.c src/allocator.c src/async.c src/base16.c \
+	src/base32.c src/base32hex.c src/base64.c \
+	src/basic-priority-queue.c src/buffer_input_stream.c \
+	src/buffer_output_stream.c src/buffered-file.c \
 	src/bytearray_input_stream.c src/bytearray_output_stream.c \
 	src/bytezarray_output_stream.c src/chroot.c \
-	src/clone_input_output_stream.c src/cmdline.c \
-	src/concat_input_stream.c src/config-cmdline.c \
+	src/circular-file.c src/clone_input_output_stream.c \
+	src/cmdline.c src/concat_input_stream.c src/config-cmdline.c \
 	src/config_file_reader.c src/config_key.c src/config_logger.c \
 	src/config_settings.c src/config_struct.c \
 	src/counter_output_stream.c src/debug.c src/digest_sha1.c \
@@ -378,41 +338,50 @@ am__libdnscore_la_SOURCES_DIST = src/alarm.c src/allocator.c \
 	src/dnskey_dsa.c src/dnskey_ecdsa.c src/dnskey_rsa.c \
 	src/dnskey-signature.c src/dnsname.c src/empty-input-stream.c \
 	src/fdtools.c src/file_input_stream.c src/file_output_stream.c \
-	src/format.c src/host_address.c src/hsdllist.c src/identity.c \
-	src/input_stream.c src/limited_input_stream.c src/limiter.c \
-	src/list-dl.c src/list-sl.c src/list-sl-debug.c \
-	src/logger-output-stream.c src/logger.c \
-	src/logger_channel_file.c src/logger_channel_stream.c \
+	src/file-pool.c src/filesystem-file.c src/format.c src/hash.c \
+	src/hash-table-values.c src/hmac-openssl.c src/host_address.c \
+	src/hsdllist.c src/identity.c src/input_stream.c src/json.c \
+	src/limited_input_stream.c src/limiter.c src/list-dl.c \
+	src/list-sl.c src/list-sl-debug.c src/logger-output-stream.c \
+	src/logger.c src/logger_channel_file.c \
+	src/logger_channel_pipe.c src/logger_channel_stream.c \
 	src/logger_channel_syslog.c src/logger_handle.c \
 	src/message-buffer.c src/message-viewer.c src/message.c \
 	src/message_print_format_dig.c src/message_verify_rrsig.c \
-	src/message_dnsupdate.c src/mt_output_stream.c src/mutex.c \
-	src/name.c src/output_stream.c src/pace.c src/packet_reader.c \
-	src/packet_writer.c src/parser.c src/parsing.c src/pid.c \
-	src/pipe_stream.c src/pool.c src/ptr_set.c src/ptr_set_debug.c \
-	src/ptr_vector.c src/queue-sl.c src/random.c src/rc.c \
-	src/rewind-input-stream.c src/rfc.c src/serial.c \
-	src/server-setup.c src/service.c src/string_set.c \
+	src/message_dnsupdate.c src/mapped-file.c \
+	src/mt_output_stream.c src/mutex.c src/network.c \
+	src/nsec3-hash.c src/output_stream.c src/pace.c \
+	src/packet_reader.c src/packet_writer.c src/parser.c \
+	src/parsing.c src/process.c src/pid.c src/pipe_stream.c \
+	src/pool.c src/popen-output-stream.c src/ptr_set.c \
+	src/ptr_set_debug.c src/ptr_vector.c src/queue-sl.c \
+	src/random.c src/rc.c src/rewind-input-stream.c src/rfc.c \
+	src/serial.c src/server-setup.c src/service.c \
+	src/shared-heap.c src/shared-circular-buffer.c \
+	src/shared-heap-bytearray-output-stream.c src/signals.c \
+	src/simple-http-server.c src/socket-server.c src/string_set.c \
 	src/sys_error.c src/sys_get_cpu_count.c src/tcp_io_stream.c \
-	src/thread_pool.c src/threaded-qsl-cw.c src/threaded_dll_cw.c \
+	src/tcp_manager.c src/thread.c src/thread_pool.c \
+	src/thread-tag.c src/threaded-qsl-cw.c src/threaded_dll_cw.c \
 	src/threaded_nb_mm.c src/threaded_nbrb.c \
-	src/threaded_ringbuffer.c src/threaded_ringbuffer_cw.c \
-	src/threaded_ringlist.c src/timeformat.c src/timems.c \
-	src/typebitmap.c src/u32_set.c src/u64_set.c \
-	src/u64_set_debug.c src/xfr_input_stream.c src/zalloc.c \
+	src/threaded_queue_slg.c src/threaded_ringbuffer.c \
+	src/threaded_ringbuffer_cw.c src/threaded_ringlist.c \
+	src/timeformat.c src/timems.c src/typebitmap.c src/u32_set.c \
+	src/u64_set.c src/u64_set_debug.c src/xfr_input_stream.c \
+	src/zalloc.c src/zone_reader_axfr.c src/zone_reader_text.c \
 	src/osx_clock_gettime.c src/tsig.c src/tsig_algorithms.c \
 	src/nsid.c
 am__dirstamp = $(am__leading_dot)dirstamp
 @IS_DARWIN_OS_TRUE@am__objects_1 = src/osx_clock_gettime.lo
-@HAS_TSIG_SUPPORT_TRUE@am__objects_2 = src/tsig.lo \
-@HAS_TSIG_SUPPORT_TRUE@	src/tsig_algorithms.lo
-@HAS_NSID_SUPPORT_TRUE@am__objects_3 = src/nsid.lo
-am_libdnscore_la_OBJECTS = src/alarm.lo src/allocator.lo src/async.lo \
-	src/base16.lo src/base32.lo src/base32hex.lo src/base64.lo \
-	src/basic-priority-queue.lo src/buffer_input_stream.lo \
-	src/buffer_output_stream.lo src/bytearray_input_stream.lo \
+@HAS_NSID_SUPPORT_TRUE@am__objects_2 = src/nsid.lo
+am_libdnscore_la_OBJECTS = src/alarm.lo src/acl.lo src/acl-config.lo \
+	src/allocator.lo src/async.lo src/base16.lo src/base32.lo \
+	src/base32hex.lo src/base64.lo src/basic-priority-queue.lo \
+	src/buffer_input_stream.lo src/buffer_output_stream.lo \
+	src/buffered-file.lo src/bytearray_input_stream.lo \
 	src/bytearray_output_stream.lo src/bytezarray_output_stream.lo \
-	src/chroot.lo src/clone_input_output_stream.lo src/cmdline.lo \
+	src/chroot.lo src/circular-file.lo \
+	src/clone_input_output_stream.lo src/cmdline.lo \
 	src/concat_input_stream.lo src/config-cmdline.lo \
 	src/config_file_reader.lo src/config_key.lo \
 	src/config_logger.lo src/config_settings.lo \
@@ -424,32 +393,41 @@ am_libdnscore_la_OBJECTS = src/alarm.lo src/allocator.lo src/async.lo \
 	src/dnskey_rsa.lo src/dnskey-signature.lo src/dnsname.lo \
 	src/empty-input-stream.lo src/fdtools.lo \
 	src/file_input_stream.lo src/file_output_stream.lo \
-	src/format.lo src/host_address.lo src/hsdllist.lo \
-	src/identity.lo src/input_stream.lo \
-	src/limited_input_stream.lo src/limiter.lo src/list-dl.lo \
-	src/list-sl.lo src/list-sl-debug.lo \
-	src/logger-output-stream.lo src/logger.lo \
-	src/logger_channel_file.lo src/logger_channel_stream.lo \
-	src/logger_channel_syslog.lo src/logger_handle.lo \
-	src/message-buffer.lo src/message-viewer.lo src/message.lo \
+	src/file-pool.lo src/filesystem-file.lo src/format.lo \
+	src/hash.lo src/hash-table-values.lo src/hmac-openssl.lo \
+	src/host_address.lo src/hsdllist.lo src/identity.lo \
+	src/input_stream.lo src/json.lo src/limited_input_stream.lo \
+	src/limiter.lo src/list-dl.lo src/list-sl.lo \
+	src/list-sl-debug.lo src/logger-output-stream.lo src/logger.lo \
+	src/logger_channel_file.lo src/logger_channel_pipe.lo \
+	src/logger_channel_stream.lo src/logger_channel_syslog.lo \
+	src/logger_handle.lo src/message-buffer.lo \
+	src/message-viewer.lo src/message.lo \
 	src/message_print_format_dig.lo src/message_verify_rrsig.lo \
-	src/message_dnsupdate.lo src/mt_output_stream.lo src/mutex.lo \
-	src/name.lo src/output_stream.lo src/pace.lo \
+	src/message_dnsupdate.lo src/mapped-file.lo \
+	src/mt_output_stream.lo src/mutex.lo src/network.lo \
+	src/nsec3-hash.lo src/output_stream.lo src/pace.lo \
 	src/packet_reader.lo src/packet_writer.lo src/parser.lo \
-	src/parsing.lo src/pid.lo src/pipe_stream.lo src/pool.lo \
-	src/ptr_set.lo src/ptr_set_debug.lo src/ptr_vector.lo \
-	src/queue-sl.lo src/random.lo src/rc.lo \
-	src/rewind-input-stream.lo src/rfc.lo src/serial.lo \
-	src/server-setup.lo src/service.lo src/string_set.lo \
-	src/sys_error.lo src/sys_get_cpu_count.lo src/tcp_io_stream.lo \
-	src/thread_pool.lo src/threaded-qsl-cw.lo \
+	src/parsing.lo src/process.lo src/pid.lo src/pipe_stream.lo \
+	src/pool.lo src/popen-output-stream.lo src/ptr_set.lo \
+	src/ptr_set_debug.lo src/ptr_vector.lo src/queue-sl.lo \
+	src/random.lo src/rc.lo src/rewind-input-stream.lo src/rfc.lo \
+	src/serial.lo src/server-setup.lo src/service.lo \
+	src/shared-heap.lo src/shared-circular-buffer.lo \
+	src/shared-heap-bytearray-output-stream.lo src/signals.lo \
+	src/simple-http-server.lo src/socket-server.lo \
+	src/string_set.lo src/sys_error.lo src/sys_get_cpu_count.lo \
+	src/tcp_io_stream.lo src/tcp_manager.lo src/thread.lo \
+	src/thread_pool.lo src/thread-tag.lo src/threaded-qsl-cw.lo \
 	src/threaded_dll_cw.lo src/threaded_nb_mm.lo \
-	src/threaded_nbrb.lo src/threaded_ringbuffer.lo \
-	src/threaded_ringbuffer_cw.lo src/threaded_ringlist.lo \
-	src/timeformat.lo src/timems.lo src/typebitmap.lo \
-	src/u32_set.lo src/u64_set.lo src/u64_set_debug.lo \
-	src/xfr_input_stream.lo src/zalloc.lo $(am__objects_1) \
-	$(am__objects_2) $(am__objects_3)
+	src/threaded_nbrb.lo src/threaded_queue_slg.lo \
+	src/threaded_ringbuffer.lo src/threaded_ringbuffer_cw.lo \
+	src/threaded_ringlist.lo src/timeformat.lo src/timems.lo \
+	src/typebitmap.lo src/u32_set.lo src/u64_set.lo \
+	src/u64_set_debug.lo src/xfr_input_stream.lo src/zalloc.lo \
+	src/zone_reader_axfr.lo src/zone_reader_text.lo \
+	$(am__objects_1) src/tsig.lo src/tsig_algorithms.lo \
+	$(am__objects_2)
 libdnscore_la_OBJECTS = $(am_libdnscore_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -470,7 +448,7 @@ AM_V_at = $(am__v_at_@AM_V@)
 am__v_at_ = $(am__v_at_@AM_DEFAULT_V@)
 am__v_at_0 = @
 am__v_at_1 = 
-DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)/include/dnscore
+DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
 am__mv = mv -f
@@ -501,12 +479,14 @@ am__can_run_installinfo = \
   esac
 DATA = $(dist_noinst_DATA)
 am__pkginclude_HEADERS_DIST = $(I)/$(FEATURESFILE) $(I)/alarm.h \
-	$(I)/allocator.h $(I)/async.h $(I)/avl.c.inc $(I)/avl.h.inc \
-	$(I)/base16.h $(I)/base32.h $(I)/base32hex.h $(I)/base64.h \
-	$(I)/basic-priority-queue.h $(I)/buffer_input_stream.h \
-	$(I)/buffer_output_stream.h $(I)/bytearray_input_stream.h \
+	$(I)/acl.h $(I)/acl-config.h $(I)/allocator.h $(I)/async.h \
+	$(I)/avl.c.inc $(I)/avl.h.inc $(I)/base16.h $(I)/base32.h \
+	$(I)/base32hex.h $(I)/base64.h $(I)/basic-priority-queue.h \
+	$(I)/buffer_input_stream.h $(I)/buffer_output_stream.h \
+	$(I)/buffered-file.h $(I)/bytearray_input_stream.h \
 	$(I)/bytearray_output_stream.h $(I)/bytezarray_output_stream.h \
-	$(I)/chroot.h $(I)/clone_input_output_stream.h $(I)/cmdline.h \
+	$(I)/chroot.h $(I)/circular-file.h \
+	$(I)/clone_input_output_stream.h $(I)/cmdline.h \
 	$(I)/concat_input_stream.h $(I)/config-cmdline.h \
 	$(I)/config_file_reader.h $(I)/config_settings.h \
 	$(I)/counter_output_stream.h $(I)/ctrl-rfc.h $(I)/debug.h \
@@ -515,35 +495,44 @@ am__pkginclude_HEADERS_DIST = $(I)/$(FEATURESFILE) $(I)/alarm.h \
 	$(I)/dnskey.h $(I)/dnskey-keyring.h $(I)/dnskey_dsa.h \
 	$(I)/dnskey_ecdsa.h $(I)/dnskey_rsa.h $(I)/dnskey-signature.h \
 	$(I)/dnsname.h $(I)/dnsname_set.h $(I)/dnssec_errors.h \
-	$(I)/empty-input-stream.h $(I)/fdtools.h \
+	$(I)/empty-input-stream.h $(I)/fdtools.h $(I)/file.h \
 	$(I)/file_input_stream.h $(I)/file_output_stream.h \
-	$(I)/fingerprint.h $(I)/format.h $(I)/host_address.h \
+	$(I)/file-pool.h $(I)/filesystem-file.h $(I)/fingerprint.h \
+	$(I)/format.h $(I)/hash.h $(I)/hmac.h $(I)/host_address.h \
 	$(I)/hsdllist.h $(I)/identity.h $(I)/input_stream.h \
-	$(I)/io_stream.h $(I)/limited_input_stream.h $(I)/limiter.h \
-	$(I)/list-dl.h $(I)/list-sl.h $(I)/list-sl-debug.h \
-	$(I)/logger.h $(I)/logger_channel_file.h \
-	$(I)/logger_channel_stream.h $(I)/logger_channel_syslog.h \
-	$(I)/logger_handle.h $(I)/logger-output-stream.h \
+	$(I)/io_stream.h $(I)/json.h $(I)/limited_input_stream.h \
+	$(I)/limiter.h $(I)/list-dl.h $(I)/list-sl.h \
+	$(I)/list-sl-debug.h $(I)/logger.h $(I)/logger_channel_file.h \
+	$(I)/logger_channel_pipe.h $(I)/logger_channel_stream.h \
+	$(I)/logger_channel_syslog.h $(I)/logger_handle.h \
+	$(I)/logger-output-stream.h $(I)/mapped-file.h \
 	$(I)/message-buffer.h $(I)/message-viewer.h $(I)/message.h \
 	$(I)/message_verify_rrsig.h $(I)/message_dnsupdate.h \
-	$(I)/mt_output_stream.h $(I)/mutex.h $(I)/name.h \
-	$(I)/network.h $(I)/output_stream.h $(I)/pace.h \
-	$(I)/packet_reader.h $(I)/packet_writer.h $(I)/parser.h \
-	$(I)/parsing.h $(I)/pid.h $(I)/pipe_stream.h $(I)/pool.h \
-	$(I)/print_stream.h $(I)/ptr_set.h $(I)/ptr_set_debug.h \
+	$(I)/mt_output_stream.h $(I)/mutex.h $(I)/network.h \
+	$(I)/nsec3-hash.h $(I)/openssl.h $(I)/output_stream.h \
+	$(I)/pace.h $(I)/packet_reader.h $(I)/packet_writer.h \
+	$(I)/parser.h $(I)/parsing.h $(I)/pid.h $(I)/pipe_stream.h \
+	$(I)/pool.h $(I)/popen-output-stream.h $(I)/print_stream.h \
+	$(I)/process.h $(I)/ptr_set.h $(I)/ptr_set_debug.h \
 	$(I)/ptr_vector.h $(I)/queue-sl.h $(I)/random.h $(I)/rc.h \
 	$(I)/rewind-input-stream.h $(I)/rfc.h $(I)/serial.h \
-	$(I)/server-setup.h $(I)/service.h $(I)/string_set.h \
-	$(I)/sys_error.h $(I)/sys_get_cpu_count.h $(I)/sys_types.h \
-	$(I)/tcp_io_stream.h $(I)/thread_pool.h $(I)/threaded-qsl-cw.h \
-	$(I)/threaded_dll_cw.h $(I)/threaded_nb_mm.h \
-	$(I)/threaded_nbrb.h $(I)/threaded_queue.h \
+	$(I)/server-setup.h $(I)/service.h $(I)/shared-heap.h \
+	$(I)/shared-circular-buffer.h \
+	$(I)/shared-heap-bytearray-output-stream.h $(I)/signals.h \
+	$(I)/simple-http-server.h $(I)/socket-server.h \
+	$(I)/string_set.h $(I)/sys_error.h $(I)/sys_get_cpu_count.h \
+	$(I)/sys_types.h $(I)/tcp_io_stream.h $(I)/tcp_manager.h \
+	$(I)/thread.h $(I)/thread_pool.h $(I)/thread-tag.h \
+	$(I)/threaded-qsl-cw.h $(I)/threaded_dll_cw.h \
+	$(I)/threaded_nb_mm.h $(I)/threaded_nbrb.h \
+	$(I)/threaded_queue.h $(I)/threaded_queue_slg.h \
 	$(I)/threaded_ringbuffer.h $(I)/threaded_ringbuffer_cw.h \
 	$(I)/threaded_ringlist.h $(I)/timeformat.h $(I)/timems.h \
 	$(I)/typebitmap.h $(I)/u32_set.h $(I)/u64_set.h \
 	$(I)/u64_set_debug.h $(I)/xfr_input_stream.h $(I)/zalloc.h \
-	$(I)/zonefile_reader.h $(I)/osx_clock_gettime.h $(I)/tsig.h \
-	$(I)/nsid.h
+	$(I)/zone_reader.h $(I)/zone_reader_axfr.h \
+	$(I)/zone_reader_text.h $(I)/zonefile_reader.h \
+	$(I)/osx_clock_gettime.h $(I)/tsig.h $(I)/nsid.h
 HEADERS = $(pkginclude_HEADERS)
 am__tagged_files = $(HEADERS) $(SOURCES) $(TAGS_FILES) $(LISP)
 # Read a list of newline-separated strings from the standard input,
@@ -564,26 +553,12 @@ am__define_uniq_tagged_files = \
   done | $(am__uniquify_input)`
 ETAGS = etags
 CTAGS = ctags
-CSCOPE = cscope
-AM_RECURSIVE_TARGETS = cscope
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
-distdir = $(PACKAGE)-$(VERSION)
-top_distdir = $(distdir)
-am__remove_distdir = \
-  if test -d "$(distdir)"; then \
-    find "$(distdir)" -type d ! -perm -200 -exec chmod u+w {} ';' \
-      && rm -rf "$(distdir)" \
-      || { sleep 5 && rm -rf "$(distdir)"; }; \
-  else :; fi
-am__post_remove_distdir = $(am__remove_distdir)
-DIST_ARCHIVES = $(distdir).tar.gz
-GZIP_ENV = --best
-DIST_TARGETS = dist-gzip
-distuninstallcheck_listfiles = find . -type f -print
-am__distuninstallcheck_listfiles = $(distuninstallcheck_listfiles) \
-  | sed 's|^\./|$(prefix)/|' | grep -v '$(infodir)/dir$$'
-distcleancheck_listfiles = find . -type f -print
-VPATH = @srcdir@
+
+# libdnscore_ladir=.
+
+# alphabetically please
+pkgincludedir = $(includedir)/dnscore
 ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
 AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
@@ -605,7 +580,6 @@ DLLTOOL = @DLLTOOL@
 DNSCORE = @DNSCORE@
 DNSDB = @DNSDB@
 DNSLG = @DNSLG@
-DNSZONE = @DNSZONE@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
 ECHO_C = @ECHO_C@
@@ -615,6 +589,7 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GREP = @GREP@
+HAS_ACL_SUPPORT = @HAS_ACL_SUPPORT@
 HAS_BFD_DEBUG_SUPPORT = @HAS_BFD_DEBUG_SUPPORT@
 HAS_BIG_ENDIAN = @HAS_BIG_ENDIAN@
 HAS_BUILD_TIMESTAMP = @HAS_BUILD_TIMESTAMP@
@@ -637,35 +612,50 @@ HAS_CC_PEDANTIC = @HAS_CC_PEDANTIC@
 HAS_CC_RDYNAMIC = @HAS_CC_RDYNAMIC@
 HAS_CC_SANITIZE_ADDRESS = @HAS_CC_SANITIZE_ADDRESS@
 HAS_CC_STACK_PROTECTOR = @HAS_CC_STACK_PROTECTOR@
+HAS_CC_STD_C11 = @HAS_CC_STD_C11@
 HAS_CC_STD_C99 = @HAS_CC_STD_C99@
+HAS_CC_STD_GNU11 = @HAS_CC_STD_GNU11@
 HAS_CC_STD_GNU99 = @HAS_CC_STD_GNU99@
 HAS_CC_TUNE_NATIVE = @HAS_CC_TUNE_NATIVE@
 HAS_CC_WALL = @HAS_CC_WALL@
 HAS_CC_XC99 = @HAS_CC_XC99@
+HAS_CLOSE_EX_REF = @HAS_CLOSE_EX_REF@
 HAS_CTRL = @HAS_CTRL@
-HAS_DROPALL_SUPPORT = @HAS_DROPALL_SUPPORT@
+HAS_DNSSEC_TOOLS = @HAS_DNSSEC_TOOLS@
 HAS_DYNUPDATE_SUPPORT = @HAS_DYNUPDATE_SUPPORT@
 HAS_ECDSA_SUPPORT = @HAS_ECDSA_SUPPORT@
+HAS_EVENT_DYNAMIC_MODULE = @HAS_EVENT_DYNAMIC_MODULE@
+HAS_FILEPOOL_CACHE = @HAS_FILEPOOL_CACHE@
 HAS_FULL_ASCII7 = @HAS_FULL_ASCII7@
 HAS_LIBC_MALLOC_DEBUG_SUPPORT = @HAS_LIBC_MALLOC_DEBUG_SUPPORT@
 HAS_LITTLE_ENDIAN = @HAS_LITTLE_ENDIAN@
+HAS_LOCK_DEBUG_SUPPORT = @HAS_LOCK_DEBUG_SUPPORT@
 HAS_LOGDIR = @HAS_LOGDIR@
-HAS_LOG_PID_ALWAYS_ON = @HAS_LOG_PID_ALWAYS_ON@
-HAS_LOG_THREAD_ID_ALWAYS_ON = @HAS_LOG_THREAD_ID_ALWAYS_ON@
-HAS_LOG_THREAD_TAG_ALWAYS_ON = @HAS_LOG_THREAD_TAG_ALWAYS_ON@
+HAS_LOG_PID = @HAS_LOG_PID@
+HAS_LOG_THREAD_ID = @HAS_LOG_THREAD_ID@
+HAS_LOG_THREAD_TAG = @HAS_LOG_THREAD_TAG@
 HAS_MALLOC_DEBUG_SUPPORT = @HAS_MALLOC_DEBUG_SUPPORT@
 HAS_MASTER_SUPPORT = @HAS_MASTER_SUPPORT@
 HAS_MEMALIGN_ISSUES = @HAS_MEMALIGN_ISSUES@
-HAS_MESSAGES_SUPPORT = @HAS_MESSAGES_SUPPORT@
 HAS_MUTEX_DEBUG_SUPPORT = @HAS_MUTEX_DEBUG_SUPPORT@
 HAS_NON_AA_AXFR_SUPPORT = @HAS_NON_AA_AXFR_SUPPORT@
+HAS_NSEC3_SUPPORT = @HAS_NSEC3_SUPPORT@
+HAS_NSEC_SUPPORT = @HAS_NSEC_SUPPORT@
 HAS_NSID_SUPPORT = @HAS_NSID_SUPPORT@
 HAS_RRL_SUPPORT = @HAS_RRL_SUPPORT@
 HAS_RRSIG_MANAGEMENT_SUPPORT = @HAS_RRSIG_MANAGEMENT_SUPPORT@
+HAS_SYNC_BUILTINS = @HAS_SYNC_BUILTINS@
+HAS_SYSTEMD_RESOLVED_AVOIDANCE = @HAS_SYSTEMD_RESOLVED_AVOIDANCE@
+HAS_TESTS = @HAS_TESTS@
+HAS_TOOLS = @HAS_TOOLS@
 HAS_TRACK_ZONES_DEBUG_SUPPORT = @HAS_TRACK_ZONES_DEBUG_SUPPORT@
+HAS_TSIG_SUPPORT = @HAS_TSIG_SUPPORT@
+HAS_YADIFA = @HAS_YADIFA@
 HAS_ZALLOC_DEBUG_SUPPORT = @HAS_ZALLOC_DEBUG_SUPPORT@
 HAS_ZALLOC_STATISTICS_SUPPORT = @HAS_ZALLOC_STATISTICS_SUPPORT@
 HAS_ZALLOC_SUPPORT = @HAS_ZALLOC_SUPPORT@
+HAVE_RECVMMSG = @HAVE_RECVMMSG@
+HAVE_SENDMMSG = @HAVE_SENDMMSG@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -708,6 +698,7 @@ SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 STRIP = @STRIP@
 VERSION = @VERSION@
+ZDB_HAS_DNSSEC_SUPPORT = @ZDB_HAS_DNSSEC_SUPPORT@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -762,118 +753,31 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I m4
-dist_noinst_DATA = VERSION
-lib_LTLIBRARIES = libdnscore.la
-I = include/dnscore
-FEATURESFILE = dnscore-config-features.h
-FEATURES = $(I)/$(FEATURESFILE)
-
-# alphabetically please
-libdnscore_la_SOURCES = src/alarm.c src/allocator.c src/async.c \
-	src/base16.c src/base32.c src/base32hex.c src/base64.c \
-	src/basic-priority-queue.c src/buffer_input_stream.c \
-	src/buffer_output_stream.c src/bytearray_input_stream.c \
-	src/bytearray_output_stream.c src/bytezarray_output_stream.c \
-	src/chroot.c src/clone_input_output_stream.c src/cmdline.c \
-	src/concat_input_stream.c src/config-cmdline.c \
-	src/config_file_reader.c src/config_key.c src/config_logger.c \
-	src/config_settings.c src/config_struct.c \
-	src/counter_output_stream.c src/debug.c src/digest_sha1.c \
-	src/digest_sha256.c src/digest_sha384.c src/digest_sha512.c \
-	src/dns-udp.c src/dns_resource_record.c src/dnscore.c \
-	src/dnsformat.c src/dnskey.c src/dnskey-keyring.c \
-	src/dnskey_dsa.c src/dnskey_ecdsa.c src/dnskey_rsa.c \
-	src/dnskey-signature.c src/dnsname.c src/empty-input-stream.c \
-	src/fdtools.c src/file_input_stream.c src/file_output_stream.c \
-	src/format.c src/host_address.c src/hsdllist.c src/identity.c \
-	src/input_stream.c src/limited_input_stream.c src/limiter.c \
-	src/list-dl.c src/list-sl.c src/list-sl-debug.c \
-	src/logger-output-stream.c src/logger.c \
-	src/logger_channel_file.c src/logger_channel_stream.c \
-	src/logger_channel_syslog.c src/logger_handle.c \
-	src/message-buffer.c src/message-viewer.c src/message.c \
-	src/message_print_format_dig.c src/message_verify_rrsig.c \
-	src/message_dnsupdate.c src/mt_output_stream.c src/mutex.c \
-	src/name.c src/output_stream.c src/pace.c src/packet_reader.c \
-	src/packet_writer.c src/parser.c src/parsing.c src/pid.c \
-	src/pipe_stream.c src/pool.c src/ptr_set.c src/ptr_set_debug.c \
-	src/ptr_vector.c src/queue-sl.c src/random.c src/rc.c \
-	src/rewind-input-stream.c src/rfc.c src/serial.c \
-	src/server-setup.c src/service.c src/string_set.c \
-	src/sys_error.c src/sys_get_cpu_count.c src/tcp_io_stream.c \
-	src/thread_pool.c src/threaded-qsl-cw.c src/threaded_dll_cw.c \
-	src/threaded_nb_mm.c src/threaded_nbrb.c \
-	src/threaded_ringbuffer.c src/threaded_ringbuffer_cw.c \
-	src/threaded_ringlist.c src/timeformat.c src/timems.c \
-	src/typebitmap.c src/u32_set.c src/u64_set.c \
-	src/u64_set_debug.c src/xfr_input_stream.c src/zalloc.c \
-	$(am__append_2) $(am__append_4) $(am__append_6)
-pkginclude_HEADERS = $(FEATURES) $(I)/alarm.h $(I)/allocator.h \
-	$(I)/async.h $(I)/avl.c.inc $(I)/avl.h.inc $(I)/base16.h \
-	$(I)/base32.h $(I)/base32hex.h $(I)/base64.h \
-	$(I)/basic-priority-queue.h $(I)/buffer_input_stream.h \
-	$(I)/buffer_output_stream.h $(I)/bytearray_input_stream.h \
-	$(I)/bytearray_output_stream.h $(I)/bytezarray_output_stream.h \
-	$(I)/chroot.h $(I)/clone_input_output_stream.h $(I)/cmdline.h \
-	$(I)/concat_input_stream.h $(I)/config-cmdline.h \
-	$(I)/config_file_reader.h $(I)/config_settings.h \
-	$(I)/counter_output_stream.h $(I)/ctrl-rfc.h $(I)/debug.h \
-	$(I)/debug_config.h $(I)/digest.h $(I)/dns-udp.h \
-	$(I)/dns_resource_record.h $(I)/dnscore.h $(I)/dnsformat.h \
-	$(I)/dnskey.h $(I)/dnskey-keyring.h $(I)/dnskey_dsa.h \
-	$(I)/dnskey_ecdsa.h $(I)/dnskey_rsa.h $(I)/dnskey-signature.h \
-	$(I)/dnsname.h $(I)/dnsname_set.h $(I)/dnssec_errors.h \
-	$(I)/empty-input-stream.h $(I)/fdtools.h \
-	$(I)/file_input_stream.h $(I)/file_output_stream.h \
-	$(I)/fingerprint.h $(I)/format.h $(I)/host_address.h \
-	$(I)/hsdllist.h $(I)/identity.h $(I)/input_stream.h \
-	$(I)/io_stream.h $(I)/limited_input_stream.h $(I)/limiter.h \
-	$(I)/list-dl.h $(I)/list-sl.h $(I)/list-sl-debug.h \
-	$(I)/logger.h $(I)/logger_channel_file.h \
-	$(I)/logger_channel_stream.h $(I)/logger_channel_syslog.h \
-	$(I)/logger_handle.h $(I)/logger-output-stream.h \
-	$(I)/message-buffer.h $(I)/message-viewer.h $(I)/message.h \
-	$(I)/message_verify_rrsig.h $(I)/message_dnsupdate.h \
-	$(I)/mt_output_stream.h $(I)/mutex.h $(I)/name.h \
-	$(I)/network.h $(I)/output_stream.h $(I)/pace.h \
-	$(I)/packet_reader.h $(I)/packet_writer.h $(I)/parser.h \
-	$(I)/parsing.h $(I)/pid.h $(I)/pipe_stream.h $(I)/pool.h \
-	$(I)/print_stream.h $(I)/ptr_set.h $(I)/ptr_set_debug.h \
-	$(I)/ptr_vector.h $(I)/queue-sl.h $(I)/random.h $(I)/rc.h \
-	$(I)/rewind-input-stream.h $(I)/rfc.h $(I)/serial.h \
-	$(I)/server-setup.h $(I)/service.h $(I)/string_set.h \
-	$(I)/sys_error.h $(I)/sys_get_cpu_count.h $(I)/sys_types.h \
-	$(I)/tcp_io_stream.h $(I)/thread_pool.h $(I)/threaded-qsl-cw.h \
-	$(I)/threaded_dll_cw.h $(I)/threaded_nb_mm.h \
-	$(I)/threaded_nbrb.h $(I)/threaded_queue.h \
-	$(I)/threaded_ringbuffer.h $(I)/threaded_ringbuffer_cw.h \
-	$(I)/threaded_ringlist.h $(I)/timeformat.h $(I)/timems.h \
-	$(I)/typebitmap.h $(I)/u32_set.h $(I)/u64_set.h \
-	$(I)/u64_set_debug.h $(I)/xfr_input_stream.h $(I)/zalloc.h \
-	$(I)/zonefile_reader.h $(am__append_1) $(am__append_3) \
-	$(am__append_5)
-libdnscore_la_LDFLAGS = -version-info 6:3:0
 
 #
 #
 #
 AM_CFLAGS = -D_THREAD_SAFE -D_REENTRANT -D_FILE_OFFSET_BITS=64 \
-	-I$(abs_builddir) -I$(abs_srcdir)/include $(am__append_9) \
-	$(am__append_10) $(am__append_11) $(am__append_12) \
-	$(am__append_13) $(am__append_14) $(am__append_15) \
-	$(am__append_16) $(am__append_17) $(am__append_18) \
-	$(am__append_19) $(am__append_21) $(am__append_27) \
-	$(am__append_29) $(am__append_30) $(am__append_32) \
-	$(am__append_34) $(am__append_36) $(am__append_37) \
-	$(am__append_39) $(am__append_41) $(am__append_43) \
-	$(am__append_45) $(am__append_46) $(LOCALFLAGS) $(YCFLAGS)
-AM_LDFLAGS = $(am__append_20) $(am__append_22) $(am__append_28) \
-	$(am__append_33) $(am__append_38) $(YLDFLAGS)
-DEBUGFLAGS = $(am__append_7) $(am__append_8) $(am__append_23) \
-	$(am__append_24) $(am__append_25) $(am__append_26) \
-	$(am__append_31) $(am__append_35) $(am__append_40) \
-	$(am__append_42) $(am__append_44)
-LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"'
+	-I$(abs_builddir) -I$(abs_builddir)/include \
+	-I$(abs_srcdir)/include $(am__append_3) $(am__append_4) \
+	$(am__append_5) $(am__append_6) $(am__append_7) \
+	$(am__append_8) $(am__append_9) $(am__append_10) \
+	$(am__append_11) $(am__append_12) $(am__append_13) \
+	$(am__append_14) $(am__append_15) $(am__append_17) \
+	$(am__append_23) $(am__append_25) $(am__append_26) \
+	$(am__append_28) $(am__append_30) $(am__append_32) \
+	$(am__append_33) $(am__append_35) $(am__append_37) \
+	$(am__append_39) $(am__append_41) $(am__append_42) \
+	$(LOCALFLAGS) -DDNSCORE_BUILD=1 \
+	-I$(top_srcdir)/lib/dnscore/include \
+	-I$(top_builddir)/lib/dnscore/include
+AM_LDFLAGS = $(am__append_16) $(am__append_18) $(am__append_24) \
+	$(am__append_29) $(am__append_34)
+DEBUGFLAGS = $(am__append_1) $(am__append_2) $(am__append_19) \
+	$(am__append_20) $(am__append_21) $(am__append_22) \
+	$(am__append_27) $(am__append_31) $(am__append_36) \
+	$(am__append_38) $(am__append_40)
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"' -DTCLDIR='"$(tcldir)"'
 @HAS_LTO_SUPPORT_FALSE@@USES_CLANG_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_FALSE@@USES_GCC_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@AM_AR = llvm-ar
@@ -893,72 +797,164 @@ LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATED
 @USES_ICC_TRUE@AM_LD = ld
 @USES_SUNC_TRUE@AM_LD = ld
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@AM_RANLIB = gcc-ranlib
-YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -g -DCMR
-YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP $(am__append_49)
-YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
-YSCFLAGS = $(YRCFLAGS)
-YRLDFLAGS = -g
-YPLDFLAGS = -pg $(am__append_47)
-YDLDFLAGS = -g $(am__append_48)
-YSLDFLAGS = $(YRLDFLAGS)
-AM_MAKEFLAGS = MODE_CFLAGS="$(AM_CFLAGS)" CC=$(CC) AR=$(AM_AR) LD=$(AM_LD)
-YCFLAGS = $(YSCFLAGS)
-YLDFLAGS = $(YNLDFLAGS)
+#AM_CFLAGS += -I$(top_srcdir)/lib/dnsdb/include -I$(top_builddir)/lib/dnsdb/include
+#AM_CFLAGS += -I$(top_srcdir)/lib/dnslg/include -I$(top_builddir)/lib/dnslg/include 
+#AM_CFLAGS += -I$(top_srcdir)/lib/dnstcl/include -I$(top_builddir)/lib/dnstcl/include
+dist_noinst_DATA = VERSION
+lib_LTLIBRARIES = libdnscore.la
+libdnscore_la_LDFLAGS = -version-info 7:4:0
+#libdnscore_la_LIBADD=$(top_buildir)/lib/.../libsomething.la
+I = include/dnscore
+FEATURESFILE = dnscore-config-features.h
+FEATURES = $(I)/$(FEATURESFILE)
+FEATURESDIR = lib/dnscore/include/dnscore
+FEATURESSRC = $(top_builddir)/$(FEATURESDIR)/dnscore-config.h
+libdnscore_la_SOURCES = src/alarm.c src/acl.c src/acl-config.c \
+	src/allocator.c src/async.c src/base16.c src/base32.c \
+	src/base32hex.c src/base64.c src/basic-priority-queue.c \
+	src/buffer_input_stream.c src/buffer_output_stream.c \
+	src/buffered-file.c src/bytearray_input_stream.c \
+	src/bytearray_output_stream.c src/bytezarray_output_stream.c \
+	src/chroot.c src/circular-file.c \
+	src/clone_input_output_stream.c src/cmdline.c \
+	src/concat_input_stream.c src/config-cmdline.c \
+	src/config_file_reader.c src/config_key.c src/config_logger.c \
+	src/config_settings.c src/config_struct.c \
+	src/counter_output_stream.c src/debug.c src/digest_sha1.c \
+	src/digest_sha256.c src/digest_sha384.c src/digest_sha512.c \
+	src/dns-udp.c src/dns_resource_record.c src/dnscore.c \
+	src/dnsformat.c src/dnskey.c src/dnskey-keyring.c \
+	src/dnskey_dsa.c src/dnskey_ecdsa.c src/dnskey_rsa.c \
+	src/dnskey-signature.c src/dnsname.c src/empty-input-stream.c \
+	src/fdtools.c src/file_input_stream.c src/file_output_stream.c \
+	src/file-pool.c src/filesystem-file.c src/format.c src/hash.c \
+	src/hash-table-values.c src/hmac-openssl.c src/host_address.c \
+	src/hsdllist.c src/identity.c src/input_stream.c src/json.c \
+	src/limited_input_stream.c src/limiter.c src/list-dl.c \
+	src/list-sl.c src/list-sl-debug.c src/logger-output-stream.c \
+	src/logger.c src/logger_channel_file.c \
+	src/logger_channel_pipe.c src/logger_channel_stream.c \
+	src/logger_channel_syslog.c src/logger_handle.c \
+	src/message-buffer.c src/message-viewer.c src/message.c \
+	src/message_print_format_dig.c src/message_verify_rrsig.c \
+	src/message_dnsupdate.c src/mapped-file.c \
+	src/mt_output_stream.c src/mutex.c src/network.c \
+	src/nsec3-hash.c src/output_stream.c src/pace.c \
+	src/packet_reader.c src/packet_writer.c src/parser.c \
+	src/parsing.c src/process.c src/pid.c src/pipe_stream.c \
+	src/pool.c src/popen-output-stream.c src/ptr_set.c \
+	src/ptr_set_debug.c src/ptr_vector.c src/queue-sl.c \
+	src/random.c src/rc.c src/rewind-input-stream.c src/rfc.c \
+	src/serial.c src/server-setup.c src/service.c \
+	src/shared-heap.c src/shared-circular-buffer.c \
+	src/shared-heap-bytearray-output-stream.c src/signals.c \
+	src/simple-http-server.c src/socket-server.c src/string_set.c \
+	src/sys_error.c src/sys_get_cpu_count.c src/tcp_io_stream.c \
+	src/tcp_manager.c src/thread.c src/thread_pool.c \
+	src/thread-tag.c src/threaded-qsl-cw.c src/threaded_dll_cw.c \
+	src/threaded_nb_mm.c src/threaded_nbrb.c \
+	src/threaded_queue_slg.c src/threaded_ringbuffer.c \
+	src/threaded_ringbuffer_cw.c src/threaded_ringlist.c \
+	src/timeformat.c src/timems.c src/typebitmap.c src/u32_set.c \
+	src/u64_set.c src/u64_set_debug.c src/xfr_input_stream.c \
+	src/zalloc.c src/zone_reader_axfr.c src/zone_reader_text.c \
+	$(am__append_44) src/tsig.c src/tsig_algorithms.c \
+	$(am__append_46)
+
+# src/ipc.c
+# src/name.c
+pkginclude_HEADERS = $(FEATURES) $(I)/alarm.h $(I)/acl.h \
+	$(I)/acl-config.h $(I)/allocator.h $(I)/async.h $(I)/avl.c.inc \
+	$(I)/avl.h.inc $(I)/base16.h $(I)/base32.h $(I)/base32hex.h \
+	$(I)/base64.h $(I)/basic-priority-queue.h \
+	$(I)/buffer_input_stream.h $(I)/buffer_output_stream.h \
+	$(I)/buffered-file.h $(I)/bytearray_input_stream.h \
+	$(I)/bytearray_output_stream.h $(I)/bytezarray_output_stream.h \
+	$(I)/chroot.h $(I)/circular-file.h \
+	$(I)/clone_input_output_stream.h $(I)/cmdline.h \
+	$(I)/concat_input_stream.h $(I)/config-cmdline.h \
+	$(I)/config_file_reader.h $(I)/config_settings.h \
+	$(I)/counter_output_stream.h $(I)/ctrl-rfc.h $(I)/debug.h \
+	$(I)/debug_config.h $(I)/digest.h $(I)/dns-udp.h \
+	$(I)/dns_resource_record.h $(I)/dnscore.h $(I)/dnsformat.h \
+	$(I)/dnskey.h $(I)/dnskey-keyring.h $(I)/dnskey_dsa.h \
+	$(I)/dnskey_ecdsa.h $(I)/dnskey_rsa.h $(I)/dnskey-signature.h \
+	$(I)/dnsname.h $(I)/dnsname_set.h $(I)/dnssec_errors.h \
+	$(I)/empty-input-stream.h $(I)/fdtools.h $(I)/file.h \
+	$(I)/file_input_stream.h $(I)/file_output_stream.h \
+	$(I)/file-pool.h $(I)/filesystem-file.h $(I)/fingerprint.h \
+	$(I)/format.h $(I)/hash.h $(I)/hmac.h $(I)/host_address.h \
+	$(I)/hsdllist.h $(I)/identity.h $(I)/input_stream.h \
+	$(I)/io_stream.h $(I)/json.h $(I)/limited_input_stream.h \
+	$(I)/limiter.h $(I)/list-dl.h $(I)/list-sl.h \
+	$(I)/list-sl-debug.h $(I)/logger.h $(I)/logger_channel_file.h \
+	$(I)/logger_channel_pipe.h $(I)/logger_channel_stream.h \
+	$(I)/logger_channel_syslog.h $(I)/logger_handle.h \
+	$(I)/logger-output-stream.h $(I)/mapped-file.h \
+	$(I)/message-buffer.h $(I)/message-viewer.h $(I)/message.h \
+	$(I)/message_verify_rrsig.h $(I)/message_dnsupdate.h \
+	$(I)/mt_output_stream.h $(I)/mutex.h $(I)/network.h \
+	$(I)/nsec3-hash.h $(I)/openssl.h $(I)/output_stream.h \
+	$(I)/pace.h $(I)/packet_reader.h $(I)/packet_writer.h \
+	$(I)/parser.h $(I)/parsing.h $(I)/pid.h $(I)/pipe_stream.h \
+	$(I)/pool.h $(I)/popen-output-stream.h $(I)/print_stream.h \
+	$(I)/process.h $(I)/ptr_set.h $(I)/ptr_set_debug.h \
+	$(I)/ptr_vector.h $(I)/queue-sl.h $(I)/random.h $(I)/rc.h \
+	$(I)/rewind-input-stream.h $(I)/rfc.h $(I)/serial.h \
+	$(I)/server-setup.h $(I)/service.h $(I)/shared-heap.h \
+	$(I)/shared-circular-buffer.h \
+	$(I)/shared-heap-bytearray-output-stream.h $(I)/signals.h \
+	$(I)/simple-http-server.h $(I)/socket-server.h \
+	$(I)/string_set.h $(I)/sys_error.h $(I)/sys_get_cpu_count.h \
+	$(I)/sys_types.h $(I)/tcp_io_stream.h $(I)/tcp_manager.h \
+	$(I)/thread.h $(I)/thread_pool.h $(I)/thread-tag.h \
+	$(I)/threaded-qsl-cw.h $(I)/threaded_dll_cw.h \
+	$(I)/threaded_nb_mm.h $(I)/threaded_nbrb.h \
+	$(I)/threaded_queue.h $(I)/threaded_queue_slg.h \
+	$(I)/threaded_ringbuffer.h $(I)/threaded_ringbuffer_cw.h \
+	$(I)/threaded_ringlist.h $(I)/timeformat.h $(I)/timems.h \
+	$(I)/typebitmap.h $(I)/u32_set.h $(I)/u64_set.h \
+	$(I)/u64_set_debug.h $(I)/xfr_input_stream.h $(I)/zalloc.h \
+	$(I)/zone_reader.h $(I)/zone_reader_axfr.h \
+	$(I)/zone_reader_text.h $(I)/zonefile_reader.h \
+	$(am__append_43) $(I)/tsig.h $(am__append_45)
+CLEANFILES = buildinfo.h $(FEATURESSRC)
 VP = DNSCORE
 all: all-am
 
 .SUFFIXES:
 .SUFFIXES: .c .lo .o .obj
-am--refresh: Makefile
-	@:
 $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am $(srcdir)/../../mk/common-settings.mk $(srcdir)/../../mk/common-labels.mk $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
 	    *$$dep*) \
-	      echo ' cd $(srcdir) && $(AUTOMAKE) --gnu'; \
-	      $(am__cd) $(srcdir) && $(AUTOMAKE) --gnu \
-		&& exit 0; \
+	      ( cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh ) \
+	        && { if test -f $@; then exit 0; else break; fi; }; \
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu lib/dnscore/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu Makefile
+	  $(AUTOMAKE) --gnu lib/dnscore/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
 	  *config.status*) \
-	    echo ' $(SHELL) ./config.status'; \
-	    $(SHELL) ./config.status;; \
+	    cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh;; \
 	  *) \
-	    echo ' cd $(top_builddir) && $(SHELL) ./config.status $@ $(am__depfiles_maybe)'; \
-	    cd $(top_builddir) && $(SHELL) ./config.status $@ $(am__depfiles_maybe);; \
+	    echo ' cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@ $(am__depfiles_maybe)'; \
+	    cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@ $(am__depfiles_maybe);; \
 	esac;
 $(srcdir)/../../mk/common-settings.mk $(srcdir)/../../mk/common-labels.mk:
 
 $(top_builddir)/config.status: $(top_srcdir)/configure $(CONFIG_STATUS_DEPENDENCIES)
-	$(SHELL) ./config.status --recheck
+	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 
 $(top_srcdir)/configure:  $(am__configure_deps)
-	$(am__cd) $(srcdir) && $(AUTOCONF)
+	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 $(ACLOCAL_M4):  $(am__aclocal_m4_deps)
-	$(am__cd) $(srcdir) && $(ACLOCAL) $(ACLOCAL_AMFLAGS)
+	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 $(am__aclocal_m4_deps):
-
-include/dnscore/dnscore-config.h: include/dnscore/stamp-h1
-	@if test ! -f $@; then rm -f include/dnscore/stamp-h1; else :; fi
-	@if test ! -f $@; then $(MAKE) $(AM_MAKEFLAGS) include/dnscore/stamp-h1; else :; fi
-
-include/dnscore/stamp-h1: $(top_srcdir)/include/dnscore/dnscore-config.h.in $(top_builddir)/config.status
-	@rm -f include/dnscore/stamp-h1
-	cd $(top_builddir) && $(SHELL) ./config.status include/dnscore/dnscore-config.h
-$(top_srcdir)/include/dnscore/dnscore-config.h.in:  $(am__configure_deps) 
-	($(am__cd) $(top_srcdir) && $(AUTOHEADER))
-	rm -f include/dnscore/stamp-h1
-	touch $@
-
-distclean-hdr:
-	-rm -f include/dnscore/dnscore-config.h include/dnscore/stamp-h1
 
 install-libLTLIBRARIES: $(lib_LTLIBRARIES)
 	@$(NORMAL_INSTALL)
@@ -1001,6 +997,8 @@ src/$(DEPDIR)/$(am__dirstamp):
 	@$(MKDIR_P) src/$(DEPDIR)
 	@: > src/$(DEPDIR)/$(am__dirstamp)
 src/alarm.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/acl.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/acl-config.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/allocator.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/async.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/base16.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
@@ -1013,6 +1011,8 @@ src/buffer_input_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/buffer_output_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
+src/buffered-file.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 src/bytearray_input_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/bytearray_output_stream.lo: src/$(am__dirstamp) \
@@ -1020,6 +1020,8 @@ src/bytearray_output_stream.lo: src/$(am__dirstamp) \
 src/bytezarray_output_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/chroot.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/circular-file.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 src/clone_input_output_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/cmdline.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
@@ -1067,11 +1069,19 @@ src/file_input_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/file_output_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
+src/file-pool.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/filesystem-file.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 src/format.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/hash.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/hash-table-values.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/hmac-openssl.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/host_address.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/hsdllist.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/identity.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/input_stream.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/json.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/limited_input_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/limiter.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
@@ -1083,6 +1093,8 @@ src/logger-output-stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/logger.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/logger_channel_file.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/logger_channel_pipe.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/logger_channel_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
@@ -1101,10 +1113,12 @@ src/message_verify_rrsig.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/message_dnsupdate.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
+src/mapped-file.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/mt_output_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/mutex.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
-src/name.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/network.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/nsec3-hash.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/output_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/pace.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
@@ -1114,9 +1128,12 @@ src/packet_writer.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/parser.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/parsing.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/process.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/pid.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/pipe_stream.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/pool.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/popen-output-stream.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 src/ptr_set.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/ptr_set_debug.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
@@ -1130,13 +1147,26 @@ src/rfc.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/serial.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/server-setup.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/service.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/shared-heap.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/shared-circular-buffer.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/shared-heap-bytearray-output-stream.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/signals.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/simple-http-server.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/socket-server.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 src/string_set.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/sys_error.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/sys_get_cpu_count.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/tcp_io_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
+src/tcp_manager.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/thread.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/thread_pool.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/thread-tag.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/threaded-qsl-cw.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/threaded_dll_cw.lo: src/$(am__dirstamp) \
@@ -1144,6 +1174,8 @@ src/threaded_dll_cw.lo: src/$(am__dirstamp) \
 src/threaded_nb_mm.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/threaded_nbrb.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/threaded_queue_slg.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/threaded_ringbuffer.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
@@ -1161,6 +1193,10 @@ src/u64_set_debug.lo: src/$(am__dirstamp) \
 src/xfr_input_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/zalloc.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/zone_reader_axfr.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/zone_reader_text.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 src/osx_clock_gettime.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/tsig.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
@@ -1179,6 +1215,8 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/acl-config.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/acl.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/alarm.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/allocator.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/async.Plo@am__quote@
@@ -1189,10 +1227,12 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/basic-priority-queue.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/buffer_input_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/buffer_output_stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/buffered-file.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/bytearray_input_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/bytearray_output_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/bytezarray_output_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/chroot.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/circular-file.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/clone_input_output_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/cmdline.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/concat_input_stream.Plo@am__quote@
@@ -1221,13 +1261,19 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnsname.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/empty-input-stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/fdtools.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/file-pool.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/file_input_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/file_output_stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/filesystem-file.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/format.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/hash-table-values.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/hash.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/hmac-openssl.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/host_address.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/hsdllist.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/identity.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/input_stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/json.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/limited_input_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/limiter.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/list-dl.Plo@am__quote@
@@ -1236,9 +1282,11 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/logger-output-stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/logger.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/logger_channel_file.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/logger_channel_pipe.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/logger_channel_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/logger_channel_syslog.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/logger_handle.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/mapped-file.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/message-buffer.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/message-viewer.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/message.Plo@am__quote@
@@ -1247,7 +1295,8 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/message_verify_rrsig.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/mt_output_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/mutex.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/name.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/network.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/nsec3-hash.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/nsid.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/osx_clock_gettime.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/output_stream.Plo@am__quote@
@@ -1259,6 +1308,8 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/pid.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/pipe_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/pool.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/popen-output-stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/process.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/ptr_set.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/ptr_set_debug.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/ptr_vector.Plo@am__quote@
@@ -1270,15 +1321,25 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/serial.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/server-setup.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/service.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/shared-circular-buffer.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/shared-heap-bytearray-output-stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/shared-heap.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/signals.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/simple-http-server.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/socket-server.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/string_set.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/sys_error.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/sys_get_cpu_count.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/tcp_io_stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/tcp_manager.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/thread-tag.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/thread.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/thread_pool.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/threaded-qsl-cw.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/threaded_dll_cw.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/threaded_nb_mm.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/threaded_nbrb.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/threaded_queue_slg.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/threaded_ringbuffer.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/threaded_ringbuffer_cw.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/threaded_ringlist.Plo@am__quote@
@@ -1292,6 +1353,8 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/u64_set_debug.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/xfr_input_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zalloc.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zone_reader_axfr.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/zone_reader_text.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -1323,9 +1386,6 @@ mostlyclean-libtool:
 clean-libtool:
 	-rm -rf .libs _libs
 	-rm -rf src/.libs src/_libs
-
-distclean-libtool:
-	-rm -f libtool config.lt
 install-pkgincludeHEADERS: $(pkginclude_HEADERS)
 	@$(NORMAL_INSTALL)
 	@list='$(pkginclude_HEADERS)'; test -n "$(pkgincludedir)" || list=; \
@@ -1381,12 +1441,6 @@ GTAGS:
 	here=`$(am__cd) $(top_builddir) && pwd` \
 	  && $(am__cd) $(top_srcdir) \
 	  && gtags -i $(GTAGS_ARGS) "$$here"
-cscope: cscope.files
-	test ! -s cscope.files \
-	  || $(CSCOPE) -b -q $(AM_CSCOPEFLAGS) $(CSCOPEFLAGS) -i cscope.files $(CSCOPE_ARGS)
-clean-cscope:
-	-rm -f cscope.files
-cscope.files: clean-cscope cscopelist
 cscopelist: cscopelist-am
 
 cscopelist-am: $(am__tagged_files)
@@ -1405,11 +1459,8 @@ cscopelist-am: $(am__tagged_files)
 
 distclean-tags:
 	-rm -f TAGS ID GTAGS GRTAGS GSYMS GPATH tags
-	-rm -f cscope.out cscope.in.out cscope.po.out cscope.files
 
 distdir: $(DISTFILES)
-	$(am__remove_distdir)
-	test -d "$(distdir)" || mkdir "$(distdir)"
 	@srcdirstrip=`echo "$(srcdir)" | sed 's/[].[^$$\\*]/\\\\&/g'`; \
 	topsrcdirstrip=`echo "$(top_srcdir)" | sed 's/[].[^$$\\*]/\\\\&/g'`; \
 	list='$(DISTFILES)'; \
@@ -1439,130 +1490,6 @@ distdir: $(DISTFILES)
 	    || exit 1; \
 	  fi; \
 	done
-	-test -n "$(am__skip_mode_fix)" \
-	|| find "$(distdir)" -type d ! -perm -755 \
-		-exec chmod u+rwx,go+rx {} \; -o \
-	  ! -type d ! -perm -444 -links 1 -exec chmod a+r {} \; -o \
-	  ! -type d ! -perm -400 -exec chmod a+r {} \; -o \
-	  ! -type d ! -perm -444 -exec $(install_sh) -c -m a+r {} {} \; \
-	|| chmod -R a+r "$(distdir)"
-dist-gzip: distdir
-	tardir=$(distdir) && $(am__tar) | GZIP=$(GZIP_ENV) gzip -c >$(distdir).tar.gz
-	$(am__post_remove_distdir)
-
-dist-bzip2: distdir
-	tardir=$(distdir) && $(am__tar) | BZIP2=$${BZIP2--9} bzip2 -c >$(distdir).tar.bz2
-	$(am__post_remove_distdir)
-
-dist-lzip: distdir
-	tardir=$(distdir) && $(am__tar) | lzip -c $${LZIP_OPT--9} >$(distdir).tar.lz
-	$(am__post_remove_distdir)
-
-dist-xz: distdir
-	tardir=$(distdir) && $(am__tar) | XZ_OPT=$${XZ_OPT--e} xz -c >$(distdir).tar.xz
-	$(am__post_remove_distdir)
-
-dist-tarZ: distdir
-	tardir=$(distdir) && $(am__tar) | compress -c >$(distdir).tar.Z
-	$(am__post_remove_distdir)
-
-dist-shar: distdir
-	shar $(distdir) | GZIP=$(GZIP_ENV) gzip -c >$(distdir).shar.gz
-	$(am__post_remove_distdir)
-
-dist-zip: distdir
-	-rm -f $(distdir).zip
-	zip -rq $(distdir).zip $(distdir)
-	$(am__post_remove_distdir)
-
-dist dist-all:
-	$(MAKE) $(AM_MAKEFLAGS) $(DIST_TARGETS) am__post_remove_distdir='@:'
-	$(am__post_remove_distdir)
-
-# This target untars the dist file and tries a VPATH configuration.  Then
-# it guarantees that the distribution is self-contained by making another
-# tarfile.
-distcheck: dist
-	case '$(DIST_ARCHIVES)' in \
-	*.tar.gz*) \
-	  GZIP=$(GZIP_ENV) gzip -dc $(distdir).tar.gz | $(am__untar) ;;\
-	*.tar.bz2*) \
-	  bzip2 -dc $(distdir).tar.bz2 | $(am__untar) ;;\
-	*.tar.lz*) \
-	  lzip -dc $(distdir).tar.lz | $(am__untar) ;;\
-	*.tar.xz*) \
-	  xz -dc $(distdir).tar.xz | $(am__untar) ;;\
-	*.tar.Z*) \
-	  uncompress -c $(distdir).tar.Z | $(am__untar) ;;\
-	*.shar.gz*) \
-	  GZIP=$(GZIP_ENV) gzip -dc $(distdir).shar.gz | unshar ;;\
-	*.zip*) \
-	  unzip $(distdir).zip ;;\
-	esac
-	chmod -R a-w $(distdir)
-	chmod u+w $(distdir)
-	mkdir $(distdir)/_build $(distdir)/_inst
-	chmod a-w $(distdir)
-	test -d $(distdir)/_build || exit 0; \
-	dc_install_base=`$(am__cd) $(distdir)/_inst && pwd | sed -e 's,^[^:\\/]:[\\/],/,'` \
-	  && dc_destdir="$${TMPDIR-/tmp}/am-dc-$$$$/" \
-	  && am__cwd=`pwd` \
-	  && $(am__cd) $(distdir)/_build \
-	  && ../configure --srcdir=.. --prefix="$$dc_install_base" \
-	    $(AM_DISTCHECK_CONFIGURE_FLAGS) \
-	    $(DISTCHECK_CONFIGURE_FLAGS) \
-	  && $(MAKE) $(AM_MAKEFLAGS) \
-	  && $(MAKE) $(AM_MAKEFLAGS) dvi \
-	  && $(MAKE) $(AM_MAKEFLAGS) check \
-	  && $(MAKE) $(AM_MAKEFLAGS) install \
-	  && $(MAKE) $(AM_MAKEFLAGS) installcheck \
-	  && $(MAKE) $(AM_MAKEFLAGS) uninstall \
-	  && $(MAKE) $(AM_MAKEFLAGS) distuninstallcheck_dir="$$dc_install_base" \
-	        distuninstallcheck \
-	  && chmod -R a-w "$$dc_install_base" \
-	  && ({ \
-	       (cd ../.. && umask 077 && mkdir "$$dc_destdir") \
-	       && $(MAKE) $(AM_MAKEFLAGS) DESTDIR="$$dc_destdir" install \
-	       && $(MAKE) $(AM_MAKEFLAGS) DESTDIR="$$dc_destdir" uninstall \
-	       && $(MAKE) $(AM_MAKEFLAGS) DESTDIR="$$dc_destdir" \
-	            distuninstallcheck_dir="$$dc_destdir" distuninstallcheck; \
-	      } || { rm -rf "$$dc_destdir"; exit 1; }) \
-	  && rm -rf "$$dc_destdir" \
-	  && $(MAKE) $(AM_MAKEFLAGS) dist \
-	  && rm -rf $(DIST_ARCHIVES) \
-	  && $(MAKE) $(AM_MAKEFLAGS) distcleancheck \
-	  && cd "$$am__cwd" \
-	  || exit 1
-	$(am__post_remove_distdir)
-	@(echo "$(distdir) archives ready for distribution: "; \
-	  list='$(DIST_ARCHIVES)'; for i in $$list; do echo $$i; done) | \
-	  sed -e 1h -e 1s/./=/g -e 1p -e 1x -e '$$p' -e '$$x'
-distuninstallcheck:
-	@test -n '$(distuninstallcheck_dir)' || { \
-	  echo 'ERROR: trying to run $@ with an empty' \
-	       '$$(distuninstallcheck_dir)' >&2; \
-	  exit 1; \
-	}; \
-	$(am__cd) '$(distuninstallcheck_dir)' || { \
-	  echo 'ERROR: cannot chdir into $(distuninstallcheck_dir)' >&2; \
-	  exit 1; \
-	}; \
-	test `$(am__distuninstallcheck_listfiles) | wc -l` -eq 0 \
-	   || { echo "ERROR: files left after uninstall:" ; \
-	        if test -n "$(DESTDIR)"; then \
-	          echo "  (check DESTDIR support)"; \
-	        fi ; \
-	        $(distuninstallcheck_listfiles) ; \
-	        exit 1; } >&2
-distcleancheck: distclean
-	@if test '$(srcdir)' = . ; then \
-	  echo "ERROR: distcleancheck can only run from a VPATH build" ; \
-	  exit 1 ; \
-	fi
-	@test `$(distcleancheck_listfiles) | wc -l` -eq 0 \
-	  || { echo "ERROR: files left in build directory after distclean:" ; \
-	       $(distcleancheck_listfiles) ; \
-	       exit 1; } >&2
 check-am: all-am
 check: check-am
 all-am: Makefile $(LTLIBRARIES) $(DATA) $(HEADERS)
@@ -1592,6 +1519,7 @@ install-strip:
 mostlyclean-generic:
 
 clean-generic:
+	-test -z "$(CLEANFILES)" || rm -f $(CLEANFILES)
 
 distclean-generic:
 	-test -z "$(CONFIG_CLEAN_FILES)" || rm -f $(CONFIG_CLEAN_FILES)
@@ -1608,11 +1536,10 @@ clean-am: clean-generic clean-libLTLIBRARIES clean-libtool \
 	mostlyclean-am
 
 distclean: distclean-am
-	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
 	-rm -rf src/$(DEPDIR)
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
-	distclean-hdr distclean-libtool distclean-tags
+	distclean-tags
 
 dvi: dvi-am
 
@@ -1655,8 +1582,6 @@ install-ps-am:
 installcheck-am:
 
 maintainer-clean: maintainer-clean-am
-	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
-	-rm -rf $(top_srcdir)/autom4te.cache
 	-rm -rf src/$(DEPDIR)
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
@@ -1678,91 +1603,73 @@ uninstall-am: uninstall-libLTLIBRARIES uninstall-pkgincludeHEADERS
 
 .MAKE: install-am install-strip
 
-.PHONY: CTAGS GTAGS TAGS all all-am am--refresh check check-am clean \
-	clean-cscope clean-generic clean-libLTLIBRARIES clean-libtool \
-	cscope cscopelist-am ctags ctags-am dist dist-all dist-bzip2 \
-	dist-gzip dist-lzip dist-shar dist-tarZ dist-xz dist-zip \
-	distcheck distclean distclean-compile distclean-generic \
-	distclean-hdr distclean-libtool distclean-tags distcleancheck \
-	distdir distuninstallcheck dvi dvi-am html html-am info \
-	info-am install install-am install-data install-data-am \
-	install-dvi install-dvi-am install-exec install-exec-am \
-	install-html install-html-am install-info install-info-am \
-	install-libLTLIBRARIES install-man install-pdf install-pdf-am \
-	install-pkgincludeHEADERS install-ps install-ps-am \
-	install-strip installcheck installcheck-am installdirs \
-	maintainer-clean maintainer-clean-generic mostlyclean \
-	mostlyclean-compile mostlyclean-generic mostlyclean-libtool \
-	pdf pdf-am ps ps-am tags tags-am uninstall uninstall-am \
-	uninstall-libLTLIBRARIES uninstall-pkgincludeHEADERS
+.PHONY: CTAGS GTAGS TAGS all all-am check check-am clean clean-generic \
+	clean-libLTLIBRARIES clean-libtool cscopelist-am ctags \
+	ctags-am distclean distclean-compile distclean-generic \
+	distclean-libtool distclean-tags distdir dvi dvi-am html \
+	html-am info info-am install install-am install-data \
+	install-data-am install-dvi install-dvi-am install-exec \
+	install-exec-am install-html install-html-am install-info \
+	install-info-am install-libLTLIBRARIES install-man install-pdf \
+	install-pdf-am install-pkgincludeHEADERS install-ps \
+	install-ps-am install-strip installcheck installcheck-am \
+	installdirs maintainer-clean maintainer-clean-generic \
+	mostlyclean mostlyclean-compile mostlyclean-generic \
+	mostlyclean-libtool pdf pdf-am ps ps-am tags tags-am uninstall \
+	uninstall-am uninstall-libLTLIBRARIES \
+	uninstall-pkgincludeHEADERS
 
 
-release:
-	echo YCFLAGS=$(YRCFLAGS)
-	echo YLDFLAGS=$(YRLDFLAGS)
-	$(MAKE) all "YCFLAGS=$(YRCFLAGS)" "YLDFLAGS=$(YRLDFLAGS)"
+### YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -g -DCMR
+### YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP
+### YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
+### YSCFLAGS = $(YRCFLAGS)
+### 
+### YRLDFLAGS = -g
+### YPLDFLAGS = -pg
+### YDLDFLAGS = -g
+### 
+### if HAS_CC_RDYNAMIC
+### YPLDFLAGS += -rdynamic
+### YDLDFLAGS += -rdynamic
+### endif
+### 
+### if USES_CLANG
+### # workaround a bug where clang does not handle properly profiling and optimizations
+### YPCFLAGS += -mno-omit-leaf-frame-pointer -fno-omit-frame-pointer
+### endif
+### 
+### YSLDFLAGS = $(YRLDFLAGS)
+### 
+### AM_CFLAGS += $(YCFLAGS)
+### AM_LDFLAGS += $(YLDFLAGS)
+### 
+### AM_MAKEFLAGS=MODE_CFLAGS="$(AM_CFLAGS)" CC=$(CC) AR=$(AM_AR) LD=$(AM_LD)
 
-profile:
-	echo YCFLAGS=$(YPCFLAGS)
-	echo YLDFLAGS=$(YPLDFLAGS)
-	$(MAKE) all "YCFLAGS=$(YPCFLAGS)" "YLDFLAGS=$(YPLDFLAGS)"
-
-debug:
-	echo YCFLAGS=$(YDCFLAGS)
-	echo YLDFLAGS=$(YDLDFLAGS)
-	$(MAKE) all "YCFLAGS=$(YDCFLAGS)" "YLDFLAGS=$(YDLDFLAGS)"
-
-rebuild: clean release
-
-release-install: release install
-
-profile-install: profile install
-
-debug-install:
-	echo YCFLAGS=$(YDCFLAGS)
-	echo YLDFLAGS=$(YDLDFLAGS)
-	$(MAKE) install "YCFLAGS=$(YDCFLAGS)" "YLDFLAGS=$(YDLDFLAGS)"
-
-buildinfo.h: config.log
+buildinfo.h: $(abs_top_builddir)/config.log
 	echo \#pragma once > buildinfo.h 2> /dev/null
 	echo // generated file, do not modify >> buildinfo.h 2> /dev/null
-	echo \#define BUILD_OPTIONS \"$$(grep "./configure" config.log | head -1 | sed 's/.*\.\/configure *//')\" >> buildinfo.h 2> /dev/null
+	echo \#define BUILD_OPTIONS \"$$(grep "/configure" $(abs_top_builddir)/config.log | head -1 | sed 's/.*\.\/configure *//')\" >> buildinfo.h 2> /dev/null
 
-all: REVISION
+all: REVISION $(FEATURESSRC)
 
 REVISION:
 	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
-src/alarm.c: features
+$(srcdir)/src/alarm.c: $(FEATURES) $(FEATURESSRC)
+
+$(FEATURESSRC): ../../config.h
+	mkdir -p $(top_builddir)/$(FEATURESDIR)
+	cp ../../config.h $(FEATURESSRC)
 
 features: $(FEATURES)
 
-$(FEATURES): config.log REVISION VERSION
+$(FEATURES): ../../config.log REVISION VERSION $(FEATURESSRC)
+	mkdir -p $(I)
 	echo "#pragma once" > $(FEATURES)
-@HAS_TSIG_SUPPORT_TRUE@	echo "#define DNSCORE_HAS_TSIG_SUPPORT 1" >> $(FEATURES)
-@HAS_TSIG_SUPPORT_FALSE@	echo "#define DNSCORE_HAS_TSIG_SUPPORT 0" >> $(FEATURES)
-@HAS_ACL_SUPPORT_TRUE@	echo "#define DNSCORE_HAS_ACL_SUPPORT 1" >> $(FEATURES)
-@HAS_ACL_SUPPORT_FALSE@	echo "#define DNSCORE_HAS_ACL_SUPPORT 0" >> $(FEATURES)
-@HAS_NSEC3_SUPPORT_TRUE@	echo "#define DNSCORE_HAS_NSEC3_SUPPORT 1" >> $(FEATURES)
-@HAS_NSEC3_SUPPORT_FALSE@	echo "#define DNSCORE_HAS_NSEC3_SUPPORT 0" >> $(FEATURES)
-@HAS_NSEC_SUPPORT_TRUE@	echo "#define DNSCORE_HAS_NSEC_SUPPORT 1" >> $(FEATURES)
-@HAS_NSEC_SUPPORT_FALSE@	echo "#define DNSCORE_HAS_NSEC_SUPPORT 0" >> $(FEATURES)
-@HAS_ZALLOC_SUPPORT_TRUE@	echo "#define DNSCORE_HAS_ZALLOC_SUPPORT 1" >> $(FEATURES)
-@HAS_ZALLOC_SUPPORT_FALSE@	echo "#define DNSCORE_HAS_ZALLOC_SUPPORT 0" >> $(FEATURES)
-@HAS_ZALLOC_DEBUG_SUPPORT_TRUE@	echo "#define DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT 1" >> $(FEATURES)
-@HAS_ZALLOC_DEBUG_SUPPORT_FALSE@	echo "#define DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT 0" >> $(FEATURES)
-@HAS_NSID_SUPPORT_TRUE@	echo "#define DNSCORE_HAS_NSID_SUPPORT 1" >> $(FEATURES)
-@HAS_NSID_SUPPORT_FALSE@	echo "#define DNSCORE_HAS_NSID_SUPPORT 0" >> $(FEATURES)
-@HAS_ZALLOC_STATISTICS_SUPPORT_TRUE@	echo "#define DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT 1" >> $(FEATURES)
-@HAS_ZALLOC_STATISTICS_SUPPORT_FALSE@	echo "#define DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT 0" >> $(FEATURES)
-@HAS_MALLOC_DEBUG_SUPPORT_TRUE@	echo "#define DNSCORE_HAS_MALLOC_DEBUG_SUPPORT 1" >> $(FEATURES)
-@HAS_MALLOC_DEBUG_SUPPORT_FALSE@	echo "#define DNSCORE_HAS_MALLOC_DEBUG_SUPPORT 0" >> $(FEATURES)
-@HAS_MUTEX_DEBUG_SUPPORT_TRUE@	echo "#define DNSCORE_HAS_MUTEX_DEBUG_SUPPORT 1" >> $(FEATURES)
-@HAS_MUTEX_DEBUG_SUPPORT_FALSE@	echo "#define DNSCORE_HAS_MUTEX_DEBUG_SUPPORT 0" >> $(FEATURES)
-@HAS_MEMALIGN_ISSUES_TRUE@	echo "#define DNSCORE_HAS_MEMALIGN_ISSUES 1" >> $(FEATURES)
-@HAS_MEMALIGN_ISSUES_FALSE@	echo "#define DNSCORE_HAS_MEMALIGN_ISSUES 0" >> $(FEATURES)
-@HAS_LOG_THREAD_TAG_ALWAYS_ON_TRUE@	echo "#define DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON 1" >> $(FEATURES)
-@HAS_LOG_THREAD_TAG_ALWAYS_ON_FALSE@	echo "#define DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON 0" >> $(FEATURES)
+	grep "^#define" $(FEATURESSRC) | sed -e 's/^#define /#define $(VP)_/' >> $(FEATURES)
+	echo '#undef $(VP)_VERSION' >> $(FEATURES)
+
 	which printf > /dev/null 2>&1
 	if [ $$? -eq 0 ];then \
 		printf '// version %i.%i.%i.%i-%i\n' $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/') 0 $$(cat REVISION) >> $(FEATURES) ; \

@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnskey DNSSEC keys functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -51,6 +52,7 @@
 #include <openssl/rsa.h>
 #include <openssl/ssl.h>
 #include <openssl/engine.h>
+#include "dnscore/openssl.h"
 
 #include "dnscore/sys_types.h"
 #include "dnscore/base64.h"
@@ -186,7 +188,7 @@ static void dnskey_rsa_from_rsa(struct dnskey_rsa_const *yrsa, const RSA *rsa)
     RSA_get0_crt_params(rsa, &yrsa->dmp1, &yrsa->dmq1, &yrsa->iqmp);
 }
 
-static void dnskey_rsa_finalise(struct dnskey_rsa *yrsa)
+static void dnskey_rsa_finalize(struct dnskey_rsa *yrsa)
 {
     if(yrsa->n != NULL) BN_free(yrsa->n);
     if(yrsa->e != NULL) BN_free(yrsa->e);
@@ -281,7 +283,7 @@ dnskey_rsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u
 
     int err = RSA_sign(key->nid, digest, digest_len, output, &output_size, key->key.rsa);
 
-#ifdef DEBUG
+#if DEBUG
     if(err == 0)
     {
         ERR_print_errors_fp(stderr);
@@ -290,7 +292,7 @@ dnskey_rsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u
     }
 #endif
 
-    return (err != 0) ? output_size : DNSSEC_ERROR_RSASIGNATUREFAILED;
+    return (err != 0) ? (s32)output_size : DNSSEC_ERROR_RSASIGNATUREFAILED; // condition is only "always true" if DEBUG is on
 }
 
 static bool
@@ -298,7 +300,7 @@ dnskey_rsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len,
 {
     yassert(signature_len <= DNSSEC_MAXIMUM_KEY_SIZE_BYTES);
     
-#ifdef DEBUG
+#if DEBUG
     log_debug6("rsa_verifydigest(K%{dnsname}-%03d-%05d, @%p, @%p)", key->owner_name, key->algorithm, key->tag, digest, signature);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG6, digest, digest_len, 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG6, signature, signature_len, 32);
@@ -316,10 +318,12 @@ dnskey_rsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len,
 
         while((ssl_err = ERR_get_error()) != 0)
         {
+#if DEBUG
             char buffer[256];
             ERR_error_string_n(ssl_err, buffer, sizeof(buffer));
 
             log_debug("digest verification returned an ssl error %08x %s", ssl_err, buffer);
+#endif
         }
 
         ERR_clear_error();
@@ -573,7 +577,7 @@ dnskey_rsa_initinstance(RSA* rsa, u8 algorithm, u16 flags, const char* origin, d
         return nid;
     }
 
-#ifdef DEBUG
+#if DEBUG
     memset(rdata, 0xff, sizeof(rdata));
 #endif
 
@@ -597,9 +601,14 @@ dnskey_rsa_initinstance(RSA* rsa, u8 algorithm, u16 flags, const char* origin, d
      *        are not taken in account
      */
 
-    u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size + 4);
+    u16 tag = dnskey_get_tag_from_rdata(rdata, rdata_size + 4);
 
     dnssec_key* key = dnskey_newemptyinstance(algorithm, flags, origin); // RC
+
+    if(key == NULL)
+    {
+        return INVALID_ARGUMENT_ERROR;
+    }
 
     key->key.rsa = rsa;
     key->vtbl = &rsa_vtbl;
@@ -638,7 +647,7 @@ dnskey_rsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
     
-    yassert(key->nid == 0);
+    //yassert(key->nid == 0);
 
     switch(key->algorithm)
     {
@@ -649,7 +658,6 @@ dnskey_rsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
             break;
         default:
             return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
-            break;
     }
     
     struct dnskey_rsa *yrsa = (struct dnskey_rsa*)parser->data;
@@ -675,6 +683,11 @@ dnskey_rsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
     if(FAIL(nid = dnskey_rsa_getnid(key->algorithm)))
     {
         return nid;
+    }
+
+    if((key->nid != 0) && (key->nid != nid))
+    {
+        return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
     }
     
     bool has_private = (yrsa->p != NULL) && (yrsa->q != NULL);
@@ -715,7 +728,7 @@ dnskey_rsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
          *        are not taken in account
          */
 
-        tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size + 4);
+        tag = dnskey_get_tag_from_rdata(rdata, rdata_size + 4);
 
         key->tag = tag;
         key->nid = nid;
@@ -736,13 +749,13 @@ dnskey_rsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
 }
         
 static void
-dnskey_rsa_parse_finalise(struct dnskey_field_parser *parser)
+dnskey_rsa_parse_finalize(struct dnskey_field_parser *parser)
 {
     struct dnskey_rsa *yrsa = (struct dnskey_rsa*)parser->data;
    
     if(yrsa != NULL)
     {
-        dnskey_rsa_finalise(yrsa);
+        dnskey_rsa_finalize(yrsa);
         ZFREE(yrsa, struct dnskey_rsa);
     }
 }
@@ -751,7 +764,7 @@ static const struct dnskey_field_parser_vtbl rsa_field_parser_vtbl =
 {
     dnskey_rsa_parse_field,
     dnskey_rsa_parse_set_key,
-    dnskey_rsa_parse_finalise,
+    dnskey_rsa_parse_finalize,
     "RSA"
 };
 
@@ -759,7 +772,7 @@ void
 dnskey_rsa_parse_init(dnskey_field_parser *fp)
 {
     struct dnskey_rsa *yrsa;
-    ZALLOC_OR_DIE(struct dnskey_rsa *, yrsa, struct dnskey_rsa, KEYRSA_TAG);
+    ZALLOC_OBJECT_OR_DIE(yrsa, struct dnskey_rsa, KEYRSA_TAG);
     ZEROMEMORY(yrsa, sizeof(struct dnskey_rsa));
     fp->data = yrsa;
     fp->vtbl = &rsa_field_parser_vtbl;
@@ -789,13 +802,12 @@ dnskey_rsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnsse
             break;
         default:
             return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
-            break;
     }
 
     rdata += 4;
     rdata_size -= 4;
     
-    ya_result return_value = DNSSEC_ERROR_KEYRING_KEY_IS_INVALID;
+    ya_result return_value = DNSSEC_ERROR_CANNOT_READ_KEY_FROM_RDATA;
 
     RSA *rsa = dnskey_rsa_public_load(rdata, rdata_size);
     
@@ -835,10 +847,9 @@ dnskey_rsa_newinstance(u32 size, u8 algorithm, u16 flags, const char* origin, dn
             break;
         default:
             return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
-            break;
     }
     
-    ya_result return_value = ERROR;
+    ya_result return_value = DNSSEC_ERROR_KEY_GENERATION_FAILED;
 
     RSA *rsa = dnskey_rsa_genkey(size);
     
@@ -859,9 +870,4 @@ dnskey_rsa_newinstance(u32 size, u8 algorithm, u16 flags, const char* origin, dn
     return return_value;
 }
 
-/*    ------------------------------------------------------------    */
-
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

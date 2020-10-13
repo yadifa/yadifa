@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnsdbscheduler Scheduled tasks of the database
  *  @ingroup dnsdb
  *  @brief
@@ -63,6 +64,7 @@
 #include <dnscore/serial.h>
 #include <dnscore/fdtools.h>
 #include <dnscore/tcp_io_stream.h>
+#include <dnscore/tcp_manager.h>
 
 #include "dnsdb/zdb_types.h"
 #include "dnsdb/zdb-zone-arc.h"
@@ -72,10 +74,9 @@
 #include "dnsdb/zdb-zone-answer-axfr.h"
 #include "dnsdb/zdb-zone-path-provider.h"
 
-#define ZDB_JOURNAL_CODE 1
-#include "dnsdb/journal.h"
-
 #define MODULE_MSG_HANDLE g_database_logger
+
+#define DEBUG_AXFR_MESSAGES 0
 
 /**
  *
@@ -131,7 +132,11 @@
 #define TCP_BUFFER_SIZE 4096
 #define FILE_BUFFER_SIZE 4096
 
+#if DEBUG
+#define ZDB_ZONE_AXFR_MINIMUM_DUMP_PERIOD 1 // seconds
+#else
 #define ZDB_ZONE_AXFR_MINIMUM_DUMP_PERIOD 60 // seconds
+#endif
 
 extern logger_handle* g_database_logger;
 
@@ -139,23 +144,25 @@ extern logger_handle* g_database_logger;
 #error "PATH_MAX not defined"
 #endif
 
-typedef struct scheduler_queue_zone_write_axfr_args scheduler_queue_zone_write_axfr_args;
+typedef struct zdb_zone_answer_axfr_thread_args zdb_zone_answer_axfr_thread_args;
 
 #define SHDQZWAA_TAG 0x4141575a51444853
 
-struct scheduler_queue_zone_write_axfr_args
+struct zdb_zone_answer_axfr_thread_args
 {
     zdb_zone *zone;
     message_data *mesg;
     struct thread_pool_s *disk_tp;
+#if DNSCORE_HAS_TCP_MANAGER
+    tcp_manager_socket_context_t *sctx;
+#else
+    int sockfd;
+#endif
     ya_result return_code;
-
     u32 packet_size_limit;
     u32 packet_records_limit;
-    
     u32 journal_from;
     u32 journal_to;
-    
     bool compress_dname_rdata;
 };
 
@@ -174,7 +181,7 @@ struct zdb_zone_answer_axfr_write_file_args
 };
 
 static void
-zdb_zone_answer_axfr_thread_exit(scheduler_queue_zone_write_axfr_args* data)
+zdb_zone_answer_axfr_thread_exit(zdb_zone_answer_axfr_thread_args* data)
 {
     log_debug("zone write axfr: %{dnsname}: ended with: %r", data->zone->origin, data->return_code);
     
@@ -254,7 +261,7 @@ zdb_zone_answer_axfr_write_file_thread(void* data_)
         storage->zone->axfr_serial = storage->serial - 1;
     }
     
-    zdb_zone_clear_status(storage->zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
+    zdb_zone_clear_dumping_axfr(storage->zone);
     
     zdb_zone_release(storage->zone);
     storage->zone = NULL;
@@ -268,7 +275,7 @@ zdb_zone_answer_axfr_write_file_thread(void* data_)
 static void*
 zdb_zone_answer_axfr_thread(void* data_)
 {
-    scheduler_queue_zone_write_axfr_args* data = (scheduler_queue_zone_write_axfr_args*)data_;
+    zdb_zone_answer_axfr_thread_args* data = (zdb_zone_answer_axfr_thread_args*)data_;
     message_data *mesg = data->mesg;
     zdb_zone *data_zone = data->zone; // already RCed ...
     output_stream os;
@@ -280,54 +287,82 @@ zdb_zone_answer_axfr_thread(void* data_)
     u32 journal_from = data->journal_from;
     u32 journal_to = data->journal_to;
     int path_len;
-    
-    int tcpfd = data->mesg->sockfd;
-    data->mesg->sockfd = -1;
-    
     u8   data_zone_origin[MAX_DOMAIN_LENGTH];
     char buffer[PATH_MAX + 8];
-       
+
+#if DNSCORE_HAS_TCP_MANAGER
+    if(!tcp_manager_is_valid(data->sctx))
+    {
+        data->return_code = MAKE_ERRNO_ERROR(ENOTSOCK);
+        log_err("zone write axfr: %{dnsname}: invalid connection", data->zone->origin);
+        zdb_zone_answer_axfr_thread_exit(data);
+        message_free(mesg);
+        return NULL;
+    }
+
+    tcp_manager_socket_context_t *sctx = data->sctx;
+
+#if DEBUG
+    log_debug("zone write axfr: %{dnsname}: socket is %d", data->zone->origin, tcp_manager_socket(sctx));
+#endif
+#else
+    int tcpfd = data->sockfd;
+    data->sockfd = -1;
+    if(tcpfd < 0)
+    {
+        data->return_code = MAKE_ERRNO_ERROR(ENOTSOCK);
+        log_err("zone write axfr: %{dnsname}: invalid socket", data->zone->origin);
+        zdb_zone_answer_axfr_thread_exit(data);
+        message_free(mesg);
+        return NULL;
+    }
+#if DEBUG
+    log_debug("zone write axfr: %{dnsname}: socket is %d", data->zone->origin, tcpfd);
+#endif
+
+#endif
+
     /**
      * The zone could already be dumping in the disk.
      * If it's the case, then the dump file needs to be read and sent until marked as "done".
      */
     
     /* locks the zone for a reader */
+        
+    message_set_additional_count_ne(mesg, 0);
     
-#ifdef DEBUG
+#if DEBUG
     log_debug("zone write axfr: %{dnsname}: locking for AXFR", data->zone->origin);
-    log_debug("zone write axfr: %{dnsname}: socket is %d", data->zone->origin, tcpfd);
 #endif
-    
-    if(tcpfd < 0)
-    {
-        data->return_code = ERROR;
-        log_err("zone write axfr: %{dnsname}: invalid socket", data->zone->origin);
-        zdb_zone_answer_axfr_thread_exit(data);
-        free(mesg);
-        return NULL;
-    }
-    
-    shutdown(tcpfd, SHUT_RD);
-    
-    MESSAGE_SET_AR(mesg->buffer, 0);
 
     zdb_zone_lock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
     
-    if(ZDB_ZONE_INVALID(data_zone))
+    if(zdb_zone_invalid(data_zone))
     {
         zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
         
         log_err("zone write axfr: %{dnsname}: marked as invalid", data_zone->origin);
-        
+
+#if DNSCORE_HAS_TCP_MANAGER
+        if(ISOK(ret = message_make_error_and_reply_tcp(mesg, RCODE_SERVFAIL, tcp_manager_socket(sctx))))
+        {
+            tcp_manager_write_update(sctx, ret);
+        }
+        tcp_manager_close(sctx);
+#else
+        message_make_error_and_reply_tcp(mesg, RCODE_SERVFAIL, tcpfd);
+#endif
         zdb_zone_answer_axfr_thread_exit(data);
+
+#if !DNSCORE_HAS_TCP_MANAGER
         tcp_set_abortive_close(tcpfd);
         close_ex(tcpfd);
-        free(mesg);        
+#endif
+        message_free(mesg);
         return NULL;
     }
     
-#ifdef DEBUG
+#if DEBUG
     log_debug("zone write axfr: %{dnsname}: checking serial number", data_zone->origin);
 #endif
     
@@ -336,21 +371,31 @@ zdb_zone_answer_axfr_thread(void* data_)
         zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
 
         log_err("zone write axfr: %{dnsname}: no SOA", data_zone->origin);
-        
-        /* @todo 20121219 edf -- send a servfail answer ... */
 
+#if DNSCORE_HAS_TCP_MANAGER
+        if(ISOK(ret = message_make_error_and_reply_tcp(mesg, RCODE_SERVFAIL, tcp_manager_socket(sctx))))
+        {
+            tcp_manager_write_update(sctx, ret);
+        }
+        tcp_manager_close(sctx);
+#else
+        message_make_error_and_reply_tcp(mesg, RCODE_SERVFAIL, tcpfd);
+#endif
         zdb_zone_answer_axfr_thread_exit(data);
+
+#if !DNSCORE_HAS_TCP_MANAGER
         tcp_set_abortive_close(tcpfd);
         close_ex(tcpfd);
-        free(mesg);
+#endif
+        message_free(mesg);
         return NULL;
     }
     
     u32 packet_size_limit = data->packet_size_limit;
 
-    if(packet_size_limit < UDPPACKET_MAX_LENGTH)
+    if(packet_size_limit < message_get_buffer_size_max(mesg))
     {
-        packet_size_limit = UDPPACKET_MAX_LENGTH;
+        packet_size_limit = message_get_buffer_size_max(mesg);
     }
     
     u32 packet_records_limit = data->packet_records_limit;
@@ -383,7 +428,7 @@ zdb_zone_answer_axfr_thread(void* data_)
      * (too old: time and/or serial increment and/or journal size)
      * 
      */
-    
+
     for(int countdown = 5; countdown >= 0; --countdown)
     {
         if(countdown == 0)
@@ -391,26 +436,44 @@ zdb_zone_answer_axfr_thread(void* data_)
             // tried to many times: servfail
             
             zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
-            
-            data->return_code = ERROR;
+
+            data->return_code = ZDB_ERROR_COULDNOTOOBTAINZONEIMAGE; // AXFR file creation failed
             log_warn("zone write axfr: %{dnsname}: could not prepare file", data_zone_origin);
             
             message_make_error(mesg, FP_CANNOT_HOLD_AXFR_DATA);
-            if(mesg->tsig.tsig != NULL)
+            if(message_has_tsig(mesg))
             {
                 tsig_sign_answer(mesg);
             }
-            message_update_tcp_length(mesg);
-            
-            if(FAIL(ret = writefully(tcpfd, mesg->buffer_tcp_len, mesg->send_length + 2)))
+
+#if DEBUG_AXFR_MESSAGES
+            LOGGER_EARLY_CULL_PREFIX(MSG_DEBUG) message_log(MODULE_MSG_HANDLE, MSG_DEBUG, mesg);
+#endif
+
+            #if DNSCORE_HAS_TCP_MANAGER
+            if(ISOK(ret = message_send_tcp(mesg, tcp_manager_socket(sctx))))
+            {
+                tcp_manager_write_update(sctx, ret);
+            }
+            else
             {
                 log_warn("zone write axfr: %{dnsname}: tcp write error: %r", data_zone_origin, ret);
+                tcp_set_abortive_close(tcp_manager_socket(sctx));
             }
-            
+            tcp_manager_close(sctx);
+#else
+            if(FAIL(ret = message_send_tcp(mesg, tcpfd)))
+            {
+                log_warn("zone write axfr: %{dnsname}: tcp write error: %r", data_zone_origin, ret);
+
+                tcp_set_abortive_close(tcpfd);
+            }
+
             tcp_set_abortive_close(tcpfd);
             close_ex(tcpfd);
-            
-            free(mesg);
+#endif
+            zdb_zone_answer_axfr_thread_exit(data);
+            message_free(mesg);
 
             return NULL;
         }
@@ -426,12 +489,22 @@ zdb_zone_answer_axfr_thread(void* data_)
             data->return_code = ret;
             data_zone->axfr_timestamp = 1;
 
-            /* @todo 20150209 edf -- send a servfail answer ... */
-
+#if DNSCORE_HAS_TCP_MANAGER
+            if(ISOK(ret = message_make_error_and_reply_tcp(mesg, RCODE_SERVFAIL, tcp_manager_socket(sctx))))
+            {
+                tcp_manager_write_update(sctx, ret);
+            }
+            tcp_manager_close(sctx);
+#else
+            message_make_error_and_reply_tcp(mesg, RCODE_SERVFAIL, tcpfd);
+#endif
             zdb_zone_answer_axfr_thread_exit(data);
+
+#if !DNSCORE_HAS_TCP_MANAGER
             tcp_set_abortive_close(tcpfd);
-            close_ex(tcpfd);
-            free(mesg);
+        close_ex(tcpfd);
+#endif
+            message_free(mesg);
             return NULL;
         }
                 
@@ -447,11 +520,23 @@ zdb_zone_answer_axfr_thread(void* data_)
             zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
             log_err("zone write axfr: %{dnsname}: unable to get path: %r", data_zone_origin, ret);
             data->return_code = ret;
-            
-            zdb_zone_answer_axfr_thread_exit(data); // releases
+
+#if DNSCORE_HAS_TCP_MANAGER
+            if(ISOK(ret = message_make_error_and_reply_tcp(mesg, RCODE_SERVFAIL, tcp_manager_socket(sctx))))
+            {
+                tcp_manager_write_update(sctx, ret);
+            }
+            tcp_manager_close(sctx);
+#else
+            message_make_error_and_reply_tcp(mesg, RCODE_SERVFAIL, tcpfd);
+#endif
+            zdb_zone_answer_axfr_thread_exit(data);
+
+#if !DNSCORE_HAS_TCP_MANAGER
             tcp_set_abortive_close(tcpfd);
-            close_ex(tcpfd);
-            free(mesg);
+        close_ex(tcpfd);
+#endif
+            message_free(mesg);
             return NULL;
         }
         
@@ -460,12 +545,11 @@ zdb_zone_answer_axfr_thread(void* data_)
         u32 axfr_dump_age = (now >= data_zone->axfr_timestamp)?now - data_zone->axfr_timestamp:0;
         
         // try to set the dumping axfr status
-        
-        u8 zone_axfr_status = zdb_zone_set_status(data_zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
+
+        bool have_writing_rights = !zdb_zone_get_set_dumping_axfr(data_zone);
         
         // if status didn't had the flag, we have ownership
-        
-        bool have_writing_rights = (zone_axfr_status & ZDB_ZONE_STATUS_DUMPING_AXFR) == 0;
+
         bool too_old = (axfr_dump_age > ZDB_ZONE_AXFR_MINIMUM_DUMP_PERIOD);
         bool different_serial = (data_zone->axfr_serial != serial);
         bool cannot_be_followed = FALSE;
@@ -485,7 +569,7 @@ zdb_zone_answer_axfr_thread(void* data_)
             cannot_be_followed = TRUE;
         }
         
-        bool should_write = have_writing_rights && ((different_serial && too_old) || cannot_be_followed);
+        bool should_write = have_writing_rights && (different_serial && (too_old || cannot_be_followed));
         
         if(!should_write && have_writing_rights)
         {
@@ -509,7 +593,7 @@ zdb_zone_answer_axfr_thread(void* data_)
             
             unlink(buffer);
 
-            yassert(path_len < sizeof(buffer) - 6);
+            yassert((path_len > 0) && ((u32)path_len < sizeof(buffer) - 6));
             
             memcpy(&buffer[path_len], ".part", 6);
             unlink(buffer); // trigger a new update
@@ -520,7 +604,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
             if(FAIL(ret = file_output_stream_create_excl(&os, buffer, 0644)))
             {
-                zdb_zone_clear_status(data_zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
+                zdb_zone_clear_dumping_axfr(data_zone);
                 
                 log_debug("zone write axfr: %{dnsname}: could not exclusively create '%s': %r", data_zone_origin, buffer, ret);
                 
@@ -534,13 +618,26 @@ zdb_zone_answer_axfr_thread(void* data_)
                 
                 zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
                 
-                log_err("zone write axfr: %{dnsname}: file create error for '%s' with serial %d: %r", data_zone_origin, buffer, serial, ret);
+                log_err("zone write axfr: %{dnsname}: file create error for '%s': %r", data_zone_origin, buffer, serial, ret);
                 
                 data->return_code = ret;
+
+#if DNSCORE_HAS_TCP_MANAGER
+                if(ISOK(ret = message_make_error_and_reply_tcp(mesg, RCODE_SERVFAIL, tcp_manager_socket(sctx))))
+                {
+                    tcp_manager_write_update(sctx, ret);
+                }
+                tcp_manager_close(sctx);
+#else
+                message_make_error_and_reply_tcp(mesg, RCODE_SERVFAIL, tcpfd);
+#endif
                 zdb_zone_answer_axfr_thread_exit(data);
+
+#if !DNSCORE_HAS_TCP_MANAGER
                 tcp_set_abortive_close(tcpfd);
                 close_ex(tcpfd);
-                free(mesg);
+#endif
+                message_free(mesg);
                 return NULL;
             }
 
@@ -553,7 +650,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
             /*
              * Now that the file has been created, the background writing thread can be called
-             * the readers will wait "forever" that the file is written but the yneed the file to exist
+             * the readers will wait "forever" that the file is written but they need the file to exist
              */
 
             zdb_zone_answer_axfr_write_file_args *store_axfr_args;
@@ -596,7 +693,14 @@ zdb_zone_answer_axfr_thread(void* data_)
             if(FAIL(ret))
             {
                 // opening failed but it should not have : try again
-                log_warn("zone write axfr: %{dnsname}: after write, could not open %s: %r", data_zone_origin, buffer, ret);
+                if(countdown > 0)
+                {
+                    log_debug("zone write axfr: %{dnsname}: after write, could not open %s: %r", data_zone_origin, buffer, ret);
+                }
+                else
+                {
+                    log_warn("zone write axfr: %{dnsname}: after write, could not open %s: %r", data_zone_origin, buffer, ret);
+                }
                 continue;
             }
             
@@ -624,11 +728,6 @@ zdb_zone_answer_axfr_thread(void* data_)
                     // file exists and the file seems usable, let's start streaming it
 
                     ret = zdb_zone_axfr_input_stream_open_with_path(&fis, data_zone, buffer);
-
-                    if(have_writing_rights)
-                    {
-                        zdb_zone_clear_status(data_zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
-                    }
 
                     if(FAIL(ret))
                     {
@@ -664,7 +763,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
                 if(have_writing_rights)
                 {
-                    zdb_zone_clear_status(data_zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
+                    zdb_zone_clear_dumping_axfr(data_zone);
                 }
 
                 if(FAIL(ret))
@@ -692,7 +791,7 @@ zdb_zone_answer_axfr_thread(void* data_)
             
             if(have_writing_rights)
             {
-                zdb_zone_clear_status(data_zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
+                zdb_zone_clear_dumping_axfr(data_zone);
             }
 
             if(errno != ENOENT)
@@ -701,7 +800,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
                 if(have_writing_rights)
                 {
-                    zdb_zone_clear_status(data_zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
+                    zdb_zone_clear_dumping_axfr(data_zone);
                 }
 
                 ret = ERRNO_ERROR;
@@ -712,21 +811,40 @@ zdb_zone_answer_axfr_thread(void* data_)
 
                 data_zone->axfr_timestamp = 1;
 
+#if DNSCORE_HAS_TCP_MANAGER
+                if(ISOK(ret = message_make_error_and_reply_tcp(mesg, RCODE_SERVFAIL, tcp_manager_socket(sctx))))
+                {
+                    tcp_manager_write_update(sctx, ret);
+                }
+                tcp_manager_close(sctx);
+#else
+                message_make_error_and_reply_tcp(mesg, RCODE_SERVFAIL, tcpfd);
+#endif
                 zdb_zone_answer_axfr_thread_exit(data);
-                close_ex(tcpfd);
-                free(mesg);
+
+#if !DNSCORE_HAS_TCP_MANAGER
+                tcp_set_abortive_close(tcpfd);
+        close_ex(tcpfd);
+#endif
+                message_free(mesg);
                 return NULL;
             }
             
             // could not access any of the two expected files, try again
         }
     } // for(;;)
+
+    /******************************************************************************************************************
+     *
+     * data pointer cannot be used beyond this point
+     *
+     ******************************************************************************************************************/
     
-    mesg->size_limit = 0x8000; // limit to 32KB, knowing perfectly well the buffer is actually 64KB
+    message_set_buffer_size(mesg, 0x8000); // limit to 32KB, knowing perfectly well the buffer is actually 64KB
 
     log_info("zone write axfr: %{dnsname}: sending AXFR with serial %d", data_zone_origin, serial);
     
-#ifdef DEBUG
+#if DEBUG
     if(fis.data == NULL)
     {
         log_err("zone write axfr: %{dnsname}: empty stream", data_zone_origin);
@@ -734,26 +852,37 @@ zdb_zone_answer_axfr_thread(void* data_)
     }
 #endif
 
+#define USE_TCPOS 0
+    
+#if USE_TCPOS    
     output_stream tcpos;
     fd_output_stream_attach(&tcpos, tcpfd);
-    buffer_input_stream_init(&fis, &fis, FILE_BUFFER_SIZE);
     buffer_output_stream_init(&tcpos, &tcpos, TCP_BUFFER_SIZE);
+#endif
     
-    MESSAGE_HIFLAGS(mesg->buffer) |= AA_BITS|QR_BITS;
-    MESSAGE_SET_AN(mesg->buffer, NETWORK_ONE_16);
+    buffer_input_stream_init(&fis, &fis, FILE_BUFFER_SIZE);
+
+    // The correct AXFR answer sets authoritative
+    message_set_authoritative_answer(mesg);
+    // Microsoft DNS server do not set the authoritative flag
+    //message_set_answer(mesg);
+
+    message_set_answer_count_ne(mesg, NETWORK_ONE_16);
 
     packet_writer pw;
     u32 packet_count = 0;
-    u16 an_records_count = 0;
+    u16 an_count = 0;
 
     // @note 20091223 edf -- With TSIG enabled this limit will be dynamic and change to a lower bound for every 100th packet
 #if ZDB_HAS_TSIG_SUPPORT
     tsig_tcp_message_position pos = TSIG_NOWHERE;
 #endif
     
-    yassert(mesg->received <= packet_size_limit); // should have already been tested by the caller
+    yassert(message_get_size(mesg) <= packet_size_limit); // should have already been tested by the caller
     
-    packet_writer_init(&pw, mesg->buffer, mesg->received, packet_size_limit);
+    size_t message_base_size = message_get_size(mesg);
+
+    packet_writer_init(&pw, message_get_buffer(mesg), message_base_size, packet_size_limit);
 
     for(;; packet_count--) /* using path as the buffer */
     {
@@ -763,7 +892,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
         if(dnscore_shuttingdown())
         {
-            log_err("zone write axfr: %{dnsname}: stopping transfer because of application shutdown", data_zone_origin);
+            log_err("zone write axfr: %{dnsname}: stopping transfer to %{sockaddr} because of application shutdown", data_zone_origin, message_get_sender_sa(mesg));
             break;
         }
 
@@ -773,7 +902,6 @@ zdb_zone_answer_axfr_thread(void* data_)
         {
             /* qname_len is an error code */
             log_err("zone write axfr: %{dnsname}: error reading next record domain: %r", data_zone_origin, qname_len);
-
             break;
         }
 
@@ -786,32 +914,20 @@ zdb_zone_answer_axfr_thread(void* data_)
         if(qname_len == 0)
         {
             /* If records are still to be sent */
-            if(an_records_count > 0)
+            if(an_count > 0)
             {
-                /* Then write them */
+                /* write them */
 
-                /*
+                message_set_authoritative_answer(mesg);
+                message_set_size(mesg, packet_writer_get_offset(&pw));
+                message_set_answer_count(mesg, an_count);
                 
-                will not be used anymore
-                 
-                if(packet_count == 0)
-                {
-                    packet_count = AXFR_TSIG_PERIOD;
-                }
-                */
-
-                mesg->send_length = packet_writer_get_offset(&pw);
-
-                /** @todo 20100820 edf -- if we only have 1 packet then we still need to cleanup  the message
-                 *	   So a better way to do this is to check if pos is TSIG_START and if it does do the standard TSIG signature.
-                 */
-
-                MESSAGE_SET_AN(mesg->buffer, htons(an_records_count));
 #if ZDB_HAS_TSIG_SUPPORT
-                if(TSIG_ENABLED(mesg))
+                if(message_has_tsig(mesg))
                 {
-                    mesg->ar_start = packet_writer_get_next_u8_ptr(&pw);
-
+                    message_set_additional_section_ptr(mesg, packet_writer_get_next_u8_ptr(&pw));
+                    message_reset_buffer_size(mesg);
+                    
                     if(pos != TSIG_START)
                     {
                         ret = tsig_sign_tcp_message(mesg, pos);
@@ -826,16 +942,41 @@ zdb_zone_answer_axfr_thread(void* data_)
                         log_err("zone write axfr: %{dnsname}: failed to sign the answer: %r", data_zone_origin, ret);
                         break;
                     }
-                } /* if TSIG_ENABLED */
-#endif
-                packet_writer_set_offset(&pw, mesg->send_length);
-
-                total_bytes_sent += mesg->send_length;
                 
-                if(FAIL(n = write_tcp_packet(&pw, &tcpos)))
+                    packet_writer_set_offset(&pw, message_get_size(mesg));
+                    
+                } /* if message_has_tsig */
+#endif
+
+#if DEBUG_AXFR_MESSAGES
+                LOGGER_EARLY_CULL_PREFIX(MSG_DEBUG) message_log(MODULE_MSG_HANDLE, MSG_DEBUG, mesg);
+#endif
+
+#if DNSCORE_HAS_TCP_MANAGER
+                if(ISOK(n = message_send_tcp(mesg, tcp_manager_socket(sctx))))
                 {
-                    log_err("zone write axfr: %{dnsname}: error sending AXFR packet: %r", data_zone_origin, n);
+                    tcp_manager_write_update(sctx, n);
                 }
+                else
+                {
+                    log_err("zone write axfr: %{dnsname}: error sending AXFR packet to %{sockaddr}: %r", data_zone_origin, message_get_sender_sa(mesg), n);
+                }
+#else
+#if USE_TCPOS
+                if(ISOK(n = message_write_tcp(mesg, &tcpos)))
+#else
+                if(ISOK(n = message_send_tcp(mesg, tcpfd)))
+#endif
+                {
+                }
+                else
+                {
+                    log_err("zone write axfr: %{dnsname}: error sending AXFR packet to %{sockaddr}: %r", data_zone_origin, message_get_sender_sa(mesg), n);
+                }
+#endif
+                total_bytes_sent += message_get_size(mesg);
+                
+                message_set_buffer_size(mesg, 0x8000); // limit to 32KB, knowing perfectly well the buffer is actually 64KB
 
                 // in effect, an_records_count = 0;
             }
@@ -858,7 +999,7 @@ zdb_zone_answer_axfr_thread(void* data_)
         if(rdata_len > sizeof(buffer))
         {
             log_err("zone write axfr: %{dnsname}: record data length is too big (%i)", data_zone_origin, rdata_len);
-#ifdef DEBUG
+#if DEBUG
             log_memdump(g_database_logger, MSG_DEBUG, &tctrl, 10, 16);
 #endif
             break;
@@ -868,63 +1009,82 @@ zdb_zone_answer_axfr_thread(void* data_)
 
         /* Check if we have enough room available for the next record */
         
-#ifdef DEBUG
-        s32 remaining_capacity = packet_writer_get_remaining_capacity(&pw);
-#endif
-
-        if((an_records_count >= packet_records_limit) || (packet_writer_get_remaining_capacity(&pw) < record_len))
+        s32 remaining_capacity = (packet_writer_get_limit(&pw) / 2) - packet_writer_get_offset(&pw);
+        
+        if((an_count >= packet_records_limit) || (remaining_capacity < record_len))
         {
             // not enough room
             
-            if(an_records_count == 0)
+            if(an_count == 0)
             {
                 log_err("zone write axfr: %{dnsname}: error preparing packet: next record is too big (%d)", data_zone_origin, record_len);
 
                 break;
             }
 
-            MESSAGE_SET_AN(mesg->buffer, htons(an_records_count));
-
-            mesg->send_length = packet_writer_get_offset(&pw);
+            message_set_authoritative_answer(mesg);
+            message_set_answer_count(mesg, an_count);
+            message_set_size(mesg, packet_writer_get_offset(&pw));
 
 #if ZDB_HAS_TSIG_SUPPORT
-            if(TSIG_ENABLED(mesg))
+            if(message_has_tsig(mesg))
             {
-                mesg->ar_start = packet_writer_get_next_u8_ptr(&pw);
+                message_reset_buffer_size(mesg);
+                
+                message_set_additional_section_ptr(mesg, packet_writer_get_next_u8_ptr(&pw));
 
                 if(FAIL(ret = tsig_sign_tcp_message(mesg, pos)))
                 {
                     log_err("zone write axfr: %{dnsname}: failed to sign the answer: %r", data_zone_origin, ret);
                     break;
                 }
+                
+                packet_writer_set_offset(&pw, message_get_size(mesg));
             }
 #endif
             /* Flush the packet. */
 
-            packet_writer_set_offset(&pw, mesg->send_length);
-            
-            total_bytes_sent += mesg->send_length;
-            
-            if(FAIL(n = write_tcp_packet(&pw, &tcpos)))
+#if DEBUG_AXFR_MESSAGES
+            LOGGER_EARLY_CULL_PREFIX(MSG_DEBUG) message_log(MODULE_MSG_HANDLE, MSG_DEBUG, mesg);
+#endif
+
+#if DNSCORE_HAS_TCP_MANAGER
+            if(ISOK(n = message_send_tcp(mesg, tcp_manager_socket(sctx))))
             {
-                log_err("zone write axfr: %{dnsname}: error sending packet: %r", data_zone_origin, n);
+                tcp_manager_write_update(sctx, n);
+            }
+            else
+            {
+                log_err("zone write axfr: %{dnsname}: error sending packet to %{sockaddr}: %r", data_zone_origin, message_get_sender_sa(mesg), n);
                 break;
             }
+#else
+#if USE_TCPOS
+            if(FAIL(n = message_write_tcp(mesg, &tcpos)))
+#else
+            if(FAIL(n = message_send_tcp(mesg, tcpfd)))
+#endif
+            {
+                log_err("zone write axfr: %{dnsname}: error sending packet to %{sockaddr}: %r", data_zone_origin, message_get_sender_sa(mesg), n);
+                break;
+            }
+#endif
+            total_bytes_sent += message_get_size(mesg);
 
 #if ZDB_HAS_TSIG_SUPPORT
             pos = TSIG_MIDDLE;
 #endif
-            an_records_count = 0;
+            an_count = 0;
 
             // Packet flushed ...
             // Reset the packet
-            // @todo 20100820 edf -- reset the counts (?)
-            // @todo 20100820 edf -- TSIG enabled means the limit changes every 100th packet
 
-            /* Remove the TSIG. */
-            /** @todo 20100820 edf -- Keep the AR count instead of setting it to 0  */
-            MESSAGE_SET_AR(mesg->buffer, 0);
-            packet_writer_init(&pw, mesg->buffer, mesg->received, packet_size_limit);
+            // Remove the TSIG.
+
+            message_set_authoritative_answer(mesg);
+            message_set_query_answer_authority_additional_counts_ne(mesg, NU16(1), 0, 0, 0);
+            message_set_buffer_size(mesg, 0x8000); // limit to 32KB, knowing perfectly well the buffer is actually 64KB
+            packet_writer_init(&pw, message_get_buffer(mesg), message_base_size, packet_size_limit);
         }
 
         /** NOTE: if tctrl.qtype == TYPE_SOA, then we are at the beginning OR the end of the AXFR stream */
@@ -941,9 +1101,10 @@ zdb_zone_answer_axfr_thread(void* data_)
             }
         }
 #endif
-        an_records_count++;
+        an_count++;
 
         packet_writer_add_fqdn(&pw, (const u8*)buffer);
+
         packet_writer_add_bytes(&pw, (const u8*)&tctrl, 10);
 
         if(compress_dname_rdata != 0)
@@ -954,7 +1115,7 @@ zdb_zone_answer_axfr_thread(void* data_)
             {
                 case TYPE_MX:
                 {
-                    if(FAIL(n = input_stream_read_fully(&fis, buffer, rdata_len))) // rdata_len < sizeof(buffer)
+                    if(FAIL(n = input_stream_read_fully(&fis, buffer, rdata_len)))
                     {
                         log_err("zone write axfr: %{dnsname}: error reading MX record: %r", data_zone_origin, n);
 
@@ -990,7 +1151,6 @@ zdb_zone_answer_axfr_thread(void* data_)
                     }
 
                     packet_writer_add_bytes(&pw, (const u8*)buffer, 2);
-                    // the write buffer is bigger than the limit and the fqdn size has been verified
                     packet_writer_add_fqdn(&pw, (const u8*)&buffer[2]);
                     SET_U16_AT(pw.packet[rdata_offset - 2], htons(pw.packet_offset - rdata_offset)); // set RDATA size
                     
@@ -1127,7 +1287,7 @@ zdb_zone_answer_axfr_thread(void* data_)
                     }
                     
                     s32 remaining = rdata_len;
-                    remaining -= 18;
+                    remaining -= RRSIG_RDATA_HEADER_LEN;
                     
                     if(remaining < 0)
                     {
@@ -1140,7 +1300,7 @@ zdb_zone_answer_axfr_thread(void* data_)
                         goto scheduler_queue_zone_write_axfr_thread_exit;
                     }
 
-                    packet_writer_add_bytes(&pw, (const u8*)buffer, 18);
+                    packet_writer_add_bytes(&pw, (const u8*)buffer, RRSIG_RDATA_HEADER_LEN);
                     
                     const u8 *o = (const u8*)&buffer[18];
                     u32 olen = dnsname_len(o);
@@ -1188,7 +1348,7 @@ zdb_zone_answer_axfr_thread(void* data_)
                 goto scheduler_queue_zone_write_axfr_thread_exit;
             }
             
-#ifdef DEBUG
+#if DEBUG
             if(packet_writer_get_remaining_capacity(&pw) < n)
             {
                 log_err("zone write axfr: %{dnsname}: would store %i bytes when %i were expected and %i remaining, from %i",
@@ -1211,7 +1371,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
             rdata_len -= n;
         }
-    }
+    } // for
 
     /**
      * GOTO !!!
@@ -1219,57 +1379,70 @@ zdb_zone_answer_axfr_thread(void* data_)
 
 scheduler_queue_zone_write_axfr_thread_exit:
 
-    log_info("zone write axfr: %{dnsname}: closing file, %llu bytes sent", data_zone_origin, total_bytes_sent);
+    log_info("zone write axfr: %{dnsname}: closing file, %llu bytes sent to %{sockaddr}", data_zone_origin, total_bytes_sent, message_get_sender_sa(mesg));
 
-#ifdef DEBUG
+#if DNSCORE_HAS_TCP_MANAGER
+#if DEBUG
+    log_debug("zone write axfr: %{dnsname}: closing socket %i", data_zone_origin, tcp_manager_socket(sctx));
+#endif
+    tcp_manager_close(sctx);
+#else
+#if DEBUG
     log_debug("zone write axfr: %{dnsname}: closing socket %i", data_zone_origin, tcpfd);
 #endif
     
-    tcp_set_agressive_close(tcpfd, 3);
-    //shutdown(tcpfd, SHUT_RDWR);
+#if USE_TCPOS
     output_stream_close(&tcpos);
+#else
+    close_ex(tcpfd);
+#endif
+#endif
     input_stream_close(&fis);
 
-    free(mesg);
+    message_free(mesg);
 
     return NULL;
 }
 
+#if DNSCORE_HAS_TCP_MANAGER
 void
-zdb_zone_answer_axfr(zdb_zone *zone, message_data *mesg, struct thread_pool_s *network_tp, struct thread_pool_s *disk_tp, u16 max_packet_size, u16 max_record_by_packet, bool compress_packets)
+zdb_zone_answer_axfr(zdb_zone *zone, message_data *mesg, tcp_manager_socket_context_t *sctx, struct thread_pool_s *network_tp, struct thread_pool_s *disk_tp, u16 max_packet_size, u16 max_record_by_packet, bool compress_packets)
+#else
+void
+zdb_zone_answer_axfr(zdb_zone *zone, message_data *mesg, int sockfd, struct thread_pool_s *network_tp, struct thread_pool_s *disk_tp, u16 max_packet_size, u16 max_record_by_packet, bool compress_packets)
+#endif
 {
-    scheduler_queue_zone_write_axfr_args* args;
+    zdb_zone_answer_axfr_thread_args* args;
     
     log_info("zone write axfr: %{dnsname}: queueing", zone->origin);
     
-    if(mesg->received >= max_packet_size)
+    if(message_get_size(mesg) >= max_packet_size)
     {
         log_err("zone write axfr: %{dnsname}: received message is already bigger than maximum message size in answer: cancelled",
                 zone->origin);
         return;
     }
         
-    MALLOC_OR_DIE(scheduler_queue_zone_write_axfr_args*, args, sizeof(scheduler_queue_zone_write_axfr_args), SHDQZWAA_TAG);
-    
+    MALLOC_OBJECT_OR_DIE(args, zdb_zone_answer_axfr_thread_args, SHDQZWAA_TAG);
+
     ya_result ret;
     if(FAIL(ret = zdb_zone_journal_get_serial_range(zone, &args->journal_from, &args->journal_to)))
     {
-        log_debug("zone write axfr: %{dnsname}: could not get serial range from the journal: %r", zone->origin, ret);
+        log_debug("zone write axfr: %{dnsname}: could not get the serial range of the journal: %r", zone->origin, ret);
         // ZDB_ERROR_ICMTL_NOTFOUND
         args->journal_from = 0;
         args->journal_to = 0;
     }
-    
+
     zdb_zone_acquire(zone);
     args->zone = zone;
-    
     args->disk_tp = disk_tp;
-    
-    message_data *mesg_clone;
-    MALLOC_OR_DIE(message_data*, mesg_clone, sizeof(message_data), MESGDATA_TAG);
-    memcpy(mesg_clone, mesg, sizeof(message_data));
-
-    args->mesg = mesg_clone;
+#if DNSCORE_HAS_TCP_MANAGER
+    args->sctx = sctx;
+#else
+    args->sockfd = sockfd;
+#endif
+    args->mesg = message_dup(mesg);
     args->packet_size_limit = max_packet_size;
     args->packet_records_limit = max_record_by_packet;
     args->compress_dname_rdata = compress_packets;

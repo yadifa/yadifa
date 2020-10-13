@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -44,11 +45,10 @@
 
 #include <dnscore/dnsname.h>
 
+#include <dnscore/nsec3-hash.h>
+
 #include <dnsdb/zdb_rr_label.h>
-
 #include <dnsdb/nsec3_types.h>
-
-#include <dnsdb/nsec3_hash.h>
 #include <dnsdb/nsec3_item.h>
 #include <dnsdb/nsec3_load.h>
 #include <dnsdb/nsec3_name_error.h>
@@ -74,12 +74,11 @@
 
 #define NSEC3_INCLUDE_ZONE_PATH 0
 
-#ifndef DEBUG
+#if !DEBUG
 #undef NSEC3_UPDATE_ZONE_DEBUG
 #define NSEC3_UPDATE_ZONE_DEBUG  0
 #endif
 
-#define NSEC3_LABEL_DEBUG 1
 
 #ifdef	__cplusplus
 extern "C"
@@ -99,6 +98,9 @@ extern "C"
 #define NSEC3_RDATA_IS_OPTIN(__rdata__) ((((u8*)(__rdata__))[1]&NSEC3_FLAGS_OPTOUT) == 0)
 #define NSEC3_RDATA_IS_OPTOUT(__rdata__) ((((u8*)(__rdata__))[1]&NSEC3_FLAGS_OPTOUT) != 0)
 #define NSEC3_RDATA_ALGORITHM(__rdata__) (((u8*)(__rdata__))[0])
+#define NSEC3_RDATA_FLAGS(__rdata__) (((u8*)(__rdata__))[1])
+#define NSEC3_RDATA_ITERATIONS_NE(__rdata__) (((u16*)(__rdata__))[1])
+#define NSEC3_RDATA_ITERATIONS(__rdata__) NU16(NSEC3_RDATA_ITERATIONS_NE(__rdata__))
     
 #define TYPE_NSEC3PARAMADD   NU16(0xff00)
 #define TYPE_NSEC3PARAMDEL   NU16(0xff01)
@@ -123,7 +125,7 @@ ya_result nsec3_remove_nsec3param(zdb_zone* zone, u8 hash_alg, u8 flags, u16 ite
  * @param fqdn
  */
 
-void nsec3_zone_label_update_chain0_links(nsec3_zone *n3, zdb_rr_label* label, const u8 *fqdn);
+void nsec3_zone_label_update_chain_links(nsec3_zone *n3, zdb_rr_label* label, int n3_count, u16 coverage_mask, const u8 *fqdn);
 
 /**
  * Updates links for the first NSEC3 chain of the zone
@@ -149,6 +151,18 @@ const zdb_rr_label* nsec3_get_closest_provable_encloser(
                     const zdb_rr_label* apex,
                     const_dnslabel_vector_reference sections,
                     s32* sections_topp);
+/*
+void nsec3_wild_closest_encloser_proof(
+    const zdb_zone *zone,
+    const dnsname_vector *qname, s32 apex_index,
+    const nsec3_zone_item **wild_closest_provable_encloser_nsec3p);
+*/
+void nsec3_wild_closest_encloser_proof(
+        const zdb_zone *zone,
+        const dnsname_vector *qname, s32 apex_index,
+        const nsec3_zone_item **wild_encloser_nsec3p,
+        const nsec3_zone_item **closest_provable_encloser_nsec3p,
+        const nsec3_zone_item **qname_encloser_nsec3p);
 
 void nsec3_closest_encloser_proof(
                     const zdb_zone *zone,
@@ -158,7 +172,6 @@ void nsec3_closest_encloser_proof(
                     const nsec3_zone_item **wild_closest_provable_encloser_nsec3p
                     );
 
-#if NSEC3_LABEL_DEBUG
 /**
  * Verifies the coherence of the nsec3 database of a zone
  * 
@@ -167,7 +180,6 @@ void nsec3_closest_encloser_proof(
  */
 
 void nsec3_check(zdb_zone *zone);
-#endif
 
 /**
  * For generates the digest label name of an fqdn for a specified NSEC3PARAM chain
@@ -181,6 +193,8 @@ void nsec3_check(zdb_zone *zone);
  */
 
 void nsec3_compute_digest_from_fqdn_with_len(const nsec3_zone *n3, const u8 *fqdn, u32 fqdn_len, u8 *digest, bool isstar);
+
+ya_result nsec3_get_next_digest_from_rdata(const u8 *rdata, u32 rdata_size, u8 *digest, u32 digest_size);
 
 // 1 -> 3 -> 9 => 4
 #define NSEC3_ZONE_DISABLED      0

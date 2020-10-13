@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup collections Generic collections functions
  *  @ingroup dnscore
  *  @brief A dynamic-sized array of pointers
@@ -55,10 +56,10 @@ extern "C" {
 
 #define PTR_VECTOR_DEFAULT_SIZE  32
 
-#define EMPTY_PTR_VECTOR {NULL, -1, 0}
-    
-typedef struct ptr_vector ptr_vector;
+#define PTR_VECTOR_EMPTY {NULL, -1, 0}
+#define EMPTY_PTR_VECTOR {NULL, -1, 0} // obsolete
 
+typedef struct ptr_vector ptr_vector;
 
 struct ptr_vector
 {
@@ -76,12 +77,29 @@ ptr_vector_init_empty(ptr_vector *v)
 }
 
 /**
+ * This tool function wraps an existing (const) array
+ * This is meant as a helper to use ptr_vector functions like search & sort to on statically allocated data.
+ * 
+ * @param v
+ * @param data
+ * @param size
+ */
+
+static inline void
+ptr_vector_wrap_const_array(ptr_vector *v, void *data, s32 size)
+{
+    v->data = data;
+    v->offset = size - 1;
+    v->size = size;
+}
+
+/**
  * Initialises a vector structure with a size of PTR_VECTOR_DEFAULT_SIZE entries
  * 
  * @param v a pointer to the ptr_vector structure to initialise
  */
 
-void  ptr_vector_init(ptr_vector *v);
+void ptr_vector_init(ptr_vector *v);
 
 /**
  * Initialises a vector structure with a size of PTR_VECTOR_DEFAULT_SIZE entries
@@ -90,7 +108,7 @@ void  ptr_vector_init(ptr_vector *v);
  * @param initial_capacity the size to allocate to start with
  */
 
-void  ptr_vector_init_ex(ptr_vector *v, s32 initial_capacity);
+void ptr_vector_init_ex(ptr_vector *v, u32 initial_capacity);
 
 /**
  * Initialises a vector as a copy as another vector.
@@ -101,7 +119,7 @@ void  ptr_vector_init_ex(ptr_vector *v, s32 initial_capacity);
  * @param extra_size the amount of reserved slots to allocate
  */
 
-void  ptr_vector_init_copy(ptr_vector *v, const ptr_vector *original, u32 extra_size);
+void ptr_vector_init_copy(ptr_vector *v, const ptr_vector *original, u32 extra_size);
 
 /**
  * Initialises a vector as a copy as another vector plus onz item added
@@ -112,7 +130,7 @@ void  ptr_vector_init_copy(ptr_vector *v, const ptr_vector *original, u32 extra_
  * @param data an item to add
  */
 
-void  ptr_vector_init_copy_append(ptr_vector *v, const ptr_vector *original, void *data);
+void ptr_vector_init_copy_append(ptr_vector *v, const ptr_vector *original, void *data);
 
 /**
  * Initialises a vector as a copy as another vector plus a few items added
@@ -124,15 +142,24 @@ void  ptr_vector_init_copy_append(ptr_vector *v, const ptr_vector *original, voi
  * @param data_size the size of the data array
  */
 
-void  ptr_vector_init_copy_append_array(ptr_vector *v, const ptr_vector *original, void *data, u32 data_size);
+void ptr_vector_init_copy_append_array(ptr_vector *v, const ptr_vector *original, void *data, u32 data_size);
 
 /**
- * Frees the memory used by a vector structure (not the vector structure itself)
+ * Calls the callback on every pointer stored in the vector.
+ * Frees the memory used by a vector structure
  * 
  * @param v a pointer to the ptr_vector structure
  */
 
-void  ptr_vector_destroy(ptr_vector *v);
+void ptr_vector_callback_and_destroy(ptr_vector *v, callback_function free_memory);
+
+/**
+ * Frees the memory used by a vector structure
+ * 
+ * @param v a pointer to the ptr_vector structure
+ */
+
+void ptr_vector_destroy(ptr_vector *v);
 
 /**
  * Empties the vector (does not release memory)
@@ -140,16 +167,21 @@ void  ptr_vector_destroy(ptr_vector *v);
  * @param v a pointer to the ptr_vector structure
  */
 
-void  ptr_vector_empties(ptr_vector *v);
+void ptr_vector_clear(ptr_vector *v);
 
-/*
- * To ease compatibility with the 2.4 changes.
+/**
+ * Cuts lose all indexes from the first bad one.
+ * Allows to resize down without tripping an assert.
  */
-static inline void
-ptr_vector_clear(ptr_vector* v)
-{
-    ptr_vector_empties(v);
-}
+
+void ptr_vector_remove_from(ptr_vector *v, s32 first_bad_index);
+
+/**
+ * Cuts lose all indexes after the last good one.
+ * Allows to resize down without tripping an assert.
+ */
+
+void ptr_vector_remove_after(ptr_vector *v, s32 last_good_index);
 
 /**
  * Changes the capacity of a vector to the specified size
@@ -161,7 +193,7 @@ ptr_vector_clear(ptr_vector* v)
  * @param newsize the new size of the vector
  */
 
-void  ptr_vector_resize(ptr_vector *v, s32 newsize);
+void ptr_vector_resize(ptr_vector *v, s32 newsize);
 
 /**
  * Ensures the vector has enough capacity to accommodate a
@@ -171,7 +203,7 @@ void  ptr_vector_resize(ptr_vector *v, s32 newsize);
  * @param reqsize the minimum size of the vector
  */
 
-void  ptr_vector_ensures(ptr_vector *v, s32 reqsize);
+void ptr_vector_ensures(ptr_vector *v, s32 reqsize);
 
 /**
  * Resizes the capacity so it can at most contain its
@@ -180,7 +212,7 @@ void  ptr_vector_ensures(ptr_vector *v, s32 reqsize);
  * @param v a pointer to the ptr_vector structure
  */
 
-void  ptr_vector_shrink(ptr_vector *v);
+void ptr_vector_shrink(ptr_vector *v);
 
 /**
  * Appends the item (pointer) to the vector
@@ -200,6 +232,16 @@ void ptr_vector_append(ptr_vector *v, void* data);
  */
 
 void ptr_vector_append_array(ptr_vector *v, void** datap, u32 data_size);
+
+/**
+ * Appends the item (pointer) to the vector
+ *
+ * @param v     a pointer to the ptr_vector structure
+ * @param datap  a pointer to the items
+ * @param data_size the number of items to append
+ */
+
+void ptr_vector_append_vector(ptr_vector *v, ptr_vector *toappend);
 
 
 /**
@@ -224,8 +266,15 @@ void ptr_vector_append_restrict_size(ptr_vector *v, void* data, u32 restrictedli
 
 void* ptr_vector_pop(ptr_vector *v);
 
+/**
+ * IMPORTANT NOTE: the callbacks are called with a pointer from the array
+ */
 
 typedef int ptr_vector_qsort_callback(const void*, const void*);
+
+/**
+ * IMPORTANT NOTE: the callbacks are called with a pointer from the array
+ */
 
 typedef int ptr_vector_qsort_r_callback(const void*, const void*, void*);
 
@@ -240,7 +289,7 @@ void ptr_vector_qsort(ptr_vector *v, ptr_vector_qsort_callback compare);
 
 void ptr_vector_qsort_r(ptr_vector *v, ptr_vector_qsort_r_callback compare, void *compare_context);
 
-typedef void void_function_voidp(void*);
+void ptr_vector_insertionsort_r(ptr_vector *v, ptr_vector_qsort_r_callback compare, void *compare_context);
 
 /**
  * Empties the vector releasing the item memory first
@@ -249,7 +298,7 @@ typedef void void_function_voidp(void*);
  * @param free_memory item free callback
  */
 
-void ptr_vector_free_empties(ptr_vector *v, void_function_voidp free_memory);
+void ptr_vector_callback_and_clear(ptr_vector *v, callback_function free_memory);
 
 /*
  * First argument is the key, second one is the item to match with the key
@@ -270,6 +319,8 @@ typedef int ptr_vector_search_callback(const void*, const void*);
  */
 
 void* ptr_vector_linear_search(const ptr_vector *v, const void* what, ptr_vector_search_callback compare);
+
+s32 ptr_vector_search_ptr_index(const ptr_vector* v, const void* what);
 
 /**
  * Look sequentially in the vector for an item using a key and a comparison function, returns the index of the first matching item
@@ -296,6 +347,8 @@ s32 ptr_vector_index_of(const ptr_vector *v, const void* what, ptr_vector_search
 
 void* ptr_vector_search(const ptr_vector *v, const void* what,ptr_vector_search_callback compare);
 
+s32 ptr_vector_search_index(const ptr_vector* v, const void* what, ptr_vector_search_callback compare);
+
 /**
  * Returns a pointer to the item at index
  * Does NOT checks for the index range.
@@ -307,6 +360,7 @@ void* ptr_vector_search(const ptr_vector *v, const void* what,ptr_vector_search_
 
 static inline void* ptr_vector_get(const ptr_vector *v, s32 idx)
 {
+    yassert(idx >= 0 && idx <= v->offset);
     return v->data[idx];
 }
 
@@ -324,7 +378,7 @@ static inline void* ptr_vector_get_mod(const ptr_vector *v, s32 idx)
 {
     assert(v->offset >= 0);
     int m = idx % (v->offset + 1);
-    if(m < 0) { m += v->offset + 1; }
+    if(m < 0) { m += v->offset + 1; } // modulo fix
     return v->data[m];
 }
 
@@ -495,6 +549,22 @@ void ptr_vector_insert_array_at(ptr_vector *pv, s32 idx, void **valp, u32 n);
  */
 
 void* ptr_vector_remove_at(ptr_vector *pv, s32 idx);
+
+typedef int ptr_vector_forall_callback(void*, void*);
+
+static inline void ptr_vector_forall(ptr_vector *pv, ptr_vector_forall_callback callback, void *args)
+{
+    intptr *limit = (intptr*)&pv->data[pv->offset];
+    for(intptr *p = (intptr*)pv->data; p <= limit; ++p)
+    {
+        if(callback((void*)*p, args) <= 0)
+        {
+            break;
+        }
+    }
+}
+
+int ptr_vector_compare_pointers_callback(const void *a, const void *b);
 
 #ifdef	__cplusplus
 }

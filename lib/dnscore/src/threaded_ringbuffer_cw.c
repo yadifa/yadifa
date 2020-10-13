@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief 
@@ -50,20 +51,20 @@
 /*
  * Note:
  *
- * If a pthread_mutex_init fails, it's because of a resource, memory or rights issue.
+ * If a mutex_init fails, it's because of a resource, memory or rights issue.
  * So the application will fail soon enough.
  * I still should check this and exit.
  *
- * pthread_mutex_lock will fail only if the current thread aleady owns the mutex
+ * mutex_lock will fail only if the current thread aleady owns the mutex
  *
- * pthread_mutex_unlock will fail only if the current thread does not owns the mutex
+ * mutex_unlock will fail only if the current thread does not owns the mutex
  *
  */
 
 void
 threaded_ringbuffer_cw_init(threaded_ringbuffer_cw *queue, int max_size)
 {
-#ifdef DEBUG
+#if DEBUG
     memset(queue, 0xff, sizeof(threaded_ringbuffer_cw));
 #endif  
     
@@ -73,9 +74,9 @@ threaded_ringbuffer_cw_init(threaded_ringbuffer_cw *queue, int max_size)
     queue->write_slot = queue->buffer;
     queue->read_slot = queue->buffer;
 
-    pthread_mutex_init(&queue->mutex, NULL);
-    pthread_cond_init(&queue->cond_read, NULL);
-    pthread_cond_init(&queue->cond_write, NULL);
+    mutex_init(&queue->mutex);
+    cond_init(&queue->cond_read);
+    cond_init(&queue->cond_write);
 
     queue->max_size = max_size;
     queue->size = 0;
@@ -93,10 +94,11 @@ threaded_ringbuffer_cw_finalize(threaded_ringbuffer_cw *queue)
     free(queue->buffer);
     queue->buffer = NULL;
 
-    pthread_cond_destroy(&queue->cond_write);
-    pthread_cond_destroy(&queue->cond_read);
-    pthread_mutex_destroy(&queue->mutex);
-#ifdef DEBUG
+    cond_finalize(&queue->cond_write);
+    cond_finalize(&queue->cond_read);
+
+    mutex_destroy(&queue->mutex);
+#if DEBUG
     memset(queue, 0xde, sizeof(threaded_ringbuffer_cw));
 #endif
 }
@@ -109,10 +111,10 @@ threaded_ringbuffer_cw_enqueue(threaded_ringbuffer_cw *queue, void *constant_poi
      * Ensure I'm allowed to work on queue (only one working on it)
      */
 
-    pthread_mutex_lock(&queue->mutex);
+    mutex_lock(&queue->mutex);
     while( queue->size >= queue->max_size )
     {
-        pthread_cond_wait(&queue->cond_write, &queue->mutex);
+        cond_wait(&queue->cond_write, &queue->mutex);
     }
 
     /*
@@ -138,12 +140,12 @@ threaded_ringbuffer_cw_enqueue(threaded_ringbuffer_cw *queue, void *constant_poi
      * We are done here, we can always signal the readers
      */
 
-    pthread_cond_broadcast(&queue->cond_read);
-    pthread_mutex_unlock(&queue->mutex);
+    cond_notify(&queue->cond_read);
+    mutex_unlock(&queue->mutex);
 }
 
 void
-threaded_ringbuffer_cw_enqueue_set(threaded_ringbuffer_cw *queue, void **constant_pointer_array, int count)
+threaded_ringbuffer_cw_enqueue_set(threaded_ringbuffer_cw *queue, void **constant_pointer_array, u32 count)
 {
     assert(queue->max_size > 0);
     assert(queue->max_size >= count);
@@ -152,10 +154,10 @@ threaded_ringbuffer_cw_enqueue_set(threaded_ringbuffer_cw *queue, void **constan
      * Ensure I'm allowed to work on queue (only one working on it)
      */
     
-    pthread_mutex_lock(&queue->mutex);
+    mutex_lock(&queue->mutex);
     while( queue->size + count > queue->max_size )
     {
-        pthread_cond_wait(&queue->cond_write, &queue->mutex);
+        cond_wait(&queue->cond_write, &queue->mutex);
     }
 
     /*
@@ -168,7 +170,7 @@ threaded_ringbuffer_cw_enqueue_set(threaded_ringbuffer_cw *queue, void **constan
      * @note: "if(overflow) reset" is (much) faster than MOD(limit)
      */
 
-    for(int i = 0; i < count; ++i)
+    for(u32 i = 0; i < count; ++i)
     {
         *queue->write_slot++ = constant_pointer_array[i];
 
@@ -184,8 +186,8 @@ threaded_ringbuffer_cw_enqueue_set(threaded_ringbuffer_cw *queue, void **constan
      * We are done here, we can always signal the readers
      */
 
-    pthread_cond_broadcast(&queue->cond_read);
-    pthread_mutex_unlock(&queue->mutex);
+    cond_notify(&queue->cond_read);
+    mutex_unlock(&queue->mutex);
 }
 
 bool
@@ -195,14 +197,14 @@ threaded_ringbuffer_cw_try_enqueue(threaded_ringbuffer_cw* queue, void* constant
      * Ensure I'm allowed to work on queue (only one working on it)
      */
 
-    if(pthread_mutex_trylock(&queue->mutex) != 0)
+    if(!mutex_trylock(&queue->mutex))
     {
         return FALSE;
     }
 
     if( queue->size >= queue->max_size )
     {
-        pthread_mutex_unlock(&queue->mutex);
+        mutex_unlock(&queue->mutex);
         return FALSE;
     }
 
@@ -229,8 +231,8 @@ threaded_ringbuffer_cw_try_enqueue(threaded_ringbuffer_cw* queue, void* constant
      * We are done here, we can always signal the readers
      */
 
-    pthread_cond_broadcast(&queue->cond_read);
-    pthread_mutex_unlock(&queue->mutex);
+    cond_notify(&queue->cond_read);
+    mutex_unlock(&queue->mutex);
 
     return TRUE;
 }
@@ -242,11 +244,11 @@ threaded_ringbuffer_cw_peek(threaded_ringbuffer_cw *queue)
      * Ensure I'm allowed to work on queue (only one working on it)
      */
 
-    pthread_mutex_lock(&queue->mutex);
+    mutex_lock(&queue->mutex);
 
     while( queue->size == 0 )
     {
-        pthread_cond_wait(&queue->cond_read,&queue->mutex);
+        cond_wait(&queue->cond_read,&queue->mutex);
     }
 
     /*
@@ -261,7 +263,7 @@ threaded_ringbuffer_cw_peek(threaded_ringbuffer_cw *queue)
      * We are done here.
      */
 
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 
     return data;
 }
@@ -269,11 +271,11 @@ threaded_ringbuffer_cw_peek(threaded_ringbuffer_cw *queue)
 void*
 threaded_ringbuffer_cw_try_peek(threaded_ringbuffer_cw *queue)
 {
-    pthread_mutex_lock(&queue->mutex);
+    mutex_lock(&queue->mutex);
 
     if( queue->size == 0 )
     {
-        pthread_mutex_unlock(&queue->mutex);
+        mutex_unlock(&queue->mutex);
 
         return NULL;
     }
@@ -290,7 +292,7 @@ threaded_ringbuffer_cw_try_peek(threaded_ringbuffer_cw *queue)
      * We are done here.
      */
 
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 
     return data;
 }
@@ -303,11 +305,11 @@ threaded_ringbuffer_cw_dequeue(threaded_ringbuffer_cw *queue)
      * Ensure I'm allowed to work on queue (only one working on it)
      */
 
-    pthread_mutex_lock(&queue->mutex);
+    mutex_lock(&queue->mutex);
 
     while( queue->size == 0 )
     {
-        pthread_cond_wait(&queue->cond_read,&queue->mutex);
+        cond_wait(&queue->cond_read,&queue->mutex);
     }
 
     /*
@@ -330,14 +332,14 @@ threaded_ringbuffer_cw_dequeue(threaded_ringbuffer_cw *queue)
          * (They will however still be locked until the queue mutex is released)
          */
 
-        pthread_cond_broadcast(&queue->cond_write);
+        cond_notify(&queue->cond_write);
     }
 
     /*
      * We are done here.
      */
 
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 
     return data;
 }
@@ -345,11 +347,11 @@ threaded_ringbuffer_cw_dequeue(threaded_ringbuffer_cw *queue)
 void*
 threaded_ringbuffer_cw_try_dequeue(threaded_ringbuffer_cw *queue)
 {
-    pthread_mutex_lock(&queue->mutex);
+    mutex_lock(&queue->mutex);
 
     if( queue->size == 0 )
     {
-        pthread_mutex_unlock(&queue->mutex);
+        mutex_unlock(&queue->mutex);
 
         return NULL;
     }
@@ -374,14 +376,14 @@ threaded_ringbuffer_cw_try_dequeue(threaded_ringbuffer_cw *queue)
         * (They will however still be locked until the queue mutex is released)
         */
 
-        pthread_cond_broadcast(&queue->cond_write);
+        cond_notify(&queue->cond_write);
     }
 
     /*
      * We are done here.
      */
 
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 
     return data;
 }
@@ -393,11 +395,11 @@ threaded_ringbuffer_cw_dequeue_set(threaded_ringbuffer_cw *queue, void **array, 
      * Ensure I'm allowed to work on queue (only one working on it)
      */
 
-    pthread_mutex_lock(&queue->mutex);
+    mutex_lock(&queue->mutex);
 
     while( queue->size == 0 )
     {
-        pthread_cond_wait(&queue->cond_read,&queue->mutex);
+        cond_wait(&queue->cond_read,&queue->mutex);
     }
 
     /*
@@ -439,14 +441,14 @@ threaded_ringbuffer_cw_dequeue_set(threaded_ringbuffer_cw *queue, void **array, 
          * (They will however still be locked until the queue mutex is released)
          */
 
-        pthread_cond_broadcast(&queue->cond_write);
+        cond_notify(&queue->cond_write);
     }   
 
     /*
      * We are done here.
      */
 
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 
     return loops;	    /* Return the amount we got from the queue */
 }
@@ -458,11 +460,11 @@ threaded_ringbuffer_cw_wait_empty(threaded_ringbuffer_cw *queue)
 
     for(;;)
     {
-        pthread_mutex_lock(&queue->mutex);
+        mutex_lock(&queue->mutex);
 
         size = queue->size;
 
-        pthread_mutex_unlock(&queue->mutex);
+        mutex_unlock(&queue->mutex);
 
         if(size == 0)
         {
@@ -478,11 +480,11 @@ threaded_ringbuffer_cw_size(threaded_ringbuffer_cw *queue)
 {
     int size;
 
-    pthread_mutex_lock(&queue->mutex);
+    mutex_lock(&queue->mutex);
 
     size = queue->size;
 
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 
     return size;
 }
@@ -492,11 +494,11 @@ threaded_ringbuffer_cw_room(threaded_ringbuffer_cw *queue)
 {
     int room;
 
-    pthread_mutex_lock(&queue->mutex);
+    mutex_lock(&queue->mutex);
 
     room = queue->max_size - queue->size;
 
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 
     return room;
 }
@@ -504,11 +506,11 @@ threaded_ringbuffer_cw_room(threaded_ringbuffer_cw *queue)
 ya_result
 threaded_ringbuffer_cw_set_maxsize(threaded_ringbuffer_cw *queue, int max_size)
 {
-    ya_result ret = ERROR;
+    ya_result ret = INVALID_ARGUMENT_ERROR; // can only grow
 
-    pthread_mutex_lock(&queue->mutex);
+    mutex_lock(&queue->mutex);
 
-    if(max_size >= queue->size)
+    if(max_size >= (int)queue->size)
     {
         void** tmp;
         MALLOC_OR_DIE(void**, tmp, sizeof(void*) * max_size, THREADED_QUEUE_TAG);
@@ -556,12 +558,9 @@ threaded_ringbuffer_cw_set_maxsize(threaded_ringbuffer_cw *queue, int max_size)
     
     ret = queue->max_size;
     
-    pthread_mutex_unlock(&queue->mutex);
+    mutex_unlock(&queue->mutex);
 
     return ret;
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup systemtypes Definition of types in order to ensure architecture-independence
  *  @ingroup dnscore
  *  @brief Definition of types in order to ensure architecture-independence
@@ -41,36 +42,51 @@
 #ifndef _SYSTYPES_H
 #define	_SYSTYPES_H
 
+#include <dnscore/dnscore-config-features.h>
+
+#ifdef __cplusplus
+#error "C++ compiler mode not supported"
+#endif
+
+#if !DEBUG    
+#ifndef NDEBUG
+#define NDEBUG 1
+#endif
+#endif
+
 #include <stdlib.h>
 
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <stddef.h>
+
+#ifdef _MSC_VER 
+#include <malloc.h>
+#define C11_VLA_AVAILABLE 0
+static void* stack_alloc(size_t size)
+{
+    // VS wants to use _malloca instead which allocates on the heap if size > _ALLOCA_S_THRESHOLD (1024)
+    // I'd rather have a bigger stack
+
+    return _alloca(size);
+}
+#else
+#define C11_VLA_AVAILABLE 1
+#endif
+
+#ifndef __has_c_attribute       // Optional of course.
+#define __has_c_attribute(x) 0  // Compatibility with non-clang compilers.
+#endif
+#if __has_c_attribute(fallthrough)
+#define FALLTHROUGH [[fallthrough]]
+#else
+#define FALLTHROUGH
+#endif
 
 #if defined __FreeBSD__
 #include <sys/endian.h>
-
-static inline char *strcpy_freebsd(char *dest, const char *src)
-{
-    size_t src_len = strlen(src) + 1;
-    memcpy(dest, src, src_len);
-    return dest;
-}
-
-static inline char *strncpy_freebsd(char *dest, const char *src, size_t n)
-{
-    size_t src_len = strlen(src) + 1;
-    if(src_len >= n)
-    {
-        src_len = n; // yes, the NUL will be ignored.
-    }
-    memcpy(dest, src, src_len);
-    return dest;
-}
-
-#define strcpy strcpy_freebsd
-#define strncpy strncpy_freebsd
 
 #ifndef __BYTE_ORDER
     #if defined(_BYTE_ORDER)
@@ -116,7 +132,7 @@ static inline char *strncpy_freebsd(char *dest, const char *src, size_t n)
         #define __BYTE_ORDER __BIG_ENDIAN
     #endif
 #endif
-#elif defined __OpenBSD__
+#elif defined __OpenBSD__ || defined __NetBSD__
 #include <endian.h>
 #ifndef __BYTE_ORDER
     #if defined(BYTE_ORDER)
@@ -130,6 +146,27 @@ static inline char *strncpy_freebsd(char *dest, const char *src, size_t n)
         #define __BYTE_ORDER __BIG_ENDIAN
     #endif
 #endif
+#elif defined(WIN32)
+#define WIN32_LEAN_AND_MEAN
+#pragma message("windows")
+#include <Windows.h>
+#include <BaseTsd.h>
+#include <windef.h>
+//#include <minwindef.h>
+//#include <minwinbase.h>
+#undef inline
+#define inline
+typedef int uid_t;
+typedef int gid_t;
+typedef HANDLE pid_t;
+typedef unsigned int mode_t;
+
+#define restrict
+
+#define S_ISREG(mode__) ((mode__ & _S_IFREG) != 0)
+#define S_ISLNK(mode__) (0)
+#define S_ISDIR(mode__) ((mode__ & _S_IFDIR) != 0)
+
 #else
 #include <endian.h>
 #include <byteswap.h>
@@ -138,6 +175,8 @@ static inline char *strncpy_freebsd(char *dest, const char *src, size_t n)
 #define VERSION_2_0_0 0x020000000000LL
 #define VERSION_2_1_0 0x020100000000LL
 #define VERSION_2_2_0 0x020200000000LL
+#define VERSION_2_3_0 0x020300000000LL
+#define VERSION_2_4_0 0x020400000000LL
 
 #include <dnscore/dnscore-config-features.h>
 #include <dnscore/sys_error.h>
@@ -148,6 +187,8 @@ static inline char *strncpy_freebsd(char *dest, const char *src, size_t n)
 extern "C"
 {
 #endif
+    
+#define SIZEOF_TIMEVAL 16
     
 #ifndef HAS_DYNAMIC_PROVISIONING
 #define HAS_DYNAMIC_PROVISIONING 1
@@ -220,6 +261,15 @@ typedef signed long long s64;
 #elif defined(_LONGLONG_TYPE)
 typedef unsigned long long u64;
 typedef signed long long s64;
+#elif defined(WIN32)
+typedef __int8 s8;
+typedef unsigned __int8 u8;
+typedef __int16 s16;
+typedef unsigned __int16 u16;
+typedef __int32 s32;
+typedef unsigned __int32 u32;
+typedef __int64 s64;
+typedef unsigned __int64 u64;
 #else
 #error NO UNSIGNED 64 BITS TYPE KNOWN ON THIS 64 BITS ARCHITECTURE (u64 + s64)
 #endif
@@ -236,7 +286,7 @@ NT: _M_IA64
  */
 
 #ifndef __SIZEOF_POINTER__
-#if defined(__LP64__)||defined(__LP64)||defined(_LP64)||defined(__64BIT__)||defined(MIPS_SZLONG)||defined(_M_IA64)
+#if defined(__LP64__)||defined(__LP64)||defined(_LP64)||defined(__64BIT__)||defined(MIPS_SZLONG)||defined(_M_IA64)||defined(_WIN64)
 #define __SIZEOF_POINTER__ 8
 #else
 #define __SIZEOF_POINTER__ 4
@@ -245,7 +295,9 @@ NT: _M_IA64
 
 #if __SIZEOF_POINTER__ == 4
 
-typedef unsigned int intptr;
+typedef unsigned int intptr; // an integer with the same size as a data pointer
+
+typedef float realptr;  // a float with the same size as a data pointer
 
 #elif __SIZEOF_POINTER__ == 8
 
@@ -261,9 +313,13 @@ typedef unsigned long long intptr;
 typedef unsigned long long intptr;
 #elif defined(_LONGLONG_TYPE)
 typedef unsigned long long intptr;
+#elif defined(_WIN64)
+typedef u64 intptr;
 #else
 #error NO UNSIGNED 64 BITS TYPE KNOWN ON THIS 64 BITS ARCHITECTURE (intptr)
 #endif
+
+typedef double realptr; // a float with the same size as a data pointer
 
 #else // __SIZEOF_POINTER not 4 nor 8
 #error __SIZEOF_POINTER__ value not handled (only 4 and 8 are)
@@ -313,7 +369,7 @@ typedef unsigned long long intptr;
 #error "DNSCORE_HAS_MEMALIGN_ISSUES is not defined.  Please ensure the relevant config.h is included at some level above."
 #endif
 
-#if DNSCORE_HAS_MEMALIGN_ISSUES == 0
+#if !DNSCORE_HAS_MEMALIGN_ISSUES
 
 #if AVOID_ANTIALIASING
 static inline u16 GET_U16_AT_P(const void* address)
@@ -555,6 +611,10 @@ static inline void SET_U64_AT_P(void* p, u64 v)
 
 #define CLEARED_SOCKET (-1)
 
+#ifdef __GNUC__
+#define GCC_VERSION ((__GNUC__ * 10000) + (__GNUC_MINOR__ * 100) + __GNUC_PATCHLEVEL__)
+#endif
+
 #ifndef htobe64
 
 #if defined __APPLE__
@@ -626,23 +686,27 @@ typedef u32 process_flags_t;
 #define NU32(value)     ((u32)(( (((u32)(value)) >> 24) & 0xff) | ((((u32)(value)) >> 8) & 0xff00) | ((((u32)(value)) << 8) & 0xff0000) | (((u32)(value)) << 24)))
 #endif
 
-#define VERSION_U32(h__,l__) (((h__) << 16) || (l__))
-#define VERSION_U16(h__,l__) (((h__) <<  8) || (l__))
-#define VERSION_U8(h__,l__)  (((h__) <<  4) || (l__))
+#define VERSION_U32(h__,l__) (((h__) << 16) | (l__))
+#define VERSION_U16(h__,l__) (((h__) <<  8) | (l__))
+#define VERSION_U8(h__,l__)  (((h__) <<  4) | (l__))
 
 #define NETWORK_ONE_16  NU16(0x0001)
 #define IS_WILD_LABEL(u8dnslabel_) ( GET_U16_AT(*(u8dnslabel_)) == NU16(0x012a))       /* 01 2a = 1 '*' */
 
 /* sys_types.h is included everywhere.  This ensure the debug hooks will be too. */
 
-#ifndef DEBUG
+#define TMPBUFFR_TAG 0x5246465542504d54
+
+#if !DEBUG
 #define MALLOC_OR_DIE(cast,target,size,tag) if(((target)=(cast)malloc(size))==NULL){perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
 #define MALLOC_OBJECT_OR_DIE(target__,object__,tag__) if(((target__)=(object__*)malloc(sizeof(object__)))==NULL){perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
 #define MALLOC_OBJECT_ARRAY_OR_DIE(target__,object__,count__,tag__) if(((target__)=(object__*)malloc(sizeof(object__)*(count__)))==NULL){perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
+#define MALLOC_OBJECT_ARRAY(target__,object__,count__,tag__) (target__)=(object__*)malloc(sizeof(object__)*(count__))
 #else
-#define MALLOC_OR_DIE(cast,target,size,tag) if(((target)=(cast)malloc(size))!=NULL){memset((void*)(target),0xac,(size));}else{perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
+#define MALLOC_OR_DIE(cast_,target_,size_,tag_) if(((target_)=(cast_)malloc(size_))!=NULL){memset((void*)(target_),0xac,(size_));}else{perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
 #define MALLOC_OBJECT_OR_DIE(target__,object__,tag__) if(((target__)=(object__*)malloc(sizeof(object__)))!=NULL){memset((void*)(target__),0xac,(sizeof(object__)));}else{perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
 #define MALLOC_OBJECT_ARRAY_OR_DIE(target__,object__,count__,tag__) if(((target__)=(object__*)malloc(sizeof(object__)*(count__)))!=NULL){memset((void*)(target__),0xac,(sizeof(object__)*(count__)));}else{perror(__FILE__);exit(EXIT_CODE_OUTOFMEMORY_ERROR);}
+#define MALLOC_OBJECT_ARRAY(target__,object__,count__,tag__) if(((target__)=(object__*)malloc(sizeof(object__)*(count__)))!=NULL){memset((void*)(target__),0xac,(sizeof(object__)*(count__)));}
 #endif
 
 #define REALLOC_OR_DIE(cast,src_and_target,newsize,tag) if(((src_and_target)=(cast)realloc((src_and_target),(newsize)))==NULL){perror(__FILE__);abort();}
@@ -663,14 +727,44 @@ typedef u32 process_flags_t;
 #define PREPROCESSOR_CONCAT_EVAL_(a__,b__) a__##b__
 #define PREPROCESSOR_CONCAT_EVAL(a__,b__) PREPROCESSOR_CONCAT_EVAL_(a__,b__)
 
+/**
+ * strcpy is not safe
+ * strncpy is filling buffers needlessly
+ *
+ * This one does what we want.
+ */
+
+static inline void strcpy_ex(char *dest, const char *src, size_t n)
+{
+   size_t src_len = strlen(src) + 1;
+   if(src_len <= n)
+   {
+       memcpy(dest, src, src_len);
+   }
+   else
+   {
+       --n;
+       memcpy(dest, src, n);
+       dest[n] = '\0';
+   }
+}
+
 #define BOOL2INT(b_) ((b_)?1:0)
 #define BOOL2STR(b_) ((b_)?"true":"false")
 #define BOOL2CHR(b_) ((b_)?'y':'n')
 
 #include <dnscore/debug.h>
 
+#ifdef MIN
+#undef MIN
+#endif
 #define MIN(a,b) (((a)<=(b))?(a):(b))
+
+#ifdef MAX
+#undef MAX
+#endif
 #define MAX(a,b) (((a)>=(b))?(a):(b))
+
 #define BOUND(a,b,c) (((b)<=(a))?(a):(((b)>=(c))?(c):(b)))
 
 #define ZEROMEMORY(buffer__,size__) memset(buffer__, 0, size__)
@@ -679,15 +773,15 @@ typedef u32 process_flags_t;
 // a magic number as 32 bits
 #define MAGIC4(b0_,b1_,b2_,b3_) NU32((((u32)b0_)<<24)|(((u32)b1_)<<16)|(((u32)b2_)<<8)|((u32)b3_))
 
-struct type_class_ttl_rdlen /* @todo 20150402 edf -- move to a more appropriate place */
+struct type_class_ttl_rdlen
 {
     u16 qtype;
     u16 qclass;
-    u32 ttl;
+    s32 ttl;
     u16 rdlen;
 };
 
-#if USES_ICC == 1
+#if USES_ICC
 
 #ifndef inline
 #define inline __inline
@@ -710,6 +804,6 @@ struct type_class_ttl_rdlen /* @todo 20150402 edf -- move to a more appropriate 
 #endif
 
 
-#endif	/* _DBTYPES_H */
+#endif	/* _SYSTYPES_H */
 
 /** @} */

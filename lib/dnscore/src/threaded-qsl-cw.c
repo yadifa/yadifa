@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief 
@@ -48,7 +49,6 @@
 #include "dnscore/threaded-qsl-cw.h"
 
 #define MODULE_MSG_HANDLE		g_system_logger
-extern logger_handle *g_system_logger;
 
 #define THREADED_QUEUE_TAG	    0x455545555154	/* TQUEUE */
 
@@ -70,7 +70,7 @@ extern logger_handle *g_system_logger;
 void
 threaded_qsl_cw_init(threaded_qsl_cw *queue, int max_size)
 {
-#ifdef DEBUG
+#if DEBUG
     memset(queue, 0xff, sizeof(threaded_qsl_cw));
 #endif  
     queue_sl_init(&queue->queue);
@@ -116,7 +116,7 @@ threaded_qsl_cw_finalize(threaded_qsl_cw *queue)
     cond_finalize(&queue->cond_write);
     cond_finalize(&queue->cond_read);
     mutex_destroy(&queue->mutex);
-#ifdef DEBUG
+#if DEBUG
     memset(queue, 0xde, sizeof(threaded_qsl_cw));
 #endif
 }
@@ -166,7 +166,7 @@ threaded_qsl_cw_try_enqueue(threaded_qsl_cw* queue, void* constant_pointer)
      * Ensure I'm allowed to work on queue (only one working on it)
      */
 
-    if(mutex_trylock(&queue->mutex) != 0)
+    if(!mutex_trylock(&queue->mutex))
     {
         return FALSE;
     }
@@ -360,7 +360,7 @@ threaded_qsl_cw_set_maxsize(threaded_qsl_cw *queue, int max_size)
 
     mutex_lock(&queue->mutex);
 
-    if(max_size >= queue_sl_size(&queue->queue))
+    if(max_size >= (int)queue_sl_size(&queue->queue))
     {
         queue->max_size = max_size;
     }
@@ -377,6 +377,3 @@ threaded_qsl_cw_set_maxsize(threaded_qsl_cw *queue, int max_size)
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

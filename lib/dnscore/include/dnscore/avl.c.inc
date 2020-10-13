@@ -2,51 +2,36 @@
  *
  * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
+ *
+ * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
  *
- *        * Redistributions of source code must retain the above copyright 
+ *        * Redistributions of source code must retain the above copyright
  *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
  *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
  *          without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
  * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
  * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
  *------------------------------------------------------------------------------
  *
- *
- *      SVN Program:
- *              $URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.11-public/lib/dnscore/include/dnscore/avl.c.inc $
- *
- *      Creation Date:
- *              2009-01-07
- *
- *      Last Update:
- *              $Date: 2020-09-03 11:53:27 +0200 (Thu, 03 Sep 2020) $
- *              $Revision: 9707 $
- *
- *      Last Change:
- *              $Author: ericdf $
- *
- *------------------------------------------------------------------------------
- *
- * DOCUMENTATION */
+ */
+
 /** @defgroup collections Generic collections functions
  *  @ingroup dnscore
  *  @brief AVL structure and functions
@@ -66,6 +51,8 @@
 #include "dnscore/sys_types.h"
 #include "dnscore/format.h"
 
+void logger_flush();
+
 #ifndef DUMPER_FUNCTION
 #define DUMPER_FUNCTION(...) formatln(__VA_ARGS__);flushout()
 #endif
@@ -82,7 +69,7 @@
  *
  */
 
-#if AVL_HAS_PARENT_POINTER != 0
+#if AVL_HAS_PARENT_POINTER
 #ifndef AVL_PARENT
 #error AVL_HAS_PARENT_POINTER enabled but parent not defined
 #endif
@@ -138,7 +125,7 @@ static s8 AVL_BALANCE_TO_DIR_[5] = {DIR_LEFT, DIR_LEFT, DIR_CRASH, DIR_RIGHT, DI
 
 #define MUST_REAVL_BALANCE(node) ((AVL_BALANCE(node)<LEFT)||(AVL_BALANCE(node)>RIGHT))
 
-#if (defined(AVL_PARENT) && defined(DEBUG))
+#if (defined(AVL_PARENT) && DEBUG)
 
 #define ASSERT_CHECK_CHILD_PARENT_LINK(node)                    \
     if(node!=NULL)                                              \
@@ -373,7 +360,7 @@ avl_create_node(AVL_REFERENCE_TYPE hash)
  */
 
 void
-AVL_PREFIXED(avl_init)(AVL_TREE_TYPE* tree)
+AVL_PREFIXED(init)(AVL_TREE_TYPE* tree)
 {
     AVL_TREE_ROOT(tree) = NULL;
 }
@@ -389,7 +376,7 @@ AVL_PREFIXED(avl_init)(AVL_TREE_TYPE* tree)
  */
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_find)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
+AVL_PREFIXED(find)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
 {
     assert(tree != NULL);
 
@@ -407,15 +394,352 @@ AVL_PREFIXED(avl_find)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERE
     while(node != NULL)
     {
         h = AVL_REFERENCE(node);
+
+#if !AVL_TERNARYCMP
         if(AVL_ISEQUAL(h, obj_hash))
         {
             return (AVL_NODE_TYPE*)node;
         }
 
         node = AVL_CHILD(node, AVL_ISBIGGER(obj_hash, h)&1);
+#else
+        int cmp = AVL_COMPARE(h, obj_hash);
+
+        if(cmp == 0)
+        {
+            return (AVL_NODE_TYPE*)node;
+        }
+
+        node = AVL_CHILD(node, (cmp<0)&1);
+#endif
     }
 
     return NULL;
+}
+
+/** @brief Find a node in the tree or if such node does into exist, find the one after it (by key order)
+ *
+ *  Find a node in the tree or if such node does into exist, find the one after it (by key order)
+ *
+ *  @param[in]  root the tree to search in
+ *  @param[in]  obj_hash the hash to find
+ *
+ *  @return A pointer to the node, or if it does not exists the node after it, or NULL if there is no such node.
+ *
+ *        L
+ *       / \
+ *      A   *
+ *    /   \
+ *    E     B
+ *  /  \   / \
+ * F   G  C   D
+ *           /
+ *          H
+ *         /
+ *        I
+ *       / \
+ *      J  K
+ *
+ */
+
+AVL_NODE_TYPE*
+AVL_PREFIXED(find_key_or_next)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
+{
+    assert(tree != NULL);
+
+    AVL_NODE_TYPE *node = AVL_TREE_ROOT(tree);
+    AVL_REFERENCE_MODIFIER AVL_REFERENCE_TYPE h;
+
+    // the stack is used to find parents
+
+#if !AVL_HAS_PARENT_POINTER
+    int stack_size = 0;
+    AVL_NODE_TYPE *stack[48];
+    stack[0] = NULL;
+#else
+    AVL_NODE_TYPE *prev = NULL;
+#endif
+
+    if(node != NULL)
+    {
+        do
+        {
+#if !AVL_HAS_PARENT_POINTER
+            stack[stack_size++] = node;
+#endif
+
+            h = AVL_REFERENCE(node);
+
+#if AVL_HAS_PARENT_POINTER
+            prev = node;
+#endif
+
+#if !AVL_TERNARYCMP
+            if(AVL_ISEQUAL(h, obj_hash))
+            {
+                return (AVL_NODE_TYPE*)node;
+            }
+
+            node = AVL_CHILD(node, AVL_ISBIGGER(obj_hash, h)&1);
+#else
+            int cmp = AVL_COMPARE(h, obj_hash);
+
+            if(cmp == 0)
+            {
+                return (AVL_NODE_TYPE*)node;
+            }
+
+            node = AVL_CHILD(node, (cmp < 0)&1);
+#endif
+        }
+        while(node != NULL);
+
+        // the node was not found, now, using the stack, find the next node from the key
+
+#if !AVL_HAS_PARENT_POINTER
+        node = stack[--stack_size];
+
+        if(node == NULL)
+        {
+            return node;
+        }
+#else
+        if(prev == NULL)
+        {
+            return prev;
+        }
+
+        node = prev;
+#endif
+
+        // back on the last node on the path
+
+#if !AVL_TERNARYCMP
+        h = AVL_REFERENCE(node);
+        if(AVL_ISBIGGER(h, obj_hash))
+        {
+            return node;
+        }
+#else
+        int cmp = AVL_COMPARE(h, obj_hash);
+
+        if(cmp >= 0)
+        {
+            return (AVL_NODE_TYPE*)node;
+        }
+#endif
+
+        const AVL_NODE_TYPE *right_node = AVL_CHILD(node, DIR_RIGHT);
+        if(right_node != NULL)
+        {
+            // the next node is below (the left-most node from the right child)
+            // right_node is already a valid answer
+
+            for(;;)
+            {
+                const AVL_NODE_TYPE *left_node = AVL_CHILD(right_node, DIR_LEFT);
+
+                if(left_node != NULL)
+                {
+                    right_node = left_node;
+                }
+                else
+                {
+                    return (AVL_NODE_TYPE*)right_node;
+                }
+            }
+        }
+        else
+        {
+            // the next node is either the first "right" parent
+            // either nothing
+
+            for(;;)
+            {
+#if !AVL_HAS_PARENT_POINTER
+                if(stack_size == 0)
+                {
+                    return (AVL_NODE_TYPE*)NULL;
+                }
+
+                const AVL_NODE_TYPE *parent_node = stack[--stack_size];
+#else
+                const AVL_NODE_TYPE *parent_node = AVL_PARENT(node);
+                if(parent_node == NULL)
+                {
+                    return (AVL_NODE_TYPE*)NULL;
+                }
+#endif
+                // if the node is the left child of the parent, then return the parent
+
+                if(node == AVL_CHILD(parent_node, DIR_LEFT))
+                {
+                    return (AVL_NODE_TYPE*)parent_node;
+                }
+
+                node = (AVL_NODE_TYPE*)parent_node;
+            }
+        }
+    }
+    else
+    {
+        return NULL;
+    }
+}
+
+/** @brief Find a node in the tree or if such node does into exist, find the one after it (by key order)
+ *
+ *  Find a node in the tree or if such node does into exist, find the one after it (by key order)
+ *
+ *  @param[in]  root the tree to search in
+ *  @param[in]  obj_hash the hash to find
+ *
+ *  @return A pointer to the node, or if it does not exists the node after it, or NULL if there is no such node.
+ */
+
+AVL_NODE_TYPE*
+AVL_PREFIXED(find_key_or_prev)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
+{
+    assert(tree != NULL);
+
+    AVL_NODE_TYPE *node = AVL_TREE_ROOT(tree);
+    AVL_REFERENCE_MODIFIER AVL_REFERENCE_TYPE h;
+
+    // the stack is used to find parents
+
+#if !AVL_HAS_PARENT_POINTER
+    int stack_size = 0;
+    AVL_NODE_TYPE *stack[48];
+    stack[0] = NULL;
+#else
+    AVL_NODE_TYPE *prev = NULL;
+#endif
+
+    if(node != NULL)
+    {
+        do
+        {
+#if !AVL_HAS_PARENT_POINTER
+            stack[stack_size++] = node;
+#endif
+
+            h = AVL_REFERENCE(node);
+
+#if AVL_HAS_PARENT_POINTER
+            prev = node;
+#endif
+
+#if !AVL_TERNARYCMP
+            if(AVL_ISEQUAL(h, obj_hash))
+            {
+                return (AVL_NODE_TYPE*)node;
+            }
+
+            node = AVL_CHILD(node, AVL_ISBIGGER(obj_hash, h)&1);
+#else
+            int cmp = AVL_COMPARE(h, obj_hash);
+
+            if(cmp == 0)
+            {
+                return (AVL_NODE_TYPE*)node;
+            }
+
+            node = AVL_CHILD(node, (cmp < 0)&1);
+#endif
+        }
+        while(node != NULL);
+
+        // the node was not found, now, using the stack, find the next node from the key
+
+#if !AVL_HAS_PARENT_POINTER
+        node = stack[--stack_size];
+
+        if(node == NULL)
+        {
+            return node;
+        }
+#else
+        if(prev == NULL)
+        {
+            return prev;
+        }
+
+        node = prev;
+#endif
+
+        // back on the last node on the path
+
+#if !AVL_TERNARYCMP
+        h = AVL_REFERENCE(node);
+        if(AVL_ISBIGGER(obj_hash, h))
+        {
+            return node;
+        }
+#else
+        int cmp = AVL_COMPARE(obj_hash, h);
+
+        if(cmp >= 0)
+        {
+            return (AVL_NODE_TYPE*)node;
+        }
+#endif
+
+        const AVL_NODE_TYPE *left_node = AVL_CHILD(node, DIR_LEFT);
+        if(left_node != NULL)
+        {
+            // the prev node is below (the right-most node from the left child)
+            // left_node is already a valid answer
+
+            for(;;)
+            {
+                const AVL_NODE_TYPE *right_node = AVL_CHILD(left_node, DIR_RIGHT);
+
+                if(right_node != NULL)
+                {
+                    left_node = right_node;
+                }
+                else
+                {
+                    return (AVL_NODE_TYPE*)left_node;
+                }
+            }
+        }
+        else
+        {
+            // the next node is either the first "right" parent
+            // either nothing
+
+            for(;;)
+            {
+#if !AVL_HAS_PARENT_POINTER
+                if(stack_size == 0)
+                {
+                    return (AVL_NODE_TYPE*)NULL;
+                }
+
+                const AVL_NODE_TYPE *parent_node = stack[--stack_size];
+#else
+                const AVL_NODE_TYPE *parent_node = AVL_PARENT(node);
+                if(parent_node == NULL)
+                {
+                    return (AVL_NODE_TYPE*)NULL;
+                }
+#endif
+                // if the node is the right child of the parent, then return the parent
+
+                if(node == AVL_CHILD(parent_node, DIR_RIGHT))
+                {
+                    return (AVL_NODE_TYPE*)parent_node;
+                }
+
+                node = (AVL_NODE_TYPE*)parent_node;
+            }
+        }
+    }
+    else
+    {
+        return NULL;
+    }
 }
 
 /** @brief Insert a node into the tree.
@@ -437,7 +761,7 @@ AVL_PREFIXED(avl_find)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERE
  */
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
+AVL_PREFIXED(insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
 {
     assert(tree != NULL);
 
@@ -458,13 +782,14 @@ AVL_PREFIXED(avl_insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
 
     AVL_NODE_TYPE * nodes[AVL_MAX_DEPTH];
     s8 balances[AVL_MAX_DEPTH];
-    u8 dirs[AVL_MAX_DEPTH];
+    s8 dirs[AVL_MAX_DEPTH];
 
     AVL_NODE_TYPE *node = AVL_TREE_ROOT(tree);
     AVL_REFERENCE_TYPE node_hash;
     int level = 0;
     s8 dir = MIDDLE;
 
+#if !AVL_TERNARYCMP
     while((node != NULL) && !AVL_ISEQUAL(obj_hash, (node_hash = AVL_REFERENCE(node))))
     {
         nodes[level] = node;
@@ -479,6 +804,32 @@ AVL_PREFIXED(avl_insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
 
         dirs[level++] = dir;
     }
+#else
+
+    while(node != NULL)
+    {
+        node_hash = AVL_REFERENCE(node);
+        int cmp = AVL_COMPARE(obj_hash, node_hash);
+
+        if(cmp == 0)
+        {
+            break;
+        }
+
+        nodes[level] = node;
+        balances[level] = AVL_BALANCE(node);
+
+        /* DIR_LEFT = 0, DIR_RIGHT = 1 */
+
+        dir = (cmp > 0)&1;
+
+        ASSERT_CHECK_CHILD_PARENT_LINK(node);
+
+        node = AVL_CHILD(node, dir);
+
+        dirs[level++] = dir;
+    }
+#endif
 
     DUMP("Level = %i", level);
 
@@ -670,7 +1021,7 @@ AVL_PREFIXED(avl_insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
  */
 
 void
-AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
+AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
 {
     DUMP("avl_delete(%p, " AVL_REFERENCE_FORMAT_STRING ") ------------------------------", tree, AVL_REFERENCE_FORMAT(obj_hash));
 
@@ -685,12 +1036,12 @@ AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_
 
     AVL_NODE_TYPE *nodes[AVL_MAX_DEPTH];
     s8 balances[AVL_MAX_DEPTH];
-    u8 dirs[AVL_MAX_DEPTH];
+    s8 dirs[AVL_MAX_DEPTH];
 
-#ifdef DEBUG
-    memset(&nodes, 0xff, sizeof(AVL_NODE_TYPE*) * AVL_MAX_DEPTH);
-    memset(&balances, 0xff, AVL_MAX_DEPTH);
-    memset(&dirs, 0xff, AVL_MAX_DEPTH);
+#if DEBUG
+    memset(&nodes, 0xf0, sizeof(AVL_NODE_TYPE*) * AVL_MAX_DEPTH);
+    memset(&balances, 0xfb, AVL_MAX_DEPTH);
+    memset(&dirs, 0xfd, AVL_MAX_DEPTH);
 #endif
 
     AVL_NODE_TYPE *node = AVL_TREE_ROOT(tree);
@@ -700,6 +1051,7 @@ AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_
 
     /* look for the node to delete, keep the path */
 
+#if !AVL_TERNARYCMP
     while((node != NULL) && !AVL_ISEQUAL(obj_hash, (node_hash = AVL_REFERENCE(node))))
     {
         nodes[level] = node;
@@ -711,6 +1063,29 @@ AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_
 
         dirs[level++] = dir;
     }
+#else
+    while(node != NULL)
+    {
+        node_hash = AVL_REFERENCE(node);
+
+        int cmp = AVL_COMPARE(obj_hash, node_hash);
+
+        if(cmp == 0)
+        {
+            break;
+        }
+
+        nodes[level] = node;
+        balances[level] = AVL_BALANCE(node);
+
+        /* DIR_LEFT = 0, DIR_RIGHT = 1 */
+
+        dir = (cmp > 0)&1;
+        node = AVL_CHILD(node, dir);
+
+        dirs[level++] = dir;
+    }
+#endif
 
     DUMP("Level = %i", level);
 
@@ -799,7 +1174,7 @@ AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_
          * Given that we are in a (L-R) case, it's the last one in the chain L->R*
          */
 
-        u32 victim_level = level - 1;
+        s32 victim_level = level - 1;
 
         dirs[victim_level] = DIR_LEFT;
 
@@ -1147,7 +1522,7 @@ avl_destroy_(AVL_NODE_TYPE *node)
  */
 
 void
-AVL_PREFIXED(avl_destroy)(AVL_TREE_TYPE* tree)
+AVL_PREFIXED(destroy)(AVL_TREE_TYPE* tree)
 {
     if(AVL_TREE_ROOT(tree) != NULL)
     {
@@ -1158,7 +1533,7 @@ AVL_PREFIXED(avl_destroy)(AVL_TREE_TYPE* tree)
 }
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_node_last)(AVL_NODE_TYPE *node)
+AVL_PREFIXED(node_last)(AVL_NODE_TYPE *node)
 {
     if(node == NULL)
     {
@@ -1181,7 +1556,7 @@ AVL_PREFIXED(avl_node_last)(AVL_NODE_TYPE *node)
 /* Iterators -> */
 
 void
-AVL_PREFIXED(avl_iterator_init)(AVL_CONST_TREE_TYPE *tree, AVL_PREFIXED(avl_iterator*) iter)
+AVL_PREFIXED(iterator_init)(AVL_CONST_TREE_TYPE *tree, AVL_PREFIXED(iterator*) iter)
 {
     /* Do we have a tree to iterate ? */
 
@@ -1196,14 +1571,73 @@ AVL_PREFIXED(avl_iterator_init)(AVL_CONST_TREE_TYPE *tree, AVL_PREFIXED(avl_iter
     }
 }
 
+void
+AVL_PREFIXED(iterator_init_from)(AVL_CONST_TREE_TYPE *tree, AVL_PREFIXED(iterator*) iter, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
+{
+    // Do we have a tree to iterate ?
+
+    iter->stack_pointer = -1;
+
+    if(tree != NULL)
+    {
+        // Let's stack the path left path
+
+        AVL_NODE_TYPE *node = AVL_TREE_ROOT(tree);
+        AVL_REFERENCE_MODIFIER AVL_REFERENCE_TYPE h;
+
+        while(node != NULL)
+        {
+            h = AVL_REFERENCE(node);
+
+#if !AVL_TERNARYCMP
+            if(AVL_ISBIGGER(h, obj_hash))
+            {
+                iter->stack[++iter->stack_pointer] = node;
+                node = AVL_LEFT_CHILD(node);
+            }
+            else if(AVL_ISBIGGER(obj_hash, h))
+            {
+                node = AVL_RIGHT_CHILD(node);
+            }
+            else
+            {
+
+                iter->stack[++iter->stack_pointer] = node;
+
+                return;
+            }
+#else
+            int cmp = AVL_COMPARE(h, obj_hash);
+
+            if(cmp > 0)
+            {
+                iter->stack[++iter->stack_pointer] = node;
+                node = AVL_LEFT_CHILD(node);
+            }
+            else if(cmp < 0)
+            {
+                node = AVL_RIGHT_CHILD(node);
+            }
+            else
+            {
+
+                iter->stack[++iter->stack_pointer] = node;
+
+                return;
+            }
+#endif
+        }
+    }
+}
+
 bool
-AVL_PREFIXED(avl_iterator_hasnext)(AVL_PREFIXED(avl_iterator*) iter)
+AVL_PREFIXED(iterator_hasnext)(AVL_PREFIXED(iterator*) iter)
 {
     return iter->stack_pointer >= 0;
 }
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_iterator_next_node)(AVL_PREFIXED(avl_iterator*) iter)
+AVL_PREFIXED(iterator_next_node)(AVL_PREFIXED(iterator*) iter)
 {
     assert(iter->stack_pointer >= 0);
 
@@ -1223,7 +1657,7 @@ AVL_PREFIXED(avl_iterator_next_node)(AVL_PREFIXED(avl_iterator*) iter)
         node = tmp;
         while((tmp = AVL_LEFT_CHILD(node)) != NULL)
         {
-            iter->stack[++iter->stack_pointer] = tmp; /* PUSH */
+            iter->stack[++iter->stack_pointer] = tmp; /* PUSH @note edf 20180102 -- overflow is unlikely: the depth of the stack allows iteration on collections of tens of billions of items */
             node = tmp;
         }
 
@@ -1267,7 +1701,7 @@ avl_callback_and_destroy_(AVL_NODE_TYPE *node, void (*callback)(AVL_NODE_TYPE *)
  */
 
 void
-AVL_PREFIXED(avl_callback_and_destroy)(AVL_TREE_TYPE *tree, void (*callback)(AVL_NODE_TYPE *))
+AVL_PREFIXED(callback_and_destroy)(AVL_TREE_TYPE *tree, void (*callback)(AVL_NODE_TYPE *))
 {
     if(AVL_TREE_ROOT(tree) != NULL)
     {
@@ -1277,7 +1711,7 @@ AVL_PREFIXED(avl_callback_and_destroy)(AVL_TREE_TYPE *tree, void (*callback)(AVL
 }
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_get_first)(AVL_CONST_TREE_TYPE* tree)
+AVL_PREFIXED(get_first)(AVL_CONST_TREE_TYPE* tree)
 {
     assert(tree != NULL);
 
@@ -1297,7 +1731,7 @@ AVL_PREFIXED(avl_get_first)(AVL_CONST_TREE_TYPE* tree)
 #ifdef AVL_PARENT
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_node_next)(const AVL_NODE_TYPE *node)
+AVL_PREFIXED(node_next)(const AVL_NODE_TYPE *node)
 {
     AVL_NODE_TYPE* next;
 
@@ -1343,7 +1777,7 @@ AVL_PREFIXED(avl_node_next)(const AVL_NODE_TYPE *node)
 }
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_node_prev)(const AVL_NODE_TYPE *node)
+AVL_PREFIXED(node_prev)(const AVL_NODE_TYPE *node)
 {
     AVL_NODE_TYPE* prev;
 
@@ -1391,7 +1825,7 @@ AVL_PREFIXED(avl_node_prev)(const AVL_NODE_TYPE *node)
 }
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_node_mod_next)(const AVL_NODE_TYPE *node)
+AVL_PREFIXED(node_mod_next)(const AVL_NODE_TYPE *node)
 {
     AVL_NODE_TYPE* next;
     
@@ -1453,7 +1887,7 @@ AVL_PREFIXED(avl_node_mod_next)(const AVL_NODE_TYPE *node)
 }
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_node_mod_prev)(const AVL_NODE_TYPE *node)
+AVL_PREFIXED(node_mod_prev)(const AVL_NODE_TYPE *node)
 {
     AVL_NODE_TYPE* prev;
     
@@ -1517,10 +1951,10 @@ AVL_PREFIXED(avl_node_mod_prev)(const AVL_NODE_TYPE *node)
 #endif // AVL_PARENT
 
 static int
-AVL_PREFIXED(avl_check_common)(AVL_NODE_TYPE *node, int depth);
+AVL_PREFIXED(check_common)(AVL_NODE_TYPE *node, int depth);
 
 static int
-AVL_PREFIXED(avl_check_node)(AVL_NODE_TYPE *node, int depth)
+AVL_PREFIXED(check_node)(AVL_NODE_TYPE *node, int depth)
 {
 #if AVL_HAS_PARENT_POINTER == 1
     if(AVL_PARENT(node) == NULL)
@@ -1571,11 +2005,11 @@ AVL_PREFIXED(avl_check_node)(AVL_NODE_TYPE *node, int depth)
     }
 #endif
 
-    return AVL_PREFIXED(avl_check_common)(node, depth);
+    return AVL_PREFIXED(check_common)(node, depth);
 }
 
 static int
-AVL_PREFIXED(avl_check_common)(AVL_NODE_TYPE *node, int depth)
+AVL_PREFIXED(check_common)(AVL_NODE_TYPE *node, int depth)
 {
     int ld = depth;
     int rd = depth;
@@ -1585,14 +2019,14 @@ AVL_PREFIXED(avl_check_common)(AVL_NODE_TYPE *node, int depth)
 
     if(lc != NULL)
     {
-        if((ld = AVL_PREFIXED(avl_check_node)(lc, depth + 1)) < 0)
+        if((ld = AVL_PREFIXED(check_node)(lc, depth + 1)) < 0)
         {
             return ld;
         }
     }
     if(rc != NULL)
     {
-        if((rd = AVL_PREFIXED(avl_check_node)(rc, depth + 1)) < 0)
+        if((rd = AVL_PREFIXED(check_node)(rc, depth + 1)) < 0)
         {
             return rd;
         }
@@ -1618,8 +2052,36 @@ AVL_PREFIXED(avl_check_common)(AVL_NODE_TYPE *node, int depth)
     return MAX(ld, rd);
 }
 
+void AVL_PREFIXED(forall)(AVL_CONST_TREE_TYPE* tree, AVL_PREFIXED(forall_callback) *callback, void *callback_args)
+{
+#if AVL_HAS_PARENT_POINTER
+    
+    AVL_NODE_TYPE *node = AVL_PREFIXED(get_first)(tree);
+    while(node != NULL)
+    {
+        if(callback(node, callback_args) <= 0)
+        {
+            return;
+        }
+        
+        node = AVL_PREFIXED(node_next)(node);
+    }
+#else
+    AVL_PREFIXED(iterator) iter;
+    AVL_PREFIXED(iterator_init)(tree, &iter);
+    while(AVL_PREFIXED(iterator_hasnext)(&iter))
+    {
+        AVL_NODE_TYPE *node = AVL_PREFIXED(iterator_next_node)(&iter);
+        if(callback(node, callback_args) <= 0)
+        {
+            break;
+        }
+    }
+#endif
+}
+
 int
-AVL_PREFIXED(avl_check)(AVL_TREE_TYPE* tree)
+AVL_PREFIXED(check_tree)(AVL_TREE_TYPE* tree)
 {
     if(AVL_TREE_ROOT(tree) == NULL)
     {
@@ -1638,13 +2100,13 @@ AVL_PREFIXED(avl_check)(AVL_TREE_TYPE* tree)
     }
 #endif
     
-    int depth = AVL_PREFIXED(avl_check_common)(AVL_TREE_ROOT(tree), 0);
+    int depth = AVL_PREFIXED(check_common)(AVL_TREE_ROOT(tree), 0);
 
     return depth;
 }
 
 static void
-AVL_PREFIXED(avl_dump_node)(AVL_NODE_TYPE *node, int level, char c)
+AVL_PREFIXED(dump_node)(AVL_NODE_TYPE *node, int level, char c)
 {
 #if defined(DEBUG_DUMP)
     char b;
@@ -1679,11 +2141,11 @@ AVL_PREFIXED(avl_dump_node)(AVL_NODE_TYPE *node, int level, char c)
     
     if(AVL_LEFT_CHILD(node) != NULL)
     {
-        AVL_PREFIXED(avl_dump_node)(AVL_LEFT_CHILD(node), level +1, 'l');
+        AVL_PREFIXED(dump_node)(AVL_LEFT_CHILD(node), level +1, 'l');
     }
     if(AVL_RIGHT_CHILD(node) != NULL)
     {
-        AVL_PREFIXED(avl_dump_node)(AVL_RIGHT_CHILD(node), level +1, 'r');
+        AVL_PREFIXED(dump_node)(AVL_RIGHT_CHILD(node), level +1, 'r');
     }
 #else
     (void)node;
@@ -1693,9 +2155,9 @@ AVL_PREFIXED(avl_dump_node)(AVL_NODE_TYPE *node, int level, char c)
 }
 
 void
-AVL_PREFIXED(avl_dump)(AVL_TREE_TYPE *tree)
+AVL_PREFIXED(dump)(AVL_TREE_TYPE *tree)
 {
-    AVL_PREFIXED(avl_dump_node)(AVL_TREE_ROOT(tree), 0, 'r');
+    AVL_PREFIXED(dump_node)(AVL_TREE_ROOT(tree), 0, 'r');
 }
 
 

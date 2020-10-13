@@ -1,42 +1,43 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 #include <dnscore/parser.h>
 #include <dnscore/bytearray_input_stream.h>
 #include <dnscore/bytearray_output_stream.h>
 #include <dnscore/timems.h>
 #include <dnscore/file_input_stream.h>
+#include <dnscore/format.h>
 
 #include "dnslg/resolv-conf.h"
 
@@ -212,7 +213,7 @@ resolv_conf_parse_stream(resolv_s *resolver, input_stream *is)
         // declare and init 'search FQDNs'
         host_address search_domains;
         search_domains.next = NULL;
-#if HAS_TSIG_SUPPORT
+#if DNSCORE_HAS_TSIG_SUPPORT
         search_domains.tsig = NULL;
 #endif
         search_domains.version = HOST_ADDRESS_NONE;
@@ -220,14 +221,14 @@ resolv_conf_parse_stream(resolv_s *resolver, input_stream *is)
         // declare and init 'domain FQDN'
         host_address domain;
         domain.next = NULL;
-#if HAS_TSIG_SUPPORT
+#if DNSCORE_HAS_TSIG_SUPPORT
         domain.tsig = NULL;
 #endif
 
         // declare and init resolving 'name_servers'
         host_address name_servers;
         name_servers.next = NULL;
-#if HAS_TSIG_SUPPORT
+#if DNSCORE_HAS_TSIG_SUPPORT
         name_servers.tsig = NULL;
 #endif
 
@@ -266,7 +267,7 @@ resolv_conf_parse_stream(resolv_s *resolver, input_stream *is)
                                         // re-init header
                                         search_domains.version = HOST_ADDRESS_NONE;
                                         search_domains.next = NULL;
-#if HAS_TSIG_SUPPORT
+#if DNSCORE_HAS_TSIG_SUPPORT
                                         search_domains.tsig = NULL;
 #endif
                                     }
@@ -421,7 +422,7 @@ resolv_conf_parse_stream(resolv_s *resolver, input_stream *is)
                         case RO_TIMEOUT_VALUE:
                             {
                                 u32 val;
-                                if(ISOK(return_code = parse_u32_check_range(text, &val, 0, MAX_U16, 10)))
+                                if(ISOK(return_code = parse_u32_check_range(text, &val, 0, MAX_U16, BASE_10)))
                                 {
                                     resolver->timeout = (u16)val;
                                 }
@@ -431,7 +432,7 @@ resolv_conf_parse_stream(resolv_s *resolver, input_stream *is)
                         case RO_ATTEMPTS_VALUE:
                             {
                                 u32 val;
-                                if(ISOK(return_code = parse_u32_check_range(text, &val, 0, MAX_U8, 10)))
+                                if(ISOK(return_code = parse_u32_check_range(text, &val, 0, MAX_U8, BASE_10)))
                                 {
                                     resolver->attempts = (u8)val;
                                 }
@@ -441,7 +442,7 @@ resolv_conf_parse_stream(resolv_s *resolver, input_stream *is)
                         case RO_NDOTS_VALUE:
                             {
                                 u32 val;
-                                if(ISOK(return_code = parse_u32_check_range(text, &val, 0, MAX_U8, 10)))
+                                if(ISOK(return_code = parse_u32_check_range(text, &val, 0, MAX_U8, BASE_10)))
                                 {
                                     resolver->ndots = (u8)val;
                                 }
@@ -561,7 +562,6 @@ resolv_conf_parse(input_stream *out_is)
 
     resolv_conf_parse_file(INPUT_FILE, &resolver);
 
-
     // put the struct back in a stream
     output_stream os;
     bytearray_output_stream_init(&os, NULL, 0);
@@ -579,10 +579,9 @@ resolv_conf_parse(input_stream *out_is)
         osformatln(&os, "search %{hostaddrlist}", resolver.search_or_domain.address.search);
     }
     
-
     if(resolver.nameserver != NULL)
     {
-        osformatln(&os, "nameserver %{hostaddrlist}", resolver.nameserver);         /// @todo 20140509 edf -- ?
+        osformatln(&os, "nameserver %{hostaddrlist}", resolver.nameserver);
     }
 
     osformatln(&os, "timeout %hu", resolver.timeout);

@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -94,7 +95,7 @@ bytezarray_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
             }
             while(newsize < data->buffer_size + len);
 
-            ZALLOC_ARRAY_OR_DIE(u8*, newbuffer, newsize, BYTE_ARRAY_OUTPUT_STREAM_TAG);
+            ZALLOC_OBJECT_ARRAY_OR_DIE(newbuffer, u8, newsize, BYTE_ARRAY_OUTPUT_STREAM_TAG);
 
             MEMCOPY(newbuffer, data->buffer, data->buffer_offset);
 
@@ -123,6 +124,8 @@ bytezarray_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
 static ya_result
 bytezarray_output_stream_flush(output_stream* stream)
 {
+    (void)stream;
+
     return SUCCESS;
 }
 
@@ -133,7 +136,7 @@ bytezarray_output_stream_close(output_stream* stream)
 
     if((data->flags & BYTEARRAY_OWNED) != 0)
     {
-#ifdef DEBUG
+#if DEBUG
         memset(data->buffer, 0xe5, data->buffer_size);
 #endif
         ZFREE_ARRAY(data->buffer, data->buffer_size);
@@ -171,7 +174,7 @@ bytezarray_output_stream_init_ex_static(output_stream* out_stream, u8* array,u32
             size = BYTEARRAY_STARTSIZE;
         }
 
-        ZALLOC_ARRAY_OR_DIE(u8*, array, size, BYTE_ARRAY_OUTPUT_STREAM_BUFF_TAG);
+        ZALLOC_OBJECT_ARRAY_OR_DIE(array, u8, size, BYTE_ARRAY_OUTPUT_STREAM_BUFF_TAG);
     }
 
     data->buffer = array;
@@ -188,7 +191,7 @@ bytezarray_output_stream_init_ex(output_stream* out_stream, u8* array, u32 size,
 {
     bytezarray_output_stream_data* data;
 
-    ZALLOC_OR_DIE(bytezarray_output_stream_data*, data, bytezarray_output_stream_data, BYTE_ARRAY_OUTPUT_STREAM_DATA_TAG);
+    ZALLOC_OBJECT_OR_DIE( data, bytezarray_output_stream_data, BYTE_ARRAY_OUTPUT_STREAM_DATA_TAG);
 
     flags |= BYTEARRAY_ZALLOC_CONTEXT;
     
@@ -220,6 +223,13 @@ bytezarray_output_stream_buffer_size(output_stream* stream)
 {
     bytezarray_output_stream_data* data = (bytezarray_output_stream_data*)stream->data;
     return data->buffer_size;
+}
+
+u32
+bytezarray_output_stream_buffer_offset(output_stream* stream)
+{
+    bytezarray_output_stream_data* data = (bytezarray_output_stream_data*)stream->data;
+    return data->buffer_offset;
 }
 
 u8*
@@ -255,6 +265,3 @@ bytezarray_output_stream_set(output_stream* stream, u8 *buffer, u32 buffer_size,
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

@@ -1,55 +1,43 @@
 ################################################################################
 #
-# Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-# The YADIFA TM software product is provided under the BSD 3-clause license:
+#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
-# Redistribution and use in source and binary forms, with or without 
-# modification, are permitted provided that the following conditions
-# are met:
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions
+#  are met:
 #
-#        * Redistributions of source code must retain the above copyright 
-#          notice, this list of conditions and the following disclaimer.
-#        * Redistributions in binary form must reproduce the above copyright 
-#          notice, this list of conditions and the following disclaimer in the 
-#          documentation and/or other materials provided with the distribution.
-#        * Neither the name of EURid nor the names of its contributors may be 
-#          used to endorse or promote products derived from this software 
-#          without specific prior written permission.
+#         * Redistributions of source code must retain the above copyright
+#           notice, this list of conditions and the following disclaimer.
+#         * Redistributions in binary form must reproduce the above copyright
+#           notice, this list of conditions and the following disclaimer in the
+#           documentation and/or other materials provided with the distribution.
+#         * Neither the name of EURid nor the names of its contributors may be
+#           used to endorse or promote products derived from this software
+#           without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE 
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+#  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+#  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+#  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+#  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+#  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-################################################################################
-#
-#       SVN Program:
-#               $URL: $
-#
-#       Last Update:
-#               $Date:$
-#               $Revision: 1717 $
-#
-#       Purpose:
-#               Settings common to all makefiles
-#
-################################################################################
+################################################################################        
 
 #
 # ALL
 #
 
-AM_CFLAGS  = -D_THREAD_SAFE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -I$(abs_builddir) -I$(abs_srcdir)/include
+AM_CFLAGS  = -D_THREAD_SAFE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -I$(abs_builddir) -I$(abs_builddir)/include -I$(abs_srcdir)/include
 
 AM_LDFLAGS =
 DEBUGFLAGS =
-LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"'
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"' -DTCLDIR='"$(tcldir)"'
 
 if USES_SUNC
 DEBUGFLAGS +=
@@ -81,16 +69,25 @@ if HAS_CC_MISSING_FIELD_INITIALIZERS
 AM_CFLAGS += -Werror=missing-field-initializers
 endif
 
+if HAS_CC_STD_GNU11
+AM_CFLAGS += -std=gnu11
+else
+if HAS_CC_STD_C11
+AM_CFLAGS += -std=c11 -D_GNU_SOURCE
+else
 if HAS_CC_STD_GNU99
 AM_CFLAGS += -std=gnu99
 else
 if HAS_CC_STD_C99
 AM_CFLAGS += -std=c99
-endif
+else
 if HAS_CC_XC99
 AM_CFLAGS += -xc99
-endif
-endif
+endif # XC99
+endif # C99
+endif # GNU99
+endif # C11
+endif # GNU11
 
 if HAS_CC_TUNE_NATIVE
 AM_CFLAGS += -mtune=native
@@ -180,7 +177,8 @@ AM_AR = ar
 AM_LD = ld
 endif
 
-AM_CFLAGS += -DUSES_LLVM -Wno-gnu -Wno-extended-offsetof
+AM_CFLAGS += -DUSES_LLVM -Wno-gnu
+#-Wno-extended-offsetof
 
 DEBUGFLAGS += -DMODE_DEBUG_CLANG -fsanitize=address -fsanitize=bounds
 
@@ -266,29 +264,28 @@ endif
 
 AM_CFLAGS += $(LOCALFLAGS)
 
-YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -g -DCMR
-YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP
-YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
-YSCFLAGS = $(YRCFLAGS)
-
-YRLDFLAGS = -g
-YPLDFLAGS = -pg
-YDLDFLAGS = -g
-
-if HAS_CC_RDYNAMIC
-YPLDFLAGS += -rdynamic
-YDLDFLAGS += -rdynamic
-endif
-
-if USES_CLANG
-# workaround a bug where clang does not handle properly profiling and optimizations
-YPCFLAGS += -mno-omit-leaf-frame-pointer -fno-omit-frame-pointer
-endif
-
-YSLDFLAGS = $(YRLDFLAGS)
-
-AM_CFLAGS += $(YCFLAGS)
-AM_LDFLAGS += $(YLDFLAGS)
-
-AM_MAKEFLAGS=MODE_CFLAGS="$(AM_CFLAGS)" CC=$(CC) AR=$(AM_AR) LD=$(AM_LD)
-
+### YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -g -DCMR
+### YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP
+### YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
+### YSCFLAGS = $(YRCFLAGS)
+### 
+### YRLDFLAGS = -g
+### YPLDFLAGS = -pg
+### YDLDFLAGS = -g
+### 
+### if HAS_CC_RDYNAMIC
+### YPLDFLAGS += -rdynamic
+### YDLDFLAGS += -rdynamic
+### endif
+### 
+### if USES_CLANG
+### # workaround a bug where clang does not handle properly profiling and optimizations
+### YPCFLAGS += -mno-omit-leaf-frame-pointer -fno-omit-frame-pointer
+### endif
+### 
+### YSLDFLAGS = $(YRLDFLAGS)
+### 
+### AM_CFLAGS += $(YCFLAGS)
+### AM_LDFLAGS += $(YLDFLAGS)
+### 
+### AM_MAKEFLAGS=MODE_CFLAGS="$(AM_CFLAGS)" CC=$(CC) AR=$(AM_AR) LD=$(AM_LD)

@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man on Tue  9 May 09:45:30 CEST 2017
+.\" Manual page created with latex2man on Tue Oct 13 12:59:04 2020
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFAD\-CONF" "5" "2020\-10\-07" "YADIFA " "YADIFA "
+.TH "YADIFAD\-CONF" "5" "2020\-10\-12" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -20,49 +20,131 @@ yadifad.conf
 .SH SYNOPSIS
 
 .PP
-${PREFIX}/etc/yadifad.conf 
+${SYSCONFDIR}/yadifad.conf 
 .PP
 .SH DESCRIPTION
 
 .PP
 The configuration of yadifad
+is consistent in a text file that can optionally include others. 
+The general structure is a sequence of containers: a sequence of lines of text starting with a <container\-name> and ending with a </container\-name>. 
+Each line between these delimitters is in the form: variable\-name value. 
+The format of the value is determined by the type of the variable. 
+.PP
+.SS TYPES
+.PP
+There are 15 types: 
+.PP
+.TP
+\fIACL\fP
+ A list of ACL descriptors. User\-defined ACLs are found in the ACL section. The "any" and "none" descriptors are always defined. Elements of the list are separated by a "," or a ";". 
+.TP
+\fIDNSSECTYPE\fP
+ A DNSSEC type name. It can be a DNSSEC\-enabled value ("nsec", "nsec3" or "nsec3\-optout") or a DNSSEC\-disabled value ("none", "no", "off" or "0"). 
+.TP
+\fIENUM\fP
+ A word from a specified set. 
+.TP
+\fIFLAG\fP
+ A boolean value. It can be true ("1", "enable", "enabled", "on", "true", "yes") or false ("0", "disable", "disabled", "off", "false", "no"). 
+.TP
+\fIFQDN\fP
+ A fully\-qualified domain name text string. e.g.: www.eurid.eu. 
+.TP
+\fIGID\fP
+ Group ID. (Can be a number or a name) 
+.TP
+\fIHOST(S)\fP
+ A (list of) host(s). A host is defined by an IP (v4 or v6) and can be followed by the word `port\&' and a port number. Elements of the list are separated by a `,\&' or a `;\&'\&. 
+.TP
+\fIINTEGER / INT\fP
+ A base\-ten integer. 
+.TP
+\fINETMOD\fP
+ A word or integer that identifies the network model: 
+.br
+\fBsingle or 0\fP
+Each working thread reads a single message, processes its answer and replies to it. 
+.br
+\fBbuffered or 1\fP
+Working threads are working by couple. One reads a single message and queues it, one de\-queues it, processes its answer and replies to it. 
+.br
+\fBmulti or 2\fP
+Each working thread reads a multiple messages, processes their answers and replies to them. 
+.br
+.TP
+\fIPATH / FILE\fP
+ A file or directory path. i.e.: "/var/zones". 
+.TP
+\fISTRING / STR\fP
+ A text string. Double quotes can be used but are not mandatory. Without quotes the string will be taken from the first non\-blank charater to the last non\-blank character. 
+.TP
+\fIHEXSTR\fP
+ A hexadecimal even\-length text string. 
+.TP
+\fIRELDATE\fP
+ A cron\-like date to be matched, relative to another. The columns are minutes [0;59], hours [0;23], days [0;31], months [1;12], weekdays [mon,tue,wed,thu,fri,sat,sun] and week\-of\-the\-month [0;4]. Multiple values can be set in a column cell using \&',\&' as a separator. The \&'*\&' character can be used to set all possible values of its column cell. 
+.TP
+\fIRELTIME\fP
+ A time offset relative to another. It\&'s written as +integer[unit\-character] (e.g.: +24h) where the unit character can be \fIs\fPeconds,
+\fIm\fPinutes,
+\fIh\fPours,
+\fId\fPays
+or \fIw\fPeeks.
+.TP
+\fISECONDS\fP
+ A base\-ten integer. 
+.TP
+\fIHOURS\fP
+ A base\-ten integer. 
+.TP
+\fIDAYS\fP
+ A base\-ten integer. 
+.TP
+\fIUID\fP
+ User ID. (Can be a number or a name) 
+.PP
+.SS CONTAINERS
+.PP
+The configuration of yadifad
 has several containers: 
+.PP
 .TP
 \fB<main>\fP
  General container 
 .TP
-<key> 
-TSIG keys 
+\fB<key>\fP
+ TSIG keys 
 .TP
-<acl> 
-Access lists 
+\fB<acl>\fP
+ Access lists 
 .TP
-<nsid> 
-NameServer IDentifier 
+\fB<nsid>\fP
+ NameServer IDentifier 
 .TP
-<rrl> 
-Response Rate Limiting directives 
+\fB<rrl>\fP
+ Response Rate Limiting directives 
 .TP
-<zone> 
-Description of the domain name in specific attributes. 
+\fB<zone>\fP
+ Description of the domain name in specific attributes. 
 .TP
-<channels> 
-Description of the logger outputs. 
+\fB<channels>\fP
+ Description of the logger outputs. 
 .TP
-<dnssec\-policy> 
-Description of dnssec policies. 
+\fB<dnssec\-policy>\fP
+ Description of dnssec policies. 
 .TP
-<key\-suite> 
-Description of the key\-suites needed if \&'dnssec policies\&' are used. 
+\fB<key\-suite>\fP
+ Description of the key\-suites needed if \&'dnssec policies\&' are used. 
 .TP
-<key\-roll> 
-Description of the key\-rolls needed if \&'dnssec policies\&' are used. 
+\fB<key\-roll>\fP
+ Description of the key\-rolls needed if \&'dnssec policies\&' are used. 
 .TP
-<key\-template> 
-Description of the key\-templates needed if \&'dnssec policies\&' are used. 
+\fB<key\-template>\fP
+ Description of the key\-templates needed if \&'dnssec policies\&' are used. 
 .TP
-<denial> 
-Description of \&'denial\&', this can be used in certain \&'dnssec policies\&'\&. 
+\fB<denial>\fP
+ Description of \&'denial\&', this can be used in certain \&'dnssec policies\&'\&. 
 .PP
 The configuration supports included files.
 .br
@@ -84,18 +166,1038 @@ Variable name
 .B *
 Arguments can contain 1 or more comma separated values. 
 .PP
-eg. 
+.SS STANDARD SECTIONS
 .PP
-.Vb
-<container>
-    # variable  argument
-    variable    value1  
-    # variable  argument1       argument2
-    variable    value1          value2
-    # variable  argument1
-    variable    value1,value2
-</container>
-.Ve
+.TP
+\fB<main>\fP
+ General container, contains all the configuration parameters needed to start up yadifad\&.
+.PP
+.RS
+.TP
+\fBallow\-control \fP\fIACL \fP
+ default: none 
+
+Default server\-control access control list. Only the sources matching the ACL are accepted. 
+.TP
+\fBallow\-notify \fP\fIACL \fP
+ default: any 
+
+Default notify access control list. Only the servers matching the ACL will be handled. 
+.TP
+\fBallow\-query \fP\fIACL \fP
+ default: any 
+
+Default query access control list. Only the clients matching the ACL will be replied to. 
+.TP
+\fBallow\-transfer \fP\fIACL \fP
+ default: none 
+
+Default transfer access control list. Only the clients matching the ACL will be allowed to transfer a zone (\fIaxfr\fP/\fIixfr\fP).
+.TP
+\fBallow\-update \fP\fIACL \fP
+ default: none 
+
+Default update access control list. Only the clients matching the ACL will be allowed to update a zone. 
+.TP
+\fBallow\-update\-forwarding \fP\fIACL \fP
+ default: none 
+
+Default update\-forwarding access control list. Only the sources matching the ACL are accepted. 
+.TP
+\fBanswer\-formerr\-packets \fP\fIFLAG \fP
+ default: true 
+
+If this flag is disabled; the server will not reply to badly formatted packets. 
+.TP
+\fBaxfr\-compress\-packets \fP\fIFLAG \fP
+ default: true 
+
+Enables the \fIdns\fP
+packet compression of each \fIaxfr\fP
+packet. 
+.TP
+\fBaxfr\-max\-packet\-size \fP\fIINT \fP
+ default: 4096 bytes 
+
+The maximum size of an \fIaxfr\fP
+packet. (MIN: 512; MAX: 65535) 
+.TP
+\fBaxfr\-max\-record\-by\-packet \fP\fIINT \fP
+ default: 0 
+
+The maximum number of records in each \fIaxfr\fP
+packet. Older name servers can only handle 1. Set to 0 to disable the limit. (MIN: 0; MAX: 65535) 
+.TP
+\fBaxfr\-retry\-delay \fP\fISECONDS \fP
+ default: 600 
+
+Number of seconds between each retry for the first transfer from the master name server. (MIN: 60; MAX: 86400) 
+.TP
+\fBaxfr\-retry\-jitter \fP\fISECONDS \fP
+ default: 180 
+
+Jitter applied to axfr\-retry\-delay. (MIN: 60; MAX: axfr\-retry\-delay) 
+.TP
+\fBaxfr\-retry\-failure\-delay\-multiplier \fP\fIINT \fP
+ default: 5 
+
+Linear back\-off multiplier. The multiplier times the number of failures is added to the xfr\-retry\-delay. (MIN: 0; MAX: 86400) 
+.TP
+\fBaxfr\-retry\-failure\-delay\-max \fP\fISECONDS \fP
+ default: 3600 
+
+Maximum delay added for the back\-off. (MIN: 0; MAX: 604800) 
+.TP
+\fBaxfr\-strict\-authority \fP\fIFLAG \fP
+ default: yes (unless \-\-enable\-non\-aa\-axfr\-support was used) 
+
+Tells yadifad to be strict with the AA flag in AXFR answers 
+.TP
+\fBchroot \fP\fIFLAG \fP
+ default: off 
+
+Enabling this flag will make the server jail itself in the chroot\-path directory. 
+.TP
+\fBchroot\-path; chrootpath \fP\fIPATH \fP
+ default: / 
+
+The directory used for the jail. 
+.TP
+\fBcpu\-count\-override \fP\fIINT \fP
+ default: 0 
+
+Overrides the detected number of logical cpus. Set to 0 for automatic. (MIN: 0; MAX: 256) 
+.TP
+\fBdaemon; daemonize \fP\fIFLAG \fP
+ default: false 
+
+Enabling this flag will make the server detach from the console and work in background. 
+.TP
+\fBdata\-path; datapath \fP\fIPATH \fP
+ default: zones 
+
+The base path were lies the data (zone file path; journaling data; temporary files; etc.) 
+.TP
+\fBdo\-not\-listen \fP\fIHOSTS \fP
+ default: \- 
+
+An exclusion list of addresses to never listen to. If set, 0.0.0.0 and ::0 will always be split by interface to isolate the address. 
+.TP
+\fBedns0\-max\-size \fP\fIINT \fP
+ default: 4096 
+
+\fIedns0\fP
+packets size. (MIN: 512; MAX: 65535) 
+.TP
+\fBgid; group \fP\fIGID \fP
+ default: 0 (or root) 
+
+The group ID that the server will use. 
+.TP
+\fBhidden\-master \fP\fIFLAG \fP
+ default: no 
+
+As a hidden master  more CPU will be used for various maintenance tasks. 
+.TP
+\fBhostname\-chaos; hostname \fP\fISTR \fP
+ default: the host name 
+
+The string returned by a hostname\-chaos TXT CH query. 
+.TP
+\fBkeys\-path; keyspath \fP\fIPATH \fP
+ default: zones/keys 
+
+The base path of the \fIdnssec\fP
+keys. 
+.TP
+\fBlisten \fP\fIHOSTS \fP
+ default: 0.0.0.0,::0 
+
+The list of interfaces to listen to. 
+.TP
+\fBlog\-files\-disabled \fP\fIFLAG \fP
+ default: no 
+
+If set, disables checking the log\-path directory for existence and writing rights. 
+.TP
+\fBlog\-path; logpath \fP\fIPATH \fP
+ default: log 
+
+The base path where the log files are written. 
+.TP
+\fBlog\-unprocessable \fP\fIFLAG \fP
+ default: off 
+
+Enabling this flag will make the server log unprocessable queries. 
+.TP
+\fBmax\-tcp\-queries; max\-tcp\-connections \fP\fIINT \fP
+ default: 16 
+
+The maximum number of parallel \fItcp\fP
+queries; allowed. (MIN: 1; MAX: 255) 
+.TP
+\fBnetwork\-model \fP\fINETMOD \fP
+ default: multi 
+
+Sets the networking model of yadifa. 
+.TP
+\fBpid\-file; pidfile \fP\fISTR \fP
+ default: run/yadifad.pid 
+
+The pid file name. 
+.TP
+\fBqueries\-log\-type \fP\fIINT \fP
+ default: 1 
+
+Query log format. (0: none; 1: \fIyadifa\fP
+format; 2: BIND format; 3: \fIyadifa\fP
+and BIND format at once) 
+.TP
+\fBserverid\-chaos; serverid \fP\fISTR \fP
+ default: \- 
+
+The string returned by a id.server. TXT CH query. If not set; REFUSED is answered. 
+.TP
+\fBserver\-port; port \fP\fIINT \fP
+ default: 53 
+
+The default \fIdns\fP
+port. (MIN: 1; MAX: 65535) 
+.TP
+\fBsig\-validity\-interval \fP\fIDAYS \fP
+ default: 30 
+
+The number of days for which an automatic signature is valid. (MIN: 7 days; MAX: 30 days) 
+.TP
+\fBsig\-validity\-jitter; sig\-jitter \fP\fISECONDS \fP
+ default: 3600 
+
+The signature expiration validity jitter in seconds (1 hour). (MIN: 0 sec; MAX: 86400 sec) 
+.TP
+\fBsig\-validity\-regeneration \fP\fIHOURS \fP
+ default: automatic 
+
+Signatures expiring in less than the indicated amount of hours will be recomputed. The default will be chosen by \fIyadifa\fP\&.
+(MIN: 24 hours; MAX: 168 hours) 
+.TP
+\fBstatistics \fP\fIFLAG \fP
+ default: true 
+
+The server will log a report line about some internal statistics. 
+.TP
+\fBstatistics\-max\-period \fP\fISECONDS \fP
+ default: 60 
+
+The period in seconds between two statistics log lines. (MIN: 1 sec; MAX: 31 * 86400 seconds (31 days)) 
+.TP
+\fBtcp\-query\-min\-rate \fP\fIINT \fP
+ default: 512 bytes/second 
+
+The minimum transfer rate required in a \fItcp\fP
+connection (read and write). Slower connections are closed. The units are bytes per second. (MIN: 0; MAX: 4294967295 
+.TP
+\fBthread\-affinity\-base \fP\fIINT \fP
+ default: 0 
+
+Sets the first CPU to set affinity for. Set it to the real CPU of a core. (MIN: 0; MAX: 3) 
+.TP
+\fBthread\-affinity\-multiplier \fP\fIINT \fP
+ default: 0 
+
+Sets the multiplier chosing CPU to set affinity for. Allows avoiding hyperthread cores. Set to 0 for automatic avoiding. (MIN: 0; MAX: 4) 
+.TP
+\fBthread\-count\-by\-address \fP\fIINT \fP
+ default: \-1 
+
+Number of independent threads used to process each listening address. Set to \-1 for automatic. Set to 0 for single threaded. (MIN: \-1; MAX: number of CPU\&'s) 
+.TP
+\fBuid; user \fP\fIUID \fP
+ default: 0 (or root) 
+
+The user ID that the server will use. 
+.TP
+\fBversion\-chaos; version \fP\fISTR \fP
+ default: yadifa version# 
+
+The text to include in the version TXT CH query. 
+.TP
+\fBxfr\-connect\-timeout \fP\fISECONDS \fP
+ default: 5 
+
+Timeout for establishing a connection for \fIaxfr\fP
+and \fIixfr\fP
+transfers. Set to 0 to disable. (MIN: 0; MAX: 4294967295) 
+.TP
+\fBxfr\-path; xfrpath \fP\fIPATH \fP
+ default: zones/xfr 
+
+The base path used for \fIaxfr\fP
+and journal storage. 
+.TP
+\fBzone\-download\-thread\-count \fP\fIINT \fP
+ default: 4 
+
+Number of independent threads used to download the zones. (MIN: 0; MAX: 255) 
+.TP
+\fBzone\-load\-thread\-count \fP\fIINT \fP
+ default: 1 
+
+Number of independent threads used to process loading of the zones. (MIN: 0; MAX: 255) 
+.TP
+\fBzone\-store\-thread\-count \fP\fIINT \fP
+ default: 1 
+
+Sets the number of threads used to store a zone on disk (MIN: 1, MAX: 4). 
+.TP
+\fBzone\-unload\-thread\-count \fP\fIINT \fP
+ default: 1 
+
+Sets the number of threads used to delete a zone from memory (MIN: 1, MAX: 4). 
+.TP
+\fBworker\-backlog\-queue\-size \fP\fIINT \fP
+ default: 16384 
+
+For network\-model 1, sets the size of the backlog queue (MIN: 4096, MAX: 1048576). 
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<key>\fP
+ TSIG keys 
+.PP
+.RS
+.TP
+\fBalgorithm \fP\fIENUM \fP
+ default: \- 
+
+Mandatory. Sets the algorithm of the key. 
+
+.RS
+.PP
+Supported values are: 
+.RS
+.RE
+.TP
+\fB \fP\fB \fP\fB \fP\fIhmac\-md5\fP
+.TP
+\fB \fP\fB \fP\fB \fP\fIhmac\-sha1\fP
+.TP
+\fB \fP\fB \fP\fB \fP\fIhmac\-sha224\fP
+.TP
+\fB \fP\fB \fP\fB \fP\fIhmac\-sha256\fP
+.TP
+\fB \fP\fB \fP\fB \fP\fIhmac\-sha384\fP
+.TP
+\fB \fP\fB \fP\fB \fP\fIhmac\-sha512\fP
+.RE
+.RS
+.PP
+(the algorithm names are case insensitive)} 
+.RE
+.TP
+\fBname \fP\fIFQDN \fP
+ default: \- 
+
+Mandatory. Sets the name of the key. 
+.TP
+\fBsecret \fP\fITEXT \fP
+ default: \- 
+
+Mandatory. Sets the value of the key. BASE64 encoded. 
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<acl>\fP
+ Access lists 
+.PP
+Each entry of the acl section defines a rule of access. 
+Each rule is a name (a single user\-defined word) followed by a rule in the form of a list of statements. The separator can be "," or ";". 
+The "any" and "none" names are reserved. 
+A statement tells if a source is accepted or rejected. Reject statements are prefixed with "!". 
+Statements are evaluated in the following order: first from more specific to less specific, then from reject to accept. 
+If a statement matches, the evaluation will stop and accordingly accept or reject the source. 
+If no statement matches, then the source is rejected. 
+.PP
+A statement can be either: 
+.PP
+.RS
+.TP
+.B *
+An IPv4 or an IPv6 address followed (or not) by a mask.
+.br 
+[\fI!\fP]ipv4
+|ipv6 [\fI/mask\fP]
+.br
+.RS
+.PP
+For example: 
+.RS
+.RE
+.TP
+.B *
+internal\-network 192.0.2.128/26;2001:DB8::/32 
+.RE
+.RS
+.PP
+.RE
+.TP
+.B *
+The word `key\&' followed by the name of a TSIG key.
+.br 
+key key\-name
+.br
+.RS
+.PP
+For example: 
+.RS
+.RE
+.TP
+.B *
+slaves key public\-slave;key hidden\-slave 
+.RE
+.RS
+.PP
+.RE
+.TP
+.B *
+An ACL statement name from the \fIacl\fP section. Note that negation and recursion are forbidden and duly rejected.
+.br
+acl\-name
+.br
+.RS
+.PP
+For example: 
+.RS
+.RE
+.TP
+.B *
+who\-can\-ask\-for\-an\-ixfr master;slaves;127.0.0.1 
+.RE
+.RS
+.PP
+.RE
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<nsid>\fP
+ NameServer IDentifier 
+.PP
+.RS
+.TP
+\fBascii \fP\fI STR \fP
+ default: "" 
+
+The string can be 512 characters long. 
+.TP
+\fBhex \fP\fI \fP
+ default: "" 
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<rrl>\fP
+ Response Rate Limiting directives 
+.PP
+.RS
+.TP
+\fBresponses\-per\-second \fP\fI INT \fP
+ default: 5 
+
+Allowed response rate. 
+.TP
+\fBerrors\-per\-second \fP\fI INT \fP
+ default: 5 
+
+Allowed error rate. 
+.TP
+\fBslip \fP\fI INT \fP
+ default: 2 
+
+Random slip parameter. 
+.TP
+\fBlog\-only \fP\fI FLAG \fP
+ default: false 
+
+If set to true, logs what it should do without doing it. 
+.TP
+\fBipv4\-prefix\-length \fP\fI INT \fP
+ default: 24 
+
+Mask applied to group the IPv4 clients. 
+.TP
+\fBipv6\-prefix\-length \fP\fI INT \fP
+ default: 56 
+
+Mask applied to group the IPv6 clients. 
+.TP
+\fBexempt\-clients \fP\fI ACL \fP
+ default: none 
+
+Clients maching this rule are not subject to the RRL. 
+.TP
+\fBenabled \fP\fI FLAG \fP
+ default: false 
+
+Enables the RRL 
+.TP
+\fBmin\-table\-size \fP\fI INT \fP
+ default: 1024 
+
+RRL buffer minimum size 
+.TP
+\fBmax\-table\-size \fP\fI INT \fP
+ default: 16384 
+
+RRL buffer maximum size 
+.TP
+\fBwindow \fP\fI INT \fP
+ default: 15 
+
+RRL sliding window size in seconds 
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<zone>\fP
+ Description of the domain name in specific attributes. 
+.PP
+.RS
+.TP
+\fBallow\-control \fP\fIACL \fP
+ default: as main 
+
+Control commands control list. Only the matching sources are allowed. 
+.TP
+\fBallow\-notify \fP\fIACL \fP
+ default: as main 
+
+Notify access control list. Only the servers matching the ACL will be handled. 
+.TP
+\fBallow\-query \fP\fIACL \fP
+ default: as main 
+
+Query access control list. Only the clients matching the ACL will be replied to. 
+.TP
+\fBallow\-transfer \fP\fIACL \fP
+ default: as main 
+
+Tansfer access control list. Only the clients matching the ACL will be allowed to transfer a zone (\fIaxfr\fP/\fIixfr\fP
+.TP
+\fBallow\-update \fP\fIACL \fP
+ default: as main 
+
+Update access control list. Only the clients matching the ACL will be allowed to update a zone. 
+.TP
+\fBallow\-update\-forwarding \fP\fIACL \fP
+ default: as main 
+
+Update forwarding control list. Only the matching sources are allowed. 
+.TP
+\fBdnssec\-mode; dnssec \fP\fIDNSSEC\-TYPE\fP
+ default: off 
+
+Type of \fIdnssec\fP
+used for the zone. As master name sever; \fIyadifa\fP
+will try to maintain that state. 
+.TP
+\fBdnssec\-policy \fP\fISTR \fP
+ default: \- 
+
+Sets the dnssec\-policy id to be used. 
+.TP
+\fBdomain \fP\fIFQDN \fP
+ default: \- 
+
+Mandatory. Sets the domain of the zone (i.e.: eurid.eu). 
+.TP
+\fBdrop\-before\-load \fP\fIFLAG \fP
+ default: off 
+
+Enabling this flag will make the server drop the zone before loading the updated zone from disk. Use this on systems constrained for RAM. 
+.TP
+\fBfile\-name; file \fP\fIFILE \fP
+ default: \- 
+
+Sets the zone file name. Only mandatory for a master zone. 
+.TP
+\fBjournal\-size\-kb \fP\fIINT \fP
+ default: 0 
+
+Puts a soft limit on the size of the journal; expressed in KB. (MIN: 0; MAX: 3698688 (3GB)) 
+.TP
+\fBkeys\-path; keyspath \fP\fIPATH \fP
+ default: as main 
+
+The base path of the \fIdnssec\fP
+keys. 
+.TP
+\fBmaintain\-dnssec \fP\fIFLAG \fP
+ default: true 
+
+Enabling this flag will cause the server to try and maintain \fIrrsig\fP
+records 
+.TP
+\fBmasters; master \fP\fIHOSTS \fP
+ default: \- 
+
+Mandatory for a slave. Sets the master server(s). Multiple masters are supported. 
+.TP
+\fBmultimaster\-retries \fP\fIINT \fP
+ default: 0 
+
+The number of times the master is unreachable before switching to a different master. (MIN: 0; MAX: 255) 
+.TP
+\fBno\-master\-updates \fP\fIFLAG \fP
+ default: false 
+
+Enabling this flag will prevent the server from probing or downloading changes from the master. 
+.TP
+\fBnotifies; also\-notify; notify \fP\fIHOSTS \fP
+ default: \- 
+
+The list of servers to notify in the event of a change. Currently only used by masters when a dynamic update occurs. 
+.TP
+\fBnotify\-auto \fP\fIFLAG \fP
+ default: true 
+
+Enabling this flag will cause \fInotify\fP
+messages to be sent to all name servers in the APEX. Disabling this flags causes the content of APEX to be ignored (\fIns\fP
+Records). 
+.TP
+\fBnotify\-retry\-count \fP\fIINT \fP
+ default: 5 
+
+Number of times \fIyadifa\fP
+tries to send a \fInotify\fP\&.
+(MIN: 0; MAX: 10) 
+.TP
+\fBnotify\-retry\-period \fP\fIINT \fP
+ default: 1 
+
+Time period in minutes between two \fInotify\fP
+attempts. (MIN: 1; MAX: 600) 
+.TP
+\fBnotify\-retry\-period\-increase \fP\fIINT \fP
+ default: 0 
+
+Increase of the time period in minutes between two \fInotify\fP
+attempts. (MIN: 0; MAX: 600) 
+.TP
+\fBrrsig\-nsupdate\-allowed \fP\fIFLAG \fP
+ default: false 
+
+If this flag is set  the server allows to edit RRSIG records using dynamic updates. 
+.TP
+\fBsig\-validity\-interval \fP\fIDAYS \fP
+ default: as main 
+
+The number of days for which an automatic signature is valid. (MIN: 7 days; MAX: 30 days) 
+.TP
+\fBsig\-validity\-regeneration \fP\fIHOURS \fP
+ default: as main 
+
+The signatures expiring in less than the indicated amount of hours will be recomputed. (MIN: 24 hours; MAX: 168 hours) 
+.TP
+\fBsig\-validity\-jitter \fP\fISECONDS \fP
+ default: as main 
+
+The signature expiration validity jitter in seconds. (MIN: 0 sec; MAX: 86400 sec) 
+.TP
+\fBtrue\-multimaster \fP\fIFLAG \fP
+ default: off 
+
+Enabling this flag will make the server use \fIaxfr\fP
+when switching to a new master. 
+.TP
+\fBtype \fP\fIENUM \fP
+ default: \- 
+
+Mandatory. Sets the type of zone : either \fImaster\fP
+or \fIslave\fP\&.
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<channels>\fP
+ Description of the logger outputs. 
+.PP
+It contains a list descriptions of user\-defined outputs for the logger. 
+Depending on the kind of output, the format is different. 
+.PP
+The "name" is arbitrary and is used for identification in the <loggers>.
+.br
+The "stream\-name" defines the output type (ie: a file name, a program output or syslog).
+.br
+The "arguments" are specific to the output type (ie: unix file access rights or syslog options and facilities).
+.br
+.PP
+.RS
+.TP
+.B *
+file output stream 
+channel\-name file\-name access\-rights (octal). 
+.TP
+.B *
+pipe to a program 
+channel\-name "| shell command" 
+channel\-name "| path\-to\-program program arguments >> append\-redirect" 
+.TP
+.B *
+STDOUT, STDERR output stream 
+channel\-name stdout 
+channel\-name stderr 
+.TP
+.B *
+syslog 
+channel\-name syslog syslog\-facility 
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<loggers>\fP
+ Description of the logger outputs sources. 
+.PP
+Sets the output of a pre\-defined logger from yadifad.
+.br
+.PP
+The format of the line is: 
+logger\-name output\-filter comma\-separated\-channel\-names 
+.br
+.PP
+Filters are:
+.br
+\fIDEBUG7\fP,
+\fIDEBUG6\fP,
+\fIDEBUG5\fP,
+\fIDEBUG4\fP,
+\fIDEBUG3\fP,
+\fIDEBUG2\fP,
+\fIDEBUG1\fP,
+\fIDEBUG\fP,
+\fIINFO\fP,
+\fINOTICE\fP,
+\fIWARNING\fP,
+\fIERR\fP,
+\fICRIT\fP,
+\fIALERT\fP,
+\fIEMERG\fP
+.br
+.PP
+Additionally, there are: 
+.br
+.PP
+.RS
+.TP
+.B *
+\fIALL\fP (or \&'\fI*\fP\&') meaning all the filters.
+.TP
+.B *
+\fIPROD\fP means all but the DEBUG filters.
+.RE
+.RS
+.PP
+The defined loggers are: 
+.br
+.PP
+.RS
+.RE
+.TP
+\fBsystem\fP
+ contains low level messages about the system such as memory allocation, threading, IOs, timers and cryptography, \&.\&.\&. 
+.TP
+\fBdatabase\fP
+ It contains messages about most lower\-level operations in the DNS database. ie: journal, updates, zone loading and sanitization, DNS message query resolution, \&.\&.\&.) 
+.TP
+\fBdnssec\fP
+ contains messages about lower\-level dnssec operations in the DNS database. ie: status, maintenance, verification, \&.\&.\&. 
+.TP
+\fBserver\fP
+ contains messages about operations in the DNS server. ie: start up, shutdown, configuration, transfers, various services status (database management, network management, DNS notification management, dynamic update management, resource rate limiting, \&.\&.\&.) 
+.TP
+\fBzone\fP
+ contains messages about the loading of a zone from a source (file parsing, transferred binary zone reading, \&.\&.\&.) 
+.TP
+\fBstats\fP
+ contains the statistics of the server. 
+.TP
+\fBqueries\fP
+ contains the queries on the server. 
+Queries can be logged with the BIND and/or with the YADIFA format.
+.br
+.br
+\fBBIND format:\fP
+.br
+.br
+client sender\-ip#port: query: fqdn class type +SETDC (listen\-ip)
+.br
+.br
+\fBYADIFA format:\fP
+.br
+.br
+query [ id ] {+SETDC} fqdn class type (sender\-ip#port)
+.br 
+.br
+where: 
+.RS
+.TP
+id 
+is the query message id 
+.TP
++ 
+means the message has the Recursion Desired flag set 
+.TP
+S 
+means the message is signed with a TSIG 
+.TP
+E 
+means the message is EDNS 
+.TP
+T 
+means the message was sent using TCP instead of UDP 
+.TP
+D 
+means the message has the DNSSEC OK flag set 
+.TP
+C 
+means the message has the Checking Disabled flag set 
+.TP
+fqdn 
+is the queried FQDN 
+.TP
+class 
+is the queried class 
+.TP
+type 
+is the queried type 
+.TP
+sender\-ip 
+is the IP of the client that sent the query 
+.TP
+port 
+is the port of the client that sent the query 
+.TP
+listen\-ip 
+is the listen network interface that received the message 
+.RE
+.RS
+.PP
+Note that on YADIFA any unset flag is replaced by a \&'\-\&', on BIND only the \&'+\&' follows that rule. 
+.RE
+.RE
+.RS
+.PP
+System operators will mostly be interested in the info and above messages of queries and stats, as well as the error and above messages of the other loggers. 
+.PP
+.RE
+.PP
+.SS DNSSEC\-POLICY
+.PP
+There are 5 sections: 
+.PP
+.TP
+\fB<dnssec\-policy>\fP
+ The dnssec\-policy section binds up to four key suites and a denial mode. It is meant to be used as a dnssec\-policy parameter in a zone section. 
+Usually two key\-suite will be given: one for a KSK and one for a ZSK. The denial mode can be either \&'nsec\&' either the name of a denial section. 
+.PP
+.RS
+.TP
+\fBid \fP\fISTR \fP
+ default: \- 
+
+\fIid\fP
+of the dnssec\-policy section. 
+.TP
+\fBdescription \fP\fISTR \fP
+ default: \- 
+
+Description for the dnssec\-policy section. 
+.TP
+\fBkey\-suite \fP\fISTR \fP
+ default: \- 
+
+\fIid\fP
+of the \fIkey\-suite\fP
+to be used. Usually both a KSK and a ZSK suites are given. 
+.TP
+\fBdenial \fP\fISTR \fP
+ default: nsec 
+
+\fIid\fP
+of the \fIdenial\fP
+to be used for \fInsec3\fP
+or the argument \&'nsec\&' to use \fInsec\fP\&.
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<key\-suite>\fP
+ The key\-suite section is used by dnssec policies and is meant to be referenced by a dnssec\-policy section. 
+A key\-suite links a key definition (key\-template) with a deployment calendar (key\-roll). 
+.PP
+.RS
+.TP
+\fBid \fP\fISTR \fP
+ default: \- 
+
+\fIid\fP
+of the key\-suite section. 
+.TP
+\fBkey\-template \fP\fISTR \fP
+ default: \- 
+
+\fIid\fP
+of the \fIkey\-template\fP
+to be used. 
+.TP
+\fBkey\-roll \fP\fISTR \fP
+ default: \- 
+
+\fIid\fP
+of the \fIkey\-roll\fP
+to be used. 
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<key\-roll>\fP
+ The key\-roll section is used by dnssec policies and is meant to be referenced by a key\-suite section. 
+It\&'s essentially a deployment calendar. 
+Each event is computed relatively to another. Dates are chosen so that there is always a key in an active state. Please look at the examples as a misconfiguration could easily span the life of a key over several years. (e.g.: by too restrictive on the matching conditions) If the RELDATE format is being used, the first valid date matching the line is used. Usage of the RELDATE format is recommended over the RELTIME one. 
+.PP
+.RS
+.TP
+\fBid \fP\fIRELDATE|RELTIME\fP
+ default: \- 
+
+\fIid\fP
+of the key\-roll section. 
+.TP
+\fBgenerate \fP\fIRELDATE|RELTIME\fP
+ default: \- 
+
+Time when the key must be generated. Pre\-dated before so it\&'s active right now if it\&'s the first one. Always computed so that the next activation happens before the last deactivation. 
+.TP
+\fBpublish \fP\fIRELDATE|RELTIME\fP
+ default: \- 
+
+Time when the key must be published in the zone. Relative to the generation. 
+.TP
+\fBactivate \fP\fIRELDATE|RELTIME\fP
+ default: \- 
+
+Time when the key will be used for signing the zone or apex of the zone. Relative to the publication. 
+.TP
+\fBinactive \fP\fIRELDATE|RELTIME\fP
+ default: \- 
+
+Time when the key will not be used anymore for signing. Relative to the activation. 
+.TP
+\fBdelete \fP\fIRELDATE|RELTIME\fP
+ default: \- 
+
+Time when the key will be removed out of the zone. Relative to the deactivation. 
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<key\-template>\fP
+ The key\-template section is used by dnssec policies and is meant to be referenced by a key\-suite section. 
+It contains the various parameters of a key for its generation. 
+.PP
+.RS
+.TP
+\fBid \fP\fISTR \fP
+ default: \- 
+
+\fIid\fP
+of the key\-template section. 
+.TP
+\fBksk \fP\fIFLAG \fP
+ default: false 
+
+When this flag is enabled a \fIksk\fP
+will be generated. When disabled a \fIzsk\fP
+will be generated. 
+.TP
+\fBalgorithm \fP\fIENUM \fP
+ default: 7 
+
+Sets the algorithm of the key. Supported values are: \fI’DSA’\fP;
+\fI3\fP;
+\fI’RSASHA1’\fP;
+\fI5\fP;
+\fI’NSEC3DSA’\fP;
+\fI6\fP;
+\fI’NSEC3RSASHA1’\fP;
+\fI7\fP;
+\fI’RSASHA256’\fP;
+\fI8\fP;
+\fI’RSASHA512’\fP;
+\fI10\fP;
+\fI’ECDSAP256SHA256’\fP;
+\fI13\fP;
+\fI’ECDSAP384SHA384’\fP;
+\fI14\fP\&.
+.RS
+.PP
+.RE
+.TP
+\fBsize \fP\fIINT \fP
+ default: 0 
+
+The length of the key in bits (incompatible sizes will be rejected). (MIN: 0; MAX: 4096) 
+.RE
+.RS
+.PP
+.RE
+.TP
+\fB<denial>\fP
+ The denial section is used by dnssec policies and is meant to be referenced by a dnssec\-policy section. 
+It is used to define the NSEC3 denial parameters of a dnssec policy. Policies using a NSEC denial don\&'t need to use this section. 
+.PP
+.RS
+.TP
+\fBid \fP\fISTR \fP
+ default: \- 
+
+\fIid\fP
+of the denial section. 
+.TP
+\fBsalt \fP\fIHEXSTR \fP
+ default: empty 
+
+A base16 encoded sequence of bytes used as the salt parameter of the NSEC3 chain. 
+.TP
+\fBsalt\-length \fP\fIINT \fP
+ default: 0 
+
+If the salt parameter isn\&'t set, generates a random salt parameter of that length. (MIN: 0; MAX: 255) 
+.TP
+\fBiterations \fP\fIINT \fP
+ default: 1 
+
+Iteration parameter of the NSEC3 chain. (MIN: 0; MAX: 65535) 
+.TP
+\fBoptout \fP\fIFLAG \fP
+ default: false 
+
+Enables opt\-out coverage in the NSEC3 chain. When this flag is enabled, delegations which do not have a DS record will not be covered by an NSEC3 record. 
+.RE
+.RS
+.PP
+.RE
 .PP
 .SH EXAMPLES
 
@@ -108,19 +1210,7 @@ Main
 .RS
 .TP
 1.
-Config with includes 
-.RS
-.PP
-.Vb
-# start yadifad.conf <main> container
-include /etc/yadifa/conf.d/local.conf
-# end yadifad.conf <main> container
-.Ve
-.PP
-.RE
-.TP
-2.
-Main without includes 
+Main section example 
 .RS
 .PP
 .Vb
@@ -157,7 +1247,7 @@ Main without includes
     serverid                "yadifad\-01"
 
     # The version returned by a query to version.yadifa. CH TXT (alias: version\-chaos)
-    version                 "2.3.11"
+    version                 "2.4.0"
 
     # Set the maximum UDP packet size.  
     # note: the packetsize cannot be less than 512 or more than 65535.
@@ -180,7 +1270,6 @@ Main without includes
     port                    53
 
     # The interfaces to listen to.
-    # listen        0.0.0.0
     listen                  127.0.0.1, 192.0.2.2, 192.0.2.130 port 8053, 2001:db8::2
 
     # Type of querylog to use
@@ -236,7 +1325,7 @@ Main without includes
 
     # If YADIFA has the controller enabled, allow control only for these
     # clients (none by default)
-    allow\-control           localhost
+    allow\-control           controller
 
     # overwrite the amount of CPUs detected by yadifad
     cpu\-count\-override 3
@@ -248,6 +1337,7 @@ Main without includes
 .Ve
 .RE
 .RE
+.RS
 .PP
 .RE
 .TP
@@ -274,7 +1364,7 @@ Admin\-key key definition (the name is arbitrary)
 .RE
 .TP
 2.
-Master\-slave key definition 
+Master\-slave key definition (the name is arbitrary) 
 .RS
 .PP
 .Vb
@@ -286,6 +1376,7 @@ Master\-slave key definition
 .Ve
 .RE
 .RE
+.RS
 .PP
 .RE
 .TP
@@ -307,11 +1398,13 @@ Master\-slave key use
     admins      192.0.2.0/24, 2001:db8::74
     master      192.0.2.53
     localhost   127.0.0.0/8, ::1
+    controller  key controller # the ACL for the controller MUST use a key
 </acl>
 .Ve
 .PP
 .RE
 .RE
+.RS
 .PP
 .RE
 .TP
@@ -346,6 +1439,7 @@ Example with hex
 .Ve
 .RE
 .RE
+.RS
 .PP
 .RE
 .TP
@@ -353,6 +1447,15 @@ Example with hex
 RRL
 .br 
 Response Rate Limiting 
+.PP
+.RS
+.RS
+.PP
+.RE
+.TP
+1.
+Example 
+.RS
 .PP
 .Vb
 <rrl>
@@ -382,6 +1485,11 @@ Response Rate Limiting
 </rrl>
 .Ve
 .PP
+.RE
+.RE
+.RS
+.PP
+.RE
 .TP
 .B *
 Zone 
@@ -447,6 +1555,7 @@ Slave domain zone config
 .PP
 .RE
 .RE
+.RS
 .PP
 .RE
 .TP
@@ -493,41 +1602,39 @@ key\-suite
     id              "ksk\-2048"
 
     key\-template    "ksk\-2048"
-    key\-roll        "key\-roll\-ksk\-2048\-short\-times"
+    key\-roll        "yearly\-schedule"
 </key\-suite>                            
 
 <key\-suite>                     
     id              "zsk\-1024"
 
     key\-template    "zsk\-1024"
-    key\-roll        "key\-roll\-zsk\-1024\-short\-times"
+    key\-roll        "monthly\-schedule"
 </key\-suite>                            
 .Ve
 .TP
 3.
 key\-roll 
 .Vb
-<key\-roll>      
-    id              "key\-roll\-ksk\-2048\-short\-times"
+<key\-roll>
+    id                 "yearly\-schedule"
 
-#   command         minutes    hours      day        month      day\-week   week
-    generate        5,35       *          *          *          *          *
-    publish         6,36       *          *          *          *          *
-    activate        7,37       *          *          *          *          *
-    inactive        8,38       *          *          *          *          * 
-    remove          12,42      *          *          *          *          *
-</key\-roll>     
+    generate            5          0           15                  6            *                 * # this year   (2018) 15/06 at 00:05
+    publish             10         0           15                  6            *                 * #                             00:10
+    activate            15         0           16                  6            *                 * #                    16/06 at 00:15
+    inactive            15         0           17                  6            *                 * #             (2019) 17/06 at 00:15
+    remove              15        11           18                  6            *                 * #             (2019) 18/06 at 11:15
+</key\-roll>
 
-<key\-roll>      
-    id              "key\-roll\-zsk\-1024\-short\-times"
+<key\-roll>
+    id                 "monthly\-schedule"
 
-#   command         minutes    hours      day        month      day\-week   week
-    generate        5,35       *          *          *          *          *
-    publish         6,36       *          *          *          *          *
-    activate        7,37       *          *          *          *          *
-    inactive        8,38       *          *          *          *          * 
-    remove          12,42      *          *          *          *          *
-</key\-roll>     
+    generate            5          0           *                   *            tue               0 # 1 tuesday   of the month at 00:05
+    publish             10         0           *                   *            tue               0 #                             00:10
+    activate            15         0           *                   *            wed               0 # 1 wednesday of the month at 00:15
+    inactive            15         0           *                   *            thu               0 # 1 thursday  of the month at 00:15
+    remove              15        11           *                   *            fri               0 # 1 friday    of the month at 11:15
+</key\-roll>
 .Ve
 .TP
 4.
@@ -577,6 +1684,7 @@ denial
 .PP
 .RE
 .RE
+.RS
 .PP
 .RE
 .TP
@@ -585,9 +1693,11 @@ Channels
 .PP
 Logging output\-channel configurations: 
 .PP
-The "name" is arbitrary and is used in the <loggers>.
+It contains a list of user\-defined outputs for the logger. 
+.PP
+The "name" is arbitrary and is used for identification in the <loggers>.
 .br
-The "stream\-name" defines the output type (ie: a file name or syslog).
+The "stream\-name" defines the output type (ie: a file name, a program output or syslog).
 .br
 The "arguments" are specific to the output type (ie: unix file access rights or syslog options and facilities).
 .br
@@ -614,6 +1724,8 @@ Example: YADIFA running as daemon channel definition.
     zone        zone.log        0644
     all         all.log         0644
 
+    gziplog     "|/usr/bin/gzip \\\- >> /var/log/yadifa.log.gz"
+
     syslog      syslog          user
 </channels>
 .Ve
@@ -638,6 +1750,7 @@ This example shows the "stderr" and "stdout" which can also be used in the first
 .PP
 .RE
 .RE
+.RS
 .PP
 .RE
 .TP
@@ -648,7 +1761,9 @@ Logging input configurations:
 .PP
 The "bundle" is the name of the section of YADIDA being logged, sources are : database, dnssec, queries, server, stats, system, zone.
 .br
-The "debuglevel" uses the same names as syslog or "*" or "all" to filter the input.
+The "debuglevel" uses the same names as syslog. 
+.br
+Additionally, "*" or "all" means all the levels; "prod" means all but the debug levels. 
 .br
 .PP
 The "channels" are a comma\-separated list of channels. 
@@ -692,96 +1807,7 @@ Example with syslog
 .Ve
 .RE
 .RE
-.PP
-The defined loggers are: 
-.PP
 .RS
-.RE
-.TP
-system 
-contains low level messages about the system such as memory allocation, threading, IOs, timers and cryptography, \&.\&.\&. 
-.TP
-database 
-It contains messages about most lower\-level operations in the DNS database. ie: journal, updates, zone loading and sanitization, DNS message query resolution, \&.\&.\&.) 
-.TP
-dnssec 
-contains messages about lower\-level dnssec operations in the DNS database. ie: status, maintenance, verification, \&.\&.\&. 
-.TP
-server 
-contains messages about operations in the DNS server. ie: start up, shutdown, configuration, transfers, various services status (database management, network management, DNS notification management, dynamic update management, resource rate limiting, \&.\&.\&.) 
-.TP
-zone 
-contains messages about the loading of a zone from a source (file parsing, transferred binary zone reading, \&.\&.\&.) 
-.TP
-stats 
-contains the statistics of the server. 
-.TP
-queries 
-contains the queries on the server. 
-Queries can be logged with the BIND and/or with the YADIFA format.
-.br
-.br
-\fBBIND format:\fP
-.br
-.br
-client sender\-ip#port: query: fqdn class type +SETDC (listen\-ip)
-.br
-.br
-\fBYADIFA format:\fP
-.br
-.br
-query [ id ] {+SETDC} fqdn class type (sender\-ip#port)
-.br 
-.br
-where: 
-.RS
-.TP
-id 
-is the query message id 
-.TP
-+ 
-means the message has the Recursion Desired flag set 
-.TP
-S 
-means the message is signed with a TSIG 
-.TP
-E 
-means the message is EDNS 
-.TP
-T 
-means the message was sent using TCP instead of UDP 
-.TP
-D 
-means the message has the DNSSEC OK flag set 
-.TP
-C 
-means the message has the Checking Disabled flag set 
-.TP
-fqdn 
-is the queried FQDN 
-.TP
-class 
-is the queried class 
-.TP
-type 
-is the queried type 
-.TP
-sender\-ip 
-is the IP of the client that sent the query 
-.TP
-port 
-is the port of the client that sent the query 
-.TP
-listen\-ip 
-is the listen network interface that received the message 
-.RE
-.RS
-.PP
-Note that on YADIFA any unset flag is replaced by a \&'\-\&', on BIND only the \&'+\&' follows that rule. 
-.RE
-.RE
-.PP
-System operators will mostly be interested in the info and above messages of queries and stats, as well as the error and above messages of the other loggers. 
 .PP
 .RE
 .PP
@@ -799,20 +1825,19 @@ you can indent everything to taste.
 .SH CHANGES
 
 .PP
-Please check the file ChangeLog
+Please check the file README
 from the sources. 
 .PP
 .SH VERSION
 
 .PP
-Version: 2.3.11 of 2020\-10\-07 \&.
+Version: 2.4.0 of 2020\-10\-12. 
 .PP
 .SH MAILING LISTS
 
 .PP
 There exists a mailinglist for questions relating to any program in the yadifa package:
 .br
-.RE
 .TP
 .B *
 \fByadifa\-users@mailinglists.yadifa.eu\fP

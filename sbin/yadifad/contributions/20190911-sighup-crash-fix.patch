@@ -1,0 +1,30 @@
+From 58675f943fc9acdea7d9c27f576d9f515779a45c Mon Sep 17 00:00:00 2001
+From: Markus Kolb <github@tower-net.de>
+Date: Wed, 11 Sep 2019 13:05:40 +0200
+Subject: [PATCH] Fix crash on SIGHUP when zone files changed
+
+---
+ sbin/yadifad/database-service-zone-load.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/sbin/yadifad/database-service-zone-load.c b/sbin/yadifad/database-service-zone-load.c
+index 2ecc92c..119fdfc 100644
+--- a/sbin/yadifad/database-service-zone-load.c
++++ b/sbin/yadifad/database-service-zone-load.c
+@@ -1671,11 +1671,14 @@ database_service_zone_load_thread(void *parms)
+         }
+         
+         database_fire_zone_loaded(zone_desc, zone, return_code);
+-        
+-        zdb_zone_release(zone);
++
++        if(zone != NULL)
++        {
++            zdb_zone_release(zone);
+ #ifdef DEBUG
+         zone = NULL;
+ #endif
++        }
+     }
+     else
+     {

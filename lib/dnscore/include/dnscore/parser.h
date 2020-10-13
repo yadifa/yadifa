@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 #ifndef PARSER_H
 #define	PARSER_H
 
@@ -66,6 +67,9 @@ typedef struct parser_delimiter_s parser_delimiter_s;
 #define PARSER_CHAR_TYPE_MULTILINE_DELIMITER_END 5
 #define PARSER_CHAR_TYPE_BLANK_MARKER            6
 #define PARSER_CHAR_TYPE_EOL                     7
+#if DNSCORE_HAS_FULL_ASCII7
+#define PARSER_CHAR_TYPE_TO_TRANSLATE            8
+#endif
 
 #define PARSER_CHAR_TYPE_IGNORE                255
 
@@ -97,6 +101,7 @@ typedef struct parser_delimiter_s parser_delimiter_s;
 #define PARSER_REACHED_END_OF_LINE              PARSER_ERROR_CODE(0x000D)
 #define PARSER_FOUND_WORD                       PARSER_ERROR_CODE(0x000E)
 #define PARSER_REACHED_END_OF_FILE              PARSER_ERROR_CODE(0x000F)
+#define PARSER_INVALID_ESCAPED_FORMAT           PARSER_ERROR_CODE(0x0010)
 
 struct parser_token_s
 {
@@ -147,12 +152,16 @@ struct parser_s
     char multiline;     // TODO: stack of multilines
     char cutchar;       // 
     bool tokenize_on_string;
+    bool close_last_stream;
     
     input_stream *input_stream_stack[PARSER_INCLUDE_DEPTH_MAX];
     u32 line_number_stack[PARSER_INCLUDE_DEPTH_MAX];
     
     char char_type[256];
     char delimiter_close[256];
+#if DNSCORE_HAS_FULL_ASCII7
+    char translation_table[256];
+#endif
         
     char line_buffer[PARSER_LINE_LENGTH_MAX];
     char line_buffer_zero;
@@ -184,7 +193,14 @@ ya_result parser_next_characters_nospace(parser_s *parser);
 ya_result parser_concat_next_tokens(parser_s *parser);
 ya_result parser_concat_next_tokens_nospace(parser_s *parser);
 
+ya_result parser_concat_current_and_next_tokens_nospace(parser_s *parser);
+
 void parser_set_eol(parser_s *parser);
+
+#if DNSCORE_HAS_FULL_ASCII7
+void parser_add_translation(parser_s *parser, u8 character, u8 translates_into);
+void parser_del_translation(parser_s *parser, u8 character);
+#endif
 
 static inline u32
 parser_text_length(const parser_s *parser)
@@ -247,6 +263,7 @@ parser_text_unasciiz(parser_s *parser)
 static inline u8
 parser_text_delimiter(const parser_s *parser)
 {
+    (void)parser;
     return 0; // not implemented
 }
 
@@ -424,6 +441,42 @@ parse_word_match(const char *text, u32 text_len, const char *match, u32 match_le
     return FALSE;
 }
 
+static inline bool
+parse_word_case_match(const char *text, u32 text_len, const char *match, u32 match_len)
+{
+    if(text_len == match_len)
+    {
+        for(u32 i = 0; i < text_len; ++i)
+        {
+            if(tolower(text[i]) != tolower(match[i]))
+            {
+                return FALSE;
+            }
+        }
+
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+static inline ya_result
+parser_copy_word(parser_s *p, char *out_text, u32 out_text_len)
+{
+    u32 len = parser_text_length(p);
+    if(len < out_text_len)
+    {
+        memcpy(out_text, parser_text(p), len);
+        out_text[len] = '\0';
+
+        return len;
+    }
+    else
+    {
+        return PARSER_BUFFER_TOO_SMALL;
+    }
+}
+
 static inline ya_result
 parser_copy_next_word(parser_s *p, char *out_text, u32 out_text_len)
 {
@@ -457,7 +510,7 @@ parser_copy_next_class(parser_s *p, u16 *out_value)
     
     if(ISOK(return_code = parser_copy_next_word(p, text, sizeof(text))))
     {
-        return_code = get_class_from_name(text, out_value);
+        return_code = dns_class_from_name(text, out_value);
     }
     
     return return_code;
@@ -472,7 +525,7 @@ parser_copy_next_type(parser_s *p, u16 *out_value)
     
     if(ISOK(return_code = parser_copy_next_word(p, text, sizeof(text))))
     {
-        return_code = get_type_from_name(text, out_value);
+        return_code = dns_type_from_name(text, out_value);
     }
     
     return return_code;
@@ -648,6 +701,10 @@ parser_copy_next_u64(parser_s *p, u64 *out_value)
 
 
 
+
+ya_result parser_get_network_protocol_from_next_word(parser_s *p, int *out_value);
+
+ya_result parser_get_network_service_port_from_next_word(parser_s *p, int *out_value);
 
 ya_result parser_type_bit_maps_initialise(parser_s *p, type_bit_maps_context* context);
 

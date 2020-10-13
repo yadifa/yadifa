@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 /** @defgroup yadifad
  *  @ingroup ###
@@ -38,9 +38,13 @@
  */
 
 #include <dnscore/config_settings.h>
+
+#include <strings.h>
+
 #include <dnscore/ptr_set.h>
 #include <dnscore/base16.h>
 #include <dnscore/logger.h>
+#include <dnscore/parsing.h>
 
 #include "dnssec-policy.h"
 #include "zone_desc.h"
@@ -51,7 +55,6 @@
 /*----------------------------------------------------------------------------*/
 #pragma mark GLOBAL VARIABLES
 
-extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
 
 #define DENIALCF_TAG 0x46434c41494e4544
@@ -62,9 +65,7 @@ static value_name_table dnssec_enum[]=
     {0, NULL}
 };
 
-
 static ptr_set denial_desc_set = PTR_SET_ASCIIZ_EMPTY;
-
 
 /*----------------------------------------------------------------------------*/
 #pragma mark CONFIG
@@ -94,16 +95,23 @@ CONFIG_END(config_section_denial_desc)
 static ya_result
 config_section_denial_set_wild(struct config_section_descriptor_s *csd, const char *key, const char *value)
 {
+    (void)csd;
+    (void)key;
+    (void)value;
+
     return CONFIG_UNKNOWN_SETTING;
 }
 
 
 static ya_result
-config_section_denial_print_wild(struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_denial_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
 {
+    (void)csd;
+    (void)os;
+
     if(key != NULL)
     {
-        return ERROR;
+        return INVALID_ARGUMENT_ERROR;
     }
 
     return SUCCESS;
@@ -131,7 +139,7 @@ config_section_denial_init(struct config_section_descriptor_s *csd)
 
     if(csd->base != NULL)
     {
-        return ERROR; // base SHOULD be NULL at init
+        return INVALID_STATE_ERROR; // base SHOULD be NULL at init
     }
 
     return SUCCESS;
@@ -163,15 +171,16 @@ config_section_denial_start(struct config_section_descriptor_s *csd)
 
     if(csd->base != NULL)
     {
-        return ERROR;
+        return INVALID_STATE_ERROR;
     }
     
     denial_desc_s *denial;
-    MALLOC_OR_DIE(denial_desc_s*, denial, sizeof(denial_desc_s), DENIALCF_TAG);
+    MALLOC_OBJECT_OR_DIE(denial, denial_desc_s, DENIALCF_TAG);
     ZEROMEMORY(denial, sizeof(denial_desc_s));
     csd->base = denial;
     
     config_error_s cfgerr;
+    config_error_reset(&cfgerr);
     config_set_section_default(csd, &cfgerr);
 
     return SUCCESS;
@@ -219,9 +228,12 @@ config_section_denial_stop(struct config_section_descriptor_s *csd)
     }
     else
     {
-        denial->algorithm_val = (u8)atoi(denial->algorithm);
-
-        if(denial->algorithm_val != 1)
+        u32 parsed_algorithm = 0;
+        if(ISOK(parse_u32_check_range(denial->algorithm, &parsed_algorithm, 1, 255, 10)))
+        {
+            denial->algorithm_val = (u8)parsed_algorithm;
+        }
+        else
         {
             return CONFIG_SECTION_ERROR;
         }
@@ -238,7 +250,7 @@ config_section_denial_stop(struct config_section_descriptor_s *csd)
 #endif // if 0
 
 
-    ptr_node *node = ptr_set_avl_insert(&denial_desc_set, denial->id);
+    ptr_node *node = ptr_set_insert(&denial_desc_set, denial->id);
 
     if(node->value == NULL)
     {
@@ -270,17 +282,19 @@ config_section_denial_stop(struct config_section_descriptor_s *csd)
 static ya_result
 config_section_denial_postprocess(struct config_section_descriptor_s *csd)
 {
-   ya_result salt_length;
+    (void)csd;
 
-    ptr_set_avl_iterator iter;
-    ptr_set_avl_iterator_init(&denial_desc_set, &iter);
+    ya_result salt_length;
+
+    ptr_set_iterator iter;
+    ptr_set_iterator_init(&denial_desc_set, &iter);
 
     u8 buffer[256];
 
     // go thru binary tree and check all the 'denial' sections
-    while(ptr_set_avl_iterator_hasnext(&iter))
+    while(ptr_set_iterator_hasnext(&iter))
     {
-        ptr_node *denial_node = ptr_set_avl_iterator_next_node(&iter);
+        ptr_node *denial_node = ptr_set_iterator_next_node(&iter);
         denial_desc_s *denial_desc = (denial_desc_s *)denial_node->value;
 
         // check if there's a salt present
@@ -342,7 +356,7 @@ denial_free(denial_desc_s *denial)
 
 
 /**
- * @fn static ya_result config_section_denial_finalise(struct config_section_descriptor_s *csd)
+ * @fn static ya_result config_section_denial_finalize(struct config_section_descriptor_s *csd)
  *
  * @brief free denial_desc_s completely
  *
@@ -357,7 +371,7 @@ denial_free(denial_desc_s *denial)
  * return ya_result
  */
 static ya_result
-config_section_denial_finalise(struct config_section_descriptor_s *csd)
+config_section_denial_finalize(struct config_section_descriptor_s *csd)
 {
     if(csd != NULL)
     {
@@ -365,7 +379,7 @@ config_section_denial_finalise(struct config_section_descriptor_s *csd)
         {
             denial_desc_s *denial = (denial_desc_s*)csd->base;
             denial_free(denial);
-#ifdef DEBUG
+#if DEBUG
             csd->base = NULL;
 #endif
         }
@@ -391,7 +405,7 @@ static const config_section_descriptor_vtbl_s config_section_denial_descriptor_v
     config_section_denial_start,
     config_section_denial_stop,
     config_section_denial_postprocess,
-    config_section_denial_finalise
+    config_section_denial_finalize
 };
 
 
@@ -420,7 +434,7 @@ config_register_denial(const char *null_or_key_name, s32 priority)
     (void)null_or_key_name;
 
     config_section_descriptor_s *desc;
-    MALLOC_OR_DIE(config_section_descriptor_s*, desc, sizeof(config_section_descriptor_s), CFGSDESC_TAG);
+    MALLOC_OBJECT_OR_DIE(desc, config_section_descriptor_s, CFGSDESC_TAG);
     desc->base = NULL;
     desc->vtbl = &config_section_denial_descriptor_vtbl;
 

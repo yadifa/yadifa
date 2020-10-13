@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -45,6 +46,8 @@
 #include <dnscore/output_stream.h>
 #include <dnscore/input_stream.h>
 #include <dnscore/host_address.h>
+#include <dnscore/ptr_vector.h>
+#include <dnscore/cmdline.h>
 
 /*
  Each section/container descriptor is registered.
@@ -119,6 +122,10 @@
 
 #define CONFIG_SETTINGS_DEBUG 0
 
+#define CONFIG_FIELD_ALLOCATION_DIRECT  0       // direct value 
+#define CONFIG_FIELD_ALLOCATION_MALLOC  1       // mallocated value
+#define CONFIG_FIELD_ALLOCATION_ZALLOC  2       // zallocated value
+
 /**
  * This union covers 64 bits
  * Meant to be used to store different parameters
@@ -131,10 +138,10 @@ union anytype_u
     u8      _u8;
     u16     _u16;
     u32     _u32;
+    u64     _u64;
     u8      _8u8[8];
     u16     _4u16[4];
     u32     _2u32[2];
-    u64     _u64;
     s8      _s8;
     s16     _s16;
     s32     _s32;
@@ -146,11 +153,14 @@ union anytype_u
     result_callback_function *result_callback;
     void*   _voidp;
     char*   _charp;
+    u8*     _u8p;
 };
 
 typedef union anytype_u anytype;
 
-typedef ya_result config_set_field_function(const char*, void*, anytype);
+
+
+typedef ya_result config_set_field_function(const char*, void*, const anytype);
 
 struct config_section_descriptor_s;
 
@@ -166,22 +176,27 @@ struct config_section_descriptor_s;
 struct config_table_descriptor_item_s
 {
     const char *name;
-    int field_offset;
+    size_t field_offset;
     config_set_field_function *setter;
     const char *default_value_string;
     anytype function_specific;
+    size_t expected_size;
+    size_t field_size;
     u8 source;
+    u8 allocation_mode;
+    // help text
 };
 
 typedef struct config_table_descriptor_item_s config_table_descriptor_item_s;
 
 typedef ya_result config_section_set_wild_method(struct config_section_descriptor_s *, const char *key, const char *value);
-typedef ya_result config_section_print_wild_method(struct config_section_descriptor_s *, output_stream *os, const char *key);
+typedef ya_result config_section_print_wild_method(const struct config_section_descriptor_s *, output_stream *os, const char *key);
+
 typedef ya_result config_section_init_method(struct config_section_descriptor_s *);
 typedef ya_result config_section_start_method(struct config_section_descriptor_s *);
 typedef ya_result config_section_stop_method(struct config_section_descriptor_s *);
 typedef ya_result config_section_postprocess_method(struct config_section_descriptor_s *);
-typedef ya_result config_section_finalise_method(struct config_section_descriptor_s *);
+typedef ya_result config_section_finalize_method(struct config_section_descriptor_s *);
 
 #define CFGSVTBL_TAG 0x42545653474643
 
@@ -189,15 +204,16 @@ struct config_section_descriptor_vtbl_s
 {
     /// section name
     const char                                 *name; // the table name
-    config_table_descriptor_item_s            *table; // the descriptor for the table
+    config_table_descriptor_item_s            *table; // the descriptor for the table (static fields)
     
     config_section_set_wild_method         *set_wild; // sets an undefined (dynamic) field
     config_section_print_wild_method     *print_wild; // prints an undefined (dynamic) field
+
     config_section_init_method                 *init; // initialises
     config_section_start_method               *start; // called when a section starts
     config_section_stop_method                 *stop; // called when a section stops
     config_section_postprocess_method   *postprocess; // called after the section has been processed
-    config_section_finalise_method         *finalise; // finishes
+    config_section_finalize_method         *finalise; // finishes, deletes all memory for this section, this vtbl included (if needed)
 };
 
 typedef struct config_section_descriptor_vtbl_s config_section_descriptor_vtbl_s;
@@ -235,75 +251,85 @@ typedef struct config_section_descriptor_s config_section_descriptor_s;
 
 #undef CONFIG_TYPE /* please_define_me */   
 
-#define CONFIG_BEGIN(name_) static config_table_descriptor_item_s name_[] = {
-#define CONFIG_BOOL(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_bool, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_FLAG8(fieldname_,defaultvalue_, realfieldname_, mask_) {#fieldname_,offsetof(CONFIG_TYPE, realfieldname_), (config_set_field_function*)config_set_flag8, defaultvalue_,{(u8)mask_}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_FLAG16(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFIG_TYPE, realfieldname_), (config_set_field_function*)config_set_flag16, defaultvalue_,{(u16)mask_}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_FLAG32(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFIG_TYPE, realfieldname_), (config_set_field_function*)config_set_flag32, defaultvalue_,{(u32)mask_}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_FLAG64(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFIG_TYPE, realfieldname_), (config_set_field_function*)config_set_flag64, defaultvalue_,{(u64)mask_}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_U64(fieldname_,defaultvalue_)                 {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_u64,       defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_U32(fieldname_,defaultvalue_)                 {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_u32,       defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_U32_RANGE(fieldname_,defaultvalue_,min_,max_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_u32_range, defaultvalue_,{._2u32={(min_),(max_)}}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_U32_CLAMP(fieldname_,defaultvalue_,min_,max_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_u32_clamp, defaultvalue_,{._2u32={(min_),(max_)}}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_U16(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_u16, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_DNS_TYPE(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_dnstype, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_DNS_CLASS(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_dnsclass, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_U8(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_u8, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_U8_INC(fieldname_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_inc_u8, 0,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_STRING(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_string, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_STRING_COPY(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_string_copy, defaultvalue_,{._u32=(sizeof(((CONFIG_TYPE*)NULL)->fieldname_))}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_STRING_ARRAY(fieldname_,default_value_,max_size_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_append_string_array_item, default_value_,{._u32=(max_size_)}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_PASSWORD(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_password, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_FQDN(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_fqdn, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_PATH(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_path, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_CHROOT(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_chroot, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_LOGPATH(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_logpath, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_FILE(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_file, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_UID(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_uid_t, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_GID(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_gid_t, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-//#define CONFIG_ACL(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, ac) + offsetof(access_control,fieldname_), (config_set_field_function*)config_set_acl_item, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-//#define CONFIG_ACL_FILTER(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_acl_item, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_LIST_ITEM(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_add_list_item, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_ENUM(fieldname_,defaultvalue_,enumtable_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_enum_value, defaultvalue_, {(intptr)enumtable_}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_ENUM8(fieldname_,defaultvalue_,enumtable_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_enum8_value, defaultvalue_, {(intptr)enumtable_}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_HOST_LIST(fieldname_,defaultvalue_) {#fieldname_, offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_host_list, defaultvalue_,{._8u8={CONFIG_HOST_LIST_FLAGS_DEFAULT,255,0,0,0,0,0,0}}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_HOST_LIST_EX(fieldname_,defaultvalue_,flags_,host_list_max_) {#fieldname_, offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_host_list, defaultvalue_,{._8u8={(flags_),(host_list_max_),0,0,0,0,0,0}}, CONFIG_TABLE_SOURCE_NONE},
-#define CONFIG_BYTES(fieldname_,defaultvalue_,maxsize_) {#fieldname_, offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_bytes, defaultvalue_, {maxsize_}, CONFIG_TABLE_SOURCE_NONE},
-//#define CONFIG_DNSSEC(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_dnssec, defaultvalue_,{._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
-    
-#define CONFIG_ALIAS(fieldname_, aliasedname_) {#fieldname_, 0, NULL, #aliasedname_, {._intptr=0}, CONFIG_TABLE_SOURCE_NONE},
+#define CONFIG_BEGIN(name_) static /* DO NOT const */ config_table_descriptor_item_s name_[] = {
+#define CONFIG_BOOL(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_bool, defaultvalue_,{._intptr=0}, sizeof(bool), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_FLAG8(fieldname_,defaultvalue_, realfieldname_, mask_) {#fieldname_,offsetof(CONFIG_TYPE, realfieldname_), (config_set_field_function*)config_set_flag8, defaultvalue_,{(u8)(mask_)}, sizeof(u8), sizeof(u8), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_FLAG16(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFIG_TYPE, realfieldname_), (config_set_field_function*)config_set_flag16, defaultvalue_,{(u16)(mask_)}, sizeof(u16), sizeof(u16), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_FLAG32(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFIG_TYPE, realfieldname_), (config_set_field_function*)config_set_flag32, defaultvalue_,{(u32)(mask_)}, sizeof(u32), sizeof(u32), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_FLAG64(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFIG_TYPE, realfieldname_), (config_set_field_function*)config_set_flag64, defaultvalue_,{(u64)(mask_)}, sizeof(u64), sizeof(u64), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_U64(fieldname_,defaultvalue_)                 {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_u64,       defaultvalue_,{._intptr=0}, sizeof(u64), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_U32(fieldname_,defaultvalue_)                 {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_u32,       defaultvalue_,{._intptr=0}, sizeof(u32), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_S32(fieldname_,defaultvalue_)                 {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_s32,       defaultvalue_,{._intptr=0}, sizeof(u32), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_U32_RANGE(fieldname_,defaultvalue_,min_,max_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_u32_range, defaultvalue_,{._2u32={(min_),(max_)}}, sizeof(u32), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_U32_CLAMP(fieldname_,defaultvalue_,min_,max_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_u32_clamp, defaultvalue_,{._2u32={(min_),(max_)}}, sizeof(u32), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_U16(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_u16, defaultvalue_,{._intptr=0}, sizeof(u16), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_DNS_TYPE(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_dnstype, defaultvalue_,{._intptr=0}, sizeof(u16), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_DNS_CLASS(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_dnsclass, defaultvalue_,{._intptr=0}, sizeof(u16), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_U8(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_u8, defaultvalue_,{._intptr=0}, sizeof(u8), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_DNSKEY_ALGORITHM(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_dnskey_algorithm, defaultvalue_,{._intptr=0}, sizeof(u8), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_U8_INC(fieldname_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_inc_u8, 0,{._intptr=0}, sizeof(u8), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_STRING(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_string, defaultvalue_,{._intptr=0}, sizeof(char*), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_STRING_COPY(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_string_copy, defaultvalue_,{._u32=(sizeof(((CONFIG_TYPE*)NULL)->fieldname_))}, sizeof(((CONFIG_TYPE*)NULL)->fieldname_), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_STRING_ARRAY(fieldname_,default_value_,max_size_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_append_string_array_item, default_value_,{._u32=(max_size_)}, sizeof(ptr_vector), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_PASSWORD(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_password, defaultvalue_,{._intptr=0}, sizeof(char*), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_FQDN(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_fqdn, defaultvalue_,{._intptr=0}, sizeof(u8*), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_MALLOC },
+#define CONFIG_PATH(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_path, defaultvalue_,{._intptr=0}, sizeof(char*), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_CHROOT(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_chroot, defaultvalue_,{._intptr=0}, sizeof(char*), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_LOGPATH(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_logpath, defaultvalue_,{._intptr=0}, sizeof(char*), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_FILE(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_file, defaultvalue_,{._intptr=0}, sizeof(char*), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_UID(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_uid_t, defaultvalue_,{._intptr=0}, sizeof(uid_t), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_GID(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_gid_t, defaultvalue_,{._intptr=0}, sizeof(gid_t), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+//#define CONFIG_ACL(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, ac) + offsetof(access_control,fieldname_), (config_set_field_function*)config_set_acl_item, defaultvalue_,{._intptr=0}, sizeof(), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+//#define CONFIG_ACL_FILTER(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_acl_item, defaultvalue_,{._intptr=0}, sizeof(), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+//#define CONFIG_LIST_ITEM(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_add_list_item, defaultvalue_,{._intptr=0}, sizeof(), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_ENUM(fieldname_,defaultvalue_,enumtable_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_enum_value, defaultvalue_, {(intptr)(enumtable_)}, sizeof(u32), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+//#define CONFIG_ENUM8(fieldname_,defaultvalue_,enumtable_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_enum8_value, defaultvalue_, {(intptr)enumtable_}, sizeof(u8), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_HOST_LIST(fieldname_,defaultvalue_) {#fieldname_, offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_host_list, defaultvalue_,{._8u8={CONFIG_HOST_LIST_FLAGS_DEFAULT,255,0,0,0,0,0,0}}, sizeof(host_address*), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_HOST_LIST_EX(fieldname_,defaultvalue_,flags_,host_list_max_) {#fieldname_, offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_host_list, defaultvalue_,{._8u8={(flags_),(host_list_max_),0,0,0,0,0,0}}, sizeof(host_address*), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_BYTES(fieldname_,defaultvalue_,maxsize_) {#fieldname_, offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_bytes, defaultvalue_, {maxsize_}, maxsize_, sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+//#define CONFIG_DNSSEC(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_dnssec, defaultvalue_,{._intptr=0}, sizeof(), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_TSIG_ITEM(fieldname_,defaultvalue_) {#fieldname_, offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_tsig_item, defaultvalue_, {._intptr=0}, sizeof(struct tsig_item*), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_OBSOLETE(fieldname_) {#fieldname_,0, (config_set_field_function*)config_set_obsolete, NULL,{._intptr=0}, 0, 0, CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+
+#define CONFIG_ALIAS(fieldname_, aliasedname_) {#fieldname_, 0, NULL, #aliasedname_, {._intptr=0}, 0, 0, CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT},
     /*#define CONFIG_CATEGORY(fieldname_, category_) {#fieldname_, 0, NULL, NULL, #category},*/
 
-#define CONFIG_END(name_) {NULL,0,NULL,NULL, {._intptr=0}, CONFIG_TABLE_SOURCE_NONE} }; // name_
- 
-ya_result config_set_bool(const char *value, bool *dest, anytype notused);
-ya_result config_set_flag8(const char *value, u8 *dest, anytype mask8);
-ya_result config_set_flag16(const char *value, u16 *dest, anytype mask16);
-ya_result config_set_flag32(const char *value, u32 *dest, anytype mask32);
-ya_result config_set_flag64(const char *value, u64 *dest, anytype mask64);
-ya_result config_set_u64(const char *value,u64 *dest, anytype notused);
-ya_result config_set_u32(const char *value,u32 *dest, anytype notused);
-ya_result config_set_u32_range(const char *value,u32 *dest, anytype min_max);
-ya_result config_set_u16(const char *value,u16 *dest, anytype notused);
-ya_result config_set_u8(const char *value,u8 *dest, anytype notused);
-ya_result config_inc_u8(const char *value_notused,u8 *dest, anytype notused);
-ya_result config_set_string(const char *value, char **dest, anytype notused);
-ya_result config_set_string_copy(const char *value, char *dest, anytype maxlen);
-ya_result config_append_string_array_item(const char *value, ptr_vector *dest, anytype maxsize);
-ya_result config_set_password(const char *value, char **dest, anytype notused);
-ya_result config_set_fqdn(const char *value, u8 **dest, anytype notused);
-ya_result config_set_path(const char *value, char **dest, anytype notused);
-ya_result config_set_chroot(const char *value, char **dest, anytype notused);
-ya_result config_set_logpath(const char *value, char **dest, anytype notused);
-ya_result config_set_file(const char *value, char **dest, anytype notused);
-ya_result config_set_uid_t(const char *value, uid_t *dest, anytype notused);
-ya_result config_set_gid_t(const char *value, gid_t *dest, anytype notused);
-ya_result config_set_dnstype(const char *value, u16 *dest, anytype notused);
-ya_result config_set_dnsclass(const char *value, u16 *dest, anytype notused);
-ya_result config_set_enum_value(const char *value, u32 *dest, anytype enum_value_name_table);
-ya_result config_set_enum8_value(const char *value, u8 *dest, anytype enum_value_name_table);
-ya_result config_set_host_list(const char *value, host_address **dest, anytype notused);
-ya_result config_set_bytes(const char *value, void *dest, anytype sizeoftarget);
+#define CONFIG_END(name_) {NULL,0,NULL,NULL, {._intptr=0}, 0, 0, CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT} }; // name_
+
+struct tsig_item;
+
+ya_result config_set_bool(const char *value, bool *dest, const anytype notused);
+ya_result config_set_flag8(const char *value, u8 *dest, const anytype mask8);
+ya_result config_set_flag16(const char *value, u16 *dest, const anytype mask16);
+ya_result config_set_flag32(const char *value, u32 *dest, const anytype mask32);
+ya_result config_set_flag64(const char *value, u64 *dest, const anytype mask64);
+ya_result config_set_u64(const char *value,u64 *dest, const anytype notused);
+ya_result config_set_u32(const char *value,u32 *dest, const anytype notused);
+ya_result config_set_s32(const char *value,s32 *dest, const anytype notused);
+ya_result config_set_u32_range(const char *value,u32 *dest, const anytype min_max);
+ya_result config_set_u16(const char *value,u16 *dest, const anytype notused);
+ya_result config_set_u8(const char *value,u8 *dest, const anytype notused);
+ya_result config_inc_u8(const char *value_notused,u8 *dest, const anytype notused);
+ya_result config_set_dnskey_algorithm(const char *value, u8 *dest, const anytype notused);
+ya_result config_set_string(const char *value, char **dest, const anytype notused);
+ya_result config_set_string_copy(const char *value, char *dest, const anytype maxlen);
+ya_result config_append_string_array_item(const char *value, ptr_vector *dest, const anytype maxsize);
+ya_result config_set_password(const char *value, char **dest, const anytype notused);
+ya_result config_set_fqdn(const char *value, u8 **dest, const anytype notused);
+ya_result config_set_path(const char *value, char **dest, const anytype notused);
+ya_result config_set_chroot(const char *value, char **dest, const anytype notused);
+ya_result config_set_logpath(const char *value, char **dest, const anytype notused);
+ya_result config_set_file(const char *value, char **dest, const anytype notused);
+ya_result config_set_uid_t(const char *value, uid_t *dest, const anytype notused);
+ya_result config_set_gid_t(const char *value, gid_t *dest, const anytype notused);
+ya_result config_set_dnstype(const char *value, u16 *dest, const anytype notused);
+ya_result config_set_dnsclass(const char *value, u16 *dest, const anytype notused);
+ya_result config_set_enum_value(const char *value, u32 *dest, const anytype enum_value_name_table);
+ya_result config_set_enum8_value(const char *value, u8 *dest, const anytype enum_value_name_table);
+ya_result config_set_host_list(const char *value, host_address **dest, const anytype notused);
+ya_result config_set_bytes(const char *value, void *dest, const anytype sizeoftarget);
+ya_result config_set_tsig_item(const char *value, struct tsig_item **dest, const anytype notused);
+ya_result config_set_obsolete(const char *value, void *dest, const anytype sizeoftarget);
 
 // life of the config processing
 
@@ -311,12 +337,28 @@ void config_init_error_codes();
 
 struct config_error_s
 {
+    const char *variable_name;
     u32 line_number;
+    bool has_content;
     char line[256];
     char file[PATH_MAX];
 };
 
 typedef struct config_error_s config_error_s;
+
+static inline void config_error_reset(config_error_s* cfgerr)
+{
+    if(cfgerr != NULL)
+    {
+        cfgerr->variable_name = "";
+        cfgerr->line_number = 0;
+        cfgerr->has_content = FALSE;
+        cfgerr->line[0] = '\0';
+        cfgerr->file[0] = '\0';
+    }
+}
+
+#define CONFIG_ERROR_INITIALISER { NULL, 0, "?", "?"}
 
 struct config_source_s;
 
@@ -349,8 +391,6 @@ struct config_source_s
     } source;
     u8 level;
 };
-
-
 
 #ifdef TODO
 struct config_s
@@ -420,7 +460,6 @@ u8 config_get_default_source();
 
 void config_set_default_source(u8 l);           // this level is meant for default (1)
 
-
 #define CONFIG_CALLBACK_RESULT_CONTINUE 0
 #define CONFIG_CALLBACK_RESULT_STOP     1
 
@@ -457,7 +496,13 @@ ya_result config_remove_on_section_read_callback(const char *section_name, confi
  * @return an error code
  */
 
-ya_result config_register(const config_section_descriptor_s *section_descritor, s32 priority);
+ya_result config_register(config_section_descriptor_s *section_descritor, s32 priority);
+
+ya_result config_register_const(const config_section_descriptor_s *section_descriptor, s32 priority);
+
+ya_result config_unregister(config_section_descriptor_s *section_descriptor);
+
+config_section_descriptor_s *config_unregister_by_name(const char *name);
 
 /**
  * 
@@ -518,6 +563,8 @@ void config_source_set_buffer(struct config_source_s *source, const char *name, 
 
 void config_source_set_file(struct config_source_s *source, const char *name, u8 level);
 
+ya_result config_source_set_commandline(struct config_source_s *source, const cmdline_desc_s *cmdline, int argc, char **argv);
+
 /**
  * Read all sources from a table
  * 
@@ -570,11 +617,14 @@ ya_result config_set_section_default(config_section_descriptor_s *section_descri
  * @param section_descriptor the descriptor pointing to the table
  * @param key the key to set
  * @param value to value to set it to
+ * @param cfgerr a structure that contains details about an error
  * 
  * @return an error code
  */
 
-ya_result config_value_set(config_section_descriptor_s *section_descriptor, const char *key, const char *value);
+ya_result config_value_set(config_section_descriptor_s *section_descriptor, const char *key, const char *value, config_error_s *cfgerr);
+
+ya_result config_source_set_by_target(config_section_descriptor_s *section_descriptor, void *target_ptr);
 
 /**
  * 
@@ -645,7 +695,7 @@ ya_result config_postprocess();
  * 
  */
 
-ya_result config_finalise();
+ya_result config_finalize();
 
 // helpers
 
@@ -664,6 +714,8 @@ typedef void *config_section_struct_collection_get_next_method(void *previous_da
  */
 
 ya_result config_register_struct(const char *name, config_table_descriptor_item_s *table, void *data_struct, s32 priority);
+
+void* config_unregister_struct(const char *name, const config_table_descriptor_item_s *table);
 
 /**
  * 

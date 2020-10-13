@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man
+.\" Manual page created with latex2man on Tue Oct 13 12:59:04 2020
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -10,9 +10,12 @@
 
 .fi
 ..
-.TH "YADIFAD" "8" "2020\-10\-07" "YADIFA " "YADIFA "
+.TH "YADIFAD" "8" "2020\-10\-12" "YADIFA " "YADIFA "
 .SH NAME
-yadifad \- an authoritative Internet domain name server. 
+
+.PP
+YADIFAD
+\- an authoritative Internet domain name server. 
 .PP
 .SH SYNOPSIS
 
@@ -27,6 +30,7 @@ yadifad
 .PP
 .SH DESCRIPTION
 
+.PP
 yadifad
 is a Domain Name System (DNS) server, part of the YADIFA distribution from EURid vzw/asbl. The latest version of YADIFA
 can be found on:
@@ -58,46 +62,216 @@ DNS Update
 .B *
 NOTIFY 
 .PP
-.br
 yadifad
 works only with 1 CLASS:
-
-.nf
-.ta 3i 4.5i
-Class       Value   Definition
-IN          1       (Internet class)
-
-yadifad supports following TYPES:
-
-Type        Value   Defining RFC
-
-A           1       1035
-AAAA        28      3596
-CNAME       5       1035
-DNSKEY      48      4034
-DS          43      4034
-HINFO       12      1035
-MX          15      1035
-NAPTR       35      3403
-NS          2       1035
-NSEC        47      4034
-NSEC3       50      5155
-NSEC3PARAM  51      5155
-PTR         12      1035
-RRSIG       46      4034
-SOA         6       1035
-SRV         33      2782
-SSHFP       44      4255
-TLSA        52      6698
-TXT         16      1035
-
+.PP
+.TS
+tab(&);
+l l lw(2cm).
+T{
+Class 
+T}&T{
+Value 
+T}&T{
+Definition
+T}
+T{
+T}
+T{
+IN
+T}&T{
+1 
+T}&T{
+Internet class
+T}
+.TE
+.PP
+yadifad
+supports following TYPES:
+.PP
+.TS
+tab(&);
+l l l.
+T{
+Type 
+T}&T{
+Value 
+T}&T{
+Defining RFC
+T}
+T{
+T}
+T{
+A 
+T}&T{
+1 
+T}&T{
+1035
+T}
+T{
+AAAA 
+T}&T{
+28 
+T}&T{
+3596
+T}
+T{
+CNAME 
+T}&T{
+5 
+T}&T{
+1035
+T}
+T{
+DNSKEY 
+T}&T{
+48 
+T}&T{
+4034
+T}
+T{
+DS 
+T}&T{
+43 
+T}&T{
+4034
+T}
+T{
+HINFO 
+T}&T{
+12 
+T}&T{
+1035
+T}
+T{
+MX 
+T}&T{
+15 
+T}&T{
+1035
+T}
+T{
+NAPTR 
+T}&T{
+35 
+T}&T{
+3403
+T}
+T{
+NS 
+T}&T{
+2 
+T}&T{
+1035
+T}
+T{
+NSEC 
+T}&T{
+47 
+T}&T{
+4034
+T}
+T{
+NSEC3 
+T}&T{
+50 
+T}&T{
+5155
+T}
+T{
+NSEC3PARAM 
+T}&T{
+51 
+T}&T{
+5155
+T}
+T{
+PTR 
+T}&T{
+12 
+T}&T{
+1035
+T}
+T{
+RRSIG 
+T}&T{
+46 
+T}&T{
+4034
+T}
+T{
+SOA 
+T}&T{
+6 
+T}&T{
+1035
+T}
+T{
+SRV 
+T}&T{
+33 
+T}&T{
+2782
+T}
+T{
+SSHFP 
+T}&T{
+44 
+T}&T{
+4255
+T}
+T{
+TXT 
+T}&T{
+16 
+T}&T{
+1035
+T}
+.TE
+.PP
 Other tyes and pseudo resource records: 
-
-*           255     1035
-AXFR        252     1035
-IXFR        251     1035
-OPT         41      6891
-
+.PP
+.TS
+tab(&);
+l l l.
+T{
+Type 
+T}&T{
+Value 
+T}&T{
+Defining RFC
+T}
+T{
+T}
+T{
+* 
+T}&T{
+255 
+T}&T{
+1035
+T}
+T{
+AXFR 
+T}&T{
+252 
+T}&T{
+1035
+T}
+T{
+IXFR 
+T}&T{
+251 
+T}&T{
+1035
+T}
+T{
+OPT 
+T}&T{
+41 
+T}&T{
+6891
+T}
+.TE
 .PP
 .SH OPTIONS
 
@@ -107,7 +281,7 @@ OPT         41      6891
  Another config file will be used. 
 .TP
 [\fB\-\-daemon|\-d\fP]
- Starts the name server in daemon mode. 
+ Starts the name server in daemon mode (default) 
 .TP
 [\fB\-\-uid|\-u\fP\fI uid\fP]
  Starts the name server with the given uid. 
@@ -130,7 +304,7 @@ SIGHUP
 reloads the zone and key sections in the configuration file and reloads the zone file(s) with incremented serial number, and close all log files and reopens them. 
 .TP
 SIGINT 
-shuts down the server 
+shutdowns the server 
 .TP
 SIGTERM 
 (see SIGINT) 
@@ -138,9 +312,9 @@ SIGTERM
 .SH CONFIGURATION
 
 .PP
-The yadifad.conf itself is mandatory, but can be empty. No options are needed for using yadifad DNS name server. 
+The yadifad.conf itself is mandatory, but can be empty. No options is needed for using yadifad DNS name server. 
 .PP
-The yadifad configuration options can be found in yadifad.conf.5 man page. A complete description is provided in the YADIFA 2.3.11 Reference Manual (YRM2311). 
+The yadifad configuration options can be found in yadifad.conf.5 man page. A complete description is provided in the YADIFA 2.4.0 Reference Manual (YM24). 
 .PP
 .SH FILES
 
@@ -170,17 +344,18 @@ yadifad.conf.5
 .TP
 OpenSSL 
 yadifad
-requires OpenSSL version 0.9.8 or later. 
+requires OpenSSL version 1.1.1 or later. 
 .PP
 .SH CHANGES
 
-Please check the ChangeLog
+.PP
+Please check the README
 file from the source code. 
 .PP
 .SH VERSION
 
 .PP
-Version: 2.3.11 of 2020\-10\-07\&.
+Version: 2.4.0 of 2020\-10\-12. 
 .PP
 .SH MAILING LISTS
 
@@ -212,7 +387,7 @@ via:
 .PP
 .TP
 Copyright 
-(C) 2011\-2020, EURid vzw/asbl
+(C)2011\-2020, EURid vzw/asbl
 .br
 B\-1831 Diegem, Belgium
 .br

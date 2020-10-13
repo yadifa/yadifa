@@ -1,0 +1,70 @@
+From helmut@subdivi.de Fri Oct 02 20:22:05 2020
+Received: (at submit) by bugs.debian.org; 2 Oct 2020 20:22:06 +0000
+Date: Fri, 2 Oct 2020 22:21:42 +0200
+From: Helmut Grohne <helmut@subdivi.de>
+To: Debian Bug Tracking System <submit@bugs.debian.org>
+Subject: yadifa FTCBFS: detects cpu features from uname
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="EVF5PPMfhYS0aIcm"
+Content-Disposition: inline
+X-Reportbug-Version: 7.7.0
+Delivered-To: submit@bugs.debian.org
+
+
+--EVF5PPMfhYS0aIcm
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+
+Source: yadifa
+Version: 2.3.10-1
+Tags: ftbfs patch upstream
+User: debian-cross@lists.debian.org
+Usertags: ftcbfs
+
+When building yadifa on amd64 for an architecture that does not have
+multilib support via -m64, the build fails, because yadifa concludes
+that when building on amd64, one must pass -m64 to the compiler. That's
+broken.
+
+For detecting the cpu, one should use AC_CANONICAL_HOST instead of
+uname. Beyond that, -m64 is wrong on x32 and that actually breaks native
+builds on x32.
+
+The attached patch fixes both. Please consider applying it.
+
+Helmut
+
+--EVF5PPMfhYS0aIcm
+Content-Type: text/x-diff; charset=us-ascii
+Content-Disposition: attachment; filename="cross.patch"
+
+--- yadifa-2.3.10.orig/m4/eurid.m4
++++ yadifa-2.3.10/m4/eurid.m4
+@@ -316,18 +316,15 @@
+ 		;;
+ esac
+ 
+-case "$(uname -m)" in
+-	x86_64)
++AC_REQUIRE([AC_CANONICAL_HOST])
++AS_IF([test "$host_cpu" = x86_64],[
+ 		AC_DEFINE_UNQUOTED([HAS_CPU_AMDINTEL], [1], [i386, Athlon, Opteron, Core2, i3, i5, i7, ...])
+ 		AM_CONDITIONAL([HAS_CPU_AMDINTEL], [true])
+ 		AC_MSG_RESULT([AMD/Intel])
+-		CFLAGS3264=-m64
++		AS_IF([test "$host" = x86_64-linux-gnux32],,[CFLAGS3264=-m64])
+ 		CPU_UNKNOWN=0
+ 		cpu_intel_compatible=1
+-		;;
+-	*)
+-		;;
+-esac
++])
+ 
+ case "${CPU_UNKNOWN}" in
+ 	1)
+
+--EVF5PPMfhYS0aIcm--
+
+
+

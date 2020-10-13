@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnskey DNSSEC keys functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -55,9 +56,11 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/ec.h>
+//#include <openssl/ec_lcl.h>
 #include <openssl/ecdsa.h>
 #include <openssl/ssl.h>
 #include <openssl/engine.h>
+#include "dnscore/openssl.h"
 
 #include "dnscore/dnscore-config.h"
 
@@ -71,8 +74,6 @@
 #include "dnscore/dnssec_errors.h"
 
 #include "dnscore/zalloc.h"
-
-
 
 #define MODULE_MSG_HANDLE g_system_logger
 
@@ -146,7 +147,7 @@ static void dnskey_ecdsa_from_ecdsa(struct dnskey_ecdsa_const *yecdsa, const EC_
     yecdsa->private_key = EC_KEY_get0_private_key(ecdsa);
 }
 
-static void dnskey_ecdsa_finalise(struct dnskey_ecdsa *yecdsa)
+static void dnskey_ecdsa_finalize(struct dnskey_ecdsa *yecdsa)
 {
     if(yecdsa->private_key != NULL) BN_free(yecdsa->private_key);
     dnskey_ecdsa_init(yecdsa);
@@ -178,25 +179,7 @@ dnskey_ecdsa_getnid(u8 algorithm)
     }
 }
 
-static int
-dnskey_ecdsa_getnid_by_size(u32 size)
-{
-    switch(size)
-    {
-        case 256:
-        {
-            return DNSKEY_ALGORITHM_ECDSAP256SHA256_NID;
-        }
-        case 384:
-        {
-            return DNSKEY_ALGORITHM_ECDSAP384SHA384_NID;
-        }
-        default:
-        {
-            return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
-        }
-    }
-}
+
 
 static int
 dnskey_ecdsa_nid_to_signature_bn_size(int nid)
@@ -218,16 +201,18 @@ dnskey_ecdsa_nid_to_signature_bn_size(int nid)
     }
 }
 
+
+
 static EC_KEY*
-dnskey_ecdsa_genkey(u32 size)
+dnskey_ecdsa_genkey_by_nid(int nid)
 {
-    yassert(size == 256 || size == 384);
+    //yassert(size == 256 || size == 384);
 
     int err;
     EC_KEY *ecdsa;
     EC_GROUP *group;
-    
-    if((group = EC_GROUP_new_by_curve_name(dnskey_ecdsa_getnid_by_size(size))) == NULL)
+
+    if((group = EC_GROUP_new_by_curve_name(nid)) == NULL)
     {
         return NULL;
     }
@@ -236,25 +221,34 @@ dnskey_ecdsa_genkey(u32 size)
     {
         return NULL;
     }
-    
+
     EC_KEY_set_group(ecdsa, group);
-    
+
     err = EC_KEY_generate_key(ecdsa); /* no callback */
+
+    EC_GROUP_clear_free(group);
 
     if(err == 0)
     {
         // error
-        
+
         EC_KEY_free(ecdsa);
         ecdsa = NULL;
     }
-    
+
     return ecdsa;
 }
 
 static ya_result
-dnskey_ecdsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u8 *output)
+dnskey_ecdsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u8 *output_)
 {
+    u8 *output;
+
+
+    output = output_;
+
+
+
     ECDSA_SIG *sig = ECDSA_do_sign(digest, digest_len, key->key.ec);
 
     if(sig != NULL)
@@ -265,14 +259,26 @@ dnskey_ecdsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len,
         const BIGNUM *sig_r;
         const BIGNUM *sig_s;
         ECDSA_SIG_get0(sig, &sig_r, &sig_s);
-        
-        int r_size = BN_bn2bin(sig_r, output);
-        output += r_size;
-        int s_size = BN_bn2bin(sig_s, output);
+
+        int r_size = BN_num_bytes(sig_r);
+        int r_pad = bn_size - r_size;
+        memset(output, 0, r_pad);
+        BN_bn2bin(sig_r, &output[r_pad]);
+        output += bn_size;
+
+        int s_size = BN_num_bytes(sig_s);
+        int s_pad = bn_size - s_size;
+        memset(output, 0, s_pad);
+        BN_bn2bin(sig_s, &output[s_pad]);
+        //output += bn_size;
         
         ECDSA_SIG_free(sig);
         
-        return r_size + s_size;
+        ya_result output_size = bn_size * 2; // r_size + s_size;
+
+
+
+        return output_size;
     }
     else
     {
@@ -296,7 +302,7 @@ dnskey_ecdsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_le
 {
     yassert(signature_len <= DNSSEC_MAXIMUM_KEY_SIZE_BYTES);
     
-#ifdef DEBUG
+#if DEBUG
     log_debug6("ecdsa_verifydigest(K%{dnsname}-%03d-%05d, @%p, @%p)", key->owner_name, key->algorithm, key->tag, digest, signature);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG6, digest, digest_len, 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG6, signature, signature_len, 32);
@@ -309,9 +315,15 @@ dnskey_ecdsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_le
     
     int bn_size = dnskey_ecdsa_nid_to_signature_bn_size(key->nid);
 
-    if(signature_len != bn_size * 2)
+    if(FAIL(bn_size))
     {
-        log_err("EC_KEY signature expected to be 41 bytes long");
+        log_err("EC_KEY getting size for NID returned: %r", bn_size);
+        return FALSE;
+    }
+
+    if((int)signature_len != bn_size * 2)
+    {
+        log_err("EC_KEY signature size unexpected");
         return FALSE;
     }
     
@@ -362,6 +374,7 @@ dnskey_ecdsa_public_load(u8 algorithm, const u8* rdata, u16 rdata_size)
         if(EC_POINT_oct2point(group, point, tmp, rdata_size + 1, NULL) == 1)
         {
             EC_KEY_set_public_key(ecdsa, point);
+            EC_POINT_free(point);
             return ecdsa;
         }
         
@@ -545,7 +558,7 @@ dnskey_ecdsa_initinstance(EC_KEY *ecdsa, u8 algorithm, u16 flags, const char *or
         return nid;
     }
 
-#ifdef DEBUG
+#if DEBUG
     memset(rdata, 0xff, sizeof(rdata));
 #endif
 
@@ -569,9 +582,14 @@ dnskey_ecdsa_initinstance(EC_KEY *ecdsa, u8 algorithm, u16 flags, const char *or
      *        are not taken in account
      */
 
-    u16 tag = dnskey_get_key_tag_from_rdata(rdata, public_key_size + 4);
+    u16 tag = dnskey_get_tag_from_rdata(rdata, public_key_size + 4);
 
     dnssec_key* key = dnskey_newemptyinstance(algorithm, flags, origin); // RC
+
+    if(key == NULL)
+    {
+        return INVALID_ARGUMENT_ERROR;
+    }
 
     key->key.ec = ecdsa;
     key->vtbl = &ecdsa_vtbl;
@@ -610,7 +628,6 @@ dnskey_ecdsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
             break;
         default:
             return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
-            break;
     }
     
     if(yecdsa->private_key == NULL)
@@ -669,6 +686,8 @@ dnskey_ecdsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
             EC_KEY_set_public_key(ecdsa, gen_point);
             point = gen_point;
         }
+
+        EC_POINT_free(gen_point);
     }
 
     if(point != NULL)
@@ -701,7 +720,7 @@ dnskey_ecdsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
              *        are not taken in account
              */
 
-            tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size + 4);
+            tag = dnskey_get_tag_from_rdata(rdata, rdata_size + 4);
 
             key->tag = tag;
             key->nid = nid;
@@ -716,33 +735,33 @@ dnskey_ecdsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
 }
 
 static void
-dnskey_ecdsa_parse_finalise(struct dnskey_field_parser *parser)
+dnskey_ecdsa_parse_finalize(struct dnskey_field_parser *parser)
 {
     struct dnskey_ecdsa *ydsa = (struct dnskey_ecdsa*)parser->data;
     
     if(ydsa != NULL)
     {
-        dnskey_ecdsa_finalise(ydsa);
+        dnskey_ecdsa_finalize(ydsa);
         ZFREE(ydsa, struct dnskey_ecdsa);
     }
 }
 
-static const struct dnskey_field_parser_vtbl dsa_field_parser_vtbl =
+static const struct dnskey_field_parser_vtbl ecdsa_field_parser_vtbl =
 {
     dnskey_ecdsa_parse_field,
     dnskey_ecdsa_parse_set_key,
-    dnskey_ecdsa_parse_finalise,
+    dnskey_ecdsa_parse_finalize,
     "ECDSA"
 };
 
 void
 dnskey_ecdsa_parse_init(dnskey_field_parser *fp)
 {
-    struct dnskey_ecdsa *ydsa;
-    ZALLOC_OR_DIE(struct dnskey_ecdsa *, ydsa, struct dnskey_ecdsa, KEYECDSA_TAG);
-    ZEROMEMORY(ydsa, sizeof(struct dnskey_ecdsa));
-    fp->data = ydsa;
-    fp->vtbl = &dsa_field_parser_vtbl;
+    struct dnskey_ecdsa *yecdsa;
+    ZALLOC_OBJECT_OR_DIE(yecdsa, struct dnskey_ecdsa, KEYECDSA_TAG);
+    ZEROMEMORY(yecdsa, sizeof(struct dnskey_ecdsa));
+    fp->data = yecdsa;
+    fp->vtbl = &ecdsa_field_parser_vtbl;
 }
 
 ya_result
@@ -759,8 +778,9 @@ dnskey_ecdsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dns
 
     u16 flags = GET_U16_AT(rdata[0]);
     u8 algorithm = rdata[3];
-    
-    if((algorithm != DNSKEY_ALGORITHM_ECDSAP256SHA256) && (algorithm != DNSKEY_ALGORITHM_ECDSAP384SHA384))
+
+    if((algorithm != DNSKEY_ALGORITHM_ECDSAP256SHA256) && (algorithm != DNSKEY_ALGORITHM_ECDSAP384SHA384) &&
+       (algorithm != DNSKEY_ALGORITHM_ED25519) && (algorithm != DNSKEY_ALGORITHM_ED448))
     {
         return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
     }
@@ -768,7 +788,7 @@ dnskey_ecdsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dns
     rdata += 4;
     rdata_size -= 4;
     
-    ya_result return_value = ERROR;
+    ya_result return_value = DNSSEC_ERROR_CANNOT_READ_KEY_FROM_RDATA;
 
     EC_KEY *ecdsa = dnskey_ecdsa_public_load(algorithm, rdata, rdata_size);
     
@@ -799,14 +819,16 @@ dnskey_ecdsa_newinstance(u32 size, u8 algorithm, u16 flags, const char* origin, 
         return DNSSEC_ERROR_KEYISTOOBIG;
     }
     
-    if((algorithm != DNSKEY_ALGORITHM_ECDSAP256SHA256) && (algorithm != DNSKEY_ALGORITHM_ECDSAP384SHA384))
+    if((algorithm != DNSKEY_ALGORITHM_ECDSAP256SHA256) && (algorithm != DNSKEY_ALGORITHM_ECDSAP384SHA384) &&
+       (algorithm != DNSKEY_ALGORITHM_ED25519) && (algorithm != DNSKEY_ALGORITHM_ED448))
     {
         return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
     }
     
-    ya_result return_value = ERROR;
+    ya_result return_value = DNSSEC_ERROR_KEY_GENERATION_FAILED;
 
-    EC_KEY *ecdsa = dnskey_ecdsa_genkey(size);
+    //EC_KEY *ecdsa = dnskey_ecdsa_genkey(size);
+    EC_KEY *ecdsa = dnskey_ecdsa_genkey_by_nid(dnskey_ecdsa_getnid(algorithm));
     
     if(ecdsa != NULL)
     {
@@ -829,8 +851,6 @@ dnskey_ecdsa_newinstance(u32 size, u8 algorithm, u16 flags, const char* origin, 
 void dnskey_ecdsa_not_supported() {}
 
 #endif // HAS_ECDSA_SUPPORT
-
-/*    ------------------------------------------------------------    */
 
 /** @} */
 

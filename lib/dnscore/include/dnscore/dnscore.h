@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnscore System core functions
  *  @brief System core functions
  *
@@ -39,7 +40,6 @@
 #define	_DNSCORE_H
 
 #include <dnscore/output_stream.h>
-#include <dnscore/logger.h>
 
 #ifndef __DNSCORE_C__
 #ifdef	__cplusplus
@@ -108,7 +108,7 @@ static inline dnscore_fingerprint dnscore_getmyfingerprint()
 #if DNSCORE_HAS_ZALLOC_SUPPORT
     | DNSCORE_ZALLOC
 #endif
-#ifdef DEBUG
+#if DEBUG
     | DNSCORE_DEBUG
 #endif
     )
@@ -145,12 +145,23 @@ dnscore_fingerprint dnscore_getfingerprint();
 // default: on
 #define DNSCORE_TTY_BUFFERED                0x00000020
 
-#define DNSCORE_ALL (DNSCORE_TIMER_THREAD|DNSCORE_TIMER_PERIOD(5)|DNSCORE_LOGGER|DNSCORE_CRYPTO|DNSCORE_DNS|DNSCORE_ZALLOC|DNSCORE_ALARM|DNSCORE_TTY_BUFFERED)
+#define DNSCORE_SOCKET_SERVER               0x00000040
+#define DNSCORE_SHARED_HEAP                 0x00000080
 
-void dnscore_init_ex(u32 features);
-u32 dnscore_get_settings_mask();
+#define DNSCORE_MOST (DNSCORE_TIMER_THREAD|DNSCORE_TIMER_PERIOD(5)|DNSCORE_LOGGER|DNSCORE_CRYPTO|DNSCORE_DNS|DNSCORE_ZALLOC|DNSCORE_ALARM|DNSCORE_TTY_BUFFERED|DNSCORE_SHARED_HEAP)
+#define DNSCORE_TINYRUN (DNSCORE_DNS|DNSCORE_ZALLOC)
+#define DNSCORE_ALL (DNSCORE_MOST|DNSCORE_SOCKET_SERVER)
+
+/**
+ *
+ * argc can be 0 and argv can be NULL
+ */
+
+void dnscore_init_ex(u32 features, int argc, char **argv);
 
 void dnscore_init();
+
+u32 dnscore_get_active_features();
 
 u32 dnscore_timer_get_tick();
 
@@ -166,6 +177,10 @@ bool dnscore_shuttingdown();
 
 void dnscore_signature_check(int so_mutex_t, int so_group_mutex_t);
 
+size_t dnscore_ipc_make_name(const char *suffix, char *out_buffer, size_t out_buffer_size);
+
+void stdstream_detach_fds();
+
 /**
  * Will try to find a FD in MT(BUFFER(FILE(fd)))
  * Returns true if it has been found (valid or invalid)
@@ -178,12 +193,14 @@ bool stdstream_is_tty(output_stream *os);
 
 #define DNSCORE_API_CHECK() dnscore_signature_check(sizeof(mutex_t), sizeof(group_mutex_t))
 
+void dnscore_hookme(); // debugging tool : this function can be used as a single breakpoint
+
 #ifdef	__cplusplus
 }
 #endif
 
 #endif	/* _DNSCORE_H */
+
 /** @} */
 
-/*----------------------------------------------------------------------------*/
 

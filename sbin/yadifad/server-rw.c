@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 /**
  *  @defgroup server Server
@@ -57,11 +57,13 @@
 
 #include "server-config.h"
 
+#ifndef WIN32
 #ifndef __USE_GNU
 #define __USE_GNU 1
 #endif
 #define _GNU_SOURCE 1
 #include <sched.h>
+#endif
 
 #if defined __FreeBSD__
 #include <sys/param.h>
@@ -71,7 +73,6 @@ typedef cpuset_t cpu_set_t;
 
 // <-- keep this order
 
-#include "config.h"
 #include "server_context.h"
 
 #include <dnscore/sys_types.h>
@@ -83,6 +84,7 @@ typedef cpuset_t cpu_set_t;
 #include <dnscore/thread_pool.h>
 #include <dnscore/sys_get_cpu_count.h>
 #include <dnscore/host_address.h>
+#include <dnscore/process.h>
 
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/zdb-zone-lock.h>
@@ -91,7 +93,7 @@ typedef cpuset_t cpu_set_t;
 
 #include <dnsdb/journal.h>
 
-#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
+#if ZDB_HAS_LOCK_DEBUG_SUPPORT
 #include "dnsdb/zdb-zone-lock-monitor.h"
 #endif
 
@@ -104,22 +106,35 @@ typedef cpuset_t cpu_set_t;
 #include "signals.h"
 #include "dynupdate_query_service.h"
 
-#define SERVER_RW_DEBUG 0
+#if HAS_EVENT_DYNAMIC_MODULE
+#include "dynamic-module-handler.h"
+#endif
 
-#ifdef SO_REUSEPORT
+#define SVRPLBIN_TAG 0x4e49424c50525653
+#define SVRPLBOT_TAG 0x544f424c50525653
+
+#if 1 // def SO_REUSEPORT
 
 // allow an external definition of the backlog queue size and L1 parameters
 
 #ifndef SERVER_RW_BACKLOG_QUEUE_SIZE
 //#define SERVER_RW_BACKLOG_QUEUE_SIZE 0x40000 // 256k slots : 16MB
-#define SERVER_RW_BACKLOG_QUEUE_SIZE 0x80000 // 512k slots : 32MB
+//#define SERVER_RW_BACKLOG_QUEUE_SIZE 0x80000 // 512k slots : 32MB
+#define SERVER_RW_BACKLOG_QUEUE_SIZE 0x4000 // 16k slots
 #endif
 
-#ifndef L1_DATA_LINE_SIZE
-#define L1_DATA_LINE_SIZE 64
-#define L1_DATA_LINE_SHIFT 6
-#elif ((1 << L1_DATA_LINE_SHIFT) != L1_DATA_LINE_SIZE)
-#error "2^" TOSTRING(L1_DATA_LINE_SHIFT) " != " TOSTRING(L1_DATA_LINE_SIZE) " : please fix"
+#define NETWORK_THREAD_CONTEXT_FAST_MESSAGE_COUNT 3 // do NOT change this value
+
+#ifndef SERVER_RW_L1_DATA_LINE_ALIGNED_SIZE
+
+#define SERVER_RW_L1_DATA_LINE_ALIGNED_SIZE     128
+#define SERVER_RW_L1_DATA_LINE_ALIGNED_SHIFT    7
+
+//#define SERVER_RW_L1_DATA_LINE_ALIGNED_SIZE     512
+//#define SERVER_RW_L1_DATA_LINE_ALIGNED_SHIFT    9
+
+#elif ((1 << SERVER_RW_L1_DATA_LINE_ALIGNED_SHIFT) != SERVER_RW_L1_DATA_LINE_ALIGNED_SIZE)
+#error "2^" TOSTRING(SERVER_RW_L1_DATA_LINE_ALIGNED_SHIFT) " != " TOSTRING(SERVER_RW_L1_DATA_LINE_ALIGNED_SIZE) " : please fix"
 #endif
 
 // DEBUG build: log debug 5 of incoming wire
@@ -133,17 +148,14 @@ extern logger_handle* g_statistics_logger;
 #define RWNTCTXS_TAG 0x53585443544e5752
 #define RWNTCTX_TAG 0x585443544e5752
 
-static zdb *database = NULL;
-
 struct msg_hdr_s
 {
     union socketaddress_46 sa;
-    //struct msg_data_s *next;
-    u8 ctrl[32];
-    int blk_count;
-    int msg_size;
-    int sa_len;
-    int ctrl_len;
+    u8 ctrl[MESSAGE_DATA_CONTROL_BUFFER_SIZE];
+    int blk_count;      // 16
+    int msg_size;       // 16
+    int sa_len;         // 8
+    int ctrl_len;       // 8
 };
 
 struct msg_data_s
@@ -157,151 +169,282 @@ typedef struct msg_data_s msg_data_s;
 union msg_cell_u
 {
     struct msg_data_s data;         // this is an UNION, l1_data is there to specify the size
-    u8 l1_data[L1_DATA_LINE_SIZE];  // L1 data cache line size, ensures the size is right
+    u8 l1_data[SERVER_RW_L1_DATA_LINE_ALIGNED_SIZE];  // L1 data cache line size, ensures the size is right
 };
 
 typedef union msg_cell_u msg_cell_u;
 
 struct network_thread_context_s
 {
-    pthread_t idr;
-    pthread_t idw;
-    int sockfd;
-    u16 idx;
+    network_thread_context_base_t base;
+    
+    thread_t idr;
+    thread_t idw;
 
-    volatile u8  status;
-#if __FreeBSD__
-    u8 is_any;
-#endif    
     // should be aligned with 64
     
-    volatile message_data *next_message __attribute__ ((aligned (L1_DATA_LINE_SIZE)));
-    volatile msg_cell_u *backlog_enqueue;// __attribute__ ((aligned (L1_DATA_LINE_SIZE)));
-    volatile const msg_cell_u *backlog_dequeue;// __attribute__ ((aligned (L1_DATA_LINE_SIZE))); 
+#ifndef WIN32
+    volatile message_data *next_message __attribute__ ((aligned (SERVER_RW_L1_DATA_LINE_ALIGNED_SIZE)));
+#else
+    volatile message_data* next_message;
+#endif
+    volatile msg_cell_u *backlog_enqueue;// __attribute__ ((aligned (SERVER_RW_L1_DATA_LINE_ALIGNED_SIZE)));
+    volatile const msg_cell_u *backlog_dequeue;// __attribute__ ((aligned (SERVER_RW_L1_DATA_LINE_ALIGNED_SIZE))); 
+    msg_cell_u * backlog_queue_limit; // &backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE];
     
     mutex_t mtx;
     cond_t cond;
     
     // should be aligned with 64
     
-    msg_cell_u backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1] __attribute__ ((aligned (L1_DATA_LINE_SIZE)));
-    
-#if UDP_USE_MESSAGES
-    struct iovec    sender_iovec;
-    struct msghdr   sender_msghdr;
+#ifndef WIN32
+    server_statistics_t statistics __attribute__ ((aligned (SERVER_RW_L1_DATA_LINE_ALIGNED_SIZE)));
+#else
+    server_statistics_t statistics;
 #endif
-    // should be aligned with 64
-    
-    server_statistics_t statistics __attribute__ ((aligned (L1_DATA_LINE_SIZE)));
     
     // should be aligned with 64
     
-    message_data in_message[3] __attribute__ ((aligned (L1_DATA_LINE_SIZE))); // used by the reader
-    message_data out_message;   // used by the writer
+#ifndef WIN32
+    message_data_with_buffer in_message[NETWORK_THREAD_CONTEXT_FAST_MESSAGE_COUNT] __attribute__ ((aligned (SERVER_RW_L1_DATA_LINE_ALIGNED_SIZE))); // used by the reader
+#else
+    message_data_with_buffer in_message[NETWORK_THREAD_CONTEXT_FAST_MESSAGE_COUNT]; // used by the reader
+#endif
+    message_data_with_buffer out_message;   // used by the writer
+    
+    // should be aligned with 64
+    
+#ifndef WIN32
+    msg_cell_u backlog_queue[/*SERVER_RW_BACKLOG_QUEUE_SIZE*/ + 1] __attribute__ ((aligned (SERVER_RW_L1_DATA_LINE_ALIGNED_SIZE)));    
+#else
+    msg_cell_u backlog_queue[/*SERVER_RW_BACKLOG_QUEUE_SIZE*/ +1];
+#endif
 };
 
 typedef struct network_thread_context_s network_thread_context_s;
+
+static network_thread_context_s*
+network_thread_context_new_instance(size_t backlog_queue_slots, struct service_worker_s *worker, u16 sockfd_idx)
+{
+    network_thread_context_s *ctx;
+    
+    size_t network_thread_context_real_size = sizeof(network_thread_context_s) + sizeof(msg_cell_u) * backlog_queue_slots;
+    
+    ctx = (network_thread_context_s*)malloc(network_thread_context_real_size);
+    
+    if(ctx == NULL)
+    {
+        return NULL;
+    }
+    
+    memset(ctx, 0, sizeof(network_thread_context_s));
+    ctx->base.worker = worker;
+    ctx->base.idx = sockfd_idx;
+    ctx->base.sockfd = g_server_context.udp_socket[sockfd_idx];
+    ctx->base.statisticsp = &ctx->statistics;
+    ctx->backlog_enqueue = &ctx->backlog_queue[0];
+    ctx->backlog_dequeue = &ctx->backlog_queue[0];
+    ctx->backlog_queue_limit = &ctx->backlog_queue[backlog_queue_slots];
+
+    for(int i = 0; i < NETWORK_THREAD_CONTEXT_FAST_MESSAGE_COUNT; ++i)
+    {
+        message_data_with_buffer_init(&ctx->in_message[i]); // recv
+        message_reset_control(&ctx->in_message[i].message);
+    }
+
+    message_data_with_buffer_init(&ctx->out_message);   // recv reply
+    message_reset_control(&ctx->out_message.message);
+
+    ctx->backlog_queue_limit->data.hdr.blk_count = 0; // implicitely done by the memset, but I want to be absolutely clear about this
+    ctx->backlog_queue_limit->data.hdr.msg_size = 0;
+
+    mutex_init(&ctx->mtx);
+    cond_init(&ctx->cond);
+    
+    return ctx;
+}
+
+static void
+network_thread_context_delete(network_thread_context_s *ctx)
+{
+    if(ctx != NULL)
+    {
+        cond_finalize(&ctx->cond);
+        mutex_destroy(&ctx->mtx);
+        message_finalize(&ctx->out_message.message);
+        for(int i = NETWORK_THREAD_CONTEXT_FAST_MESSAGE_COUNT - 1; i >= 0; --i)
+        {
+            message_finalize(&ctx->in_message[i].message);
+        }
+
+        free(ctx);
+    }
+}
+
+struct network_thread_context_array
+{
+    network_thread_context_s **contextes;
+    size_t listen_count;
+    size_t reader_by_fd;
+    size_t backlog_queue_slots;
+};
+
+typedef struct network_thread_context_array network_thread_context_array;
+
+static void
+network_thread_context_array_finalize(network_thread_context_array *ctxa)
+{
+    for(size_t listen_idx = 0, sockfd_idx = 0; listen_idx < ctxa->listen_count; ++listen_idx)
+    {
+        for(u32 r = 0; r < ctxa->reader_by_fd; r++)
+        {
+            network_thread_context_delete(ctxa->contextes[sockfd_idx]);
+            ++sockfd_idx;
+        }
+    }
+    
+    free(ctxa->contextes);
+}
+
+static ya_result
+network_thread_context_init(network_thread_context_array *ctxa, size_t listen_count, size_t reader_by_fd,
+        size_t backlog_queue_slots, struct service_worker_s *worker)
+{
+    network_thread_context_s **contextes;
+    MALLOC_OBJECT_ARRAY(contextes, network_thread_context_s*, listen_count * reader_by_fd, RWNTCTXS_TAG);
+
+    // the memory allocation macro without _OR_DIE suffix will not abort on insufficient memory
+
+    if(contextes == NULL)
+    {
+        return MAKE_ERRNO_ERROR(ENOMEM);
+    }
+    
+    memset(contextes, 0, listen_count * reader_by_fd * sizeof(network_thread_context_s*)); // there is no leak, the pointer is right there:
+    
+    ctxa->contextes = contextes;
+    ctxa->listen_count = listen_count;
+    ctxa->reader_by_fd = reader_by_fd;
+    ctxa->backlog_queue_slots = backlog_queue_slots;
+
+    for(size_t listen_idx = 0, sockfd_idx = 0; listen_idx < listen_count; ++listen_idx)
+    {
+        for(u32 r = 0; r < reader_by_fd; r++)
+        {
+            network_thread_context_s *ctx;
+
+            ctx = network_thread_context_new_instance(backlog_queue_slots, worker, sockfd_idx);
+
+            if(ctx == NULL)
+            {
+                network_thread_context_array_finalize(ctxa);
+                return MAKE_ERRNO_ERROR(ENOMEM);
+            }
+
+            contextes[sockfd_idx] = ctx;
+
+            /*
+             * Update the select read set for the current interface (udp + tcp)
+             */           
+
+            ++sockfd_idx;
+        }
+    }
+
+    return SUCCESS;
+}
+
+static void server_rw_set_cpu_affinity(int index, int w0s1)
+{
+#if HAS_PTHREAD_SETAFFINITY_NP
+    int cpu_count = sys_get_cpu_count();
+    if(cpu_count < 0)
+    {
+        cpu_count = 1;
+    }
+
+    int affinity_with = (g_config->thread_affinity_base + (index * 2 + w0s1) * g_config->thread_affinity_multiplier) % cpu_count;
+    log_info("server-rw: receiver setting affinity with virtual cpu %i", affinity_with);
+#if __NetBSD__
+    cpuset_t* mycpu = cpuset_create();
+    if(mycpu != NULL)
+    {
+        cpuset_zero(mycpu);
+        cpuset_set((cpuid_t)affinity_with, mycpu);
+        if(pthread_setaffinity_np(thread_self(), cpuset_size(mycpu), mycpu) != 0)
+        {
+#pragma message("TODO: report errors")
+        }
+        cpuset_destroy(mycpu);
+    }
+    else
+    {
+    }
+#elif defined(WIN32)
+#pragma message("TODO: implement")
+#else
+    cpu_set_t mycpu;
+    CPU_ZERO(&mycpu);
+    CPU_SET(affinity_with, &mycpu);
+    pthread_setaffinity_np(thread_self(), sizeof(cpu_set_t), &mycpu);
+#endif
+#endif
+}
 
 static void*
 server_rw_udp_receiver_thread(void *parms)
 {
     struct network_thread_context_s *ctx = (struct network_thread_context_s*)parms;
     u64 *local_statistics_udp_input_count = (u64*)&ctx->statistics.udp_input_count;
-    ctx->idr = pthread_self();
+    ctx->idr = thread_self();
     ssize_t n;
-    int fd = ctx->sockfd;
+    int fd = ctx->base.sockfd;
     int next_message_index = 0; // ^ 1 ^ 1 ...
     
-    log_debug("server_rw_udp_receiver_thread(%i, %i): started", ctx->idx, fd);
+    log_debug("server_rw_udp_receiver_thread(%i, %i): started", ctx->base.idx, fd);
 
-#if HAS_PTHREAD_SETAFFINITY_NP
-    cpu_set_t mycpu;
-    CPU_ZERO(&mycpu);
-    
-    int affinity_with = g_config->thread_affinity_base + (ctx->idx * 2 + 0) * g_config->thread_affinity_multiplier;
-    log_info("server-rw: receiver setting affinity with virtual cpu %i", affinity_with);
-    CPU_SET(affinity_with, &mycpu);
-    
-    pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mycpu);
-#endif
-    
-#if UDP_USE_MESSAGES
-    
-    struct msghdr   receiver_msghdr;
-    struct iovec    receiver_iovec;
-    receiver_msghdr.msg_iov = &receiver_iovec;
-    receiver_msghdr.msg_iovlen = 1;
-    receiver_msghdr.msg_control = NULL;
-    receiver_msghdr.msg_controllen = 0;
-    receiver_msghdr.msg_flags = 0;
+    socketaddress sa;
+    socklen_t sa_len = sizeof(sa);
+    getsockname(fd, &sa.sa, &sa_len);
+    log_info("waiting for udp messages for %{sockaddr}", &sa);
 
-    /* UDP messages handling requires more setup */
-#endif
-#if __FreeBSD__
-    bool bound_to_any = ctx->is_any != 0;
-#endif
-    
+    server_rw_set_cpu_affinity(ctx->base.idx, 0);
+
     // const void *nullptr = NULL;
+    
+    tcp_set_recvtimeout(fd, 1, 0);
     
     for(;;)
     {
         
-#if SERVER_RW_DEBUG
-        log_debug("%i: recv wait", fd);
-#endif
-        
-        message_data *mesg = &ctx->in_message[next_message_index];        
-        
-#if !UDP_USE_MESSAGES
-        mesg->addr_len = sizeof(socketaddress);
-        n = recvfrom(fd, mesg->buffer, MIN(NETWORK_BUFFER_SIZE, sizeof(mesg->buffer)), 0, (struct sockaddr*)&mesg->other.sa, &mesg->addr_len);
-#else
-        receiver_iovec.iov_base = mesg->buffer;
-        receiver_iovec.iov_len = MIN(NETWORK_BUFFER_SIZE, sizeof(mesg->buffer));
-        receiver_msghdr.msg_name = &mesg->other.sa;
-        receiver_msghdr.msg_namelen = sizeof(socketaddress);
-        
-#if !__FreeBSD__
-        receiver_msghdr.msg_control = mesg->control_buffer;
-        receiver_msghdr.msg_controllen = sizeof(mesg->control_buffer);
-#else
-        if(bound_to_any)
-        {
-            receiver_msghdr.msg_control = mesg->control_buffer;
-            receiver_msghdr.msg_controllen = sizeof(mesg->control_buffer);
-        }
-        else
-        {
-            receiver_msghdr.msg_control = NULL;
-            receiver_msghdr.msg_controllen = 0;
-        }
-#endif
-        n = recvmsg(fd, &receiver_msghdr, 0);
-#endif
+
+        message_data *mesg = &ctx->in_message[next_message_index].message;
+
+        message_recv_udp_reset(mesg);
+        message_reset_control_size(mesg);
+
+        n = message_recv_udp(mesg, fd);
+
         if(n >= DNS_HEADER_LENGTH)
         {
             local_statistics_udp_input_count++;
-            
-#ifdef DEBUG
+#if DEBUG
             mesg->recv_us = timeus();
-#endif
-            
-#if UDP_USE_MESSAGES
-            mesg->addr_len = receiver_msghdr.msg_namelen;
-            mesg->control_buffer_size = receiver_msghdr.msg_controllen;
-#endif
-            
-#ifdef DEBUG
-            mesg->recv_us = timeus();
-            log_debug("server_rw_udp_receiver_thread: recvfrom: got %d bytes from %{sockaddr}", n, &mesg->other.sa);
+            log_debug("server_rw_udp_receiver_thread: recvfrom: got %d bytes from %{sockaddr}", n, message_get_sender_sa(mesg));
 #if DUMP_UDP_RW_RECEIVED_WIRE
             log_memdump_ex(g_server_logger, MSG_DEBUG5, mesg->buffer, n, 16, OSPRINT_DUMP_HEXTEXT);
 #endif
 #endif
+
+#if __FreeBSD__
+            if(message_control_size(mesg) == 0)
+            {
+                message_clear_control(mesg);
+            }
+#endif
+
             // now the trick: either direct queue, either delayed queue
-            
-            mesg->received = n;
-            
+
             mutex_lock(&ctx->mtx);
             if(ctx->next_message == NULL)
             {
@@ -311,33 +454,28 @@ server_rw_udp_receiver_thread(void *parms)
                 ctx->next_message = mesg;
                 
                 // notify the other side it has to do some job
-#ifdef DEBUG
+#if DEBUG
                 mesg->pushed_us = timeus();
 #endif
                 cond_notify_one(&ctx->cond);
                 mutex_unlock(&ctx->mtx);
-                next_message_index = (next_message_index + 1) % 3;
-#if SERVER_RW_DEBUG
-                log_debug("%i: show %04hx", fd, ntohs(MESSAGE_ID(mesg->buffer)));
-#endif
+                next_message_index = (next_message_index + 1) % NETWORK_THREAD_CONTEXT_FAST_MESSAGE_COUNT;
+
                 // next_message is only set to NULL when the sender took the previous one
                 // and it only takes the previous one when the backlog is empty
                 // so ...
-                
-#if SERVER_RW_DEBUG
-                log_debug("server_rw_udp_receiver_thread(%i, %i): queued in the fast lane", ctx->idx, fd);
+#if DEBUG1
+                log_debug("server_rw_udp_receiver_thread(%i, %i): queued in the fast lane", ctx->base.idx, fd);
 #endif
-                
             }
             else
             {
-                //mutex_unlock(&ctx->mtx);
                 // does not need to be fast (as we are already choking)
                 
                 // copy the bytes in the delayed queue (if there is room available,
                 // else wait ...
                 
-                int blk_count = (mesg->received + offsetof(struct msg_data_s, data) + L1_DATA_LINE_SIZE - 1) >> L1_DATA_LINE_SHIFT;
+                int blk_count = (message_get_size(mesg) + offsetof(struct msg_data_s, data) + SERVER_RW_L1_DATA_LINE_ALIGNED_SIZE - 1) >> SERVER_RW_L1_DATA_LINE_ALIGNED_SHIFT;
                 msg_cell_u *cell = (msg_cell_u *)ctx->backlog_enqueue;
                 msg_cell_u *cell_next = cell + blk_count;
                 
@@ -345,95 +483,109 @@ server_rw_udp_receiver_thread(void *parms)
                 {
                     // can fill up to the end of the buffer
                     
-                    const msg_cell_u *cell_limit = &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE];
+                    const msg_cell_u *cell_limit = ctx->backlog_queue_limit; //&ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE];
                     
                     if(cell_next <= cell_limit)
                     {
                         // copy the content
-#ifdef DEBUG
-                        log_debug("%i: push %04hx", fd, ntohs(MESSAGE_ID(mesg->buffer)));
+#if DEBUG
+                        log_debug("%i: push %04hx", fd, ntohs(message_get_id(mesg)));
 #endif            
                         // keep the relevant data from the message
                     
-                        memcpy(&cell->data.hdr.sa, &mesg->other.sa, mesg->addr_len);
-#if UDP_USE_MESSAGES
-                        memcpy(cell->data.hdr.ctrl, receiver_msghdr.msg_control, receiver_msghdr.msg_controllen);
-#endif
-                        cell->data.hdr.msg_size = mesg->received;
+                        message_copy_sender_to_sa(mesg, &cell->data.hdr.sa.sa);
+                        cell->data.hdr.ctrl_len = message_copy_control(mesg, cell->data.hdr.ctrl, sizeof(cell->data.hdr.ctrl));
+                        cell->data.hdr.msg_size = message_get_size(mesg);
+                        yassert(cell->data.hdr.msg_size <= 4096);    // as none of the UDP test are that big (130 max)
                         cell->data.hdr.blk_count = blk_count;
-                        cell->data.hdr.sa_len = mesg->addr_len;
-#if UDP_USE_MESSAGES
-                        cell->data.hdr.ctrl_len = receiver_msghdr.msg_controllen;
-#endif
-                        memcpy(&cell->data.data, mesg->buffer, mesg->received);
+                        cell->data.hdr.sa_len = message_get_sender_size(mesg);
+                        yassert((cell->data.hdr.sa_len > 0) && ((u32)cell->data.hdr.sa_len <= sizeof(struct sockaddr_in6)));
+                        message_copy_buffer(mesg, &cell->data.data, (blk_count * SERVER_RW_L1_DATA_LINE_ALIGNED_SIZE) - offsetof(msg_data_s, data));
                         
                         //
                         
                         if(cell_next == cell_limit)
                         {
-                            // loop
-                            cell_next = &ctx->backlog_queue[0];
+                            if(ctx->backlog_dequeue > &ctx->backlog_queue[0])
+                            {
+                                // loop
+                                cell_next = &ctx->backlog_queue[0];
+                            }
+#if DEBUG
+                            else
+                            {
+                                // looping here would make the queue look empty : don't do it
+                            }
+#endif
                         }
+#if DEBUG
+                        else
+                        {
+                            // the end hasn't been reached yet
+                        }
+#endif
                     }
                     else
                     {
-                        // erase
+                        // mark the cell as unused (a.k.a: looping)
                         cell->data.hdr.msg_size = 0;
                         // loop
                         cell = &ctx->backlog_queue[0];
                         cell_next = cell + blk_count;
-                        
-                        // copy the content
-                        
-                        // keep the relevant data from the message
-                    
-                        memcpy(&cell->data.hdr.sa, &mesg->other.sa, mesg->addr_len);
-#if UDP_USE_MESSAGES
-                        memcpy(cell->data.hdr.ctrl, receiver_msghdr.msg_control, receiver_msghdr.msg_controllen);
-#endif
-                        cell->data.hdr.msg_size = mesg->received;
-                        cell->data.hdr.blk_count = blk_count;
-                        cell->data.hdr.sa_len = mesg->addr_len;
-#if UDP_USE_MESSAGES
-                        cell->data.hdr.ctrl_len = receiver_msghdr.msg_controllen;
-#endif
-                        memcpy(&cell->data.data, mesg->buffer, mesg->received);
-                        
-                        //
+
+                        // now update the limit and test for overflow
+
+                        const msg_cell_u *cell_limit = (const msg_cell_u *)ctx->backlog_dequeue; // we have to leave at least one block
+
+                        if(cell_next < cell_limit)
+                        {
+                            // copy the content
+
+                            // keep the relevant data from the message
+                            message_copy_sender_to_sa(mesg, &cell->data.hdr.sa.sa);
+                            cell->data.hdr.ctrl_len = message_copy_control(mesg, cell->data.hdr.ctrl, sizeof(cell->data.hdr.ctrl));
+                            cell->data.hdr.msg_size = message_get_size(mesg);
+                            yassert(cell->data.hdr.msg_size <= 4096);    // as none of the UDP test are that big (130 max)
+                            cell->data.hdr.blk_count = blk_count;
+                            cell->data.hdr.sa_len = message_get_sender_size(mesg);
+                            yassert((cell->data.hdr.sa_len > 0) && ((u32)cell->data.hdr.sa_len <= sizeof(struct sockaddr_in6)));
+                            message_copy_buffer(mesg, &cell->data.data, (blk_count * SERVER_RW_L1_DATA_LINE_ALIGNED_SIZE) - offsetof(msg_data_s, data));
+                        }
+                        else
+                        {
+                            cell_next = cell;   // as the message is discarded
+                        }
                     }
                 }
-                else // we are about to fill the buffer (soon)
+                else // we are about to fill the buffer (soon) (cell < ctx->backlog_dequeue)
                 {
                     const msg_cell_u *cell_limit = (const msg_cell_u *)ctx->backlog_dequeue; // we have to leave at least one block
                     
                     if(cell_next < cell_limit)
                     {
                         // copy the content
-#if SERVER_RW_DEBUG  
-                        log_debug("%i: push %04hx (<)", fd, ntohs(MESSAGE_ID(mesg->buffer)));
-#endif
-                        
+#if DEBUG
+                        log_debug("%i: push %04hx (<)", fd, ntohs(message_get_id(mesg)));
+#endif                        
                         // keep the relevant data from the message
                     
-                        memcpy(&cell->data.hdr.sa, &mesg->other.sa, mesg->addr_len);
-#if UDP_USE_MESSAGES
-                        memcpy(cell->data.hdr.ctrl, receiver_msghdr.msg_control, receiver_msghdr.msg_controllen);
-#endif
-                        cell->data.hdr.msg_size = mesg->received;
+                        message_copy_sender_to_sa(mesg, &cell->data.hdr.sa.sa);
+                        cell->data.hdr.ctrl_len = message_copy_control(mesg, cell->data.hdr.ctrl, sizeof(cell->data.hdr.ctrl));
+                        cell->data.hdr.msg_size = message_get_size(mesg);
+                        yassert(cell->data.hdr.msg_size <= 4096);    // as none of the UDP test are that big (130 max)
                         cell->data.hdr.blk_count = blk_count;
-                        cell->data.hdr.sa_len = mesg->addr_len;
-#if UDP_USE_MESSAGES
-                        cell->data.hdr.ctrl_len = receiver_msghdr.msg_controllen;
-#endif
-                        memcpy(&cell->data.data, mesg->buffer, mesg->received);
+                        cell->data.hdr.sa_len = message_get_sender_size(mesg);
+                        yassert((cell->data.hdr.sa_len > 0) && ((u32)cell->data.hdr.sa_len <= sizeof(struct sockaddr_in6)));
+                        message_copy_buffer(mesg, &cell->data.data, (blk_count * SERVER_RW_L1_DATA_LINE_ALIGNED_SIZE) - offsetof(msg_data_s, data));
                     }
-#if SERVER_RW_DEBUG
                     else
                     {
+                        cell_next = cell; // as the message is discarded
+#if DEBUG
                         // full: lose it (?)
-                        log_debug("%i: full %04hx", fd, ntohs(MESSAGE_ID(mesg->buffer)));
-                    }
+                        log_debug("%i: full %04hx", fd, ntohs(message_get_id(mesg)));
 #endif
+                    }
                 }
 
                 ctx->backlog_enqueue = cell_next;
@@ -443,46 +595,40 @@ server_rw_udp_receiver_thread(void *parms)
         }
         else if(n >= 0)
         {
-            log_warn("%i: received %i bytes garbage from %{sockaddr}", fd, &mesg->other.sa);
+            log_warn("server-rw: received %i bytes garbage from %{sockaddr} (%i)", n, message_get_sender_sa(mesg), fd);
         }
         else // n < 0
         {
-            /*
-             * errno is not a variable but a macro
-             */
-
             int err = errno;
             
-            if(err != EINTR)
+            if((err != EINTR) && (err != EAGAIN))
             {
                 /*
                  * EAGAIN
                  * Resource temporarily unavailable (may be the same value as EWOULDBLOCK) (POSIX.1)
                  */
-
-                if(err != EAGAIN)
+                if(err != EBADF)
                 {
-                    if(err != EBADF)
-                    {
-                        log_warn("%i: fail ----: %r", fd, MAKE_ERRNO_ERROR(err));
-                    }
-                    // else we are shutting down
-#ifdef DEBUG
-                    log_debug("server_rw_udp_receiver_thread: recvfrom error: %r", MAKE_ERRNO_ERROR(err)); /* most likely: timeout/resource temporarily unavailable */
-#endif
-                    break;
+                    log_warn("server-rw: receiver: %r (%i)", MAKE_ERRNO_ERROR(err), fd);
                 }
-                // else retry
+                // else we are shutting down
+
+                log_debug("server_rw_udp_receiver_thread(%i, %i): recvfrom error: %r", ctx->base.idx, fd, MAKE_ERRNO_ERROR(err)); /* most likely: timeout/resource temporarily unavailable */
+                break;
+            }
+
+            if(service_should_reconfigure_or_stop(ctx->base.worker))
+            {
+                log_debug("server_rw_udp_receiver_thread(%i, %i): will stop (reconfigure or stop)", ctx->base.idx, fd);
+                break;
             }
             // else retry
             
-#if SERVER_RW_DEBUG
-            log_debug("server_rw_udp_receiver_thread: tick");
-#endif
+
         }
     }
     
-    log_debug("server_rw_udp_receiver_thread(%i, %i): stopped", ctx->idx, fd);
+    log_debug("server_rw_udp_receiver_thread(%i, %i): stopped", ctx->base.idx, fd);
 
     return NULL;
 }
@@ -499,464 +645,71 @@ server_rw_udp_receiver_thread(void *parms)
  * This implies I have to copy the message so the original structure can be used
  * for the next query.
  */
+#endif
 
-
-static void
-server_rw_process_udp_update(message_data *mesg)
+ya_result
+server_rw_process_message_udp(struct network_thread_context_s *ctx, message_data *mesg)
 {
-    dynupdate_query_service_enqueue(database, mesg);
-}
-
-#endif
-
-static ya_result
-server_rw_udp_sender_process_message(struct network_thread_context_s *ctx, message_data *mesg)
-{
-    server_statistics_t * const local_statistics = &ctx->statistics;
-    local_statistics->udp_input_count++;
-    ya_result return_code;
-    int fd = ctx->sockfd;
-    
-#ifdef DEBUG1
-    log_debug("server_rw_process_message(%i, %i)", ctx->idx, fd);
-#endif
-    
-    switch(MESSAGE_OP(mesg->buffer))
+    ya_result ret;
+    if(ISOK(ret = server_process_message_udp((network_thread_context_base_t*)ctx, mesg)))
     {
-        case OPCODE_QUERY:
+        ssize_t sent;
+
+        while((sent = message_send_udp(mesg, ctx->base.sockfd)) < 0)
         {
-            if(ISOK(return_code = message_process_query(mesg)))
+            int error_code = errno;
+
+            if(error_code != EINTR)
             {
-                message_edns0_clear_undefined_flags(mesg);
-                
-                switch(mesg->qclass)
-                {
-                    case CLASS_IN:
-                    {
-                        local_statistics->udp_queries_count++;
-
-                        log_query(ctx->sockfd, mesg);
-
-                        switch(mesg->qtype)
-                        {
-                            default:
-                            {
-#if HAS_RRL_SUPPORT
-                                ya_result rrl = database_query_with_rrl(database, mesg);
-
-                                local_statistics->udp_referrals_count += mesg->referral;
-                                local_statistics->udp_fp[mesg->status]++;                                
-
-                                switch(rrl)
-                                {
-                                    case RRL_SLIP:
-                                    {
-                                        local_statistics->rrl_slip++;
-                                        break;
-                                    }
-                                    case RRL_DROP:
-                                    {
-                                        local_statistics->rrl_drop++;
-                                        return SUCCESS;
-                                    }
-                                    case RRL_PROCEED_DROP:
-                                    {
-                                        local_statistics->rrl_drop++;
-                                        break;
-                                    }
-                                }
-#else
-                                database_query(database, mesg);
-
-                                local_statistics->udp_referrals_count += mesg->referral;
-                                local_statistics->udp_fp[mesg->status]++;
-#endif
-                                break;
-                            }
-                            case TYPE_IXFR: // reply with a truncate
-                            {
-                                MESSAGE_FLAGS_OR(mesg->buffer, QR_BITS|TC_BITS, 0); /** @todo 20160106 edf -- IXFR UDP */
-                                SET_U32_AT(mesg->buffer[4], 0);
-                                SET_U32_AT(mesg->buffer[8], 0);
-                                mesg->send_length = DNS_HEADER_LENGTH;
-                                local_statistics->udp_fp[FP_IXFR_UDP]++;
-                                break;
-                            }
-                            case TYPE_AXFR:
-                            case TYPE_OPT:
-                            {
-                                message_make_error(mesg, FP_INCORR_PROTO);
-                                local_statistics->udp_fp[FP_INCORR_PROTO]++;
-                                break;
-                            }
-                        } // switch query type
-                        
-                        break;
-                    } // query class IN
-                    case CLASS_CH:
-                    {
-                        class_ch_process(mesg); // thread-safe
-                        local_statistics->udp_fp[mesg->status]++;
-                        break;
-                    } // query class CH
-                    default:
-                    {
-                        message_make_error(mesg, FP_NOT_SUPP_CLASS);
-                        local_statistics->udp_fp[FP_NOT_SUPP_CLASS]++;
-                        break;
-                    }
-                } // query class
-            } // if message process succeeded
-            else // an error occurred : no query to be done at all
-            {
-                log_warn("query (%04hx) [%02x|%02x] error %i (%r) (%{sockaddrip})",
-                        ntohs(MESSAGE_ID(mesg->buffer)),
-                        MESSAGE_HIFLAGS(mesg->buffer),
-                        MESSAGE_LOFLAGS(mesg->buffer),
-                        mesg->status,
-                        return_code,
-                        &mesg->other.sa);
-
-                local_statistics->udp_fp[mesg->status]++;
-                
-#ifdef DEBUG
-                if(return_code == UNPROCESSABLE_MESSAGE && (g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE))
-                {
-                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_ALL);
-                }
-#endif
-                
-                /*
-                 * If not FE, or if we answer FE
-                 * 
-                 * ... && (MESSAGE_QR(mesg->buffer) == 0 ??? and if there the query number is > 0 ???
-                 */
-                if( (return_code != INVALID_MESSAGE) && ((mesg->status != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)))
-                {
-                    message_edns0_clear_undefined_flags(mesg);
-                    
-                    if(!MESSAGEP_HAS_TSIG(mesg))
-                    {
-                        message_transform_to_error(mesg);
-                    }
-                }
-                else
-                {
-                    local_statistics->udp_dropped_count++;
-                    return SUCCESS;
-                }
-            }
-            
-            break;
-        } // case query
-        case OPCODE_NOTIFY:
-        {
-            if(ISOK(return_code = message_process(mesg)))
-            {
-                message_edns0_clear_undefined_flags(mesg);
-                
-                switch(mesg->qclass)
-                {
-                    case CLASS_IN:
-                    {
-                        ya_result return_value;
-
-                        local_statistics->udp_notify_input_count++;
-
-                        log_info("notify (%04hx) %{dnsname} (%{sockaddr})",
-                                ntohs(MESSAGE_ID(mesg->buffer)),
-                                mesg->qname,
-                                &mesg->other.sa);
-
-                        bool answer = MESSAGE_QR(mesg->buffer);
-                        
-                        return_value = notify_process(mesg); // thread-safe
-                        
-                        local_statistics->udp_fp[mesg->status]++;
-                        
-                        if(FAIL(return_value))
-                        {
-                            log_err("notify (%04hx) %{dnsname} failed : %r",
-                                    ntohs(MESSAGE_ID(mesg->buffer)),
-                                    mesg->qname,
-                                    return_value);
-                            
-                            if(answer)
-                            {
-                                return SUCCESS;
-                            }
-                            
-                            if(!MESSAGEP_HAS_TSIG(mesg))
-                            {
-                                message_transform_to_error(mesg);
-                            }
-                            break;
-                        }
-                        else
-                        {
-                            if(answer)
-                            {
-                                return SUCCESS;
-                            }
-                        }
-                        
-                        break;
-                    } // notify class IN
-                    default:
-                    {
-                        /// @todo 20140521 edf -- verify unsupported class error handling
-                        /*
-                        FP_CLASS_NOTFOUND
-                        */
-                        message_make_error(mesg, FP_NOT_SUPP_CLASS);
-                        local_statistics->udp_fp[FP_NOT_SUPP_CLASS]++;
-                        break;
-                    }
-                } // notify class
-            } // if message process succeeded
-            else // an error occurred : no query to be done at all
-            {
-                log_warn("notify (%04hx) [%02x|%02x] error %i (%r) (%{sockaddrip})",
-                         ntohs(MESSAGE_ID(mesg->buffer)),
-                         MESSAGE_HIFLAGS(mesg->buffer),MESSAGE_LOFLAGS(mesg->buffer),
-                         mesg->status,
-                         return_code,
-                         &mesg->other.sa);
-
-                local_statistics->udp_fp[mesg->status]++;
-#ifdef DEBUG
-                log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG5, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_ALL);
-#endif
-                /*
-                 * If not FE, or if we answer FE
-                 * 
-                 * ... && (MESSAGE_QR(mesg->buffer) == 0 ??? and if there the query number is > 0 ???
-                 */
-                if( (return_code != INVALID_MESSAGE) && ((mesg->status != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)))
-                {
-                    message_edns0_clear_undefined_flags(mesg);
-                    
-                    if(!MESSAGEP_HAS_TSIG(mesg))
-                    {
-                        message_transform_to_error(mesg);
-                    }
-                }
-                else
-                {
-                    local_statistics->udp_dropped_count++;
-                    return SUCCESS;
-                }
-            }
-            break;
-        } // case notify
-
-        case OPCODE_UPDATE:
-        {
-            if(ISOK(return_code = message_process(mesg)))
-            {
-                message_edns0_clear_undefined_flags(mesg);
-                
-                switch(mesg->qclass)
-                {
-                    case CLASS_IN:
-                    {
-#if HAS_DYNUPDATE_SUPPORT
-                        /**
-                         * @note It's the responsibility of the called function (or one of its callees) to ensure
-                         *       this does not take much time and thus to trigger a background task with the
-                         *       scheduler if needed.
-                         */
-
-                        local_statistics->udp_updates_count++;
-                        mesg->sockfd = fd;
-                        server_rw_process_udp_update(mesg);
-                        
-                        return SUCCESS; // NOT break;
-#else
-                        message_make_error(mesg, FP_FEATURE_DISABLED);
-                        local_statistics->udp_fp[FP_FEATURE_DISABLED]++;
-                        break;
-#endif
-                        
-                    } // update class IN
-                    default:
-                    {
-                        /// @todo 20140521 edf -- verify unsupported class error handling
-                        /*
-                        FP_CLASS_NOTFOUND
-                        */
-                        message_make_error(mesg, FP_NOT_SUPP_CLASS);
-                        local_statistics->udp_fp[FP_NOT_SUPP_CLASS]++;
-                        break;
-                    }
-                } // update class
-            } // if message process succeeded
-            else // an error occurred : no query to be done at all
-            {
-                log_warn("update (%04hx) [%02x|%02x] error %i (%r) (%{sockaddrip})",
-                         ntohs(MESSAGE_ID(mesg->buffer)),
-                         MESSAGE_HIFLAGS(mesg->buffer),MESSAGE_LOFLAGS(mesg->buffer),
-                         mesg->status,
-                         return_code,
-                         &mesg->other.sa);
-
-                local_statistics->udp_fp[mesg->status]++;
-#ifdef DEBUG
-                log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG5, mesg->buffer, mesg->received, 16, OSPRINT_DUMP_ALL);
-#endif
-                /*
-                 * If not FE, or if we answer FE
-                 * 
-                 * ... && (MESSAGE_QR(mesg->buffer) == 0 ??? and if there the query number is > 0 ???
-                 */
-                if( (return_code != INVALID_MESSAGE) && ((mesg->status != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)))
-                {
-                    message_edns0_clear_undefined_flags(mesg);
-                    
-                    if(!MESSAGEP_HAS_TSIG(mesg))
-                    {
-                        message_transform_to_error(mesg);
-                    }
-                }
-                else
-                {
-                    local_statistics->udp_dropped_count++;
-                    return SUCCESS;
-                }
-            }
-            break;
-        } // case update
-
-        default:
-        {
-            return_code = message_process_query(mesg);
-            mesg->status = RCODE_NOTIMP;
-            
-            if(ctx->sockfd < 0)
-            {
-                return STOPPED_BY_APPLICATION_SHUTDOWN; // shutdown
-            }
-
-            log_warn("unknown [%04hx] error: %r", ntohs(MESSAGE_ID(mesg->buffer)), MAKE_DNSMSG_ERROR(mesg->status));
-            
-            if( (mesg->status != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0))
-            {
-                message_edns0_clear_undefined_flags(mesg);
-                
-                if(!MESSAGEP_HAS_TSIG(mesg))
-                {
-                    message_transform_to_error(mesg);
-                }
-            }
-            else
-            {
-                local_statistics->udp_dropped_count++;
-                return SUCCESS;
+                return MAKE_ERRNO_ERROR(error_code);
             }
         }
-    }
-    
-#if SERVER_RW_DEBUG
 
-#endif
-    
-#if !UDP_USE_MESSAGES
-    
-    while(sendto(fd, mesg->buffer, mesg->send_length, 0, (struct sockaddr*)&mesg->other.sa, mesg->addr_len) < 0)
-    {
-        int error_code = errno;
-
-        if(error_code != EINTR)
-        {
-            return error_code;
-        }
-    }
-#else
-    ctx->sender_iovec.iov_base = mesg->buffer;
-    ctx->sender_iovec.iov_len = mesg->send_length;
-    ctx->sender_msghdr.msg_name = &mesg->other.sa;
-    ctx->sender_msghdr.msg_namelen = mesg->addr_len;
-    
-#if !__FreeBSD__
-    ctx->sender_msghdr.msg_control = mesg->control_buffer;
-    ctx->sender_msghdr.msg_controllen = mesg->control_buffer_size;
-#else
-    if(ctx->is_any)
-    {
-        ctx->sender_msghdr.msg_control = mesg->control_buffer;
-        ctx->sender_msghdr.msg_controllen = mesg->control_buffer_size;
-    }
-    else
-    {
-        ctx->sender_msghdr.msg_control = NULL;
-        ctx->sender_msghdr.msg_controllen = 0;
-    }
-#endif
-    
-    ssize_t sent;
-    
-    while((sent = sendmsg(fd, &ctx->sender_msghdr, 0)) < 0)
-    {
-        int error_code = errno;
-
-        if(error_code != EINTR)
-        {
-            return error_code;
-        }
+        ctx->statistics.udp_output_size_total += sent;
     }
 
-    local_statistics->udp_output_size_total += sent;
-#endif
-        
-    return SUCCESS;
+    return ret;
 }
 
 static void*
 server_rw_udp_sender_thread(void *parms)
 {
     struct network_thread_context_s *ctx = (struct network_thread_context_s*)parms;
-    ctx->idw = pthread_self();
-    int fd = ctx->sockfd;
+    ctx->idw = thread_self();
+
+    log_debug("server_rw_udp_sender_thread(%i, %i): started", ctx->base.idx, ctx->base.sockfd);
     
-    log_debug("server_rw_udp_sender_thread(%i, %i): started", ctx->idx, fd);
+    server_rw_set_cpu_affinity(ctx->base.idx, 1);
     
-#if HAS_PTHREAD_SETAFFINITY_NP
-    cpu_set_t mycpu;
-    CPU_ZERO(&mycpu);
-    
-    int affinity_with = g_config->thread_affinity_base + (ctx->idx * 2 + 1) * g_config->thread_affinity_multiplier;
-    log_info("sender setting affinity with virtual cpu %i", affinity_with);
-    CPU_SET(affinity_with, &mycpu);
-    
-    pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mycpu);
-#endif
-    
-#if UDP_USE_MESSAGES
-    ctx->sender_msghdr.msg_iov = &ctx->sender_iovec;
-    ctx->sender_msghdr.msg_iovlen = 1;
-    ctx->sender_msghdr.msg_control = NULL;
-    ctx->sender_msghdr.msg_controllen = 0;
-    ctx->sender_msghdr.msg_flags = 0;
-#endif
+    size_t pool_buffer_size = 0x80000;
+    u8 *pool_buffer_in;
+    MALLOC_OBJECT_ARRAY_OR_DIE(pool_buffer_in, u8, pool_buffer_size, SVRPLBIN_TAG);
+    u8 *pool_buffer_out;
+    MALLOC_OBJECT_ARRAY_OR_DIE(pool_buffer_out, u8, pool_buffer_size, SVRPLBOT_TAG);
+
+    for(int i = 0; i < NETWORK_THREAD_CONTEXT_FAST_MESSAGE_COUNT; ++i)
+    {
+        message_set_pool_buffer(&ctx->in_message[i].message, pool_buffer_in, pool_buffer_size);
+    }
+    message_set_pool_buffer(&ctx->out_message.message, pool_buffer_out, pool_buffer_size);
     
     for(;;)
     {
-#ifdef DEBUG1
-        log_debug("server_rw_udp_sender_thread(%i, %i): dequeuing slow queries", ctx->idx, fd);
+#if DEBUG1
+        log_debug("server_rw_udp_sender_thread(%i, %i): dequeuing slow queries", ctx->base.idx, fd);
 #endif
         
         message_data *mesg;
         
         mutex_lock(&ctx->mtx);
 
-        const msg_cell_u *cell = (const msg_cell_u *)ctx->backlog_dequeue;
-        
+        const msg_cell_u *cell = (const msg_cell_u*)ctx->backlog_dequeue;
 
-        if(ctx->backlog_enqueue == cell) // embty backlog (the next to read is also the next to be filled)
+        if(ctx->backlog_enqueue == cell) // empty backlog (the next to read is also the next to be filled)
         {
             // no item on the backlog
-#ifdef DEBUG1
-            log_debug("server_rw_backlog_dequeue_message(%i, %i): dequeuing slow queries", ctx->idx, ctx->sockfd);
+#if DEBUG1
+            log_debug("server_rw_backlog_dequeue_message(%i, %i): dequeuing slow queries", ctx->base.idx, ctx->base.sockfd);
 #endif
             // wait for an item from the fastlane
             
@@ -964,19 +717,43 @@ server_rw_udp_sender_thread(void *parms)
             {
                 // no item, so wait for an event ...
 
-                cond_timedwait(&ctx->cond, &ctx->mtx, 1000000);
+                cond_timedwait(&ctx->cond, &ctx->mtx, ONE_SECOND_US);
                 
                 while((mesg = (message_data*)ctx->next_message) == NULL)
                 {
-                    if(ctx->sockfd >= 0)
+                    if(ctx->base.sockfd >= 0)
                     {
-                        cond_timedwait(&ctx->cond, &ctx->mtx, 1000000);
+                        int tw = cond_timedwait(&ctx->cond, &ctx->mtx, ONE_SECOND_US);
+                        
+                        if(tw == ETIMEDOUT)
+                        {                        
+                            if(service_should_reconfigure_or_stop(ctx->base.worker))
+                            {
+                                mutex_unlock(&ctx->mtx);
+                                
+                                free(pool_buffer_out);
+                                free(pool_buffer_in);
+                                
+                                log_debug("server_rw_udp_sender_thread(%i, %i): stopped (worker)", ctx->base.idx, ctx->base.sockfd);
+    
+                                return NULL;
+                            }
+                        }
+#if DEBUG
+                        else
+                        {
+                            yassert(tw == 0);
+                        }
+#endif
                     }
                     else
                     {
                         mutex_unlock(&ctx->mtx);
                         
-                        log_debug("server_rw_udp_sender_thread(%i, %i): stopped (wait->no-socket)", ctx->idx, fd);
+                        free(pool_buffer_out);
+                        free(pool_buffer_in);
+                        
+                        log_debug("server_rw_udp_sender_thread(%i, %i): stopped (wait->no-socket)", ctx->base.idx, ctx->base.sockfd);
     
                         return NULL;
                         // exit
@@ -989,19 +766,90 @@ server_rw_udp_sender_thread(void *parms)
             ctx->next_message = NULL;
                         
             mutex_unlock(&ctx->mtx);
-            
-#if SERVER_RW_DEBUG
+#if DEBUG
             mesg->popped_us = timeus();
 
-            log_debug("%i: look: %04hx %lluus %lluus", ctx->sockfd, ntohs(MESSAGE_ID(mesg->buffer)), mesg->pushed_us - mesg->recv_us, mesg->popped_us - mesg->pushed_us);
+            log_debug("server-rw: look: %04hx %lluus %lluus (%i)", ntohs(message_get_id(mesg)), mesg->pushed_us - mesg->recv_us, mesg->popped_us - mesg->pushed_us, ctx->base.sockfd);
 #endif
-            if(FAIL(server_rw_udp_sender_process_message(ctx, mesg)))
+            ya_result ret;
+            if(FAIL(ret = server_rw_process_message_udp(ctx, mesg)))
             {
-                if(ctx->sockfd >= 0)
+                if(ret != MAKE_ERRNO_ERROR(EBADF))
                 {
-                    log_err("%i: look: %04hx", ctx->sockfd, ntohs(MESSAGE_ID(mesg->buffer)));
+                    if(ctx->base.sockfd >= 0)
+                    {
+                        if(ret == MAKE_ERRNO_ERROR(EINVAL))
+                        {
+                            s32 dest_port = sockaddr_inet_port((struct sockaddr*)mesg->_msghdr.msg_name);
+
+                            // note dest_port is in network endian
+
+                            if(dest_port == 0)
+                            {
+                                log_err("server-rw: error replying to message %04hx %{dnsname} %{dnstype} from %{sockaddr}: invalid destination port",
+                                        ntohs(message_get_id(mesg)), message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), mesg->_msghdr.msg_name);
+                            }
+                            else if(dest_port < 0)
+                            {
+                                log_err("server-rw: error replying to message %04hx %{dnsname} %{dnstype} invalid IP family",
+                                        ntohs(message_get_id(mesg)), message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), mesg->_msghdr.msg_name);
+                            }
+                            else
+                            {
+                                log_err("server-rw: error replying to message %04hx %{dnsname} %{dnstype} from %{sockaddr}: %r",
+                                        ntohs(message_get_id(mesg)), message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), mesg->_msghdr.msg_name, ret);
+                            }
+                        }
+
+#if DEBUG
+                        log_err("server-rw: look: %04hx: %r (%i)", ntohs(message_get_id(mesg)), ret, ctx->base.sockfd);
+
+                        if(mesg->_msghdr.msg_name != NULL)
+                        {
+                            log_err("server-rw: name %{sockaddr} (%llu)", mesg->_msghdr.msg_name, mesg->_msghdr.msg_namelen);
+                        }
+#ifndef WIN32
+                        if(mesg->_msghdr.msg_control != NULL)
+                        {
+                            log_err("server-rw: control@%p (%llu)", mesg->_msghdr.msg_control, mesg->_msghdr.msg_controllen);
+                            log_memdump(MODULE_MSG_HANDLE, MSG_ERR, mesg->_msghdr.msg_control, mesg->_msghdr.msg_controllen, 32);
+                        }
+#else
+                        if(mesg->_msghdr.msg_control.buf != NULL)
+                        {
+                            log_err("server-rw: control@%p (%llu)", mesg->_msghdr.msg_control.buf, mesg->_msghdr.msg_control.len);
+                            log_memdump(MODULE_MSG_HANDLE, MSG_ERR, mesg->_msghdr.msg_control.buf, mesg->_msghdr.msg_control.len, 32);
+                        }
+#endif
+                        if(mesg->_msghdr.msg_iov != NULL)
+                        {
+                            log_err("server-rw: iov@%p (%i)", mesg->_msghdr.msg_iov, mesg->_msghdr.msg_iovlen);
+                        }
+
+                        if(mesg->_iovec.iov_base != NULL)
+                        {
+                            log_memdump(MODULE_MSG_HANDLE, MSG_ERR, mesg->_iovec.iov_base, mesg->_iovec.iov_len, 32);
+                        }
+
+                        log_err("server-rw: flags %x", mesg->_msghdr.msg_flags);
+#endif
+                    }
+                    else
+                    {
+                        log_err("server-rw: unexpected negative socket (%i)", ctx->base.sockfd);
+                    }
+
+                    message_reset_control(mesg);
+                    message_reset_buffer_size(mesg);
                 }
-                return NULL;
+                else
+                {
+                    free(pool_buffer_out);
+                    free(pool_buffer_in);
+
+                    // log_debug("server_rw_udp_sender_thread(%i, %i): stopped (closed)", ctx->base.idx, fd);
+                    return NULL;
+                }
             }
         }
         else // there are items on the backlog
@@ -1014,114 +862,118 @@ server_rw_udp_sender_thread(void *parms)
             
             int loop_idx = 0;
             
-            yassert(cell >= &ctx->backlog_queue[0] && cell < &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1]);
+            yassert(cell >= &ctx->backlog_queue[0] && cell <= ctx->backlog_queue_limit);
             
             if(cell > cell_limit) // go up to the end of the buffer (ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1])
             {
-                while(cell < &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE])
+                while(cell < ctx->backlog_queue_limit /*&ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE]*/)
                 {
                     if(cell->data.hdr.msg_size == 0) // partial cell (which can only happen if there was no room anymore for a cell
                     {
                         break;
                     }
-#if SERVER_RW_DEBUG
+#if DEBUG
                     u64 retrieve_start = timeus();
 #endif
-                    mesg = &ctx->out_message;
+                    mesg = &ctx->out_message.message;
 
-                    memcpy(&mesg->other.sa, &cell->data.hdr.sa, cell->data.hdr.sa_len);
-#if UDP_USE_MESSAGES
-                    ctx->sender_msghdr.msg_control = mesg->control_buffer;
-                    memcpy(ctx->sender_msghdr.msg_control, cell->data.hdr.ctrl, cell->data.hdr.ctrl_len);
+                    message_copy_sender_from_sa(mesg, &cell->data.hdr.sa.sa, cell->data.hdr.sa_len);
+#if DEBUG
+                    log_debug("%i: cell->data.hdr.ctrl_len=%i cell->data.hdr.blk_count=%i cell->data.hdr.blk_count=%i (>)", ctx->base.sockfd, cell->data.hdr.ctrl_len, cell->data.hdr.blk_count, cell->data.hdr.msg_size);
 #endif
-                    mesg->received = cell->data.hdr.msg_size;
-                    mesg->addr_len = cell->data.hdr.sa_len;
-#if UDP_USE_MESSAGES
-                    ctx->sender_msghdr.msg_controllen = cell->data.hdr.ctrl_len;
-#endif
+                    message_set_control(mesg, cell->data.hdr.ctrl, cell->data.hdr.ctrl_len);
                     yassert(cell->data.hdr.msg_size < 65536);
                     
-                    memcpy(mesg->buffer, &cell->data.data, cell->data.hdr.msg_size);
-#if SERVER_RW_DEBUG
+                    memcpy(message_get_buffer(mesg), &cell->data.data, cell->data.hdr.msg_size);
+                    message_set_size(mesg, cell->data.hdr.msg_size);
+#if DEBUG
                     mesg->popped_us = timeus();
                     
-                    log_debug("%i: popd: %04hx %lluus (%i) (>)", ctx->sockfd, ntohs(MESSAGE_ID(mesg->buffer)), mesg->popped_us - retrieve_start, loop_idx);
+                    log_debug("%i: popd: %04hx %lluus (%i) (>)", ctx->base.sockfd, ntohs(message_get_id(mesg)), mesg->popped_us - retrieve_start, loop_idx);
 #endif
-                    if(FAIL(server_rw_udp_sender_process_message(ctx, mesg)))
+                    ya_result ret;
+                    if(FAIL(ret = server_rw_process_message_udp(ctx, mesg)))
                     {
-                        log_err("%i: popd: %04hx (>)", ctx->sockfd, ntohs(MESSAGE_ID(mesg->buffer)));
-                        return NULL;
+                        if(ret != MAKE_ERRNO_ERROR(EBADF))
+                        {
+                            log_err("server-rw: could not process message %04hx (sock %i) (%r) (>)", ntohs(message_get_id(mesg)), ctx->base.sockfd, ret);
+
+                            if(g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE)
+                            {
+                                log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_ALL);
+                            }
+                        }
                     }
 
                     ++loop_idx;
 
                     cell += cell->data.hdr.blk_count;
                     
-                    yassert(cell >= &ctx->backlog_queue[0] && cell < &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1]);
+                    yassert(cell >= &ctx->backlog_queue[0] && cell <= ctx->backlog_queue_limit);
                 }
                 
                 cell = &ctx->backlog_queue[0];
             }
             
-            yassert(cell >= &ctx->backlog_queue[0] && cell < &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1]);
+            yassert(cell >= &ctx->backlog_queue[0] && cell <= ctx->backlog_queue_limit);
             
             while(cell < cell_limit)
             {
-#if SERVER_RW_DEBUG
+#if DEBUG
                 u64 retrieve_start = timeus();
 #endif
-                yassert(cell >= &ctx->backlog_queue[0] && cell < &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1]);
-                
-                mesg = &ctx->out_message;
+                yassert(cell >= &ctx->backlog_queue[0] && cell <= ctx->backlog_queue_limit);
 
-                memcpy(&mesg->other.sa, &cell->data.hdr.sa, cell->data.hdr.sa_len);
-#if UDP_USE_MESSAGES
-                ctx->sender_msghdr.msg_control = mesg->control_buffer;
-                memcpy(ctx->sender_msghdr.msg_control, cell->data.hdr.ctrl, cell->data.hdr.ctrl_len);
-#endif
-                mesg->received = cell->data.hdr.msg_size;
-                mesg->addr_len = cell->data.hdr.sa_len;
-#if UDP_USE_MESSAGES
-                ctx->sender_msghdr.msg_controllen = cell->data.hdr.ctrl_len;
-#endif
-                memcpy(mesg->buffer, &cell->data.data, cell->data.hdr.msg_size);
+                mesg = &ctx->out_message.message;
 
-#if SERVER_RW_DEBUG
+                message_copy_sender_from_sa(mesg, &cell->data.hdr.sa.sa, cell->data.hdr.sa_len);
+
+                log_debug("%i: cell->data.hdr.ctrl_len=%i", ctx->base.sockfd, cell->data.hdr.ctrl_len);
+
+                message_set_control(mesg, cell->data.hdr.ctrl, cell->data.hdr.ctrl_len);
+                memcpy(message_get_buffer(mesg), &cell->data.data, cell->data.hdr.msg_size);
+                message_set_size(mesg, cell->data.hdr.msg_size);
+#if DEBUG
                 mesg->popped_us = timeus();
-                log_debug("%i: popd: %04hx %lluus (%i)", ctx->sockfd, ntohs(MESSAGE_ID(mesg->buffer)), mesg->popped_us - retrieve_start, loop_idx);
+                log_debug("%i: popd: %04hx %lluus (%i)", ctx->base.sockfd, ntohs(message_get_id(mesg)), mesg->popped_us - retrieve_start, loop_idx);
 #endif
-                if(FAIL(server_rw_udp_sender_process_message(ctx, mesg)))
+                ya_result ret;
+                if(FAIL(ret = server_rw_process_message_udp(ctx, mesg)))
                 {
-                    log_err("%i: popd: %04hx", ctx->sockfd, ntohs(MESSAGE_ID(mesg->buffer)));
-                    return NULL;
+                    if(ret != MAKE_ERRNO_ERROR(EBADF))
+                    {
+                        log_err("server-rw: could not process message %04hx (sock %i) (%r)", ntohs(message_get_id(mesg)), ctx->base.sockfd, ret);
+                    }
                 }
 
                 ++loop_idx;
-
+#if DEBUG
+                const msg_cell_u *next_cell = cell + cell->data.hdr.blk_count;
+                yassert((next_cell >= &ctx->backlog_queue[0]) && (next_cell <= ctx->backlog_queue_limit));
+                cell = next_cell;
+#else
                 cell += cell->data.hdr.blk_count;
-                
-                yassert(cell >= &ctx->backlog_queue[0] && cell < &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1]);
+                yassert((cell >= &ctx->backlog_queue[0]) && (cell <= ctx->backlog_queue_limit));
+#endif
             }
             
-            yassert(cell >= &ctx->backlog_queue[0] && cell < &ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE + 1]);
-            
+            yassert(cell >= &ctx->backlog_queue[0] && cell <= ctx->backlog_queue_limit);
+
+
+            mutex_lock(&ctx->mtx);
             // cell             
             ctx->backlog_dequeue = cell;
+            mutex_unlock(&ctx->mtx);
         }
     }
-    
-    log_debug("server_rw_udp_sender_thread(%i, %i): stopped", ctx->idx, fd);
-    
-    return NULL;
 }
 
 static server_statistics_t server_statistics_sum;
 
 ya_result
-server_rw_query_loop()
+server_rw_query_loop(struct service_worker_s *worker)
 {
-    //u64 server_run_loop_rate_tick         = 0;
-    ya_result return_code;
+    ya_result ret;
     s32 server_run_loop_timeout_countdown = 0;
     int maxfd = -1;
 
@@ -1130,7 +982,12 @@ server_rw_query_loop()
         return INVALID_STATE_ERROR;
     }
     
-    if(server_context.tcp_socket_count <= 0)
+    if(g_server_context.tcp_socket_count <= 0)
+    {
+        return INVALID_STATE_ERROR;
+    }
+    
+    if(g_server_context.listen_count <= 0)
     {
         return INVALID_STATE_ERROR;
     }
@@ -1160,8 +1017,6 @@ server_rw_query_loop()
     timeout.tv_sec = 1;
     timeout.tv_nsec = 0;
     
-    database = g_config->database;
-
     /**
      * For each interface ...
      */
@@ -1174,334 +1029,313 @@ server_rw_query_loop()
      */
 
     FD_ZERO(&read_set_init);    
-    s32 reader_by_fd = g_config->thread_count_by_address / 2;
+    s32 reader_by_fd = g_server_context.udp_socket_count / g_server_context.udp_unit_per_interface;
     s32 cpu_count = sys_get_cpu_count();
     if(reader_by_fd > cpu_count)
     {
         log_warn("server-rw: using too many threads per address is counter-productive on highly loaded systems (%d > %d)", reader_by_fd, cpu_count);
     }
-    
-    /*
-     * 
-     */
 
-    // ensure the number of udp thread by interface does not goes "too much" beyond a limit
-    // recompute reader_by_fd if it does
-    
-    if(reader_by_fd * server_context.listen_count <= 255)
-    {
-        reader_by_fd = MAX(reader_by_fd, 1);
-    }
-    else
-    {
-        reader_by_fd = MAX(255 / server_context.listen_count, 1);
-    }
-    
-    //synced_init(itf_count * reader_by_fd);
-    
     u64 server_run_loop_rate_tick = 0;
     u32 previous_tick = 0;
-    
-    extern server_context_s server_context;
-    
-    struct thread_pool_s *server_udp_thread_pool = thread_pool_init_ex(server_context.listen_count * reader_by_fd * 2, 1, "svrudprw");
-        
-    network_thread_context_s **contextes;
-    MALLOC_OR_DIE(network_thread_context_s**, contextes, sizeof(network_thread_context_s*) * server_context.listen_count * reader_by_fd, RWNTCTXS_TAG);
-       
-    for(int listen_idx = 0, sockfd_idx = 0; listen_idx < server_context.listen_count; ++listen_idx)
-    {
-        for(u32 r = 0; r < reader_by_fd; r++)
-        {
-            network_thread_context_s *ctx;
-            MALLOC_OR_DIE(network_thread_context_s*, ctx, sizeof(network_thread_context_s), RWNTCTX_TAG);
-            memset(ctx, 0, sizeof(network_thread_context_s));
-            contextes[sockfd_idx] = ctx;
-            ctx->idx = sockfd_idx;
-            ctx->sockfd = server_context.udp_socket[sockfd_idx];
-#if __FreeBSD__
-            ctx->is_any = socket_is_any(ctx->sockfd);
-#endif
-            ctx->backlog_enqueue = &ctx->backlog_queue[0];
-            ctx->backlog_dequeue = &ctx->backlog_queue[0];
-            
-            ctx->in_message[0].process_flags = ~0;
-            ctx->in_message[1].process_flags = ~0;
-            ctx->in_message[2].process_flags = ~0;
-            ctx->out_message.process_flags = ~0;
-            
-            ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE].data.hdr.blk_count = 0; // implicitely done by the memset, but I want to be absolutely clear about this
-            ctx->backlog_queue[SERVER_RW_BACKLOG_QUEUE_SIZE].data.hdr.msg_size = 0;
-            
-            mutex_init(&ctx->mtx);
-            cond_init(&ctx->cond);
-            
-            //synced_threads.threads[tidx].intf = new_intf;
-            
-            log_info("thread #%i of UDP interface: %{sockaddr} using socket %i", r, server_context.udp_interface[listen_idx]->ai_addr, ctx->sockfd);
 
-            log_debug("server_rw_query_loop: pooling #%d=%d fd=%d", sockfd_idx, ctx->idx, ctx->sockfd);
+    log_info("server-rw: UDP working threads to be spawned: %i", (int)g_server_context.udp_interface_count * (int)g_server_context.udp_unit_per_interface * 2);
+
+    struct thread_pool_s *server_udp_thread_pool = thread_pool_init_ex(g_server_context.udp_interface_count * g_server_context.udp_unit_per_interface * 2, 1, "svrudprw");
+
+    if(server_udp_thread_pool == NULL)
+    {
+        log_err("server-rw: unable to allocate working threads pool");
+        return INVALID_STATE_ERROR;
+    }
+    
+    size_t backlog_queue_slots = g_server_context.worker_backlog_queue_size; /* SERVER_RW_BACKLOG_QUEUE_SIZE*/;
+    
+    network_thread_context_array ctxa;
+    if(FAIL(ret = network_thread_context_init(&ctxa, g_server_context.udp_interface_count, g_server_context.udp_unit_per_interface,
+            backlog_queue_slots, worker)))
+    {
+        log_err("server-rw: unable to allocate context: %r", ret);
+        return ret;
+    }
+
+    u32 initialised_context_indexes = 0;
+    
+    for(u32 udp_interface_index = 0; udp_interface_index < g_server_context.udp_interface_count; ++udp_interface_index)
+    {
+        for(u32 unit_index = 0; unit_index < g_server_context.udp_unit_per_interface; unit_index++)
+        {
+            network_thread_context_s *ctx = ctxa.contextes[initialised_context_indexes];
+
+            yassert(ctx != NULL);
+
+            log_info("server-rw: thread #%i of UDP interface: %{sockaddr} using socket %i", unit_index, g_server_context.udp_interface[udp_interface_index]->ai_addr, ctx->base.sockfd);
+
+            log_debug("server_rw_query_loop: pooling #%d=%d fd=%d", initialised_context_indexes, ctx->base.idx, ctx->base.sockfd);
             
-            if(FAIL(return_code = thread_pool_enqueue_call(server_udp_thread_pool, server_rw_udp_receiver_thread, ctx, NULL, "server-rw-recv")))
+            if(FAIL(ret = thread_pool_enqueue_call(server_udp_thread_pool, server_rw_udp_receiver_thread, ctx, NULL, "server-rw-recv")))
             {
-                log_err("unable to schedule task : %r", return_code);
+                log_err("server-rw: unable to schedule task : %r", ret);
+
+                service_stop(worker->service);
                 
-                return return_code;
+                break;
             }
             
-            if(FAIL(return_code = thread_pool_enqueue_call(server_udp_thread_pool, server_rw_udp_sender_thread, ctx, NULL, "server-rw-send")))
+            if(FAIL(ret = thread_pool_enqueue_call(server_udp_thread_pool, server_rw_udp_sender_thread, ctx, NULL, "server-rw-send")))
             {
-                log_err("unable to schedule task : %r", return_code);
+                log_err("server-rw: unable to schedule task : %r", ret);
+
+                service_stop(worker->service);
+
+                mutex_lock(&ctx->mtx);
+                cond_notify(&ctx->cond);
+                mutex_unlock(&ctx->mtx);
                 
-                return return_code;
+                break;
             }
          
             /*
              * Update the select read set for the current interface (udp + tcp)
              */           
             
-            ++sockfd_idx;
+            ++initialised_context_indexes;
+        }
+        
+        if(FAIL(ret))
+        {
+            break;
         }
     }
 
-    for(int i = 0; i < server_context.tcp_socket_count; ++i)
+    if(ISOK(ret))
     {
-        int sockfd = server_context.tcp_socket[i];
-        FD_SET(sockfd, &read_set_init);                    
-        maxfd = MAX(maxfd, sockfd);
-    }
-    
-    ++maxfd; /* pselect actually requires maxfd + 1 */
-    
-    /* compute maxfd plus one once and for all : done */
-
-
-    
-    log_info("ready to work");
-
-    while(program_mode != SA_SHUTDOWN)
-    {
-        server_statistics.input_loop_count++;
-
-        /* Reset the pselect read set */
-
-        MEMCOPY(&read_set, &read_set_init, sizeof(fd_set));
-
-        /* At this moment waits only for READ SET or timeout of x seconds */
-
-        /*
-         * @note (p)select has known bugs on Linux & glibc
-         *
-         * @todo 20160106 edf -- See man select about said bugs
-         */
-
-        return_code = pselect(maxfd,
-                &read_set,
-                NULL,
-                NULL,
-                &timeout,
-                0);
-
-        if(return_code > 0) /* Are any bit sets by pselect ? */
+        for(u32 i = 0; i < g_server_context.tcp_socket_count; ++i)
         {
-            /* If pselect check for the correct sock file descriptor,
-             * at this moment only READ SET
-             */
+            int sockfd = g_server_context.tcp_socket[i];
+
+            if(sockfd >= 0)
+            {
+                maxfd = MAX(maxfd, sockfd);
+                FD_SET(sockfd, &read_set_init);
+            }
+            else
+            {
+                log_err("server-rw: invalid socket value (%i) in tcp listening sockets", sockfd);
+            }
+        }
+
+        ++maxfd; /* pselect actually requires maxfd + 1 */
+
+        /* compute maxfd plus one once and for all : done */
+
+
+    
+        log_info("ready to work");
+
+        while(!service_should_reconfigure_or_stop(worker))
+        {
+            server_statistics.input_loop_count++;
+
+            /* Reset the pselect read set */
+
+            MEMCOPY(&read_set, &read_set_init, sizeof(fd_set));
+
+            /* At this moment waits only for READ SET or timeout of x seconds */
 
             /*
-             * This variable will contain the pointer to the processing function.
-             * It has been removed from the mesg structure at the time the latter
-             * has been moved to the core.
+             * @note (p)select has known bugs on Linux & glibc
              *
-             * Reasons being: zdb *dependency & server dependency -> dependency loop
-             *
-             * Since the call is only local it should not have side effects.
              */
-            
-            for(int i = 0; i < server_context.tcp_socket_count; ++i)
+
+            ret = pselect(maxfd,
+                    &read_set,
+                    NULL,
+                    NULL,
+                    &timeout,
+                    0);
+
+            if(ret > 0) /* Are any bit sets by pselect ? */
             {
-                int sockfd = server_context.tcp_socket[i];
-                
-                if(FD_ISSET(sockfd, &read_set))
+                /* If pselect check for the correct sock file descriptor,
+                 * at this moment only READ SET
+                 */
+
+                /*
+                 * This variable will contain the pointer to the processing function.
+                 * It has been removed from the mesg structure at the time the latter
+                 * has been moved to the core.
+                 *
+                 * Reasons being: zdb *dependency & server dependency -> dependency loop
+                 *
+                 * Since the call is only local it should not have side effects.
+                 */
+
+                for(u32 i = 0; i < g_server_context.tcp_socket_count; ++i)
                 {
-                    /* Jumps to the correct processing function */
-                    server_process_tcp(g_config->database, sockfd);
-                    server_statistics.loop_rate_counter++;
+                    int sockfd = g_server_context.tcp_socket[i];
+
+                    if(FD_ISSET(sockfd, &read_set))
+                    {
+                        /* Jumps to the TCP processing function */
+                        server_process_tcp(sockfd);
+                        server_statistics.loop_rate_counter++;
+                    }
                 }
             }
-        }
-        else /* return_code <= 0 */
-        {
-            if(return_code == -1)
+            else /* return_code <= 0 */
             {
-                if(errno != EINTR)
+                if(ret == -1)
                 {
-                    /**
-                     *  From the man page, what we can expect is EBADF (bug) EINVAL (bug) or ENOMEM (critical)
-                     *  So I we can kill and notify.
-                     */
-                    log_quit("pselect returned a critical error: %r", ERRNO_ERROR);
+                    int err = errno;
+                    if((err != EINTR) && (err != EBADF))
+                    {
+                        /**
+                         *  From the man page, what we can expect is EBADF (bug) EINVAL (bug) or ENOMEM (critical)
+                         *  So I we can kill and notify.
+                         */
+                        log_err("server-rw: pselect: %r", ERRNO_ERROR);
+                    }
+                    /*else if(err == EBADF)
+                    {
+                        break;
+                    }*/
                 }
+                /*else if(dnscore_shuttingdown())
+                {
+                    break;
+                }*/
+
+                /* return_code == 0 => no fd set at all and no error => timeout */
+
+                server_run_loop_timeout_countdown--;
+                server_statistics.input_timeout_count++;
             }
-
-            /* return_code == 0 => no fd set at all and no error => timeout */
-
-            server_run_loop_timeout_countdown--;
-            server_statistics.input_timeout_count++;
-        }
 
 #if HAS_RRL_SUPPORT
-        rrl_cull();
+            rrl_cull();
 #endif
         
-#if ZDB_HAS_MUTEX_DEBUG_SUPPORT
-        zdb_zone_lock_monitor_log();
+#if ZDB_HAS_LOCK_DEBUG_SUPPORT
+            zdb_zone_lock_monitor_log();
 #endif
 #if ZDB_HAS_OLD_MUTEX_DEBUG_SUPPORT
-        zdb_zone_lock_set_monitor();
+            zdb_zone_lock_set_monitor();
 #endif
         
-        /* handles statistics logging */
-#if 1
-        if(log_statistics_enabled)
-        {
-            u32 tick = dnscore_timer_get_tick();
+            /* handles statistics logging */
 
-            if((tick - previous_tick) >= g_config->statistics_max_period)
+            if(log_statistics_enabled)
             {
-                u64 now = timems();
-                u64 delta = now - server_run_loop_rate_tick;
+                u32 tick = dnscore_timer_get_tick();
 
-                if(delta > 0)
+                if((tick - previous_tick) >= g_config->statistics_max_period)
                 {
-                    /* log_info specifically targeted to the g_statistics_logger handle */
+                    u64 now = timems();
+                    u64 delta = now - server_run_loop_rate_tick;
 
-                    server_statistics.loop_rate_elapsed = delta;
-                    
-                    memcpy(&server_statistics_sum, &server_statistics, sizeof(server_statistics_t));
-                    
-                    for(int listen_idx = 0, sockfd_idx = 0; listen_idx < server_context.listen_count; ++listen_idx)
+                    if(delta > 0)
                     {
-                        for(u32 r = 0; r < reader_by_fd; r++)
+                        /* log_info specifically targeted to the g_statistics_logger handle */
+
+                        server_statistics.loop_rate_elapsed = delta;
+
+                        memcpy(&server_statistics_sum, &server_statistics, sizeof(server_statistics_t));
+
+                        for(u32 udp_interface_index = 0, context_index = 0; udp_interface_index < g_server_context.udp_interface_count; ++udp_interface_index)
                         {
-                            server_statistics_t *stats = &contextes[sockfd_idx]->statistics;
-
-                            server_statistics_sum.input_loop_count += stats->input_loop_count;
-                            /* server_statistics_sum.input_timeout_count += stats->input_timeout_count; */
-
-                            server_statistics_sum.udp_output_size_total += stats->udp_output_size_total;
-                            server_statistics_sum.udp_referrals_count += stats->udp_referrals_count;
-                            server_statistics_sum.udp_input_count += stats->udp_input_count;
-                            server_statistics_sum.udp_dropped_count += stats->udp_dropped_count;
-                            server_statistics_sum.udp_queries_count += stats->udp_queries_count;
-                            server_statistics_sum.udp_notify_input_count += stats->udp_notify_input_count;
-                            server_statistics_sum.udp_updates_count += stats->udp_updates_count;
-
-                            server_statistics_sum.udp_undefined_count += stats->udp_undefined_count;
-#if HAS_RRL_SUPPORT
-                            server_statistics_sum.rrl_slip += stats->rrl_slip;
-                            server_statistics_sum.rrl_drop += stats->rrl_drop;
-#endif
-                            for(u32 j = 0; j < SERVER_STATISTICS_ERROR_CODES_COUNT; j++)
+                            for(u32 unit_index = 0; unit_index < g_server_context.udp_unit_per_interface; unit_index++)
                             {
-                                server_statistics_sum.udp_fp[j] += stats->udp_fp[j];
-                            }
-                            ++sockfd_idx;
-                        }
-                    }
-                    
-                    log_statistics(&server_statistics_sum);
+                                server_statistics_t *stats = &(ctxa.contextes[context_index]->statistics);
 
-                    server_run_loop_rate_tick = now;
-                    server_run_loop_timeout_countdown = g_config->statistics_max_period;
-                    server_statistics.loop_rate_counter = 0;
-#ifdef DEBUG
+                                assert(stats != NULL);
+
+                                server_statistics_sum.input_loop_count += stats->input_loop_count;
+                                /* server_statistics_sum.input_timeout_count += stats->input_timeout_count; */
+
+                                server_statistics_sum.udp_output_size_total += stats->udp_output_size_total;
+                                server_statistics_sum.udp_referrals_count += stats->udp_referrals_count;
+                                server_statistics_sum.udp_input_count += stats->udp_input_count;
+                                server_statistics_sum.udp_dropped_count += stats->udp_dropped_count;
+                                server_statistics_sum.udp_queries_count += stats->udp_queries_count;
+                                server_statistics_sum.udp_notify_input_count += stats->udp_notify_input_count;
+                                server_statistics_sum.udp_updates_count += stats->udp_updates_count;
+
+                                server_statistics_sum.udp_undefined_count += stats->udp_undefined_count;
+#if HAS_RRL_SUPPORT
+                                server_statistics_sum.rrl_slip += stats->rrl_slip;
+                                server_statistics_sum.rrl_drop += stats->rrl_drop;
+#endif
+                                for(u32 j = 0; j < SERVER_STATISTICS_ERROR_CODES_COUNT; j++)
+                                {
+                                    server_statistics_sum.udp_fp[j] += stats->udp_fp[j];
+                                }
+
+                                ++context_index;
+                            }
+                        }
+
+#if HAS_EVENT_DYNAMIC_MODULE
+                        if(dynamic_module_statistics_interface_chain_available())
+                        {
+                            dynamic_module_on_statistics_update(&server_statistics_sum, now);
+                        }
+#endif
+                        log_statistics(&server_statistics_sum);
+
+                        server_run_loop_rate_tick = now;
+                        server_run_loop_timeout_countdown = g_config->statistics_max_period;
+                        server_statistics.loop_rate_counter = 0;
+#if DEBUG
 #if HAS_ZALLOC_STATISTICS_SUPPORT
-                    zalloc_print_stats(termout);
+                        zalloc_print_stats(termout);
 #endif
 #if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
-                    debug_stat(DEBUG_STAT_SIZES|DEBUG_STAT_TAGS); // do NOT enable the dump
+                        debug_stat(DEBUG_STAT_SIZES|DEBUG_STAT_TAGS); // do NOT enable the dump
 #endif
-                    journal_log_status();
-                    
-                    debug_bench_logdump_all();
+                        journal_log_status();
+
+                        debug_bench_logdump_all();
 #endif
 #if HAS_LIBC_MALLOC_DEBUG_SUPPORT
-                    debug_malloc_hook_caller_dump();
+                        debug_malloc_hook_caller_dump();
 #endif
-                }
+                    }
 
-                previous_tick = tick;
-            }
+                    previous_tick = tick;
+                }
+            } // if log_statistics_enabled
         }
-#endif  
+    }
+    else
+    {
+        log_err("server-rw: initialisation failed");
     }
 
-    log_info("stopping the threads");
-    //synced_stop();
-    
-    for(int i = 0; i < 5; ++i) // 5 arbitrary loops (one every second)
-    {    
-        for(int listen_idx = 0, sockfd_idx = 0; listen_idx < server_context.listen_count; ++listen_idx)
+    log_info("server-rw: stopping the threads");
+
+    for(u32 udp_interface_index = 0, context_index = 0; udp_interface_index < g_server_context.udp_interface_count; ++udp_interface_index)
+    {
+        for(u32 unit_index = 0; unit_index < g_server_context.udp_unit_per_interface; unit_index++)
         {
-            for(u32 r = 0; r < reader_by_fd; r++)
+            if(context_index >= initialised_context_indexes) // only happens in case of critical error
             {
-                network_thread_context_s *ctx = contextes[sockfd_idx];
-                
-                if(fd_getsockettype(ctx->sockfd) == SOCK_DGRAM)
-                {
-                    close_ex(ctx->sockfd);
-
-                    for(int i = 0; i < server_context.udp_socket_count; ++i)
-                    {
-                        if(server_context.udp_socket[i] == ctx->sockfd)
-                        {
-                            server_context.udp_socket[i] = -1;
-                        }
-                    }
-                }
-                else
-                {
-                    if(ctx->sockfd >= 0)
-                    {
-                        log_warn("could not close %i: socket is not a datagram", ctx->sockfd);
-                    }
-                }
-                
-                ctx->sockfd = -1;
-
-                pthread_t id;
-
-                mutex_lock(&ctx->mtx);
-                cond_notify(&ctx->cond);
-                mutex_unlock(&ctx->mtx);
-
-                id = ctx->idr;
-                if(id != 0)
-                {
-                    ctx->idr = 0;
-                    pthread_kill(id, SIGUSR2); 
-                }
-
-                id = ctx->idw;
-                if(id != 0)
-                {
-                    ctx->idw = 0;
-                    pthread_kill(id, SIGUSR2); 
-                }
-
-                //memset(&ctx->out_message.buffer, 0xff, 13);
-                ctx->next_message = &ctx->out_message;
-
-                mutex_lock(&ctx->mtx);
-                cond_notify(&ctx->cond);
-                mutex_unlock(&ctx->mtx);
-
-                ++sockfd_idx;
+                break;
             }
+
+            network_thread_context_s *ctx = ctxa.contextes[context_index];
+
+            if(ctx != NULL)
+            {
+                log_info("thread #%i of UDP interface: %{sockaddr} using socket %i", unit_index, g_server_context.udp_interface[udp_interface_index]->ai_addr, ctx->base.sockfd);
+
+                mutex_lock(&ctx->mtx);
+                cond_notify(&ctx->cond);
+                mutex_unlock(&ctx->mtx);
+            }
+
+            ++context_index;
         }
-    
-        sleep(1); // this is happening while shutting down
     }
         
     /*
@@ -1509,37 +1343,37 @@ server_rw_query_loop()
      * Close database alarm handle
      */
 
-    log_info("shutting down");
-    
-    //synced_finalize();
-    
+    log_info("server-rw: cleaning up");
+
     thread_pool_destroy(server_udp_thread_pool);
-    server_udp_thread_pool = NULL;
+    //server_udp_thread_pool = NULL;
+    
+    network_thread_context_array_finalize(&ctxa);
 
-    for(int listen_idx = 0, sockfd_idx = 0; listen_idx < server_context.listen_count; ++listen_idx)
-    {
-        for(u32 r = 0; r < reader_by_fd; r++)
-        {
-            free(contextes[sockfd_idx]);
-            ++sockfd_idx;
-        }
-    }
-    free(contextes);
-
-    log_debug("shutting down (pid = %u)", getpid());
+    log_info("server-rw: stopped", getpid_ex());
     
     return SUCCESS;
 }
 
 ya_result
 server_rw_context_init(int workers_per_interface)
-{    
-    server_context.thread_per_udp_worker_count = 2; // set in stone
-    server_context.thread_per_tcp_worker_count = 1; // set in stone
-    server_context.udp_unit_per_interface = MAX(workers_per_interface / 2, 1);
-    server_context.tcp_unit_per_interface = 1;    
-    server_context.reuse = 1;
-    server_context.ready = 1;
+{
+    g_server_context.thread_per_udp_worker_count = 2; // set in stone
+    g_server_context.thread_per_tcp_worker_count = 1; // set in stone
+    g_server_context.udp_unit_per_interface = MAX(workers_per_interface , 1);
+    g_server_context.tcp_unit_per_interface = 1;
+#ifdef SO_REUSEPORT
+    g_server_context.reuse = 1;
+#else
+    if(g_server_context.udp_unit_per_interface > 1)
+    {
+        log_warn("system does not support SO_REUSEPORT, downgrading UDP unit per interface from %i to 1", g_server_context.udp_unit_per_interface);
+        g_server_context.udp_unit_per_interface = 1;
+    }
+    g_server_context.reuse = 0;
+#endif
+
+    g_server_context.ready = 1;
     return SUCCESS;
 }
 

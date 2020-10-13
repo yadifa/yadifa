@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 /** @defgroup yadifad
  *  @ingroup ###
@@ -49,13 +49,11 @@
 /*----------------------------------------------------------------------------*/
 #pragma mark GLOBAL VARIABLES
 
-extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
 
 #define KEYSUICF_TAG 0x464349555359454b
 
 static ptr_set key_suite_desc_set = PTR_SET_ASCIIZ_EMPTY;
-
 
 /*----------------------------------------------------------------------------*/
 #pragma mark CONFIG
@@ -72,24 +70,28 @@ CONFIG_STRING(key_roll, NULL)
 CONFIG_END(config_section_key_suite_desc)
 #undef CONFIG_TYPE
 
-
-/*----------------------------------------------------------------------------*/
 #pragma mark STATIC FUNCTIONS
-
 
 static ya_result
 config_section_key_suite_set_wild(struct config_section_descriptor_s *csd, const char *key, const char *value)
 {
+    (void)csd;
+    (void)key;
+    (void)value;
+
     return CONFIG_UNKNOWN_SETTING;
 }
 
 
 static ya_result
-config_section_key_suite_print_wild(struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_key_suite_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
 {
+    (void)csd;
+    (void)os;
+
     if(key != NULL)
     {
-        return ERROR;
+        return INVALID_ARGUMENT_ERROR;
     }
 
     return SUCCESS;
@@ -117,7 +119,7 @@ config_section_key_suite_init(struct config_section_descriptor_s *csd)
 
     if(csd->base != NULL)
     {
-        return ERROR; // base SHOULD be NULL at init
+        return INVALID_STATE_ERROR; // base SHOULD be NULL at init
     }
 
     return SUCCESS;
@@ -149,11 +151,11 @@ config_section_key_suite_start(struct config_section_descriptor_s *csd)
 
     if(csd->base != NULL)
     {
-        return ERROR;
+        return INVALID_STATE_ERROR;
     }
     
     key_suite_desc_s *key_suite;
-    MALLOC_OR_DIE(key_suite_desc_s*, key_suite, sizeof(key_suite_desc_s), KEYSUICF_TAG);
+    MALLOC_OBJECT_OR_DIE(key_suite, key_suite_desc_s, KEYSUICF_TAG);
     ZEROMEMORY(key_suite, sizeof(key_suite_desc_s));
 
     csd->base = key_suite;
@@ -196,7 +198,7 @@ config_section_key_suite_stop(struct config_section_descriptor_s *csd)
         return CONFIG_SECTION_ERROR;
     }
     
-    ptr_node *node = ptr_set_avl_insert(&key_suite_desc_set, key_suite->id);
+    ptr_node *node = ptr_set_insert(&key_suite_desc_set, key_suite->id);
 
     if(node->value == NULL)
     {
@@ -228,12 +230,14 @@ config_section_key_suite_stop(struct config_section_descriptor_s *csd)
 static ya_result
 config_section_key_suite_postprocess(struct config_section_descriptor_s *csd)
 {
-    ptr_set_avl_iterator iter;
-    ptr_set_avl_iterator_init(&key_suite_desc_set, &iter);
+    (void)csd;
 
-    while(ptr_set_avl_iterator_hasnext(&iter))
+    ptr_set_iterator iter;
+    ptr_set_iterator_init(&key_suite_desc_set, &iter);
+
+    while(ptr_set_iterator_hasnext(&iter))
     {
-        ptr_node *key_suite_node = ptr_set_avl_iterator_next_node(&iter);
+        ptr_node *key_suite_node = ptr_set_iterator_next_node(&iter);
         key_suite_desc_s *key_suite_desc = (key_suite_desc_s *)key_suite_node->value;
         dnssec_policy_key *dpk = dnssec_policy_key_acquire_from_name(key_suite_desc->key_template);
         if(dpk != NULL)
@@ -288,7 +292,7 @@ key_suite_free(key_suite_desc_s *key_suite)
 
 
 /**
- * @fn static ya_result config_section_key_suite_finalise(struct config_section_descriptor_s *csd)
+ * @fn static ya_result config_section_key_suite_finalize(struct config_section_descriptor_s *csd)
  *
  * @brief free key_template_desc_s completely
  *
@@ -303,7 +307,7 @@ key_suite_free(key_suite_desc_s *key_suite)
  * return ya_result
  */
 static ya_result
-config_section_key_suite_finalise(struct config_section_descriptor_s *csd)
+config_section_key_suite_finalize(struct config_section_descriptor_s *csd)
 {
     if(csd != NULL)
     {
@@ -311,7 +315,7 @@ config_section_key_suite_finalise(struct config_section_descriptor_s *csd)
         {
             key_suite_desc_s *key_suite = (key_suite_desc_s*)csd->base;
             key_suite_free(key_suite);
-#ifdef DEBUG
+#if DEBUG
             csd->base = NULL;
 #endif
         }
@@ -337,7 +341,7 @@ static const config_section_descriptor_vtbl_s config_section_key_suite_descripto
     config_section_key_suite_start,
     config_section_key_suite_stop,
     config_section_key_suite_postprocess,
-    config_section_key_suite_finalise
+    config_section_key_suite_finalize
 };
 
 
@@ -366,7 +370,7 @@ config_register_key_suite(const char *null_or_key_name, s32 priority)
     (void)null_or_key_name;
 
     config_section_descriptor_s *desc;
-    MALLOC_OR_DIE(config_section_descriptor_s*, desc, sizeof(config_section_descriptor_s), CFGSDESC_TAG);
+    MALLOC_OBJECT_OR_DIE(desc, config_section_descriptor_s, CFGSDESC_TAG);
     desc->base = NULL;
     desc->vtbl = &config_section_key_suite_descriptor_vtbl;
 
@@ -376,7 +380,6 @@ config_register_key_suite(const char *null_or_key_name, s32 priority)
     {
         free(desc);
     }
-
 
     return return_code; // scan-build false positive: either it is freed, either it is stored in a global collection
 }

@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup debug Debug functions
  *  @ingroup dnscore
  *  @brief Debug functions.
@@ -53,8 +54,8 @@
 #define DEBUG_STAT_TAGS  2 // Usefull
 #define DEBUG_STAT_DUMP  4 // USE WITH CARE
 
-#ifdef DEBUG
-#include <pthread.h>
+#if DEBUG
+#include <dnscore/thread.h>
 #endif
 
 #include <stdlib.h>
@@ -66,7 +67,7 @@
 
 #include <dnscore/debug_config.h>
 
-#if !defined(DEBUG)
+#if !DEBUG
 #define yassert(x)
 #else
 void log_assert__(bool b, const char *txt, const char *file, int line);
@@ -91,7 +92,7 @@ struct logger_handle;
 
 bool debug_log_stacktrace(struct logger_handle *handle, u32 level, const char *prefix);
 
-#ifdef DEBUG
+#if DEBUG
 /*
  * DO NOT FORGET THAT THE "L" FUNCTIONS DO REQUIRE A DEBUG_LEVEL #define
  * BEFORE THE "debug.h" INCLUDE !
@@ -128,14 +129,14 @@ bool debug_log_stacktrace(struct logger_handle *handle, u32 level, const char *p
 
 void* debug_malloc(
                     size_t size_,const char* file, int line
-#if ZDB_DEBUG_TAG_BLOCKS!=0
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
                     ,u64 tag
 #endif
                 );
 
 void* debug_calloc(
                     size_t size_,const char* file, int line
-#if ZDB_DEBUG_TAG_BLOCKS!=0
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
                     ,u64 tag
 #endif
                 );
@@ -165,7 +166,7 @@ u32 debug_get_block_count();
 
 #define strdup debug_strdup
 
-#if ZDB_DEBUG_TAG_BLOCKS == 0
+#if !DNSCORE_DEBUG_HAS_BLOCK_TAG
 
 #define malloc(len) debug_malloc((len),__FILE__,__LINE__)
 #define calloc(len) debug_calloc((len),__FILE__,__LINE__)
@@ -178,9 +179,9 @@ u32 debug_get_block_count();
 
 #define ZDB_MALLOC_TAG	0x434f4c4c414d
 
-#define malloc(len) debug_malloc((len),__FILE__,__LINE__,ZDB_MALLOC_TAG)
-#define free(p) debug_free((p),__FILE__,__LINE__)
-#define realloc(p,len) debug_realloc((p),(len),__FILE__,__LINE__)
+#define malloc(len__) debug_malloc((len__),__FILE__,__LINE__,ZDB_MALLOC_TAG)
+#define free(p__) debug_free((p__),__FILE__,__LINE__)
+#define realloc(p__,len__) debug_realloc((p__),(len__),__FILE__,__LINE__)
 
 #define MALLOC_OR_DIE(cast,target,size,tag) if(((target)=(cast)debug_malloc(size,__FILE__,__LINE__,(tag)))==NULL){perror(__FILE__);abort(); /* TAGGED */}
 #define REALLOC_OR_DIE(cast,src_and_target,newsize,tag) if(((src_and_target)=(cast)debug_realloc((src_and_target),(newsize),__FILE__,__LINE__))==NULL){perror(__FILE__);abort(); /* NOT TAGGED */ }
@@ -213,7 +214,9 @@ typedef struct debug_bench_s debug_bench_s;
 
 // declares timeus()
 
-u64 timeus();
+s64 timeus();
+
+void debug_bench_init();
 
 void debug_bench_register(debug_bench_s *bench, const char *name);
 
@@ -225,11 +228,14 @@ void debug_bench_commit(debug_bench_s *bench, u64 delta);
 
 void debug_bench_logdump_all();
 
+void debug_bench_unregister_all();
+
 typedef intptr* stacktrace;
 struct output_stream;
 struct logger_handle;
 stacktrace debug_stacktrace_get();
 void debug_stacktrace_log(struct logger_handle *handle, u32 level, stacktrace trace);
+void debug_stacktrace_log_with_prefix(struct logger_handle* handle, u32 level, stacktrace trace, const char *prefix);
 void debug_stacktrace_try_log(struct logger_handle *handle, u32 level, stacktrace trace);
 void debug_stacktrace_print(struct output_stream *os, stacktrace trace);
 /**
@@ -238,38 +244,9 @@ void debug_stacktrace_print(struct output_stream *os, stacktrace trace);
  */
 void debug_stacktrace_clear();
 
-#ifdef DEBUG
-
-/*
- * These debugging tools ensure that ONE and only ONE thread is working on the structure.
- * It detects race issues.
- */
-
-typedef struct debug_unicity debug_unicity;
-
-struct debug_unicity
-{
-    pthread_mutex_t mutex;
-    u8 counter;
-};
-
-void debug_unicity_init(debug_unicity *dus);
-void debug_unicity_acquire(debug_unicity *dus);
-void debug_unicity_release(debug_unicity *dus);
-/* No, they are never destroyed */
-
-
-#define UNICITY_DEFINE(x)   static debug_unicity debug_unicity##x = {PTHREAD_MUTEX_INITIALIZER, 0};
-#define UNICITY_ACQUIRE(x)  debug_unicity_acquire(&debug_unicity##x);
-#define UNICITY_RELEASE(x)  debug_unicity_release(&debug_unicity##x);
-
-#else
-
 #define UNICITY_DEFINE(x)
 #define UNICITY_ACQUIRE(x)
 #define UNICITY_RELEASE(x)
-
-#endif
 
 extern volatile size_t malloc_hook_total;
 extern volatile size_t malloc_hook_malloc;
@@ -278,7 +255,7 @@ extern volatile size_t malloc_hook_realloc;
 extern volatile size_t malloc_hook_memalign;
 
 void debug_malloc_hooks_init();
-void debug_malloc_hooks_finalise();
+void debug_malloc_hooks_finalize();
 void *debug_malloc_unmonitored(size_t size);
 void debug_free_unmonitored(void* ptr);
 void debug_malloc_hook_tracked_dump();
@@ -289,4 +266,3 @@ void debug_malloc_hook_caller_dump();
 #endif
 
 #endif	/* _DEBUG_H */
-

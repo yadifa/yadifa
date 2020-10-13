@@ -1,5 +1,5 @@
 '\" t
-.\" Manual page created with latex2man on Wed Jul 13 11:14:21 CEST 2017
+.\" Manual page created with latex2man on Tue Oct 13 12:59:04 2020
 .\" NOTE: This file is generated, DO NOT EDIT.
 .de Vb
 .ft CW
@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFA\-RC" "5" "2020\-10\-07" "YADIFA " "YADIFA "
+.TH "YADIFA\-RC" "5" "2020\-10\-12" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -29,8 +29,8 @@ The configuration of yadifa
 has several containers: 
 .PP
 .TP
-\fB<yadifa>\fP
- General container 
+\fB<yadifa\-ctrl>\fP
+ Controller module settings 
 .TP
 \fB<key>\fP
  TSIG keys 
@@ -45,7 +45,7 @@ The configuration consists of:
 .PP
 .TP
 .B *
-Container, which starts with <container name> and ends with </container name> 
+Container, which starts with \fB<container name>\fP and ends with \fB</container name>\fP
 .TP
 .B *
 Variable name 
@@ -78,57 +78,38 @@ Examples of containers defined for a configuration file.
 .PP
 .TP
 .B *
-YADIFA, General 
-.RS
-.TP
-1.
-Config with Key 
-.RS
+Controller 
 .PP
 .Vb
-# start .yadifa.rc
-<yadifa>
+<yadifa\-ctrl>
     server        "192.0.2.1 port 53"
-    tsig\-key\-name Admin\-key
-</yadifa>
-
-# end .yadifa.rc
+    tsig\-key\-name controller
+</yadifa\-ctrl>
 .Ve
 .PP
-.RE
-.RE
-.PP
-.RE
 .TP
 .B *
-KEY, TSIG\-key configuration
-.br 
+KEY, controller key definition (the name is arbitrary) 
 .PP
-.RS
-.TP
-1.
-Admin\-key key definition (the name is arbitrary) 
 .Vb
 <key>
-    name        Admin\-key
+    name        controller
     algorithm   hmac\-md5
     secret      WorthlessKeyForExample==
 </key>
 .Ve
-.RE
-.RS
-.PP
-.RE
 .PP
 .SH FILES
 
 .PP
-.RE
 .TP
 yadifa
  The name server remote client. 
 .TP
-$HOME/.yadifa.rc
+${SYSCONFDIR}/yadifa.conf
+ default conf file. 
+.TP
+${HOME}/.yadifa.rc
  default rcfile. 
 .PP
 .TP
@@ -141,6 +122,7 @@ yadifa.8
 .SH SEE ALSO
 
 .PP
+\fIyadifa.conf\fP(5)
 \fIyadifa\fP(8)
 .PP
 .SH NOTES
@@ -158,7 +140,7 @@ from the sources.
 .SH VERSION
 
 .PP
-Version: 2.3.11 of 2020\-10\-07\&.
+Version: 2.4.0 of 2020\-10\-12. 
 .PP
 .SH MAILING LISTS
 

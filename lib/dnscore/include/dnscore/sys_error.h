@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnscoreerror Error
  *  @ingroup dnscore
  *  @brief 
@@ -91,37 +92,60 @@
 
 /// @note Everywhere in the source, "return ERROR;" should be replaced by something more specific
 
+#ifdef ERROR
+#undef ERROR
+#endif
 #define ERROR                           -1
 #define NOK				                -1
 
+#define TRACK_RETURNED_GENERIC_ERROR    0
+
+#define ERRNO_ERROR_BASE                0x80000000
+
+typedef int32_t ya_result;
+
 /* Two macros to easily check an error status */
 
-#define FAIL(result) ((result)<0)
-#define ISOK(result) ((result)>=0)
+#define YA_ERROR_BASE(err_) ((err_) & 0xffff0000UL)
+#define YA_ERROR_CODE(err_) ((err_) & 0x0000ffffUL)
+
+#if !DEBUG
+#define FAIL(result__) ((result__)<0)
+#define ISOK(result__) ((result__)>=0)
+#else
+
+#if TRACK_RETURNED_GENERIC_ERROR
+bool dnscore_monitored_isok(ya_result ret);
+bool dnscore_monitored_fail(ya_result ret);
+#define FAIL(result__) dnscore_monitored_fail((result__))
+#define ISOK(result__) dnscore_monitored_isok((result__))
+#else
+#define FAIL(result) ((((u32)(result)) & ((u32)ERRNO_ERROR_BASE)) != 0) // trying to make scan-build understand
+#define ISOK(result) ((((u32)(result)) & ((u32)ERRNO_ERROR_BASE)) == 0)
+#endif
+#endif
 
 /* 16 most significant bits : GROUP, the sign bit being ALWAYS set
  * 16 least significant bits : ID
  */
 
-#define ERRNO_ERROR_BASE                0x80000000
 #define ERRNO_ERROR                     ((s32)(ERRNO_ERROR_BASE+errno))
 #define MAKE_ERRNO_ERROR(err_)          ((s32)(ERRNO_ERROR_BASE+(err_)))
 
 #define EXITFAIL(x) if((x)<0) {DIE(ERROR);exit(EXIT_FAILURE);}
 
 #define DNSMSG_ERROR_BASE               0xc0000000
-#define MAKE_DNSMSG_ERROR(err_)         ((s32)(DNSMSG_ERROR_BASE+(err_)))
+
 
 /* -----------------------------------------------------------------------------
  *
  *   STRUCTS
  */
 
-typedef int32_t ya_result;
-
-#define SERVER_ERROR_BASE                       0x80010000
-#define SERVER_ERROR_CODE(code_)                ((s32)(SERVER_ERROR_BASE+(code_)))
-#define SERVER_ERROR_GETCODE(error_)            ((error_)&0xffff)
+#define RCODE_ERROR_BASE                        0x80010000
+#define RCODE_ERROR_CODE(code_)                 ((s32)(RCODE_ERROR_BASE+(code_)))
+#define RCODE_ERROR_GETCODE(error_)             ((error_)&0xffff)
+#define MAKE_DNSMSG_ERROR(err_)                 RCODE_ERROR_CODE(err_)
 
 #define CORE_ERROR_BASE                         0x80020000
 #define CORE_ERROR_CODE(code_)                  ((s32)(CORE_ERROR_BASE+(code_)))
@@ -153,6 +177,13 @@ typedef int32_t ya_result;
 #define DIRECTORY_NOT_WRITABLE                  CORE_ERROR_CODE(26)
 #define FEATURE_NOT_SUPPORTED                   CORE_ERROR_CODE(27)
 #define LOCK_TIMEOUT                            CORE_ERROR_CODE(28)
+#define CIRCULAR_FILE_FULL                      CORE_ERROR_CODE(29)
+#define CIRCULAR_FILE_SHORT                     CORE_ERROR_CODE(30)
+#define CIRCULAR_FILE_END                       CORE_ERROR_CODE(31)
+#define CIRCULAR_FILE_LIMIT_EXCEEDED            CORE_ERROR_CODE(32)
+#define DATA_FORMAT_ERROR                       CORE_ERROR_CODE(33)
+#define LOCK_FAILED                             CORE_ERROR_CODE(34)
+#define UNSUPPORTED_CLASS                       CORE_ERROR_CODE(35)
 
 #define PARSEB16_ERROR                          CORE_ERROR_CODE(0x1001)
 #define PARSEB32_ERROR                          CORE_ERROR_CODE(0x1002)
@@ -183,6 +214,8 @@ typedef int32_t ya_result;
 #define CONFIG_KEY_UNKNOWN                      CORE_ERROR_CODE(0x180d)
 #define CONFIG_KEY_PARSE_ERROR                  CORE_ERROR_CODE(0x180e)
 #define CONFIG_SECTION_ERROR                    CORE_ERROR_CODE(0x180f)
+#define CONFIG_IS_BUSY                          CORE_ERROR_CODE(0x1810)
+#define CONFIG_FILE_NOT_FOUND                   CORE_ERROR_CODE(0x1811)
 
 #define THREAD_CREATION_ERROR                   CORE_ERROR_CODE(0x2001)
 #define THREAD_DOUBLEDESTRUCTION_ERROR          CORE_ERROR_CODE(0x2002)
@@ -194,6 +227,7 @@ typedef int32_t ya_result;
 #define SERVICE_NOT_INITIALISED                 CORE_ERROR_CODE(0x2008)
 #define SERVICE_HAS_RUNNING_THREADS             CORE_ERROR_CODE(0x2009)
 #define SERVICE_ALREADY_PAUSED                  CORE_ERROR_CODE(0x200a)
+#define SERVICE_INITIALISATION_ERROR            CORE_ERROR_CODE(0x200b)
 
 #define TSIG_DUPLICATE_REGISTRATION             CORE_ERROR_CODE(0x3001)
 #define TSIG_UNABLE_TO_SIGN                     CORE_ERROR_CODE(0x3002)
@@ -209,6 +243,9 @@ typedef int32_t ya_result;
 #define CHARON_ERROR_INVALID_TAIL               CORE_ERROR_CODE(0x5007)
 #define CHARON_ERROR_INVALID_COMMAND            CORE_ERROR_CODE(0x5008)
 #define CHARON_ERROR_COMMAND_SEQ_MISMATCHED     CORE_ERROR_CODE(0x5009)
+#define CHARON_ERROR_UNKNOWN_MAGIC              CORE_ERROR_CODE(0x500a)
+#define CHARON_ERROR_ALREADY_RUNNING            CORE_ERROR_CODE(0x500b)
+#define CHARON_ERROR_ALREADY_STOPPED            CORE_ERROR_CODE(0x500c)
 
 #define LOGGER_CHANNEL_ALREADY_REGISTERED       CORE_ERROR_CODE(0x6001)
 #define LOGGER_CHANNEL_NOT_REGISTERED           CORE_ERROR_CODE(0x6002)
@@ -222,17 +259,22 @@ typedef int32_t ya_result;
 #define INCORRECT_IPADDRESS                     DNS_ERROR_CODE(2)    /* Incorrect ip address              */
 #define INCORRECT_RDATA                         DNS_ERROR_CODE(3)
 
-#define ZONEFILE_UNSUPPORTED_TYPE               DNS_ERROR_CODE(11)      /* Type is unknown                              */
-#define LABEL_TOO_LONG                          DNS_ERROR_CODE(12)      /* label is longer than 63                      */
-#define INVALID_CHARSET                         DNS_ERROR_CODE(13)      /*                                              */
-#define ZONEFILE_INVALID_TYPE                   DNS_ERROR_CODE(14)      /* Type is unknown                              */
-#define DOMAINNAME_INVALID                      DNS_ERROR_CODE(16)      /* invalid dnsname usually : double dot         */
+#define LABEL_TOO_LONG                          DNS_ERROR_CODE(10)      /* label is longer than 63                      */
+#define INVALID_CHARSET                         DNS_ERROR_CODE(11)      /*                                              */
+#define ZONEFILE_INVALID_TYPE                   DNS_ERROR_CODE(12)      /* Type is unknown                              */
+#define DOMAINNAME_INVALID                      DNS_ERROR_CODE(13)      /* invalid dnsname usually : double dot         */
+
+#define TSIG_FORMERR                            DNS_ERROR_CODE(14)
+#define TSIG_SIZE_LIMIT_ERROR                   DNS_ERROR_CODE(15)
+
+#define TSIG_BADSIG                             DNS_ERROR_CODE(16)      /* TSIG timestamp outisde of the time window    */
 #define TSIG_BADKEY                             DNS_ERROR_CODE(17)      /* Unknown key name in TSIG record              */
 #define TSIG_BADTIME                            DNS_ERROR_CODE(18)      /* TSIG timestamp outisde of the time window    */
-#define TSIG_BADSIG                             DNS_ERROR_CODE(19)      /* TSIG timestamp outisde of the time window    */
-#define TSIG_FORMERR                            DNS_ERROR_CODE(20)
-#define TSIG_SIZE_LIMIT_ERROR                   DNS_ERROR_CODE(21)
-#define UNPROCESSABLE_MESSAGE                   DNS_ERROR_CODE(22)
+#define TSIG_BADMODE                            DNS_ERROR_CODE(19)
+#define TSIG_BADNAME                            DNS_ERROR_CODE(20)
+#define TSIG_BADALG                             DNS_ERROR_CODE(21)
+#define TSIG_BADTRUNC                           DNS_ERROR_CODE(22)
+#define UNPROCESSABLE_MESSAGE                   DNS_ERROR_CODE(23)
 #define INVALID_PROTOCOL                        DNS_ERROR_CODE(24)
 #define INVALID_RECORD                          DNS_ERROR_CODE(25)
 #define UNSUPPORTED_RECORD                      DNS_ERROR_CODE(26)
@@ -240,20 +282,22 @@ typedef int32_t ya_result;
 #define UNKNOWN_DNS_TYPE                        DNS_ERROR_CODE(28)
 #define UNKNOWN_DNS_CLASS                       DNS_ERROR_CODE(29)
 
-#define INVALID_MESSAGE                         DNS_ERROR_CODE(30)
+//#define INVALID_MESSAGE                         DNS_ERROR_CODE(30)
+#define INVALID_MESSAGE                         UNPROCESSABLE_MESSAGE
 
 #define MESSAGE_HAS_WRONG_ID                    DNS_ERROR_CODE(31)
 #define MESSAGE_IS_NOT_AN_ANSWER                DNS_ERROR_CODE(32)
 #define MESSAGE_UNEXPECTED_ANSWER_DOMAIN        DNS_ERROR_CODE(33)
 #define MESSAGE_UNEXPECTED_ANSWER_TYPE_CLASS    DNS_ERROR_CODE(34)
 #define MESSAGE_CONTENT_OVERFLOW                DNS_ERROR_CODE(35)
+#define MESSAGE_TRUNCATED                       DNS_ERROR_CODE(36)
 
-#define RRSIG_COVERED_TYPE_DIFFERS              DNS_ERROR_CODE(36)
-#define RRSIG_OUTPUT_DIGEST_SIZE_TOO_BIG        DNS_ERROR_CODE(37)
-#define RRSIG_UNSUPPORTED_COVERED_TYPE          DNS_ERROR_CODE(38)
-#define RRSIG_VERIFICATION_FAILED               DNS_ERROR_CODE(39)
+#define RRSIG_COVERED_TYPE_DIFFERS              DNS_ERROR_CODE(50)
+#define RRSIG_OUTPUT_DIGEST_SIZE_TOO_BIG        DNS_ERROR_CODE(51)
+#define RRSIG_UNSUPPORTED_COVERED_TYPE          DNS_ERROR_CODE(52)
+#define RRSIG_VERIFICATION_FAILED               DNS_ERROR_CODE(53)
 
-#define UNKNOWN_DNSSEC_ALGO                     DNS_ERROR_CODE(40)
+#define UNKNOWN_DNSSEC_ALGO                     DNS_ERROR_CODE(100)
 
 /// @note EAI error codes are used for getaddrinfo
 ///

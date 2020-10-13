@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup error Database error handling
  *  @ingroup dnsdb
  *  @brief Database error handling
@@ -73,6 +74,9 @@ zdb_register_errors()
     error_register(ZDB_READER_ZONENOTLOADED, "The zone has not been loaded.");
 
     error_register(ZDB_ERROR_NOSOAATAPEX, "ZDB_ERROR_NOSOAATAPEX");
+
+    error_register(ZDB_ERROR_COULDNOTOOBTAINZONEIMAGE, "ZDB_ERROR_COULDNOTOOBTAINZONEIMAGE");
+
     error_register(ZDB_ERROR_CORRUPTEDSOA, "ZDB_ERROR_CORRUPTEDSOA");
 
     error_register(ZDB_ERROR_ICMTL_NOTFOUND, "ZDB_ERROR_ICMTL_NOTFOUND");
@@ -85,7 +89,7 @@ zdb_register_errors()
     error_register(ZDB_ERROR_ZONE_IS_NOT_DNSSEC, "ZDB_ERROR_ZONE_IS_NOT_DNSSEC");
     error_register(ZDB_ERROR_ZONE_NO_ZSK_PRIVATE_KEY_FILE, "ZDB_ERROR_ZONE_NO_ZSK_PRIVATE_KEY_FILE");
     error_register(ZDB_ERROR_ZONE_NO_ACTIVE_DNSKEY_FOUND, "ZDB_ERROR_ZONE_NO_ACTIVE_DNSKEY_FOUND");
-    error_register(ZDB_ERROR_ZONE_UNKNOWN, "ZDB_ERROR_ZONE_UNKNOWN");
+    error_register(ZDB_ERROR_ZONE_NOT_IN_DATABASE, "ZDB_ERROR_ZONE_NOT_IN_DATABASE");
     error_register(ZDB_ERROR_ZONE_NOT_MAINTAINED,"ZDB_ERROR_ZONE_NOT_MAINTAINED");
 
     error_register(ZDB_READER_FIRST_RECORD_NOT_SOA, "ZDB_READER_FIRST_RECORD_NOT_SOA");
@@ -100,8 +104,15 @@ zdb_register_errors()
     error_register(ZDB_JOURNAL_SOA_RECORD_EXPECTED, "ZDB_JOURNAL_SOA_RECORD_EXPECTED");
     error_register(ZDB_JOURNAL_SERIAL_OUT_OF_KNOWN_RANGE, "ZDB_JOURNAL_SERIAL_OUT_OF_KNOWN_RANGE");
     error_register(ZDB_JOURNAL_FEATURE_NOT_SUPPORTED, "ZDB_JOURNAL_FEATURE_NOT_SUPPORTED");
-    error_register(ZDB_JOURNAL_ERROR_READING_JOURNAL, "ZDB_JOURNAL_ERROR_READING_JOURNAL");
-    //error_register(ZDB_JOURNAL_IXFR_SERIAL_OUT_OF_KNOWN_RANGE, "ZDB_JOURNAL_IXFR_SERIAL_OUT_OF_KNOWN_RANGE");
+    error_register(ZDB_JOURNAL_IS_BUSY, "ZDB_JOURNAL_IS_BUSY");
+    error_register(ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY, "ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY");
+
+    error_register(ZDB_JOURNAL_NOT_INITIALISED, "ZDB_JOURNAL_NOT_INITIALISED");
+    error_register(ZDB_JOURNAL_IS_BUSY, "ZDB_JOURNAL_IS_BUSY");
+    error_register(ZDB_JOURNAL_LOOKS_CORRUPTED, "ZDB_JOURNAL_LOOKS_CORRUPTED");
+    error_register(ZDB_JOURNAL_UNEXPECTED_MAGIC, "ZDB_JOURNAL_UNEXPECTED_MAGIC");
+    error_register(ZDB_JOURNAL_SHORT_READ, "ZDB_JOURNAL_SHORT_READ");
+    error_register(ZDB_JOURNAL_SIZE_LIMIT_TOO_SMALL, "ZDB_JOURNAL_SIZE_LIMIT_TOO_SMALL");
 }
 
 

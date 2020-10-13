@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup ### #######
  *  @ingroup dnscore
  *  @brief
@@ -44,10 +45,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <openssl/hmac.h>
 #include <dnscore/dnskey.h>
-#include <dnscore/sys_types.h>
-#include <dnscore/packet_reader.h>
+#include <dnscore/hmac.h>
+
+#if DNSCORE_HAS_TSIG_SUPPORT
+
+#ifdef	__cplusplus
+extern "C"
+{
+#endif
 
 #define HMAC_UNKNOWN	  0
 #define HMAC_MD5        157
@@ -57,16 +63,8 @@
 #define HMAC_SHA384     164
 #define HMAC_SHA512     165
 
-#if DNSCORE_HAS_TSIG_SUPPORT
+struct packet_unpack_reader_data;
 
-#ifdef	__cplusplus
-extern "C"
-{
-#endif
-
-/*
- * 
- */
 /*
  * A digest is stored prefixed with its length ([1;255])
  */
@@ -102,7 +100,6 @@ struct tsig_item
     const u8 *name;
     const u8 *mac;
     const u8 *mac_algorithm_name;
-    const EVP_MD *evp_md;
     u16 name_len;
     u16 mac_algorithm_name_len;
     u16 mac_size;
@@ -210,7 +207,7 @@ void tsig_verify_tcp_last_message(struct message_data *mesg);
 
 void tsig_register_algorithms();
 
-const EVP_MD *tsig_get_EVP_MD(u8 algorithm);
+ya_result tsig_get_hmac_algorithm_from_friendly_name(const char *hmacname);
 
 u8 tsig_get_algorithm(const u8 *name);
 const u8* tsig_get_algorithm_name(u8 algorithm);
@@ -225,11 +222,11 @@ const u8* tsig_get_algorithm_name(u8 algorithm);
  */
 
 // no verification whatsoever, use with care
-ya_result tsig_process(struct message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offset, const tsig_item *tsig, struct type_class_ttl_rdlen *tctr);
+ya_result tsig_process(struct message_data *mesg, struct packet_unpack_reader_data *purd, u32 tsig_offset, const tsig_item *tsig, struct type_class_ttl_rdlen *tctr);
 
-ya_result tsig_process_query(struct message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offset, u8 tsigname[MAX_DOMAIN_LENGTH], struct type_class_ttl_rdlen *tctr);
+ya_result tsig_process_query(struct message_data *mesg, struct packet_unpack_reader_data *purd, u32 tsig_offset, u8 tsigname[MAX_DOMAIN_LENGTH], struct type_class_ttl_rdlen *tctr);
 
-ya_result tsig_process_answer(struct message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offset, const tsig_item *tsig, struct type_class_ttl_rdlen *tctr, const u8 *mac, u16 mac_size);
+ya_result tsig_process_answer(struct message_data *mesg, struct packet_unpack_reader_data *purd, u32 tsig_offset, struct type_class_ttl_rdlen *tctr);
 
 /*
  * Search for the last
@@ -269,13 +266,6 @@ ya_result tsig_append_error(struct message_data *mesg);
  */
 
 ya_result tsig_message_extract(struct message_data *mesg);
-
-#define TSIG_ENABLED(message__) ((message__)->tsig.tsig != NULL)
-
-typedef HMAC_CTX* tsig_hmac_t;
-
-tsig_hmac_t tsig_hmac_allocate();
-void tsig_hmac_free(tsig_hmac_t t);
 
 #ifdef	__cplusplus
 }

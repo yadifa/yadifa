@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 /** @defgroup yadifad
  *  @ingroup ###
@@ -81,24 +81,28 @@ CONFIG_ALIAS(created, generate)
 CONFIG_END(config_section_key_roll_desc)
 #undef CONFIG_TYPE
 
-
-/*----------------------------------------------------------------------------*/
 #pragma mark STATIC FUNCTIONS
-
 
 static ya_result
 config_section_key_roll_set_wild(struct config_section_descriptor_s *csd, const char *key, const char *value)
 {
+    (void)csd;
+    (void)key;
+    (void)value;
+
     return CONFIG_UNKNOWN_SETTING;
 }
 
 
 static ya_result
-config_section_key_roll_print_wild(struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_key_roll_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
 {
+    (void)csd;
+    (void)os;
+
     if(key != NULL)
     {
-        return ERROR;
+        return INVALID_ARGUMENT_ERROR;
     }
 
     return SUCCESS;
@@ -126,7 +130,7 @@ config_section_key_roll_init(struct config_section_descriptor_s *csd)
 
     if(csd->base != NULL)
     {
-        return ERROR; // base SHOULD be NULL at init
+        return INVALID_STATE_ERROR; // base SHOULD be NULL at init
     }
 
     return SUCCESS;
@@ -158,11 +162,11 @@ config_section_key_roll_start(struct config_section_descriptor_s *csd)
 
     if(csd->base != NULL)
     {
-        return ERROR;
+        return INVALID_STATE_ERROR;
     }
     
     key_roll_desc_s *key_roll;
-    MALLOC_OR_DIE(key_roll_desc_s*, key_roll, sizeof(key_roll_desc_s), KEYROLCF_TAG);
+    MALLOC_OBJECT_OR_DIE(key_roll, key_roll_desc_s, KEYROLCF_TAG);
     ZEROMEMORY(key_roll, sizeof(key_roll_desc_s));
 
     csd->base = key_roll;
@@ -216,38 +220,37 @@ config_section_key_roll_stop(struct config_section_descriptor_s *csd)
     key_roll_line_s krl_ds_publish;
     key_roll_line_s krl_ds_remove;
 
-
     if(FAIL(return_code = config_key_roll_parser_line(key_roll->generate, &krl_generate, KR_ACTION_GENERATE)))
     {
-        ttylog_err("config: key-roll: %s: error in 'generate'", key_roll->id);
+        ttylog_err("config: key-roll: %s: error in 'generate' (%r)", key_roll->id, return_code);
 
         return PARSE_INVALID_ARGUMENT;
     }
 
     if(FAIL(return_code = config_key_roll_parser_line(key_roll->publish, &krl_publish, KR_ACTION_GENERATE)))
     {
-        ttylog_err("config: key-roll: %s: error in 'publish'", key_roll->id);
+        ttylog_err("config: key-roll: %s: error in 'publish' (%r)", key_roll->id, return_code);
 
         return PARSE_INVALID_ARGUMENT;
     }
 
     if(FAIL(return_code = config_key_roll_parser_line(key_roll->activate, &krl_activate, KR_ACTION_PUBLISH)))
     {
-        ttylog_err("config: key-roll: %s: error in 'activate'", key_roll->id);
+        ttylog_err("config: key-roll: %s: error in 'activate' (%r)", key_roll->id, return_code);
 
         return PARSE_INVALID_ARGUMENT;
     }
 
     if(FAIL(return_code = config_key_roll_parser_line(key_roll->inactive, &krl_inactive, KR_ACTION_ACTIVATE)))
     {
-        ttylog_err("config: key-roll: %s: error in 'inactive'", key_roll->id);
+        ttylog_err("config: key-roll: %s: error in 'inactive' (%r)", key_roll->id, return_code);
 
         return PARSE_INVALID_ARGUMENT;
     }
 
     if(FAIL(return_code = config_key_roll_parser_line(key_roll->remove, &krl_remove, KR_ACTION_INACTIVE)))
     {
-        ttylog_err("config: key-roll: %s: error in 'remove'", key_roll->id);
+        ttylog_err("config: key-roll: %s: error in 'remove' (%r)", key_roll->id, return_code);
 
         return PARSE_INVALID_ARGUMENT;
     }
@@ -348,7 +351,7 @@ config_section_key_roll_stop(struct config_section_descriptor_s *csd)
 
     csd->base = NULL;
 
-    ptr_node *node = ptr_set_avl_insert(&key_roll_desc_set, key_roll->id);
+    ptr_node *node = ptr_set_insert(&key_roll_desc_set, key_roll->id);
 
     if(node->value == NULL)
     {
@@ -383,6 +386,7 @@ config_section_key_roll_stop(struct config_section_descriptor_s *csd)
 static ya_result
 config_section_key_roll_postprocess(struct config_section_descriptor_s *csd)
 {
+    (void)csd;
     return SUCCESS;
 }
 
@@ -417,7 +421,7 @@ key_roll_free(key_roll_desc_s *key_roll)
 
 
 /**
- * @fn static ya_result config_section_key_roll_finalise(struct config_section_descriptor_s *csd)
+ * @fn static ya_result config_section_key_roll_finalize(struct config_section_descriptor_s *csd)
  *
  * @brief free key_roll_desc_s completely
  *
@@ -432,7 +436,7 @@ key_roll_free(key_roll_desc_s *key_roll)
  * return ya_result
  */
 static ya_result
-config_section_key_roll_finalise(struct config_section_descriptor_s *csd)
+config_section_key_roll_finalize(struct config_section_descriptor_s *csd)
 {
     if(csd != NULL)
     {
@@ -440,7 +444,7 @@ config_section_key_roll_finalise(struct config_section_descriptor_s *csd)
         {
             key_roll_desc_s *key_roll = (key_roll_desc_s*)csd->base;
             key_roll_free(key_roll);
-#ifdef DEBUG
+#if DEBUG
             csd->base = NULL;
 #endif
         }
@@ -466,7 +470,7 @@ static const config_section_descriptor_vtbl_s config_section_key_roll_descriptor
     config_section_key_roll_start,
     config_section_key_roll_stop,
     config_section_key_roll_postprocess,
-    config_section_key_roll_finalise
+    config_section_key_roll_finalize
 };
 
 
@@ -495,7 +499,7 @@ config_register_key_roll(const char *null_or_key_name, s32 priority)
     (void)null_or_key_name;
 
     config_section_descriptor_s *desc;
-    MALLOC_OR_DIE(config_section_descriptor_s*, desc, sizeof(config_section_descriptor_s), CFGSDESC_TAG);
+    MALLOC_OBJECT_OR_DIE(desc, config_section_descriptor_s, CFGSDESC_TAG);
     desc->base = NULL;
     desc->vtbl = &config_section_key_roll_descriptor_vtbl;
 

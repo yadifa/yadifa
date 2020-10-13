@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnsdbixfr IXFR answers
  *  @ingroup dnsdb
  *  @brief
@@ -56,10 +57,12 @@
 #include <dnscore/buffer_input_stream.h>
 #include <dnscore/format.h>
 #include <dnscore/packet_writer.h>
+#include <dnscore/packet_reader.h>
 #include <dnscore/rfc.h>
 #include <dnscore/serial.h>
+#include <dnscore/tcp_manager.h>
 
-#ifdef DEBUG
+#if DEBUG
 #include <dnscore/logger-output-stream.h>
 #endif
 
@@ -80,7 +83,6 @@
 #define RECORD_MODE_ADD     1
 
 #define ZAIXFRRB_TAG 0x425252465849415a
-
 /*
  * Typically it goes 4 3 [2,1]+ 0
  */
@@ -94,7 +96,6 @@ extern logger_handle* g_database_logger;
 #define RECORD_MODE_DELETE  0
 #define RECORD_MODE_ADD     1
 
-#define ZAIXFRRB_TAG 0x425252465849415a
 
 /*
  * Typically it goes 4 3 [2,1]+ 0
@@ -113,9 +114,13 @@ typedef struct zdb_zone_answer_ixfr_args zdb_zone_answer_ixfr_args;
 struct zdb_zone_answer_ixfr_args
 {
     zdb_zone *zone;
-    //char *directory;
     message_data *mesg;
     struct thread_pool_s *disk_tp;
+#if DNSCORE_HAS_TCP_MANAGER
+    tcp_manager_socket_context_t *sctx;
+#else
+    int sockfd;
+#endif
     ya_result return_code;
     u32 packet_size_limit;
     u32 packet_records_limit;
@@ -128,9 +133,11 @@ zdb_zone_answer_ixfr_thread_exit(zdb_zone_answer_ixfr_args* data)
 {
     log_debug("zone write ixfr: ended with: %r", data->return_code);
 
+    zdb_zone_release(data->zone);
+    
     if(data->mesg != NULL)
     {
-        free(data->mesg);
+        message_free(data->mesg);
     }
     //free(data->directory);
     free(data);
@@ -212,12 +219,11 @@ zdb_zone_answer_ixfr_send_message(output_stream *tcpos, packet_writer *pw, messa
      * Flush and stop
      */
 
-#ifdef DEBUG
-    log_debug("zone write ixfr: sending message for %{dnsname} to %{sockaddr}", mesg->qname, &mesg->other);
+#if DEBUG
+    log_debug("zone write ixfr: %{dnsname}: sending message for %{dnsname} to %{sockaddr}", message_get_canonised_fqdn(mesg), message_get_canonised_fqdn(mesg), message_get_sender(mesg));
 #endif
     
-    MESSAGE_SET_AR(pw->packet, 0);
-    if(mesg->edns) // Dig does a TCP query with EDNS0
+    if(message_is_edns0(mesg)) // Dig does a TCP query with EDNS0
     {
         /* 00 00 29 SS SS rr vv 80 00 00 00 */
 
@@ -225,17 +231,21 @@ zdb_zone_answer_ixfr_send_message(output_stream *tcpos, packet_writer *pw, messa
         packet_writer_forward(pw, 2);
         packet_writer_add_u8(pw, 0x29);
         packet_writer_add_u16(pw, htons(edns0_maxsize));
-        packet_writer_add_u32(pw, mesg->rcode_ext);
+        packet_writer_add_u32(pw, message_get_rcode_ext(mesg));
         packet_writer_forward(pw, 2);
-        MESSAGE_SET_AR(pw->packet, NETWORK_ONE_16);
+        message_set_additional_count_ne(mesg, NETWORK_ONE_16);
+    }
+    else
+    {
+        message_set_additional_count_ne(mesg, 0);
     }
 
-    mesg->send_length = packet_writer_get_offset(pw); /** @todo 20101221 edf -- I need to put this in a packet_writer function */
+    message_set_size(mesg, packet_writer_get_offset(pw));
         
 #if ZDB_HAS_TSIG_SUPPORT
-    if(TSIG_ENABLED(mesg))
+    if(message_has_tsig(mesg))
     {
-        mesg->ar_start = packet_writer_get_next_u8_ptr(pw);
+        message_set_additional_section_ptr(mesg, packet_writer_get_next_u8_ptr(pw));
 
         if(FAIL(return_code = tsig_sign_tcp_message(mesg, pos)))
         {
@@ -246,21 +256,20 @@ zdb_zone_answer_ixfr_send_message(output_stream *tcpos, packet_writer *pw, messa
     }
 #endif
     
-    packet_writer_set_offset(pw, mesg->send_length);
+    packet_writer_set_offset(pw, message_get_size(mesg));
     
-#ifdef DEBUG
-    {
-        output_stream los;
-        logger_output_stream_open(&los, MODULE_MSG_HANDLE, MSG_DEBUG, 160);
-        message_print_format_dig(&los, mesg->buffer, mesg->send_length, 15, 0);
-        output_stream_flush(&los);
-        output_stream_close(&los);
-    }
-#endif
+
     
     if(FAIL(return_code = write_tcp_packet(pw, tcpos)))
     {
-        log_err("zone write ixfr: error sending IXFR packet to %{sockaddr}: %r", &mesg->other.sa, return_code);
+        if(return_code == MAKE_ERRNO_ERROR(EPIPE))
+        {
+            log_notice("zone write ixfr: %{dnsname}: %{sockaddr}: error sending IXFR message: client closed connection", message_get_canonised_fqdn(mesg), message_get_sender_sa(mesg));
+        }
+        else
+        {
+            log_notice("zone write ixfr: %{dnsname}: %{sockaddr}: error sending IXFR message: %r", message_get_canonised_fqdn(mesg), message_get_sender_sa(mesg), return_code);
+        }
     }
 
     return return_code;
@@ -301,7 +310,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
     u8 *rdata_buffer = NULL;
     struct type_class_ttl_rdlen tctrl;
     u32 qname_size;
-    u32 rdata_size;
+    u32 rdata_size = 0;
     
     packet_writer pw;
     
@@ -315,10 +324,15 @@ zdb_zone_answer_ixfr_thread(void* data_)
     ya_result return_value;
     
     u32 serial = 0;
-    u16 an_record_count = 0;
+    u16 an_count = 0;
+    s32 pages_sent = 0;
+    u32 current_to_serial = 0;
+    u32 stream_serial = 0;
 
     u32 packet_size_limit;
     u32 packet_size_trigger;
+    s32 packet_records_limit;
+    s32 packet_records_countdown;
 
 #if ZDB_HAS_TSIG_SUPPORT
     tsig_tcp_message_position pos = TSIG_START;
@@ -337,17 +351,29 @@ zdb_zone_answer_ixfr_thread(void* data_)
     
     /***********************************************************************/
 
-    if(data->mesg->sockfd < 0)
+#if DNSCORE_HAS_TCP_MANAGER
+    if(!tcp_manager_is_valid(data->sctx))
+    {
+        log_err("zone write ixfr: %{dnsname}: no connection", data->zone->origin);
+
+        data->return_code = MAKE_ERRNO_ERROR(ENOTSOCK);
+
+        zdb_zone_answer_ixfr_thread_exit(data);
+
+        return NULL;
+    }
+#else
+    if(data->sockfd < 0)
     {
         log_err("zone write ixfr: %{dnsname}: no TCP socket set for operation", data->zone->origin);
 
-        data->return_code = ERROR;
+        data->return_code = MAKE_ERRNO_ERROR(ENOTSOCK);
 
         zdb_zone_answer_ixfr_thread_exit(data);
         
         return NULL;
     }
-
+#endif
     /***********************************************************************/
 
     zdb_zone_lock(data->zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
@@ -358,13 +384,29 @@ zdb_zone_answer_ixfr_thread(void* data_)
     
     if(soa == NULL)
     {
-        /** @todo 20101214 edf -- error other than "does not exists" : SERVFAIL */
-        
         zdb_zone_unlock(data->zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+
+#if DNSCORE_HAS_TCP_MANAGER
+        if(ISOK(message_make_error_and_reply_tcp(mesg, RCODE_SERVFAIL, tcp_manager_socket(data->sctx))))
+        {
+            tcp_manager_write_update(data->sctx, message_get_size(mesg));
+        }
+#else
+        message_make_error_and_reply_tcp(mesg, RCODE_SERVFAIL, data->sockfd);
+#endif
 
         /**
          * @note This does an exit with error.
          */
+
+#if DNSCORE_HAS_TCP_MANAGER
+        tcp_manager_close(data->sctx);
+#else
+        shutdown(data->sockfd, SHUT_RDWR);
+        close_ex(data->sockfd);
+        data->sockfd = -1;
+#endif
+
         
         data->return_code = ZDB_ERROR_NOSOAATAPEX;
 
@@ -384,11 +426,6 @@ zdb_zone_answer_ixfr_thread(void* data_)
     current_soa_tctrl.rdlen  = htons(soa->rdata_size);
     
     zdb_zone_unlock(data->zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
-    
-    u32 last_serial;
-    rr_soa_get_serial(current_soa_rdata_buffer, current_soa_rdata_size, &last_serial);
-    
-    log_debug("zone write ixfr: %{dnsname}: %{sockaddr}: current serial is %08x (%d)", data->zone->origin, &mesg->other.sa, last_serial, last_serial);
 
     /***********************************************************************/
 
@@ -398,17 +435,15 @@ zdb_zone_answer_ixfr_thread(void* data_)
      * Set the answer bit and clean the NS count
      */
 
-    packet_unpack_reader_data purd;
-    purd.packet = mesg->buffer;
-    purd.packet_size = mesg->received;
-    purd.offset = 12;
+    packet_unpack_reader_data purd;    
+    packet_reader_init_from_message(&purd, mesg);
 
     /* Keep only the query */
 
     packet_reader_skip_fqdn(&purd);
     purd.offset += 4;
 
-    mesg->received = purd.offset;
+    message_set_size(mesg, purd.offset);
 
     /* Get the queried serial */
 
@@ -421,10 +456,10 @@ zdb_zone_answer_ixfr_thread(void* data_)
     packet_reader_read(&purd, (u8*)&serial, 4);
     serial = ntohl(serial);
     
-    log_debug("zone write ixfr: %{dnsname}: %{sockaddr}: client requested changes from serial %08x (%d)", data->zone->origin, &mesg->other.sa, serial, serial);
+    log_debug("zone write ixfr: %{dnsname}: %{sockaddr}: client requested changes from serial %08x (%d)", data->zone->origin, message_get_sender_sa(mesg), serial, serial);
 
-    MESSAGE_HIFLAGS(mesg->buffer) |= AA_BITS|QR_BITS;
-    MESSAGE_SET_NS(mesg->buffer, 0);
+    message_set_authoritative_answer(mesg);
+    message_set_authority_count(mesg, 0);
     
     dns_resource_record rr;
     dns_resource_record_init(&rr);
@@ -434,41 +469,79 @@ zdb_zone_answer_ixfr_thread(void* data_)
         if(return_value == ZDB_JOURNAL_SERIAL_OUT_OF_KNOWN_RANGE)
         {
             u32 from, to;
-            zdb_zone_journal_get_serial_range(data->zone, &from, &to);
-            log_info("zone write ixfr: %{dnsname}: %{sockaddr}: host asked for serial %d out of the journal range [%d; %d]", data->zone->origin, &mesg->other.sa, serial, from, to);
+            
+            ya_result range_ret = zdb_zone_journal_get_serial_range(data->zone, &from, &to);
+            
+            if(ISOK(range_ret))
+            {
+                log_info("zone write ixfr: %{dnsname}: %{sockaddr}: host asked for serial %d out of the journal range [%d; %d]", data->zone->origin, message_get_sender_sa(mesg), serial, from, to);
+            }
+            else
+            {
+                log_err("zone write ixfr: %{dnsname}: %{sockaddr}: host asked for serial %d, but the journal range cannot be retrieved: %r", data->zone->origin, message_get_sender_sa(mesg), serial, range_ret);
+            }
         }
         else
         {
-            log_err("zone write ixfr: %{dnsname}: %{sockaddr}: unable to open journal: %r", data->zone->origin, &mesg->other.sa, return_value);
+            if(return_value != ZDB_ERROR_ICMTL_NOTFOUND)
+            {
+                if(return_value != /**/ ERROR)
+                {
+                    log_err("zone write ixfr: %{dnsname}: %{sockaddr}: unable to open journal: %r", data->zone->origin, message_get_sender_sa(mesg), return_value);
+                }
+                else // a generic error occurs when the journal is being maintained
+                {
+                    log_info("zone write ixfr: %{dnsname}: %{sockaddr}: journal is busy", data->zone->origin, message_get_sender_sa(mesg));
+                    return_value = ZDB_JOURNAL_IS_BUSY;
+                }
+            }
+            else
+            {
+                log_debug("zone write ixfr: %{dnsname}: %{sockaddr}: there is no journal", data->zone->origin, message_get_sender_sa(mesg));
+            }
         }
         
         dns_resource_record_clear(&rr);
-        
-        zdb_zone_answer_axfr(data->zone, mesg, NULL, data->disk_tp, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
-        
+
+#if DNSCORE_HAS_TCP_MANAGER
+        zdb_zone_answer_axfr(data->zone, mesg, data->sctx, NULL, data->disk_tp, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
+        data->sctx = NULL;
+#else
+        zdb_zone_answer_axfr(data->zone, mesg, data->sockfd, NULL, data->disk_tp, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
+        data->sockfd = -1;
+#endif
         data->return_code = return_value;
 
         zdb_zone_answer_ixfr_thread_exit(data);
         
         return NULL;
     }
-    
-    if(FAIL(return_value) || (sizeof(target_soa_rdata_buffer) < rr.rdata_size))
+
+    yassert(ISOK(return_value));
+
+    if(sizeof(target_soa_rdata_buffer) < rr.rdata_size) // scan-build (7) incoherence
     {
         u32 from, to;
-        zdb_zone_journal_get_serial_range(data->zone, &from, &to);
-        log_warn("zone write ixfr: %{dnsname}: %{sockaddr}: unable to read journal from serial %d [%d; %d]", data->zone->origin, &mesg->other.sa, serial, from, to);
-        
-        zdb_zone_answer_axfr(data->zone, mesg, NULL, data->disk_tp, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
-        
-        dns_resource_record_clear(&rr);
-        
-        if(ISOK(return_value))
+        ya_result range_ret = zdb_zone_journal_get_serial_range(data->zone, &from, &to);
+        if(ISOK(range_ret))
         {
-            return_value = ERROR;
+            log_warn("zone write ixfr: %{dnsname}: %{sockaddr}: unable to read journal from serial %d [%d; %d]", data->zone->origin, message_get_sender_sa(mesg), serial, from, to);
+        }
+        else
+        {
+            log_err("zone write ixfr: %{dnsname}: %{sockaddr}: unable to read journal from serial %d, cannot get its range: %r", data->zone->origin, message_get_sender_sa(mesg), serial, range_ret);
         }
         
-        data->return_code = return_value;
+        dns_resource_record_clear(&rr);
+
+#if DNSCORE_HAS_TCP_MANAGER
+        zdb_zone_answer_axfr(data->zone, mesg, data->sctx, NULL, data->disk_tp, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
+#else
+        zdb_zone_answer_axfr(data->zone, mesg, data->sockfd, NULL, data->disk_tp, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
+        data->sockfd = -1;
+#endif
+
+        data->return_code = BUFFER_WOULD_OVERFLOW;
         
         zdb_zone_answer_ixfr_thread_exit(data);
         
@@ -492,21 +565,32 @@ zdb_zone_answer_ixfr_thread(void* data_)
      */
 
     /* It's TCP, my limit is 16 bits */
-
-    packet_size_limit = DNSPACKET_MAX_LENGTH;
+    // except if the buffer we are using is too small ...
+    packet_size_limit = message_get_buffer_size_max(mesg);
     
     packet_size_trigger = packet_size_limit / 2; // so, ~32KB, also : guarantees that there will be room for SOA & TSIG
+    packet_records_limit = data->packet_records_limit;
+    if(packet_records_limit <= 0)
+    {
+        packet_records_limit = MAX_S32;
+    }
+    packet_records_countdown = packet_records_limit;
 
-    mesg->size_limit = packet_size_limit;
+    message_reset_buffer_size(mesg);
 
-    int tcpfd = data->mesg->sockfd;
-    data->mesg->sockfd = -1;
+#if DNSCORE_HAS_TCP_MANAGER
+    tcp_manager_socket_context_t *sctx = data->sctx;
+    data->sctx = NULL;
+#else
+    int tcpfd = data->sockfd;
+    data->sockfd = -1;
+#endif
     
     dnsname_copy(origin, data->zone->origin);
 
     /* Sends the "Write unlocked" notification */
 
-    log_info("zone write ixfr: %{dnsname}: %{sockaddr}: releasing implicit write lock", origin, &mesg->other);
+    log_info("zone write ixfr: %{dnsname}: %{sockaddr}: releasing implicit write lock", origin, message_get_sender(mesg));
 
     data->mesg = NULL; // still need the message.  do not destroy it
     data->return_code = SUCCESS;
@@ -515,20 +599,26 @@ zdb_zone_answer_ixfr_thread(void* data_)
 
     /* WARNING: From this point forward, 'data' cannot be used anymore */
 
-    data = NULL; /* WITH THIS I ENSURE A CRASH IF I DO NOT RESPECT THE ABOVE COMMENT */
-
+    data = NULL; /* WITH THIS I ENSURE A CRASH IF THE ABOVE COMMENT IS NOT FOLLOWED */
+    
     /***********************************************************************/
 
-    log_info("zone write ixfr: %{dnsname}: %{sockaddr}: sending journal from serial %d", origin, &mesg->other.sa, serial);
+    log_info("zone write ixfr: %{dnsname}: %{sockaddr}: sending journal from serial %d", origin, message_get_sender_sa(mesg), serial);
 
     /* attach the tcp descriptor and put a buffer filter in front of the input and the output*/
 
+#if DNSCORE_HAS_TCP_MANAGER
+    fd_output_stream_attach(&tcpos, tcp_manager_socket(sctx));
+#else
     fd_output_stream_attach(&tcpos, tcpfd);
+#endif
 
     buffer_input_stream_init(&fis, &fis, FILE_BUFFER_SIZE);
     buffer_output_stream_init(&tcpos, &tcpos, TCP_BUFFER_SIZE);
+    
+    size_t query_size = message_get_size(mesg);
 
-    packet_writer_init(&pw, mesg->buffer, mesg->received, packet_size_limit - 780);
+    packet_writer_init(&pw, message_get_buffer(mesg), query_size, packet_size_limit - 780);
 
     /*
      * Init
@@ -540,9 +630,14 @@ zdb_zone_answer_ixfr_thread(void* data_)
     packet_writer_add_bytes(&pw, (const u8*)&current_soa_tctrl, 8); /* not 10 ? */
     packet_writer_add_rdata(&pw, TYPE_SOA, current_soa_rdata_buffer, current_soa_rdata_size);
     
-    an_record_count = 1 /*2*/;
+    u32 last_serial;
+    rr_soa_get_serial(current_soa_rdata_buffer, current_soa_rdata_size, &last_serial);
+
+    an_count = 1 /*2*/;
 
     bool end_of_stream = FALSE;
+
+    int soa_count = 0;
     
     for(;;)
     {
@@ -550,22 +645,42 @@ zdb_zone_answer_ixfr_thread(void* data_)
         {
             // critical error.
 
-            log_err("zone write ixfr: %{dnsname}: %{sockaddr}: read record #%d failed: %r", origin, &mesg->other.sa, an_record_count, return_value);
+            log_err("zone write ixfr: %{dnsname}: %{sockaddr}: read record #%d failed: %r", origin, message_get_sender_sa(mesg), an_count, return_value);
             break;
         }
+
+        // at this point, record_length >= 0
+        // if record_length > 0 then tctrl has been set
         
         u32 record_length = return_value;
         
-        if((record_length > 0) && (tctrl.qtype == TYPE_SOA))
+        if(record_length > 0)
         {
-            // ensure we didn't go too far
-            u32 soa_serial;
-            rr_soa_get_serial(rdata_buffer, rdata_size, &soa_serial);
-            if(serial_gt(soa_serial, last_serial))
+            if(tctrl.qtype == TYPE_SOA) // scan-build (7) false positive: the path allegedly leading here lies on an incoherence (record_length <= 0)
             {
-                log_info("zone write ixfr: %{dnsname}: %{sockaddr}: cutting at serial %u", origin, &mesg->other, soa_serial);
-                
-                record_length = 0; // will be seen as an EOF
+                ++soa_count;
+
+                // ensure we didn't go too far
+                u32 soa_serial;
+                rr_soa_get_serial(rdata_buffer, rdata_size, &soa_serial);
+                if(serial_gt(soa_serial, last_serial))
+                {
+                    log_info("zone write ixfr: %{dnsname}: %{sockaddr}: cutting at serial %u", origin, message_get_sender_sa(mesg), soa_serial);
+
+                    record_length = 0; // will be seen as an EOF
+                }
+
+                if((soa_count & 1) != 0) // do not cut mid-page
+                {
+                    current_to_serial = soa_serial;
+
+                    if(dnscore_shuttingdown())
+                    {
+                        log_info("zone write ixfr: %{dnsname}: %{sockaddr}: shutting down: cutting at serial %u", origin, message_get_sender_sa(mesg), soa_serial);
+
+                        record_length = 0; // will be seen as an EOF
+                    }
+                }
             }
         }
         
@@ -573,8 +688,8 @@ zdb_zone_answer_ixfr_thread(void* data_)
         
         if(record_length == 0)
         {
-#ifdef DEBUG
-            log_debug("zone write ixfr: %{dnsname}: %{sockaddr}: end of stream", origin, &mesg->other);
+#if DEBUG
+            log_debug("zone write ixfr: %{dnsname}: %{sockaddr}: end of stream", origin, message_get_sender(mesg));
 #endif
 
 #if ZDB_HAS_TSIG_SUPPORT
@@ -589,40 +704,59 @@ zdb_zone_answer_ixfr_thread(void* data_)
 #endif
             // Last SOA
             // There is no need to check for remaining space as packet_size_trigger guarantees there is still room
+            
+#if  DEBUG
+            {
+                rdata_desc rr_desc = {TYPE_SOA, current_soa_rdata_size, current_soa_rdata_buffer};                            
+                log_debug("zone write ixfr: %{dnsname}: closing: %{dnsname} %{typerdatadesc}", origin, origin, &rr_desc);
+            }
+#endif
 
             packet_writer_add_fqdn(&pw, (const u8*)origin);
             packet_writer_add_bytes(&pw, (const u8*)&current_soa_tctrl, 8); /* not 10 ? */
             packet_writer_add_rdata(&pw, TYPE_SOA, current_soa_rdata_buffer, current_soa_rdata_size);
 
-            ++an_record_count;
+            ++an_count;
             
             end_of_stream = TRUE;
         }
         else if(record_length > MAX_U16) // technically possible: a record too big to fit in an update (not likely)
         {
             // this is technically possible with an RDATA of 64K
-            log_err("zone write ixfr: %{dnsname}: %{sockaddr}: ignoring record of size %u", origin, &mesg->other.sa, record_length);
+            log_err("zone write ixfr: %{dnsname}: %{sockaddr}: ignoring record of size %u", origin, message_get_sender_sa(mesg), record_length);
             rdata_desc rr_desc = {tctrl.qtype, rdata_size, rdata_buffer};                            
-            log_err("zone write ixfr: %{dnsname}: %{sockaddr}: record is: %{dnsname} %{typerdatadesc}", origin, &mesg->other.sa, return_value, fqdn, &rr_desc);
+            log_err("zone write ixfr: %{dnsname}: %{sockaddr}: record is: %{dnsname} %{typerdatadesc}", origin, message_get_sender_sa(mesg), return_value, fqdn, &rr_desc);
             continue;
         }
         
         // if the record puts us above the trigger, or if there is no more record to read, send the message
         
-        if(pw.packet_offset + record_length >= packet_size_trigger || end_of_stream)
+        if(pw.packet_offset + record_length >= packet_size_trigger || (packet_records_countdown-- <= 0) || end_of_stream)
         {
             // flush
 
-            MESSAGE_SET_AN(mesg->buffer, htons(an_record_count));
-            mesg->send_length = packet_writer_get_offset(&pw);
+            message_set_answer_count(mesg, an_count);
+            //message_set_size(mesg, packet_writer_get_offset(&pw));
 
 #if ZDB_HAS_TSIG_SUPPORT
-            if(FAIL(return_value = zdb_zone_answer_ixfr_send_message(&tcpos, &pw, mesg, pos)))
+            if(ISOK(return_value = zdb_zone_answer_ixfr_send_message(&tcpos, &pw, mesg, pos)))
 #else
-            if(FAIL(return_value = zdb_zone_answer_ixfr_send_message(&tcpos, &pw, mesg)))
+            if(ISOK(return_value = zdb_zone_answer_ixfr_send_message(&tcpos, &pw, mesg)))
 #endif
             {
-                log_err("zone write ixfr: %{dnsname}: %{sockaddr}: send message failed: %r", origin, &mesg->other.sa, return_value);
+                ++pages_sent;
+                stream_serial = current_to_serial;
+            }
+            else
+            {
+                if(return_value == MAKE_ERRNO_ERROR(EPIPE))
+                {
+                    log_notice("zone write ixfr: %{dnsname}: %{sockaddr}: send message failed: client closed connection", origin, message_get_sender_sa(mesg));
+                }
+                else
+                {
+                    log_notice("zone write ixfr: %{dnsname}: %{sockaddr}: send message failed: %r", origin, message_get_sender_sa(mesg), return_value);
+                }
 
                 break;
             }
@@ -630,30 +764,46 @@ zdb_zone_answer_ixfr_thread(void* data_)
 #if ZDB_HAS_TSIG_SUPPORT
             pos = TSIG_MIDDLE;
 #endif
-            packet_writer_init(&pw, mesg->buffer, mesg->received, packet_size_limit - 780);
+            packet_writer_init(&pw, message_get_buffer(mesg), query_size, packet_size_limit - 780);
 
-            an_record_count = 0;
+            an_count = 0;
             
             if(end_of_stream)
             {
                 break;
             }
+            
+            packet_records_countdown = packet_records_limit;
         }
+        
+#if  DEBUG
+        {
+            rdata_desc rr_desc = {tctrl.qtype, rdata_size, rdata_buffer};                            
+            log_debug("zone write ixfr: %{dnsname}: sending: %{dnsname} %{typerdatadesc}", origin, fqdn, &rr_desc);
+        }
+#endif
 
         packet_writer_add_fqdn(&pw, (const u8*)fqdn);
         packet_writer_add_bytes(&pw, (const u8*)&tctrl, 8);
         packet_writer_add_rdata(&pw, tctrl.qtype, rdata_buffer, rdata_size);
         
-        ++an_record_count;
+        ++an_count;
     }
-        
+
     if(ISOK(return_value))
     {
-        log_info("zone write ixfr: %{dnsname}: %{sockaddr}: ixfr stream sent", origin, &mesg->other);
+        log_info("zone write ixfr: %{dnsname}: %{sockaddr}: incremental stream sent (serial %u)", origin, message_get_sender(mesg), stream_serial);
     }
     else
     {
-        log_err("zone write ixfr: %{dnsname}: %{sockaddr}: ixfr stream not sent", origin, &mesg->other);
+        if(pages_sent == 0)
+        {
+            log_warn("zone write ixfr: %{dnsname}: %{sockaddr}: incremental stream not sent", origin, message_get_sender(mesg));
+        }
+        else
+        {
+            log_notice("zone write ixfr: %{dnsname}: %{sockaddr}: incremental stream partially sent (serial %u instead of %u)", origin, message_get_sender(mesg), stream_serial, last_serial);
+        }
     }
 
     output_stream_close(&tcpos);
@@ -664,7 +814,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
     }
 
     free(rdata_buffer);
-    free(mesg);
+    message_free(mesg);
 
     return NULL;
 }
@@ -683,24 +833,38 @@ zdb_zone_answer_ixfr_thread(void* data_)
  * 
  */
 
+//zdb_zone_answer_ixfr_parm
+
 void
-zdb_zone_answer_ixfr(zdb_zone* zone, message_data *mesg, struct thread_pool_s *network_tp, struct thread_pool_s *disk_tp, u32 packet_size_limit, u32 packet_records_limit, bool compress_dname_rdata)
+zdb_zone_answer_ixfr(
+    zdb_zone* zone,
+    message_data *mesg,
+#if DNSCORE_HAS_TCP_MANAGER
+    tcp_manager_socket_context_t *sctx,
+#else
+    int sockfd,
+#endif
+    struct thread_pool_s *network_tp,
+    struct thread_pool_s *disk_tp,
+    u32 packet_size_limit,
+    u32 packet_records_limit,
+    bool compress_dname_rdata)
 {
     zdb_zone_answer_ixfr_args* args;
         
-    log_info("zone write ixfr: %{dnsname}: %{sockaddr}: queueing answer", zone->origin, &mesg->other.sa);
+    log_info("zone write ixfr: %{dnsname}: %{sockaddr}: queueing answer", zone->origin, message_get_sender_sa(mesg));
     
-    MALLOC_OR_DIE(zdb_zone_answer_ixfr_args*, args, sizeof(zdb_zone_answer_ixfr_args), ZAIXFRA_TAG);
+    MALLOC_OBJECT_OR_DIE(args, zdb_zone_answer_ixfr_args, ZAIXFRA_TAG);
+    zdb_zone_acquire(zone);
     args->zone = zone;
-    //args->directory = "/tmp"; // strdup(journal_get_xfr_path());
 
-    message_data *mesg_clone;
-
-    MALLOC_OR_DIE(message_data*, mesg_clone, sizeof(message_data), MESGDATA_TAG);
-    memcpy(mesg_clone, mesg, sizeof(message_data));
-
-    args->mesg = mesg_clone;
+    args->mesg = message_dup(mesg);
     args->disk_tp = disk_tp;
+#if DNSCORE_HAS_TCP_MANAGER
+    args->sctx = sctx;
+#else
+    args->sockfd = sockfd;
+#endif
     args->packet_size_limit = packet_size_limit;
     args->packet_records_limit = packet_records_limit;
     args->compress_dname_rdata = compress_dname_rdata;

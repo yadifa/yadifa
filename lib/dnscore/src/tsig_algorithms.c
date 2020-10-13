@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup ### #######
  *  @ingroup dnscore
  *  @brief
@@ -67,7 +68,7 @@ tsig_string_set_insert(const char *name, u32 value)
 
     cstr_to_dnsname(fqdn, name);
 
-    node = string_set_avl_insert(&hmac_algorithms, (char*)dnsname_dup(fqdn));
+    node = string_set_insert(&hmac_algorithms, (char*)dnsname_dup(fqdn));
     node->value = value;
 }
 
@@ -85,22 +86,22 @@ tsig_register_algorithms()
 void
 tsig_finalize_algorithms()
 {
-    string_set_avl_iterator iter;
-    string_set_avl_iterator_init(&hmac_algorithms, &iter);
+    string_set_iterator iter;
+    string_set_iterator_init(&hmac_algorithms, &iter);
     
-    while(string_set_avl_iterator_hasnext(&iter))
+    while(string_set_iterator_hasnext(&iter))
     {
-        string_node* node = string_set_avl_iterator_next_node(&iter);
+        string_node* node = string_set_iterator_next_node(&iter);
         free((void*)node->key);
     }
     
-    string_set_avl_destroy(&hmac_algorithms);
+    string_set_destroy(&hmac_algorithms);
 }
 
 u8
 tsig_get_algorithm(const u8 *name)
 {
-    string_node *node = string_set_avl_find(&hmac_algorithms, (char*)name);
+    string_node *node = string_set_find(&hmac_algorithms, (char*)name);
 
     return (node != NULL) ? node->value : HMAC_UNKNOWN;
 }
@@ -124,36 +125,6 @@ tsig_get_algorithm_name(u8 algorithm)
             return (u8*)"\013hmac-sha512";
         default:
             return (u8*)"\004null"; /* UNKNOWN */
-    }
-}
-
-const EVP_MD *
-tsig_get_EVP_MD(u8 algorithm)
-{
-    switch(algorithm)
-    {
-#ifndef OPENSSL_NO_MD5
-        case HMAC_MD5:
-            return EVP_md5();
-#endif
-#ifndef OPENSSL_NO_SHA
-        case HMAC_SHA1:
-            return EVP_sha1();
-#endif
-#ifndef OPENSSL_NO_SHA256
-        case HMAC_SHA224:
-            return EVP_sha224();
-        case HMAC_SHA256:
-            return EVP_sha256();
-#endif
-#ifndef OPENSSL_NO_SHA512
-        case HMAC_SHA384:
-            return EVP_sha384();
-        case HMAC_SHA512:
-            return EVP_sha512();
-#endif
-        default:
-            return EVP_md_null();
     }
 }
 

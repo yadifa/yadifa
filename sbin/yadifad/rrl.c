@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup 
  *  @ingroup yadifad
  *  @brief 
@@ -42,7 +43,6 @@
  *----------------------------------------------------------------------------*/
 
 #include "server-config.h"
-#include "config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -58,10 +58,10 @@
 #include <dnscore/config_settings.h>
 
 #include "rrl.h"
-#include "acl.h"
-#include "config_acl.h"
+#include <dnscore/acl.h>
+#include <dnscore/acl-config.h>
 
-u32 zdb_query_message_update(message_data* message, zdb_query_ex_answer* answer_set);
+u32 zdb_query_message_update(message_data* message, const zdb_query_ex_answer* answer_set);
 
 extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
@@ -100,7 +100,7 @@ struct rrl_settings_s
 typedef struct rrl_settings_s rrl_settings_s;
 
 #define CONFIG_TYPE rrl_settings_s
-#include "acl.h"
+#include <dnscore/acl.h>
 CONFIG_BEGIN(config_rrl_desc)
 CONFIG_U32(responses_per_second, TOSTRING(RRL_RESPONSES_PER_SECOND_DEFAULT))
 CONFIG_U32(errors_per_second, TOSTRING(RRL_ERRORS_PER_SECOND_DEFAULT))
@@ -122,7 +122,7 @@ CONFIG_END(config_rrl_desc)
 static mutex_t rrl_mtx;
 static random_ctx g_rrl_rnd;
 static struct rrl_settings_s g_rrl_settings;
-static ptr_vector g_rrl_list = EMPTY_PTR_VECTOR;
+static ptr_vector g_rrl_list = PTR_VECTOR_EMPTY;
 static u64 g_rrl_start = 0;
 static u32 g_rrl_slip_bucket = 0;
 static s8 g_rrl_slip_bucket_bits = 0;
@@ -213,6 +213,7 @@ config_rrl_section_postprocess(struct config_section_descriptor_s *csd)
     {
         log_warn("min-table-size > max-table-size (%d > %d) setting min-table-size to %d instead",
             g_rrl_settings.min_table_size, g_rrl_settings.max_table_size, g_rrl_settings.max_table_size);
+        g_rrl_settings.min_table_size = g_rrl_settings.max_table_size;
     }
     
     ptr_vector_resize(&g_rrl_list, g_rrl_settings.min_table_size);
@@ -356,11 +357,11 @@ rrl_make_key(const message_data *mesg, const zdb_query_ex_answer *ans_auth_add, 
     u32 size;
     u32 flags = 0;
     
-    if(mesg->other.sa.sa_family ==  AF_INET)
+    if(message_get_sender_sa_family(mesg) ==  AF_INET)
     {
         size = 4;
         
-        u32 ip = mesg->other.sa4.sin_addr.s_addr;
+        u32 ip = message_get_sender_sa4(mesg)->sin_addr.s_addr;
         ip &= g_rrl_settings.ipv4_prefix_mask;
         SET_U32_AT(out_key[2], ip);
         
@@ -370,11 +371,11 @@ rrl_make_key(const message_data *mesg, const zdb_query_ex_answer *ans_auth_add, 
     {
         size = 16;
         
-        u64 iph = GET_U64_AT(((u64*)&mesg->other.sa6.sin6_addr)[0]);
+        u64 iph = GET_U64_AT(((u64*)&message_get_sender_sa6(mesg)->sin6_addr)[0]);
         iph &= g_rrl_settings.ipv6_prefix_mask_high;
         SET_U64_AT(out_key[ 2], iph);
         
-        u64 ipl = GET_U64_AT(((u64*)&mesg->other.sa6.sin6_addr)[1]);
+        u64 ipl = GET_U64_AT(((u64*)&message_get_sender_sa6(mesg)->sin6_addr)[1]);
         ipl &= g_rrl_settings.ipv6_prefix_mask_low;
         SET_U64_AT(out_key[10], ipl);
         
@@ -384,14 +385,14 @@ rrl_make_key(const message_data *mesg, const zdb_query_ex_answer *ans_auth_add, 
     
     // note: wildcard names are not handled (yet)
     
-    switch(mesg->status)
+    switch(message_get_status(mesg))
     {
-        case RCODE_NOERROR:
+        case FP_RCODE_NOERROR:
         {
             // take the answer
             if(ans_auth_add->delegation == 0)
             {
-                src = mesg->qname; // query name
+                src = message_get_canonised_fqdn(mesg); // query name
             }
             else
             {
@@ -401,7 +402,7 @@ rrl_make_key(const message_data *mesg, const zdb_query_ex_answer *ans_auth_add, 
             }
             break;
         }
-        case RCODE_NXDOMAIN:
+        case FP_RCODE_NXDOMAIN:
         {
             flags |= 0x8000; // note: if we want to have a different key for NXDOMAIN and other errors, we can use 0xc000 instead
             if(ans_auth_add->authority != NULL)
@@ -410,7 +411,7 @@ rrl_make_key(const message_data *mesg, const zdb_query_ex_answer *ans_auth_add, 
             }
             else
             {
-                src = mesg->qname;
+                src = message_get_canonised_fqdn(mesg);
             }
             break;
         }
@@ -418,7 +419,7 @@ rrl_make_key(const message_data *mesg, const zdb_query_ex_answer *ans_auth_add, 
         default:
         {
             flags = 0x8000;
-            src = mesg->qname; // query name
+            src = message_get_canonised_fqdn(mesg); // query name
         }
     }
     
@@ -488,12 +489,12 @@ rrl_payload_copy(rrl_item_s *a, const rrl_item_s *b)
  * Worst case : N is enough for sum[n = 0,N](Fn) where Fn is Fibonacci(n+1)1
  * Best case : N is enough for (2^(N+1))-1
  */
-#define AVL_MAX_DEPTH 32 // 9227464 items max (worst case)*/
+#define AVL_MAX_DEPTH 34 // 24157816 items max (worst case)*/
 
 /*
  * The previx that will be put in front of each function name
  */
-#define AVL_PREFIX	rrl_
+#define AVL_PREFIX	rrl_set_
 
 /*
  * The type that hold the node
@@ -592,6 +593,10 @@ typedef AVL_TREE_TYPE rrl_set_s;
  * It must be of type REFERENCE_TYPE
  */
 #define AVL_REFERENCE(node) (node)->error_mask_ip_imputed_name
+
+#define AVL_TERNARYCMP 1
+
+#if !AVL_TERNARYCMP
 /*
  * A macro to compare two references
  * Returns TRUE if and only if the references are equal.
@@ -602,6 +607,13 @@ typedef AVL_TREE_TYPE rrl_set_s;
  * Returns TRUE if and only if the first one is bigger than the second one.
  */
 #define AVL_ISBIGGER(reference_a,reference_b) (memcmp(&(reference_a)[0],&(reference_b)[0],rrl_item_key_size(reference_a))>0)
+
+#else
+
+#define AVL_COMPARE(reference_a,reference_b) (memcmp(&(reference_a)[0],&(reference_b)[0],rrl_item_key_size(reference_a)))
+
+#endif
+
 /*
  * Copies the payload of a node
  * It MUST NOT copy the "proprietary" node fields : children, parent, balance
@@ -636,13 +648,13 @@ rrl_init()
     rrl_initialised = TRUE;
     
     mutex_init(&rrl_mtx);
-    rrl_avl_init(&g_rrl);
+    rrl_set_init(&g_rrl);
     
     g_rrl_start = timeus();
     g_rrl_rnd = random_init_auto();
     g_rrl_slip_bucket = random_next(g_rrl_rnd);
     g_rrl_slip_bucket_bits = 32;
-    
+
     /*
     u32 responses_per_tick = (5 * 1000000) >> (20 - EPOCH_PRECISION);
     u32 errors_per_tick = (5 * 1000000) >> (20 - EPOCH_PRECISION);
@@ -657,10 +669,11 @@ rrl_finalize()
 {
     rrl_cull_all();
     
-    rrl_avl_destroy(&g_rrl);
+    rrl_set_destroy(&g_rrl);
+    ptr_vector_destroy(&g_rrl_list);
+
     mutex_destroy(&rrl_mtx);
     random_finalize(g_rrl_rnd);
-    
     rrl_initialised = FALSE;
 }
 
@@ -688,9 +701,9 @@ rrl_slip(message_data *mesg)
     {
         // slip
         
-#ifdef DEBUG
+#if DEBUG
         log_debug("rrl: %{sockaddrip} %{dnsname} %{dnstype} %{dnsclass}: slipping",
-                &mesg->other.sa, mesg->qname, &mesg->qtype, &mesg->qclass);
+                message_get_sender_sa(mesg), message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg));
 #endif
 
         return_code = RRL_SLIP;
@@ -701,31 +714,30 @@ rrl_slip(message_data *mesg)
              * Give a truncated answer
              */
             
-            mesg->send_length = mesg->received;
-            MESSAGE_FLAGS_OR(mesg->buffer, QR_BITS|TC_BITS, mesg->status);
-            MESSAGE_SET_AN(mesg->buffer, 0);
-            MESSAGE_SET_NSAR(mesg->buffer, 0);
+            message_update_truncated_answer_status(mesg);
+            message_set_answer_count_ne(mesg, 0);
+            message_set_authority_additional_counts(mesg, 0, 0);
 
-            if(mesg->edns)
+            if(message_is_edns0(mesg))
             {
                 /* 00 00 29 SS SS rr vv 80 00 00 00 */
 
-                MESSAGE_SET_AR(mesg->buffer, NETWORK_ONE_16);
+                message_set_additional_count_ne(mesg, NETWORK_ONE_16);
 
-                u8 *ednsrecord =  &mesg->buffer[mesg->received];
+                u8 *ednsrecord =  message_get_buffer_limit(mesg);
 
                 *ednsrecord++ = 0;                              // fqdn
                 SET_U16_AT(*ednsrecord, TYPE_OPT);              // type
                 ednsrecord += 2;
                 SET_U16_AT(*ednsrecord, htons(message_edns0_getmaxsize()));  // udp payload size
                 ednsrecord += 2;
-                SET_U32_AT(*ednsrecord, mesg->rcode_ext);       // edns flags
+                SET_U32_AT(*ednsrecord, message_get_rcode_ext(mesg));    // edns flags
                 ednsrecord += 4;
                 SET_U16_AT(*ednsrecord, 0);                     // rdata size
                 
                 // nsid
 
-                mesg->send_length += EDNS0_RECORD_SIZE;
+                message_increase_size(mesg, EDNS0_RECORD_SIZE);
             }
         }
     }
@@ -759,6 +771,16 @@ rrl_slip(message_data *mesg)
  * @return an RRL error code
  */
 
+/**
+ * Look at the message for RRL processing.
+ * Returns an RRL code.
+ * After this call, the message may be truncated.
+ * 
+ * @param mesg the query message
+ * @param ans_auth_add the answer that would be given to the client
+ * @return an RRL error code
+ */
+
 ya_result
 rrl_process(message_data *mesg, zdb_query_ex_answer *ans_auth_add)
 {
@@ -769,11 +791,11 @@ rrl_process(message_data *mesg, zdb_query_ex_answer *ans_auth_add)
     
     if(!g_rrl_settings.enabled || (g_rrl_settings.exempted_filter(mesg, &g_rrl_settings.exempted) > 0))
     {
-#ifdef DEBUG
+#if DEBUG
         log_debug("rrl: %{sockaddrip} %{dnsname} %{dnstype} %{dnsclass}: disabled or exempted",
-                &mesg->other.sa, mesg->qname, &mesg->qtype, &mesg->qclass);
+                message_get_sender_sa(mesg), message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg));
 #endif
-        mesg->send_length = zdb_query_message_update(mesg, ans_auth_add);
+        zdb_query_message_update(mesg, ans_auth_add);
 
         return return_code;
     }
@@ -790,7 +812,7 @@ rrl_process(message_data *mesg, zdb_query_ex_answer *ans_auth_add)
     
     mutex_lock(&rrl_mtx);
     
-    rrl_item_s *item = rrl_avl_insert(&g_rrl, key);
+    rrl_item_s *item = rrl_set_insert(&g_rrl, key);
     
     if(item->timestamp > 0)
     {
@@ -803,13 +825,13 @@ rrl_process(message_data *mesg, zdb_query_ex_answer *ans_auth_add)
         {
             // nothing happened for 1 second, we cannot accumulate so ...
             // we cut at lasttimestamp, we remove (lasttimestamp - timestamp) * rps
-            u32 tsd = (now - item->timestamp) & ~(ONE_SECOND_TICKS - 1);            
+            s32 tsd = (now - item->timestamp) & ~(ONE_SECOND_TICKS - 1);
             item->timestamp += tsd;
-            u32 hsd = (tsd >> EPOCH_PRECISION) * g_rrl_settings.responses_per_second;
+            s32 hsd = (tsd >> EPOCH_PRECISION) * g_rrl_settings.responses_per_second;
             
-#ifdef DEBUG
+#if DEBUG
             log_debug("rrl: %{sockaddrip} %{dnsname} %{dnstype} %{dnsclass}: 1s bucket overflow; delta time = %d (%ds); hits adjusted from %i to %i",
-                    &mesg->other.sa, mesg->qname, &mesg->qtype, &mesg->qclass,
+                    message_get_sender_sa(mesg), message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg),
                     tsd, tsd >> EPOCH_PRECISION, item->hits, MAX(item->hits - hsd, 0));
 #endif
             
@@ -849,22 +871,20 @@ rrl_process(message_data *mesg, zdb_query_ex_answer *ans_auth_add)
         {
             limit = ((g_rrl_settings.responses_per_second * ticks) >> EPOCH_PRECISION);
 
-#ifdef DEBUG
+#if DEBUG
             log_debug("rrl: %{sockaddrip} %{dnsname} %{dnstype} %{dnsclass}: %i responses with a limit of %i in %i ticks, %i/s, %is",
-                    &mesg->other.sa, mesg->qname, &mesg->qtype, &mesg->qclass, hits, limit, ticks, g_rrl_settings.responses_per_second, ticks >> EPOCH_PRECISION);
+                    message_get_sender_sa(mesg), message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg), hits, limit, ticks, g_rrl_settings.responses_per_second, ticks >> EPOCH_PRECISION);
 #endif
         }
         else
         {
             limit = ((g_rrl_settings.errors_per_second * ticks) >> EPOCH_PRECISION);
 
-#ifdef DEBUG
+#if DEBUG
             log_debug("rrl: %{sockaddrip} %{dnsname} %{dnstype} %{dnsclass}: %i errors with a limit of %i in %i ticks, %i/s, %is",
-                    &mesg->other.sa, mesg->qname, &mesg->qtype, &mesg->qclass, hits, limit, ticks, g_rrl_settings.errors_per_second, ticks >> EPOCH_PRECISION);
+                    message_get_sender_sa(mesg), message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg), hits, limit, ticks, g_rrl_settings.errors_per_second, ticks >> EPOCH_PRECISION);
 #endif
         }
-        
-        mutex_unlock(&rrl_mtx);
         
         // test if we are in the allowed rate
         
@@ -874,9 +894,9 @@ rrl_process(message_data *mesg, zdb_query_ex_answer *ans_auth_add)
         }
         else
         {
-#ifdef DEBUG
+#if DEBUG
             log_debug("rrl: %{sockaddrip} %{dnsname} %{dnstype} %{dnsclass}: rate exceeded",
-                    &mesg->other.sa, mesg->qname, &mesg->qtype, &mesg->qclass);
+                    message_get_sender_sa(mesg), message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg));
 #endif
             // rate exceeded, drop ... except if we slip
             
@@ -884,10 +904,10 @@ rrl_process(message_data *mesg, zdb_query_ex_answer *ans_auth_add)
             
             if((g_rrl_settings.slip > 0 ) && (--item->slip_countdown == 0))
             {
-#ifdef DEBUG
+#if DEBUG
                 // pure debug
                 log_debug("rrl: %{sockaddrip} %{dnsname} %{dnstype} %{dnsclass}: testing slip",
-                        &mesg->other.sa, mesg->qname, &mesg->qtype, &mesg->qclass);
+                        message_get_sender_sa(mesg), message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg));
 #endif
                 item->slip_countdown = g_rrl_settings.slip;
                 
@@ -903,22 +923,24 @@ rrl_process(message_data *mesg, zdb_query_ex_answer *ans_auth_add)
                 }
             }
         }
+
+        mutex_unlock(&rrl_mtx);
         
         if(((return_code & (RRL_SLIP|RRL_DROP)) == 0) || g_rrl_settings.log_only)
         {
-#ifdef DEBUG
+#if DEBUG
             log_debug("rrl: %{sockaddrip} %{dnsname} %{dnstype} %{dnsclass}: %x | %i",
-                    &mesg->other.sa, mesg->qname, &mesg->qtype, &mesg->qclass, return_code, g_rrl_settings.log_only);
+                    message_get_sender_sa(mesg), message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg), return_code, g_rrl_settings.log_only);
 #endif
-            mesg->send_length = zdb_query_message_update(mesg, ans_auth_add);
+            zdb_query_message_update(mesg, ans_auth_add);
         }
     }
     else
     {
-#ifdef DEBUG
+#if DEBUG
         // pure debug
         log_debug("rrl: %{sockaddrip} %{dnsname} %{dnstype} %{dnsclass}: new entry",
-                &mesg->other.sa, mesg->qname, &mesg->qtype, &mesg->qclass);
+                message_get_sender_sa(mesg), message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg));
 #endif
         item->timestamp = now - ONE_SECOND_TICKS;
         item->lasttimestamp = now;
@@ -933,19 +955,21 @@ rrl_process(message_data *mesg, zdb_query_ex_answer *ans_auth_add)
         {
             // full: replace
             s32 victim = random_next(g_rrl_rnd) % g_rrl_settings.max_table_size;
-            
-            log_info("rrl: table is full (%u), removing entry #%i", g_rrl_settings.max_table_size, victim);
+
+#if DEBUG
+            log_debug("rrl: table is full (%u), removing entry #%i", g_rrl_settings.max_table_size, victim);
+#endif
             
             rrl_item_s *victim_item = (rrl_item_s *)g_rrl_list.data[victim];
             
-            rrl_avl_delete(&g_rrl, victim_item->error_mask_ip_imputed_name);
+            rrl_set_delete(&g_rrl, victim_item->error_mask_ip_imputed_name);
             
             g_rrl_list.data[victim] = item;
         }
         
         mutex_unlock(&rrl_mtx);
                 
-        mesg->send_length = zdb_query_message_update(mesg, ans_auth_add);
+        zdb_query_message_update(mesg, ans_auth_add);
     }
     
     return return_code;
@@ -958,7 +982,7 @@ rrl_cull()
     now -= g_rrl_start;
     // it's us so about 20 bits of (im)precision
     now >>= (20 - EPOCH_PRECISION);
-    
+
     mutex_lock(&rrl_mtx);
     
     for(s32 i = 0; i <= g_rrl_list.offset; i++)
@@ -972,7 +996,7 @@ rrl_cull()
             g_rrl_list.offset--;
             
             // remove from the tree
-            rrl_avl_delete(&g_rrl, item->error_mask_ip_imputed_name);
+            rrl_set_delete(&g_rrl, item->error_mask_ip_imputed_name);
         }
     }
     
@@ -982,11 +1006,7 @@ rrl_cull()
 void
 rrl_cull_all()
 {
-    u64 now = timeus();
-    now -= g_rrl_start;
-    // it's us so about 20 bits of (im)precision
-    now >>= (20 - EPOCH_PRECISION);
-    
+
     mutex_lock(&rrl_mtx);
     
     for(s32 i = 0; i <= g_rrl_list.offset; i++)
@@ -995,7 +1015,7 @@ rrl_cull_all()
         g_rrl_list.data[i] = g_rrl_list.data[g_rrl_list.offset];
 
         // remove from the tree
-        rrl_avl_delete(&g_rrl, item->error_mask_ip_imputed_name);
+        rrl_set_delete(&g_rrl, item->error_mask_ip_imputed_name);
     }
     
     g_rrl_list.offset = -1;
@@ -1010,6 +1030,3 @@ rrl_is_logonly()
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief 
@@ -43,11 +44,12 @@
 #ifndef _THREAD_POOL_H
 #define	_THREAD_POOL_H
 
-#include <pthread.h>
+#include <dnscore/thread.h>
 
 #include <dnscore/sys_types.h>
 #include <dnscore/random.h>
 #include <dnscore/mutex.h>
+#include <dnscore/service.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -78,7 +80,11 @@ extern "C"
 #define THREAD_STATUS_WORKING       2
 #define THREAD_STATUS_TERMINATING   3
 #define THREAD_STATUS_TERMINATED    4
-	
+
+#define THREAD_POOL_SIZE_LIMIT_MIN  1
+#define THREAD_POOL_SIZE_LIMIT_DEFAULT   4096
+#define THREAD_POOL_SIZE_LIMIT_MAX  65536
+
 typedef void *thread_pool_function(void*);
 
 typedef struct thread_pool_task_counter thread_pool_task_counter;
@@ -89,6 +95,9 @@ struct thread_pool_task_counter
     cond_t cond;
     volatile s32 value;
 };
+
+u32 thread_pool_get_max_thread_per_pool_limit();
+u32 thread_pool_set_max_thread_per_pool_limit(u32 max_thread_per_pool_limit);
 
 void thread_pool_counter_init(thread_pool_task_counter *counter, s32 value);
 void thread_pool_counter_destroy(thread_pool_task_counter *counter);
@@ -107,7 +116,7 @@ struct thread_pool_s;
  * @return 
  */
 
-struct thread_pool_s *thread_pool_init_ex(u8 thread_count, u32 queue_size, const char* pool_name);
+struct thread_pool_s *thread_pool_init_ex(u32 thread_count, u32 queue_size, const char* pool_name);
 
 /**
  * Initialises a thread pool
@@ -117,7 +126,7 @@ struct thread_pool_s *thread_pool_init_ex(u8 thread_count, u32 queue_size, const
  * @return 
  */
 
-struct thread_pool_s *thread_pool_init(u8 thread_count, u32 queue_size);
+struct thread_pool_s *thread_pool_init(u32 thread_count, u32 queue_size);
 
 /**
  * Enqueues a function to be executed by a thread pool
@@ -135,7 +144,6 @@ struct thread_pool_s *thread_pool_init(u8 thread_count, u32 queue_size);
  */
 
 ya_result thread_pool_enqueue_call(struct thread_pool_s *tp, thread_pool_function func, void *parm, thread_pool_task_counter *counter, const char *categoryname);
-
 
 /**
  * Tries to enqueue a function to be executed by a thread pool
@@ -162,19 +170,9 @@ struct thread_pool_enqueue_call_item
 
 typedef struct thread_pool_enqueue_call_item thread_pool_enqueue_call_item;
 
-/**
- * Enqueues a fixed amount of tasks in one go.
- * This new feature helps fixing a starvation issue when allocating consumers
- * and producers from a pool in a random order for several tasks.
- * 
- * @param tp
- * @param tasks
- * @param tasks_count
- * @return 
- */
 
-ya_result thread_pool_enqueue_calls(struct thread_pool_s *tp, thread_pool_enqueue_call_item *tasks, int tasks_count);
 
+ya_result thread_pool_stop(struct thread_pool_s* tp);
 ya_result thread_pool_destroy(struct thread_pool_s *tp);
 
 /**
@@ -194,13 +192,13 @@ ya_result thread_pool_wait_all_running(struct thread_pool_s *tp);
  * @return 
  */
 
-ya_result thread_pool_resize(struct thread_pool_s* tp, u8 new_size);
+ya_result thread_pool_resize(struct thread_pool_s* tp, u32 new_size);
 
 random_ctx thread_pool_get_random_ctx();
 void thread_pool_setup_random_ctx();
 void thread_pool_destroy_random_ctx();
 
-u8 thread_pool_get_size(struct thread_pool_s *tp);
+u32 thread_pool_get_size(struct thread_pool_s *tp);
 
 /**
  * 
@@ -212,21 +210,13 @@ u8 thread_pool_get_size(struct thread_pool_s *tp);
 
 int thread_pool_queue_size(struct thread_pool_s *tp);
 
+void thread_pool_wait_queue_empty(struct thread_pool_s *tp);
+
 // before and after a fork
 
 ya_result thread_pool_stop_all();
 // fork
 ya_result thread_pool_start_all();
-
-#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
-
-const char *thread_get_tag(pthread_t id);
-char *thread_copy_tag(pthread_t id, char *out_9_bytes);
-void thread_set_tag(pthread_t id, const char *tag8chars);
-void thread_clear_tag(pthread_t id);
-void thread_make_tag(const char *prefix, u32 index, u32 count, char *service_tag);
-
-#endif
 
 #ifdef	__cplusplus
 }
@@ -234,6 +224,3 @@ void thread_make_tag(const char *prefix, u32 index, u32 count, char *service_tag
 
 #endif	/* _THREAD_POOL_H */
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

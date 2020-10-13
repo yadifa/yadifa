@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup records Internal functions for the database: resource records.
  *  @ingroup dnsdb
  *  @brief Internal functions for the database: resource records.
@@ -45,8 +46,15 @@
 #ifndef _ZDB_RECORD_H
 #define	_ZDB_RECORD_H
 
+#include <dnscore/typebitmap.h>
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/dnsrdata.h>
+
+#define  ZDB_RECORD_USES_INLINE 1
+
+#if ZDB_RECORD_USES_INLINE
+#include <dnsdb/btree.h>
+#endif
 
 #ifdef	__cplusplus
 extern "C"
@@ -124,6 +132,8 @@ bool zdb_record_insert_checked(zdb_rr_collection* collection, u16 type, zdb_pack
 /* 1 USE */
 bool zdb_record_insert_checked_keep_ttl(zdb_rr_collection* collection, u16 type, zdb_packed_ttlrdata* record);
 
+#if !ZDB_RECORD_USES_INLINE
+
 /** @brief Finds and return all the a resource record matching the class and type
  *
  *  Finds and returl all the a resource record matching the class and type
@@ -166,6 +176,67 @@ zdb_packed_ttlrdata** zdb_record_findp(const zdb_rr_collection* collection, u16 
 
 zdb_packed_ttlrdata** zdb_record_find_insert(zdb_rr_collection* collection, u16 type);
 
+#else
+
+/** @brief Finds and return all the a resource record matching the class and type
+ *
+ *  Finds and returns all the a resource record matching the class and type
+ *
+ *  @param[in]  collection the collection
+ *  @param[in]  class_ the class of the resource record to match
+ *  @param[in]  type the type of the resource record to match
+ *
+ *  @return the first record, or NULL of none has been found.
+ */
+
+static inline zdb_packed_ttlrdata* zdb_record_find(const zdb_rr_collection* collection, u16 type)
+{
+    zdb_packed_ttlrdata* record_list = (zdb_packed_ttlrdata*)btree_find(collection, type);
+
+    return record_list;
+}
+
+/** @brief Finds and return a pointer to the list of all the a resource record matching the class and type
+ *
+ *  Finds and returns a pointer to the list of all the a resource record matching the class and type
+ *
+ *  @param[in]  collection the collection
+ *  @param[in]  class_ the class of the resource record to match
+ *  @param[in]  type the type of the resource record to match
+ *
+ *  @return the first record, or NULL of none has been found.
+ */
+
+static inline zdb_packed_ttlrdata** zdb_record_findp(const zdb_rr_collection* collection, u16 type)
+{
+    zdb_packed_ttlrdata** record_list = (zdb_packed_ttlrdata**)btree_findp(collection, type);
+
+    return record_list;
+}
+
+/** @brief Finds and return all the a resource record matching the class and type
+ *  Create the node if no such resource exists
+ *
+ *  Finds and returl all the a resource record matching the class and type
+ *  Create the node if no such resource exists
+ *
+ *  @param[in]  collection the collection
+ *  @param[in]  class_ the class of the resource record to match
+ *  @param[in]  type the type of the resource record to match
+ *
+ *  @return the first record, or NULL of none has been found.
+ */
+
+static inline zdb_packed_ttlrdata** zdb_record_find_insert(zdb_rr_collection* collection, u16 type)
+{
+    yassert(collection != NULL);
+
+    zdb_packed_ttlrdata** record_list = (zdb_packed_ttlrdata**)btree_insert(collection, type);
+
+    return record_list;
+}
+
+#endif
 
 /** @brief Deletes all the a resource record matching the class and type
  *
@@ -296,6 +367,8 @@ void zdb_ttlrdata_delete(zdb_ttlrdata* record);
 
 void zdb_record_print_indented(zdb_rr_collection collection, output_stream *os, int indent);
 void zdb_record_print(zdb_rr_collection collection, output_stream *os);
+
+u16 zdb_record_bitmap_type_init(const zdb_rr_collection collection, type_bit_maps_context *bitmap);
 
 #ifdef	__cplusplus
 }

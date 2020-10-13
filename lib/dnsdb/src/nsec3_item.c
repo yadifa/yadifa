@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -48,6 +49,7 @@
 
 #include <dnscore/output_stream.h>
 #include <dnscore/bytearray_output_stream.h>
+#include <dnscore/logger.h>
 
 #include "dnsdb/zdb_record.h"
 
@@ -74,21 +76,13 @@ extern logger_handle *g_dnssec_logger;
 nsec3_zone_item*
 nsec3_zone_item_find_encloser_start(const nsec3_zone* n3, const u8* digest)
 {
-    return nsec3_avl_find_interval_start(&n3->items, (u8*)digest);
+    return nsec3_find_interval_start(&n3->items, (u8*)digest);
 }
-
-/**
- * Finds the nsec3 record based on the binary digest
- * 
- * @param n3
- * @param digest
- * @return 
- */
 
 nsec3_zone_item*
 nsec3_zone_item_find(const nsec3_zone* n3, const u8* digest)
 {
-    return nsec3_avl_find(&n3->items, (u8*)digest);
+    return nsec3_find(&n3->items, (u8*)digest);
 }
 
 /**
@@ -111,7 +105,7 @@ nsec3_zone_item_find_by_name(const nsec3_zone* n3, const u8* nsec3_label)
     {
         digest[0] = digest_len;
 
-        return nsec3_avl_find(&n3->items, digest);
+        return nsec3_find(&n3->items, digest);
     } 
     else
     {
@@ -184,14 +178,14 @@ nsec3_zone_item_equals_rdata(const nsec3_zone* n3,
 
     const u8 *p = &rdata[param_rdata_size];
 
-    nsec3_zone_item* next = nsec3_avl_node_mod_next(item);
+    nsec3_zone_item* next = nsec3_node_mod_next(item);
 
     if(memcmp(p, next->digest, hash_len + 1) != 0)
     {
 #if DEBUG_LEVEL >= 9
-        //nsec3_avl_find_debug(&n3->items, item->digest);
-        //nsec3_avl_find_debug(&n3->items, next->digest);
-        //bool exists = nsec3_avl_find_debug(&n3->items, p) != NULL;
+        //nsec3_find_debug(&n3->items, item->digest);
+        //nsec3_find_debug(&n3->items, next->digest);
+        //bool exists = nsec3_find_debug(&n3->items, p) != NULL;
         
         log_debug("nsec3_zone_item_equals_rdata: REJECT: %{digest32h} NSEC3 ... %{digest32h} was expected to be followed by %{digest32h}",
                  item->digest, next->digest, p);
@@ -230,14 +224,14 @@ nsec3_zone_item_equals_rdata_lenient(const nsec3_zone* n3,
 
     const u8 *p = &rdata[param_rdata_size];
 
-    nsec3_zone_item* next = nsec3_avl_node_mod_next(item);
+    nsec3_zone_item* next = nsec3_node_mod_next(item);
 
     if(memcmp(p, next->digest, hash_len + 1) != 0)
     {
 #if DEBUG_LEVEL >= 9
-        //nsec3_avl_find_debug(&n3->items, item->digest);
-        //nsec3_avl_find_debug(&n3->items, next->digest);
-        //bool exists = nsec3_avl_find_debug(&n3->items, p) != NULL;
+        //nsec3_find_debug(&n3->items, item->digest);
+        //nsec3_find_debug(&n3->items, next->digest);
+        //bool exists = nsec3_find_debug(&n3->items, p) != NULL;
         
         log_debug("nsec3_zone_item_equals_rdata: REJECT: %{digest32h} NSEC3 ... %{digest32h} was expected to be followed by %{digest32h}",
                  item->digest, next->digest, p);
@@ -299,7 +293,7 @@ nsec3_zone_item_to_zdb_packed_ttlrdata(const nsec3_zone* n3,
     MEMCOPY(p, &n3->rdata[0], param_rdata_size);
     p += param_rdata_size;
 
-    nsec3_zone_item* next = nsec3_avl_node_mod_next(item);
+    nsec3_zone_item* next = nsec3_node_mod_next(item);
 
     MEMCOPY(p, next->digest, hash_len + 1);
     p += hash_len + 1;
@@ -335,8 +329,48 @@ nsec3_zone_item_to_new_zdb_packed_ttlrdata(
                                        const zdb_packed_ttlrdata** out_nsec3_rrsig)
 {
     const nsec3_zone* n3 = nsec3_parms->n3;
+#if DEBUG
+    if(n3 == NULL)
+    {
+        log_err("%{dnsname}: missing NSEC3 chain", nsec3_parms->origin);
+
+        if(out_owner_p != NULL)
+        {
+            *out_owner_p = NULL;
+        }
+        if(out_nsec3 != NULL)
+        {
+            *out_nsec3 = NULL;
+        }
+        if(out_nsec3_rrsig != NULL)
+        {
+            *out_nsec3_rrsig = NULL;
+        }
+        return;
+    }
+#endif
     u32 param_rdata_size = NSEC3_ZONE_RDATA_SIZE(n3);
     const nsec3_zone_item* item = nsec3_parms->item;
+#if DEBUG
+    if(n3 == NULL)
+    {
+        log_err("%{dnsname}: missing NSEC3 record", nsec3_parms->origin);
+
+        if(out_owner_p != NULL)
+        {
+            *out_owner_p = NULL;
+        }
+        if(out_nsec3 != NULL)
+        {
+            *out_nsec3 = NULL;
+        }
+        if(out_nsec3_rrsig != NULL)
+        {
+            *out_nsec3_rrsig = NULL;
+        }
+        return;
+    }
+#endif
     u8 hash_len = NSEC3_NODE_DIGEST_SIZE(nsec3_parms->item);
     u32 type_bit_maps_size = item->type_bit_maps_size;
 
@@ -359,7 +393,7 @@ nsec3_zone_item_to_new_zdb_packed_ttlrdata(
     MEMCOPY(p, &n3->rdata[0], param_rdata_size);
     p += param_rdata_size;
 
-    nsec3_zone_item* next = nsec3_avl_node_mod_next(item);
+    nsec3_zone_item* next = nsec3_node_mod_next(item);
 
     MEMCOPY(p, next->digest, hash_len + 1);
     p += hash_len + 1;
@@ -378,12 +412,49 @@ nsec3_zone_item_to_new_zdb_packed_ttlrdata(
     MEMCOPY(&out_owner[1 + b32_len], origin, origin_len);
     
     *pool += ALIGN16(1 + b32_len + origin_len);
-    
-    
+
     nsec3->rdata_start[1] = item->flags & 1; /* Opt-Out or Opt-In */
 
     *out_nsec3 = nsec3;
     *out_nsec3_rrsig = item->rrsig;
+}
+
+u16
+nsec3_zone_item_to_rdata(
+    const nsec3_zone* n3,
+    const nsec3_zone_item *item,
+    u8 *out_rdata, u16 out_rdata_size)
+{
+    u32 param_rdata_size = NSEC3_ZONE_RDATA_SIZE(n3);
+    u8 hash_len = NSEC3_NODE_DIGEST_SIZE(item);
+    u32 type_bit_maps_size = item->type_bit_maps_size;
+
+    /* Whatever the editor says: rdata_size is used. */
+    u32 rdata_size = param_rdata_size + 1 + hash_len + type_bit_maps_size;
+
+    yassert(out_rdata_size >= rdata_size);
+
+    if(out_rdata_size < rdata_size)
+    {
+        log_err("nsec3_zone_item_to_rdata: buffer would overflow");
+        return 0;
+    }
+
+    u8* p = out_rdata;
+
+    MEMCOPY(p, &n3->rdata[0], param_rdata_size);
+    p[1] = item->flags & 1; /* Opt-Out or Opt-In */
+
+    p += param_rdata_size;
+
+    nsec3_zone_item* next = nsec3_node_mod_next(item);
+
+    MEMCOPY(p, next->digest, hash_len + 1);
+    p += hash_len + 1;
+
+    MEMCOPY(p, item->type_bit_maps, item->type_bit_maps_size);
+
+    return rdata_size;
 }
 
 u32
@@ -393,7 +464,7 @@ nsec3_zone_item_get_label(const nsec3_zone_item* item,
                           )
 {
     yassert(buffer_size >= 128);
-
+    (void)buffer_size;
     u8 hash_len = NSEC3_NODE_DIGEST_SIZE(item);
     u32 b32_len = base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), hash_len, (char*)&output_buffer[1]);
     output_buffer[0] = b32_len;
@@ -424,6 +495,8 @@ nsec3_item_format_writer_callback(const void *args_, output_stream *os, s32 padd
     (void)padding;
     (void)pad_char;
     (void)left_justified;
+    (void)reserved_for_method_parameters;
+
     nsec3_item_format_writer_args *args = (nsec3_item_format_writer_args*)args_;
     output_stream nsec3_wire_os;
     bytearray_output_stream_context nsec3_wire_os_context;
@@ -495,7 +568,7 @@ nsec3_zone_item_to_output_stream(output_stream* os,
 
     output_stream_write(os, &n3->rdata[2], param_rdata_size - 2);
 
-    nsec3_zone_item* next = nsec3_avl_node_mod_next(item);
+    nsec3_zone_item* next = nsec3_node_mod_next(item);
 
     output_stream_write(os, next->digest, hash_len + 1);
 
@@ -530,33 +603,37 @@ nsec3_zone_item_rrsig_del_by_keytag(nsec3_zone_item *item, u16 native_key_tag)
 void
 nsec3_zone_item_rrsig_del(nsec3_zone_item *item, const zdb_ttlrdata *nsec3_rrsig)
 {
-    while((item->rrsig != NULL) && (nsec3_rrsig != NULL))
+    if(item->rrsig != NULL)
     {
-        zdb_packed_ttlrdata **rrsigp = &item->rrsig;
-        
-        do
+        while(nsec3_rrsig != NULL)
         {
-            zdb_packed_ttlrdata *rrsig = *rrsigp;
+            zdb_packed_ttlrdata** rrsigp = &item->rrsig;
 
-            if(zdb_record_equals_unpacked(rrsig, nsec3_rrsig))
+            // look for a match
+
+            zdb_packed_ttlrdata* rrsig;
+
+            while((rrsig = *rrsigp) != NULL)
             {
-                /* Remove from the list */
-                *rrsigp = rrsig->next;
-                ZDB_RECORD_ZFREE(rrsig);
-                break;
+                if(zdb_record_equals_unpacked(rrsig, nsec3_rrsig))
+                {
+                    /* Remove from the list */
+                    *rrsigp = rrsig->next;
+                    ZDB_RECORD_ZFREE(rrsig);
+                    break;
+                }
+
+                rrsigp = &rrsig->next;
             }
 
-            rrsigp = &rrsig->next;
+            nsec3_rrsig = nsec3_rrsig->next;
         }
-        while(*rrsigp != NULL);
-
-        nsec3_rrsig = nsec3_rrsig->next;
     }
 }
 
 void
 nsec3_zone_item_rrsig_add(nsec3_zone_item *item, zdb_packed_ttlrdata *nsec3_rrsig)
-{    
+{
     if(item->rrsig == NULL)
     {
         item->rrsig = nsec3_rrsig;
@@ -647,8 +724,8 @@ nsec3_zone_item_rrsig_delete_all(nsec3_zone_item *item)
 void
 nsec3_zone_item_empties(nsec3_zone_item *item)
 {
-    nsec3_remove_all_star(item);
-    nsec3_remove_all_owners(item);
+    nsec3_item_remove_all_star(item);
+    nsec3_item_remove_all_owners(item);
 
     yassert(item->rc == 0 && item->sc == 0);
 
@@ -721,23 +798,19 @@ nsec3_zone_item_update_bitmap(nsec3_zone_item* nsec3_item, const u8 *rdata, u16 
 
     if((nsec3_item->type_bit_maps_size != type_bit_maps_size) || (memcmp(nsec3_item->type_bit_maps, bitmap, type_bit_maps_size) != 0))
     {
-        /* If the size differs : free and alloc */
+        /* If the (bloc) size differs : free and alloc */
 
-        if(nsec3_item->type_bit_maps_size != type_bit_maps_size)
+        if(zalloc_memory_block_size(nsec3_item->type_bit_maps_size) != zalloc_memory_block_size(type_bit_maps_size))
         {
-            /* @todo 20140214 edf -- : take the memory granularity in account in case of ZALLOC enabled */
             ZFREE_ARRAY(nsec3_item->type_bit_maps, nsec3_item->type_bit_maps_size);
             ZALLOC_ARRAY_OR_DIE(u8*, nsec3_item->type_bit_maps, type_bit_maps_size, NSEC3_TYPEBITMAPS_TAG);
-            nsec3_item->type_bit_maps_size = type_bit_maps_size;
         }
 
         memcpy(nsec3_item->type_bit_maps, bitmap, type_bit_maps_size);
+        nsec3_item->type_bit_maps_size = type_bit_maps_size;
     }
 
     return SUCCESS;
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnscore System core functions
  *  @brief System core functions
  *
@@ -39,25 +40,12 @@
 #include "dnscore/dnscore-config.h"
 #include <stddef.h>
 #include <unistd.h>
+#include <dnscore/message-viewer.h>
 
 #include "dnscore/counter_output_stream.h"
 #include "dnscore/format.h"
 #include "dnscore/message.h"
-
-
-#define     VM_WITH_ADDITIONAL                  0x01
-#define     VM_WITH_ANSWER                      0x02
-#define     VM_WITH_AUTHORITY                   0x04
-#define     VM_WITH_QUESTION                    0x08
-
-static u8 message_print_view_with_mode[4] =
-{
-    VM_WITH_QUESTION,
-    VM_WITH_ANSWER,
-    VM_WITH_AUTHORITY,
-    VM_WITH_ADDITIONAL
-};
-
+#include "dnscore/packet_reader.h"
 
 static char* message_section_names[4] =
 {
@@ -81,7 +69,7 @@ static char* message_count_update_names[4] =
 
 
 ya_result
-message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u16 length, u16 view_mode_with)
+message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u32 length, u16 view_mode_with)
 {
     ya_result                                                  return_value;
     
@@ -103,22 +91,21 @@ message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u16 length
     /*    ------------------------------------------------------------    */    
 
     /* Init packet reader with buffer. length and offset in the buffer */
-    purd.packet      = buffer;
-    purd.packet_size = length;
-    purd.offset      = DNS_HEADER_LENGTH;
+
+    packet_reader_init_at(&purd, buffer, length, DNS_HEADER_LENGTH);
 
     /* 1. GET ID */
     u16 id           = MESSAGE_ID(buffer);
 
 
     /* 2. GET OPCODE AND RCODE */
-    u8 opcode        = MESSAGE_OP(buffer);
-    opcode         >>= OPCODE_SHIFT;
+    u8 opcode_shifted= MESSAGE_OP(buffer);
+    u8 opcode        = opcode_shifted >> OPCODE_SHIFT;
 
     u8 rcode         = MESSAGE_RCODE(buffer);
 
-    const char *opcode_txt = get_opcode(opcode);
-    const char *status_txt = get_rcode(rcode);
+    const char *opcode_txt = dns_message_opcode_get_name(opcode);
+    const char *status_txt = dns_message_rcode_get_name(rcode);
 
 
     /* 3. GET VALUES OF THE SECTIONS */
@@ -130,14 +117,14 @@ message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u16 length
     
 
     /* 4. GET THE NAMES FOR THE PRESENTATION */
-    char **count_name   = (opcode != OPCODE_UPDATE)? message_count_names   : message_count_update_names;
-    char **section_name = (opcode != OPCODE_UPDATE)? message_section_names : message_section_update_names;
+    char **count_name   = (opcode_shifted != OPCODE_UPDATE)? message_count_names   : message_count_update_names;
+    char **section_name = (opcode_shifted != OPCODE_UPDATE)? message_section_names : message_section_update_names;
 
 
     /* 5. FILL THE STREAM */
 
     /* fill the information of the header of a DNS packet */
-    osformat(os, ";; ->>HEADER<<- opcode: %s, status: %s, id: %hd\n", opcode_txt, status_txt, id);
+    osformat(os, ";; ->>HEADER<<- opcode: %s, status: %s, id: %hd\n", opcode_txt, status_txt, ntohs(id));
     osformat(os, ";; flags: ");
     
     if(MESSAGE_QR(buffer) != 0) osprint(os, "qr ");
@@ -160,7 +147,8 @@ message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u16 length
         u32 section_idx = 0;
       
         /* Print SECTION name */
-        if ((view_mode_with & message_print_view_with_mode[section_idx]) && count[section_idx])
+
+        if(message_viewer_requires_section(section_idx, view_mode_with))
         {
             osformat(os, "\n;; %s:\n", section_name[section_idx]);
         }
@@ -192,7 +180,7 @@ message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u16 length
             /* Print everything from QUESTION SECTION */
 
 
-        if ((view_mode_with & message_print_view_with_mode[section_idx]) && count[section_idx])
+            if(message_viewer_requires_section(section_idx, view_mode_with))
             {
                 u64 next = counters.write_count + 24 + 8;
 
@@ -221,12 +209,12 @@ message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u16 length
             }
         }
         osprintln(os, "");
-    }    
+    }
 
     
     for(u32 section_idx = 1; section_idx < 4; section_idx++)
     {
-        if ((view_mode_with & message_print_view_with_mode[section_idx]) && count[section_idx])
+        if(message_viewer_requires_section(section_idx, view_mode_with))
         {
             osformat(os, ";; %s:\n", section_name[section_idx]);
         }
@@ -247,6 +235,18 @@ message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u16 length
             u32 rttl       = ntohl(GET_U32_AT(rdata[4]));
             u16 rdata_size = ntohs(GET_U16_AT(rdata[8]));
 
+            if(section_idx == 3)
+            {
+                if(rtype == TYPE_OPT)
+                {
+                    continue;
+                }
+                else if(rtype == TYPE_OPT)
+                {
+                    continue;
+                }
+            }
+
             /** @todo 20130530 gve -- test that rdata_size matches the record size */
             
             rdata         += 10;
@@ -254,7 +254,7 @@ message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u16 length
             u64 next       = counters.write_count + 24;
 
             /* Starting printing */
-            if ((view_mode_with & message_print_view_with_mode[section_idx]) && count[section_idx])
+            if(message_viewer_requires_section(section_idx, view_mode_with))
             {
                 /* write NAME + alignment for next item */
                 osformat(os, "%{dnsname}", rname);
@@ -294,7 +294,7 @@ message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u16 length
                 osprintln(os, "");
             }
         }
-        if ((view_mode_with & message_print_view_with_mode[section_idx]) && count[section_idx])
+        if(message_viewer_requires_section(section_idx, view_mode_with))
         {
             osprintln(os, "");
         }
@@ -305,7 +305,7 @@ message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u16 length
 
 
 ya_result
-message_print_format_dig(output_stream *os, const u8 *buffer, u16 length, u16 view_mode_with, long time_duration)
+message_print_format_dig(output_stream *os, const u8 *buffer, u32 length, u16 view_mode_with, long time_duration)
 {
     ya_result                                                  return_value;
 
@@ -323,13 +323,23 @@ message_print_format_dig(output_stream *os, const u8 *buffer, u16 length, u16 vi
 
     time(&timep);
 
-    osformat(os, ";; Query time: %ld msec\n", time_duration);
+    if(time_duration >= 0)
+    {
+        osformat(os, ";; Query time: %ld msec\n", time_duration);
+    }
 
     /** @todo 20130530 gve -- still need to implemented the server viewable line */
 //    osformat(os, ";; SERVER: %{hostaddr}(%{hostaddr})\n", config->server, config->server);
 
     osformat(os, ";; WHEN: %s", ctime(&timep));
-    osformat(os, ";; MSG SIZE rcvd: %ld\n", length);
+    if(time_duration >= 0)
+    {
+        osformat(os, ";; MSG SIZE rcvd: %ld\n", length);
+    }
+    else
+    {
+        osformat(os, ";; MSG SIZE: %ld\n", length);
+    }
     osformat(os, "\n");
 
     return OK;

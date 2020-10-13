@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup debug Debug functions
  *  @ingroup dnscore
  *  @brief Debug functions.
@@ -43,7 +44,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <pthread.h>
 
 #if defined(__linux__)
 #include <malloc.h>
@@ -52,17 +52,19 @@
 #include <unistd.h>
 #include <sys/mman.h>
 
+#include "dnscore/thread.h"
 #include "dnscore/dnscore-config.h"
+#include "dnscore/timems.h"
 
 #if defined(__linux__) || defined(__APPLE__)
-#include <execinfo.h>
-#if HAS_BFD_DEBUG_SUPPORT
-#include <bfd.h>
-#ifndef DMGL_PARAMS
-#define DMGL_PARAMS      (1 << 0)       /* Include function args */
-#define DMGL_ANSI        (1 << 1)       /* Include const, volatile, etc */
-#endif
-#endif
+    #include <execinfo.h>
+    #if HAS_BFD_DEBUG_SUPPORT
+        #include <bfd.h>
+        #ifndef DMGL_PARAMS
+            #define DMGL_PARAMS      (1 << 0)       /* Include function args */
+            #define DMGL_ANSI        (1 << 1)       /* Include const, volatile, etc */
+        #endif
+    #endif
 #endif
 
 #include "dnscore/sys_types.h"
@@ -83,9 +85,9 @@
 #undef debug_mallocated
 
 #if defined(__linux__) || defined(__APPLE__)
-#define ZDB_DEBUG_STACKTRACE 1
+#define DNSCORE_DEBUG_STACKTRACE 1
 #else /* __FreeBSD__ or unknown */
-#define ZDB_DEBUG_STACKTRACE 0
+#define DNSCORE_DEBUG_STACKTRACE 0
 #endif
 
 #ifdef    __cplusplus
@@ -108,10 +110,10 @@ typedef void *memalign_hook_t(size_t, size_t, const void *);
 
 static bool _real_malloc_initialised = FALSE;
 
-malloc_hook_t *_real_malloc;
-realloc_hook_t *_real_realloc;
-free_hook_t *_real_free;
-memalign_hook_t *_real_memalign;
+malloc_hook_t *_real_malloc = malloc;
+realloc_hook_t *_real_realloc = realloc;
+free_hook_t *_real_free = free;
+memalign_hook_t *_real_memalign = memalign;
 
 static pthread_mutex_t malloc_hook_mtx = PTHREAD_MUTEX_INITIALIZER;
 static ptr_set_debug malloc_hook_tracked_set = PTR_SET_DEBUG_PTR_EMPTY;
@@ -165,18 +167,18 @@ struct db_header
     u32 magic;
     u32 size;
 
-#if ZDB_DEBUG_TAG_BLOCKS!=0
-#define HEADER_SIZE_TAG 8
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
+#define HEADER_TAG_SIZE 8
     u64 tag;
 #else
-#define HEADER_SIZE_TAG 0
+#define HEADER_TAG_SIZE 0
 #endif
 
-#if ZDB_DEBUG_SERIALNUMBERIZE_BLOCKS!=0
+#if DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
     u64 serial;
 #endif
 
-#if ZDB_DEBUG_CHAIN_ALLOCATED_BLOCKS!=0
+#if DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS
 #define HEADER_SIZE_CHAIN (8+(2*__SIZEOF_POINTER__))
     db_header* next;
     db_header* previous;
@@ -184,26 +186,26 @@ struct db_header
 #define HEADER_SIZE_CHAIN 0
 #endif
 
-#if ZDB_DEBUG_STACKTRACE
+#if DNSCORE_DEBUG_STACKTRACE
     intptr* _trace;
 #endif
 };
 
 #define HEADER_SIZE sizeof(db_header)
 
-#if ZDB_DEBUG_CHAIN_ALLOCATED_BLOCKS!=0
+#if DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS
 static db_header db_mem_first = {
     DB_MALLOC_MAGIC, 0,
-#if ZDB_DEBUG_TAG_BLOCKS!=0
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
     0xffffffffffffffffLL,
 #endif
-#if ZDB_DEBUG_SERIALNUMBERIZE_BLOCKS!=0
+#if DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
     0,
 #endif
-#if ZDB_DEBUG_CHAIN_ALLOCATED_BLOCKS!=0
+#if DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS
     &db_mem_first, &db_mem_first,
 #endif
-#if ZDB_DEBUG_STACKTRACE
+#if DNSCORE_DEBUG_STACKTRACE
     NULL,
 #endif
 };
@@ -249,6 +251,7 @@ debug_get_self_exe()
     
     return NULL;
 }
+
 /*
 static char *
 debug_get_real_file(const char *file)
@@ -428,7 +431,7 @@ debug_bfd_resolve_address(void *address, const char *binary_file_path, const cha
         debug_bfd_symbol_flag_help();        
     }
     
-    ptr_node_debug *node = ptr_set_debug_avl_insert(&bfd_collection, (char*)binary_file_path);
+    ptr_node_debug *node = ptr_set_debug_insert(&bfd_collection, (char*)binary_file_path);
     
     bfd_node *bfdn = (bfd_node*)node->value;
     
@@ -498,7 +501,7 @@ debug_bfd_resolve_address(void *address, const char *binary_file_path, const cha
         }
         else
         {
-            ptr_set_debug_avl_delete(&bfd_collection, binary_file_path);
+            ptr_set_debug_delete(&bfd_collection, binary_file_path);
         }
     }
     
@@ -549,7 +552,7 @@ static
 void debug_bfd_clear()
 {
     pthread_mutex_lock(&bfd_mtx);
-    ptr_set_debug_avl_callback_and_destroy(&bfd_collection, debug_bfd_clear_delete);
+    ptr_set_debug_callback_and_destroy(&bfd_collection, debug_bfd_clear_delete);
     pthread_mutex_unlock(&bfd_mtx);
 }
 
@@ -567,6 +570,7 @@ typedef u64_set_debug stacktrace_set;
 static stacktrace_set stacktraces_list_set = U64_SET_EMPTY;
 static pthread_mutex_t stacktraces_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+#ifdef __linux__
 static ya_result 
 debug_stacktraces_list_set_search(void* data, void* parm)
 {
@@ -594,6 +598,7 @@ debug_stacktraces_list_set_search(void* data, void* parm)
 
     return COLLECTION_ITEM_STOP;            
 }
+#endif
 
 stacktrace
 debug_stacktrace_get()
@@ -603,7 +608,7 @@ debug_stacktrace_get()
 
     int n = backtrace(buffer_, sizeof(buffer_) / sizeof(void*));
     
-    void* buffer = &buffer_[1];
+    void** buffer = &buffer_[1];
     n -= 1; // minus this function
 
     // backtrace to key
@@ -612,13 +617,13 @@ debug_stacktrace_get()
     u64 key = 0;
     for(int i = 0; i < n; i++)
     {
-        key += sp[i] << ( n & 65535 );
+        key += sp[i] << ( n & ((__SIZEOF_POINTER__ * 8) - 1) );
     }
     
     pthread_mutex_lock(&stacktraces_mutex);
     
     stacktrace trace;
-    u64_node_debug *node = u64_set_debug_avl_insert(&stacktraces_list_set, key);
+    u64_node_debug *node = u64_set_debug_insert(&stacktraces_list_set, key);
     if(node->value == NULL)
     {
         list_sl_debug_s *sll;
@@ -678,6 +683,9 @@ debug_stacktrace_clear_delete(u64_node_debug *node)
             free(trace_strings);
             free(trace);
         }
+        
+        free(sll);
+        node->value = NULL;
     }
 }
 
@@ -685,10 +693,12 @@ void
 debug_stacktrace_clear()
 {
     pthread_mutex_lock(&stacktraces_mutex);
-    u64_set_debug_avl_callback_and_destroy(&stacktraces_list_set, debug_stacktrace_clear_delete);
+    u64_set_debug_callback_and_destroy(&stacktraces_list_set, debug_stacktrace_clear_delete);
     pthread_mutex_unlock(&stacktraces_mutex);
-#if HAS_BFD_DEBUG_SUPPORT 
+#if !DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
+#if HAS_BFD_DEBUG_SUPPORT
     debug_bfd_clear();
+#endif
 #endif
 }
 
@@ -742,6 +752,66 @@ debug_stacktrace_log(logger_handle* handle, u32 level, stacktrace trace)
             {
 #endif
                 logger_handle_msg(handle, level, "%p %s", address, text);
+#if HAS_BFD_DEBUG_SUPPORT     
+           }
+#endif
+        }
+    }
+#else
+    logger_handle_msg(handle, level, "backtrace not supported");
+#endif
+}
+
+void
+debug_stacktrace_log_with_prefix(logger_handle* handle, u32 level, stacktrace trace, const char *prefix)
+{
+#ifdef __linux__
+    int n = 0;
+
+    if(trace != NULL)
+    {
+        while(trace[n] != 0)
+        {
+            ++n;
+        }
+    
+        char **trace_strings = (char**)trace[n + 1];
+        for(int i = 0; i < n; i++)
+        {
+            void *address = (void*)trace[i];
+            const char *text = (trace_strings != NULL) ? trace_strings[i] : "???";
+        
+#if HAS_BFD_DEBUG_SUPPORT
+            char *parenthesis = strchr(text, '(');
+            if(parenthesis != NULL)
+            {
+                u32 n = parenthesis - text;
+
+                assert(n < PATH_MAX);
+
+                char binary[PATH_MAX];            
+                memcpy(binary, text, n);
+                binary[n] = '\0';
+
+                const char *file = NULL;
+                const char *function = NULL;
+                u32 line;
+
+                debug_bfd_resolve_address(address, binary, &file, &function, &line);
+
+                if((file != NULL) && (*file != '\0'))
+                {                    
+                    logger_handle_msg(handle, level, "%s%p: %s (%s:%i)", prefix, address, function, file, line);
+                }
+                else
+                {
+                    logger_handle_msg(handle, level, "%s%p: %s", prefix, address, text);
+                }
+            }
+            else
+            {
+#endif
+                logger_handle_msg(handle, level, "%s%p %s", prefix, address, text);
 #if HAS_BFD_DEBUG_SUPPORT     
            }
 #endif
@@ -841,7 +911,7 @@ debug_stacktrace_print(output_stream *os, stacktrace trace)
 
 #define REAL_SIZE(rs_size_) MALLOC_REALSIZE((rs_size_)+HEADER_SIZE)
 
-#if ZDB_DEBUG_ENHANCED_STATISTICS!=0
+#if DNSCORE_DEBUG_ENHANCED_STATISTICS
 
 
 /* [  0]   1..  8
@@ -853,7 +923,7 @@ debug_stacktrace_print(output_stream *os, stacktrace trace)
  * [ 32] 257..2^31
  */
 
-static u64 db_alloc_count_by_size[(ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE / 8) + 1] = {
+static u64 db_alloc_count_by_size[(DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE / 8) + 1] = {
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
@@ -861,7 +931,7 @@ static u64 db_alloc_count_by_size[(ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_S
     0
 };
 
-static u64 db_alloc_peak_by_size[(ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE / 8) + 1] = {
+static u64 db_alloc_peak_by_size[(DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE / 8) + 1] = {
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
@@ -877,11 +947,11 @@ static u64 db_current_allocated = 0;
 static u64 db_current_blocks = 0;
 static u64 db_peak_allocated = 0;
 
-#if ZDB_DEBUG_SERIALNUMBERIZE_BLOCKS!=0
+#if DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
 static u64 db_next_block_serial = 0;
 #endif
 
-static bool db_showallocs = ZDB_DEBUG_SHOW_ALLOCS;
+static bool db_showallocs = DNSCORE_DEBUG_SHOW_ALLOCS;
 
 static pthread_mutex_t alloc_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -1001,15 +1071,15 @@ void*
 debug_malloc(
              size_t size_,
              const char* file, int line
-#if ZDB_DEBUG_TAG_BLOCKS!=0
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
         , u64 tag
 #endif
         )
 {
     size_t size = MALLOC_REALSIZE(size_);
 
-#if ZDB_DEBUG_TAG_BLOCKS != 0
-    assert((tag != 0) && (tag != ~0));
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
+    assert((tag != 0) && (tag != ~0ULL));
 #endif
 
     pthread_mutex_lock(&alloc_mutex);
@@ -1019,11 +1089,11 @@ debug_malloc(
     pthread_mutex_unlock(&alloc_mutex);
 
 
-    if(current_allocated + size > ZDB_DEBUG_ALLOC_MAX)
+    if(current_allocated + size > DNSCORE_DEBUG_ALLOC_MAX)
     {
         if(__termout__.vtbl != NULL)
         {
-            format("DB_MAX_ALLOC reached !!! (%u)", ZDB_DEBUG_ALLOC_MAX);
+            format("DB_MAX_ALLOC reached !!! (%u)", DNSCORE_DEBUG_ALLOC_MAX);
         }
 
         abort();
@@ -1033,7 +1103,7 @@ debug_malloc(
 
     if(ptr == NULL)
     {
-        perror("");
+        perror("debug_malloc");
 
         fflush(NULL);
 
@@ -1042,18 +1112,18 @@ debug_malloc(
 
     pthread_mutex_lock(&alloc_mutex);
 
-#if ZDB_DEBUG_STACKTRACE
+#if DNSCORE_DEBUG_STACKTRACE
     ptr->_trace = debug_stacktrace_get();
 #endif
 
     ptr->magic = DB_MALLOC_MAGIC;
     ptr->size = size;
 
-#if ZDB_DEBUG_TAG_BLOCKS != 0
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
     ptr->tag = tag;
 #endif
 
-#if ZDB_DEBUG_SERIALNUMBERIZE_BLOCKS != 0
+#if DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
     ptr->serial = ++db_next_block_serial;
 
     if(ptr->serial == 0x01cb || ptr->serial == 0x01d0)
@@ -1063,7 +1133,7 @@ debug_malloc(
 
 #endif
 
-#if ZDB_DEBUG_CHAIN_ALLOCATED_BLOCKS != 0
+#if DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS
 
     ptr->next = &db_mem_first;
     ptr->previous = db_mem_first.previous;
@@ -1079,17 +1149,17 @@ debug_malloc(
     db_current_blocks++;
 
 
-#if ZDB_DEBUG_ENHANCED_STATISTICS!=0
+#if DNSCORE_DEBUG_ENHANCED_STATISTICS
 
-    if(size_ < ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE)
+    if(size_ < DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE)
     {
         db_alloc_count_by_size[(size_ - 1) >> 3]++;
         db_alloc_peak_by_size[(size_ - 1) >> 3]++;
     }
     else
     {
-        db_alloc_count_by_size[ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3]++;
-        db_alloc_peak_by_size[ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3]++;
+        db_alloc_count_by_size[DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3]++;
+        db_alloc_peak_by_size[DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3]++;
     }
 
 #endif
@@ -1100,12 +1170,12 @@ debug_malloc(
     {
         if(__termout__.vtbl != NULL)
         {
-            format("[%08x] malloc(%3x", pthread_self(), (u32)size);
-#if ZDB_DEBUG_TAG_BLOCKS!=0
+            format("[%08x] malloc(%3x", thread_self(), (u32)size);
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
             print(" | ");
             debug_dump((u8*) & ptr->tag, 8, 8, FALSE, TRUE);
 #endif
-#if ZDB_DEBUG_SERIALNUMBERIZE_BLOCKS!=0
+#if DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
             format(" | #%08llx", ptr->serial);
 #endif
             formatln(")=%p (%s:%i)", ptr + 1, file, line);
@@ -1116,7 +1186,7 @@ debug_malloc(
 
     /* ensure the memory is not initialized "by chance" */
 
-#if ZDB_DEBUG_MALLOC_TRASHMEMORY != 0
+#if DNSCORE_DEBUG_MALLOC_TRASHMEMORY
     memset(ptr, 0xac, size_); /* AC : AlloCated */
     memset(((u8*)ptr) + size_, 0xca, size - size_); /* CA : AlloCated for padding */
 #endif
@@ -1128,13 +1198,13 @@ void*
 debug_calloc(
              size_t size_,
              const char* file, int line
-#if ZDB_DEBUG_TAG_BLOCKS!=0
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
         , u64 tag
 #endif
         )
 {
     void* p = debug_malloc(size_, file, line
-#if ZDB_DEBUG_TAG_BLOCKS!=0
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
             , tag
 #endif
             );
@@ -1174,8 +1244,13 @@ debug_free(void* ptr_, const char* file, int line)
                 formatln("MEMORY CORRUPTED @%p (%s:%i)", ptr, file, line);
             }
         }
+        
+        stacktrace trace = debug_stacktrace_get();
+        debug_stacktrace_print(termout, trace);
 
         debug_dump(ptr, 64, 32, TRUE, TRUE);
+        
+        flushout();
 
         abort();
     }
@@ -1186,13 +1261,13 @@ debug_free(void* ptr_, const char* file, int line)
     {
         if(__termout__.vtbl != NULL)
         {
-            format("[%08x] free(%p [%3x]", pthread_self(), ptr + 1, (u32)size);
+            format("[%08x] free(%p [%3x]", thread_self(), ptr + 1, (u32)size);
 
-#if ZDB_DEBUG_TAG_BLOCKS!=0
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
             print(" | ");
             debug_dump((u8*) & ptr->tag, 8, 8, FALSE, TRUE);
 #endif
-#if ZDB_DEBUG_SERIALNUMBERIZE_BLOCKS!=0
+#if DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
             format(" | #%08llx", ptr->serial);
 #endif
             formatln(") (%s:%i)", file, line);
@@ -1201,7 +1276,7 @@ debug_free(void* ptr_, const char* file, int line)
 
     pthread_mutex_lock(&alloc_mutex);
 
-#if ZDB_DEBUG_CHAIN_ALLOCATED_BLOCKS!=0
+#if DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS
     ptr->previous->next = ptr->next;
     ptr->next->previous = ptr->previous;
     ptr->next = (void*)~0;
@@ -1212,15 +1287,15 @@ debug_free(void* ptr_, const char* file, int line)
     db_current_allocated -= size;
     db_current_blocks--;
 
-#if ZDB_DEBUG_ENHANCED_STATISTICS!=0
+#if DNSCORE_DEBUG_ENHANCED_STATISTICS
 
-    if(size < ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE)
+    if(size < DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE)
     {
         db_alloc_count_by_size[(size - 1) >> 3]--;
     }
     else
     {
-        db_alloc_count_by_size[ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3]--;
+        db_alloc_count_by_size[DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3]--;
     }
 
 #endif
@@ -1239,7 +1314,7 @@ void
 debug_realloc(void* ptr, size_t size, const char* file, int line)
 
 {
-#if ZDB_DEBUG_TAG_BLOCKS!=0
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
     u64 tag = 0x4c554e4152;
 #endif
 
@@ -1249,13 +1324,13 @@ debug_realloc(void* ptr, size_t size, const char* file, int line)
     {
         hdr = (db_header*)ptr;
         hdr--;
-#if ZDB_DEBUG_TAG_BLOCKS!=0
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
         tag = hdr->tag;
 #endif
     }
 
     void* newptr = debug_malloc(size, file, line
-#if ZDB_DEBUG_TAG_BLOCKS!=0
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
             , tag
 #endif
             );
@@ -1275,11 +1350,10 @@ debug_realloc(void* ptr, size_t size, const char* file, int line)
     return newptr;
 }
 
-char
-*
+char*
 debug_strdup(const char* str)
 {
-    int l = strlen(str) + 1;
+    size_t l = strlen(str) + 1;
     char* out;
     MALLOC_OR_DIE(char*, out, l, ZDB_STRDUP_TAG); /* ZALLOC IMPOSSIBLE, MUST KEEP MALLOC_OR_DIE */
     MEMCOPY(out, str, l);
@@ -1311,11 +1385,13 @@ debug_mtest(void* ptr_)
             }
         }
 
+        stacktrace trace = debug_stacktrace_get();
+        debug_stacktrace_print(termout, trace);
+        
         debug_dump(ptr, 64, 32, TRUE, TRUE);
 
         abort();
     }
-
 }
 
 u32
@@ -1350,7 +1426,7 @@ debug_stat(int mask)
         malloc_hook_memalign);
 #endif
 
-#if ZDB_DEBUG_ENHANCED_STATISTICS
+#if DNSCORE_DEBUG_ENHANCED_STATISTICS
     if(mask & DEBUG_STAT_SIZES)
     {
         formatln("%16llx | DB: MEM: Block sizes: ([size/8]={current / peak}", timeus());
@@ -1359,7 +1435,7 @@ debug_stat(int mask)
         
         int i;
 
-        for(i = 0; i < (ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3); i++)
+        for(i = 0; i < (DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3); i++)
         {
             format("[%4i]={%8llu / %8llu} ;", (i + 1) << 3, db_alloc_count_by_size[i], db_alloc_peak_by_size[i]);
 
@@ -1372,12 +1448,12 @@ debug_stat(int mask)
         println("");
 
         formatln("%16llx | [++++]={%8llu / %8llu}", timeus(),
-                 db_alloc_count_by_size[ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3],
-                 db_alloc_peak_by_size[ZDB_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3]);
+                 db_alloc_count_by_size[DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3],
+                 db_alloc_peak_by_size[DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3]);
     }
 #endif
 
-#if ZDB_DEBUG_CHAIN_ALLOCATED_BLOCKS
+#if DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS
     if(mask & DEBUG_STAT_TAGS)
     {
         db_header *ptr;
@@ -1465,12 +1541,12 @@ debug_stat(int mask)
         {
             formatln("block #%04x %16p [%08x]", index, (void*)& ptr[1], ptr->size);
 
-#if ZDB_DEBUG_TAG_BLOCKS
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
             debug_dump((u8*) & ptr->tag, 8, 8, FALSE, TRUE);
             formatln(" | ");
 #endif
 
-#if ZDB_DEBUG_STACKTRACE
+#if DNSCORE_DEBUG_STACKTRACE
             int n = 0;
             intptr *st = ptr->_trace;
             if(st != NULL)
@@ -1488,7 +1564,7 @@ debug_stat(int mask)
             }
 #endif
 
-#if ZDB_DEBUG_SERIALNUMBERIZE_BLOCKS
+#if DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
             formatln("#%08llx | ", ptr->serial);
 #endif
             osprint_dump(termout, & ptr[1], MIN(ptr->size, 128), 32, OSPRINT_DUMP_ALL);
@@ -1568,80 +1644,7 @@ debug_mallocated(void* ptr)
 
 #if HAS_LIBC_MALLOC_DEBUG_SUPPORT
 
-#ifdef __MALLOC_DEPRECATED
-
-extern void *__libc_malloc(size_t size);
-extern void *__libc_realloc(void* ptr, size_t size);
-extern void __libc_free(void* ptr);
-extern void *__libc_memalign(size_t alignment, size_t size);
-
-static void* debug_malloc_hook_base(size_t size, const void* caller)
-{
-    (void)caller;
-    void *ptr = __libc_malloc(size);
-    return ptr;
-}
-
-static void* debug_realloc_hook_base(void *ptr, size_t size, const void* caller)
-{
-    (void)caller;
-    ptr = __libc_realloc(ptr, size);
-    return ptr;
-}
-
-static void debug_free_hook_base(void *ptr, const void* caller)
-{
-    (void)caller;
-    __libc_free(ptr);
-}
-
-static void* debug_memalign_hook_base(size_t alignment, size_t size, const void* caller)
-{
-    (void)caller;
-    void *ptr = __libc_memalign(alignment, size);
-    return ptr;
-}
-
-static malloc_hook_t *__yadifa_malloc_hook = debug_malloc_hook_base;
-static realloc_hook_t *__yadifa_realloc_hook = debug_realloc_hook_base;
-static free_hook_t *__yadifa_free_hook = debug_free_hook_base;
-static memalign_hook_t *__yadifa_memalign_hook = debug_memalign_hook_base;
-
-void* malloc(size_t size)
-{
-    void *caller = __builtin_return_address(0);
-    pthread_mutex_lock(&libc_hook_mtx);
-    void *ptr = __yadifa_malloc_hook(size, caller);
-    pthread_mutex_unlock(&libc_hook_mtx);
-    return ptr;
-}
-
-void* realloc(void* ptr, size_t size)
-{
-    void *caller = __builtin_return_address(0);
-    pthread_mutex_lock(&libc_hook_mtx);
-    ptr = __yadifa_realloc_hook(ptr, size, caller);
-    pthread_mutex_unlock(&libc_hook_mtx);
-    return ptr;
-}
-
-void free(void* ptr)
-{
-    void *caller = __builtin_return_address(0);
-    pthread_mutex_lock(&libc_hook_mtx);
-    __yadifa_free_hook(ptr, caller);
-    pthread_mutex_unlock(&libc_hook_mtx);
-}
-
-void* memalign(size_t alignment, size_t size)
-{
-    void *caller = __builtin_return_address(0);
-    pthread_mutex_lock(&libc_hook_mtx);
-    void *ptr = __yadifa_memalign_hook(alignment, size, caller);
-    pthread_mutex_unlock(&libc_hook_mtx);
-    return ptr;
-}
-
+#if 0 /* fix */
 #else
 
 #define __yadifa_malloc_hook __malloc_hook
@@ -1657,7 +1660,7 @@ static bool debug_malloc_istracked(void* ptr)
 {
     bool ret; 
     pthread_mutex_lock(&malloc_hook_mtx);
-    ptr_node_debug *node = ptr_set_debug_avl_find(&malloc_hook_tracked_set, ptr);
+    ptr_node_debug *node = ptr_set_debug_find(&malloc_hook_tracked_set, ptr);
     ret = (node != NULL);
     pthread_mutex_unlock(&malloc_hook_mtx);
     return ret;
@@ -1667,7 +1670,7 @@ static void debug_malloc_track_alloc_nolock(void* ptr)
 {
     //formatln("track alloc %p", ptr);
     
-    ptr_node_debug *node = ptr_set_debug_avl_insert(&malloc_hook_tracked_set, ptr);
+    ptr_node_debug *node = ptr_set_debug_insert(&malloc_hook_tracked_set, ptr);
     
     intptr flags = (intptr)node->value;
     if(flags != 0)
@@ -1684,7 +1687,7 @@ static void debug_malloc_track_free_nolock(void* ptr)
 {
     //formatln("track free  %p", ptr);
     
-    ptr_node_debug *node = ptr_set_debug_avl_find(&malloc_hook_tracked_set, ptr);
+    ptr_node_debug *node = ptr_set_debug_find(&malloc_hook_tracked_set, ptr);
     
     if(node == NULL)
     {
@@ -1708,11 +1711,11 @@ static void debug_malloc_track_free_nolock(void* ptr)
 void debug_malloc_hook_tracked_dump()
 {
     pthread_mutex_lock(&malloc_hook_mtx);
-    ptr_set_debug_avl_iterator iter;
-    ptr_set_debug_avl_iterator_init(&malloc_hook_tracked_set, &iter);
-    while(ptr_set_debug_avl_iterator_hasnext(&iter))
+    ptr_set_debug_iterator iter;
+    ptr_set_debug_iterator_init(&malloc_hook_tracked_set, &iter);
+    while(ptr_set_debug_iterator_hasnext(&iter))
     {
-        const ptr_node_debug *node = ptr_set_debug_avl_iterator_next_node(&iter);
+        const ptr_node_debug *node = ptr_set_debug_iterator_next_node(&iter);
         if(((intptr)node->value) == 1)
         {
             const malloc_hook_header_t *hdr =  (const malloc_hook_header_t*)node->key;
@@ -1734,7 +1737,7 @@ typedef struct malloc_hook_caller_t malloc_hook_caller_t;
 
 void debug_malloc_caller_add(const void* caller_address, ssize_t size)
 {
-    ptr_node_debug *node = ptr_set_debug_avl_insert(&malloc_hook_caller_set, (void*)caller_address);
+    ptr_node_debug *node = ptr_set_debug_insert(&malloc_hook_caller_set, (void*)caller_address);
     malloc_hook_caller_t *caller = (malloc_hook_caller_t*)node->value;
     if(caller == NULL)
     {
@@ -1764,11 +1767,11 @@ void debug_malloc_hook_caller_dump()
     ssize_t count_total = 0;
     ssize_t size_total = 0;
     pthread_mutex_lock(&malloc_hook_mtx);
-    ptr_set_debug_avl_iterator iter;
-    ptr_set_debug_avl_iterator_init(&malloc_hook_caller_set, &iter);
-    while(ptr_set_debug_avl_iterator_hasnext(&iter))
+    ptr_set_debug_iterator iter;
+    ptr_set_debug_iterator_init(&malloc_hook_caller_set, &iter);
+    while(ptr_set_debug_iterator_hasnext(&iter))
     {
-        const ptr_node_debug *node = ptr_set_debug_avl_iterator_next_node(&iter);
+        const ptr_node_debug *node = ptr_set_debug_iterator_next_node(&iter);
         const malloc_hook_caller_t *caller = (malloc_hook_caller_t*)node->value;
         ssize_t mean = 0;
         ssize_t count = caller->count;
@@ -1972,7 +1975,7 @@ void debug_malloc_hooks_init()
     }
 }
 
-void debug_malloc_hooks_finalise()
+void debug_malloc_hooks_finalize()
 {
     if(_real_malloc_initialised)
     {
@@ -1987,12 +1990,7 @@ void debug_malloc_hooks_finalise()
 
 void *debug_malloc_unmonitored(size_t size)
 {
-    void *ret = _real_malloc(size, NULL);
-    if(ret == NULL)
-    {
-        abort();
-    }
-    return ret;
+    return _real_malloc(size, NULL);
 }
 
 void debug_free_unmonitored(void* ptr)
@@ -2005,18 +2003,18 @@ void debug_malloc_hooks_init()
 {
 }
 
-void debug_malloc_hooks_finalise()
+void debug_malloc_hooks_finalize()
 {
 }
 
 void *debug_malloc_unmonitored(size_t size)
 {
-    void *ret = malloc(size);
-    if(ret == NULL)
+    void *ptr = malloc(size);
+    if(ptr == NULL)
     {
         abort();
     }
-    return ret;
+    return ptr;
 }
 
 void debug_free_unmonitored(void* ptr)
@@ -2030,10 +2028,54 @@ void debug_malloc_hook_tracked_dump()
 
 #endif
 
-#ifdef DEBUG
+#if DEBUG
 
 static pthread_mutex_t debug_bench_mtx = PTHREAD_MUTEX_INITIALIZER;
 static debug_bench_s *debug_bench_first = NULL;
+static bool debug_bench_init_done = FALSE;
+
+void
+debug_bench_init()
+{
+    if(debug_bench_init_done)
+    {
+        return;
+    }
+    
+    pthread_mutexattr_t mta;
+    int err;
+    
+    err = pthread_mutexattr_init(&mta);
+    
+    if(err == 0)
+    {
+        err = pthread_mutexattr_settype(&mta, PTHREAD_MUTEX_RECURSIVE);
+    
+        if(err == 0)
+        {
+            err = pthread_mutex_init(&debug_bench_mtx, &mta);
+
+            if(err == 0)
+            {
+                debug_bench_init_done = TRUE;
+            }
+            else
+            {
+                formatln("debug_bench_init: pthread_mutex_init: %r", MAKE_ERRNO_ERROR(err));
+            }
+        }
+        else
+        {
+            formatln("debug_bench_init: pthread_mutexattr_settype: %r", MAKE_ERRNO_ERROR(err));
+        }
+        
+        pthread_mutexattr_destroy(&mta);
+    }
+    else
+    {
+        formatln("debug_bench_init: pthread_mutexattr_init: %r", MAKE_ERRNO_ERROR(err));
+    }
+}
 
 void
 debug_bench_register(debug_bench_s *bench, const char *name)
@@ -2081,11 +2123,11 @@ void debug_bench_logdump_all()
     while(p != NULL)
     {
         double min = p->time_min;
-        min /= 1000000.0;
+        min /= ONE_SECOND_US_F;
         double max = p->time_max;
-        max /= 1000000.0;
+        max /= ONE_SECOND_US_F;
         double total = p->time_total;
-        total /= 1000000.0;
+        total /= ONE_SECOND_US_F;
         u32 count = p->time_count;
         if(logger_is_running())
         {
@@ -2100,41 +2142,54 @@ void debug_bench_logdump_all()
     pthread_mutex_unlock(&debug_bench_mtx);
 }
 
+void debug_bench_unregister_all()
+{
+    pthread_mutex_lock(&debug_bench_mtx);
+    debug_bench_s *p = debug_bench_first;
+    while(p != NULL)
+    {
+        debug_bench_s *tmp = p;
+        p = p->next;
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
+        debug_free((void*)tmp->name,__FILE__,__LINE__);
+#else
+        free((void*)tmp->name);
 #endif
+    }
+    debug_bench_first = NULL;
+    pthread_mutex_unlock(&debug_bench_mtx);
+}
+#else
 
-
-#ifdef DEBUG
-
-void debug_unicity_init(debug_unicity *dus)
+void
+debug_bench_init()
 {
-    assert(dus != NULL);
-
-    pthread_mutex_init(&dus->mutex, NULL);
-    dus->counter = 0;
 }
 
 void
-debug_unicity_acquire(debug_unicity *dus)
+debug_bench_register(debug_bench_s *bench, const char *name)
 {
-    assert(dus != NULL);
-
-    pthread_mutex_lock(&dus->mutex);
-    dus->counter++;
-    assert(dus->counter == 1);
-    pthread_mutex_unlock(&dus->mutex);
+    (void)bench;
+    (void)name;
 }
 
 void
-debug_unicity_release(debug_unicity *dus)
+debug_bench_commit(debug_bench_s *bench, u64 delta)
 {
-    assert(dus != NULL);
+    (void)bench;
+    (void)delta;
+}
 
-    pthread_mutex_lock(&dus->mutex);
-    dus->counter--;
-    assert(dus->counter == 0);
-    pthread_mutex_unlock(&dus->mutex);
+void debug_bench_logdump_all()
+{
+}
+
+void
+debug_bench_unregister_all()
+{
 }
 
 #endif
 
 /** @} */
+

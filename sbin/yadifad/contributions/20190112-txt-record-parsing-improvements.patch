@@ -1,0 +1,198 @@
+From 8c06fbe679554b6d18326717ce7b7a661e85befc Mon Sep 17 00:00:00 2001
+From: Jeremy Zerfas <Jeremy-YADIFA@JeremyZerfas.com>
+Date: Sat, 12 Jan 2019 14:29:04 -0600
+Subject: [PATCH] Make string parsing and TXT record writing more robust
+
+Improves string parsing so that text between string delimiters is
+handled correctly when it contains string delimiter characters that have
+been escaped or when it ends with escape characters.
+
+Changes TXT records to be written as quoted strings and characters are
+now escaped when needed.
+---
+ lib/dnscore/src/format.c | 89 +++++++++++++++++++++++++---------------
+ lib/dnscore/src/parser.c | 42 ++++++++++++-------
+ 2 files changed, 83 insertions(+), 48 deletions(-)
+
+diff --git a/lib/dnscore/src/format.c b/lib/dnscore/src/format.c
+index 6baba24..a3225c5 100644
+--- a/lib/dnscore/src/format.c
++++ b/lib/dnscore/src/format.c
+@@ -1884,53 +1884,76 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
+ 
+             return total;
+         }
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+ 
+         case TYPE_TXT:
+-
+-
+-
+         {
+-            u8 c;
++            /* rdata_pointer should be a chain of Pascal strings and the chain should be EXACTLY
++             * rdata_size bytes long. Check the chain to make sure the last Pascal string in the
++             * chain ends at exactly rdata_size bytes, if it doesn't then consider that an error and
++             * return an error code.
++             */
++            u32 pstring_chain_size = 0;
++            while(pstring_chain_size < rdata_size)
++            {
++                pstring_chain_size += 1 + rdata_pointer[pstring_chain_size];
++                if(pstring_chain_size > rdata_size)
++                {
++                    return INCORRECT_RDATA;
++                }
++            }
+ 
+             while(rdata_size > 0)
+             {
+-                c = *rdata_pointer++;
+-
+-                if(c > 0)
++                /* Check each character in the Pascal string to see if it is one of the characters
++                 * which needs to be escaped (double quotes, line feeds, and backslashes currently)
++                 * when used in a zone file quoted string. If we find a character which needs to be
++                 * escaped, then output any characters that preceded it which we didn't output
++                 * already, the escape character, and that character which needed to be escaped.
++                 */
++                const u8 pstring_len = *rdata_pointer++;
++                const char *character_to_check = (char *)rdata_pointer;
++                const char * const limit = character_to_check + pstring_len;
++                output_stream_write_u8(os, '"'); /* Opening double quote for the string. */
++                do
+                 {
+-                    c = MIN(c, rdata_size);
++                    if(memchr("\"\n\\", *character_to_check, 3))
++                    {
++                        const u8 preceding_span_len = character_to_check - (char *)rdata_pointer;
++
++                        output_stream_write(os, rdata_pointer, preceding_span_len);
++                        output_stream_write_u8(os, '\\');
++                        output_stream_write_u8(os, *character_to_check);
+ 
+-                    output_stream_write(os, rdata_pointer, c);
+-                    output_stream_write(os, (u8*)" ", 1);
++                        rdata_pointer += preceding_span_len + 1;
++                    }
++                }
++                while(++character_to_check < limit);
++
++                /* Output any remaining characters in the Pascal string if rdata_pointer didn't
++                 * reach limit (because it ended with a character that didn't have to be escaped).
++                 */
++                if((char *)rdata_pointer < limit)
++                {
++                    output_stream_write(os, rdata_pointer, limit - (char *)rdata_pointer);
++                    rdata_pointer += limit - (char *)rdata_pointer;
+                 }
+ 
+-                rdata_size--;
+-                rdata_pointer += c;
+-                rdata_size -= c;
++                output_stream_write_u8(os, '"'); /* Closing double quote for the string. */
++
++                rdata_size -= 1 + pstring_len; /* Decrement by the FULL Pascal string size. */
++
++                /* If there are still more Pascal strings in the chain, then output a space to
++                 * separate them from the one that was just output.
++                 */
++                if(rdata_size > 0)
++                {
++                    output_stream_write_u8(os, ' ');
++                }
+             }
+ 
+             return SUCCESS;
+         }
++
+         case TYPE_CTRL_ZONERELOAD:
+         {
+             /* ONE NAME record */
+diff --git a/lib/dnscore/src/parser.c b/lib/dnscore/src/parser.c
+index 82e7ad4..13720be 100644
+--- a/lib/dnscore/src/parser.c
++++ b/lib/dnscore/src/parser.c
+@@ -556,36 +556,48 @@ parser_next_token(parser_s *parser)
+                     // find the end char ...
+                     // note: see strpbrk
+ 
+-                    char end_char = parser->delimiter_close[b];
++                    const char end_char = parser->delimiter_close[b];
+ 
+-                    char *string_end;
++                    char *string_end = ++needle;
+ 
+                     for(;;)
+                     {
+-                        needle++;
+-
+-                        string_end = memchr(needle, end_char, parser->limit - needle);
++                        string_end = memchr(string_end, end_char, parser->limit - string_end);
+ 
+                         if(string_end != NULL)
+                         {
+-                            if(parser->char_type[(u8)string_end[-1]] != PARSER_CHAR_TYPE_ESCAPE_CHARACTER)
+-                            {
+-                                break;
++                            /* Check if the string delimiter that was found was escaped. Keep in
++                             * mind that if there was an escape character in front of the string
++                             * delimiter, the escape character itself could have also been escaped
++                             * (and the one before that and the one before that...). What we can do
++                             * is check to see how many consecutive preceding escape characters
++                             * there are (by finding the first preceding nonescape character or the
++                             * opening string delimiter if there isn't one) and if it's an even
++                             * number then the string delimiter we found is unescaped but if it's an
++                             * odd number then it is escaped. Note that this will need to be revised
++                             * if YADIDA later adds support for using \DDD type escape sequences
++                             * between string delimiters.
++                             */
++                            const char *prior_nonescape_character = string_end;
++                            while(--prior_nonescape_character >= needle){
++                                if(parser->char_type[(u8)*prior_nonescape_character] != PARSER_CHAR_TYPE_ESCAPE_CHARACTER)
++                                    break;
+                             }
+-                            
++                            if((string_end - prior_nonescape_character) % 2 == 1){
++                                break; /* String delimiter was not escaped if we got here. */
++                            }
++
+                             // this one was escaped ...
+ 
+                             string_end++;
+-                            
++
+                             // needle = string_end + 1 and try again ?
+-                            
+-                            if(string_end > parser->limit)
++
++                            if(string_end >= parser->limit)
+                             {
+                                 return PARSER_EXPECTED_STRING_END_DELIMITER;
+                             }
+-                            
+-                            needle = string_end;
+-                                    
++
+                             //string_end = memchr(string_end, end_char, parser->limit - string_end);
+                         }
+                         else

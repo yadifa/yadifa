@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup logging Server logging
  *  @ingroup yadifad
  *  @brief 
@@ -42,7 +43,6 @@
  *----------------------------------------------------------------------------*/
 
 #include "server-config.h"
-#include "config.h"
 
 #include <dnscore/logger.h>
 
@@ -57,7 +57,7 @@
 
 #define LOG_QUERY_C_
 
-logger_handle* g_queries_logger = NULL;
+logger_handle* g_queries_logger = LOGGER_HANDLE_SINK;
 log_query_function* log_query = log_query_yadifa;
 
 void
@@ -132,11 +132,11 @@ log_query_bind(int socket_fd, message_data *mesg)
     
     u16 port = 0;
     
-    switch(mesg->other.sa.sa_family)
+    switch(message_get_sender_sa(mesg)->sa_family)
     {
         case AF_INET:
         {
-            struct sockaddr_in *ipv4 = &mesg->other.sa4;
+            const struct sockaddr_in *ipv4 = message_get_sender_sa4(mesg);
             
             if(inet_ntop(ipv4->sin_family, &ipv4->sin_addr, buffer, 64) != NULL)
             {
@@ -148,7 +148,7 @@ log_query_bind(int socket_fd, message_data *mesg)
         }
         case AF_INET6:
         {
-            struct sockaddr_in6 *ipv6 = &mesg->other.sa6;
+            const struct sockaddr_in6 *ipv6 = message_get_sender_sa6(mesg);
 
             if(inet_ntop(ipv6->sin6_family, &ipv6->sin6_addr, buffer, 64) != NULL)
             {
@@ -165,11 +165,11 @@ log_query_bind(int socket_fd, message_data *mesg)
     memcpy(buffer, ": query: ", 9);
     buffer += 9;
     
-    buffer += dnsname_to_cstr(buffer, mesg->qname);
+    buffer += dnsname_to_cstr(buffer, message_get_canonised_fqdn(mesg));
     
     *buffer++ = ' ';
     
-    class_name = get_name_from_class(mesg->qclass);
+    class_name = dns_class_get_name(message_get_query_class(mesg));
     if(class_name != NULL)
     {
         strcpy(buffer, class_name); // the buffer is big enough
@@ -179,12 +179,12 @@ log_query_bind(int socket_fd, message_data *mesg)
     {
         memcpy(buffer, "CLASS", 5);
         buffer += 5;
-        buffer += log_query_add_du16(buffer, mesg->qclass);        
+        buffer += log_query_add_du16(buffer, message_get_query_class(mesg));        
     }
     
     *buffer++ = ' ';
     
-    type_name = get_name_from_type(mesg->qtype);
+    type_name = dns_type_get_name(message_get_query_type(mesg));
     if(type_name != NULL)
     {
         strcpy(buffer, type_name); // the buffer is big enough
@@ -194,36 +194,36 @@ log_query_bind(int socket_fd, message_data *mesg)
     {
         memcpy(buffer, "TYPE", 4);
         buffer += 4;
-        buffer += log_query_add_du16(buffer, mesg->qtype);        
+        buffer += log_query_add_du16(buffer, message_get_query_type(mesg));        
     }
 
     *buffer++ = ' ';
     
-    *buffer++ = (MESSAGE_RD(mesg->buffer)==0)?'-':'+';
+    *buffer++ = message_has_recursion_desired(mesg)?'+':'-';
 
-#if HAS_TSIG_SUPPORT
-    if(mesg->tsig.tsig != NULL)
+#if DNSCORE_HAS_TSIG_SUPPORT
+    if(message_tsig_get_key(mesg) != NULL)
     {
         *buffer++ = 'S';
     }
 #endif
     
-    if(mesg->edns)
+    if(message_is_edns0(mesg))
     {
         *buffer++ = 'E';
     }
     
-    if(mesg->protocol == IPPROTO_TCP)
+    if(message_get_protocol(mesg) == IPPROTO_TCP)
     {
         *buffer++ = 'T';
     }
     
-    if((mesg->rcode_ext & RCODE_EXT_DNSSEC))
+    if(message_has_rcode_ext_dnssec(mesg))
     {
         *buffer++ = 'D';
     }
     
-    if(MESSAGE_CD(mesg->buffer) != 0)
+    if(message_has_checking_disabled(mesg))
     {
         *buffer++ = 'C';
     }
@@ -260,30 +260,30 @@ log_query_yadifa(int socket_fd, message_data *mesg)
     
     memcpy(buffer, "query [", 7);
     buffer+=7;    
-    buffer += log_query_add_xu16(buffer, MESSAGE_ID(mesg->buffer));
+    buffer += log_query_add_xu16(buffer, message_get_id(mesg));
     *buffer++ = ']';
     *buffer++ = ' ';
     
     *buffer++ = '{';    
-    *buffer++ = (MESSAGE_RD(mesg->buffer)!=0)?'+':'-';
-#if HAS_TSIG_SUPPORT
-    *buffer++ = (mesg->tsig.tsig != NULL)?    'S':'-';
+    *buffer++ = message_has_recursion_desired(mesg)?'+':'-';
+#if DNSCORE_HAS_TSIG_SUPPORT
+    *buffer++ = (message_tsig_get_key(mesg) != NULL)?    'S':'-';
 #else
     *buffer++ = '-';
 #endif
-    *buffer++ = (mesg->edns)?                 'E':'-';
-    *buffer++ = (mesg->protocol == IPPROTO_TCP)?'T':'-';
-    *buffer++ = ((mesg->rcode_ext & RCODE_EXT_DNSSEC)!=0)?'D':'-';
-    *buffer++ = (MESSAGE_CD(mesg->buffer) != 0)?'C':'-';
+    *buffer++ = message_is_edns0(mesg)?'E':'-';
+    *buffer++ = (message_get_protocol(mesg) == IPPROTO_TCP)?'T':'-';
+    *buffer++ = message_has_rcode_ext_dnssec(mesg)?'D':'-';
+    *buffer++ = message_has_checking_disabled(mesg)?'C':'-';
 
     *buffer++ = '}';
     *buffer++ = ' ';
     
-    buffer += dnsname_to_cstr(buffer, mesg->qname);
+    buffer += dnsname_to_cstr(buffer, message_get_canonised_fqdn(mesg));
     
     *buffer++ = ' ';
     
-    class_name = get_name_from_class(mesg->qclass);
+    class_name = dns_class_get_name(message_get_query_class(mesg));
     if(class_name != NULL)
     {
         strcpy(buffer, class_name); // the buffer is big enough
@@ -293,12 +293,12 @@ log_query_yadifa(int socket_fd, message_data *mesg)
     {
         memcpy(buffer, "CLASS", 5);
         buffer += 5;
-        buffer += log_query_add_du16(buffer, mesg->qclass);        
+        buffer += log_query_add_du16(buffer, message_get_query_class(mesg));        
     }
     
     *buffer++ = ' ';
     
-    type_name = get_name_from_type(mesg->qtype);
+    type_name = dns_type_get_name(message_get_query_type(mesg));
     if(type_name != NULL)
     {
         strcpy(buffer, type_name); // the buffer is big enough
@@ -308,7 +308,7 @@ log_query_yadifa(int socket_fd, message_data *mesg)
     {
         memcpy(buffer, "TYPE", 4);
         buffer += 4;
-        buffer += log_query_add_du16(buffer, mesg->qtype);        
+        buffer += log_query_add_du16(buffer, message_get_query_type(mesg));        
     }
     
     *buffer++ = ' ';
@@ -316,11 +316,11 @@ log_query_yadifa(int socket_fd, message_data *mesg)
     
     u16 port = 0;
     
-    switch(mesg->other.sa.sa_family)
+    switch(message_get_sender_sa(mesg)->sa_family)
     {
         case AF_INET:
         {
-            struct sockaddr_in *ipv4 = &mesg->other.sa4;
+            const struct sockaddr_in *ipv4 = message_get_sender_sa4(mesg);
             
             if(inet_ntop(ipv4->sin_family, &ipv4->sin_addr, buffer, 64) != NULL)
             {
@@ -332,7 +332,7 @@ log_query_yadifa(int socket_fd, message_data *mesg)
         }
         case AF_INET6:
         {
-            struct sockaddr_in6 *ipv6 = &mesg->other.sa6;
+            const struct sockaddr_in6 *ipv6 = message_get_sender_sa6(mesg);
 
             if(inet_ntop(ipv6->sin6_family, &ipv6->sin6_addr, buffer, 64) != NULL)
             {

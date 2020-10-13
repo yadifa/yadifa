@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup rrsig RRSIG functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -48,9 +49,8 @@
 #include <dnscore/dnskey.h>
 
 #include <dnsdb/zdb_types.h>
-#include <dnsdb/rr_canonize.h>
 
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
 
 #include <dnsdb/nsec3.h>
 
@@ -62,7 +62,7 @@
 #define DNSSEC_DEBUGLEVEL       0  // NOT FOR RELEASE (put a 0 here on RELEASE code)
 #define DNSSEC_DUMPSIGNCOUNT    0
 
-#ifndef DEBUG
+#if !DEBUG
 #define SIGNER_THREAD_COUNT     2
 #else
 #define SIGNER_THREAD_COUNT     1   /* EASIER FOR DEBUGGING */
@@ -116,85 +116,8 @@
 extern "C" {
 #endif
 
-static inline u16 rrsig_get_type_covered_from_rdata(const void *rdata, u16 rdata_size)
-{
-    u16 tc = TYPE_NONE;
-    if(rdata_size >= 2)
-    {
-        tc = GET_U16_AT_P(rdata);
-    }
-    return tc;
-}
 
-static inline u8 rrsig_get_algorithm_from_rdata(const void *rdata, u16 rdata_size)
-{
-    u8 a = 0;
-    if(rdata_size >= 3)
-    {
-        a = ((const u8*)rdata)[2];
-    }
-    return a;
-}
-
-static inline u8 rrsig_get_labels_from_rdata(const void *rdata, u16 rdata_size)
-{
-    u8 l = 0;
-    if(rdata_size >= 4)
-    {
-        l = ((const u8*)rdata)[3];
-    }
-    return l;
-}
-
-static inline s32 rrsig_get_original_ttl_from_rdata(const void *rdata, u16 rdata_size)
-{
-    s32 ottl = 0;
-    if(rdata_size >= 8)
-    {
-        ottl = GET_U32_AT(((const u8*)rdata)[4]);
-    }
-    return ottl;
-}
-
-static inline s32 rrsig_get_valid_until_from_rdata(const void *rdata, u16 rdata_size)
-{
-    s32 t = 0;
-    if(rdata_size >= 12)
-    {
-        t = ntohl(GET_U32_AT(((const u8*)rdata)[8]));
-    }
-    return t;
-}
-
-static inline s32 rrsig_get_valid_from_from_rdata(const void *rdata, u16 rdata_size)
-{
-    s32 t = 0;
-    if(rdata_size >= 16)
-    {
-        t = ntohl(GET_U32_AT(((const u8*)rdata)[12]));
-    }
-    return t;
-}
-
-static inline u16 rrsig_get_key_tag_from_rdata(const void *rdata, u16 rdata_size)
-{
-    u16 tag = 0;
-    if(rdata_size >= 18)
-    {
-        tag = ntohs(GET_U16_AT(((const u8*)rdata)[16]));
-    }
-    return tag;
-}
-
-static inline const u8* rrsig_get_signer_name_from_rdata(const void *rdata, u16 rdata_size)
-{
-    const u8 *signer_name = NULL;
-    if(rdata_size >= 18)
-    {
-        signer_name = &((const u8*)rdata)[18];
-    }
-    return signer_name;
-}
+bool rrsig_should_remove_signature_from_rdata(const void *rdata, u16 rdata_size, const ptr_vector *zsks, s32 now, s32 regeneration, s32 *key_indexp);
 
 typedef struct rrsig_context_s rrsig_context_s;
 
@@ -353,16 +276,16 @@ typedef struct rrsig_update_item_s rrsig_update_item_s;
 static inline rrsig_update_item_s* rrsig_update_item_alloc()
 {
     rrsig_update_item_s *ret;
-    ZALLOC_OR_DIE(rrsig_update_item_s*, ret, rrsig_update_item_s, ZDB_RRSIGUPQ_TAG);
+    ZALLOC_OBJECT_OR_DIE( ret, rrsig_update_item_s, ZDB_RRSIGUPQ_TAG);
     return ret;
 }
 
 static inline void rrsig_update_item_free(rrsig_update_item_s *rui)
 {
-    ZFREE(rui, rrsig_update_item_s);
+    ZFREE_OBJECT(rui);
 }
 
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
 
 struct nsec3_rrsig_update_item_s
 {
@@ -513,6 +436,13 @@ zdb_packed_ttlrdata* rrsig_find_first(const zdb_rr_label* label, u16 covered_typ
  
 zdb_packed_ttlrdata* rrsig_find_next(const zdb_packed_ttlrdata* rrsig, u16 covered_type);
 
+
+/**
+ * Deletes all RRSIG covering the given type.
+ */
+
+void  rrsig_delete_covering(const zdb_rr_label* label, u16 type);
+
 /**
  * 
  * Removes all the RRSIG covering the type
@@ -561,6 +491,3 @@ bool rrsig_should_label_be_signed(zdb_zone *zone, const u8 *fqdn, zdb_rr_label *
 
 #endif	/* _RRSIGN_H */
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup ### #######
  *  @ingroup yadifad
  *  @brief
@@ -132,7 +133,7 @@ struct database_message_zone_load_s
     u8 type;
 };
 
-struct database_message_zone_save_s
+struct database_message_zone_store_s
 {
     u8 type;
     bool clear;
@@ -178,14 +179,13 @@ struct database_message_zone_unloaded_event_s
 struct database_message_zone_unmounted_event_s
 {
     u8 type;
-    ya_result result_code;      // yes, I meant to put this 32 bits field before the pointers ...
     zone_desc_s *zone_desc;     //
 };
 
 struct database_message_zone_downloaded_event_s
 {
     u8  type;
-    u16 download_type;          // yes, I meant to put this 32 bits field before the 32 bits ones ...
+    u16 download_type;          // yes, I meant to put this 16 bits field before the 32 bits ones ...
     u32 serial;
     ya_result result_code;
 };
@@ -237,7 +237,7 @@ struct database_message
         struct database_message_origin_process_s origin_process;
         
         struct database_message_zone_load_s zone_load;
-        struct database_message_zone_save_s zone_save;
+        struct database_message_zone_store_s zone_store;
         struct database_message_zone_unload_s zone_unload;
         
         struct database_message_zone_update_signatures_s zone_update_signatures;
@@ -260,7 +260,7 @@ bool database_service_started();
 ya_result database_service_init();
 ya_result database_service_start();
 ya_result database_service_stop();
-ya_result database_service_finalise();
+ya_result database_service_finalize();
 
 void database_load_all_zones();
 
@@ -289,7 +289,7 @@ void database_zone_unfreeze(const u8 *origin);
  * @param origin
  */
 
-void database_zone_save(const u8 *origin);
+void database_zone_store(const u8 *origin);
 
 /**
  * Enqueues the storage of a zone, optionally clearing its journal
@@ -297,7 +297,7 @@ void database_zone_save(const u8 *origin);
  * @param origin
  */
 
-void database_zone_save_ex(const u8 *origin, bool clear_journal);
+void database_zone_store_ex(const u8 *origin, bool clear_journal);
 
 /**
  * Saves a zone in the current thread using the provided locks (0 meaning: do not try to lock)
@@ -316,7 +316,7 @@ void database_zone_save_ex(const u8 *origin, bool clear_journal);
 #define DATABASE_SERVICE_ZONE_SAVE_IGNORE_SHUTDOWN ZDB_ZONE_WRITE_TEXT_FILE_IGNORE_SHUTDOWN
 #define DATABASE_SERVICE_ZONE_SAVE_UNMODIFIED 4
 
-ya_result database_service_zone_save_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonelockowner, u8 flags);
+ya_result database_service_zone_store_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zonelockowner, u8 flags);
 
 /// @note HAS_DYNAMIC_PROVISIONING
 
@@ -472,7 +472,8 @@ void database_service_zone_load_queue_thread(thread_pool_function func, void *pa
  * @param categoryname
  */
 
-void database_service_zone_save_queue_thread(thread_pool_function func, void *parm, thread_pool_task_counter *counter, const char* categoryname);
+void database_service_zone_store_queue_thread(thread_pool_function func, void *parm, thread_pool_task_counter *counter,
+                                              const char *categoryname);
 
 /**
  * Queues a function in the thread pool for unloading zones
@@ -533,14 +534,12 @@ void database_fire_zone_unloaded(zdb_zone *zone, ya_result result_code);
 
 /**
  * Tells the database service that a zone has been unloaded.
- * Although there is a result code, it most likely cannot fail with the current implementation.
  * Meant to be used internally.
  * 
  * @param zone_desc
- * @param result_code
  */
 
-void database_fire_zone_unmounted(zone_desc_s *zone_desc, ya_result result_code);
+void database_fire_zone_unmounted(zone_desc_s *zone_desc);
 
 /**
  * Tells the database service that a zone has been downloaded.
@@ -572,7 +571,9 @@ const char *database_service_operation_get_name(u32 id);
  */
 
 void database_zone_update_signatures(const u8 *origin, zone_desc_s *expected_zone_desc, zdb_zone *expected_zone);
-
+void database_zone_update_signatures_resume(const u8 *origin, zone_desc_s *expected_zone_desc, zdb_zone *expected_zone);
+void database_zone_update_signatures_allow_queue(const u8 *origin, zone_desc_s *expected_zone_desc,
+                                                 zdb_zone *expected_zone);
 /**
  * 
  * Sets an alarm to enqueue a zone maintenance at a given time (best effort)

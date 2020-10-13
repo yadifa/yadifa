@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnscoretools Generic Tools
  *  @ingroup dnscore
  *  @brief
@@ -174,7 +175,7 @@ void host_address_delete(host_address *address);
 
 
 void host_address_delete_list(host_address *address);
-void host_set_default_port_value(host_address *address, u16 port);
+void host_address_set_default_port_value(host_address *address, u16 port);
 u32 host_address_count(const host_address *address);
 
 static inline bool
@@ -183,9 +184,9 @@ host_address_empty(host_address *address)
     return (address == NULL);
 }
 
-ya_result host_address2addrinfo(struct addrinfo **sa, const host_address *address);
-ya_result host_address2allocated_sockaddr(struct sockaddr **sap, const host_address *address);
-ya_result host_address2sockaddr(socketaddress *sap, const host_address *address);
+ya_result host_address2addrinfo(const host_address *address, struct addrinfo **sa);
+ya_result host_address2allocated_sockaddr(const host_address *address, struct sockaddr **sap);
+ya_result host_address2sockaddr(const host_address *address, socketaddress *sap);
 
 /**
  * It does not set the "next" pointer, NONE of the "set" functions do.
@@ -196,11 +197,11 @@ ya_result host_address2sockaddr(socketaddress *sap, const host_address *address)
  */
 
 ya_result host_address_set_with_sockaddr(host_address *address, const socketaddress *sa);
-bool host_address_list_contains_ip(host_address *address, const socketaddress *sa);
+bool host_address_list_contains_ip(const host_address *address_list, const socketaddress *sa);
 #if DNSCORE_HAS_TSIG_SUPPORT
-bool host_address_list_contains_ip_tsig(host_address *address, const socketaddress *sa, const struct tsig_item *tsig);
+bool host_address_list_contains_ip_tsig(const host_address *address_list, const socketaddress *sa, const struct tsig_item *tsig);
 #endif
-bool host_address_list_contains_host(host_address *address, const host_address *ha);
+bool host_address_list_contains_host(const host_address *address_list, const host_address *ha);
 bool host_address_list_equals(const host_address *a, const host_address *b);
 
 /**
@@ -212,9 +213,11 @@ bool host_address_list_equals(const host_address *a, const host_address *b);
 void host_address_list_roll(host_address **firstp);
 bool host_address_equals(const host_address *a, const host_address *b);
 s32  host_address_compare(const host_address *a, const host_address *b);
+bool host_address_is_any(const host_address *ha);
 bool host_address_match(const host_address *a, const host_address *b);
 void host_address_set_ipv4(host_address *address, const u8 *ipv4, u16 port);
 void host_address_set_ipv6(host_address *address, const u8 *ipv6, u16 port);
+
 /**
  * It does not set the "next" pointer, NONE of the "set" functions do.
  * An address set like this will need to be freed with host_address_clear()
@@ -224,14 +227,17 @@ void host_address_set_ipv6(host_address *address, const u8 *ipv6, u16 port);
  * @param dname
  * @param port
  */
+
 void host_address_set_dname(host_address *address, const u8 *dname, u16 port);
 ya_result host_address_append_ipv4(host_address *address, const u8 *ipv4, u16 port);
 ya_result host_address_append_ipv6(host_address *address, const u8 *ipv6, u16 port);
 ya_result host_address_append_dname(host_address *address, const u8 *dname, u16 port);
 ya_result host_address_append_host_address(host_address *address, const host_address *ha);
 ya_result host_address_append_hostent(host_address *address, struct hostent *he, u16 port);
+ya_result host_address_append_sockaddr(host_address *address, const socketaddress *sa);
+ya_result host_address_append_sockaddr_with_port(host_address *address, const socketaddress *sa, u16 port);
 host_address *host_address_remove_host_address(host_address **address, host_address *ha_match);
-bool host_address_update_host_address_list(host_address **dp, host_address *s);
+bool host_address_update_host_address_list(host_address **dp, const host_address *s);
 
 static inline const host_address *host_address_get_at_index(const host_address *ha_list, u32 idx)
 {

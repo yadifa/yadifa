@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief 
@@ -128,17 +129,67 @@ typedef nsec3_label_extension** nsec3_label_extension_array;
 
 struct nsec3_label_extension
 {
-    nsec3_zone_item* self;
-    nsec3_zone_item* star;
+    nsec3_zone_item* _self;
+    nsec3_zone_item* _star;
 
-    struct nsec3_label_extension *next;
+    struct nsec3_label_extension *_next;
 };
+
+static inline nsec3_zone_item *nsec3_label_extension_self(const struct nsec3_label_extension *n3le)
+{
+    return n3le->_self;
+}
+
+static inline nsec3_zone_item *nsec3_label_extension_star(const struct nsec3_label_extension *n3le)
+{
+    return n3le->_star;
+}
+
+static inline struct nsec3_label_extension *nsec3_label_extension_next(const struct nsec3_label_extension *n3le)
+{
+    return n3le->_next;
+}
+
+static inline void nsec3_label_extension_set_self(struct nsec3_label_extension *n3le, nsec3_zone_item *self)
+{
+    n3le->_self = self;
+}
+
+static inline void nsec3_label_extension_set_star(struct nsec3_label_extension *n3le, nsec3_zone_item *star)
+{
+    n3le->_star = star;
+}
+
+static inline void nsec3_label_extension_set_next(struct nsec3_label_extension *n3le, struct nsec3_label_extension *next)
+{
+    n3le->_next = next;
+}
+
+static inline struct nsec3_label_extension **nsec3_label_extension_next_ptr(struct nsec3_label_extension *n3le)
+{
+    return &n3le->_next;
+}
+
+
+static inline nsec3_label_extension*
+nsec3_label_extension_get_from_label(zdb_rr_label *label, int index)
+{
+    yassert(label != NULL);
+    
+    //yassert(index > 0);
+    nsec3_label_extension *n3e = label->nsec.nsec3;
+    while(index > 0)
+    {
+        yassert(n3e != NULL);
+        n3e = nsec3_label_extension_next(n3e);
+        index--;
+    }
+    return n3e;
+}
 
 /*
 typedef struct nsec3_zone nsec3_zone;
-
- */
-
+*/
 
 struct nsec3_zone
 {
@@ -147,23 +198,21 @@ struct nsec3_zone
     u8 rdata[];                     // NSEC3PARAM head
 };
 
-
-
-#define NSEC3_ZONE_FAKE_OWNER ((void*)~0)
-
 #define NSEC3PARAM_MINIMUM_LENGTH		5
 
 #define NSEC3PARAM_RDATA_ALGORITHM(n3prd)	(((const u8*)(n3prd))[0])
 #define NSEC3PARAM_RDATA_FLAGS(n3prd)		(((const u8*)(n3prd))[1])
-#define NSEC3PARAM_RDATA_ITERATIONS(n3prd)	GET_U16_AT(((const u8*)(n3prd))[2]) // network order
+#define NSEC3PARAM_RDATA_ITERATIONS_NE(n3prd)	GET_U16_AT(((const u8*)(n3prd))[2]) // network order
+#define NSEC3PARAM_RDATA_ITERATIONS(n3prd)	NU16(GET_U16_AT(((const u8*)(n3prd))[2])) // network order
 #define NSEC3PARAM_RDATA_SALT_LEN(n3prd)	(((const u8*)(n3prd))[4])
 #define NSEC3PARAM_RDATA_SALT(n3prd)		(&((u8*)(n3prd))[NSEC3PARAM_MINIMUM_LENGTH])
 #define NSEC3PARAM_RDATA_SIZE_FROM_SALT(salt_len) (NSEC3PARAM_MINIMUM_LENGTH + (salt_len))
 #define NSEC3PARAM_RDATA_SIZE_FROM_RDATA(rdata_bytes_) (NSEC3PARAM_RDATA_SIZE_FROM_SALT(NSEC3PARAM_RDATA_SALT_LEN(rdata_bytes_)))
 
-#define NSEC3_ZONE_ALGORITHM(n3_)		NSEC3PARAM_RDATA_ALGORITHM((n3_)->rdata)
-#define NSEC3_ZONE_FLAGS(n3_)			NSEC3PARAM_RDATA_FLAGS((n3_)->rdata)
-#define NSEC3_ZONE_SALT_LEN(n3_)		NSEC3PARAM_RDATA_SALT_LEN((n3_)->rdata)
+#define NSEC3_ZONE_ALGORITHM(n3_)		    NSEC3PARAM_RDATA_ALGORITHM((n3_)->rdata)
+#define NSEC3_ZONE_FLAGS(n3_)			    NSEC3PARAM_RDATA_FLAGS((n3_)->rdata)
+#define NSEC3_ZONE_ITERATIONS(n3_)	        NSEC3PARAM_RDATA_ITERATIONS((n3_)->rdata)
+#define NSEC3_ZONE_SALT_LEN(n3_)		    NSEC3PARAM_RDATA_SALT_LEN((n3_)->rdata)
 #define NSEC3_ZONE_SALT(n3_)	    		NSEC3PARAM_RDATA_SALT((n3_)->rdata)
 
 #define NSEC3PARAM_DEFAULT_TTL			0
@@ -188,41 +237,59 @@ struct nsec3_zone
 #define nsec3_zone_get_item_next(n3_,idx_)	((nsec3_zone_item*)((n3_)->items.data[(idx_+1)%nsec3_zone_get_item_count(n3_)]))
 
 #define ZONE_HAS_NSEC3PARAM(zone_) (((zone_)->nsec.nsec3!=NULL) && (zdb_record_find(&(zone_)->apex->resource_record_set, TYPE_NSEC3PARAM)!=NULL))
-#define ZONE_NSEC3_AVAILABLE(zone_) (((zone_)->apex->flags & ZDB_RR_LABEL_NSEC3) != 0)
+#define ZONE_NSEC3_AVAILABLE(zone_) (zdb_rr_label_flag_isset(((zone_)->apex), ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT))
 
 static inline bool zdb_rr_label_nsec_linked(const zdb_rr_label *label)
 {
-    return (label->flags & ZDB_RR_LABEL_NSEC) != 0;
+    return (label->_flags & ZDB_RR_LABEL_NSEC) != 0;
 }
 
 static inline bool zdb_rr_label_nsec3_linked(const zdb_rr_label *label)
 {
-    return (label->flags & ZDB_RR_LABEL_NSEC3) != 0;
+    return (label->_flags & ZDB_RR_LABEL_NSEC3) != 0;
 }
 
 static inline bool zdb_rr_label_nsec3optout_linked(const zdb_rr_label *label)
 {
-    return (label->flags & ZDB_RR_LABEL_NSEC3_OPTOUT) != 0;
+    return (label->_flags & ZDB_RR_LABEL_NSEC3_OPTOUT) != 0;
 }
 
 static inline bool zdb_rr_label_nsec3any_linked(const zdb_rr_label *label)
 {
-    return (label->flags & (ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT)) != 0;
+    return (label->_flags & (ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT)) != 0;
 }
 
 static inline nsec3_label_extension *nsec3_label_extension_alloc()
 {
     nsec3_label_extension *n3le;
-    ZALLOC_OR_DIE(nsec3_label_extension*, n3le, nsec3_label_extension, NSEC3_LABELEXT_TAG); // in nsec3_label_link
-#ifdef DEBUG
+    ZALLOC_OBJECT_OR_DIE( n3le, nsec3_label_extension, NSEC3_LABELEXT_TAG); // in nsec3_label_link
+#if DEBUG
     memset(n3le, 0xac, sizeof(nsec3_label_extension));
 #endif
     return n3le;
 }
 
+static inline nsec3_label_extension *nsec3_label_extension_alloc_list(int count)
+{
+    nsec3_label_extension *n3le = nsec3_label_extension_alloc();
+    n3le->_self = NULL;
+    n3le->_star = NULL;
+    nsec3_label_extension *prev = n3le;
+    while(--count > 0)
+    {
+        prev->_next = nsec3_label_extension_alloc();
+        prev = prev->_next;
+        prev->_self = NULL;
+        prev->_star = NULL;
+    }
+    prev->_next = NULL;
+
+    return n3le;
+}
+
 static inline void nsec3_label_extension_free(nsec3_label_extension *n3le)
 {
-#ifdef DEBUG
+#if DEBUG
     memset(n3le, 0xfe, sizeof(nsec3_label_extension));
 #endif
     ZFREE(n3le, nsec3_label_extension);
@@ -246,6 +313,3 @@ static inline void nsec3param_set_flags(void *rdata_, u8 flags)
 
 #endif	/* _NSEC3_TYPES_H */
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup zone Functions used to sanitize a zone
  *  @ingroup dnsdb
  *  @brief Functions used to sanitize a zone
@@ -41,6 +42,9 @@
  */
 
 #include "dnsdb/dnsdb-config.h"
+
+#include <stdarg.h>
+
 #include <dnscore/dnscore.h>
 #include <dnscore/logger.h>
 #include <dnscore/format.h>
@@ -48,6 +52,8 @@
 #include <dnscore/dnskey.h>
 
 #include "dnsdb/zdb_sanitize.h"
+#include "dnsdb/zdb_zone_load.h"
+#include "dnsdb/rrsig.h"
 
 #if HAS_DNSSEC_SUPPORT
 #include "dnsdb/rrsig.h"
@@ -59,36 +65,67 @@
 #include "dnsdb/zdb_utils.h"
 #include "dnsdb/zdb_error.h"
 
-extern logger_handle* g_database_logger;
-#define MODULE_MSG_HANDLE g_database_logger
+#define SANITIZE_OVERSHARE 0        // don't, this is dev/debugging
+#define SANITIZE_LABEL_SUMMARY 0    // don't, this is dev/debugging
 
-#define TYPE_OFFSET(t) ((t)>>3)
-#define TYPE_BIT(t) (1<<((t)&7))
-
-#define HAS_TYPE(t) ((types[TYPE_OFFSET(t)] & TYPE_BIT(t)) != 0)
-#define SET_TYPE(t) (types[TYPE_OFFSET(t)] |= TYPE_BIT(t))
-#define UNSET_TYPE(t) (types[TYPE_OFFSET(t)] &= ~TYPE_BIT(t))
-
-#define CNAME_TYPE 5
-#define NS_TYPE 2
-#define DS_TYPE 43
+#define SANTIZE_DROP_LONELY_DS 0
 
 #define SANITIZE_DETECT_MISSING_GLUES 1
 
-struct zdb_sanitize_parms
-{
-    zdb_zone *zone;
-    u32_set dnskey_set;
-};
+extern logger_handle* g_database_logger;
+#define MODULE_MSG_HANDLE g_database_logger
 
-typedef struct zdb_sanitize_parms zdb_sanitize_parms;
+#define TYPES_INIT(b_)          u64 b_ = 0
+#define TYPES_HAS(b_,t_)        (((b_) & (1ULL << NU16(t_))) != 0)
+#define TYPES_ONLY_HAS(b_,t_)   ((b_) == (1ULL << NU16(t_)))
+#define TYPES_SET(b_,t_)        ((b_) |= (1ULL << NU16(t_)))
+#define TYPES_SET_OTHER(b_)     ((b_) |= (1ULL << 0)) // zero must never be used, so it's a perfect place holder
+#define TYPES_CLEAR(b_,t_)      ((b_) &= ~(1ULL << (t)))
+#define TYPES_AND_MASK(b_,m_)   ((b_) & (m_))
+
+static u8 u64_count_bits(u64 value)
+{
+    static const u8 bitcount[256] =
+    {
+        0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
+        1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+        1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+        2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+        1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+        2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+        2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+        3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+        1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+        2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+        2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+        3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+        2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+        3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+        3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+        4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8
+    };
+
+    u8 total = 0;
+
+    while(value != 0)
+    {
+        total += bitcount[value & 0xff];
+        value >>= 8;
+    }
+
+    return total;
+}
 
 static void
-zdb_sanitize_parms_init(zdb_sanitize_parms *parms, zdb_zone *zone)
+zdb_sanitize_parms_init(zdb_sanitize_parms *parms, zdb_zone *zone, struct zdb_zone_load_parms *load_parms)
 {
+    memset(parms, 0, sizeof(*parms));
     parms->zone = zone;
-    u32_set_avl_init(&parms->dnskey_set);
+    u32_set_init(&parms->dnskey_set);
+    parms->load_parms = load_parms;
 }
+
+#if ZDB_HAS_DNSSEC_SUPPORT
 
 static void
 zdb_sanitize_parms_update_keys(zdb_sanitize_parms *parms)
@@ -99,31 +136,30 @@ zdb_sanitize_parms_update_keys(zdb_sanitize_parms *parms)
         const u8 *dnskey_rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(dnskey_rrset);
         u32 dnskey_rdata_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(dnskey_rrset);
         
-        u16 keytag = dnskey_get_key_tag_from_rdata(dnskey_rdata, dnskey_rdata_size);
+        u16 keytag = dnskey_get_tag_from_rdata(dnskey_rdata, dnskey_rdata_size);
 
-        u32_set_avl_insert(&parms->dnskey_set, keytag);
+        u32_set_insert(&parms->dnskey_set, keytag);
         
         dnskey_rrset = dnskey_rrset->next;
     }
 }
 
-#if ZDB_HAS_DNSSEC_SUPPORT
-static bool
-zdb_sanitize_parms_has_key(zdb_sanitize_parms *parms, u16 tag)
-{
-    return u32_set_avl_find(&parms->dnskey_set, tag) != NULL;
-}
+
+
 #endif
 
-static void
-zdb_sanitize_parms_finalise(zdb_sanitize_parms *parms)
+void
+zdb_sanitize_parms_finalize(zdb_sanitize_parms *parms)
 {
-    u32_set_avl_destroy(&parms->dnskey_set);
+    u32_set_destroy(&parms->dnskey_set);
 }
 
+#if SANITIZE_LABEL_SUMMARY
 static void
 zdb_sanitize_log(dnsname_stack *dnsnamev, ya_result err)
 {
+
+
     if(err & SANITY_UNEXPECTEDSOA)
     {
         log_warn("sanity: %{dnsnamestack} failed: unexpected SOA", dnsnamev);
@@ -158,91 +194,82 @@ zdb_sanitize_log(dnsname_stack *dnsnamev, ya_result err)
     }
     if(err & SANITY_TRASHUNDERDELEGATION)
     {
-        log_warn("sanity: %{dnsnamestack} failed: non-glue records found under delegation", dnsnamev);
+        log_warn("sanity: %{dnsnamestack} failed: non-glue record(s) found under delegation", dnsnamev);
     }
     // SANITY_TOOMANYNSEC is not used
     if(err & SANITY_RRSIGWITHOUTKEYS)
     {
-        log_warn("sanity: %{dnsnamestack} failed: RRSIG records without matched DNSKEY", dnsnamev);
+        log_warn("sanity: %{dnsnamestack} failed: RRSIG record(s) without matched DNSKEY", dnsnamev);
+    }
+    if(err & SANITY_RRSIGWITHOUTSET)
+    {
+        log_warn("sanity: %{dnsnamestack} failed: RRSIG record(s) over an absent RRSET", dnsnamev);
+    }
+    if(err & SANITY_RRSIGTTLDOESNTMATCH)
+    {
+        log_warn("sanity: %{dnsnamestack} failed: RRSIG record(s) TTL does not match the one of the covered RRSET", dnsnamev);
     }
 }
+#endif
 
-static void zdb_sanitize_rr_set_useless_glue(zdb_zone *zone, zdb_rr_label *label, dnsname_stack *name, zdb_rr_label** parent)
+/**
+ * There must be an NS rrset on the path that matches the name
+ */
+
+static void
+zdb_sanitize_rr_set_useless_glue(zdb_zone *zone, zdb_rr_label *label, dnsname_stack *name, zdb_rr_label** parent)
 {
     zdb_rr_label** delegation = parent;
 
     // start from the parent
     // while there is a delegation
-    
-    while(*delegation != NULL && (((*delegation)->flags & ZDB_RR_LABEL_DELEGATION) == 0))
-    {
-        delegation--;
-    }
 
-    if(*delegation != NULL)
+    while(*delegation != NULL)
     {
-        u16 ip_type = TYPE_A;
-
         zdb_packed_ttlrdata* delegation_ns_record_list_head = zdb_record_find(&(*delegation)->resource_record_set, TYPE_NS);
 
-        // try to find the address in the NS set
-        
-        for(;;)
+        // if there is an NS rrset
+
+        if(delegation_ns_record_list_head != NULL)
         {
-            zdb_packed_ttlrdata* ip_record_list = zdb_record_find(&label->resource_record_set, ip_type);
-
-            zdb_packed_ttlrdata* delegation_ns_record_list = delegation_ns_record_list_head;
-
-            while(ip_record_list != NULL)
+            do
             {
-
-                bool matched = FALSE;
-
-                while(delegation_ns_record_list != NULL)
+                if(dnsname_equals_dnsname_stack(ZDB_PACKEDRECORD_PTR_RDATAPTR(delegation_ns_record_list_head), name))
                 {
-                    const u8* nameserver_name = ZDB_PACKEDRECORD_PTR_RDATAPTR(delegation_ns_record_list);
+                    // if the fqdn in the rdata matches the glue, there is nothing further
 
-                    if(dnsname_equals_dnsname_stack(nameserver_name, name))
-                    {
-                        matched = TRUE;
-                        break;
-                    }
-
-                    delegation_ns_record_list = delegation_ns_record_list->next;
+                    return;
                 }
 
-                if(!matched)
-                {
-                    /*
-                    * Useless A/AAAA record
-                    */
-
-                    rdata_desc rdata;
-                    rdata.type = ip_type;
-                    rdata.len = ZDB_PACKEDRECORD_PTR_RDATASIZE(ip_record_list);
-                    rdata.rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(ip_record_list);
-
-#ifdef DEBUG
-                    log_debug7("sanity: about label: %{dnslabel} %x", label->name, label->flags);
-#endif
-                    
-                    log_warn("sanity: %{dnsname}: consider removing wrong glue: %{dnsnamestack} %{typerdatadesc}", zone->origin, name, &rdata);
-                }
-
-                ip_record_list = ip_record_list->next;
+                delegation_ns_record_list_head = delegation_ns_record_list_head->next;
             }
+            while(delegation_ns_record_list_head != NULL);
+        }
 
-            if(ip_type == TYPE_AAAA)
-            {
-                break;
-            }
+        --delegation;
+    }
 
-            ip_type = TYPE_AAAA;
+    // the NS fqdn has not been found : warn about it
+
+    static const u16 ip_types[2] = {TYPE_A, TYPE_AAAA};
+
+    for(int i = 0; i < 2; ++i)
+    {
+        zdb_packed_ttlrdata* ip_record_list = zdb_record_find(&label->resource_record_set, ip_types[i]);
+
+        if(ip_record_list != NULL)
+        {
+            rdata_desc rdatadesc;
+            rdatadesc.type = ip_types[i];
+            rdatadesc.len = ZDB_PACKEDRECORD_PTR_RDATASIZE(ip_record_list);
+            rdatadesc.rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(ip_record_list);
+
+            log_warn("sanity: %{dnsname}: consider removing wrong glue: %{dnsnamestack} %{typerdatadesc}", zone->origin, name, &rdatadesc);
         }
     }
 }
 
-static ya_result
+static u32
 zdb_sanitize_rr_set_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsname_stack *name, u16 flags, zdb_rr_label** parent)
 {
     zdb_zone *zone = parms->zone;
@@ -250,45 +277,29 @@ zdb_sanitize_rr_set_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsname_
      * CNAME : nothing else than RRSIG & NSEC
      */
 
-    /* record counts for ... (can overlap) */
-    u32 not_cname_rrsig_nsec = 0;
-    u32 not_ns_ds_nsec_rrsig = 0;
-    u32 not_a_aaaa = 0;
-    u32 a_aaaa = 0;
-    u32 others = 0; /* outside the first 256 types */
-    u32 soa = 0;
-    u32 nsec = 0;
+    // record counts for ... (can overlap)
+
+    const u64 not_cmake_nsec_rrsig_mask = ~((1ULL<<NU16(TYPE_CNAME))|(1ULL<<NU16(TYPE_NSEC))|(1ULL<<NU16(TYPE_RRSIG)));
+    const u64 not_ns_ds_nsec_rrsig_mask = ~((1ULL<<NU16(TYPE_DS))|(1ULL<<NU16(TYPE_NS))|(1ULL<<NU16(TYPE_NSEC))|(1ULL<<NU16(TYPE_RRSIG)));
+    const u64 not_a_aaaa_mask = ~((1ULL<<NU16(TYPE_A))|(1ULL<<NU16(TYPE_AAAA)));
+    const u64 not_a_aaaa_ns_ds_mask = ~((1ULL<<NU16(TYPE_A))|(1ULL<<NU16(TYPE_AAAA))|(1ULL<<NU16(TYPE_NS))|(1ULL<<NU16(TYPE_DS)));
+    const u64 ns_ds_mask = ((1ULL<<NU16(TYPE_NS))|(1ULL<<NU16(TYPE_DS)));
+    const u64 ds_mask = (1ULL<<NU16(TYPE_DS));
+    const u64 not_rrsig_mask = ~(1ULL<<NU16(TYPE_RRSIG));
+
+    //const u64 others_mask = (1ULL<<63);     // this type is unassigned
+
+    const u64 a_aaaa_mask = ((1ULL<<NU16(TYPE_A))|(1ULL<<NU16(TYPE_AAAA)));
+
+
+    TYPES_INIT(dns_rrset_types);
+
+    u32 rr_set_status = 0;
+
     bool ns_points_to_itself = FALSE;
-
-    ya_result return_value = 0;
-    
     bool isapex = zone->apex == label;
-    
-    u8 types[32]; /* I only really care about the types < 256, for any other one I'll use a boolean 'others' */
-
-    ZEROMEMORY(types, sizeof(types));
-   
-#if HAS_DNSSEC_SUPPORT 
-    zdb_packed_ttlrdata *rrsig = zdb_record_find(&label->resource_record_set, TYPE_RRSIG);
-    // the signing key must be known
-    while(rrsig != NULL)
-    {
-        u16 tag = RRSIG_KEY_TAG(rrsig);
-
-        zdb_packed_ttlrdata *rrsig_next = rrsig->next;
-        
-        if(!zdb_sanitize_parms_has_key(parms, tag))
-        {
-            log_warn("signature without key");
-            
-            struct zdb_ttlrdata rrsig_record = {NULL, rrsig->ttl, ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig), 0,  ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig)};
-            
-            zdb_record_delete_self_exact(&label->resource_record_set, TYPE_RRSIG, &rrsig_record);
-        }
-        
-        rrsig = rrsig_next;
-    }
-#endif
+    bool at_delegation = flags & ZDB_RR_LABEL_DELEGATION;
+    bool under_delegation = flags & ZDB_RR_LABEL_UNDERDELEGATION;
 
     btree_iterator iter;
     btree_iterator_init(label->resource_record_set, &iter);
@@ -302,228 +313,491 @@ zdb_sanitize_rr_set_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsname_
 
         if(type != TYPE_RRSIG)
         {
-            u32 ttl = record_list->ttl;
+            s32 ttl = record_list->ttl;
             while((record_list = record_list->next) != NULL)
             {
                 record_list->ttl = ttl;
             }
         }
-
-        if((type & NU16(0xff00)) == 0)
+        else
         {
-            if(type == TYPE_SOA)
+            u16 keytag = rrsig_get_key_tag_from_rdata(ZDB_PACKEDRECORD_PTR_RDATAPTR(record_list), ZDB_PACKEDRECORD_PTR_RDATASIZE(record_list));
+
+            u32_node *node = u32_set_find(&parms->dnskey_set, keytag);
+            if(node != NULL)
             {
-                soa++;
-                not_cname_rrsig_nsec++;
-                not_ns_ds_nsec_rrsig++;
-                not_a_aaaa++;
+                // no key for this signature
+                u16 rrsig_ctype = rrsig_get_type_covered_from_rdata(ZDB_PACKEDRECORD_PTR_RDATAPTR(record_list), ZDB_PACKEDRECORD_PTR_RDATASIZE(record_list));
+                s32 rrsig_ttl = rrsig_get_original_ttl_from_rdata(ZDB_PACKEDRECORD_PTR_RDATAPTR(record_list), ZDB_PACKEDRECORD_PTR_RDATASIZE(record_list));
+                record_list->ttl = rrsig_ttl;
+
+                zdb_packed_ttlrdata *rrsig_ctype_rrset = zdb_record_find(&label->resource_record_set, rrsig_ctype);
+
+                if(rrsig_ctype_rrset != NULL)
+                {
+                    s32 rrsig_ctype_ttl = rrsig_ctype_rrset->ttl;
+                    if(rrsig_ctype_ttl != rrsig_ttl)
+                    {
+                        // signature TTL is wrong
+                        rr_set_status |= SANITY_RRSIGTTLDOESNTMATCH;
+                        parms->has_bogus_rrsig = TRUE;
+                    }
+                }
+                else
+                {
+                    // signature covered type wrong
+                    rr_set_status |= SANITY_RRSIGWITHOUTSET;
+                    parms->has_bogus_rrsig = TRUE;
+
+                    log_warn("zone: sanitize: %{dnsname}: %{dnsnamestack}: RRSIG covers a non-existing resource record set %{dnstype}",
+                            zone->origin, name, &rrsig_ctype);
+                }
+
+                /// @note : maybe also verify RRSIG signature
             }
             else
             {
-                switch(type)
+                rr_set_status |= SANITY_RRSIGWITHOUTKEYS;
+                parms->has_bogus_rrsig = TRUE;
+
+                log_warn("zone: sanitize: %{dnsname}: %{dnsnamestack}: RRSIG made with key with tag=%hu but there is no such key", zone->origin, name, keytag);
+            }
+        }
+
+        if((type & NU16(0xffc0)) == 0) // only handle the 64 first types
+        {
+            if(type == TYPE_SOA)
+            {
+                if(TYPES_HAS(dns_rrset_types, TYPE_SOA))
                 {
-                    case TYPE_CNAME:
-                        not_ns_ds_nsec_rrsig++;
-                        not_a_aaaa++;
-                        break;
-                    case TYPE_NSEC:
-                        nsec++;
-                    case TYPE_RRSIG:
-                        not_a_aaaa++;                        
-                        break;
-                    case TYPE_NS:
-                    case TYPE_DS:
-                        not_cname_rrsig_nsec++;
-                        not_a_aaaa++;
-                        break;
-                    case TYPE_A:
-                    case TYPE_AAAA:
-                        not_cname_rrsig_nsec++;
-                        not_ns_ds_nsec_rrsig++;
-                        a_aaaa++;
-                        break;
-                    default:
-                        not_cname_rrsig_nsec++;
-                        not_ns_ds_nsec_rrsig++;
-                        not_a_aaaa++;
-                        break;
+                    if(isapex)
+                    {
+                        rr_set_status |= SANITY_UNEXPECTEDSOA | SANITY_MUSTDROPZONE;
+                        log_warn("zone: sanitize: %{dnsname}: too many SOA", zone->origin);
+                    }
+                    else
+                    {
+                        rr_set_status |= SANITY_UNEXPECTEDSOA;
+                        log_warn("zone: sanitize: %{dnsname}: %{dnsnamestack}: unexpected SOA", zone->origin, name);
+                    }
+                }
+            }
+
+            TYPES_SET(dns_rrset_types, type); // types bitmap
+        }
+        else
+        {
+            TYPES_SET_OTHER(dns_rrset_types);
+        }
+    }
+
+    parms->types_mask |= dns_rrset_types;
+
+#if ZDB_HAS_DNSSEC_SUPPORT
+    if(parms->load_parms != NULL) // gather information about signature status
+    {
+        if(TYPES_HAS(dns_rrset_types, TYPE_DNSKEY))
+        {
+            const zdb_packed_ttlrdata* dnskey_record_list = zdb_record_find(&label->resource_record_set, TYPE_DNSKEY);
+            const zdb_packed_ttlrdata* dnskey = dnskey_record_list;
+            while(dnskey != NULL)
+            {
+                zdb_zone_load_parms_dnskey_add(parms->load_parms, ZDB_PACKEDRECORD_PTR_RDATAPTR(dnskey), ZDB_PACKEDRECORD_PTR_RDATASIZE(dnskey));
+                dnskey = dnskey->next;
+            }
+        }
+
+        TYPES_INIT(rrsig_covered_types);
+
+        if(TYPES_HAS(dns_rrset_types, TYPE_RRSIG))
+        {
+            // bool has_ds = TYPES_HAS(dns_rrset_types, TYPE_DS);
+
+            const zdb_packed_ttlrdata* rrsig_record_list = zdb_record_find(&label->resource_record_set, TYPE_RRSIG);
+            const zdb_packed_ttlrdata* rrsig = rrsig_record_list;
+            // the signing key must be known
+            while(rrsig != NULL)
+            {
+                u16 covered_type = rrsig_get_type_covered_from_rdata(ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig), ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig));
+
+                u16 flags = zdb_zone_load_parms_get_key_flags_from_rrsig_rdata(parms->load_parms, ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig), ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig));
+
+                if(flags == 0)
+                {
+                    flags = DNSKEY_FLAGS_ZSK; // assume ZSK
                 }
 
-                type = ntohs(type);
+                if((covered_type & NU16(0xffc0)) == 0)
+                {
+                    TYPES_SET(rrsig_covered_types, covered_type); // types bitmap
 
-                SET_TYPE(type);
+                    if(covered_type != TYPE_RRSIG)
+                    {
+                        TYPES_SET(rrsig_covered_types, covered_type); // types bitmap
+
+                        if(flags == DNSKEY_FLAGS_ZSK)
+                        {
+                            if(TYPES_HAS(dns_rrset_types, covered_type))
+                            {
+                                // signed ...
+
+                                // should type signed for NSEC ?            // yes, always at or above delegations
+                                // should type signed for NSEC3 OPTIN ?     // yes, always at or above delegations
+                                // should type signed for NSEC3 OPTOUT ?    // everything but delegations without a DS and under delegations
+
+                                if(at_delegation)
+                                {
+                                    // NS & DS for NSEC & NSEC3IN
+                                    // if has_ds DS for NSEC3OUT
+
+                                    switch(covered_type)
+                                    {
+                                        case TYPE_NS:
+#if SANITIZE_OVERSHARE
+                                            log_warn("sanity: %{dnsnamestack}: N3O: NS at delegation should not be signed", name);
+#endif
+                                            ++parms->nsec3out_extraneous_rrsig;
+                                            break;
+                                        case TYPE_DS:
+                                            break;
+                                        default:
+#if SANITIZE_OVERSHARE
+                                            log_warn("sanity: %{dnsnamestack}: ANY: %{dnstype} at delegation should not be signed", name, &covered_type);
+#endif
+                                            ++parms->nsec_extraneous_rrsig;
+                                            ++parms->nsec3in_extraneous_rrsig;
+                                            ++parms->nsec3out_extraneous_rrsig;
+                                            break;
+                                    }
+                                }
+                                else if(under_delegation)
+                                {
+                                    // nothing
+
+                                    if((dns_rrset_types & ns_ds_mask) == 0)
+                                    {
+#if SANITIZE_OVERSHARE
+                                        log_warn("sanity: %{dnsnamestack}: ANY: %{dnstype} under delegation should not be signed", name, &covered_type);
+#endif
+
+                                        ++parms->nsec_extraneous_rrsig;
+                                        ++parms->nsec3in_extraneous_rrsig;
+                                        ++parms->nsec3out_extraneous_rrsig;
+
+                                        rr_set_status |= SANITY_RRSIGUNDERDELETATION;
+
+                                        log_warn("zone: sanitize: %{dnsname}: %{dnsnamestack}: unexpected RRSIG under a delegation", zone->origin, name);
+                                    }
+                                }
+                                else
+                                {
+                                    // should be signed so it's all right
+                                }
+                            }
+                            else
+                            {
+                                // signature covers a type that's not present
+#if SANITIZE_OVERSHARE
+                                log_warn("sanity: %{dnsnamestack}: ANY: %{dnstype} is signed but not present", name, &covered_type);
+#endif
+                                rr_set_status |= SANITY_RRSIGWITHOUTSET;
+
+                                log_warn("zone: sanitize: %{dnsname}: %{dnsnamestack}: RRSIG covers a non-existing resource record set %{dnstype}",
+                                         zone->origin, name, &covered_type);
+                            }
+                        }
+                        else if(flags == DNSKEY_FLAGS_KSK)
+                        {
+                            if(covered_type != TYPE_DNSKEY)
+                            {
+                                rr_set_status |= SANITY_RRSIGBYKSKOVERNONKEY;
+#if SANITIZE_OVERSHARE
+                                log_warn("sanity: %{dnsnamestack}: ANY: %{dnstype} is signed by a key signing key", name, &covered_type);
+#endif
+                                log_warn("zone: sanitize: %{dnsname}: key-signing-key used to sign a %{dnstype} rrset", zone->origin, &covered_type);
+
+                                ++parms->nsec_extraneous_rrsig;
+                                ++parms->nsec3in_extraneous_rrsig;
+                                ++parms->nsec3out_extraneous_rrsig;
+                            }
+                            else if(!isapex)
+                            {
+#if SANITIZE_OVERSHARE
+                                log_warn("sanity: %{dnsnamestack}: ANY: %{dnstype} is used out of the apex", name, &covered_type);
+#endif
+                                log_warn("zone: sanitize: %{dnsname}: key-signing-key used out of the apex", zone->origin);
+
+                                ++parms->nsec_extraneous_rrsig;
+                                ++parms->nsec3in_extraneous_rrsig;
+                                ++parms->nsec3out_extraneous_rrsig;
+
+                                rr_set_status |= SANITY_RRSIGBYKSKNOTINAPEX;
+                            }
+                        }
+                        else
+                        {
+                            // ignored
+                        }
+
+                    }
+                    else
+                    {
+                        rr_set_status |= SANITY_RRSIGOVERRRSIG;
+                        log_warn("zone: sanitize: %{dnsname}: %{dnsnamestack}: unexpected RRSIG of an RRSIG", zone->origin, name);
+                    }
+                }
+                else
+                {
+                    if(at_delegation)
+                    {
+                        // NS & DS for NSEC & NSEC3IN
+                        // if has_ds DS for NSEC3OUT
+#if SANITIZE_OVERSHARE
+                        log_warn("sanity: %{dnsnamestack}: ANY: %{dnstype} at delegation should not be signed", name, &covered_type);
+#endif
+                        ++parms->nsec_extraneous_rrsig;
+                        ++parms->nsec3in_extraneous_rrsig;
+                        ++parms->nsec3out_extraneous_rrsig;
+                    }
+                    else if(under_delegation)
+                    {
+                        // nothing
+
+                        if((dns_rrset_types & ns_ds_mask) == 0)
+                        {
+#if SANITIZE_OVERSHARE
+                            log_warn("sanity: %{dnsnamestack}: ANY: %{dnstype} under delegation should not be signed", name, &covered_type);
+#endif
+
+                            ++parms->nsec_extraneous_rrsig;
+                            ++parms->nsec3in_extraneous_rrsig;
+                            ++parms->nsec3out_extraneous_rrsig;
+
+                            rr_set_status |= SANITY_RRSIGUNDERDELETATION;
+
+                            log_warn("zone: sanitize: %{dnsname}: %{dnsnamestack}: unexpected RRSIG under a delegation", zone->origin, name);
+                        }
+                        else
+                        {
+                            // we are in the delegation under a delegation case
+                        }
+                    }
+                    else
+                    {
+                        // should be signed so it's all right
+                    }
+
+                    TYPES_SET_OTHER(rrsig_covered_types);
+                }
+
+                zdb_zone_load_parms_rrsig_add(parms->load_parms, ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig), ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig));
+
+                rrsig = rrsig->next;
             }
-        }
-        else
-        {
-            others++;
-        }
-    }
-    /*
-    if(nsec > 0)
-    {
-        u32 max  = ((zone->apex->flags & ZDB_RR_LABEL_NSEC) == 0)?0:1;
-        
-        if(nsec > max)
-        {
-            return_value |= SANITY_TOOMANYNSEC | SANITY_MUSTDROPZONE;
-        }
-    }
-    */
-    /*
-     * Too many SOAs or SOAs not at the APEX
-     */
 
-    if(soa > 0)
-    {
-        if(!isapex)
-        {
-            return_value |= SANITY_UNEXPECTEDSOA | SANITY_TOOMANYSOA;
+            // dns_rrset_types
+            // rrsig_covered_types
 
-            /*
-             * Remove them all
-             */
+            u64 missing_types = dns_rrset_types & ~rrsig_covered_types & not_rrsig_mask;
 
-            zdb_record_delete(&label->resource_record_set, TYPE_SOA);
-        }
-        else
-        {
-            if(soa > 1)
+            // missing type is the mask of missing signatures for types
+
+            if(missing_types != 0)
             {
-                return_value |= SANITY_TOOMANYSOA | SANITY_MUSTDROPZONE;
+                if(at_delegation)
+                {
+                    // NS & DS for NSEC & NSEC3IN
+                    // if has_ds DS for NSEC3OUT
 
-                /*
-                 * DROP
-                 */
+                    if((missing_types & ns_ds_mask) != 0)
+                    {
+                        u8 count = u64_count_bits(missing_types & ns_ds_mask);
+#if SANITIZE_OVERSHARE
+                        log_warn("sanity: %{dnsnamestack}: NSEC,N3I: %i types at delegation are not covered by any signature", name, count);
+#endif
+                        parms->nsec_missing_rrsig += count;
+                        parms->nsec3in_missing_rrsig += count;
+                    }
+
+                    if((missing_types & ds_mask) != 0)
+                    {
+                        u8 count = u64_count_bits(missing_types & ds_mask);
+#if SANITIZE_OVERSHARE
+                        log_warn("sanity: %{dnsnamestack}: N3O: %i types at delegation are not covered by any signature", name, count);
+#endif
+                        parms->nsec3out_missing_rrsig += count;
+                    }
+                }
+                else if(under_delegation)
+                {
+                    // nothing
+                }
+                else
+                {
+                    // everything should be signed
+
+                    u8 count = u64_count_bits(missing_types);
+#if SANITIZE_OVERSHARE
+                    log_warn("sanity: %{dnsnamestack}: ANY: %i types are not covered by any signature", name, count);
+#endif
+                    parms->nsec_missing_rrsig += count;
+                    parms->nsec3in_missing_rrsig += count;
+                    parms->nsec3out_missing_rrsig += count;
+                }
+            }
+        }
+        else // no signature found in this label
+        {
+            // dns_rrset_types
+            // rrsig_covered_types
+
+            u64 missing_types = dns_rrset_types & ~rrsig_covered_types;
+
+            // missing type is the mask of missing signatures for types
+
+            if(missing_types != 0)
+            {
+                if(at_delegation)
+                {
+                    // NS & DS for NSEC & NSEC3IN
+                    // if has_ds DS for NSEC3OUT
+
+                    if((missing_types & ns_ds_mask) != 0)
+                    {
+                        u8 count = u64_count_bits(missing_types & ns_ds_mask);
+#if SANITIZE_OVERSHARE
+                        log_warn("sanity: %{dnsnamestack}: NSEC,N3I: %i types at delegation are not covered by any signature (there are none)", name, count);
+#endif
+                        parms->nsec_missing_rrsig += count;
+                        parms->nsec3in_missing_rrsig += count;
+                    }
+
+                    if((missing_types & ds_mask) != 0)
+                    {
+                        u8 count = u64_count_bits(missing_types & ds_mask);
+#if SANITIZE_OVERSHARE
+                        log_warn("sanity: %{dnsnamestack}: N3O: %i types at delegation are not covered by any signature (there are none)", name, count);
+#endif
+                        parms->nsec3out_missing_rrsig += count;
+                    }
+                }
+                else if(under_delegation)
+                {
+                    // nothing
+                }
+                else
+                {
+                    // everything should be signed
+
+                    u8 count = u64_count_bits(missing_types);
+#if SANITIZE_OVERSHARE
+                    log_warn("sanity: %{dnsnamestack}: ANY: %i types are not covered by any signature (there are none)", name, count);
+#endif
+                    parms->nsec_missing_rrsig += count;
+                    parms->nsec3in_missing_rrsig += count;
+                    parms->nsec3out_missing_rrsig += count;
+                }
             }
         }
     }
-    
-    if(HAS_TYPE(CNAME_TYPE))
+#endif // ZDB_HAS_DNSSEC_SUPPORT
+
+    if(isapex)
     {
-        /*
-         * Cannot accept anything else than RRSIG & NSEC
-         */
-
-        if(!isapex)
-        {
-            if(others + not_cname_rrsig_nsec > 0)
-            {
-                return_value |= SANITY_CNAMENOTALONE;
-
-                /*
-                 * What do I remove ?
-                 */
-            }
-        }
-        else
+        if(TYPES_HAS(dns_rrset_types, TYPE_CNAME))
         {
             /*
              * No CNAME at apex
              */
 
-            return_value |= SANITY_UNEXPECTEDCNAME;
-            
+            rr_set_status |= SANITY_UNEXPECTEDCNAME;
+
             /*
              * Remove them all
              */
 
-            zdb_record_delete(&label->resource_record_set, TYPE_CNAME);
+            log_warn("zone: sanitize: %{dnsname}: %{dnsnamestack}: CNAME record is not allowed at the apex", zone->origin, name);
         }
 
-        /*
-         * Other DNS record types, such as NS, MX, PTR, SRV, etc. that point to other names should never point to a CNAME alias.
-         * => insanely expensive to test
-         */
-    }
-
-    if(HAS_TYPE(DS_TYPE))
-    {
-        if(!isapex)
-        {
-            /*
-             * MUST have an NS with a DS
-             */
-            
-            if(HAS_TYPE(NS_TYPE))
-            {
-                label->flags |= ZDB_RR_LABEL_N3COVERED|ZDB_RR_LABEL_N3OCOVERED;
-            }
-            else
-            {
-                return_value |= SANITY_EXPECTEDNS;
-                label->flags &= ~(ZDB_RR_LABEL_N3COVERED|ZDB_RR_LABEL_N3OCOVERED);
-
-                zdb_record_delete(&label->resource_record_set, TYPE_DS);
-            }
-            
-            
-        }
-        else
-        {
-            /*
-             * cannot have a DS at apex
-             */
-            
-            return_value |= SANITY_UNEXPECTEDDS;
-            
-            /*
-             * Remove them all
-             */
-
-            zdb_record_delete(&label->resource_record_set, TYPE_DS);
-        }
-    }
-    else
-    {
-        /*
-         */
-
-        if(HAS_TYPE(NS_TYPE))
-        {
-            label->flags |= ZDB_RR_LABEL_N3COVERED;
-
-            /*
-             * Need glue ?
-             *
-             * Has glue ?
-             */
-        }
-    }
-
-    if(isapex)
-    {
         /*
          * supposed to have one NS at apex
          */
         
-        if(!HAS_TYPE(NS_TYPE))
+        if(!TYPES_HAS(dns_rrset_types, TYPE_NS))
         {
-            return_value |= SANITY_EXPECTEDNS;
+            rr_set_status |= SANITY_EXPECTEDNS;
 
             /*
              * Just report it
              */
+
+            log_warn("zone: sanitize: %{dnsname}: expected NS record at apex", zone->origin);
+        }
+
+        if(TYPES_HAS(dns_rrset_types, TYPE_DS))
+        {
+            /*
+             * cannot have a DS at apex
+             */
+
+            rr_set_status |= SANITY_UNEXPECTEDDS;
+
+            log_warn("zone: sanitize: %{dnsname}: unexpected DS record at apex", zone->origin);
         }
         
-        label->flags |= ZDB_RR_LABEL_N3COVERED|ZDB_RR_LABEL_N3OCOVERED;
+        zdb_rr_label_flag_or(label, ZDB_RR_LABEL_N3COVERED|ZDB_RR_LABEL_N3OCOVERED);
     }
-    else
+    else // ! apex
     {
-        if(flags & ZDB_RR_LABEL_DELEGATION)
+        if(TYPES_HAS(dns_rrset_types, TYPE_CNAME))
+        {
+            // Cannot accept anything else other than RRSIG & NSEC
+
+            if((TYPES_AND_MASK(dns_rrset_types, not_cmake_nsec_rrsig_mask)) != 0)
+            {
+                rr_set_status |= SANITY_CNAMENOTALONE;
+
+                log_warn("zone: sanitize: %{dnsname}: %{dnsnamestack}: CNAME record can only be next to NSEC and/or RRSIG records", zone->origin, name);
+            }
+
+            /*
+             * Other DNS record types, such as NS, MX, PTR, SRV, etc. that point to other names should never point to a CNAME alias.
+             * => insanely expensive to test
+             */
+        }
+
+        if(TYPES_HAS(dns_rrset_types, TYPE_DS))
+        {
+            /*
+             * MUST have an NS with a DS
+             */
+
+            if(TYPES_HAS(dns_rrset_types, TYPE_NS))
+            {
+                zdb_rr_label_flag_or(label, ZDB_RR_LABEL_N3COVERED|ZDB_RR_LABEL_N3OCOVERED);
+            }
+            else
+            {
+                rr_set_status |= SANITY_EXPECTEDNS;
+                zdb_rr_label_flag_and(label, ~(ZDB_RR_LABEL_N3COVERED|ZDB_RR_LABEL_N3OCOVERED));
+                log_warn("zone: sanitize: %{dnsname}: %{dnsnamestack}: expected NS record or unexpected DS record", zone->origin, name);
+            }
+        }
+
+        if(at_delegation)
         {
 #if SANITIZE_DETECT_MISSING_GLUES
             /// The 3 SANITIZE_DETECT_MISSING_GLUES blocs are for the detection of NS that should have a glue but do not have one.
-            zdb_packed_ttlrdata* ns_record_list;
+            const zdb_packed_ttlrdata* ns_record_list = NULL;
 #endif // SANITIZE_DETECT_MISSING_GLUES
             
-            if(HAS_TYPE(NS_TYPE))
+            if(TYPES_HAS(dns_rrset_types, TYPE_NS))
             {
 #if SANITIZE_DETECT_MISSING_GLUES
                 ns_record_list = zdb_record_find(&label->resource_record_set, TYPE_NS);
                 /* verify if the NS warrants a glue and if said glue exists */
 
-                zdb_packed_ttlrdata* record_list = ns_record_list;
+                const zdb_packed_ttlrdata* record_list = ns_record_list;
 
                 while(record_list != NULL)
                 {
@@ -554,29 +828,33 @@ zdb_sanitize_rr_set_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsname_
             }
             else
             {
-                return_value |= SANITY_EXPECTEDNS;
+                rr_set_status |= SANITY_EXPECTEDNS;
 #if SANITIZE_DETECT_MISSING_GLUES
                 ns_record_list = NULL;
 #endif // SANITIZE_DETECT_MISSING_GLUES
             }
             
-            if(a_aaaa > 0 && parent != NULL)
+            if((TYPES_AND_MASK(dns_rrset_types, a_aaaa_mask) != 0) && (parent != NULL))
             {
                 zdb_sanitize_rr_set_useless_glue(zone, label, name, parent);
             }
             
             /*
-             *  If we have anything excepct NS DS NSEC RRSIG ...
+             *  If we have anything except NS DS NSEC RRSIG ...
              */
-            if(others + not_ns_ds_nsec_rrsig > 0)
+            if(TYPES_AND_MASK(dns_rrset_types, not_ns_ds_nsec_rrsig_mask) != 0)
             {
-                /*
-                 * If A/AAAA is all we have
-                 */
-                if(a_aaaa == others + not_ns_ds_nsec_rrsig)
+                // If A/AAAA is all we have (+ NS and + DS)
+
+                if((TYPES_AND_MASK(dns_rrset_types, not_a_aaaa_ns_ds_mask) == 0) && (TYPES_AND_MASK(dns_rrset_types, a_aaaa_mask) != 0))
                 {
                     //zdb_packed_ttlrdata* record_list = ns_record_list;
-                    zdb_packed_ttlrdata* record_list =zdb_record_find(&label->resource_record_set, TYPE_NS); // sanitize
+                    if(ns_record_list == NULL)
+                    {
+                        ns_record_list = zdb_record_find(&label->resource_record_set, TYPE_NS);
+                    }
+
+                    const zdb_packed_ttlrdata* record_list = ns_record_list; // sanitize
 
                     while(record_list != NULL)
                     {
@@ -590,52 +868,63 @@ zdb_sanitize_rr_set_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsname_
                     }
                 }
 
-                if(! ns_points_to_itself)
+                if(!ns_points_to_itself)
                 {
-                    return_value |= SANITY_TRASHATDELEGATION;
+                    rr_set_status |= SANITY_TRASHATDELEGATION; // A or AAAA record at delegation
                 }
             }
             
-            label->flags |= ZDB_RR_LABEL_N3COVERED;
+            zdb_rr_label_flag_or(label, ZDB_RR_LABEL_N3COVERED); // delegation case
         }
-        else if(flags & ZDB_RR_LABEL_UNDERDELEGATION)
-        {    
-            if(a_aaaa > 0 && parent != NULL)
+        else if(under_delegation)
+        {
+            if((TYPES_AND_MASK(dns_rrset_types, a_aaaa_mask) != 0) && (parent != NULL))
             {
                 zdb_sanitize_rr_set_useless_glue(zone, label, name, parent);
             }
-            if(others + not_a_aaaa > 0)
+
+            if(TYPES_AND_MASK(dns_rrset_types & not_ns_ds_nsec_rrsig_mask, not_a_aaaa_mask) != 0)
             {
-                return_value |= SANITY_TRASHUNDERDELEGATION;
+                rr_set_status |= SANITY_TRASHUNDERDELEGATION;
+
+                log_warn("zone: sanitize: %{dnsname}: %{dnsnamestack}: unexpected types under a delegation", zone->origin, name);
             }
+
+            // zdb_rr_label_flag_or(label, ZDB_RR_LABEL_N3COVERED);
         }
         else // not under delegation either
         {
-            label->flags |= ZDB_RR_LABEL_N3COVERED|ZDB_RR_LABEL_N3OCOVERED;
+#if SANTIZE_DROP_LONELY_DS
+            if(!TYPES_ONLY_HAS(dns_rrset_types, TYPE_DS))
+            {
+                zdb_rr_label_flag_or(label, ZDB_RR_LABEL_N3COVERED|ZDB_RR_LABEL_N3OCOVERED);
+            }
+            else
+            {
+                // lonley DS record
+
+                log_warn("zone: sanitize: %{dnsname}: %{dnsnamestack}: isolated DS record", zone->origin, name);
+
+                u8 name_fqdn[MAX_DOMAIN_LENGTH];
+                dnsname_vector name_vector;
+                dnsname_stack_to_dnsname(name, name_fqdn);
+                dnsname_to_dnsname_vector(name_fqdn, &name_vector);
+                zdb_rr_label_delete_record(zone, name_vector.labels, (name_vector.size - zone->origin_vector.size) - 1, TYPE_ANY);
+
+                rr_set_status |= SANITY_LABEL_DELETED;
+            }
+#else
+            zdb_rr_label_flag_or(label, ZDB_RR_LABEL_N3COVERED|ZDB_RR_LABEL_N3OCOVERED);
+#endif
         }
     }
 
-    if(return_value != 0)
+    if(rr_set_status != 0)
     {
-        return_value |= SANITY_ERROR_BASE;
+        rr_set_status |= SANITY_ERROR_BASE;
     }
 
-    return return_value;
-}
-
-ya_result
-zdb_sanitize_rr_set(zdb_zone *zone, zdb_rr_label *label)
-{
-    zdb_sanitize_parms parms;
-    
-    zdb_sanitize_parms_init(&parms, zone);
-    zdb_sanitize_parms_update_keys(&parms);
-    
-    ya_result return_code = zdb_sanitize_rr_set_ext(&parms, label, NULL, 0, NULL);
-    
-    zdb_sanitize_parms_finalise(&parms);
-    
-    return return_code;
+    return rr_set_status;
 }
 
 static ya_result
@@ -651,11 +940,11 @@ zdb_sanitize_rr_label_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsnam
 
     if((flags & (ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_UNDERDELEGATION)) != 0)
     {
-        label->flags |= ZDB_RR_LABEL_UNDERDELEGATION;
+        zdb_rr_label_flag_or(label, ZDB_RR_LABEL_UNDERDELEGATION);
     }
     else
     {
-        label->flags &= ~ZDB_RR_LABEL_UNDERDELEGATION;
+        zdb_rr_label_flag_and(label, ~ZDB_RR_LABEL_UNDERDELEGATION);
     }
     
     if(parent != NULL)
@@ -663,12 +952,15 @@ zdb_sanitize_rr_label_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsnam
         parent++;
         *parent = label;
     }
-    
-    if(FAIL(return_value = zdb_sanitize_rr_set_ext(parms, label, name, label->flags, parent)))
-    {
-        zdb_sanitize_log(name, return_value);
 
-        if((return_value & SANITY_MUSTDROPZONE) != 0)
+    u32 rr_set_status;
+
+    if((rr_set_status = zdb_sanitize_rr_set_ext(parms, label, name, zdb_rr_label_flag_get(label), parent)) != 0)
+    {
+#if SANITIZE_LABEL_SUMMARY
+        zdb_sanitize_log(name, return_value);
+#endif
+        if((rr_set_status & SANITY_MUSTDROPZONE) != 0)
         {
             /**
              * Can stop here
@@ -677,8 +969,13 @@ zdb_sanitize_rr_label_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsnam
             return ERROR;
         }
     }
+
+    if(rr_set_status & SANITY_LABEL_DELETED)
+    {
+        return SUCCESS;
+    }
     
-    u16 shutdown_test_countdown = 1000;
+    u16 shutdown_test_countdown = 10000;
         
     dictionary_iterator iter;
     dictionary_iterator_init(&label->sub, &iter);
@@ -688,7 +985,7 @@ zdb_sanitize_rr_label_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsnam
 
         dnsname_stack_push_label(name, (*sub_labelp)->name);
 
-        return_value = zdb_sanitize_rr_label_ext(parms, *sub_labelp, name, label->flags, parent);
+        return_value = zdb_sanitize_rr_label_ext(parms, *sub_labelp, name, zdb_rr_label_flag_get(label), parent);
         
         /*
          * If this label is under (or at) delegation
@@ -717,79 +1014,6 @@ zdb_sanitize_rr_label_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsnam
     return SUCCESS;
 }
 
-ya_result
-zdb_sanitize_rr_label(zdb_zone *zone, zdb_rr_label *label, dnsname_stack *name)
-{
-    zdb_sanitize_parms parms;
-    
-    zdb_sanitize_parms_init(&parms, zone);
-    zdb_sanitize_parms_update_keys(&parms);
-    
-    ya_result return_code = zdb_sanitize_rr_label_ext(&parms, label, name, 0, NULL);
-    
-    zdb_sanitize_parms_finalise(&parms);
-    
-    return return_code;
-}
-
-ya_result
-zdb_sanitize_rr_label_with_parent(zdb_zone *zone, zdb_rr_label *label, dnsname_stack *name)
-{
-    zdb_sanitize_parms parms;
-    
-    zdb_sanitize_parms_init(&parms, zone);
-    zdb_sanitize_parms_update_keys(&parms);
-    
-    ya_result return_code = SUCCESS;
-    
-    /*
-     * the parent is at name.size-1
-     * the zone starts at zone->origin_vector.size + 1
-     * be sure not to do it at the apex
-     */
-    
-    if(!ZDB_LABEL_ISAPEX(label))
-    {
-        // note: int index = zone->origin_vector.size + 1;
-        zdb_rr_label* label_stack[128];
-        
-#ifdef DEBUG
-        memset(label_stack, 0xff, sizeof(label_stack));
-#endif
-        
-        zdb_rr_label *parent_label = zdb_rr_label_stack_find(zone->apex, name->labels, name->size, zone->origin_vector.size + 1);
-        
-        if(parent_label != NULL)
-        {
-            label_stack[0] = NULL;
-            label_stack[1] = parent_label;
-
-            return_code =  zdb_sanitize_rr_label_ext(&parms, label, name, parent_label->flags, &label_stack[1]);
-        }
-#ifdef DEBUG
-        zdb_rr_label_stack_find(zone->apex, name->labels, name->size, zone->origin_vector.size + 1);
-#endif
-        if(!RR_LABEL_RELEVANT(label))
-        {
-            u8 name_fqdn[MAX_DOMAIN_LENGTH];
-            dnsname_vector name_vector;
-            dnsname_stack_to_dnsname(name, name_fqdn);
-            dnsname_to_dnsname_vector(name_fqdn, &name_vector);
-            
-            
-            zdb_rr_label_delete_record(zone, name_vector.labels, (name_vector.size - zone->origin_vector.size) - 1, TYPE_ANY);
-        }
-    }
-    else
-    {
-        return_code =  zdb_sanitize_rr_label_ext(&parms, label, name, 0, NULL);
-    }
-    
-    zdb_sanitize_parms_finalise(&parms);
-    
-    return return_code;
-}
-
 #if HAS_NSEC3_SUPPORT
 
 static ya_result
@@ -797,7 +1021,8 @@ zdb_sanitize_zone_nsec3(zdb_sanitize_parms *parms)
 {
     zdb_zone *zone = parms->zone;
     nsec3_zone* n3 = zone->nsec.nsec3;
-    
+    s32 soa_nttl = zone->min_ttl;
+
     while(n3 != NULL)
     {
 #if DNSSEC_DEBUGLEVEL>2
@@ -805,12 +1030,12 @@ zdb_sanitize_zone_nsec3(zdb_sanitize_parms *parms)
         log_debug("dnssec_process_zone_nsec3_body: processing NSEC3 collection");
 #endif
         
-        nsec3_avl_iterator nsec3_items_iter;
-        nsec3_avl_iterator_init(&n3->items, &nsec3_items_iter);
+        nsec3_iterator nsec3_items_iter;
+        nsec3_iterator_init(&n3->items, &nsec3_items_iter);
 
-        if(nsec3_avl_iterator_hasnext(&nsec3_items_iter))
+        if(nsec3_iterator_hasnext(&nsec3_items_iter))
         {
-            nsec3_zone_item* first = nsec3_avl_iterator_next_node(&nsec3_items_iter);
+            nsec3_zone_item* first = nsec3_iterator_next_node(&nsec3_items_iter);
             nsec3_zone_item* item = first;
             nsec3_zone_item* next;
 
@@ -824,9 +1049,9 @@ zdb_sanitize_zone_nsec3(zdb_sanitize_parms *parms)
                     return STOPPED_BY_APPLICATION_SHUTDOWN;
                 }
                 
-                if(nsec3_avl_iterator_hasnext(&nsec3_items_iter))
+                if(nsec3_iterator_hasnext(&nsec3_items_iter))
                 {
-                    next = nsec3_avl_iterator_next_node(&nsec3_items_iter);
+                    next = nsec3_iterator_next_node(&nsec3_items_iter);
                 }
                 else
                 {
@@ -838,20 +1063,21 @@ zdb_sanitize_zone_nsec3(zdb_sanitize_parms *parms)
                 // the signing key must be known
                 while(rrsig != NULL)
                 {
-                    u16 tag = RRSIG_KEY_TAG(rrsig);
 
-                    zdb_packed_ttlrdata *rrsig_next = rrsig->next;
+                    s32 rrsig_ttl = rrsig_get_original_ttl_from_rdata(ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig), ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig));
 
-                    if(!zdb_sanitize_parms_has_key(parms, tag))
+                    if(rrsig_ttl != soa_nttl)
                     {
-                        log_warn("signature without key");
-
-                        struct zdb_ttlrdata rrsig_record = {NULL, rrsig->ttl, ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig), 0,  ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig)};
-                        
-                        nsec3_zone_item_rrsig_del(item, &rrsig_record);
+                        log_warn("%{digest32h}.%{dnsname} RRSIG's TTL does not match the NTTL (%i != %i)", item->digest, zone->origin, rrsig_ttl, soa_nttl);
+                        // RRSIG TTL does not match NTTL
+                        parms->has_bogus_rrsig = TRUE;
                     }
 
-                    rrsig = rrsig_next;
+                    rrsig->ttl = soa_nttl;
+
+                    zdb_zone_load_parms_rrsig_add(parms->load_parms, ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig), ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig));
+
+                    rrsig = rrsig->next;
                 }
 
                 item = next;
@@ -878,17 +1104,17 @@ zdb_sanitize_zone_nsec3(zdb_sanitize_parms *parms)
 #endif
 
 ya_result
-zdb_sanitize_zone(zdb_zone *zone)
+zdb_sanitize_zone_ex(zdb_zone *zone, struct zdb_zone_load_parms *load_parms)
 {
     if(zone->apex == NULL)
     {
         return ERROR;
     }
     
-    zdb_sanitize_parms parms;
+    zdb_sanitize_parms *parmsp = &load_parms->sanitize_parms;
     
-    zdb_sanitize_parms_init(&parms, zone);
-    zdb_sanitize_parms_update_keys(&parms);
+    zdb_sanitize_parms_init(parmsp, zone, load_parms);
+    zdb_sanitize_parms_update_keys(parmsp);
     
     zdb_rr_label* label_stack[256];
     label_stack[0] = NULL;
@@ -896,10 +1122,52 @@ zdb_sanitize_zone(zdb_zone *zone)
     dnsname_stack name;
     dnsname_to_dnsname_stack(zone->origin, &name);
 
-    ya_result return_code = zdb_sanitize_rr_label_ext(&parms, zone->apex, &name, 0, label_stack);
+    ya_result return_code = zdb_sanitize_rr_label_ext(parmsp, zone->apex, &name, 0, label_stack);
+
     if(ISOK(return_code))
     {
 #if HAS_NSEC3_SUPPORT 
+        if((zone_get_maintain_mode(zone) & ZDB_ZONE_MAINTAIN_NSEC3) != 0)
+        {
+            if(zdb_zone_is_nsec3(zone))
+            {
+                return_code = zdb_sanitize_zone_nsec3(parmsp);
+            }
+        }
+#endif
+    }
+
+    load_parms->state |= ZDB_ZONE_LOAD_STATE_SANITIZE_FIELD_AVAIABLE;
+    
+    // zdb_sanitize_parms_finalize(parmsp);
+    
+    return return_code;
+}
+
+ya_result
+zdb_sanitize_zone(zdb_zone *zone)
+{
+    if(zone->apex == NULL)
+    {
+        return ERROR;
+    }
+
+    zdb_sanitize_parms parms;
+
+    zdb_sanitize_parms_init(&parms, zone, NULL);
+    zdb_sanitize_parms_update_keys(&parms);
+
+    zdb_rr_label* label_stack[256];
+    label_stack[0] = NULL;
+
+    dnsname_stack name;
+    dnsname_to_dnsname_stack(zone->origin, &name);
+
+    ya_result return_code = zdb_sanitize_rr_label_ext(&parms, zone->apex, &name, 0, label_stack);
+
+    if(ISOK(return_code))
+    {
+#if HAS_NSEC3_SUPPORT
         if((zone_get_maintain_mode(zone) & ZDB_ZONE_MAINTAIN_NSEC3) != 0)
         {
             if(zdb_zone_is_nsec3(zone))
@@ -909,10 +1177,216 @@ zdb_sanitize_zone(zdb_zone *zone)
         }
 #endif
     }
-    
-    zdb_sanitize_parms_finalise(&parms);
-    
+
+    zdb_sanitize_parms_finalize(&parms);
+
     return return_code;
+}
+
+bool
+zdb_sanitize_is_good_for_chains(struct zdb_zone_load_parms *load_parms, u8 dnssec_mode)
+{
+    if((load_parms->state & ZDB_ZONE_LOAD_STATE_SANITIZE_FIELD_AVAIABLE) != 0)
+    {
+        switch(dnssec_mode)
+        {
+            case ZDB_ZONE_NOSEC:
+            {
+                return TRUE;
+            }
+            case ZDB_ZONE_NSEC:
+            {
+                return !(load_parms->sanitize_parms.has_bogus_rrsig) && (load_parms->sanitize_parms.nsec_missing_rrsig + load_parms->sanitize_parms.nsec_extraneous_rrsig) == 0;
+            }
+            case ZDB_ZONE_NSEC3:
+            {
+                return !(load_parms->sanitize_parms.has_bogus_rrsig) &&(load_parms->sanitize_parms.nsec3in_missing_rrsig + load_parms->sanitize_parms.nsec3in_extraneous_rrsig) == 0;
+            }
+            case ZDB_ZONE_NSEC3_OPTOUT:
+            {
+                return !(load_parms->sanitize_parms.has_bogus_rrsig) &&(load_parms->sanitize_parms.nsec3out_missing_rrsig + load_parms->sanitize_parms.nsec3out_extraneous_rrsig) == 0;
+            }
+            default:
+            {
+                return FALSE;   // unexpected state, assume sanitisaiton is useless
+            }
+        }
+    }
+    else
+    {
+        return dnssec_mode == ZDB_ZONE_NOSEC;   // no sanitisation results available, only consider it "good" if DNSSEC is not used for the zone
+    }
+}
+
+bool
+zdb_sanitize_is_good(struct zdb_zone_load_parms *load_parms, u8 dnssec_mode)
+{
+    if((load_parms->state & ZDB_ZONE_LOAD_STATE_SANITIZE_SUMMARY_AVAILABLE) == 0)
+    {
+        if(zdb_sanitize_is_good_for_chains(load_parms, dnssec_mode))
+        {
+            load_parms->state |= ZDB_ZONE_LOAD_STATE_SANITIZE_SUMMARY_AVAILABLE;
+            return TRUE;
+        }
+        else
+        {
+            load_parms->state |= ZDB_ZONE_LOAD_STATE_SANITIZE_SUMMARY_AVAILABLE|ZDB_ZONE_LOAD_STATE_SANITIZE_SUMMARY_MAINTENANCE_REQUIRED;
+            return FALSE;
+        }
+    }
+    else
+    {
+        return (load_parms->state & ZDB_ZONE_LOAD_STATE_SANITIZE_SUMMARY_MAINTENANCE_REQUIRED) == 0;
+    }
+}
+
+static void
+zdb_sanitize_zone_rrset_flags_records(zdb_rr_label *label, dnsname_stack *name, u16 flags, zdb_rr_label** parent)
+{
+    (void)name;
+    (void)parent;
+
+    TYPES_INIT(dns_rrset_types);
+
+    bool under_delegation = flags & ZDB_RR_LABEL_UNDERDELEGATION;
+
+    if(under_delegation)
+    {
+        zdb_rr_label_flag_and(label, ~(ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_N3COVERED|ZDB_RR_LABEL_N3OCOVERED));
+        return;
+    }
+
+    bool at_delegation = flags & ZDB_RR_LABEL_DELEGATION;
+
+    if(at_delegation)
+    {
+        zdb_rr_label_flag_or(label, ZDB_RR_LABEL_N3COVERED); // delegation case
+
+        btree_iterator iter;
+        btree_iterator_init(label->resource_record_set, &iter);
+
+        while(btree_iterator_hasnext(&iter))
+        {
+            btree_node* node = btree_iterator_next_node(&iter);
+            u16 type = node->hash;
+
+            zdb_packed_ttlrdata* record_list = (zdb_packed_ttlrdata*)node->data;
+
+            if(type != TYPE_RRSIG)
+            {
+                s32 ttl = record_list->ttl;
+                while((record_list = record_list->next) != NULL)
+                {
+                    record_list->ttl = ttl;
+                }
+            }
+
+            if((type & NU16(0xffc0)) == 0) // only handle the 64 first types
+            {
+                TYPES_SET(dns_rrset_types, type); // types bitmap
+            }
+            else
+            {
+                TYPES_SET_OTHER(dns_rrset_types);
+            }
+
+            if(TYPES_HAS(dns_rrset_types, TYPE_DS))
+            {
+                /*
+                 * MUST have an NS with a DS
+                 */
+
+                if(TYPES_HAS(dns_rrset_types, TYPE_NS))
+                {
+                    zdb_rr_label_flag_or(label, ZDB_RR_LABEL_N3COVERED|ZDB_RR_LABEL_N3OCOVERED);
+                }
+                else
+                {
+                    zdb_rr_label_flag_and(label, ~ZDB_RR_LABEL_N3OCOVERED);
+                }
+            }
+        }
+
+        return;
+    }
+
+    // not under delegation either
+
+    zdb_rr_label_flag_or(label, ZDB_RR_LABEL_N3COVERED|ZDB_RR_LABEL_N3OCOVERED);
+}
+
+static ya_result
+zdb_sanitize_zone_rrset_flags_label(zdb_rr_label *label, dnsname_stack *name, u16 flags, zdb_rr_label **parent)
+{
+    u16 shutdown_test_countdown = 10000;
+
+    ya_result ret = SUCCESS;
+
+    if((flags & (ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_UNDERDELEGATION)) != 0)
+    {
+        zdb_rr_label_flag_or(label, ZDB_RR_LABEL_UNDERDELEGATION);
+    }
+    else
+    {
+        zdb_rr_label_flag_and(label, ~ZDB_RR_LABEL_UNDERDELEGATION);
+    }
+
+    zdb_sanitize_zone_rrset_flags_records(label, name, zdb_rr_label_flag_get(label), parent);
+
+    dictionary_iterator iter;
+    dictionary_iterator_init(&label->sub, &iter);
+    while(dictionary_iterator_hasnext(&iter))
+    {
+        zdb_rr_label **sub_labelp = (zdb_rr_label**)dictionary_iterator_next(&iter);
+
+        dnsname_stack_push_label(name, (*sub_labelp)->name);
+
+        ret = zdb_sanitize_zone_rrset_flags_label(*sub_labelp, name, zdb_rr_label_flag_get(label), parent);
+
+        /*
+         * If this label is under (or at) delegation
+         *   For each A/AAAA record
+         *     Ensure there are NS at delegation linked to said records.
+         */
+
+        dnsname_stack_pop_label(name);
+
+        if(FAIL(ret))
+        {
+            return ret;
+        }
+
+        if(--shutdown_test_countdown == 0)
+        {
+            if(dnscore_shuttingdown())
+            {
+                return STOPPED_BY_APPLICATION_SHUTDOWN;
+            }
+
+            shutdown_test_countdown = 1000;
+        }
+    }
+
+    return ret;
+}
+
+ya_result
+zdb_sanitize_zone_rrset_flags(zdb_zone *zone)
+{
+    if(zone->apex == NULL)
+    {
+        return ERROR;
+    }
+
+    zdb_rr_label* label_stack[256];
+    label_stack[0] = NULL;
+
+    dnsname_stack name;
+    dnsname_to_dnsname_stack(zone->origin, &name);
+
+    ya_result ret = zdb_sanitize_zone_rrset_flags_label(zone->apex, &name, 0, label_stack);
+
+    return ret;
 }
 
 /** @} */

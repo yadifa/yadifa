@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnscore
  *  @ingroup dnscore
  *  @brief Functions used to manipulate dns formatted names and labels
@@ -46,12 +47,41 @@
  * @{
  */
 
+#define DNSNAME_C_ 1
+
 #include "dnscore/dnscore-config.h"
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <ctype.h>
 
 #include "dnscore/dnscore-config.h"
+#include "dnscore/sys_types.h"
+
+
+const u8 __LOCASE_TABLE__[256] =
+{
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+
+    0x40, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f,
+    0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
+    0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f,
+    0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
+
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
+    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
+    0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7, 0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf,
+    0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf,
+
+    0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7, 0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf,
+    0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7, 0xd8, 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf,
+    0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7, 0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
+    0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
+};
+
 
 #include "dnscore/dnsname.h"
 #include "dnscore/rfc.h"
@@ -1500,6 +1530,7 @@ cstr_to_locase_dnsname_with_check_len_with_origin(u8* name_parm, const char* tex
             
             text += 2;
             label_start += 2;
+            text_len -= 2;
             p += 2;
         }
         else                    // '*????'
@@ -1748,7 +1779,7 @@ cstr_get_dnsname_len(const char* str)
 u32
 dnsname_to_cstr(char* dest_cstr, const u8* name)
 {
-#if defined(DEBUG)
+#if DEBUG
     yassert(name != NULL);
 #endif
     
@@ -1792,7 +1823,7 @@ dnsname_to_cstr(char* dest_cstr, const u8* name)
 
 /* ELEVEN uses */
 
-#if DNSCORE_HAS_MEMALIGN_ISSUES == 0
+#if !DNSCORE_HAS_MEMALIGN_ISSUES
 
 bool
 dnslabel_equals(const u8* name_a, const u8* name_b)
@@ -1872,10 +1903,10 @@ dnslabel_equals(const u8* name_a, const u8* name_b)
  *  @return Returns TRUE if names are equal, else FALSE.
  */
 
-#if DNSCORE_HAS_MEMALIGN_ISSUES == 0
+#if !DNSCORE_HAS_MEMALIGN_ISSUES
 
 bool
-dnslabel_equals_ignorecase_left(const u8* name_a, const u8* name_b)
+dnslabel_equals_ignorecase_left1(const u8* name_a, const u8* name_b)
 {
     int len = (int)* name_a;
 
@@ -1917,6 +1948,131 @@ dnslabel_equals_ignorecase_left(const u8* name_a, const u8* name_b)
     assert(FALSE); /* NOT zassert */
     
     return FALSE;
+}
+
+bool
+dnslabel_equals_ignorecase_left2(const u8* name_a, const u8* name_b)
+{
+    int len = (int)* name_a;
+
+    if(len != (int)* name_b)
+    {
+        return FALSE;
+    }
+
+    for(int i = 1; i < len; ++i)
+    {
+        //if(__LOCASE_TABLE__[name_a[i]] != __LOCASE_TABLE__[name_b[i]])
+        if(name_a[i] != __LOCASE_TABLE__[name_b[i]])
+        {
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
+bool
+dnslabel_equals_ignorecase_left3(const u8* name_a, const u8* name_b)
+{
+    int len = (int)* name_a;
+
+    if(len != (int)* name_b)
+    {
+        return FALSE;
+    }
+
+    for(name_a++, name_b++; len > 4; len -= 4, name_a += 4, name_b += 4)
+    {
+        //if(__LOCASE_TABLE__[name_a[i]] != __LOCASE_TABLE__[name_b[i]])
+        u32 w = GET_U32_AT_P(name_a);
+        u32 x = GET_U32_AT_P(name_b);
+
+        if((w & 0xff) != __LOCASE_TABLE__[x & 0xff])
+        {
+            return FALSE;
+        }
+
+        w >>= 8;
+        x >>= 8;
+
+        if((w & 0xff) != __LOCASE_TABLE__[x & 0xff])
+        {
+            return FALSE;
+        }
+
+        w >>= 8;
+        x >>= 8;
+
+        if((w & 0xff) != __LOCASE_TABLE__[x & 0xff])
+        {
+            return FALSE;
+        }
+
+        w >>= 8;
+        x >>= 8;
+
+        if((w) != __LOCASE_TABLE__[x])
+        {
+            return FALSE;
+        }
+    }
+
+    for(int i = 0; i < len; ++i)
+    {
+        //if(__LOCASE_TABLE__[name_a[i]] != __LOCASE_TABLE__[name_b[i]])
+        if(name_a[i] != __LOCASE_TABLE__[name_b[i]])
+        {
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
+bool
+dnslabel_equals_ignorecase_left4(const u8* name_a, const u8* name_b)
+{
+    int len = (int)* name_a;
+
+    if(len != (int)* name_b)
+    {
+        return FALSE;
+    }
+
+    for(name_a++, name_b++; len > 4; len -= 4, name_a += 4, name_b += 4)
+    {
+        //if(__LOCASE_TABLE__[name_a[i]] != __LOCASE_TABLE__[name_b[i]])
+        u32 w = GET_U32_AT_P(name_a);
+        u32 x = GET_U32_AT_P(name_b);
+
+        u32 z = (u32)__LOCASE_TABLE__[x & 0xff] |
+                ((u32)__LOCASE_TABLE__[(x >> 8) & 0xff] << 8) |
+                ((u32)__LOCASE_TABLE__[(x >> 16) & 0xff] << 16) |
+                ((u32)__LOCASE_TABLE__[(x >> 24) & 0xff] << 24);
+
+        if(w != z)
+        {
+            return FALSE;
+        }
+    }
+
+    for(int i = 0; i < len; ++i)
+    {
+        //if(__LOCASE_TABLE__[name_a[i]] != __LOCASE_TABLE__[name_b[i]])
+        if(name_a[i] != __LOCASE_TABLE__[name_b[i]])
+        {
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
+bool
+dnslabel_equals_ignorecase_left5(const u8* name_a, const u8* name_b)
+{
+    return strcasecmp((const char*)name_a, (const char*)name_b) == 0;
 }
 
 #else
@@ -2011,6 +2167,7 @@ dnsname_compare(const u8* name_a, const u8* name_b)
 bool
 dnsname_is_subdomain(const u8* subdomain, const u8* domain)
 {
+#if !HAS_FULL_ASCII7
     u32 len = dnsname_len(domain);
     u32 sub_len = dnsname_len(subdomain);
     
@@ -2024,6 +2181,28 @@ dnsname_is_subdomain(const u8* subdomain, const u8* domain)
             return ret == 0;
         }
     }
+#else
+    dnsname_stack subdomain_stack;
+    dnsname_stack domain_stack;
+    s32 subdomain_top = dnsname_to_dnsname_stack(subdomain, &subdomain_stack);
+    s32 domain_top = dnsname_to_dnsname_stack(domain, &domain_stack);
+
+    if(subdomain_top >= domain_top)
+    {
+        for(int i = 0; i <= domain_top; ++i)
+        {
+            const u8 *sublabel = subdomain_stack.labels[i];
+            const u8 *label = domain_stack.labels[i];
+
+            if(!dnslabel_equals(sublabel, label))
+            {
+                return FALSE;
+            }
+        }
+
+        return TRUE;
+    }
+#endif
     
     return FALSE;
 }
@@ -2041,7 +2220,7 @@ dnsname_is_subdomain(const u8* subdomain, const u8* domain)
 /* TWO uses */
 
 bool
-dnsname_equals_ignorecase(const u8* name_a, const u8* name_b)
+dnsname_equals_ignorecase1(const u8* name_a, const u8* name_b)
 {
     int len;
 
@@ -2074,6 +2253,45 @@ dnsname_equals_ignorecase(const u8* name_a, const u8* name_b)
     return FALSE;
 }
 
+bool
+dnsname_equals_ignorecase2(const u8* name_a, const u8* name_b)
+{
+    int len;
+
+    for(int i = 0;; ++i)
+    {
+        len = (int)name_a[i];
+
+        if(len != (int)name_b[i])
+        {
+            return FALSE;
+        }
+
+        if(len == 0)
+        {
+            return TRUE;
+        }
+
+        len += i;
+
+        for(; i < len; ++i)
+        {
+            if(__LOCASE_TABLE__[name_a[i]] != __LOCASE_TABLE__[name_b[i]])
+            {
+                return FALSE;
+            }
+        }
+    }
+}
+
+bool
+dnsname_equals_ignorecase3(const u8* name_a, const u8* name_b)
+{
+    int len_a = dnsname_len(name_a);
+    int len_b = dnsname_len(name_b);
+    return ((len_a == len_b) && (strncasecmp((const char*)name_a, (const char*)name_b, len_a) == 0));
+}
+
 /** @brief Returns the full length of a dns name
  *
  *  Returns the full length of a dns name
@@ -2097,6 +2315,37 @@ dnsname_len(const u8 *name)
     while((c = *name++) > 0)
     {
         name += c;
+    }
+
+    return name - start;
+}
+
+s32
+dnsname_len_with_limit(const u8 *name, const u8 *name_limit)
+{
+    yassert(name != NULL);
+    
+    const u8 *start = name;
+
+    u8 c;
+
+    for(;;)
+    {
+        if(name >= name_limit)
+        {
+            return DOMAINNAME_INVALID;
+        }
+        
+        c = *name;
+        
+        name += c;
+        
+        if(c == 0)
+        {
+            break;
+        }
+        
+        ++name;
     }
 
     return name - start;
@@ -2131,6 +2380,16 @@ dnsname_dup(const u8* src)
     MEMCOPY(dst, src, len);
 
     return dst;
+}
+
+void
+dnsname_free(u8* ptr)
+{
+#if DEBUG
+    u32 len = dnsname_len(ptr);
+    memset(ptr, 0xfe, len);
+#endif
+    free(ptr);
 }
 
 /* ONE use */
@@ -2249,9 +2508,9 @@ dnslabel_vector_dnslabel_to_dnsname(const u8 *prefix, const dnsname_vector *name
     str += len + 1;
 
     const_dnslabel_vector_reference name = &namestack->labels[bottom];
-    u32 top = namestack->size;
+    u32 top = (u32)namestack->size;
 
-    while(bottom <= top)
+    while(bottom <= (s32)top)
     {
         const u8* label = *name++;
         u32 len = *label;
@@ -2412,16 +2671,24 @@ u32
 dnslabel_stack_to_cstr(const_dnslabel_stack_reference name, s32 top, char* str)
 {
     char* start = str;
-    while(top >= 0)
+    if(top >= 0)
     {
-        const u8* label = name[top];
-        u8 len = *label++;
+        do
+        {
+            const u8* label = name[top];
+            u8 len = *label++;
 
-        MEMCOPY(str, label, len);
-        str += len;
+            MEMCOPY(str, label, len);
+            str += len;
 
+            *str++ = '.';
+            top--;
+        }
+        while(top >= 0);
+    }
+    else
+    {
         *str++ = '.';
-        top--;
     }
     *str++ = '\0';
 
@@ -2607,7 +2874,7 @@ dnsname_stack_pop_label(dnsname_stack* name)
 {
     yassert(name != NULL);
     
-#ifdef DEBUG
+#if DEBUG
     name->labels[name->size] = (u8*)~0;
 #endif
 
@@ -2663,7 +2930,7 @@ dnsname_zdup(const u8* name)
 
     u8* dup;
 
-    ZALLOC_ARRAY_OR_DIE(u8*, dup, len, ZDB_NAME_TAG);
+    ZALLOC_OBJECT_ARRAY_OR_DIE(dup, u8, len, ZDB_NAME_TAG);
     MEMCOPY(dup, name, len); // nothing wrong here
 
     return dup;
@@ -2684,11 +2951,18 @@ dnsname_zdup_from_name(const char* domainname)
     yassert(domainname != NULL);
 
     u32 len = cstr_get_dnsname_len(domainname);
-
+    ya_result ret;
     u8* dup;
 
-    ZALLOC_ARRAY_OR_DIE(u8*, dup, len, ZDB_NAME_TAG);
-    cstr_to_dnsname(dup, domainname);
+    ZALLOC_OBJECT_ARRAY_OR_DIE(dup, u8, len, ZDB_NAME_TAG);
+    if(ISOK(ret = cstr_to_dnsname_with_check(dup, domainname)))
+    {
+    }
+    else
+    {
+        ZFREE_ARRAY(dup, len);
+        dup = NULL;
+    }
     
     return dup;
 }
@@ -2716,7 +2990,7 @@ dnslabel_zdup(const u8* name)
     u32 len = name[0] + 1;
 
     u8* dup;
-    ZALLOC_ARRAY_OR_DIE(u8*, dup, len, ZDB_LABEL_TAG);
+    ZALLOC_OBJECT_ARRAY_OR_DIE(dup, u8, len, ZDB_LABEL_TAG);
     MEMCOPY(dup, name, len);
 
     return dup;
@@ -2727,6 +3001,178 @@ dnslabel_zfree(u8 *name)
 {
     u32 len = name[0] + 1;
     ZFREE_ARRAY(name, len);
+    (void)len; // silences warning  on some build settings
+}
+
+/**
+ * 
+ * Expands a compressed FQDN from a wire.
+ * 
+ * @param wire_base_ the address of the wire buffer
+ * @param wire_size the size of the wire buffer
+ * @param compressed_fqdn the address, in the wire buffer, of the FQDN to expand
+ * @param output_fqdn the address of the buffer that will get a copy of the expanded FQDN
+ * @param output_fqdn_size the size of the buffer that will get a a copy of the expanded FQDN
+ * 
+ * @return a pointer to the next byte after the expanded FQDN (ie: points to a type) or NULL if an error occurred
+ */
+
+const u8*
+dnsname_expand_compressed(const void *wire_base_, size_t wire_size, const void *compressed_fqdn, u8 *output_fqdn, u32 output_fqdn_size)
+{
+    const u8 *base = (const u8*)wire_base_;
+    const u8 *p_limit = &base[wire_size];
+
+    yassert(output_fqdn_size >= MAX_DOMAIN_LENGTH);
+
+    u8 *buffer = output_fqdn;
+    u8 * const buffer_limit = &buffer[output_fqdn_size];  // pointer to the byte that must never be reached
+    const u8 *p = (const u8*)compressed_fqdn;
+    const u8 *ret_ptr;
+
+    if((p < base) || (p >= p_limit))
+    {
+        return NULL; /* EOF */
+    }
+
+    for(;;)
+    {
+        u8 len = *p++;  // get the next byte (length)
+
+        if((len & 0xc0) == 0xc0)    // test if it's a compressed code
+        {
+            ret_ptr = p + 1;
+
+            /* reposition the pointer */
+            u32 new_offset = len & 0x3f;
+            new_offset <<= 8;
+            new_offset |= *p;
+
+            p = &base[new_offset];
+
+            if(p < p_limit) // ensure we are not outside the message
+            {
+                break;
+            }
+
+            return NULL;
+        }
+
+        if((p + len >= p_limit) || (buffer + len + 1 >= buffer_limit))
+        {
+            return NULL;
+        }
+
+        *buffer++ = len;
+
+        if(len == 0)
+        {
+            return p;
+        }
+
+        u8 *label_limit = &buffer[len];
+        do
+        {
+            *buffer++ = tolower(*p++);
+        }
+        while(buffer < label_limit);
+    }
+
+    for(;;)
+    {
+        u8 len = *p;
+
+        if((len & 0xc0) == 0xc0) /* EDF: better yet: cmp len, 192; jge  */
+        {
+            /* reposition the pointer */
+            u32 new_offset = len & 0x3f;
+            new_offset <<= 8;
+            new_offset |= p[1];
+
+            const u8* q = &base[new_offset];
+            
+            if(q < p)
+            {
+                p = q;
+                continue;
+            }
+            
+            return NULL;
+        }
+
+        if((p + len >= p_limit) || (buffer + len + 1>= buffer_limit))
+        {
+            return NULL;
+        }
+
+        *buffer++ = len;
+
+        if(len == 0)
+        {
+            return ret_ptr;
+        }
+        
+        ++p;
+
+        u8 *label_limit = &buffer[len];
+        do
+        {
+            *buffer++ = tolower(*p++);
+        }
+        while(buffer < label_limit);
+    }
+    
+    // never reached
+}
+
+/**
+ * 
+ * Skip a compressed FQDN from a wire to position right after the FQDN.
+ * 
+ * @param wire_base_ the address of the wire buffer
+ * @param wire_size the size of the wire buffer
+ * @param compressed_fqdn the address, in the wire buffer, of the FQDN to expand
+ * 
+ * @return a pointer to the next byte after the FQDN (ie: points to a type) or NULL if an error occurred
+ */
+
+const u8*
+dnsname_skip_compressed(const void *wire_base_, size_t wire_size, const void *compressed_fqdn)
+{
+    const u8 *base = (const u8*)wire_base_;
+    
+    const u8 *p_limit = &base[wire_size];
+
+    const u8 *p = (const u8*)compressed_fqdn;
+
+    if((p < base) || (p >= p_limit))
+    {
+        return NULL; /* EOF */
+    }
+
+    for(;;)
+    {
+        u8 len = *p++;
+
+        if((len & 0xc0) == 0xc0)
+        {
+            return p + 1;   // yes, read the purpose of the function
+        }
+
+        if(len == 0)
+        {
+            return p;
+        }
+        
+        p += len;
+
+        if(p >= p_limit)
+        {
+            return NULL;
+        }
+    }
+
+    // never reached
 }
 
 /** @} */

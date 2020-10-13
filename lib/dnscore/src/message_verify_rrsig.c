@@ -1,42 +1,44 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 #include "dnscore/dnscore-config.h"
 #include "dnscore/sys_types.h"
 #include "dnscore/message_verify_rrsig.h"
 #include "dnscore/packet_reader.h"
 #include "dnscore/format.h"
 #include "dnscore/ptr_set.h"
+#include "dnscore/logger.h"
 
 extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
@@ -50,18 +52,61 @@ extern logger_handle *g_system_logger;
 #define RRSVFQDN_TAG 0x4e44514656535252
 #define MSGVRDTT_TAG 0x545444525647534d
 
+void
+message_verify_rrsig_format_handler(const void *result_u8_ptr, output_stream *os, s32 p0, char p1, bool p2, void* reserved_for_method_parameters)
+{
+    (void)p0;
+    (void)p1;
+    (void)p2;
+    (void)reserved_for_method_parameters;
+
+    u8 flag = *(u8*)result_u8_ptr;
+    static const char *separator = ",";
+    int separator_size = 0;
+
+    if(flag & MESSAGE_VERIFY_RRSIG_NOTSIGNED)
+    {
+        output_stream_write(os, "not-signed", 10);
+        separator_size = 1;
+    }
+    if(flag & MESSAGE_VERIFY_RRSIG_WRONG)
+    {
+        output_stream_write(os, separator, separator_size);
+        output_stream_write(os, "wrong", 5);
+        separator_size = 1;
+    }
+    if(flag & MESSAGE_VERIFY_RRSIG_VERIFIED)
+    {
+        output_stream_write(os, separator, separator_size);
+        output_stream_write(os, "verified", 8);
+        separator_size = 1;
+    }
+    if(flag & MESSAGE_VERIFY_RRSIG_TIMEFRAME)
+    {
+        output_stream_write(os, separator, separator_size);
+        output_stream_write(os, "wrong-time-frame", 16);
+        separator_size = 1;
+    }
+    if(flag & MESSAGE_VERIFY_RRSIG_NOKEY)
+    {
+        output_stream_write(os, separator, separator_size);
+        output_stream_write(os, "no-key", 6);
+    }
+}
+
+
 static s32
 message_verify_rrsig_compute_digest(const u8 *owner, u16 rtype, u16 rclass,
                                     const u8 *rrsig_rdata, u32 rrsig_rdata_size,
                                     ptr_vector *rrset_canonised_rdata,
-                                    u8 *out_digest, u32 out_digest_size)
+                                    digest_s *ctx_ptr)
 {
     log_debug6("message_verify_rrsig_compute_digest(%{dnsname},%{dnstype},%{dnsclass},@%p,%u,@%p,@%p)",
-                    owner, &rtype, &rclass, rrsig_rdata, rrsig_rdata_size, rrset_canonised_rdata, out_digest);
+                    owner, &rtype, &rclass, rrsig_rdata, rrsig_rdata_size, rrset_canonised_rdata, ctx_ptr);
 
     u8 rr_header[2 + 2 + 4];
     
-    if(rrsig_rdata_size < 18)
+    if(rrsig_rdata_size < RRSIG_RDATA_HEADER_LEN)
     {
         return INCORRECT_RDATA;
     }
@@ -79,54 +124,45 @@ message_verify_rrsig_compute_digest(const u8 *owner, u16 rtype, u16 rclass,
     SET_U16_AT(rr_header[2], rclass);
     SET_U32_AT(rr_header[4], rttl);
     
-    digest_s ctx;
-    
     ya_result err;
-    if(FAIL(err = dnskey_digest_init(&ctx, rrsig_rdata[2])))
+    if(FAIL(err = dnskey_digest_init(ctx_ptr, rrsig_rdata[2])))
     {
         log_err("message_verify_rrsig_compute_digest: %r", err);
         return err;
     }
-    
-    if(digest_get_size(&ctx) > out_digest_size)
-    {
-        return RRSIG_OUTPUT_DIGEST_SIZE_TOO_BIG;
-    }
-    
-    out_digest_size = digest_get_size(&ctx);
 
     /*
      * Type covered | algorithm | labels | original_ttl | exp | inception | tag | origin
      *
      */
     
-    u32 rrsig_rdata_prefix_size = 18 + dnsname_len(&rrsig_rdata[18]);
+    u32 rrsig_rdata_prefix_size = RRSIG_RDATA_HEADER_LEN + dnsname_len(&rrsig_rdata[RRSIG_RDATA_HEADER_LEN]);
         
-    digest_update(&ctx, rrsig_rdata, rrsig_rdata_prefix_size);
+    digest_update(ctx_ptr, rrsig_rdata, rrsig_rdata_prefix_size);
     
-#ifdef DEBUG
+#if DEBUG
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG6, rrsig_rdata, rrsig_rdata_prefix_size, 32);
 #endif
     
     for(s32 i = 0; i <= rrset_canonised_rdata->offset; i++)
     {
-        digest_update(&ctx, owner, owner_len);
+        digest_update(ctx_ptr, owner, owner_len);
         
-#ifdef DEBUG
+#if DEBUG
         log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG6, owner, owner_len, 32);
 #endif
         
-        digest_update(&ctx, rr_header, sizeof(rr_header));
+        digest_update(ctx_ptr, rr_header, sizeof(rr_header));
         
-#ifdef DEBUG
+#if DEBUG
         log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG6, rr_header, sizeof(rr_header), 32);
 #endif
         
         u8 *rdata_size_rdata = (u8*)rrset_canonised_rdata->data[i];
         u16 rdata_size = ntohs(GET_U16_AT(rdata_size_rdata[0]));
-        digest_update(&ctx, rdata_size_rdata, rdata_size + 2);
+        digest_update(ctx_ptr, rdata_size_rdata, rdata_size + 2);
            
-#ifdef DEBUG
+#if DEBUG
         log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG6, rdata_size_rdata, rdata_size + 2, 32);
 #endif
     }
@@ -135,26 +171,26 @@ message_verify_rrsig_compute_digest(const u8 *owner, u16 rtype, u16 rclass,
      * Retrieve the digest
      */
 
-    digest_final(&ctx, out_digest, out_digest_size);
-    
-#ifdef DEBUG
+    digest_final(ctx_ptr);
+
+#if DEBUG
     log_debug6("digest:");
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG6, out_digest, out_digest_size, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG6, digest_get_digest_ptr(ctx_ptr), digest_get_size(ctx_ptr), 32);
 #endif
 
-#if RRSIG_DUMP!=0
+#if RRSIG_DUMP
     log_debug5("rrsig: digest:");
     log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG5, digest_out, out_digest_size, 32, OSPRINT_DUMP_HEX);
 #endif
     
-    return out_digest_size;
+    return digest_get_size(ctx_ptr);
 }
 
 static int
 message_verify_canonize_sort_rdata_compare(const void *a, const void *b)
 {
-    u8* ptr_a = *((u8**)a);
-    u8* ptr_b = *((u8**)b);
+    u8* ptr_a = (u8*)a;
+    u8* ptr_b = (u8*)b;
     
     u16 rr_a_size = ntohs(GET_U16_AT(ptr_a[0]));
     u16 rr_b_size = ntohs(GET_U16_AT(ptr_b[0]));
@@ -189,6 +225,11 @@ message_verify_canonize_sort_rdata_compare(const void *a, const void *b)
 static ya_result
 message_verify_rrsig_result_default_handler(const message_data *mesg, const struct dnskey_keyring *keyring, const message_verify_rrsig_result_s *result, void *args)
 {
+    (void)mesg;
+    (void)keyring;
+    (void)result;
+    (void)args;
+
     return MESSAGE_VERIFY_RRSIG_FEEDBACK_CONTINUE;
 }
 
@@ -222,7 +263,7 @@ static int message_verify_rrsig_node_compare(const void *key_a, const void *key_
 static void
 message_verify_rrsig_init(ptr_set *section_type_fqdn)
 {
-    ptr_set_avl_init(section_type_fqdn);
+    ptr_set_init(section_type_fqdn);
     section_type_fqdn->compare = message_verify_rrsig_node_compare;
 }
 
@@ -230,24 +271,24 @@ static void
 message_verify_rrsig_set_flag(ptr_set *section_type_fqdn, const u8 *type_record_fqdn, u32 type_record_fqdn_len, u8 flag_bits)
 {
     // create the type-fqdn entry if needed
-    ptr_node *type_fqdn_node = ptr_set_avl_find(section_type_fqdn, type_record_fqdn);
+    ptr_node *type_fqdn_node = ptr_set_find(section_type_fqdn, type_record_fqdn);
     if(type_fqdn_node == NULL)
     {
-#ifdef DEBUG
+#if DEBUG
         log_debug7("message_verify_rrsig: new node %{dnsname} %{dnstype}", type_record_fqdn + 2, type_record_fqdn);
 #endif
         
         u8 *type_record_fqdn_copy;
         MALLOC_OR_DIE(u8*,type_record_fqdn_copy, type_record_fqdn_len, RRSVFQDN_TAG);
         memcpy(type_record_fqdn_copy, type_record_fqdn, type_record_fqdn_len);
-        type_fqdn_node = ptr_set_avl_insert(section_type_fqdn, type_record_fqdn_copy);
+        type_fqdn_node = ptr_set_insert(section_type_fqdn, type_record_fqdn_copy);
         type_fqdn_node->value = NULL; // has records, has verified signatures, has wrong signatures, has unknown signatures
 
         // the next phase will scan for each of there types instead
     }
     intptr flag = (intptr)type_fqdn_node->value;
     
-#ifdef DEBUG
+#if DEBUG
     log_debug7("message_verify_rrsig: set node %{dnsname} %{dnstype} %x => %x", type_record_fqdn + 2, type_record_fqdn, flag, flag | flag_bits);
 #endif
     
@@ -265,7 +306,7 @@ static void
 message_verify_rrsig_clear(ptr_set *section_type_fqdn)
 {
     // create the type-fqdn entry if needed
-    ptr_set_avl_callback_and_destroy(section_type_fqdn, message_verify_rrsig_clear_callback);
+    ptr_set_callback_and_destroy(section_type_fqdn, message_verify_rrsig_clear_callback);
 }
 
 /**
@@ -323,9 +364,7 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
     result.section = 0;
     result.ctype = 0;
     
-    packet_reader_init(&pr, mesg->buffer, mesg->received);
-
-    pr.offset = DNS_HEADER_LENGTH;
+    packet_reader_init_from_message(&pr, mesg);
     
     if(FAIL(return_code = packet_reader_skip_fqdn(&pr)))
     {
@@ -350,8 +389,8 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
                 
         ptr_set section_type_fqdn;
         message_verify_rrsig_init(&section_type_fqdn);
-        
-        for(u16 count = ntohs(MESSAGE_SECTION_COUNT(mesg->buffer, section)); count > 0; --count)
+
+        for(u16 count = message_get_section_count(mesg, section); count > 0; --count)
         {
             // count RRSIG / types
 
@@ -395,7 +434,7 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
 
             if(rtype == TYPE_RRSIG)
             {
-                if(rdata_size < 18)
+                if(rdata_size < RRSIG_RDATA_HEADER_LEN)
                 {
                     message_verify_rrsig_clear(&section_type_fqdn);
                     
@@ -404,7 +443,7 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
 
                 u16 ctype;
 
-                if(FAIL(return_code = packet_reader_read(&pr, &ctype, 2)))
+                if(FAIL(return_code = packet_reader_read(&pr, &ctype, 2))) // exact
                 {
                     message_verify_rrsig_clear(&section_type_fqdn);
                     
@@ -451,19 +490,19 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
         
         message_verify_rrsig_type_summary_s type_info = {0, 0, 0, 0};
         
-        ptr_set_avl_iterator section_types_fqdn_iter;
+        ptr_set_iterator section_types_fqdn_iter;
         
-        ptr_set_avl_iterator_init(&section_type_fqdn, &section_types_fqdn_iter);
-        while(ptr_set_avl_iterator_hasnext(&section_types_fqdn_iter))
+        ptr_set_iterator_init(&section_type_fqdn, &section_types_fqdn_iter);
+        while(ptr_set_iterator_hasnext(&section_types_fqdn_iter))
         {
-            ptr_node *types_fqdn_node = ptr_set_avl_iterator_next_node(&section_types_fqdn_iter);
+            ptr_node *types_fqdn_node = ptr_set_iterator_next_node(&section_types_fqdn_iter);
 
             const u8 * type_fqdn = (u8*)types_fqdn_node->key;
             u16 ctype = GET_U16_AT_P(type_fqdn);
             type_fqdn += 2;
             u8 flags = (u8)(intptr)types_fqdn_node->value; // double cast just to explicitly show what is happening
             
-#ifdef DEBUG
+#if DEBUG
             log_debug6("message_verify_rrsig: %{dnsname} %{dnstype} (%x)", type_fqdn, &ctype, flags);
 #endif
             
@@ -495,9 +534,9 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
 
             pr.offset = section_start;
 
-            ptr_vector rrset = EMPTY_PTR_VECTOR;
+            ptr_vector rrset = PTR_VECTOR_EMPTY;
 
-            for(u16 count = ntohs(MESSAGE_SECTION_COUNT(mesg->buffer, section));count > 0; --count)
+            for(u16 count = message_get_section_count(mesg, section); count > 0; --count)
             {
                 // count RRSIG / types
 
@@ -529,7 +568,7 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
                 }
                 else
                 {
-                    ptr_vector_free_empties(&rrset, message_verify_rrsig_free_rrset);
+                    ptr_vector_callback_and_clear(&rrset, message_verify_rrsig_free_rrset);
                     ptr_vector_destroy(&rrset);
                     
                     message_verify_rrsig_clear(&section_type_fqdn);
@@ -542,7 +581,7 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
 
             ptr_vector_qsort(&rrset, message_verify_canonize_sort_rdata_compare);
 
-#ifdef DEBUG
+#if DEBUG
             for(int i = 0; i <= rrset.offset; i++)
             {
                 u8* rdata = rrset.data[i];
@@ -558,13 +597,14 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
 
             u32 saved_offset = pr.offset;
 
-            u8 digest_buffer[DIGEST_BUFFER_SIZE];
+            //u8 digest_buffer[DIGEST_BUFFER_SIZE];
+            digest_s digest_ctx;
 
             // rewind to the beginning of the section
 
             pr.offset = section_start;
 
-            for(u16 count = ntohs(MESSAGE_SECTION_COUNT(mesg->buffer, section));count > 0;--count)
+            for(u16 count = message_get_section_count(mesg, section); count > 0; --count)
             {
                 // get RRSIG covering RRSET
 
@@ -582,18 +622,18 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
                         u8 *rdata = (u8*)tctr;
                         rdata += 10;
 
-                        if((GET_U16_AT(rdata[0]) == ctype) && (rdata_size > 18)) // if type covered is the one we are processing ...
+                        if((GET_U16_AT(rdata[0]) == ctype) && (rdata_size > RRSIG_RDATA_HEADER_LEN)) // if type covered is the one we are processing ...
                         {
-#ifdef DEBUG
+#if DEBUG
                             rdata_desc rdatadesc = {TYPE_RRSIG, rdata_size, rdata};
                             log_debug6("with %{dnsname} %{typerdatadesc}", fqdn, &rdatadesc);
 #endif
                             message_verify_rrsig_detail_s rrsig_header;
 
-                            memcpy(&rrsig_header, rdata, 18);
+                            memcpy(&rrsig_header, rdata, RRSIG_RDATA_HEADER_LEN);
                             rrsig_header.result = 0;
                             rrsig_header.section = section;
-                            rrsig_header.signer_name = &rdata[18];
+                            rrsig_header.signer_name = &rdata[RRSIG_RDATA_HEADER_LEN];
                             rrsig_header.fqdn = fqdn;
 
                             result.data.detail = &rrsig_header;
@@ -615,16 +655,18 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
                                     s32 digest_size = message_verify_rrsig_compute_digest(fqdn, ctype, tctr->qclass,
                                                                                           rdata, rdata_size,
                                                                                           &rrset,
-                                                                                          digest_buffer, sizeof(digest_buffer));
+                                                                                          &digest_ctx);
                                     assert(digest_size > 0);
 
                                     u32 rrsig_signer_name_len = dnsname_len(rrsig_header.signer_name);
-                                    u32 rrsig_header_len = 18 + rrsig_signer_name_len;
+                                    u32 rrsig_header_len = RRSIG_RDATA_HEADER_LEN + rrsig_signer_name_len;
 
                                     u8 *signature = &rdata[rrsig_header_len];
                                     u32 signature_len = rdata_size - rrsig_header_len;
 
-                                    if(key->vtbl->dnssec_key_verify_digest(key, digest_buffer, digest_size, signature, signature_len))
+                                    void *digest_ptr;
+                                    digest_get_digest(&digest_ctx, &digest_ptr);
+                                    if(key->vtbl->dnssec_key_verify_digest(key, digest_ptr, digest_size, signature, signature_len))
                                     {
                                         // verified signature with origin/algorithm/tag
 
@@ -659,7 +701,7 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
                                 rrsig_header.result |= MESSAGE_VERIFY_RRSIG_TIMEFRAME;
                             }
 
-                            if((feedback_result = feedback(mesg, keyring, &result, args)) != MESSAGE_VERIFY_RRSIG_FEEDBACK_CONTINUE)
+                            if(feedback(mesg, keyring, &result, args) != MESSAGE_VERIFY_RRSIG_FEEDBACK_CONTINUE)
                             {
                                 break;
                             }
@@ -672,7 +714,7 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
 
             pr.offset = saved_offset;
 
-            ptr_vector_free_empties(&rrset, message_verify_rrsig_free_rrset);
+            ptr_vector_callback_and_clear(&rrset, message_verify_rrsig_free_rrset);
             ptr_vector_destroy(&rrset);
             
         } // for all types/fqdn

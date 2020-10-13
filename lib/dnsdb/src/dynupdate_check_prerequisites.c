@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnsdbupdate Dynamic update functions
  *  @ingroup dnsdb
  *  @brief
@@ -75,8 +76,8 @@ name_type_rdata_compare(const void* a, const void* b)
 {
     int cmp;
 
-    name_type_rdata* ia = *(name_type_rdata**)a;
-    name_type_rdata* ib = *(name_type_rdata**)b;
+    name_type_rdata* ia = (name_type_rdata*)a;
+    name_type_rdata* ib = (name_type_rdata*)b;
 
     /* strcmp is adequate for this test */
 
@@ -100,7 +101,7 @@ name_type_rdata_free(void* a)
 static void
 free_rrsets(ptr_vector* rrsetsp)
 {
-    ptr_vector_free_empties(rrsetsp, name_type_rdata_free);
+    ptr_vector_callback_and_clear(rrsetsp, name_type_rdata_free);
     ptr_vector_destroy(rrsetsp);
 }
 
@@ -116,7 +117,7 @@ free_rrsets(ptr_vector* rrsetsp)
 ya_result
 dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count)
 {
-    if(ZDB_ZONE_INVALID(zone))
+    if(zdb_zone_invalid(zone))
     {
         return ZDB_ERROR_ZONE_INVALID;
     }
@@ -134,7 +135,6 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
     u8* rname;
     u8* rdata;
     u32 rname_size;
-    //u32 rttl;
     u16 rtype;
     u16 rclass;
     u16 rdata_size;
@@ -142,6 +142,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
 
     ptr_vector_init(&rrsets);
 
+#pragma message("TODO: THIS IS USELESS, zdb_zone ALREADY CONTAINS A dnsname_vector origin_vector field to avoid this (used in queries)")
     dnsname_to_dnsname_vector(zone->origin, &origin_path);
 
     while(count-- > 0)
@@ -151,14 +152,13 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
         if(FAIL(return_value = packet_reader_read_record(reader, wire, sizeof(wire))))
         {
             free_rrsets(&rrsets);
-            return SERVER_ERROR_CODE(RCODE_FORMERR);
+            return RCODE_ERROR_CODE(RCODE_FORMERR);
         }
         
         rname = wire;
         rname_size = dnsname_len(wire);
         rtype = GET_U16_AT(wire[rname_size]);
         rclass = GET_U16_AT(wire[rname_size + 2]);
-        //rttl = ntohl(GET_U32_AT(wire[rname_size + 4]));
         rdata_size = ntohs(GET_U16_AT(wire[rname_size + 8]));        
         rdata = &wire[rname_size + 10];
 
@@ -171,7 +171,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
             if(!dnslabel_equals(origin_path.labels[origin_path.size - idx], name_path.labels[name_path.size - idx]))
             {
                 free_rrsets(&rrsets);
-                return SERVER_ERROR_CODE(RCODE_NOTZONE);
+                return RCODE_ERROR_CODE(RCODE_NOTZONE);
             }
         }
 
@@ -180,7 +180,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
             if(rdata_size != 0)
             {
                 free_rrsets(&rrsets);
-                return SERVER_ERROR_CODE(RCODE_FORMERR);
+                return RCODE_ERROR_CODE(RCODE_FORMERR);
             }
 
             zdb_rr_label* label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path.size) - 1);
@@ -190,7 +190,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
                 if(label == NULL)
                 {
                     free_rrsets(&rrsets);
-                    return SERVER_ERROR_CODE(RCODE_NXDOMAIN);
+                    return RCODE_ERROR_CODE(RCODE_NXDOMAIN);
                 }
             }
             else
@@ -198,13 +198,13 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
                 if(label == NULL)
                 {
                     free_rrsets(&rrsets);
-                    return SERVER_ERROR_CODE(RCODE_NXRRSET);
+                    return RCODE_ERROR_CODE(RCODE_NXRRSET);
                 }
 
                 if(zdb_record_find(&label->resource_record_set, rtype) == NULL)
                 {
                     free_rrsets(&rrsets);
-                    return SERVER_ERROR_CODE(RCODE_NXRRSET);
+                    return RCODE_ERROR_CODE(RCODE_NXRRSET);
                 }
             }
         }
@@ -213,7 +213,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
             if(rdata_size != 0)
             {
                 free_rrsets(&rrsets);
-                return SERVER_ERROR_CODE(RCODE_FORMERR);
+                return RCODE_ERROR_CODE(RCODE_FORMERR);
             }
 
             zdb_rr_label* label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path.size) - 1);
@@ -223,7 +223,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
                 if(label != NULL)
                 {
                     free_rrsets(&rrsets);
-                    return SERVER_ERROR_CODE(RCODE_YXDOMAIN);
+                    return RCODE_ERROR_CODE(RCODE_YXDOMAIN);
                 }
             }
             else
@@ -233,15 +233,15 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
                     if(zdb_record_find(&label->resource_record_set, rtype) != NULL)
                     {
                         free_rrsets(&rrsets);
-                        return SERVER_ERROR_CODE(RCODE_YXRRSET);
+                        return RCODE_ERROR_CODE(RCODE_YXRRSET);
                     }
-                }
+                } // else label is NULL
             }
         }
         else if(rclass == zdb_zone_getclass(zone))
         {
             name_type_rdata* item;
-            MALLOC_OR_DIE(name_type_rdata*, item, sizeof(name_type_rdata), ZDB_DYNUPDATE_TAG);
+            MALLOC_OBJECT_OR_DIE(item, name_type_rdata, ZDB_DYNUPDATE_TAG);
             item->rname = rname;
             item->rdata = rdata;
             item->rtype = rtype;
@@ -251,7 +251,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
         else
         {
             free_rrsets(&rrsets);
-            return SERVER_ERROR_CODE(RCODE_FORMERR);
+            return RCODE_ERROR_CODE(RCODE_FORMERR);
         }
     }
     
@@ -277,8 +277,8 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
         s32 required_matches = 0;
 
         name_type_rdata** itemp;
-        s32 record_count = ptr_vector_last_index(&rrsets);
-        
+        s32 record_count = ptr_vector_last_index(&rrsets); // record_count >= 0
+
         itemp = (name_type_rdata**)rrsets.data;
 
         while(record_count-- >= 0)
@@ -290,7 +290,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
                 if(required_matches != 0)
                 {
                     free_rrsets(&rrsets);
-                    return SERVER_ERROR_CODE(RCODE_NXRRSET);
+                    return RCODE_ERROR_CODE(RCODE_NXRRSET);
                 }
 
                 last_name = item->rname;
@@ -303,6 +303,12 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
 
                 label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path.size) - 1);
 
+                if(label == NULL)
+                {
+                    free_rrsets(&rrsets);
+                    return RCODE_ERROR_CODE(RCODE_NXRRSET);
+                }
+
                 last_type = 0; // forces the next test
             }
 
@@ -311,7 +317,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
                 if(required_matches != 0)
                 {
                     free_rrsets(&rrsets);
-                    return SERVER_ERROR_CODE(RCODE_NXRRSET);
+                    return RCODE_ERROR_CODE(RCODE_NXRRSET);
                 }
 
                 last_type = item->rtype;
@@ -321,7 +327,14 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
                  * compute the size of the list
                  */
 
-                rr_sll = zdb_record_find(&label->resource_record_set, last_type);
+                if(label != NULL)
+                {
+                    rr_sll = zdb_record_find(&label->resource_record_set, last_type);
+                }
+                else
+                {
+                    rr_sll = NULL;
+                }
 
                 required_matches = 0;
 
@@ -349,11 +362,8 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
             {
                 if(rr->rdata_size == item->rdata_size)
                 {
-                    /**
-                     * @todo 20100820 edf -- This should be done by a type-aware comparator.
-                     *        Sometimes case (in)sensitivity is important.
-                     *
-                     *        Do I have to assume that, as for the zone load, the RDATA are low-cased where allowed ?
+                    /*
+                     * the records are read canonised to lower-case 
                      */
 
                     if(memcmp(&rr->rdata_start[0], item->rdata, item->rdata_size) == 0)
@@ -377,7 +387,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
                  */
 
                 free_rrsets(&rrsets);
-                return SERVER_ERROR_CODE(RCODE_NXRRSET);
+                return RCODE_ERROR_CODE(RCODE_NXRRSET);
             }
         }
     }
@@ -387,8 +397,4 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
     return reader->offset;
 }
 
-/*    ------------------------------------------------------------    */
-
 /** @} */
-
-/*----------------------------------------------------------------------------*/

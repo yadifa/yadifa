@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup threading Threading, pools, queues, ...
  *  @ingroup dnscore
  *  @brief 
@@ -48,7 +49,6 @@
 #include "dnscore/threaded_dll_cw.h"
 
 #define MODULE_MSG_HANDLE		g_system_logger
-extern logger_handle *g_system_logger;
 
 #define THREADED_QUEUE_TAG	    0x455545555154	/* TQUEUE */
 
@@ -70,7 +70,7 @@ extern logger_handle *g_system_logger;
 void
 threaded_dll_cw_init(threaded_dll_cw *queue, int max_size)
 {
-#ifdef DEBUG
+#if DEBUG
     memset(queue, 0xff, sizeof(threaded_dll_cw));
 #endif  
     list_dl_init(&queue->queue);
@@ -116,7 +116,7 @@ threaded_dll_cw_finalize(threaded_dll_cw *queue)
     cond_finalize(&queue->cond_write);
     cond_finalize(&queue->cond_read);
     mutex_destroy(&queue->mutex);
-#ifdef DEBUG
+#if DEBUG
     memset(queue, 0xde, sizeof(threaded_dll_cw));
 #endif
 }
@@ -303,6 +303,59 @@ threaded_dll_cw_try_dequeue(threaded_dll_cw *queue)
     return data;
 }
 
+void*
+threaded_dll_cw_dequeue_with_timeout(threaded_dll_cw *queue, s64 timeout_us)
+{
+    /*
+     * Ensure I'm allowed to work on queue (only one working on it)
+     */
+
+    mutex_lock(&queue->mutex);
+
+    while(list_dl_size(&queue->queue) == 0)
+    {
+        if(cond_timedwait(&queue->cond_read, &queue->mutex, timeout_us) != 0)
+        {
+            // timed-out
+            mutex_unlock(&queue->mutex);
+
+            return NULL;
+        }
+    }
+
+    bool write_blocked = (list_dl_size(&queue->queue) == queue->max_size);
+
+#if DLL_POOL
+    list_dl_node_s *node = list_dl_remove_last_node(&queue->queue);
+
+    void *data = node->data;
+    node->next = queue->pool;
+    queue->pool = node;
+#else
+    void *data = list_dl_dequeue(&queue->queue);
+#endif
+
+
+    if(write_blocked) /* enqueue has just been locked  -> unlock */
+    {
+        /*
+         * The queue is full : the queuers are waiting.
+         * Since we will are removing something, we can free (one of) them.
+         * (They will however still be locked until the queue mutex is released)
+         */
+
+        cond_notify(&queue->cond_write);
+    }
+
+    /*
+     * We are done here.
+     */
+
+    mutex_unlock(&queue->mutex);
+
+    return data;
+}
+
 void
 threaded_dll_cw_wait_empty(threaded_dll_cw *queue)
 {
@@ -360,7 +413,7 @@ threaded_dll_cw_set_maxsize(threaded_dll_cw *queue, int max_size)
 
     mutex_lock(&queue->mutex);
 
-    if(max_size >= list_dl_size(&queue->queue))
+    if(max_size >= (int)list_dl_size(&queue->queue))
     {
         queue->max_size = max_size;
     }

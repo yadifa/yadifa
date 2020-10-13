@@ -1,6 +1,6 @@
 ################################################################################
 # 
-#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  Copyright (c) 2011-2020, EURid. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 #  Redistribution and use in source and binary forms, with or without 
@@ -29,59 +29,524 @@
 # 
 ################################################################################
 
-20201007:
-    YADIFA 2.3.11
-	Applied Debian cross-build fix (helmut@subdivi.de, https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=971605)
+20201012:
+    YADIFA 2.4.0-public
 
-	Fixes an issue where a TCP connection would be closed for inactivity with some flows rates (in some kernel/network settings)
+    Fixes an issue that could happen with multiprocess logging.
+    Fixes an issue parsing a *. domain.
+    Improves support for LibreSSL.
+    Added contributions directories with community-provided patches.
+    Readied the source for the release.
 
-20200915:
-    YADIFA 2.3.10
-	Added an autogen.sh script, as we did for YADIFA 2.4.x
+    Many changes have been made since version 2.3.x.
+    
+    Please read the manual for more information.
 
-        Fixes an issue with IPv6 aliases.
-        Fixes an issue that would happen when building with a gcc version 10 or above.
-        Fixes an issue with FreeBSD aliases.
-        Fixes an issue with strncpy on FreeBSD.
-        Fixes an issue with CNAME queries incorrectly answered with an error code.
+    YAKEYROLLD 2.4.0
 
-20190211:
-    YADIFA 2.3.9
-        Fixes an issue handling some rdata containing a domain set to '.'
+    Since version 2.4.0, yadifad optionally allows dynamic update of RRSIG records.
+    The external key managing tool using this feature is being released along with it.
+   
+    Please read the manual for more information.
 
-20180214:
+    YADIFA CTRL 2.4.0
+
+    The updated version of the command line controller has been made more user-friendly.
+
+    Please read the manual for more information.
+
+20200722:
+    YADIFA 2.4.0-67
+
+    Default listen is now "0.0.0.0,::0"
+    Added "do-not-listen" feature to avoid conflicts with systemd-resolved, default is empty.
+    Added --enable-systemd-resolved-avoidance in the configure script to change the default of "do-not-listen" to "127.0.0.53 port 53"
+    Zone file reader now decodes \ddd tokens.
+    Text zone parsing is now more lenient in what it accepts: unescaped @ and $ in a domain will be read as '@' and '$', with a warning.
+    Improves the configuration update by keeping a timestamp of all files involved and checking they have been modified.
+    Logger configuration can now be reconfigured during runtime.
+    In the event of an incorrect reconfiguration of the network, yadifad will periodically try to reconfigure itself reading the configuration files.
+    
+    Fixes a potential issue in NSEC3 replying.
+    Fixes TXT parsing issues.
+    Fixes a leak with the chroot remapping when reconfiguring.
+    Fixes a leak processing the command line.
+    Fixes a leak in the policies configuration.
+    
+20200630:
+    YADIFA 2.4.0-64
+
+    Network setup errors will now stop yadifad if they occur during the first configuration.
+        If they occur during a reconfiguration the error will be logged every minute instead of every second.
+
+    Fixes DSA API usage with OpenSSL 1.1.0
+    Fixes an other side effect of FreeBSD's process-shared mutexes where a thread waiting on a condition wouldn't always be woken up.
+    Fixes IPv6 handling in FreeBSD.
+    Fixes an issue where the logging could lock when daemonizing.
+    Fixes the build-time-configuration paths when using cmake.
+    Fixes an issue where a sync clean command would not delete the journal if the zone wasn't dynamically updated since the start of yadifad.
+    Fixes an issue where the size of the buffer given for a message would be slightly bigger than needed.
+    Duplicate but identical definition of a TSIG key are nolonger considered an error.
+    Increased the log output handling control commands (mostly error conditions)
+
+    yadifa ctrl:
+        The fqdn isn't set by default anymore (it used to be '.' by default)
+        Adds the "freeze", "thaw", "unfreeze", "freezeall", "unfreezeall" and "thawall" friendly keywords to yadfia ctrl.
+        Adds the "notify" command.
+        The FQDN has no default value anymore.
+        Fixes the friendly parsing of the command line.
+        Fixes several minor issues with the console output of the command line.
+
+20200608:
+    YADIFA 2.4.0-52
+    	This is version is going to production as master and for public release.
+
+	Fixes limit case issues giving NSEC3 answers for some zone structures (mostly *, * + CNAME)
+	Fixes an issue where the packet reader may not allocate enough room for SOA records (found in yakeyrolld) 
+	
+    YKEYROLL-1.0.5-4
+    	This is version is going to production as master and for public release.
+
+	Fixes the handling of more limit cases (broken setup).
+
+20200515:
+    YADIFA 2.4.0-51
+        In an effort to find issues using different tools, the code has been partially ported to compile in Visual Studio 2019. (Doesn't run)
+		The code analyser from Visual Studio 2019 reported 290 potential issues, 5 of which were valid (understand: errors) and not reported by other analysers.
+		We have used a mmap.c MIT-licensed code from github to help in this task. We'll have to decide to keep it or to write ours when we will do a Windows release.
+	Adds a DNS pcap analyser tool to measure DNS traffic from a network pcap file. Used to find why so many packets were lost in the benchmark.
+		(resut: The benchmark tool was broken.)
+	Adds a --disable-filepool-cache build configure option.
+	Logs clarity has been improved.
+	Improved usability: <main> network-model option can now use words instead of just numbers, respectively: single, buffered, multi for 0, 1, 2.
+	
+	Fixes an issue that could occur in the logger service with some settings.
+	Fixes an issue in the new network model.
+	Fixes a memory leak that could occur in the cirular_file layer of the journal.
+	Fixes a memory leak that could occur in the journal depending on the reason it was closed.
+	Fixes a memory leak that could occur at shutdown while destroying a file pool.
+	Fixes an issue where trying to print a corrupted fqdn (e.g.: random bytes) could have an undefined behaviour.
+	Fixes an issue using the drop-before-load feature where the memory of the previous zone would not be completely freed yet before the new version of the zone started to load.
+	Fixes a race condition that could occur while detaching stdout/stderr from console.
+	Fixes missing AA flag in  master notification.
+	Fixes a rare issue where a signal could block the logger.
+	Fixes TSIG-covered answers of an unsupported opcode.
+
+    YKEYROLL-1.0.5-3
+	Fixes the handling of several limit cases (all coming from a broken, corrupted state).
+
+20200320:
+    YADIFA 2.4.0-50
+	Efforts have been made to reduce the memory usage in the case where a lot of specific listening addresses are defined.
+	A new network-model taking advantage of the multiple-send/receive of some kernels has been added. (recvmmsg, sendmmsg)
+
+	Back-ported gcc-10 compatibility fix from the main development branch (trunk)
+		This issue was reported by several distributions already using the yet-to-be-released gcc-10 (We are using gcc-9)
+
+	Adds the tcp_manager for experimentation (an alternative way to keep track of opened TCP connections).
+
+	Fixes a potential memory leak that could sometimes happen freeing NSEC3 records without removing their attached RRSIG first.
+	Fixes FreeBSD 12.1/libressl build issue.
+
+    YKEYROLL-1.0.5-2
+	Now handles SIGHUP to reopen the log files.
+	Imrpoved the command line options help.
+
+20200212:
+    YADIFA 2.4.0-49
+	This version is going for production.
+
+	Fixes an issue with signature expiration value where the time was sometimes incorrectly taken from the oldest key.
+	The RRL tables are now growing faster in order to avoid wasting resources.
+
+    YKEYROLL-1.0.4-2
+	This version is going for production.
+
+	Now keeps the expected starting point and end point for all steps.
+		This is used to verify the state before and after each update.
+	Now has a "print" mode that logs the "plan" out (logs all the known steps).
+
+20200128:
+    YADIFA 2.4.0-48
+	New nameserver infrastructure update.
+
+	In <main>, adds a log_files_disabled flag to disable checking the log-path directory for existence and writing rights.
+		Without this, yadifad would refuse to work without a proper log output directory like we have on our SELinux setup.
+
+	Fixes an issue that would occur if SELinux would reject a write operation with EPERM to a socket we have succesfully opened for writing.
+        	yadifad would not complain and end-up hammering both the socket creation and the logs
+
+	Fixes an issue that would occur if SELinux would reject a read operation with EPERM on a socket we have successfully opened for reading.
+		This happens, notably, the notify service, producing a lot of log lines.
+        	Now such an issue will make yadifad pause for one second.
+
+20200106:
+    YADIFA 2.4.0-45
+	Fixes an issue where having no ZSK would trigger a useless maintenance pass.
+	Fixes an issue where notifies could stop being sent when their queue was full. (New dynamic queue used at minimal increased CPU cost for this part)
+	Fixes an issue where reopening or syncing would have their effect delayed.
+	Fixes an issue that could occur for DSA T parameter deduction from a public key.
+
+	Made the command line more friendly using the new features from dnscore.
+	
+    YKEYROLL 1.0.3-0
+	Now filters-out publish and unpublish meta lines.
+	Fixes an issue where retrying to send a message to an unresponsive server could have the message content reset.
+
+20191120:
+    YKEYROLL-1.0.2-3
+	This version is going for production.
+
+	Adds switching to a uid/gid set in the configuration file (must be set to the same as yadifad).
+	Adds process mutual-exclusion for plan generation.
+	Improves shutdown speed.
+	Reduces logging.
+
+20191118:
+    YADIFA 2.4.0-43
+	Fixes an issue where enabling key activation leniency would incorrectly enable deactivation leniency.
+	Fixes an issue where redundant signatures would be kept longuer than needed.
+	The journal name for the root zone will now be root_zone.cjf (only one dot) intead of ..cjf, as that name was troublesome.
+	
+    YKEYROLL-1.0.1-9
+	This version is going for production.
+
+	Can now work in a loop without detaching from console.
+
+20191106:
+    YADIFA 2.4.0-42
+	This version is going for production.
+
+	Issues found by CLion's code inspector fixed or marked as invalid.
+	Downgrades several "error" into "notice".
+	More generally, an effort has been made to reduce the log size.
+	Setting a policy field with an incorrect value will now log an error instead of stopping yadifad.
+	Slave zones don't run sanitization anymore, as the master is "right".  This avoids thight rules being counter-productive in production environments.
+
+	Fixes an issue that would occur if an update happens at tahe same time as the removal of a DNSKEY when a maintenance has started.
+	Fixes an issue where the authoritative bit coudl be flipped off in some operations.
+	Fixes an issue where removing and adding the same record in a single update would incorrectly drop its signature.
+	Fixes an issue where a slave receiving an inccorrect IXFR stream (specifically: finishing on an incomplete page) would not reject the broken page.
+	Fixes an issue where a master would cut an IXFR page in half if a shutdown was triggered while the page was being read from the journal.
+	Fixes an issue in the policy date computation that could lead to a time period without signature coverage.
+	
+20191010:
+    YADIFA 2.4.0-41
+	Fixes typos.
+
+    YKEYROLL-1.0.0
+	Improved error codes returned by the keyroll policies.
+	Fixes an error that could occur parsing a corrupted step file.
+
+20190927:
+    YADIFA 2.4.0-40
+	Adds a tool to append an IXFR in text form (so, from a dig command) to a journal.
+		This is an unfriendly pure dev tool meant to create some tests scenarii.
+	The cjf-scan tool, used to print the content of a journal, can now print its content in a way similar to the dig command.
+		Simply use the "-clean" command line option before the journal file name.
+
+		Both the above tools mean that a journal can be dumped as text, edited then re-created as binary.
+		Although not initially created for this purpose, it can be a powerful fix tool.
+	
+	Fixes the "11:04" issue. It was triggered by an optimisation not being handled on all exit paths of the maintenance function, potentially leading to a buffer overflow.
+	Fixes an issue in the journal:
+		If the first update written into a dynamically sized journal is bigger that the default size of the journal (64KB) then yadifad incorrectly tries to shift-out
+		content to make room, which it obviously cannot do.
+
+20190920:
+    YADIFA 2.4.0-39
+	In <main>, adds axfr-strict-authority option.  Defaulted to enabled unless yadifad was built-configured using --enable-non-aa-axfr-support.
+	Improves TXT parsing (github/ JZerf).
+	Fixes an potential crash on SIGHUP if the zone loader calee gives an incorrect answer (github/kolbma).
+	Fixes an issue where a UDP query with invalid return address (port 0) would trigger an EINVAL leading yadifa to shutdown the thread.
+	Fixes an issue with IPv6 aliased replies. Depending on the OS/release the value could be wrong.  The fix tries several options.
+		This has been tested on several Debian and RedHat variants and seems to work properly.
+
+20190919:
+    YADIFA 2.4.0-38
+	note: Serial bump due to issues during rpm packaging.
+
+	Reduces the number of warnings triggered by type bitmap fixes. Now only prints one and leaves the rest available as debug.
+	Contains code to track the "11:04" issue and verify the hypothesis of its cause.
+
+20190913:
+    YADIFA 2.4.0-26
+	Timestamp in dns-udp are now human-readable.
+	Writing a zone as text now computes and updates the approximate wire size for the zone (AXFR/IXFR trigger accuracy)
+	yadifad now replies to ENDS# bad format.
+
+	Fixes an issue in dns-udp where the message size would not be reset on the received side.
+	Fixes an issue in dns-udp where the rate-limiter would fire before a message would be checked for actual IO (aggregated queries).
+	Fixes an issue in dns-udp where a very slow call-back would slow down the processing part of the receiver enough to trigger a timeout of the query.
+	Fixes a warning that would be shown for keys being both NSEC and NSEC3.
+	Fixes an issue where the '#' character was incorrectly set as a zone comment.
+	Fixes an issue where a journal with an invalid character in a name would trigger an infinite error loop (until program shutdown).
+	Fixes an issue where a DNSKEY dynamic update coming with an RRSIG push could fail under certain conditions.
+
+	Fixes some typos.
+
+    YKEYROLL-beta
+	Improves error reporting.
+	Allows different configuration files.
+	Fixes corrupted plan handling.
+	Updates the configuration example.
+	Correction updates are now merged in a single step, then played.
+	Added error-retries-cases in daemon mode.
+	Added a --timeus-offset parameter (not publicly documented) to lie about the current time.
+	Added a --dryrun parameter.
+	Fixes an issue handling key duplicates.
+
+20190627:
+    YADIFA 2.4.0-25
+	Fixes an issue where a corrupted journal would prevent a slave from working.
+	Fixes an issue replaying NSEC3 chain changes as a slave that could occur when a discrepancy was found.
+	If a corrupted journal is found, yadifad now renames it adding ".bad" to its name.
+
+20190613:
+    YADIFA 2.4.0-24
+	Adds safeguards for the logger shutdown.
+	
+	FreeBSD 12.0 issue diagnostic:
+		There was an elusive issue occurring only on FreeBSD 12.0 related to shared mutexes.
+		After posting an the issue anonymously with a proof-of-concept code, it turns out it was bug in FreeBSD:
+
+		An unlocked mutex is still being accessed by the thread library right after the effective unlock has occurred.
+
+		yadifad destroys a structure containing mutexes right after it is unlocked for the last time.
+
+		FreeBSD has issued a fix, but at the moment the fix appeared to have side effects.
+		This may have been us not rebuilding "world" properly (First time we do this), or it may be that the patch wasn't complete at the time.
+		The matter is closed as far as yadifad's source code is concerned so this is something to watch after the next FreeBSD update.
+
+	Added the "freebsd12-test" proof-of-concept code in the test section of the code.
+
+	Adds the IP_MTU_DISCOVER IP_PMTUDISC_OMIT patch:
+
+	patch received 20190323 from daisuke.higashi@gmail.com
+
+	/*
+	 * Linux 3.15 has IP_PMTUDISC_OMIT which makes sockets
+	 * ignore PMTU information and send packets with DF=0.
+	 * Fragmentation is allowed if and only if the packet
+	 * size exceeds the outgoing interface MTU or the packet
+	 * encounters smaller MTU link in network.
+	 * This mitigates DNS fragmentation attacks by preventing
+	 * forged PMTU information.
+	 * FreeBSD already has same semantics without setting
+	 * the option.
+	 */
+
+	Added sereral fixes for NetBSD builds.
+		Ultimately, NetBSD declares but does not implement PSHARED.
+		This makes that platform unusable for the moment.
+
+	Logs have been improved (level & verbosity, some have been downgraded to debug).
+
+	Improves command-line help.
+
+	Internally, INVALID and UNPROCESSABLE messages are now seen as the same error.
+
+	In <main>, added log_unprocessable boolean to add a warning log for bad DNS messages.
+
+	If yadifad is not started as root but requires elevated privileges in order to bind an addess, it will stop.
+	
+	Fixes build on older sytems (FreeBSD).
+	Fixes an incorrect warning message related to TSIG.
+	Fixes an issue with garbage collection at shutdown.
+	Fixes an issue that would occur if the signature max-interval was set high enough to end up in an integer overflow.
+	Fixes an issue where newly added keys would not always be taken into account in the computations.
+	Fixes an issue where the nttl cache could overflow.
+	Fixes an issue in the path provider of yadifad where an empty slave zone file setting could lead to a NULL pointer reference.
+	Fixes an issue where the KSK public key would not be stored, losing the flags of the key as seen by libdnscore.
+	Fixes an issue in dns-udp that would occur when TCP fails with a DNS error.
+	Fixes an issue in dns-udp where the thread_pool destruction order could trigger some issues.
+	Fixes an issue where a TCP read time-out from a client (thus when the server is sending) could lead to an indefinitely held connection.
+	Fixes an issue that could happen in the RRL, leading to the current state pool being misused.
+	Fixes an issue where an error code sent from the socket server would nto be interpreted correctly.
+	Fixes an issue in the text parser that was being tripped in the yakeyrolld.
+	Fixes an issue where asking the help from the command line would return to the shell with a non-zero value.
+	
+
+    YKEYROLL-alpha
+	Code commited in alpha state to avoid potential issues related to a certain event.
+
+	The new keyroll software is being written in C.
+	It is based on the YADIFA framework.
+	It's main features are:
+		_ cron-like timings,
+		_ KSK/ZSK separation,
+		_ RRSIG push usage,
+		_ one event per file and one file per event,
+		_ integrity milestones,
+		_ extension of the time-line on demand.
+
+20190326:
+    YADIFA 2.4.0-23
+	Added autogen.sh in the make dist.
+	Improved yadifad startup so that simply asking for its version would not go through service start.
+	Improved AXFR log messages: now showing the peer's IP address.
+
+20190322:
+    YADIFA 2.4.0-22
+	EDDSA is known but not handled. (EDDSA handling code is in the 2.5.x branch)
+
+	Sanitization now checks for DNSKEY matching RRSIG records.
+
+	Fixes an issue where yadifad would abort in a specific condition:
+
+		A zone that allows RRSIG pushed by dynamic updates
+		with a bunch of inactive ZSK keys available, one of them still in the zone
+		with said inactive ZSK key in the zone having signature expiring after its deactivation date AND in the future
+		with an active key in the zone that does not expire and is fully usable (key pair available)
+		with a single KSK key in the zone that has no private part available ...
+
+		... was considered fubar and triggering an emergency stop (ending up in an abort())
+
+	Fixes an issue handling BigNum from OpenSSL being sometimes smaller than expected.
+	Fixes a double-free issue (crashed yadifad the 20190311).
+	Fixes an issue that would occur on a slave when the journal is too small to work optimally.
+	
+	Added a "dsfromkey" in the test section, to be added in the command line later
+
+20190218:
+    YADIFA 2.4.0-21
+	Fixes an issue where killing yadifad while thread creation is in limbo would not work.
+		yadifad will now ignore all signals until notify service thread is up and running (thus outside of limbo)
+	Fixes an issue where policies would be tried on non-policed zones.
+
+20190213:
+    YADIFA 2.4.0-19
+	Improves CPU usage by inlining several small domain-related functions.
+	Sanitization now occurs only once, after the journal has been replayed.
+	Code marked as obsolete has been removed.
+	Fixes an issue where an internal update message woudln't be properly initialised.
+	Fixes an irrelevant warning when "publish" equals "active" or "inactive" equals "delete" in a DNSKEY key.
+	Fixes embedded delegation issues.
+	    _ Sanitization complaining about wrong glue resource records in embedded delegations
+		_ Sanitization complaining about unexpected signatures in embedded delegations
+		_ Internal state is now correctly set.
+	Fixes a policy issue where a DNSSEC chain would not be added if the DNSKEY was not already generated and added.
+	Fixes an issue where removing an RRSIG covering a type could sometimes invalidate an RRSIG covering another in the same domain.
+	Fixes an issue where a query that would return an RDATA with a '.' domain and require additionals, would trigger a memory underflow with undefined results.
+	Fixes an issue that could occur when replaying NSEC3 updates from the journal.
+	Fixes dnssec-policy NSEC chain generation that could not be completed because of an interference by the internal integrity tests.
+	Fixes an issue with NSEC3 type bitmap handling that would occur on an empty broken zone without RRSIG records.
+	Fixes an issue where reading corrupted messages would not be handled properly.
+	Fixes an issue where the illegal addition of a DS resource record would not be handled properly.
+
+20190205:
+    YADIFA 2.4.0-18
+	Signature verification now has an abstract API (easier extension to future algorithms e.g.: EDDSA).
+	Added our own zone test program. This includes signatures verification.
+		It's in the test section and the feature should be moved inside the command line later.
+	Fixes an issue where deleting a DNSKEY in a dynamic update would not be handled properly.
+	Fixes an issue where removing an RRSIG in signature maintenance would not change the type bitmap in the associated NSEC3 record.
+	Fixes an issue where maintenance would remove an RRSIG for a replacement (exchange) that could not be created (e.g.: private key missing).
+	Fixes an issue managing a zone with an NSEC3PARAM record but no NSEC3 chain.
+	Fixes an issue where NSEC3 chain recomputation could be called before RRSIG changes would be known.
+	Fixes an issue where stopping yadifad while it started a signature thread (in a window of a few instructions) would trigger an assertion.
+	Fixes an issue where dnssec-policies could conflict with RRSIG pushed with a dynamic update.
+	Fixes an issue parsing records with a class ANY in update messages.
+	
+20190109:
+    YADIFA 2.4.0-17
+	Added a test for the keyroll feature (test section).
+	Key creation time is now systematically set in newly created keys.
+
+20181122:
+    YADIFA 2.4.0-11
+	Fixes handling of several limit cases in chain updates (that should never happen in a sane system).
+	Fixes some minor memory leaks.
+	This is the first release that is meant to prevent DNSKEY with incorrect "smart" setup making yadifad trying to take them at every occasion (e.g.: dynamic update).
+
+20181122:
+    YADIFA-2.4.0-10
+	Made to caters for the needs of an internal project.
+
+20180802:
+    YADIFA 2.4.0-1
+	Fixes all fixable -Wextra warnings (that ar not in -Wall for some reason)
+	One of these warnings would have showed the suprise-issue with the ACL ...
+	These fixes needs to be thoroughly tested before being used on anything production.
+
+20180725:
+    YADIFA 2.4.0 alpha
+
+        Fixes an issue where a slave having downloaded a invalid zone from an master will proceed re-download it and failing until the zone is fixed on the master.
+            Now it will wait until the axfr-retry + random(axfr-retry-jitter) elapsed.
+
+        It is now possible to change the network configuration at runtime.
+
+        It is now possible to have threads logged with a tag instead of an opaque hexadecimal ID. (--enable-log-thread-tag)
+
+        It is now possible to pipe execute loggers output.
+
+            e.g.:
+                <channel>
+                    my-zipped-channel "|/usr/bin/gzip - >> /var/log/yadifa.log.gz"
+                </channel>
+
+            Obviously, outputs are run using the uid/gid set for the server.
+            As the command can be restarted for several reasons so using >> is the obvious choice.
+
+        The maximum number of queries that are queued on an overloaded server is now configurable.
+        Note this is currently only used by network-model 1 and the ram usage in bytes is about (workers * size * 64)
+
+            For a server that only needs to answer 10000 queries per second, it would be suitable to use:
+
+            e.g.:
+                network-model-worker-backlog-size 10000
+
+            Our artificial benchmark tests are showing that setting this value to 500000 is enough to handle about 2.5 millions queries per second
+            on a server with the appropriate hardware configured properly (network queues, ...).
+
+        The zone journal maximum size is now an hard limit instead of "best effort within a few bytes".
+
+        The --disable-messages ./configure option has now been removed as the send & recv are not suitable for proper aliased addresses handling.
+
+        The build system has been changed:
+
+            From now on, to do a debug build, add CFLAGS='-O0 -g3 -DEBUG=1' to the configure command.
+
+            e.g.:
+
+            ./configure --enable-shared --enable-log-thread-tag CC=clang CFLAGS='-O0 -g3 -DDEBUG=1'
+
+            A release build that keeps the symbols would be:
+
+            ./configure --enable-log-thread-tag CC=clang CFLAGS='-O3 -g -DDEBUG=0'
+
+        The dnszone library has been merged into dnscore and dnsdb.
+
+        Several of our unit tests have been added as well as the valgrind suppression file (yadifad.supp).
+
+        Several simplifications and abstractions have been made on the internal APIs.
+
+        Network model 1 is the only model available from this version.
+
+        dnssec-thread-count parameter is now obsolete
+
+20180213:
     YADIFA 2.3.8
         Fixes the OPT record Z flags not being cleared in server answers.
 
-20171208:
-    YADIFA 2.3.7
-        A master can now be configured to allow updating RRSIG records externally (e.g.: update add domain. RRSIG ...)
-
-        Fixes an issue where an IXFR query returning "not implemented" instead of an AXFR would be retried later as an IXFR.
-        Fixes an issue where hammering reopening the logs on an overloaded server would not work properly.
-
-        Note: SunOS 5.10 requires setting --disable-messages in ./configure
-
-        Note: Altough Debian/Hurd is not officially supported, YADIFA builds and works on the 2017 iso by setting --disable-messages in ./configure 
-
-20171205:
-    YADIFA 2.2.7
-        Fixes YADIFA libraries numbering.
-
-20170925:
-    YADIFA 2.3.2-2.3.3 (internal)
-        Messages are now default (--enable-messages). Disable them using --disable-messages.
-        Adds a build option to remove compile date and time from various help messages (--disable-build-timestamp)
-        Adds more (dynamic) update validation.
-        From now on, both master and slaves are updating the zone in the same manner (journal transactions)
-        Fixes an issue where closing an (a)XFR stream could lead to a race over the file descriptors.
-        Fixes an issue where an AXFR query would return a version of the zone too old to be upgradable by following incremental updates.
-        Fixes an issue where zones with big-enough NSEC3 coverage (several millions NSEC3 record) could potentially reach an internal limit of the database.
-        Fixes an issue where shutting down YADIFA while a zone is being downloaded (AXFR) may make it wait forever.
-        Fixes an issue where the slave would complain about a missing private key.
-        Fixes an issue where a specifically truncated IXFR query may make YADIFA replying with an AXFR.
-
-
+20171207:
+     YADIFA 2.3.0 - 2.3.7
+         From now on, both master and slaves are updating the zone in the same manner (journal transactions)
+         Messages are now default (--enable-messages). Disable them using --disable-messages.
+         Adds more (dynamic) update validation.
+         Adds a build option to remove compile date and time from various help messages (--disable-build-timestamp)
+         A master can now be configured to allow updating RRSIG records externally (e.g.: update add domain. RRSIG ...)
+ 
+         Fixes an issue where closing an (a)XFR stream could lead to a race over the file descriptors.
+         Fixes an issue where an AXFR query would return a version of the zone too old to be upgradable by following incremntal updates.
+         Fixes an issue where zones with big-enough NSEC3 coverage (several millions NSEC3 record) could potentially reach an internal limit of the database.
+         Fixes an issue where shutting down YADIFA while a zone is being downloaded (AXFR) may make it wait forever.
+         Fixes an issue where the slave would complain about a missing private key.
+         Fixes an issue where a specifically truncated IXFR query may make YADIFA replying with an AXFR.
+         Fixes an issue where an IXFR query returning "not implemented" instead of an AXFR would be retried later as an IXFR.
+         Fixes an issue where hammering reopening the logs on an overloaded server would not work properly.
+        
 20170912:
     YADIFA 2.2.6
         Fixes an issue where a maliciously crafted message may block the server. (CVE-2017-14339)
@@ -98,7 +563,7 @@
 
 20170223:
     YADIFA 2.3.1 (internal)
-        Added thread_pool_try_enqueue_call to give up if a queue is full or overworked.
+        Added thread_pool_try_enqueue_call to give up if a queue is full or overworked (distance project)
         Fixes an issue with the CW queuing mechanism when trying to fill a full queue.
 
 20161124:
@@ -149,8 +614,7 @@
         - fixed an issue in AXFR/IXFR retry timing management
 
 20160715:
-	YADIFA 2.2.0
-        
+    YADIFA 2.2.0
         Multi-master support:
 
             In <zone>, the masters field is now a list.
@@ -191,13 +655,13 @@
         - fixed an issue with the $TTL not being respected.
 
 20160126:
-        YADIFA 2.1.6
+    YADIFA 2.1.6
 
         Fixes:
         - fixed an issue where the referral would not be measured for UDP on a optimised build.
 
 20160108:
-        YADIFA 2.1.5
+    YADIFA 2.1.5
 
         Dynamic updates do not use temporary files anymore which improves their general performance.
         The statistics now shows the referrals.
@@ -213,7 +677,7 @@
           before finishing the previous write could lead to a deadlock
 
 20151026:
-        YADIFA 2.1.4
+    YADIFA 2.1.4
 
         The zone reader error reporting has been improved.
         Stacktrace support added for Solaris.
@@ -228,7 +692,7 @@
         - fixed an issue where zone signature maintenance would only start if all private keys were available.
 
 20150821:
-        YADIFA 2.1.3
+    YADIFA 2.1.3
 
         Fixes:
         - fixed an issue that could lead to a crash at startup
@@ -236,7 +700,7 @@
 
 
 20150814:
-        YADIFA 2.1.2
+    YADIFA 2.1.2
 
         The ./configure script has a new option: --enable-full-ascii7
         This changes the behaviour of DNS name validation to accept all the ASCII7 characters instead of only the DNS-space ones.
@@ -246,7 +710,7 @@
         - fixes an issue where the hmac-shaX identification string sent with a TSIG had the suffix ".sig-alg.reg.int".
 
 20150714:
-        YADIFA 2.1.1
+    YADIFA 2.1.1
 
         The yadifa command line has a new option: --config|-c file : read the specific configuration file instead of ~/.yadifa.rc
 
@@ -260,7 +724,7 @@
         - fixed an issue accepting some answers on IXFR transfers
 
 20150424:
-        YADIFA 2.1.0
+    YADIFA 2.1.0
 
         New journal file format:
       
@@ -278,7 +742,7 @@
 
 
 20150403:
-        YADIFA 2.0.6
+    YADIFA 2.0.6
 
         This release is a public release.
         This minor update's sole purpose is to fix YADIFA builds on OpenBSD.
@@ -293,7 +757,7 @@
             Configure: ./configure CC=egcc
 
 20150226:
-        YADIFA 2.0.5
+    YADIFA 2.0.5
 
         This release is a public release.
 
@@ -311,7 +775,7 @@
         - minor fixes and improvements
 
 20141216:
-        YADIFA 2.0.4
+    YADIFA 2.0.4
 
         This release is a public release.
 
@@ -390,95 +854,95 @@
 20140905:
     YADIFA 2.0.0
 
-    This release is a public release
+        This release is a public release
 
-    Fixes:
-    - fixed a log incorrectly reporting an error when the client didn't close the TCP connection fast enough
-    - fixed an issue with the statistics on TCP queries
+        Fixes:
+        - fixed a log incorrectly reporting an error when the client didn't close the TCP connection fast enough
+        - fixed an issue with the statistics on TCP queries
 
-    Known issue:
-    - removing the last key of a signed zone is permitted by YADIFA but triggers some chicken-egg issue with signatures.
+        Known issue:
+        - removing the last key of a signed zone is permitted by YADIFA but triggers some chicken-egg issue with signatures.
 
 20140829:
     YADIFA 2.0.0-beta3-public
 
-    This release is a public release
+        This release is a public release
 
-    - --disable-master feature at configure now builds a slave-only server
+        - --disable-master feature at configure now builds a slave-only server
 
-    Fixes:
-    - fixed an issue with TSIG signed queries
-    - fixed an issue with thread pool live resizing
-    - fixed an issue where reading an undeleted obsolete journal ending at the start of a newly transferred zone from the master would incorrectly trigger an error
+        Fixes:
+        - fixed an issue with TSIG signed queries
+        - fixed an issue with thread pool live resizing
+        - fixed an issue where reading an undeleted obsolete journal ending at the start of a newly transferred zone from the master would incorrectly trigger an error
 
-    Known issue:
-    - removing the last key of a signed zone is permitted by YADIFA but triggers some chicken-egg issue with signatures.
+        Known issue:
+        - removing the last key of a signed zone is permitted by YADIFA but triggers some chicken-egg issue with signatures.
 
 
 20140630:
     YADIFA 2.0.0-beta2-public
 
-    This release is a public release
+        This release is a public release
 
-    - basepath disabled
-    - pidpath removed, only pidfile remains
-    - log reopen notification is now timestamped
-    - slave zones no longer complain about missing NSEC/NSEC3 private keys
-    - the error code ZRE_FILE_NOT_FOUND has been replaced by the more accurate code ZRE_NO_VALID_FILE_FOUND
-    - default logging settings no longer output debug
+        - basepath disabled
+        - pidpath removed, only pidfile remains
+        - log reopen notification is now timestamped
+        - slave zones no longer complain about missing NSEC/NSEC3 private keys
+        - the error code ZRE_FILE_NOT_FOUND has been replaced by the more accurate code ZRE_NO_VALID_FILE_FOUND
+        - default logging settings no longer output debug
 
-    Fixes:
-    - fixed issue in flag computation (AD,CD)
-    - fixed an issue with journal truncation sometimes leading to a crash
-    - zone parsing now correctly accepts '#' as a comment marker
-    - zone parsing now rejects wrong fqdn as soon as it reads them, leading to a more accurate error message
-    - removing the last dnskey of a zone no longer crashes the server
+        Fixes:
+        - fixed issue in flag computation (AD,CD)
+        - fixed an issue with journal truncation sometimes leading to a crash
+        - zone parsing now correctly accepts '#' as a comment marker
+        - zone parsing now rejects wrong fqdn as soon as it reads them, leading to a more accurate error message
+        - removing the last dnskey of a zone no longer crashes the server
 
-    Known issue:
-    - removing the last key of a signed zone is permitted by YADIFA but triggers some chicken-egg issue with signatures.
+        Known issue:
+        - removing the last key of a signed zone is permitted by YADIFA but triggers some chicken-egg issue with signatures.
 
-    yadifa remote client commands prototype is now available with the following supported commands:
+        yadifa remote client commands prototype is now available with the following supported commands:
 
-        -shutdown
-            shuts down yadifa
-            e.g. ./yadifa -s "192.0.2.1 port 53" -t shutdown
-            
-        -cfgreload
-            reloads the <key> and <zone> sections of the yadifad configuration
+            -shutdown
+                shuts down yadifa
+                e.g. ./yadifa -s "192.0.2.1 port 53" -t shutdown
+                
+            -cfgreload
+                reloads the <key> and <zone> sections of the yadifad configuration
 
-            e.g. ./yadifa -s "192.0.2.1 port 53" -t cfgreload
+                e.g. ./yadifa -s "192.0.2.1 port 53" -t cfgreload
 
-        -logreopen
-            closes and reopen the log files
+            -logreopen
+                closes and reopen the log files
 
-            e.g. ./yadifa -s "192.0.2.1 port 53" -t logreopen
+                e.g. ./yadifa -s "192.0.2.1 port 53" -t logreopen
 
-        -freezeall
-            prevents all zones from being updated dynamically with nsupdate
-            
-            e.g. ./yadifa -s "192.0.2.1 port 53" -t freezeall
+            -freezeall
+                prevents all zones from being updated dynamically with nsupdate
+                
+                e.g. ./yadifa -s "192.0.2.1 port 53" -t freezeall
 
-        -freeze
-            prevents a zone from being updated dynamically with nsupdate
+            -freeze
+                prevents a zone from being updated dynamically with nsupdate
 
-            e.g. ./yadifa -s "192.0.2.1 port 53" -t freeze -q somedomain.eu
+                e.g. ./yadifa -s "192.0.2.1 port 53" -t freeze -q somedomain.eu
 
-        -unfreezeall
-            enables updates of all zones again
+            -unfreezeall
+                enables updates of all zones again
 
-            e.g. ./yadifa -s "192.0.2.1 port 53" -t unfreezeall
+                e.g. ./yadifa -s "192.0.2.1 port 53" -t unfreezeall
 
-        -unfreeze
-            enables updates of a zone again
+            -unfreeze
+                enables updates of a zone again
 
-            e.g. ./yadifa -s "192.0.2.1 port 53" -t unfreeze -q somedomain.eu
+                e.g. ./yadifa -s "192.0.2.1 port 53" -t unfreeze -q somedomain.eu
 
-        In order to work, the allow-control ACL must be defined either in <main> for the global commands and
-        may also be defined in <zone> for the ones targeting a specific zone.
+            In order to work, the allow-control ACL must be defined either in <main> for the global commands and
+            may also be defined in <zone> for the ones targeting a specific zone.
 
-            e.g. allow-control 127.0.0.1
+                e.g. allow-control 127.0.0.1
 
-        Note that tsig is not supported in the client yet.
+            Note that tsig is not supported in the client yet.
 
 20140528:
     YADIFA 2.0.0-beta1-public
@@ -496,10 +960,10 @@
         - framework is rewritten for multi core systems
         - single core server has been removed
 
-    Fixes:	
+        Fixes:	
 	- fixed several minor issues
 
-    Know issues:
+        Know issues:
 	- removing all dnskeys from a zone file crashes the server
 	- yadifa has some issues with nodelay, nocork
 	
@@ -563,168 +1027,168 @@
         _ notify is ignored on TCP  
 
 20120709:
-	YADIFA 1.0.1
-		_ logging repeat compression is now by channel instead of global
+    YADIFA 1.0.1
+    	_ logging repeat compression is now by channel instead of global
 
-	Fixes:
+    Fixes:
         _ fixed an issue where glibc whould assert if libgcc_s.so (libgcc_s.so.1) and libc.so (libc.so.6) where not
-		  available inside the chrooted directory of YADIFA
-		_ fixed an issue in the syslog module
+    	  available inside the chrooted directory of YADIFA
+    	_ fixed an issue in the syslog module
 
-	Known issues:
-		_ on 32 bits architectures, the sig-validity-* fields are not properly copied from <main> to <zone>
-		  as a workaround, set the sig-validity fields in each <zone> container in 32 bits architectures
+    Known issues:
+    	_ on 32 bits architectures, the sig-validity-* fields are not properly copied from <main> to <zone>
+    	  as a workaround, set the sig-validity fields in each <zone> container in 32 bits architectures
 
-		  ie:
-			  sig-validity-interval 7
+    	  ie:
+    		  sig-validity-interval 7
  			  sig-validity-regeneration 168
-			  sig-validity-jitter 3600
-		_ if the serial of a zone is changed in a way that it goes beyond a value such as
-		  the journal serial start is bigger than the journal serial end, issues are expected
-		  for IXFR answers.
-		_ notify is ignored on TCP
+    		  sig-validity-jitter 3600
+    	_ if the serial of a zone is changed in a way that it goes beyond a value such as
+    	  the journal serial start is bigger than the journal serial end, issues are expected
+    	  for IXFR answers.
+    	_ notify is ignored on TCP
 
 20120625:
-	YADIFA 1.0.0
-		_ LTO support can be enabled with --enable-lto but this is not working with clang. LTO does not increase
-		  the performance significally
-		_ parallel processing of listening addresses can now be enabled.
-		  It can be set using thread-count-by-address in the <main> section.
-		  By default YADIFA will not use parallel processing as this feature has not been
-		  as thoroughly tested as the single-thread processing model
-		_ default parameters tuning
-		_ fixes
+    YADIFA 1.0.0
+    	_ LTO support can be enabled with --enable-lto but this is not working with clang. LTO does not increase
+    	  the performance significally
+    	_ parallel processing of listening addresses can now be enabled.
+    	  It can be set using thread-count-by-address in the <main> section.
+    	  By default YADIFA will not use parallel processing as this feature has not been
+    	  as thoroughly tested as the single-thread processing model
+    	_ default parameters tuning
+    	_ fixes
 
-	 Known issue:
-		_ on 32 bits architectures, the sig-validity-* fields are not properly copied from <main> to <zone>
-		  as a workaround, set the sig-validity fields in each <zone> container in 32 bits architectures
+     Known issue:
+    	_ on 32 bits architectures, the sig-validity-* fields are not properly copied from <main> to <zone>
+    	  as a workaround, set the sig-validity fields in each <zone> container in 32 bits architectures
 
-		  ie:
-			  sig-validity-interval 7
+    	  ie:
+    		  sig-validity-interval 7
  			  sig-validity-regeneration 168
-			  sig-validity-jitter 3600
+    		  sig-validity-jitter 3600
 		
 20120530:
-	YADIFA 1.0.0RC3
-		_ the configuration parser now ignores undefined logger names and
-		  report them with a warning
-		_ syslog messages are now put in the name of "yadifad" instead of  the name used for the "syslog" channel
-		_ syslog messages do not print the time from YADIFA anymore
-		_ improved the steps involved in loading a locally cached slave zone
-		_ zones are now loaded in background 
-		_ man page yadifad-conf.man5 renamed into yadifad.conf.man5
+    YADIFA 1.0.0RC3
+    	_ the configuration parser now ignores undefined logger names and
+    	  report them with a warning
+    	_ syslog messages are now put in the name of "yadifad" instead of  the name used for the "syslog" channel
+    	_ syslog messages do not print the time from YADIFA anymore
+    	_ improved the steps involved in loading a locally cached slave zone
+    	_ zones are now loaded in background 
+    	_ man page yadifad-conf.man5 renamed into yadifad.conf.man5
 
-	Fixes:
-		_ AXFR/IXFR answers with the RA bit set are nolonger rejected as invalid
-		_ YADIFA now answers to SIGINT again (shutdown)
-		_ fixed an issue where obsolete AXFR files were not always being deleted
-		_ fixed an issue occurring when both IPv4 and IPv6 were available to handle a notify
-		_ fixed journal replay issue where some RRSIGs records were not properly removed
-		_ fixed an issue occurring with IPv6 queries
-		_ fixed an issue in the generation of a specific NSEC3 error answer
-		_ fixed named query style layout
+    Fixes:
+    	_ AXFR/IXFR answers with the RA bit set are nolonger rejected as invalid
+    	_ YADIFA now answers to SIGINT again (shutdown)
+    	_ fixed an issue where obsolete AXFR files were not always being deleted
+    	_ fixed an issue occurring when both IPv4 and IPv6 were available to handle a notify
+    	_ fixed journal replay issue where some RRSIGs records were not properly removed
+    	_ fixed an issue occurring with IPv6 queries
+    	_ fixed an issue in the generation of a specific NSEC3 error answer
+    	_ fixed named query style layout
 
-	Known issue:
-		_ if the serial of a zone is changed in a way that it goes beyond a value such as
-		  the journal serial start is bigger than the journal serial end, issues are expected
-		  for IXFR answers.
-		_ notify is ignored on TCP
-		
+    Known issue:
+    	_ if the serial of a zone is changed in a way that it goes beyond a value such as
+    	  the journal serial start is bigger than the journal serial end, issues are expected
+    	  for IXFR answers.
+    	_ notify is ignored on TCP
+    	
 20120328:
-	YADIFA 1.0.0RC2
-		_ fixed logging issue on work file creation error
-		_ fixed an issue where IXFR queries could be rejected as being wrongly formatted
-		_ fixed an issue in the query logging text
-		_ enabled command line options ( -u uid -g gid -d )
-	
+    YADIFA 1.0.0RC2
+    	_ fixed logging issue on work file creation error
+    	_ fixed an issue where IXFR queries could be rejected as being wrongly formatted
+    	_ fixed an issue in the query logging text
+    	_ enabled command line options ( -u uid -g gid -d )
+    
 20120319:
-	YADIFA 1.0.0RC1
+    YADIFA 1.0.0RC1
 
-	Is a full functional authoritative name server:
+    Is a full functional authoritative name server:
 
-		- works as primary or secondary name server
-		- AXFR
-		- IXFR
-		- NOTIFY
-		- NSUPDATE
-		- TSIG
-		- CLASSES:
-			- IN
-			- CH (just for version)
-		- TYPES:
-			- AAAA
-			- CNAME
-			- DNSKEY
-			- DS
-			- HINFO
-			- MX
-			- NAPTR
-			- NS
-			- NSEC3
-			- NSEC3PARAM
-			- NSEC
-			- PTR
-			- RRSIG
-			- SOA
-			- SRV
-			- SSHFP
-			- TXT
-		- Automatic resigning
-		- DNSSEC algorithms:
-			- 5 (RSASHA1)
-			- 7 (RSASHA1-NSEC3
-		- ACL's
-	
+    	- works as primary or secondary name server
+    	- AXFR
+    	- IXFR
+    	- NOTIFY
+    	- NSUPDATE
+    	- TSIG
+    	- CLASSES:
+    		- IN
+    		- CH (just for version)
+    	- TYPES:
+    		- AAAA
+    		- CNAME
+    		- DNSKEY
+    		- DS
+    		- HINFO
+    		- MX
+    		- NAPTR
+    		- NS
+    		- NSEC3
+    		- NSEC3PARAM
+    		- NSEC
+    		- PTR
+    		- RRSIG
+    		- SOA
+    		- SRV
+    		- SSHFP
+    		- TXT
+    	- Automatic resigning
+    	- DNSSEC algorithms:
+    		- 5 (RSASHA1)
+    		- 7 (RSASHA1-NSEC3
+    	- ACL's
+    
 
-	KNOWN ISSUES:
+    KNOWN ISSUES:
 
-		NSEC3:	_ cannot work with multiple NSEC3PARAM chains with mixed OPT-IN/OUT settings
+    	NSEC3:	_ cannot work with multiple NSEC3PARAM chains with mixed OPT-IN/OUT settings
 
-			_ adding a new NSEC3 chain expects that the master sends the NSEC3PARAM first (it does not seems to be always the case)
-				  We have a case where a master starts with 2 thousands NSEC3 opt-out records then adds 6 millions NSEC3 opt-in records but does not give the NSEC3PARAM record
-				  first. The slave server rejects them all because it's unable to link them to a chain.  (This one has high priority)
+    		_ adding a new NSEC3 chain expects that the master sends the NSEC3PARAM first (it does not seems to be always the case)
+    			  We have a case where a master starts with 2 thousands NSEC3 opt-out records then adds 6 millions NSEC3 opt-in records but does not give the NSEC3PARAM record
+    			  first. The slave server rejects them all because it's unable to link them to a chain.  (This one has high priority)
 
-		DNSSEC:	_ it is not allowed to change the zone security mode (unsecure, NSEC, or NSEC3).  Once the zone is loaded it keeps its security mode.
+    	DNSSEC:	_ it is not allowed to change the zone security mode (unsecure, NSEC, or NSEC3).  Once the zone is loaded it keeps its security mode.
 
-			_ dynamic updates of NSEC as well as NSEC3 records are refused
+    		_ dynamic updates of NSEC as well as NSEC3 records are refused
 
-		QUIT:	the server will shutdown on the following conditions:
+    	QUIT:	the server will shutdown on the following conditions:
 
-			_ detection of an impossible situation or an internal integrity issue (ie: for any reason the SOA has vanished from a zone)
+    		_ detection of an impossible situation or an internal integrity issue (ie: for any reason the SOA has vanished from a zone)
 
-			_ memory limit reached which prevents any more work
+    		_ memory limit reached which prevents any more work
 
-			_ ipc issue which prevent internal services communication
+    		_ ipc issue which prevent internal services communication
 
-		ACL:	_ since the access control is set by zone and CHAOS class is not implemented as a configurable zone, it is not possible (yet) to specifically block CHAOS queries.
+    	ACL:	_ since the access control is set by zone and CHAOS class is not implemented as a configurable zone, it is not possible (yet) to specifically block CHAOS queries.
 
 20111121:
-	YADIFA 0.5.5
-		-	many fixes 
+    YADIFA 0.5.5
+    	-	many fixes 
 
-	KNOWN ISSUE: NSEC3 slave zone replay fails.
+    KNOWN ISSUE: NSEC3 slave zone replay fails.
 
 20110706:
-	YADIFA 0.5.0
-		-	slave mode, AXFR/IXFR (no TSIG yet for the slave-side transfer)
-		-	answers to a notify from the master
-		-	polls the (first) master on the masters list
-		-	maintains the .axfr & .ix files (deletes the obsoletes ones)
-		-	TSIG queries are checked
-		-	Replays the zone journal on startup after the zone load (journaling)
-		-	Answers IXFR queries (journaling)
+    YADIFA 0.5.0
+    	-	slave mode, AXFR/IXFR (no TSIG yet for the slave-side transfer)
+    	-	answers to a notify from the master
+    	-	polls the (first) master on the masters list
+    	-	maintains the .axfr & .ix files (deletes the obsoletes ones)
+    	-	TSIG queries are checked
+    	-	Replays the zone journal on startup after the zone load (journaling)
+    	-	Answers IXFR queries (journaling)
 
 20110601:
-	YADIFA 0.4.0
-		Operational:
-		-	It works as a no dnssec name server
-		-	No notifies to slave name servers
-		-	daemon
-		-	Answers AXFR queries with TSIG
-		- 	nsupdate functionality (journaling)
-		-	TSIG on client server side will be transmitted, but not checked
-		-	ACL works
-		- 	The zone has SOA, NS A resource records.
+    YADIFA 0.4.0
+    	Operational:
+    	-	It works as a no dnssec name server
+    	-	No notifies to slave name servers
+    	-	daemon
+    	-	Answers AXFR queries with TSIG
+    	- 	nsupdate functionality (journaling)
+    	-	TSIG on client server side will be transmitted, but not checked
+    	-	ACL works
+    	- 	The zone has SOA, NS A resource records.
 
 20110524:
 	YADIFA 0.3.0
@@ -739,36 +1203,36 @@
 		
 
 20091224:
-	YADIFA 0.2.0
-		_	Answers AXFR queries
-		_	ACL based on IP and TSIG (not all query types are ACL'ed yet)
+    YADIFA 0.2.0
+    	_	Answers AXFR queries
+    	_	ACL based on IP and TSIG (not all query types are ACL'ed yet)
 
 20091104:
-	YADIFA 0.1.0
+    YADIFA 0.1.0
 
-		YADIFA is a work in progress. The main goal is to have an alternative for BIND or NSD.
+    	YADIFA is a work in progress. The main goal is to have an alternative for BIND or NSD.
 
-		Version 0.1.0 is an authoritative server only. 
+    	Version 0.1.0 is an authoritative server only. 
 
-		It has no:
-		-	AXFR/IXFR functionality
-		-	dynupdate
-		- 	support for NSEC
-		- 	support for NSEC3
-		-	caching mechanism
-		- 	additional tools (eg.dig, dnssectools, drill,...)
+    	It has no:
+    	-	AXFR/IXFR functionality
+    	-	dynupdate
+    	- 	support for NSEC
+    	- 	support for NSEC3
+    	-	caching mechanism
+    	- 	additional tools (eg.dig, dnssectools, drill,...)
 
-		It has:
-		-	a very fast way to give authoritative answer
-		-	a very fast method for loading the database and checking the zone files
+    	It has:
+    	-	a very fast way to give authoritative answer
+    	-	a very fast method for loading the database and checking the zone files
 
-		This first release is to have a feeling how it works in an operational environment.
-	
-	TODO
+    	This first release is to have a feeling how it works in an operational environment.
+    
+    TODO
 
-		Everything what is not implemented, has to be implemented. Most of the code is there, but is not activated.
+    	Everything what is not implemented, has to be implemented. Most of the code is there, but is not activated.
 
-		No comformity tests has been done. (This of course is on the todo list)
+    	No comformity tests has been done. (This of course is on the todo list)
 
 
 

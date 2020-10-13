@@ -16,91 +16,65 @@
 
 ################################################################################
 #
-# Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-# The YADIFA TM software product is provided under the BSD 3-clause license:
+#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
-# Redistribution and use in source and binary forms, with or without 
-# modification, are permitted provided that the following conditions
-# are met:
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions
+#  are met:
 #
-#        * Redistributions of source code must retain the above copyright 
-#          notice, this list of conditions and the following disclaimer.
-#        * Redistributions in binary form must reproduce the above copyright 
-#          notice, this list of conditions and the following disclaimer in the 
-#          documentation and/or other materials provided with the distribution.
-#        * Neither the name of EURid nor the names of its contributors may be 
-#          used to endorse or promote products derived from this software 
-#          without specific prior written permission.
+#         * Redistributions of source code must retain the above copyright
+#           notice, this list of conditions and the following disclaimer.
+#         * Redistributions in binary form must reproduce the above copyright
+#           notice, this list of conditions and the following disclaimer in the
+#           documentation and/or other materials provided with the distribution.
+#         * Neither the name of EURid nor the names of its contributors may be
+#           used to endorse or promote products derived from this software
+#           without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE 
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+#  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+#  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+#  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+#  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+#  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-################################################################################
-#
-#	YADIFA server Makefile.am script
-#
-#      	Makefile.am script
-#
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.11-public/sbin/yadifad/Makefile.am $
-#
-#       $Date: 2020-09-03 11:53:27 +0200 (Thu, 03 Sep 2020) $
-#
-#       $Revision: 9707 $
-#
-#	$Author: ericdf $
-#
-##############################################################################
+################################################################################        
 
 ################################################################################
 #
-# Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-# The YADIFA TM software product is provided under the BSD 3-clause license:
+#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
-# Redistribution and use in source and binary forms, with or without 
-# modification, are permitted provided that the following conditions
-# are met:
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions
+#  are met:
 #
-#        * Redistributions of source code must retain the above copyright 
-#          notice, this list of conditions and the following disclaimer.
-#        * Redistributions in binary form must reproduce the above copyright 
-#          notice, this list of conditions and the following disclaimer in the 
-#          documentation and/or other materials provided with the distribution.
-#        * Neither the name of EURid nor the names of its contributors may be 
-#          used to endorse or promote products derived from this software 
-#          without specific prior written permission.
+#         * Redistributions of source code must retain the above copyright
+#           notice, this list of conditions and the following disclaimer.
+#         * Redistributions in binary form must reproduce the above copyright
+#           notice, this list of conditions and the following disclaimer in the
+#           documentation and/or other materials provided with the distribution.
+#         * Neither the name of EURid nor the names of its contributors may be
+#           used to endorse or promote products derived from this software
+#           without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE 
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+#  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+#  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+#  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+#  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+#  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-################################################################################
-#
-#       SVN Program:
-#               $URL: $
-#
-#       Last Update:
-#               $Date:$
-#               $Revision: 1717 $
-#
-#       Purpose:
-#               Settings common to all makefiles
-#
-################################################################################
+################################################################################        
 
 #
 # ALL
@@ -108,46 +82,34 @@
 
 ################################################################################
 #
-# Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-# The YADIFA TM software product is provided under the BSD 3-clause license:
+#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
-# Redistribution and use in source and binary forms, with or without 
-# modification, are permitted provided that the following conditions
-# are met:
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions
+#  are met:
 #
-#        * Redistributions of source code must retain the above copyright 
-#          notice, this list of conditions and the following disclaimer.
-#        * Redistributions in binary form must reproduce the above copyright 
-#          notice, this list of conditions and the following disclaimer in the 
-#          documentation and/or other materials provided with the distribution.
-#        * Neither the name of EURid nor the names of its contributors may be 
-#          used to endorse or promote products derived from this software 
-#          without specific prior written permission.
+#         * Redistributions of source code must retain the above copyright
+#           notice, this list of conditions and the following disclaimer.
+#         * Redistributions in binary form must reproduce the above copyright
+#           notice, this list of conditions and the following disclaimer in the
+#           documentation and/or other materials provided with the distribution.
+#         * Neither the name of EURid nor the names of its contributors may be
+#           used to endorse or promote products derived from this software
+#           without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE 
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+#  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+#  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+#  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+#  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+#  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-################################################################################
-#
-#       SVN Program:
-#               $URL: $
-#
-#       Last Update:
-#               $Date:$
-#               $Revision: 1717 $
-#
-#       Purpose:
-#               Labels common to all makefiles
-#
-################################################################################
+################################################################################        
 
 
 
@@ -215,71 +177,38 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-sbin_PROGRAMS = yadifad$(EXEEXT)
-@HAS_NSID_SUPPORT_TRUE@am__append_1 = config-nsid.c
-@HAS_CTRL_TRUE@am__append_2 = config_control.c \
-@HAS_CTRL_TRUE@	ctrl.c \
-@HAS_CTRL_TRUE@	ctrl_query.c \
-@HAS_CTRL_TRUE@	ctrl_zone.c
-
-@HAS_CTRL_TRUE@am__append_3 = ctrl.h \
-@HAS_CTRL_TRUE@	ctrl_query.h \
-@HAS_CTRL_TRUE@	ctrl_zone.h
-
-@HAS_ACL_SUPPORT_TRUE@am__append_4 = acl.c config_acl.c
-@HAS_ACL_SUPPORT_TRUE@am__append_5 = config_acl.h
-@HAS_RRL_SUPPORT_TRUE@am__append_6 = rrl.c
-@HAS_RRL_SUPPORT_TRUE@am__append_7 = rrl.h
-@HAS_ACL_SUPPORT_TRUE@am__append_8 = acl.h
-@HAS_DYNUPDATE_SUPPORT_TRUE@am__append_9 = dynupdate_query_service.c
-@HAS_DYNUPDATE_SUPPORT_TRUE@am__append_10 = dynupdate_query_service.h
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@am__append_11 = database-service-zone-resignature.c \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-denial.c \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-dnssec-policy.c \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-key-roll.c \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-key-suite.c \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-key-template.c \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    config-key-roll-parser.c \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    zone-signature-policy.c \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    zone-signature-date-next.c \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    zone-signature-date-prev.c
-
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@am__append_12 = database-service-zone-resignature.h \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-dnssec-policy.h \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    config-key-roll-parser.h \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	zone-signature-policy.h
-
 DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
-	$(srcdir)/../../mk/common-labels.mk INSTALL NEWS README \
-	AUTHORS ChangeLog $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
-	$(top_srcdir)/configure $(am__configure_deps) \
-	$(srcdir)/server-config.h.in depcomp $(dist_noinst_DATA) \
-	$(am__noinst_HEADERS_DIST) COPYING compile config.guess \
-	config.sub install-sh missing ltmain.sh
-@USES_SUNC_TRUE@am__append_13 = 
-@USES_SUNC_FALSE@am__append_14 = -O0
-@IS_DARWIN_OS_TRUE@am__append_15 = -Wno-deprecated
-@HAS_CC_NO_IDENT_TRUE@am__append_16 = -fno-ident
-@HAS_CC_ANSI_TRUE@am__append_17 = -ansi
-@HAS_CC_PEDANTIC_TRUE@am__append_18 = -pedantic
-@HAS_CC_WALL_TRUE@am__append_19 = -Wall -Wno-unknown-pragmas
-@HAS_CC_MISSING_FIELD_INITIALIZERS_TRUE@am__append_20 = -Werror=missing-field-initializers
-@HAS_CC_STD_GNU99_TRUE@am__append_21 = -std=gnu99
-@HAS_CC_STD_C99_TRUE@@HAS_CC_STD_GNU99_FALSE@am__append_22 = -std=c99
-@HAS_CC_STD_GNU99_FALSE@@HAS_CC_XC99_TRUE@am__append_23 = -xc99
-@HAS_CC_TUNE_NATIVE_TRUE@am__append_24 = -mtune=native
-@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_25 = -m64
-@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_26 = -m64
-@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_27 = -m32
-@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_28 = -m32
+	$(srcdir)/../../mk/common-labels.mk $(srcdir)/Makefile.in \
+	$(srcdir)/Makefile.am $(top_srcdir)/depcomp \
+	$(dist_noinst_DATA) $(am__noinst_HEADERS_DIST) \
+	$(am__pkginclude_HEADERS_DIST) AUTHORS COPYING ChangeLog NEWS \
+	README
+@USES_SUNC_TRUE@am__append_1 = 
+@USES_SUNC_FALSE@am__append_2 = -O0
+@IS_DARWIN_OS_TRUE@am__append_3 = -Wno-deprecated
+@HAS_CC_NO_IDENT_TRUE@am__append_4 = -fno-ident
+@HAS_CC_ANSI_TRUE@am__append_5 = -ansi
+@HAS_CC_PEDANTIC_TRUE@am__append_6 = -pedantic
+@HAS_CC_WALL_TRUE@am__append_7 = -Wall -Wno-unknown-pragmas
+@HAS_CC_MISSING_FIELD_INITIALIZERS_TRUE@am__append_8 = -Werror=missing-field-initializers
+@HAS_CC_STD_GNU11_TRUE@am__append_9 = -std=gnu11
+@HAS_CC_STD_C11_TRUE@@HAS_CC_STD_GNU11_FALSE@am__append_10 = -std=c11 -D_GNU_SOURCE
+@HAS_CC_STD_C11_FALSE@@HAS_CC_STD_GNU11_FALSE@@HAS_CC_STD_GNU99_TRUE@am__append_11 = -std=gnu99
+@HAS_CC_STD_C11_FALSE@@HAS_CC_STD_C99_TRUE@@HAS_CC_STD_GNU11_FALSE@@HAS_CC_STD_GNU99_FALSE@am__append_12 = -std=c99
+@HAS_CC_STD_C11_FALSE@@HAS_CC_STD_C99_FALSE@@HAS_CC_STD_GNU11_FALSE@@HAS_CC_STD_GNU99_FALSE@@HAS_CC_XC99_TRUE@am__append_13 = -xc99
+@HAS_CC_TUNE_NATIVE_TRUE@am__append_14 = -mtune=native
+@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_15 = -m64
+@FORCE64BITS_TRUE@@HAS_CC_M64_TRUE@am__append_16 = -m64
+@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_17 = -m32
+@FORCE32BITS_TRUE@@FORCE64BITS_FALSE@@HAS_CC_M32_TRUE@am__append_18 = -m32
 
 #
 # DEBUG
 #
-@HAS_CC_G3_TRUE@am__append_29 = -g3
-@HAS_CC_G3_FALSE@@HAS_CC_G_TRUE@am__append_30 = -g
-@HAS_CC_DWARF4_TRUE@am__append_31 = -gdwarf-4
-@HAS_CC_DWARF3_TRUE@@HAS_CC_DWARF4_FALSE@am__append_32 = -gdwarf-3
+@HAS_CC_G3_TRUE@am__append_19 = -g3
+@HAS_CC_G3_FALSE@@HAS_CC_G_TRUE@am__append_20 = -g
+@HAS_CC_DWARF4_TRUE@am__append_21 = -gdwarf-4
+@HAS_CC_DWARF3_TRUE@@HAS_CC_DWARF4_FALSE@am__append_22 = -gdwarf-3
 
 #
 # Intel C Compiler
@@ -288,11 +217,11 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 
 #ICC
 #IPO= -ipo (need to use the intel xiar instead of ar)
-@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_33 = -DLTO -ipo
-@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_34 = -ipo
-@USES_ICC_TRUE@am__append_35 = -DUSES_ICC 
-@HAS_CC_ANSI_ALIAS_TRUE@@USES_ICC_TRUE@am__append_36 = -ansi-alias -U__STRICT_ANSI__ 
-@USES_ICC_TRUE@am__append_37 = -DMODE_DEBUG_ICC
+@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_23 = -DLTO -ipo
+@HAS_LTO_SUPPORT_TRUE@@USES_ICC_TRUE@am__append_24 = -ipo
+@USES_ICC_TRUE@am__append_25 = -DUSES_ICC 
+@HAS_CC_ANSI_ALIAS_TRUE@@USES_ICC_TRUE@am__append_26 = -ansi-alias -U__STRICT_ANSI__ 
+@USES_ICC_TRUE@am__append_27 = -DMODE_DEBUG_ICC
 
 #
 # LLVM Clang
@@ -300,10 +229,11 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 ###############################################################################
 
 # CLANG
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_38 = -DLTO -flto
-@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_39 = -flto
-@USES_CLANG_TRUE@am__append_40 = -DUSES_LLVM -Wno-gnu -Wno-extended-offsetof
-@USES_CLANG_TRUE@am__append_41 = -DMODE_DEBUG_CLANG -fsanitize=address -fsanitize=bounds
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_28 = -DLTO -flto
+@HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@am__append_29 = -flto
+@USES_CLANG_TRUE@am__append_30 = -DUSES_LLVM -Wno-gnu
+#-Wno-extended-offsetof
+@USES_CLANG_TRUE@am__append_31 = -DMODE_DEBUG_CLANG -fsanitize=address -fsanitize=bounds
 
 # Note: add a _d suffix for debug builds ?
 
@@ -313,18 +243,18 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 ###############################################################################
 
 #GCC
-@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_42 = -mcpu=niagara
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_43 = -DLTO -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_44 = -flto \
+@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_32 = -mcpu=niagara
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_33 = -DLTO -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_34 = -flto \
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-fwhole-program \
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-fno-fat-lto-objects \
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-fuse-linker-plugin \
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-Wl,-Map=module.map \
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-Wl,--cref
-@USES_GCC_TRUE@am__append_45 = -DUSES_GCC
-@USES_GCC_TRUE@am__append_46 = -DMODE_DEBUG_GCC -fstack-check -fstack-protector-strong
-@USES_SUNC_TRUE@am__append_47 = -DUSES_SUNC
-@USES_SUNC_TRUE@am__append_48 = -DMODE_DEBUG_SUNC
+@USES_GCC_TRUE@am__append_35 = -DUSES_GCC
+@USES_GCC_TRUE@am__append_36 = -DMODE_DEBUG_GCC -fstack-check -fstack-protector-strong
+@USES_SUNC_TRUE@am__append_37 = -DUSES_SUNC
+@USES_SUNC_TRUE@am__append_38 = -DMODE_DEBUG_SUNC
 
 # Note: add a _d suffix for debug builds ?
 
@@ -334,74 +264,103 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 ###############################################################################
 
 # if an unknown compiler is used, it should have its own section
-@USES_UNKNOWN_TRUE@am__append_49 = -DUSES_UNKNOWN_COMPILER
-@USES_UNKNOWN_TRUE@am__append_50 = -DMODE_DEBUG_UNKNOWN
+@USES_UNKNOWN_TRUE@am__append_39 = -DUSES_UNKNOWN_COMPILER
+@USES_UNKNOWN_TRUE@am__append_40 = -DMODE_DEBUG_UNKNOWN
 
 #
 # Some BSD-based OSes need this
 #
-@IS_BSD_FAMILY_TRUE@am__append_51 = -I./include
-@IS_SOLARIS_FAMILY_TRUE@am__append_52 = -D_POSIX_PTHREAD_SEMANTICS
-@HAS_CC_RDYNAMIC_TRUE@am__append_53 = -rdynamic
-@HAS_CC_RDYNAMIC_TRUE@am__append_54 = -rdynamic
+@IS_BSD_FAMILY_TRUE@am__append_41 = -I./include
+@IS_SOLARIS_FAMILY_TRUE@am__append_42 = -D_POSIX_PTHREAD_SEMANTICS
+sbin_PROGRAMS = yadifad$(EXEEXT)
+@HAVE_SENDMMSG_TRUE@@IS_LINUX_FAMILY_TRUE@am__append_43 = server-mm.c
+@HAVE_SENDMMSG_TRUE@@IS_LINUX_FAMILY_TRUE@am__append_44 = server-mm.h
+@HAS_EVENT_DYNAMIC_MODULE_TRUE@am__append_45 = dynamic-module-handler.c
+@HAS_EVENT_DYNAMIC_MODULE_TRUE@am__append_46 = dynamic-module-handler.h
+@HAS_NSID_SUPPORT_TRUE@am__append_47 = config-nsid.c
+@HAS_CTRL_TRUE@am__append_48 = config_control.c ctrl.c ctrl_query.c \
+@HAS_CTRL_TRUE@	ctrl_zone.c ctrl_notify.c ctrl_query_axfr.c \
+@HAS_CTRL_TRUE@	ctrl_query_message.c ctrl_update.c
+@HAS_CTRL_TRUE@am__append_49 = ctrl.h ctrl_query.h ctrl_zone.h \
+@HAS_CTRL_TRUE@	ctrl_notify.h ctrl_query_axfr.h \
+@HAS_CTRL_TRUE@	ctrl_query_message.h ctrl_update.h
+@HAS_RRL_SUPPORT_TRUE@am__append_50 = rrl.c
+@HAS_RRL_SUPPORT_TRUE@am__append_51 = rrl.h
+@HAS_DYNUPDATE_SUPPORT_TRUE@am__append_52 = dynupdate_query_service.c
+@HAS_DYNUPDATE_SUPPORT_TRUE@am__append_53 = dynupdate_query_service.h
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@am__append_54 = database-service-zone-resignature.c \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    config-denial.c \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    config-dnssec-policy.c \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    config-key-roll.c \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    config-key-suite.c \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    config-key-template.c \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    config-key-roll-parser.c \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    zone-signature-policy.c \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    zone-signature-date-next.c \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    zone-signature-date-prev.c
 
-# workaround a bug where clang does not handle properly profiling and optimizations
-@USES_CLANG_TRUE@am__append_55 = -mno-omit-leaf-frame-pointer -fno-omit-frame-pointer
-subdir = .
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@am__append_55 = database-service-zone-resignature.h \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    config-dnssec-policy.h \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    config-key-roll-parser.h \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@    zone-signature-policy.h
+
+subdir = sbin/yadifad
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/../../m4/libtool.m4 \
-	$(top_srcdir)/../../m4/ltoptions.m4 \
-	$(top_srcdir)/../../m4/ltsugar.m4 \
-	$(top_srcdir)/../../m4/ltversion.m4 \
-	$(top_srcdir)/../../m4/lt~obsolete.m4 \
-	$(top_srcdir)/../../m4/eurid.m4 \
-	$(top_srcdir)/../../m4/yadifa.m4 $(top_srcdir)/configure.ac
+am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
+	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
+	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
+	$(top_srcdir)/m4/eurid.m4 $(top_srcdir)/m4/yadifa.m4 \
+	$(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
-am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
- configure.lineno config.status.lineno
 mkinstalldirs = $(install_sh) -d
-CONFIG_HEADER = server-config.h
+CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
-am__installdirs = "$(DESTDIR)$(sbindir)"
+am__installdirs = "$(DESTDIR)$(sbindir)" "$(DESTDIR)$(pkgincludedir)"
 PROGRAMS = $(sbin_PROGRAMS)
 am__yadifad_SOURCES_DIST = main.c axfr.c config_main.c config_zone.c \
 	confs.c database-service-zone-desc-load.c \
 	database-service-zone-desc-unload.c \
 	database-service-zone-download.c \
 	database-service-zone-freeze.c database-service-zone-load.c \
-	database-service-zone-mount.c database-service-zone-save.c \
+	database-service-zone-mount.c database-service-zone-store.c \
 	database-service-zone-unfreeze.c \
 	database-service-zone-unload.c database-service-zone-unmount.c \
 	database-service.c database.c ixfr.c log_query.c \
 	log_statistics.c notify.c poll-util.c process_class_ch.c \
-	server-mt.c server-rw.c server.c server_context.c signals.c \
-	zone.c config-nsid.c config_control.c ctrl.c ctrl_query.c \
-	ctrl_zone.c acl.c config_acl.c rrl.c dynupdate_query_service.c \
-	database-service-zone-resignature.c config-denial.c \
-	config-dnssec-policy.c config-key-roll.c config-key-suite.c \
-	config-key-template.c config-key-roll-parser.c \
-	zone-signature-policy.c zone-signature-date-next.c \
-	zone-signature-date-prev.c
-@HAS_NSID_SUPPORT_TRUE@am__objects_1 = config-nsid.$(OBJEXT)
-@HAS_CTRL_TRUE@am__objects_2 = config_control.$(OBJEXT) ctrl.$(OBJEXT) \
-@HAS_CTRL_TRUE@	ctrl_query.$(OBJEXT) ctrl_zone.$(OBJEXT)
-@HAS_ACL_SUPPORT_TRUE@am__objects_3 = acl.$(OBJEXT) \
-@HAS_ACL_SUPPORT_TRUE@	config_acl.$(OBJEXT)
-@HAS_RRL_SUPPORT_TRUE@am__objects_4 = rrl.$(OBJEXT)
-@HAS_DYNUPDATE_SUPPORT_TRUE@am__objects_5 =  \
+	server-sm.c server.c server_context.c \
+	server_process_message_udp.c signals.c zone.c server-rw.c \
+	server-mm.c dynamic-module-handler.c config-nsid.c \
+	config_control.c ctrl.c ctrl_query.c ctrl_zone.c ctrl_notify.c \
+	ctrl_query_axfr.c ctrl_query_message.c ctrl_update.c rrl.c \
+	dynupdate_query_service.c database-service-zone-resignature.c \
+	config-denial.c config-dnssec-policy.c config-key-roll.c \
+	config-key-suite.c config-key-template.c \
+	config-key-roll-parser.c zone-signature-policy.c \
+	zone-signature-date-next.c zone-signature-date-prev.c
+@HAVE_SENDMMSG_TRUE@@IS_LINUX_FAMILY_TRUE@am__objects_1 =  \
+@HAVE_SENDMMSG_TRUE@@IS_LINUX_FAMILY_TRUE@	server-mm.$(OBJEXT)
+@HAS_EVENT_DYNAMIC_MODULE_TRUE@am__objects_2 = dynamic-module-handler.$(OBJEXT)
+@HAS_NSID_SUPPORT_TRUE@am__objects_3 = config-nsid.$(OBJEXT)
+@HAS_CTRL_TRUE@am__objects_4 = config_control.$(OBJEXT) ctrl.$(OBJEXT) \
+@HAS_CTRL_TRUE@	ctrl_query.$(OBJEXT) ctrl_zone.$(OBJEXT) \
+@HAS_CTRL_TRUE@	ctrl_notify.$(OBJEXT) ctrl_query_axfr.$(OBJEXT) \
+@HAS_CTRL_TRUE@	ctrl_query_message.$(OBJEXT) \
+@HAS_CTRL_TRUE@	ctrl_update.$(OBJEXT)
+@HAS_RRL_SUPPORT_TRUE@am__objects_5 = rrl.$(OBJEXT)
+@HAS_DYNUPDATE_SUPPORT_TRUE@am__objects_6 =  \
 @HAS_DYNUPDATE_SUPPORT_TRUE@	dynupdate_query_service.$(OBJEXT)
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@am__objects_6 = database-service-zone-resignature.$(OBJEXT) \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-denial.$(OBJEXT) \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-dnssec-policy.$(OBJEXT) \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-key-roll.$(OBJEXT) \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-key-suite.$(OBJEXT) \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-key-template.$(OBJEXT) \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-key-roll-parser.$(OBJEXT) \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	zone-signature-policy.$(OBJEXT) \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	zone-signature-date-next.$(OBJEXT) \
-@HAS_DNSSEC_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	zone-signature-date-prev.$(OBJEXT)
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@am__objects_7 = database-service-zone-resignature.$(OBJEXT) \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-denial.$(OBJEXT) \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-dnssec-policy.$(OBJEXT) \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-key-roll.$(OBJEXT) \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-key-suite.$(OBJEXT) \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-key-template.$(OBJEXT) \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	config-key-roll-parser.$(OBJEXT) \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	zone-signature-policy.$(OBJEXT) \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	zone-signature-date-next.$(OBJEXT) \
+@HAS_MASTER_SUPPORT_TRUE@@HAS_RRSIG_MANAGEMENT_SUPPORT_TRUE@	zone-signature-date-prev.$(OBJEXT)
 am_yadifad_OBJECTS = main.$(OBJEXT) axfr.$(OBJEXT) \
 	config_main.$(OBJEXT) config_zone.$(OBJEXT) confs.$(OBJEXT) \
 	database-service-zone-desc-load.$(OBJEXT) \
@@ -410,19 +369,19 @@ am_yadifad_OBJECTS = main.$(OBJEXT) axfr.$(OBJEXT) \
 	database-service-zone-freeze.$(OBJEXT) \
 	database-service-zone-load.$(OBJEXT) \
 	database-service-zone-mount.$(OBJEXT) \
-	database-service-zone-save.$(OBJEXT) \
+	database-service-zone-store.$(OBJEXT) \
 	database-service-zone-unfreeze.$(OBJEXT) \
 	database-service-zone-unload.$(OBJEXT) \
 	database-service-zone-unmount.$(OBJEXT) \
 	database-service.$(OBJEXT) database.$(OBJEXT) ixfr.$(OBJEXT) \
 	log_query.$(OBJEXT) log_statistics.$(OBJEXT) notify.$(OBJEXT) \
 	poll-util.$(OBJEXT) process_class_ch.$(OBJEXT) \
-	server-mt.$(OBJEXT) server-rw.$(OBJEXT) server.$(OBJEXT) \
-	server_context.$(OBJEXT) signals.$(OBJEXT) zone.$(OBJEXT) \
-	$(am__objects_1) $(am__objects_2) $(am__objects_3) \
-	$(am__objects_4) $(am__objects_5) $(am__objects_6)
+	server-sm.$(OBJEXT) server.$(OBJEXT) server_context.$(OBJEXT) \
+	server_process_message_udp.$(OBJEXT) signals.$(OBJEXT) \
+	zone.$(OBJEXT) server-rw.$(OBJEXT) $(am__objects_1) \
+	$(am__objects_2) $(am__objects_3) $(am__objects_4) \
+	$(am__objects_5) $(am__objects_6) $(am__objects_7)
 yadifad_OBJECTS = $(am_yadifad_OBJECTS)
-yadifad_LDADD = $(LDADD)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
@@ -439,7 +398,7 @@ AM_V_at = $(am__v_at_@AM_V@)
 am__v_at_ = $(am__v_at_@AM_DEFAULT_V@)
 am__v_at_0 = @
 am__v_at_1 = 
-DEFAULT_INCLUDES = -I.@am__isrc@
+DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
 am__mv = mv -f
@@ -469,25 +428,54 @@ am__can_run_installinfo = \
     *) (install-info --version) >/dev/null 2>&1;; \
   esac
 DATA = $(dist_noinst_DATA)
-am__noinst_HEADERS_DIST = axfr.h config.h config_error.h confs.h \
+am__noinst_HEADERS_DIST = axfr.h config_error.h confs.h \
 	database-service-zone-desc-load.h \
 	database-service-zone-desc-unload.h \
 	database-service-zone-download.h \
 	database-service-zone-freeze.h database-service-zone-load.h \
-	database-service-zone-mount.h database-service-zone-save.h \
+	database-service-zone-mount.h database-service-zone-store.h \
 	database-service-zone-unfreeze.h \
 	database-service-zone-unload.h database-service-zone-unmount.h \
 	database-service.h database.h dnssec-policy.h ixfr.h \
 	log_query.h log_statistics.h notify.h poll-util.h \
-	process_class_ch.h server-mt.h server-rw.h server.h \
-	server_context.h server_error.h signals.h zone.h zone_desc.h \
-	zone-source.h ctrl.h ctrl_query.h ctrl_zone.h config_acl.h \
-	rrl.h acl.h dynupdate_query_service.h \
-	database-service-zone-resignature.h config-dnssec-policy.h \
-	config-key-roll-parser.h zone-signature-policy.h
-HEADERS = $(noinst_HEADERS)
-am__tagged_files = $(HEADERS) $(SOURCES) $(TAGS_FILES) \
-	$(LISP)server-config.h.in
+	process_class_ch.h server-sm.h server.h server_context.h \
+	server_error.h signals.h zone.h zone_desc.h zone-source.h \
+	server-rw.h server-mm.h dynamic-module-handler.h ctrl.h \
+	ctrl_query.h ctrl_zone.h ctrl_notify.h ctrl_query_axfr.h \
+	ctrl_query_message.h ctrl_update.h rrl.h \
+	dynupdate_query_service.h database-service-zone-resignature.h \
+	config-dnssec-policy.h config-key-roll-parser.h \
+	zone-signature-policy.h
+am__pkginclude_HEADERS_DIST = dynamic-module-interface.h
+am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
+am__vpath_adj = case $$p in \
+    $(srcdir)/*) f=`echo "$$p" | sed "s|^$$srcdirstrip/||"`;; \
+    *) f=$$p;; \
+  esac;
+am__strip_dir = f=`echo $$p | sed -e 's|^.*/||'`;
+am__install_max = 40
+am__nobase_strip_setup = \
+  srcdirstrip=`echo "$(srcdir)" | sed 's/[].[^$$\\*|]/\\\\&/g'`
+am__nobase_strip = \
+  for p in $$list; do echo "$$p"; done | sed -e "s|$$srcdirstrip/||"
+am__nobase_list = $(am__nobase_strip_setup); \
+  for p in $$list; do echo "$$p $$p"; done | \
+  sed "s| $$srcdirstrip/| |;"' / .*\//!s/ .*/ ./; s,\( .*\)/[^/]*$$,\1,' | \
+  $(AWK) 'BEGIN { files["."] = "" } { files[$$2] = files[$$2] " " $$1; \
+    if (++n[$$2] == $(am__install_max)) \
+      { print $$2, files[$$2]; n[$$2] = 0; files[$$2] = "" } } \
+    END { for (dir in files) print dir, files[dir] }'
+am__base_list = \
+  sed '$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;s/\n/ /g' | \
+  sed '$$!N;$$!N;$$!N;$$!N;s/\n/ /g'
+am__uninstall_files_from_dir = { \
+  test -z "$$files" \
+    || { test ! -d "$$dir" && test ! -f "$$dir" && test ! -r "$$dir"; } \
+    || { echo " ( cd '$$dir' && rm -f" $$files ")"; \
+         $(am__cd) "$$dir" && rm -f $$files; }; \
+  }
+HEADERS = $(noinst_HEADERS) $(pkginclude_HEADERS)
+am__tagged_files = $(HEADERS) $(SOURCES) $(TAGS_FILES) $(LISP)
 # Read a list of newline-separated strings from the standard input,
 # and print each of them once, without duplicates.  Input order is
 # *not* preserved.
@@ -506,25 +494,7 @@ am__define_uniq_tagged_files = \
   done | $(am__uniquify_input)`
 ETAGS = etags
 CTAGS = ctags
-CSCOPE = cscope
-AM_RECURSIVE_TARGETS = cscope
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
-distdir = $(PACKAGE)-$(VERSION)
-top_distdir = $(distdir)
-am__remove_distdir = \
-  if test -d "$(distdir)"; then \
-    find "$(distdir)" -type d ! -perm -200 -exec chmod u+w {} ';' \
-      && rm -rf "$(distdir)" \
-      || { sleep 5 && rm -rf "$(distdir)"; }; \
-  else :; fi
-am__post_remove_distdir = $(am__remove_distdir)
-DIST_ARCHIVES = $(distdir).tar.gz
-GZIP_ENV = --best
-DIST_TARGETS = dist-gzip
-distuninstallcheck_listfiles = find . -type f -print
-am__distuninstallcheck_listfiles = $(distuninstallcheck_listfiles) \
-  | sed 's|^\./|$(prefix)/|' | grep -v '$(infodir)/dir$$'
-distcleancheck_listfiles = find . -type f -print
 ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
 AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
@@ -546,7 +516,6 @@ DLLTOOL = @DLLTOOL@
 DNSCORE = @DNSCORE@
 DNSDB = @DNSDB@
 DNSLG = @DNSLG@
-DNSZONE = @DNSZONE@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
 ECHO_C = @ECHO_C@
@@ -556,6 +525,7 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GREP = @GREP@
+HAS_ACL_SUPPORT = @HAS_ACL_SUPPORT@
 HAS_BFD_DEBUG_SUPPORT = @HAS_BFD_DEBUG_SUPPORT@
 HAS_BIG_ENDIAN = @HAS_BIG_ENDIAN@
 HAS_BUILD_TIMESTAMP = @HAS_BUILD_TIMESTAMP@
@@ -578,35 +548,50 @@ HAS_CC_PEDANTIC = @HAS_CC_PEDANTIC@
 HAS_CC_RDYNAMIC = @HAS_CC_RDYNAMIC@
 HAS_CC_SANITIZE_ADDRESS = @HAS_CC_SANITIZE_ADDRESS@
 HAS_CC_STACK_PROTECTOR = @HAS_CC_STACK_PROTECTOR@
+HAS_CC_STD_C11 = @HAS_CC_STD_C11@
 HAS_CC_STD_C99 = @HAS_CC_STD_C99@
+HAS_CC_STD_GNU11 = @HAS_CC_STD_GNU11@
 HAS_CC_STD_GNU99 = @HAS_CC_STD_GNU99@
 HAS_CC_TUNE_NATIVE = @HAS_CC_TUNE_NATIVE@
 HAS_CC_WALL = @HAS_CC_WALL@
 HAS_CC_XC99 = @HAS_CC_XC99@
+HAS_CLOSE_EX_REF = @HAS_CLOSE_EX_REF@
 HAS_CTRL = @HAS_CTRL@
-HAS_DROPALL_SUPPORT = @HAS_DROPALL_SUPPORT@
+HAS_DNSSEC_TOOLS = @HAS_DNSSEC_TOOLS@
 HAS_DYNUPDATE_SUPPORT = @HAS_DYNUPDATE_SUPPORT@
 HAS_ECDSA_SUPPORT = @HAS_ECDSA_SUPPORT@
+HAS_EVENT_DYNAMIC_MODULE = @HAS_EVENT_DYNAMIC_MODULE@
+HAS_FILEPOOL_CACHE = @HAS_FILEPOOL_CACHE@
 HAS_FULL_ASCII7 = @HAS_FULL_ASCII7@
 HAS_LIBC_MALLOC_DEBUG_SUPPORT = @HAS_LIBC_MALLOC_DEBUG_SUPPORT@
 HAS_LITTLE_ENDIAN = @HAS_LITTLE_ENDIAN@
+HAS_LOCK_DEBUG_SUPPORT = @HAS_LOCK_DEBUG_SUPPORT@
 HAS_LOGDIR = @HAS_LOGDIR@
-HAS_LOG_PID_ALWAYS_ON = @HAS_LOG_PID_ALWAYS_ON@
-HAS_LOG_THREAD_ID_ALWAYS_ON = @HAS_LOG_THREAD_ID_ALWAYS_ON@
-HAS_LOG_THREAD_TAG_ALWAYS_ON = @HAS_LOG_THREAD_TAG_ALWAYS_ON@
+HAS_LOG_PID = @HAS_LOG_PID@
+HAS_LOG_THREAD_ID = @HAS_LOG_THREAD_ID@
+HAS_LOG_THREAD_TAG = @HAS_LOG_THREAD_TAG@
 HAS_MALLOC_DEBUG_SUPPORT = @HAS_MALLOC_DEBUG_SUPPORT@
 HAS_MASTER_SUPPORT = @HAS_MASTER_SUPPORT@
 HAS_MEMALIGN_ISSUES = @HAS_MEMALIGN_ISSUES@
-HAS_MESSAGES_SUPPORT = @HAS_MESSAGES_SUPPORT@
 HAS_MUTEX_DEBUG_SUPPORT = @HAS_MUTEX_DEBUG_SUPPORT@
 HAS_NON_AA_AXFR_SUPPORT = @HAS_NON_AA_AXFR_SUPPORT@
+HAS_NSEC3_SUPPORT = @HAS_NSEC3_SUPPORT@
+HAS_NSEC_SUPPORT = @HAS_NSEC_SUPPORT@
 HAS_NSID_SUPPORT = @HAS_NSID_SUPPORT@
 HAS_RRL_SUPPORT = @HAS_RRL_SUPPORT@
 HAS_RRSIG_MANAGEMENT_SUPPORT = @HAS_RRSIG_MANAGEMENT_SUPPORT@
+HAS_SYNC_BUILTINS = @HAS_SYNC_BUILTINS@
+HAS_SYSTEMD_RESOLVED_AVOIDANCE = @HAS_SYSTEMD_RESOLVED_AVOIDANCE@
+HAS_TESTS = @HAS_TESTS@
+HAS_TOOLS = @HAS_TOOLS@
 HAS_TRACK_ZONES_DEBUG_SUPPORT = @HAS_TRACK_ZONES_DEBUG_SUPPORT@
+HAS_TSIG_SUPPORT = @HAS_TSIG_SUPPORT@
+HAS_YADIFA = @HAS_YADIFA@
 HAS_ZALLOC_DEBUG_SUPPORT = @HAS_ZALLOC_DEBUG_SUPPORT@
 HAS_ZALLOC_STATISTICS_SUPPORT = @HAS_ZALLOC_STATISTICS_SUPPORT@
 HAS_ZALLOC_SUPPORT = @HAS_ZALLOC_SUPPORT@
+HAVE_RECVMMSG = @HAVE_RECVMMSG@
+HAVE_SENDMMSG = @HAVE_SENDMMSG@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -649,6 +634,7 @@ SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 STRIP = @STRIP@
 VERSION = @VERSION@
+ZDB_HAS_DNSSEC_SUPPORT = @ZDB_HAS_DNSSEC_SUPPORT@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -703,55 +689,34 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I ../../m4
-dist_noinst_DATA = VERSION
-yadifad_SOURCES = main.c axfr.c config_main.c config_zone.c confs.c \
-	database-service-zone-desc-load.c \
-	database-service-zone-desc-unload.c \
-	database-service-zone-download.c \
-	database-service-zone-freeze.c database-service-zone-load.c \
-	database-service-zone-mount.c database-service-zone-save.c \
-	database-service-zone-unfreeze.c \
-	database-service-zone-unload.c database-service-zone-unmount.c \
-	database-service.c database.c ixfr.c log_query.c \
-	log_statistics.c notify.c poll-util.c process_class_ch.c \
-	server-mt.c server-rw.c server.c server_context.c signals.c \
-	zone.c $(am__append_1) $(am__append_2) $(am__append_4) \
-	$(am__append_6) $(am__append_9) $(am__append_11)
-noinst_HEADERS = axfr.h config.h config_error.h confs.h \
-	database-service-zone-desc-load.h \
-	database-service-zone-desc-unload.h \
-	database-service-zone-download.h \
-	database-service-zone-freeze.h database-service-zone-load.h \
-	database-service-zone-mount.h database-service-zone-save.h \
-	database-service-zone-unfreeze.h \
-	database-service-zone-unload.h database-service-zone-unmount.h \
-	database-service.h database.h dnssec-policy.h ixfr.h \
-	log_query.h log_statistics.h notify.h poll-util.h \
-	process_class_ch.h server-mt.h server-rw.h server.h \
-	server_context.h server_error.h signals.h zone.h zone_desc.h \
-	zone-source.h $(am__append_3) $(am__append_5) $(am__append_7) \
-	$(am__append_8) $(am__append_10) $(am__append_12)
 
 #
 #
 #
 AM_CFLAGS = -D_THREAD_SAFE -D_REENTRANT -D_FILE_OFFSET_BITS=64 \
-	-I$(abs_builddir) -I$(abs_srcdir)/include $(am__append_15) \
-	$(am__append_16) $(am__append_17) $(am__append_18) \
-	$(am__append_19) $(am__append_20) $(am__append_21) \
-	$(am__append_22) $(am__append_23) $(am__append_24) \
-	$(am__append_25) $(am__append_27) $(am__append_33) \
-	$(am__append_35) $(am__append_36) $(am__append_38) \
-	$(am__append_40) $(am__append_42) $(am__append_43) \
-	$(am__append_45) $(am__append_47) $(am__append_49) \
-	$(am__append_51) $(am__append_52) $(LOCALFLAGS) $(YCFLAGS)
-AM_LDFLAGS = $(am__append_26) $(am__append_28) $(am__append_34) \
-	$(am__append_39) $(am__append_44) $(YLDFLAGS)
-DEBUGFLAGS = $(am__append_13) $(am__append_14) $(am__append_29) \
-	$(am__append_30) $(am__append_31) $(am__append_32) \
-	$(am__append_37) $(am__append_41) $(am__append_46) \
-	$(am__append_48) $(am__append_50)
-LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"'
+	-I$(abs_builddir) -I$(abs_builddir)/include \
+	-I$(abs_srcdir)/include $(am__append_3) $(am__append_4) \
+	$(am__append_5) $(am__append_6) $(am__append_7) \
+	$(am__append_8) $(am__append_9) $(am__append_10) \
+	$(am__append_11) $(am__append_12) $(am__append_13) \
+	$(am__append_14) $(am__append_15) $(am__append_17) \
+	$(am__append_23) $(am__append_25) $(am__append_26) \
+	$(am__append_28) $(am__append_30) $(am__append_32) \
+	$(am__append_33) $(am__append_35) $(am__append_37) \
+	$(am__append_39) $(am__append_41) $(am__append_42) \
+	$(LOCALFLAGS) -I$(top_srcdir)/lib/dnscore/include \
+	-I$(top_builddir)/lib/dnscore/include \
+	-I$(top_srcdir)/lib/dnsdb/include \
+	-I$(top_builddir)/lib/dnsdb/include \
+	-I$(top_srcdir)/lib/dnstcl/include \
+	-I$(top_builddir)/lib/dnstcl/include
+AM_LDFLAGS = $(am__append_16) $(am__append_18) $(am__append_24) \
+	$(am__append_29) $(am__append_34)
+DEBUGFLAGS = $(am__append_1) $(am__append_2) $(am__append_19) \
+	$(am__append_20) $(am__append_21) $(am__append_22) \
+	$(am__append_27) $(am__append_31) $(am__append_36) \
+	$(am__append_38) $(am__append_40)
+LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"' -DTCLDIR='"$(tcldir)"'
 @HAS_LTO_SUPPORT_FALSE@@USES_CLANG_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_FALSE@@USES_GCC_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_TRUE@@USES_CLANG_TRUE@AM_AR = llvm-ar
@@ -771,72 +736,85 @@ LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATED
 @USES_ICC_TRUE@AM_LD = ld
 @USES_SUNC_TRUE@AM_LD = ld
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@AM_RANLIB = gcc-ranlib
-YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -g -DCMR
-YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP $(am__append_55)
-YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
-YSCFLAGS = $(YRCFLAGS)
-YRLDFLAGS = -g
-YPLDFLAGS = -pg $(am__append_53)
-YDLDFLAGS = -g $(am__append_54)
-YSLDFLAGS = $(YRLDFLAGS)
-AM_MAKEFLAGS = MODE_CFLAGS="$(AM_CFLAGS)" CC=$(CC) AR=$(AM_AR) LD=$(AM_LD)
-YCFLAGS = $(YSCFLAGS)
-YLDFLAGS = $(YNLDFLAGS)
-all: server-config.h
+BUILT_SOURCES = buildinfo.h server-config.h
+dist_noinst_DATA = VERSION \
+	contributions/20170225-libressl-detection-and-fix.patch \
+	contributions/20190112-escape-character-fix.patch \
+	contributions/20190112-txt-record-parsing-improvements.patch \
+	contributions/20190323-yadifa-2.3.9-pmtudisc_omit.patch \
+	contributions/20190911-sighup-crash-fix.patch
+yadifad_LDADD = $(abs_top_builddir)/lib/dnsdb/libdnsdb.la \
+	$(abs_top_builddir)/lib/dnscore/libdnscore.la
+yadifad_SOURCES = main.c axfr.c config_main.c config_zone.c confs.c \
+	database-service-zone-desc-load.c \
+	database-service-zone-desc-unload.c \
+	database-service-zone-download.c \
+	database-service-zone-freeze.c database-service-zone-load.c \
+	database-service-zone-mount.c database-service-zone-store.c \
+	database-service-zone-unfreeze.c \
+	database-service-zone-unload.c database-service-zone-unmount.c \
+	database-service.c database.c ixfr.c log_query.c \
+	log_statistics.c notify.c poll-util.c process_class_ch.c \
+	server-sm.c server.c server_context.c \
+	server_process_message_udp.c signals.c zone.c server-rw.c \
+	$(am__append_43) $(am__append_45) $(am__append_47) \
+	$(am__append_48) $(am__append_50) $(am__append_52) \
+	$(am__append_54)
+yadifad_DEPENDENCIES = server-config.h buildinfo.h
+noinst_HEADERS = axfr.h config_error.h confs.h \
+	database-service-zone-desc-load.h \
+	database-service-zone-desc-unload.h \
+	database-service-zone-download.h \
+	database-service-zone-freeze.h database-service-zone-load.h \
+	database-service-zone-mount.h database-service-zone-store.h \
+	database-service-zone-unfreeze.h \
+	database-service-zone-unload.h database-service-zone-unmount.h \
+	database-service.h database.h dnssec-policy.h ixfr.h \
+	log_query.h log_statistics.h notify.h poll-util.h \
+	process_class_ch.h server-sm.h server.h server_context.h \
+	server_error.h signals.h zone.h zone_desc.h zone-source.h \
+	server-rw.h $(am__append_44) $(am__append_46) $(am__append_49) \
+	$(am__append_51) $(am__append_53) $(am__append_55)
+# pkgincludedir is already defined to $(includedir)/yadifa (as the package name is yadifa)
+# pkgincludedir = $(includedir)/yadifad
+@HAS_EVENT_DYNAMIC_MODULE_TRUE@pkginclude_HEADERS = dynamic-module-interface.h
+CLEANFILES = buildinfo.h server-config.h
+all: $(BUILT_SOURCES)
 	$(MAKE) $(AM_MAKEFLAGS) all-am
 
 .SUFFIXES:
 .SUFFIXES: .c .lo .o .obj
-am--refresh: Makefile
-	@:
 $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am $(srcdir)/../../mk/common-settings.mk $(srcdir)/../../mk/common-labels.mk $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
 	    *$$dep*) \
-	      echo ' cd $(srcdir) && $(AUTOMAKE) --gnu'; \
-	      $(am__cd) $(srcdir) && $(AUTOMAKE) --gnu \
-		&& exit 0; \
+	      ( cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh ) \
+	        && { if test -f $@; then exit 0; else break; fi; }; \
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu sbin/yadifad/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu Makefile
+	  $(AUTOMAKE) --gnu sbin/yadifad/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
 	  *config.status*) \
-	    echo ' $(SHELL) ./config.status'; \
-	    $(SHELL) ./config.status;; \
+	    cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh;; \
 	  *) \
-	    echo ' cd $(top_builddir) && $(SHELL) ./config.status $@ $(am__depfiles_maybe)'; \
-	    cd $(top_builddir) && $(SHELL) ./config.status $@ $(am__depfiles_maybe);; \
+	    echo ' cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@ $(am__depfiles_maybe)'; \
+	    cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@ $(am__depfiles_maybe);; \
 	esac;
 $(srcdir)/../../mk/common-settings.mk $(srcdir)/../../mk/common-labels.mk:
 
 $(top_builddir)/config.status: $(top_srcdir)/configure $(CONFIG_STATUS_DEPENDENCIES)
-	$(SHELL) ./config.status --recheck
+	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 
 $(top_srcdir)/configure:  $(am__configure_deps)
-	$(am__cd) $(srcdir) && $(AUTOCONF)
+	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 $(ACLOCAL_M4):  $(am__aclocal_m4_deps)
-	$(am__cd) $(srcdir) && $(ACLOCAL) $(ACLOCAL_AMFLAGS)
+	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 $(am__aclocal_m4_deps):
-
-server-config.h: stamp-h1
-	@if test ! -f $@; then rm -f stamp-h1; else :; fi
-	@if test ! -f $@; then $(MAKE) $(AM_MAKEFLAGS) stamp-h1; else :; fi
-
-stamp-h1: $(srcdir)/server-config.h.in $(top_builddir)/config.status
-	@rm -f stamp-h1
-	cd $(top_builddir) && $(SHELL) ./config.status server-config.h
-$(srcdir)/server-config.h.in:  $(am__configure_deps) 
-	($(am__cd) $(top_srcdir) && $(AUTOHEADER))
-	rm -f stamp-h1
-	touch $@
-
-distclean-hdr:
-	-rm -f server-config.h stamp-h1
 install-sbinPROGRAMS: $(sbin_PROGRAMS)
 	@$(NORMAL_INSTALL)
 	@list='$(sbin_PROGRAMS)'; test -n "$(sbindir)" || list=; \
@@ -897,7 +875,6 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/acl.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/axfr.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/config-denial.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/config-dnssec-policy.Po@am__quote@
@@ -906,13 +883,16 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/config-key-suite.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/config-key-template.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/config-nsid.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/config_acl.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/config_control.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/config_main.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/config_zone.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/confs.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ctrl.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ctrl_notify.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ctrl_query.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ctrl_query_axfr.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ctrl_query_message.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ctrl_update.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ctrl_zone.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-desc-load.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-desc-unload.Po@am__quote@
@@ -921,12 +901,13 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-load.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-mount.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-resignature.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-save.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-store.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-unfreeze.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-unload.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service-zone-unmount.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database-service.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/database.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dynamic-module-handler.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dynupdate_query_service.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ixfr.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/log_query.Po@am__quote@
@@ -936,10 +917,12 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/poll-util.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/process_class_ch.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rrl.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/server-mt.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/server-mm.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/server-rw.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/server-sm.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/server.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/server_context.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/server_process_message_udp.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/signals.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/zone-signature-date-next.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/zone-signature-date-prev.Po@am__quote@
@@ -947,22 +930,25 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/zone.Po@am__quote@
 
 .c.o:
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
+@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
+@am__fastdepCC_TRUE@	$(COMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ $< &&\
+@am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Po
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(COMPILE) -c $<
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(COMPILE) -c -o $@ $<
 
 .c.obj:
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ `$(CYGPATH_W) '$<'`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
+@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.obj$$||'`;\
+@am__fastdepCC_TRUE@	$(COMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ `$(CYGPATH_W) '$<'` &&\
+@am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Po
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(COMPILE) -c `$(CYGPATH_W) '$<'`
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(COMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
 
 .c.lo:
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LTCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Plo
+@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.lo$$||'`;\
+@am__fastdepCC_TRUE@	$(LTCOMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ $< &&\
+@am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Plo
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LTCOMPILE) -c -o $@ $<
@@ -972,9 +958,27 @@ mostlyclean-libtool:
 
 clean-libtool:
 	-rm -rf .libs _libs
+install-pkgincludeHEADERS: $(pkginclude_HEADERS)
+	@$(NORMAL_INSTALL)
+	@list='$(pkginclude_HEADERS)'; test -n "$(pkgincludedir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(pkgincludedir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(pkgincludedir)" || exit 1; \
+	fi; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  echo "$$d$$p"; \
+	done | $(am__base_list) | \
+	while read files; do \
+	  echo " $(INSTALL_HEADER) $$files '$(DESTDIR)$(pkgincludedir)'"; \
+	  $(INSTALL_HEADER) $$files "$(DESTDIR)$(pkgincludedir)" || exit $$?; \
+	done
 
-distclean-libtool:
-	-rm -f libtool config.lt
+uninstall-pkgincludeHEADERS:
+	@$(NORMAL_UNINSTALL)
+	@list='$(pkginclude_HEADERS)'; test -n "$(pkgincludedir)" || list=; \
+	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(pkgincludedir)'; $(am__uninstall_files_from_dir)
 
 ID: $(am__tagged_files)
 	$(am__define_uniq_tagged_files); mkid -fID $$unique
@@ -1009,12 +1013,6 @@ GTAGS:
 	here=`$(am__cd) $(top_builddir) && pwd` \
 	  && $(am__cd) $(top_srcdir) \
 	  && gtags -i $(GTAGS_ARGS) "$$here"
-cscope: cscope.files
-	test ! -s cscope.files \
-	  || $(CSCOPE) -b -q $(AM_CSCOPEFLAGS) $(CSCOPEFLAGS) -i cscope.files $(CSCOPE_ARGS)
-clean-cscope:
-	-rm -f cscope.files
-cscope.files: clean-cscope cscopelist
 cscopelist: cscopelist-am
 
 cscopelist-am: $(am__tagged_files)
@@ -1033,11 +1031,8 @@ cscopelist-am: $(am__tagged_files)
 
 distclean-tags:
 	-rm -f TAGS ID GTAGS GRTAGS GSYMS GPATH tags
-	-rm -f cscope.out cscope.in.out cscope.po.out cscope.files
 
 distdir: $(DISTFILES)
-	$(am__remove_distdir)
-	test -d "$(distdir)" || mkdir "$(distdir)"
 	@srcdirstrip=`echo "$(srcdir)" | sed 's/[].[^$$\\*]/\\\\&/g'`; \
 	topsrcdirstrip=`echo "$(top_srcdir)" | sed 's/[].[^$$\\*]/\\\\&/g'`; \
 	list='$(DISTFILES)'; \
@@ -1067,138 +1062,16 @@ distdir: $(DISTFILES)
 	    || exit 1; \
 	  fi; \
 	done
-	-test -n "$(am__skip_mode_fix)" \
-	|| find "$(distdir)" -type d ! -perm -755 \
-		-exec chmod u+rwx,go+rx {} \; -o \
-	  ! -type d ! -perm -444 -links 1 -exec chmod a+r {} \; -o \
-	  ! -type d ! -perm -400 -exec chmod a+r {} \; -o \
-	  ! -type d ! -perm -444 -exec $(install_sh) -c -m a+r {} {} \; \
-	|| chmod -R a+r "$(distdir)"
-dist-gzip: distdir
-	tardir=$(distdir) && $(am__tar) | GZIP=$(GZIP_ENV) gzip -c >$(distdir).tar.gz
-	$(am__post_remove_distdir)
-
-dist-bzip2: distdir
-	tardir=$(distdir) && $(am__tar) | BZIP2=$${BZIP2--9} bzip2 -c >$(distdir).tar.bz2
-	$(am__post_remove_distdir)
-
-dist-lzip: distdir
-	tardir=$(distdir) && $(am__tar) | lzip -c $${LZIP_OPT--9} >$(distdir).tar.lz
-	$(am__post_remove_distdir)
-
-dist-xz: distdir
-	tardir=$(distdir) && $(am__tar) | XZ_OPT=$${XZ_OPT--e} xz -c >$(distdir).tar.xz
-	$(am__post_remove_distdir)
-
-dist-tarZ: distdir
-	tardir=$(distdir) && $(am__tar) | compress -c >$(distdir).tar.Z
-	$(am__post_remove_distdir)
-
-dist-shar: distdir
-	shar $(distdir) | GZIP=$(GZIP_ENV) gzip -c >$(distdir).shar.gz
-	$(am__post_remove_distdir)
-
-dist-zip: distdir
-	-rm -f $(distdir).zip
-	zip -rq $(distdir).zip $(distdir)
-	$(am__post_remove_distdir)
-
-dist dist-all:
-	$(MAKE) $(AM_MAKEFLAGS) $(DIST_TARGETS) am__post_remove_distdir='@:'
-	$(am__post_remove_distdir)
-
-# This target untars the dist file and tries a VPATH configuration.  Then
-# it guarantees that the distribution is self-contained by making another
-# tarfile.
-distcheck: dist
-	case '$(DIST_ARCHIVES)' in \
-	*.tar.gz*) \
-	  GZIP=$(GZIP_ENV) gzip -dc $(distdir).tar.gz | $(am__untar) ;;\
-	*.tar.bz2*) \
-	  bzip2 -dc $(distdir).tar.bz2 | $(am__untar) ;;\
-	*.tar.lz*) \
-	  lzip -dc $(distdir).tar.lz | $(am__untar) ;;\
-	*.tar.xz*) \
-	  xz -dc $(distdir).tar.xz | $(am__untar) ;;\
-	*.tar.Z*) \
-	  uncompress -c $(distdir).tar.Z | $(am__untar) ;;\
-	*.shar.gz*) \
-	  GZIP=$(GZIP_ENV) gzip -dc $(distdir).shar.gz | unshar ;;\
-	*.zip*) \
-	  unzip $(distdir).zip ;;\
-	esac
-	chmod -R a-w $(distdir)
-	chmod u+w $(distdir)
-	mkdir $(distdir)/_build $(distdir)/_inst
-	chmod a-w $(distdir)
-	test -d $(distdir)/_build || exit 0; \
-	dc_install_base=`$(am__cd) $(distdir)/_inst && pwd | sed -e 's,^[^:\\/]:[\\/],/,'` \
-	  && dc_destdir="$${TMPDIR-/tmp}/am-dc-$$$$/" \
-	  && am__cwd=`pwd` \
-	  && $(am__cd) $(distdir)/_build \
-	  && ../configure --srcdir=.. --prefix="$$dc_install_base" \
-	    $(AM_DISTCHECK_CONFIGURE_FLAGS) \
-	    $(DISTCHECK_CONFIGURE_FLAGS) \
-	  && $(MAKE) $(AM_MAKEFLAGS) \
-	  && $(MAKE) $(AM_MAKEFLAGS) dvi \
-	  && $(MAKE) $(AM_MAKEFLAGS) check \
-	  && $(MAKE) $(AM_MAKEFLAGS) install \
-	  && $(MAKE) $(AM_MAKEFLAGS) installcheck \
-	  && $(MAKE) $(AM_MAKEFLAGS) uninstall \
-	  && $(MAKE) $(AM_MAKEFLAGS) distuninstallcheck_dir="$$dc_install_base" \
-	        distuninstallcheck \
-	  && chmod -R a-w "$$dc_install_base" \
-	  && ({ \
-	       (cd ../.. && umask 077 && mkdir "$$dc_destdir") \
-	       && $(MAKE) $(AM_MAKEFLAGS) DESTDIR="$$dc_destdir" install \
-	       && $(MAKE) $(AM_MAKEFLAGS) DESTDIR="$$dc_destdir" uninstall \
-	       && $(MAKE) $(AM_MAKEFLAGS) DESTDIR="$$dc_destdir" \
-	            distuninstallcheck_dir="$$dc_destdir" distuninstallcheck; \
-	      } || { rm -rf "$$dc_destdir"; exit 1; }) \
-	  && rm -rf "$$dc_destdir" \
-	  && $(MAKE) $(AM_MAKEFLAGS) dist \
-	  && rm -rf $(DIST_ARCHIVES) \
-	  && $(MAKE) $(AM_MAKEFLAGS) distcleancheck \
-	  && cd "$$am__cwd" \
-	  || exit 1
-	$(am__post_remove_distdir)
-	@(echo "$(distdir) archives ready for distribution: "; \
-	  list='$(DIST_ARCHIVES)'; for i in $$list; do echo $$i; done) | \
-	  sed -e 1h -e 1s/./=/g -e 1p -e 1x -e '$$p' -e '$$x'
-distuninstallcheck:
-	@test -n '$(distuninstallcheck_dir)' || { \
-	  echo 'ERROR: trying to run $@ with an empty' \
-	       '$$(distuninstallcheck_dir)' >&2; \
-	  exit 1; \
-	}; \
-	$(am__cd) '$(distuninstallcheck_dir)' || { \
-	  echo 'ERROR: cannot chdir into $(distuninstallcheck_dir)' >&2; \
-	  exit 1; \
-	}; \
-	test `$(am__distuninstallcheck_listfiles) | wc -l` -eq 0 \
-	   || { echo "ERROR: files left after uninstall:" ; \
-	        if test -n "$(DESTDIR)"; then \
-	          echo "  (check DESTDIR support)"; \
-	        fi ; \
-	        $(distuninstallcheck_listfiles) ; \
-	        exit 1; } >&2
-distcleancheck: distclean
-	@if test '$(srcdir)' = . ; then \
-	  echo "ERROR: distcleancheck can only run from a VPATH build" ; \
-	  exit 1 ; \
-	fi
-	@test `$(distcleancheck_listfiles) | wc -l` -eq 0 \
-	  || { echo "ERROR: files left in build directory after distclean:" ; \
-	       $(distcleancheck_listfiles) ; \
-	       exit 1; } >&2
 check-am: all-am
-check: check-am
-all-am: Makefile $(PROGRAMS) $(DATA) $(HEADERS) server-config.h
+check: $(BUILT_SOURCES)
+	$(MAKE) $(AM_MAKEFLAGS) check-am
+all-am: Makefile $(PROGRAMS) $(DATA) $(HEADERS)
 installdirs:
-	for dir in "$(DESTDIR)$(sbindir)"; do \
+	for dir in "$(DESTDIR)$(sbindir)" "$(DESTDIR)$(pkgincludedir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
-install: install-am
+install: $(BUILT_SOURCES)
+	$(MAKE) $(AM_MAKEFLAGS) install-am
 install-exec: install-exec-am
 install-data: install-data-am
 uninstall: uninstall-am
@@ -1220,6 +1093,7 @@ install-strip:
 mostlyclean-generic:
 
 clean-generic:
+	-test -z "$(CLEANFILES)" || rm -f $(CLEANFILES)
 
 distclean-generic:
 	-test -z "$(CONFIG_CLEAN_FILES)" || rm -f $(CONFIG_CLEAN_FILES)
@@ -1228,17 +1102,17 @@ distclean-generic:
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
+	-test -z "$(BUILT_SOURCES)" || rm -f $(BUILT_SOURCES)
 clean: clean-am
 
 clean-am: clean-generic clean-libtool clean-sbinPROGRAMS \
 	mostlyclean-am
 
 distclean: distclean-am
-	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
 	-rm -rf ./$(DEPDIR)
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
-	distclean-hdr distclean-libtool distclean-tags
+	distclean-tags
 
 dvi: dvi-am
 
@@ -1252,7 +1126,7 @@ info: info-am
 
 info-am:
 
-install-data-am:
+install-data-am: install-pkgincludeHEADERS
 
 install-dvi: install-dvi-am
 
@@ -1281,8 +1155,6 @@ install-ps-am:
 installcheck-am:
 
 maintainer-clean: maintainer-clean-am
-	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
-	-rm -rf $(top_srcdir)/autom4te.cache
 	-rm -rf ./$(DEPDIR)
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
@@ -1300,58 +1172,60 @@ ps: ps-am
 
 ps-am:
 
-uninstall-am: uninstall-sbinPROGRAMS
+uninstall-am: uninstall-pkgincludeHEADERS uninstall-sbinPROGRAMS
 
-.MAKE: all install-am install-strip
+.MAKE: all check install install-am install-strip
 
-.PHONY: CTAGS GTAGS TAGS all all-am am--refresh check check-am clean \
-	clean-cscope clean-generic clean-libtool clean-sbinPROGRAMS \
-	cscope cscopelist-am ctags ctags-am dist dist-all dist-bzip2 \
-	dist-gzip dist-lzip dist-shar dist-tarZ dist-xz dist-zip \
-	distcheck distclean distclean-compile distclean-generic \
-	distclean-hdr distclean-libtool distclean-tags distcleancheck \
-	distdir distuninstallcheck dvi dvi-am html html-am info \
-	info-am install install-am install-data install-data-am \
-	install-dvi install-dvi-am install-exec install-exec-am \
-	install-html install-html-am install-info install-info-am \
-	install-man install-pdf install-pdf-am install-ps \
-	install-ps-am install-sbinPROGRAMS install-strip installcheck \
+.PHONY: CTAGS GTAGS TAGS all all-am check check-am clean clean-generic \
+	clean-libtool clean-sbinPROGRAMS cscopelist-am ctags ctags-am \
+	distclean distclean-compile distclean-generic \
+	distclean-libtool distclean-tags distdir dvi dvi-am html \
+	html-am info info-am install install-am install-data \
+	install-data-am install-dvi install-dvi-am install-exec \
+	install-exec-am install-html install-html-am install-info \
+	install-info-am install-man install-pdf install-pdf-am \
+	install-pkgincludeHEADERS install-ps install-ps-am \
+	install-sbinPROGRAMS install-strip installcheck \
 	installcheck-am installdirs maintainer-clean \
 	maintainer-clean-generic mostlyclean mostlyclean-compile \
 	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
-	tags tags-am uninstall uninstall-am uninstall-sbinPROGRAMS
+	tags tags-am uninstall uninstall-am \
+	uninstall-pkgincludeHEADERS uninstall-sbinPROGRAMS
 
 
-release:
-	echo YCFLAGS=$(YRCFLAGS)
-	echo YLDFLAGS=$(YRLDFLAGS)
-	$(MAKE) all "YCFLAGS=$(YRCFLAGS)" "YLDFLAGS=$(YRLDFLAGS)"
+### YRCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -g -DCMR
+### YPCFLAGS = -DNDEBUG $(CCOPTIMISATIONFLAGS) -pg -DCMP
+### YDCFLAGS = -DDEBUG $(DEBUGFLAGS) -DCMD
+### YSCFLAGS = $(YRCFLAGS)
+### 
+### YRLDFLAGS = -g
+### YPLDFLAGS = -pg
+### YDLDFLAGS = -g
+### 
+### if HAS_CC_RDYNAMIC
+### YPLDFLAGS += -rdynamic
+### YDLDFLAGS += -rdynamic
+### endif
+### 
+### if USES_CLANG
+### # workaround a bug where clang does not handle properly profiling and optimizations
+### YPCFLAGS += -mno-omit-leaf-frame-pointer -fno-omit-frame-pointer
+### endif
+### 
+### YSLDFLAGS = $(YRLDFLAGS)
+### 
+### AM_CFLAGS += $(YCFLAGS)
+### AM_LDFLAGS += $(YLDFLAGS)
+### 
+### AM_MAKEFLAGS=MODE_CFLAGS="$(AM_CFLAGS)" CC=$(CC) AR=$(AM_AR) LD=$(AM_LD)
 
-profile:
-	echo YCFLAGS=$(YPCFLAGS)
-	echo YLDFLAGS=$(YPLDFLAGS)
-	$(MAKE) all "YCFLAGS=$(YPCFLAGS)" "YLDFLAGS=$(YPLDFLAGS)"
-
-debug:
-	echo YCFLAGS=$(YDCFLAGS)
-	echo YLDFLAGS=$(YDLDFLAGS)
-	$(MAKE) all "YCFLAGS=$(YDCFLAGS)" "YLDFLAGS=$(YDLDFLAGS)"
-
-rebuild: clean release
-
-release-install: release install
-
-profile-install: profile install
-
-debug-install:
-	echo YCFLAGS=$(YDCFLAGS)
-	echo YLDFLAGS=$(YDLDFLAGS)
-	$(MAKE) install "YCFLAGS=$(YDCFLAGS)" "YLDFLAGS=$(YDLDFLAGS)"
-
-buildinfo.h: config.log
+buildinfo.h: $(abs_top_builddir)/config.log
 	echo \#pragma once > buildinfo.h 2> /dev/null
 	echo // generated file, do not modify >> buildinfo.h 2> /dev/null
-	echo \#define BUILD_OPTIONS \"$$(grep "./configure" config.log | head -1 | sed 's/.*\.\/configure *//')\" >> buildinfo.h 2> /dev/null
+	echo \#define BUILD_OPTIONS \"$$(grep "/configure" $(abs_top_builddir)/config.log | head -1 | sed 's/.*\.\/configure *//')\" >> buildinfo.h 2> /dev/null
+
+server-config.h: ../../config.h
+	cp ../../config.h server-config.h
 
 features:
 

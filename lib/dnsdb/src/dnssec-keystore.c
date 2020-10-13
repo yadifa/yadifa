@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnskey DNSSEC keys functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -45,10 +46,10 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <string.h>
-#include <strings.h>
+//#include <strings.h>
 #include <arpa/inet.h>
 
-#include <pthread.h>
+#include <dnscore/thread.h>
 
 #include <dnscore/base64.h>
 #include <dnscore/format.h>
@@ -80,8 +81,12 @@ extern logger_handle *g_dnssec_logger;
 
 #define ZDB_KEYSTORE_ORIGIN_TAG 0x4e494749524f534b
 
-#define OAT_PRIVATE_FORMAT "K%s+%03d+%05i.private"
-#define OAT_DNSKEY_FORMAT "K%s+%03d+%05i.key"
+#define OAT_PRIVATE_FORMAT "K%s+%03d+%05d.private"
+#define OAT_DNSKEY_FORMAT "K%s+%03d+%05d.key"
+
+// if the key is irrelevant and yadifad is self-managing, then a deactivated key can be removed after this time elapsed
+
+#define AUTOMATIC_DEACTIVATED_DNSKEY_UNPUBLISH_DELAY 86400
 
 static int dnssec_keystore_keys_node_compare(const void *, const void *);
 
@@ -130,7 +135,6 @@ typedef struct dnssec_keystore dnssec_keystore;
 
 static const char* g_keystore_path = DNSSEC_DEFAULT_KEYSTORE_PATH;
 static dnssec_keystore g_keystore = DNSSEC_KEYSTORE_EMPTY;
-//static pthread_mutex_t keystore_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 #define KEY_HASH(key) ((((hashcode)key->tag)<<16)|key->flags|(key->algorithm<<1))
 #define TAG_FLAGS_ALGORITHM_HASH(t_,f_,a_) ((((hashcode)t_)<<16)|(f_)|((a_)<<1))
@@ -142,15 +146,15 @@ dnssec_keystore_keys_node_compare(const void *node_a, const void *node_b)
     dnssec_key *k_b = (dnssec_key*)node_b;
     ya_result ret;
     
-    ret = dnssec_key_get_algorithm(k_a) - dnssec_key_get_algorithm(k_b);
+    ret = dnskey_get_algorithm(k_a) - dnskey_get_algorithm(k_b);
     
     if(ret == 0)
     {
-        ret = dnssec_key_get_tag(k_a) - dnssec_key_get_tag(k_b);
+        ret = dnskey_get_tag(k_a) - dnskey_get_tag(k_b);
         
         if(ret == 0)
         {
-            ret = dnsname_compare(dnssec_key_get_domain(k_a), dnssec_key_get_domain(k_b));
+            ret = dnsname_compare(dnskey_get_domain(k_a), dnskey_get_domain(k_b));
         }
     }
     
@@ -182,7 +186,7 @@ dnssec_keystore_init(/*dnssec_keystore *ks*/)
 static dnssec_keystore_domain_s*
 dnssec_keystore_get_domain_nolock(dnssec_keystore *ks, const u8 *domain)
 {
-    ptr_node *d_node = ptr_set_avl_find(&ks->domains, domain);
+    ptr_node *d_node = ptr_set_find(&ks->domains, domain);
     
     return (dnssec_keystore_domain_s*)((d_node != NULL)?d_node->value:NULL);
 }
@@ -191,7 +195,7 @@ static dnssec_keystore_domain_s*
 dnssec_keystore_get_domain(dnssec_keystore *ks, const u8 *domain)
 {
     mutex_lock(&ks->lock);
-    dnssec_keystore_domain_s *ret = dnssec_keystore_get_domain_nolock(ks, domain);
+    dnssec_keystore_domain_s *ret = dnssec_keystore_get_domain_nolock(ks, domain); // locked
     mutex_unlock(&ks->lock);
     return ret;
 }
@@ -212,14 +216,14 @@ dnssec_keystore_add_domain_nolock(dnssec_keystore *ks, const u8 *domain, const c
 {
     // insert or get the domain in the collection
     
-    ptr_node *d_node = ptr_set_avl_insert(&ks->domains, (u8*)domain);
+    ptr_node *d_node = ptr_set_insert(&ks->domains, (u8*)domain);
     dnssec_keystore_domain_s *d;
     
     if(d_node->value == NULL)
     {
         // insert : setup
         
-        ZALLOC_OR_DIE(dnssec_keystore_domain_s*, d, dnssec_keystore_domain_s, KSDOMAIN_TAG);
+        ZALLOC_OBJECT_OR_DIE(d, dnssec_keystore_domain_s, KSDOMAIN_TAG);
         d->fqdn = dnsname_zdup(domain);
         d_node->key = d->fqdn;
         d->keys_scan_epoch = 0;
@@ -245,7 +249,7 @@ dnssec_keystore_add_domain_nolock(dnssec_keystore *ks, const u8 *domain, const c
         
             // it has changed : reduce previous count
 
-            ptr_node *node = ptr_set_avl_find(&ks->paths, (char*)d->keys_path);
+            ptr_node *node = ptr_set_find(&ks->paths, (char*)d->keys_path);
             yassert(node != NULL);
 
             node->value = (void*)(((intptr)node->value) - 1);
@@ -253,19 +257,20 @@ dnssec_keystore_add_domain_nolock(dnssec_keystore *ks, const u8 *domain, const c
             if(node->value == NULL)
             {
                 char *key = (char*)node->key;
-                ptr_set_avl_delete(&ks->paths, path);
+                ptr_set_delete(&ks->paths, path);
                 free(key);
             }
             
             // the previous path is fully removed, the new value will be assigned, if needs to be, at the next step
 
             d->keys_path = NULL;
+            d->keys_scan_epoch = 0;
         }
     }
     
     if(path != NULL)
     {    
-        ptr_node *p_node = ptr_set_avl_insert(&ks->paths, (char*)path);
+        ptr_node *p_node = ptr_set_insert(&ks->paths, (char*)path);
         if(p_node->value == NULL)
         {
             p_node->key = strdup(path);
@@ -273,6 +278,7 @@ dnssec_keystore_add_domain_nolock(dnssec_keystore *ks, const u8 *domain, const c
         p_node->value = (void*)(((intptr)p_node->value) + 1);
 
         d->keys_path = (const char*)p_node->key;
+        d->keys_scan_epoch = 0;
     }
     
     return d;
@@ -296,11 +302,11 @@ dnssec_keystore_add_domain(/*dnssec_keystore *ks, */const u8 *domain, const char
  */
 
 void
-dnssec_keystore_remove_domain(/*dnssec_keystore *ks, */const u8 *domain, const char *path)
+dnssec_keystore_remove_domain_nolock(/*dnssec_keystore *ks, */const u8 *domain, const char *path)
 {
+    (void)domain;
     dnssec_keystore *ks = &g_keystore;
-    mutex_lock(&ks->lock);
-    ptr_node *node = ptr_set_avl_find(&ks->paths, path);
+    ptr_node *node = ptr_set_find(&ks->paths, path);
     if(node != NULL)
     {
         node->value = (void*)(((intptr)node->value) - 1);
@@ -308,10 +314,19 @@ dnssec_keystore_remove_domain(/*dnssec_keystore *ks, */const u8 *domain, const c
         if(node->value == NULL)
         {
             char *key = (char*)node->key;
-            ptr_set_avl_delete(&ks->paths, path);
+            ptr_set_delete(&ks->paths, path);
             free(key);
         }
     }
+}
+
+void
+dnssec_keystore_remove_domain(/*dnssec_keystore *ks, */const u8 *domain, const char *path)
+{
+    (void)domain;
+    dnssec_keystore *ks = &g_keystore;
+    mutex_lock(&ks->lock);
+    dnssec_keystore_remove_domain_nolock(domain, path);
     mutex_unlock(&ks->lock);
 }
 
@@ -328,10 +343,10 @@ dnssec_keystore_remove_domain(/*dnssec_keystore *ks, */const u8 *domain, const c
 static bool
 dnssec_keystore_add_key_nolock(dnssec_keystore *ks, dnssec_key *key)
 {
-    const u8 *domain = dnssec_key_get_domain(key);
+    const u8 *domain = dnskey_get_domain(key);
     dnssec_keystore_domain_s *kd;
 
-    kd = dnssec_keystore_get_domain_nolock(ks, domain);
+    kd = dnssec_keystore_get_domain_nolock(ks, domain); // caller nolock
     if(kd == NULL)
     {
         kd = dnssec_keystore_add_domain_nolock(ks, domain, NULL);
@@ -341,18 +356,20 @@ dnssec_keystore_add_key_nolock(dnssec_keystore *ks, dnssec_key *key)
     
     // Add a reference in the keys collection
     
-    ptr_node *key_node = ptr_set_avl_insert(&ks->keys, key);
+
+    ptr_node *key_node = ptr_set_insert(&ks->keys, key);
+
     
     if(key_node->value == NULL)
     {
         // new one
         key_node->value = key;
-        dnskey_acquire(key);
+        dnskey_acquire(key); // RC
 
         // Add a reference in the domain keys collection
         // insert, sorted by tag value
         
-        dnskey_key_add_in_chain(key, &kd->key_chain); // RC
+        dnskey_add_to_chain(key, &kd->key_chain); // RC
         
         return TRUE;
     }
@@ -374,10 +391,10 @@ dnssec_keystore_add_key_nolock(dnssec_keystore *ks, dnssec_key *key)
 static bool
 dnssec_keystore_replace_key_nolock(dnssec_keystore *ks, dnssec_key *key)
 {
-    const u8 *domain = dnssec_key_get_domain(key);
+    const u8 *domain = dnskey_get_domain(key);
     dnssec_keystore_domain_s *kd;
 
-    kd = dnssec_keystore_get_domain_nolock(ks, domain);
+    kd = dnssec_keystore_get_domain_nolock(ks, domain); // caller nolock
     if(kd == NULL)
     {
         kd = dnssec_keystore_add_domain_nolock(ks, domain, NULL);
@@ -387,7 +404,9 @@ dnssec_keystore_replace_key_nolock(dnssec_keystore *ks, dnssec_key *key)
     
     // Add a reference in the keys collection
     
-    ptr_node *key_node = ptr_set_avl_insert(&ks->keys, key);
+
+    ptr_node *key_node = ptr_set_insert(&ks->keys, key);
+
     
     dnssec_key *old_key = (dnssec_key*)key_node->value;
     
@@ -395,7 +414,7 @@ dnssec_keystore_replace_key_nolock(dnssec_keystore *ks, dnssec_key *key)
     {
         if(old_key != NULL)
         {
-            dnskey_key_remove_from_chain(old_key, &kd->key_chain);
+            dnskey_remove_from_chain(old_key, &kd->key_chain);
             dnskey_release(old_key);
         }
 
@@ -405,7 +424,7 @@ dnssec_keystore_replace_key_nolock(dnssec_keystore *ks, dnssec_key *key)
         // Add a reference in the domain keys collection
         // insert, sorted by tag value
 
-        dnskey_key_add_in_chain(key, &kd->key_chain); // RC
+        dnskey_add_to_chain(key, &kd->key_chain); // RC
         
         return TRUE;
     }
@@ -433,7 +452,7 @@ dnssec_keystore_add_key(dnssec_key *key)
 {
     dnssec_keystore *ks = &g_keystore;
     mutex_lock(&ks->lock);
-    bool ret = dnssec_keystore_add_key_nolock(ks, key); // RC
+    bool ret = dnssec_keystore_add_key_nolock(ks, key); // RC // locked
     mutex_unlock(&ks->lock);
     return ret;
 }
@@ -455,7 +474,7 @@ dnssec_keystore_replace_key(dnssec_key *key)
 {
     dnssec_keystore *ks = &g_keystore;
     mutex_lock(&ks->lock);
-    bool ret = dnssec_keystore_replace_key_nolock(ks, key); // RC
+    bool ret = dnssec_keystore_replace_key_nolock(ks, key); // RC // locked
     mutex_unlock(&ks->lock);
     return ret;
 }
@@ -463,7 +482,7 @@ dnssec_keystore_replace_key(dnssec_key *key)
 /**
  * 
  * Removes a key from the keystore
- * If the key is fuond, it is returned acquired (still has to be released)
+ * If the key is found, it is returned acquired (still has to be released)
  * 
  * RC ok
  * 
@@ -477,23 +496,23 @@ dnssec_keystore_remove_key_nolock(dnssec_keystore *ks, dnssec_key *key)
 {
     dnssec_key *ret_key = NULL;
 
-    ptr_node *key_node = ptr_set_avl_find(&ks->keys, key);
+    ptr_node *key_node = ptr_set_find(&ks->keys, key);
     
     if(key_node != NULL)
     {
         ret_key = (dnssec_key*)key_node->value;
-        ptr_set_avl_delete(&ks->keys, key);
+        ptr_set_delete(&ks->keys, key);
         // no not release as it will be returned
         
-        const u8 *domain = dnssec_key_get_domain(key);
+        const u8 *domain = dnskey_get_domain(key);
         
-        dnssec_keystore_domain_s *kd = dnssec_keystore_get_domain_nolock(ks, domain);
+        dnssec_keystore_domain_s *kd = dnssec_keystore_get_domain_nolock(ks, domain); // caller nolock
         
         if(kd != NULL)
         {
             // remove, sorted by tag value
             
-            dnskey_key_remove_from_chain(key, &kd->key_chain); // RC
+            dnskey_remove_from_chain(key, &kd->key_chain); // RC
         }
     }
     // else already known
@@ -519,7 +538,7 @@ dnssec_keystore_remove_key(dnssec_key *key)
 {
     dnssec_keystore *ks = &g_keystore;
     mutex_lock(&ks->lock);
-    dnssec_key *ret_key = dnssec_keystore_remove_key_nolock(ks, key); // RC
+    dnssec_key *ret_key = dnssec_keystore_remove_key_nolock(ks, key); // RC // locked
     mutex_unlock(&ks->lock);
     return ret_key;
 }
@@ -585,7 +604,7 @@ dnssec_keystore_delete_key(dnssec_key *key)
 
             if(ISOK(ret))
             {
-                if(dnssec_key_equals(key, key_from_file))
+                if(dnskey_equals(key, key_from_file))
                 {
                     log_info("dnskey-keystore: %{dnsname}: delete: private key file content matches key: renaming file '%s' to '%s'",
                             fqdn, path, path_new);
@@ -654,7 +673,7 @@ dnssec_keystore_delete_key(dnssec_key *key)
 
             if(ISOK(ret))
             {
-                if(dnssec_key_public_equals(key, key_from_file))
+                if(dnskey_public_equals(key, key_from_file))
                 {
                     log_info("dnskey-keystore: %{dnsname}: delete: public key file content matches key: renaming file '%s' to '%s'", fqdn, path, path_new);
                     
@@ -712,14 +731,14 @@ dnssec_keystore_acquire_key_from_fqdn_nolock(dnssec_keystore *ks, const u8 *doma
 {
     dnssec_key *key = NULL;
     
-    dnssec_keystore_domain_s* kd = dnssec_keystore_get_domain_nolock(ks, domain);
+    dnssec_keystore_domain_s* kd = dnssec_keystore_get_domain_nolock(ks, domain); // caller nolock
     if(kd != NULL)
     {    
         key = kd->key_chain;
         
         while(key != NULL)
         {
-            u16 key_tag = dnssec_key_get_tag(key);
+            u16 key_tag = dnskey_get_tag(key);
             if(key_tag == tag)
             {
                 break;
@@ -750,11 +769,11 @@ dnssec_keystore_acquire_key_from_fqdn_nolock(dnssec_keystore *ks, const u8 *doma
  */
 
 dnssec_key*
-dnssec_keystore_acquire_key_from_fqdn(const u8 *domain, u16 tag)
+dnssec_keystore_acquire_key_from_fqdn_with_tag(const u8 *domain, u16 tag)
 {
     dnssec_keystore *ks = &g_keystore;
     mutex_lock(&ks->lock);
-    dnssec_key *key = dnssec_keystore_acquire_key_from_fqdn_nolock(ks, domain, tag); // RC
+    dnssec_key *key = dnssec_keystore_acquire_key_from_fqdn_nolock(ks, domain, tag); // RC // locked
     mutex_unlock(&ks->lock);
     
     return key;
@@ -776,9 +795,9 @@ dnssec_key*
 dnssec_keystore_acquire_key_from_rdata(const u8 *domain, const u8 *rdata, u16 rdata_size)
 {
     dnssec_keystore *ks = &g_keystore;
-    u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size);
+    u16 tag = dnskey_get_tag_from_rdata(rdata, rdata_size);
     mutex_lock(&ks->lock);
-    dnssec_key *key = dnssec_keystore_acquire_key_from_fqdn_nolock(ks, domain, tag); // RC
+    dnssec_key *key = dnssec_keystore_acquire_key_from_fqdn_nolock(ks, domain, tag); // RC // locked
     mutex_unlock(&ks->lock);
     
     return key;
@@ -798,7 +817,7 @@ dnssec_keystore_acquire_key_from_fqdn_by_index(const u8 *domain, int idx)
     dnssec_keystore *ks = &g_keystore;
     dnssec_key *key = NULL;
     mutex_lock(&ks->lock);
-    dnssec_keystore_domain_s* kd = dnssec_keystore_get_domain_nolock(ks, domain);
+    dnssec_keystore_domain_s* kd = dnssec_keystore_get_domain_nolock(ks, domain); // locked
     if(kd != NULL)
     {    
         key = kd->key_chain;
@@ -808,6 +827,7 @@ dnssec_keystore_acquire_key_from_fqdn_by_index(const u8 *domain, int idx)
             --idx;
             key = key->next;
         }
+
         if(key != NULL)
         {
             dnskey_acquire(key);
@@ -818,116 +838,153 @@ dnssec_keystore_acquire_key_from_fqdn_by_index(const u8 *domain, int idx)
     return key;
 }
 
-/**
- * Returns true iff the key for theddomain+algorithm+tag is active at 'now'
- * 
- * @param domain
- * @param algorithm
- * @param tag
- * @param now
- * 
- * @return 
- */
-
-bool
-dnssec_keystore_is_key_active(const u8 *domain, u8 algorithm, u16 tag, time_t now)
+dnssec_key *
+dnssec_keystore_acquire_key_from_fqdn_at_index(const u8 *domain, int index)
 {
-    dnssec_keystore *ks = &g_keystore;
     dnssec_key *key = NULL;
+    dnssec_keystore *ks = &g_keystore;
     mutex_lock(&ks->lock);
-    dnssec_keystore_domain_s* kd = dnssec_keystore_get_domain_nolock(ks, domain);
-    
-    bool ret = FALSE;
-    
-    if(kd != NULL)
-    {    
-        key = kd->key_chain;
-        
-        while(key != NULL)
+    dnssec_keystore_domain_s *ks_domain = dnssec_keystore_get_domain_nolock(ks, domain); // locked
+    if(ks_domain != NULL)
+    {
+        key = ks_domain->key_chain;
+        while(index > 0 && key != NULL)
         {
-            if(key->algorithm == algorithm)
-            {
-                if(key->tag == tag)
-                {
-                    if((ret = dnskey_is_activated(key, now)))
-                    {
-                        break;
-                    }
-                }
-            }
-            
             key = key->next;
+            --index;
+        }
+        if(key != NULL)
+        {
+            dnskey_acquire(key);
         }
     }
     mutex_unlock(&ks->lock);
-    
+    return key;
+}
+
+bool
+dnssec_keystore_has_usable_ksk(const u8 *domain, time_t attime)
+{
+    dnssec_keystore *ks = &g_keystore;
+    dnssec_key *key = NULL;
+    bool ret = FALSE;
+    mutex_lock(&ks->lock);
+    dnssec_keystore_domain_s* kd = dnssec_keystore_get_domain_nolock(ks, domain); // locked
+    if(kd != NULL)
+    {
+        key = kd->key_chain;
+
+        while(key != NULL)
+        {
+            if(dnskey_get_flags(key) == (DNSKEY_FLAG_ZONEKEY | DNSKEY_FLAG_KEYSIGNINGKEY))
+            {
+                if(dnskey_is_activated(key, attime))
+                {
+                    ret = TRUE;
+                    break;
+                }
+            }
+
+            key = key->next;
+        }
+    }
+
+    mutex_unlock(&ks->lock);
+
     return ret;
 }
 
-/**
- * Acquires all the currently activated keys and store them to the appropriate
- * KSK or ZSK collection ptr_vector.
- * 
- * @param domain
- * @param ksks
- * @param zsks
- * @return 
- */
+
 
 int
-dnssec_keystore_acquire_activated_keys_from_fqdn_to_vectors(const u8 *domain, ptr_vector *ksks, ptr_vector *zsks)
+dnssec_keystore_acquire_publish_delete_keys_from_fqdn_to_vectors(const u8 *domain, ptr_vector *publish_keys, ptr_vector *delete_keys)
 {
     time_t now = time(NULL);
-    
+
     for(int i = 0; ;++i)
     {
         dnssec_key *key = dnssec_keystore_acquire_key_from_fqdn_by_index(domain, i);
-        
+
         if(key == NULL)
         {
+            log_debug1("dnskey-keystore: acquiring activated key %{dnsname}: no other key available", domain);
             break;
         }
-        
-        if(dnskey_is_activated(key, now))
+
+        if((key->status & DNSKEY_KEY_IS_IN_ZONE) == 0)
         {
-            if(!dnssec_key_is_private(key))
+            if(dnskey_has_explicit_publish_or_delete(key))
             {
-                continue;
-            }
-            
-            if(key->flags == (DNSKEY_FLAG_ZONEKEY | DNSKEY_FLAG_KEYSIGNINGKEY))
-            {
-                if(ksks != NULL)
+                if(dnskey_is_published(key, now))
                 {
-                    ptr_vector_append(ksks, key);
+                    if((publish_keys != NULL) && (ptr_vector_search_ptr_index(publish_keys, key) < 0))
+                    {
+                        ptr_vector_append(publish_keys, key);
+                    }
+                    else
+                    {
+                        dnskey_release(key);
+                    }
+                    continue;
+                }
+
+                if(dnskey_is_unpublished(key, now))
+                {
+                    if((delete_keys != NULL) && (ptr_vector_search_ptr_index(delete_keys, key) < 0))
+                    {
+                        ptr_vector_append(delete_keys, key);
+                    }
+                    else
+                    {
+                        dnskey_release(key);
+                    }
                     continue;
                 }
             }
-            else if(key->flags == DNSKEY_FLAG_ZONEKEY)
+            else if(dnskey_has_activate_or_deactivate(key))
             {
-                if(zsks != NULL)
+                if(dnskey_is_activated(key, now))
                 {
-                    ptr_vector_append(zsks, key);
+                    if((publish_keys != NULL) && (ptr_vector_search_ptr_index(publish_keys, key) < 0))
+                    {
+                        ptr_vector_append(publish_keys, key);
+                    }
+                    else
+                    {
+                        dnskey_release(key);
+                    }
+                    continue;
+                }
+                if(dnskey_is_deactivated(key, MAX((s64)now - AUTOMATIC_DEACTIVATED_DNSKEY_UNPUBLISH_DELAY, 0)))
+                {
+                    if((delete_keys != NULL) && (ptr_vector_search_ptr_index(delete_keys, key) < 0))
+                    {
+                        ptr_vector_append(delete_keys, key);
+                    }
+                    else
+                    {
+                        dnskey_release(key);
+                    }
                     continue;
                 }
             }
         }
-        
+
         dnskey_release(key);
     }
-    
+
     int ret = 0;
-    
-    if(ksks != NULL)
+
+    if(publish_keys != NULL)
     {
-        ret += ptr_vector_size(ksks);
+        ret += ptr_vector_size(publish_keys);
     }
-    
-    if(zsks != NULL)
+
+    if(delete_keys != NULL)
     {
-        ret += ptr_vector_size(zsks);
+        ret += ptr_vector_size(delete_keys);
     }
-    
+
     return  ret;
 }
 
@@ -943,6 +1000,9 @@ dnssec_keystore_release_keys_from_vector(ptr_vector *keys)
     for(int i = 0; i <= ptr_vector_last_index(keys); ++i)
     {
         dnssec_key *key = (dnssec_key*)ptr_vector_get(keys, i);
+
+        log_debug("dnskey-keystore: releasing key %{dnsname}", dnskey_get_domain(key));
+
         dnskey_release(key);
     }
 }
@@ -960,14 +1020,14 @@ dnssec_keystore_release_keys_from_vector(ptr_vector *keys)
  */
 
 static dnssec_key*
-dnssec_keystore_get_key_from_name_nolock(dnssec_keystore *ks, const char *domain, u16 tag)
+dnssec_keystore_acquire_key_from_name_nolock(dnssec_keystore *ks, const char *domain, u16 tag)
 {
     dnssec_key *key = NULL;
     u8 fqdn[MAX_DOMAIN_LENGTH];
     
     if(ISOK(cstr_to_dnsname(fqdn, domain)))
     {
-        key = dnssec_keystore_acquire_key_from_fqdn_nolock(ks, fqdn, tag); // RC
+        key = dnssec_keystore_acquire_key_from_fqdn_nolock(ks, fqdn, tag); // RC // caller nolock
     }
     
     return key;
@@ -993,7 +1053,7 @@ dnssec_keystore_acquire_key_from_name(const char *domain, u16 tag)
     
     if(ISOK(cstr_to_dnsname(fqdn, domain)))
     {
-        key = dnssec_keystore_acquire_key_from_fqdn(fqdn, tag); // RC
+        key = dnssec_keystore_acquire_key_from_fqdn_with_tag(fqdn, tag); // RC
     }
     
     return key;
@@ -1025,15 +1085,16 @@ struct dnssec_keystore_reload_readdir_callback_s
 {
     dnssec_keystore *ks;
     const char *domain;
+    int private_update;
 };
 
 typedef struct dnssec_keystore_reload_readdir_callback_s dnssec_keystore_reload_readdir_callback_s;
 
 static ya_result
-dnssec_keystore_reload_readdir_callback(const char *basedir, const char* filename, u8 filetype, void *args_)
+dnssec_keystore_reload_readdir_callback_nolock(const char *basedir, const char *filename, u8 filetype, void *args_)
 {
-//#define OAT_PRIVATE_FORMAT "K%s+%03d+%05i.private"
-//#define OAT_DNSKEY_FORMAT "K%s+%03d+%05i.key"
+//#define OAT_PRIVATE_FORMAT "K%s+%03d+%05d.private"
+//#define OAT_DNSKEY_FORMAT "K%s+%03d+%05d.key"
     if((filetype == DT_REG) && (filename[0] != 'K'))
     {
         return SUCCESS;
@@ -1057,7 +1118,7 @@ dnssec_keystore_reload_readdir_callback(const char *basedir, const char* filenam
         log_err("path too long for '%s'/'%s'", basedir, filename);
         return INVALID_PATH;
     }
-    
+    memset(extension, 0, sizeof(extension)); // to shut-up valgrind
     memcpy(file, basedir, dlen);
     if(file[dlen - 1] != '/')
     {
@@ -1067,6 +1128,7 @@ dnssec_keystore_reload_readdir_callback(const char *basedir, const char* filenam
     
     if(sscanf(filename, "K%255[^+]+%03d+%05d.%15s", domain, &algorithm, &tag, extension) == 4)
     {
+        domain[255] = '\0'; // ensure the 256th char is '\0'
         if((args->domain == NULL) || (strcmp(domain, args->domain) == 0))
         {
             if(memcmp(extension, "private", 8) == 0)
@@ -1079,18 +1141,20 @@ dnssec_keystore_reload_readdir_callback(const char *basedir, const char* filenam
                     // get the key with that domain/tag
                     // @note 20150907 edf -- work in progress
 
-                    dnssec_key *current_key = dnssec_keystore_get_key_from_name_nolock(ks, domain, tag); // RC
+                    dnssec_key *current_key = dnssec_keystore_acquire_key_from_name_nolock(ks, domain, tag); // RC // caller nolock
                     if(current_key != NULL)
                     {
                         // check if it has to be reloaded
                         if(current_key->timestamp >= ts)
                         {
-                            // ignore this file
+                            // ignore this file (already got it)
 
                             dnskey_release(current_key);
 
                             return SUCCESS;
                         }
+
+			            log_info("DNSKEY from file '%s' was modified (expected %lT, got %lT)", filename, current_key->timestamp, ts);
                     }
 
                     dnssec_key *key;
@@ -1107,7 +1171,7 @@ dnssec_keystore_reload_readdir_callback(const char *basedir, const char* filenam
                         {
                             log_warn("key from '%s' is missing smart fields", file);
                         }
-#ifdef DEBUG
+#if DEBUG
                         log_debug1("dnssec_keystore_reload_readdir_callback: private key generated from file '%s'", file);
 #endif               
                         // compare the cryptographic parts of the key (the public key is enough) and
@@ -1115,12 +1179,11 @@ dnssec_keystore_reload_readdir_callback(const char *basedir, const char* filenam
 
                         if(current_key != NULL)
                         {
-                            if(dnssec_key_equals(current_key, key))
+                            if(dnskey_equals(current_key, key))
                             {
-#ifdef DEBUG
+#if DEBUG
                                 log_debug1("dnssec_keystore_reload_readdir_callback: file '%s' has already been loaded", file);
 #endif
-
                                 current_key->epoch_created = key->epoch_created;
                                 current_key->epoch_publish = key->epoch_publish;
                                 current_key->epoch_activate = key->epoch_activate;
@@ -1128,15 +1191,15 @@ dnssec_keystore_reload_readdir_callback(const char *basedir, const char* filenam
                                 current_key->epoch_inactive = key->epoch_inactive;
                                 current_key->epoch_delete = key->epoch_delete;
                                 current_key->timestamp = key->timestamp;
+                                current_key->status &= ~(DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH|DNSKEY_KEY_HAS_SMART_FIELD_DELETE|DNSKEY_KEY_HAS_SMART_FIELD_ACTIVATE|DNSKEY_KEY_HAS_SMART_FIELD_INACTIVE);
+                                current_key->status |= key->status &  (DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH|DNSKEY_KEY_HAS_SMART_FIELD_DELETE|DNSKEY_KEY_HAS_SMART_FIELD_ACTIVATE|DNSKEY_KEY_HAS_SMART_FIELD_INACTIVE);
                             }
                             else
                             {
                                 // update
-                                
-#ifdef DEBUG
+#if DEBUG
                                 log_debug1("dnssec_keystore_reload_readdir_callback: file '%s' updated a key", file);
 #endif
-
                                 current_key->epoch_created = key->epoch_created;
                                 current_key->epoch_publish = key->epoch_publish;
                                 current_key->epoch_activate = key->epoch_activate;
@@ -1145,8 +1208,10 @@ dnssec_keystore_reload_readdir_callback(const char *basedir, const char* filenam
                                 current_key->epoch_delete = key->epoch_delete;
                                 current_key->timestamp = key->timestamp;
 
-                                // update key re-signature scheduling
+                                current_key->status &= ~(DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH|DNSKEY_KEY_HAS_SMART_FIELD_DELETE|DNSKEY_KEY_HAS_SMART_FIELD_ACTIVATE|DNSKEY_KEY_HAS_SMART_FIELD_INACTIVE);
+                                current_key->status |= key->status & (DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH|DNSKEY_KEY_HAS_SMART_FIELD_DELETE|DNSKEY_KEY_HAS_SMART_FIELD_ACTIVATE|DNSKEY_KEY_HAS_SMART_FIELD_INACTIVE);
 
+                                // update key re-signature scheduling
                             }
 
                             dnskey_release(current_key);
@@ -1154,25 +1219,25 @@ dnssec_keystore_reload_readdir_callback(const char *basedir, const char* filenam
                         else
                         {
                             // add the new key
-                            
-#ifdef DEBUG
+#if DEBUG
                             log_debug1("dnssec_keystore_reload_readdir_callback: file '%s' generated a new key", file);
 #endif
 
-                            dnssec_keystore_add_key_nolock(ks, key); // RC
+                            dnssec_keystore_add_key_nolock(ks, key); // RC // caller nolock
 
                             // also : the key should be put in the zone and signature should be scheduled
-                            /// @todo 20160209 edf -- this has to be done when policies are in
                         }
                         
                         dnskey_release(key);
-#ifdef DEBUG
+
+                        ++args->private_update; // one key was modified (it's timings at the very least)
+#if DEBUG
                         log_debug1("dnssec_keystore_reload_readdir_callback: file '%s' successfully read", file);
 #endif
                     }
                     else
                     {
-                        log_err("could not read '%s': %r (missing public .key file ?)", file, ret);
+                        log_debug("could not read '%s': %r (missing public .key file ?)", file, ret);
                     }
                 }
                 else
@@ -1213,30 +1278,35 @@ dnssec_keystore_reload()
     //       added:   update alarms (?)
     
     dnssec_keystore *ks = &g_keystore;
-    ya_result ret = SUCCESS;
+    ya_result ret;
     
-    dnssec_keystore_reload_readdir_callback_s args = {ks, NULL};
+    dnssec_keystore_reload_readdir_callback_s args = {ks, NULL, 0};
     
     mutex_lock(&ks->lock);
     
-    ptr_set_avl_iterator iter;
-    ptr_set_avl_iterator_init(&ks->paths, &iter);
-    while(ptr_set_avl_iterator_hasnext(&iter))
+    ptr_set_iterator iter;
+    ptr_set_iterator_init(&ks->paths, &iter);
+    while(ptr_set_iterator_hasnext(&iter))
     {
-        ptr_node *path_node = ptr_set_avl_iterator_next_node(&iter);
+        ptr_node *path_node = ptr_set_iterator_next_node(&iter);
         const char *path = (const char*)path_node->key;
-        if(FAIL(ret = readdir_forall(path, dnssec_keystore_reload_readdir_callback, &args)))
+        if(FAIL(ret = readdir_forall(path, dnssec_keystore_reload_readdir_callback_nolock, &args)))
         {
             log_err("dnssec keystore reload: an error occurred reading key directory '%s': %r", path, ret);
         }
     }
     
-    if(FAIL(ret = readdir_forall(g_keystore_path, dnssec_keystore_reload_readdir_callback, &args)))
+    if(FAIL(ret = readdir_forall(g_keystore_path, dnssec_keystore_reload_readdir_callback_nolock, &args)))
     {
         log_err("dnssec keystore reload: an error occurred reading key directory '%s': %r", g_keystore_path, ret);
     }
     
     mutex_unlock(&ks->lock);
+
+    if(ISOK(ret))
+    {
+        ret = args.private_update;
+    }
 
     return ret;
 }
@@ -1259,15 +1329,17 @@ dnssec_keystore_reload_domain(const u8 *fqdn)
     //       timings: remove the previous alarms (?)
     //       removed: ?
     //       added:   update alarms (?)
-    
+
+    log_debug("dnskey-keystore: %{dnsname}: reload domain: scanning for keys", fqdn);
+
     dnssec_keystore *ks = &g_keystore;
     ya_result ret = SUCCESS;
     
     mutex_lock(&ks->lock);
     
-    dnssec_keystore_domain_s *keystore_domain = dnssec_keystore_get_domain_nolock(ks, fqdn);
+    dnssec_keystore_domain_s *keystore_domain = dnssec_keystore_get_domain_nolock(ks, fqdn); // locked
     
-    ret = ERROR; // no such domain
+    ret = DNSSEC_ERROR_NO_KEY_FOR_DOMAIN; // no key for domain
             
     if(keystore_domain != NULL)
     {
@@ -1275,17 +1347,52 @@ dnssec_keystore_reload_domain(const u8 *fqdn)
         
         dnsname_to_cstr(domain, fqdn);
         
-        dnssec_keystore_reload_readdir_callback_s args = {ks, domain};
+        dnssec_keystore_reload_readdir_callback_s args = {ks, domain, 0};
         
         const char *path = keystore_domain->keys_path;
+
         if(path == NULL)
         {
             path = g_keystore_path;
         }
-        
-        if(FAIL(ret = readdir_forall(path, dnssec_keystore_reload_readdir_callback, &args)))
+
+        struct stat st;
+        stat(path, &st);
+#if defined WIN32
+        s64 mod_time = st.st_mtime;
+#elif IS_DARWIN_OS
+        s64 mod_time = st.st_mtimespec.tv_sec;
+        mod_time *= 1000000000LL;
+        mod_time += st.st_mtimespec.tv_nsec;
+#else
+        s64 mod_time = st.st_mtim.tv_sec;
+        mod_time *= 1000000000LL;
+        mod_time += st.st_mtim.tv_nsec;
+#endif
+
+        if((u64)mod_time > keystore_domain->keys_scan_epoch)
         {
-            log_err("dnssec keystore reload domain: an error occurred reading key directory of domain %s: '%s': %r", domain, path, ret);
+            if(ISOK(ret = readdir_forall(path, dnssec_keystore_reload_readdir_callback_nolock, &args)))
+            {
+                ret = args.private_update;
+
+                keystore_domain->keys_scan_epoch = mod_time;
+            }
+            else
+            {
+                log_err("dnssec keystore: %{dnsname} reload domain: an error occurred reading key directory '%s': %r", fqdn, path, ret);
+
+                if(keystore_domain->key_chain != NULL)
+                {
+                    ret = 0;
+                }
+            }
+        }
+        else
+        {
+            log_debug("dnssec keystore: %{dnsname} reload domain: no need to scan key directory '%s' again", fqdn, path);
+
+            ret = 0;
         }
     }
     
@@ -1360,18 +1467,53 @@ dnssec_keystore_setpath(const char* path)
         g_keystore_path = strdup(path);
     }
 }
+/*
+void
+dnssec_keystore_destroy_paths_cb(ptr_node *node)
+{
+    free(node->key);
+}
+*/
+
+static void
+dnssec_keystore_destroy_domains_cb(ptr_node *node)
+{
+    dnssec_keystore_domain_s *d = (dnssec_keystore_domain_s*)node->value;
+    dnsname_zfree(d->fqdn);
+    d->fqdn = NULL;
+    ZFREE_OBJECT(d);
+    //d->keys_path is a pointer to a key in g_keystore.paths
+    //d->key_chain should have been emptied by now
+}
 
 void
 dnssec_keystore_destroy()
 {
-    /*
-    pthread_mutex_lock(&keystore_mutex);
+    log_debug("dnskey-keystore: clearing-up");
+    
+    mutex_lock(&g_keystore.lock);
 
-    btree_callback_and_destroy(g_keystore, dnssec_keystore_destroy_callback);
-    g_keystore = NULL;
+    while(!ptr_set_isempty(&g_keystore.keys))
+    {
+        ptr_node *key_node = g_keystore.keys.root;
+        dnssec_key *key = (dnssec_key *)key_node->key;
 
-    pthread_mutex_unlock(&keystore_mutex);
-   */
+        if(key != NULL)
+        {
+            log_debug("dnskey-keystore: %{dnsname} +%03d+%05d/%d status=%x rc=%i (%p)", dnskey_get_domain(key), key->algorithm, key->tag, ntohs(key->flags), key->status, key->rc, key);
+
+            dnssec_key *ret_key = dnssec_keystore_remove_key_nolock(&g_keystore, key); // locked
+            dnskey_release(ret_key);
+        }
+        else
+        {
+            break;
+        }
+    }
+    
+    ptr_set_callback_and_destroy(&g_keystore.domains, dnssec_keystore_destroy_domains_cb);
+    
+    mutex_unlock(&g_keystore.lock);
 }
 
 
@@ -1437,17 +1579,32 @@ dnssec_keystore_new_key(u8 algorithm, u32 size, u16 flags, const char *origin, d
                 break;
             }
 #endif
+#if HAS_EDDSA_SUPPORT
+#endif
+#ifdef DNSKEY_ALGORITHM_DUMMY
+            case DNSKEY_ALGORITHM_DUMMY:
+            {
+                if(FAIL(return_value = dnskey_dummy_newinstance(size, algorithm, flags, clean_origin, &key)))
+                {
+                    return return_value;
+                }
+            }
+#endif
             default:
             {
                 return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
             }
         }
 
-        dnssec_key *same_tag_key;
+        dnssec_key *same_tag_key = NULL;
         
-        dnssec_key_get_tag(key); // updates the tag field if needed
+        dnskey_get_tag(key); // updates the tag field if needed
                 
-        if(FAIL(return_value = dnssec_keystore_load_private_key_from_parameters(algorithm, key->tag, flags, fqdn, &same_tag_key)))
+        if(ISOK(return_value = dnssec_keystore_load_private_key_from_parameters(algorithm, key->tag, flags, fqdn, &same_tag_key))) // key properly released
+        {
+            dnskey_release(same_tag_key);
+        }
+        else
         {
             // the key already exists
             
@@ -1484,17 +1641,27 @@ dnssec_keystore_load_public_key_from_rdata(const u8 *rdata, u16 rdata_size, cons
     //u16 flags = DNSKEY_FLAGS_FROM_RDATA(rdata);
     //u8 algorithm = rdata[3];
 
-    u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size);
+    u16 tag = dnskey_get_tag_from_rdata(rdata, rdata_size);
     
     ya_result ret = SUCCESS;
     
-    dnssec_key *key = dnssec_keystore_acquire_key(fqdn, tag);
+    dnssec_key *key = dnssec_keystore_acquire_key_from_fqdn_with_tag(fqdn, tag);
 
     if(key == NULL)
     {
         if(ISOK(ret = dnskey_new_from_rdata(rdata, rdata_size, fqdn, &key))) // RC
         {
-            dnssec_keystore_add_key(key); // RC
+            if(!dnssec_keystore_add_key(key)) // RC
+            {
+                dnskey_release(key);
+
+                key = dnssec_keystore_acquire_key_from_fqdn_with_tag(fqdn, tag);
+
+                if(key == NULL) // should not happen
+                {
+                    ret = ERROR;
+                }
+            }
         }
     }
     
@@ -1514,7 +1681,7 @@ dnssec_keystore_load_public_key_from_rdata(const u8 *rdata, u16 rdata_size, cons
  * @param flags
  * @param origin
  * @param out_key
- * @return 
+ * @return the number of keys loaded by the call (1 or 0) or an error code
  */
 
 ya_result
@@ -1525,7 +1692,7 @@ dnssec_keystore_load_private_key_from_rdata(const u8 *rdata, u16 rdata_size, con
         return INVALID_ARGUMENT_ERROR;
     }
     
-    u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size);
+    u16 tag = dnskey_get_tag_from_rdata(rdata, rdata_size);
     u16 flags = GET_U16_AT_P(rdata);
     u8 algorithm = rdata[3];
     
@@ -1545,20 +1712,22 @@ dnssec_keystore_load_private_key_from_rdata(const u8 *rdata, u16 rdata_size, con
  * @param flags
  * @param origin
  * @param out_key
- * @return 
+ * @return SUCCESS if a key is loaded, 1 if the key was already loaded, or an error code
  */
 
 ya_result
 dnssec_keystore_load_private_key_from_parameters(u8 algorithm, u16 tag, u16 flags, const u8* fqdn, dnssec_key **out_key)
 {    
-    dnssec_key *key = dnssec_keystore_acquire_key_from_fqdn(fqdn, tag);
-    ya_result ret = ERROR;
+    dnssec_key *key = dnssec_keystore_acquire_key_from_fqdn_with_tag(fqdn, tag);
+    ya_result ret;
     bool has_public_key = FALSE;
     
     *out_key = NULL;
     
-    if(key != NULL && !dnssec_key_is_private(key))
+    if(key != NULL && !dnskey_is_private(key))
     {
+        log_debug("dnssec_key_load_private: %{dnsname} +%03d+%05d/%d is not private", fqdn, algorithm, tag, ntohs(flags));
+        
         has_public_key = TRUE;
         dnskey_release(key);
         key = NULL;
@@ -1566,6 +1735,8 @@ dnssec_keystore_load_private_key_from_parameters(u8 algorithm, u16 tag, u16 flag
 
     if(key == NULL)
     {
+        // the key is not loaded already
+
         dnssec_keystore_domain_s *domain;
         char clean_origin[MAX_DOMAIN_LENGTH];
         dnsname_to_cstr(clean_origin, fqdn);
@@ -1575,6 +1746,7 @@ dnssec_keystore_load_private_key_from_parameters(u8 algorithm, u16 tag, u16 flag
         domain = dnssec_keystore_get_domain(&g_keystore, fqdn);
 
         char path[PATH_MAX];
+        path[0] = '\0';
         
         if((domain != NULL) && (domain->keys_path != NULL))
         {
@@ -1593,7 +1765,7 @@ dnssec_keystore_load_private_key_from_parameters(u8 algorithm, u16 tag, u16 flag
             }
         }
         
-        log_debug("dnssec_key_load_private: opening file %s", path);
+        log_debug("dnssec_key_load_private: %{dnsname} +%03d+%05d/%d: opening file '%s'", fqdn, algorithm, tag, ntohs(flags), path);
         
         ret = dnskey_new_private_key_from_file(path, &key); // RC
 
@@ -1604,23 +1776,32 @@ dnssec_keystore_load_private_key_from_parameters(u8 algorithm, u16 tag, u16 flag
                 /*
                  * remove the old (public) version
                  */
+
+                log_debug("dnssec_key_load_private: %{dnsname} +%03d+%05hd/%hd: replacing previous version with loaded key", fqdn, algorithm, tag, ntohs(flags));
                 
                 dnssec_keystore_replace_key(key); // RC
             }
             else
             {
+                log_debug("dnssec_key_load_private: %{dnsname} +%03d+%05hd/%hd: adding loaded key", fqdn, algorithm, tag, ntohs(flags));
+                
                 dnssec_keystore_add_key(key); // RC
             }
+
+            log_info("dnssec: loaded private key: %{dnsname} +%03d+%05hd/%hd from '%s'", fqdn, algorithm, tag, ntohs(flags), path);
             
             *out_key = key;
-            
-            ret = SUCCESS;
+            ret = 1; // newly loaded
+        }
+        else
+        {
+            log_debug("dnssec_key_load_private: %{dnsname} +%03d+%05hd/%hd: could not load the key: %r", fqdn, algorithm, tag, ntohs(flags), ret);
         }
     }
     else
     {
         *out_key = key;
-        ret = SUCCESS;
+        ret = 0;    // already loaded
     }
 
     return ret;
@@ -1631,18 +1812,18 @@ dnssec_keystore_store_private_key(dnssec_key* key)
 {
     char path[PATH_MAX];
 
-    if(key == NULL || key->key.any == NULL || key->origin == NULL || !dnssec_key_is_private(key))
+    if(key == NULL || key->key.any == NULL || key->origin == NULL || !dnskey_is_private(key))
     {
         return DNSSEC_ERROR_INCOMPLETEKEY;
     }
     
-    dnssec_key_get_tag(key); // updates the tag field if needed
+    dnskey_get_tag(key); // updates the tag field if needed
     
     dnssec_keystore_domain_s *domain = dnssec_keystore_get_domain(&g_keystore, key->owner_name);
     
     if((domain != NULL) && (domain->keys_path != NULL))
     {
-        if(snprintf(path, PATH_MAX, "%s/" OAT_PRIVATE_FORMAT, domain->keys_path, key->origin, key->algorithm, key->tag) >= PATH_MAX)
+        if(snprintf(path, sizeof(path), "%s/" OAT_PRIVATE_FORMAT, domain->keys_path, key->origin, key->algorithm, key->tag) >= PATH_MAX)
         {
             /* Path bigger than PATH_MAX */
             return DNSSEC_ERROR_KEYSTOREPATHISTOOLONG;
@@ -1650,7 +1831,7 @@ dnssec_keystore_store_private_key(dnssec_key* key)
     }
     else
     {
-        if(snprintf(path, PATH_MAX, "%s/" OAT_PRIVATE_FORMAT, g_keystore_path, key->origin, key->algorithm, key->tag) >= PATH_MAX)
+        if(snprintf(path, sizeof(path), "%s/" OAT_PRIVATE_FORMAT, g_keystore_path, key->origin, key->algorithm, key->tag) >= PATH_MAX)
         {
             /* Path bigger than PATH_MAX */
             return DNSSEC_ERROR_KEYSTOREPATHISTOOLONG;
@@ -1667,6 +1848,11 @@ dnssec_keystore_store_private_key(dnssec_key* key)
         case DNSKEY_ALGORITHM_DSASHA1_NSEC3:
         case DNSKEY_ALGORITHM_ECDSAP256SHA256:
         case DNSKEY_ALGORITHM_ECDSAP384SHA384:
+        case DNSKEY_ALGORITHM_ED25519:
+        case DNSKEY_ALGORITHM_ED448:
+#ifdef DNSKEY_ALGORITHM_DUMMY
+        case DNSKEY_ALGORITHM_DUMMY:
+#endif
         {
             break;
         }
@@ -1676,7 +1862,7 @@ dnssec_keystore_store_private_key(dnssec_key* key)
         }
     }
     
-    ya_result ret = dnskey_save_private_key_to_file(key, path);
+    ya_result ret = dnskey_store_private_key_to_file(key, path);
 
     return ret;
 }
@@ -1686,7 +1872,7 @@ dnssec_keystore_store_public_key(dnssec_key* key)
 {
     char path[PATH_MAX];
     
-    dnssec_key_get_tag(key); // updates the tag field if needed
+    dnskey_get_tag(key); // updates the tag field if needed
 
     dnssec_keystore_domain_s *domain = dnssec_keystore_get_domain(&g_keystore, key->owner_name);
     
@@ -1729,13 +1915,13 @@ dnssec_keystore_store_public_key(dnssec_key* key)
     fprintf(f, "%s IN DNSKEY %u %u %u ", key->origin, ntohs(key->flags), lc, key->algorithm);
 
     u8* rdata;
-    u32 rdata_size = key->vtbl->dnskey_key_rdatasize(key);
+    u32 rdata_size = key->vtbl->dnssec_key_rdatasize(key);
 
     MALLOC_OR_DIE(u8*, rdata, rdata_size, DNSKEY_RDATA_TAG);
 
     /* store the RDATA */
 
-    key->vtbl->dnskey_key_writerdata(key, rdata);
+    key->vtbl->dnssec_key_writerdata(key, rdata);
 
     char b64[BASE64_ENCODED_SIZE(4096)];
     
@@ -1761,30 +1947,6 @@ dnssec_keystore_store_public_key(dnssec_key* key)
     return ret;
 }
 
-dnssec_key *
-dnssec_keystore_acquire_key(const u8 *domain, int index)
-{
-    dnssec_key *ret = NULL;
-    dnssec_keystore *ks = &g_keystore;
-    mutex_lock(&ks->lock);
-    dnssec_keystore_domain_s *ks_domain = dnssec_keystore_get_domain_nolock(ks, domain);
-    if(ks_domain != NULL)
-    {
-        ret = ks_domain->key_chain;
-        while(index > 0 && ret != NULL)
-        {
-            ret = ret->next;
-            --index;            
-        }
-        if(ret != NULL)
-        {
-            dnskey_acquire(ret);
-        }
-    }
-    mutex_unlock(&ks->lock);
-    return ret;
-}
-
 /**
  * Adds all the valid keys of the domain in the keyring
  * 
@@ -1799,7 +1961,7 @@ dnssec_keystore_add_valid_keys_from_fqdn(const u8 *fqdn, time_t at_time, struct 
     dnssec_keystore *ks = &g_keystore;
     u32 count = 0;
     mutex_lock(&ks->lock);
-    dnssec_keystore_domain_s *ks_domain = dnssec_keystore_get_domain_nolock(ks, fqdn);
+    dnssec_keystore_domain_s *ks_domain = dnssec_keystore_get_domain_nolock(ks, fqdn); // locked
     if(ks_domain != NULL)
     {
         dnssec_key *key = ks_domain->key_chain;
@@ -1836,8 +1998,6 @@ dnssec_keystore_add_valid_keys_from_fqdn(const u8 *fqdn, time_t at_time, struct 
 ya_result
 zdb_zone_get_active_keys(zdb_zone *zone, dnssec_key_sll **out_keys, int *out_ksk_count, int *out_zsk_count)
 {
-    yassert(out_keys != NULL);
-    
     ya_result ret = SUCCESS;
     int ksk_count = 0;
     int zsk_count = 0;
@@ -1846,6 +2006,21 @@ zdb_zone_get_active_keys(zdb_zone *zone, dnssec_key_sll **out_keys, int *out_ksk
 
     if(dnskey_rrset == NULL)
     {
+        if(out_ksk_count != NULL)
+        {
+            *out_ksk_count = 0;
+        }
+
+        if(out_zsk_count != NULL)
+        {
+            *out_zsk_count = 0;
+        }
+
+        if(out_keys != NULL)
+        {
+            *out_keys = NULL;
+        }
+
         return DNSSEC_ERROR_RRSIG_NOZONEKEYS;
     }
     
@@ -1867,10 +2042,12 @@ zdb_zone_get_active_keys(zdb_zone *zone, dnssec_key_sll **out_keys, int *out_ksk
         
         dnssec_key* priv_key;
         // from disk or from global keyring
-        ret = dnssec_keystore_load_private_key_from_parameters(algorithm, tag, flags, zone->origin, &priv_key); // converted
+        ret = dnssec_keystore_load_private_key_from_parameters(algorithm, tag, flags, zone->origin, &priv_key); // converted, key put in a collection or released
 
-        if(priv_key != NULL)
+        if(ISOK(ret))
         {
+            yassert(priv_key != NULL);
+
             if(dnskey_is_activated(priv_key, time(NULL)))
             {
                 log_debug("rrsig: %{dnsname}: private key algorithm=%d tag=%05d flags=%3d is active", zone->origin, algorithm, tag, ntohs(flags));
@@ -1888,16 +2065,28 @@ zdb_zone_get_active_keys(zdb_zone *zone, dnssec_key_sll **out_keys, int *out_ksk
                     ++zsk_count;
                 }
 
-               dnssec_key_sll* key_node;
-               ZALLOC_OR_DIE(dnssec_key_sll*, key_node, dnssec_key_sll, DNSSEC_KEY_SLL_TAG);
-               key_node->next = keys;
-               key_node->key = priv_key;
-               keys = key_node;
+                if(out_keys != NULL)
+                {
+                    dnssec_key_sll *key_node;
+                    ZALLOC_OBJECT_OR_DIE(key_node, dnssec_key_sll, DNSSEC_KEY_SLL_TAG);
+                    key_node->next = keys;
+                    key_node->key = priv_key;
+                    keys = key_node;
+                }
+                else
+                {
+                    dnskey_release(priv_key);
+                }
             }
             else
             {
                 log_debug("rrsig: %{dnsname}: private key algorithm=%d tag=%05d flags=%3d is not active", zone->origin, algorithm, tag, ntohs(flags));
+                dnskey_release(priv_key);
             }
+        }
+        else
+        {
+            yassert(priv_key == NULL);
         }
     }
     
@@ -1910,8 +2099,13 @@ zdb_zone_get_active_keys(zdb_zone *zone, dnssec_key_sll **out_keys, int *out_ksk
     {
         *out_zsk_count = zsk_count;
     }
-    
-    *out_keys = keys;
+
+    if(out_keys != NULL)
+    {
+        *out_keys = keys;
+    }
+
+    ret = ksk_count + zsk_count;
     
     return ret;
 }
@@ -1927,7 +2121,9 @@ zdb_zone_release_active_keys(dnssec_key_sll *keys)
     while(keys != NULL)
     {
         dnskey_release(keys->key);
+        dnssec_key_sll *tmp = keys;
         keys = keys->next;
+        ZFREE_OBJECT(tmp);        
     }
 }
 

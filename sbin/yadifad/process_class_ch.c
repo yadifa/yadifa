@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup server
  *  @ingroup yadifad
  *  @brief server
@@ -42,15 +43,12 @@
 /*----------------------------------------------------------------------------*/
 
 #include "server-config.h"
-#include "config.h"
-
-#include <poll.h>
 
 #include <dnscore/logger.h>
 #include <dnscore/thread_pool.h>
 #include <dnscore/fdtools.h>
-
 #include <dnscore/rfc.h>
+#include <dnscore/packet_reader.h>
 
 extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
@@ -85,7 +83,7 @@ class_ch_set_hostname(const char *name)
         size_t name_len = MIN(strlen(name), 255);
         u8* tmp;
         MALLOC_OR_DIE(u8*, tmp, 13 + name_len, CHHOSTNM_TAG);
-        memcpy(tmp, chaos_txt_stub, 10);
+        memcpy(tmp, chaos_txt_stub, 10); // VS false positive (nonsense)
         SET_U16_AT(tmp[10], htons(name_len + 1));
         tmp[12] = (u8)name_len;
         memcpy(&tmp[13], name, name_len);
@@ -109,7 +107,7 @@ class_ch_set_version(const char *name)
         size_t name_len = MIN(strlen(name), 255);
         u8* tmp;
         MALLOC_OR_DIE(u8*, tmp, 13 + name_len, CHVRSION_TAG);
-        memcpy(tmp, chaos_txt_stub, 10);
+        memcpy(tmp, chaos_txt_stub, 10); // VS false positive (nonsense)
         SET_U16_AT(tmp[10], htons(name_len + 1));
         tmp[12] = (u8)name_len;
         memcpy(&tmp[13], name, name_len);
@@ -133,7 +131,7 @@ class_ch_set_id_server(const char *name)
         size_t name_len = MIN(strlen(name), 255);
         u8* tmp;
         MALLOC_OR_DIE(u8*, tmp, 13 + name_len, CHIDSVR_TAG);
-        memcpy(tmp, chaos_txt_stub, 10);
+        memcpy(tmp, chaos_txt_stub, 10); // VS false positive (nonsense)
         SET_U16_AT(tmp[10], htons(name_len + 1));
         tmp[12] = (u8)name_len;
         memcpy(&tmp[13], name, name_len);
@@ -171,16 +169,16 @@ static u8 chaos_ns[1*8 + 6] = {
 static void
 chaos_make_message(message_data *mesg, const u8* record_wire, u32 record_wire_len)
 {
-    u16 t = mesg->qtype;
+    u16 t = message_get_query_type(mesg);
     u16 an = 0;
     u16 au = 0;
     
     /* set the flags */
 
-    MESSAGE_FLAGS_OR(mesg->buffer, QR_BITS|AA_BITS, 0);
-    MESSAGE_FLAGS_AND(mesg->buffer, QR_BITS|AA_BITS|RD_BITS, 0);
+    message_set_authoritative_answer(mesg);
+    message_apply_mask(mesg, QR_BITS|AA_BITS|RD_BITS, 0);
 
-    u8 *p = &mesg->buffer[mesg->received];
+    u8 *p = message_get_buffer_limit(mesg);
 
     if(t == TYPE_TXT || t == TYPE_ANY)
     {
@@ -195,7 +193,7 @@ chaos_make_message(message_data *mesg, const u8* record_wire, u32 record_wire_le
         memcpy(p, chaos_soa, sizeof(chaos_soa));
         p += sizeof(chaos_soa);
 
-        MESSAGE_SET_AN(mesg->buffer, NETWORK_ONE_16);
+        message_set_answer_count_ne(mesg, NETWORK_ONE_16);
 
         an++;
     }
@@ -212,26 +210,26 @@ chaos_make_message(message_data *mesg, const u8* record_wire, u32 record_wire_le
         au++;
     }
 
-    MESSAGE_SET_AN(mesg->buffer, htons(an));
-    MESSAGE_SET_NS(mesg->buffer, htons(au));
+    message_set_answer_count(mesg, an);
+    message_set_authority_count(mesg, au);
 
-    if(mesg->edns)
+    if(message_is_edns0(mesg))
     {
         u16 edns0_maxsize = g_config->edns0_max_size;
-        u32 rcode_ext = mesg->rcode_ext;
+        u32 rcode_ext = message_get_rcode_ext(mesg);
 
         p[ 0] = 0;
         p[ 1] = 0;
         p[ 2] = 0x29;        
         p[ 3] = edns0_maxsize>>8;
         p[ 4] = edns0_maxsize;
-        p[ 5] = (mesg->status >> 4);
+        p[ 5] = (message_get_status(mesg) >> 4);
         p[ 6] = rcode_ext >> 16;
         p[ 7] = rcode_ext >> 8;
         p[ 8] = rcode_ext;
 
 #if DNSCORE_HAS_NSID_SUPPORT
-        if(!mesg->nsid)
+        if(!message_has_nsid(mesg))
         {
             p[ 9] = 0;
             p[10] = 0;
@@ -250,10 +248,10 @@ chaos_make_message(message_data *mesg, const u8* record_wire, u32 record_wire_le
 
         p += EDNS0_RECORD_SIZE;
 #endif
-        MESSAGE_SET_AR(mesg->buffer, NETWORK_ONE_16);
+        message_set_additional_count_ne(mesg, NETWORK_ONE_16);
     }
 
-    mesg->send_length = p - mesg->buffer;
+    message_set_size(mesg, p - message_get_buffer_const(mesg));
 }
 
 void
@@ -264,9 +262,9 @@ class_ch_process(message_data *mesg)
     u8 qname[MAX_DOMAIN_LENGTH];
     
 #if HAS_ACL_SUPPORT
-    if(ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac.allow_query)))
+    if(ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac->allow_query)))
     {
-        mesg->status = FP_ACCESS_REJECTED;
+        message_set_status(mesg, FP_ACCESS_REJECTED);
         message_transform_to_error(mesg);
         
         return;
@@ -274,9 +272,7 @@ class_ch_process(message_data *mesg)
 #endif
 
     packet_unpack_reader_data purd;
-    purd.packet = mesg->buffer;
-    purd.packet_size = mesg->received;
-    purd.offset = DNS_HEADER_LENGTH;
+    packet_reader_init_from_message(&purd, mesg);
 
     if(FAIL(return_value = packet_reader_read_fqdn(&purd, qname, sizeof(qname))))
     {
@@ -305,9 +301,17 @@ class_ch_process(message_data *mesg)
     {
         /* REFUSED */
 
-        mesg->status = FP_NOZONE_FOUND;
+        message_set_status(mesg, FP_NOZONE_FOUND);
         message_transform_to_error(mesg);
     }
+
+#if DNSCORE_HAS_TSIG_SUPPORT
+
+    if(message_has_tsig(mesg))  /* NOTE: the TSIG information is in mesg */
+    {
+        tsig_sign_answer(mesg);
+    }
+#endif
 }
 
 /** @} */

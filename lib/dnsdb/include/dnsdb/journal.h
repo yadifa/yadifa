@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup
  *  @ingroup dnsdb
  *  @brief
@@ -54,6 +55,10 @@
 #error "Please do not include dnsdb/journal.h directly."
 #endif
 
+#define JOURNAL_IX_ENABLED 0
+#define JOURNAL_CJF_ENABLED 0
+#define JOURNAL_JNL_ENABLED 1
+
 #include <dnscore/input_stream.h>
 #include <dnscore/dns_resource_record.h>
 #include <dnscore/list-dl.h>
@@ -73,7 +78,7 @@ typedef struct journal journal;
 
 ya_result journal_init(u32 mru_size);
 
-void journal_finalise();
+void journal_finalize();
 
 /**
  * 
@@ -123,9 +128,14 @@ typedef ya_result journal_reopen_method(journal *jh);
 typedef void journal_flush_method(journal *jh);
 typedef ya_result journal_close_method(journal *jh);
 typedef ya_result journal_get_domain_method(journal *jh, u8 *out_domain);
+typedef const u8 *journal_get_domain_const_method(const journal *jh);
 typedef void journal_destroy_method(journal *jh);
 typedef void journal_log_dump_method(journal *jh);
-typedef void journal_link_zone_method(journal *jh, zdb_zone *zone);
+typedef void journal_minimum_serial_update_method(journal *jh, u32 stored_serial);
+typedef void journal_maximum_size_update_method(journal *jh, u32 maximum_size);
+typedef void journal_limit_size_update_method(journal *jh, u32 maximum_size);
+
+//typedef void journal_link_zone_method(journal *jh, zdb_zone *zone);
 
 struct journal_vtbl
 {
@@ -144,15 +154,17 @@ struct journal_vtbl
     journal_log_dump_method                  *log_dump;                 // dumps the status of the journal on the database logger
     journal_get_domain_method                *get_domain;               // copies the domain to the output buffer
     journal_destroy_method                   *destroy;                  // destroys the journal at the first opportunity
-    journal_link_zone_method                 *link_zone;                // links the zone to the journal and do required internal updates
+    journal_get_domain_const_method          *get_domain_const;         // copies the domain to the output buffer
+    journal_minimum_serial_update_method     *minimum_serial_update;    // stores the minimum serial the zone must contain (continuity from the zone)
+    journal_maximum_size_update_method       *maximum_size_update;      // updates the maximum size of the journal, applied at the earliest convenience
+    journal_limit_size_update_method         *limit_size_update;        // updates the limit size of the journal, applied at the earliest convenience
     const  char* __class__;
 };
 
 struct journal
 {
     volatile struct journal_vtbl *vtbl;
-    volatile zdb_zone            *zone;
-    volatile list_dl_node_s   mru_node;
+    volatile list_dl_node_s   mru_node; // to list the journals by most to least recently used
     volatile int                    rc;
     volatile unsigned int _forget:1,_mru:1;
     
@@ -172,7 +184,8 @@ struct journal
 #define journal_get_serial_range(j_, serial_start_, serial_end_)                (j_)->vtbl->get_serial_range((j_),(serial_start_),(serial_end_))
 #define journal_truncate_to_size(j_, size_)                                     (j_)->vtbl->truncate_to_size((j_), (size_))
 #define journal_truncate_to_serial(j_, serial_)                                 (j_)->vtbl->truncate_to_serial((j_), (serial_))
-#define journal_link_zone(j_, zone_)                                            (j_)->vtbl->link_zone((j_), (zone_));
+//#define journal_link_zone(j_, zone_)                                            (j_)->vtbl->link_zone((j_), (zone_))
+#define journal_get_domain_const(j_)                                            (j_)->vtbl->get_domain_const((j_))
 
 /**
  * 
@@ -224,19 +237,15 @@ ya_result journal_serial_range(const u8 *origin, u32 *serialfromp, u32 *serialto
 ya_result journal_truncate(const u8 *origin);
 
 /**
- * Retrieves the last SOA of the journal.
- * 
- * @param origin the zone origin
- * @param workingdir the working directory of the journal
- * @param serial a pointer that will be set to the serial of the SOA, can be NULL
- * @param ttl a pointer that will be set to the ttl of the SOA, can be NULL
- * @param last_soa_rdata a pointer to a buffer that will get a copy of the SOA, if its size is big enough, can be NULL
- * @param last_soa_rdata_size a pointer to a u16 integer that contains the size of the rdata buffer and that will be set to the real size of the SOA rdata, can be NULL
- * 
+ * Returns the last SOA TTL + RDATA
+ *
+ * @param jh the journal
+ * @param rr an initialised resource record
+ *
  * @return an error code
  */
 
-ya_result journal_last_soa(const u8 *origin, u32 *serial, u32 *ttl, u8 *last_soa_rdata, u16 *last_soa_rdata_size);
+ya_result journal_get_last_soa(journal *jh, dns_resource_record *rr);
 
 /**
  * Flushes, closes and destroys all currently unused journals (from memory)

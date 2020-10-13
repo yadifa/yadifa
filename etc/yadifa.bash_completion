@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+# Copyright (c) 2011-2020, EURid. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without 
@@ -29,22 +29,84 @@
 #
 ################################################################################
 
-_yadifa()
+_yadifa_ctrl_find_subcmd()
 {
-    local cur prev opts
+    local subcword
+    for (( subcword=1; subcword < ${#COMP_WORDS[@]}-1; subcword++ ))
+    do
+        case ${COMP_WORDS[subcword]} in
+            cfgreload|freeze|freezeall|loglevel|logreopen|notify|querylog|reload|shutdown|sync|thaw|thawall|unfreeze|unfreezeall|zonecfgreload)
+                subcmd="${COMP_WORDS[subcword]}"
+                break
+                ;;
+            *)
+                ;;
+        esac
+    done
+}
 
-    COMPREPLY=()
-    cur="${COMP_WORDS[COMP_CWORD]}"
-    prev="${COMP_WORDS[COMP_CWORD-1]}"
+_yadifa_ctrl()
+{
+    local subcmd
+    _yadifa_ctrl_find_subcmd
 
-    # standard options to complete
-    opts="--config -c --server -s -V --help -h -t -K -v --verbose -q -l --level"
+    if [[ "x$subcmd" = "x" ]]
+    then
+        # standard options to complete
+        opts="cfgreload freeze freezeall loglevel logreopen notify querylog reload shutdown sync thaw thawall unfreeze unfreezeall zonecfgreload"
+
+    else
+        opts="-c --config -s --server -p --port -K --key-name -y --key"
+
+    fi
 
     #
     #   some basic options' arguments can be completed
     #
     case ${prev} in
-    
+        freeze|notify|reload|sync|thaw|unfreeze|zonecfgreload)
+            _yadifa_find_all_zones
+
+            return 0
+            ;;
+        -p)
+            _yadifa_find_ports
+
+            return 0
+            ;;
+        -s|--server)
+            _yadifa_find_servers
+
+            return 0
+            ;;
+        -K|--key-name)
+            _yadifa_find_key_names
+
+            return 0
+            ;;
+        -y|--key)
+            _yadifa_find_key_names
+
+            return 0
+            ;;
+        loglevel)
+            local running="$(seq 0 15)"
+            COMPREPLY=( $( compgen -W "${running}" -- "$cur" ) )
+
+            return 0
+            ;;
+        querylog)
+            local running="enable disable"
+            COMPREPLY=( $( compgen -W "${running}" -- "$cur" ) )
+
+            return 0
+            ;;
+        -c|--config)
+            local xpat='conf'
+            _filedir "${xpat}"
+
+            return 0
+            ;;
         -t)
             # options to complete if '-t' has been used
             local running="freeze unfreeze reload cfgreload sync querylog loglevel logreopen shutdown"
@@ -54,16 +116,107 @@ _yadifa()
             ;;
         *)
             ;;
-     esac
+    esac
 
-    
 
-    if [[ "$cur" == -* ]]; then
+    COMPREPLY=( $( compgen -W "${opts}" -- "$cur" ) )
 
-        COMPREPLY=( $( compgen -W "${opts}" -- "$cur" ) )
+    return 0
+}
 
-        return 0
-    fi
+_yadifa_find_keys()
+{
+    # TODO find different keys in the configuration
+    local keys
 
+    COMPREPLY=( $( compgen -W "${keys}" -- "$cur" ) )
+
+    return 0
+}
+
+_yadifa_find_key_names()
+{
+    # TODO find different key names in the configuration
+    local keynames
+
+    COMPREPLY=( $( compgen -W "${keynames}" -- "$cur" ) )
+
+    return 0
+}
+
+_yadifa_find_servers()
+{
+    # TODO find different servers in the configuration
+    local servers
+
+    COMPREPLY=( $( compgen -W "${servers}" -- "$cur" ) )
+
+    return 0
+}
+
+_yadifa_find_ports()
+{
+    # TODO find different port numbers in the configuration
+    local ports="53"
+
+    COMPREPLY=( $( compgen -W "${ports}" -- "$cur" ) )
+
+    return 0
+}
+
+_yadifa_find_all_zones()
+{
+    # TODO find all the zones in the configuration
+    local zones
+
+    COMPREPLY=( $( compgen -W "${zones}" -- "$cur" ) )
+
+    return 0
+}
+
+_yadifa_find_cmd()
+{
+    local subcword
+    for (( subcword=1; subcword < ${#COMP_WORDS[@]}-1; subcword++ ))
+    do
+        case ${COMP_WORDS[subcword]} in
+            ctrl)
+                cmd="ctrl"
+                break
+                ;;
+            *)
+                ;;
+        esac
+    done
+}
+
+_yadifa()
+{
+    local cur prev bprev cmd opts
+
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    bprev="${COMP_WORDS[COMP_CWORD-2]}"
+
+    # Look if we have a command or not
+    _yadifa_find_cmd
+
+    # standard options to complete
+    opts="ctrl -V --version --help -h -v --verbose"
+
+    case $cmd in
+        ctrl)
+            _yadifa_ctrl
+
+            return 0
+            ;;
+        *)
+            ;;
+    esac
+
+    COMPREPLY=( $( compgen -W "${opts}" -- "$cur" ) )
+
+    return 0
 } &&
 complete -F _yadifa yadifa

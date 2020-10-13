@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup 
  *  @ingroup dnscore
  *  @brief 
@@ -49,11 +50,17 @@
  */
 
 #include <unistd.h>
-#include <pthread.h>
+#include <dnscore/thread.h>
 #include <time.h>
 
+#define SEMAPHORE_SUPPORT 0
+
+#if SEMAPHORE_SUPPORT
+#include <semaphore.h>
+#endif
+
 #include <dnscore/sys_types.h>
-#include <dnscore/logger.h>
+#include "timems.h"
 
 #if defined(__MACH__)
 #include <dnscore/osx_clock_gettime.h>
@@ -80,131 +87,270 @@ extern "C"
 #define MUTEX_LOCKED_TOO_MUCH_TIME_US 5000000
 #define MUTEX_WAITED_TOO_MUCH_TIME_US 2000000
 
-typedef pthread_cond_t  cond_t;
+typedef pthread_cond_t cond_t;
 
 #define COND_INITIALIZER PTHREAD_COND_INITIALIZER
 
-    
 // DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
     
 #if !MUTEX_USE_SPINLOCK // do not use SPINLOCK
-    
+
 #if !DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+
 typedef pthread_mutex_t mutex_t;
 
 #define MUTEX_INITIALIZER PTHREAD_MUTEX_INITIALIZER
 
-#define mutex_lock(mtx)    pthread_mutex_lock(mtx)
-#define mutex_trylock(mtx) (pthread_mutex_trylock(mtx)==0)
-#define mutex_unlock(mtx)  pthread_mutex_unlock(mtx)
-
-#else
-
-struct mutex_t
+static inline int mutex_lock_unchecked(mutex_t* mtx)
 {
-    pthread_mutex_t mtx;
-    volatile stacktrace trace;
-    volatile pthread_t id;
-    volatile u64 timestamp;
-    volatile bool wait;
-    bool recursive;
-    char _MTXs[4];
-};
-
-typedef struct mutex_t mutex_t;
-
-#define MUTEX_INITIALIZER {PTHREAD_MUTEX_INITIALIZER, 0, 0, 0, FALSE, FALSE, {'M', 'T', 'X', sizeof(mutex_t)}}
-
-extern logger_handle *g_system_logger;
-extern volatile bool mutex_ultraverbose;
-
-void mutex_locked_set_add(mutex_t *mtx);
-void mutex_locked_set_del(mutex_t *mtx);
-void mutex_locked_set_monitor();
-
-void mutex_lock(mutex_t *mtx);
-
-static inline bool mutex_trylock(mutex_t *mtx)
-{
-    if(mutex_ultraverbose)
-    {
-        logger_handle_msg(g_system_logger, MSG_DEBUG7, "mutex_trylock(%p)", mtx);
-    }
-    
-    int err = pthread_mutex_trylock(&mtx->mtx);
-    
-    if((err != 0) && (err != EBUSY))
-    {
-        logger_handle_msg(g_system_logger,MSG_ERR, "mutex_trylock(%p): %r", mtx, MAKE_ERRNO_ERROR(err));
-        logger_flush();
-        abort();
-    }
-    
-    if(err == 0)
-    {
-        mtx->trace = debug_stacktrace_get();
-        mtx->id = pthread_self();
-        mtx->timestamp = timeus();
-
-        mutex_locked_set_add(mtx);
-    }
-    
-    if(mutex_ultraverbose)
-    {
-        logger_handle_msg(g_system_logger,MSG_DEBUG7, "mutex_trylock(%p): %s", mtx, (err == 0)?"locked":"failed");
-    }
-        
-    return err == 0;
+    int ret = pthread_mutex_lock(mtx);
+    return ret;
 }
 
-static inline void mutex_unlock(mutex_t *mtx)
+static inline int mutex_unlock_unchecked(mutex_t* mtx)
 {
-    if(mutex_ultraverbose)
-    {
-        logger_handle_msg(g_system_logger,MSG_DEBUG7, "mutex_unlock(%p)", mtx);
-    }
-   
+    int ret = pthread_mutex_unlock(mtx);
+    return ret;
+}
 
-    
-    mutex_locked_set_del(mtx);
-        
-    stacktrace o_trace = mtx->trace;
-    pthread_t o_id = mtx->id;
-    u64 o_timestamp = mtx->timestamp;
-    mtx->trace = NULL;
-    mtx->id = 0;
-    mtx->timestamp = 0;
-        
-    int err = pthread_mutex_unlock(&mtx->mtx);
-    
-    if(err != 0)
+#if !DEBUG
+#define mutex_lock(mtx__)    pthread_mutex_lock(mtx__)
+#define mutex_trylock(mtx__) (pthread_mutex_trylock(mtx__)==0)
+#define mutex_unlock(mtx__)  pthread_mutex_unlock(mtx__)
+#else
+
+static inline void mutex_lock(mutex_t* mtx)
+{
+    int ret = pthread_mutex_lock(mtx);
+
+    if(ret != 0)
     {
-        logger_handle_msg(g_system_logger,MSG_ERR, "mutex_unlock(%p = {%p,%llu}) self=%p: %r", mtx, (intptr)o_id, o_timestamp, (intptr)pthread_self(), MAKE_ERRNO_ERROR(err));
-        debug_stacktrace_log(g_system_logger, MSG_ERR, o_trace);
-        logger_flush();
         abort();
     }
+}
+
+static inline bool mutex_trylock(mutex_t* mtx)
+{
+    int ret = pthread_mutex_trylock(mtx);
+    if((ret != 0) && (ret != EBUSY))
+    {
+        abort();
+    }
+    return ret == 0;
+}
+
+static inline void mutex_unlock(mutex_t* mtx)
+{
+    int ret = pthread_mutex_unlock(mtx);
+    if(ret != 0)
+    {
+        abort();
+    }
+}
+
+#if SEMAPHORE_SUPPORT
+
+typedef sem_t semaphore_t;
+
+static inline int semaphone_init(semaphore_t *sem)
+{
+    int ret = sem_init(sem, 0, 0);
+    return ret;
+}
+
+static inline int semaphone_init_process_shared(semaphore_t *sem)
+{
+    int ret = sem_init(sem, 1, 1);
+    return ret;
+}
+
+static inline void semaphore_finalize(semaphore_t *sem)
+{
+    sem_destroy(sem);
+}
+
+static inline void semaphore_lock(semaphore_t *sem)
+{
+    for(;;)
+    {
+        if(sem_wait(sem) == 0)
+        {
+            return;
+        }
+
+        int err = errno;
+        if(err != EINTR)
+        {
+            abort();
+        }
+    }
+}
+
+static inline bool semaphore_trylock(semaphore_t *sem)
+{
+    int ret = sem_trywait(sem); // fails if
+    return ret == 0;
+}
+
+static inline void semaphore_unlock(semaphore_t *sem)
+{
+    sem_post(sem);
 }
 
 #endif
 
+#endif
+
+#else // #if !DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+
+#define MUTEX_CONTENTION_MONITOR 0
+
+#if MUTEX_CONTENTION_MONITOR
+#pragma message("***********************************************************")
+#pragma message("***********************************************************")
+#pragma message("MUTEX_CONTENTION_MONITOR 1")
+#pragma message("***********************************************************")
+#pragma message("***********************************************************")
+#endif
+
+#if MUTEX_CONTENTION_MONITOR
+struct mutex_contention_monitor_s;
+void mutex_contention_object_create(void *mutex_ptr, bool recursive);
+void mutex_contention_object_destroy(void *mutex_ptr);
+struct mutex_contention_monitor_s * mutex_contention_lock_begin(thread_t thread, void *mutex_ptr, stacktrace st, const char *type_name);
+void mutex_contention_lock_wait(struct mutex_contention_monitor_s *mcm);
+void mutex_contention_lock_wait_with_mutex(thread_t thread, void *mutex_ptr);
+void mutex_contention_lock_resume(struct mutex_contention_monitor_s *mcm);
+void mutex_contention_lock_resume_with_mutex(thread_t thread, void *mutex_ptr);
+void mutex_contention_lock_end(struct mutex_contention_monitor_s *mcm);
+void mutex_contention_lock_fail(struct mutex_contention_monitor_s *mcm);
+void mutex_contention_unlock(thread_t thread, void *mutex_ptr);
+void mutex_contention_unlock_with_monitor(struct mutex_contention_monitor_s *mcm);
+
+void mutex_contention_monitor_start();
+void mutex_contention_monitor_stop();
+#endif
+
+typedef pthread_mutex_t mutex_t;
+
+#define MUTEX_INITIALIZER PTHREAD_MUTEX_INITIALIZER
+
+void mutex_lock(mutex_t *mtx);
+bool mutex_trylock(mutex_t *mtx);
+void mutex_unlock(mutex_t *mtx);
+
+int mutex_lock_unchecked(mutex_t* mtx);
+int mutex_unlock_unchecked(mutex_t* mtx);
+
+#ifdef UNDEF_MSG_ERR
+#undef MSG_ERR
+#undef UNDEF_MSG_ERR
+#endif
+
+#endif // DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+
 void mutex_init_recursive(mutex_t *mtx);
+int mutex_init_process_shared(mutex_t *mtx);
 void mutex_init(mutex_t *mtx);
 void mutex_destroy(mutex_t *mtx);
 
-#if !DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
-static inline void cond_wait(cond_t *cond, mutex_t *mtx)
+#if __APPLE__
+typedef mutex_t spinlock_t;
+
+static inline void spinlock_init(spinlock_t *spin)
 {
-    pthread_cond_wait(cond, mtx);
+    mutex_init(spin);
+}
+
+static inline void spinlock_destroy(spinlock_t *spin)
+{
+    mutex_destroy(spin);
+}
+
+static inline void spinlock_lock(spinlock_t *spin)
+{
+    mutex_lock(spin);
+}
+
+static inline void spinlock_unlock(spinlock_t *spin)
+{
+    mutex_unlock(spin);
 }
 #else
+
+typedef pthread_spinlock_t spinlock_t;
+
+static inline void spinlock_init(spinlock_t *spin)
+{
+    pthread_spin_init(spin, 0);
+}
+
+static inline void spinlock_destroy(spinlock_t *spin)
+{
+    pthread_spin_destroy(spin);
+}
+
+static inline void spinlock_lock(spinlock_t *spin)
+{
+    pthread_spin_lock(spin);
+}
+
+static inline void spinlock_unlock(spinlock_t *spin)
+{
+    pthread_spin_unlock(spin);
+}
+
+#endif
+
 static inline void cond_wait(cond_t *cond, mutex_t *mtx)
 {
-    mtx->wait = TRUE;
-    pthread_cond_wait(cond, &mtx->mtx);
-    mtx->wait = FALSE;
-}
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if MUTEX_CONTENTION_MONITOR
+    mutex_contention_lock_wait_with_mutex(thread_self(), mtx);
 #endif
+#endif
+    int ret = pthread_cond_wait(cond, mtx);
+
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if MUTEX_CONTENTION_MONITOR
+    mutex_contention_lock_resume_with_mutex(thread_self(), mtx);
+#endif
+#endif
+
+    if(ret != 0)
+    {
+        perror("cond_wait");
+        fflush(stderr);
+    }
+}
+
+extern struct timespec __alarm__approximate_time_10s;
+
+static inline void cond_wait_auto_time_out(cond_t *cond, mutex_t *mtx)
+{
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if MUTEX_CONTENTION_MONITOR
+    mutex_contention_lock_wait_with_mutex(thread_self(), mtx);
+#endif
+#endif
+
+    int ret = pthread_cond_timedwait(cond, mtx, &__alarm__approximate_time_10s);
+
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if MUTEX_CONTENTION_MONITOR
+    mutex_contention_lock_resume_with_mutex(thread_self(), mtx);
+#endif
+#endif
+#ifndef WIN32
+    if(ret != 0)
+    {
+        fprintf(stderr, "cond_wait_auto_time_out: %s", strerror(ret));
+        fflush(stderr);
+        time_t now = time(NULL);
+        __alarm__approximate_time_10s.tv_sec =  now + 10;
+    }
+#endif
+}
 
 #else
 
@@ -225,13 +371,17 @@ static inline void cond_wait(cond_t *cond, mutex_t *mtx)
 
 #endif
 
+int cond_init_process_shared(cond_t *cond);
+
 static inline void cond_init(cond_t *cond)
 {
     pthread_cond_init(cond, NULL);
 }
 
 #if !_POSIX_TIMERS
+#ifndef _TIMEMS_H
 u64 timeus();
+#endif
 #endif
 
 static inline int cond_timedwait(cond_t *cond, mutex_t *mtx, u64 usec)
@@ -251,18 +401,69 @@ static inline int cond_timedwait(cond_t *cond, mutex_t *mtx, u64 usec)
     }
 #else
     usec += timeus();
-    usec *= 1000;
+    usec *= 1000ULL;
     ts.tv_nsec = usec % 1000000000LL;
     ts.tv_sec = usec / 1000000000LL;
 #endif
-    
-#if !DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
-    int ret = pthread_cond_timedwait(cond, mtx, &ts);
-#else
-    mtx->wait = TRUE;
-    int ret = pthread_cond_timedwait(cond, &mtx->mtx, &ts);
-    mtx->wait = FALSE;
+
+
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if MUTEX_CONTENTION_MONITOR
+    mutex_contention_lock_wait_with_mutex(thread_self(), mtx);
 #endif
+#endif
+
+    int ret = pthread_cond_timedwait(cond, mtx, &ts);
+
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if MUTEX_CONTENTION_MONITOR
+    mutex_contention_lock_resume_with_mutex(thread_self(), mtx);
+#endif
+#endif
+
+    return ret;
+}
+
+static inline int cond_timedwait_absolute(cond_t *cond, mutex_t *mtx, u64 usec_epoch)
+{
+    struct timespec ts;
+
+    ts.tv_sec = usec_epoch / ONE_SECOND_US;
+    ts.tv_nsec = (usec_epoch % ONE_SECOND_US) * 1000LL;
+
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    #if MUTEX_CONTENTION_MONITOR
+    mutex_contention_lock_wait_with_mutex(thread_self(), mtx);
+#endif
+#endif
+
+    int ret = pthread_cond_timedwait(cond, mtx, &ts);
+
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    #if MUTEX_CONTENTION_MONITOR
+    mutex_contention_lock_resume_with_mutex(thread_self(), mtx);
+#endif
+#endif
+
+    return ret;
+}
+
+static inline int cond_timedwait_absolute_ts(cond_t *cond, mutex_t *mtx, struct timespec *ts)
+{
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    #if MUTEX_CONTENTION_MONITOR
+    mutex_contention_lock_wait_with_mutex(thread_self(), mtx);
+#endif
+#endif
+
+    int ret = pthread_cond_timedwait(cond, mtx, ts);
+
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+    #if MUTEX_CONTENTION_MONITOR
+    mutex_contention_lock_resume_with_mutex(thread_self(), mtx);
+#endif
+#endif
+
     return ret;
 }
 
@@ -281,7 +482,24 @@ static inline void cond_notify(cond_t *cond)
 
 static inline void cond_finalize(cond_t *cond)
 {
-    pthread_cond_destroy(cond);
+    for(;;)
+    {
+        int ret = pthread_cond_destroy(cond);
+
+        if(ret == 0)
+        {
+            break;
+        }
+
+        if(ret != EBUSY)
+        {
+            //osformat(termerr, "async_wait_finalize: pthread_cond_destroy returned another error than EBUSY: %r", MAKE_ERRNO_ERROR(ret));
+            //flusherr();
+            break;
+        }
+
+        usleep(5000);
+    }
 }
 
 struct smp_int
@@ -291,6 +509,7 @@ struct smp_int
 };
 
 #define SMP_INT_INITIALIZER {PTHREAD_MUTEX_INITIALIZER,0}
+#define SMP_INT_INITIALIZER_AT(value_) {PTHREAD_MUTEX_INITIALIZER, (value_)}
 
 typedef struct smp_int smp_int;
 
@@ -443,23 +662,14 @@ typedef struct group_mutex_t group_mutex_t;
 
 struct group_mutex_t
 {
-    mutex_t mutex;
     cond_t cond;
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
-    stacktrace trace;
-    volatile pthread_t id;
-    volatile u64 timestamp;
-#endif
+    mutex_t mutex;
     volatile s32 count;
     volatile u8 owner;
     volatile u8 reserved_owner;
 };
 
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
-#define GROUP_MUTEX_INITIALIZER {MUTEX_INITIALIZER, COND_INITIALIZER, NULL, 0, 0, 0, 0, 0}
-#else
-#define GROUP_MUTEX_INITIALIZER {MUTEX_INITIALIZER, COND_INITIALIZER, 0, 0, 0}
-#endif
+#define GROUP_MUTEX_INITIALIZER {COND_INITIALIZER, MUTEX_INITIALIZER, 0, 0, 0}
 
 void group_mutex_init(group_mutex_t* mtx);
 void group_mutex_lock(group_mutex_t *mtx, u8 owner);
@@ -472,10 +682,6 @@ bool group_mutex_islocked(group_mutex_t* mtx);
 void group_mutex_double_lock(group_mutex_t *mtx, u8 owner, u8 secondary_owner);
 void group_mutex_double_unlock(group_mutex_t *mtx, u8 owner, u8 secondary_owner);
 void group_mutex_exchange_locks(group_mutex_t *mtx, u8 owner, u8 secondary_owner);
-
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
-void group_mutex_locked_set_monitor();
-#endif
 
 static inline void group_mutex_read_lock(group_mutex_t *mtx)
 {
@@ -496,7 +702,6 @@ static inline void group_mutex_write_unlock(group_mutex_t *mtx)
 {
     group_mutex_unlock(mtx, GROUP_MUTEX_WRITE);
 }
-
 
 /**
  * The shared group mutex is a group mutex that only uses N mutex(es) and N condition(s).
@@ -522,9 +727,13 @@ struct shared_group_mutex_t
 {
     shared_group_shared_mutex_t *shared_mutex;
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+#if MUTEX_CONTENTION_MONITOR
+    struct mutex_contention_monitor_s *mcm;
+#else
     stacktrace trace;
-    volatile pthread_t id;
+    volatile thread_t id;
     volatile u64 timestamp;
+#endif
 #endif
 
     volatile s32 count;
@@ -548,16 +757,9 @@ void shared_group_mutex_destroy(shared_group_mutex_t* mtx);
 bool shared_group_mutex_islocked(shared_group_mutex_t* mtx);
 bool shared_group_mutex_islocked_by(shared_group_mutex_t *mtx, u8 owner);
 
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
-void shared_group_mutex_locked_set_monitor();
-#endif
-
 #ifdef	__cplusplus
 }
 #endif
 
 #endif	/* _MUTEX_H */
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

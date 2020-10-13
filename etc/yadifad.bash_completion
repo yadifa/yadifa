@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+# Copyright (c) 2011-2020, EURid. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without 
@@ -45,22 +45,15 @@ _yadifad()
     #
     case ${prev} in
     
-        -u)
-            # options to complete if '-u' has been used
+        -u|--uid)
+            # options to complete if '-u' or '--uid' has been used
             local running=$(getent passwd | cut -d: -f1)
             COMPREPLY=( $( compgen -W "${running}" -- "$cur" ) )
 
             return 0
             ;;
-        --uid)
-            # options to complete if '--uid' has been used
-            local running=$(getent passwd | cut -d: -f1)
-            COMPREPLY=( $( compgen -W "${running}" -- "$cur" ) )
-
-            return 0
-            ;;
-        -g)
-            # options to complete if '-g' has been used
+        -g|--gid)
+            # options to complete if '-g' or '--gid' has been used
             if [ -e /etc/group ]; then
                 local running=$(getent group | cut -d: -f1)
                 COMPREPLY=( $( compgen -W "${running}" -- "$cur" ) )
@@ -68,12 +61,10 @@ _yadifad()
 
             return 0
             ;;
-        --gid)
-            # options to complete if '--gid' has been used
-            if [ -e /etc/group ]; then
-                local running=$(getent group | cut -d: -f1)
-                COMPREPLY=( $( compgen -W "${running}" -- "$cur" ) )
-            fi
+        -c|--config)
+            # options to complete if '-c' or '--config' has been used
+            local xpat='conf'
+            _filedir "${xpat}"
 
             return 0
             ;;

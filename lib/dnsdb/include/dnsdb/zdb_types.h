@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup types The types used in the database
  *  @ingroup dnsdb
  *  @brief The types used in the database
@@ -44,12 +45,15 @@
 
 #include <dnsdb/zdb-config-features.h>
 
+#include <stdatomic.h>
+
 #include <dnscore/dnsname.h>
 #include <dnscore/zalloc.h>
 #include <dnscore/rfc.h>
 #include <dnscore/message.h>
 #include <dnscore/alarm.h>
 #include <dnscore/mutex.h>
+#include <dnscore/acl.h>
 
 #include <dnsdb/zdb_config.h>
 #include <dnsdb/dictionary.h>
@@ -66,6 +70,27 @@ struct journal;
     
 #define ROOT_LABEL                  ((u8*)"")
 
+#define ZDB_ZONE_LOCK_HAS_OWNER_ID 0 // debug
+
+#if ZDB_ZONE_LOCK_HAS_OWNER_ID
+#pragma message("***********************************************************")
+#pragma message("***********************************************************")
+#pragma message("ZDB_ZONE_LOCK_HAS_OWNER_ID 1")
+#pragma message("***********************************************************")
+#pragma message("***********************************************************")
+#endif
+
+
+/* zdb_ttlrdata
+ *
+ * This record is allocated in:
+ *
+ * zdb_zone_load
+ * zdb_add_global
+ *
+ *
+ */
+
 typedef struct zdb_packed_ttlrdata zdb_packed_ttlrdata;
 
 struct zdb_packed_ttlrdata
@@ -75,6 +100,21 @@ struct zdb_packed_ttlrdata
     u16 rdata_size; /*  2  2 */
     u8 rdata_start[1];
 };
+
+static inline int zdb_packed_ttlrdata_count(const zdb_packed_ttlrdata *rrset)
+{
+    int count = 0;
+    
+    const zdb_packed_ttlrdata* p = rrset;
+    
+    while(p != NULL)
+    {
+        ++count;
+        p = p->next;
+    }
+    
+    return count;
+}
 
 // a zdb_packed_ttlrdata ready to store a valid SOA
 
@@ -223,6 +263,40 @@ struct zdb_packed_ttlrdata_soa
 #define ZDB_PACKEDRECORD_PTR_RDATAPTR(record_)  (&(record_)->rdata_start[0])
 #define ZDB_PACKEDRECORD_PTR_RDATASIZE(record_) ((record_)->rdata_size)
 
+static inline int zdb_packed_ttlrdata_compare_records(const zdb_packed_ttlrdata *rr0, const zdb_packed_ttlrdata *rr1)
+{
+    int s0 = ZDB_PACKEDRECORD_PTR_RDATASIZE(rr0);
+    int s1 = ZDB_PACKEDRECORD_PTR_RDATASIZE(rr1);
+    int s = MIN(s0, s1);
+    int d;
+
+    if(s > 0)
+    {
+        d = memcmp(ZDB_PACKEDRECORD_PTR_RDATAPTR(rr0), ZDB_PACKEDRECORD_PTR_RDATAPTR(rr1), s);
+        if(d == 0)
+        {
+            d = s0 - s1;
+
+            if(d == 0)
+            {
+                d = rr0->ttl - rr1->ttl;
+            }
+        }
+    }
+    else
+    {
+        d = s0 - s1;
+
+        if(d == 0)
+        {
+            d = rr0->ttl - rr1->ttl;
+        }
+    }
+
+    return d;
+}
+
+
 #define ZDB_RECORD_PTR_RDATASIZE(record_)       ((record_)->rdata_size)
 #define ZDB_RECORD_PTR_RDATAPTR(record_)        ((record_)->rdata_pointer)
 
@@ -251,13 +325,11 @@ struct zdb_ttlrdata
 
 typedef btree zdb_rr_collection;
 
-
 #define ZDB_RESOURCERECORD_TAG 0x444345524c4c5546   /** "FULLRECD" */
 
 /* zdb_zone */
 
 typedef struct zdb_zone zdb_zone;
-
 
 #define LABEL_HAS_RECORDS(label_) ((label_)->resource_record_set != NULL)
 
@@ -279,21 +351,19 @@ typedef dictionary zdb_rr_label_set;
 
 typedef struct zdb_rr_label zdb_rr_label;
 
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
 
-#if ZDB_HAS_NSEC_SUPPORT != 0
+#if ZDB_HAS_NSEC_SUPPORT
 
 typedef struct nsec_label_extension nsec_label;
 typedef struct nsec_label_extension nsec_label_extension;
 typedef struct nsec_node nsec_zone;
 
-
 #endif
 
-#if ZDB_HAS_NSEC3_SUPPORT != 0
+#if ZDB_HAS_NSEC3_SUPPORT
 
 typedef struct nsec3_zone nsec3_zone;
-
 
 #endif
 
@@ -344,22 +414,6 @@ union nsec_label_union
  */
 
 /*
- * Zone security is managed
- */
-#define ZDB_RR_LABEL_MAINTAINED     0x8000 // should be moved
-
-/*
- * Forbid updates to the apex
- */
-#define ZDB_RR_APEX_LABEL_FROZEN    0x4000  // should be moved
-
-/*
- * When a zone has expired, the apex is marked with this flag
- */
-
-#define ZDB_RR_LABEL_INVALID_ZONE   0x2000  // should be moved
-
-/*
  * For the apex, marks a label as being the apex
  */
 
@@ -395,8 +449,8 @@ union nsec_label_union
 
 #define ZDB_RR_LABEL_DROPCNAME      0x0020
 
-#define ZDB_RR_LABEL_N3COVERED      0x0040
-#define ZDB_RR_LABEL_N3OCOVERED     0x0080
+#define ZDB_RR_LABEL_N3COVERED      0x0040  // expected coverage
+#define ZDB_RR_LABEL_N3OCOVERED     0x0080  // expected coverage
 
 
 #if ZDB_HAS_DNSSEC_SUPPORT
@@ -412,7 +466,7 @@ union nsec_label_union
  *
  * IT IS NOT VALID TO CHECK THIS TO SEE IF A ZONE IS NSEC3
  */
-#define ZDB_RR_LABEL_NSEC3          0x0200
+#define ZDB_RR_LABEL_NSEC3          0x0200  // structure
 
 /*
  * The zone is (NSEC3) + OPTOUT (NSEC3 should also be set)
@@ -420,35 +474,89 @@ union nsec_label_union
  * IT IS NOT VALID TO CHECK THIS TO SEE IF A ZONE IS NSEC3
  */
 
-#define ZDB_RR_LABEL_NSEC3_OPTOUT   0x0400
+#define ZDB_RR_LABEL_NSEC3_OPTOUT   0x0400  // structure
+
+/*
+ * Marks a label so it cannot be deleted.
+ * Used for incremental changes when it is known that an empty terminal will have records added.
+ * (Avoiding to delete then re-create several structures)
+ */
+#define ZDB_RR_LABEL_KEEP           0x0800
 
 #endif
 
-#define ZDB_ZONE_VALID(__z__) ((((__z__)->apex->flags)&ZDB_RR_LABEL_INVALID_ZONE) == 0)
-#define ZDB_ZONE_INVALID(__z__) ((((__z__)->apex->flags)&ZDB_RR_LABEL_INVALID_ZONE) != 0)
+#define ZDB_RR_LABEL_HAS_NS         0x1000  // quick check of the presence of an NS record
+#define ZDB_RR_LABEL_HAS_DS         0x2000  // quick check of the presence of an DS record
 
-#define ZDB_LABEL_UNDERDELEGATION(__l__) ((((__l__)->flags)&ZDB_RR_LABEL_UNDERDELEGATION)!=0)
-#define ZDB_LABEL_ATDELEGATION(__l__) ((((__l__)->flags)&ZDB_RR_LABEL_DELEGATION)!=0)
-#define ZDB_LABEL_ATORUNDERDELEGATION(__l__) ((((__l__)->flags)&(ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_UNDERDELEGATION))!=0)
-
-#define ZDB_LABEL_ISAPEX(__l__) ((((__l__)->flags)&ZDB_RR_LABEL_APEX)!=0)
+#define ZDB_LABEL_UNDERDELEGATION(__l__) ((((__l__)->_flags)&ZDB_RR_LABEL_UNDERDELEGATION)!=0)
+#define ZDB_LABEL_ATDELEGATION(__l__) ((((__l__)->_flags)&ZDB_RR_LABEL_DELEGATION)!=0)
+#define ZDB_LABEL_ATORUNDERDELEGATION(__l__) ((((__l__)->_flags)&(ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_UNDERDELEGATION))!=0)
 
 struct zdb_rr_label
 {
     zdb_rr_label* next; /* dictionnary_node* next */ /*  4  8 */
     zdb_rr_label_set sub; /* dictionnary of N children labels */ /* 16 24 */
 
-    zdb_rr_collection resource_record_set; /* resource records for the label (a btree)*/ /*  4  4 */
+    zdb_rr_collection resource_record_set; /* resource records for the ²label (a btree)*/ /*  4  4 */
 
-#if ZDB_HAS_DNSSEC_SUPPORT != 0
+#if ZDB_HAS_DNSSEC_SUPPORT
     nsec_label_union nsec;
 #endif
 
-    u16 flags;	/* NSEC, NSEC3, and 6 for future usage ... */
+    u16 _flags;	/* NSEC, NSEC3, and 6 for future usage ... */
 
     u8 name[1]; /* label */ /*  4  8 */
     /* No zone ptr */
 }; /* 28 44 => 32 48 */
+
+static inline void zdb_rr_label_flag_or(zdb_rr_label *rr_label, u16 or_mask)
+{
+
+    rr_label->_flags |= or_mask;
+}
+
+static inline void zdb_rr_label_flag_and(zdb_rr_label *rr_label, u16 and_mask)
+{
+
+    rr_label->_flags &= and_mask;
+}
+
+static inline void zdb_rr_label_flag_or_and(zdb_rr_label *rr_label, u16 or_mask, u16 and_mask)
+{
+
+    rr_label->_flags = (rr_label->_flags |or_mask) & and_mask;
+}
+
+static inline bool zdb_rr_label_flag_isset(const zdb_rr_label *rr_label, u16 and_mask)
+{
+    return (rr_label->_flags & and_mask) != 0;
+}
+
+static inline bool zdb_rr_label_flag_matches(const zdb_rr_label *rr_label, u16 and_mask)
+{
+    return (rr_label->_flags & and_mask) == and_mask;
+}
+
+
+static inline bool zdb_rr_label_flag_isclear(const zdb_rr_label *rr_label, u16 and_mask)
+{
+    return (rr_label->_flags & and_mask) == 0;
+}
+
+static inline u16 zdb_rr_label_flag_get(const zdb_rr_label *rr_label)
+{
+    return rr_label->_flags;
+}
+
+static inline bool zdb_rr_label_is_apex(const zdb_rr_label *rr_label)
+{
+    return zdb_rr_label_flag_isset(rr_label, ZDB_RR_LABEL_APEX);
+}
+
+static inline bool zdb_rr_label_is_not_apex(const zdb_rr_label *rr_label)
+{
+    return zdb_rr_label_flag_isclear(rr_label, ZDB_RR_LABEL_APEX);
+}
 
 #define ZDB_ZONE_MUTEX_EXCLUSIVE_FLAG   0x80
 #define ZDB_ZONE_MUTEX_LOCKMASK_FLAG    0x7f
@@ -483,17 +591,45 @@ typedef ya_result zdb_zone_access_filter(const message_data* /*mesg*/, const voi
 
 #define ZDB_ZONE_KEEP_RAW_SIZE          1
 
-#define ZDB_ZONE_STATUS_ICMTL_ENABLED   1
+#define ZDB_ZONE_STATUS_NEED_REFRESH    1
 #define ZDB_ZONE_STATUS_DUMPING_AXFR    2
-#define ZDB_ZONE_STATUS_WILL_NOTIFY     4 // in the queue
+#define ZDB_ZONE_STATUS_WILL_NOTIFY     4   // in the queue
+#define ZDB_ZONE_STATUS_MODIFIED        8   // content has been changed since last time (typically, a replay has been done)
+#define ZDB_ZONE_STATUS_WILL_NOTIFY_AGAIN 16
+#define ZDB_ZONE_STATUS_SAVE_CLEAR_JOURNAL_AFTER_MOUNT 32   // if a corrupted chain has been
+
+#define ZDB_ZONE_ERROR_STATUS_DIFF_FAILEDNOUSABLE_KEYS 1
+
+/*
+ * The zone has expired or is a stub (while the real zone is being loaded)
+ */
+
+#define ZDB_ZONE_STATUS_INVALID   64
+
+/*
+ * Forbid updates of the zone
+ */
+#define ZDB_ZONE_STATUS_FROZEN    128
+
+#define ZDB_ZONE_STATUS_IN_DYNUPDATE_DIFF 256
+
+
+//#define ZDB_ZONE_STATUS_KEEP_TEXT_UNUSED      16   // when storing an image, always keep it as text (slower, bigger)
 
 #define ZDB_ZONE_HAS_OPTOUT_COVERAGE    1   // assumed true, until something else is found
+#define ZDB_ZONE_MAINTAIN_NOSEC         0
 #define ZDB_ZONE_MAINTAIN_NSEC          2
 #define ZDB_ZONE_MAINTAIN_NSEC3         4
 #define ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT  5
 #define ZDB_ZONE_MAINTAIN_MASK          7
-
 #define ZDB_ZONE_RRSIG_PUSH_ALLOWED     8   // feature requested internally
+
+#define ZDB_ZONE_MAINTENANCE_ON_MOUNT   16  // means the sanity decided the zone should probably be maintained ASAP
+#define ZDB_ZONE_MAINTAIN_QUEUED        32
+#define ZDB_ZONE_MAINTAINED             64
+#define ZDB_ZONE_MAINTENANCE_PAUSED     128
+
+
 
 
 
@@ -515,12 +651,33 @@ struct dnskey_keyring;
 struct zdb_zone_update_signatures_ctx
 {
     u8 *current_fqdn;
-    u32 earliest_signature_expiration;
+    s32 earliest_signature_expiration;
     u16 labels_at_once;
-
+    s8 chain_index;
 };
 
 typedef struct zdb_zone_update_signatures_ctx zdb_zone_update_signatures_ctx;
+
+struct zdb;
+struct zdb_zone;
+
+typedef ya_result zdb_zone_resolve(struct zdb_zone *zone, message_data *data, struct zdb *db);
+
+/**
+ * A zone can be loaded from disk
+ * A zone can be stored to disk
+ * A zone image can be downloaded from a master
+ * 
+ * A masters loads an image from a text oh hierarchical image.
+ * If the hierarchical image is allowed as a source (meaning no text image anymore), no AXFR image should ever be stored.
+ * If only the text image is allowed, then the AXFR image should be stored as hierarchical.
+ * 
+ * A slave downloads an AXFR image, then incremental changes, and stores the image on disk when the journal requests it.
+ * This last storage step can be done as an AXFR image, a hierarchical image, or even a text image (but that one should not exist on a slave).
+ * It means the only time an AXFR image should (partially) exist on the disk from the time its being downloaded from a master to the time
+ * it's stored again in a (better) form.
+ *
+ */
 
 struct zdb_zone
 {
@@ -532,11 +689,11 @@ struct zdb_zone
 #endif
 
     zdb_zone_access_filter* query_access_filter;
-    void *extension;    /**
-                         * This pointer is meant to be used by the server so it can associate data with the zone
-                         * without having to do the match on its side too.
-                         *
-                         */
+    access_control *acl;     /**
+                                    * This pointer is meant to be used by the server so it can associate data with the zone
+                                    * without having to do the match on its side too.
+                                    *
+                                    */
     
 #if ZDB_HAS_DNSSEC_SUPPORT
     zdb_zone_update_signatures_ctx progressive_signature_update;
@@ -562,11 +719,11 @@ struct zdb_zone
     
     volatile u32 axfr_timestamp;        // The last time when an AXFR has ENDED to be written on disk, if 0, an AXFR is being written right now
     volatile u32 axfr_serial;           // The serial number of the AXFR (being written) on disk
-    
+    volatile u32 text_serial;           // The serial number of the TEXT on disk
 #if ZDB_HAS_DNSSEC_SUPPORT
-    u32 sig_validity_regeneration_seconds;
-    u32 sig_validity_interval_seconds;
-    u32 sig_validity_jitter_seconds;
+    s32 sig_validity_interval_seconds;
+    s32 sig_validity_regeneration_seconds;
+    s32 sig_validity_jitter_seconds;
     u32 sig_quota;                      // starts at 100, updated so a batch does not takes more than a fraction of a second
 #endif
         
@@ -575,20 +732,25 @@ struct zdb_zone
     volatile s32 lock_count;            // the number of owners with the current lock ID
     volatile u8 lock_owner;             // the ID of who can manipulate the zone
     volatile u8 lock_reserved_owner;    // to the next-owner mechanism (reserve an ownership change)
-    
-    volatile u8 _status;                // extended status flags for background tasks not part of the normal operations        
+
     volatile u8 _flags;                 // extended flags (optout coverage)
-#if ZDB_RECORDS_MAX_CLASS != 1
+    volatile u8 _error_status;          // various error status used to avoid repetition
+    volatile atomic_uint_fast32_t _status;                // extended status flags for background tasks not part of the normal operations
+#if ZDB_RECORDS_MAX_CLASS
     u16 zclass;
 #endif
     
     mutex_t lock_mutex;
     cond_t  lock_cond;
+#if ZDB_ZONE_LOCK_HAS_OWNER_ID
+    thread_t lock_last_owner_id;
+    thread_t lock_last_reserved_owner_id;
+#endif
     
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
     stacktrace lock_trace;
-    pthread_t lock_id;
-    u64 lock_timestamp;
+    thread_t lock_id;
+    s64 lock_timestamp;
 #endif
 
 #if ZDB_ZONE_KEEP_RAW_SIZE
@@ -684,9 +846,93 @@ struct zdb_zone_label_iterator /// 47136 bytes on a 64 bits architecture
 
 typedef ya_result rrl_process_callback(message_data *mesg, zdb_query_ex_answer *ans_auth_add);
 
-u8 zdb_zone_get_status(zdb_zone *zone);
-u8 zdb_zone_set_status(zdb_zone *zone, u8 status);
-u8 zdb_zone_clear_status(zdb_zone *zone, u8 status);
+u32 zdb_zone_get_status(zdb_zone *zone);
+u32 zdb_zone_set_status(zdb_zone *zone, u32 status);
+u32 zdb_zone_clear_status(zdb_zone *zone, u32 status);
+
+bool zdb_zone_error_status_getnot_set(zdb_zone *zone, u8 error_status);
+void zdb_zone_error_status_clear(zdb_zone *zone, u8 error_status);
+
+/*
+u8 zdb_zone_get_flags(zdb_zone *zone);
+u8 zdb_zone_set_flags(zdb_zone *zone, u8 flags);
+u8 zdb_zone_clear_flags(zdb_zone *zone, u8 flags);
+*/
+static inline bool zdb_zone_invalid(zdb_zone *zone)
+{
+    return (zdb_zone_get_status(zone) & ZDB_ZONE_STATUS_INVALID) != 0;
+}
+
+static inline bool zdb_zone_valid(zdb_zone *zone)
+{
+    return (zdb_zone_get_status(zone) & ZDB_ZONE_STATUS_INVALID) == 0;
+}
+
+static inline void zdb_zone_set_dumping_axfr(zdb_zone *zone)
+{
+    zdb_zone_set_status(zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
+}
+
+static inline bool zdb_zone_get_set_dumping_axfr(zdb_zone *zone)
+{
+    u8 status = zdb_zone_set_status(zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
+    return (status & ZDB_ZONE_STATUS_DUMPING_AXFR) != 0;
+}
+
+static inline void zdb_zone_clear_dumping_axfr(zdb_zone *zone)
+{
+    zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_DUMPING_AXFR);
+}
+
+static inline bool zdb_zone_is_dumping_axfr(zdb_zone *zone)
+{
+    return (zdb_zone_get_status(zone) & ZDB_ZONE_STATUS_DUMPING_AXFR) != 0;
+}
+
+static inline void zdb_zone_set_store_clear_journal_after_mount(zdb_zone *zone)
+{
+    zdb_zone_set_status(zone, ZDB_ZONE_STATUS_SAVE_CLEAR_JOURNAL_AFTER_MOUNT);
+}
+
+static inline void zdb_zone_clear_store_clear_journal_after_mount(zdb_zone *zone)
+{
+    zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_SAVE_CLEAR_JOURNAL_AFTER_MOUNT);
+}
+
+static inline bool zdb_zone_is_store_clear_journal_after_mount(zdb_zone *zone)
+{
+    return (zdb_zone_get_status(zone) & ZDB_ZONE_STATUS_SAVE_CLEAR_JOURNAL_AFTER_MOUNT) != 0;
+}
+
+static inline void zdb_zone_set_invalid(zdb_zone *zone)
+{
+    zdb_zone_set_status(zone, ZDB_ZONE_STATUS_INVALID);
+}
+
+static inline void zdb_zone_clear_invalid(zdb_zone *zone)
+{
+    zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_INVALID);
+}
+
+static inline bool zdb_zone_is_invalid(zdb_zone *zone)
+{
+    return (zdb_zone_get_status(zone) & ZDB_ZONE_STATUS_INVALID) != 0;
+}
+
+static inline void zdb_zone_set_frozen(zdb_zone *zone)
+{
+    zdb_zone_set_status(zone, ZDB_ZONE_STATUS_FROZEN);
+}
+
+static inline void zdb_zone_clear_frozen(zdb_zone *zone)
+{
+    zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_FROZEN);
+}
+
+static inline bool zdb_zone_is_frozen(zdb_zone *zone)
+{
+    return (zdb_zone_get_status(zone) & ZDB_ZONE_STATUS_FROZEN) != 0;
+}
 
 #ifdef	__cplusplus
 }

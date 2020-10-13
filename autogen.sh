@@ -28,7 +28,7 @@
 #  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-################################################################################
+################################################################################        
 
 OS=$(uname -s)
 SED=sed
@@ -70,53 +70,8 @@ then
 	fi
 fi
 
-cd ./bin/yadifa
 aclocal
 autoheader
-libtoolize --copy
-automake --add-missing --copy
+automake --add-missing
 autoconf
-cd -
-cd .
-aclocal
-autoheader
-libtoolize --copy
-automake --add-missing --copy
-autoconf
-cd -
-cd ./lib/dnscore
-aclocal
-autoheader
-libtoolize --copy
-automake --add-missing --copy
-autoconf
-cd -
-cd ./lib/dnsdb
-aclocal
-autoheader
-libtoolize --copy
-automake --add-missing --copy
-autoconf
-cd -
-cd ./lib/dnslg
-aclocal
-autoheader
-libtoolize --copy
-automake --add-missing --copy
-autoconf
-cd -
-cd ./lib/dnszone
-aclocal
-autoheader
-libtoolize --copy
-automake --add-missing --copy
-autoconf
-cd -
-cd ./sbin/yadifad
-aclocal
-autoheader
-libtoolize --copy
-automake --add-missing --copy
-autoconf
-cd -
 

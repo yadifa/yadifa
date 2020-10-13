@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup nsec NSEC functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -55,6 +56,8 @@
 
 #define MODULE_MSG_HANDLE g_dnssec_logger
 extern logger_handle *g_dnssec_logger;
+
+#define NSEC_CHAIN_REPLAY_DEBUG 0
 
 #define NSEC3CNR_TAG 0x524e433345534e
 #define NSEC3RPL_TAG 0x4c50523345534e
@@ -103,8 +106,8 @@ nsec_chain_replay_record_fqdn(nsec_chain_replay_record *record)
 static int
 nsec_chain_replay_record_nsec_compare(const void *a, const void *b)
 {
-    nsec_chain_replay_record *ra = *(nsec_chain_replay_record**)a;
-    nsec_chain_replay_record *rb = *(nsec_chain_replay_record**)b;
+    nsec_chain_replay_record *ra = (nsec_chain_replay_record*)a;
+    nsec_chain_replay_record *rb = (nsec_chain_replay_record*)b;
     int d = dnsname_compare(nsec_chain_replay_record_fqdn(ra), nsec_chain_replay_record_fqdn(rb));
     return d;
 }
@@ -123,7 +126,7 @@ nsec_chain_replay_record_del(chain_replay *cr, const u8 *fqdn, u16 rtype, const 
 {
     nsec_chain_replay_data *crd = (nsec_chain_replay_data*)cr->data;
     
-#ifdef DEBUG
+#if NSEC_CHAIN_REPLAY_DEBUG
     rdata_desc type_len_rdata = {rtype, ZDB_RECORD_PTR_RDATASIZE(ttlrdata), ZDB_RECORD_PTR_RDATAPTR(ttlrdata)};
     log_debug("nsec-chain: del %{dnsname} %{typerdatadesc}", fqdn, &type_len_rdata);
 #endif
@@ -147,7 +150,7 @@ nsec_chain_replay_record_add(chain_replay *cr, const u8 *fqdn, u16 rtype, const 
 {
     nsec_chain_replay_data *crd = (nsec_chain_replay_data*)cr->data;
     
-#ifdef DEBUG
+#if NSEC_CHAIN_REPLAY_DEBUG
     rdata_desc type_len_rdata = {rtype, ZDB_RECORD_PTR_RDATASIZE(ttlrdata), ZDB_RECORD_PTR_RDATAPTR(ttlrdata)};
     log_debug("nsec-chain: add %{dnsname} %{typerdatadesc}", fqdn, &type_len_rdata);
 #endif
@@ -197,7 +200,7 @@ nsec_chain_replay_execute(chain_replay *cr)
         
         // keep a quick access on the record
         
-        ptr_node *node = ptr_set_avl_insert(&del_nsec_set, (u8*)nsec_chain_replay_record_fqdn(record));
+        ptr_node *node = ptr_set_insert(&del_nsec_set, (u8*)nsec_chain_replay_record_fqdn(record));
         if(node->value == NULL)
         {
             
@@ -219,7 +222,7 @@ nsec_chain_replay_execute(chain_replay *cr)
         
         // check for updates
         
-        ptr_node *node = ptr_set_avl_find(&del_nsec_set, nsec_chain_replay_record_fqdn(record));
+        ptr_node *node = ptr_set_find(&del_nsec_set, nsec_chain_replay_record_fqdn(record));
         if(node != NULL)
         {
             // the record is updated
@@ -243,17 +246,17 @@ nsec_chain_replay_execute(chain_replay *cr)
         nsec_chain_replay_record *record = (nsec_chain_replay_record*)ptr_vector_get(&crd->del_nsec_records, i);
         if(record->status == 0)
         {
-#ifdef DEBUG
+#if NSEC_CHAIN_REPLAY_DEBUG
             log_debug("nsec-chain: - %{dnsname}", nsec_chain_replay_record_fqdn(record));
 #endif
             s32 labels_top = dnsname_to_dnslabel_vector(record->fqdn, labels);
+
+            nsec_delete_label_node(crd->zone, labels, labels_top);
             
             zdb_rr_label* label = zdb_rr_label_find_exact(crd->zone->apex, labels, labels_top - crd->zone->origin_vector.size - 1);
             if(label != NULL)
             {
-                nsec_delete_label_node(crd->zone, label, labels, labels_top);
-                
-                if(RR_LABEL_IRRELEVANT(label))
+                if(RR_LABEL_IRRELEVANT(label))  // irrelevant and RR_LABEL_EMPTY_TERMINAL should be equivalent here
                 {
                     ya_result ret;
                     if(FAIL(ret = zdb_rr_label_delete_record(crd->zone, labels, labels_top - crd->zone->origin_vector.size - 1, TYPE_ANY)))
@@ -274,7 +277,7 @@ nsec_chain_replay_execute(chain_replay *cr)
         {
             // insert the new record
             
-#ifdef DEBUG
+#if NSEC_CHAIN_REPLAY_DEBUG
             log_debug("nsec-chain: + %{dnsname}", nsec_chain_replay_record_fqdn(record));
 #endif           
             s32 labels_top = dnsname_to_dnslabel_vector(record->fqdn, labels);
@@ -287,7 +290,7 @@ nsec_chain_replay_execute(chain_replay *cr)
         }
         else
         {
-#ifdef DEBUG
+#if NSEC_CHAIN_REPLAY_DEBUG
             log_debug("nsec-chain: ~ %{dnsname}", nsec_chain_replay_record_fqdn(record));
 #endif
         }
@@ -295,21 +298,21 @@ nsec_chain_replay_execute(chain_replay *cr)
         
     // unlock the zone for writing
     
-    ptr_set_avl_destroy(&del_nsec_set);
+    ptr_set_destroy(&del_nsec_set);
     
-    ptr_vector_free_empties(&crd->del_nsec_records, nsec_chain_replay_record_delete_cb);
-    ptr_vector_free_empties(&crd->add_nsec_records, nsec_chain_replay_record_delete_cb);
-    
+    ptr_vector_callback_and_clear(&crd->del_nsec_records, nsec_chain_replay_record_delete_cb);
+    ptr_vector_callback_and_clear(&crd->add_nsec_records, nsec_chain_replay_record_delete_cb);
+        
     return SUCCESS;
 }
 
 static void
-nsec_chain_replay_finalise(chain_replay *cr)
+nsec_chain_replay_finalize(chain_replay *cr)
 {
     nsec_chain_replay_data *crd = (nsec_chain_replay_data*)cr->data;
     
-    ptr_vector_free_empties(&crd->del_nsec_records, nsec_chain_replay_record_delete_cb);
-    ptr_vector_free_empties(&crd->add_nsec_records, nsec_chain_replay_record_delete_cb);
+    ptr_vector_callback_and_clear(&crd->del_nsec_records, nsec_chain_replay_record_delete_cb);
+    ptr_vector_callback_and_clear(&crd->add_nsec_records, nsec_chain_replay_record_delete_cb);
     ptr_vector_destroy(&crd->del_nsec_records);
     ptr_vector_destroy(&crd->add_nsec_records);
     
@@ -317,6 +320,9 @@ nsec_chain_replay_finalise(chain_replay *cr)
     crd->zone = NULL;
     
     // release memory
+    
+    ZFREE_OBJECT(crd);
+    cr->data = NULL;
 }
 
 static const struct chain_replay_vtbl nsec_chain_replay_vtbl =
@@ -324,7 +330,7 @@ static const struct chain_replay_vtbl nsec_chain_replay_vtbl =
     nsec_chain_replay_record_add,
     nsec_chain_replay_record_del,
     nsec_chain_replay_execute,
-    nsec_chain_replay_finalise,
+    nsec_chain_replay_finalize,
     "nsec_chain_replay"
 };
 
@@ -332,7 +338,7 @@ ya_result
 nsec_chain_replay_init(chain_replay *cr, zdb_zone *zone)
 {
     nsec_chain_replay_data *data;
-    ZALLOC_OR_DIE(nsec_chain_replay_data*, data, nsec_chain_replay_data, NSEC3RPL_TAG);
+    ZALLOC_OBJECT_OR_DIE(data, nsec_chain_replay_data, NSEC3RPL_TAG);
     ptr_vector_init(&data->del_nsec_records);
     ptr_vector_init(&data->add_nsec_records);    
     zdb_zone_acquire(zone);

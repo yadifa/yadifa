@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup
  *  @ingroup dnsdb
  *  @brief
@@ -43,6 +44,8 @@
  *
  * USE INCLUDES */
 #include "dnsdb/dnsdb-config.h"
+#include <dnscore/u32_set.h>
+#include <dnscore/logger.h>
 #include "dnsdb/zdb-zone-maintenance.h"
 #include "dnsdb/rrsig.h"
 
@@ -74,7 +77,7 @@ zdb_zone_maintenance_nsec(zdb_zone_maintenance_ctx* mctx, const zone_diff_fqdn *
     // NSEC signatures should be handled with the general signatures
     
     int ret = 0;
-    
+
     if((mctx->nsec_chain_status & (NSEC_ZONE_GENERATING|NSEC_ZONE_REMOVING)) == NSEC_ZONE_GENERATING)
     {
         // add
@@ -102,34 +105,36 @@ zdb_zone_maintenance_nsec(zdb_zone_maintenance_ctx* mctx, const zone_diff_fqdn *
     {
         if(rrset_to_sign != NULL)
         {
-#ifdef DEBUG
-            log_debug("maintenance: %{dnsname}: looking at NSEC RRSIG coverage", mctx->zone->origin);
+#if DEBUG
+            log_debug1("maintenance: %{dnsname}: looking at NSEC RRSIG coverage", mctx->zone->origin);
 #endif
             if(zone_diff_will_have_rrset_type(diff_fqdn, TYPE_NSEC))
             {
-                zone_diff_fqdn_rr_set *nsec_rrset = zone_diff_fqdn_rr_get((zone_diff_fqdn*)diff_fqdn, TYPE_NSEC);
+                zone_diff_fqdn_rr_set *nsec_rrset = zone_diff_fqdn_rr_set_get((zone_diff_fqdn *) diff_fqdn, TYPE_NSEC);
 
                 if(nsec_rrset != NULL)
                 {
-#ifdef DEBUG
-                    log_debug("maintenance: %{dnsname}: NSEC RRSET exists", mctx->zone->origin);
+#if DEBUG
+                    log_debug1("maintenance: %{dnsname}: NSEC RRSET exists", mctx->zone->origin);
 #endif
-                    zone_diff_fqdn_rr_set *rrsig_rrset = zone_diff_fqdn_rr_get((zone_diff_fqdn*)diff_fqdn, TYPE_RRSIG);
-                    
-                    bool sign_nsec_rrset;
-                    
+#if 0
+                    zone_diff_fqdn_rr_set *rrsig_rrset = zone_diff_fqdn_rr_set_get((zone_diff_fqdn *) diff_fqdn, TYPE_RRSIG);
+#endif
+                    bool sign_nsec_rrset = TRUE;
+#if 0
                     if(rrsig_rrset != NULL)
                     {
-                        sign_nsec_rrset = TRUE;
+                        bool has_one_valid_signature = FALSE;
+                        sign_nsec_rrset = FALSE;
                         
-                        ptr_set_avl_iterator rr_iter;
-                        ptr_set_avl_iterator_init(&rrsig_rrset->rr, &rr_iter);
-                        while(ptr_set_avl_iterator_hasnext(&rr_iter))
+                        ptr_set_iterator rr_iter;
+                        ptr_set_iterator_init(&rrsig_rrset->rr, &rr_iter);
+                        while(ptr_set_iterator_hasnext(&rr_iter))
                         {
-                            ptr_node *node = ptr_set_avl_iterator_next_node(&rr_iter);
+                            ptr_node *node = ptr_set_iterator_next_node(&rr_iter);
                             zone_diff_label_rr *rr = (zone_diff_label_rr *)node->key;                            
                             
-                            if((rr->state & ZONE_DIFF_REMOVE) != 0)
+                            if((rr->state & ZONE_DIFF_RR_REMOVE) != 0)
                             {
                                 continue; // signature is being removed already: ignore
                             }
@@ -138,29 +143,38 @@ zdb_zone_maintenance_nsec(zdb_zone_maintenance_ctx* mctx, const zone_diff_fqdn *
 
                             if(covered_type == TYPE_NSEC)
                             {
-                                u32 valid_until = rrsig_get_valid_until_from_rdata(rr->rdata, rr->rdata_size);
-                                u32 valid_from = rrsig_get_valid_from_from_rdata(rr->rdata, rr->rdata_size);
-
-                                if((mctx->now >= valid_from) && (mctx->now < valid_until)) // signature seem valid
+                                s32 key_index = -2;
+                                if(rrsig_should_remove_signature_from_rdata(
+                                    rr->rdata, rr->rdata_size,
+                                    &mctx->zsks, mctx->now, mctx->zone->sig_validity_regeneration_seconds, &key_index) && (key_index != -1))
                                 {
-#ifdef DEBUG
-                                    log_debug("maintenance: %{dnsname}: NSEC RRSET is covered by at least one signature", mctx->zone->origin);
+#if DEBUG
+                                    log_debug1("maintenance: %{dnsname}: NSEC RRSET signature should be removed", mctx->zone->origin);
 #endif
-                                    sign_nsec_rrset = FALSE;
+                                    sign_nsec_rrset = TRUE;
                                     break;
+                                }
+                                else
+                                {
+#if DEBUG
+                                    log_debug1("maintenance: %{dnsname}: NSEC RRSET is covered by at least one signature", mctx->zone->origin);
+#endif
+                                    has_one_valid_signature = TRUE;
                                 }
                             }
                         }
+
+                        sign_nsec_rrset |= has_one_valid_signature;
                     }
                     else
                     {
-#ifdef DEBUG
-                        log_debug("maintenance: %{dnsname}: NSEC RRSET and there are no signatures at all on the label", mctx->zone->origin);
+#if DEBUG
+                        log_debug1("maintenance: %{dnsname}: NSEC RRSET and there are no signatures at all on the label", mctx->zone->origin);
 #endif
                         sign_nsec_rrset = TRUE;
                     }
-                    
-                    if(sign_nsec_rrset)
+#endif
+                    if(sign_nsec_rrset) // always true ...
                     {
                         for(int i = 0; i <= ptr_vector_last_index(rrset_to_sign); ++i)
                         {
@@ -173,7 +187,7 @@ zdb_zone_maintenance_nsec(zdb_zone_maintenance_ctx* mctx, const zone_diff_fqdn *
                         
                         if(sign_nsec_rrset)
                         {
-#ifdef DEBUG
+#if DEBUG
                             u16 rtype = TYPE_NSEC;
                             log_debug1("maintenance: %{dnsname}: %{dnsname} %{dnstype} will have its RRSIGs updated",
                                     mctx->zone->origin,
@@ -181,16 +195,17 @@ zdb_zone_maintenance_nsec(zdb_zone_maintenance_ctx* mctx, const zone_diff_fqdn *
                                     &rtype);
 #endif
                             ptr_vector_append(rrset_to_sign, nsec_rrset);
+                            ++ret;
                         }
                         else
                         {
-                            log_debug("maintenance: %{dnsname}: NSEC RRSET is already marked for signature", mctx->zone->origin);
+                            log_debug1("maintenance: %{dnsname}: NSEC RRSET is already marked for signature", mctx->zone->origin);
                         }
                     }
                     else
                     {
-#ifdef DEBUG
-                        log_debug("maintenance: %{dnsname}: NSEC RRSET does not need to be signed again", mctx->zone->origin);
+#if DEBUG
+                        log_debug1("maintenance: %{dnsname}: NSEC RRSET does not need to be signed again", mctx->zone->origin);
 #endif
                     }
                 }

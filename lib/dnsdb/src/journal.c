@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -66,10 +67,16 @@
 #include <dnscore/dns_resource_record.h>
 #include <dnscore/fdtools.h>
 #include <dnscore/ptr_set.h>
+#include <dnscore/packet_writer.h>
+#include <dnscore/file_output_stream.h>
+#include <dnscore/buffer_input_stream.h>
+#include <dnscore/buffer_output_stream.h>
+#include <dnscore/rfc.h>
 
 #include "dnsdb/journal.h"
-#include "dnsdb/journal_ix.h"
-#include "dnsdb/journal-cjf.h"
+//#include "dnsdb/journal_ix.h"
+//#include "dnsdb/journal-cjf.h"
+#include "dnsdb/journal-jnl.h"
 #include "dnsdb/zdb_zone.h"
 #include "dnsdb/zdb_utils.h"
 #include "dnsdb/xfr_copy.h"
@@ -79,7 +86,24 @@ extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
 //#define journal_default_open journal_ix_open
+
+/*
 #define journal_default_open journal_cjf_open
+#define journal_default_finalize journal_cjf_finalize
+*/
+
+#define journal_default_open journal_jnl_open
+#define journal_default_finalize journal_jnl_finalize
+
+#ifndef JOURNAL_DEBUG
+#if DEBUG
+#define JOURNAL_DEBUG 1
+#else
+#define JOURNAL_DEBUG 0
+#endif
+#endif
+
+#define JOURNAL_DEBUG_TTY 0
 
 /**
  * @note 20161028 edf -- this parameters tells how many dictionaries are can stay open when not used
@@ -101,41 +125,45 @@ static mutex_t journal_mutex = MUTEX_INITIALIZER;
 static list_dl_s journal_mru_list;
 static mutex_t journal_mru_mtx = MUTEX_INITIALIZER;
 
-static s32 journal_mru_size_max = 32;
+static u32 journal_mru_size_max = 32;
 static s32 journal_count = 0;
 static bool journal_initialised = FALSE;
 
-static inline void journal_mru_flag_set(journal *jh, bool value)
+static inline void
+journal_mru_flag_set(journal *jh, bool value)
 {
-#ifdef DEBUG
-    log_debug("journal: MRU: journal@%p setting flag from %i to %i", jh, jh->_mru, value);
+#if JOURNAL_DEBUG
+    log_debug("journal: %{dnsname}: MRU: journal@%p setting flag from %i to %i", journal_get_domain_const(jh), jh, jh->_mru, value);
 #endif
     
     jh->_mru = value;
 }
 
-static inline bool journal_mru_flag_get(const journal *jh)
+static inline bool
+journal_mru_flag_get(const journal *jh)
 {
-#ifdef DEBUG
-    log_debug("journal: MRU: journal@%p flag is %i", jh, jh->_mru);
+#if JOURNAL_DEBUG
+    log_debug("journal: %{dnsname}: MRU: journal@%p flag is %i", journal_get_domain_const(jh), jh, jh->_mru);
 #endif
     
     return jh->_mru != 0;
 }
 
-static inline void journal_forget_flag_set(journal *jh, bool value)
+static inline void
+journal_forget_flag_set(journal *jh, bool value)
 {
-#ifdef DEBUG
-    log_debug("journal: journal@%p setting flag from %i to %i", jh, jh->_forget, value);
+#if JOURNAL_DEBUG
+    log_debug("journal: %{dnsname}: journal@%p forget flag set from %i to %i", journal_get_domain_const(jh), jh, (int)jh->_forget, (int)value);
 #endif
     
     jh->_forget = value;
 }
 
-static inline bool journal_forget_flag_get(const journal *jh)
+static inline bool
+journal_forget_flag_get(const journal *jh)
 {
-#ifdef DEBUG
-    log_debug("journal: journal@%p forget flag is %i", jh, jh->_forget);
+#if JOURNAL_DEBUG
+    log_debug("journal: %{dnsname}: journal@%p forget flag is %i", journal_get_domain_const(jh), jh, (int)jh->_forget);
 #endif
     
     return jh->_forget != 0;
@@ -170,7 +198,8 @@ journal_init(u32 mru_size)
     return SUCCESS;
 }
 
-static void journal_mru_remove(journal *jh)
+static void
+journal_mru_remove(journal *jh)
 {
     if(journal_mru_flag_get(jh))
     {
@@ -181,19 +210,12 @@ static void journal_mru_remove(journal *jh)
         jh->mru_node.prev = NULL;
         
         journal_mru_flag_set(jh, FALSE);
-        
-        if(jh->zone != NULL)
-        {
-            log_debug("journal: %{dnsname}: MRU: journal@%p for zone@%p removed", jh->zone->origin, jh, jh->zone);
-        }
-        else
-        {
-            log_debug("journal: MRU: journal@%p removed", jh);
-        }
+
+        log_debug("journal: %{dnsname}: MRU: journal@%p removed", journal_get_domain_const(jh), jh);
 
         mutex_unlock(&journal_mru_mtx); // safe
     }
-#ifdef DEBUG
+#if JOURNAL_DEBUG
     else
     {
         yassert(jh->mru_node.prev == NULL);
@@ -210,7 +232,8 @@ static void journal_mru_remove(journal *jh)
  * called from journal_mru_clear(), to clear the mru of its content
  */
 
-static void journal_mru_close_last()
+static void
+journal_mru_close_last_nolock() // journal_mru_mtx must be locked;
 {
     list_dl_node_s *victim_node = list_dl_remove_last_node(&journal_mru_list);
 
@@ -224,7 +247,7 @@ static void journal_mru_close_last()
         u8 origin_buffer[MAX_DOMAIN_LENGTH];
         u8 *origin = NULL;
         
-#ifdef DEBUG
+#if JOURNAL_DEBUG
         memcpy(origin_buffer, "\005BOGUS", 7);
 #endif
         
@@ -238,14 +261,21 @@ static void journal_mru_close_last()
 
         yassert(victim->mru_node.next == NULL);
         
-        ptr_node *node = ptr_set_avl_find(&journal_set, origin_buffer);
+        ptr_node *node = ptr_set_find(&journal_set, origin_buffer);
         if(node != NULL)
         {
-            log_debug("journal: %{dnsname}: MRU: journal@%p is being removed from the set", origin_buffer, victim);
-            
-            origin = (u8*)node->key;
-            ptr_set_avl_delete(&journal_set, origin_buffer);
-            --journal_count;
+            if(node->value == victim)
+            {
+                log_debug("journal: %{dnsname}: MRU: journal@%p is being removed from the set", origin_buffer, victim);
+                
+                origin = (u8*)node->key;
+                ptr_set_delete(&journal_set, origin_buffer);
+                --journal_count;
+            }
+            else
+            {
+                log_debug("journal: %{dnsname}: MRU: journal@%p was not in the set (another instance was)", origin_buffer, victim);
+            }
         }
         
         if(origin != NULL)
@@ -271,7 +301,8 @@ static void journal_mru_close_last()
  * called from journal_release(journal *jh), when a journal is not referenced anymore and could thus be closed ... soon
  */
 
-static void journal_mru_enqueue(journal *jh)
+static void
+journal_mru_enqueue(journal *jh)
 {
     mutex_lock(&journal_mru_mtx);
     
@@ -288,23 +319,16 @@ static void journal_mru_enqueue(journal *jh)
     
     journal_mru_flag_set(jh, TRUE);
         
-    if(jh->zone != NULL)
-    {
-        log_debug("journal: %{dnsname}: MRU: journal@%p for zone @%p added", jh->zone->origin, jh, jh->zone);
-    }
-    else
-    {
-        log_debug("journal: MRU: journal@%p added", jh);
-    }
+    log_debug("journal: %{dnsname}: MRU: journal@%p added", journal_get_domain_const(jh), jh);
     
     while(list_dl_size(&journal_mru_list) > journal_mru_size_max)
     {
-        log_debug("journal: MRU: size: %i/%i: closing oldest", list_dl_size(&journal_mru_list), journal_mru_size_max);
+        log_debug("journal: %{dnsname}: MRU: size: %i/%i: closing oldest", journal_get_domain_const(jh), list_dl_size(&journal_mru_list), journal_mru_size_max);
         
-        journal_mru_close_last(); // set locked
+        journal_mru_close_last_nolock(); // set locked
     }
     
-    log_debug("journal: MRU: size: %i/%i", list_dl_size(&journal_mru_list), journal_mru_size_max);
+    log_debug("journal: %{dnsname}: MRU: size: %i/%i", journal_get_domain_const(jh), list_dl_size(&journal_mru_list), journal_mru_size_max);
     
     mutex_unlock(&journal_mru_mtx);
 }
@@ -315,20 +339,21 @@ static void journal_mru_enqueue(journal *jh)
  * (checked)
  */
 
-static void journal_mru_clear()
+static void
+journal_mru_clear()
 {
     log_debug("journal: MRU: clear");
     
     mutex_lock(&journal_mru_mtx);
     while(list_dl_size(&journal_mru_list) > 0)
     {
-        journal_mru_close_last(); // set locked
+        journal_mru_close_last_nolock(); // set locked
     }
     mutex_unlock(&journal_mru_mtx);
 }
 
 void
-journal_finalise()
+journal_finalize()
 {
     log_debug("journal: finalising");
 
@@ -347,10 +372,8 @@ journal_finalise()
         
             journal_mru_clear(); // set locked
             
-            bool empty = ptr_set_avl_isempty(&journal_set);
+            bool empty = ptr_set_isempty(&journal_set);
 
-            group_mutex_unlock(&journal_set_mtx, GROUP_MUTEX_WRITE);
-            
             if(empty)
             {
                 break;
@@ -360,8 +383,10 @@ journal_finalise()
         }
         
         log_debug("journal: finalised");
+
+        journal_default_finalize();
         
-#if DEBUG
+#if JOURNAL_DEBUG
         logger_flush();
 #endif
     }
@@ -373,14 +398,21 @@ journal_acquire_from_fqdn_and_zone(journal **jhp, const u8 *origin, zdb_zone *zo
     ya_result ret;
     char data_path[PATH_MAX];
     
+#if JOURNAL_DEBUG
+    log_debug3("journal_acquire_from_fqdn_and_zone(%p, %{dnsname}, %p, %i)", jhp, origin, zone, (int)create);
+#endif
+    
     if(origin == NULL)
     {
+        log_err("journal_acquire_from_fqdn_and_zone(%p, NULL, %p, %i) failed: %r", jhp, zone, (int)create, ZDB_JOURNAL_WRONG_PARAMETERS);
+        
         return ZDB_JOURNAL_WRONG_PARAMETERS;
     }
     
     group_mutex_lock(&journal_set_mtx, GROUP_MUTEX_WRITE); // MUST be a WRITE, not a double, not a read : a write
     
-    ptr_node *node = ptr_set_avl_find(&journal_set, origin);
+    ptr_node *node = ptr_set_find(&journal_set, origin);
+    
     if(node == NULL || node->value == NULL)
     {
         // the journal is not in the set
@@ -394,45 +426,56 @@ journal_acquire_from_fqdn_and_zone(journal **jhp, const u8 *origin, zdb_zone *zo
         if(FAIL(ret = zdb_zone_path_get_provider()(origin, data_path, sizeof(data_path), path_flags)))
         {
             group_mutex_unlock(&journal_set_mtx, GROUP_MUTEX_WRITE);
+#if JOURNAL_DEBUG
+            log_debug3("journal_acquire_from_fqdn_and_zone(%p, %{dnsname}, %p, %i) failed: %r", jhp, origin, zone, (int)create, ret);
+#endif
             return ret;
         }
         
         if(FAIL(ret = journal_default_open(jhp, origin, data_path, create)))
         {
             group_mutex_unlock(&journal_set_mtx, GROUP_MUTEX_WRITE);
+#if JOURNAL_DEBUG
+            log_debug3("journal_acquire_from_fqdn_and_zone(%p, %{dnsname}, %p, %i) failed: %r", jhp, origin, zone, (int)create, ret);
+#endif
             return ret;
         }
         
-        if(zone != NULL)
-        {
-            log_debug("journal: %{dnsname} new journal instance %p, linked to zone %p", origin, *jhp, zone);
-            journal_link_zone(*jhp, zone);
-        }
-        else
-        {
-            log_debug("journal: %{dnsname}: new journal instance %p", origin, *jhp);
-        }
+        log_debug3("journal: %{dnsname}: new journal instance %p", origin, *jhp);
         
         void *key = dnsname_zdup(origin);
-        node = ptr_set_avl_insert(&journal_set, key);
+        node = ptr_set_insert(&journal_set, key);
         (*jhp)->rc = 1;       // nobody else has access yet, no point locking
         node->value = *jhp;
         ++journal_count;
         
         group_mutex_unlock(&journal_set_mtx, GROUP_MUTEX_WRITE);
+
+#if JOURNAL_DEBUG_TTY
+        formatln("%{dnsname} %i -> %i (first acquire with fqdn)", journal_get_domain_const((*jhp)), (*jhp)->rc - 1, (*jhp)->rc);
+        debug_stacktrace_print(termout, debug_stacktrace_get());
+#endif
     }
     else
     {
         int rc;
         mutex_lock(&journal_mutex); // in set write lock
         *jhp = (journal*)node->value;
-        rc = ++(*jhp)->rc;
-#ifdef DEBUG
-        log_debug("journal: %{dnsname}: acquired: rc=%i (set)", origin, rc);
+
+#if JOURNAL_DEBUG_TTY
+        formatln("%{dnsname} %i -> %i (acquire with fqdn)", journal_get_domain_const((*jhp)), (*jhp)->rc, (*jhp)->rc + 1);
+        debug_stacktrace_print(termout, debug_stacktrace_get());
 #endif
+
+        rc = ++(*jhp)->rc;        
+#if JOURNAL_DEBUG
+        log_debug3("journal: %{dnsname}: acquired: rc=%i (set)", origin, rc);
+#endif
+        yassert(((journal*)node->value)->_forget == 0);
+        
         mutex_unlock(&journal_mutex); // in set write lock
         
-        log_debug("journal: %{dnsname}: got journal instance %p, rc=%i", origin, *jhp, rc);
+        log_debug1("journal: %{dnsname}: got journal instance %p, rc=%i", origin, *jhp, rc);
         
         journal_mru_remove(*jhp);
         
@@ -446,13 +489,6 @@ journal_acquire_from_fqdn_and_zone(journal **jhp, const u8 *origin, zdb_zone *zo
         
         if(ISOK(ret = (*jhp)->vtbl->reopen(*jhp)))
         {
-            // bind with the zone, if it was passed
-            
-            if(zone != NULL)
-            {
-                journal_link_zone(*jhp, zone);
-            }
-            
             // done
         }
         else
@@ -511,7 +547,7 @@ journal_acquire_from_zone_ex(journal **jhp, zdb_zone *zone, bool create)
     
     // DO NOT zdb_zone_acquire(zone);
     
-    log_debug("journal: %{dnsname}: opening journal for zone @%p", zone->origin, zone);
+    log_debug1("journal: %{dnsname}: opening journal for zone @%p", zone->origin, zone);
     
     *jhp = NULL;
     ret = journal_acquire_from_fqdn_and_zone(jhp, zone->origin, zone, create);
@@ -529,16 +565,21 @@ journal_acquire_from_zone(journal **jhp, zdb_zone *zone)
 void
 journal_acquire(journal *jh)
 {
+#if JOURNAL_DEBUG_TTY
+    formatln("%{dnsname} %i -> %i (acquire)", journal_get_domain_const(jh), jh->rc, jh->rc + 1);
+     debug_stacktrace_print(termout, debug_stacktrace_get());
+#endif
+
     mutex_lock(&journal_mutex); // journal already acquired, set is safe
     yassert(jh->rc > 0);
-#ifdef DEBUG
+#if JOURNAL_DEBUG
     int rc =
 #endif
     ++jh->rc;
-#ifdef DEBUG
+#if JOURNAL_DEBUG
     u8 origin_buffer[MAX_DOMAIN_LENGTH];
     jh->vtbl->get_domain(jh, origin_buffer);
-    log_debug("journal: %{dnsname}: acquired: rc=%i", origin_buffer, rc);
+    log_debug3("journal: %{dnsname}: acquired: rc=%i", origin_buffer, rc);
 #endif
     mutex_unlock(&journal_mutex); // journal already acquired, set is safe
 }
@@ -554,24 +595,26 @@ journal_release(journal *jh)
 {
     if(jh != NULL)
     {
+#if JOURNAL_DEBUG_TTY
+        formatln("%{dnsname} %i -> %i (release)", journal_get_domain_const(jh), jh->rc, jh->rc - 1);
+        debug_stacktrace_print(termout, debug_stacktrace_get());
+#endif
         group_mutex_lock(&journal_set_mtx, GROUP_MUTEX_WRITE);
         
         mutex_lock(&journal_mutex); // in set write lock
-        
-        yassert(jh->rc > 0);
-        
-        
-#ifdef DEBUG
-        int rc = --jh->rc;        
+
+#if JOURNAL_DEBUG
+        int rc = --jh->rc;
         bool not_used = (rc == 0);
-        
         u8 origin_buffer[MAX_DOMAIN_LENGTH];
         jh->vtbl->get_domain(jh, origin_buffer);
-        log_debug("journal: %{dnsname}: released: rc=%i", origin_buffer, rc);
+        log_debug3("journal: %{dnsname}: released: rc=%i", origin_buffer, rc);
+        yassert(jh->rc >= 0);
 #else
+        yassert(jh->rc > 0);
+
         bool not_used = (--jh->rc) == 0;
 #endif
-        
         mutex_unlock(&journal_mutex); // in set write lock
         
         if(not_used)
@@ -580,14 +623,7 @@ journal_release(journal *jh)
             
             // the journal is candidate for closing
             
-            if(jh->zone != NULL)
-            {
-                log_debug("journal: %{dnsname}: closing journal@%p for zone@%p", jh->zone->origin, jh, jh->zone);
-            }
-            else
-            {
-                log_debug("journal: closing journal@%p", jh);
-            }
+            log_debug3("journal: %{dnsname}: closing journal@%p", journal_get_domain_const(jh), jh);
 
             yassert(journal_count >= 0);
             
@@ -595,17 +631,26 @@ journal_release(journal *jh)
             
             if(!journal_forget_flag_get(jh))
             {
-                log_debug("journal: enqueuing journal@%p to MRU", jh);
+                log_debug3("journal: enqueuing journal@%p to MRU", jh);
                 journal_mru_enqueue(jh); // set locked, close later
             }
             else
             {
-                log_debug("journal: closing journal@%p", jh);
+                log_debug3("journal: closing journal@%p", jh);
                 
-                u8 origin_buffer[MAX_DOMAIN_LENGTH];        
-                jh->vtbl->get_domain(jh, origin_buffer);
-        
-                ptr_set_avl_delete(&journal_set, origin_buffer);
+                // if the journal is in the set, remove it
+                ptr_node *node  = ptr_set_find(&journal_set, journal_get_domain_const(jh));
+                if(node != NULL)
+                {
+                    if(node->value == jh)
+                    {
+                        u8 *origin = (u8*)node->key;
+                        assert(origin != NULL);
+                        ptr_set_delete(&journal_set, journal_get_domain_const(jh));
+                        --journal_count;
+                        dnsname_zfree(origin);
+                    }
+                }
                 
                 jh->vtbl->close(jh);
                 jh->vtbl->destroy(jh);
@@ -689,6 +734,10 @@ journal_truncate(const u8 *origin)
     journal *jh = NULL;
     ya_result ret;
     
+#if JOURNAL_DEBUG
+    log_debug3("journal: %{dnsname}: truncate", origin);
+#endif
+    
     if(ISOK(ret = journal_acquire_from_fqdn(&jh, origin)))
     {
         ret = journal_truncate_to_size(jh, 0);
@@ -697,12 +746,37 @@ journal_truncate(const u8 *origin)
         // if a journal file has been completely been emptied, then it should
         // be fully closed too
         
+        group_mutex_lock(&journal_set_mtx, GROUP_MUTEX_WRITE);
+        
+        // if the journal is in the set, remove it
+        ptr_node *node  = ptr_set_find(&journal_set, journal_get_domain_const(jh));
+        if(node != NULL)
+        {
+            if(node->value == jh)
+            {
+                u8 *origin = (u8*)node->key;
+                assert(origin != NULL);
+                ptr_set_delete(&journal_set, journal_get_domain_const(jh));
+                --journal_count;
+                dnsname_zfree(origin);
+            }
+        }
+        
+        // if the journal is in the mru, remove it
+        journal_mru_remove(jh);
+        
+        group_mutex_unlock(&journal_set_mtx, GROUP_MUTEX_WRITE);
+        
         journal_release(jh);
+        
+#if JOURNAL_DEBUG
+        log_debug3("journal: %{dnsname}: truncated", origin);
+#endif
     }
-#ifdef DEBUG
+#if JOURNAL_DEBUG
     else
     {
-        log_debug("journal_truncate(%{dnsname}) failed with %r", origin, ret);
+        log_debug3("journal: %{dnsname}: truncate failed with %r", origin, ret);
     }
 #endif
     
@@ -710,87 +784,69 @@ journal_truncate(const u8 *origin)
 }
 
 /**
- * 
  * Returns the last SOA TTL + RDATA 
- * 
- * Opens the journal file based on the fqdn.
- * Reads the SOA.
- * Closes the journal.
- * 
- * @param origin
- * @param workingdir
- * @param serial
- * @param ttl
- * @param last_soa_rdata
- * @param last_soa_rdata_size
- * @return 
+ *
+ * @param jh the journal
+ * @param rr an initialised resource record
+ *
+ * @return an error code
  */
 
 ya_result
-journal_last_soa(const u8 *origin, u32 *serial, u32 *ttl, u8 *last_soa_rdata, u16 *last_soa_rdata_size)
+journal_get_last_soa(journal *jh, dns_resource_record *rr)
 {
-    journal *jh = NULL;
-    ya_result ret;
-    
-    if(ISOK(ret = journal_acquire_from_fqdn(&jh, origin)))
+    ya_result ret = ERROR;
+
+    input_stream is;
+    u32 first_serial = 0;
+    u32 last_serial = 0;
+
+    journal_get_serial_range(jh, &first_serial, &last_serial);
+
+    if(first_serial != last_serial) // clion inspection says this is always false, which ignores the update of the variables in the above call
     {
-        input_stream is;
-        u32 first_serial = 0;
-        u32 last_serial = 0;
-        u16 last_soa_rdata_size_store;
-        
-        dns_resource_record rr;
-
-        if(last_soa_rdata_size == NULL)
+        for(u32 serial = last_serial - 1; serial_ge(serial, first_serial); --serial)
         {
-            last_soa_rdata_size = &last_soa_rdata_size_store;
-        }
-        
-        journal_get_first_serial(jh, &first_serial);
-        journal_get_last_serial(jh, &last_serial);
-        
-        if(first_serial != last_serial)
-        {
-            dns_resource_record_init(&rr);
-            
-            if(ISOK(ret = journal_get_ixfr_stream_at_serial(jh, first_serial, &is, &rr)))
+#if JOURNAL_DEBUG
+            log_debug3("journal: %{dnsname}: get last soa, journal range is [%u, %u] looking at serial %u", journal_get_domain_const(jh), first_serial, last_serial, serial);
+#endif
+            if(ISOK(ret = journal_get_ixfr_stream_at_serial(jh, serial, &is, rr)))
             {
-                if(last_soa_rdata_size != NULL)
+#if JOURNAL_DEBUG
+                log_debug3("journal: %{dnsname}: get last soa, journal range is [%u, %u] looked at serial %u: %r", journal_get_domain_const(jh), first_serial, last_serial, serial, ret);
+#endif
+                if(rr->tctr.qtype == TYPE_SOA)
                 {
-                    *last_soa_rdata_size = rr.rdata_size;
-                    
-                    if((last_soa_rdata != NULL) && (*last_soa_rdata_size >= rr.rdata_size))
-                    {
-                        MEMCOPY(last_soa_rdata, rr.rdata, rr.rdata_size);
-                    }
+                    ret = SUCCESS;
+                }
+                else
+                {
+                    ret = ZDB_JOURNAL_SOA_RECORD_EXPECTED;
                 }
 
-                if(serial != NULL)
-                {
-                    if(rr.rdata_size > 0)
-                    {
-                        ret = rr_soa_get_serial(rr.rdata, rr.rdata_size, serial);
-                    }
-                    else
-                    {
-                        log_err("jnl: %{dnsname}: empty last SOA in journal [%u;%u]", origin, first_serial, last_serial);
-                    }
-                }
-
-                if(ttl != NULL)
-                {
-                    *ttl = htonl(rr.tctr.ttl);
-                }
-                
                 input_stream_close(&is);
-            }
-            
-            dns_resource_record_clear(&rr);
-        }
 
-        journal_release(jh);
+                break; // from the scan-back
+            }
+            else
+            {
+#if JOURNAL_DEBUG
+                log_debug3("journal: %{dnsname}: get last soa, journal range is [%u, %u] looking at serial %u (error)", journal_get_domain_const(jh), first_serial, last_serial, serial);
+#endif
+            }
+        }
     }
-    
+    /*
+    else
+    {
+        ret = ERROR;
+    }
+    */
+
+#if JOURNAL_DEBUG
+    log_debug3("journal: %{dnsname}: get last soa, journal range is [%u, %u] returning %r", journal_get_domain_const(jh), first_serial, last_serial, ret);
+#endif
+
     return ret;
 }
 
@@ -815,6 +871,210 @@ journal_close_unused()
 void
 journal_log_status()
 {
+}
+
+ya_result
+journal_answer_ixfr(journal *jh, message_data* mesg, int tcpfd, s32 packet_records_limit)
+{
+    const u8 *origin = message_get_canonised_fqdn(mesg);
+    
+    // TCP output stream
+
+    output_stream tcpos;
+    input_stream fis;
+    packet_writer pw;
+    ya_result return_value;
+    u32 packet_size_limit;
+    u32 packet_size_trigger;
+    s32 packet_records_countdown;
+    u32 serial;
+
+#if ZDB_HAS_TSIG_SUPPORT
+    tsig_tcp_message_position pos = TSIG_START;
+#endif
+
+    if(FAIL(return_value = message_get_ixfr_query_serial(mesg, &serial)))
+    {
+        return return_value;
+    }
+    
+    dns_resource_record soa_rr;
+    dns_resource_record_init(&soa_rr);
+    
+    if(FAIL(return_value = journal_get_ixfr_stream_at_serial(jh, serial, &fis, &soa_rr)))
+    {
+        dns_resource_record_clear(&soa_rr);
+        return return_value;
+    }
+    
+    dns_resource_record rr;
+    dns_resource_record_init(&rr);
+    
+    packet_size_limit = message_get_buffer_size_max(mesg);
+    
+    packet_size_trigger = packet_size_limit / 2; // so, ~32KB, also : guarantees that there will be room for SOA & TSIG
+    
+    if(packet_records_limit)
+    {
+        packet_records_limit = MAX_S32;
+    }
+    packet_records_countdown = packet_records_limit;
+
+    message_reset_buffer_size(mesg);
+    
+    /* attach the tcp descriptor and put a buffer filter in front of the input and the output*/
+
+    fd_output_stream_attach(&tcpos, tcpfd);
+
+    buffer_input_stream_init(&fis, &fis, 4096);
+    buffer_output_stream_init(&tcpos, &tcpos, 4096);
+    
+    size_t query_size = message_get_size(mesg);
+    
+    packet_writer_init(&pw, message_get_buffer(mesg), query_size, packet_size_limit - 780);
+
+    /*
+     * Init
+     * 
+     * Write the final SOA (start of the IXFR stream)
+     */
+   
+    packet_writer_add_dnsrr(&pw, &soa_rr);
+    
+    u32 last_serial;
+    rr_soa_get_serial(soa_rr.rdata, soa_rr.rdata_size, &last_serial);
+
+    u16 an_count = 1 /*2*/;
+
+    bool end_of_stream = FALSE;
+    
+    for(;;)
+    {
+        if(FAIL(return_value = dns_resource_record_read(&rr, &fis)))
+        {
+            log_err("journal ixfr: %{dnsname}: %{sockaddr}: read record #%d failed: %r", origin, message_get_sender_sa(mesg), an_count, return_value);
+            break;
+        }
+        
+        u32 record_length = return_value;
+        
+        if(rr.tctr.qtype == TYPE_SOA)
+        {
+            // ensure we didn't go too far
+            u32 soa_serial;
+            rr_soa_get_serial(rr.rdata, rr.rdata_size, &soa_serial);
+            if(serial_gt(soa_serial, last_serial))
+            {
+                record_length = 0; // will be seen as an EOF
+            }
+        }
+        
+
+        
+        if(record_length == 0)
+        {
+#if JOURNAL_DEBUG
+            log_debug3("journal ixfr: %{dnsname}: %{sockaddr}: end of stream", origin, message_get_sender(mesg));
+#endif
+
+#if ZDB_HAS_TSIG_SUPPORT
+            if(pos != TSIG_START)
+            {
+                pos = TSIG_END;
+            }
+            else
+            {
+                pos = TSIG_WHOLE;
+            }
+#endif
+            // Last SOA
+            // There is no need to check for remaining space as packet_size_trigger guarantees there is still room
+            
+#if  DEBUG
+            {
+                log_debug3("journal ixfr: %{dnsname}: closing: %{dnsrr}", origin, &soa_rr);
+            }
+#endif
+
+            packet_writer_add_dnsrr(&pw, &soa_rr);
+
+            ++an_count;
+            
+            end_of_stream = TRUE;
+        }
+        else if(record_length > MAX_U16) // technically possible: a record too big to fit in an update (not likely)
+        {
+            // this is technically possible with an RDATA of 64K
+            log_err("journal ixfr: %{dnsname}: %{sockaddr}: ignoring record of size %u", origin, message_get_sender_sa(mesg), record_length);          
+            log_err("journal ixfr: %{dnsname}: %{sockaddr}: record is: %{dnsrr}", origin, message_get_sender_sa(mesg), return_value, &rr);
+            continue;
+        }
+        
+        // if the record puts us above the trigger, or if there is no more record to read, send the message
+        
+        if(pw.packet_offset + record_length >= packet_size_trigger || (packet_records_countdown-- <= 0) || end_of_stream)
+        {
+            // flush
+
+            message_set_answer_count(mesg, an_count);
+            message_set_size(mesg, packet_writer_get_offset(&pw));
+
+#if ZDB_HAS_TSIG_SUPPORT
+            return_value = message_terminate_then_write(mesg, &tcpos, pos);
+#else
+            return_value = message_terminate_then_write(mesg, &tcpos, 0);
+#endif
+
+            if(FAIL(return_value))
+            {
+                if(return_value == MAKE_ERRNO_ERROR(EPIPE))
+                {
+                    log_notice("journal ixfr: %{dnsname}: %{sockaddr}: send message failed: client closed connection", origin, message_get_sender_sa(mesg));
+                }
+                else
+                {
+                    log_notice("journal ixfr: %{dnsname}: %{sockaddr}: send message failed: %r", origin, message_get_sender_sa(mesg), return_value);
+                }
+
+                break;
+            }
+
+#if ZDB_HAS_TSIG_SUPPORT
+            pos = TSIG_MIDDLE;
+#endif
+            packet_writer_init(&pw, message_get_buffer(mesg), query_size, packet_size_limit - 780);
+
+            an_count = 0;
+            
+            if(end_of_stream)
+            {
+                break;
+            }
+            
+            packet_records_countdown = packet_records_limit;
+        }
+        
+#if  DEBUG
+        {
+            log_debug3("journal ixfr: %{dnsname}: sending: %{dnsrr}", origin, &rr);
+        }
+#endif
+        packet_writer_add_dnsrr(&pw, &rr);
+        
+        ++an_count;
+    }
+    
+    dns_resource_record_clear(&rr);
+    dns_resource_record_clear(&soa_rr);
+  
+    output_stream_close(&tcpos);
+
+    if(input_stream_valid(&fis))
+    {
+        input_stream_close(&fis);
+    }
+    
+    return return_value;   
 }
 
 /** @} */

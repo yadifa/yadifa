@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -54,15 +55,22 @@
 #include "dnscore/identity.h"
 
 #include "dnscore/server-setup.h"
+#include "dnscore/mt_output_stream.h"
+
+#include "dnscore/process.h"
+#include "dnscore/signals.h"
 
 #include <fcntl.h>
-#include <signal.h>
+#ifndef WIN32
 #include <sys/resource.h>
+#endif
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
-void stdtream_detach_fd_and_close();
+#if DNSCORE_HAS_LOG_THREAD_TAG
+void thread_tag_log_tags();
+#endif
 
 /*------------------------------------------------------------------------------
  * GLOBAL VARIABLES */
@@ -108,6 +116,7 @@ ttylog_err(const char *format, ...)
 int
 server_setup_daemon_go_ex(bool parent_exit, bool child_logger_ownership)
 {
+#ifndef WIN32
     mode_t                                                         mask = 0;
     pid_t                                                               pid;
     struct sigaction                                                     sa;
@@ -144,6 +153,10 @@ server_setup_daemon_go_ex(bool parent_exit, bool child_logger_ownership)
 
         exit(EXIT_FAILURE);
     }
+
+#if DNSCORE_HAS_LOG_THREAD_TAG
+    thread_tag_log_tags();
+#endif
     
     logger_flush();
     logger_stop();
@@ -156,6 +169,8 @@ server_setup_daemon_go_ex(bool parent_exit, bool child_logger_ownership)
     flushout();
 #endif
 
+    logger_release_ownership();
+    
     /* Become a session leader to lose controlling TTYs */
     if((pid = fork()) < 0)
     {
@@ -196,6 +211,7 @@ server_setup_daemon_go_ex(bool parent_exit, bool child_logger_ownership)
     /* Set program in new session */
     setsid();
 
+#ifndef WIN32
     /* Ensure future opens won't allocate controlling TTYs */
     sa.sa_handler = SIG_IGN;
     sigemptyset(&sa.sa_mask);
@@ -208,6 +224,7 @@ server_setup_daemon_go_ex(bool parent_exit, bool child_logger_ownership)
         
         exit(EXIT_FAILURE);
     }
+#endif
 
     /* Stevens way of detaching the program from the parent process,
      * forking twice
@@ -230,17 +247,28 @@ server_setup_daemon_go_ex(bool parent_exit, bool child_logger_ownership)
     }
 
 #if DEBUG
-    osformatln(termout, "taking ownership of the logger (%i)", getpid());
+    debug_osformatln(termout, "taking ownership of the logger (%i)", getpid());
     flushout();
 #endif
-    
+
+    g_pid = getpid();
+
+    if(child_logger_ownership)
+    {
+        logger_take_ownership(getpid());
+    }
+
     logger_start();
-    
+
+#if DNSCORE_HAS_LOG_THREAD_TAG
+    thread_tag_log_tags();
+#endif
+
     log_debug("daemonize: start timer");
     
     dnscore_reset_timer();
 
-#ifdef DEBUG
+#if DEBUG
     // It has been asked to fix the "tmpfile vulnerability" on DEBUG builds.
     // Although this mode is meant for us (Gery & I), we can imagine that
     // someone else could have some interest in it too.
@@ -249,8 +277,8 @@ server_setup_daemon_go_ex(bool parent_exit, bool child_logger_ownership)
     // Later, the "server" part will also be modifiable by the caller.
 
     char output_file[PATH_MAX];
-    snformat(output_file, sizeof(output_file), "/tmp/server-%013x-%05x.std", timeus(), getpid());
-    formatln("redirecting all to '%s'\n", output_file);
+    snformat(output_file, sizeof(output_file), "/tmp/server-%013x-%05x.std.txt", timeus(), getpid());
+    debug_osformatln(termout,"redirecting all to '%s'\n", output_file);
     int file_flags = O_RDWR|O_CREAT|O_EXCL; // ensure no overwrite
 #else
     const char *output_file  = "/dev/null";
@@ -313,9 +341,11 @@ server_setup_daemon_go_ex(bool parent_exit, bool child_logger_ownership)
     }
 
 #if DEBUG
-    osformatln(termout, "detaching from console");
+    debug_osformatln(termout, "detaching from console");
     flushout();
 #endif
+
+
 
     log_debug("daemonize: start thread pools");
     
@@ -330,7 +360,7 @@ server_setup_daemon_go_ex(bool parent_exit, bool child_logger_ownership)
      */
 
 #if DEBUG
-    println("daemonized");
+    debug_println("daemonized");
     flushout();
 #endif
 
@@ -339,6 +369,9 @@ server_setup_daemon_go_ex(bool parent_exit, bool child_logger_ownership)
     logger_flush();
 
     return pid;
+#else
+    return 0;
+#endif
 }
 
 void
@@ -348,10 +381,11 @@ server_setup_daemon_go()
 }
 
 ya_result
-server_setup_env(pid_t *pid, char **pid_file_pathp, uid_t uid, gid_t gid, u32 setup_flags)
+server_setup_env(pid_t *pid, char *pid_file_pathp, uid_t uid, gid_t gid, u32 setup_flags)
 {
     ya_result                                    return_code;
 
+#ifndef WIN32
     if(setup_flags & SETUP_CORE_LIMITS)
     {
         struct rlimit core_limits = {RLIM_INFINITY, RLIM_INFINITY};
@@ -360,14 +394,14 @@ server_setup_env(pid_t *pid, char **pid_file_pathp, uid_t uid, gid_t gid, u32 se
         {
             ttylog_err("unable to set core dump limit: %r", ERRNO_ERROR);
         }
-#ifdef DEBUG
+#if DEBUG
         else
         {
             log_debug("core no-limit set");
         }
 #endif
     }
-        
+
     if(setup_flags & SETUP_ROOT_CHANGE)
     {
         log_info("going to jail");
@@ -395,14 +429,14 @@ server_setup_env(pid_t *pid, char **pid_file_pathp, uid_t uid, gid_t gid, u32 se
     if(setup_flags & SETUP_CREATE_PID_FILE)
     {
         /* Setup environment */
-        if(FAIL(return_code = pid_file_create(pid, *pid_file_pathp, uid, gid)))
+        if(FAIL(return_code = pid_file_create(pid, pid_file_pathp, uid, gid)))
         {
-            ttylog_err("unable to create pid file '%s': %r", *pid_file_pathp, return_code);
+            ttylog_err("unable to create pid file '%s': %r", pid_file_pathp, return_code);
 
             return return_code;
         }
     }
-
+#endif
     return SUCCESS;
 }
 

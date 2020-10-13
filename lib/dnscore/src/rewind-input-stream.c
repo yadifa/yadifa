@@ -1,50 +1,42 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
-/* *@defgroup streaming Streams
-  * @ingroup dnscore
-  * @brief
  *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
  *
-  *@{
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
  *
- *----------------------------------------------------------------------------*/
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 #include "dnscore/dnscore-config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
-#ifdef DEBUG
+#if DEBUG
 #include "dnscore/logger.h"
 #define MODULE_MSG_HANDLE g_system_logger
 extern logger_handle* g_system_logger;
@@ -74,7 +66,7 @@ typedef struct rewind_input_stream_data rewind_input_stream_data;
 struct rewind_input_stream_data
 {
     input_stream filtered;
-#ifdef DEBUG
+#if DEBUG
     u64 offset;
 #endif
     s32 buffer_size;    // amount of the rewind that's filled
@@ -84,7 +76,7 @@ struct rewind_input_stream_data
     u8 buffer[];
 };
 
-static ya_result rewind_input_stream_read(input_stream *stream, u8 *buffer, u32 len);
+static ya_result rewind_input_stream_read(input_stream *stream, void *buffer, u32 len);
 static void rewind_input_stream_close(input_stream *stream);
 static ya_result rewind_input_stream_skip(input_stream *stream, u32 len);
 
@@ -109,7 +101,7 @@ rewind_input_stream_mark(input_stream *stream)
     rewind_input_stream_data *data = (rewind_input_stream_data*)stream->data;    
     yassert(stream->vtbl == &rewind_input_stream_vtbl);
     
-#ifdef DEBUG
+#if DEBUG
     log_debug1("rewind_input_stream_mark(%p) (%llu, %u, %u, %u)", stream, data->offset, data->buffer_offset, data->rewind_relative, data->buffer_offset-data->rewind_relative);
 #endif
     
@@ -119,7 +111,7 @@ rewind_input_stream_mark(input_stream *stream)
         data->rewind_relative = 0;
         data->marked = TRUE;
         
-#ifdef DEBUG
+#if DEBUG
         memset(data->buffer, 0xff, data->buffer_size);
 #endif
     }
@@ -139,7 +131,7 @@ rewind_input_stream_mark(input_stream *stream)
         data->buffer_offset = src_len;
         data->rewind_relative = src_len;
         
-#ifdef DEBUG
+#if DEBUG
         memset(&data->buffer[data->buffer_offset], 0xff, data->buffer_size - data->buffer_offset);
 #endif
     }
@@ -168,26 +160,28 @@ rewind_input_stream_rewind_to_mark(input_stream *stream)
 {
     rewind_input_stream_data *data = (rewind_input_stream_data*)stream->data;    
     yassert(stream->vtbl == &rewind_input_stream_vtbl);
-#ifdef DEBUG
+#if DEBUG
     log_debug1("rewind_input_stream_rewind_to_mark(%p) (%llu, %u, %u, %u)", stream, data->offset, data->buffer_offset, data->rewind_relative, data->buffer_offset-data->rewind_relative);
 #endif
     data->rewind_relative = data->buffer_offset;
 }
 
 static ya_result
-rewind_input_stream_read(input_stream *stream, u8 *buffer, u32 len)
+rewind_input_stream_read(input_stream *stream, void *buffer_, u32 len)
 {
     rewind_input_stream_data *data = (rewind_input_stream_data*)stream->data;
     ya_result ret;
     
-#ifdef DEBUG
+    u8 *buffer = (u8*)buffer_;
+    
+#if DEBUG
     log_debug1("rewind_input_stream_read(%p, %p, %u) (%llu, %u, %u, %u)", stream, buffer, len, data->offset, data->buffer_offset, data->rewind_relative, data->buffer_offset-data->rewind_relative);
 #endif
     
     if(!data->marked)
     {
         ret = data->filtered.vtbl->read(&data->filtered, buffer, len);
-#ifdef DEBUG
+#if DEBUG
         if(ISOK(ret)) data->offset += len;
 #endif
         return ret;
@@ -197,7 +191,7 @@ rewind_input_stream_read(input_stream *stream, u8 *buffer, u32 len)
     
     if(data->rewind_relative > 0)
     {
-        rewind_len = MIN(data->rewind_relative, len);
+        rewind_len = MIN(data->rewind_relative, (s32)len);
         memcpy(buffer, &data->buffer[data->buffer_offset - data->rewind_relative], rewind_len);
 
         data->rewind_relative -= rewind_len;
@@ -217,13 +211,13 @@ rewind_input_stream_read(input_stream *stream, u8 *buffer, u32 len)
     
     s32 remaining_space_in_buffer = data->buffer_size - data->buffer_offset;
     
-    if(remaining_space_in_buffer >= len)
+    if(remaining_space_in_buffer >= (s32)len)
     {
         if(ISOK(ret = data->filtered.vtbl->read(&data->filtered, &data->buffer[data->buffer_offset], len)))
         {        
             memcpy(buffer, &data->buffer[data->buffer_offset], ret);
             data->buffer_offset += ret;
-#ifdef DEBUG
+#if DEBUG
             data->offset += ret;
 #endif
             return ret + rewind_len;
@@ -241,7 +235,7 @@ rewind_input_stream_read(input_stream *stream, u8 *buffer, u32 len)
         
         if(ISOK(ret = data->filtered.vtbl->read(&data->filtered, buffer, len)))
         {
-#ifdef DEBUG
+#if DEBUG
             data->offset += ret;
 #endif
             return ret + rewind_len;
@@ -267,7 +261,7 @@ rewind_input_stream_skip(input_stream *stream, u32 len)
     rewind_input_stream_data *data = (rewind_input_stream_data*)stream->data;
     ya_result ret;
     
-#ifdef DEBUG
+#if DEBUG
     log_debug1("rewind_input_stream_skip(%p, %u) (%llu, %u, %u, %u)", stream, len, data->offset, data->buffer_offset, data->rewind_relative, data->buffer_offset-data->rewind_relative);
 #endif
     
@@ -275,7 +269,7 @@ rewind_input_stream_skip(input_stream *stream, u32 len)
     {
         ret = data->filtered.vtbl->skip(&data->filtered, len);
         
-#ifdef DEBUG
+#if DEBUG
         if(ISOK(ret)) data->offset += ret;
 #endif
         
@@ -288,7 +282,7 @@ rewind_input_stream_skip(input_stream *stream, u32 len)
     
     if(data->rewind_relative > 0)
     {
-        rewind_len = MIN(data->rewind_relative, len);
+        rewind_len = MIN(data->rewind_relative, (s32)len);
         
         data->rewind_relative -= rewind_len;
         len -= rewind_len;
@@ -304,12 +298,12 @@ rewind_input_stream_skip(input_stream *stream, u32 len)
     
     s32 remaining_space_in_buffer = data->buffer_size - data->buffer_offset;
     
-    if(remaining_space_in_buffer >= len)
+    if(remaining_space_in_buffer >= (s32)len)
     {
         if(ISOK(ret = data->filtered.vtbl->read(&data->filtered, &data->buffer[data->buffer_offset], len)))
         {
             data->buffer_offset += ret;
-#ifdef DEBUG
+#if DEBUG
             data->offset += ret;
 #endif
             return ret + rewind_len;
@@ -328,7 +322,7 @@ rewind_input_stream_skip(input_stream *stream, u32 len)
         
         if(ISOK(ret = data->filtered.vtbl->skip(&data->filtered, len)))
         {
-#ifdef DEBUG
+#if DEBUG
             data->offset += ret;
 #endif
             return ret + rewind_len;
@@ -351,7 +345,7 @@ rewind_input_stream_init(input_stream *filtered, input_stream *stream, int rewin
 
     data->filtered.data = filtered->data;
     data->filtered.vtbl = filtered->vtbl;
-#ifdef DEBUG
+#if DEBUG
     data->offset = 0;
     memset(data->buffer, 0xff, rewind_size);
 #endif

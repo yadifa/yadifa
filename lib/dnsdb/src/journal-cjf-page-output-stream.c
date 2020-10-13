@@ -1,40 +1,47 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 #define JOURNAL_CJF_BASE 1
 
 #include "dnsdb/dnsdb-config.h"
+
+#define ZDB_JOURNAL_CODE 1
+
+#include "dnsdb/journal.h"
+
+#if JOURNAL_CJF_ENABLED
+
 #include <dnscore/buffer_output_stream.h>
 #include <dnscore/file_output_stream.h>
 
@@ -130,12 +137,12 @@ journal_cjf_page_output_stream_next(output_stream *stream)
         // CFJ_PAGE_CACHE ->
         log_debug3("cjf: updating PAGE item at %u[(1 + %u) * 8]", jnl->last_page.file_offset, jnl->last_page.count);
 
-        journal_cjf_page_cache_read_header(jnl->fd, jnl->last_page.file_offset, &head);
+        journal_cjf_page_cache_read_header(jnl->file, jnl->last_page.file_offset, &head);
         head.stream_end_offset = item.stream_file_offset + data->size;
         head.count = jnl->last_page.count + 1;
-        journal_cjf_page_cache_write_header(jnl->fd, jnl->last_page.file_offset, &head);
+        journal_cjf_page_cache_write_header(jnl->file, jnl->last_page.file_offset, &head);
         
-        journal_cjf_page_cache_write_item(jnl->fd, jnl->last_page.file_offset, jnl->last_page.count, &item);
+        journal_cjf_page_cache_write_item(jnl->file, jnl->last_page.file_offset, jnl->last_page.count, &item);
         // CFJ_PAGE_CACHE <-
         
         if(jnl->last_page.count == 0)
@@ -207,7 +214,7 @@ journal_cjf_page_output_stream_close(output_stream *stream)
             log_debug3("cjf: flushing PAGE item");
             
             journal_cjf_page_output_stream_flush(stream);
-            fd_output_stream_detach(buffer_output_stream_get_filtered(&data->filtered));
+            file_pool_file_output_stream_detach(buffer_output_stream_get_filtered(&data->filtered));
             output_stream_close(&data->filtered);
         }
         else
@@ -215,7 +222,7 @@ journal_cjf_page_output_stream_close(output_stream *stream)
             log_debug3("cjf: no PAGE item to flush");
         }
         
-        journal_cjf_page_cache_flush(jnl->fd);
+        journal_cjf_page_cache_flush(jnl->file);
         
         log_debug3("cjf: closing PAGE item");
         ZFREE(data, journal_cjf_page_output_stream_data);
@@ -246,7 +253,7 @@ journal_cjf_page_output_stream_cancel(output_stream *stream)
                    data->jnl->last_page.records_limit, data->jnl->last_page.records_limit);
 
         journal_cjf_page_output_stream_flush(stream);
-        fd_output_stream_detach(buffer_output_stream_get_filtered(&data->filtered));
+        file_pool_file_output_stream_detach(buffer_output_stream_get_filtered(&data->filtered));
         output_stream_close(&data->filtered);
         output_stream_set_void(&data->filtered);
         data->size = 0;
@@ -336,12 +343,8 @@ journal_cjf_page_output_stream_reopen(output_stream *out_os, journal_cjf *jnl)
     
     if((jnl->last_page.count == 0) && (jnl->last_page.file_offset == CJF_HEADER_SIZE) && (jnl->first_page_offset == CJF_HEADER_SIZE))
     {
-        // first PAGE
-        
-        journal_cjf_ensure_file_opened(jnl, TRUE);
-        
         // CFJ_PAGE_CACHE ->
-        journal_cjf_page_cache_write_new_header(jnl->fd, jnl->last_page.file_offset);
+        journal_cjf_page_cache_write_new_header(jnl->file, jnl->last_page.file_offset);
         // CFJ_PAGE_CACHE <-
 
         log_debug_jnl(jnl, "journal_cjf_page_open_next_output_stream: INIT");
@@ -356,9 +359,9 @@ journal_cjf_page_output_stream_reopen(output_stream *out_os, journal_cjf *jnl)
             journal_cjf_page_output_stream_flush(out_os);
             journal_cjf_idxt_append_page(jnl);
             // reposition the stream
-            if(lseek(jnl->fd, jnl->last_page.records_limit, SEEK_SET) < 0)
+            if(file_pool_seek(jnl->file, jnl->last_page.records_limit, SEEK_SET) < 0)
             {
-                log_err("cjf: %{dnsname}: cannot move into journal at new page (fd=%i, pos=%llu): %r", jnl->origin, jnl->fd, jnl->last_page.records_limit, ERRNO_ERROR);
+                log_err("cjf: %{dnsname}: cannot move into journal at new page (file=%p, pos=%llu): %r", jnl->origin, jnl->file, jnl->last_page.records_limit, ERRNO_ERROR);
                 logger_flush();
                 return ERRNO_ERROR;
             }
@@ -380,17 +383,17 @@ journal_cjf_page_output_stream_reopen(output_stream *out_os, journal_cjf *jnl)
         
         log_debug2("cjf: opening next PAGE stream at position %u (%08x)", jnl->last_page.records_limit, jnl->last_page.records_limit);
     
-        if(lseek(jnl->fd, jnl->last_page.records_limit, SEEK_SET) < 0)
+        if(file_pool_seek(jnl->file, jnl->last_page.records_limit, SEEK_SET) < 0)
         {
-            log_err("cjf: %{dnsname}: cannot move into journal at next page (fd=%i, pos=%llu): %r", jnl->origin, jnl->fd, jnl->last_page.records_limit, ERRNO_ERROR);
+            log_err("cjf: %{dnsname}: cannot move into journal at next page (file=%p, pos=%llu): %r", jnl->origin, jnl->file, jnl->last_page.records_limit, ERRNO_ERROR);
             logger_flush();
             return ERRNO_ERROR;
         }
         
         journal_cjf_page_output_stream_data *data;
-        ZALLOC_OR_DIE(journal_cjf_page_output_stream_data*, data, journal_cjf_page_output_stream_data, JCJFPOSD_TAG);
+        ZALLOC_OBJECT_OR_DIE( data, journal_cjf_page_output_stream_data, JCJFPOSD_TAG);
         ZEROMEMORY(data, sizeof(journal_cjf_page_output_stream_data));  // false positive: data cannot be NULL
-        fd_output_stream_attach(&data->filtered, jnl->fd);              // this initialises the stream
+        file_pool_file_output_stream_init(&data->filtered, jnl->file);              // this initialises the stream
         file_output_stream_set_full_writes(&data->filtered, TRUE);      // this makes the stream "write fully"
         buffer_output_stream_init(&data->filtered, &data->filtered, 512);
         data->jnl = jnl;
@@ -424,3 +427,4 @@ journal_cfj_page_output_stream_get_current_offset(output_stream *stream)
     return data->start_offset + data->size;
 }
 
+#endif

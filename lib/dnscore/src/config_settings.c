@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -40,10 +41,15 @@
 
 #include "dnscore/dnscore-config.h"
 #include <unistd.h>
+#include <strings.h>
 #include <sys/types.h>
+#ifndef WIN32
 #include <pwd.h>
 #include <grp.h>
+#endif
 #include <sys/stat.h>
+#include <dnscore/config_settings.h>
+#include <dnscore/cmdline.h>
 
 #include "dnscore/logger.h"
 #include "dnscore/base64.h"
@@ -59,7 +65,6 @@
 #include "dnscore/ptr_set.h"
 #include "dnscore/host_address.h"
 
-extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
 #define UIDNAME_TAG 0x454d414e444955
@@ -136,7 +141,7 @@ typedef union code_data_ptr code_data_ptr;
 ya_result
 config_add_on_section_read_callback(const char *section_name, config_callback_function *on_section_read)
 {
-    ptr_node *node = ptr_set_avl_insert(&on_section_read_callback_set, (char*)section_name);
+    ptr_node *node = ptr_set_insert(&on_section_read_callback_set, (char*)section_name);
     
     if(node->value != NULL)
     {
@@ -160,7 +165,7 @@ config_remove_on_section_read_callback(const char *section_name, config_callback
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
     
-    ptr_node *node = ptr_set_avl_find(&on_section_read_callback_set, section_name);
+    ptr_node *node = ptr_set_find(&on_section_read_callback_set, section_name);
     
     if(node != NULL)
     {
@@ -173,7 +178,7 @@ config_remove_on_section_read_callback(const char *section_name, config_callback
 
         free(node->key);
 
-        ptr_set_avl_delete(&on_section_read_callback_set, section_name);
+        ptr_set_delete(&on_section_read_callback_set, section_name);
         
         return SUCCESS;
     }
@@ -188,7 +193,7 @@ config_fire_on_section_read_callback(const char *section_name, int index)
 {
     ya_result return_code = SUCCESS;
     
-    ptr_node *node = ptr_set_avl_find(&on_section_read_callback_set, section_name);
+    ptr_node *node = ptr_set_find(&on_section_read_callback_set, section_name);
     
     if(node != NULL)
     {
@@ -201,7 +206,7 @@ config_fire_on_section_read_callback(const char *section_name, int index)
         }
         else
         {
-            return_code = ERROR;
+            return_code = CONFIG_SECTION_ERROR;
         }
     }
     
@@ -218,13 +223,15 @@ config_fire_on_section_read_callback(const char *section_name, int index)
  *  @retval NOK
  */
 ya_result
-config_set_bool(const char *value, bool *dest, anytype notused)
+config_set_bool(const char *value, bool *dest, const anytype notused)
 {
+    (void)notused;
+
     ya_result return_code;
     u32 integer_value;
     bool yes_or_no;
 
-    if(ISOK(return_code = get_value_from_casename(true_false_enum, value, &integer_value)))
+    if(ISOK(return_code = value_name_table_get_value_from_casename(true_false_enum, value, &integer_value)))
     {
         yes_or_no = (integer_value != 0);
         *dest = yes_or_no;
@@ -242,7 +249,7 @@ config_set_bool(const char *value, bool *dest, anytype notused)
  *  @retval NOK
  */
 ya_result
-config_set_flag8(const char *value, u8 *dest, anytype mask8)
+config_set_flag8(const char *value, u8 *dest, const anytype mask8)
 {
     ya_result return_code;
     bool b;
@@ -271,7 +278,7 @@ config_set_flag8(const char *value, u8 *dest, anytype mask8)
  *  @retval NOK
  */
 ya_result
-config_set_flag16(const char *value, u16 *dest, anytype mask16)
+config_set_flag16(const char *value, u16 *dest, const anytype mask16)
 {
     ya_result return_code;
     bool b;
@@ -300,7 +307,7 @@ config_set_flag16(const char *value, u16 *dest, anytype mask16)
  *  @retval NOK
  */
 ya_result
-config_set_flag32(const char *value, u32 *dest, anytype mask32)
+config_set_flag32(const char *value, u32 *dest, const anytype mask32)
 {
     ya_result return_code;
     bool b;
@@ -329,7 +336,7 @@ config_set_flag32(const char *value, u32 *dest, anytype mask32)
  *  @retval NOK
  */
 ya_result
-config_set_flag64(const char *value, u64 *dest, anytype mask64)
+config_set_flag64(const char *value, u64 *dest, const anytype mask64)
 {
     ya_result return_code;
     bool b;
@@ -359,52 +366,22 @@ config_set_flag64(const char *value, u64 *dest, anytype mask64)
  */
 
 ya_result
-config_set_u64(const char *value,u64 *dest, anytype notused)
+config_set_u64(const char *value,u64 *dest, const anytype notused)
 {
-    *dest = atoll(value);
+    (void)notused;
 
-    return OK;
-}
-
-/** @brief Integer option value parser
- *
- *  @param[in] value in asciiz
- *  @param[out] dest to the value
- *
- *  @retval OK
- *  @retval NOK
- */
-
-ya_result
-config_set_u32(const char *value,u32 *dest, anytype notused)
-{
-    *dest = atoi(value);
-
-    return OK;
-}
-
-/** @brief Integer option value parser
- *
- *  @param[in] value in asciiz
- *  @param[out] dest to the value
- *
- *  @retval OK
- *  @retval NOK
- */
-
-ya_result
-config_set_u32_range(const char *value,u32 *dest, anytype range)
-{
-    u32 tmp = atoi(value);
-    
-    if(tmp >= range._2u32[0] && tmp <= range._2u32[1])
-    {    
-        *dest = tmp;
-        return OK;
+    errno = 0;
+    char *first_invalid = NULL;
+    s64 tmp = strtoll(value, &first_invalid, 10);
+    int err = errno;
+    if(err == 0)
+    {
+        *dest = (u64)tmp;
+        return SUCCESS;
     }
     else
     {
-        return CONFIG_VALUE_OUT_OF_RANGE;
+        return MAKE_ERRNO_ERROR(err);
     }
 }
 
@@ -418,20 +395,30 @@ config_set_u32_range(const char *value,u32 *dest, anytype range)
  */
 
 ya_result
-config_set_u32_clamp(const char *value,u32 *dest, anytype range)
+config_set_u32(const char *value,u32 *dest, const anytype notused)
 {
-    u32 tmp = atoi(value);
-    
-    if(tmp < range._2u32[0])
+    (void)notused;
+
+    errno = 0;
+    char *first_invalid = NULL;
+    s64 tmp = strtoll(value, &first_invalid, 10);
+    int err = errno;
+    if(err == 0)
     {
-        tmp = range._2u32[0];
+        if((tmp >= 0) && (tmp <= MAX_U32))
+        {
+            *dest = (u32)tmp;
+            return SUCCESS;
+        }
+        else
+        {
+            return MAKE_ERRNO_ERROR(EOVERFLOW);
+        }
     }
-    else if(tmp > range._2u32[1])
+    else
     {
-        tmp = range._2u32[1];
+        return MAKE_ERRNO_ERROR(err);
     }
-    *dest = tmp;
-    return OK;
 }
 
 /** @brief Integer option value parser
@@ -444,30 +431,195 @@ config_set_u32_clamp(const char *value,u32 *dest, anytype range)
  */
 
 ya_result
-config_set_u16(const char *value,u16 *dest, anytype notused)
+config_set_s32(const char *value, s32 *dest, const anytype notused)
 {
+    (void)notused;
 
-    *dest = atoi(value);
+    errno = 0;
+    char *first_invalid = NULL;
+    s64 tmp = strtoll(value, &first_invalid, 10);
+    int err = errno;
+    if(err == 0)
+    {
+        if((tmp >= MIN_S32) && (tmp <= MAX_S32))
+        {
+            *dest = (s32)tmp;
+            return SUCCESS;
+        }
+        else
+        {
+            return MAKE_ERRNO_ERROR(EOVERFLOW);
+        }
+    }
+    else
+    {
+        return MAKE_ERRNO_ERROR(err);
+    }
+}
 
-    return OK;
+
+/** @brief Integer option value parser
+ *
+ *  @param[in] value in asciiz
+ *  @param[out] dest to the value
+ *
+ *  @retval OK
+ *  @retval NOK
+ */
+
+ya_result
+config_set_u32_range(const char *value,u32 *dest, const anytype range)
+{
+    errno = 0;
+    char *first_invalid = NULL;
+    s64 tmp = strtoll(value, &first_invalid, 10);
+    int err = errno;
+    if(err == 0)
+    {
+        if(tmp >= range._2u32[0] && tmp <= range._2u32[1])
+        {
+            *dest = (u32)tmp;
+            return SUCCESS;
+        }
+        else
+        {
+            return CONFIG_VALUE_OUT_OF_RANGE;
+        }
+    }
+    else
+    {
+        return MAKE_ERRNO_ERROR(err);
+    }
+}
+
+/** @brief Integer option value parser
+ *
+ *  @param[in] value in asciiz
+ *  @param[out] dest to the value
+ *
+ *  @retval OK
+ *  @retval NOK
+ */
+
+ya_result
+config_set_u32_clamp(const char *value,u32 *dest, const anytype range)
+{
+    errno = 0;
+    char *first_invalid = NULL;
+    s64 tmp = strtoll(value, &first_invalid, 10);
+    int err = errno;
+    if(err == 0)
+    {
+        if(tmp < range._2u32[0])
+        {
+            tmp = range._2u32[0];
+        }
+        else if(tmp > range._2u32[1])
+        {
+            tmp = range._2u32[1];
+        }
+
+        *dest = (u32)tmp;
+
+        return SUCCESS;
+    }
+    else
+    {
+        return MAKE_ERRNO_ERROR(err);
+    }
+}
+
+/** @brief Integer option value parser
+ *
+ *  @param[in] value in asciiz
+ *  @param[out] dest to the value
+ *
+ *  @retval OK
+ *  @retval NOK
+ */
+
+ya_result
+config_set_u16(const char *value,u16 *dest, const anytype notused)
+{
+    (void)notused;
+
+    errno = 0;
+    char *first_invalid = NULL;
+    s64 tmp = strtoll(value, &first_invalid, 10);
+    int err = errno;
+    if(err == 0)
+    {
+        if((tmp >= 0) && (tmp <= MAX_U16))
+        {
+            *dest = (u16)tmp;
+            return SUCCESS;
+        }
+        else
+        {
+            return MAKE_ERRNO_ERROR(EOVERFLOW);
+        }
+    }
+    else
+    {
+        return MAKE_ERRNO_ERROR(err);
+    }
 }
 
 ya_result
-config_set_u8(const char *value,u8 *dest, anytype notused)
+config_set_u8(const char *value,u8 *dest, const anytype notused)
 {
+    (void)notused;
 
-    *dest = atoi(value);
-
-    return OK;
+    errno = 0;
+    char *first_invalid = NULL;
+    s64 tmp = strtoll(value, &first_invalid, 10);
+    int err = errno;
+    if(err == 0)
+    {
+        if((tmp >= 0) && (tmp <= MAX_U8))
+        {
+            *dest = (u8)tmp;
+            return SUCCESS;
+        }
+        else
+        {
+            return MAKE_ERRNO_ERROR(EOVERFLOW);
+        }
+    }
+    else
+    {
+        return MAKE_ERRNO_ERROR(err);
+    }
 }
 
 ya_result
-config_inc_u8(const char *value_notused,u8 *dest, anytype notused)
+config_inc_u8(const char *value_notused,u8 *dest, const anytype notused)
 {
     (void)value_notused;
+    (void)notused;
+
     (*dest)++;
     
     return OK;
+}
+
+ya_result
+config_set_dnskey_algorithm(const char *value, u8 *dest, const anytype notused)
+{
+    (void)notused;
+
+    ya_result ret;
+    u32 val;
+    if(FAIL(ret = parse_u32_check_range(value, &val, 1, 255, BASE_10)))
+    {
+        ret = dns_encryption_algorithm_from_case_name(value, dest);
+    }
+    else
+    {
+        *dest = (u8)val;
+    }
+
+    return ret;
 }
 
 /** @brief String parser
@@ -481,8 +633,10 @@ config_inc_u8(const char *value_notused,u8 *dest, anytype notused)
  */
 
 ya_result
-config_set_string(const char *value, char **dest, anytype notused)
+config_set_string(const char *value, char **dest, const anytype notused)
 {
+    (void)notused;
+
     if(*dest != NULL)
     {
         if(strcmp(*dest, value) != 0)
@@ -510,7 +664,7 @@ config_set_string(const char *value, char **dest, anytype notused)
  */
 
 ya_result
-config_set_string_copy(const char *value, char *dest, anytype maxlen)
+config_set_string_copy(const char *value, char *dest, const anytype maxlen)
 {
     size_t len = strlen(value);
     if(len > maxlen._u32 - 1)
@@ -535,14 +689,17 @@ config_set_string_copy(const char *value, char *dest, anytype maxlen)
  */
 
 ya_result
-config_append_string_array_item(const char *value, ptr_vector *dest, anytype maxsize)
+config_append_string_array_item(const char *value, ptr_vector *dest, const anytype maxsize)
 {
-    if(ptr_vector_size(dest) >= maxsize._u32)
+    if(ptr_vector_size(dest) >= maxsize._s32)
     {
         return CONFIG_ARRAY_SIZE_TOO_BIG;
     }
     
-    ptr_vector_append(dest, strdup(value));
+    if(value != NULL)
+    {
+        ptr_vector_append(dest, strdup(value));
+    }
     
     return ptr_vector_size(dest);
 }
@@ -558,17 +715,21 @@ config_append_string_array_item(const char *value, ptr_vector *dest, anytype max
  */
 
 ya_result
-config_set_password(const char *value, char **dest, anytype notused)
+config_set_password(const char *value, char **dest, const anytype notused)
 {
+    (void)notused;
+
     if(*dest != NULL)
     {
         if(strcmp(*dest, value) != 0)
         {
             size_t n = strlen(*dest);
-            for(int i = 0; i < n; i++)
+
+            for(size_t i = 0; i < n; i++)
             {
                 *dest[i] = rand();
             }
+
             free(*dest);
             *dest = strdup(value);
         }
@@ -592,13 +753,17 @@ config_set_password(const char *value, char **dest, anytype notused)
  */
 
 ya_result
-config_set_fqdn(const char *value, u8 **dest, anytype notused)
+config_set_fqdn(const char *value, u8 **dest, const anytype notused)
 {
+    (void)notused;
+
     ya_result return_value;
     
     u8 tmp[MAX_DOMAIN_LENGTH];
-    
-    if(ISOK(return_value = cstr_to_dnsname(tmp, value)))
+
+    return_value = cstr_to_dnsname(tmp, value);
+
+    if(ISOK(return_value))
     {
         if(*dest != NULL)
         {
@@ -630,13 +795,15 @@ config_set_fqdn(const char *value, u8 **dest, anytype notused)
  */
 
 ya_result
-config_set_path(const char *value, char **dest, anytype notused)
+config_set_path(const char *value, char **dest, const anytype notused)
 {
+    (void)notused;
+
     size_t len = strlen(value);
     
     if(*dest != NULL)
     {
-        int dest_len = strlen(*dest);
+        size_t dest_len = strlen(*dest);
                 
         if(value[len - 1] != '/')
         {
@@ -663,21 +830,31 @@ config_set_path(const char *value, char **dest, anytype notused)
     if(value[len - 1] != '/')
     {
         char *tmp = (char*)malloc(len + 2);
-        memcpy(tmp, value, len);
-        tmp[len] = '/';
-        tmp[len + 1 ] = '\0';
-        *dest = tmp;
+        if(tmp != NULL)
+        {
+            memcpy(tmp, value, len);
+            tmp[len] = '/';
+            tmp[len + 1] = '\0';
+            *dest = tmp;
+        }
+        else
+        {
+            return MAKE_ERRNO_ERROR(ENOMEM);
+        }
     }
     else
     {
-        *dest = strdup(value);
+        if((*dest = strdup(value)) == NULL)
+        {
+            return MAKE_ERRNO_ERROR(ENOMEM);
+        }
     }
 
-    return OK;
+    return SUCCESS;
 }
 
 ya_result
-config_set_logpath(const char *value, char **dest, anytype notused)
+config_set_logpath(const char *value, char **dest, const anytype notused)
 {
     ya_result return_code;
     
@@ -691,10 +868,12 @@ config_set_logpath(const char *value, char **dest, anytype notused)
 
 
 ya_result
-config_set_chroot(const char *value, char **dest, anytype notused)
+config_set_chroot(const char *value, char **dest, const anytype notused)
 {
+    (void)notused;
+
     ya_result return_code;
-    
+#ifndef WIN32    
     if(ISOK(return_code = config_set_path(value, dest, notused)))
     {
         return_code = chroot_set_path(*dest);
@@ -702,16 +881,29 @@ config_set_chroot(const char *value, char **dest, anytype notused)
     }
 
     return return_code;
+#else
+    return FEATURE_NOT_IMPLEMENTED_ERROR;
+#endif
 }
 
 ya_result
-config_set_file(const char *value, char **dest, anytype notused)
+config_set_file(const char *value, char **dest, const anytype notused)
 {
+    (void)notused;
+
     struct stat fileinfo;
     
     if(stat(value, &fileinfo) < 0)
     {
-        return ERRNO_ERROR;
+        int err = ERRNO_ERROR;
+        if(err == MAKE_ERRNO_ERROR(ENOENT))
+        {
+            return CONFIG_FILE_NOT_FOUND;
+        }
+        else
+        {
+            return ERRNO_ERROR;
+        }
     }
     /* Is it a regular file */
     if(!S_ISREG(fileinfo.st_mode))
@@ -746,8 +938,11 @@ config_set_file(const char *value, char **dest, anytype notused)
  */
 
 ya_result
-config_set_uid_t(const char *value, uid_t *dest, anytype notused)
+config_set_uid_t(const char *value, uid_t *dest, const anytype notused)
 {
+    (void)notused;
+#ifndef WIN32
+
     if((*value == '\0') || (strcmp(value, "-") == 0))
     {
         *dest = getuid();
@@ -758,7 +953,7 @@ config_set_uid_t(const char *value, uid_t *dest, anytype notused)
         struct passwd *result;
         char *buffer;
 
-        int buffer_size = sysconf(_SC_GETPW_R_SIZE_MAX);
+        long buffer_size = sysconf(_SC_GETPW_R_SIZE_MAX);
 
         /*
          * This fix has been made for FreeBSD that returns -1 for the above call
@@ -777,13 +972,14 @@ config_set_uid_t(const char *value, uid_t *dest, anytype notused)
         if(result == NULL)
         {
             u32 val;
-            if(FAIL(parse_u32_check_range(value, &val, 0, MAX_U32, 10)))
+            if(FAIL(parse_u32_check_range(value, &val, 0, MAX_U32, BASE_10)))
             {
                 return CONFIG_BAD_UID;
             }
             *dest = val;
         }
     }
+#endif
 
     return SUCCESS;
 }
@@ -799,8 +995,11 @@ config_set_uid_t(const char *value, uid_t *dest, anytype notused)
  */
 
 ya_result
-config_set_gid_t(const char *value, gid_t *dest, anytype notused)
+config_set_gid_t(const char *value, gid_t *dest, const anytype notused)
 {
+#ifndef WIN32
+    (void)notused;
+
     if((*value == '\0') || (strcmp(value, "-") == 0))
     {
         *dest = getgid();
@@ -811,7 +1010,7 @@ config_set_gid_t(const char *value, gid_t *dest, anytype notused)
         struct group *result;
         char *buffer;
 
-        int buffer_size = sysconf(_SC_GETGR_R_SIZE_MAX);
+        long buffer_size = sysconf(_SC_GETGR_R_SIZE_MAX);
 
         /*
          * This fix has been made for FreeBSD that returns -1 for the above call
@@ -832,7 +1031,7 @@ config_set_gid_t(const char *value, gid_t *dest, anytype notused)
         {
             u32 val;
 
-            if(FAIL(parse_u32_check_range(value, &val, 0, MAX_U32, 10)))
+            if(FAIL(parse_u32_check_range(value, &val, 0, MAX_U32, BASE_10)))
             {
                 return CONFIG_BAD_GID;
             }
@@ -840,16 +1039,19 @@ config_set_gid_t(const char *value, gid_t *dest, anytype notused)
             *dest = val;
         }
     }
+#endif
     
     return SUCCESS;
 }
 
 ya_result
-config_set_dnsclass(const char *value, u16 *dest, anytype notused)
+config_set_dnsclass(const char *value, u16 *dest, const anytype notused)
 {
+    (void)notused;
+
     u16   qclass;
 
-    if(FAIL(get_class_from_case_name(value, &qclass)))
+    if(FAIL(dns_class_from_case_name(value, &qclass)))
     {       
         return NOK;
     }
@@ -860,11 +1062,13 @@ config_set_dnsclass(const char *value, u16 *dest, anytype notused)
 }
 
 ya_result
-config_set_dnstype(const char *value, u16 *dest, anytype notused)
+config_set_dnstype(const char *value, u16 *dest, const anytype notused)
 {
+    (void)notused;
+
     u16   qtype;
 
-    if(FAIL(get_type_from_case_name(value, &qtype)))
+    if(FAIL(dns_type_from_case_name(value, &qtype)))
     {       
         return NOK;
     }
@@ -880,14 +1084,14 @@ config_set_dnstype(const char *value, u16 *dest, anytype notused)
 
 
 ya_result
-config_set_enum_value(const char *value, u32 *dest, anytype enum_value_name_table)
+config_set_enum_value(const char *value, u32 *dest, const anytype enum_value_name_table)
 {
     ya_result return_code;
     u32 integer_value;
 
     value_name_table *table = (value_name_table*)enum_value_name_table._voidp;
 
-    if(ISOK(return_code = get_value_from_casename(table, value, &integer_value)))
+    if(ISOK(return_code = value_name_table_get_value_from_casename(table, value, &integer_value)))
     {
         *dest = integer_value;
     }
@@ -896,14 +1100,14 @@ config_set_enum_value(const char *value, u32 *dest, anytype enum_value_name_tabl
 }
 
 ya_result
-config_set_enum8_value(const char *value, u8 *dest, anytype enum_value_name_table)
+config_set_enum8_value(const char *value, u8 *dest, const anytype enum_value_name_table)
 {
     ya_result return_code;
     u32 integer_value;
 
     value_name_table *table = (value_name_table*)enum_value_name_table._voidp;
 
-    if(ISOK(return_code = get_value_from_casename(table, value, &integer_value)))
+    if(ISOK(return_code = value_name_table_get_value_from_casename(table, value, &integer_value)))
     {
         *dest = integer_value;
     }
@@ -915,7 +1119,7 @@ config_set_enum8_value(const char *value, u8 *dest, anytype enum_value_name_tabl
  * IP port n, 
  */
 ya_result
-config_set_host_list(const char *value, host_address **dest, anytype settings)
+config_set_host_list(const char *value, host_address **dest, const anytype settings)
 {
     if(value == NULL)   /* nothing to do */
     {
@@ -995,6 +1199,8 @@ config_set_host_list(const char *value, host_address **dest, anytype settings)
 
         port_or_key = MIN(port_or_key, to);
 
+        host_type = HOST_ADDRESS_NONE;
+
         if(FAIL(return_code = parse_ip_address(from, port_or_key - from, ip_buffer, sizeof(ip_buffer))))
         {
             if(! (flags & CONFIG_HOST_LIST_FLAGS_FQDN))
@@ -1060,7 +1266,7 @@ config_set_host_list(const char *value, host_address **dest, anytype settings)
 
                 u32 port_value;
 
-                if(FAIL(return_code = parse_u32_check_range(next_word, &port_value, 1, MAX_U16, 10)))
+                if(FAIL(return_code = parse_u32_check_range(next_word, &port_value, 1, MAX_U16, BASE_10)))
                 {
                     /* parse error, expected something */
 
@@ -1158,7 +1364,7 @@ config_set_host_list(const char *value, host_address **dest, anytype settings)
             
         host_address *address;
         
-        //MALLOC_OR_DIE(host_address*, address, sizeof(host_address), HOSTADDR_TAG);
+        //MALLOC_OBJECT_OR_DIE(address, host_address, HOSTADDR_TAG);
         //address->next = NULL;
         address = host_address_alloc(); // sets version=0, next = NULL, tsig = NULL
         
@@ -1186,6 +1392,11 @@ config_set_host_list(const char *value, host_address **dest, anytype settings)
 
                 break;
             }
+            case HOST_ADDRESS_NONE:
+            {
+                host_address_delete(address);
+                return PARSEIP_ERROR;
+            }
         }
 
         *dest = address;
@@ -1205,14 +1416,143 @@ config_set_host_list(const char *value, host_address **dest, anytype settings)
  */
 
 ya_result
-config_set_bytes(const char *value, void *dest, anytype sizeoftarget)
+config_set_bytes(const char *value, void *dest, const anytype sizeoftarget)
 {
+    (void)dest;
+    (void)sizeoftarget;
+
     ya_result return_value;
     
     return_value = base64_decode(value, /*sizeoftarget._u32*/strlen(value), (u8*)dest);  
     
     return return_value;
 }
+
+/**
+ * [hmac:]name:key
+ */
+
+ya_result
+config_set_tsig_item(const char *value, tsig_item **dest, const anytype unused)
+{
+    (void)unused;
+    ya_result ret;
+    char *token2;
+    char *token3;
+    const char *value_limit = &value[strlen(value)];
+
+    token2 = strchr(value, ':');
+    if(token2 == NULL)
+    {
+        return PARSE_INVALID_ARGUMENT; // expects at least one ':'
+    }
+
+    token3 = strchr(token2 + 1, ':');
+
+    size_t hmac_name_size;
+    size_t key_name_size;
+    char hmac_name[32];
+    u8 key_name[MAX_DOMAIN_LENGTH];
+    u8 key_bytes[1024];
+
+    if(token3 == NULL)
+    {
+        // hmac-md5 OR hmac-sha256 :name:key
+        memcpy(hmac_name, "hmac-md5", 9);
+    }
+    else
+    {
+        // hmac:name:key
+
+        hmac_name_size = token2 - value;
+
+        if(hmac_name_size < sizeof(hmac_name) - 1)
+        {
+            memcpy(hmac_name, value, hmac_name_size);
+            hmac_name[hmac_name_size] = '\0';
+        }
+        else
+        {
+            return BUFFER_WOULD_OVERFLOW;
+        }
+
+        value = token2 + 1;
+        token2 = token3;
+    }
+
+    key_name_size = token2 - value;
+
+    ret = charp_to_locase_dnsname(key_name, value, key_name_size);
+
+    if(ISOK(ret))
+    {
+        ++token2;
+        size_t key_size = value_limit - token2;
+
+        if(BASE64_DECODED_SIZE(key_size) <= sizeof(key_bytes))
+        {
+            ret = base64_decode(token2, key_size, key_bytes);
+
+            if(ISOK(ret))
+            {
+                key_size = (size_t)ret;
+
+                if(ISOK(ret = tsig_get_hmac_algorithm_from_friendly_name(hmac_name)))
+                {
+                    u32 hmac_algorithm = (u32)ret;
+
+                    ret = tsig_register(key_name, key_bytes, key_size, hmac_algorithm);
+
+                    if(ISOK(ret))
+                    {
+                        tsig_item *tsig_key = tsig_get(key_name);
+                        if(dest != NULL)
+                        {
+                            *dest = tsig_key;
+                        }
+                    }
+
+                    return ret;
+                }
+                else
+                {
+                    return UNKNOWN_NAME;
+                }
+            }
+            else
+            {
+                return ret;
+            }
+        }
+        else
+        {
+            return BUFFER_WOULD_OVERFLOW;
+        }
+    }
+    else
+    {
+        return ret;
+    }
+}
+
+ya_result
+config_set_obsolete(const char *value, void *dest, const anytype notused)
+{
+    (void)dest;
+    (void)notused;
+
+    if(logger_is_running())
+    {
+        log_warn("parameter '%s' is not used", value);
+    }
+    else
+    {
+        osformatln(termerr, "parameter '%s' is not used", value);
+    }
+
+    return SUCCESS;
+}
+
 
 void
 config_init_error_codes()
@@ -1306,6 +1646,7 @@ config_set_default_source(u8 l)
 ya_result
 config_init()
 {
+    config_init_error_codes();
     return SUCCESS;
 }
 
@@ -1321,19 +1662,19 @@ config_init()
  */
 
 ya_result
-config_register(const config_section_descriptor_s *section_descriptor, s32 priority)
+config_register(config_section_descriptor_s *section_descriptor, s32 priority)
 {
     if(priority < 0)
     {
         priority = 0x1000;
     }
         
-    u32_node *node = u32_set_avl_find(&section_descriptor_set, (u32)priority);
+    u32_node *node = u32_set_find(&section_descriptor_set, (u32)priority);
     if(node == NULL)
     {
-        node = u32_set_avl_insert(&section_descriptor_set, (u32)priority);
+        node = u32_set_insert(&section_descriptor_set, (u32)priority);
         
-        node->value = (void*)section_descriptor;
+        node->value = /*(void*)*/section_descriptor;
         
         return SUCCESS;
     }
@@ -1350,6 +1691,55 @@ config_register(const config_section_descriptor_s *section_descriptor, s32 prior
     }
 }
 
+ya_result
+config_register_const(const config_section_descriptor_s *section_descriptor, s32 priority)
+{
+    ya_result ret;
+    ret = config_register((config_section_descriptor_s*)section_descriptor, priority);
+    return ret;
+}
+
+ya_result
+config_unregister(config_section_descriptor_s *section_descriptor)
+{
+    u32_set_iterator iter;
+    u32_set_iterator_init(&section_descriptor_set, &iter);
+    while(u32_set_iterator_hasnext(&iter))
+    {
+        u32_node *node = u32_set_iterator_next_node(&iter);
+        if(node->value == section_descriptor)
+        {
+            u32_set_delete(&section_descriptor_set, node->key);
+            return SUCCESS;
+        }
+    }
+    
+    return ERROR;
+}
+
+config_section_descriptor_s*
+config_unregister_by_name(const char *name)
+{
+    u32_set_iterator iter;
+    u32_set_iterator_init(&section_descriptor_set, &iter);
+    while(u32_set_iterator_hasnext(&iter))
+    {
+        u32_node *node = u32_set_iterator_next_node(&iter);
+        if(node->value != NULL)
+        {
+            config_section_descriptor_s* desc = (config_section_descriptor_s*)node->value;
+            if(desc->vtbl != NULL)
+            {
+                if(strcmp(desc->vtbl->name, name) == 0)
+                {
+                    u32_set_delete(&section_descriptor_set, node->key);
+                    return desc;
+                }
+            }
+        }
+    }
+    return NULL;
+}
 
 ya_result
 config_set_section_default(config_section_descriptor_s *section_descriptor, config_error_s *cfgerr)
@@ -1364,13 +1754,16 @@ config_set_section_default(config_section_descriptor_s *section_descriptor, conf
         {
             if((item->default_value_string != NULL) && (item->setter != NULL))
             {
-                if(FAIL(err = config_value_set(section_descriptor, item->name, item->default_value_string)))
+                if(FAIL(err = config_value_set(section_descriptor, item->name, item->default_value_string, cfgerr)))
                 {
-                    if(cfgerr != NULL)
+                    if((cfgerr != NULL) && !cfgerr->has_content)
                     {
-                        strncpy(cfgerr->file, "default values", sizeof(cfgerr->file));
-                        strncpy(cfgerr->line, item->name, sizeof(cfgerr->line));
+                        cfgerr->variable_name = item->name;
                         cfgerr->line_number = 0;
+                        cfgerr->has_content = TRUE;
+                        strcpy_ex(cfgerr->file, "default values", sizeof(cfgerr->file));
+                        strcpy_ex(cfgerr->line, item->name, sizeof(cfgerr->line));
+                        snformat(cfgerr->line, sizeof(cfgerr->line), "%s \"%s\"", item->name, item->default_value_string);
                     }
 
                     break;
@@ -1394,13 +1787,13 @@ config_read_section(const char *the_configuration_file_path, config_error_s *cfg
     // => bad
     // so a copy is done first
     
-    strncpy(configuration_file_path, the_configuration_file_path, sizeof(configuration_file_path));
+    strcpy_ex(configuration_file_path, the_configuration_file_path, sizeof(configuration_file_path));
     
-    u32_set_avl_iterator iter;    
-    u32_set_avl_iterator_init(&section_descriptor_set, &iter);
-    while(u32_set_avl_iterator_hasnext(&iter))
+    u32_set_iterator iter;    
+    u32_set_iterator_init(&section_descriptor_set, &iter);
+    while(u32_set_iterator_hasnext(&iter))
     {
-        u32_node *node = u32_set_avl_iterator_next_node(&iter);
+        u32_node *node = u32_set_iterator_next_node(&iter);
         config_section_descriptor_s *section_descriptor = (config_section_descriptor_s*)node->value;
         
         if((section_name != NULL) && (strcmp(section_descriptor->vtbl->name, section_name) != 0))
@@ -1457,10 +1850,26 @@ config_read_section(const char *the_configuration_file_path, config_error_s *cfg
         }
         else
         {
-#ifdef DEBUG
+#if DEBUG
             formatln("config file: cannot open: '%s': %r", configuration_file_path, err);
 #endif
             break;
+        }
+        
+        if(section_descriptor->vtbl->postprocess != NULL)
+        {
+            if(FAIL(err = section_descriptor->vtbl->postprocess(section_descriptor)))
+            {
+                if(cfgerr != NULL && !cfgerr->has_content)
+                {
+                    cfgerr->line_number = 0;
+                    cfgerr->has_content = TRUE;
+                    cfgerr->line[0] = '\0';
+                    snformat(cfgerr->file, sizeof(cfgerr->file), "section %s", section_descriptor->vtbl->name);
+                }
+
+                break;
+            }
         }
     }
  
@@ -1490,11 +1899,11 @@ config_read_from_buffer(const char *buffer, u32 buffer_len, const char *buffer_n
 {
     ya_result err = SUCCESS;
     
-    u32_set_avl_iterator iter;    
-    u32_set_avl_iterator_init(&section_descriptor_set, &iter);
-    while(u32_set_avl_iterator_hasnext(&iter))
+    u32_set_iterator iter;    
+    u32_set_iterator_init(&section_descriptor_set, &iter);
+    while(u32_set_iterator_hasnext(&iter))
     {
-        u32_node *node = u32_set_avl_iterator_next_node(&iter);
+        u32_node *node = u32_set_iterator_next_node(&iter);
         config_section_descriptor_s *section_descriptor = (config_section_descriptor_s*)node->value;
         
 #if CONFIG_SETTINGS_DEBUG
@@ -1551,15 +1960,22 @@ static ya_result
 config_source_get_from_file(struct config_source_s *source, input_stream *out_stream, config_error_s *cfgerr)
 {
     ya_result return_code;
-    return_code = file_input_stream_open(out_stream, source->source.file_name.name);
-    if(FAIL(return_code))
+    if(source->source.file_name.name != NULL)
     {
-        if(cfgerr != NULL)
+        return_code = file_input_stream_open(out_stream, source->source.file_name.name);
+        if(FAIL(return_code))
         {
-            strncpy(cfgerr->file, source->source.file_name.name, sizeof(cfgerr->file));
-            strncpy(cfgerr->line, "unable to open file", sizeof(cfgerr->line));
-            cfgerr->line_number = 0;
+            if(cfgerr != NULL)
+            {
+                strcpy_ex(cfgerr->file, source->source.file_name.name, sizeof(cfgerr->file));
+                strcpy_ex(cfgerr->line, "unable to open file", sizeof(cfgerr->line));
+                cfgerr->line_number = 0;
+            }
         }
+    }
+    else
+    {
+        return CONFIG_INTERNAL_ERROR;
     }
     return return_code;
 }
@@ -1575,10 +1991,50 @@ config_source_set_file(struct config_source_s *source, const char *name, u8 leve
 }
 
 ya_result
+config_source_set_commandline(struct config_source_s *source, const cmdline_desc_s *cmdline, int argc, char **argv)
+{
+    input_stream config_is;
+    ya_result ret;
+
+    source->get_source = config_source_get_from_buffer;
+    source->name = "command line";
+    source->__class__ = "command line source";
+    source->source.file_name.name = "command line";
+    source->level = CONFIG_SOURCE_CMDLINE;
+
+    int argc_error;
+
+    if(FAIL(ret = cmdline_parse(cmdline, argc, argv, NULL, NULL, &config_is, &argc_error)))
+    {
+        if(argc_error > 0)
+        {
+            formatln("command line: %r at '%s'", ret, argv[argc_error]);
+        }
+        else
+        {
+            formatln("command line: %r", ret);
+        }
+
+        flushout();
+
+        return ret;
+    }
+
+    source->source.buffer.size = bytearray_input_stream_size(&config_is);
+    source->source.buffer.text = (char*)bytearray_input_stream_detach(&config_is);
+
+    input_stream_close(&config_is);
+
+    return SUCCESS;
+}
+
+ya_result
 config_read_from_sources(struct config_source_s *sources, u32 sources_count, config_error_s *cfgerr)
 {
     ya_result err = SUCCESS;
-    
+
+    config_error_reset(cfgerr);
+
     // test that the sources are setup properly
     
     u8 last_source = MAX_U8;
@@ -1596,16 +2052,17 @@ config_read_from_sources(struct config_source_s *sources, u32 sources_count, con
         
         last_source = sources[i].level;
     }
+
     if(last_source <= 1)
     {
         return CONFIG_INTERNAL_ERROR; // do not put "default" nor "none" in a source level
     }
 
-    u32_set_avl_iterator iter;    
-    u32_set_avl_iterator_init(&section_descriptor_set, &iter);
-    while(u32_set_avl_iterator_hasnext(&iter))
+    u32_set_iterator iter;    
+    u32_set_iterator_init(&section_descriptor_set, &iter);
+    while(u32_set_iterator_hasnext(&iter))
     {
-        u32_node *node = u32_set_avl_iterator_next_node(&iter);
+        u32_node *node = u32_set_iterator_next_node(&iter);
         config_section_descriptor_s *section_descriptor = (config_section_descriptor_s*)node->value;
         
 #if CONFIG_SETTINGS_DEBUG
@@ -1655,12 +2112,13 @@ config_read_from_sources(struct config_source_s *sources, u32 sources_count, con
             
             if(FAIL(err = config_set_section_default(section_descriptor, cfgerr)))
             {
-                if(cfgerr != NULL)
+                if((cfgerr != NULL) && !cfgerr->has_content)
                 {
-                    // cfgerr->file[0] = '\0';
-                    snformat(cfgerr->file, sizeof(cfgerr->file), "setting-up section %s default", section_descriptor->vtbl->name);
-                    cfgerr->line[0] = '\0';
+                    cfgerr->variable_name = "";
                     cfgerr->line_number = 0;
+                    cfgerr->has_content = TRUE;
+                    cfgerr->line[0] = '\0';
+                    snformat(cfgerr->file, sizeof(cfgerr->file), "setting-up section %s default", section_descriptor->vtbl->name);
                 }
                 
                 break;
@@ -1670,12 +2128,13 @@ config_read_from_sources(struct config_source_s *sources, u32 sources_count, con
             {
                 if(FAIL(err = section_descriptor->vtbl->postprocess(section_descriptor)))
                 {
-                    if(cfgerr != NULL)
+                    if((cfgerr != NULL) && !cfgerr->has_content)
                     {
-                        //cfgerr->file[0] = '\0';
-                        snformat(cfgerr->file, sizeof(cfgerr->file), "section %s", section_descriptor->vtbl->name);
-                        cfgerr->line[0] = '\0';
+                        cfgerr->variable_name = "";
                         cfgerr->line_number = 0;
+                        cfgerr->has_content = TRUE;
+                        cfgerr->line[0] = '\0';
+                        snformat(cfgerr->file, sizeof(cfgerr->file), "section %s", section_descriptor->vtbl->name);
                     }
                     
                     break;
@@ -1688,11 +2147,13 @@ config_read_from_sources(struct config_source_s *sources, u32 sources_count, con
             {
                 if(FAIL(err))
                 {
-                    if(cfgerr != NULL)
+                    if((cfgerr != NULL) && !cfgerr->has_content)
                     {
-                        cfgerr->file[0] = '\0';
-                        cfgerr->line[0] = '\0';
+                        cfgerr->variable_name = "";
                         cfgerr->line_number = 0;
+                        cfgerr->has_content = FALSE;
+                        cfgerr->line[0] = '\0';
+                        cfgerr->file[0] = '\0';
                     }
                 }
                 break;
@@ -1700,7 +2161,10 @@ config_read_from_sources(struct config_source_s *sources, u32 sources_count, con
         }
         else
         {
-            break;
+            if(err != MAKE_ERRNO_ERROR(ENOENT))
+            {
+                break;
+            }
         }
     }
     
@@ -1714,11 +2178,11 @@ config_set_default(config_error_s *cfgerr)
 {
     ya_result err = SUCCESS;
     
-    u32_set_avl_iterator iter;    
-    u32_set_avl_iterator_init(&section_descriptor_set, &iter);
-    while(u32_set_avl_iterator_hasnext(&iter))
+    u32_set_iterator iter;    
+    u32_set_iterator_init(&section_descriptor_set, &iter);
+    while(u32_set_iterator_hasnext(&iter))
     {
-        u32_node *node = u32_set_avl_iterator_next_node(&iter);
+        u32_node *node = u32_set_iterator_next_node(&iter);
         config_section_descriptor_s *section_descriptor = (config_section_descriptor_s*)node->value;
         
 #if CONFIG_SETTINGS_DEBUG
@@ -1750,13 +2214,13 @@ ya_result
 config_value_set_to_default(const char *section_name, const char *name, config_error_s *cfgerr)
 {
     config_section_descriptor_s *section_descriptor = NULL;
-    ya_result err = ERROR;
+    ya_result err = CONFIG_SECTION_ERROR;
     
-    u32_set_avl_iterator iter;    
-    u32_set_avl_iterator_init(&section_descriptor_set, &iter);
-    while(u32_set_avl_iterator_hasnext(&iter))
+    u32_set_iterator iter;    
+    u32_set_iterator_init(&section_descriptor_set, &iter);
+    while(u32_set_iterator_hasnext(&iter))
     {
-        u32_node *node = u32_set_avl_iterator_next_node(&iter);
+        u32_node *node = u32_set_iterator_next_node(&iter);
         config_section_descriptor_s *section_desc = (config_section_descriptor_s*)node->value;
         
         if(strcmp(section_desc->vtbl->name, section_name) == 0)
@@ -1778,13 +2242,17 @@ config_value_set_to_default(const char *section_name, const char *name, config_e
 
                 if(item->default_value_string != NULL)
                 {
-                    if(FAIL(err = config_value_set(section_descriptor, item->name, item->default_value_string)))
+                    if(FAIL(err = config_value_set(section_descriptor, item->name, item->default_value_string, cfgerr)))
                     {
-                        if(cfgerr != NULL)
+                        if((cfgerr != NULL) && !cfgerr->has_content)
                         {
-                            strncpy(cfgerr->file, STRNULL(item->default_value_string), sizeof(cfgerr->file));
-                            strncpy(cfgerr->line, item->name, sizeof(cfgerr->line));
+                            cfgerr->variable_name = "";
                             cfgerr->line_number = 0;
+                            cfgerr->has_content = TRUE;
+                            strcpy_ex(cfgerr->line, item->name, sizeof(cfgerr->line));
+                            strcpy_ex(cfgerr->file, STRNULL(item->default_value_string), sizeof(cfgerr->file));
+
+
                         }
                     }
                 }
@@ -1819,7 +2287,7 @@ config_section_struct_register_type_handler(config_set_field_function *setter, c
     config_set_field_function_as_voidp key;
     key.setter = setter;
     
-    ptr_node *node  = ptr_set_avl_insert(&config_section_struct_type_handler_set, key.ptr);
+    ptr_node *node  = ptr_set_insert(&config_section_struct_type_handler_set, key.ptr);
     if(node->value == NULL)
     {
         config_section_struct_type_handler_as_voidp value;
@@ -1838,7 +2306,7 @@ void
 config_section_struct_print(const config_section_descriptor_s *section_descriptor, const void* configbase, output_stream *os)
 {
     const char *value;
-    config_table_descriptor_item_s *table = section_descriptor->vtbl->table;
+    const config_table_descriptor_item_s *table = section_descriptor->vtbl->table;
         
     char tmp[1024];
     
@@ -1945,19 +2413,21 @@ config_section_struct_print(const config_section_descriptor_s *section_descripto
             {
                 value = "????????";
             }
+#ifndef WIN32
             else if(table->setter == (config_set_field_function*)config_set_chroot)
             {
                 value = chroot_get_path();
             }
+#endif
             else if(table->setter == (config_set_field_function*)config_set_dnstype)
             {
                 u16 *v = (u16*)ptr;
-                value = get_name_from_type(*v);
+                value = dns_type_get_name(*v);
             }
             else if(table->setter == (config_set_field_function*)config_set_dnsclass)
             {
                 u16 *v = (u16*)ptr;
-                value = get_name_from_class(*v);
+                value = dns_class_get_name(*v);
             }
             else if(table->setter == (config_set_field_function*)config_set_string_copy)
             {
@@ -1973,7 +2443,7 @@ config_section_struct_print(const config_section_descriptor_s *section_descripto
                 snformat(tmp, sizeof(tmp), "%{dnsname}", *((u8**)ptr));
                 value = tmp;
             }/*
-            else if(table->setter == (config_set_field_function*)config_set_acl_item)
+            else if(table->setter == (config_set_field_function*)acl_config_set_item)
             {
                 address_match_set* ams = (address_match_set*)ptr;
                 if(ams != NULL)
@@ -1998,7 +2468,7 @@ config_section_struct_print(const config_section_descriptor_s *section_descripto
                     do
                     {
                         socketaddress sa;
-                        host_address2sockaddr(&sa, v);
+                        host_address2sockaddr(v, &sa);
                         osformat(os, "%c%{sockaddrip}", sep, &sa);
                         if(v->port != DNS_DEFAULT_PORT)
                         {
@@ -2085,7 +2555,7 @@ config_section_struct_print(const config_section_descriptor_s *section_descripto
                 config_set_field_function_as_voidp key;
                 key.setter = table->setter;
     
-                ptr_node *node = ptr_set_avl_find(&config_section_struct_type_handler_set, key.ptr);
+                ptr_node *node = ptr_set_find(&config_section_struct_type_handler_set, key.ptr);
                 
                 if(node != NULL)
                 {   
@@ -2124,7 +2594,7 @@ config_section_struct_print(const config_section_descriptor_s *section_descripto
 void
 config_section_struct_free(const config_section_descriptor_s *section_descriptor, const void* configbase)
 {
-    config_table_descriptor_item_s *table = section_descriptor->vtbl->table;
+    const config_table_descriptor_item_s *table = section_descriptor->vtbl->table;
 
     if(configbase == NULL)
     {
@@ -2195,10 +2665,12 @@ config_section_struct_free(const config_section_descriptor_s *section_descriptor
             else if(table->setter == (config_set_field_function*)config_set_password)
             {
             }
+#ifndef WIN32
             else if(table->setter == (config_set_field_function*)config_set_chroot)
             {
                 chroot_set_path(NULL);
             }
+#endif
             else if(table->setter == (config_set_field_function*)config_set_dnstype)
             {
             }
@@ -2241,7 +2713,7 @@ config_section_struct_free(const config_section_descriptor_s *section_descriptor
                 config_set_field_function_as_voidp key;
                 key.setter = table->setter;
     
-                ptr_node *node = ptr_set_avl_find(&config_section_struct_type_handler_set, key.ptr);
+                ptr_node *node = ptr_set_find(&config_section_struct_type_handler_set, key.ptr);
                 
                 if(node != NULL)
                 {   
@@ -2268,11 +2740,11 @@ config_section_print(const config_section_descriptor_s *section_descriptor, outp
 void
 config_print(output_stream *os)
 {
-    u32_set_avl_iterator iter;    
-    u32_set_avl_iterator_init(&section_descriptor_set, &iter);
-    while(u32_set_avl_iterator_hasnext(&iter))
+    u32_set_iterator iter;    
+    u32_set_iterator_init(&section_descriptor_set, &iter);
+    while(u32_set_iterator_hasnext(&iter))
     {
-        u32_node *node = u32_set_avl_iterator_next_node(&iter);
+        u32_node *node = u32_set_iterator_next_node(&iter);
         config_section_descriptor_s *section_descriptor = (config_section_descriptor_s*)node->value;
         
         osformatln(os, "<%s>", section_descriptor->vtbl->name);
@@ -2332,11 +2804,11 @@ config_item_index_get(const config_table_descriptor_item_s *table, const char *n
 config_section_descriptor_s *
 config_section_get_descriptor(const char *name)
 {
-    u32_set_avl_iterator iter;
-    u32_set_avl_iterator_init(&section_descriptor_set, &iter);
-    while(u32_set_avl_iterator_hasnext(&iter))
+    u32_set_iterator iter;
+    u32_set_iterator_init(&section_descriptor_set, &iter);
+    while(u32_set_iterator_hasnext(&iter))
     {
-        u32_node *node = u32_set_avl_iterator_next_node(&iter);
+        u32_node *node = u32_set_iterator_next_node(&iter);
         config_section_descriptor_s *section_descriptor = (config_section_descriptor_s*)node->value;
         
         if(strcmp(section_descriptor->vtbl->name, name) == 0)
@@ -2349,8 +2821,9 @@ config_section_get_descriptor(const char *name)
 }
 
 ya_result
-config_value_set(config_section_descriptor_s *section_descriptor, const char *key, const char *value)
+config_value_set(config_section_descriptor_s *section_descriptor, const char *key, const char *value, config_error_s *cfgerr)
 {
+    (void)cfgerr;
     ya_result err;
     s8 maxalias = 16;
     
@@ -2375,7 +2848,7 @@ config_value_set(config_section_descriptor_s *section_descriptor, const char *ke
         
         if(--maxalias <= 0)
         {
-            return CONFIG_ALIAS_CHAIN_TOO_BIG; // alias chain to obig
+            return CONFIG_ALIAS_CHAIN_TOO_BIG; // alias chain too big
         }
         
         // point to the aliased
@@ -2396,6 +2869,7 @@ config_value_set(config_section_descriptor_s *section_descriptor, const char *ke
         if(ISOK(err = item->setter(value, &base[item->field_offset], item->function_specific)))
         {
             item->source = config_current_source;
+
         }
     }
     else
@@ -2407,15 +2881,33 @@ config_value_set(config_section_descriptor_s *section_descriptor, const char *ke
 }
 
 ya_result
+config_source_set_by_target(config_section_descriptor_s *section_descriptor, void *target_ptr)
+{
+    config_table_descriptor_item_s *item = section_descriptor->vtbl->table;
+    u8 *base = (u8*)section_descriptor->base;
+
+    while(item->name != NULL)
+    {
+        if((void*)&base[item->field_offset] == target_ptr)
+        {
+            item->source = config_default_source;
+            return SUCCESS;
+        }
+    }
+
+    return ERROR;
+}
+
+ya_result
 config_postprocess()
 {
     ya_result return_code = SUCCESS;
     
-    u32_set_avl_iterator iter;
-    u32_set_avl_iterator_init(&section_descriptor_set, &iter);
-    while(u32_set_avl_iterator_hasnext(&iter))
+    u32_set_iterator iter;
+    u32_set_iterator_init(&section_descriptor_set, &iter);
+    while(u32_set_iterator_hasnext(&iter))
     {
-        u32_node *node = u32_set_avl_iterator_next_node(&iter);
+        u32_node *node = u32_set_iterator_next_node(&iter);
         config_section_descriptor_s *section_descriptor = (config_section_descriptor_s*)node->value;
         
         if(section_descriptor->vtbl->postprocess != NULL)
@@ -2431,15 +2923,15 @@ config_postprocess()
 }
 
 ya_result
-config_finalise()
+config_finalize()
 {
     ya_result return_code = SUCCESS;
     
-    u32_set_avl_iterator iter;
-    u32_set_avl_iterator_init(&section_descriptor_set, &iter);
-    while(u32_set_avl_iterator_hasnext(&iter))
+    u32_set_iterator iter;
+    u32_set_iterator_init(&section_descriptor_set, &iter);
+    while(u32_set_iterator_hasnext(&iter))
     {
-        u32_node *node = u32_set_avl_iterator_next_node(&iter);
+        u32_node *node = u32_set_iterator_next_node(&iter);
         config_section_descriptor_s *section_descriptor = (config_section_descriptor_s*)node->value;
         
         if(section_descriptor->vtbl->finalise != NULL)
@@ -2451,17 +2943,17 @@ config_finalise()
         }
     }
     
-    u32_set_avl_destroy(&section_descriptor_set);
+    u32_set_destroy(&section_descriptor_set);
     
-    ptr_set_avl_iterator iter2;
-    ptr_set_avl_iterator_init(&on_section_read_callback_set, &iter2);
-    while(ptr_set_avl_iterator_hasnext(&iter2))
+    ptr_set_iterator iter2;
+    ptr_set_iterator_init(&on_section_read_callback_set, &iter2);
+    while(ptr_set_iterator_hasnext(&iter2))
     {
-        ptr_node *node = ptr_set_avl_iterator_next_node(&iter2);
+        ptr_node *node = ptr_set_iterator_next_node(&iter2);
         free(node->key);
     }
     
-    ptr_set_avl_destroy(&on_section_read_callback_set);
+    ptr_set_destroy(&on_section_read_callback_set);
     
     return SUCCESS;
 }

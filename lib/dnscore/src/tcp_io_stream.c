@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -43,6 +44,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <sys/socket.h>
@@ -52,6 +54,7 @@
 #include "dnscore/fdtools.h"
 #include "dnscore/parsing.h"
 #include "dnscore/format.h"
+#include "dnscore/timems.h"
 
 #define DNSCORE_TCP_FLAGS "DNSCORE_TCP_FLAGS"
 // nodelay,delay,cork,nocork
@@ -154,9 +157,11 @@ tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream
         
         if(err != EINTR)
         {
-            return MAKE_ERRNO_ERROR(err);
+            return MAKE_ERRNO_ERROR(err); // scan-build does not understand this make the value signed
         }
     }
+
+    fd_setcloseonexec(fd);
     
     /*
      * Bind the socket if required.
@@ -164,16 +169,30 @@ tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream
 
     if(bind_from != NULL)
     {
+        s64 try_until = (to_sec > 0)?timeus() + (ONE_SECOND_US * to_sec):MAX_S64;
+
         while((bind(fd, bind_from, sizeof(socketaddress))) < 0)
         {
             int err = errno;
 
-            if(err != EINTR)
+            if(err == EINTR)
             {
-                close_ex(fd); /* could clear errno */
-
-                return MAKE_ERRNO_ERROR(err);
+                continue;
             }
+
+            if(err == EADDRNOTAVAIL)
+            {
+                if(try_until >= timeus())
+                {
+                    close_ex(fd);
+
+                    return MAKE_ERRNO_ERROR(err);
+                }
+            }
+
+            close_ex(fd);
+
+            return MAKE_ERRNO_ERROR(err);
         }
     }
 
@@ -256,7 +275,7 @@ tcp_input_output_stream_connect_host_address(const host_address *ha, input_strea
     
     ya_result return_code;
     
-    if(ISOK(return_code = host_address2sockaddr(&sa, ha)))
+    if(ISOK(return_code = host_address2sockaddr(ha, &sa)))
     {
         return_code = tcp_input_output_stream_connect_sockaddr(&sa.sa, istream_, ostream_, NULL, to_sec);
     }
@@ -270,6 +289,12 @@ tcp_io_stream_connect_ex(const char *server, u16 port, io_stream *ios, struct so
 {
     input_stream istream;
     output_stream ostream;
+    
+#if DEBUG
+    input_stream_set_void(&istream);    // this should shut-up a false-positive from scan-build
+    output_stream_set_void(&ostream);
+#endif
+    
     ya_result return_code;
 
     if(ISOK(return_code = tcp_input_output_stream_connect_ex(server, port, &istream, &ostream, bind_from, 0)))
@@ -405,10 +430,10 @@ tcp_init_with_env()
     
     if(tcp_flags_cfg != NULL)
     {
-        strncpy(tmp, tcp_flags_cfg, sizeof(tmp)-1);
+        strcpy_ex(tmp, tcp_flags_cfg, sizeof(tmp)-1);
         tmp[sizeof(tmp) - 1] = '\0';
         size_t tmp_len = strlen(tmp);
-        for(int i = 0; i < tmp_len; i++)
+        for(size_t i = 0; i < tmp_len; i++)
         {
             if(tmp[i] == ',')
             {

@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief AVL structure and functions
@@ -62,6 +63,11 @@
 #endif
 
 #include "dnsdb/avl.h"
+
+#ifdef LDEBUG
+#undef LDEBUG
+#define LDEBUG(...)
+#endif
 
 /* This should be closer to 40 */
 
@@ -99,8 +105,8 @@
  *
  */
 
-#define TOOLEFT    -2
-#define LEFT       -1
+#define TOOLEFT    (-2)
+#define LEFT       (-1)
 #define MIDDLE      0
 #define RIGHT       1
 #define TOORIGHT    2
@@ -108,6 +114,8 @@
 #define DIR_LEFT    0
 #define DIR_RIGHT   1
 #define DIR_CRASH   127
+
+#define avl_destroy_node(node) LDEBUG(9, "avl_destroy_node(%p)\n",node);ZFREE_OBJECT(node);
 
 /* #define DIR_TO_BALANCE(dir) (((dir)==0)?LEFT:RIGHT) */
 static s8 DIR_TO_BALANCE_[2] = {LEFT, RIGHT};
@@ -213,7 +221,7 @@ avl_create_node(hashcode hash)
 {
     avl_node* node;
 
-    ZALLOC_OR_DIE(avl_node*, node, avl_node, AVL_NODE_TAG);
+    ZALLOC_OBJECT_OR_DIE( node, avl_node, AVL_NODE_TAG);
 
     LEFT_CHILD(node) = NULL;
     RIGHT_CHILD(node) = NULL;
@@ -230,8 +238,6 @@ avl_create_node(hashcode hash)
    avl_destroy_node(node);
    }
  */
-
-#define avl_destroy_node(node) LDEBUG(9, "avl_destroy_node(%p)\n",node);ZFREE(node,avl_node);
 
 /** @brief Initializes the tree
  *
@@ -258,7 +264,7 @@ avl_init(avl_tree* tree)
  *  @return A pointer to the node or NULL if there is no such node.
  */
 
-#if ZDB_INLINES_AVL_FIND == 0
+#if !ZDB_INLINES_AVL_FIND
 
 void*
 avl_find(avl_tree* root, hashcode obj_hash)
@@ -329,13 +335,13 @@ avl_find(avl_tree* root, hashcode obj_hash)
              "testq %rax,%rax\n\t"
              "jnz avl_find_loop\n\t"
              "\navl_find_return_null:\n\t"
-#ifdef DEBUG
+#if DEBUG
             "leave\n\t"
 #endif
             "ret\n\t"
              "\navl_find_return_data:\n\t"
              "mov 16(%rax),%rax\n\t"
-#ifdef DEBUG
+#if DEBUG
             "leave\n\t"
 #endif
             "ret\n\t"
@@ -356,7 +362,7 @@ avl_find(avl_tree* root, hashcode obj_hash)
  *  @return A pointer to the node or NULL if there is no such node.
  */
 
-#if ZDB_INLINES_AVL_FIND == 0
+#if !ZDB_INLINES_AVL_FIND
 
 void**
 avl_findp(avl_tree* root, hashcode obj_hash)
@@ -415,7 +421,7 @@ avl_insert(avl_tree* root, hashcode obj_hash)
 
     avl_node * nodes[MAX_DEPTH];
     s8 balances[MAX_DEPTH];
-    u8 dirs[MAX_DEPTH];
+    s8 dirs[MAX_DEPTH];
 
     avl_node* node = *root;
     hashcode node_hash;
@@ -515,7 +521,7 @@ avl_insert(avl_tree* root, hashcode obj_hash)
 
         dir = dirs[level - 1];
 
-        LDEBUG(9, "\t\t\tIMABALANCE: dir=%i old parent balance=%i patch=%i\n", dir, BALANCE(parent), DIR_TO_BALANCE(dir));
+        LDEBUG(9, "\t\t\tIMBALANCE: dir=%i old parent balance=%i patch=%i\n", dir, BALANCE(parent), DIR_TO_BALANCE(dir));
 
         BALANCE(parent) += DIR_TO_BALANCE(dir);
 
@@ -610,9 +616,9 @@ avl_delete(avl_tree* root, hashcode obj_hash)
 
     avl_node * nodes[MAX_DEPTH];
     s8 balances[MAX_DEPTH];
-    u8 dirs[MAX_DEPTH];
+    s8 dirs[MAX_DEPTH];
 
-#ifdef DEBUG
+#if DEBUG
     memset(&nodes, 0xff, sizeof(avl_node*) * MAX_DEPTH);
     memset(&balances, 0xff, MAX_DEPTH);
     memset(&dirs, 0xff, MAX_DEPTH);
@@ -1009,7 +1015,7 @@ avl_iterator_init(avl_tree tree, avl_iterator* iter)
 }
 
 avl_node*
-avl_iterator_init_from(avl_tree tree, avl_iterator* iter, hashcode obj_hash)
+avl_iterator_init_from_after(avl_tree tree, avl_iterator *iter, hashcode obj_hash)
 {
     /* Do we have a tree to iterate ? */
 
@@ -1059,7 +1065,7 @@ avl_iterator_init_from(avl_tree tree, avl_iterator* iter, hashcode obj_hash)
     return NULL;
 }
 
-#if ZDB_INLINES_AVL_FIND == 0
+#if !ZDB_INLINES_AVL_FIND
 bool
 avl_iterator_hasnext(avl_iterator* iter)
 {
@@ -1088,14 +1094,14 @@ avl_iterator_next(avl_iterator* iter)
         
         while((tmp = LEFT_CHILD(node)) != NULL)
         {
-            iter->stack[++iter->stack_pointer] = tmp; /* PUSH */
+            iter->stack[++iter->stack_pointer] = tmp; /* PUSH @note edf 20180102 -- overflow is unlikely: the depth of the stack allows iteration on collections of tens of billions of items*/
             node = tmp;
         }
 
         return datapp;
     }
     
-#ifdef DEBUG
+#if DEBUG
     iter->stack[iter->stack_pointer] = (avl_node*)(intptr)0xfefefefefefefefeLL;
 #endif
 
@@ -1125,14 +1131,14 @@ avl_iterator_next_node(avl_iterator* iter)
         node = tmp;
         while((tmp = LEFT_CHILD(node)) != NULL)
         {
-            iter->stack[++iter->stack_pointer] = tmp; /* PUSH */
+            iter->stack[++iter->stack_pointer] = tmp; /* PUSH @note edf 20180102 -- overflow is unlikely: the depth of the stack allows iteration on collections of tens of billions of items */
             node = tmp;
         }
 
         return current;
     }
     
-#ifdef DEBUG
+#if DEBUG
     iter->stack[iter->stack_pointer] = (avl_node*)(intptr)0xfefefefefefefefeLL;
 #endif
 
@@ -1181,7 +1187,7 @@ avl_callback_and_destroy(avl_tree tree, void (*callback)(void*))
     }
 }
 
-#ifdef DEBUG
+#if DEBUG
 
 /** @brief DEBUG: check that a tree fits the AVL definition.
  *

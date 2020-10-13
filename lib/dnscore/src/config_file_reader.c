@@ -1,49 +1,48 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 #define DO_PRINT 0
 
+#include "dnscore/fdtools.h"
 #include "dnscore/dnscore-config.h"
 #include "dnscore/config_file_reader.h"
 #include "dnscore/parser.h"
-
 #include "dnscore/logger.h"
 #include "dnscore/file_input_stream.h"
-
 #include "dnscore/typebitmap.h"
-
 #include "dnscore/config_settings.h"
+#include "dnscore/fdtools.h"
 
 #define CONFIG_FILE_READER_INCLUDE_DEPTH_MAX 4
 
@@ -58,6 +57,7 @@ struct config_file_reader
     parser_s parser;
     config_section_descriptor_s *section_descriptor;
     config_error_s *error_context;
+    struct file_mtime_set_s *file_mtime_set;
 
     const char *container_name;
     size_t container_name_length;
@@ -65,7 +65,7 @@ struct config_file_reader
     size_t key_length;
     size_t current_container_name_length;
     
-    u8 container_type;
+    //u8 container_type;
     u8 includes_count;
     
     bool in_container;
@@ -136,7 +136,7 @@ config_file_reader_prepend_path_from_file(char *file_path, const char *base_file
  */
 
 static ya_result
-config_file_reader_read(config_file_reader *cfr) /// config_reader
+config_file_reader_read(config_file_reader *cfr, config_error_s *cfgerr) /// config_reader
 {
     parser_s *p = &cfr->parser;
     ya_result return_code;
@@ -259,12 +259,10 @@ config_file_reader_read(config_file_reader *cfr) /// config_reader
 
                             memcpy(cfr->current_container_name, &text[1], text_len - 2); // copy between < > 
                             cfr->current_container_name_length = text_len - 2;
-
 #if DO_PRINT
                             print("(CONTAINER)");
                             output_stream_write(termout, (const u8*)cfr->current_container_name, cfr->current_container_name_length);
 #endif
-
                             // mark the container as OPEN
                             cfr->in_container = TRUE;
 
@@ -394,6 +392,13 @@ config_file_reader_read(config_file_reader *cfr) /// config_reader
 
                                 if(ISOK(err = file_input_stream_open(&cfr->includes[cfr->includes_count], file_name)))
                                 {
+                                    // add the file and its mtime to the context
+
+                                    if(cfr->file_mtime_set != NULL)
+                                    {
+                                        file_mtime_set_add_file(cfr->file_mtime_set, file_name);
+                                    }
+
                                     parser_push_stream(&cfr->parser, &cfr->includes[cfr->includes_count]);
                                     cfr->file_name[cfr->includes_count] = strdup(file_name);
 
@@ -457,8 +462,8 @@ config_file_reader_read(config_file_reader *cfr) /// config_reader
 #endif
                         // using the descriptor table : set the value in the target struct
                         
-                        return_code = config_value_set(cfr->section_descriptor, cfr->key, text);
-                        
+                        return_code = config_value_set(cfr->section_descriptor, cfr->key, text, cfgerr);
+
                         // restore the character cut of
                         
                         parser_text_unasciiz(p);
@@ -508,23 +513,18 @@ config_file_reader_parse_stream(const char* stream_name, input_stream *ins, conf
 {
     config_file_reader *cfr; /// remove
     ya_result return_code;
-    
-    /*    ------------------------------------------------------------    */
-    
+
+    file_mtime_set_t *file_mtime_set = file_mtime_set_get_for_file(stream_name);
+
     // allocates and initialises a config file reader structure
     
-    MALLOC_OR_DIE(config_file_reader*, cfr, sizeof(config_file_reader), CFREADER_TAG);
-
+    MALLOC_OBJECT_OR_DIE(cfr, config_file_reader, CFREADER_TAG);
     ZEROMEMORY(cfr, sizeof(config_file_reader));
-    
+
+    config_error_reset(cfgerr);
     cfr->error_context = cfgerr;
-    if(cfgerr != NULL)
-    {
-        cfgerr->file[0] = '\0';
-        cfgerr->line[0] = '\0';
-        cfgerr->line_number = 0;
-    }
-    
+    cfr->file_mtime_set = file_mtime_set;
+
     // initalises a parser
 
     const char *string_delimiters = "\"\"''";
@@ -564,19 +564,20 @@ config_file_reader_parse_stream(const char* stream_name, input_stream *ins, conf
         // the config file reader structure is now ready : parse the stream
         // parsing will setup fields described by the config section descriptor
         
-        if(FAIL(return_code = config_file_reader_read(cfr)))
+        if(FAIL(return_code = config_file_reader_read(cfr, cfgerr)))
         {
-            // failure: if the error reporting is set then used it
-            
-            if(cfgerr != NULL)
+            // failure: if the error reporting is set then use it
+#if 1
+            if((cfgerr != NULL) && (cfr->includes_count > 0) && !cfgerr->has_content)
             {
                 const char *file_name = cfr->file_name[cfr->includes_count - 1];
+
                 if(file_name == NULL)
                 {
                     file_name = "?";
                 }
                 
-                strncpy(cfgerr->file, file_name, sizeof(cfgerr->file));
+                strcpy_ex(cfgerr->file, file_name, sizeof(cfgerr->file));
                 
                 size_t len = MIN(strlen(cfr->parser.line_buffer), sizeof(cfgerr->line) - 1);
                 memcpy(cfgerr->line, cfr->parser.line_buffer, len);
@@ -586,7 +587,9 @@ config_file_reader_parse_stream(const char* stream_name, input_stream *ins, conf
                 }
                 
                 cfgerr->line_number = parser_get_line_number(&cfr->parser);
+                cfgerr->has_content = TRUE;
             }
+#endif
         }
        
        // ends parsing, this also closes the input stream pushed to the parser
@@ -594,7 +597,7 @@ config_file_reader_parse_stream(const char* stream_name, input_stream *ins, conf
         parser_finalize(&cfr->parser);
     }
 
-#ifdef DEBUG
+#if DEBUG
     memset(cfr, 0xfe, sizeof(config_file_reader));
 #endif
     
@@ -624,7 +627,9 @@ config_file_reader_open(const char* fullpath, config_section_descriptor_s *csd, 
     {
         return return_value;
     }
-    
+
+    // add the file and its mtime to the context
+
 #if (DNSDB_USE_POSIX_ADVISE != 0) && (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
     int fd = fd_input_stream_get_filedescriptor(&ins);
     posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);

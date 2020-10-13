@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup format C-string formatting
  *  @ingroup dnscore
  *  @brief
@@ -57,6 +58,8 @@
 
 #define NULL_STRING_SUBSTITUTE (u8*)"(NULL)"
 #define NULL_STRING_SUBSTITUTE_LEN 6 /*(sizeof(NULL_STRING_SUBSTITUTE)-1)*/
+#define INVALID_LABEL_LENGTH "INVALID_LABEL_LENGTH"
+#define INVALID_LABEL_LENGTH_LEN (sizeof(INVALID_LABEL_LENGTH) - 1)
 #define PORT_SEPARATOR '#'
 #define PORT_SEPARATOR_V4 PORT_SEPARATOR
 #define PORT_SEPARATOR_V6 PORT_SEPARATOR
@@ -71,6 +74,8 @@
 static void
 digest32h_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
 {
+    (void)reserved_for_method_parameters;
+
     u8 *digest = (u8 *)val;
 
     if(digest != NULL)
@@ -94,6 +99,11 @@ static const format_handler_descriptor digest32h_format_handler_descriptor ={
 void
 dnsname_format_handler_method(const void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
 {
+    (void)padding;
+    (void)pad_char;
+    (void)left_justified;
+    (void)reserved_for_method_parameters;
+
     const u8 dot = (u8)'.';
     u8 *label    = (u8*)val;
 
@@ -109,6 +119,12 @@ dnsname_format_handler_method(const void *val, output_stream *stream, s32 paddin
         {
             do
             {
+                if(label_len > 63)
+                {
+                    output_stream_write(stream, INVALID_LABEL_LENGTH, INVALID_LABEL_LENGTH_LEN);
+                    break;
+                }
+
                 FORMAT_BREAK_ON_INVALID(&label[1], label_len);
 
                 output_stream_write(stream, ++label, label_len);
@@ -146,6 +162,11 @@ static const format_handler_descriptor dnsname_format_handler_descriptor ={
 static void
 dnsnamevector_format_handler_method(const void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
 {
+    (void)padding;
+    (void)pad_char;
+    (void)left_justified;
+    (void)reserved_for_method_parameters;
+
     u8 dot                     = '.';
     dnsname_vector* namevector = (dnsname_vector *)val;
 
@@ -184,7 +205,8 @@ dnsnamevector_format_handler_method(const void *val, output_stream *stream, s32 
     }
 }
 
-static const format_handler_descriptor dnsnamevector_format_handler_descriptor ={
+static const format_handler_descriptor dnsnamevector_format_handler_descriptor =
+{
     "dnsnamevector",
     13,
     dnsnamevector_format_handler_method
@@ -195,6 +217,11 @@ static const format_handler_descriptor dnsnamevector_format_handler_descriptor =
 static void
 dnsnamestack_format_handler_method(const void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
 {
+    (void)padding;
+    (void)pad_char;
+    (void)left_justified;
+    (void)reserved_for_method_parameters;
+
     u8 dot                   = '.';
     dnsname_stack *namestack = (dnsname_stack *)val;
 
@@ -224,7 +251,8 @@ dnsnamestack_format_handler_method(const void *val, output_stream *stream, s32 p
     }
 }
 
-static const format_handler_descriptor dnsnamestack_format_handler_descriptor ={
+static const format_handler_descriptor dnsnamestack_format_handler_descriptor =
+{
     "dnsnamestack",
     12,
     dnsnamestack_format_handler_method
@@ -235,6 +263,11 @@ static const format_handler_descriptor dnsnamestack_format_handler_descriptor ={
 static void
 dnslabel_format_handler_method(const void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
 {
+    (void)padding;
+    (void)pad_char;
+    (void)left_justified;
+    (void)reserved_for_method_parameters;
+
     u8 *label = (u8 *)val;
 
     if(label != NULL)
@@ -248,7 +281,8 @@ dnslabel_format_handler_method(const void *val, output_stream *stream, s32 paddi
     }
 }
 
-static const format_handler_descriptor dnslabel_format_handler_descriptor ={
+static const format_handler_descriptor dnslabel_format_handler_descriptor =
+{
     "dnslabel",
     8,
     dnslabel_format_handler_method
@@ -259,8 +293,12 @@ static const format_handler_descriptor dnslabel_format_handler_descriptor ={
 static void
 dnsclass_format_handler_method(const void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
 {
-    u16 *classp = (u16 *)val;
+    (void)padding;
+    (void)pad_char;
+    (void)left_justified;
+    (void)reserved_for_method_parameters;
 
+    u16 *classp = (u16 *)val;
 
     if(classp != NULL)
     {
@@ -273,17 +311,30 @@ dnsclass_format_handler_method(const void *val, output_stream *stream, s32 paddi
                 len = 2;
                 txt = CLASS_IN_NAME;
                 break;
-            case CLASS_HS:
-                len = 2;
-                txt = CLASS_HS_NAME;
-                break;
             case CLASS_CH:
                 len = 2;
                 txt = CLASS_CH_NAME;
                 break;
+            case CLASS_HS:
+                len = 2;
+                txt = CLASS_HS_NAME;
+                break;
             case CLASS_CTRL:
                 len = 4;
                 txt = CLASS_CTRL_NAME;
+                break;
+
+#if HAS_WHOIS
+            case CLASS_WHOIS:
+                len = 5;
+                txt = CLASS_WHOIS_NAME;
+                break;
+#endif  // HAS_WHOIS
+
+
+            case CLASS_NONE:
+                len = 4;
+                txt = CLASS_NONE_NAME;
                 break;
             case CLASS_ANY:
                 len = 3;
@@ -314,6 +365,11 @@ static const format_handler_descriptor dnsclass_format_handler_descriptor ={
 static void
 dnstype_format_handler_method(const void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
 {
+    (void)padding;
+    (void)pad_char;
+    (void)left_justified;
+    (void)reserved_for_method_parameters;
+
     u16 *typep = (u16 *)val;
 
     if(typep != NULL)
@@ -547,6 +603,18 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                 len = 6;
                 txt = TYPE_TALINK_NAME;
                 break;
+            case TYPE_CDS:
+                len = 3;
+                txt = TYPE_CDS_NAME;
+                break;
+            case TYPE_CDNSKEY:
+                len = 7;
+                txt = TYPE_CDNSKEY_NAME;
+                break;
+            case TYPE_OPENPGPKEY:
+                len = 10;
+                txt = TYPE_OPENPGPKEY_NAME;
+                break;
 
             case TYPE_SPF:
                 len = 3;
@@ -631,6 +699,10 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                 len = 3;
                 txt = TYPE_CAA_NAME;
                 break;
+            case TYPE_AVC:
+                len = 3;
+                txt = TYPE_AVC_NAME;
+                break;
             case TYPE_TA:
                 len = 2;
                 txt = TYPE_TA_NAME;
@@ -639,60 +711,7 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                 len = 3;
                 txt = TYPE_DLV_NAME;
                 break;
-#if HAS_DYNAMIC_PROVISIONING
-            case TYPE_ZONE_TYPE:
-                len = 8;
-                txt = TYPE_ZONE_TYPE_NAME;
-                break;
-            case TYPE_ZONE_FILE:
-                len = 8;
-                txt = TYPE_ZONE_FILE_NAME;
-                break;
-            case TYPE_ZONE_NOTIFY:
-                len = 9;
-                txt = TYPE_ZONE_NOTIFY_NAME;
-                break;
-            case TYPE_ZONE_MASTER:
-                len = 6;
-                txt = TYPE_ZONE_MASTER_NAME;
-                break;
-            case TYPE_ZONE_DNSSEC:
-                len = 6;
-                txt = TYPE_ZONE_DNSSEC_NAME;
-                break;
-            case TYPE_ZONE_SLAVES:
-                len = 6;
-                txt = TYPE_ZONE_SLAVES_NAME;
-                break;
-            case TYPE_SIGINTV:
-                len = 7;
-                txt = TYPE_SIGINTV_NAME;
-                break;
-            case TYPE_SIGREGN:
-                len = 7;
-                txt = TYPE_SIGREGN_NAME;
-                break;
-            case TYPE_SIGJITR:
-                len = 7;
-                txt = TYPE_SIGJITR_NAME;
-                break;
-            case TYPE_NTFRC:
-                len = 5;
-                txt = TYPE_NTFRC_NAME;
-                break;
-            case TYPE_NTFRP:
-                len = 5;
-                txt = TYPE_NTFRP_NAME;
-                break;
-            case TYPE_NTFRPI:
-                len = 6;
-                txt = TYPE_NTFRPI_NAME;
-                break;
-            case TYPE_NTFAUTO:
-                len = 7;
-                txt = TYPE_NTFAUTO_NAME;
-                break;
-#endif
+
 
 /// @todo 20150219 gve -- HAS_CTRL is the correct if statement and not 1, must be changed before release
 #if 1 // HAS_CTRL
@@ -748,6 +767,10 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                  len = 4;
                  txt = TYPE_CTRL_ZONESYNC_NAME;
                  break;
+            case TYPE_CTRL_ZONENOTIFY:
+                len = 6;
+                txt = TYPE_CTRL_ZONENOTIFY_NAME;
+                break;
 
 
 
@@ -775,8 +798,10 @@ static const format_handler_descriptor dnstype_format_handler_descriptor ={
 static void
 sockaddr_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
 {
+    (void)reserved_for_method_parameters;
+
     char buffer[INET6_ADDRSTRLEN + 1 + 5 + 1];
-    char *src           = buffer;
+    char *src = buffer;
     
     struct sockaddr *sa = (struct sockaddr*)val;
 
@@ -788,7 +813,7 @@ sockaddr_format_handler_method(const void *restrict val, output_stream *stream, 
             
             if(inet_ntop(ipv4->sin_family, &ipv4->sin_addr, buffer, sizeof(buffer)) != NULL)
             {
-                int n       = strlen(buffer);
+                int n = strlen(buffer);
                 buffer[n++] = PORT_SEPARATOR_V4;
                 snprintf(&buffer[n],6, "%i", ntohs(ipv4->sin_port));
             }
@@ -804,7 +829,7 @@ sockaddr_format_handler_method(const void *restrict val, output_stream *stream, 
 
             if(inet_ntop(ipv6->sin6_family, &ipv6->sin6_addr, buffer, sizeof(buffer)) != NULL)
             {
-                int n       = strlen(buffer);
+                int n = strlen(buffer);
                 buffer[n++] = PORT_SEPARATOR_V6;
                 snprintf(&buffer[n],6, "%i", ntohs(ipv6->sin6_port));
             }
@@ -833,6 +858,8 @@ static const format_handler_descriptor sockaddr_format_handler_descriptor ={
 static void
 hostaddr_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
 {
+    (void)reserved_for_method_parameters;
+
     char buffer[MAX_DOMAIN_LENGTH + 1 + 5 + 1];
     char *src = buffer;
 
@@ -900,6 +927,8 @@ static const format_handler_descriptor hostaddr_format_handler_descriptor ={
 static void
 hostaddrlist_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
 {
+    (void)reserved_for_method_parameters;
+
     char *src;
     char *p;
     char *limit;
@@ -932,7 +961,7 @@ hostaddrlist_format_handler_method(const void *restrict val, output_stream *stre
                     }
                     else
                     {
-                        strncpy(src, strerror(errno), limit - src);
+                        strcpy_ex(src, strerror(errno), limit - src);
                     }
                     break;
                 }
@@ -948,7 +977,7 @@ hostaddrlist_format_handler_method(const void *restrict val, output_stream *stre
                     }
                     else
                     {
-                        strncpy(src, strerror(errno), limit - src);
+                        strcpy_ex(src, strerror(errno), limit - src);
                     }
                     break;
                 }
@@ -986,7 +1015,7 @@ hostaddrlist_format_handler_method(const void *restrict val, output_stream *stre
                     free(src);
                 }
                 allocated = TRUE;
-                p = &tmp[p - src];
+                p = &tmp[p - src]; // VS false positive: uninitialised yes, but only its address matters
                 src = tmp;
                 limit = &tmp[len];
             }
@@ -1014,6 +1043,8 @@ static const format_handler_descriptor hostaddrlist_format_handler_descriptor ={
 static void
 sockaddrip_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
 {
+    (void)reserved_for_method_parameters;
+
     char buffer[INET6_ADDRSTRLEN + 1 + 5 + 1];
     char *src           = buffer;
 
@@ -1066,8 +1097,16 @@ static const format_handler_descriptor sockaddrip_format_handler_descriptor ={
 static void
 rdatadesc_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
 {
+    (void)padding;
+    (void)pad_char;
+    (void)left_justified;
+    (void)reserved_for_method_parameters;
+
     rdata_desc *desc = (rdata_desc *)val;
-    osprint_rdata(stream, desc->type, desc->rdata, desc->len);
+    if(desc->len > 0)
+    {
+        osprint_rdata(stream, desc->type, desc->rdata, desc->len);
+    }
 }
 
 static const format_handler_descriptor rdatadesc_format_handler_descriptor ={
@@ -1153,6 +1192,39 @@ static const format_handler_descriptor dnsrr_format_handler_descriptor = {
     dnsrr_format_handler_method
 };
 
+static void
+dnszrr_format_handler_method(const void * restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
+{
+    dns_resource_record *rr = (dns_resource_record*)val;
+
+    if(rr == NULL)
+    {
+        output_stream_write(stream,(const u8*)"*** NULL RESOURCE RECORD ***", 28);
+        return;
+    }
+
+    dnsname_format_handler_method(rr->name, stream, padding, pad_char, left_justified, reserved_for_method_parameters);
+    output_stream_write_u8(stream, (u8)pad_char);
+    format_dec_u64((u64)ntohl(rr->tctr.ttl), stream, 0, ' ', FALSE);
+    output_stream_write_u8(stream, (u8)pad_char);
+    dnstype_format_handler_method(&rr->tctr.qtype, stream, padding, pad_char, left_justified, reserved_for_method_parameters);
+    output_stream_write_u8(stream, (u8)pad_char);
+    if(rr->rdata != NULL)
+    {
+        osprint_rdata(stream, rr->tctr.qtype, rr->rdata, rr->rdata_size);
+    }
+    else
+    {
+        output_stream_write(stream, (const u8*)"*** NULL RDATA ***", 18);
+    }
+}
+
+static const format_handler_descriptor dnszrr_format_handler_descriptor = {
+    "dnszrr",
+    6,
+    dnszrr_format_handler_method
+};
+
 static bool netformat_class_init_done = FALSE;
 static bool dnsformat_class_init_done = FALSE;
 
@@ -1197,7 +1269,5 @@ dnsformat_class_init()
     format_registerclass(&typerdatadesc_format_handler_descriptor);
     format_registerclass(&recordwire_format_handler_descriptor);
     format_registerclass(&dnsrr_format_handler_descriptor);
+    format_registerclass(&dnszrr_format_handler_descriptor);
 }
-
-/*----------------------------------------------------------------------------*/
-

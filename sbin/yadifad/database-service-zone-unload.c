@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup database Routines for database manipulations
  *  @ingroup yadifad
  *  @brief database functions
@@ -50,7 +51,6 @@
  * USE INCLUDES */
 
 #include "server-config.h"
-#include "config.h"
 
 #include <dnscore/logger.h>
 #include <dnsdb/zdb-zone-garbage.h>
@@ -115,7 +115,7 @@ void
 database_service_zone_unload(zone_desc_s *zone_desc, zdb_zone *zone)
 {
     log_debug("database_service_zone_unload(%{dnsname}@%p=%i,%{dnsname})",
-            zone_desc->origin, zone_desc, zone_desc->rc,
+            zone_origin(zone_desc), zone_desc, zone_desc->rc,
             (zone != NULL)?zone->origin:(const u8*)"\004NULL");
 
     zdb_zone *work_zone = NULL;
@@ -129,7 +129,7 @@ database_service_zone_unload(zone_desc_s *zone_desc, zdb_zone *zone)
             log_warn("database_service_zone_unload: forced unload of %p = loaded_zone", zone);
             
             log_debug7("database_service_zone_unload: %{dnsname}@%p: loaded_zone@%p (was %p)",
-                    zone_desc->origin,
+                    zone_origin(zone_desc),
                     zone_desc,
                     NULL,
                     zone_desc->loaded_zone); // UNLOAD
@@ -145,7 +145,7 @@ database_service_zone_unload(zone_desc_s *zone_desc, zdb_zone *zone)
         work_zone = zone_desc->loaded_zone; // UNLOAD
         
         log_debug7("database_service_zone_unload: %{dnsname}@%p: loaded_zone@%p (was %p)",
-                zone_desc->origin,
+                zone_origin(zone_desc),
                 zone_desc,
                 NULL,
                 zone_desc->loaded_zone); // UNLOAD
@@ -162,7 +162,7 @@ database_service_zone_unload(zone_desc_s *zone_desc, zdb_zone *zone)
     if(work_zone != NULL)
     {
         database_service_zone_unload_parms_s *parm;
-        MALLOC_OR_DIE(database_service_zone_unload_parms_s*, parm, sizeof(database_service_zone_unload_parms_s), DSZZUPRM_TAG);
+        MALLOC_OBJECT_OR_DIE(parm, database_service_zone_unload_parms_s, DSZZUPRM_TAG);
         parm->zone_desc = zone_desc;
         parm->zone = work_zone;
     
@@ -172,7 +172,7 @@ database_service_zone_unload(zone_desc_s *zone_desc, zdb_zone *zone)
     else
     {
         log_debug7("database_service_zone_unload: %{dnsname}@%p: nothing to unload",
-                zone_desc->origin,
+                zone_origin(zone_desc),
                 zone_desc);                   
     }
     zone_lock(zone_desc, ZONE_LOCK_UNLOAD);

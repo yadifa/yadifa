@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 #include "dnscore/dnscore-config.h"
 #include <unistd.h>
@@ -39,7 +39,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
-#include <sys/resource.h>
+//#include <sys/resource.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
 
@@ -55,6 +55,8 @@
 #include "dnscore/base64.h"
 
 #include "dnscore/parser.h"
+#include "dnscore/ptr_set.h"
+#include "dnscore/mutex.h"
 
 
 #define DO_PRINT 0
@@ -75,7 +77,7 @@ parser_set_couples(parser_s *parser, const char* input, u8 kind, u8 closer_kind)
         return PARSER_ODD_CHAR_NUMBER;
     }
     
-    for(int i = 0; i < n; i+= 2)
+    for(u32 i = 0; i < n; i+= 2)
     {
         parser->char_type[(u8)input[i]] = kind;
         if(closer_kind != PARSER_CHAR_TYPE_IGNORE)
@@ -93,7 +95,7 @@ parser_set_singleton(parser_s *parser, const char* input, u8 kind)
 {
     u32 n = strlen(input);
 
-    for(int i = 0; i < n; i++)
+    for(u32 i = 0; i < n; i++)
     {
         parser->char_type[(u8)input[i]] = kind;
     }
@@ -126,6 +128,7 @@ parser_init_error_codes()
     error_register(PARSER_REACHED_END_OF_LINE,"PARSER_REACHED_END_OF_LINE");
     error_register(PARSER_FOUND_WORD,"PARSER_FOUND_WORD");
     error_register(PARSER_REACHED_END_OF_FILE, "PARSER_REACHED_END_OF_FILE");
+    error_register(PARSER_INVALID_ESCAPED_FORMAT, "PARSER_INVALID_ESCAPED_FORMAT");
 }
 
 ya_result
@@ -159,6 +162,7 @@ parser_init(parser_s *parser,
             parser->blank_marker = blank_makers;
             parser->escape_characters_count =parser_set_singleton(parser, escape_characters, PARSER_CHAR_TYPE_ESCAPE_CHARACTER);
             parser->escape_characters = escape_characters;
+            parser->close_last_stream = TRUE;
             parser_set_singleton(parser, "\n", PARSER_CHAR_TYPE_EOL);
         }
     }
@@ -173,6 +177,10 @@ parser_finalize(parser_s *parser)
     {
         input_stream *is = parser_pop_stream(parser);
         if(is == NULL)
+        {
+            break;
+        }
+        if((parser->input_stream_stack_size == 0) && !parser->close_last_stream)
         {
             break;
         }
@@ -206,7 +214,7 @@ parser_clear_escape_codes(char **startp, int *lenp, char escape_char, char *new_
 
             // is the escape code is at the last position ?
             
-            if(n + 1 == len)
+            if(n + 1 == (size_t)len)
             {
                 // oops
                 return PARSER_LINE_ENDED_WITH_ESCAPE;
@@ -215,10 +223,56 @@ parser_clear_escape_codes(char **startp, int *lenp, char escape_char, char *new_
             memcpy(op, start, n);
 #if 0 /* fix */
 #else
-            op[n] = escape_char_ptr[1];
-            op += n + 1;
-            start = escape_char_ptr + 2;
-            len -= n + 2;
+            char c = escape_char_ptr[1];
+
+            if((c >= '0') && (c <= '2'))
+            {
+                if(n + 3 < (size_t)len)
+                {
+                    u32 decimal_char = (c - '0') * 100;
+                    c = escape_char_ptr[2];
+                    if((c >= '0') && (c <= '9'))
+                    {
+                        decimal_char += (c - '0') * 10;
+                        c = escape_char_ptr[3];
+                        if((c >= '0') && (c <= '9'))
+                        {
+                            decimal_char += (c - '0');
+                            if(decimal_char <= 255)
+                            {
+                                op[n] = (u8)decimal_char;
+                                op += n + 1;
+                                start = escape_char_ptr + 4;
+                                len -= n + 4;
+                            }
+                            else
+                            {
+                                return PARSER_INVALID_ESCAPED_FORMAT;
+                            }
+                        }
+                        else
+                        {
+                            return PARSER_INVALID_ESCAPED_FORMAT;
+                        }
+                    }
+                    else
+                    {
+                        return PARSER_INVALID_ESCAPED_FORMAT;
+                    }
+                }
+                else
+                {
+                    return PARSER_INVALID_ESCAPED_FORMAT;
+                }
+            }
+            else
+            {
+                op[n] = c;
+                op += n + 1;
+                start = escape_char_ptr + 2;
+                len -= n + 2;
+            }
+
 #endif
             yassert(len >= 0);
             
@@ -344,6 +398,8 @@ parser_next_token(parser_s *parser)
 
             if(return_code == 0)
             {
+
+
                 return PARSER_EOF;
             }
 
@@ -360,14 +416,62 @@ parser_next_token(parser_s *parser)
 
             // test for multiline close
 
+            bool has_escapes = FALSE;
+
             switch(parser->char_type[b])
             {
+#if DNSCORE_HAS_FULL_ASCII7
+                case PARSER_CHAR_TYPE_TO_TRANSLATE:
+                    *needle = parser->translation_table[b];
+                    --needle;
+#endif
+                FALLTHROUGH // fall through
                 case PARSER_CHAR_TYPE_ESCAPE_CHARACTER:
                     // the text starts after the next char, whatever it is
-                    needle++;
-                    //b = (u8)*needle;
+                    if(++needle < parser->limit)
+                    {
+                        if((*needle >= '0') && (*needle <= '2'))
+                        {
+                            // octal byte
+                            if(needle + 2 < parser->limit)
+                            {
+                                //u8 octal_char = ((*needle) - '0') * 100;
+                                ++needle;
+                                if((*needle >= '0') && (*needle <= '9'))
+                                {
+                                    //octal_char |= ((*needle) - '0') * 10;
+                                    ++needle;
+                                    if((*needle >= '0') && (*needle <= '9'))
+                                    {
+                                        //octal_char |= ((*needle) - '0');
+                                        needle -= 3;
+                                        has_escapes = TRUE;
+                                        // the buffer needs to be copied
+                                    }
+                                    else
+                                    {
+                                        // octal parse error
 
-                    // no "break" here : fall through required
+                                        return PARSER_INVALID_ESCAPED_FORMAT;
+                                    }
+                                }
+                                else
+                                {
+                                    // octal parse error
+
+                                    return PARSER_INVALID_ESCAPED_FORMAT;
+                                }
+                            }
+                            else
+                            {
+                                // octal parse error
+
+                                return PARSER_INVALID_ESCAPED_FORMAT;
+                            }
+                        }
+                    }
+
+                    FALLTHROUGH // fall through
 
                 case PARSER_CHAR_TYPE_NORMAL:
                 {
@@ -375,7 +479,6 @@ parser_next_token(parser_s *parser)
                     // STRING => error
                     // COMMENT => CUT
 
-                    bool has_escapes = FALSE;
                     parser->text = needle++;
 
                     for(; needle < parser->limit; needle++)
@@ -404,7 +507,7 @@ parser_next_token(parser_s *parser)
                                 goto parser_next_token_end_of_token_found; /********* GOTO G O T O GOTO **********/
                             }
 
-                            case PARSER_CHAR_TYPE_MULTILINE_DELIMITER: // @todo 20130830 edf -- handle BEGIN END and BOTH
+                            case PARSER_CHAR_TYPE_MULTILINE_DELIMITER:
                             {
                                 if(parser->multiline == 0)
                                 {
@@ -479,6 +582,13 @@ parser_next_token(parser_s *parser)
                                 parser->needle = needle;
                                 goto parser_next_token_end_of_token_found; /********* GOTO G O T O GOTO **********/
                             }
+#if DNSCORE_HAS_FULL_ASCII7
+                            case PARSER_CHAR_TYPE_TO_TRANSLATE:
+                            {
+                                *needle = parser->translation_table[b];
+                                break;
+                            }
+#endif
 
                             //case PARSER_CHAR_TYPE_NORMAL:
                             default:
@@ -509,11 +619,10 @@ parser_next_token(parser_s *parser)
                                 return err;
                             }
                         }
-
-                        parser->needle = needle + token_len;
                     }
 
                     parser->text_length = token_len;
+                    parser->needle = needle;
 
                     return return_code | PARSER_WORD;
                 }
@@ -558,45 +667,73 @@ parser_next_token(parser_s *parser)
 
                     char end_char = parser->delimiter_close[b];
 
+                    char *string_start = ++needle;
                     char *string_end;
-
                     for(;;)
                     {
-                        needle++;
-
                         string_end = memchr(needle, end_char, parser->limit - needle);
 
                         if(string_end != NULL)
                         {
-                            if(parser->char_type[(u8)string_end[-1]] != PARSER_CHAR_TYPE_ESCAPE_CHARACTER)
+                            // this one may have been escaped
+
+                            /// @note 20190917 edf -- Patch submitted trough github by JZerf
+                            ///                       This fixes the case of escaped escapes as well as an incorrect limit test
+                            ///                       The patch has been slightly adapted in 2.4.x but may be kept as it is in 2.3.x
+
+                            /* Check if the string delimiter that was found was escaped. Keep in
+                             * mind that if there was an escape character in front of the string
+                             * delimiter, the escape character itself could have also been escaped
+                             * (and the one before that and the one before that...). What we can do
+                             * is check to see how many consecutive preceding escape characters
+                             * there are (by finding the first preceding nonescape character or the
+                             * opening string delimiter if there isn't one) and if it's an even
+                             * number then the string delimiter we found is unescaped but if it's an
+                             * odd number then it is escaped. Note that this will need to be revised
+                             * if YADIDA later adds support for using \DDD type escape sequences
+                             * between string delimiters.
+                             */
+
+                            /// @note 20190917 edf -- while => do-while : I've kept the first if out of the loop to avoid needlessly
+                            ///                       testing for the needle. (Which should be the most common case)
+
+                            const char *prior_nonescape_character = string_end - 1;
+
+                            do
                             {
-                                break;
+                                if(parser->char_type[(u8)*prior_nonescape_character] != PARSER_CHAR_TYPE_ESCAPE_CHARACTER)
+                                {
+                                    break;
+                                }
                             }
+                            while(--prior_nonescape_character >= needle);
                             
                             // this one was escaped ...
+                            if(((string_end - prior_nonescape_character) & 1) == 1)
+                            {
+                                break; /* String delimiter was not escaped if we got here. */
+                            }
 
                             string_end++;
                             
                             // needle = string_end + 1 and try again ?
                             
-                            if(string_end > parser->limit)
+                            if(string_end >= parser->limit)
                             {
                                 return PARSER_EXPECTED_STRING_END_DELIMITER;
                             }
                             
                             needle = string_end;
-                                    
-                            //string_end = memchr(string_end, end_char, parser->limit - string_end);
                         }
                         else
                         {
-                            // syntax error @todo 20130830 edf -- ?
+                            // syntax error
 
                             return PARSER_EXPECTED_STRING_END_DELIMITER;
                         }
                     }
 
-                    int token_len = string_end - needle;
+                    int token_len = string_end - string_start;
 
                     yassert(parser->escape_characters_count <= 1);
                     
@@ -605,13 +742,13 @@ parser_next_token(parser_s *parser)
                         ya_result err;
                         char escape_char = parser->escape_characters[escape_index];
 
-                        if(FAIL(err = parser_clear_escape_codes(&needle, &token_len, escape_char, parser->extra_buffer)))
+                        if(FAIL(err = parser_clear_escape_codes(&string_start, &token_len, escape_char, parser->extra_buffer)))
                         {
                             return err;
                         }
                     }
 
-                    parser->text = needle;
+                    parser->text = string_start;
                     parser->text_length = token_len;
 
                     parser->needle = string_end + 1;
@@ -647,6 +784,8 @@ parser_next_token(parser_s *parser)
 
                     *needle = ' ';
                 }
+                FALLTHROUGH // fall through
+
                 case PARSER_CHAR_TYPE_BLANK_MARKER:
                 {
                     return_code |= PARSER_BLANK_START;
@@ -672,7 +811,7 @@ parser_next_token(parser_s *parser)
     
     // never reached
     
-    return 0;
+    // return 0;
 }
 
 void
@@ -681,6 +820,21 @@ parser_set_eol(parser_s *parser)
     parser->needle = (char*)&eol_park_needle[0];
     parser->limit = (char*)&eol_park_needle[1];
 }
+
+#if DNSCORE_HAS_FULL_ASCII7
+void
+parser_add_translation(parser_s *parser, u8 character, u8 translates_into)
+{
+    parser->translation_table[character] = translates_into;
+    parser->char_type[character] = PARSER_CHAR_TYPE_TO_TRANSLATE;
+}
+
+void
+parser_del_translation(parser_s *parser, u8 character)
+{
+    parser->char_type[character] = PARSER_CHAR_TYPE_NORMAL;
+}
+#endif
 
 ya_result
 parser_next_characters(parser_s *parser)
@@ -801,7 +955,7 @@ parser_concat_next_tokens(parser_s *parser)
                 return PARSER_SYNTAX_ERROR_LINE_TOO_BIG;
             }
 
-            memcpy(&parser->additional_buffer[offset], text, text_length);
+            memcpy(&parser->additional_buffer[offset], text, text_length); // VS false positive: overflow is chercked right before
             offset = new_length;
 
             parser->additional_buffer[offset] = space;
@@ -825,12 +979,20 @@ parser_concat_next_tokens(parser_s *parser)
     return parser->text_length;
 }
 
-
 ya_result
-parser_concat_next_tokens_nospace(parser_s *parser)
+parser_concat_current_and_next_tokens_nospace(parser_s *parser)
 {
     ya_result ret;
-    size_t offset = 0;
+    size_t offset;
+    
+    if(parser->text_length > sizeof(parser->additional_buffer))
+    {
+        return PARSER_SYNTAX_ERROR_LINE_TOO_BIG;
+    }
+    
+    memcpy(&parser->additional_buffer[0], parser->text, parser->text_length);
+    offset = parser->text_length;
+    
     do
     {
         ret = parser_next_token(parser);
@@ -850,6 +1012,49 @@ parser_concat_next_tokens_nospace(parser_s *parser)
 
         memcpy(&parser->additional_buffer[offset], text, text_length);
         offset = new_length;
+    }
+    while((ret & (PARSER_EOF|PARSER_EOL)) == 0);
+    
+    char* text = parser->additional_buffer;
+    while(parser->char_type[(u8)*text] == PARSER_CHAR_TYPE_BLANK_MARKER)
+    {
+        text++;
+    }
+    parser->text_length = offset - (text - parser->additional_buffer);
+    parser->text = text;
+    parser->needle = (char*)&eol_park_needle[0];
+    parser->limit = (char*)&eol_park_needle[1];
+    
+    return parser->text_length;
+}
+
+ya_result
+parser_concat_next_tokens_nospace(parser_s *parser)
+{
+    ya_result ret;
+    size_t offset = 0;
+    do
+    {
+        ret = parser_next_token(parser);
+        
+        if((ret & PARSER_COMMENT) != 0)
+        {
+            continue;
+        }
+
+        if((ret & PARSER_WORD) != 0)
+        {
+            const char *text = parser_text(parser);
+            size_t text_length = parser_text_length(parser);
+            size_t new_length = offset + text_length;
+            if(new_length > sizeof(parser->additional_buffer))
+            {
+                return PARSER_SYNTAX_ERROR_LINE_TOO_BIG;
+            }
+
+            memcpy(&parser->additional_buffer[offset], text, text_length);
+            offset = new_length;
+        }
     }
     while((ret & (PARSER_EOF|PARSER_EOL)) == 0);
     
@@ -898,7 +1103,7 @@ parser_pop_stream(parser_s *p)
     if(p->input_stream_stack_size > 0)
     {
          is = p->input_stream_stack[--p->input_stream_stack_size];
-#ifdef DEBUG
+#if DEBUG
          p->input_stream_stack[p->input_stream_stack_size] = NULL;
 #endif
          p->line_number = p->line_number_stack[p->input_stream_stack_size];
@@ -1010,7 +1215,7 @@ parser_type_bit_maps_initialise(parser_s *p, type_bit_maps_context* context)
             u32 text_len = parser_text_length(p);
             
             ya_result ret; // MUST use another return variable than return_code
-            if(FAIL(ret = get_type_from_case_name_len(text, text_len, &type)))
+            if(FAIL(ret = dns_type_from_case_name_length(text, text_len, &type)))
             {
                 return ret;
             }
@@ -1040,6 +1245,36 @@ parser_type_bit_maps_initialise(parser_s *p, type_bit_maps_context* context)
     context->type_bit_maps_size = type_bit_maps_size;
 
     return type_bit_maps_size;
+}
+
+ya_result
+parser_get_network_protocol_from_next_word(parser_s *p, int *out_value)
+{
+    char protocol_token[64];
+    
+    ya_result ret = parser_copy_next_word(p, protocol_token, sizeof(protocol_token));
+    
+    if(ISOK(ret))
+    {
+        ret = protocol_name_to_id(protocol_token, out_value);
+    }
+    
+    return ret;
+}
+
+ya_result
+parser_get_network_service_port_from_next_word(parser_s *p, int *out_value)
+{
+    char service_token[64];
+    
+    ya_result ret = parser_copy_next_word(p, service_token, sizeof(service_token));
+    
+    if(ISOK(ret))
+    {
+        ret = server_name_to_port(service_token, out_value);
+    }
+    
+    return ret;
 }
 
 /** @} */

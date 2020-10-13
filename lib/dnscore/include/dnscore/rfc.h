@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup 
  *  @ingroup dnscore
  *  @brief 
@@ -44,6 +45,7 @@
 #define RFC_H_
 
 #include <dnscore/sys_types.h>
+#include <netinet/in.h>
 
 /*    ------------------------------------------------------------
  *
@@ -83,26 +85,26 @@
 #define     DNSSEC_CD                       0x10     /* Checking Disabled flag                     */
 
 #define     RRSIG_RDATA_HEADER_LEN          18      /* The length of an RRSIG rdata without the
-                                                     * signer_name and the signature               */
+                                                     * signer_name and the signature: MUST BE 18 ! */
 
 #define     ID_BITS                         0xFF    /*                                    rfc 1035 */
 
 // HIGH flags
 
-#define     QR_BITS                         0x80    /*                                    rfc 1035 */
-#define     OPCODE_BITS                     0x78    /*                                    rfc 1035 */
-#define     OPCODE_SHIFT                    3
-#define     AA_BITS                         0x04    /*                                    rfc 1035 */
-#define     TC_BITS                         0x02    /*                                    rfc 1035 */
-#define     RD_BITS                         0x01    /*                                    rfc 1035 */
+#define     QR_BITS                         0x80U    /*                                    rfc 1035 */
+#define     OPCODE_BITS                     0x78U    /*                                    rfc 1035 */
+#define     OPCODE_SHIFT                    3U
+#define     AA_BITS                         0x04U    /*                                    rfc 1035 */
+#define     TC_BITS                         0x02U    /*                                    rfc 1035 */
+#define     RD_BITS                         0x01U    /*                                    rfc 1035 */
 
 // LOW flags
 
-#define     RA_BITS                         0x80    /*                                    rfc 1035 */
-#define     Z_BITS                          0x40    /*                                    rfc 1035 */
-#define     AD_BITS                         0x20    /*                                    rfc 2065 */
-#define     CD_BITS                         0x10    /*                                    rfc 2065 */
-#define     RCODE_BITS                      0x0F    /*                                    rfc 1035 */
+#define     RA_BITS                         0x80U    /*                                    rfc 1035 */
+#define     Z_BITS                          0x40U    /*                                    rfc 1035 */
+#define     AD_BITS                         0x20U    /*                                    rfc 2065 */
+#define     CD_BITS                         0x10U    /*                                    rfc 2065 */
+#define     RCODE_BITS                      0x0FU    /*                                    rfc 1035 */
 
 #ifdef WORDS_BIGENDIAN
 // BIG endian
@@ -687,6 +689,10 @@
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */ 
 /*
+ * @todo 20171121 thx -- this is not about RDATA, fix this (maybe it should not
+ *                       be here at all ?)
+ * 
+ *
                                    1  1  1  1  1  1
      0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
@@ -942,6 +948,47 @@
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
 #define     TYPE_CDS                        NU16(59)    /* Child DS                         rfc 7344 */
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                   FLAGS                       |    16 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |        PROTOCOL       |       ALGORITHM       |    PROTOCOL: 8 bit, ALGORITHM: 8 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               /
+   /                   PUBLIC KEY                  /
+   /                                               /
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_CDNSKEY                    NU16(60)    /* DNSKEY(s) the Child wants reflected in DS rfc 7344 */
+/*
+
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                                               / 
+   /             OPENPGP PUBLIC KEY                /    single OpenPGP public key as defined in Section 5.5.1.1 of [RFC4880].  
+   /                                               /    without ASCII armor or base64 encoding
+   /                                               / 
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+
+   */
+#define     TYPE_OPENPGPKEY                 NU16(61)    /* OpenPGP Key                      @note undocumented see draft-ietf-dane-openpgpkey-03 */
+
+/*
+                                   1  1  1  1  1  1
+     0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                  SOA SERIAL                   |    32 bit
+   |                                               | 
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   |                    FLAGS                      |    16 bit
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   /                TYPE BIT MAP                   /    
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+   */
+#define     TYPE_CSYNC                      NU16(62)    /* Child-To-Parent Synchronization  rfc 7477 */
 
 /*
                                    1  1  1  1  1  1
@@ -1111,6 +1158,10 @@
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
 #define     TYPE_CAA                        NU16(257)   /* Certification Authority Authorization rfc 6844 */
+
+
+#define     TYPE_AVC                        NU16(258)   // Visibility and control, no rfc yet
+
 /*
                                    1  1  1  1  1  1
      0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
@@ -1151,6 +1202,11 @@
 #define     CLASS_HS                        NU16(4)       /* Hesiod                            rfc 1025 */
 #define     CLASS_CTRL                      NU16(0x2A)    /* @note Yadifa controller class */
 
+#if HAS_WHOIS
+#define     CLASS_WHOIS                     NU16(0x2B)    /* @note WHOIS class */
+#endif  // HAS_WHOIS
+
+
 #define     CLASS_NONE                      NU16(254)     /* rfc 2136                          rfc 2136 */
 #define     CLASS_ANY                       NU16(255)     /* rfc 1035  QCLASS ONLY             rfc 1025 */
 
@@ -1182,31 +1238,39 @@
 #define     DNSKEY_ALGORITHM_GOST              12       /* RFC 5933, not supported by YADIFA */
 #define     DNSKEY_ALGORITHM_ECDSAP256SHA256   13       /* RFC 6605 */
 #define     DNSKEY_ALGORITHM_ECDSAP384SHA384   14       /* RFC 6605 */
+#define     DNSKEY_ALGORITHM_ED25519           15       /* RFC 8080 */
+#define     DNSKEY_ALGORITHM_ED448             16       /* RFC 8080 */
 
 #define     DS_DIGEST_SHA1                      1
 #define     DS_DIGEST_SHA256                    2
 
 #define     NSEC3_FLAGS_OPTOUT                  1           /*  */
 
+#define     DNSKEY_ALGORITHM_RSAMD5_NAME             "RSAMD5"               /* RFC 4034 */ // RSA // DEPRECATED
+#define     DNSKEY_ALGORITHM_DIFFIE_HELLMAN_NAME     "DH"                   /* RFC 2539 */ // NOT USED
+#define     DNSKEY_ALGORITHM_DSASHA1_NAME            "DSA"                  /* RFC 3755 */
+#define     DNSKEY_ALGORITHM_RSASHA1_NAME            "RSASHA1"              /* RFC 4034 */
+#define     DNSKEY_ALGORITHM_DSASHA1_NSEC3_NAME      "DSA-NSEC3-SHA1"       /* RFC 5155 */ // NSEC3DSA"
+#define     DNSKEY_ALGORITHM_RSASHA1_NSEC3_NAME      "RSASHA1-NSEC3-SHA1"   /* RFC 5155 */ // NSEC3RSASHA1
+#define     DNSKEY_ALGORITHM_RSASHA256_NSEC3_NAME    "RSASHA256"            /* RFC 5702 */
+#define     DNSKEY_ALGORITHM_RSASHA512_NSEC3_NAME    "RSASHA512"            /* RFC 5702 */
+#define     DNSKEY_ALGORITHM_GOST_NAME               "ECC-GOST" // GOST     /* RFC 5933 */ // not supported by YADIFA
+#define     DNSKEY_ALGORITHM_ECDSAP256SHA256_NAME    "ECDSAP256SHA256"      /* RFC 6605 */
+#define     DNSKEY_ALGORITHM_ECDSAP384SHA384_NAME    "ECDSAP384SHA384"      /* RFC 6605 */
+#define     DNSKEY_ALGORITHM_ED25519_NAME            "ED25519"              /* RFC 8080 */
+#define     DNSKEY_ALGORITHM_ED448_NAME              "ED448"                /* RFC 8080 */
 
-#define     DNSKEY_ALGORITHM_RSAMD5_NAME             "RSA"                   // DEPRECATED
-#define     DNSKEY_ALGORITHM_DIFFIE_HELLMAN_NAME     "DH"                    // NOT USED
-#define     DNSKEY_ALGORITHM_DSASHA1_NAME            "DSA"
-#define     DNSKEY_ALGORITHM_RSASHA1_NAME            "RSASHA1"
-#define     DNSKEY_ALGORITHM_DSASHA1_NSEC3_NAME      "NSEC3DSA"
-#define     DNSKEY_ALGORITHM_RSASHA1_NSEC3_NAME      "NSEC3RSASHA1"
-#define     DNSKEY_ALGORITHM_RSASHA256_NSEC3_NAME    "RSASHA256"             /* RFC 5702 */
-#define     DNSKEY_ALGORITHM_RSASHA512_NSEC3_NAME    "RSASHA512"             /* RFC 5702 */
-#define     DNSKEY_ALGORITHM_GOST_NAME               "GOST"                  /* RFC 5933, not supported by YADIFA */
-#define     DNSKEY_ALGORITHM_ECDSAP256SHA256_NAME    "ECDSAP256SHA256"       /* RFC 6605 */
-#define     DNSKEY_ALGORITHM_ECDSAP384SHA384_NAME    "ECDSAP384SHA384"       /* RFC 6605 */
+#define     DNSKEY_ALGORITHM_DSASHA1_NSEC3_NAME2     "NSEC3DSA"
+#define     DNSKEY_ALGORITHM_RSASHA1_NSEC3_NAME2     "NSEC3RSASHA1"
 
+#ifdef DNSKEY_ALGORITHM_DUMMY
+#define     DNSKEY_ALGORITHM_DUMMY_NAME "DUMMY"
+#endif
 
-#define     IS_TYPE_PRIVATE(t)              ( ((t) >= 65280) && ( (t) <= 65534))
-#define     IS_TYPE_NPRIVATE(t)             ( (NU16(t) >= 65280) && ( NU16(t) <= 65534))
+#define     IS_TYPE_PRIVATE(t)              (((t) >= 65280) && ( (t) <= 65534))
+#define     IS_TYPE_NPRIVATE(t)             ((NU16(t) >= 65280) && ( NU16(t) <= 65534))
 
-/*    ------------------------------------------------------------
- *
+/*
  *      STRUCTS
  */
 
@@ -1247,7 +1311,8 @@ typedef struct message_header message_header;
 struct message_header
 {
     u16                         id;
-    u16                     opcode;
+    u8                      opcode;
+    u8                       flags;
     u16                    qdcount;
     u16                    ancount;
     u16                    nscount;
@@ -1329,7 +1394,9 @@ extern const class_table qclass[];
 #define     TYPE_RKEY_NAME                  "RKEY"      /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
 #define     TYPE_TALINK_NAME                "TALINK"    /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
 #define     TYPE_CDS_NAME                   "CDS"
-
+#define     TYPE_CDNSKEY_NAME               "CDNSKEY"
+#define     TYPE_OPENPGPKEY_NAME            "OPENPGPKEY"
+#define     TYPE_CSYNC_NAME                 "CSYNC"
 #define     TYPE_SPF_NAME                   "SPF"
 #define     TYPE_UINFO_NAME                 "UINFO"
 #define     TYPE_UID_NAME                   "UID"
@@ -1356,6 +1423,7 @@ extern const class_table qclass[];
                                                     */
 #define     TYPE_URI_NAME                   "URI"       /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
 #define     TYPE_CAA_NAME                   "CAA"       /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
+#define     TYPE_AVC_NAME                   "AVC"   /* visibility and control */
 
 #define     TYPE_TA_NAME                    "TA"        /* @note undocumented see draft-lewis-dns-undocumented-types-01 */
 #define     TYPE_DLV_NAME                   "DLV"
@@ -1371,7 +1439,7 @@ extern const type_table qtype[];
  * @return the c-string
  */
 
-const char *get_name_from_class(u16 c);
+const char *dns_class_get_name(u16 c);
 
 /**
  * Static asciiz representation of a dns type
@@ -1380,7 +1448,7 @@ const char *get_name_from_class(u16 c);
  * @return the c-string
  */
 
-const char *get_name_from_type(u16 t);
+const char *dns_type_get_name(u16 t);
 
 /** \brief Get the numeric value of a class (network order) from its name
  *
@@ -1390,7 +1458,7 @@ const char *get_name_from_type(u16 t);
  *  @retval OK
  *  @retval NOK
  */
-int get_class_from_name(const char *src, u16 *dst);
+int dns_class_from_name(const char *src, u16 *dst);
 
 /** \brief Get the numeric value of a class (network order) from its name
  *  Case insensitive
@@ -1401,7 +1469,7 @@ int get_class_from_name(const char *src, u16 *dst);
  *  @retval OK
  *  @retval NOK
  */
-int get_class_from_case_name(const char *src, u16 *dst);
+int dns_class_from_case_name(const char *src, u16 *dst);
 
 /** \brief Get the numeric value of a type (network order) from its name
  *
@@ -1411,7 +1479,7 @@ int get_class_from_case_name(const char *src, u16 *dst);
  *  @retval OK
  *  @retval NOK
  */
-int get_type_from_name(const char *src, u16 *dst);
+int dns_type_from_name(const char *src, u16 *dst);
 
 /** \brief Get the numeric value of a type (network order) from its name
  *  Case insensitive
@@ -1422,9 +1490,9 @@ int get_type_from_name(const char *src, u16 *dst);
  *  @retval OK
  *  @retval NOK
  */
-int get_type_from_case_name(const char *src, u16 *dst);
+int dns_type_from_case_name(const char *src, u16 *dst);
 
-int get_type_from_case_name_len(const char *src, int src_len, u16 *dst);
+int dns_type_from_case_name_length(const char *src, int src_len, u16 *dst);
 
 /**
  * @brief Case-insensitive search for the name in the table, returns the value
@@ -1435,14 +1503,12 @@ int get_type_from_case_name_len(const char *src, int src_len, u16 *dst);
  * 
  * @return SUCCESS iff the name was matched
  */
-ya_result get_value_from_casename(const value_name_table *table, const char *name, u32 *out_value);
+ya_result value_name_table_get_value_from_casename(const value_name_table *table, const char *name, u32 *out_value);
 
 
-int get_dnssec_algo_from_name(const char *src, u8 *dst);
-int get_dnssec_algo_from_case_name(const char *src, u8 *dst);
-void rfc_dnssec_algo_init(void);
-void rfc_dnssec_algo_finalize(void);
-
+const char* dns_encryption_algorithm_get_name(u16 d);
+int dns_encryption_algorithm_from_name(const char *src, u8 *dst);
+int dns_encryption_algorithm_from_case_name(const char *src, u8 *dst);
 
 /**
  * @brief Static asciiz representation of a dns opcode
@@ -1451,7 +1517,7 @@ void rfc_dnssec_algo_finalize(void);
  *
  * @return the c-string
  */
-const char *get_opcode(u16 c);
+const char *dns_message_opcode_get_name(u16 c);
 
 /**
  * @brief Static asciiz representation of a dns rcode
@@ -1460,7 +1526,7 @@ const char *get_opcode(u16 c);
  *
  * @return the c-string
  */
-const char *get_rcode(u16 c);
+const char *dns_message_rcode_get_name(u16 c);
 
 #if DNSCORE_HAS_NSID_SUPPORT
 
@@ -1471,12 +1537,103 @@ extern u32 edns0_rdatasize_nsid_option_wire_size;
 #endif
 
 void edns0_set_nsid(u8 *bytes, u16 size);
-
 #endif
+
+ya_result protocol_name_to_id(const char* name, int *out_port);
+ya_result protocol_id_to_name(int proto, char *name, size_t name_len);
+
+ya_result server_name_to_port(const char* name, int *out_value);
+ya_result server_port_to_name(int port, char *name, size_t name_len);
+
+/*
+ * SOA
+ */
+
+ya_result rr_soa_get_serial(const u8* rdata, u16 rdata_size, u32* out_serial);
+ya_result rr_soa_increase_serial(u8* rdata, u16 rdata_size, u32 increment);
+
+ya_result rr_soa_get_minimumttl(const u8* rdata, u16 rdata_size, s32* out_minimum_ttl);
+
+static inline u16 rrsig_get_type_covered_from_rdata(const void *rdata, u16 rdata_size)
+{
+    u16 tc = TYPE_NONE;
+    if(rdata_size >= 2)
+    {
+        tc = GET_U16_AT_P(rdata);
+    }
+    return tc;
+}
+
+static inline u8 rrsig_get_algorithm_from_rdata(const void *rdata, u16 rdata_size)
+{
+    u8 a = 0;
+    if(rdata_size >= 3)
+    {
+        a = ((const u8*)rdata)[2];
+    }
+    return a;
+}
+
+static inline u8 rrsig_get_labels_from_rdata(const void *rdata, u16 rdata_size)
+{
+    u8 l = 0;
+    if(rdata_size >= 4)
+    {
+        l = ((const u8*)rdata)[3];
+    }
+    return l;
+}
+
+static inline s32 rrsig_get_original_ttl_from_rdata(const void *rdata, u16 rdata_size)
+{
+    s32 ottl = 0;
+    if(rdata_size >= 8)
+    {
+        ottl = ntohl(GET_U32_AT(((const u8*)rdata)[4]));
+    }
+    return ottl;
+}
+
+static inline u32 rrsig_get_valid_until_from_rdata(const void *rdata, u16 rdata_size)
+{
+    u32 t = 0;
+    if(rdata_size >= RRSIG_RDATA_HEADER_LEN)
+    {
+        t = ntohl(GET_U32_AT(((const u8*)rdata)[8]));
+    }
+    return t;
+}
+
+static inline u32 rrsig_get_valid_from_from_rdata(const void *rdata, u16 rdata_size)
+{
+    u32 t = 0;
+    if(rdata_size >= RRSIG_RDATA_HEADER_LEN)
+    {
+        t = ntohl(GET_U32_AT(((const u8*)rdata)[12]));
+    }
+    return t;
+}
+
+static inline u16 rrsig_get_key_tag_from_rdata(const void *rdata, u16 rdata_size)
+{
+    u16 tag = 0;
+    if(rdata_size >= RRSIG_RDATA_HEADER_LEN)
+    {
+        tag = ntohs(GET_U16_AT(((const u8*)rdata)[16]));
+    }
+    return tag;
+}
+
+static inline const u8* rrsig_get_signer_name_from_rdata(const void *rdata, u16 rdata_size)
+{
+    const u8 *signer_name = NULL;
+    if(rdata_size >= RRSIG_RDATA_HEADER_LEN)
+    {
+        signer_name = &((const u8*)rdata)[18];
+    }
+    return signer_name;
+}
 
 #endif /* RFC_H_ */
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

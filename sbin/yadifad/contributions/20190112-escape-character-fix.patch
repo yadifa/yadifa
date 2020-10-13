@@ -1,0 +1,32 @@
+From 2ad56c317484b6303c0b3d8618263a77108f8a46 Mon Sep 17 00:00:00 2001
+From: Jeremy Zerfas <46632101+JZerf@users.noreply.github.com>
+Date: Sat, 12 Jan 2019 15:43:51 -0600
+Subject: [PATCH] Fix escape character searching loop to work properly
+
+Fix the escape character searching loop so that it isn't ran when the
+string is empty.
+---
+ lib/dnscore/src/format.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/lib/dnscore/src/format.c b/lib/dnscore/src/format.c
+index a3225c5..dfad0d4 100644
+--- a/lib/dnscore/src/format.c
++++ b/lib/dnscore/src/format.c
+@@ -1914,7 +1914,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
+                 const char *character_to_check = (char *)rdata_pointer;
+                 const char * const limit = character_to_check + pstring_len;
+                 output_stream_write_u8(os, '"'); /* Opening double quote for the string. */
+-                do
++                for(; character_to_check < limit; character_to_check++)
+                 {
+                     if(memchr("\"\n\\", *character_to_check, 3))
+                     {
+@@ -1927,7 +1927,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
+                         rdata_pointer += preceding_span_len + 1;
+                     }
+                 }
+-                while(++character_to_check < limit);
+ 
+                 /* Output any remaining characters in the Pascal string if rdata_pointer didn't
+                  * reach limit (because it ended with a character that didn't have to be escaped).

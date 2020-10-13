@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnskey DNSSEC keys functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -50,6 +51,7 @@
 #include <openssl/dsa.h>
 #include <openssl/ssl.h>
 #include <openssl/engine.h>
+#include "dnscore/openssl.h"
 
 #include "dnscore/dnscore.h"
 
@@ -62,7 +64,6 @@
 #include "dnscore/dnssec_errors.h"
 #include "dnscore/zalloc.h"
 
-#include "dnscore/dnskey.h"
 
 #define MODULE_MSG_HANDLE g_system_logger
 
@@ -102,6 +103,11 @@ static int DSA_set0_pqg(DSA *d, BIGNUM *p, BIGNUM *q, BIGNUM *g)
     return 1;
 }
 
+const BIGNUM *DSA_get0_p(const DSA *d)
+{
+    return d->p;
+}
+
 void DSA_get0_key(const DSA *d,
                   const BIGNUM **pub_key, const BIGNUM **priv_key)
 {
@@ -136,7 +142,15 @@ int DSA_SIG_set0(DSA_SIG *sig, BIGNUM *r, BIGNUM *s)
     SSL_FIELD_SET(sig,s)
     return 1;
 }
-
+#elif SSL_API_LT_111
+const BIGNUM *DSA_get0_p(const DSA *d)
+{
+    const BIGNUM *p;
+    const BIGNUM *q;
+    const BIGNUM *g;
+    DSA_get0_pqg(d, &p, &q, &g);
+    return p;
+}
 #endif
 
 /*
@@ -183,7 +197,7 @@ static void dnskey_dsa_from_dsa(struct dnskey_dsa_const *ydsa, const DSA *dsa)
     DSA_get0_key(dsa, &ydsa->pub_key, &ydsa->priv_key);
 }
 
-static void dnskey_dsa_finalise(struct dnskey_dsa *ydsa)
+static void dnskey_dsa_finalize(struct dnskey_dsa *ydsa)
 {
     if(ydsa->p != NULL) BN_free(ydsa->p);
     if(ydsa->q != NULL) BN_free(ydsa->q);
@@ -254,8 +268,9 @@ dnskey_dsa_genkey(u32 size)
 }
 
 static ya_result
-dnskey_dsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u8 *output)
+dnskey_dsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u8 *output_)
 {
+    u8 *output = output_;
     DSA_SIG *sig = DSA_do_sign(digest, digest_len, key->key.dsa);
 
     if(sig != NULL)
@@ -263,43 +278,40 @@ dnskey_dsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u
         const BIGNUM *sig_r;
         const BIGNUM *sig_s;
         
-        const BIGNUM *pub_key;       
-        
-        DSA_get0_key(key->key.dsa, &pub_key, NULL);
-
+        const BIGNUM *p;
+        p = DSA_get0_p(key->key.dsa);
         DSA_SIG_get0(sig, &sig_r, &sig_s);
-        
-        u32 t = BN_num_bytes(pub_key) >> 3;
-        u32 rn = BN_num_bytes(sig_r);
-        
+        u32 p_size_bytes = BN_num_bytes(p);
+        u32 t = (p_size_bytes - 64) >> 3;
+
         *output++ = t;
-        int sig_r_n = BN_bn2bin(sig_r, output);
-        if(sig_r_n < 20)
-        {
-            memset(&output[sig_r_n], 0, 20 - sig_r_n);
-        }
-        else if(sig_r_n > 20)
-        {
-            log_err("dsa: sign: %{dnsname}/%05i: unexpected signature R size (%i)", key->owner_name, key->tag, sig_r_n);
-            return DNSSEC_ERROR_DSASIGNATUREFAILED;
-        }
-        
-        output += 20;
-        
-        int sig_s_n = BN_bn2bin(sig_s, output);
-        if(sig_s_n < 20)
-        {
-            memset(&output[sig_s_n], 0, 20 - sig_s_n);
-        }
-        else if(sig_s_n > 20)
-        {
-            log_err("dsa: sign: %{dnsname}/%05i: unexpected signature S size (%i)", key->owner_name, key->tag, sig_s_n);
-            return DNSSEC_ERROR_DSASIGNATUREFAILED;
-        }
-        
+        const int bn_size = 20;
+
+        int r_size = BN_num_bytes(sig_r);
+        int r_pad = bn_size - r_size;
+        memset(output, 0, r_pad);
+        BN_bn2bin(sig_r, &output[r_pad]);
+        output += bn_size;
+
+        int s_size = BN_num_bytes(sig_s);
+        int s_pad = bn_size - s_size;
+        memset(output, 0, s_pad);
+        BN_bn2bin(sig_s, &output[s_pad]);
+        // output += bn_size;
+
         DSA_SIG_free(sig);
+
+        //ya_result output_size = (rn << 1) + 1;
+        ya_result output_size = 20 * 2 + 1;
+
+#if DEBUG
+        if(!key->vtbl->dnssec_key_verify_digest(key, digest, digest_len, output_, output_size))
+        {
+            log_err("CANNOT VERIFY OWN SIGNATURE!");
+        }
+#endif
         
-        return (rn << 1) + 1;
+        return output_size;
     }
     else
     {
@@ -309,7 +321,7 @@ dnskey_dsa_signdigest(const dnssec_key *key, const u8 *digest, u32 digest_len, u
         {
             char buffer[256];
             ERR_error_string_n(ssl_err, buffer, sizeof(buffer));
-            log_err("dsa: sign: %{dnsname}/%05i: error %08x %s", key->owner_name, key->tag, ssl_err, buffer);
+            log_err("dsa: sign: %{dnsname}/%05d: error %08x %s", key->owner_name, key->tag, ssl_err, buffer);
         }
 
         ERR_clear_error();
@@ -323,7 +335,7 @@ dnskey_dsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len,
 {
     yassert(signature_len <= DNSSEC_MAXIMUM_KEY_SIZE_BYTES);
     
-#ifdef DEBUG
+#if DEBUG
     log_debug6("dsa_verifydigest(K%{dnsname}-%03d-%05d, @%p, @%p)", key->owner_name, key->algorithm, key->tag, digest, signature);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG6, digest, digest_len, 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG6, signature, signature_len, 32);
@@ -345,7 +357,7 @@ dnskey_dsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len,
     
     if(t != 8)
     {
-        log_warn("DSA T!=8");
+        log_warn("DSA T!=8 (%i)", t);
     }
     
     signature_len--;        
@@ -371,7 +383,7 @@ dnskey_dsa_verifydigest(const dnssec_key *key, const u8 *digest, u32 digest_len,
             char buffer[256];
             ERR_error_string_n(ssl_err, buffer, sizeof(buffer));
 
-            log_debug("dsa: verify: %{dnsname}/%05i: error %08x %s", key->owner_name, key->tag, ssl_err, buffer);
+            log_debug("dsa: verify: %{dnsname}/%05d: error %08x %s", key->owner_name, key->tag, ssl_err, buffer);
         }
 
         ERR_clear_error();
@@ -483,7 +495,7 @@ dnskey_dsa_public_store(DSA* dsa, u8* output_buffer)
 
     if((abs(p_n - g_n) > 2) || (abs(p_n - y_n) > 2)) /* sometimes, there is one byte difference in storage */
     {
-        /// @todo 20161107 edf -- the caller should be aware of this and retry the generation (well before this one is called)
+        log_err("dnskey_dsa_public_store: DSA key size discrepancy");
         return 0;
     }
     
@@ -548,20 +560,20 @@ dnskey_dsa_size(const dnssec_key* key)
 static u32
 dnskey_dsa_public_size(const DSA* dsa)
 {
-    const BIGNUM* q;
     const BIGNUM* p;
+    const BIGNUM* q;
     const BIGNUM* g;
     const BIGNUM* y;
     
     DSA_get0_pqg(dsa, &p, &q, &g);
     DSA_get0_key(dsa, &y, NULL);
 
-    u32 q_n = BN_num_bytes(q);
     u32 p_n = BN_num_bytes(p);
+    u32 q_n = BN_num_bytes(q);
     u32 g_n = BN_num_bytes(g);
     u32 y_n = BN_num_bytes(y);
 
-    return 1 + q_n + p_n + g_n + y_n;
+    return 1 + p_n + q_n + g_n + y_n;
 }
 
 static u32
@@ -689,7 +701,7 @@ dnskey_dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin, d
         return nid;
     }
 
-#ifdef DEBUG
+#if DEBUG
     memset(rdata, 0xff, sizeof(rdata));
 #endif
 
@@ -715,9 +727,14 @@ dnskey_dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin, d
      *        are not taken in account
      */
 
-    u16 tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size + 4);
+    u16 tag = dnskey_get_tag_from_rdata(rdata, rdata_size + 4);
 
     dnssec_key* key = dnskey_newemptyinstance(algorithm, flags, origin); // RC
+
+    if(key == NULL)
+    {
+        return INVALID_ARGUMENT_ERROR;
+    }
 
     key->key.dsa = dsa;
     key->vtbl = &dsa_vtbl;
@@ -763,7 +780,6 @@ dnskey_dsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
             break;
         default:
             return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
-            break;
     }
     
     if((ydsa->p == NULL) ||
@@ -819,7 +835,7 @@ dnskey_dsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
          *        are not taken in account
          */
 
-        tag = dnskey_get_key_tag_from_rdata(rdata, rdata_size + 4);
+        tag = dnskey_get_tag_from_rdata(rdata, rdata_size + 4);
 
         key->tag = tag;
         key->nid = nid;
@@ -840,13 +856,13 @@ dnskey_dsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
 }
 
 static void
-dnskey_dsa_parse_finalise(struct dnskey_field_parser *parser)
+dnskey_dsa_parse_finalize(struct dnskey_field_parser *parser)
 {
     struct dnskey_dsa *ydsa = (struct dnskey_dsa*)parser->data;
     
     if(ydsa != NULL)
     {
-        dnskey_dsa_finalise(ydsa);
+        dnskey_dsa_finalize(ydsa);
         ZFREE(ydsa, struct dnskey_dsa);
     }
 }
@@ -855,7 +871,7 @@ static const struct dnskey_field_parser_vtbl dsa_field_parser_vtbl =
 {
     dnskey_dsa_parse_field,
     dnskey_dsa_parse_set_key,
-    dnskey_dsa_parse_finalise,
+    dnskey_dsa_parse_finalize,
     "DSA"
 };
 
@@ -863,7 +879,7 @@ void
 dnskey_dsa_parse_init(dnskey_field_parser *fp)
 {
     struct dnskey_dsa *ydsa;
-    ZALLOC_OR_DIE(struct dnskey_dsa *, ydsa, struct dnskey_dsa, KEYDSA_TAG);
+    ZALLOC_OBJECT_OR_DIE(ydsa, struct dnskey_dsa, KEYDSA_TAG);
     ZEROMEMORY(ydsa, sizeof(struct dnskey_dsa));
     fp->data = ydsa;
     fp->vtbl = &dsa_field_parser_vtbl;
@@ -892,7 +908,7 @@ dnskey_dsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnsse
     rdata += 4;
     rdata_size -= 4;
     
-    ya_result return_value = ERROR;
+    ya_result return_value = DNSSEC_ERROR_CANNOT_READ_KEY_FROM_RDATA;
 
     DSA *dsa = dnskey_dsa_public_load(rdata, rdata_size);
     
@@ -928,7 +944,7 @@ dnskey_dsa_newinstance(u32 size, u8 algorithm, u16 flags, const char* origin, dn
         return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
     }
     
-    ya_result return_value = ERROR;
+    ya_result return_value = DNSSEC_ERROR_KEY_GENERATION_FAILED;
 
     DSA *dsa = dnskey_dsa_genkey(size);
     

@@ -1,6 +1,6 @@
-<yadifa>
+<yadifa-ctrl>
    server 127.0.0.1
    tsig-key-name "abroad-admin-key"
-</yadifa>
+</yadifa-ctrl>
 
 include "keys.conf"

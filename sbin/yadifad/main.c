@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup yadifad Yet Another DNS Implementation for all
  * 
  *  @brief Yet Another DNS Implementation for all
@@ -44,12 +45,12 @@
 #define __USE_POSIX
 
 #include "server-config.h"
-#include "server-config.h"
-#include "config.h"
 
 #include <sys/types.h>
 #include <sys/time.h>
+#ifndef WIN32
 #include <sys/resource.h>
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -64,6 +65,7 @@
 #include <dnscore/async.h>
 #include <dnscore/service.h>
 #include <dnscore/logger-output-stream.h>
+#include <dnscore/socket-server.h>
 
 // #include <dnscore/dnskey_ecdsa.h>
 
@@ -72,10 +74,11 @@
 
 #include <dnscore/sys_get_cpu_count.h>
 
+#include <dnsdb/zdb.h>
+
 #if ZDB_HAS_DNSSEC_SUPPORT
 #include <dnsdb/dnssec.h>
 #include <dnsdb/dnssec-keystore.h>
-#include <dnsdb/zdb.h>
 #endif
 
 #include "server_error.h"
@@ -95,6 +98,14 @@
 #include "dynconf.h"
 #endif
 
+#include "process_class_ch.h"
+
+#include "zone-signature-policy.h"
+
+#if HAS_EVENT_DYNAMIC_MODULE
+#include "dynamic-module-handler.h"
+#endif
+
 #include "buildinfo.h"
 
 #define MODULE_MSG_HANDLE g_server_logger
@@ -106,14 +117,15 @@ static bool server_do_clean_exit = FALSE;
 int g_yadifa_exitcode = EXIT_SUCCESS;
 static bool own_pid = FALSE;
 
-static bool main_config_log_from_start = FALSE; // start logging asap
+static bool main_config_log_from_start = FALSE;     // start logging asap
+static u32  main_config_features = DNSCORE_ALL;     // start all services (can be reduced on early config)
+static bool main_config_help_requested = FALSE;     // no point in starting anything
 
 void config_logger_setdefault();
 void config_logger_cleardefault();
-
 int process_command_line(int argc, char **argv, config_data *config);
-
 int zalloc_init();
+void config_unregister_main();
 
 static void
 server_register_errors()
@@ -151,7 +163,7 @@ server_register_errors()
     error_register(ACL_WRONG_MASK,"ACL_WRONG_MASK");
     error_register(ACL_DUPLICATE_ENTRY,"ACL_DUPLICATE_ENTRY");
     error_register(ACL_RESERVED_KEYWORD,"ACL_RESERVED_KEYWORD");
-    error_register(ACL_TOO_MUCH_TOKENS,"ACL_TOO_MUCH_TOKENS");
+    error_register(ACL_TOO_MANY_TOKENS,"ACL_TOO_MANY_TOKENS");
     error_register(ACL_NAME_PARSE_ERROR,"ACL_NAME_PARSE_ERROR");
     error_register(ACL_UNKNOWN_TSIG_KEY,"ACL_UNKNOWN_TSIG_KEY");
     error_register(ACL_UPDATE_REJECTED,"ACL_UPDATE_REJECTED");
@@ -176,8 +188,10 @@ server_register_errors()
     error_register(POLICY_ILLEGAL_DATE_PARAMETERS, "POLICY_ILLEGAL_DATE_PARAMETERS");
     error_register(POLICY_ILLEGAL_DATE_COMPARE, "POLICY_ILLEGAL_DATE_COMPARE");
     error_register(POLICY_UNDEFINED, "POLICY_UNDEFINED");
+    error_register(POLICY_KEY_SUITE_UNDEFINED, "POLICY_KEY_SUITE_UNDEFINED");
     error_register(POLICY_NULL_REQUESTED, "POLICY_NULL_REQUESTED");
-    error_register(POLICY_ZONE_NOT_READY, "POLICY_ZONE_NOT_READY");    
+    error_register(POLICY_ZONE_NOT_READY, "POLICY_ZONE_NOT_READY");
+
 }
 
 static void
@@ -185,7 +199,7 @@ main_dump_info()
 {
     log_info("starting YADIFA " VERSION);
     log_info("built with " BUILD_OPTIONS);
-#if !defined(DEBUG)
+#if !DEBUG
     log_info("release build");
 #else
     log_info("debug build");
@@ -202,15 +216,27 @@ main_dump_info()
 #endif
 }
 
+static bool yadifad_config_on_section_loggers_read_done_once = FALSE;
+
 static ya_result
 yadifad_config_on_section_loggers_read(const char* name, int index)
 {
+    (void)name;
+    (void)index;
+
+    if(yadifad_config_on_section_loggers_read_done_once)
+    {
+        return SUCCESS;
+    }
+
     //formatln("yadifad_config_on_section_main_read(%s,%i)", name, index);
 
     ya_result                                                   ret;
+    pid_t                                                       pid;
     
-    if(FAIL(ret = pid_check_running_program(PROGRAM_NAME, g_config->pid_file))) /// @todo 20160127 edf -- needs to add pid_file stuff
+    if(FAIL(ret = pid_check_running_program(g_config->pid_file, &pid)))
     {
+        log_err("%s already running with pid: %lu (%s)", PROGRAM_NAME, pid, g_config->pid_file);
         return ret;
     }
     
@@ -238,10 +264,13 @@ yadifad_config_on_section_loggers_read(const char* name, int index)
     
     if(FAIL(ret = server_service_init()))
     {
+        log_err("failed to initialise network service: %r", ret);
         return ret;
     }
     
     database_service_init();
+
+    notify_service_init();
 
     /* Initialize signals used for inter process communication and
      * quitting the program
@@ -262,7 +291,16 @@ yadifad_config_on_section_loggers_read(const char* name, int index)
         return ret;
     }
 
-    notify_service_init();
+    notify_wait_servicing();
+    
+    signal_setup(); // hooks the signals
+
+#if DEBUG
+    println("yadifad_config_on_section_loggers_read done");
+    flushout();
+#endif
+
+    yadifad_config_on_section_loggers_read_done_once = TRUE;
 
     return CONFIG_CALLBACK_RESULT_CONTINUE;
 }
@@ -283,8 +321,7 @@ main_config(int argc, char *argv[])
 {
     ya_result ret;
     
-    
-    if(main_config_log_from_start)
+    if(main_config_log_from_start) // -L was used on the command line
     {
         config_logger_setdefault();
     }
@@ -292,10 +329,10 @@ main_config(int argc, char *argv[])
     /*
      *  Initialise configuration file and set standard values
      */
-        
+    
     if(FAIL(ret = yadifad_config_init()))
     {
-        osformatln(termerr, "error: %r", ret);
+        osformatln(termerr, "error: setting up configuration: %r", ret);
         flusherr();
 
         return ret;
@@ -316,21 +353,21 @@ main_config(int argc, char *argv[])
 
     if(FAIL(ret = yadifad_config_read(g_config->config_file)))
     {
-        osformatln(termerr, "error: %r", ret);
+        osformatln(termerr, "error: reading configuration: %r", ret);
         flusherr();
 
         return ret;
     }
     
-    if(FAIL(ret = yadifad_config_finalise()))
+    if(FAIL(ret = yadifad_config_finalize()))
     {
-        osformatln(termerr, "error: %r", ret);
+        osformatln(termerr, "error: processing configuration: %r", ret);
         flusherr();
 
         return ret;
     }
         
-#if 0 && defined(DEBUG)
+#if 0 && DEBUG
     config_print(termout);    
     osformatln(termout, "starting logging service");
 #endif
@@ -361,8 +398,9 @@ main_final_tests_is_directory_writable(const char* dir)
     snformat(tempfile, sizeof(tempfile), "%s/ydf.XXXXXX", dir);
     int tempfd;
     if((tempfd = mkstemp_ex(tempfile)) < 0)
-    {        
-        ttylog_err("error: '%s' is not writable: %r", dir, ERRNO_ERROR);
+    {
+        int err = ERRNO_ERROR;
+        ttylog_err("error: '%s' is not writable as (%d:%d): %r", dir, getuid(), getgid(), err);
         
         return FALSE;
     }
@@ -387,9 +425,13 @@ main_final_tests()
     {
         return DIRECTORY_NOT_WRITABLE;
     }
-    if(!main_final_tests_is_directory_writable(g_config->log_path))
+
+    if((g_config->server_flags & SERVER_FL_LOG_FILE_DISABLED) == 0)
     {
-        return DIRECTORY_NOT_WRITABLE;
+        if(!main_final_tests_is_directory_writable(g_config->log_path))
+        {
+            return DIRECTORY_NOT_WRITABLE;
+        }
     }
     if(!main_final_tests_is_directory_writable(g_config->xfr_path))
     {
@@ -417,7 +459,7 @@ main_exit()
     
     server_service_stop();
     
-    server_service_finalise();
+    server_service_finalize();
     
 #if HAS_DYNUPDATE_SUPPORT
     dynupdate_query_service_stop();
@@ -425,9 +467,24 @@ main_exit()
     
     notify_service_stop();
     
-    signal_handler_finalise();
-    notify_service_finalise();
-    database_service_finalise();
+#if HAS_EVENT_DYNAMIC_MODULE
+    dynamic_module_handler_finalize();
+#endif
+    
+    signal_handler_finalize();
+    notify_service_finalize();
+    database_service_finalize();
+
+#if HAS_DNSSEC_SUPPORT && ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
+    dnssec_policy_finalize();
+#endif
+    class_ch_set_hostname(NULL);    
+    class_ch_set_id_server(NULL);
+    class_ch_set_version(NULL);
+
+#if DNSCORE_HAS_NSID_SUPPORT
+    edns0_set_nsid(NULL, 0);
+#endif
     
     logger_flush();
         
@@ -446,6 +503,8 @@ main_exit()
 
             pid_file_destroy(g_config->pid_file);
         }
+        
+        //config_unregister_main();
 
         logger_flush();
 
@@ -453,7 +512,7 @@ main_exit()
         flusherr();
 
 #if HAS_ACL_SUPPORT
-        acl_free_definitions();
+        acl_definitions_free();
 #endif
         
         dnscore_finalize();
@@ -482,6 +541,7 @@ main_exit()
  *  @return EXIT_SUCCESS
  *  @return EXIT_FAILURE
  *  @return exit codes
+ *
  *
  */
 
@@ -523,15 +583,50 @@ main_check_build_settings()
  * @param argv
  */
 
-static void
-main_check_lock_from_start(int argc, const char **argv)
+static int
+main_early_argv_check(int argc, char *argv[])
 {
+    int ret = 0;
+    
     for(int i = 1; i < argc; ++i)
     {
         if(strcmp(argv[i], "-L") == 0)
         {
             main_config_log_from_start = TRUE;
         }
+        if(strcmp(argv[i], "-h") == 0)
+        {
+            main_config_help_requested = TRUE;
+            main_config_features = DNSCORE_TINYRUN;
+            ++ret;
+        }
+        else if(strcmp(argv[i], "--help") == 0)
+        {
+            main_config_help_requested = TRUE;
+            main_config_features = DNSCORE_TINYRUN;
+            ++ret;
+        }
+        else if(strcmp(argv[i], "-V") == 0)
+        {
+            main_config_features = DNSCORE_TINYRUN;
+        }
+        else if(strcmp(argv[i], "--version") == 0)
+        {
+            main_config_features = DNSCORE_TINYRUN;
+        }
+    }
+    
+    return ret;
+}
+
+static void
+main_ignore_signals_while_starting_up()
+{
+    int ignore_these[] = {SIGHUP, SIGUSR1, SIGINT, SIGTERM, SIGPIPE, 0};
+
+    for(int i = 0; ignore_these[i] != 0; ++i)
+    {
+        signal(ignore_these[i], SIG_IGN);
     }
 }
 
@@ -542,8 +637,6 @@ main(int argc, char *argv[])
     
 
 
-    /*    ------------------------------------------------------------    */
-    
     /**
      *  Initialises the core library:
      * _ checks basic architecture settings (endianness, types sizes, random generator, ...)
@@ -557,15 +650,27 @@ main(int argc, char *argv[])
      * _ resets and start the alarm/timer function
      */
     
-#ifdef DEBUG
+#if DEBUG
     puts("YADIFA debug build");
 #endif
     
     main_check_build_settings();
-        
-    dnscore_init();
     
-    main_check_lock_from_start(argc, (const char**)argv);
+    if(main_early_argv_check(argc, argv) != 0)
+    {
+        // print the help using printf & flush
+
+        dnscore_init_ex(DNSCORE_TINYRUN, argc, argv);
+        yadifad_print_usage(argv[0]);
+
+        return 1;
+    }
+
+    main_ignore_signals_while_starting_up();
+
+    dnscore_init_ex(main_config_features, argc, argv);
+
+    //main_check_log_from_start(argc, (const char**)argv);
         
     async_message_pool_init();
 
@@ -574,26 +679,35 @@ main(int argc, char *argv[])
     server_register_errors();
     
     // arms the exit handling function
+    
+#if HAS_EVENT_DYNAMIC_MODULE
+    dynamic_module_handler_init();
+#endif
 
     atexit(main_exit);
+    
+    // ?
+    // register all the services:
+    // server, database, ...
     
 #if HAS_DYNCONF_SUPPORT
     //dynconf_service_init();
     //dynconf_service_start();
 #endif    
     // configures, exit if ordered to (version/help or error)
+    //
     
     if((ret = main_config(argc, argv)) != SUCCESS)
     {
         return ISOK(ret)?EXIT_SUCCESS:EXIT_CONFIG_ERROR;
     }
 
-
-
     // This is always 'exit' on failure
-    if(FAIL(ret = pid_check_running_program(PROGRAM_NAME, g_config->pid_file)))
+    pid_t pid;
+    if(FAIL(ret = pid_check_running_program(g_config->pid_file, &pid)))
     {
-        return ret;
+        log_err("%s already running with pid: %lu (%s)", PROGRAM_NAME, pid, g_config->pid_file);
+        return EXIT_FAILURE; // don't use ret
     }
 
     /*
@@ -613,7 +727,25 @@ main(int argc, char *argv[])
         setup_flags |= SETUP_ROOT_CHANGE;
     }
 
-    if(FAIL(ret = server_setup_env(&g_config->pid, &g_config->pid_file, g_config->uid, g_config->gid, setup_flags)))
+#ifndef WIN32
+    {
+        struct rlimit limits;
+        getrlimit(RLIMIT_NOFILE, &limits);
+
+        if(limits.rlim_cur < 1024)
+        {
+            ttylog_err("file open limits are too small (%i < 1024) to even try to go on.", limits.rlim_cur);
+            return EXIT_FAILURE;
+        }
+
+        if(limits.rlim_cur < 65536)
+        {
+            ttylog_notice("file open limits could be higher (%i < 65536).  The highest the better.", limits.rlim_cur);
+        }
+    }
+#endif
+
+    if(FAIL(ret = server_setup_env(&g_config->pid, g_config->pid_file, g_config->uid, g_config->gid, setup_flags)))
     {
         log_err("server setup failed: %r", ret);
         return EXIT_FAILURE;
@@ -623,7 +755,6 @@ main(int argc, char *argv[])
     
 #if ZDB_HAS_DNSSEC_SUPPORT
     dnssec_keystore_setpath(g_config->keys_path);
-    dnssec_set_xfr_path(g_config->xfr_path);
 #endif
     logger_reopen();
 
@@ -647,42 +778,86 @@ main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
     
-    /**
-     * @todo 20140415 edf -- only do this if we are master for at least one zone
-     */
-    
-    log_info("starting notify service");
-
-    notify_service_start();
-    
-#if HAS_DYNUPDATE_SUPPORT
-    // dynupdate service
-    //
-    // called by the dns server
-    // uses the database
-    
-    dynupdate_query_service_start();
-#endif
-    
     /*
      * Starts the services, ending with the server.
      * Waits for the shutdown signal.
      */
     
-    int exit_code;
+    int exit_code = EXIT_SUCCESS;
 
+#if HAS_EVENT_DYNAMIC_MODULE
+    dynamic_module_startup();
+#endif
+    
 
-        
-        if(ISOK(ret = server_service_start_and_wait()))
+        while(!dnscore_shuttingdown())
         {
-            exit_code = EXIT_SUCCESS;
-        }
-        else
-        {
-            exit_code = EXIT_FAILURE;
-        }
+            log_info("starting notify service");
 
+            notify_service_start();
 
+#if HAS_DYNUPDATE_SUPPORT
+
+            log_info("starting dynupdate service");
+
+            // dynupdate service
+            //
+            // called by the dns server
+            // uses the database
+
+            dynupdate_query_service_start();
+#endif
+/*
+            if(ctrl_has_dedicated_listen())
+            {
+                // start ctrl server on its address(es) that does not match the DNS server addresses
+            }
+*/
+            log_info("starting server");
+
+            if(ISOK(ret = server_service_start_and_wait()))
+            {
+                exit_code = EXIT_SUCCESS;
+            }
+            else
+            {
+                exit_code = EXIT_FAILURE;
+            }
+
+#if HAS_DYNUPDATE_SUPPORT
+            log_info("stopping dynupdate service");
+
+            dynupdate_query_service_stop();
+
+            log_info("dynupdate service stopped");
+#endif
+
+            log_info("stopping notify service");
+
+            notify_service_stop();
+
+            if(!dnscore_shuttingdown())
+            {            
+                // server stop
+               // server context stop
+               server_context_stop();
+               // server context start
+               if(ISOK(ret = server_context_create()))
+               {
+                   // server start
+               }
+               else
+               {
+                   log_try_err("failed to start server: %r", ret);
+               }
+            }
+        }
+    
+
+    
+#if HAS_EVENT_DYNAMIC_MODULE
+    dynamic_module_shutdown();
+#endif
     
     /// @note DO NOT: logger_finalize() don't, it will be done automatically at exit
 

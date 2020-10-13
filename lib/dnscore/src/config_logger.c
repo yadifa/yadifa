@@ -1,45 +1,48 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 #include "dnscore/dnscore-config.h"
 #include <syslog.h>
 #include <unistd.h>
+#include <strings.h>
 
 #include "dnscore/logger.h"
 #include "dnscore/file_output_stream.h"
 #include "dnscore/logger_channel_stream.h"
 #include "dnscore/logger_channel_syslog.h"
 #include "dnscore/logger_channel_file.h"
+#include "dnscore/logger_channel_pipe.h"
 #include "dnscore/parsing.h"
 #include "dnscore/chroot.h"
 #include "dnscore/fdtools.h"
@@ -279,7 +282,7 @@ config_section_handles_postprocess(struct config_section_descriptor_s *csd)
 }
 
 static ya_result
-config_section_handles_finalise(struct config_section_descriptor_s *csd)
+config_section_handles_finalize(struct config_section_descriptor_s *csd)
 {
     // NOP
     (void)csd;
@@ -334,11 +337,11 @@ config_section_handles_set_wild(struct config_section_descriptor_s *csd, const c
         {
             u32 token_value;
             
-            if(ISOK(get_value_from_casename(syslog_channel_arguments_options, token, &token_value)))
+            if(ISOK(value_name_table_get_value_from_casename(syslog_channel_arguments_options, token, &token_value)))
             {
                 options |= token_value;
             }
-            else if(ISOK(get_value_from_casename(syslog_channel_arguments_facility, token, &token_value)))
+            else if(ISOK(value_name_table_get_value_from_casename(syslog_channel_arguments_facility, token, &token_value)))
             {
                 facility = token_value; // Facility is NOT a bit mask
             }
@@ -360,11 +363,12 @@ config_section_handles_set_wild(struct config_section_descriptor_s *csd, const c
     }
     else
     {
+#ifndef WIN32
         const char *chroot_base = chroot_get_path();
         
         uid_t uid = logger_get_uid();
         gid_t gid = logger_get_gid();
-        
+
         ya_result return_code;
         unsigned int access_rights;
         char fullpath[PATH_MAX];
@@ -376,53 +380,89 @@ config_section_handles_set_wild(struct config_section_descriptor_s *csd, const c
         size_t path_len = path_limit - value;
         size_t pathbase_len;
         
-        if(value[0] != '/')
-        {
-            pathbase_len = snformat(fullpath, sizeof(fullpath), "%s%s", chroot_base, log_path);
+        if(value[0] != '|')
+        {        
+            if(value[0] != '/')
+            {
+                pathbase_len = snformat(fullpath, sizeof(fullpath), "%s%s", chroot_base, log_path);
+            }
+            else
+            {
+                pathbase_len = snformat(fullpath, sizeof(fullpath), "%s", chroot_base);
+            }
+
+            if(pathbase_len + path_len + 1 >= sizeof(fullpath))
+            {
+                return CONFIG_FILE_PATH_TOO_BIG;
+            }
+
+            memcpy(&fullpath[pathbase_len], value, path_len);
+            path_len += pathbase_len;
+            fullpath[path_len] = '\0';
+
+            // parse the next word, it is supposed to be an octal number
+#if 1
+            errno = 0;
+
+            access_rights = strtol(path_limit, NULL, 8);
+            if(errno != 0)
+            {
+                access_rights = FILE_CHANNEL_DEFAULT_ACCESS_RIGHTS;
+            }
+#else
+            if(sscanf(path_limit, "%o", &access_rights) != 1)
+            {
+                access_rights = FILE_CHANNEL_DEFAULT_ACCESS_RIGHTS;
+            }
+#endif
+            
+            bool sync = FALSE;
+
+            // if the path starts with a slash, it's absolute, else it's relative
+            // to the log directory
+
+            logger_channel* file_channel = logger_channel_alloc();
+            if(FAIL(return_code = logger_channel_file_open(fullpath, uid, gid, access_rights, sync, file_channel)))
+            {
+                osformatln(termerr, "config: unable to open file channel '%s' (%d:%d %o) : %r", fullpath, uid, gid, access_rights, return_code);
+                flusherr();
+
+                return return_code;
+            }
+
+            logger_channel_register(key, file_channel);
         }
         else
         {
-            pathbase_len = snformat(fullpath, sizeof(fullpath), "%s", chroot_base);
-        }
-        
-        if(pathbase_len + path_len + 1 >= sizeof(fullpath))
-        {
-            return CONFIG_FILE_PATH_TOO_BIG;
-        }
-        
-        memcpy(&fullpath[pathbase_len], value, path_len);
-        path_len += pathbase_len;
-        fullpath[path_len] = '\0';
-        
-        
-        // parse the next word, it is supposed to be an octal number
-        
-        if(sscanf(path_limit, "%o", &access_rights) != 1)
-        {
-            access_rights = FILE_CHANNEL_DEFAULT_ACCESS_RIGHTS;
-        }
-        
-        // if the path starts with a slash, it's absolute, else it's relative
-        // to the log directory
+            ++value;
 
-        logger_channel* file_channel = logger_channel_alloc();
-        if(FAIL(return_code = logger_channel_file_open(fullpath, uid, gid, access_rights, FALSE, file_channel)))
-        {
-            osformatln(termerr, "config: unable to open file channel '%s' (%d:%d %o) : %r", fullpath, uid, gid, access_rights, return_code);
-            flusherr();
-            
-            return return_code;
+            logger_channel* file_channel = logger_channel_alloc();
+            if(FAIL(return_code = logger_channel_pipe_open(value, FALSE, file_channel)))
+            {
+                osformatln(termerr, "config: unable to open pipe channel '%s' : %r", fullpath, return_code);
+                flusherr();
+
+                return return_code;
+            }
+
+            logger_channel_register(key, file_channel);
         }
-        
-        logger_channel_register(key, file_channel);
+#else
+    osformatln(termerr, "config: pipes not supported");
+    return ERROR;
+#endif
     }
     
     return SUCCESS;
 }
 
 static ya_result
-config_section_handles_print_wild(struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_handles_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
 {
+    (void)csd;
+    (void)os;
+    (void)key;
+
     return FEATURE_NOT_IMPLEMENTED_ERROR;
 }
 
@@ -430,6 +470,7 @@ static ya_result
 config_section_loggers_init(struct config_section_descriptor_s *csd)
 {
     // NOP
+    (void)csd;
     
     return SUCCESS;
 }
@@ -438,6 +479,7 @@ static ya_result
 config_section_loggers_start(struct config_section_descriptor_s *csd)
 {
     // NOP
+    (void)csd;
     
     logger_section_found = TRUE;
     
@@ -464,7 +506,7 @@ config_section_loggers_postprocess(struct config_section_descriptor_s *csd)
 
 
 static ya_result
-config_section_loggers_finalise(struct config_section_descriptor_s *csd)
+config_section_loggers_finalize(struct config_section_descriptor_s *csd)
 {
     // NOP
     (void)csd;
@@ -474,6 +516,8 @@ config_section_loggers_finalise(struct config_section_descriptor_s *csd)
 static ya_result
 config_section_loggers_set_wild(struct config_section_descriptor_s *csd, const char *key, const char *value)
 {
+    (void)csd;
+
     u32 debuglevel = 0;
     ya_result return_code;
     
@@ -520,14 +564,14 @@ config_section_loggers_set_wild(struct config_section_descriptor_s *csd, const c
         }
         else
         {
-            value += return_code + 1; // note: false positive from cppcheck
+            value += (size_t)return_code + 1; // note: false positive from cppcheck
         }
         
         //
         
         u32 debuglevel_value;
         
-        if(FAIL(get_value_from_casename(logger_debuglevels, level, &debuglevel_value)))
+        if(FAIL(value_name_table_get_value_from_casename(logger_debuglevels, level, &debuglevel_value)))
         {
             return CONFIG_LOGGER_INVALID_DEBUGLEVEL;
         }
@@ -573,8 +617,12 @@ config_section_loggers_set_wild(struct config_section_descriptor_s *csd, const c
 }
 
 static ya_result
-config_section_loggers_print_wild(struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_loggers_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
 {
+    (void)csd;
+    (void)os;
+    (void)key;
+
     return FEATURE_NOT_IMPLEMENTED_ERROR;
 }
 
@@ -588,7 +636,7 @@ static const config_section_descriptor_vtbl_s config_section_handles_descriptor_
     config_section_handles_start,
     config_section_handles_stop,
     config_section_handles_postprocess,
-    config_section_handles_finalise
+    config_section_handles_finalize
 };
 
 static const config_section_descriptor_s config_section_handles_descriptor =
@@ -607,7 +655,7 @@ static const config_section_descriptor_vtbl_s config_section_loggers_descriptor_
     config_section_loggers_start,
     config_section_loggers_stop,
     config_section_loggers_postprocess,
-    config_section_loggers_finalise
+    config_section_loggers_finalize
 };
 
 static const config_section_descriptor_s config_section_loggers_descriptor =
@@ -634,9 +682,9 @@ config_register_logger(const char *null_or_channels_name, const char *null_or_lo
     
     ya_result return_code;
     
-    if(ISOK(return_code = config_register(&config_section_handles_descriptor, priority + 0)))
+    if(ISOK(return_code = config_register_const(&config_section_handles_descriptor, priority + 0)))
     {
-        return_code = config_register(&config_section_loggers_descriptor, priority + 1);
+        return_code = config_register_const(&config_section_loggers_descriptor, priority + 1);
     }
     
     return return_code;

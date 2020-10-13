@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup logger Logging functions
  *  @ingroup dnscore
  *  @brief
@@ -43,9 +44,10 @@
 #include "dnscore/dnscore-config.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <pthread.h>
+#include <dnscore/thread.h>
 
 #include "dnscore/logger_channel_stream.h"
+#include "dnscore/logger_handle.h"
 #include "dnscore/output_stream.h"
 #include "dnscore/format.h"
 
@@ -64,6 +66,9 @@ struct stream_data
 static ya_result
 logger_channel_stream_constmsg(logger_channel* chan, int level, char* text, u32 text_len, u32 date_offset)
 {
+    (void)level;
+    (void)date_offset;
+
     stream_data* sd = (stream_data*)chan->data;
 
     output_stream_write(&sd->os, (const u8*)text, text_len);
@@ -81,6 +86,8 @@ logger_channel_stream_constmsg(logger_channel* chan, int level, char* text, u32 
 static ya_result
 logger_channel_stream_vmsg(logger_channel* chan, int level, char* text, va_list args)
 {
+    (void)level;
+
     stream_data* sd = (stream_data*)chan->data;
 
     vosformat(&sd->os, text, args);
@@ -170,8 +177,14 @@ static const logger_channel_vtbl stream_vtbl =
 void
 logger_channel_stream_open(output_stream* os, bool forceflush, logger_channel* chan)
 {
+    if(chan == NULL)
+    {
+        osformatln(termerr, "tried to open stream on uninitialised channel");
+        return;
+    }
+    
     stream_data* sd;
-    MALLOC_OR_DIE(stream_data*, sd, sizeof(stream_data), 0x4d5254534e414843); /* CHANSTRM */
+    MALLOC_OBJECT_OR_DIE(sd, stream_data, 0x4d5254534e414843); /* CHANSTRM */
 
     sd->os.data = os->data;
     sd->os.vtbl = os->vtbl;
@@ -188,6 +201,3 @@ logger_channel_stream_open(output_stream* os, bool forceflush, logger_channel* c
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

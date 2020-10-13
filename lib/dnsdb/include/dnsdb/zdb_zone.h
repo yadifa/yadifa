@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief Functions used to manipulate a zone
@@ -67,6 +68,8 @@ extern "C"
 #endif
 
 #define ZDB_ZONETAG 0x454e4f5a52445a /* "ZDBZONE" */
+
+
 
 /**
  * @brief Get the zone with the given name
@@ -113,38 +116,6 @@ zdb_zone *zdb_zone_find_from_name(zdb *db, const char* name);
 void zdb_zone_record_add(zdb_zone* zone, dnslabel_vector_reference labels, s32 labels_top, u16 type, zdb_packed_ttlrdata* ttlrdata); /* class is implicit */
 
 /**
- * @brief Removes a record from a zone
- *
- * Removes a record from a zone and frees its memory.
- * 
- * In the current version (20160513) if the record itself should not be used as
- * the parameter is still used after removal for feedback to the journal.
- *
- * @param[in] zone the zone
- * @param[in] labels the stack of labels of the dns name
- * @param[in] labels_top the index of the top of the stack (the level)
- * @param[in] type the type of the record
- * @param[in] ttlrdata the ttl and rdata of the record.  NOTE: the caller stays the owner
- */
-
-ya_result zdb_zone_record_delete(zdb_zone *zone, dnslabel_vector_reference labels, s32 labels_top, u16 type, zdb_packed_ttlrdata* packed_ttlrdata);
-
-/**
- * @brief Removes a record from a zone
- *
- * Copies the record then removes it from the zone and frees its memory.
- * This allows removing safely a record using itself as a parameter.
- *
- * @param[in] zone the zone
- * @param[in] labels the stack of labels of the dns name
- * @param[in] labels_top the index of the top of the stack (the level)
- * @param[in] type the type of the record
- * @param[in] ttlrdata the ttl and rdata of the record.  NOTE: the caller stays the owner
- */
-
-ya_result zdb_zone_record_delete_self(zdb_zone *zone, dnslabel_vector_reference labels, s32 labels_top, u16 type, zdb_packed_ttlrdata* packed_ttlrdata);
-
-/**
  * @brief Search for a record in a zone
  *
  * Search for a record in a zone
@@ -157,6 +128,17 @@ ya_result zdb_zone_record_delete_self(zdb_zone *zone, dnslabel_vector_reference 
 
 /* 4 USES */
 zdb_packed_ttlrdata* zdb_zone_record_find(zdb_zone *zone, dnslabel_vector_reference labels, s32 labels_top, u16 type);
+
+/**
+ * Searches the zone for the zdb_rr_label of an fqdn if it exists.
+ *
+ * @param[in] zone the zone
+ * @parma[in] fqdn the fqdn of the the label
+ *
+ * @return a pointer the label, or NULL if it was not found.
+ */
+
+zdb_rr_label* zdb_zone_find_label_from_fqdn(zdb_zone *zone, const u8 *fqdn);
 
 /**
  * @brief Creates a zone
@@ -181,6 +163,8 @@ void zdb_zone_invalidate(zdb_zone *zone);
 
 
 void zdb_zone_truncate_invalidate(zdb_zone *zone);
+
+void zdb_zone_destroy_nolock(zdb_zone *zone);
 
 /**
  * @brief Destroys a zone and all its content
@@ -237,6 +221,7 @@ static inline void zdb_zone_getminttl(const zdb_zone *zone, s32 *minttl)
 #if ZDB_RECORDS_MAX_CLASS == 1
 static inline u16 zdb_zone_getclass(const zdb_zone *zone)
 {
+    (void)zone;
     return CLASS_IN;
 }
 
@@ -251,6 +236,43 @@ ya_result zdb_zone_store_axfr(zdb_zone *zone, output_stream* os);
 
 const zdb_packed_ttlrdata *zdb_zone_get_dnskey_rrset(zdb_zone *zone);
 
+
+static inline u8 zdb_zone_get_flags(const zdb_zone *zone)
+{
+    //mutex_lock(&zone->lock_mutex);
+    u8 ret = zone->_flags;
+    //mutex_unlock(&zone->lock_mutex);
+    return ret;
+}
+
+static inline u8  zdb_zone_set_flags(zdb_zone *zone, u8 flags)
+{
+    //mutex_lock(&zone->lock_mutex);
+    u8 ret = zone->_flags;
+    zone->_flags |= flags;
+    //mutex_unlock(&zone->lock_mutex);
+    return ret;
+}
+
+static inline u8 zdb_zone_clear_flags(zdb_zone *zone, u8 flags)
+{
+    //mutex_lock(&zone->lock_mutex);
+    u8 ret = zone->_flags;
+    zone->_flags &= ~flags;
+    //mutex_unlock(&zone->lock_mutex);
+    return ret;
+}
+
+static inline u8 zdb_zone_set_clear_flags(zdb_zone *zone, u8 set_flags, u8 clear_flags)
+{
+    //mutex_lock(&zone->lock_mutex);
+    u8 ret = zone->_flags;
+    zone->_flags &= ~clear_flags;
+    zone->_flags |= set_flags;
+    //mutex_unlock(&zone->lock_mutex);
+    return ret;
+}
+
 /**
  * Tells if the apex of the zone has an NSEC3 extension
  * 
@@ -261,7 +283,7 @@ const zdb_packed_ttlrdata *zdb_zone_get_dnskey_rrset(zdb_zone *zone);
 static inline bool zdb_zone_is_nsec3(const zdb_zone* zone)
 {
 #if ZDB_HAS_NSEC3_SUPPORT
-    return (zone->apex->flags & ZDB_RR_LABEL_NSEC3) != 0;
+    return (zone->apex->_flags & ZDB_RR_LABEL_NSEC3) != 0;
 #else
     return FALSE;
 #endif
@@ -277,7 +299,7 @@ static inline bool zdb_zone_is_nsec3(const zdb_zone* zone)
 static inline bool zdb_zone_is_nsec3_optout(const zdb_zone* zone)
 {
 #if ZDB_HAS_NSEC3_SUPPORT
-    return ((zone->apex->flags & ZDB_RR_LABEL_NSEC3_OPTOUT) != 0);
+    return ((zone->apex->_flags & ZDB_RR_LABEL_NSEC3_OPTOUT) != 0);
 #else
     return FALSE;
 #endif
@@ -293,7 +315,7 @@ static inline bool zdb_zone_is_nsec3_optout(const zdb_zone* zone)
 static inline bool zdb_zone_is_nsec3_optin(const zdb_zone* zone)
 {
 #if ZDB_HAS_NSEC3_SUPPORT
-    return ((zone->apex->flags & ZDB_RR_LABEL_NSEC3_OPTOUT) == 0);
+    return ((zone->apex->_flags & ZDB_RR_LABEL_NSEC3_OPTOUT) == 0);
 #else
     return FALSE;
 #endif
@@ -338,9 +360,9 @@ static inline bool zdb_zone_has_nsec3_chain(const zdb_zone *zone)
  * @return 
  */
 
-static inline bool zdb_zone_has_nsec3_optout_chain(const zdb_zone *zone)
+static inline bool zdb_zone_has_nsec3_optout_chain(zdb_zone *zone)
 {
-    return (zone->nsec.nsec3 != NULL) && (zone->_flags & ZDB_ZONE_HAS_OPTOUT_COVERAGE); /// and ?
+    return (zone->nsec.nsec3 != NULL) && (zdb_zone_get_flags(zone) & ZDB_ZONE_HAS_OPTOUT_COVERAGE); /// and ?
 }
 
 static inline bool zdb_zone_has_nsec3_records(const zdb_zone *zone)
@@ -362,6 +384,27 @@ static inline bool zdb_zone_has_nsec3param_records(const zdb_zone *zone)
     return zdb_record_find(&zone->apex->resource_record_set, TYPE_NSEC3PARAM) != NULL;
 }
 
+static inline bool zdb_zone_maintenance_queued(zdb_zone *zone)
+{
+    bool ret = (zdb_zone_get_flags(zone) & ZDB_ZONE_MAINTAIN_QUEUED) != 0;
+    return ret;
+}
+
+/**
+ * Returns TRUE if the zne was not already marked as maintained
+ */
+
+static inline bool zdb_zone_set_maintenance_queued(zdb_zone *zone)
+{
+    bool not_already_set = (zdb_zone_set_flags(zone, ZDB_ZONE_MAINTAIN_QUEUED) & ZDB_ZONE_MAINTAIN_QUEUED) == 0;
+    return not_already_set;
+}
+
+static inline void zdb_zone_clear_maintenance_queued(zdb_zone *zone)
+{
+    zdb_zone_clear_flags(zone, ZDB_ZONE_MAINTAIN_QUEUED);
+}
+
 #endif
 
 /**
@@ -374,7 +417,7 @@ static inline bool zdb_zone_has_nsec3param_records(const zdb_zone *zone)
 static inline bool zdb_zone_is_nsec(const zdb_zone *zone)
 {
 #if ZDB_HAS_NSEC_SUPPORT
-    return (zone->apex->flags & ZDB_RR_LABEL_NSEC) != 0;
+    return (zone->apex->_flags & ZDB_RR_LABEL_NSEC) != 0;
 #else
     return FALSE;
 #endif
@@ -400,6 +443,8 @@ static inline bool zdb_zone_has_nsec_records(const zdb_zone *zone)
 
 #endif
 
+#if HAS_RRSIG_MANAGEMENT_SUPPORT
+
 /**
  * True for zones that are to be maintained.
  * This covers DNSSEC zones, but also zones in the process of being
@@ -409,39 +454,84 @@ static inline bool zdb_zone_has_nsec_records(const zdb_zone *zone)
  * @return 
  */
 
-static inline bool zdb_zone_is_maintained(const zdb_zone *zone)
+static inline bool zdb_zone_is_maintained(zdb_zone *zone)
 {
-    return (zone->apex->flags & ZDB_RR_LABEL_MAINTAINED) != 0;
+    bool ret = (zdb_zone_get_flags(zone) & ZDB_ZONE_MAINTAINED) != 0;
+    return ret;
 }
 
-static inline void zdb_zone_set_maintained(const zdb_zone *zone, bool maintained)
+static inline void zdb_zone_set_maintained(zdb_zone *zone, bool maintained)
 {
     if(maintained)
     {
-        zone->apex->flags |= ZDB_RR_LABEL_MAINTAINED;
+        zdb_zone_set_flags(zone, ZDB_ZONE_MAINTAINED);
     }
     else
     {
-        zone->apex->flags &= ~ZDB_RR_LABEL_MAINTAINED;
+        zdb_zone_clear_flags(zone, ZDB_ZONE_MAINTAINED);
     }
+}
+
+static inline bool zdb_zone_is_maintenance_paused(zdb_zone *zone)
+{
+    u8 flags = zdb_zone_get_flags(zone);
+    bool ret = (flags & (ZDB_ZONE_MAINTENANCE_PAUSED|ZDB_ZONE_MAINTAINED)) == ZDB_ZONE_MAINTENANCE_PAUSED;
+    return ret;
+}
+
+static inline void zdb_zone_set_maintenance_paused(zdb_zone *zone, bool maintenance_paused)
+{
+    mutex_lock(&zone->lock_mutex);
+    if(maintenance_paused)
+    {
+        zdb_zone_set_clear_flags(zone, ZDB_ZONE_MAINTENANCE_PAUSED, ZDB_ZONE_MAINTAINED);
+    }
+    else
+    {
+        zdb_zone_set_clear_flags(zone, ZDB_ZONE_MAINTAINED, ZDB_ZONE_MAINTENANCE_PAUSED);
+    }
+    mutex_unlock(&zone->lock_mutex);
 }
 
 static inline void zone_set_maintain_mode(zdb_zone *zone, u8 mode)
 {
     yassert((mode & ZDB_ZONE_MAINTAIN_MASK) == mode);
-    zone->_flags &= ~ZDB_ZONE_MAINTAIN_MASK;
-    zone->_flags |= mode;
+    zdb_zone_set_clear_flags(zone, mode, ZDB_ZONE_MAINTAIN_MASK);
 }
+
+static inline u8 zone_get_maintain_mode(zdb_zone *zone)
+{
+    u8 ret = zdb_zone_get_flags(zone) & ZDB_ZONE_MAINTAIN_MASK;
+    return ret;
+}
+
+#else // HAS_RRSIG_MANAGEMENT_SUPPORT
+
+static inline bool zdb_zone_is_maintained(const zdb_zone *zone)
+{
+    (void)zone;
+    return FALSE;
+}
+
 
 static inline u8 zone_get_maintain_mode(const zdb_zone *zone)
 {
-    return zone->_flags & ZDB_ZONE_MAINTAIN_MASK;
+    (void)zone;
+    return 0;
 }
 
-static inline bool zdb_zone_is_dnssec(const zdb_zone *zone)
+static inline void zone_set_maintain_mode(zdb_zone *zone, u8 mode)
+{
+    (void)zone;
+    (void)mode;
+}
+
+#endif
+
+static inline bool zdb_zone_is_dnssec(zdb_zone *zone)
 {
 #if ZDB_HAS_DNSSEC_SUPPORT
-    return (zone->apex->flags & (ZDB_RR_LABEL_NSEC | ZDB_RR_LABEL_NSEC3)) != 0;
+    return (zone->apex->_flags & (ZDB_RR_LABEL_NSEC | ZDB_RR_LABEL_NSEC3)) != 0;
 #else
     return FALSE;
 #endif    
@@ -451,17 +541,18 @@ static inline void zdb_zone_set_rrsig_push_allowed(zdb_zone *zone, bool allowed)
 {
     if(allowed)
     {
-        zone->_flags |= ZDB_ZONE_RRSIG_PUSH_ALLOWED;
+        zdb_zone_set_flags(zone, ZDB_ZONE_RRSIG_PUSH_ALLOWED);
     }
     else
     {
-        zone->_flags &= ~ZDB_ZONE_RRSIG_PUSH_ALLOWED;
+        zdb_zone_clear_flags(zone, ZDB_ZONE_RRSIG_PUSH_ALLOWED);
     }
 }
 
-static inline bool zdb_zone_get_rrsig_push_allowed(const zdb_zone *zone)
+static inline bool zdb_zone_get_rrsig_push_allowed(zdb_zone *zone)
 {
-    return (zone->_flags & ZDB_ZONE_RRSIG_PUSH_ALLOWED) != 0;
+    bool ret = zdb_zone_get_flags(zone) & ZDB_ZONE_RRSIG_PUSH_ALLOWED;
+    return ret;
 }
 
 bool zdb_zone_isinvalid(zdb_zone *zone);
@@ -518,7 +609,7 @@ void zdb_zone_update_keystore_keys_from_zone(zdb_zone *zone, u8 secondary_lock);
 
 #endif
 
-#ifdef DEBUG
+#if DEBUG
 
 /**
  * DEBUG

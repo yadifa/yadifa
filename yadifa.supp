@@ -1,0 +1,85 @@
+{
+	getpwnam_r
+	Memcheck:Leak
+	fun:getpwnam*
+}
+{
+	getgrnam_r
+	Memcheck:Leak
+	fun:getgrnam*
+}
+{
+	__nss_lookup_function
+	Memcheck:Leak
+	fun:malloc
+	fun:__nss_lookup_function 
+}
+{
+	__nss_lookup_function too
+	Memcheck:Leak
+	fun:malloc
+	fun:tsearch
+	fun:__nss_lookup_function 
+}
+{
+	__nss_database_lookup
+	Memcheck:Leak
+	fun:malloc
+	fun:nss_parse_service_list
+	fun:__nss_database_lookup
+}
+{
+	backtrace 
+	Memcheck:Leak
+	fun:malloc
+	fun:backtrace_symbols
+}
+{
+	openssl
+	Memcheck:Leak
+	fun:malloc
+	fun:CRYPTO_malloc
+}
+{
+	bogusrace1
+	Helgrind:Race
+	fun:sighandler_setxid
+	fun:*
+	obj:/usr/lib/libpthread-2.17.so
+	obj:*
+}
+{
+   create_pid_file
+   Helgrind:Race
+   fun:*
+   fun:create_pid_file
+   fun:*
+}
+{
+   there_is_a_reason_its_called_random
+   Helgrind:Race
+   fun:random_init_auto
+   fun:*
+   obj:/usr/lib/valgrind/vgpreload_helgrind-amd64-linux.so
+}
+{
+   ignore_libcrypto_conditional_jump_errors
+   Memcheck:Cond
+   ...
+   obj:/usr/lib/libcrypto.so.1.0.0
+}
+{
+   ignore_libcrypto_value8_jump_errors
+   Memcheck:Value8
+   ...
+   obj:/usr/lib/libcrypto.so.1.0.0
+}
+{
+    ignore_pthread_create
+    Memcheck:Leak
+    fun:calloc
+    fun:allocate_dtv
+    fun:_dl_allocate_tls
+    fun:pthread_create@GLIBC_2.2.5
+}
+

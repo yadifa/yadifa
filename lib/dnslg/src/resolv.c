@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -124,11 +125,11 @@ resolv_lookup_name_server(host_address **dest)
 
     // 2. STORE THE IP ADDRESS(ES) IN "dest"
     
-    MALLOC_OR_DIE(host_address*, address, sizeof(host_address), HOSTADDR_TAG);
+    MALLOC_OBJECT_OR_DIE(address, host_address, HOSTADDR_TAG);
 
     address->next = NULL;
 
-#if HAS_TSIG_SUPPORT
+#if DNSCORE_HAS_TSIG_SUPPORT
     address->tsig = NULL;
 #endif
 
@@ -163,7 +164,7 @@ ya_result
 resolv_init(resolver_s *resolv)
 {
     ZEROMEMORY(resolv, sizeof(struct resolver_s));
-/*** @todo 20130823 edf -- implement
+/*** @todo 20130823 gve -- implement
     resolv->option_attempts =  RES_OPTION_ATTEMPTS_DEFAULT;
     resolv->option_ndots    = RES_OPTION_NDOTS_DEFAULT;
     resolv->option_timeout  =  RES_TIMEOUT_DEFAULT;
@@ -282,7 +283,7 @@ resolv_address(host_address *src, host_address *dst, int ip_flags)
     // 2. GET THE IP ADDRESS 
     //
     dnsname_to_cstr(fqdn, src->ip.dname.dname);
-#ifdef DEBUG
+#if DEBUG
     formatln("dname: %{hostaddr}", src);
 #endif
 
@@ -296,7 +297,7 @@ resolv_address(host_address *src, host_address *dst, int ip_flags)
     {
         perror ("getaddrinfo");
 
-        return -1; // @todo 20140509 edf -- nicer error code --- gery
+        return -1; // @todo 20140509 gve -- nicer error code ---
     }
 
 
@@ -354,7 +355,7 @@ resolv_host_address_list(host_address *src, host_address *dst)
 
             if(FAIL(return_code = resolv_address(src, dst, HAS_IPV4 | HAS_IPV6)))
             {
-#ifdef DEBUG
+#if DEBUG
                 formatln("RESOLV ADDRESS FAULT");
 #endif
                 return return_code;

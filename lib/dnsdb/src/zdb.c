@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnsdb Zone database
  *  @brief The zone dataBase
  *
@@ -43,7 +44,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <strings.h>
+//#include <strings.h>
 
 #include <dnscore/logger.h>
 #include <dnscore/format.h>
@@ -77,6 +78,7 @@ extern logger_handle* g_database_logger;
 #if ZDB_OPENSSL_SUPPORT
 #include <openssl/ssl.h>
 #include <openssl/engine.h>
+#include <dnscore/openssl.h>
 #include <dnscore/dnskey.h> // needed
 
 #ifndef SSL_API
@@ -98,13 +100,13 @@ extern logger_handle* g_database_logger;
 #endif
 
 #if HAS_BUILD_TIMESTAMP
-#ifdef DEBUG
+#if DEBUG
 const char *dnsdb_lib = "dnsdb " __DATE__ " " __TIME__ " debug";
 #else
 const char *dnsdb_lib = "dnsdb " __DATE__ " " __TIME__ " release";
 #endif
 #else
-#ifdef DEBUG
+#if DEBUG
 const char *dnsdb_lib = "dnsdb debug";
 #else
 const char *dnsdb_lib = "dnsdb release";
@@ -115,7 +117,7 @@ void dnssec_keystore_init();
 
 #if SSL_API_LT_110
 
-static pthread_mutex_t *ssl_mutex = NULL;
+static mutex_t *ssl_mutex = NULL;
 static int ssl_mutex_count = 0;
 
 static void
@@ -125,27 +127,27 @@ ssl_lock(int mode, int type, const char* file, int line)
     {
         /* lock */
 
-        pthread_mutex_lock(&ssl_mutex[type]);
+        mutex_lock(&ssl_mutex[type]);
     }
     else
     {
         /* unlock */
 
-        pthread_mutex_unlock(&ssl_mutex[type]);
+        mutex_unlock(&ssl_mutex[type]);
     }
 }
 
 static unsigned long
 ssl_thread_id()
 {
-    return (unsigned long)pthread_self();
+    return (unsigned long)thread_self();
 }
 
 #endif
 
 #endif
 
-logger_handle* g_database_logger = NULL;
+logger_handle* g_database_logger = LOGGER_HANDLE_SINK;
 
 /** @brief Initializes the database internals.
  *
@@ -207,10 +209,6 @@ zdb_init_ex(u32 thread_pool_count)
 
     zdb_register_errors();
 
-    /* Init the hash tables */
-
-    hash_init();
-
 #if ZDB_OPENSSL_SUPPORT
 
     /* Init openssl */
@@ -226,13 +224,13 @@ zdb_init_ex(u32 thread_pool_count)
 
     ssl_mutex_count = CRYPTO_num_locks();
 
-    MALLOC_OR_DIE(pthread_mutex_t*, ssl_mutex, ssl_mutex_count * sizeof(pthread_mutex_t), ZDB_SSLMUTEX_TAG);
+    MALLOC_OR_DIE(mutex_t*, ssl_mutex, ssl_mutex_count * sizeof(mutex_t), ZDB_SSLMUTEX_TAG);
 
     int i;
 
     for(i = 0; i < ssl_mutex_count; i++)
     {
-        pthread_mutex_init(&ssl_mutex[i], NULL);
+        mutex_init(&ssl_mutex[i]);
     }
 
     CRYPTO_set_id_callback(ssl_thread_id);
@@ -265,14 +263,16 @@ zdb_finalize()
 
     zdb_init_done = FALSE;
 
-    journal_finalise();
-    
-    zdb_zone_garbage_finalize();
-        
 #if ZDB_HAS_DNSSEC_SUPPORT
+#if DEBUG
     dnssec_keystore_destroy();
     dnssec_keystore_resetpath();
 #endif
+#endif
+
+    zdb_zone_garbage_finalize();
+
+    journal_finalize();
 
 #if ZDB_OPENSSL_SUPPORT
 
@@ -288,14 +288,14 @@ zdb_finalize()
 
     for(i = 0; i < ssl_mutex_count; i++)
     {
-        pthread_mutex_destroy(&ssl_mutex[i]);
+        mutex_destroy(&ssl_mutex[i]);
     }
     
     ssl_mutex_count = 0;
 
     free(ssl_mutex);
 #endif
-    
+  
     ENGINE_cleanup();
 
 #endif
@@ -314,7 +314,7 @@ zdb_create(zdb* db)
 {
     zdb_zone_label* zone_label;
 
-    ZALLOC_OR_DIE(zdb_zone_label*, zone_label, zdb_zone_label, ZDB_ZONELABEL_TAG);
+    ZALLOC_OBJECT_OR_DIE(zone_label, zdb_zone_label, ZDB_ZONELABEL_TAG);
     ZEROMEMORY(zone_label, sizeof(zdb_zone_label));
     zone_label->name = dnslabel_zdup(ROOT_LABEL); /* . */
     dictionary_init(&zone_label->sub);
@@ -327,6 +327,21 @@ zdb_create(zdb* db)
     group_mutex_init(&db->mutex);
 }
 
+/**
+ * 
+ * Puts a zone in the DB.
+ * 
+ * If a zone with the same name did exist, returns the old zone (to be released)
+ * and replaces it with the one given as a parameter.
+ * 
+ * This function temporarily locks the database for writing.
+ * The zone added gets its RC increased.
+ * 
+ * @param db the database
+ * @param zone the zone to mount (will be RC++)
+ * @return the previously mounted zone (to be RC--)
+ */
+
 zdb_zone *
 zdb_set_zone(zdb *db, zdb_zone* zone)
 {
@@ -337,7 +352,7 @@ zdb_set_zone(zdb *db, zdb_zone* zone)
     zdb_zone *old_zone = label->zone;
     zdb_zone_acquire(zone);
     label->zone = zone;
-#ifdef DEBUG
+#if DEBUG
     log_debug("zdb: added zone %{dnsname}@%p", zone->origin, zone);
 #endif
     zdb_unlock(db, ZDB_MUTEX_WRITER);
@@ -356,7 +371,7 @@ zdb_remove_zone(zdb *db, dnsname_vector *name)
     {
         old_zone = label->zone;        
         label->zone = NULL;
-#ifdef DEBUG
+#if DEBUG
         log_debug("zdb: removed zone %{dnsnamevector}@%p", name, old_zone);
 #endif
         if(ZONE_LABEL_IRRELEVANT(label))
@@ -383,6 +398,8 @@ zdb_remove_zone_from_dnsname(zdb *db, const u8 *fqdn)
     
     return zone;
 }
+
+#if 1 /// @note 20190109 edf -- cannot be marked as OBSOLETE as the function is used on another project.
 
 /** @brief Search for a match in the database
  *
@@ -461,6 +478,8 @@ zdb_query_ip_records(zdb* db, const u8* name_, zdb_packed_ttlrdata* * restrict t
     
     return ZDB_ERROR_KEY_NOTFOUND;
 }
+
+#endif // OBSOLETE
 
 /**
  * 
@@ -599,7 +618,7 @@ void zdb_signature_check(int so_zdb, int so_zdb_zone, int so_zdb_zone_label, int
     zdb_signature_check_one("mutex_t", sizeof(mutex_t), so_mutex_t);
 }
 
-#ifdef DEBUG
+#if DEBUG
 
 /** @brief DEBUG: Prints the content of the database.
  *

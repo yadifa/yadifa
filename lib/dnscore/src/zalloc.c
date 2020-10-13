@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup zalloc very fast, no-overhead specialised memory allocation functions
  *  @ingroup dnscore
  *  @brief no-overhead specialised allocation functions
@@ -55,8 +56,9 @@
  */
 
 #include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore-config-features.h"
 
-#include <pthread.h>
+#include "dnscore/thread.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -78,10 +80,10 @@ extern logger_handle* g_system_logger;
 #include "dnscore/ptr_set_debug.h"
 
 #define ZALLOC_DEBUG                 1
-#define ZDB_DEBUG_ZALLOC_TRASHMEMORY 1
+#define DNSCORE_DEBUG_ZALLOC_TRASHMEMORY 1
 #else
 #define ZALLOC_DEBUG                 0
-#define ZDB_DEBUG_ZALLOC_TRASHMEMORY 0
+#define DNSCORE_DEBUG_ZALLOC_TRASHMEMORY 0
 #endif
 
 #if HAS_ZALLOC_STATISTICS_SUPPORT
@@ -124,7 +126,7 @@ extern logger_handle* g_system_logger;
 #ifdef MAP_ANON
 #define MAP_ANONYMOUS MAP_ANON
 #else
-#error MMAP MAP_ANONYMUS not supported.  Please disable zalloc usage until an alternative way is implemented.
+#error MMAP MAP_ANONYMOUS not supported.  Please disable zalloc usage until an alternative way is implemented.
 #endif
 #endif
 
@@ -177,7 +179,7 @@ static u32 lazy_count[ADJUSTED_ALLOC_PG_SIZE_COUNT];
 static u32 smallest_size[ADJUSTED_ALLOC_PG_SIZE_COUNT];
 #endif
 
-static pthread_mutex_t line_mutex[ADJUSTED_ALLOC_PG_SIZE_COUNT];
+static mutex_t line_mutex[ADJUSTED_ALLOC_PG_SIZE_COUNT];
 
 #if ZALLOC_STATISTICS
 static volatile u64 zalloc_memory_allocated = 0;
@@ -187,6 +189,19 @@ static mutex_t zalloc_statistics_mtx = MUTEX_INITIALIZER;
 
 static int system_page_size = 0;
 static volatile bool zalloc_init_done = FALSE;
+
+static inline void* zalloc_line_head_get(u32 page_index)
+{
+    void* ret = line_sll[page_index];
+    return ret;
+}
+
+static inline void zalloc_line_head_set(u32 page_index, void *ptr)
+{
+    yassert(ptr != NULL);
+    line_sll[page_index] = ptr;
+}
+
 
 #if HAS_ZALLOC_DEBUG_SUPPORT
 
@@ -214,7 +229,7 @@ zalloc_ptr_set_debug_range_compare(const void *node_a, const void *node_b)
 }
 
 ptr_set_debug zalloc_pages_set = { NULL, zalloc_ptr_set_debug_range_compare};
-pthread_mutex_t zalloc_pages_set_mtx = PTHREAD_MUTEX_INITIALIZER;
+mutex_t zalloc_pages_set_mtx = MUTEX_INITIALIZER;
 #endif
 
 int
@@ -228,8 +243,11 @@ zalloc_init()
     zalloc_init_done = TRUE;
     
     // lcm is in this file
-    
+#ifndef WIN32
     system_page_size = getpagesize();
+#else
+    system_page_size = 4096;
+#endif
     
     if(system_page_size > ZALLOC_MMAP_BLOC_SIZE)
     {
@@ -256,14 +274,14 @@ zalloc_init()
         lazy_count[i] = 0;
         smallest_size[i] = lcm_page_chunk;
 #endif
-        pthread_mutex_init(&line_mutex[i], NULL);
+        mutex_init(&line_mutex[i]);
     }
     
     return SUCCESS;
 }
 
 void
-zalloc_finalise()
+zalloc_finalize()
 {
 }
 
@@ -297,16 +315,16 @@ zalloc_lines(u32 page_index)
         zalloc_range_s *range = malloc(sizeof(zalloc_range_s));
         range->from = (intptr)map_pointer;
         range->to = range->from + size - 1;
-        pthread_mutex_lock(&zalloc_pages_set_mtx);
-        ptr_node_debug *node = ptr_set_debug_avl_insert(&zalloc_pages_set, range);
+        mutex_lock(&zalloc_pages_set_mtx);
+        ptr_node_debug *node = ptr_set_debug_insert(&zalloc_pages_set, range);
         node->value = (void*)(intptr)page_index;
-        pthread_mutex_unlock(&zalloc_pages_set_mtx);
+        mutex_unlock(&zalloc_pages_set_mtx);
 #endif
        
 #if ZALLOC_STATISTICS
-        pthread_mutex_lock(&zalloc_statistics_mtx);
+        mutex_lock(&zalloc_statistics_mtx);
         mmap_count++;
-        pthread_mutex_unlock(&zalloc_statistics_mtx);
+        mutex_unlock(&zalloc_statistics_mtx);
 #endif
     
         if(map_pointer == MAP_FAILED)
@@ -323,7 +341,7 @@ zalloc_lines(u32 page_index)
             {
                 osformatln(termerr, "zalloc_lines(%u,%u) madvise(%p,%x,%i) failed with %r", size, chunk_size, map_pointer, size, MADV_NOHUGEPAGE, ERRNO_ERROR);
             }
-#ifdef DEBUG
+#if DEBUG
             else
             {
                 osformatln(termout, "zalloc_lines(%u,%u) madvise(%p,%x,%i) failed with %r", size, chunk_size, map_pointer, size, MADV_NOHUGEPAGE, ERRNO_ERROR);
@@ -385,7 +403,7 @@ zalloc_lines(u32 page_index)
 
     *header = (void*)(~0); // the last header points to an impossible address    
 
-    line_sll[page_index] = map_pointer;
+    zalloc_line_head_set(page_index, map_pointer);
 }
 
 /**
@@ -409,7 +427,7 @@ zalloc_line(u32 page_index)
     page_index++;               // debug requires 8 more bytes
 #endif
     
-    pthread_mutex_lock(&line_mutex[page_index]);
+    mutex_lock(&line_mutex[page_index]);
 
     if(line_count[page_index] == 0)
     {
@@ -419,9 +437,14 @@ zalloc_line(u32 page_index)
     line_count[page_index]--;
 
     yassert(line_count[page_index] >= 0);
-    
-    void **ret = line_sll[page_index];
-    line_sll[page_index] = *ret;
+    // get the first free slot as a pointer to the next free slot
+    void **ret = zalloc_line_head_get(page_index);
+
+    yassert(ret != NULL);   // it should not be NULL
+                            // the next free slot can be NULL iff page_index == 0
+    yassert((page_index == 0) || ((page_index > 0) && (*ret != NULL)));
+
+    zalloc_line_head_set(page_index, *ret);
 
     *ret = NULL; /* erases ZALLOC pointer */
 
@@ -432,17 +455,17 @@ zalloc_line(u32 page_index)
     ret = (void**)(hdr + 1);    // the address returned (without the DEBUG header)
 #endif
 
-#if ZDB_DEBUG_ZALLOC_TRASHMEMORY
+#if DNSCORE_DEBUG_ZALLOC_TRASHMEMORY
     memset(ret, 0xac, ((page_index + 1) << 3) - sizeof(u64));
 #endif
 
 #if ZALLOC_STATISTICS
-    pthread_mutex_lock(&zalloc_statistics_mtx);
+    mutex_lock(&zalloc_statistics_mtx);
     zalloc_memory_allocated += (page_index + 1) << 3;
-    pthread_mutex_unlock(&zalloc_statistics_mtx);
+    mutex_unlock(&zalloc_statistics_mtx);
 #endif
     
-    pthread_mutex_unlock(&line_mutex[page_index]);
+    mutex_unlock(&line_mutex[page_index]);
 
     return ret;
 }
@@ -467,7 +490,7 @@ zfree_line_report(int page_index)
     s32 count = line_count[page_index];
     if(count > 0)
     {
-        void** ret = line_sll[page_index];
+        void** ret = zalloc_line_head_get(page_index);
         
         for(s32 i = 0; i < count; i++)
         {
@@ -505,7 +528,7 @@ zfree_line(void* ptr, u32 page_index)
         page_index++;
 #endif
         
-        pthread_mutex_lock(&line_mutex[page_index]);
+        mutex_lock(&line_mutex[page_index]);
         
 #if ZALLOC_DEBUG
         u64* hdr = (u64*)ptr;
@@ -514,9 +537,9 @@ zfree_line(void* ptr, u32 page_index)
 #if HAS_ZALLOC_DEBUG_SUPPORT
         zalloc_range_s range = {(intptr)hdr,(intptr)hdr};
         ptr_node_debug *node;
-        pthread_mutex_lock(&zalloc_pages_set_mtx);
-        node = ptr_set_debug_avl_find(&zalloc_pages_set, &range);
-        pthread_mutex_unlock(&zalloc_pages_set_mtx);
+        mutex_lock(&zalloc_pages_set_mtx);
+        node = ptr_set_debug_find(&zalloc_pages_set, &range);
+        mutex_unlock(&zalloc_pages_set_mtx);
         
         if(node == NULL)
         {
@@ -559,28 +582,30 @@ zfree_line(void* ptr, u32 page_index)
         ptr = hdr;
 #endif
 
-#if ZDB_DEBUG_ZALLOC_TRASHMEMORY
+#if DNSCORE_DEBUG_ZALLOC_TRASHMEMORY
         memset(ptr, 0xfe, (page_index + 1) << 3);
 #endif
 
 #if ZALLOC_STATISTICS
-        pthread_mutex_lock(&zalloc_statistics_mtx);
+        mutex_lock(&zalloc_statistics_mtx);
         zalloc_memory_allocated -= (page_index + 1) << 3;
-        pthread_mutex_unlock(&zalloc_statistics_mtx);
+        mutex_unlock(&zalloc_statistics_mtx);
 #endif
 
         void** ret = (void**)ptr;
-        *ret = line_sll[page_index];
-        line_sll[page_index] = ret;
+        // get the pointer from the first free cell and put it in the newly freed block (thus making a new link in the chain)
+        *ret = zalloc_line_head_get(page_index);
+        // put the newly made link at the head of the line
+        zalloc_line_head_set(page_index, ret);
 
         line_count[page_index]++;
-
+  
         if(line_count[page_index] > heap_total[page_index])
         {
             zfree_line_report(page_index);
         }
         
-        pthread_mutex_unlock(&line_mutex[page_index]);
+        mutex_unlock(&line_mutex[page_index]);
     }
 }
 
@@ -593,11 +618,11 @@ zheap_line_total(u32 page_index)
 {
     if(page_index < ADJUSTED_ALLOC_PG_SIZE_COUNT)
     {
-        pthread_mutex_lock(&line_mutex[page_index]);
+        mutex_lock(&line_mutex[page_index]);
 
         u64 return_value = heap_total[page_index];
         
-        pthread_mutex_unlock(&line_mutex[page_index]);
+        mutex_unlock(&line_mutex[page_index]);
         
         return return_value;
         
@@ -611,11 +636,11 @@ zheap_line_avail(u32 page_index)
 {
     if(page_index < ADJUSTED_ALLOC_PG_SIZE_COUNT)
     {
-        pthread_mutex_lock(&line_mutex[page_index]);
+        mutex_lock(&line_mutex[page_index]);
         
         u64 return_value = line_count[page_index];
         
-        pthread_mutex_unlock(&line_mutex[page_index]);
+        mutex_unlock(&line_mutex[page_index]);
         
         return return_value;
 
@@ -658,7 +683,7 @@ zalloc_unaligned(u32 size)
     if(size <= 254)
     {
         u8 page_index = (size - 1) >> 3;
-        p = (u8*)zalloc_line(page_index);
+        p = (u8*) zalloc_line(page_index);
         *p = page_index;
     }
     else
@@ -667,7 +692,7 @@ zalloc_unaligned(u32 size)
         p = (u8*)malloc(size);
 #else
         
-#if ZDB_DEBUG_TAG_BLOCKS == 0
+#if !DNSCORE_DEBUG_HAS_BLOCK_TAG
         p = (u8*)debug_malloc(size, __FILE__, __LINE__);
 #else
         p = (u8*)debug_malloc(size, __FILE__, __LINE__, ZMALLOC_TAG);
@@ -681,7 +706,7 @@ zalloc_unaligned(u32 size)
         }
         
         *p = 0xff;
-#if ZDB_DEBUG_ZALLOC_TRASHMEMORY
+#if DNSCORE_DEBUG_ZALLOC_TRASHMEMORY
         memset(p + 1, 0xca, size);
 #endif
     }

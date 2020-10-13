@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -62,9 +63,10 @@ struct buffer_input_stream_data
 };
 
 static ya_result
-buffer_input_stream_read(input_stream* stream, u8* buffer, u32 len)
+buffer_input_stream_read(input_stream *stream, void* buffer_, u32 len)
 {
     buffer_input_stream_data* data = (buffer_input_stream_data*)stream->data;
+    u8* buffer = (u8*)buffer_;
     u8* src = data->buffer;
 
     ya_result ret;
@@ -102,12 +104,12 @@ buffer_input_stream_read(input_stream* stream, u8* buffer, u32 len)
         }
         else // 'remaining' bytes may have been copied already, if so, return that before the error
         {
-            return (remaining > 0)?remaining:ret;
+            return (remaining > 0) ? (s32)remaining : ret;
         }
     }
 
-#ifdef DEBUG
-    memset(data->buffer, 0xee, data->buffer_maxsize);
+#if DEBUG
+    memset(data->buffer, 0xbe, data->buffer_maxsize);
 #endif
 
     // What remains to read is smaller than the buffer max size:
@@ -120,17 +122,17 @@ buffer_input_stream_read(input_stream* stream, u8* buffer, u32 len)
         
         // 'remaining' bytes may have been copied already, if so, return that before the error
 
-        return (remaining > 0) ? remaining : ERROR /* eof */;
+        return (remaining > 0) ? (s32)remaining : ERROR /* eof */;
     }
     
-    if(len > ret)
+    if(len > (u32)ret) // ret > 0
     {
-        len = ret;
+        len = (u32)ret;
     }
 
     MEMCOPY(buffer, data->buffer, len); /* starts at offset 0 */
 
-    data->buffer_size = ret;
+    data->buffer_size = (u32)ret;
     data->buffer_offset = len;
 
     return remaining + len;
@@ -168,7 +170,7 @@ buffer_input_stream_skip(input_stream* stream, u32 len)
     {
         // 'remaining' bytes may have been skipped already, if so, return that before the error
         
-        return (remaining > 0)?remaining:ret;
+        return (remaining > 0)?(s32)remaining:ret;
     }
 
     return remaining + ret;
@@ -202,7 +204,7 @@ buffer_input_stream_init(input_stream* stream, input_stream* filtered, int buffe
     filtered->data = NULL;
     filtered->vtbl = NULL;
 
-    data->buffer_maxsize = buffer_size;
+    data->buffer_maxsize = (u32)buffer_size;
     data->buffer_size = 0;
     data->buffer_offset = 0;
 
@@ -248,7 +250,7 @@ buffer_input_stream_read_line(input_stream* stream, char* buffer, u32 len)
         }
         
         data->buffer_offset = 0;
-        data->buffer_size = n;
+        data->buffer_size = (u32)n;
         b = src;
     }
     
@@ -260,17 +262,17 @@ buffer_input_stream_read_line(input_stream* stream, char* buffer, u32 len)
 #if 0 /* fix */
 #else
         //
-        char *eol = (char*)memchr(b, '\n', n);
+        char *eol = (char*)memchr(b, '\n', (size_t)n);
         if(eol != NULL)
         {
             ++eol;
-            u32 len = eol - b;
+            u32 len_to_the_end = eol - b;
             data->buffer_offset = eol - src;
-            memcpy(buffer, b, len);
-            buffer[len] = '\0';
-            return total + len;
+            memcpy(buffer, b, len_to_the_end);
+            buffer[len_to_the_end] = '\0';
+            return total + len_to_the_end;
         }
-        memcpy(buffer, b, n);
+        memcpy(buffer, b, (size_t)n);
         buffer += n;
 #endif
         //
@@ -296,10 +298,10 @@ buffer_input_stream_read_line(input_stream* stream, char* buffer, u32 len)
             
             *buffer = '\0';
 
-            return (total > 0) ? total : ERROR /* eof */;
+            return (total > 0) ? (s32)total : ERROR /* eof */;
         }
         
-        data->buffer_size = n;
+        data->buffer_size = (u32)n;
 
         b = src;
     }
@@ -353,6 +355,3 @@ is_buffer_input_stream(input_stream *bos)
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

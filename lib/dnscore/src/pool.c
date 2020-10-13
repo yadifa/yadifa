@@ -1,39 +1,40 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 #include "dnscore/dnscore-config.h"
 #include "dnscore/pool.h"
+#include "dnscore/logger.h"
 
 extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
@@ -41,12 +42,32 @@ extern logger_handle *g_system_logger;
 static mutex_t pool_chain_mtx = MUTEX_INITIALIZER;
 static pool_s *pool_chain = NULL;
 
-void
-pool_init(pool_s *pool, pool_allocate_callback *allocate_, pool_free_callback *free_, void *allocate_args, const char *name)
+static void pool_reset_nop(void *ptr, void *args)
 {
+    (void)ptr;
+    (void)args;
+}
+
+void pool_init_ex(pool_s *pool, pool_allocate_callback *allocate_, pool_free_callback *free_, pool_reset_callback *reset_, void *allocate_args, const char* name)
+{
+#if DEBUG
+    
+    // ensure there are no double initialisations
+    
+    pool_s *first = pool_chain;
+    while(first != NULL)
+    {
+        if(first == pool)
+        {   
+            abort();
+        }
+        first = first->next;
+    }
+#endif
     ptr_vector_init(&pool->pool);
     pool->allocate_method = allocate_;
     pool->free_method = free_;
+    pool->reset_method = reset_;
     pool->allocate_args = allocate_args;
     mutex_init(&pool->mtx);
     pool->allocated_count = 0;
@@ -64,6 +85,12 @@ pool_init(pool_s *pool, pool_allocate_callback *allocate_, pool_free_callback *f
     pool->next = pool_chain;
     pool_chain = pool;
     mutex_unlock(&pool_chain_mtx);
+}
+
+void
+pool_init(pool_s *pool, pool_allocate_callback *allocate_, pool_free_callback *free_, void *allocate_args, const char *name)
+{
+    pool_init_ex(pool, allocate_, free_, pool_reset_nop, allocate_args, name);
 }
 
 void
@@ -110,6 +137,10 @@ pool_log_all_stats()
 void
 pool_finalize(pool_s *pool)
 {
+#if DEBUG
+    pool_log_stats(pool);
+#endif
+    
     mutex_lock(&pool_chain_mtx);
     pool_s **pp = &pool_chain;
     while(*pp != NULL)
@@ -142,7 +173,7 @@ pool_finalize(pool_s *pool)
         log_warn("pool '%s' leaked: %d items", pool->name, delta);
     }
 
-#ifdef DEBUG
+#if DEBUG
     memset(pool, 0xe0, sizeof(pool_s));
 #endif
 }
@@ -182,6 +213,7 @@ pool_alloc(pool_s *pool)
     {
         p = ptr_vector_pop(&pool->pool);
         mutex_unlock(&pool->mtx);
+        pool->reset_method(p, pool->allocate_args);
     }
     else
     {

@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup nsec3 NSEC3 functions
  *  @ingroup dnsdbdnssec
  *  @brief
@@ -45,6 +46,7 @@
 #include "dnsdb/dnsdb-config.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <dnscore/logger.h>
 
 #include "dnsdb/zdb_zone.h"
 #include "dnsdb/nsec3_types.h"
@@ -101,7 +103,7 @@ nsec3_nodata_error(const zdb_zone *zone, const zdb_rr_label* owner,
         min_ttl
     };
 
-    if((owner->nsec.dnssec == NULL) || (owner->nsec.nsec3->self == NULL))
+    if((owner->nsec.dnssec == NULL) || (nsec3_label_extension_self(owner->nsec.nsec3) == NULL)) // scan-build false positive: owner->nsec.dnssec == owner->nsec.nsec3 => owner->nsec.nsec3 can't ben NULL for nsec3_label_extension_self
     {
         nsec3_closest_encloser_proof(zone, qname, apex_index,
                                     &owner_nsec3,
@@ -122,14 +124,14 @@ nsec3_nodata_error(const zdb_zone *zone, const zdb_rr_label* owner,
             *out_closest_encloser_nsec3_owner = NULL;
             *out_closest_encloser_nsec3 = NULL;
             *out_closest_encloser_nsec3_rrsig = NULL;
-#ifdef DEBUG
+#if DEBUG
             log_debug("nsec3_nodata_error: no closest encloser proof");
 #endif
         }
     }
     else
     {
-        owner_nsec3 = owner->nsec.nsec3->self;
+        owner_nsec3 = nsec3_label_extension_self(owner->nsec.nsec3);
         *out_closest_encloser_nsec3 = NULL;
         *out_closest_encloser_nsec3_rrsig = NULL;
     }
@@ -150,7 +152,15 @@ nsec3_nodata_error(const zdb_zone *zone, const zdb_rr_label* owner,
     }
     else
     {
-        log_err("%{dnsnamevector} owner_nsec3 is null", qname);
+        log_err("%{dnsnamevector} has no NSEC3 owner, has DNSSEC mode been changed?", qname);
+        
+        //
+        /*
+        ((zone->_flags & ZDB_ZONE_HAS_OPTOUT_COVERAGE) != 0)
+        
+        digestname(closest_provable_encloser, dnsname_len(closest_provable_encloser), salt, salt_len, iterations, &digest[1], FALSE);
+        closest_provable_encloser_nsec3 = nsec3_find(&n3->items, digest);
+        */
     }
 }
 
@@ -178,28 +188,70 @@ void nsec3_wild_nodata_error(const zdb_zone *zone, const zdb_rr_label *owner,
                              u8 **out_closest_encloser_nsec3_owner_p,
                              zdb_packed_ttlrdata** out_closest_encloser_nsec3,
                              const zdb_packed_ttlrdata** out_closest_encloser_nsec3_rrsig,
-                             
-                             u8 **out_wild_closest_encloser_nsec3_owner_p,
-                             zdb_packed_ttlrdata** out_wild_closest_encloser_nsec3,
-                             const zdb_packed_ttlrdata** out_wild_closest_encloser_nsec3_rrsig)
+
+                             u8 **out_qname_encloser_nsec3_owner_p,
+                             zdb_packed_ttlrdata** out_qname_encloser_nsec3,
+                             const zdb_packed_ttlrdata** out_qname_encloser_nsec3_rrsig)
 {   
     yassert(out_next_closer_nsec3_owner_p != NULL && out_encloser_nsec3 != NULL && out_encloser_nsec3_rrsig != NULL);
     yassert(out_closest_encloser_nsec3_owner_p != NULL && out_closest_encloser_nsec3 != NULL && out_closest_encloser_nsec3_rrsig != NULL);
-    yassert(out_wild_closest_encloser_nsec3_owner_p != NULL && out_wild_closest_encloser_nsec3 != NULL && out_wild_closest_encloser_nsec3_rrsig != NULL);
-    
-    nsec3_name_error(zone, qname, apex_index, pool,
-                     
-                     out_next_closer_nsec3_owner_p,
-                     out_encloser_nsec3,
-                     out_encloser_nsec3_rrsig,
-                     
-                     out_closest_encloser_nsec3_owner_p,
-                     out_closest_encloser_nsec3,
-                     out_closest_encloser_nsec3_rrsig,
-                     
-                     out_wild_closest_encloser_nsec3_owner_p,
-                     out_wild_closest_encloser_nsec3,
-                     out_wild_closest_encloser_nsec3_rrsig);
+
+    (void)owner;
+
+    // find the *.fqdn
+    // add the name error above it
+
+    const nsec3_zone_item *wild_encloser_nsec3 = NULL;
+    const nsec3_zone_item *closest_provable_encloser_nsec3 = NULL;
+    const nsec3_zone_item *qname_encloser_nsec3 = NULL;
+    nsec3_wild_closest_encloser_proof(zone, qname, apex_index, &wild_encloser_nsec3, &closest_provable_encloser_nsec3, &qname_encloser_nsec3);
+
+    nsec3_zone* n3 = zone->nsec.nsec3;
+
+    s32 min_ttl;
+    zdb_zone_getminttl(zone, &min_ttl);
+
+    nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm nsec3_parms =
+        {
+            n3,
+            wild_encloser_nsec3,
+            zone->origin,
+            pool,
+            min_ttl
+        };
+
+    *out_encloser_nsec3 = NULL;
+
+    if(wild_encloser_nsec3 != NULL)
+    {
+        nsec3_zone_item_to_new_zdb_packed_ttlrdata(
+            &nsec3_parms,
+            out_next_closer_nsec3_owner_p,
+            out_encloser_nsec3,
+            out_encloser_nsec3_rrsig);
+    }
+
+    *out_closest_encloser_nsec3 = NULL;
+
+    if((closest_provable_encloser_nsec3 != wild_encloser_nsec3) && (closest_provable_encloser_nsec3 != NULL))
+    {
+        nsec3_parms.item = closest_provable_encloser_nsec3;
+        nsec3_zone_item_to_new_zdb_packed_ttlrdata(
+            &nsec3_parms,
+            out_closest_encloser_nsec3_owner_p,
+            out_closest_encloser_nsec3,
+            out_closest_encloser_nsec3_rrsig);
+    }
+
+    if((qname_encloser_nsec3 != wild_encloser_nsec3) && (qname_encloser_nsec3 != closest_provable_encloser_nsec3) && (qname_encloser_nsec3 != NULL))
+    {
+        nsec3_parms.item = qname_encloser_nsec3;
+        nsec3_zone_item_to_new_zdb_packed_ttlrdata(
+            &nsec3_parms,
+            out_qname_encloser_nsec3_owner_p,
+            out_qname_encloser_nsec3,
+            out_qname_encloser_nsec3_rrsig);
+    }
 }
 
 /** @} */

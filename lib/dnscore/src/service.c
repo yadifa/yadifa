@@ -1,58 +1,61 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 #include "dnscore/dnscore-config.h"
 
 #if HAS_PTHREAD_SETNAME_NP
-#ifdef DEBUG
+#if DEBUG
 #define _GNU_SOURCE 1
 #endif
 #endif
 
 #include <unistd.h>
-#include <signal.h>
 
-#include <pthread.h>
+#include <dnscore/thread.h>
 
 #include "dnscore/ptr_set.h"
 #include "dnscore/logger.h"
 #include "dnscore/thread_pool.h"
 
 #include "dnscore/service.h"
+#include "dnscore/thread.h"
+#include "dnscore/signals.h"
 
 extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
+
+#define SERVICE_WAKE_USING_SIGUSR2 0 // don't use signals
 
 static int service_ptr_set_compare(const void *node_a, const void *node_b)
 {
@@ -66,7 +69,7 @@ static int service_ptr_set_compare(const void *node_a, const void *node_b)
 static ptr_set service_set = {NULL, service_ptr_set_compare};
 static mutex_t service_set_mutex = MUTEX_INITIALIZER;
 
-static void*
+static noreturn void*
 service_thread(void *args)
 {
     struct service_worker_s *worker = (struct service_worker_s *)args;
@@ -85,55 +88,32 @@ service_thread(void *args)
     struct service_s *desc = (struct service_s *)worker->service;
         
     thread_pool_setup_random_ctx();
-    
+
+    thread_set_name(desc->name, worker->worker_index, worker->service->worker_count);
+
     if(worker->service->worker_count == 1)
     {
-        log_debug("service: %s starting", desc->name);
+#if DNSCORE_HAS_LOG_THREAD_TAG
+        char service_tag[9];
+        service_tag[8] = '\0';
+        thread_make_tag(desc->name, worker->worker_index, desc->worker_count, service_tag);
+        logger_handle_set_thread_tag(service_tag);
 
-#if HAS_PTHREAD_SETNAME_NP
-#ifdef DEBUG
-#if __APPLE__
-        pthread_setname_np(desc->name);
-#else
-        pthread_setname_np(pthread_self(), desc->name);
-#endif // __APPLE__
+        log_debug("service: %s tagged '%s' (pid=%i, thread=%p)", desc->name, service_tag, getpid(), thread_self());
 #endif
-#endif
-    
-#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
-    char service_tag[8];
-    thread_make_tag(desc->name, worker->worker_index, desc->worker_count, service_tag);
-    thread_set_tag(pthread_self(), service_tag);
-#endif
-        
+        log_debug("service: %s starting", desc->name);
     }
     else
     {
-        log_debug("service: %s starting (%i/%i)", desc->name, worker->worker_index + 1, worker->service->worker_count);
+#if DNSCORE_HAS_LOG_THREAD_TAG
+        char service_tag[9];
+        service_tag[8] = '\0';
+        thread_make_tag(desc->name, worker->worker_index, desc->worker_count, service_tag);
+        logger_handle_set_thread_tag(service_tag);
 
-#if HAS_PTHREAD_SETNAME_NP        
-#ifdef DEBUG
-        // 16 is the size limit for this, cfr man page
-        if(strlen(desc->name) >= 16)
-        {
-#if __APPLE__
-            pthread_setname_np(desc->name);
-#else
-            pthread_setname_np(pthread_self(), desc->name);
-#endif // __APPLE__
-        }
-        else
-        {
-            char tmp_name[16];
-            snformat(tmp_name, sizeof(tmp_name), "%s:%d", desc->name, worker->worker_index + 1);
-#if __APPLE__
-            pthread_setname_np(tmp_name);
-#else
-            pthread_setname_np(pthread_self(), tmp_name);
-#endif // __APPLE__
-        }
+        log_debug("service: %s tagged '%s' (pid=%i, thread=%p) (%i/%i)", desc->name, service_tag, getpid(), thread_self(), worker->worker_index + 1, worker->service->worker_count);
 #endif
-#endif
+        log_debug("service: %s starting (%i/%i)", desc->name, worker->worker_index + 1, worker->service->worker_count);
     }
     
     if(desc->entry_point != NULL)
@@ -158,17 +138,37 @@ service_thread(void *args)
     mutex_lock(&worker->service->wait_lock);
     cond_notify(&worker->service->wait_cond);
     mutex_unlock(&worker->service->wait_lock);
+
+#if DNSCORE_HAS_LOG_THREAD_TAG
+    logger_handle_clear_thread_tag();
+#endif
     
-    pthread_exit(NULL);
-    return NULL;
+    thread_exit(NULL);
+
+    // unreachable
+    // return NULL;
 }
 
 static void*
 service_on_main_thread(void *args)
 {
     struct service_worker_s *worker = (struct service_worker_s *)args;
-    
+
     if(worker == NULL)
+    {
+        log_err("service: with NULL worker");
+
+        return NULL;
+    }
+
+    if(worker->service == NULL)
+    {
+        log_err("service: worker not linked to a service");
+
+        return NULL;
+    }
+
+    if(worker->service->entry_point == NULL)
     {
         log_err("service: with NULL entry point");
         
@@ -196,16 +196,12 @@ service_on_main_thread(void *args)
 
     log_debug("service: %s starting", desc->name);
 
-#if HAS_PTHREAD_SETNAME_NP
-#ifdef DEBUG
-#if __APPLE__
-    pthread_setname_np(desc->name);
-#else
-    pthread_setname_np(pthread_self(), desc->name);
-#endif // __APPLE__
+    thread_set_name(desc->name, 0, 0);
+
+#if DNSCORE_HAS_LOG_THREAD_TAG
+    logger_handle_set_thread_tag(desc->name);
 #endif
-#endif
-    
+
     if(desc->entry_point != NULL)
     {
         worker->return_code = desc->entry_point(worker);
@@ -222,12 +218,18 @@ service_on_main_thread(void *args)
         
         log_debug("service: NULL entry point", worker->return_code);
     }
-    
+
     thread_pool_destroy_random_ctx();
     
     mutex_lock(&worker->service->wait_lock);
     cond_notify(&worker->service->wait_cond);
     mutex_unlock(&worker->service->wait_lock);
+
+#if DNSCORE_HAS_LOG_THREAD_TAG
+    logger_handle_clear_thread_tag();
+#endif
+
+
 
     return NULL;
 }
@@ -251,22 +253,30 @@ service_init_ex(struct service_s *desc, service_main *entry_point, const char* n
     {
         return INVALID_ARGUMENT_ERROR;
     }
-    
-    ZEROMEMORY(desc, sizeof(struct service_s));
-    
+
+    mutex_lock(&service_set_mutex);
+    bool already_initialised = !desc->_not_initialised;
+    mutex_unlock(&service_set_mutex);
+
+    if(already_initialised)
+    {
+        log_debug("service: %s instance %p already initialized", name, desc);
+        return SERVICE_ALREADY_INITIALISED;
+    }
+
     mutex_init(&desc->wait_lock);
     cond_init(&desc->wait_cond);
     
     desc->name = (char*)name;
     
     mutex_lock(&service_set_mutex);
-    ptr_node *node = ptr_set_avl_find(&service_set, desc);
+    ptr_node *node = ptr_set_find(&service_set, desc);
     mutex_unlock(&service_set_mutex);
     
     if(node == NULL)
     {
         log_debug("service: %s init %i workers", name, count);
-        
+
         desc->entry_point = entry_point;
         desc->name = strdup(name);
         MALLOC_OR_DIE(struct service_worker_s*, desc->worker, sizeof(struct service_worker_s) * count, SRVCWRKR_TAG); // DON'T POOL
@@ -280,18 +290,20 @@ service_init_ex(struct service_s *desc, service_main *entry_point, const char* n
             desc->worker[i].return_code = 0;
             desc->worker[i].flags = 0;
         }
-    
+
+        desc->args = NULL;
+
         mutex_lock(&service_set_mutex);
-        ptr_set_avl_insert(&service_set, desc);
+        desc->_not_initialised = FALSE;
+        ptr_set_insert(&service_set, desc);
         mutex_unlock(&service_set_mutex);
         
         return SUCCESS;
     }
     else
     {
-        log_debug("service: %s already initialized", name);
-        
-        desc->name = NULL;
+        log_err("service: %s instance %p already initialized, but marked as if not", name, desc);
+
         return SERVICE_ALREADY_INITIALISED;
     }
 }
@@ -312,6 +324,38 @@ int
 service_init(struct service_s *desc, service_main *entry_point, const char* name)
 {
     int ret = service_init_ex(desc, entry_point, name, 1);
+    return ret;
+}
+
+/**
+ * Set service args.
+ * 
+ * @param desc a pointer to the service
+ * @param args a pointer to the args
+ */
+
+void
+service_args_set(struct service_s *desc, void *args)
+{
+    mutex_lock(&desc->wait_lock);
+    desc->args = args;
+    mutex_unlock(&desc->wait_lock);
+}
+
+/**
+ * Get service args.
+ * 
+ * @param desc a pointer to the service
+ *
+ * @return a pointer to the args
+ */
+
+void*
+service_args_get(struct service_s *desc)
+{
+    mutex_lock(&desc->wait_lock);
+    void *ret = desc->args;
+    mutex_unlock(&desc->wait_lock);
     return ret;
 }
 
@@ -337,13 +381,16 @@ service_finalize(struct service_s *desc)
     service_wait(desc);
     
     mutex_lock(&service_set_mutex);
-    ptr_set_avl_delete(&service_set, desc);
+    ptr_set_delete(&service_set, desc);
     mutex_unlock(&service_set_mutex);
-    
+
+    mutex_lock(&desc->wait_lock);
+
     for(u32 i = 0; i < desc->worker_count; i++)
     {
         mutex_destroy(&desc->worker[i].lock);
     }
+
     ZEROMEMORY(desc->worker, sizeof(struct service_worker_s) * desc->worker_count);
     free(desc->worker);
     desc->worker = NULL;
@@ -351,10 +398,19 @@ service_finalize(struct service_s *desc)
     desc->entry_point = NULL;
     
     cond_finalize(&desc->wait_cond);
-    mutex_destroy(&desc->wait_lock);
-    
+
     free(desc->name);
     desc->name = NULL;
+    mutex_lock(&service_set_mutex);
+    desc->_not_initialised = TRUE;
+    mutex_unlock(&service_set_mutex);
+
+    mutex_unlock(&desc->wait_lock);
+
+    mutex_destroy(&desc->wait_lock);
+
+    static const struct service_s dummy_uninitialised_service = UNINITIALIZED_SERVICE;
+    *desc = dummy_uninitialised_service;
     
     return SUCCESS;
 }
@@ -375,10 +431,12 @@ service_start(struct service_s *desc)
     
     u32 success = 0;
     u32 failure = 0;
-    
+
+#if SERVICE_HAS_LAST_SEEN_ALIVE_SUPPORT
     u32 now = time(NULL);
     desc->last_seen_alive = now;
-    
+#endif
+
     for(u32 i = 0; i < desc->worker_count; i++)
     {
         struct service_worker_s *worker = &desc->worker[i];
@@ -402,8 +460,10 @@ service_start(struct service_s *desc)
         }
         
 
-        if(pthread_create(&worker->tid, NULL, service_thread, worker) == 0)
+        if(thread_create(&worker->tid, service_thread, worker) == 0)
         {
+            log_debug("service_start: worker %i created with id %p", i, worker->tid);
+
             success++;
         }
         else
@@ -412,7 +472,9 @@ service_start(struct service_s *desc)
 
             mutex_lock(&worker->lock);
 
+#if SERVICE_HAS_LAST_SEEN_ALIVE_SUPPORT
             worker->last_seen_alive = now;
+#endif
             worker->tid = 0;
             worker->return_code = err;
             worker->flags = SERVICE_OFF;
@@ -469,8 +531,10 @@ service_start_and_wait(struct service_s *desc)
     {
         log_debug("service: %s start", desc->name);
 
+#if SERVICE_HAS_LAST_SEEN_ALIVE_SUPPORT
         u32 now = time(NULL);
         desc->last_seen_alive = now;
+#endif
 
         struct service_worker_s *worker = &desc->worker[0];
 
@@ -501,7 +565,7 @@ service_start_and_wait(struct service_s *desc)
 }
 
 /**
- * Set the status of all workers of the service to "STOP" and sends SIGUSR1 to
+ * Set the status of all workers of the service to "STOP" and sends SIGUSR2 to
  * each of them.
  * 
  * The signal is meant to interrupt blocking IOs and the worker should notice
@@ -535,14 +599,63 @@ service_stop(struct service_s *desc)
 
         mutex_unlock(&worker->lock);
         
+#if SERVICE_WAKE_USING_SIGUSR2
         if((f != 0) && (worker->tid != 0))
         {
-            pthread_kill(worker->tid, SIGUSR1);
+            thread_kill(worker->tid, SIGUSR2);
         }
+#endif
     }
     
     return err;
 }
+
+/**
+ * Set the status of all workers of the service to "RECONFIGURE" and sends SIGUSR2 to
+ * each of them.
+ * 
+ * The signal is meant to interrupt blocking IOs and the worker should notice
+ * it 'in time' and finish.
+ * 
+ * @param desc the service
+ * 
+ * @return an error code
+ */
+
+int
+service_reconfigure(struct service_s *desc)
+{
+    log_debug("service: %s stop", desc->name);
+
+    int err = SERVICE_NOT_RUNNING;
+    
+    for(u32 i = 0; i < desc->worker_count; i++)
+    {
+        struct service_worker_s *worker = &desc->worker[i];
+        
+        mutex_lock(&worker->lock);
+        
+        u8 f = worker->flags;
+
+        if((f & SERVICE_RECONFIGURE) != SERVICE_RECONFIGURE)
+        {
+            worker->flags |= SERVICE_RECONFIGURE;
+            err = SUCCESS;
+        }
+
+        mutex_unlock(&worker->lock);
+        
+#if SERVICE_WAKE_USING_SIGUSR2
+        if((f != 0) && (worker->tid != 0))
+        {
+            thread_kill(worker->tid, SIGUSR2);
+        }
+#endif
+    }
+    
+    return err;
+}
+
 
 /**
  * Waits for all threads of the service to be stopped.
@@ -557,16 +670,16 @@ service_wait(struct service_s *desc)
     log_debug("service: %s wait", desc->name);
     
     mutex_lock(&desc->wait_lock);
-    for(;;)
+    for(int tries = 0;;++tries)
     {
         u32 running = desc->worker_count;
         
         for(u32 i = 0; i < desc->worker_count; i++)
         {
             struct service_worker_s *worker = &desc->worker[i];
-
             mutex_lock(&worker->lock);
             u8 f = worker->flags;    
+            thread_t tid = worker->tid;
             mutex_unlock(&worker->lock);
             
             if(f == SERVICE_OFF)
@@ -575,21 +688,46 @@ service_wait(struct service_s *desc)
             }
             else
             {
-                if(pthread_kill(worker->tid, 0) != 0)
+                if(tid != 0)
                 {
-                    log_err("service: %s thread %p died on us", desc->name, worker->tid);
-                    running--;
-                    mutex_lock(&worker->lock);
-                    worker->flags = SERVICE_OFF;
-                    mutex_unlock(&worker->lock);
-                }
-                else
-                {
-                    // if the worker is meant to stop but is not stopping yet, then signal it
-                    
-                    if((worker->flags & (SERVICE_STOP|SERVICE_STOPPING)) == SERVICE_STOP)
+#ifndef WIN32
+                    if(thread_kill(tid, 0) != 0)
                     {
-                        pthread_kill(worker->tid, SIGINT);
+                        log_err("service: %s thread %p died on us", desc->name, tid);
+                        running--;
+                        mutex_lock(&worker->lock);
+                        worker->flags = SERVICE_OFF;
+                        mutex_unlock(&worker->lock);
+                    }
+                    else
+#endif
+                    {
+                        // if the worker is meant to stop but is not stopping yet, then signal it
+
+                        if((worker->flags & (SERVICE_STOP|SERVICE_STOPPING)) == SERVICE_STOP)
+                        {
+                            if(tries > 0)
+                            {
+                                if(tries <= 2)
+                                {
+                                    log_warn("service: %s thread %p hasn't stopped yet ...", desc->name, tid);
+#if DEBUG
+                                    logger_flush();
+#endif
+                                    usleep_ex(500000);
+                                }
+                                else
+                                {
+                                    log_warn("service: %s thread %p is not stopping ...", desc->name, tid);
+#if DEBUG
+                                    logger_flush();
+#endif
+#ifndef WIN32
+                                    thread_kill(tid, SIGINT);
+#endif
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -617,7 +755,7 @@ service_wait(struct service_s *desc)
         
         log_debug("service: %s join ... (%u/%u)", desc->name, i, desc->worker_count);
         
-        int err = pthread_join(worker->tid, NULL);
+        int err = thread_join(worker->tid, NULL);
         
         switch(err)
         {
@@ -644,11 +782,14 @@ service_wait(struct service_s *desc)
             default:
             {
                 log_warn("service: %s thread %p joining returned an unexpected error code %i", desc->name, worker->tid, err);
+                break;
             }
         }
         
-        worker->flags = 0;
+        mutex_lock(&worker->lock);
+        worker->flags = SERVICE_OFF;
         worker->tid = 0;
+        mutex_unlock(&worker->lock);
     }
     
     log_debug("service: %s all %u workers are stopped", desc->name, desc->worker_count);
@@ -762,6 +903,30 @@ service_set_stopping(struct service_worker_s *worker)
 }
 
 /**
+ * Only to be called by the worker of the service itself when it has reconfigured.
+ * Calling it is not mandatory but give more accuracy to the status of the service.
+ * 
+ * @param worker the worker calling this function
+ */
+
+int service_clear_reconfigure(struct service_worker_s *worker)
+{
+    int err = SERVICE_NOT_RUNNING;
+    
+    log_debug("service: %s reconfigured", worker->service->name);
+    
+    mutex_lock(&worker->lock);
+    if((worker->flags & SERVICE_RECONFIGURE) != 0)
+    {
+        worker->flags &= ~SERVICE_RECONFIGURE;
+        err = SUCCESS;
+    }
+    mutex_unlock(&worker->lock);
+    
+    return err;
+}
+
+/**
  * Waits until all workers have notified they were servicing.
  * Calling this on a service that does not call service_set_servicing will
  * potentially wait forever (or until the program is shutting down).
@@ -794,31 +959,67 @@ service_wait_servicing(struct service_s *desc)
 }
 
 int
-service_shouldrun(struct service_worker_s *worker)
+service_should_run(struct service_worker_s *worker)
 {
     mutex_lock(&worker->lock);
     u8 f = worker->flags;    
     mutex_unlock(&worker->lock);
-    
+
+#if SERVICE_HAS_LAST_SEEN_ALIVE_SUPPORT
     time_t now = time(NULL);
-    
+    mutex_lock(&worker->lock);
     worker->last_seen_alive = now;
     worker->service->last_seen_alive = now;
+    mutex_unlock(&worker->lock);
+#endif
     
     return (f & (SERVICE_START | SERVICE_STOP)) == SERVICE_START;
 }
 
+int
+service_should_reconfigure(struct service_worker_s *worker)
+{
+    mutex_lock(&worker->lock);
+    u8 f = worker->flags;    
+    mutex_unlock(&worker->lock);
+
+#if SERVICE_HAS_LAST_SEEN_ALIVE_SUPPORT
+    time_t now = time(NULL);
+    worker->last_seen_alive = now;
+    worker->service->last_seen_alive = now;
+#endif
+    
+    return (f & (SERVICE_START | SERVICE_STOP | SERVICE_STOPPING | SERVICE_RECONFIGURE)) == (SERVICE_START | SERVICE_RECONFIGURE);
+}
+
+int
+service_should_reconfigure_or_stop(struct service_worker_s *worker)
+{
+    mutex_lock(&worker->lock);
+    u8 f = worker->flags;    
+    mutex_unlock(&worker->lock);
+
+#if SERVICE_HAS_LAST_SEEN_ALIVE_SUPPORT
+    time_t now = time(NULL);
+    worker->last_seen_alive = now;
+    worker->service->last_seen_alive = now;
+#endif
+    
+    return f & (SERVICE_STOP | SERVICE_STOPPING | SERVICE_RECONFIGURE);
+}
+
+#if SERVICE_HAS_LAST_SEEN_ALIVE_SUPPORT
 int
 service_check_all_alive()
 {
     time_t now = time(NULL);
     
     mutex_lock(&service_set_mutex);
-    ptr_set_avl_iterator iter;
-    ptr_set_avl_iterator_init(&service_set, &iter);
-    while(ptr_set_avl_iterator_hasnext(&iter))
+    ptr_set_iterator iter;
+    ptr_set_iterator_init(&service_set, &iter);
+    while(ptr_set_iterator_hasnext(&iter))
     {
-        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        ptr_node *node = ptr_set_iterator_next_node(&iter);
         struct service_s *desc = (struct service_s *)node->key;
         
         if(desc->last_seen_alive > 0)
@@ -851,6 +1052,14 @@ service_check_all_alive()
     
     return SUCCESS;
 }
+#else
+int
+service_check_all_alive()
+{
+    // not available in release
+    return SUCCESS;
+}
+#endif
 
 /**
  * Appends all services references to the array.
@@ -867,11 +1076,11 @@ service_get_all(ptr_vector *services)
 {
     int ret = 0;
     mutex_lock(&service_set_mutex);
-    ptr_set_avl_iterator iter;
-    ptr_set_avl_iterator_init(&service_set, &iter);
-    while(ptr_set_avl_iterator_hasnext(&iter))
+    ptr_set_iterator iter;
+    ptr_set_iterator_init(&service_set, &iter);
+    while(ptr_set_iterator_hasnext(&iter))
     {
-        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        ptr_node *node = ptr_set_iterator_next_node(&iter);
         struct service_s *desc = (struct service_s *)node->key;
         
         ptr_vector_append(services, desc);
@@ -912,53 +1121,16 @@ service_get_worker(const struct service_s *service, u32 idx)
     return NULL;
 }
 
-
-void
-service_signal_worker(const struct service_s *service, u32 idx, int signo)
-{
-    if(service != NULL)
-    {
-        if(service->worker_count > idx)
-        {
-            struct service_worker_s* worker = &service->worker[idx];
-            
-            if(worker->tid != 0)
-            {
-                pthread_kill(worker->tid, signo);
-            }
-        }
-    }
-}
-
-void
-service_signal_all_workers(const struct service_s *service, int signo)
-{
-    if(service != NULL)
-    {
-        for(u32 i = 0; i < service->worker_count; i++)
-        {
-            struct service_worker_s *worker = &service->worker[i];
-
-            if(worker->tid == 0)
-            {
-                continue;
-            }
-
-            pthread_kill(worker->tid, signo);
-        }
-    }
-}
-
 void
 service_stop_all()
 {
     mutex_lock(&service_set_mutex);
-    ptr_set_avl_iterator iter;
+    ptr_set_iterator iter;
     
-    ptr_set_avl_iterator_init(&service_set, &iter);
-    while(ptr_set_avl_iterator_hasnext(&iter))
+    ptr_set_iterator_init(&service_set, &iter);
+    while(ptr_set_iterator_hasnext(&iter))
     {
-        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        ptr_node *node = ptr_set_iterator_next_node(&iter);
         struct service_s *desc = (struct service_s *)node->key;
     
         log_debug("service_stop_all: stop '%s'", STRNULL(desc->name));
@@ -966,10 +1138,10 @@ service_stop_all()
         service_stop(desc);    
     }
     
-    ptr_set_avl_iterator_init(&service_set, &iter);
-    while(ptr_set_avl_iterator_hasnext(&iter))
+    ptr_set_iterator_init(&service_set, &iter);
+    while(ptr_set_iterator_hasnext(&iter))
     {
-        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        ptr_node *node = ptr_set_iterator_next_node(&iter);
         struct service_s *desc = (struct service_s *)node->key;
     
         log_debug("service_stop_all: wait '%s'", STRNULL(desc->name));
@@ -984,12 +1156,12 @@ void
 service_start_all()
 {
     mutex_lock(&service_set_mutex);
-    ptr_set_avl_iterator iter;
+    ptr_set_iterator iter;
     
-    ptr_set_avl_iterator_init(&service_set, &iter);
-    while(ptr_set_avl_iterator_hasnext(&iter))
+    ptr_set_iterator_init(&service_set, &iter);
+    while(ptr_set_iterator_hasnext(&iter))
     {
-        ptr_node *node = ptr_set_avl_iterator_next_node(&iter);
+        ptr_node *node = ptr_set_iterator_next_node(&iter);
         struct service_s *desc = (struct service_s *)node->key;
     
         log_debug("service_start_all: start '%s'", STRNULL(desc->name));

@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnscore System core functions
  *  @brief System core functions
  *
@@ -41,7 +42,7 @@
 #include "dnscore/dnscore-config.h"
 
 #if HAS_PTHREAD_SETNAME_NP
-#ifdef DEBUG
+#if DEBUG
 #define _GNU_SOURCE 1
 #endif
 #endif
@@ -51,10 +52,7 @@
 #include <openssl/ssl.h>
 #include <signal.h>
 
-#include <pthread.h>
-
 #include "dnscore/zalloc.h"
-
 #include "dnscore/message.h"
 
 #include "dnscore/file_output_stream.h"
@@ -64,8 +62,10 @@
 #include "dnscore/dnsformat.h"
 #include "dnscore/logger.h"
 #include "dnscore/random.h"
+#include "dnscore/process.h"
 
 #include "dnscore/sys_error.h"
+#include "dnscore/thread.h"
 #include "dnscore/thread_pool.h"
 #include "dnscore/tsig.h"
 #include "dnscore/mutex.h"
@@ -73,12 +73,17 @@
 #include "dnscore/tcp_io_stream.h"
 #include "dnscore/config_settings.h"
 #include "dnscore/async.h"
+#include "dnscore/hash.h"
+#include "dnscore/socket-server.h"
+#include "dnscore/shared-heap.h"
+#include "dnscore/tcp_manager.h"
 
 #include <sys/time.h>
 
 #if DNSCORE_HAS_TSIG_SUPPORT
 #include <openssl/ssl.h>
 #include <openssl/engine.h>
+#include <openssl/conf.h>
 #endif
 
 #define TERM_BUFFER_SIZE 4096
@@ -103,18 +108,29 @@
 #endif
 
 #if HAS_BUILD_TIMESTAMP
-#ifdef DEBUG
+#if DEBUG
 const char *dnscore_lib = "dnscore " __DATE__ " " __TIME__ " debug";
 #else
 const char *dnscore_lib = "dnscore " __DATE__ " " __TIME__ " release";
 #endif
 #else
-#ifdef DEBUG
+#if DEBUG
 const char *dnscore_lib = "dnscore debug";
 #else
 const char *dnscore_lib = "dnscore release";
 #endif
 #endif
+
+void rfc_init();
+void rfc_finalize();
+void format_class_finalize();
+#ifndef WIN32
+void chroot_unmanage_all();
+#endif
+void signal_handler_finalize();
+void dnskey_init();
+void dnskey_finalize();
+void xfr_input_stream_finalize();
 
 static const char* ARCH_RECOMPILE_WARNING = "Please recompile with the correct settings.";
 static const char* ARCH_CHECK_SIZE_WARNING = "PANIC: %s does not match the size requirements (%i instead of %i).\n";
@@ -123,11 +139,7 @@ static const char* ARCH_CHECK_SIGN_WARNING = "PANIC: %s does not match the sign 
 #define ARCH_CHECK_SIGNED(a) {a val=~0;if(val>0) { printf(ARCH_CHECK_SIGN_WARNING,#a);puts(ARCH_RECOMPILE_WARNING);DIE(ERROR); }}
 #define ARCH_CHECK_UNSIGNED(a) {a val=~0;if(val<0) { printf(ARCH_CHECK_SIGN_WARNING,#a);puts(ARCH_RECOMPILE_WARNING);DIE(ERROR); }}
 
-logger_handle *g_system_logger = NULL;
-
-void dnskey_init();
-
-
+logger_handle *g_system_logger = LOGGER_HANDLE_SINK;
 
 static smp_int g_shutdown = SMP_INT_INITIALIZER;
 
@@ -147,7 +159,7 @@ dnscore_arch_checkup()
 {
 /// @note 20170413 edf -- older compilers (gcc 4.6 and such) used to complain a lot about this
 ///
-/// # pragma message("Don't worry about the possible warnings below")
+# pragma message("Don't worry about the possible warnings below")
     ARCH_CHECK_SIZE(__SIZEOF_POINTER__, sizeof(void*));
     ARCH_CHECK_SIZE(sizeof(u8), 1);
     ARCH_CHECK_SIZE(sizeof(s8), 1);
@@ -168,17 +180,19 @@ dnscore_arch_checkup()
     ARCH_CHECK_UNSIGNED(u64);
     ARCH_CHECK_UNSIGNED(intptr);
 
+#if !MESSAGE_PAYLOAD_IS_POINTER
     message_data* msg = NULL;
-    intptr msg_diffs = (intptr)(msg->buffer - msg->buffer_tcp_len); // cppcheck : false positive: of course it's a null pointer
-    if((msg->buffer - msg->buffer_tcp_len) != 2)
+    intptr msg_diffs = (intptr)(msg->_buffer - msg->_buffer_tcp_len); // cppcheck : false positive: of course it's a null pointer
+    if(msg_diffs != 2)
     {
         printf("Structure aligment is wrong.  Expected 2 but got %i. (see message_data)\n", (int)msg_diffs);
         DIE(ERROR);
     }
+#endif
 
-/// # pragma message("You can resume worrying about warnings ...")
+# pragma message("You can resume worrying about warnings ...")
     
-#if WORDS_BIGENDIAN==1
+#if WORDS_BIGENDIAN == 1
     static const u8 endian[4] = {1, 2, 3, 4}; /* BIG    */
     static const char* endian_name = "BIG";
 #else
@@ -195,6 +209,97 @@ dnscore_arch_checkup()
         DIE(ERROR);
     }
 }
+
+struct dnscore_ipc_prefix_t
+{
+    char zero;
+    char pid[8];
+    char uid[8];
+    char gid[8];
+    char timestamp[16];
+    char rnd[7];
+};
+
+#ifndef WIN32
+static struct dnscore_ipc_prefix_t dnscore_ipc_prefix;
+
+static void
+dnscore_init_ipc_prefix()
+{
+    int pid = getpid();
+    int uid = getpid();
+    int gid = getgid();
+    u64 timestamp = timeus();
+    snformat(dnscore_ipc_prefix.pid, sizeof(dnscore_ipc_prefix) - 1, "%08x%08x%08x%016x", pid, uid, gid, timestamp);
+    dnscore_ipc_prefix.zero = '\0';
+    random_ctx rnd = thread_pool_get_random_ctx();
+    
+    for(size_t i = 0; i < sizeof(dnscore_ipc_prefix.rnd); ++i)
+    {
+        char c = random_next(rnd)&0x7f7f7f7f;
+        c %= 62;
+        if(c < 10)
+        {
+            c += '0' - 0;
+        }
+        else if(c < 36)
+        {
+            c += 'A' - 10;
+        }
+        else // if(c < 62)
+        {
+            c += 'a' - 36;
+        }
+        dnscore_ipc_prefix.rnd[i] = c;
+    }
+}
+
+static size_t
+dnscore_ipc_prefix_copy(char *out_buffer, size_t out_buffer_size)
+{
+    if(out_buffer != NULL)
+    {
+        if(out_buffer_size >= sizeof(struct dnscore_ipc_prefix_t))
+        {
+            memcpy(out_buffer, &dnscore_ipc_prefix, sizeof(struct dnscore_ipc_prefix_t));
+        }
+        else
+        {
+            return 0;
+        }
+    }
+
+    return sizeof(struct dnscore_ipc_prefix_t);
+}
+
+size_t
+dnscore_ipc_make_name(const char *suffix, char *out_buffer, size_t out_buffer_size)
+{
+    size_t offset = dnscore_ipc_prefix_copy(out_buffer, out_buffer_size);
+    
+    if(offset > 0)
+    {
+        size_t suffix_len = strlen(suffix) + 1;
+        
+        if(out_buffer != NULL)
+        {
+            if(offset + suffix_len <= out_buffer_size)
+            {
+                memcpy(&out_buffer[offset], suffix, suffix_len);
+            }
+            else
+            {
+                return 0;
+            }
+        }
+        
+        return offset + suffix_len;
+    }
+    
+    return 0;
+}
+
+#endif
 
 /*****************************************************************************/
 
@@ -220,53 +325,27 @@ stdstream_init(bool bufferise)
     output_stream tmp;
     output_stream tmp2;
 
-    fd_output_stream_attach(&tmp, 1);
-    
     if(bufferise)
     {
+        fd_output_stream_attach(&tmp, 1);
         buffer_output_stream_init(&tmp2, &tmp, TERM_BUFFER_SIZE);
         mt_output_stream_init(&__termout__, &tmp2);
-        
+    }
+    else
+    {
+        fd_output_stream_attach(&__termout__, 1);
     }
     
-    fd_output_stream_attach(&tmp, 2);
-        
     if(bufferise)
     {
+        fd_output_stream_attach(&tmp, 2);
         buffer_output_stream_init(&tmp2, &tmp, TERM_BUFFER_SIZE);
         mt_output_stream_init(&__termerr__, &tmp2);
     }
-}
-
-static void
-stdtream_detach_fd(output_stream *os)
-{
-    /*
-     * Ensure that the stream that will be detached is one of the valid ones
-     */
-    output_stream_flush(os);
-    if(!is_fd_output_stream(os))
+    else
     {
-        if(!is_mt_output_stream(os))
-        {
-            log_err("unexpected stream in term");
-            exit(EXIT_FAILURE);
-        }
-        os = mt_output_stream_get_filtered(os);
-        if(!is_buffer_output_stream(os))
-        {
-            log_err("unexpected stream in term");
-            exit(EXIT_FAILURE);
-        }
-        os = buffer_output_stream_get_filtered(os);
-        if(!is_fd_output_stream(os))
-        {
-            log_err("unexpected stream in term");
-            exit(EXIT_FAILURE);
-        }
-        output_stream_flush(os);
+        fd_output_stream_attach(&__termerr__, 2);
     }
-    fd_output_stream_detach(os);
 }
 
 static void
@@ -278,42 +357,144 @@ stdstream_flush_both_terms()
 
 /**
  * Detaches the fd at the bottom of the mt(buffer(file(fd))) stream ... if it can.
- * Closes the stream.
- * 
+ *
  * @param os
  * @return 1 if an seemingly valid fd has been found and detached.  0 otherwise.
  */
 
 ya_result
-stdtream_detach_fd_and_close_output_stream(output_stream *os)
+stdstream_detach_fd(output_stream *os)
 {
-    output_stream *wos = os;
+    output_stream *wos = NULL;
     ya_result ret = 0;
-    
-    output_stream_flush(wos);
-    
+
+    output_stream_flush(os);
+
     if(is_mt_output_stream(wos))
     {
-        wos = mt_output_stream_get_filtered(wos);
+        output_stream filtered;
+        wos = &filtered;
+        mt_output_stream_detach_filtered(os, &filtered);
+        if(is_buffer_output_stream(&filtered))
+        {
+            wos = buffer_output_stream_get_filtered(wos);
+            if(is_fd_output_stream(wos))
+            {
+                fd_output_stream_detach(wos);
+                ret = 1;
+            }
+        }
+        else if(is_fd_output_stream(&filtered))
+        {
+            fd_output_stream_detach(&filtered);
+            ret = 1;
+        }
+        else
+        {
+            // no clues
+        }
     }
-    if(is_buffer_output_stream(wos))
+    else
     {
-        wos = buffer_output_stream_get_filtered(wos);
+        if(is_buffer_output_stream(os))
+        {
+            wos = buffer_output_stream_get_filtered(wos);
+            if(is_fd_output_stream(wos))
+            {
+                fd_output_stream_detach(wos);
+                ret = 1;
+            }
+        }
+        else if(is_fd_output_stream(os))
+        {
+            fd_output_stream_detach(os);
+            ret = 1;
+        }
+        else
+        {
+            // no clues
+        }
     }
-    if(is_fd_output_stream(wos))
+
+    return ret;
+}
+
+
+
+ya_result
+stdstream_detach_fd_and_close_filtered(output_stream *os)
+{
+    output_stream *wos = NULL;
+    ya_result ret = 0;
+
+    output_stream_flush(os);
+
+    if(is_mt_output_stream(wos))
     {
-        stdtream_detach_fd(wos);
-        ret = 1;
+        output_stream filtered;
+        wos = &filtered;
+        mt_output_stream_detach_filtered(os, &filtered);
+        if(is_buffer_output_stream(&filtered))
+        {
+            wos = buffer_output_stream_get_filtered(wos);
+            if(is_fd_output_stream(wos))
+            {
+                fd_output_stream_detach(wos);
+                ret = 1;
+            }
+        }
+        else if(is_fd_output_stream(&filtered))
+        {
+            fd_output_stream_detach(&filtered);
+            ret = 1;
+        }
+        else
+        {
+            // no clues
+        }
+
+        // closes the whole output_stream stack but not the file descriptor at the bottom
+        output_stream_close(&filtered);
+
+        ret |= 2;
     }
-    output_stream_close(os);
+    else
+    {
+        if(is_buffer_output_stream(os))
+        {
+            wos = buffer_output_stream_get_filtered(wos);
+            if(is_fd_output_stream(wos))
+            {
+                fd_output_stream_detach(wos);
+                ret = 1;
+            }
+        }
+        else if(is_fd_output_stream(os))
+        {
+            fd_output_stream_detach(os);
+            ret = 1;
+        }
+        else
+        {
+            // no clues
+        }
+    }
+
     return ret;
 }
 
 void
-stdtream_detach_fd_and_close()
+stdstream_detach_fds_and_close()
 {
-    stdtream_detach_fd_and_close_output_stream(&__termout__);
-    stdtream_detach_fd_and_close_output_stream(&__termerr__);
+    stdstream_detach_fd_and_close_filtered(&__termout__);
+    stdstream_detach_fd_and_close_filtered(&__termerr__);
+}
+
+void
+stdstream_detach_fds()
+{
+    stdstream_detach_fd(&__termout__);
+    stdstream_detach_fd(&__termerr__);
 }
 
 bool
@@ -334,37 +515,29 @@ stdstream_is_tty(output_stream *os)
     return ret;
 }
 
-void rfc_init();
-void rfc_finalize();
-void format_class_finalize();
-
 //static smp_int dnscore_time_thread_must_run = SMP_INT_INITIALIZER;
-static async_wait_s timer_thread_sync;
-static pthread_t dnscore_timer_thread_id = 0;
+static async_wait_s* timer_thread_sync = NULL;
+static thread_t dnscore_timer_thread_id = 0;
 static volatile int dnscore_timer_creator_pid = 0;
 static int dnscore_timer_period = 5;
 static volatile u32 dnscore_timer_tick = 0;
+static mutex_t dnscore_timer_mtx = MUTEX_INITIALIZER;
 
-static void*
+static noreturn void*
 dnscore_timer_thread(void * unused0)
 {
+    (void)unused0;
+
     thread_pool_setup_random_ctx();
 
+    mutex_lock(&dnscore_timer_mtx);
     dnscore_timer_tick = time(NULL);
+    mutex_unlock(&dnscore_timer_mtx);
 
-#if HAS_PTHREAD_SETNAME_NP
-#ifdef DEBUG
-#if  __APPLE__
-    pthread_setname_np("timer");
-#else
-    pthread_setname_np(pthread_self(), "timer");
-#endif // __APPLE__
+    thread_set_name("timer", 0, 0);
 
-#endif
-#endif
-    
-#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
-    thread_set_tag(pthread_self(), "timer");
+#if DNSCORE_HAS_LOG_THREAD_TAG
+    logger_handle_set_thread_tag("timer");
 #endif
     
     log_debug5("dnscore_timer_thread started");
@@ -372,28 +545,26 @@ dnscore_timer_thread(void * unused0)
     // if the counter reaches 0 then we have to stop
     
     u64 loop_period = dnscore_timer_period;
-    loop_period *= 1000000LL;
+    loop_period *= ONE_SECOND_US;
     
     u64 loop_next_timeout_epoch = timeus();
-    
-    while(!async_wait_timeout_absolute(&timer_thread_sync, loop_next_timeout_epoch))
+
+    // every timeout (1s) loops as the async_ call returned FALSE.
+    while(!async_wait_timeout_absolute(timer_thread_sync, loop_next_timeout_epoch))
     {
         /* log & term output flush handling */
         stdstream_flush_both_terms();
 
-#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
-        mutex_locked_set_monitor();
-        group_mutex_locked_set_monitor();
-        shared_group_mutex_locked_set_monitor();
-#endif
-        
         logger_flush();
 
+        mutex_lock(&dnscore_timer_mtx);
         dnscore_timer_tick = time(NULL);
+        u32 local_dnscore_timer_tick = dnscore_timer_tick;
+        mutex_unlock(&dnscore_timer_mtx);
         
         if(!dnscore_shuttingdown())
         {
-            alarm_run_tick(dnscore_timer_tick);
+            alarm_run_tick(local_dnscore_timer_tick);
         }
         else
         {
@@ -402,50 +573,73 @@ dnscore_timer_thread(void * unused0)
 
         loop_next_timeout_epoch += loop_period;
     }
-    
+
     log_debug5("dnscore_timer_thread stopping");
 
     thread_pool_destroy_random_ctx();
     
     log_debug5("dnscore_timer_thread stopped");
-    
-#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
-    thread_clear_tag(pthread_self());
-#endif
-    
-    pthread_exit(NULL); /* not from the pool, so it's the way */
 
-    return NULL;
+#if DNSCORE_HAS_LOG_THREAD_TAG
+    logger_handle_clear_thread_tag();
+#endif
+
+    thread_exit(NULL); /* not from the pool, so it's the way */
+
+    // unreachable
+    // return NULL;
+
+    return NULL; // just so the compiler shuts-up
 }
 
 void
 dnscore_reset_timer()
 {
-    int mypid = getpid();
+    assert(getpid_ex() == getpid());
+    
+    int mypid = getpid_ex();
+
+    mutex_lock(&dnscore_timer_mtx);
 
     if(mypid != dnscore_timer_creator_pid)
     {
         dnscore_timer_tick = 0;
         dnscore_timer_creator_pid = mypid;
-        
-        async_wait_init(&timer_thread_sync, 1);
+        mutex_unlock(&dnscore_timer_mtx);
+
+        if(timer_thread_sync != NULL)
+        {
+            log_err("timer_thread_sync isn't NULL");
+            abort();
+        }
+
+        timer_thread_sync = async_wait_new_instance(1);
         
         log_debug("starting timer");
 
-        if(pthread_create(&dnscore_timer_thread_id, NULL, dnscore_timer_thread, NULL) != 0)
+        if(thread_create(&dnscore_timer_thread_id, dnscore_timer_thread, NULL) != 0)
         {
+            mutex_lock(&dnscore_timer_mtx);
             dnscore_timer_thread_id = 0;
             dnscore_timer_creator_pid = 0;
+            mutex_unlock(&dnscore_timer_mtx);
             log_err("failed to create timer thread: %r", ERRNO_ERROR);
             exit(EXIT_CODE_THREADCREATE_ERROR);
         }
+    }
+    else
+    {
+        mutex_unlock(&dnscore_timer_mtx);
     }
 }
 
 u32
 dnscore_timer_get_tick()
 {
-    return dnscore_timer_tick;
+    mutex_lock(&dnscore_timer_mtx);
+    u32 ret = dnscore_timer_tick;
+    mutex_unlock(&dnscore_timer_mtx);
+    return ret;
 }
 
 static volatile u32 dnscore_features = 0;
@@ -456,20 +650,29 @@ static volatile bool dnscore_random_set = FALSE;
 static volatile bool dnscore_atexit_registered = FALSE;
 
 void
-dnscore_init_ex(u32 features)
+dnscore_init_ex(u32 features, int argc, char **argv)
 {
     if(!dnscore_arch_checked)
     {
         dnscore_arch_checkup();
         dnscore_arch_checked = TRUE;
     }
+
+    g_pid = getpid();
+    
+    debug_bench_init();
     
     debug_malloc_hooks_init();
+
+    /* Init the hash tables */
+
+    hash_init();
     
     if(!dnscore_tty_init)
     {
-        output_stream_set_void(&__termout__);
-        output_stream_set_void(&__termerr__);
+        output_stream_set_sink(&__termout__);
+        output_stream_set_sink(&__termerr__);
+
         dnscore_tty_init = TRUE;
     }
     
@@ -480,16 +683,12 @@ dnscore_init_ex(u32 features)
         dnscore_features |= DNSCORE_ZALLOC;
     }
 #endif
-
-#if DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON
-    thread_set_tag(pthread_self(), "main");
-#endif
-    
+          
     if(((features & DNSCORE_TTY_BUFFERED) && !(dnscore_features & DNSCORE_TTY_BUFFERED)) || !dnscore_tty_set)
     {
         if(dnscore_tty_set)
         {
-            stdtream_detach_fd_and_close();
+            stdstream_detach_fds_and_close();
             dnscore_tty_set = FALSE;
         }
         if(features & DNSCORE_TTY_BUFFERED)
@@ -500,7 +699,11 @@ dnscore_init_ex(u32 features)
         dnscore_features |= DNSCORE_TTY_BUFFERED;
         dnscore_tty_set = TRUE;
     }
-        
+
+#if MUTEX_CONTENTION_MONITOR
+    //mutex_contention_monitor_start();
+#endif
+
     if(!dnscore_random_set)
     {
         thread_pool_setup_random_ctx();
@@ -529,7 +732,11 @@ dnscore_init_ex(u32 features)
                 break;
             }
         }
+                
         dnscore_random_set = TRUE;
+#ifndef WIN32
+        dnscore_init_ipc_prefix();
+#endif
     }
 
     netformat_class_init();
@@ -547,6 +754,29 @@ dnscore_init_ex(u32 features)
         logger_init();
         dnscore_features |= DNSCORE_LOGGER;
     }
+    
+    if((features & DNSCORE_SHARED_HEAP) && !(dnscore_features & DNSCORE_SHARED_HEAP))
+    {
+        shared_heap_init();
+        /*
+        int ret = shared_heap_create(20);
+        if(ret < 0)
+        {
+            osformatln(&__termerr__, "[%i] failed to allocate shared memory: %r", getpid(), ret);
+            exit(1);
+        }
+        if(ret != 0)
+        {
+            osformatln(&__termerr__, "[%i] expected shared memory id to be 0, instead it is %i", getpid(), ret);
+            exit(2);
+        }
+        */
+        dnscore_features |= DNSCORE_SHARED_HEAP;
+    }
+    
+#if DNSCORE_HAS_LOG_THREAD_TAG
+    logger_handle_set_thread_tag("main");
+#endif
 
     dnscore_register_errors();
     
@@ -562,7 +792,12 @@ dnscore_init_ex(u32 features)
         dnskey_init();
         dnscore_features |= DNSCORE_CRYPTO;
     }
-    
+    /*
+    if(features & DNSCORE_SHARED_HEAP)
+    {
+        shared_heap_init();
+    }
+    */
     if(!dnscore_atexit_registered)
     {
         atexit(dnscore_finalize);
@@ -590,12 +825,32 @@ dnscore_init_ex(u32 features)
     }
     
     tcp_init_with_env();
+    
+    if((features & DNSCORE_SOCKET_SERVER) && !(dnscore_features & DNSCORE_SOCKET_SERVER))
+    {
+        if(FAIL(socket_server_init(argc, argv))) // yes, even before the core
+        {
+            puts("no server socket available ...");
+            fflush(NULL);
+            exit(EXIT_FAILURE);
+        }
+        dnscore_features |= DNSCORE_SOCKET_SERVER;
+    }
+
+#if DNSCORE_HAS_TCP_MANAGER
+    tcp_manager_init();
+#endif
 }
 
 void
 dnscore_init()
 {
-    dnscore_init_ex(DNSCORE_ALL);
+    dnscore_init_ex(DNSCORE_MOST, 0, NULL);
+}
+
+u32 dnscore_get_active_features()
+{
+    return dnscore_features;
 }
 
 void
@@ -605,7 +860,9 @@ dnscore_stop_timer()
      * Timer thread stop
      */
 
-    int mypid = getpid();
+    //yassert(getpid_ex() == getpid());
+    
+    int mypid = getpid_ex();
 
     if(mypid == dnscore_timer_creator_pid)
     {
@@ -615,19 +872,20 @@ dnscore_stop_timer()
         {
             log_debug("stopping timer");
             
-            async_wait_progress(&timer_thread_sync, 1);
+            async_wait_progress(timer_thread_sync, 1);
             
             // pthread_kill(dnscore_timer_thread_id, SIGUSR1);
-            pthread_join(dnscore_timer_thread_id, NULL);
+            thread_join(dnscore_timer_thread_id, NULL);
             
             dnscore_timer_thread_id = 0;
-            
-            async_wait_finalize(&timer_thread_sync);
+
+            async_wait_destroy(timer_thread_sync);
+            timer_thread_sync = NULL;
         }
     }
     else
     {
-#ifdef DEBUG
+#if DEBUG
         if(dnscore_timer_creator_pid != 0)
         {
             log_debug("timer owned by %d, not touching it (I'm %d)", dnscore_timer_creator_pid, mypid);
@@ -645,11 +903,11 @@ dnscore_stop_timer()
 void
 dnscore_wait_timer_stopped()
 {
-    pthread_t id = dnscore_timer_thread_id;
+    thread_t id = dnscore_timer_thread_id;
     
     if(id != 0)
     {
-        pthread_join(id, NULL);
+        thread_join(id, NULL);
     }
 }
 
@@ -671,14 +929,15 @@ void log_assert__(bool b, const char *txt, const char *file, int line)
 {
     if(!b)
     {
-        if(logger_is_running() && (g_system_logger != NULL))
+#if !HAS_SHARED_QUEUE_SUPPORT
+        if(logger_is_running() && (g_system_logger != NULL) && (g_system_logger != LOGGER_HANDLE_SINK))
         {
             //logger_handle_exit_level(MAX_U32);
             log_crit("assert: at %s:%d: %s", file, line, txt); /* this is in yassert */
             logger_flush();
         }
-
-        osformatln(&__termerr__,"assert: at %s:%d: %s", file, line, txt);
+#endif
+        osformatln(&__termerr__,"assert: [pid=%i, thread=%p] at %s:%d: %s", getpid(), thread_self(), file, line, txt);
         stdstream_flush_both_terms();
         abort();
     }
@@ -704,17 +963,17 @@ dnscore_finalize()
     
     dnscore_shutdown();
     
-#ifdef DEBUG
+#if DEBUG
     debug_bench_logdump_all();
 #endif
     
-#ifdef DEBUG
+#if DEBUG
     log_debug("exit: destroying the thread pool");
 #endif
     
     logger_flush();
     
-#ifdef DEBUG
+#if DEBUG
     log_debug("exit: bye (pid=%hd)", getpid());
     
     logger_flush();
@@ -726,18 +985,24 @@ dnscore_finalize()
     dnscore_wait_timer_stopped();
     if(dnscore_features & DNSCORE_ALARM)
     {
-        alarm_finalise();
+        alarm_finalize();
     }
     
-    config_finalise();
+    config_finalize();
         
     async_message_pool_finalize();
 
     stdstream_flush_both_terms();
     
+    signal_handler_finalize();
+    
+    xfr_input_stream_finalize();
+    
     logger_finalize();  /** @note does a logger_stop */
+    
+    config_set_log_base_path(NULL);
 
-#if defined(DEBUG) || defined(DNSCORE_TIDY_UP_MEMORY)
+#if DEBUG || defined(DNSCORE_TIDY_UP_MEMORY)
     /*
      *  It may not be required right now, but in case the stdstream are filtered/buffered
      *  this will flush them.
@@ -749,8 +1014,24 @@ dnscore_finalize()
         
 #if DNSCORE_HAS_TSIG_SUPPORT
     tsig_finalize();
+#if SSL_API_LT_110
+    CONF_modules_free();
+#endif
+    ENGINE_cleanup();
+#if SSL_API_LT_110
+    CONF_modules_unload(1);
+#endif
+    ERR_free_strings();
+    EVP_cleanup();
+    CRYPTO_cleanup_all_ex_data();
+
+    //sk_free(SSL_COMP_get_compression_methods());
+    
 #endif
     
+#ifndef WIN32
+    chroot_unmanage_all();
+#endif
     error_unregister_all();
     rfc_finalize();
     format_class_finalize();
@@ -762,14 +1043,37 @@ dnscore_finalize()
     
     stdstream_flush_both_terms();
     
-#endif // DNSCORE_TIDY_UP_MEMORY
+    dnskey_finalize();
     
-    output_stream_close(&__termerr__);
-    output_stream_close(&__termout__);
+#endif // DNSCORE_TIDY_UP_MEMORY
+
+    if(__termerr__.vtbl != NULL)
+    {
+        output_stream_close(&__termerr__);
+    }
+    if(__termout__.vtbl != NULL)
+    {
+        output_stream_close(&__termout__);
+    }
+
+    debug_bench_unregister_all();
     
     debug_stacktrace_clear();
     
-    debug_malloc_hooks_finalise();
+    debug_malloc_hooks_finalize();
+
+#if MUTEX_CONTENTION_MONITOR
+    mutex_contention_monitor_stop();
+#endif
+    
+#if DEBUG
+    FILE* dnscore_finalize_file = fopen("/tmp/dnscore_finalize_file.txt", "a+");
+    if(dnscore_finalize_file != NULL)
+    {
+        fprintf(dnscore_finalize_file, "dnscore_finalize() of pid %i properly terminated\n", getpid());
+        fclose(dnscore_finalize_file);
+    }
+#endif
 }
 
 static void
@@ -789,6 +1093,49 @@ void dnscore_signature_check(int so_mutex_t, int so_group_mutex_t)
     dnscore_signature_check_one("group_mutex_t", sizeof(group_mutex_t), so_group_mutex_t);
 }
 
-/** @} */
+/**
+ * Helper function, used for tracking generic error codes.
+ */
 
-/*----------------------------------------------------------------------------*/
+bool dnscore_monitored_isok(ya_result ret)
+{
+    if(ret == -1 /* ERROR */)
+    {
+        log_warn("error-code-monitor: a function returned the generic ERROR code");
+        debug_log_stacktrace(g_system_logger, MSG_WARNING, "error-code-monitor: ");
+    }
+
+    return ((((u32)(ret)) & ((u32)ERRNO_ERROR_BASE)) == 0);
+}
+
+/**
+ * Helper function, used for tracking generic error codes.
+ */
+
+bool dnscore_monitored_fail(ya_result ret)
+{
+    if(ret == -1 /* ERROR */)
+    {
+        log_warn("error-code-monitor: a function returned the generic ERROR code");
+        debug_log_stacktrace(g_system_logger, MSG_WARNING, "error-code-monitor: ");
+    }
+
+    return ((((u32)(ret)) & ((u32)ERRNO_ERROR_BASE)) != 0);
+}
+
+void dnscore_hookme()
+{
+    puts("BREAKPOINT HOLDER");
+}
+
+#ifdef LIBRESSL_VERSION_NUMBER
+void ENGINE_load_openssl(void) {}
+void ENGINE_cleanup(void) {}
+int SSL_library_init(void) {return 1;}
+void SSL_load_error_strings(void) {}
+void ERR_free_strings(void) {}
+void EVP_cleanup(void) {}
+void CRYPTO_cleanup_all_ex_data(void) {}
+#endif
+
+/** @} */

@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup 
  *  @ingroup 
  *  @brief 
@@ -83,7 +84,7 @@
 #include <dnscore/ptr_set.h>
 #include <dnscore/fdtools.h>
 
-#include <dnscore/u32_set.h>
+#include <dnscore/ptr_set.h>
 #include <dnscore/u64_set.h>
 #include <dnscore/list-dl.h>
 #include <dnscore/list-sl.h>
@@ -97,8 +98,10 @@
 #include "dnsdb/xfr_copy.h"
 #include "dnsdb/zdb-zone-path-provider.h"
 
-#define DEBUG_JOURNAL 1
-#ifndef DEBUG
+#if JOURNAL_CJF_ENABLED
+
+#define DEBUG_JOURNAL 0
+#if !DEBUG
 #undef DEBUG_JOURNAL
 #define DEBUG_JOURNAL 0
 #endif
@@ -131,6 +134,11 @@ extern logger_handle* g_database_logger;
 
 #define CJF_PAGE_SIZE_IN_BYTE        (CJF_SECTION_INDEX_SLOT_HEAD + (CJF_SECTION_INDEX_SLOT_COUNT * CJF_SECTION_INDEX_SLOT_SIZE))
 #define CJF_PAGE_ARBITRARY_UPDATE_SIZE      512
+
+#define CJF_SECTION_INDEX_SLOT_HEAD_SLOT (CJF_SECTION_INDEX_SLOT_HEAD / CJF_SECTION_INDEX_SLOT_SIZE)
+
+//#define log_cjf_page_debug log_debug5
+#define log_cjf_page_debug log_debug
 
 /*
  * PAGE
@@ -188,7 +196,7 @@ struct journal_cjf_page_cache_item
 {
     u64 file_offset;
     journal_cjf_page_tbl_item *buffer;
-    int fd;
+    file_pool_file_t file;
     s16 first_written_entry;
     s16 last_written_entry; // set to the end means not dirty
 };
@@ -197,9 +205,11 @@ typedef struct journal_cjf_page_cache_item journal_cjf_page_cache_item;
 
 // fd => list_dl(page_cache_item)
 
-static u32_set page_cache_item_by_fd = U32_SET_EMPTY;
+static ptr_set page_cache_item_by_file = PTR_SET_PTR_EMPTY;
 static list_dl_s page_cache_mru = {{NULL, NULL}, {NULL, NULL}, 0};
 static group_mutex_t page_cache_mtx = GROUP_MUTEX_INITIALIZER;
+
+static void journal_cjf_page_cache_free(journal_cjf_page_cache_item *page_cache);
 
 void
 journal_cjf_page_cache_init()
@@ -216,52 +226,105 @@ journal_cjf_page_cache_init()
     list_dl_init(&page_cache_mru);
     
     empty_page_tbl_header_and_zeroes_initialised = TRUE;
-    //page_cache_mru.size
 }
 
 static void
-journal_cjf_page_cache_item_undirty(journal_cjf_page_cache_item *sci)
+journal_cjf_page_cache_remove_from_mru(journal_cjf_page_cache_item *page_cache)
 {
-    sci->first_written_entry = (1 + CJF_SECTION_INDEX_SLOT_COUNT);
-    sci->last_written_entry = -1;
+    if(list_dl_size(&page_cache_mru) > 0)
+    {
+        list_dl_remove(&page_cache_mru, page_cache);
+    }
+}
+
+static void
+journal_cjf_page_cache_add_to_mru(journal_cjf_page_cache_item *page_cache)
+{
+    list_dl_insert(&page_cache_mru, page_cache);
+}
+
+/*
+void
+journal_cjf_page_cache_finalize()
+{
+}
+*/
+
+/**
+ * called undirty because clear and clean are too similar
+ * 
+ * @param page_cache
+ */
+
+static void
+journal_cjf_page_cache_item_undirty(journal_cjf_page_cache_item *page_cache)
+{
+    page_cache->first_written_entry = (1 + CJF_SECTION_INDEX_SLOT_COUNT);
+    page_cache->last_written_entry = -1;
+}
+
+static void
+journal_cjf_page_cache_item_flush_internal(journal_cjf_page_cache_item *page_cache)
+{
+    file_pool_file_t file = page_cache->file;
+    
+    // at file_offset, write from first to last entries
+
+    off_t first_offset = page_cache->file_offset + (page_cache->first_written_entry * CJF_SECTION_INDEX_SLOT_SIZE);
+    size_t size = ((page_cache->last_written_entry - page_cache->first_written_entry) + 1) * CJF_SECTION_INDEX_SLOT_SIZE;
+
+    log_cjf_page_debug("cjf: %s: flush page @%lli=%llx size=%i", file_pool_filename(file), first_offset, first_offset, size);
+    
+    for(;;)
+    {
+        file_pool_seek(file, first_offset, SEEK_SET);
+
+        ya_result ret = file_pool_writefully(file, &page_cache->buffer[page_cache->first_written_entry], size);
+
+        if(ret == (s32)size)
+        {
+            break;
+        }
+
+        // should no be reached, but if an issue occur, better not hammer the logs
+
+        log_err("cjf: %s: flush page @%lli=%llx size=%i failed with: %r", file_pool_filename(file), first_offset, first_offset, size, ret);
+
+        sleep(1);
+    }
+
+    // mark the entry as not being used
+
+    journal_cjf_page_cache_item_undirty(page_cache);
 }
 
 /**
- * @param sci
+ * @param page_cache
  * @return 
  */
 
 static void
-journal_cjf_page_cache_item_flush(journal_cjf_page_cache_item *sci)
+journal_cjf_page_cache_item_flush(journal_cjf_page_cache_item *page_cache)
 {
     yassert(group_mutex_islocked(&page_cache_mtx));
     
-    if(sci != NULL)
+    if(page_cache != NULL)
     {
-        if(sci->first_written_entry <= sci->last_written_entry)
+        if(page_cache->first_written_entry <= page_cache->last_written_entry)
         {
-            int fd = sci->fd;
-            u64 here = lseek(fd, 0, SEEK_CUR);
+            file_pool_file_t file = page_cache->file;
+            size_t here;
+                        
+            file_pool_tell(file, &here);
+            
+            journal_cjf_page_cache_item_flush_internal(page_cache);
 
-            // at file_offset, write from first to last entries
-
-            off_t first_offset = sci->file_offset + (sci->first_written_entry * CJF_SECTION_INDEX_SLOT_SIZE);
-
-            log_debug5("journal_cjf_page_cache_flush_item fd=%i offset=%lli=%llx size=%i)", fd, first_offset, first_offset, (sci->last_written_entry - sci->first_written_entry) * CJF_SECTION_INDEX_SLOT_SIZE);
-
-            lseek(fd, first_offset, SEEK_SET);
-            writefully(fd, &sci->buffer[sci->first_written_entry], ((sci->last_written_entry - sci->first_written_entry) + 1) * CJF_SECTION_INDEX_SLOT_SIZE);
-
-            // mark the entry as not being used
-
-            journal_cjf_page_cache_item_undirty(sci);
-
-            lseek(fd, here, SEEK_SET);
+            file_pool_seek(file, (ssize_t)here, SEEK_SET);
         }
     }
     else
     {
-        log_warn("cjf: journal_cjf_page_cache_flush_item(NULL)");
+        log_err("cjf: journal_cjf_page_cache_flush_item(NULL)");
     }
 }
 
@@ -272,183 +335,156 @@ journal_cjf_page_cache_cull()
     
     // culls a cache entry at the end of the MRU
     
-    if(list_dl_size(&page_cache_mru) > journal_cfj_page_mru_size)
+    log_cjf_page_debug("cjf: cull pages");
+    
+    while(list_dl_size(&page_cache_mru) > journal_cfj_page_mru_size)
     {
-        log_debug6("journal_cjf_page_cache_cull() %i > %i, removing and flushing last",
-                list_dl_size(&page_cache_mru) > journal_cfj_page_mru_size);
         // get the tail one
-        journal_cjf_page_cache_item *sci = (journal_cjf_page_cache_item*)list_dl_remove_last(&page_cache_mru);
+        journal_cjf_page_cache_item *page_cache = (journal_cjf_page_cache_item*)list_dl_remove_last(&page_cache_mru);
         // flush it
-        journal_cjf_page_cache_item_flush(sci);
+        journal_cjf_page_cache_item_flush(page_cache);
         // free it
     }
-}
-
-static journal_cjf_page_cache_item *
-journal_cjf_page_cache_new(int fd, u32 file_offset)
-{
-    /// @todo 20150113 edf -- make a rule that culls a cache entry at the end of the MRU
-    /// @todo 20150114 edf -- use a pool
     
-    journal_cjf_page_cache_item *sci;
-    
-    MALLOC_OR_DIE(journal_cjf_page_cache_item*, sci, sizeof(journal_cjf_page_cache_item), JCJFPCI_TAG);
-    sci->file_offset = file_offset;
-    MALLOC_OR_DIE(journal_cjf_page_tbl_item*, sci->buffer, CJF_PAGE_SIZE_IN_BYTE , JCJFTI_TAG);
-    sci->fd = fd;
-    journal_cjf_page_cache_item_undirty(sci);
-    
-#ifdef DEBUG
-    memset(sci->buffer, 0xfe, CJF_PAGE_SIZE_IN_BYTE);
-#endif
-    
-    return sci;
+    log_cjf_page_debug("cjf: cull pages done");
 }
 
 static void
-journal_cjf_page_cache_delete(int fd, u32 file_offset)
+journal_cjf_page_mru_clear()
 {
     yassert(group_mutex_islocked(&page_cache_mtx));
     
-    u32_node *fd_node = u32_set_avl_find(&page_cache_item_by_fd, (u32)fd);
+    // culls a cache entry at the end of the MRU
     
-    if(fd_node != NULL)
+    log_cjf_page_debug("cjf: clear pages");
+    
+    while(list_dl_size(&page_cache_mru) > 0)
+    {
+        // get the tail one
+        journal_cjf_page_cache_item *page_cache = (journal_cjf_page_cache_item*)list_dl_remove_last(&page_cache_mru);
+        // flush it
+        journal_cjf_page_cache_item_flush(page_cache);
+        // free it
+        journal_cjf_page_cache_free(page_cache);
+    }
+    
+    log_cjf_page_debug("cjf: clear pages done");
+}
+
+static journal_cjf_page_cache_item *
+journal_cjf_page_cache_new(file_pool_file_t file, u32 file_offset)
+{
+    journal_cjf_page_cache_item *page_cache;
+    
+    log_cjf_page_debug("cjf: %s: new page cache for offset %i", file_pool_filename(file), file_offset);
+    
+    ZALLOC_OBJECT_OR_DIE(page_cache, journal_cjf_page_cache_item, JCJFPCI_TAG);
+    page_cache->file_offset = file_offset;
+    MALLOC_OR_DIE(journal_cjf_page_tbl_item*, page_cache->buffer, CJF_PAGE_SIZE_IN_BYTE , JCJFTI_TAG);
+    page_cache->file = file;
+    journal_cjf_page_cache_item_undirty(page_cache);
+    
+#if DEBUG
+    memset(page_cache->buffer, 0xfe, CJF_PAGE_SIZE_IN_BYTE);
+#endif
+    
+    return page_cache;
+}
+
+static void
+journal_cjf_page_cache_free(journal_cjf_page_cache_item *page_cache)
+{
+#if DEBUG
+    memset(page_cache->buffer, 0xfd, CJF_PAGE_SIZE_IN_BYTE);
+#endif
+    
+    free(page_cache->buffer);
+    ZFREE_OBJECT(page_cache);
+}
+
+static inline u64_set*
+journal_cjf_page_cache_set_from_file(file_pool_file_t file)
+{
+    yassert(group_mutex_islocked(&page_cache_mtx));
+    
+    ptr_node *file_node = ptr_set_find(&page_cache_item_by_file, file);
+    if(file_node != NULL)
+    {
+        return (u64_set*)&file_node->value;
+    }
+    else
+    {
+        log_warn("cjf: %s: file is not cached", file_pool_filename(file));
+        return NULL;
+    }
+}
+
+static inline journal_cjf_page_cache_item*
+journal_cjf_page_cache_from_set(u64_set* page_cache_set, u32 file_offset)
+{
+    u64_node *file_offset_node = u64_set_find(page_cache_set, file_offset);
+    
+    if(file_offset_node != NULL)
+    {
+        return (journal_cjf_page_cache_item*)file_offset_node->value;
+    }
+    else
+    {
+        log_err("cjf: page is not cached");
+    }
+    
+    return NULL;
+}
+
+static inline journal_cjf_page_cache_item*
+journal_cjf_page_cache_from_file(file_pool_file_t file, u32 file_offset)
+{
+    u64_set* page_cache_set = journal_cjf_page_cache_set_from_file(file);
+    
+    if(page_cache_set != NULL)
+    {
+        journal_cjf_page_cache_item *page_cache = journal_cjf_page_cache_from_set(page_cache_set, file_offset);
+        
+        return page_cache;
+    }
+    
+    return NULL;
+}
+
+static void
+journal_cjf_page_cache_delete_from_file_and_offset(const file_pool_file_t file, u32 file_offset)
+{
+    yassert(group_mutex_islocked(&page_cache_mtx));
+    
+    log_cjf_page_debug("cjf: %s: dropping page at offset %i", file_pool_filename(file), file_offset);
+    
+    u64_set* page_cache_set = journal_cjf_page_cache_set_from_file(file);
+            
+    if(page_cache_set != NULL)
     {
         // get the PAGE cache at the file_offset
 
-        u64_node *file_offset_node = u64_set_avl_find((u64_set*)&fd_node->value, file_offset);
+        journal_cjf_page_cache_item *page_cache = journal_cjf_page_cache_from_set(page_cache_set, file_offset);
 
-        if(file_offset_node != NULL)
+        if(page_cache != NULL)
         {
-            journal_cjf_page_cache_item *sci = (journal_cjf_page_cache_item*)file_offset_node->value;
-            u64_set_avl_delete((u64_set*)&fd_node->value, file_offset);
-            
-            journal_cjf_page_cache_item_flush(sci);
-    
-            if(list_dl_size(&page_cache_mru) > 0)
-            {
-                list_dl_remove(&page_cache_mru, sci);
-            }
+            u64_set_delete(page_cache_set, file_offset);
 
-            free(sci->buffer);
-            free(sci);
+            journal_cjf_page_cache_item_flush(page_cache);
+
+            journal_cjf_page_cache_remove_from_mru(page_cache);
+
+            journal_cjf_page_cache_free(page_cache);
         }
-        else
-        {
-            log_warn("cjf: %i:%x page is not cached", fd, file_offset);
-        }
-    }
-    else
-    {
-        log_warn("cjf: %i:%x has no page cache", fd, file_offset);
     }
 }
 
-static void
-journal_cjf_page_cache_item_delete(journal_cjf_page_cache_item *sci)
-{
-    journal_cjf_page_cache_delete(sci->fd, sci->file_offset);
-}
-
-static void
-journal_cjf_page_cache_write(int fd, u64 file_offset, s16 offset, const void *value, u32 value_len)
-{
-    log_debug6("journal_cjf_page_cache_write(%i, %lli=%llx, %i, %p, %i)", fd, file_offset, file_offset, offset, value, value_len);
-    
-    group_mutex_lock(&page_cache_mtx, GROUP_MUTEX_WRITE);
-    // get or create a node for the fd
-    
-    u32_node *fd_node = u32_set_avl_insert(&page_cache_item_by_fd, (u32)fd);
-    
-    // make some room, if needed
-    
-    journal_cjf_page_cache_cull();
-    
-    // get or create an PAGE chache at the file_offset
-    
-    u64_node *file_offset_node = u64_set_avl_insert((u64_set*)&fd_node->value, file_offset);
-    
-    journal_cjf_page_cache_item *sci;
-    
-    if(file_offset_node->value != NULL)
-    {
-        // already got that one
-        
-        sci = (journal_cjf_page_cache_item*)file_offset_node->value;
-    }
-    else
-    {
-        // have to create it
-        sci = journal_cjf_page_cache_new(fd, file_offset);
-        
-        // if the file is big enough: load it
-        
-        struct stat st;
-        if(fstat(fd, &st) == 0)
-        {
-            if(file_offset + CJF_PAGE_SIZE_IN_BYTE <= st.st_size)
-            {
-                off_t here = lseek(fd, 0, SEEK_CUR);
-                yassert(here != (off_t)-1);
-                
-                off_t there = lseek(fd, file_offset, SEEK_SET);
-                yassert(there == file_offset);
-                // it is a READ, because to write the cache, it must first be loaded
-                ssize_t size = readfully(fd, sci->buffer, CJF_PAGE_SIZE_IN_BYTE);
-#ifdef DEBUG
-                log_memdump_ex(g_database_logger, MSG_DEBUG6, sci->buffer, size, 32, OSPRINT_DUMP_ADDRESS|OSPRINT_DUMP_HEX);
-#endif                
-                yassert(size == CJF_PAGE_SIZE_IN_BYTE);
-                
-                there = lseek(fd, here, SEEK_SET);
-                yassert(there == here);
-                
-                (void)size;
-                (void)there;
-                (void)here;
-            }
-        }
-        
-        file_offset_node->value = sci;
-    }
-    
-    if(offset > sci->last_written_entry)
-    {
-        s16 value_len_slots = ((value_len + 7) >> 3) - 1;
-        
-        yassert(value_len_slots >= 0);
-        
-        sci->last_written_entry = offset + value_len_slots;
-    }
-    
-    if(offset < sci->first_written_entry)
-    {
-        sci->first_written_entry = offset;
-    }
-    
-    memcpy(&sci->buffer[offset], value, value_len);
-    
-    // move at the head of the MRU
-    
-    if(list_dl_size(&page_cache_mru) > 0)
-    {
-        list_dl_remove(&page_cache_mru, sci);
-    }
-    list_dl_insert(&page_cache_mru, sci);
-    
-    group_mutex_unlock(&page_cache_mtx, GROUP_MUTEX_WRITE);
-}
-
-static void
-journal_cjf_page_cache_read(int fd, u64 file_offset, s16 offset, void *value, u32 value_len)
+static journal_cjf_page_cache_item*
+journal_cjf_page_cache_get_for_rw(file_pool_file_t file, u64 file_offset)
 {
     // get or create a node for the fd
     
-    log_debug6("journal_cjf_page_cache_read(%i, %lli=%llx, %i, %p, %i)", fd, file_offset, file_offset, offset, value, value_len);
-    
-    group_mutex_lock(&page_cache_mtx, GROUP_MUTEX_WRITE);
-    
-    u32_node *fd_node = u32_set_avl_insert(&page_cache_item_by_fd, (u32)fd);
+    ptr_node *file_node = ptr_set_insert(&page_cache_item_by_file, file);
     
     // make some room, if needed
     
@@ -456,93 +492,169 @@ journal_cjf_page_cache_read(int fd, u64 file_offset, s16 offset, void *value, u3
     
     // get or create an PAGE cache at the file_offset
     
-    u64_node *file_offset_node = u64_set_avl_insert((u64_set*)&fd_node->value, file_offset);
+    u64_node *file_offset_node = u64_set_insert((u64_set*)&file_node->value, file_offset);
     
-    journal_cjf_page_cache_item *sci;
+    journal_cjf_page_cache_item *page_cache;
     
     if(file_offset_node->value != NULL)
     {
         // already got that one
         
-        sci = (journal_cjf_page_cache_item*)file_offset_node->value;
+        page_cache = (journal_cjf_page_cache_item*)file_offset_node->value;
     }
     else
     {
         // have to create it
-        sci = journal_cjf_page_cache_new(fd, file_offset);
+        page_cache = journal_cjf_page_cache_new(file, file_offset);
         
         // if the file is big enough: load it
         
-        struct stat st;
-        if(fstat(fd, &st) == 0)
+        size_t the_file_size;
+        
+        if(ISOK(file_pool_get_size(file, &the_file_size)))
         {
-            if(file_offset + CJF_PAGE_SIZE_IN_BYTE <= st.st_size)
+            if(file_offset + CJF_PAGE_SIZE_IN_BYTE <= the_file_size)
             {
-                off_t here = lseek(fd, 0, SEEK_CUR);
-                yassert(here != (off_t)-1);
-                
-                off_t there = lseek(fd, file_offset, SEEK_SET);
-                yassert(there == file_offset);
-                
-                ssize_t size = readfully(fd, sci->buffer, CJF_PAGE_SIZE_IN_BYTE);                
-#ifdef DEBUG
-                log_memdump_ex(g_database_logger, MSG_DEBUG6, sci->buffer, size, 32, OSPRINT_DUMP_ADDRESS|OSPRINT_DUMP_HEX);
+                size_t here = ~0ULL;
+                file_pool_tell(file, &here);
+                yassert(here != ~0ULL);
+
+#ifndef NDEBUG
+                ssize_t there =
 #endif
+                file_pool_seek(file, file_offset, SEEK_SET);
+                yassert(there == (ssize_t)file_offset);
+                // it is a READ, because to write the cache, it must first be loaded
+                ssize_t size = file_pool_readfully(file, page_cache->buffer, CJF_PAGE_SIZE_IN_BYTE);
+#if DEBUG
+                log_memdump_ex(g_database_logger, MSG_DEBUG6, page_cache->buffer, size, 32, OSPRINT_DUMP_ADDRESS|OSPRINT_DUMP_HEX);
+#endif                
                 yassert(size == CJF_PAGE_SIZE_IN_BYTE);
-                
-                there = lseek(fd, here, SEEK_SET);
-                yassert(there == here);
+                (void)size;
+#ifndef NDEBUG                
+                there = 
+#endif
+file_pool_seek(file, here, SEEK_SET);
+#ifndef NDEBUG
+                yassert(there == (ssize_t)here);
                 (void)size;
                 (void)there;
                 (void)here;
+#endif
             }
         }
         
-        file_offset_node->value = sci;
+        file_offset_node->value = page_cache;
+        
+#if DEBUG
+        log_debug("test");
+#endif
     }
     
-    memcpy(value, &sci->buffer[offset], value_len);
+    return page_cache;
+}
+
+static void
+journal_cjf_page_cache_write(file_pool_file_t file, u64 file_offset, s16 offset, const void *value, u32 value_len)
+{
+    log_cjf_page_debug("cjf: %s: writing slot %i from page at offset %llu", file_pool_filename(file), offset, file_offset);
+    
+    group_mutex_lock(&page_cache_mtx, GROUP_MUTEX_WRITE);
+    // get or create a node for the fd
+    
+    journal_cjf_page_cache_item *page_cache = journal_cjf_page_cache_get_for_rw(file, file_offset);
+    
+    // update the last written entry to keep the highest value
+    
+    if(offset > page_cache->last_written_entry)
+    {
+        s16 value_len_slots = ((value_len + 7) >> 3) - 1;
+        
+        yassert(value_len_slots >= 0);
+        
+        page_cache->last_written_entry = offset + value_len_slots;
+    }
+    
+    // update the last written entry to keep the smallest value
+    
+    if(offset < page_cache->first_written_entry)
+    {
+        page_cache->first_written_entry = offset;
+    }
+    
+    // update the entry
+    
+    memcpy(&page_cache->buffer[offset], value, value_len);
     
     // move at the head of the MRU
     
-    if(list_dl_size(&page_cache_mru) > 0)
-    {
-        list_dl_remove(&page_cache_mru, sci);
-    }
-    list_dl_insert(&page_cache_mru, sci);
+    journal_cjf_page_cache_remove_from_mru(page_cache);
+    journal_cjf_page_cache_add_to_mru(page_cache);
     
     group_mutex_unlock(&page_cache_mtx, GROUP_MUTEX_WRITE);
 }
 
+static void
+journal_cjf_page_cache_read(file_pool_file_t file, u64 file_offset, s16 offset, void *value, u32 value_len)
+{
+    log_cjf_page_debug("cjf: %s: reading slot %i from page at offset %llu", file_pool_filename(file), offset, file_offset);
+    
+    group_mutex_lock(&page_cache_mtx, GROUP_MUTEX_WRITE);
+    // get or create a node for the fd
+    
+    journal_cjf_page_cache_item *page_cache = journal_cjf_page_cache_get_for_rw(file, file_offset);
+    
+    yassert(offset + value_len <= CJF_PAGE_SIZE_IN_BYTE);
+    
+    memcpy(value, &page_cache->buffer[offset], value_len);
+    
+    // move at the head of the MRU
+    
+    journal_cjf_page_cache_remove_from_mru(page_cache);
+    journal_cjf_page_cache_add_to_mru(page_cache);
+    
+    group_mutex_unlock(&page_cache_mtx, GROUP_MUTEX_WRITE);
+}
+
+/**
+ * @param file
+ * @param file_offset
+ * @param offset in slot size units (8 bytes)
+ * @param value
+ */
+
 void
-journal_cjf_page_cache_write_item(int fd, u64 file_offset, s16 offset, const journal_cjf_page_tbl_item *value)
+journal_cjf_page_cache_write_item(file_pool_file_t file, u64 file_offset, s16 offset, const journal_cjf_page_tbl_item *value)
 {
     yassert(file_offset >= CJF_HEADER_SIZE);
-    log_debug5("journal_cjf_page_cache_write_item(%i, %lli=%llx, %i, {%08x,%08x})", fd, file_offset, file_offset, offset, value->ends_with_serial, value->stream_file_offset);
-    journal_cjf_page_cache_write(fd, file_offset, offset + 2, value, sizeof(journal_cjf_page_tbl_item));
+    log_cjf_page_debug("cjf: %s: %lli=%llx [ %i ] write {%08x,%08x}", file_pool_filename(file), file_offset, file_offset, offset, value->ends_with_serial, value->stream_file_offset);
+    
+    journal_cjf_page_cache_write(file, file_offset, offset + CJF_SECTION_INDEX_SLOT_HEAD_SLOT, value, sizeof(journal_cjf_page_tbl_item));
 }
 
 void
-journal_cjf_page_cache_read_item(int fd, u64 file_offset, s16 offset, journal_cjf_page_tbl_item *value)
+journal_cjf_page_cache_read_item(file_pool_file_t file, u64 file_offset, s16 offset, journal_cjf_page_tbl_item *value)
 {
     yassert(file_offset >= CJF_HEADER_SIZE);
-    journal_cjf_page_cache_read(fd, file_offset, offset + 2, value, sizeof(journal_cjf_page_tbl_item));
-    log_debug5("journal_cjf_page_cache_read_item(%i, %lli=%llx, %i, {%08x,%08x})", fd, file_offset, file_offset, offset, value->ends_with_serial, value->stream_file_offset);
+    journal_cjf_page_cache_read(file, file_offset, offset + CJF_SECTION_INDEX_SLOT_HEAD_SLOT, value, sizeof(journal_cjf_page_tbl_item));
+    log_cjf_page_debug("cjf: %s: %lli=%llx [ %i ] read {%08x,%08x}", file_pool_filename(file), file_offset, file_offset, offset, value->ends_with_serial, value->stream_file_offset);
 }
 
 void
-journal_cjf_page_cache_write_header(int fd, u64 file_offset,  const journal_cjf_page_tbl_header *value)
+journal_cjf_page_cache_write_header(file_pool_file_t file, u64 file_offset,  const journal_cjf_page_tbl_header *value)
 {
     yassert(file_offset >= CJF_HEADER_SIZE);
     yassert(value->count <= value->size);
     yassert(((value->count <= value->size) && (value->next_page_offset < file_offset)) || (value->next_page_offset > file_offset) || (value->next_page_offset == 0));
     yassert(value->stream_end_offset != 0);
-    log_debug5("journal_cjf_page_cache_write_header(%i, %lli=%llx, {%08x,%3d,%3d,%08x})", fd, file_offset, file_offset, value->next_page_offset, value->count, value->size, value->stream_end_offset);
-    journal_cjf_page_cache_write(fd, file_offset, 0, value, CJF_SECTION_INDEX_SLOT_HEAD);
+    
+    log_cjf_page_debug("cjf: %s: %lli=%llx update header {%08x,%3d,%3d,%08x}", file_pool_filename(file), file_offset, file_offset, value->next_page_offset, value->count, value->size, value->stream_end_offset);
+    
+    journal_cjf_page_cache_write(file, file_offset, 0, value, CJF_SECTION_INDEX_SLOT_HEAD);
 }
 
 void
-journal_cjf_page_cache_write_new_header(int fd, u64 file_offset)
+journal_cjf_page_cache_write_new_header(file_pool_file_t file, u64 file_offset)
 {
     static const journal_cjf_page_tbl_header new_page_header = PAGE_INITIALIZER;
     static const journal_cjf_page_tbl_item empty_item = {0,0};
@@ -550,229 +662,199 @@ journal_cjf_page_cache_write_new_header(int fd, u64 file_offset)
     yassert(file_offset >= CJF_HEADER_SIZE);
     yassert(value->count <= value->size);
     yassert(((value->count <= value->size) && (value->next_page_offset < file_offset)) || (value->next_page_offset > file_offset) || (value->next_page_offset == 0));
-    log_debug5("journal_cjf_page_cache_write_new_header(%i, %lli=%llx, {%08x,%3d,%3d,%08x})", fd, file_offset, file_offset, value->next_page_offset, value->count, value->size, value->stream_end_offset);
-    journal_cjf_page_cache_write(fd, file_offset, 0, value, CJF_SECTION_INDEX_SLOT_HEAD);
+    
+    log_cjf_page_debug("cjf: %s: %lli=%llx write header {%08x,%3d,%3d,%08x}", file_pool_filename(file), file_offset, file_offset, value->next_page_offset, value->count, value->size, value->stream_end_offset);
+    
+    journal_cjf_page_cache_write(file, file_offset, 0, value, CJF_SECTION_INDEX_SLOT_HEAD);
     
     for(int i = 0; i < CJF_SECTION_INDEX_SLOT_COUNT; ++i)
     {
-        journal_cjf_page_cache_write_item(fd, file_offset, i, &empty_item);
+        journal_cjf_page_cache_write_item(file, file_offset, i, &empty_item);
     }
 }
 
 void
-journal_cjf_page_cache_read_header(int fd, u64 file_offset,  journal_cjf_page_tbl_header *value)
+journal_cjf_page_cache_read_header(file_pool_file_t file, u64 file_offset,  journal_cjf_page_tbl_header *value)
 {
     yassert(file_offset >= CJF_HEADER_SIZE);
-    journal_cjf_page_cache_read(fd, file_offset, 0, value, CJF_SECTION_INDEX_SLOT_HEAD);
-    log_debug5("journal_cjf_page_cache_read_header(%i, %lli=%llx, {%08x,%3d,%3d,%08x})", fd, file_offset, file_offset, value->next_page_offset, value->count, value->size, value->stream_end_offset);
+    journal_cjf_page_cache_read(file, file_offset, 0, value, CJF_SECTION_INDEX_SLOT_HEAD);
+    
+    log_cjf_page_debug("cjf: %s: %lli=%llx read header {%08x,%3d,%3d,%08x}", file_pool_filename(file), file_offset, file_offset, value->next_page_offset, value->count, value->size, value->stream_end_offset);
 }
 
 static void
-journal_cjf_page_cache_items_flush(u64_set *sci_set)
+journal_cjf_page_cache_items_flush(u64_set *page_cache_set)
 {
     yassert(group_mutex_islocked(&page_cache_mtx));
     
-    off_t here = -1;
-    int fd = -1;
-    u64_set_avl_iterator iter;
-    u64_set_avl_iterator_init(sci_set, &iter);
-    while(u64_set_avl_iterator_hasnext(&iter))
+    size_t here;
+    file_pool_file_t file = NULL;
+    u64_set_iterator iter;
+    u64_set_iterator_init(page_cache_set, &iter);
+    while(u64_set_iterator_hasnext(&iter))
     {
-        u64_node *file_offset_node = u64_set_avl_iterator_next_node(&iter);
-        journal_cjf_page_cache_item *sci = (journal_cjf_page_cache_item*)file_offset_node->value;
-        if(sci->first_written_entry <= sci->last_written_entry)
+        u64_node *file_offset_node = u64_set_iterator_next_node(&iter);
+        journal_cjf_page_cache_item *page_cache = (journal_cjf_page_cache_item*)file_offset_node->value;
+        if(page_cache->first_written_entry <= page_cache->last_written_entry)
         {
-            if(here < 0)
+            if(file == NULL)
             {
-                fd = sci->fd;
-                here = lseek(fd, 0, SEEK_CUR);
+                file = page_cache->file;
+                yassert(file != NULL);
+                file_pool_tell(file, &here); // can only fail if &here is NULL
             }
-
-            // at file_offset, write from first to last entries
-
-            off_t first_offset = sci->file_offset + (sci->first_written_entry * CJF_SECTION_INDEX_SLOT_SIZE);
-            //off_t last_offset = sci->file_offset + (sci->last_written_entry * CJF_SECTION_INDEX_SLOT_SIZE);
             
-            // +1 because it memorises the offsets, the length of the last one has to be taken into account
-            int size = (sci->last_written_entry - sci->first_written_entry + 1) * CJF_SECTION_INDEX_SLOT_SIZE;
-
-            log_debug5("journal_cjf_page_cache_items_flush fd=%i offset=%lli=%llx size=%i)", fd, first_offset, first_offset, size);
+            yassert(file == page_cache->file);
             
-            lseek(fd, first_offset, SEEK_SET);
-            writefully(fd, &sci->buffer[sci->first_written_entry], size);
-
-            // mark the entry as not being used
-
-            journal_cjf_page_cache_item_undirty(sci);
+            journal_cjf_page_cache_item_flush_internal(page_cache);
 
             // do not move in the MRU : it will naturally fall down if not used anymore
             // (yup, nothing to do)
         }
     }
 
-    if(here >= 0)
+    if(file != NULL)
     {
-        lseek(fd, here, SEEK_SET);
+        file_pool_seek(file, here, SEEK_SET);
     }
 }
 
 static void
-journal_cjf_page_cache_items_close(u64_set *sci_set)
+journal_cjf_page_cache_items_close(u64_set *page_cache_set)
 {
     yassert(group_mutex_islocked(&page_cache_mtx));
     
+    /*
     list_sl_s delete_list;
     list_sl_init(&delete_list);
-            
-    off_t here = -1;
-    int fd = -1;
-    u64_set_avl_iterator iter;
-    u64_set_avl_iterator_init(sci_set, &iter);
-    while(u64_set_avl_iterator_hasnext(&iter))
+    */      
+    size_t here;
+    file_pool_file_t file = NULL;
+    u64_set_iterator iter;
+    u64_set_iterator_init(page_cache_set, &iter);
+    while(u64_set_iterator_hasnext(&iter))
     {
-        u64_node *file_offset_node = u64_set_avl_iterator_next_node(&iter);
-        journal_cjf_page_cache_item *sci = (journal_cjf_page_cache_item*)file_offset_node->value;
-        if(sci->first_written_entry <= sci->last_written_entry)
+        u64_node *file_offset_node = u64_set_iterator_next_node(&iter);
+        journal_cjf_page_cache_item *page_cache = (journal_cjf_page_cache_item*)file_offset_node->value;
+        
+        if(page_cache->first_written_entry <= page_cache->last_written_entry) // page needs to be flushed ?
         {
-            if(here < 0)
+            if(file == NULL)
             {
-                fd = sci->fd;
-                here = lseek(fd, 0, SEEK_CUR);
+                file = page_cache->file;
+                yassert(file != NULL);
+                file_pool_tell(file, &here); // remember the position
             }
-
-            // at file_offset, write from first to last entries
-
-            off_t first_offset = sci->file_offset + (sci->first_written_entry * CJF_SECTION_INDEX_SLOT_SIZE);
-            //off_t last_offset = sci->file_offset + (sci->last_written_entry * CJF_SECTION_INDEX_SLOT_SIZE);
-
-            log_debug5("journal_cjf_page_cache_items_close fd=%i offset=%lli=%llx size=%i)", fd, first_offset, first_offset, (sci->last_written_entry - sci->first_written_entry) * CJF_SECTION_INDEX_SLOT_SIZE);
             
-            lseek(fd, first_offset, SEEK_SET);
-            writefully(fd, &sci->buffer[sci->first_written_entry], (sci->last_written_entry - sci->first_written_entry) * CJF_SECTION_INDEX_SLOT_SIZE);
-
-            // mark the entry as not being used
-
-            journal_cjf_page_cache_item_undirty(sci);
-
+            yassert(file == page_cache->file);
+            
+            journal_cjf_page_cache_item_flush_internal(page_cache);
+            /*
             // delete the item
-            list_sl_push(&delete_list, sci);
-            
+            list_sl_push(&delete_list, page_cache);
+            */
             file_offset_node->value = NULL;
         }
         
-        if(list_dl_size(&page_cache_mru) > 0)
-        {
-            list_dl_remove(&page_cache_mru, sci);
-        }
+        journal_cjf_page_cache_remove_from_mru(page_cache);
+        journal_cjf_page_cache_free(page_cache);
     }
 
-    if(here >= 0)
+    if(file != NULL)
     {
-        lseek(fd, here, SEEK_SET);
-        journal_cjf_page_cache_item *sci;
-        while((sci = (journal_cjf_page_cache_item*)list_sl_pop(&delete_list)) != NULL)
+        file_pool_seek(file, here, SEEK_SET); // go back to the position
+        
+        // delete pages
+        /*
+        journal_cjf_page_cache_item *page_cache;
+        while((page_cache = (journal_cjf_page_cache_item*)list_sl_pop(&delete_list)) != NULL)
         {
-            journal_cjf_page_cache_item_delete(sci);
+            journal_cjf_page_cache_remove_from_mru(page_cache);
+            
+            journal_cjf_page_cache_free(page_cache);
         }
+        */
     }
     
-    u64_set_avl_destroy(sci_set);
+    u64_set_destroy(page_cache_set);
 }
 
 void
-journal_cjf_page_cache_flush(int fd)
+journal_cjf_page_cache_flush(file_pool_file_t file)
 {
     group_mutex_lock(&page_cache_mtx, GROUP_MUTEX_WRITE);
-    u32_node *fd_node = u32_set_avl_find(&page_cache_item_by_fd, (u32)fd);
-    
-    if(fd_node != NULL)
+    u64_set* page_cache_set = journal_cjf_page_cache_set_from_file(file);
+    if(page_cache_set != NULL)
     {
-        journal_cjf_page_cache_items_flush((u64_set*)&fd_node->value);
-    }
-    group_mutex_unlock(&page_cache_mtx, GROUP_MUTEX_WRITE);
-}
-
-void
-journal_cjf_page_cache_flush_page(int fd, u64 file_offset)
-{
-    group_mutex_lock(&page_cache_mtx, GROUP_MUTEX_WRITE);
-    u32_node *fd_node = u32_set_avl_find(&page_cache_item_by_fd, (u32)fd);
-    
-    if(fd_node != NULL)
-    {
-        // get the PAGE cache at the file_offset
-
-        u64_node *file_offset_node = u64_set_avl_find((u64_set*)&fd_node->value, file_offset);
-
-        if(file_offset_node != NULL)
-        {
-            journal_cjf_page_cache_item *sci = (journal_cjf_page_cache_item*)file_offset_node->value;
-            journal_cjf_page_cache_item_flush(sci);
-        }
-        else
-        {
-            log_warn("cjf: %i:%x page is not cached", fd, file_offset);
-        }
+        journal_cjf_page_cache_items_flush(page_cache_set);
     }
     else
     {
-        log_warn("cjf: %i:%x has no page cache", fd, file_offset);
+        log_warn("cjf: %s: is not cached", file_pool_filename(file));
     }
+    
     group_mutex_unlock(&page_cache_mtx, GROUP_MUTEX_WRITE);
 }
 
 void
-journal_cjf_page_cache_clear(int fd, u64 file_offset)
+journal_cjf_page_cache_flush_page(file_pool_file_t file, u64 file_offset)
 {
     group_mutex_lock(&page_cache_mtx, GROUP_MUTEX_WRITE);
-    u32_node *fd_node = u32_set_avl_find(&page_cache_item_by_fd, (u32)fd);
     
-    if(fd_node != NULL)
-    {
-        // get the PAGE cache at the file_offset
+    journal_cjf_page_cache_item *page_cache = journal_cjf_page_cache_from_file(file, file_offset);
 
-        u64_node *file_offset_node = u64_set_avl_find((u64_set*)&fd_node->value, file_offset);
-
-        if(file_offset_node != NULL)
-        {
-            journal_cjf_page_cache_item *sci = (journal_cjf_page_cache_item*)file_offset_node->value;
-            if(sci != NULL)
-            {
-                journal_cjf_page_cache_item_delete(sci);
-            }
-            else
-            {
-                log_warn("cjf: %i:%x page is NULL", fd, file_offset);
-            }
-        }
-        else
-        {
-            log_warn("cjf: %i:%x page is not cached", fd, file_offset);
-        }
-    }
-    else
+    if(page_cache != NULL)
     {
-        log_warn("cjf: %i:%x has no page cache", fd, file_offset);
+        journal_cjf_page_cache_item_flush(page_cache);
     }
+        
     group_mutex_unlock(&page_cache_mtx, GROUP_MUTEX_WRITE);
 }
 
 void
-journal_cjf_page_cache_close(int fd)
+journal_cjf_page_cache_clear(file_pool_file_t file, u64 file_offset)
 {
     group_mutex_lock(&page_cache_mtx, GROUP_MUTEX_WRITE);
-    u32_node *fd_node = u32_set_avl_find(&page_cache_item_by_fd, (u32)fd);
     
-    if(fd_node != NULL)
+    journal_cjf_page_cache_delete_from_file_and_offset(file, file_offset);
+    
+    group_mutex_unlock(&page_cache_mtx, GROUP_MUTEX_WRITE);
+}
+
+void
+journal_cjf_page_cache_close(file_pool_file_t file)
+{
+    group_mutex_lock(&page_cache_mtx, GROUP_MUTEX_WRITE);
+    
+    u64_set *page_cache_set = journal_cjf_page_cache_set_from_file(file);
+    
+    if(page_cache_set != NULL)
     {
-        journal_cjf_page_cache_items_close((u64_set*)&fd_node->value);
-        // @todo 20150113 edf -- close the content
         // destroy the u64_set content
-        // delete the fd_node
-        u32_set_avl_delete(&page_cache_item_by_fd, (u32)fd);
+        journal_cjf_page_cache_items_close(page_cache_set);
+        
+        // delete the file_node
+        ptr_set_delete(&page_cache_item_by_file, file);
     }
     group_mutex_unlock(&page_cache_mtx, GROUP_MUTEX_WRITE);
 }
+
+static void
+journal_cjf_page_cache_finalize_cb(ptr_node *file_node)
+{
+    u64_set *page_cache_set = (u64_set*)&file_node->value;
+    journal_cjf_page_cache_items_close(page_cache_set);
+}
+
+void
+journal_cjf_page_cache_finalize()
+{
+    group_mutex_write_lock(&page_cache_mtx);
+    ptr_set_callback_and_destroy(&page_cache_item_by_file, journal_cjf_page_cache_finalize_cb);
+    journal_cjf_page_mru_clear();
+    group_mutex_write_unlock(&page_cache_mtx);
+}
+
+#endif
 
 /** @} */
-

@@ -1,39 +1,35 @@
-/* 
+/*------------------------------------------------------------------------------
  *
  * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
+ *
+ * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
  *
- *        * Redistributions of source code must retain the above copyright 
+ *        * Redistributions of source code must retain the above copyright
  *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
  *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
  *          without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
  * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
  * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
  *------------------------------------------------------------------------------
  *
- * File:   avl.h.inc
- * Author: ericdf
- *
- * Created on June 5, 2009, 12:07 PM
  */
 
 #ifndef _AVL_H_INC
@@ -112,9 +108,9 @@ extern "C"
 #define _AVL_PREFIXED(name_a,name_b) __AVL_PREFIXED(name_a,name_b)	/* Do the expansion */
 #define AVL_PREFIXED(name) _AVL_PREFIXED( AVL_PREFIX , name)		/* Call with macro */
 
-typedef struct AVL_PREFIXED(avl_iterator) AVL_PREFIXED(avl_iterator);
+typedef struct AVL_PREFIXED(iterator) AVL_PREFIXED(iterator);
 
-struct AVL_PREFIXED(avl_iterator)
+struct AVL_PREFIXED(iterator)
 {
     s32 stack_pointer;
     AVL_NODE_TYPE* stack[AVL_MAX_DEPTH];    /* An AVL depth of 64 is HUGE */
@@ -130,7 +126,7 @@ struct AVL_PREFIXED(avl_iterator)
  *
  */
 
-void AVL_PREFIXED(avl_init)(AVL_TREE_TYPE* tree);
+void AVL_PREFIXED(init)(AVL_TREE_TYPE* tree);
 
 /** @brief Find a node in the tree
  *
@@ -142,7 +138,31 @@ void AVL_PREFIXED(avl_init)(AVL_TREE_TYPE* tree);
  *  @return A pointer to the node or NULL if there is no such node.
  */
 
-AVL_NODE_TYPE* AVL_PREFIXED(avl_find)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash);
+AVL_NODE_TYPE* AVL_PREFIXED(find)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash);
+
+/** @brief Find a node in the tree or if such node does into exist, find the one after it (by key order)
+ *
+ *  Find a node in the tree or if such node does into exist, find the one after it (by key order)
+ *
+ *  @param[in]  root the tree to search in
+ *  @param[in]  obj_hash the hash to find
+ *
+ *  @return A pointer to the node, or if it does not exists the node after it, or NULL if there is no such node.
+ */
+
+AVL_NODE_TYPE* AVL_PREFIXED(find_key_or_next)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash);
+
+/** @brief Find a node in the tree or if such node does into exist, find the one before it (by key order)
+ *
+ *  Find a node in the tree or if such node does into exist, find the one before it (by key order)
+ *
+ *  @param[in]  root the tree to search in
+ *  @param[in]  obj_hash the hash to find
+ *
+ *  @return A pointer to the node, or if it does not exists the node before it, or NULL if there is no such node.
+ */
+
+AVL_NODE_TYPE* AVL_PREFIXED(find_key_or_prev)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash);
 
 /** @brief Insert a node into the tree.
  *
@@ -161,7 +181,7 @@ AVL_NODE_TYPE* AVL_PREFIXED(avl_find)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_C
  *  @return The node associated to the hash
  */
 
-AVL_NODE_TYPE* AVL_PREFIXED(avl_insert)(AVL_TREE_TYPE *tree,AVL_REFERENCE_TYPE obj_hash);
+AVL_NODE_TYPE* AVL_PREFIXED(insert)(AVL_TREE_TYPE *tree,AVL_REFERENCE_TYPE obj_hash);
 
 /** @brief Deletes a node from the tree.
  *
@@ -173,7 +193,7 @@ AVL_NODE_TYPE* AVL_PREFIXED(avl_insert)(AVL_TREE_TYPE *tree,AVL_REFERENCE_TYPE o
  *  @return The node associated to the hash, NULL if it did not exist.
  */
 
-void AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE *tree,AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash);
+void AVL_PREFIXED(delete)(AVL_TREE_TYPE *tree,AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash);
 
 /** @brief Releases all the nodes of a tree
  *
@@ -185,9 +205,9 @@ void AVL_PREFIXED(avl_delete)(AVL_TREE_TYPE *tree,AVL_REFERENCE_CONST AVL_REFERE
  *  @param[in] tree the tree to empty
  */
 
-void AVL_PREFIXED(avl_destroy)(AVL_TREE_TYPE *tree);
+void AVL_PREFIXED(destroy)(AVL_TREE_TYPE *tree);
 
-static inline bool AVL_PREFIXED(avl_isempty)(AVL_CONST_TREE_TYPE *tree)
+static inline bool AVL_PREFIXED(isempty)(AVL_CONST_TREE_TYPE *tree)
 {
     return AVL_TREE_ROOT(tree) == NULL;
 }
@@ -198,7 +218,7 @@ static inline bool AVL_PREFIXED(avl_isempty)(AVL_CONST_TREE_TYPE *tree)
  *
  */
 
-AVL_NODE_TYPE* AVL_PREFIXED(avl_node_last)(AVL_NODE_TYPE *node);
+AVL_NODE_TYPE* AVL_PREFIXED(node_last)(AVL_NODE_TYPE *node);
 
 /**
  * Initialises an iterator for the AVL tree
@@ -207,7 +227,17 @@ AVL_NODE_TYPE* AVL_PREFIXED(avl_node_last)(AVL_NODE_TYPE *node);
  * @param iter
  */
 
-void AVL_PREFIXED(avl_iterator_init)(AVL_CONST_TREE_TYPE* tree,AVL_PREFIXED(avl_iterator*) iter);
+void AVL_PREFIXED(iterator_init)(AVL_CONST_TREE_TYPE* tree,AVL_PREFIXED(iterator*) iter);
+
+/**
+ * Initialises an iterator for the AVL tree from a key
+ *
+ * @param tree
+ * @param iter
+ * @param obj_hash
+ */
+
+void AVL_PREFIXED(iterator_init_from)(AVL_CONST_TREE_TYPE *tree, AVL_PREFIXED(iterator*) iter, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash);
 
 /**
  * Returns TRUE iff calling avl_iterator_next_node will return a node
@@ -216,18 +246,18 @@ void AVL_PREFIXED(avl_iterator_init)(AVL_CONST_TREE_TYPE* tree,AVL_PREFIXED(avl_
  * @return TRUE iff calling avl_iterator_next_node will return a node
  */
 
-bool AVL_PREFIXED(avl_iterator_hasnext)(AVL_PREFIXED(avl_iterator*) iter);
+bool AVL_PREFIXED(iterator_hasnext)(AVL_PREFIXED(iterator*) iter);
 
 /**
  * Returns the next node from the iterator.
- * XXX_avl_iterator_hasnext MUST be called before or results are undefined.
+ * XXX_iterator_hasnext MUST be called before or results are undefined.
  * XXX_ being the prefix of this particular version of the AVL tree.
  * 
  * @param iter
  * @return 
  */
 
-AVL_NODE_TYPE* AVL_PREFIXED(avl_iterator_next_node)(AVL_PREFIXED(avl_iterator*) iter);
+AVL_NODE_TYPE* AVL_PREFIXED(iterator_next_node)(AVL_PREFIXED(iterator*) iter);
 
 /** @brief Releases all the nodes of a tree
  *
@@ -239,7 +269,7 @@ AVL_NODE_TYPE* AVL_PREFIXED(avl_iterator_next_node)(AVL_PREFIXED(avl_iterator*) 
  *  @param[in] tree the tree to empty
  */
 
-void AVL_PREFIXED(avl_callback_and_destroy)(AVL_TREE_TYPE *tree, void (*callback)(AVL_NODE_TYPE*));
+void AVL_PREFIXED(callback_and_destroy)(AVL_TREE_TYPE *tree, void (*callback)(AVL_NODE_TYPE*));
 
 /**
  * Returns the first element in the tree (with the key having the smallest value)
@@ -249,7 +279,7 @@ void AVL_PREFIXED(avl_callback_and_destroy)(AVL_TREE_TYPE *tree, void (*callback
  * @return the first element of the tree, or NULL if the tree is empty
  */
 
-AVL_NODE_TYPE *AVL_PREFIXED(avl_get_first)(AVL_CONST_TREE_TYPE* tree);
+AVL_NODE_TYPE *AVL_PREFIXED(get_first)(AVL_CONST_TREE_TYPE* tree);
 
 #if AVL_HAS_PARENT_POINTER
 
@@ -261,7 +291,7 @@ AVL_NODE_TYPE *AVL_PREFIXED(avl_get_first)(AVL_CONST_TREE_TYPE* tree);
  * @return the 
  */
 
-AVL_NODE_TYPE* AVL_PREFIXED(avl_node_next)(const AVL_NODE_TYPE* node);
+AVL_NODE_TYPE* AVL_PREFIXED(node_next)(const AVL_NODE_TYPE* node);
 
 /**
  * Only on implementations of nodes with a pointer to the parent.
@@ -271,7 +301,7 @@ AVL_NODE_TYPE* AVL_PREFIXED(avl_node_next)(const AVL_NODE_TYPE* node);
  * @return the 
  */
 
-AVL_NODE_TYPE* AVL_PREFIXED(avl_node_prev)(const AVL_NODE_TYPE* node);
+AVL_NODE_TYPE* AVL_PREFIXED(node_prev)(const AVL_NODE_TYPE* node);
 
 /**
  * Only on implementations of nodes with a pointer to the parent.
@@ -281,7 +311,7 @@ AVL_NODE_TYPE* AVL_PREFIXED(avl_node_prev)(const AVL_NODE_TYPE* node);
  * @return the 
  */
 
-AVL_NODE_TYPE* AVL_PREFIXED(avl_node_mod_next)(const AVL_NODE_TYPE* node);
+AVL_NODE_TYPE* AVL_PREFIXED(node_mod_next)(const AVL_NODE_TYPE* node);
 
 /**
  * Only on implementations of nodes with a pointer to the parent.
@@ -291,9 +321,13 @@ AVL_NODE_TYPE* AVL_PREFIXED(avl_node_mod_next)(const AVL_NODE_TYPE* node);
  * @return the 
  */
 
-AVL_NODE_TYPE* AVL_PREFIXED(avl_node_mod_prev)(const AVL_NODE_TYPE* node);
+AVL_NODE_TYPE* AVL_PREFIXED(node_mod_prev)(const AVL_NODE_TYPE* node);
 
 #endif // AVL_HAS_PARENT_POINTER != 0
+
+typedef int AVL_PREFIXED(forall_callback)(AVL_NODE_TYPE*, void*);
+
+void AVL_PREFIXED(forall)(AVL_CONST_TREE_TYPE* tree, AVL_PREFIXED(forall_callback) *callback, void *callback_args);
 
 /**
  * DEBUG call.
@@ -304,7 +338,7 @@ AVL_NODE_TYPE* AVL_PREFIXED(avl_node_mod_prev)(const AVL_NODE_TYPE* node);
  * @return an error code in case of error.
  */
 
-int AVL_PREFIXED(avl_check)(AVL_TREE_TYPE *tree);
+int AVL_PREFIXED(check_tree)(AVL_TREE_TYPE *tree);
 
 /**
  * DEBUG call.
@@ -315,7 +349,7 @@ int AVL_PREFIXED(avl_check)(AVL_TREE_TYPE *tree);
  * @param tree
  */
 
-void AVL_PREFIXED(avl_dump)(AVL_TREE_TYPE *tree);
+void AVL_PREFIXED(dump)(AVL_TREE_TYPE *tree);
 
 #undef AVL_REFERENCE_CONST
 

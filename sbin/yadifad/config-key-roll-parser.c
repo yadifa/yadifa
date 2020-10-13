@@ -1,41 +1,43 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 /** @defgroup yadifad
  *  @ingroup configuration
  *  @brief
  */
+
+#include <strings.h>
 
 #include <dnscore/format.h>
 #include "config-key-roll-parser.h"
@@ -93,7 +95,14 @@ key_roll_item_validate(s32 *dst, const char *src, u32 min, u32 max, const char *
 {
     if(array != NULL)
     {
-        for(int i = 0; i <= max - min; i++)
+        if(max < min)
+        {
+            u32 tmp = max;
+            max = min;
+            min = tmp;
+        }
+
+        for(u32 i = 0; i <= max - min; i++)
         {
             if(strcasecmp(src, array[i]) == 0)
             {
@@ -197,7 +206,7 @@ key_roll_item_value_check(s32 *dst, char *src, u32 min, u32 max, const char *arr
 {
     ya_result return_code;
 
-    if(FAIL(parse_u32_check_range(src, (u32 *)dst, min, max, 10)))
+    if(FAIL(parse_u32_check_range(src, (u32 *)dst, min, max, BASE_10)))
     {
         if((strlen(src) == 1) && (*src == '*'))
         {
@@ -261,7 +270,10 @@ key_roll_item_value_bitmap_get(u64 *value, const char **needle, char *key_roll_i
             
             yassert((value_temp >= 0) && (value_temp < 64));
 
-            *value |= 1ULL << value_temp;
+            if(value_temp >= 0)
+            {
+                *value |= 1ULL << value_temp;
+            }
         }
         else
         {
@@ -386,33 +398,34 @@ key_roll_item_relative_to(u8 dst)
 
 
 ya_result
-config_key_roll_parser_line(char *key_roll_line, key_roll_line_s *krl, u8 action)
+config_key_roll_parser_line(const char *key_roll_line, key_roll_line_s *krl, u8 action)
 {
     ya_result return_code;
-    char key_roll_item[16]  = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    char key_roll_item[256];
     krl->type = KEY_ROLL_LINE_CRON_TYPE;
-
 
     if(key_roll_line == NULL)
     {
         return PARSE_EMPTY_ARGUMENT;
     }
 
+    memset(key_roll_item, 0, sizeof(key_roll_item));
+
     // 1. start parsing 2 first tokens to find key_roll type
     const char *needle = key_roll_line;
 
     // action
     krl->action = action;
-
+/*
     // get second token
-    needle += strlen(key_roll_item);
+    needle += strlen(key_roll_line);
+*/
     needle = (char*)parse_skip_spaces(needle);
     if(*needle == '\0')
     {
         // this is bad
         return -1;
     }
-
 
     // 2. if parser find for second token a "+" sign this means the NON-CRON key_roll type
     if(strchr(needle, '+') != NULL)
@@ -422,7 +435,6 @@ config_key_roll_parser_line(char *key_roll_line, key_roll_line_s *krl, u8 action
             return return_code;
         }
         krl->type = KEY_ROLL_LINE_RELATIVE_TYPE;
-
 
         // relative seconds
         const char *p = key_roll_item;

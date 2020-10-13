@@ -1,0 +1,321 @@
+'\" t
+.\" Manual page created with latex2man on Tue Oct 13 12:59:04 2020
+.\" NOTE: This file is generated, DO NOT EDIT.
+.de Vb
+.ft CW
+.nf
+..
+.de Ve
+.ft R
+
+.fi
+..
+.TH "YAKEYROLLD" "8" "2020\-10\-12" "YAKEYROLLD " "YADIFA "
+.SH NAME
+
+.PP
+YAKEYROLLD
+is an utility for genrating a sequence of KSK and ZSK for a zone. 
+.PP
+.SH SYNOPSIS
+
+.PP
+yakeyrolld
+\fBcommand \fP[\fIargument\fP]
+.PP
+.SH DESCRIPTION
+
+.PP
+The yakeyrolld
+program generates a sequence of \fIKSK\fP
+and \fIZSK\fP
+for a zone, with all the steps of their lifecycles. 
+.PP
+yakeyrolld
+is part of the YADIFA distribution from EURid vzw/asbl. The latest version of YADIFA
+can be found on:
+.br
+.ce 100
+\fBhttp://www.yadifa.eu/download\fP
+.ce 0
+
+.PP
+.SH LIFECYCLE
+
+.PP
+A lifecyle for a key has several steps: 
+.PP
+.TP
+.B *
+Time of creation 
+.TP
+.B *
+Time of publication 
+.TP
+.B *
+Time of activation 
+.TP
+.B *
+Time of de\-activation 
+.TP
+.B *
+Time of un\-publication. 
+.PP
+These times are determined using a cron\-like schedule. 
+.br
+.PP
+For all these steps, it computes the following: 
+.PP
+.TP
+.B *
+The expected \fIDNSSEC\fP and \fIRRSIG\fP \fIDNSSEC\fP records on the master before the step is started
+.TP
+.B *
+The \fIZSK\fP files to add
+.TP
+.B *
+The \fIZSK\fP files to remove
+.TP
+.B *
+The \fIDNSSEC\fP and \fIRRSIG\fP \fIDNSKEY\fP records to add
+.TP
+.B *
+The \fIDNSKEY\fP and \fIRRSIG\fP \fIDNSKEY\fP records to remove
+.TP
+.B *
+The expected \fIDNSKEY\fP and \fIRRSIG\fP \fIDNSKEY\fP records on the dns master after the step has been completed.
+.PP
+
+Each step is stored as a file. The file contains fields like: 
+.PP
+.TP
+\fBepochus \fP An integer with the epoch of the step expressed in microseconds.
+.TP
+\fBdateus \fP A user\-friendly date text matching the epochus field.
+.TP
+\fBactions \fP A list of actions expected to happen on the step (informational).
+.TP
+\fBdebug \fP A text meant to help understand the step (informational).
+.TP
+\fBupdate \fP Each entry is a dynamic update command to be sent to the server.
+.TP
+\fBexpect \fP Each entry defines one record expected to be in the zone on the server prior to executing the current step.
+.TP
+\fBendresult \fP Each entry defines one record expected to be in the zone on the server after the step has been executed.
+.TP
+\fBadd \fP Defines a key file to create in \fIkeys\-path\fP\&.
+.TP
+\fBdel \fP Names a key file to delete from \fIkeys\-path\fP\&.
+.PP
+.SH COMMANDS
+
+.PP
+.TP
+\fB\-\-help|\-h \fP Shows the help
+.TP
+\fB\-\-version|\-V \fP Prints the version of the software
+.TP
+\fB\-\-config|\-c \fP \fIconfigfile\fP Sets the configuration file to use
+.TP
+\fB\-\-mode|\-m \fP \fIgenerate | play | playloop | print | print\-json \fP Sets the program mode
+.TP
+\fB\-\-domain \fP \fIfqdn\fP The domain name
+.TP
+\fB\-\-path|\-p \fP \fIdirectory\fP The directory where to store the keys
+.TP
+\fB\-\-server|\-s \fP \fIaddress\fP The address of the server
+.TP
+\fB\-\-ttl|\-t \fP \fIseconds\fP The \fIttl\fP to use for both \fIdnskey\fP and \fIrrsig\fP records
+.TP
+\fB\-\-explain \fP prints the planned schedule
+.TP
+\fB\-\-reset \fP start by removing all the keys and create a new KSK and a new ZSK. The server will not be queried.
+.TP
+\fB\-\-policy \fP Name of the policy to use
+.TP
+\fB\-\-from \fP \fItime\fP The lower time bound covered by the plan (now)
+.TP
+\fB\-\-until \fP \fItime\fP The upper time bound covered by the plan (+1y)
+.TP
+\fB\-\-dryrun \fP Do not write files to disk, do not send updates to the server
+.TP
+\fB\-\-wait \fP Wait for yadifad to answer before starting to work (default)
+.TP
+\fB\-\-nowait \fP Do not wait for yadifad to answer before starting to work
+.TP
+\fB\-\-daemon \fP Daemonise the program for supported modes (default)
+.TP
+\fB\-\-nodaemon \fP Do not daemonise the program
+.TP
+\fB\-\-noconfirm \fP Do not ask for confirmation before doing a data reset
+.PP
+.SH USAGE
+
+.PP
+The yakeyrolld daemon writes key files in the yadifad keys directory and pushes DNSKEY and RRSIG records with a dynamic update. 
+.br
+Zones managed by the keyroll needs to have the rrsig\-nsupdate\-allowed setting enabled (<zone> section). 
+.br
+In generation mode, the daemon needs access to both the plan and private keys directory. 
+.br
+For all other modes, the private keys directory is ignored. 
+.br
+When not doing any kind of generation, they should not be kept on the machine. Their encrypted backup sitting in a safe place. 
+.br
+.PP
+.TP
+\fBInitialisation\fP
+.br
+.br
+Destroys all current data that could exist and starts from nothing. Creates all the steps of the rolls for the next two years. Creates all the private keys in a separate directory. 
+.br
+The directory that contains the private key files is required for this command as private keys will be added. 
+.br
+.br
+
+yakeyrolld
+\fB\-m \fP\fIgenerate\fP
+\fB\-\-until \fP\fI+1y\fP
+\fI\-\-reset\fP
+.br
+.br
+.TP
+\fBRenewal\fP
+.br
+.br
+In order to extend a plan further, simply do another generation. 
+.br
+The operation loads the current plan, extends it to cover the new limit date and saves the updated modified version back on disk. 
+.br
+Previously stored private keys may be used to generate signatures and new private keys may be added. 
+.br
+Because of this, the directory that contains the private key files is required for this command. 
+.br
+.br
+
+yakeyrolld
+\fB\-m \fP\fIgenerate\fP
+\fB\-\-until \fP\fI+1y\fP
+.br
+.br
+.TP
+\fBPlan calendar\fP
+.br
+.br
+Details of the current plan can be printed on stdout using:
+.br
+.br
+
+yakeyrolld
+\fB\-m \fP\fIprint\fP
+.br
+
+The output format of that command isn\&'t meant to be parsed by a program. 
+.br
+
+For a script, use instead: 
+.br
+.br
+
+yakeyrolld
+\fB\-m \fP\fIprint\-json\fP
+.br
+.br
+.TP
+\fBDaemon\fP
+.br
+.br
+To start the rolling the keys and pushing them to the server, use:
+.br
+.br
+
+yakeyrolld
+\fB\-m \fP\fIplayloop\fP
+.br
+.PP
+.SH FILES
+
+.PP
+.TP
+${SYSCONFDIR}/yakeyrolld.conf
+ The default yakeyrolld configuration file. 
+.PP
+.TP
+yakeyrolld.conf.5
+ Configuration man page for yakeyrolld\&.
+.PP
+.SH SEE ALSO
+
+.PP
+\fIyakeyrolld.conf\fP(5)
+.PP
+.SH REQUIREMENTS
+
+.PP
+.TP
+OpenSSL 
+yakeyrolld
+requires OpenSSL version 1.1.1 or later. 
+.PP
+.SH CHANGES
+
+.PP
+Please check the ChangeLog
+file from the sources code. 
+.PP
+.SH VERSION
+
+.PP
+Version: 2.4.0 of 2020\-10\-12. 
+.PP
+.SH MAILINGLIST
+
+.PP
+There is a mailinglist for questions relating to any program in the yadifa package:
+.br
+.PP
+.TP
+.B *
+\fByadifa\-users@mailinglists.yadifa.eu\fP
+.br
+for submitting questions/answers. 
+.PP
+.TP
+.B *
+\fBhttp://www.yadifa.eu/mailing\-list\-users\fP
+.br
+for subscription requests. 
+.PP
+If you would like to stay informed about new versions and official patches send a subscription request to via: 
+.PP
+.TP
+.B *
+\fBhttp://www.yadifa.eu/mailing\-list\-announcements\fP
+.PP
+(this is a read\-only list). 
+.PP
+.SH LICENSE AND COPYRIGHT
+
+.PP
+.TP
+Copyright 
+(C)2011\-2020, EURid
+.br
+B\-1831 Diegem, Belgium
+.br
+\fBinfo@yadifa.eu\fP
+.PP
+.SH AUTHORS
+
+.PP
+Gery Van Emelen 
+.br
+Email: \fBGery.VanEmelen@EURid.eu\fP
+.br
+Eric Diaz Fernandez 
+.br
+Email: \fBEric.DiazFernandez@EURid.eu\fP
+.PP
+WWW: \fBhttp://www.EURid.eu\fP
+.PP
+.\" NOTE: This file is generated, DO NOT EDIT.

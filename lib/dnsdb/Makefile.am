@@ -1,93 +1,86 @@
 ################################################################################
 #
-# Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-# The YADIFA TM software product is provided under the BSD 3-clause license:
+#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
-# Redistribution and use in source and binary forms, with or without 
-# modification, are permitted provided that the following conditions
-# are met:
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions
+#  are met:
 #
-#        * Redistributions of source code must retain the above copyright 
-#          notice, this list of conditions and the following disclaimer.
-#        * Redistributions in binary form must reproduce the above copyright 
-#          notice, this list of conditions and the following disclaimer in the 
-#          documentation and/or other materials provided with the distribution.
-#        * Neither the name of EURid nor the names of its contributors may be 
-#          used to endorse or promote products derived from this software 
-#          without specific prior written permission.
+#         * Redistributions of source code must retain the above copyright
+#           notice, this list of conditions and the following disclaimer.
+#         * Redistributions in binary form must reproduce the above copyright
+#           notice, this list of conditions and the following disclaimer in the
+#           documentation and/or other materials provided with the distribution.
+#         * Neither the name of EURid nor the names of its contributors may be
+#           used to endorse or promote products derived from this software
+#           without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE 
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+#  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+#  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+#  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+#  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+#  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-##############################################################################
-#
-#	YADIFA dnsdb Makefile.am script
-#
-#      	Makefile.am script
-#
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.11-public/lib/dnsdb/Makefile.am $
-#
-#       $Date: 2020-09-03 11:53:27 +0200 (Thu, 03 Sep 2020) $
-#
-#       $Revision: 9707 $
-#
-#	$Author: ericdf $
-#
-##############################################################################
-
-srcdir = @srcdir@
-libdir = @libdir@
-top_srcdir = @top_srcdir@
-VPATH = @srcdir@
+################################################################################        
 
 ACLOCAL_AMFLAGS = -I m4
+
+include ../../mk/common-settings.mk
+
+AM_CFLAGS += -DDNSDB_BUILD=1
+AM_CFLAGS += -I$(top_srcdir)/lib/dnscore/include -I$(top_builddir)/lib/dnscore/include
 
 dist_noinst_DATA = VERSION
 
 lib_LTLIBRARIES = libdnsdb.la
+libdnsdb_la_LDFLAGS = -version-info 7:4:0
+libdnsdb_la_LIBADD=$(top_builddir)/lib/dnscore/libdnscore.la
 
 I = include/dnsdb
 
 FEATURESFILE=zdb-config-features.h
 FEATURES=$(I)/$(FEATURESFILE)
+FEATURESDIR=lib/dnsdb/include/dnsdb
+FEATURESSRC=$(top_builddir)/$(FEATURESDIR)/dnsdb-config.h
+
+# libdnsdb_ladir=.
 
 # alphabetically please
 
+pkgincludedir = $(includedir)/dnsdb
 pkginclude_HEADERS = \
 	$(FEATURES) \
 	$(I)/avl.h \
 	$(I)/btree.h \
 	$(I)/dictionary.h \
 	$(I)/dictionary-node.h \
+	$(I)/dnsdb-config.h \
 	$(I)/dnsrdata.h \
 	$(I)/dnssec.h \
 	$(I)/dnssec_config.h \
 	$(I)/dnssec-keystore.h \
-	$(I)/hash.h \
 	$(I)/htable.h \
 	$(I)/htbt.h \
 	$(I)/journal.h \
 	$(I)/journal_ix.h \
+	$(I)/journal-jnl.h \
 	$(I)/journal-cjf.h \
 	$(I)/journal-cjf-common.h \
 	$(I)/journal-cjf-idxt.h \
+	$(I)/journal-cjf-page-output-stream.h \
 	$(I)/journal-cjf-page.h \
 	$(I)/journal-cjf-page-cache.h \
-	$(I)/journal-cjf-page-output-stream.h \
 	$(I)/chain-replay.h \
 	$(I)/nsec.h \
 	$(I)/nsec-chain-replay.h \
 	$(I)/nsec3.h \
 	$(I)/nsec3_collection.h \
-	$(I)/nsec3_hash.h \
 	$(I)/nsec3-chain-replay.h \
 	$(I)/nsec3_item.h \
 	$(I)/nsec3_load.h \
@@ -98,7 +91,6 @@ pkginclude_HEADERS = \
 	$(I)/nsec3_zone.h \
 	$(I)/nsec_collection.h \
 	$(I)/nsec_common.h \
-	$(I)/rr_canonize.h \
 	$(I)/rrsig.h \
 	$(I)/xfr_copy.h \
 	$(I)/zdb.h \
@@ -127,30 +119,32 @@ pkginclude_HEADERS = \
 	$(I)/zdb_zone_axfr_input_stream.h \
 	$(I)/zdb_zone_label.h \
 	$(I)/zdb_zone_label_iterator.h \
+	$(I)/zdb_zone_label_iterator_ex.h \
 	$(I)/zdb_zone_load.h \
-	$(I)/zdb_zone_load_interface.h \
 	$(I)/zdb-zone-path-provider.h \
 	$(I)/zdb_zone_process.h \
 	$(I)/zdb-zone-reader-filter.h \
 	$(I)/zdb_zone_write.h \
 	$(I)/nsec3-forall-label.h
 
+#
+
 libdnsdb_la_SOURCES = \
 	src/avl.c \
 	src/dictionary.c \
 	src/dictionary_btree.c \
 	src/dictionary_htbt.c \
-	src/hash.c \
-	src/hash_table_values.c \
 	src/htable.c \
 	src/htbt.c \
-	src/journal-cjf-idxt.c \
-	src/journal-cjf-page-cache.c \
-	src/journal-cjf-page-output-stream.c \
-	src/journal-cjf-page.c \
-	src/journal-cjf.c \
 	src/journal.c \
 	src/journal_ix.c \
+	src/journal-cjf.c \
+	src/journal-cjf-idxt.c \
+	src/journal-cjf-page.c \
+	src/journal-cjf-page-cache.c \
+	src/journal-cjf-page-output-stream.c \
+	src/journal-cjf-ro.c \
+	src/journal-jnl.c \
 	src/xfr_copy.c \
 	src/zdb-zone-answer-axfr.c \
 	src/zdb-zone-answer-ixfr.c \
@@ -160,7 +154,7 @@ libdnsdb_la_SOURCES = \
 	src/zdb-zone-garbage.c \
 	src/zdb-zone-journal.c \
 	src/zdb-zone-lock.c \
-        src/zdb-zone-lock-monitor.c \
+	src/zdb-zone-lock-monitor.c \
 	src/zdb-zone-path-provider.c \
 	src/zdb-zone-reader-filter.c \
 	src/zdb.c \
@@ -177,23 +171,34 @@ libdnsdb_la_SOURCES = \
 	src/zdb_zone_axfr_input_stream.c \
 	src/zdb_zone_label.c \
 	src/zdb_zone_label_iterator.c \
+	src/zdb_zone_label_iterator_ex.c \
 	src/zdb_zone_load.c \
 	src/zdb_zone_process.c \
 	src/zdb_zone_store_axfr.c \
+	src/zdb-zone-image.c \
 	src/zdb_zone_write_text.c \
 	src/zdb_zone_write_unbound.c
 
+#	src/journal-cjf-idxt.c \
+#	src/journal-cjf-page-cache.c \
+#	src/journal-cjf-page-output-stream.c \
+#	src/journal-cjf-page.c \
+#	src/journal-cjf.c \
+#
+
 # DNSSEC is defined if either NSEC3 or NSEC are defined
 
-if HAS_DYNUPDATE_SUPPORT
+if HAS_MASTER_SUPPORT
 
 pkginclude_HEADERS += \
 	$(I)/dynupdate.h \
-	$(I)/dynupdate-diff.h
+	$(I)/dynupdate-diff.h \
+	$(I)/dynupdate-message.h
 
 libdnsdb_la_SOURCES += \
 	src/dynupdate_check_prerequisites.c \
 	src/dynupdate-diff.c \
+	src/dynupdate-message.c \
 	src/dynupdate-diff-nochain.c \
 	src/dynupdate-diff-nsec.c \
 	src/dynupdate-diff-nsec3.c \
@@ -202,23 +207,17 @@ libdnsdb_la_SOURCES += \
 	src/zdb-zone-maintenance-nsec.c \
 	src/zdb-zone-maintenance-nsec3.c
 endif
-			
-if HAS_DNSSEC_SUPPORT
+
 libdnsdb_la_SOURCES += \
 	src/dnssec.c \
 	src/dnssec-keystore.c \
 	src/nsec_common.c \
-	src/rr_canonize.c \
 	src/rrsig.c \
-	src/zdb_update_signatures.c \
 	src/zdb-packed-ttlrdata.c
-endif
 			
-if HAS_NSEC3_SUPPORT
 libdnsdb_la_SOURCES += \
 	src/nsec3.c \
 	src/nsec3_collection.c \
-	src/nsec3_hash.c \
 	src/nsec3_item.c \
 	src/nsec3-chain-replay.c  \
 	src/nsec3_load.c \
@@ -227,68 +226,36 @@ libdnsdb_la_SOURCES += \
 	src/nsec3_owner.c \
 	src/nsec3_zone.c \
 	src/nsec3-forall-label.c
-endif
 
-if HAS_NSEC_SUPPORT
 libdnsdb_la_SOURCES += \
 	src/nsec.c \
 	src/nsec-chain-replay.c  \
 	src/nsec_collection.c
-endif
-
-libdnsdb_la_LDFLAGS = -version-info 6:3:0
-
-include ../../mk/common-settings.mk
 
 include ../../mk/common-labels.mk
 
-all: REVISION
+all: REVISION $(FEATURESSRC)
 
 REVISION:
 	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
-src/avl.c: $(FEATURES)
+$(srcdir)/src/avl.c: $(FEATURES) $(FEATURESSRC)
+	
+$(FEATURESSRC): ../../config.h
+	mkdir -p $(top_builddir)/$(FEATURESDIR)
+	cp ../../config.h $(FEATURESSRC)
+	
+CLEANFILES += $(FEATURESSRC)
 
 features: $(FEATURES)
 
-$(FEATURES): config.log REVISION VERSION
+$(FEATURES): ../../config.log REVISION VERSION $(FEATURESSRC)
+VP=ZDB
+	mkdir -p $(I)
 	echo "#pragma once" > $(FEATURES)
-if HAS_DNSSEC_SUPPORT
-	echo "#define ZDB_HAS_DNSSEC_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define ZDB_HAS_DNSSEC_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_NSEC_SUPPORT
-	echo "#define ZDB_HAS_NSEC_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define ZDB_HAS_NSEC_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_NSEC3_SUPPORT
-	echo "#define ZDB_HAS_NSEC3_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define ZDB_HAS_NSEC3_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_ACL_SUPPORT
-	echo "#define ZDB_HAS_ACL_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define ZDB_HAS_ACL_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_TSIG_SUPPORT
-	echo "#define ZDB_HAS_TSIG_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define ZDB_HAS_TSIG_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_NSID_SUPPORT
-	echo "#define ZDB_HAS_NSID_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define ZDB_HAS_NSID_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_MUTEX_DEBUG_SUPPORT
-	echo "#define ZDB_HAS_MUTEX_DEBUG_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define ZDB_HAS_MUTEX_DEBUG_SUPPORT 0" >> $(FEATURES)
-endif
-VP=DNSDB
+	grep "^#define" $(FEATURESSRC) | sed -e 's/^#define /#define $(VP)_/' >> $(FEATURES)
+	echo '#undef $(VP)_VERSION' >> $(FEATURES)
+
 	which printf > /dev/null 2>&1
 	if [ $$? -eq 0 ];then \
 		printf '// version %i.%i.%i.%i-%i\n' $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/') 0 $$(cat REVISION) >> $(FEATURES) ; \
@@ -304,10 +271,4 @@ VP=DNSDB
 	fi
 	echo "// $(FEATURES)" >> $(FEATURES)
 	echo >> $(FEATURES)
-
-#if XXX
-#	echo "#define ZDB_XXX 1" >> $(FEATURES)
-#else
-#	echo "#define ZDB_XXX 0" >> $(FEATURES)
-#endif
 

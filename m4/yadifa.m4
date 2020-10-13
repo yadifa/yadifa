@@ -1,323 +1,54 @@
-
-dnl 
+dnl ############################################################################
+dnl
 dnl Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
-dnl  
-dnl Redistribution and use in source and binary forms, with or without 
+dnl
+dnl Redistribution and use in source and binary forms, with or without
 dnl modification, are permitted provided that the following conditions
 dnl are met:
-dnl 
-dnl        * Redistributions of source code must retain the above copyright 
+dnl
+dnl        * Redistributions of source code must retain the above copyright
 dnl          notice, this list of conditions and the following disclaimer.
 dnl        * Redistributions in binary form must reproduce the above copyright
 dnl          notice, this list of conditions and the following disclaimer in
-dnl          the documentation and/or other materials provided with the 
+dnl          the documentation and/or other materials provided with the
 dnl          distribution.
 dnl        * Neither the name of EURid nor the names of its contributors may be
-dnl          used to endorse or promote products derived from this software 
+dnl          used to endorse or promote products derived from this software
 dnl          without specific prior written permission.
-dnl 
+dnl
 dnl THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-dnl AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+dnl AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 dnl IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
 dnl ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-dnl LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-dnl CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+dnl LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+dnl CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
 dnl SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-dnl INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+dnl INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
 dnl CONTRACT, STRICT LIABILITY,OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
-dnl 
-dnl ############################################################################
 dnl
-dnl       SVN Program:
-dnl               $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/bin/yadifa/configure.ac $
-dnl
-dnl       Last Update:
-dnl               $Date: 2012-03-27 16:56:49 +0200 (Tue, 27 Mar 2012) $
-dnl               $Revision: 1868 $
-dnl
-dnl       Purpose:
-dnl              common yadifa m4 macros
-dnl
-dnl ############################################################################
-
-
-dnl ####################################################
-dnl
-dnl AC_HAS_ENABLE(low-case --enable-*, up-case HAS_*, text, config.h text,ifyes,ifno)
-dnl
-dnl This macro creates a parameter with
-dnl _ a shell-variable-name that will be used for --enable-VARIABLENAME
-dnl     '_' of the variable name will be replaced by a '-' in the command
-dnl
-dnl _ SOMETHINGSOMETHING that will be transformed into a HAS_SOMETHINGSOMETHING define (both C & Makefile)
-dnl
-dnl _ A text to be put next to the --enable-this line in the --help
-dnl
-dnl _ An optional text to be put in the config.h output file.  If not set or empty, the --help text is used
-dnl
-dnl _ A block to execute if the option is enabled (--enable-this)
-dnl
-dnl _ A block to execute if the option is disabled (--disable-this or not set)
-dnl
-dnl ####################################################
-
-AC_DEFUN([AC_HAS_ENABLE], [
-#
-# AC_HAS_ENABLE $1
-#
-AM_CONDITIONAL(HAS_$2, [false])
-# CHECKING
-AC_MSG_CHECKING(if [$2] has been enabled)
-# ARG ENABLE
-AC_ARG_ENABLE([$1], AS_HELP_STRING([--enable-[translit($1,[_],[-])]], [Enable $3]))
-dnl # MSG RESULT
-dnl AC_MSG_RESULT($enable_[$1])
-dnl echo "enabled: '$enable_[$1]'"
-# CASE
-case "y$enable_[$1]" in
-	yyes)
-# DEFINE Y
-		AC_DEFINE_UNQUOTED([HAS_$2], [1], ifelse($4,,[$3 enabled.],$4))
-# CONDITIONAL Y
-		AM_CONDITIONAL([HAS_$2], [true])
-        enable_[$1]="yes"
-        AC_MSG_RESULT([yes])
-# IF YES
-        $5
-# ENDIF
-		;;
-	yno|y|*)
-# DEFINE N
-		AC_DEFINE_UNQUOTED([HAS_$2], [0], ifelse($4,,[$3 disabled.],$4))
-# CONDITIONAL N
-        AM_CONDITIONAL([HAS_$2], [false])
-        enable_[$1]="no"
-        AC_MSG_RESULT([no])
-# IF NO
-        $6
-# ENDIF
-        ;;
-esac
-dnl # CONDITIONAL
-dnl AM_CONDITIONAL([HAS_$2], [test y$enable_[$1] = yyes])
-# SUBST
-AC_SUBST(HAS_$2)
-# AC_HAS_ENABLE $1 DONE
-])
-
-dnl ####################################################
-dnl
-dnl AC_HAS_DISABLE(low-case --disable-*, up-case HAS_*, text, config.h text,ifyes,ifno)
-dnl
-dnl This macro creates a parameter with
-dnl _ a shell-variable-name that will be used for --disable-VARIABLENAME
-dnl     '_' of the variable name will be replaced by a '-' in the command
-dnl
-dnl _ SOMETHINGSOMETHING that will be transformed into a HAS_SOMETHINGSOMETHING define (both C & Makefile)
-dnl
-dnl _ A text to be put next to the --disable-this line in the --help
-dnl
-dnl _ An optional text to be put in the config.h output file.  If not set or empty, the --help text is used
-dnl
-dnl _ A block to execute if the option is enabled (--enable-this or not set)
-dnl
-dnl _ A block to execute if the option is disabled (--disable-this)
-dnl
-dnl ####################################################
-
-AC_DEFUN([AC_HAS_DISABLE], [
-#
-# AC_HAS_DISABLE $1
-#
-AM_CONDITIONAL(HAS_$2, [true])
-# CHECKING
-AC_MSG_CHECKING(if [$2] has been disabled)
-# ARG ENABLE
-AC_ARG_ENABLE([$1], AS_HELP_STRING([--disable-[translit($1,[_],[-])]],[Disable $3]))
-# MSG RESULT
-dnl echo "enabled: '$enable_[$1]'"
-# CASE
-case "y$enable_[$1]" in
-	yyes|y)
-# DEFINE Y
-		AC_DEFINE_UNQUOTED([HAS_$2], [1], ifelse($4,,[$3 enabled.],$4))
-# CONDITIONAL Y
-		AM_CONDITIONAL([HAS_$2], [true])
-        enable_[$1]=yes
-        AC_MSG_RESULT([no])
-# IF YES
-        $5
-# ENDIF
-		;;
-	yno|*)
-# DEFINE N
-		AC_DEFINE_UNQUOTED([HAS_$2], [0], ifelse($4,,[$3 disabled.],$4))
-# CONDITIONAL N
-        AM_CONDITIONAL([HAS_$2], [false])
-        enable_[$1]=no
-        AC_MSG_RESULT([yes])
-# IF NO
-        $6
-# ENDIF
-        ;;
-esac
-dnl # CONDITIONAL
-dnl AM_CONDITIONAL([HAS_$2], [test y$enable_[$1] = yyes])
-# SUBST
-AC_SUBST(HAS_$2)
-# AC_HAS_DISABLE $1 DONE
-])
-
-dnl ####################################################
-dnl
-dnl AC_HAS_WITH(low-case --with-*, up-case HAS_*, text, config.h text,ifyes,ifno)
-dnl
-dnl This macro creates a parameter with
-dnl _ a shell-variable-name that will be used for --with-VARIABLENAME
-dnl     '_' of the variable name will be replaced by a '-' in the command
-dnl
-dnl _ SOMETHINGSOMETHING that will be transformed into a HAS_SOMETHINGSOMETHING define (both C & Makefile)
-dnl
-dnl _ A text to be put next to the --with-this line in the --help
-dnl
-dnl _ An optional text to be put in the config.h output file.  If not set or empty, the --help text is used
-dnl
-dnl _ A block to execute if the option is withd (--with-this)
-dnl
-dnl _ A block to execute if the option is withoutd (--without-this or not set)
-dnl
-dnl ####################################################
-
-AC_DEFUN([AC_HAS_WITH], [
-#
-# AC_HAS_WITH $1
-#
-AM_CONDITIONAL(HAS_$2, [false])
-# CHECKING
-AC_MSG_CHECKING(if [$1] has been given)
-# ARG WITH
-AC_ARG_WITH([$1], AS_HELP_STRING([--with-[translit($1,[_],[-])]], [With $3]),
-[
-# DEFINE Y
-		AC_DEFINE_UNQUOTED([HAS_$2], [1], ifelse($4,,[With $3.],$4))
-# CONDITIONAL Y
-		AM_CONDITIONAL([HAS_$2], [true])
-        AC_DEFINE_UNQUOTED([HAS_WITH_$2], "$with_[$1]" // $withval, ifelse($4,,[build $3.],$4))
-        with_[$1]="yes"
-        AC_MSG_RESULT([yes])
-# IF YES
-        $5
-# ENDIF
-]
-,
-[
-# DEFINE N
-		AC_DEFINE_UNQUOTED([HAS_$2], [0], ifelse($4,,[Without $3.],$4))
-# CONDITIONAL N
-        AM_CONDITIONAL([HAS_$2], [false])
-        with_[$1]="no"
-        AC_MSG_RESULT([no])
-# IF NO
-        $6
-# ENDIF
-])
-# SUBST
-AC_SUBST(HAS_$2)
-# AC_HAS_WITH $1 DONE
-])
-
-dnl ####################################################
-dnl
-dnl AC_HAS_WITHOUT(low-case --without-*, up-case HAS_*, text, config.h text,ifyes,ifno)
-dnl
-dnl This macro creates a parameter with
-dnl _ a shell-variable-name that will be used for --without-VARIABLENAME
-dnl     '_' of the variable name will be replaced by a '-' in the command
-dnl
-dnl _ SOMETHINGSOMETHING that will be transformed into a HAS_SOMETHINGSOMETHING define (both C & Makefile)
-dnl
-dnl _ A text to be put next to the --without-this line in the --help
-dnl
-dnl _ An optional text to be put in the config.h output file.  If not set or empty, the --help text is used
-dnl
-dnl _ A block to execute if the option is withd (--with-this or not set)
-dnl
-dnl _ A block to execute if the option is withoutd (--without-this)
-dnl
-dnl ####################################################
-
-AC_DEFUN([AC_HAS_WITHOUT], [
-#
-# AC_HAS_WITHOUT $1
-#
-AM_CONDITIONAL(HAS_$2, [true])
-# CHECKING
-AC_MSG_CHECKING(if [$1] has to be build)
-# ARG WITH
-AC_ARG_WITH([$1], AS_HELP_STRING([--without-[translit($1,[_],[-])]],[Without $3]))
-
-# MSG RESULT
-case "y$with_[$1]" in
-    yyes|y)
-# DEFINE Y
-		AC_DEFINE_UNQUOTED([HAS_$2], [1], ifelse($4,,[With $3.],$4))
-# CONDITIONAL Y
-		AM_CONDITIONAL([HAS_$2], [true])
-        with_[$1]=yes
-        AC_MSG_RESULT([yes])
-# IF YES
-        $5
-# ENDIF
-        ;;
-
-    yno|*)
-# DEFINE N
-		AC_DEFINE_UNQUOTED([HAS_$2], [0], ifelse($4,,[Without $3.],$4))
-# CONDITIONAL N
-        AM_CONDITIONAL([HAS_$2], [false])
-        with_[$1]=no
-        AC_MSG_RESULT([no])
-# IF NO
-        $6
-# ENDIF
-        ;;
-esac
-
-dnl # CONDITIONAL
-dnl AM_CONDITIONAL([HAS_$2], [test y$with_[$1] = yyes])
-# SUBST
-AC_SUBST(HAS_$2)
-# AC_HAS_WITHOUT $1 DONE
-])
-
-dnl CTRL class
-dnl
-
-AC_DEFUN([AC_CHECK_ENABLE_CTRL], [
-
-AC_HAS_ENABLE(ctrl,CTRL,[remote control])
-
-])
-
-dnl DNS_RRL
-
+dnl ############################################################################        
+        
 AC_DEFUN([AC_CHECK_ENABLE_RRL], [
 
 AC_HAS_DISABLE(rrl,RRL_SUPPORT,[DNS Response Rate Limiter])
  
 ])
 
-dnl SSL DNSCORE DNSDB DNSZONE (all defaulted to FALSE)
+dnl SSL DNSCORE DNSDB (all defaulted to FALSE)
 
+requires_tcl=0
 requires_ssl=0
 requires_dnscore=0
 requires_dnsdb=0
-requires_dnszone=0
 requires_dnslg=0
 requires_dnstcl=0
+
+AC_DEFUN([AC_YADIFA_ENABLE_TCL], [
+	requires_tcl=1
+])
 
 AC_DEFUN([AC_YADIFA_ENABLE_SSL], [
 	requires_ssl=1
@@ -332,13 +63,14 @@ AC_DEFUN([AC_YADIFA_ENABLE_DNSDB], [
     requires_dnscore=1
 ])
 
-AC_DEFUN([AC_YADIFA_ENABLE_DNSZONE], [
-	requires_dnszone=1
-	requires_dnsdb=1
-    requires_dnscore=1
+AC_DEFUN([AC_YADIFA_ENABLE_DNSLG], [
+	requires_dnslg=1
+	requires_dnscore=1
 ])
 
-AC_DEFUN([AC_YADIFA_ENABLE_DNSLG], [
+AC_DEFUN([AC_YADIFA_ENABLE_DNSTCL], [
+	requires_dnstcl=1
+	requires_dnsdb=1
 	requires_dnslg=1
 	requires_dnscore=1
 ])
@@ -399,7 +131,9 @@ dnl		AC_CHECK_LIB([ssl], [SSL_library_init],,[exit],[$SSLDEPS])
         AC_SEARCH_LIBS([SSL_library_init],[ssl],,[
             AC_SEARCH_LIBS([OPENSSL_init_ssl],[ssl],,[exit 1])
             ])
-
+        AC_DEFINE_UNQUOTED(HAS_OPENSSL, [1], [linked with an OpenSSL compatible API])
+    else
+        AC_DEFINE_UNQUOTED(HAS_OPENSSL, [0], [not linked with an OpenSSL compatible API])
     fi
 
 	AC_SUBST(OPENSSL)
@@ -415,11 +149,11 @@ echo -n "checking if -Bstatic & -Bdynamic are supported ... "
 $CC -Wl,-Bstatic 2>&1|grep Bstatic > /dev/null
 if [[ $? -eq 0 ]]
 then
-	echo "not supported";
+	echo "not supported"
 	LDDYN=""
 	LDSTAT=""
 else
-	echo "supported";
+	echo "supported"
 fi
 
 LIBS="$LDDYN $LIBS"
@@ -429,6 +163,32 @@ AC_SEARCH_LIBS([socket],[socket],,[exit 1])
 AC_SEARCH_LIBS([dlopen],[dl],,[exit 1])
 AC_SEARCH_LIBS([pthread_self],[pthread],,[exit 1])
 dnl AC_GETHOSTBYNAME_CHECK
+
+if [[ $requires_tcl -eq 1 ]]
+then
+	echo "TCL is required by this setup ..."
+
+    if [[ "$tcl_version" = "" ]]
+    then
+        echo "tcl_version empty, expected something like 'tcl8.x'"
+        exit 1
+    fi
+
+    CFLAGS="$CFLAGS -DWITHTCLINCLUDED"
+    if [[ ! "${tcl_includedir}" = "/usr/include" ]] && [[ ! "${tcl_includedir}" = "" ]]
+    then
+    	CFLAGS="$CFLAGS -I${tcl_includedir}"
+    fi
+
+    if [[ ! "${tcl_libdir}" = "/usr/lib" ]] && [[ ! "${tcl_libdir}" = "/lib" ]] && [[ ! "${tcl_libdir}" = "" ]]
+    then
+    	LDFLAGS="-L${tcl_libdir} $LDFLAGS"
+    fi
+
+    echo "searching for library '$tcl_version' in the system"
+
+	AC_SEARCH_LIBS(Tcl_Main, [${tcl_version}], ,[echo "could not find ${tcl_version} :: tcl_includedir=${tcl_includedir} :: tcl_libdir=${tcl_libdir}"; exit 1])
+fi
 
 dnl SSL
 
@@ -448,13 +208,6 @@ if [[ $requires_dnscore -eq 1 ]]
 then
 AC_SEARCH_LIBS([clock_gettime],[rt])
 AC_MSG_CHECKING(for the DNS Core library)
-AC_ARG_WITH(dnscore, AS_HELP_STRING([--with-dnscore=DIR], [Use the dnscore from directory DIR/lib (devs only)]),
-	[
-		CFLAGS="-I$with_dnscore/include $CFLAGS"
-		LDFLAGS="-L$with_dnscore/lib $LDFLAGS";
-		AC_CHECK_LIB([dnscore], [dnscore_init],,[exit],[$LDSTAT -ldnscore $LDDYN -lssl])
-	],
-	[
 
 		if [[ ! -d ${srcdir}/../../lib/dnscore ]]
 		then
@@ -464,7 +217,6 @@ AC_ARG_WITH(dnscore, AS_HELP_STRING([--with-dnscore=DIR], [Use the dnscore from 
 			LDFLAGS="-L../../lib/dnscore/.libs $LDFLAGS"
 			LDFLAGS="$LDFLAGS $LDSTAT -ldnscore $LDDYN"
 		fi
-	])
 AC_SUBST(DNSCORE)
 
 fi
@@ -475,13 +227,6 @@ if [[ $requires_dnsdb -eq 1 ]]
 then
 
 AC_MSG_CHECKING(for the DNS Database library)
-AC_ARG_WITH(dnsdb, AS_HELP_STRING([--with-dnsdb=DIR], [Use the dnsdb from directory DIR/lib (devs only)]),
-	[
-		CFLAGS="-I$with_dnsdb/include $CFLAGS"
-		LDFLAGS="-L$with_dnsdb/lib $LDFLAGS";
-		AC_CHECK_LIB([dnsdb], [zdb_init],,[exit],[$LDSTAT -ldnscore $LDDYN -lssl])
-	],
-	[
 
 		if [[ ! -d ${srcdir}/../../lib/dnsdb ]]
 		then
@@ -494,36 +239,7 @@ AC_ARG_WITH(dnsdb, AS_HELP_STRING([--with-dnsdb=DIR], [Use the dnsdb from direct
 
 			LDFLAGS="$LDFLAGS $LDSTAT -ldnsdb $LDDYN"
 		fi
-	])
 AC_SUBST(DNSDB)
-
-fi
-
-dnl DNSZONE
-
-if [[ $requires_dnszone -eq 1 ]]
-then
-
-AC_MSG_CHECKING(for the DNS Zone library)
-AC_ARG_WITH(dnszone, AS_HELP_STRING([--with-dnszone=DIR], [Use the dnszone from directory DIR/lib (devs only)]),
-    [
-		CFLAGS="-I$with_dnszone/include $CFLAGS"
-        LDFLAGS="-L$with_dnszone/lib $LDFLAGS";
-        AC_CHECK_LIB([dnszone], [dnszone_init],,[exit],[$LDSTAT -ldnsdb -ldnscore $LDDYN -lssl])
-    ],
-    [
-		
-		if [[ ! -d ${srcdir}/../../lib/dnszone ]]
-		then
-        	AC_CHECK_LIB([dnszone], [dnszone_init],,[exit],[$LDSTAT -ldnsdb -ldnscore $LDDYN -lssl])
-        else
-            CFLAGS="-I${srcdir}/../../lib/dnszone/include $CFLAGS"
-            LDFLAGS="-L../../lib/dnszone/.libs $LDFLAGS"
-
-            LDFLAGS="$LDFLAGS $LDSTAT -ldnszone $LDDYN"	
-		fi
-    ])
-AC_SUBST(DNSZONE)
 
 fi
 
@@ -533,13 +249,6 @@ if [[ $requires_dnslg -eq 1 ]]
 then
 
 AC_MSG_CHECKING(for the DNS Looking Glass library)
-AC_ARG_WITH(dnslg, AS_HELP_STRING([--with-dnslg=DIR], [Use the dnslg from directory DIR/lib (devs only)]),
-    [
-		CFLAGS="-I$with_dnslg/include $CFLAGS"
-        LDFLAGS="-L$with_dnslg/lib $LDFLAGS";
-        AC_CHECK_LIB([dnslg], [dnslg_init],,[exit],[$LDSTAT -ldnscore $LDDYN -lssl])
-    ],
-    [
 		
 		if [[ ! -d ${srcdir}/../../lib/dnslg ]]
 		then
@@ -550,7 +259,6 @@ AC_ARG_WITH(dnslg, AS_HELP_STRING([--with-dnslg=DIR], [Use the dnslg from direct
 
             LDFLAGS="$LDFLAGS $LDSTAT -ldnslg $LDDYN"	
 		fi
-    ])
 AC_SUBST(DNSLG)
 
 fi
@@ -565,11 +273,6 @@ dnl Features
 AC_DEFUN([AC_YADIFA_FEATURES], [
 
 AC_CHECK_ENABLE_RRL
-
-dnl SENDMSG / SENDTO : send messages with sendmsg instead of sendto
-dnl ==========================================================================
-
-AC_HAS_DISABLE(messages,MESSAGES_SUPPORT,[usage of message structure API (not recommended)])
 
 dnl MASTER
 dnl ==========================================================================
@@ -586,30 +289,33 @@ AC_HAS_DISABLE(master,MASTER_SUPPORT,[DNS master],,
 dnl CTRL class
 dnl ==========================================================================
 
-AC_HAS_ENABLE(ctrl,CTRL,[remote control])
+AC_HAS_DISABLE(ctrl,CTRL,[remote control])
 
 dnl NSID
 dnl ==========================================================================
 
 AC_HAS_DISABLE(nsid,NSID_SUPPORT,[NSID support])
 
-dnl OOZRR a.k.a CACHE : outsize-of-zone records (caching, devs only)
-dnl ==========================================================================
-
-AM_CONDITIONAL([HAS_RRCACHE_ENABLED], [true])
-AC_DEFINE_UNQUOTED([HAS_RRCACHE_ENABLED], [1], [always on])
-
 dnl ACL
 dnl ==========================================================================
 
-AM_CONDITIONAL([HAS_ACL_SUPPORT], [true])
-AC_DEFINE_UNQUOTED([HAS_ACL_SUPPORT], [1], [always on])
+dnl AC_HAS_DISABLE(acl,ACL_SUPPORT,[ACL support],,
+dnl    AC_YADIFA_ENABLE_SSL
+dnl    ,
+dnl    enable_tsig='no'
+dnl    )
+AC_FORCE_ENABLE(acl,ACL_SUPPORT)
+AC_YADIFA_ENABLE_SSL
 
 dnl TSIG
 dnl ==========================================================================
 
-AM_CONDITIONAL([HAS_TSIG_SUPPORT], [true])
-AC_DEFINE_UNQUOTED([HAS_TSIG_SUPPORT], [1], [always on])
+dnl AC_HAS_DISABLE(tsig,TSIG_SUPPORT,[TSIG support],,
+dnl     AC_YADIFA_ENABLE_SSL
+dnl     ,
+dnl     )
+AC_FORCE_ENABLE(tsig,TSIG_SUPPORT)
+AC_YADIFA_ENABLE_SSL
 
 dnl DYNUPDATE
 dnl ==========================================================================
@@ -624,21 +330,18 @@ AC_HAS_DISABLE(rrsig_management,RRSIG_MANAGEMENT_SUPPORT,[RRSIG verification and
     ,
     )
 
-dnl RDTSC
-dnl ==========================================================================
-
-AM_CONDITIONAL([HAS_RDTSC_SUPPORT], [false])
-AC_DEFINE_UNQUOTED([HAS_RDTSC_SUPPORT], [0], [always on])
-
-dnl NSEC3
-
 AM_CONDITIONAL([HAS_DNSSEC_SUPPORT], [true])
-AC_DEFINE_UNQUOTED([HAS_DNSSEC_SUPPORT], [1], [always on])
-AM_CONDITIONAL([HAS_NSEC_SUPPORT], [true])
-AC_DEFINE_UNQUOTED([HAS_NSEC_SUPPORT], [1], [always on])
-AM_CONDITIONAL([HAS_NSEC3_SUPPORT], [true])
-AC_DEFINE_UNQUOTED([HAS_NSEC3_SUPPORT], [1], [always on])
+AC_DEFINE_UNQUOTED([HAS_DNSSEC_SUPPORT], [1], [MUST be enabled if either NSEC3 or NSEC are enabled])
+AC_SUBST(ZDB_HAS_DNSSEC_SUPPORT)
 AC_YADIFA_ENABLE_SSL
+
+AM_CONDITIONAL(HAS_NSEC_SUPPORT,[true])
+AC_DEFINE_UNQUOTED([HAS_NSEC_SUPPORT], [1], [NSEC enabled])
+AC_SUBST(HAS_NSEC_SUPPORT)
+
+AM_CONDITIONAL(HAS_NSEC3_SUPPORT,[true])
+AC_DEFINE_UNQUOTED([HAS_NSEC3_SUPPORT], [1], [NSEC3 enabled])
+AC_SUBST(HAS_NSEC3_SUPPORT)
 
 dnl ZALLOC
 dnl ==========================================================================
@@ -685,6 +388,14 @@ dnl ======================
 
 AC_HAS_ENABLE(mutex_debug,MUTEX_DEBUG_SUPPORT,[mutex debug support])
 
+dnl ZONE MUTEX DEBUG
+dnl ================
+AC_HAS_ENABLE(lock_debug,LOCK_DEBUG_SUPPORT,[zone lock debug support])
+
+dnl ZONE MUTEX DEBUG
+dnl ================
+AC_HAS_ENABLE(filepool_cache,FILEPOOL_CACHE,[file pool uses cache (dev)])
+
 dnl INSTANCIATED ZONES DEBUG
 dnl ========================
 
@@ -693,17 +404,17 @@ AC_HAS_ENABLE(track_zones_debug,TRACK_ZONES_DEBUG_SUPPORT,[tracking of the insta
 dnl LOG THREAD ID
 dnl =============
 
-AC_HAS_ENABLE(log_thread_id,LOG_THREAD_ID_ALWAYS_ON,[a column with an alphanumeric id consistent in the lowest 32 bits of a thread id in each log line])
+AC_HAS_ENABLE(log_thread_id,LOG_THREAD_ID,[a column with an alphanumeric id consistent in the lowest 32 bits of a thread id in each log line])
 
 dnl LOG THREAD TAG
 dnl ==============
 
-AC_HAS_ENABLE(log_thread_tag,LOG_THREAD_TAG_ALWAYS_ON,[a column with a 8 letters human-readable tag identifying a thread in each log line])
+AC_HAS_DISABLE(log_thread_tag,LOG_THREAD_TAG,[a column with a 8 letters human-readable tag identifying a thread in each log line])
 
 dnl LOG PID
 dnl =======
 
-AC_HAS_ENABLE(log_pid,LOG_PID_ALWAYS_ON,[a column with the pid in each line of log])
+AC_HAS_DISABLE(log_pid,LOG_PID,[a column with the pid in each line of log])
 
 dnl ASCII 7
 dnl =======
@@ -712,41 +423,83 @@ AC_HAS_ENABLE(full_ascii7,FULL_ASCII7,[acceptance of ASCII7 characters in DNS na
 
 dnl ECDSA
 dnl =====
-AC_HAS_DISABLE(ecdsa,ECDSA_SUPPORT,[Elliptic Curve (ECDSA) support (ie: the available OpenSSL does not supports it)])
- 
+AC_HAS_DISABLE(ecdsa,ECDSA_SUPPORT,[Elliptic Curve (ECDSA) support (ie: the available OpenSSL does not support it)])
+
+dnl SYSTEMD-RESOLVED
+dnl ================
+
+AC_HAS_ENABLE(systemd_resolved_avoidance, SYSTEMD_RESOLVED_AVOIDANCE, [to set do-not-listen to "127.0.0.53 port 53" by default (otherwise the list is empty by default)])
+
 dnl NON-AA AXFR (non-AA AXFR as sent by MS DNS)
 dnl ==========================================================================
 
-AC_HAS_ENABLE(non_aa_axfr_support,NON_AA_AXFR_SUPPORT,[lenient acceptance of AXFR answer from master that do not have AA bit set (Microsoft DNS)])
+AC_HAS_ENABLE(non_aa_axfr_support,NON_AA_AXFR_SUPPORT,[defaults axfr-strict-authority to no. Lenient acceptance of AXFR answer from master that do not have AA bit by default (Microsoft DNS)])
 
-dnl DROPALL debug 
+dnl STRDUP
 dnl ==========================================================================
 
-AC_HAS_ENABLE(dropall,DROPALL_SUPPORT,[DROPALL mode (devs only)],[DROPALL mode will not actually send back the answer (debug/bench)])
+dnl include strdup
+
+AC_MSG_CHECKING(if has strdup)
+AM_CONDITIONAL([HAS_STRDUP], [false])
+
+cat > strdup_test.c <<_ACEOF
+#include<stdlib.h>
+#include<string.h>
+
+int main(int argc, char** argv)
+{
+	char* p = strdup("test");
+	return 0;
+}
+_ACEOF
+${CC} ${CFLAGS} strdup_test.c -o strdup_test
+if [[ $? -eq 0 ]]; then
+	has_strdup=1;
+	echo "yes"
+else
+	echo "no"
+fi
+rm -f strdup_test strdup_test.c
+AM_CONDITIONAL([HAS_STRDUP], [test $has_strdup = yes])
+
+dnl EVENT DYNAMIC MODULE
+dnl ==========================================================================
+
+AC_HAS_ENABLE(event_dynamic_module,EVENT_DYNAMIC_MODULE,[Adds support for dynamically loaded module that gets events from yadifad and is allowed to fetch some information])
 
 dnl logdir
 dnl ==========================================================================
 
 AC_HAS_WITH(logdir, LOGDIR, [the log file directory set to this], [where to put the log files],
 logdir="$withval"
+with_logdir="$logdir"
 ,
 logdir=${localstatedir}/log/yadifa
+with_logdir="$logdir"
 )
+
 AC_SUBST(logdir)
 
-# DNSQ
+echo "LOGDIR=$logdir"
 
-# AC_HAS_ENABLE_HOLD(dnsq,DNSQ,[DNS Quality support (devs only)],[DNSQ support enabled])
-# AC_HAS_ENABLE_HOLD(gery,GERY,[code not to be released yet, specific to Gery (devs only)],[Gery's code is enabled])
-# AC_HAS_ENABLE_HOLD(edf,EDF,[code not to be released yet, specific to Eric (devs only)],[Eric's code is enabled])
-# AC_HAS_ENABLE_HOLD(thx,THX,[code not to be released yet, specific to Tim (devs only)],[Tim's code is enabled])
+AC_SOCKADDR_SA_LEN_CHECK
+AC_SOCKADDR_IN_SIN_LEN_CHECK
+AC_SOCKADDR_IN6_SIN6_LEN_CHECK
 
 ])
 
-# NOTIMESTAMP
+dnl NOTIMESTAMP
+dnl ==========================================================================
 
 AC_HAS_DISABLE(build_timestamp,BUILD_TIMESTAMP,[Disable timestamps in the build])
 
+dnl close_ex file-descriptor double-close protection (debug)
+dnl ==========================================================================
+AC_HAS_ENABLE(fd_close_debug, CLOSE_EX_REF, [close_ex(fd) to change the value of fd to detect double-closes issues (debug)])
+
+AC_HAS_DISABLE(yadifa,YADIFA,[controller for yadifad],[building with controller])
+AC_HAS_DISABLE(dnssec_tools,DNSSEC_TOOLS,[DNSSEC module for yadifa],[enable DNSSEC module for yadifa])
 
 AC_DEFUN([AC_YADIFA_SUMMARY], [
 
@@ -778,6 +531,12 @@ echo CTRL .............. : $enable_ctrl
 echo NSEC .............. : $enable_nsec
 echo NSEC3 ............. : $enable_nsec3
 echo RRL ............... : $enable_rrl
+echo
+echo TCL ............... : $with_tcl
+if [[ "$with_tcl" = "yes" ]]; then 
+echo TCL used ............................ : $tcl_version
+echo TCL library ......................... : $tcl_libdir
+echo "TCL includes ........................ : $tcl_includedir"
 fi
 echo
 

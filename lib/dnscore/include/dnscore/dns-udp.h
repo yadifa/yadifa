@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 #ifndef DNS_UDP_H
 #define DNS_UDP_H
@@ -42,9 +42,9 @@
 
 // error codes
 
-#define DNS_UDP_TIMEOUT         0x81000001
-#define DNS_UDP_INTERNAL        0x81000002
-#define DNS_UDP_CANCEL          0x81000003
+#define DNS_UDP_TIMEOUT         ((s32)0x81000001)
+#define DNS_UDP_INTERNAL        ((s32)0x81000002)
+#define DNS_UDP_CANCEL          ((s32)0x81000003)
 
 //
 
@@ -91,11 +91,23 @@
 #define DNS_UDP_PER_DNS_FREQ_MIN_MIN 0
 #define DNS_UDP_PER_DNS_FREQ_MIN_MAX 1000000
 
+#define DNS_UDP_READ_BUFFER_COUNT       4096
+#define DNS_UDP_READ_BUFFER_COUNT_MIN      1
+#define DNS_UDP_READ_BUFFER_COUNT_MAX   8192
+
 #define DNS_UDP_TCP_THREAD_POOL_SIZE 1
 #define DNS_UDP_TCP_THREAD_POOL_MIN 1
 #define DNS_UDP_TCP_THREAD_POOL_MAX 64
 
 #define DNS_UDP_TCP_FALLBACK_ON_TIMEOUT 0
+
+#define DNS_UDP_CALLBACK_THREAD_COUNT 4
+#define DNS_UDP_CALLBACK_THREAD_COUNT_MIN 1
+#define DNS_UDP_CALLBACK_THREAD_COUNT_MAX 8
+
+#define DNS_UDP_CALLBACK_QUEUE_SIZE 0x100000
+#define DNS_UDP_CALLBACK_QUEUE_SIZE_MIN 0x1000
+#define DNS_UDP_CALLBACK_QUEUE_SIZE_MAX 0x1000000
 
 #define DNS_SIMPLE_MESSAGE_HAS_WAIT_COND 0
 
@@ -112,7 +124,7 @@
 
 struct dns_udp_settings_s
 {
-    u64 timeout;
+    s64 timeout;
     u32 send_rate;
     u32 send_bandwidth;
     u32 recv_bandwidth;
@@ -123,11 +135,17 @@ struct dns_udp_settings_s
     u32 per_dns_rate;
     u32 per_dns_bandwidth;
     u32 per_dns_freq_min;
-    
+
     u32 udp_read_buffer_count;
-    
+
+    u32 callback_queue_size;
+    u8 callback_thread_count;
+
     u8 tcp_thread_pool_size;
     bool tcp_fallback_on_timeout;
+
+
+
 };
 
 typedef struct dns_udp_settings_s dns_udp_settings_s;
@@ -159,7 +177,7 @@ struct dns_simple_message_s
     
     smp_int rc; // number of references for this message
     group_mutex_t mtx;
-    volatile pthread_t owner;
+    volatile thread_t owner;
     
     int sender_socket;              // used so a repeated message will be sent from the same address:port
     u32 worker_index;               // seems to be only useful to get the priority queue index
@@ -169,7 +187,7 @@ struct dns_simple_message_s
     u16 source_port;                // seems useless
     u16 dns_id;
     s8  retries_left;
-    u8  status;
+    volatile u8  status;
     u8 recurse:1,tcp:1,tcp_used:1,tcp_replied:1;
     //bool recurse;
     //bool tcp;                       // try TCP
@@ -203,10 +221,10 @@ int dns_udp_handler_finalize();
 
 void dns_udp_cancel_all_queries();
 
-int dns_udp_send_simple_message(const host_address* name_server, const u8 *fqdn, u16 qtype, u16 qclass, u16 flags, async_done_callback *cb, void* cbargs);
-int dns_udp_send_recursive_message(const host_address* name_server, const u8 *fqdn, u16 qtype, u16 qclass, u16 flags, async_done_callback *cb, void* cbargs);
-int dns_udp_send_simple_message_sync(const host_address* name_server, const u8 *fqdn, u16 qtype, u16 qclass,u16 flags, dns_simple_message_s **to_release);
-int dns_udp_send_recursive_message_sync(const host_address* name_server, const u8 *fqdn, u16 qtype, u16 qclass,u16 flags, dns_simple_message_s **to_release);
+void dns_udp_send_simple_message(const host_address* name_server, const u8 *fqdn, u16 qtype, u16 qclass, u16 flags, async_done_callback *cb, void* cbargs);
+void dns_udp_send_recursive_message(const host_address* name_server, const u8 *fqdn, u16 qtype, u16 qclass, u16 flags, async_done_callback *cb, void* cbargs);
+ya_result dns_udp_send_simple_message_sync(const host_address* name_server, const u8 *fqdn, u16 qtype, u16 qclass,u16 flags, dns_simple_message_s **to_release);
+ya_result dns_udp_send_recursive_message_sync(const host_address* name_server, const u8 *fqdn, u16 qtype, u16 qclass,u16 flags, dns_simple_message_s **to_release);
 
 bool dns_udp_simple_message_trylock(dns_simple_message_s *simple_message);
 void dns_udp_simple_message_lock(dns_simple_message_s *simple_message);

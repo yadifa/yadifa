@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup database Routines for database manipulations
  *  @ingroup yadifad
  *  @brief database functions
@@ -50,7 +51,6 @@
  * USE INCLUDES */
 
 #include "server-config.h"
-#include "config.h"
 
 #include <dnscore/logger.h>
 #include <dnscore/serial.h>
@@ -58,6 +58,8 @@
 
 #include <dnsdb/zdb_zone.h>
 #include <dnsdb/zdb-zone-path-provider.h>
+#define ZDB_JOURNAL_CODE 1
+#include <dnsdb/journal.h>
 
 #include "database-service.h"
 #include "axfr.h"
@@ -70,6 +72,8 @@
 /**********************************************************************************************************************/
 
 #define DSZDLPRM_TAG 0x4d52504c445a5344
+
+#define ARBITRARY_REFRESH_VALUE 3600 // seconds
 
 struct database_service_zone_download_parms_s
 {
@@ -84,13 +88,14 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
 {
     ya_result return_value;
     
-#ifdef DEBUG
+#if DEBUG
     log_debug("database_service_zone_download_xfr(%{dnstype},%{dnsname})", &qtype, origin);
 #endif
         
     zone_desc_s *zone_desc = zone_acquirebydnsname(origin);
     host_address *servers = NULL;
     u32 loaded_serial = ~0;
+    u32 loaded_refresh = ~0;
     u16 transfer_type = 0;
     bool may_try_next_master = FALSE;
     
@@ -101,7 +106,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
     if(zone_desc == NULL)
     {
         log_debug1("database_service_zone_download_thread: no zone settings for '%{dnsname}'", origin);
-        return ERROR;
+        return INVALID_STATE_ERROR;
     }
     
     log_debug1("database_service_zone_download_thread: locking zone '%{dnsname}' for loading", origin);
@@ -137,7 +142,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
         
         database_fire_zone_processed(zone_desc);
         zone_release(zone_desc);
-        return ERROR;
+        return INVALID_STATE_ERROR;
     }
     
     if(dnscore_shuttingdown())
@@ -170,15 +175,16 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
         if(zone != NULL)
         {
             soa_rdata soa;
-            u32 local_serial;
 
             zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
             return_value = zdb_zone_getsoa(zone, &soa); // zone is locked
             zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
-            local_serial = soa.serial;
 
             if(ISOK(return_value))
             {
+                u32 local_serial;
+                local_serial = soa.serial;
+
                 log_debug("database_service_zone_download_thread: serial of %{dnsname} on the server is %d", origin, local_serial);
 
                 u32 master_serial;
@@ -195,6 +201,8 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                 {
                     log_debug("database_service_zone_download_thread: serial of %{dnsname} on the master is %d", origin, master_serial);
 
+                    // compare serials
+
                     if(!force_load && serial_le(master_serial, local_serial))
                     {
                         if(serial_lt(master_serial, local_serial))
@@ -205,14 +213,13 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                         log_debug("database_service_zone_download_thread: serial of %{dnsname} is not lower than the one on the master", origin);
 
                         zone_lock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
-
                         zone_clear_status(zone_desc, ZONE_STATUS_DOWNLOADING_XFR_FILE|ZONE_STATUS_PROCESSING);
                         zone_desc->refresh.refreshed_time = time(NULL);
                         zone_desc->refresh.retried_time = zone_desc->refresh.refreshed_time;
 
                         u32 next_refresh = zone_desc->refresh.refreshed_time + soa.refresh;
 
-                        log_info("database: refresh: %{dnsname}: zone refreshed, next refresh scheduled for %T", origin, next_refresh);
+                        log_info("database: refresh: %{dnsname}: zone didn't need a refresh, next refresh currently scheduled for %T", origin, next_refresh);
 
                         database_zone_refresh_maintenance_wih_zone(zone, next_refresh);
 
@@ -228,9 +235,18 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                 }
                 else
                 {
-                    log_err("database: could not get the serial of %{dnsname} from the master @%{hostaddr}: %r", zone_desc->origin, zone_desc->masters, return_value);
+                    log_warn("database: could not get the serial of %{dnsname} from the master @%{hostaddr}: %r", zone_origin(zone_desc), zone_desc->masters, return_value);
                 }
             }
+        }
+
+        if(dnscore_shuttingdown())
+        {
+            log_debug("zone download: zone download cancelled by shutdown (loop)");
+            database_fire_zone_processed(zone_desc);
+            zone_release(zone_desc);
+
+            return STOPPED_BY_APPLICATION_SHUTDOWN;
         }
 
         // get ready with the download of the AXFR/IXFR
@@ -249,7 +265,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
             {
                 log_info("slave: %{dnsname} AXFR query to the master", origin);
 
-                if(ISOK(return_value = axfr_query(servers, origin, &loaded_serial)))
+                if(ISOK(return_value = axfr_query_ex(servers, origin, &loaded_serial, &loaded_refresh)))
                 {
                     zone_lock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
                     zone_desc->refresh.refreshed_time = time(NULL);
@@ -258,16 +274,22 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                     zone_desc->download_failure_count = 0;
                     zone_unlock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
 
-                    transfer_type = (u16)return_value;
+                    u32 next_refresh = zone_desc->refresh.refreshed_time + loaded_refresh;
+                    database_zone_refresh_maintenance_wih_zone(zone, next_refresh);
+
+                    transfer_type = (u16)return_value; /// @note comes from axfr_query_master_ex, take care not overwriting it
 
                     if(transfer_type != 0)
                     {
-                        log_info("slave: loaded %{dnstype} for domain %{dnsname} from master at %{hostaddr}, serial is %d", &qtype, origin, servers, loaded_serial);
+                        log_info("slave: %{dnsname}: got %{dnstype} from master at %{hostaddr}, serial is %u", origin, &qtype, servers, loaded_serial);
                     }
                 }
                 else
                 {
-                    log_err("slave: axfr query error for domain %{dnsname} from master at %{hostaddr}: %r", origin, servers, return_value);
+                    if(return_value != STOPPED_BY_APPLICATION_SHUTDOWN)
+                    {
+                        log_err("slave: %{dnsname}: axfr query error from master at %{hostaddr}: %r", origin, servers, return_value);
+                    }
 
                     may_try_next_master = is_multimaster;
 
@@ -281,13 +303,13 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
 
             case TYPE_IXFR:
             {
-                log_info("slave: %{dnsname} IXFR query to the master", origin);
+                log_info("slave: %{dnsname}: IXFR query to the master", origin);
 
                 if(zone == NULL)
                 {
-                    log_err("slave: zone %{dnsname} is not in the database", origin);
+                    log_err("slave: %{dnsname}: zone is not in the database", origin);
 
-                    return_value = ZDB_ERROR_ZONE_UNKNOWN;
+                    return_value = ZDB_ERROR_ZONE_NOT_IN_DATABASE;
                     break;
                 }
 
@@ -301,7 +323,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                     }
                     else
                     {
-                        log_err("slave: zone %{dnsname} cannot do an incremental transfer from an invalid zone", origin);
+                        log_err("slave: %{dnsname}: cannot start an incremental transfer from an invalid zone", origin);
                     }
                     
                     zdb_zone_release(current_zone);
@@ -312,7 +334,9 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
 
                 if((zone_desc->flags & ZONE_FLAG_NO_MASTER_UPDATES) == 0)
                 {
-                    if(ISOK(return_value = ixfr_query(servers, zone, &loaded_serial)))
+                    return_value = ixfr_query(servers, zone, &loaded_serial);
+                            
+                    if(ISOK(return_value) || (return_value == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY))
                     {
                         zone_lock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
                         zone_desc->refresh.refreshed_time = time(NULL);
@@ -322,21 +346,53 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
 
                         transfer_type = (u16)return_value;
 
-                        if(transfer_type != 0)
+                        if(ISOK(return_value) && (transfer_type != 0))
                         {
-                            log_info("slave: loaded %{dnstype} for domain %{dnsname} from master at %{hostaddr}, new serial is %d", &qtype, origin, servers, loaded_serial);
+                            log_info("slave: %{dnsname}: got %{dnstype} from master at %{hostaddr}, new serial is %u", origin, &qtype, servers, loaded_serial);
                         }
+                        
+                        // the stream query may have been cut by the journal because it was full (or one of the many equivalent states)
+                        // the zone needs to be stored on disk so the journal can go further
+                        
+                        if(return_value == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
+                        {
+                            zdb_zone_info_background_store_zone(zone->origin);
+                        }
+                        else
+                        {
+                            soa_rdata soa;
+                            u32 next_refresh;
+                            zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+                            return_value = zdb_zone_getsoa(zone, &soa); // zone is locked
+                            zdb_zone_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
+                            if(ISOK(return_value))
+                            {
+                                next_refresh = zone_desc->refresh.refreshed_time + soa.refresh;
+                            }
+                            else
+                            {
+                                log_warn("slave: %{dnsname}: ixfr query error from master at %{hostaddr}: there was an issue getting the refresh value from the SOA: %r (defaulting to %i)", origin, servers, return_value, ARBITRARY_REFRESH_VALUE);
+                                next_refresh = zone_desc->refresh.refreshed_time + ARBITRARY_REFRESH_VALUE;
+                            }
+
+                            database_zone_refresh_maintenance_wih_zone(zone, next_refresh);
+                        }
+                        
+                        return_value = SUCCESS;
                     }
                     else if(return_value == MAKE_DNSMSG_ERROR(RCODE_NOTIMP))
                     {
-                        log_warn("slave: ixfr query error for domain %{dnsname}: master at %{hostaddr} does not supports incremental transfers and does not falls back to AXFR, switching to AXFR", origin, servers, return_value);
+                        log_warn("slave: %{dnsname}: ixfr query error from master at %{hostaddr}: it does not support incremental transfers and does not falls back to AXFR, switching to AXFR", origin, servers);
                         
                         qtype = TYPE_AXFR;
                         retry = TRUE;
                     }
                     else
                     {
-                        log_err("slave: ixfr query error for domain %{dnsname} from master at %{hostaddr}: %r", origin, servers, return_value);
+                        if(return_value != STOPPED_BY_APPLICATION_SHUTDOWN)
+                        {
+                            log_err("slave: %{dnsname}: ixfr query error from master at %{hostaddr}: %r", origin, servers, return_value);
+                        }
 
                         may_try_next_master = is_multimaster;
 
@@ -356,7 +412,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
             }
             default:
             {
-                log_err("slave: %{hostaddr} gave unexpected answer type %{dnstype} for domain %{dnsname}", servers, &qtype, origin);
+                log_err("slave: %{dnsname}: %{hostaddr} gave unexpected answer of type %{dnstype}", servers, &qtype, origin);
                 break;
             }
         } // switch(qtype)
@@ -367,6 +423,15 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
         }
     }
     while(retry);
+
+    if(dnscore_shuttingdown())
+    {
+        log_debug("zone download: zone download cancelled by shutdown (rearm)");
+        database_fire_zone_processed(zone_desc);
+        zone_release(zone_desc);
+
+        return STOPPED_BY_APPLICATION_SHUTDOWN;
+    }
     
     zone_lock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
     
@@ -378,8 +443,6 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
 
         if(FAIL(return_value))
         {
-            log_warn("slave: %{hostaddr} master failed to answer for domain %{dnsname}: retrying", servers, origin);
-            
             random_ctx rndctx = thread_pool_get_random_ctx();
             u32 jitter = random_next(rndctx);
             if(g_config->axfr_retry_jitter > 0)
@@ -392,11 +455,15 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
             
             if(qtype == TYPE_AXFR)
             {
-                database_zone_axfr_query_at(zone_desc->origin, next_try); // should not be lower than 5
+                log_warn("slave: %{dnsname}: master %{hostaddr} failed to answer AXFR query for domain retrying at %T", origin, servers, next_try);
+                
+                database_zone_axfr_query_at(zone_origin(zone_desc), next_try); // should not be lower than 5
             }
             else
             {
-                database_zone_ixfr_query_at(zone_desc->origin, next_try); // should not be lower than 5
+                log_warn("slave: %{dnsname}: master %{hostaddr} failed to answer IXFR query for domain retrying at %T", origin, servers, next_try);
+                
+                database_zone_ixfr_query_at(zone_origin(zone_desc), next_try); // should not be lower than 5
             }
         }
         // else success
@@ -414,8 +481,6 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                 
         if(zone_desc->multimaster_failures < zone_desc->multimaster_retries)
         {
-            log_warn("slave: %{hostaddr} master failed to answer for domain %{dnsname}: retrying", servers, origin);
-            
             next_try += MIN(zone_desc->download_failure_count * g_config->axfr_retry_failure_delay_multiplier, g_config->axfr_retry_failure_delay_max);
             
             if(zone_desc->multimaster_failures < MAX_U8)
@@ -425,11 +490,15 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
             
             if(qtype == TYPE_AXFR)
             {
-                database_zone_axfr_query_at(zone_desc->origin, next_try); // should not be lower than 5
+                log_warn("slave: %{dnsname}: master %{hostaddr} failed to answer AXFR query for domain retrying at %T (retry %u)", origin, servers, next_try, zone_desc->multimaster_failures);
+                
+                database_zone_axfr_query_at(zone_origin(zone_desc), next_try); // should not be lower than 5
             }
             else
             {
-                database_zone_ixfr_query_at(zone_desc->origin, next_try); // should not be lower than 5
+                log_warn("slave: %{dnsname}: master %{hostaddr} failed to answer IXFR query for domain retrying at %T (retry %u)", origin, servers, next_try, zone_desc->multimaster_failures);
+                
+                database_zone_ixfr_query_at(zone_origin(zone_desc), next_try); // should not be lower than 5
             }
         }
         else
@@ -442,13 +511,15 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
             {
                 char file_name[PATH_MAX];
                 
-                log_warn("slave: %{hostaddr} master failed to answer for domain %{dnsname}: next true master is %{hostaddr}", servers, origin, zone_desc->masters);
+                log_warn("slave: %{dnsname}: master %{hostaddr} failed to answer query for domain, will load a new zone with master %{hostaddr} at %T", origin, servers, zone_desc->masters, next_try);
                 
-                /// @todo 20160623 edf -- true multimaster : destroying local zone is the only way to go 
+                /// @note 20160623 edf -- true multimaster : destroying local zone is the only way to go 
+                
+                journal_truncate(origin);
 
                 // delete zone file, axfr file, journal
                 snformat(file_name, sizeof(file_name), "%s%s", g_config->data_path, zone_desc->file_name);
-                log_debug("slave: deleting '%s'", file_name);
+                log_debug("slave: %{dnsname}: deleting '%s'", origin, file_name);
                 unlink(file_name);
 
                 if(ISOK(return_value = zdb_zone_path_get_provider()(
@@ -456,25 +527,27 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                         file_name, sizeof(file_name) - 6,
                         ZDB_ZONE_PATH_PROVIDER_AXFR_FILE|ZDB_ZONE_PATH_PROVIDER_MKDIR)))
                 {
-                    log_debug("slave: deleting '%s'", file_name);
+                    log_debug("slave: %{dnsname}: deleting '%s'", origin, file_name);
                     unlink(file_name);
                 }               
                 
                 zone_desc->flags |= ZONE_FLAG_DROP_CURRENT_ZONE_ON_LOAD;
                 
-                database_zone_axfr_query_at(zone_desc->origin, next_try);
+                database_zone_axfr_query_at(zone_origin(zone_desc), next_try);
             }
             else
             {
-                log_warn("slave: %{hostaddr} master failed to answer for domain %{dnsname}: next master is %{hostaddr}", servers, origin, zone_desc->masters);
-                
                 if(qtype == TYPE_AXFR)
                 {
-                    database_zone_axfr_query_at(zone_desc->origin, next_try);
+                    log_warn("slave: %{dnsname}: master %{hostaddr} failed to answer AXFR query for domain trying with master %{hostaddr} at %T", origin, servers, zone_desc->masters, next_try);
+                    
+                    database_zone_axfr_query_at(zone_origin(zone_desc), next_try);
                 }
                 else if(qtype == TYPE_IXFR)
                 {
-                    database_zone_ixfr_query_at(zone_desc->origin, next_try);
+                    log_warn("slave: %{dnsname}: master %{hostaddr} failed to answer IXFR query for domain trying with master %{hostaddr} at %T", origin, servers, zone_desc->masters, next_try);
+                    
+                    database_zone_ixfr_query_at(zone_origin(zone_desc), next_try);
                 }
             }
         }
@@ -484,7 +557,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
         
     zone_unlock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
    
-#ifdef DEBUG
+#if DEBUG
     log_debug("database_service_zone_download_thread(%{dnstype},%{dnsname}) done", &qtype, origin);
 #endif
     
@@ -498,15 +571,18 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
 static void*
 database_service_zone_download_thread(void *parms)
 {
-#ifdef DEBUG
+#if DEBUG
     log_debug("database_service_zone_download_thread(%p)", parms);
 #endif
-    
     database_service_zone_download_parms_s *database_service_zone_download_parms = (database_service_zone_download_parms_s*)parms;
-    const u8 *origin = database_service_zone_download_parms->origin;
-    u16 qtype = database_service_zone_download_parms->qtype;
-    
-    database_service_zone_download_xfr(qtype, origin);
+
+    if(!dnscore_shuttingdown())
+    {
+        const u8 *origin = database_service_zone_download_parms->origin;
+        u16 qtype = database_service_zone_download_parms->qtype;
+
+        database_service_zone_download_xfr(qtype, origin);
+    }
     
     free(database_service_zone_download_parms);
     database_service_zone_download_parms = NULL;
@@ -517,12 +593,12 @@ database_service_zone_download_thread(void *parms)
 void
 database_service_zone_axfr_query(const u8 *origin)
 {
-#ifdef DEBUG
+#if DEBUG
     log_debug("database_service_zone_axfr_query(%{dnsname})", origin);
 #endif
     
     database_service_zone_download_parms_s *parm;
-    MALLOC_OR_DIE(database_service_zone_download_parms_s*, parm, sizeof(database_service_zone_download_parms_s), DSZDLPRM_TAG);
+    MALLOC_OBJECT_OR_DIE(parm, database_service_zone_download_parms_s, DSZDLPRM_TAG);
     parm->qtype = TYPE_AXFR;
     dnsname_copy(parm->origin, origin);
     
@@ -532,12 +608,12 @@ database_service_zone_axfr_query(const u8 *origin)
 void
 database_service_zone_ixfr_query(const u8 *origin)
 {
-#ifdef DEBUG
+#if DEBUG
     log_debug("database_service_zone_ixfr_query(%{dnsname})", origin);
 #endif
     
     database_service_zone_download_parms_s *parm;
-    MALLOC_OR_DIE(database_service_zone_download_parms_s*, parm, sizeof(database_service_zone_download_parms_s), DSZDLPRM_TAG);
+    MALLOC_OBJECT_OR_DIE(parm, database_service_zone_download_parms_s, DSZDLPRM_TAG);
     parm->qtype = TYPE_IXFR;
     dnsname_copy(parm->origin, origin);
         

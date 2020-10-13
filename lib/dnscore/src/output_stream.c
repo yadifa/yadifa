@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup streaming Streams
  *  @ingroup dnscore
  *  @brief
@@ -50,17 +51,20 @@
 #include <ctype.h>
 
 #include "dnscore/dnscore.h"
-
+#include "dnscore/logger.h"
 #include "dnscore/dnsname.h"
 #include "dnscore/output_stream.h"
 #include "dnscore/base64.h"
 #include "dnscore/base32.h"
 #include "dnscore/base32hex.h"
 #include "dnscore/base16.h"
+#include "dnscore/zalloc.h"
 
 #define MODULE_MSG_HANDLE g_system_logger
 
 #define OSTREAM_TAG 0x4d41455254534f
+
+static const char ESCAPE_CHARS[] = {'@', '$', '\\', ';'};
 
 ya_result
 output_stream_write_nu32(output_stream* os, u32 value)
@@ -90,18 +94,6 @@ output_stream_write_nu16(output_stream* os, u16 value)
     return output_stream_write(os, buffer, 2);
 }
 
-ya_result
-output_stream_write_u16(output_stream* os, u16 value)
-{
-    return output_stream_write(os, (u8*) & value, 2);
-}
-/* Inlined
-ya_result
-output_stream_write_u8(output_stream* os, u8 value)
-{
-    return output_stream_write(os, &value, 1);
-}
-*/
 ya_result
 output_stream_decode_base64(output_stream* os, const char * string, u32 length)
 {
@@ -393,6 +385,126 @@ output_stream_write_dnsname(output_stream* os, const u8 *name)
 }
 
 ya_result
+output_stream_write_dnsname_text(output_stream* os, const u8 *name)
+{
+    static char dot[1] = {'.'};
+    
+    const u8 *base = name;
+    
+    u8 label_len;
+    label_len = *name;
+    
+    if(label_len > 0)
+    {
+        do
+        {
+            output_stream_write(os, ++name, label_len);
+            output_stream_write(os, &dot, 1);
+            name += label_len;
+            label_len = *name;
+        }
+        while(label_len > 0);
+    }
+    else
+    {
+        output_stream_write(os, &dot, 1);
+    }
+    
+    return name - base + 1;
+}
+
+ya_result
+output_stream_write_dnslabel_text_escaped(output_stream* os, const u8 *label)
+{
+    static const char escape[1] = {'\\'};
+
+    int len = *label++;
+
+    u32 additional_len = 0;
+    for(int i = 0; i < len; ++i)
+    {
+        switch(label[i])
+        {
+            case '@':
+            case '$':
+            case ';':
+            case '\\':
+                ++additional_len;
+                output_stream_write(os, escape, 1);
+                FALLTHROUGH // fall through
+            default:
+                output_stream_write(os, &label[i], 1);
+        }
+    }
+
+    return len + additional_len;
+}
+
+static bool
+output_stream_write_should_escape(const u8* name, size_t name_len)
+{
+    for(size_t i = 0; i < name_len; ++i)
+    {
+        const char c = name[i];
+
+        for(u32 j = 0; j < sizeof(ESCAPE_CHARS); ++j)
+        {
+            if(c == ESCAPE_CHARS[j])
+            {
+                return TRUE;
+            }
+        }
+    }
+
+    return FALSE;
+}
+
+ya_result
+output_stream_write_dnsname_text_escaped(output_stream* os, const u8 *name)
+{
+    static const char dot[1] = {'.'};
+
+    u8 label_len;
+    label_len = *name;
+    ya_result ret;
+
+    if(label_len > 0)
+    {
+        ret = 0;
+
+        do
+        {
+            ++name;
+
+            if(!output_stream_write_should_escape(name, label_len))
+            {
+                output_stream_write(os, name, label_len);
+                ret += label_len;
+            }
+            else
+            {
+                // write escaped
+                ret += output_stream_write_dnslabel_text_escaped(os, name - 1);
+            }
+
+            output_stream_write(os, dot, 1);
+            ++ret;
+
+            name += label_len;
+            label_len = *name;
+        }
+        while(label_len > 0);
+    }
+    else
+    {
+        output_stream_write(os, dot, 1);
+        ret = 1;
+    }
+
+    return ret;
+}
+
+ya_result
 output_stream_write_dnslabel_vector(output_stream* os, dnslabel_vector_reference labels, s32 top)
 {
     ya_result n = 0;
@@ -444,7 +556,7 @@ output_stream*
 output_stream_alloc()
 {
     output_stream* os;
-    MALLOC_OR_DIE(output_stream*, os, sizeof(output_stream), OSTREAM_TAG); /* OSTREAM */
+    ZALLOC_OBJECT_OR_DIE(os, output_stream, OSTREAM_TAG); /* OSTREAM */
     os->data = NULL;
     os->vtbl = NULL;
     return os;
@@ -453,6 +565,9 @@ output_stream_alloc()
 static ya_result
 void_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
 {
+    (void)stream;
+    (void)buffer;
+    (void)len;
     log_err("tried to write a closed stream");
     return INVALID_STATE_ERROR;
 }
@@ -460,6 +575,7 @@ void_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
 static ya_result
 void_output_stream_flush(output_stream* stream)
 {
+    (void)stream;
     log_err("tried to flush a closed stream");
     return INVALID_STATE_ERROR;
 }
@@ -467,12 +583,13 @@ void_output_stream_flush(output_stream* stream)
 static void
 void_output_stream_close(output_stream* stream)
 {
+    (void)stream;
     /*
      * WARNING
      */
     log_err("tried to close a closed stream");
     
-#ifdef DEBUG
+#if DEBUG
     abort();
 #endif
 }
@@ -493,6 +610,48 @@ void output_stream_set_void(output_stream* stream)
 {
     stream->data = NULL;
     stream->vtbl = &void_output_stream_vtbl;
+}
+
+static ya_result
+sink_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
+{
+    (void)stream;
+    (void)buffer;
+    return len;
+}
+
+static ya_result
+sink_output_stream_flush(output_stream* stream)
+{
+    (void)stream;
+    return SUCCESS;
+}
+
+static void
+sink_output_stream_close(output_stream* stream)
+{
+    (void)stream;
+}
+
+static const output_stream_vtbl sink_output_stream_vtbl ={
+    sink_output_stream_write,
+    sink_output_stream_flush,
+    sink_output_stream_close,
+    "sink_output_stream",
+};
+
+/**
+ * Used to temporarily initialise a stream with a sink that can be closed safely.
+ * Typically used as pre-init so the stream can be closed even if the function
+ * setup failed before reaching stream initialisation.
+ * 
+ * @param os
+ */
+
+void output_stream_set_sink(output_stream* os)
+{
+    os->data = NULL;
+    os->vtbl = &sink_output_stream_vtbl;
 }
 
 ya_result
@@ -520,7 +679,7 @@ output_stream_write_fully(output_stream* stream, const void* buffer_start, u32 l
     }
 
     /* If we only read a partial it's wrong.
-     * If we were aked to read nothing it's ok.
+     * If we were asked to read nothing it's ok.
      * If we read nothing at all we were on EOF and its still ok
      */
 
@@ -532,7 +691,4 @@ output_stream_write_fully(output_stream* stream, const void* buffer_start, u32 l
     return buffer - (u8*)buffer_start;
 }
 
-
 /** @} */
-
-/*----------------------------------------------------------------------------*/

@@ -1,36 +1,36 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
 
 /** @defgroup yadifad
  *  @ingroup ###
@@ -64,8 +64,10 @@ static value_name_table dnssec_algorithm_enum[] =
     {DNSKEY_ALGORITHM_RSASHA1        , DNSKEY_ALGORITHM_RSASHA1_NAME        },
     {DNSKEY_ALGORITHM_RSASHA1        , "5"                                  },
     {DNSKEY_ALGORITHM_DSASHA1_NSEC3  , DNSKEY_ALGORITHM_DSASHA1_NSEC3_NAME  },
+    {DNSKEY_ALGORITHM_DSASHA1_NSEC3  , DNSKEY_ALGORITHM_DSASHA1_NSEC3_NAME2 },
     {DNSKEY_ALGORITHM_DSASHA1_NSEC3  , "6"                                  },
     {DNSKEY_ALGORITHM_RSASHA1_NSEC3  , DNSKEY_ALGORITHM_RSASHA1_NSEC3_NAME  },
+    {DNSKEY_ALGORITHM_RSASHA1_NSEC3  , DNSKEY_ALGORITHM_RSASHA1_NSEC3_NAME2 },
     {DNSKEY_ALGORITHM_RSASHA1_NSEC3  , "7"                                  },
     {DNSKEY_ALGORITHM_RSASHA256_NSEC3, DNSKEY_ALGORITHM_RSASHA256_NSEC3_NAME},
     {DNSKEY_ALGORITHM_RSASHA256_NSEC3, "8"                                  },
@@ -77,11 +79,17 @@ static value_name_table dnssec_algorithm_enum[] =
     {DNSKEY_ALGORITHM_ECDSAP256SHA256, "13"                                 },
     {DNSKEY_ALGORITHM_ECDSAP384SHA384, DNSKEY_ALGORITHM_ECDSAP384SHA384_NAME},
     {DNSKEY_ALGORITHM_ECDSAP384SHA384, "14"                                 },
+    {DNSKEY_ALGORITHM_ED25519        , DNSKEY_ALGORITHM_ED25519_NAME        },
+    {DNSKEY_ALGORITHM_ED25519        , "15"                                 },
+    {DNSKEY_ALGORITHM_ED448          , DNSKEY_ALGORITHM_ED448_NAME          },
+    {DNSKEY_ALGORITHM_ED448          , "16"                                 },
+#ifdef DNSKEY_ALGORITHM_DUMMY
+    {DNSKEY_ALGORITHM_DUMMY          , DNSKEY_ALGORITHM_DUMMY_NAME          },
+    {DNSKEY_ALGORITHM_DUMMY          , "254"                                },
+#endif
     {0, NULL}
 };
 
-
-/*----------------------------------------------------------------------------*/
 #pragma mark CONFIG
 
 
@@ -91,31 +99,33 @@ CONFIG_BEGIN(config_section_key_template_desc)
 
 CONFIG_STRING(    id,        NULL                                                      )
 CONFIG_BOOL(      ksk,       "0"                                                       )
-CONFIG_ENUM(      algorithm, DNSKEY_ALGORITHM_RSASHA1_NSEC3_NAME, dnssec_algorithm_enum)
+CONFIG_ENUM(      algorithm, DNSKEY_ALGORITHM_RSASHA256_NSEC3_NAME, dnssec_algorithm_enum)
 CONFIG_U16(       size,      "0"                                                       )
 CONFIG_STRING(    engine,    NULL                                                      )
 
 CONFIG_END(config_section_key_template_desc)
 #undef CONFIG_TYPE
 
-
-/*----------------------------------------------------------------------------*/
 #pragma mark STATIC FUNCTIONS
-
 
 static ya_result
 config_section_key_template_set_wild(struct config_section_descriptor_s *csd, const char *key, const char *value)
 {
+    (void)csd;
+    (void)key;
+    (void)value;
     return CONFIG_UNKNOWN_SETTING;
 }
 
 
 static ya_result
-config_section_key_template_print_wild(struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_key_template_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
 {
+    (void)csd;
+    (void)os;
     if(key != NULL)
     {
-        return ERROR;
+        return INVALID_ARGUMENT_ERROR;
     }
 
     return SUCCESS;
@@ -143,7 +153,7 @@ config_section_key_template_init(struct config_section_descriptor_s *csd)
 
     if(csd->base != NULL)
     {
-        return ERROR; // base SHOULD be NULL at init
+        return INVALID_STATE_ERROR; // base SHOULD be NULL at init
     }
 
     return SUCCESS;
@@ -175,11 +185,11 @@ config_section_key_template_start(struct config_section_descriptor_s *csd)
 
     if(csd->base != NULL)
     {
-        return ERROR;
+        return INVALID_STATE_ERROR;
     }
     
     key_template_desc_s *key_template;
-    MALLOC_OR_DIE(key_template_desc_s*, key_template, sizeof(key_template_desc_s), KEYTEMCF_TAG);
+    MALLOC_OBJECT_OR_DIE(key_template, key_template_desc_s, KEYTEMCF_TAG);
     ZEROMEMORY(key_template, sizeof(key_template_desc_s));
 
     csd->base = key_template;
@@ -299,6 +309,34 @@ config_section_key_template_stop(struct config_section_descriptor_s *csd)
             }
             break;
 
+        case DNSKEY_ALGORITHM_ED25519:
+            if(key_template->size == 0)
+            {
+                key_template->size = 256;
+            }
+
+            if(key_template->size != 256)
+            {
+                ttylog_err("dnssec-policy: key_template: %s: unsupported key size: %i.  Only 256 bits is supported for this algorithm.", key_template->id, key_template->size);
+
+                return PARSE_INVALID_ARGUMENT;
+            }
+
+            break;
+        case DNSKEY_ALGORITHM_ED448:
+            if(key_template->size == 0)
+            {
+                key_template->size = 456;
+            }
+
+            if(key_template->size != 456)
+            {
+                ttylog_err("dnssec-policy: key_template: %s: unsupported key size: %i.  Only 384 bits is supported for this algorithm.", key_template->id, key_template->size);
+
+                return PARSE_INVALID_ARGUMENT;
+            }
+            break;
+
         default:
 
             return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
@@ -307,7 +345,7 @@ config_section_key_template_stop(struct config_section_descriptor_s *csd)
 
 
 
-    ptr_node *node = ptr_set_avl_insert(&key_template_desc_set, key_template->id);
+    ptr_node *node = ptr_set_insert(&key_template_desc_set, key_template->id);
 
     if(node->value == NULL)
     {
@@ -342,12 +380,13 @@ config_section_key_template_stop(struct config_section_descriptor_s *csd)
 static ya_result
 config_section_key_template_postprocess(struct config_section_descriptor_s *csd)
 {
-    ptr_set_avl_iterator iter;
-    ptr_set_avl_iterator_init(&key_template_desc_set, &iter);
+    (void)csd;
+    ptr_set_iterator iter;
+    ptr_set_iterator_init(&key_template_desc_set, &iter);
 
-    while(ptr_set_avl_iterator_hasnext(&iter))
+    while(ptr_set_iterator_hasnext(&iter))
     {
-        ptr_node *key_template_node = ptr_set_avl_iterator_next_node(&iter);
+        ptr_node *key_template_node = ptr_set_iterator_next_node(&iter);
         key_template_desc_s *key_template_desc = (key_template_desc_s *)key_template_node->value;
 
         /*dnssec_policy_key *dpk =*/ dnssec_policy_key_create(key_template_desc->id,
@@ -386,7 +425,7 @@ key_template_free(key_template_desc_s *key_template)
 
 
 /**
- * @fn static ya_result config_section_key_template_finalise(struct config_section_descriptor_s *csd)
+ * @fn static ya_result config_section_key_template_finalize(struct config_section_descriptor_s *csd)
  *
  * @brief free key_template_desc_s completely
  *
@@ -401,7 +440,7 @@ key_template_free(key_template_desc_s *key_template)
  * return ya_result
  */
 static ya_result
-config_section_key_template_finalise(struct config_section_descriptor_s *csd)
+config_section_key_template_finalize(struct config_section_descriptor_s *csd)
 {
     if(csd != NULL)
     {
@@ -409,7 +448,7 @@ config_section_key_template_finalise(struct config_section_descriptor_s *csd)
         {
             key_template_desc_s *key_template = (key_template_desc_s*)csd->base;
             key_template_free(key_template);
-#ifdef DEBUG
+#if DEBUG
             csd->base = NULL;
 #endif
         }
@@ -435,7 +474,7 @@ static const config_section_descriptor_vtbl_s config_section_key_template_descri
     config_section_key_template_start,
     config_section_key_template_stop,
     config_section_key_template_postprocess,
-    config_section_key_template_finalise
+    config_section_key_template_finalize
 };
 
 
@@ -464,7 +503,7 @@ config_register_key_template(const char *null_or_key_name, s32 priority)
     (void)null_or_key_name;
 
     config_section_descriptor_s *desc;
-    MALLOC_OR_DIE(config_section_descriptor_s*, desc, sizeof(config_section_descriptor_s), CFGSDESC_TAG);
+    MALLOC_OBJECT_OR_DIE(desc, config_section_descriptor_s, CFGSDESC_TAG);
     desc->base = NULL;
     desc->vtbl = &config_section_key_template_descriptor_vtbl;
 

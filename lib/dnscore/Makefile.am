@@ -1,68 +1,68 @@
 ################################################################################
 #
-# Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-# The YADIFA TM software product is provided under the BSD 3-clause license:
+#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
-# Redistribution and use in source and binary forms, with or without 
-# modification, are permitted provided that the following conditions
-# are met:
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions
+#  are met:
 #
-#		* Redistributions of source code must retain the above copyright 
-#		  notice, this list of conditions and the following disclaimer.
-#		* Redistributions in binary form must reproduce the above copyright 
-#		  notice, this list of conditions and the following disclaimer in the 
-#		  documentation and/or other materials provided with the distribution.
-#		* Neither the name of EURid nor the names of its contributors may be 
-#		  used to endorse or promote products derived from this software 
-#		  without specific prior written permission.
+#         * Redistributions of source code must retain the above copyright
+#           notice, this list of conditions and the following disclaimer.
+#         * Redistributions in binary form must reproduce the above copyright
+#           notice, this list of conditions and the following disclaimer in the
+#           documentation and/or other materials provided with the distribution.
+#         * Neither the name of EURid nor the names of its contributors may be
+#           used to endorse or promote products derived from this software
+#           without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE 
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+#  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+#  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+#  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+#  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+#  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-##############################################################################
-#
-#	YADIFA dnscore Makefile.am script
-#
-#		Makefile.am script
-#
-#	$URL: https://svn.int.eurid.eu/svn/sysdevel/projects/yadifa/tags/release-2.3.11-public/lib/dnscore/Makefile.am $
-#
-#	   $Date: 2020-09-03 11:53:27 +0200 (Thu, 03 Sep 2020) $
-#
-#	   $Revision: 9707 $
-#
-#	$Author: ericdf $
-#
-##############################################################################
-
-srcdir =	@srcdir@
-libdir =	@libdir@
-top_srcdir =	@top_srcdir@
-VPATH =	 	@srcdir@
+################################################################################        
 
 ACLOCAL_AMFLAGS = -I m4
+
+include ../../mk/common-settings.mk
+
+AM_CFLAGS += -DDNSCORE_BUILD=1
+
+AM_CFLAGS += -I$(top_srcdir)/lib/dnscore/include -I$(top_builddir)/lib/dnscore/include
+#AM_CFLAGS += -I$(top_srcdir)/lib/dnsdb/include -I$(top_builddir)/lib/dnsdb/include
+#AM_CFLAGS += -I$(top_srcdir)/lib/dnslg/include -I$(top_builddir)/lib/dnslg/include 
+#AM_CFLAGS += -I$(top_srcdir)/lib/dnstcl/include -I$(top_builddir)/lib/dnstcl/include
 
 dist_noinst_DATA = VERSION
 
 lib_LTLIBRARIES= libdnscore.la
+libdnscore_la_LDFLAGS = -version-info 7:4:0
+#libdnscore_la_LIBADD=$(top_buildir)/lib/.../libsomething.la
 
 I=include/dnscore
 
 FEATURESFILE=dnscore-config-features.h
 FEATURES=$(I)/$(FEATURESFILE)
+FEATURESDIR=lib/dnscore/include/dnscore
+FEATURESSRC=$(top_builddir)/$(FEATURESDIR)/dnscore-config.h
+
+# libdnscore_ladir=.
 
 # alphabetically please
 
+pkgincludedir = $(includedir)/dnscore
+
 libdnscore_la_SOURCES = \
 	src/alarm.c \
+	src/acl.c \
+	src/acl-config.c \
 	src/allocator.c \
 	src/async.c \
 	src/base16.c \
@@ -72,10 +72,12 @@ libdnscore_la_SOURCES = \
 	src/basic-priority-queue.c \
 	src/buffer_input_stream.c \
 	src/buffer_output_stream.c \
+	src/buffered-file.c \
 	src/bytearray_input_stream.c \
 	src/bytearray_output_stream.c \
 	src/bytezarray_output_stream.c \
 	src/chroot.c \
+	src/circular-file.c \
 	src/clone_input_output_stream.c \
 	src/cmdline.c \
 	src/concat_input_stream.c \
@@ -98,7 +100,7 @@ libdnscore_la_SOURCES = \
 	src/dnskey.c \
 	src/dnskey-keyring.c \
 	src/dnskey_dsa.c \
-    src/dnskey_ecdsa.c \
+	src/dnskey_ecdsa.c \
 	src/dnskey_rsa.c \
 	src/dnskey-signature.c \
 	src/dnsname.c \
@@ -106,19 +108,26 @@ libdnscore_la_SOURCES = \
 	src/fdtools.c \
 	src/file_input_stream.c \
 	src/file_output_stream.c \
+	src/file-pool.c \
+	src/filesystem-file.c \
 	src/format.c \
+	src/hash.c \
+	src/hash-table-values.c \
+	src/hmac-openssl.c \
 	src/host_address.c \
 	src/hsdllist.c \
 	src/identity.c \
 	src/input_stream.c \
+	src/json.c \
 	src/limited_input_stream.c \
-    src/limiter.c \
+	src/limiter.c \
 	src/list-dl.c \
 	src/list-sl.c \
 	src/list-sl-debug.c \
 	src/logger-output-stream.c \
 	src/logger.c \
 	src/logger_channel_file.c \
+	src/logger_channel_pipe.c \
 	src/logger_channel_stream.c \
 	src/logger_channel_syslog.c \
 	src/logger_handle.c \
@@ -127,19 +136,23 @@ libdnscore_la_SOURCES = \
 	src/message.c \
 	src/message_print_format_dig.c \
 	src/message_verify_rrsig.c \
-    src/message_dnsupdate.c \
+	src/message_dnsupdate.c \
+	src/mapped-file.c \
 	src/mt_output_stream.c \
 	src/mutex.c \
-	src/name.c \
+	src/network.c \
+	src/nsec3-hash.c \
 	src/output_stream.c \
 	src/pace.c \
 	src/packet_reader.c \
 	src/packet_writer.c \
 	src/parser.c \
 	src/parsing.c \
+	src/process.c \
 	src/pid.c \
 	src/pipe_stream.c \
 	src/pool.c \
+	src/popen-output-stream.c \
 	src/ptr_set.c \
 	src/ptr_set_debug.c \
 	src/ptr_vector.c \
@@ -151,15 +164,25 @@ libdnscore_la_SOURCES = \
 	src/serial.c \
 	src/server-setup.c \
 	src/service.c \
+	src/shared-heap.c \
+	src/shared-circular-buffer.c \
+	src/shared-heap-bytearray-output-stream.c \
+	src/signals.c \
+	src/simple-http-server.c \
+	src/socket-server.c \
 	src/string_set.c \
 	src/sys_error.c \
 	src/sys_get_cpu_count.c \
 	src/tcp_io_stream.c \
+	src/tcp_manager.c \
+    src/thread.c \
 	src/thread_pool.c \
+	src/thread-tag.c \
 	src/threaded-qsl-cw.c \
 	src/threaded_dll_cw.c \
 	src/threaded_nb_mm.c \
 	src/threaded_nbrb.c \
+	src/threaded_queue_slg.c \
 	src/threaded_ringbuffer.c \
 	src/threaded_ringbuffer_cw.c \
 	src/threaded_ringlist.c \
@@ -170,11 +193,18 @@ libdnscore_la_SOURCES = \
 	src/u64_set.c \
 	src/u64_set_debug.c \
 	src/xfr_input_stream.c \
-	src/zalloc.c
+	src/zalloc.c \
+	src/zone_reader_axfr.c \
+	src/zone_reader_text.c
+
+# src/ipc.c
+# src/name.c
 
 pkginclude_HEADERS = \
 	$(FEATURES) \
 	$(I)/alarm.h \
+	$(I)/acl.h \
+	$(I)/acl-config.h \
 	$(I)/allocator.h \
 	$(I)/async.h \
 	$(I)/avl.c.inc \
@@ -186,10 +216,12 @@ pkginclude_HEADERS = \
 	$(I)/basic-priority-queue.h \
 	$(I)/buffer_input_stream.h \
 	$(I)/buffer_output_stream.h \
+	$(I)/buffered-file.h \
 	$(I)/bytearray_input_stream.h \
 	$(I)/bytearray_output_stream.h \
 	$(I)/bytezarray_output_stream.h \
 	$(I)/chroot.h \
+	$(I)/circular-file.h \
 	$(I)/clone_input_output_stream.h \
 	$(I)/cmdline.h \
 	$(I)/concat_input_stream.h \
@@ -208,7 +240,7 @@ pkginclude_HEADERS = \
 	$(I)/dnskey.h \
 	$(I)/dnskey-keyring.h \
 	$(I)/dnskey_dsa.h \
-    $(I)/dnskey_ecdsa.h \
+	$(I)/dnskey_ecdsa.h \
 	$(I)/dnskey_rsa.h \
 	$(I)/dnskey-signature.h \
 	$(I)/dnsname.h \
@@ -216,35 +248,44 @@ pkginclude_HEADERS = \
 	$(I)/dnssec_errors.h \
 	$(I)/empty-input-stream.h \
 	$(I)/fdtools.h \
+	$(I)/file.h \
 	$(I)/file_input_stream.h \
 	$(I)/file_output_stream.h \
+	$(I)/file-pool.h \
+	$(I)/filesystem-file.h \
 	$(I)/fingerprint.h \
 	$(I)/format.h \
+	$(I)/hash.h \
+	$(I)/hmac.h \
 	$(I)/host_address.h \
 	$(I)/hsdllist.h \
 	$(I)/identity.h \
 	$(I)/input_stream.h \
 	$(I)/io_stream.h \
+	$(I)/json.h \
 	$(I)/limited_input_stream.h \
-    $(I)/limiter.h \
+	$(I)/limiter.h \
 	$(I)/list-dl.h \
 	$(I)/list-sl.h \
 	$(I)/list-sl-debug.h \
 	$(I)/logger.h \
 	$(I)/logger_channel_file.h \
+	$(I)/logger_channel_pipe.h \
 	$(I)/logger_channel_stream.h \
 	$(I)/logger_channel_syslog.h \
 	$(I)/logger_handle.h \
 	$(I)/logger-output-stream.h \
+	$(I)/mapped-file.h \
 	$(I)/message-buffer.h \
 	$(I)/message-viewer.h \
 	$(I)/message.h \
 	$(I)/message_verify_rrsig.h \
-    $(I)/message_dnsupdate.h \
+	$(I)/message_dnsupdate.h \
 	$(I)/mt_output_stream.h \
 	$(I)/mutex.h \
-	$(I)/name.h \
 	$(I)/network.h \
+	$(I)/nsec3-hash.h \
+	$(I)/openssl.h \
 	$(I)/output_stream.h \
 	$(I)/pace.h \
 	$(I)/packet_reader.h \
@@ -254,7 +295,9 @@ pkginclude_HEADERS = \
 	$(I)/pid.h \
 	$(I)/pipe_stream.h \
 	$(I)/pool.h \
+	$(I)/popen-output-stream.h \
 	$(I)/print_stream.h \
+	$(I)/process.h \
 	$(I)/ptr_set.h \
 	$(I)/ptr_set_debug.h \
 	$(I)/ptr_vector.h \
@@ -266,17 +309,27 @@ pkginclude_HEADERS = \
 	$(I)/serial.h \
 	$(I)/server-setup.h \
 	$(I)/service.h \
+	$(I)/shared-heap.h \
+	$(I)/shared-circular-buffer.h \
+	$(I)/shared-heap-bytearray-output-stream.h \
+	$(I)/signals.h \
+	$(I)/simple-http-server.h \
+	$(I)/socket-server.h \
 	$(I)/string_set.h \
 	$(I)/sys_error.h \
 	$(I)/sys_get_cpu_count.h \
 	$(I)/sys_types.h \
 	$(I)/tcp_io_stream.h \
+	$(I)/tcp_manager.h \
+	$(I)/thread.h \
 	$(I)/thread_pool.h \
+	$(I)/thread-tag.h \
 	$(I)/threaded-qsl-cw.h \
 	$(I)/threaded_dll_cw.h \
 	$(I)/threaded_nb_mm.h \
 	$(I)/threaded_nbrb.h \
 	$(I)/threaded_queue.h \
+	$(I)/threaded_queue_slg.h \
 	$(I)/threaded_ringbuffer.h \
 	$(I)/threaded_ringbuffer_cw.h \
 	$(I)/threaded_ringlist.h \
@@ -288,102 +341,51 @@ pkginclude_HEADERS = \
 	$(I)/u64_set_debug.h \
 	$(I)/xfr_input_stream.h \
 	$(I)/zalloc.h \
+	$(I)/zone_reader.h \
+	$(I)/zone_reader_axfr.h \
+	$(I)/zone_reader_text.h \
 	$(I)/zonefile_reader.h
+
+# $(I)/ipc.h
+# $(I)/name.h
 
 if IS_DARWIN_OS
 pkginclude_HEADERS += $(I)/osx_clock_gettime.h
 libdnscore_la_SOURCES += src/osx_clock_gettime.c
 endif
 
-if HAS_TSIG_SUPPORT
 pkginclude_HEADERS += $(I)/tsig.h
 libdnscore_la_SOURCES += src/tsig.c src/tsig_algorithms.c
-endif
 
 if HAS_NSID_SUPPORT
 pkginclude_HEADERS += $(I)/nsid.h
 libdnscore_la_SOURCES += src/nsid.c
 endif
 
-libdnscore_la_LDFLAGS = -version-info 6:3:0
-
-include ../../mk/common-settings.mk
-
 include ../../mk/common-labels.mk
 
-all: REVISION
+all: REVISION $(FEATURESSRC)
 
 REVISION:
 	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
-src/alarm.c: features
+$(srcdir)/src/alarm.c: $(FEATURES) $(FEATURESSRC)
+
+$(FEATURESSRC): ../../config.h
+	mkdir -p $(top_builddir)/$(FEATURESDIR)
+	cp ../../config.h $(FEATURESSRC)
+	
+CLEANFILES += $(FEATURESSRC)
 
 features: $(FEATURES)
 
-$(FEATURES): config.log REVISION VERSION
-	echo "#pragma once" > $(FEATURES)
-if HAS_TSIG_SUPPORT
-	echo "#define DNSCORE_HAS_TSIG_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define DNSCORE_HAS_TSIG_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_ACL_SUPPORT
-	echo "#define DNSCORE_HAS_ACL_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define DNSCORE_HAS_ACL_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_NSEC3_SUPPORT
-	echo "#define DNSCORE_HAS_NSEC3_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define DNSCORE_HAS_NSEC3_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_NSEC_SUPPORT
-	echo "#define DNSCORE_HAS_NSEC_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define DNSCORE_HAS_NSEC_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_ZALLOC_SUPPORT
-	echo "#define DNSCORE_HAS_ZALLOC_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define DNSCORE_HAS_ZALLOC_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_ZALLOC_DEBUG_SUPPORT
-	echo "#define DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_NSID_SUPPORT
-	echo "#define DNSCORE_HAS_NSID_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define DNSCORE_HAS_NSID_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_ZALLOC_STATISTICS_SUPPORT
-	echo "#define DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_MALLOC_DEBUG_SUPPORT
-	echo "#define DNSCORE_HAS_MALLOC_DEBUG_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define DNSCORE_HAS_MALLOC_DEBUG_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_MUTEX_DEBUG_SUPPORT
-	echo "#define DNSCORE_HAS_MUTEX_DEBUG_SUPPORT 1" >> $(FEATURES)
-else
-	echo "#define DNSCORE_HAS_MUTEX_DEBUG_SUPPORT 0" >> $(FEATURES)
-endif
-if HAS_MEMALIGN_ISSUES
-	echo "#define DNSCORE_HAS_MEMALIGN_ISSUES 1" >> $(FEATURES)
-else
-	echo "#define DNSCORE_HAS_MEMALIGN_ISSUES 0" >> $(FEATURES)
-endif
-if HAS_LOG_THREAD_TAG_ALWAYS_ON
-	echo "#define DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON 1" >> $(FEATURES)
-else
-	echo "#define DNSCORE_HAS_LOG_THREAD_TAG_ALWAYS_ON 0" >> $(FEATURES)
-endif
-
+$(FEATURES): ../../config.log REVISION VERSION $(FEATURESSRC)
 VP=DNSCORE
+	mkdir -p $(I)
+	echo "#pragma once" > $(FEATURES)
+	grep "^#define" $(FEATURESSRC) | sed -e 's/^#define /#define $(VP)_/' >> $(FEATURES)
+	echo '#undef $(VP)_VERSION' >> $(FEATURES)
+
 	which printf > /dev/null 2>&1
 	if [ $$? -eq 0 ];then \
 		printf '// version %i.%i.%i.%i-%i\n' $$(cat VERSION|sed 's/.*\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/') 0 $$(cat REVISION) >> $(FEATURES) ; \
@@ -399,5 +401,4 @@ VP=DNSCORE
 	fi
 	echo "// $(FEATURES)" >> $(FEATURES)
 	echo >> $(FEATURES)
-
 

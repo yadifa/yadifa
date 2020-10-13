@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup format C-string formatting
  *  @ingroup dnscore
  *  @brief 
@@ -48,18 +49,18 @@
 #include <dnscore/output_stream.h>
 #include <dnscore/dnscore.h>
 
-#define OSPRINT_DUMP_LAYOUT_GROUP_MASK      0x0000ff00
-#define OSPRINT_DUMP_LAYOUT_GROUP_SHIFT     8
-#define OSPRINT_DUMP_LAYOUT_SEPARATOR_MASK  0x000000ff
-#define OSPRINT_DUMP_LAYOUT_SEPARATOR_SHIFT 0
-#define OSPRINT_DUMP_ADDRESS                0x40000000
-#define OSPRINT_DUMP_HEX                    0x20000000
-#define OSPRINT_DUMP_TEXT                   0x10000000
+#define OSPRINT_DUMP_LAYOUT_GROUP_MASK      0x0000ff00U
+#define OSPRINT_DUMP_LAYOUT_GROUP_SHIFT     8U
+#define OSPRINT_DUMP_LAYOUT_SEPARATOR_MASK  0x000000ffU
+#define OSPRINT_DUMP_LAYOUT_SEPARATOR_SHIFT 0U
+#define OSPRINT_DUMP_ADDRESS                0x40000000U
+#define OSPRINT_DUMP_HEX                    0x20000000U
+#define OSPRINT_DUMP_TEXT                   0x10000000U
     
 // predefined layouts
-#define OSPRINT_DUMP_LAYOUT_DENSE           0x0000ffff
-#define OSPRINT_DUMP_LAYOUT_ERIC            0x000003ff
-#define OSPRINT_DUMP_LAYOUT_GERY            0x00000003
+#define OSPRINT_DUMP_LAYOUT_DENSE           0x0000ffffU
+#define OSPRINT_DUMP_LAYOUT_ERIC            0x000003ffU
+#define OSPRINT_DUMP_LAYOUT_GERY            0x00000003U
     
 #define OSPRINT_DUMP_ALL                    (OSPRINT_DUMP_ADDRESS|OSPRINT_DUMP_HEX|OSPRINT_DUMP_TEXT)
 #define OSPRINT_DUMP_HEXTEXT                (OSPRINT_DUMP_HEX|OSPRINT_DUMP_TEXT)
@@ -85,7 +86,10 @@
  *              :
  * %t           : integer, prints the number of tabs on the output
  * %S           : integer, prints the number of spaces on the output
- * %T           : integer, prints the 32/64 bits UTC time on the output %T, 32 bits, YYYY-MM-DD HH:mm:SS, %lT, 64 bits, %YYYY-MM-DD HH:mm:SS.NNNNNN
+ * %T           : integer, prints the 32/64 bits UTC time on the output
+ *                %T   : 32 bits = YYYY-MM-DD HH:mm:SS
+ *                %lT  : 64 bits = YYYY-MM-DD HH:mm:SS
+ *                %llT : 64 bits = YYYY-MM-DD HH:mm:SS.NNNNNN
  * %i           : integer, prints the signed 8/16/32/64 bits integer in base 10 on the output
  * %r           : integer, prints the ya_result registered message on the output or the hexadecimal code
  * %u           : integer, prints the unsigned 8/16/32/64 bits integer in base 10 on the output
@@ -202,6 +206,10 @@ ya_result println(const char* text);
 ya_result format(const char* fmt,...);
 ya_result formatln(const char* fmt,...);
 
+// prefixes time | pid | pthread_self
+ya_result debug_osformatln(output_stream* stream, const char* fmt, ...);
+ya_result debug_println(const char* text);
+
 int vsnformat(char* out_, size_t out_size, const char* fmt, va_list args);
 int snformat(char* out, size_t out_size, const char* fmt, ...);
 
@@ -261,16 +269,21 @@ void osprint_u32_hex(output_stream* os, u32 value);
 void print_char(char value);
 
 void osprint_char(output_stream *os, char value);
+void osprint_char_times(output_stream *os, char value, int times);
 void osprint_dump(output_stream *os, const void* data_pointer_, size_t size_, size_t line_size, u32 flags);
 
 ya_result osprint_type_bitmap(output_stream *os, const u8 *rdata_pointer, u16 rdata_size);
 ya_result osprint_rdata(output_stream *os, u16 type, const u8 *rdata_pointer, u16 rdata_size);
+ya_result osprint_rdata_escaped(output_stream *os, u16 type, const u8 *rdata_pointer, u16 rdata_size);
 ya_result print_rdata(u16 type, u8 *rdata, u16 rdata_size);
 
 void osprint_question(output_stream *os, u8 *qname, u16 qclass, u16 qtype);
 void print_question(u8 *qname, u16 qclass, u16 qtype);
 
+#if 0 /* fix */
+#else
 #define FORMAT_BREAK_ON_INVALID(address__, len__)
+#endif
 
 /*
  * This is just a tool function used to test vsnformat.

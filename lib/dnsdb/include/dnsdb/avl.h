@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnsdbcollection Collections used by the database
  *  @ingroup dnsdb
  *  @brief AVL structure and functions
@@ -43,7 +44,7 @@
 #define	_AVL_H
 
 #include <dnsdb/zdb_config.h>
-#include <dnsdb/hash.h>
+#include <dnscore/hash.h>
 
 #ifndef ZDB_INLINES_AVL_FIND
 #error "ZDB_INLINES_AVL_FIND not defined"
@@ -161,9 +162,10 @@ struct avl_node_
     } children;
 
     void* data; /* 1 ptr    */
-    hashcode hash; /* hashcode of the data */
+    hashcode hash; /* hashcode of the data (32 bits) */
 
     s8 balance; /* used for balance check */
+    // 3 unused bytes
 }; /* 17 29 => 24 32 */
 
 typedef struct avl_node_ avl_node;
@@ -198,7 +200,7 @@ void avl_init(avl_tree* tree);
  *
  *  @return A pointer to the node or NULL if there is no such node.
  */
-#if ZDB_INLINES_AVL_FIND == 0
+#if !ZDB_INLINES_AVL_FIND
 void* avl_find(avl_tree* tree, hashcode obj_hash);
 #else
 
@@ -246,7 +248,7 @@ avl_find(const avl_tree* root, hashcode obj_hash)
  *  @return A pointer to a pointer to the node or NULL if there is no such node.
  */
 
-#if ZDB_INLINES_AVL_FIND == 0
+#if !ZDB_INLINES_AVL_FIND
 void** avl_findp(avl_tree* tree, hashcode obj_hash);
 #else
 static inline void**
@@ -275,7 +277,6 @@ avl_findp(const avl_tree* root, hashcode obj_hash)
 #undef CHILD
 
 #endif
-
 
 /** @brief Insert a node into the tree.
  *
@@ -320,16 +321,17 @@ void avl_destroy(avl_tree* tree);
 void avl_iterator_init(avl_tree tree, avl_iterator* iter);
 
 /**
- * Initialises an iterator from a given key.
+ * Initialises an iterator from right after a given key.
  * Returns the node, or NULL if the node does not exist.
+ * The next call to avl_iterator_next* will return the next node (provided the first one exists)
  * 
- * @param tree
- * @param iter
- * @param obj_hash
- * @return 
+ * @param tree the avl_tree collection
+ * @param iter an iterator that will be initialised to the node following the returned one (if not NULL)
+ * @param obj_hash the key of the node to look for
+ * @return the sought node
  */
 
-avl_node* avl_iterator_init_from(avl_tree tree, avl_iterator* iter, hashcode obj_hash);
+avl_node* avl_iterator_init_from_after(avl_tree tree, avl_iterator *iter, hashcode obj_hash);
 
 #if !ZDB_INLINES_AVL_FIND
 bool avl_iterator_hasnext(avl_iterator* iter);
@@ -356,7 +358,7 @@ avl_node* avl_iterator_next_node(avl_iterator* iter);
 
 void avl_callback_and_destroy(avl_tree tree, void (*callback)(void*));
 
-#ifdef DEBUG
+#if DEBUG
 
 /** @brief DEBUG: check that a tree fits the AVL definition.
  *

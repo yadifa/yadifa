@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup database Routines for database manipulations
  *  @ingroup yadifad
  *  @brief database functions
@@ -75,8 +76,8 @@ database_service_zone_mount(zone_desc_s *zone_desc)
 {
     ya_result return_value;
     
-#ifdef DEBUG
-    log_debug("database_service_zone_mount(%{dnsname}@%p=%i)", zone_desc->origin, zone_desc, zone_desc->rc);
+#if DEBUG
+    log_debug("database_service_zone_mount(%{dnsname}@%p=%i)", zone_origin(zone_desc), zone_desc, zone_desc->rc);
 #endif
     
     if(zone_desc == NULL)
@@ -85,11 +86,11 @@ database_service_zone_mount(zone_desc_s *zone_desc)
         return;
     }
     
-    log_debug1("%{dnsname}: locking for mounting (database_service_zone_mount)", zone_desc->origin);
+    log_debug1("%{dnsname}: locking for mounting (database_service_zone_mount)", zone_origin(zone_desc));
     
     if(FAIL(return_value = zone_lock(zone_desc, ZONE_LOCK_MOUNT)))
     {
-        log_err("%{dnsname}: failed to lock zone settings for (database_service_zone_mount)", zone_desc->origin);
+        log_err("%{dnsname}: failed to lock zone settings for (database_service_zone_mount)", zone_origin(zone_desc));
         return;
     }
     
@@ -99,16 +100,15 @@ database_service_zone_mount(zone_desc_s *zone_desc)
     
     if(zone == NULL)
     {
-        log_err("%{dnsname}: no zone loaded that could be mounted", zone_desc->origin);
+        log_err("%{dnsname}: no zone loaded that could be mounted", zone_origin(zone_desc));
         zone_clear_status(zone_desc, ZONE_STATUS_STARTING_UP|ZONE_STATUS_MOUNTING|ZONE_STATUS_PROCESSING);
         
-        /// @todo 20140425 edf -- check why the two commands were reversed
         database_fire_zone_mounted(zone_desc, NULL, ERROR);
-        zone_unlock(zone_desc, ZONE_LOCK_MOUNT);        
+        zone_unlock(zone_desc, ZONE_LOCK_MOUNT);
         return;
     }
         
-    log_info("%{dnsname}: mount", zone_desc->origin);
+    log_info("%{dnsname}: mount", zone_origin(zone_desc));
                     
     /*
      * If the zone descriptor (config) exists and it can be locked by the loader ...
@@ -121,18 +121,18 @@ database_service_zone_mount(zone_desc_s *zone_desc)
     log_debug1("%{dnsname}: locking zone for mounting (database_service_zone_mount)", zone->origin);
     
     // locks the descriptor with the loader identity
-        
+
+#if DEBUG
     zone_desc_log(MODULE_MSG_HANDLE, MSG_DEBUG1, zone_desc, "database_service_zone_mount");
+#endif
 
     zdb *db = g_config->database;
 
 #if HAS_ACL_SUPPORT
-    zone->extension = &zone_desc->ac;
+    zone->acl = &zone_desc->ac;
     zone->query_access_filter = acl_get_query_access_filter(&zone_desc->ac.allow_query);
 #endif
-    
-    //
-    
+
     zdb_zone *old_zone = zdb_set_zone(db, zone); // RC++, because the zone is put into the database
     
     bool send_notify_to_slaves = TRUE;
@@ -144,8 +144,8 @@ database_service_zone_mount(zone_desc_s *zone_desc)
             // there is already a different zone mounted
 
             zdb_zone_lock(old_zone, ZDB_ZONE_MUTEX_REPLACE);
-            // set old zone as invalid                
-            old_zone->apex->flags |= ZDB_RR_LABEL_INVALID_ZONE;
+            // set old zone as invalid
+            zdb_zone_set_invalid(old_zone);
             zdb_zone_unlock(old_zone, ZDB_ZONE_MUTEX_REPLACE);
         }
         else
@@ -166,29 +166,29 @@ database_service_zone_mount(zone_desc_s *zone_desc)
 #if HAS_MASTER_SUPPORT
         if(zone_desc->type == ZT_MASTER)
         {
-            log_debug("%{dnsname}: will notify slaves", zone_desc->origin);
+            log_debug("%{dnsname}: will notify slaves", zone_origin(zone_desc));
 
-            notify_slaves(zone_desc->origin); // RC++
+            notify_slaves(zone_origin(zone_desc)); // RC++
         }
         else
 #endif
         if(zone_desc->type == ZT_SLAVE)
         {
-            log_debug("%{dnsname}: will notify explicit slaves", zone_desc->origin);
+            log_debug("%{dnsname}: will notify explicit slaves", zone_origin(zone_desc));
 
-            notify_slaves(zone_desc->origin); // RC++
+            notify_slaves(zone_origin(zone_desc)); // RC++
             
             if(((zone_desc->flags & ZONE_FLAG_NO_MASTER_UPDATES) == 0))
             {
                 if(zone_desc->masters != NULL)
                 {
-                    log_debug("%{dnsname}: querying changes to the master at %{hostaddr}", zone_desc->origin, zone_desc->masters);
+                    log_debug("%{dnsname}: querying changes to the master at %{hostaddr}", zone_origin(zone_desc), zone_desc->masters);
 
-                    database_zone_ixfr_query(zone_desc->origin);
+                    database_zone_ixfr_query(zone_origin(zone_desc));
                 }
                 else
                 {
-                    log_err("%{dnsname}: no master set", zone_desc->origin);
+                    log_err("%{dnsname}: no master set", zone_origin(zone_desc));
                 }
             }
         }
@@ -196,10 +196,10 @@ database_service_zone_mount(zone_desc_s *zone_desc)
     }
     else
     {
-        log_debug("%{dnsname}: no need to send notify to slaves", zone_desc->origin);
+        log_debug("%{dnsname}: no need to send notify to slaves", zone_origin(zone_desc));
     }
 
-#if HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT
+#if HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
     if(zone_desc->type == ZT_MASTER)
     {
         if(zdb_zone_is_maintained(zone))
@@ -208,15 +208,15 @@ database_service_zone_mount(zone_desc_s *zone_desc)
         }
     }
 #endif
-    
+
+    zone_clear_status(zone_desc, ZONE_STATUS_STARTING_UP|ZONE_STATUS_MOUNTING|ZONE_STATUS_PROCESSING);
+
     database_fire_zone_mounted(zone_desc, zone, SUCCESS); // RC++
     
     zdb_zone_release(zone); // RC--
     zone = NULL;
-    
-    zone_clear_status(zone_desc, ZONE_STATUS_STARTING_UP|ZONE_STATUS_MOUNTING|ZONE_STATUS_PROCESSING);
-    
-    log_debug1("%{dnsname}: unlocking zone for mounting (database_service_zone_mount)", zone_desc->origin);
+
+    log_debug1("%{dnsname}: unlocking zone for mounting (database_service_zone_mount)", zone_origin(zone_desc));
     
     zone_unlock(zone_desc, ZONE_LOCK_MOUNT);
 }

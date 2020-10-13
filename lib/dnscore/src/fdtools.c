@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnscoretools Generic Tools
  *  @ingroup dnscore
  *  @brief
@@ -39,6 +40,7 @@
  */
 
 #include "dnscore/dnscore-config.h"
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -46,7 +48,11 @@
 #include <dirent.h>
 #include <sys/socket.h>
 
+#define FDTOOLS_C_ 1
+
 #include "dnscore/fdtools.h"
+#include "dnscore/zalloc.h"
+#include "dnscore/ptr_set.h"
 #include "dnscore/timems.h"
 #include "dnscore/logger.h"
 #include "dnscore/mutex.h"
@@ -58,10 +64,31 @@ extern logger_handle *g_system_logger;
 
 #define DEBUG_FD_OPEN_CLOSE_MONITOR 0
 
-#ifdef DEBUG
+#define FDTRACK_TAG 0x4b434152544446
+
+#if DEBUG
 // avoids logging these operations in the logger.
 // this prevents a self-deadlock if the logger limit is reached (2^20 lines)
 bool logger_is_self();
+#endif
+
+#if DEBUG
+static void
+admin_warn(const char *pathname)
+{
+    uid_t uid = getuid();
+    uid_t euid = getuid();
+    gid_t gid = getgid();
+    gid_t egid = getegid();
+    
+    bool is_admin = (uid==0)||(euid==0)||(gid==0)||(egid==0);
+    
+    if(is_admin)
+    {
+        printf("It is unlikely file or directory creation should be made as an admin '%s' (DEBUG)\n", pathname);
+        fflush(NULL);
+    }
+}
 #endif
 
 #if DEBUG_FD_OPEN_CLOSE_MONITOR
@@ -92,11 +119,11 @@ static void fd_set_name(int fd, const char *name)
     
     log_debug6("file descriptor: %i is '%s'", fd, name);
     
-    u32_node *node = u32_set_avl_insert(&fd_to_name, fd);
+    u32_node *node = u32_set_insert(&fd_to_name, fd);
                 
     if(node->value == NULL)
     {    
-        ZALLOC_OR_DIE(fd_track*, track, fd_track, GENERIC_TAG);
+        ZALLOC_OBJECT_OR_DIE(track, fd_track, FDTRACK_TAG);
         node->value = track;
         track->opener = 0;
         track->closer = 0;
@@ -111,7 +138,7 @@ static void fd_set_name(int fd, const char *name)
         }
     }
     
-    strncpy(track->name, name, sizeof(track->name));
+    strcpy_ex(track->name, name, sizeof(track->name));
     track->opener = debug_stacktrace_get();
     track->name[sizeof(track->name) - 1] = '\0';
     
@@ -122,7 +149,7 @@ static void fd_clear_name(int fd)
 {
     group_mutex_lock(&fd_mtx, GROUP_MUTEX_WRITE);
     
-    u32_node *node = u32_set_avl_find(&fd_to_name, fd);
+    u32_node *node = u32_set_find(&fd_to_name, fd);
     if(node != NULL)
     {
         yassert(node->value != NULL);
@@ -626,7 +653,61 @@ unlink_ex(const char *folder, const char *filename)
     }
     else
     {
+        errno = ENOMEM;
         return -1;
+    }
+}
+
+/**
+ * Copies the absolute path of a file into a buffer.
+ * 
+ * @param filename the file name
+ * @param buffer the output buffer
+ * @param buffer_size the size of the output buffer
+ * @return the string length (without the terminator)
+ */
+
+ya_result
+file_get_absolute_path(const char *filename, char *buffer, size_t buffer_size)
+{
+    ya_result ret;
+    
+    if(filename[0] == '/')
+    {
+        strcpy_ex(buffer, filename, buffer_size);
+        ret = strlen(buffer);
+        return ret;
+    }
+    else
+    {
+        if(getcwd(buffer, buffer_size) == NULL)
+        {
+            return ERRNO_ERROR;
+        }
+        
+        size_t n = strlen(buffer);
+        
+        if(n < buffer_size)
+        {
+            ret = n + 1;
+
+            buffer += n;
+            buffer_size -= n;
+            
+            *buffer++ = '/';
+            --buffer_size;
+            
+            n = strlen(filename);
+            if(n < buffer_size)
+            {
+                memcpy(buffer, filename, n);
+                buffer[n] = '\0';
+                
+                return ret + n;
+            }
+        }
+
+        return ERROR; // not enough room
     }
 }
 
@@ -663,7 +744,7 @@ open_ex(const char *pathname, int flags)
 {
     int fd;
     
-#ifdef DEBUG
+#if DEBUG
     if(!logger_is_self() && logger_is_running())
     {
         log_debug6("open_ex(%s,%o)", STRNULL(pathname), flags);
@@ -677,6 +758,11 @@ open_ex(const char *pathname, int flags)
     fdtools_debug_bench_register();
     u64 bench = debug_bench_start(&debug_open);
 #endif
+
+#if DNSCORE_FDTOOLS_CLOEXEC
+    bool cloexec = (flags & O_CLOEXEC) != 0;
+    flags &= ~O_CLOEXEC;
+#endif
     
     while((fd = open(pathname, flags)) < 0)
     {
@@ -687,12 +773,24 @@ open_ex(const char *pathname, int flags)
             break;
         }
     }
+
+#if DNSCORE_FDTOOLS_CLOEXEC
+    if((fd >= 0) && cloexec)
+    {
+        ya_result ret;
+
+        if(FAIL(ret = fd_setcloseonexec(fd)))
+        {
+            log_warn("open_ex(%s,%o): failed to set CLOEXEC: %r", STRNULL(pathname), flags|O_CLOEXEC, ret);
+        }
+    }
+#endif
     
 #if DEBUG_BENCH_FD
     debug_bench_stop(&debug_open, bench);
 #endif
     
-#ifdef DEBUG
+#if DEBUG
     if(!logger_is_self() && logger_is_running())
     {
         log_debug6("open_ex(%s,%o): %r (%i)", STRNULL(pathname), flags, ERRNO_ERROR, fd);
@@ -723,12 +821,16 @@ open_create_ex(const char *pathname, int flags, mode_t mode)
 {
     int fd;
     
-#ifdef DEBUG
+#if DEBUG
     if(!logger_is_self() && logger_is_running())
     {
         log_debug6("open_create_ex(%s,%o,%o)", STRNULL(pathname), flags, mode);
         errno = 0;
     }
+#endif
+    
+#if DEBUG
+    admin_warn(pathname);
 #endif
     
     yassert(pathname != NULL);
@@ -754,7 +856,7 @@ open_create_ex(const char *pathname, int flags, mode_t mode)
     debug_bench_stop(&debug_open_create, bench);
 #endif
     
-#ifdef DEBUG
+#if DEBUG
     if(!logger_is_self() && logger_is_running())
     {
         log_debug6("open_create_ex(%s,%o,%o): %r (%i)", STRNULL(pathname), flags, mode, ERRNO_ERROR, fd);
@@ -770,21 +872,25 @@ open_create_ex(const char *pathname, int flags, mode_t mode)
     return fd;
 }
 
-int mkstemp_ex(char *template)
+int mkstemp_ex(char * tmp_name_template)
 {
-    int fd = mkstemp(template);
-#ifdef DEBUG
+#ifndef WIN32
+    int fd = mkstemp(tmp_name_template);
+#if DEBUG
     if(!logger_is_self() && logger_is_running())
     {
 #if DEBUG_FD_OPEN_CLOSE_MONITOR
         if(fd > 0)
         {
-            fd_set_name(fd, template);
+            fd_set_name(fd, tmp_name_template);
         }
 #endif
     }
 #endif
     return fd;
+#else
+    return -1;
+#endif
 }
 
 /**
@@ -800,6 +906,9 @@ ya_result
 open_create_ex_nolog(const char *pathname, int flags, mode_t mode)
 {
     int fd;
+#if DEBUG
+    admin_warn(pathname);
+#endif
     while((fd = open(pathname, flags, mode)) < 0)
     {
         int err = errno;
@@ -825,7 +934,7 @@ open_create_ex_nolog(const char *pathname, int flags, mode_t mode)
  */
 
 ya_result
-#ifndef DEBUG
+#if !DNSCORE_HAS_CLOSE_EX_REF
 close_ex(int fd)
 #else
 close_ex_ref(int* fdp)
@@ -833,7 +942,7 @@ close_ex_ref(int* fdp)
 {
     ya_result return_value = SUCCESS;
 
-#ifdef DEBUG
+#if DNSCORE_HAS_CLOSE_EX_REF
     int fd = *fdp;
     
     if(fd == -2)
@@ -844,7 +953,7 @@ close_ex_ref(int* fdp)
     *fdp = -2;
 #endif
     
-#ifdef DEBUG
+#if DEBUG
     if(!logger_is_self() && logger_is_running())
     {
 #if DEBUG_FD_OPEN_CLOSE_MONITOR
@@ -878,7 +987,7 @@ close_ex_ref(int* fdp)
     debug_bench_stop(&debug_close, bench);
 #endif
     
-#ifdef DEBUG
+#if DEBUG
     if(!logger_is_self() && logger_is_running())
     {
         log_debug6("close_ex(%i): %r", fd, return_value);
@@ -902,7 +1011,7 @@ close_ex_ref(int* fdp)
  */
 
 ya_result
-#ifndef DEBUG
+#if !DNSCORE_HAS_CLOSE_EX_REF
 close_ex_nolog(int fd)
 #else
 close_ex_nolog_ref(int* fdp)
@@ -910,7 +1019,7 @@ close_ex_nolog_ref(int* fdp)
 {
     ya_result return_value = SUCCESS;
     
-#ifdef DEBUG
+#if DNSCORE_HAS_CLOSE_EX_REF
     int fd = *fdp;
     
     if(fd == -2)
@@ -938,6 +1047,7 @@ close_ex_nolog_ref(int* fdp)
 int
 fsync_ex(int fd)
 {
+#ifndef WIN32
     while(fsync(fd) < 0)
     {
         int err = errno;
@@ -946,14 +1056,17 @@ fsync_ex(int fd)
             return ERRNO_ERROR;
         }
     }
-    
+#else
+    FlushFileBuffers(fd);
+#endif
     return SUCCESS;
 }
 
 int
 fdatasync_ex(int fd)
 {
-#if IS_LINUX_FAMILY
+#ifndef WIN32
+#if defined(__linux__)
     while(fdatasync(fd) < 0)
 #else
     while(fsync(fd) < 0)
@@ -965,7 +1078,9 @@ fdatasync_ex(int fd)
             return ERRNO_ERROR;
         }
     }
-    
+#else
+    FlushFileBuffers(fd);
+#endif
     return SUCCESS;
 }
 
@@ -988,6 +1103,36 @@ int dup2_ex(int old_fd, int new_fd)
 {
     int ret;
     while((ret = dup2(old_fd, new_fd)) < 0)
+    {
+        int err = errno;
+        if(err != EINTR)
+        {
+            return ERRNO_ERROR;
+        }
+    }
+    
+    return ret;
+}
+
+int truncate_ex(const char *path, off_t len)
+{
+    int ret;
+    while((ret = truncate(path, len)) < 0)
+    {
+        int err = errno;
+        if(err != EINTR)
+        {
+            return ERRNO_ERROR;
+        }
+    }
+    
+    return ret;
+}
+
+int ftruncate_ex(int fd, off_t len)
+{
+    int ret;
+    while((ret = ftruncate(fd, len)) < 0)
     {
         int err = errno;
         if(err != EINTR)
@@ -1050,10 +1195,17 @@ ya_result
 file_exists(const char *name)
 {
     struct stat s;
+#ifndef WIN32
     if(lstat(name, &s) >= 0)    // MUST be lstat
     {
         return 1;
     }
+#else
+    if(stat(name, &s) >= 0)    // MUST be lstat
+    {
+        return 1;
+    }
+#endif
     
     int err = errno;
     
@@ -1068,6 +1220,7 @@ file_exists(const char *name)
 ya_result
 file_is_link(const char *name)
 {
+#ifndef WIN32
     struct stat s;
     if(lstat(name, &s) >= 0)    // MUST be lstat
     {
@@ -1075,6 +1228,9 @@ file_is_link(const char *name)
     }
     
     return ERRNO_ERROR;
+#else
+    return 0;
+#endif
 }
 
 /**
@@ -1097,8 +1253,12 @@ file_is_link(const char *name)
 int
 mkdir_ex(const char *pathname, mode_t mode, u32 flags)
 {
-#ifdef DEBUG
+#if DEBUG
     log_debug("mkdir_ex(%s,%o)", pathname, mode);
+#endif
+    
+#if DEBUG
+    admin_warn(pathname);
 #endif
                 
     const char *s;
@@ -1143,7 +1303,7 @@ mkdir_ex(const char *pathname, mode_t mode, u32 flags)
             
             if(err != ENOENT)
             {
-#ifdef DEBUG
+#if DEBUG
                 log_debug("mkdir_ex(%s,%o): stat returned %r", pathname, mode, MAKE_ERRNO_ERROR(err));
 #endif
                 
@@ -1152,7 +1312,7 @@ mkdir_ex(const char *pathname, mode_t mode, u32 flags)
             
             if(mkdir(dir_path, mode) < 0)
             {
-#ifdef DEBUG
+#if DEBUG
                 log_debug("mkdir_ex(%s,%o): mkdir(%s, %o) returned %r", pathname, mode, dir_path, mode, MAKE_ERRNO_ERROR(err));
 #endif
     
@@ -1191,10 +1351,12 @@ file_mtime(const char *name, s64 *timestamp)
     yassert(timestamp != NULL);
     if(stat(name, &st) >= 0)
     {
-#if !__APPLE__
-        s64 ts = (1000000LL * st.st_mtim.tv_sec) + (st.st_mtim.tv_nsec / 1000LL);
+#ifdef WIN32
+        s64 ts = ONE_SECOND_US * st.st_mtime;
+#elif !__APPLE__
+        s64 ts = (ONE_SECOND_US * st.st_mtim.tv_sec) + (st.st_mtim.tv_nsec / 1000LL);
 #else
-        s64 ts = (1000000LL * st.st_mtimespec.tv_sec) + (st.st_mtimespec.tv_nsec / 1000LL);
+        s64 ts = (ONE_SECOND_US * st.st_mtimespec.tv_sec) + (st.st_mtimespec.tv_nsec / 1000LL);
 #endif
         *timestamp = ts;
         return SUCCESS;
@@ -1223,10 +1385,12 @@ fd_mtime(int fd, s64 *timestamp)
     yassert(timestamp != NULL);
     if(fstat(fd, &st) >= 0)
     {
-#if !__APPLE__
-        s64 ts = (1000000LL * st.st_mtim.tv_sec) + (st.st_mtim.tv_nsec / 1000LL);
+#ifdef WIN32
+        s64 ts = ONE_SECOND_US * st.st_mtime;
+#elif !__APPLE__
+        s64 ts = (ONE_SECOND_US * st.st_mtim.tv_sec) + (st.st_mtim.tv_nsec / 1000LL);
 #else
-        s64 ts = (1000000LL * st.st_mtimespec.tv_sec) + (st.st_mtimespec.tv_nsec / 1000LL);
+        s64 ts = (ONE_SECOND_US * st.st_mtimespec.tv_sec) + (st.st_mtimespec.tv_nsec / 1000LL);
 #endif
         *timestamp = ts;
         return SUCCESS;
@@ -1236,6 +1400,41 @@ fd_mtime(int fd, s64 *timestamp)
         *timestamp = 0;
         return ERRNO_ERROR;
     }
+}
+
+ya_result
+fd_setcloseonexec(int fd)
+{
+#ifndef WIN32
+    int ret = fcntl(fd, F_SETFD, FD_CLOEXEC);
+    if(FAIL(ret))
+    {
+        ret = ERRNO_ERROR;
+    }
+    return ret;
+#else
+    return SUCCESS;
+#endif
+}
+
+ya_result
+fd_setnonblocking(int fd)
+{
+#ifndef WIN32
+    int ret;
+    if(ISOK(ret = fcntl(fd, F_GETFL, 0)))
+    {
+        fcntl(fd, F_SETFL, ret | O_NONBLOCK);
+    }
+    else
+    {
+        ret = ERRNO_ERROR;
+    }
+
+    return ret;
+#else
+    return SUCCESS;
+#endif
 }
 
 /**
@@ -1285,7 +1484,7 @@ dirent_get_file_type(const char *folder, const char *name)
     d_type = DT_UNKNOWN;
     
     /*
-     * If the FS OR the OS does not supports d_type :
+     * If the FS OR the OS does not support d_type :
      */
 
     if(ISOK(snprintf(fullpath, sizeof(fullpath), "%s/%s", folder, name)))
@@ -1334,12 +1533,18 @@ readdir_forall(const char *basedir, readdir_callback *func, void *args)
         }
         
         // ignore names "." and ".."
+
+#ifndef WIN32
+        const char* tmp_name = tmp->d_name;
+#else
+        const char* tmp_name = tmp->name;
+#endif
         
-        if(tmp->d_name[0] == '.')
+        if(tmp_name[0] == '.')
         {
             if(
-                ((tmp->d_name[1] == '.') && (tmp->d_name[2] == '\0')) ||
-                (tmp->d_name[1] == '\0')
+                ((tmp_name[1] == '.') && (tmp_name[2] == '\0')) ||
+                (tmp_name[1] == '\0')
                 )
             {
                 group_mutex_unlock(&readdir_mutex, GROUP_MUTEX_WRITE);
@@ -1347,16 +1552,16 @@ readdir_forall(const char *basedir, readdir_callback *func, void *args)
             }
         }
         
-        size_t name_len = strlen(tmp->d_name);
+        size_t name_len = strlen(tmp_name);
         
         if(name_len + basedir_len + 1 + 1 > sizeof(path))
         {
             group_mutex_unlock(&readdir_mutex, GROUP_MUTEX_WRITE);
-            log_err("readdir_forall: '%s/%s' is bigger than expected (%i): skipping", basedir, tmp->d_name, sizeof(path));
+            log_err("readdir_forall: '%s/%s' is bigger than expected (%i): skipping", basedir, tmp_name, sizeof(path));
             continue;
         }
         
-        memcpy(name, tmp->d_name, name_len + 1);
+        memcpy(name, tmp_name, name_len + 1);
         
         group_mutex_unlock(&readdir_mutex, GROUP_MUTEX_WRITE);
 
@@ -1404,6 +1609,117 @@ readdir_forall(const char *basedir, readdir_callback *func, void *args)
     closedir(dir);
 
     return ret;
+}
+
+struct file_mtime_set_s
+{
+    ptr_set files_mtime;
+    char *name;
+    bool is_new;
+};
+
+typedef struct file_mtime_set_s file_mtime_set_t;
+
+static ptr_set file_mtime_sets = { NULL, ptr_set_asciizp_node_compare};
+static mutex_t file_mtime_sets_mtx;
+
+file_mtime_set_t*
+file_mtime_set_get_for_file(const char *filename)
+{
+    file_mtime_set_t *ret;
+    mutex_lock(&file_mtime_sets_mtx);
+    ptr_node *sets_node = ptr_set_insert(&file_mtime_sets, filename);
+    if(sets_node->value != NULL)
+    {
+        ret = (file_mtime_set_t*)sets_node->value;
+    }
+    else
+    {
+        sets_node->key = strdup(filename);
+        ZALLOC_OBJECT_OR_DIE(ret, file_mtime_set_t, GENERIC_TAG);
+        ret->files_mtime.root = NULL;
+        ret->files_mtime.compare = ptr_set_asciizp_node_compare;
+        ret->name = strdup(filename);
+        ret->is_new = TRUE;
+        sets_node->value = ret;
+        file_mtime_set_add_file(ret, filename);
+    }
+    mutex_unlock(&file_mtime_sets_mtx);
+    return ret;
+}
+
+void
+file_mtime_set_add_file(file_mtime_set_t *ctx, const char *filename)
+{
+    s64 mtime;
+
+    if(FAIL(file_mtime(filename, &mtime)))
+    {
+        mtime = MIN_S64;
+    }
+
+    ptr_node *node = ptr_set_insert(&ctx->files_mtime, filename);
+    if(node->value == NULL)
+    {
+        node->key = strdup(filename);
+        node->value_s64 = mtime;
+    }
+}
+
+bool
+file_mtime_set_modified(file_mtime_set_t *ctx)
+{
+    if(ctx->is_new)
+    {
+        ctx->is_new = FALSE;
+        return TRUE;
+    }
+
+    ptr_set_iterator iter;
+    ptr_set_iterator_init(&ctx->files_mtime, &iter);
+    while(ptr_set_iterator_hasnext(&iter))
+    {
+        ptr_node *node = ptr_set_iterator_next_node(&iter);
+        const char *filename = (const char*)node->key;
+        s64 mtime;
+        if(ISOK(file_mtime(filename, &mtime)))
+        {
+            if(node->value_s64 < mtime)
+            {
+                return TRUE;
+            }
+        }
+        else
+        {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+void
+file_mtime_set_clear(file_mtime_set_t *ctx)
+{
+    ptr_set_iterator iter;
+    ptr_set_iterator_init(&ctx->files_mtime, &iter);
+    while(ptr_set_iterator_hasnext(&iter))
+    {
+        ptr_node *node = ptr_set_iterator_next_node(&iter);
+        free(node->key);
+    }
+    ptr_set_destroy(&ctx->files_mtime);
+    file_mtime_set_add_file(ctx, ctx->name);
+}
+
+void
+file_mtime_set_delete(file_mtime_set_t *ctx)
+{
+    mutex_lock(&file_mtime_sets_mtx);
+    ptr_set_delete(&file_mtime_sets, ctx->name);
+    mutex_unlock(&file_mtime_sets_mtx);
+    free(ctx->name);
+    file_mtime_set_clear(ctx);
+    ZFREE_OBJECT(ctx);
 }
 
 /** @} */

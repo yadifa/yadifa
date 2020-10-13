@@ -2,35 +2,36 @@
  *
  * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
- * 
- * Redistribution and use in source and binary forms, with or without 
+ *
+ * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
  *
- *        * Redistributions of source code must retain the above copyright 
+ *        * Redistributions of source code must retain the above copyright
  *          notice, this list of conditions and the following disclaimer.
- *        * Redistributions in binary form must reproduce the above copyright 
- *          notice, this list of conditions and the following disclaimer in the 
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
  *          documentation and/or other materials provided with the distribution.
- *        * Neither the name of EURid nor the names of its contributors may be 
- *          used to endorse or promote products derived from this software 
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
  *          without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
  * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
  * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
  *------------------------------------------------------------------------------
  *
  */
+
 /** @defgroup dnsdbupdate Dynamic update functions
  *  @ingroup dnsdb
  *  @brief
@@ -90,12 +91,12 @@ static const u8* dnssec_chain_node_nsec_get_inverse_fqdn(const dnssec_chain_node
 
 static bool dnssec_chain_node_nsec_fqdn_is_covered(const zone_diff_fqdn *diff_fqdn)
 {
-    return diff_fqdn->is_apex || (!diff_fqdn->under_delegation && diff_fqdn->will_be_non_empty);
+    return diff_fqdn->is_apex || (!diff_fqdn->under_delegation && (diff_fqdn->will_be_non_empty /*|| diff_fqdn->will_have_children*/));
 }
 
 static bool dnssec_chain_node_nsec_fqdn_was_covered(const zone_diff_fqdn *diff_fqdn)
 {
-    return diff_fqdn->is_apex || (!diff_fqdn->was_under_delegation && diff_fqdn->was_non_empty);
+    return diff_fqdn->is_apex || (!diff_fqdn->was_under_delegation && (diff_fqdn->was_non_empty /*|| diff_fqdn->will_have_children*/));
 }
 
 static dnssec_chain_node_t
@@ -114,18 +115,18 @@ dnssec_chain_node_nsec_new(const u8 *fqdn, dnssec_chain_head_t chain)
     nsec_zone_item *self = NULL;
     nsec_zone_item *prev;
     nsec_zone_item *next;
-    bool empty = nsec_avl_isempty(&nsec_chain);
+    bool empty = nsec_isempty(&nsec_chain); // true if there is not a single node in the NSEC chain
         
     if(!empty)
     {
-        prev = nsec_avl_find_interval_prev_mod(&nsec_chain, (u8*)inverse_name);
-        next = nsec_avl_node_mod_next(prev);
+        prev = nsec_find_interval_prev_mod(&nsec_chain, (const u8*)inverse_name);
+        next = nsec_node_mod_next(prev);
         
         if(dnsname_compare(next->inverse_relative_name, inverse_name) == 0)
         {
             // exists
             self = next;
-            next = nsec_avl_node_mod_next(self);
+            next = nsec_node_mod_next(self);
         }
     }
     else
@@ -136,7 +137,7 @@ dnssec_chain_node_nsec_new(const u8 *fqdn, dnssec_chain_head_t chain)
     
     dnssec_chain_node_nsec *node;
     
-    ZALLOC_OR_DIE(dnssec_chain_node_nsec*, node, dnssec_chain_node_nsec, NSECNODE_TAG);
+    ZALLOC_OBJECT_OR_DIE(node, dnssec_chain_node_nsec, NSECNODE_TAG);
     node->prev = prev;
     node->self = self;
     node->next = next;
@@ -196,13 +197,14 @@ static void dnssec_chain_node_nsec_delete(dnssec_chain_node_t node_)
     {
         dnsname_zfree(nsec_node->fqdn);
     }
-    ZFREE(nsec_node, dnssec_chain_node_nsec);
+    ZFREE_OBJECT(nsec_node);
 }
 
 static bool dnssec_chain_node_nsec_has_bits_map(const dnssec_chain_node_nsec *node)
 {
     return (node->self != NULL) && (node->self->label != NULL) && (zdb_record_find(&node->self->label->resource_record_set, TYPE_NSEC) != NULL);
 }
+
 
 static int dnssec_chain_node_nsec_compare(const void *a_, const void *b_)
 {
@@ -224,7 +226,7 @@ static dnssec_chain_node_t dnssec_chain_node_nsec_prev(const dnssec_chain_node_t
     
     u8 fqdn[MAX_DOMAIN_LENGTH];
     
-    ZALLOC_OR_DIE(dnssec_chain_node_nsec*, node, dnssec_chain_node_nsec, NSECNODE_TAG);
+    ZALLOC_OBJECT_OR_DIE(node, dnssec_chain_node_nsec, NSECNODE_TAG);
     node->prev = NULL;
     node->self = self->prev;
     node->next = self->next;
@@ -246,7 +248,7 @@ static dnssec_chain_node_t dnssec_chain_node_nsec_next(const dnssec_chain_node_t
     
     u8 fqdn[MAX_DOMAIN_LENGTH];
     
-    ZALLOC_OR_DIE(dnssec_chain_node_nsec*, node, dnssec_chain_node_nsec, NSECNODE_TAG);
+    ZALLOC_OBJECT_OR_DIE(node, dnssec_chain_node_nsec, NSECNODE_TAG);
     node->prev = self->prev;
     node->self = self->next;
     node->next = NULL;
@@ -321,35 +323,41 @@ static void dnssec_chain_node_nsec_publish_record(nsec_zone *nsec_chain,
 
     // generate the type map
     
-    if(!dnssec_chain_node_nsec_has_bits_map(from) || ((mask & ZONE_DIFF_REMOVE) && (from->state & DNSSEC_CHAIN_REMAP)))
+    if(!dnssec_chain_node_nsec_has_bits_map(from) || ((mask & ZONE_DIFF_RR_REMOVE) && (from->state & DNSSEC_CHAIN_REMAP)))
     {
         type_bit_maps_context bitmap;
 
-        u16 bitmap_size = zone_diff_type_bit_map_generate(diff, from->fqdn, &bitmap, mask | ZONE_DIFF_REMOVE, 0, from->fqdn);
-        
-        if(mask & ZONE_DIFF_REMOVE)
+        u16 bitmap_size = zone_diff_type_bit_map_generate(diff, from->fqdn, &bitmap, mask | ZONE_DIFF_RR_REMOVE, 0,
+                                                          from->fqdn, append_signatures);
+
+        if(mask & ZONE_DIFF_RR_REMOVE)
         {
             type_bit_maps_set_type(&bitmap, TYPE_NSEC);
             type_bit_maps_set_type(&bitmap, TYPE_RRSIG);
             bitmap_size = type_bit_maps_update_size(&bitmap);
         }
-        
+
         yassert(bitmap_size != 0);
 
         int to_fqdn_len = dnsname_len(to->fqdn);
 
         u16 rdata_size = to_fqdn_len + bitmap_size;
+        
+#if C11_VLA_AVAILABLE
         u8 rdata[rdata_size];
+#else
+        u8* const rdata = (u8* const)stack_alloc(rdata_size);
+#endif
 
         memcpy(&rdata, to->fqdn, to_fqdn_len);
         type_bit_maps_write(&bitmap, &rdata[to_fqdn_len]);
-        type_bit_maps_finalise(&bitmap);
+        type_bit_maps_finalize(&bitmap);
 
         // the record can be created
 
         zone_diff_label_rr *nsec_rr = zone_diff_label_rr_new(
                 from->fqdn, TYPE_NSEC, CLASS_IN, diff->nttl, rdata, rdata_size, TRUE);
-        nsec_rr->state |= ZONE_DIFF_VOLATILE;
+        nsec_rr->state |= ZONE_DIFF_RR_VOLATILE;
         
         ptr_vector_append(collection, nsec_rr);
     }
@@ -376,14 +384,18 @@ static void dnssec_chain_node_nsec_publish_record(nsec_zone *nsec_chain,
         int to_fqdn_len = dnsname_len(to->fqdn);
 
         u16 rdata_size = to_fqdn_len + bitmap_size;
+
+#if C11_VLA_AVAILABLE
         u8 rdata[rdata_size];
+#else
+        u8* const rdata = (u8* const)stack_alloc(rdata_size);
+#endif
         
         memcpy(&rdata, to->fqdn, to_fqdn_len);
         memcpy(&rdata[to_fqdn_len], &nsec_rdata[next_fqdn_len], bitmap_size);
         
-        zone_diff_label_rr *nsec_rr = zone_diff_label_rr_new(
-                from->fqdn, TYPE_NSEC, CLASS_IN, diff->nttl, rdata, rdata_size, TRUE);
-        nsec_rr->state |= ZONE_DIFF_VOLATILE;
+        zone_diff_label_rr *nsec_rr = zone_diff_label_rr_new(from->fqdn, TYPE_NSEC, CLASS_IN, diff->nttl, rdata, rdata_size, TRUE);
+        nsec_rr->state |= ZONE_DIFF_RR_VOLATILE;
         
         ptr_vector_append(collection, nsec_rr);
         
@@ -394,13 +406,13 @@ static void dnssec_chain_node_nsec_publish_record(nsec_zone *nsec_chain,
             {
                 if(RRSIG_TYPE_COVERED(rrsig_sll) == TYPE_NSEC)
                 {
-                    zone_diff_label_rr *nsec_rr = zone_diff_label_rr_new(
+                    zone_diff_label_rr *new_nsec_rr = zone_diff_label_rr_new(
                         from->fqdn, TYPE_RRSIG, CLASS_IN, rrsig_sll->ttl,
                         ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig_sll),
                         ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig_sll),
                         TRUE);
-                    nsec_rr->state |= ZONE_DIFF_VOLATILE;
-                    ptr_vector_append(collection, nsec_rr);
+                    new_nsec_rr->state |= ZONE_DIFF_RR_VOLATILE;
+                    ptr_vector_append(collection, new_nsec_rr);
                 }
 
                 rrsig_sll = rrsig_sll->next;
@@ -433,7 +445,7 @@ static void dnssec_chain_node_nsec_publish_add(dnssec_chain_head_t chain_, dnsse
     dnssec_chain_node_nsec *to = (dnssec_chain_node_nsec*)to_;
     
     nsec_zone *nsec_chain = (nsec_zone*)chain_;
-    dnssec_chain_node_nsec_publish_record(nsec_chain, from, to, diff, collection, ZONE_DIFF_REMOVE, FALSE);
+    dnssec_chain_node_nsec_publish_record(nsec_chain, from, to, diff, collection, ZONE_DIFF_RR_REMOVE, FALSE);
 }
 
 static void dnssec_chain_node_nsec_publish_delete(dnssec_chain_head_t chain_, dnssec_chain_node_t from_, dnssec_chain_node_t to_, zone_diff *diff, ptr_vector *collection)
@@ -442,18 +454,18 @@ static void dnssec_chain_node_nsec_publish_delete(dnssec_chain_head_t chain_, dn
     dnssec_chain_node_nsec *to = (dnssec_chain_node_nsec*)to_;
      
     nsec_zone *nsec_chain = (nsec_zone*)chain_;
-    dnssec_chain_node_nsec_publish_record(nsec_chain, from, to, diff, collection, ZONE_DIFF_ADD, TRUE);
+    dnssec_chain_node_nsec_publish_record(nsec_chain, from, to, diff, collection, ZONE_DIFF_RR_ADD, TRUE);
 }
 
 static bool dnssec_chain_nsec_isempty(dnssec_chain_head_t chain_)
 {
     nsec_zone *nsec_chain = (nsec_zone*)chain_;
-    bool ret = (nsec_chain != NULL)?nsec_avl_isempty(&nsec_chain):TRUE;
+    bool ret = (nsec_chain != NULL)?nsec_isempty(&nsec_chain):TRUE;
     return ret;
 }
 
 static void
-dnssec_chain_nsec_finalise_delete_callback(ptr_node *node)
+dnssec_chain_nsec_finalize_delete_callback(ptr_node *node)
 {
     dnssec_chain_node_nsec_delete(node->value);
 }
@@ -463,6 +475,18 @@ static void dnssec_chain_node_nsec_format_writer_init(dnssec_chain_node_t node_,
     dnssec_chain_node_nsec *node = (dnssec_chain_node_nsec*)node_;
     outfw->callback = dnsname_format_handler_method;
     outfw->value = node->fqdn;
+}
+
+static bool dnssec_chain_node_nsec_rrset_should_be_signed(const zone_diff_fqdn *diff_fqdn, const zone_diff_fqdn_rr_set *rr_set)
+{
+    if(diff_fqdn->at_delegation || diff_fqdn->under_delegation)
+    {
+        return (rr_set->rtype == TYPE_DS) || (rr_set->rtype == TYPE_NSEC);
+    }
+    else
+    {
+        return TRUE;
+    }
 }
 
 static dnssec_chain_node_vtbl dnssec_chain_node_nsec_vtbl = 
@@ -480,9 +504,10 @@ static dnssec_chain_node_vtbl dnssec_chain_node_nsec_vtbl =
     dnssec_chain_node_nsec_publish_add,
     dnssec_chain_node_nsec_publish_log,
     dnssec_chain_node_nsec_compare,
-    dnssec_chain_nsec_finalise_delete_callback,
+    dnssec_chain_nsec_finalize_delete_callback,
     dnssec_chain_nsec_isempty,
     dnssec_chain_node_nsec_format_writer_init,
+    dnssec_chain_node_nsec_rrset_should_be_signed,
     "nsec"
 };
 

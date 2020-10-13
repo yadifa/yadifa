@@ -1,0 +1,60 @@
+From: Daisuke HIGASHI <daisuke.higashi@gmail.com>
+To: "yadifa-users@mailinglists.yadifa.eu"
+	<yadifa-users@mailinglists.yadifa.eu>
+Date: Sat, 23 Mar 2019 11:03:02 +0000
+Subject: [yadifa-users] Patch: IP_PMTUDISC_OMIT on IPv4/UDP for mitigating
+	fragment attack
+
+Hi,
+
+   Linux 3.15 introduced a new socket option IP_PMTUDISC_OMIT[1] which makes sockets ignore PMTU information and send packets with DF=0. With this sockopt fragmentation is allowed if and only if the packet size exceeds the outgoing interface MTU or the packet encounters smaller MTU link in network.
+
+By preventing forged PMTU information, setting IP_PMTUDISC_OMIT (instead of IP_PMTUDISC_DONT) to DNS responder's IPv4/UDP socket mitigates DNS fragmentation attacks [2]. Some DNS implementations already have this feature [3][4][5].
+
+Patches for yadifa-2.3.9 to set IP_PMTUDISC_OMIT to IPv4/UDP sockets (if available) attached.
+It would be appreciated if this patch be applied to mainline.
+
+[1] Linux kernel introduced IP*_PMTUDISC_OMIT
+  https://lists.openwall.net/netdev/2014/02/26/4
+[2] IP fragmentation attack on DNS
+  https://ripe67.ripe.net/presentations/240-ipfragattack.pdf
+[3] Unbound 1.5.0 introduced this feature.
+  https://github.com/NLnetLabs/unbound/commit/470b7bda8763c36a7db255d1d981f3ae06d41ba0
+[4] BIND 9.9.10 introduced this feature.
+  https://www.isc.org/blogs/bind-april-2017/
+[5] NSD 4.1.27 will introduce this feature
+  https://www.nlnetlabs.nl/bugs-script/show_bug.cgi?id=4235
+
+--
+Daisuke Higashi
+
+
+diff -ur yadifa-2.3.9-8497/sbin/yadifad/server_context.c yadifa-2.3.9-8497.omit/sbin/yadifad/server_context.c
+--- yadifa-2.3.9-8497/sbin/yadifad/server_context.c	2019-02-11 12:45:56.956114538 +0000
++++ yadifa-2.3.9-8497.omit/sbin/yadifad/server_context.c	2019-03-23 10:42:31.549563989 +0000
+@@ -355,6 +355,25 @@
+             }
+         }
+ #endif
++
++#if defined(IP_MTU_DISCOVER) && defined(IP_PMTUDISC_OMIT)
++	/*
++	 * Linux 3.15 has IP_PMTUDISC_OMIT which makes sockets
++	 * ignore PMTU information and send packets with DF=0.
++	 * Fragmentation is allowed if and only if the packet
++	 * size exceeds the outgoing interface MTU or the packet
++	 * encounters smaller MTU link in network.
++	 * This mitigates DNS fragmentation attacks by preventing
++	 * forged PMTU information.
++	 * FreeBSD already has same semantics without setting
++	 * the option.
++	 */
++	if(family == SOCK_DGRAM)
++	{
++		int action_omit = IP_PMTUDISC_OMIT;
++		(void)setsockopt(sockfd, IPPROTO_IP,IP_MTU_DISCOVER, &action_omit, sizeof(action_omit));
++	}
++#endif /* IP_MTU_DISCOVER && IP_PMTUDISC_OMIT */
+     }
+ 
+     if(FAIL(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on))))

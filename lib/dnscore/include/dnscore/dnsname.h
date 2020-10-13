@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnscore
  *  @ingroup dnscore
  *  @brief Functions used to manipulate dns formatted names and labels
@@ -50,6 +51,10 @@
 #include <dnscore/sys_types.h>
 #include <dnscore/rfc.h>
 
+#if DNSCORE_HAS_FULL_ASCII7
+#include <ctype.h>
+#endif
+
 /**
  * The maximum number of domains-subdomains handled by the database.
  * This should not be set to a value greater than 128 (128 covers (\001 'a') * 255 )
@@ -62,6 +67,10 @@
 
 #define DNSNAME_MAX_SECTIONS ((MAX_DOMAIN_LENGTH + 1) / 2)
 
+#if !DNSNAME_C_
+extern const u8 __LOCASE_TABLE__[256];
+#endif
+
 // dns equal chars comparison should give 0x00 or 0x20
 // the '_' breaks this so there is a slightly different (slightly slower) way to handle it
 
@@ -69,7 +78,12 @@
 
 // IMPORTANT NOTE 2 : LOCASEEQUAL only works on the DNS chars AND with the first parameter being a lo-case string (like in the database)
 
-#if SRV_UNDERSCORE_SUPPORT == 0
+#if !DNSCORE_HAS_FULL_ASCII7
+
+#define dnsname_equals_ignorecase dnsname_equals_ignorecase3
+#define dnslabel_equals_ignorecase_left dnslabel_equals_ignorecase_left1
+
+#if !SRV_UNDERSCORE_SUPPORT
 #define LOCASE(c__) ((char)(c__)|(char)0x20)
 
 static inline bool LOCASEEQUALS(char ca__,char cb__)
@@ -92,6 +106,7 @@ static inline bool LOCASEEQUALSBY4(const u8* name_a, const u8* name_b)
     return (((GET_U32_AT(name_a[0]) - GET_U32_AT(name_b[0])) & ((u16)0xdfdfdfdf)) == 0);
 }
 #else // slightly modified to take '_' into account
+
 #define LOCASE(c__) (((((char)(c__)+(char)0x01)|(char)0x20))-(char)0x01)
 
 static inline bool LOCASEEQUALS(u8 a, u8 b)
@@ -113,6 +128,35 @@ static inline bool LOCASEEQUALSBY4(const u8* name_a, const u8* name_b)
 {
     return (( ( (GET_U32_AT(name_a[0]) + 0x01010101) - (GET_U32_AT(name_b[0]) + 0x01010101)) & ((u32)0xdfdfdfdf)) == 0);
 }
+#endif
+
+#else // DNSCORE_HAS_FULL_ASCII7
+
+#define dnsname_equals_ignorecase dnsname_equals_ignorecase3
+#define dnslabel_equals_ignorecase_left dnslabel_equals_ignorecase_left4
+
+#define LOCASE(c__) __LOCASE_TABLE__[(c__)]
+
+static inline bool LOCASEEQUALS(u8 a, u8 b)
+{
+    return LOCASE(a) == LOCASE(b);
+}
+
+static inline bool LOCASEEQUALSBY2(const u8* name_a, const u8* name_b)
+{
+    return LOCASEEQUALS(name_a[0], name_b[0]) && LOCASEEQUALS(name_a[1], name_b[1]);
+}
+
+static inline bool LOCASEEQUALSBY3(const u8* name_a, const u8* name_b)
+{
+    return LOCASEEQUALSBY2(name_a, name_b) && LOCASEEQUALS(name_a[2], name_b[2]);
+}
+
+static inline bool LOCASEEQUALSBY4(const u8* name_a, const u8* name_b)
+{
+    return LOCASEEQUALSBY3(name_a, name_b) && LOCASEEQUALS(name_a[3], name_b[3]);
+}
+
 #endif
 
 #define ZDB_NAME_TAG  0x454d414e42445a       /* "ZDBNAME" */
@@ -160,7 +204,7 @@ typedef const u8** dnslabel_vector_reference;
 typedef const u8*const* const_dnslabel_stack_reference;
 typedef const u8*const* const_dnslabel_vector_reference;
 
-#ifdef DEBUG
+#if DEBUG
 #define DEBUG_RESET_dnsname(name) memset(&(name),0x5b,sizeof(dnsname_stack))
 #else
 #define DEBUG_RESET_dnsname(name)
@@ -335,7 +379,15 @@ bool dnsname_is_subdomain(const u8* subdomain, const u8* domain);
  *  @return Returns TRUE if names are equal, else FALSE.
  */
 
-bool dnslabel_equals_ignorecase_left(const u8* name_a, const u8* name_b);
+bool dnslabel_equals_ignorecase_left1(const u8* name_a, const u8* name_b);
+
+bool dnslabel_equals_ignorecase_left2(const u8* name_a, const u8* name_b);
+
+bool dnslabel_equals_ignorecase_left3(const u8* name_a, const u8* name_b);
+
+bool dnslabel_equals_ignorecase_left4(const u8* name_a, const u8* name_b);
+
+bool dnslabel_equals_ignorecase_left5(const u8* name_a, const u8* name_b);
 
 /** @brief Tests if two DNS names are equals
  *
@@ -363,7 +415,11 @@ bool dnsname_equals(const u8* name_a, const u8* name_b);
 
 /* TWO uses */
 
-bool dnsname_equals_ignorecase(const u8* name_a, const u8* name_b);
+bool dnsname_equals_ignorecase1(const u8* name_a, const u8* name_b);
+
+bool dnsname_equals_ignorecase2(const u8* name_a, const u8* name_b);
+
+bool dnsname_equals_ignorecase3(const u8* name_a, const u8* name_b);
 
 /** @brief Returns the full length of a dns name
  *
@@ -389,6 +445,8 @@ u32 dnsname_copy(u8* dst, const u8* src);
 /* malloc & copies a dnsname */
 
 u8* dnsname_dup(const u8* src);
+
+void dnsname_free(u8* ptr);
 
 /** @brief Canonizes a dns name.
  *
@@ -631,6 +689,34 @@ void dnsname_zfree(u8 *name);
 u8 *dnslabel_zdup(const u8 *name);
 
 void dnslabel_zfree(u8 *name);
+
+/**
+ * 
+ * Expands a compressed FQDN from a wire.
+ * 
+ * @param wire_base_ the address of the wire buffer
+ * @param wire_size the size of the wire buffer
+ * @param compressed_fqdn the address, in the wire buffer, of the FQDN to expand
+ * @param output_fqdn the address of the buffer that will get a copy of the expanded FQDN
+ * @param output_fqdn_size the size of the buffer that will get a a copy of the expanded FQDN
+ * 
+ * @return a pointer to the next byte after the expanded FQDN (ie: points to a type) or NULL if an error occurred
+ */
+
+const u8* dnsname_expand_compressed(const void *wire_base_, size_t wire_size, const void *compressed_fqdn, u8 *output_fqdn, u32 output_fqdn_size);
+
+/**
+ * 
+ * Skip a compressed FQDN from a wire.
+ * 
+ * @param wire_base_ the address of the wire buffer
+ * @param wire_size the size of the wire buffer
+ * @param compressed_fqdn the address, in the wire buffer, of the FQDN to expand
+ * 
+ * @return a pointer to the next byte after the FQDN (ie: points to a type) or NULL if an error occurred
+ */
+
+const u8* dnsname_skip_compressed(const void *wire_base_, size_t wire_size, const void *compressed_fqdn);
 
 #ifdef	__cplusplus
 }

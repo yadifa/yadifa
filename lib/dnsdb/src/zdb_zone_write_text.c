@@ -1,36 +1,37 @@
 /*------------------------------------------------------------------------------
-*
-* Copyright (c) 2011-2020, EURid vzw. All rights reserved.
-* The YADIFA TM software product is provided under the BSD 3-clause license:
-* 
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*
-*        * Redistributions of source code must retain the above copyright 
-*          notice, this list of conditions and the following disclaimer.
-*        * Redistributions in binary form must reproduce the above copyright 
-*          notice, this list of conditions and the following disclaimer in the 
-*          documentation and/or other materials provided with the distribution.
-*        * Neither the name of EURid nor the names of its contributors may be 
-*          used to endorse or promote products derived from this software 
-*          without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-*------------------------------------------------------------------------------
-*
-*/
+ *
+ * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *        * Redistributions of source code must retain the above copyright
+ *          notice, this list of conditions and the following disclaimer.
+ *        * Redistributions in binary form must reproduce the above copyright
+ *          notice, this list of conditions and the following disclaimer in the
+ *          documentation and/or other materials provided with the distribution.
+ *        * Neither the name of EURid nor the names of its contributors may be
+ *          used to endorse or promote products derived from this software
+ *          without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ *------------------------------------------------------------------------------
+ *
+ */
+
 /** @defgroup dnsdbzone Zone related functions
  *  @ingroup dnsdb
  *  @brief
@@ -56,6 +57,8 @@
 #include <dnscore/fdtools.h>
 #include <dnscore/random.h>
 #include <dnscore/thread_pool.h>
+#include <dnsdb/rrsig.h>
+#include <dnsdb/nsec_collection.h>
 
 #include "dnsdb/zdb_zone_write.h"
 
@@ -68,7 +71,9 @@
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
-#if ZDB_HAS_NSEC3_SUPPORT!=0
+#define ZDB_ZONE_WRITE_TEXT_USE_TTL_VAR 1
+
+#if ZDB_HAS_NSEC3_SUPPORT
 #include "dnsdb/nsec3.h"
 #endif
 
@@ -80,6 +85,10 @@ extern logger_handle* g_database_logger;
 #define INDENT_SPACES       40
 #define INDENT_TABS	    (INDENT_SPACES/TAB_SIZE)
 
+// escapes '@' and '$' symbols of fqdn in rdata
+
+#define ZDB_ZONE_WRITE_TEXT_FILE_ESCAPE_RDATA 1
+
 /*
  * 0 1
  * 1 1
@@ -89,14 +98,95 @@ extern logger_handle* g_database_logger;
  */
 
 static const char __TAB__[1] = {'\t'};
-#ifndef DEBUG
+#if !DEBUG
 static const char __LF__[1] = {'\n'};
 #endif
+static const char __ESCAPE__[1] = {'\\'};
+
+static u32
+zdb_zone_write_text_output_stream_write_escaped(output_stream *os, const char *str, u32 len)
+{
+    u32 additional_len = 0;
+    for(u32 i = 0; i < len; ++i)
+    {
+        switch(str[i])
+        {
+            case '@':
+            case '$':
+            case '\r':
+            case '\n':
+            case '\t':
+            case '\\':
+                ++additional_len;
+                output_stream_write(os, __ESCAPE__, 1);
+                FALLTHROUGH // fall through
+            default:
+                output_stream_write(os, &str[i], 1);
+        }
+    }
+
+    return len + additional_len;
+}
 
 static void
-osprint_tab_padded(output_stream* os, char* str, u32 len, s32 tabs)
+zdb_zone_write_text_fqdn_print(output_stream *os, char *str, u32 len, s32 tabs)
 {
-    output_stream_write(os, (u8*)str, len);
+    if(str != NULL)
+    {
+#if 1 // handle escapes
+
+#if _GNU_SOURCE
+        char *str_limit = &str[len];
+        *str_limit = '@';
+        char *chrpos = rawmemchr(str, '@');
+        if(chrpos == str_limit) // not found
+        {
+            *str_limit = '$';
+            chrpos = rawmemchr(str, '$');
+
+            if(chrpos == str_limit) // not found
+            {
+                output_stream_write(os, (u8*)str, len);
+            }
+            else
+            {
+                // write escaped
+                len = zdb_zone_write_text_output_stream_write_escaped(os, str, len);
+            }
+        }
+        else
+        {
+            // write escaped
+            len = zdb_zone_write_text_output_stream_write_escaped(os, str, len);
+        }
+#else
+        char *chrpos = memchr(str, '@', len);
+        if(chrpos == NULL) // not found
+        {
+            chrpos = memchr(str, '$', len);
+
+            if(chrpos == NULL) // not found
+            {
+                output_stream_write(os, (u8*)str, len);
+            }
+            else
+            {
+                // write escaped
+                len = zdb_zone_write_text_output_stream_write_escaped(os, str, len);
+            }
+        }
+        else
+        {
+            // write escaped
+            len = zdb_zone_write_text_output_stream_write_escaped(os, str, len);
+        }
+#endif
+
+#else // do not handle escapes
+
+        output_stream_write(os, (u8*)str, len);
+#endif
+    }
     
     tabs -= (len / TAB_SIZE) + 1;
 
@@ -106,9 +196,10 @@ osprint_tab_padded(output_stream* os, char* str, u32 len, s32 tabs)
     }
 }
 
-#ifdef DEBUG
+#if DEBUG
 static void
-zdb_zone_rr_label_flags_format(const void *value, output_stream *os, s32 padding, char pad_char, bool left_justified, void* reserved_for_method_parameters)
+zdb_zone_write_text_rr_label_flags_format(const void *value, output_stream *os, s32 padding, char pad_char,
+                                          bool left_justified, void *reserved_for_method_parameters)
 {
     (void)padding;
     (void)pad_char;
@@ -139,12 +230,7 @@ zdb_zone_rr_label_flags_format(const void *value, output_stream *os, s32 padding
         output_stream_write(os, "O", 1);
     }
 #endif
-       
-    if((flags & ZDB_RR_APEX_LABEL_FROZEN) != 0)
-    {
-        output_stream_write(os, "F", 1);
-    }
-    
+
     if((flags & ZDB_RR_LABEL_GOT_WILD) != 0)
     {
         output_stream_write(os, "*", 1);
@@ -169,12 +255,7 @@ zdb_zone_rr_label_flags_format(const void *value, output_stream *os, s32 padding
     {
         output_stream_write(os, "c", 1);
     }
-    
-    if((flags & ZDB_RR_LABEL_INVALID_ZONE) != 0)
-    {
-        output_stream_write(os, "I", 1);
-    }
-    
+
     if((flags & ZDB_RR_LABEL_N3COVERED) != 0)
     {
         output_stream_write(os, "S", 1);
@@ -188,7 +269,7 @@ zdb_zone_rr_label_flags_format(const void *value, output_stream *os, s32 padding
 #endif
 
 ya_result
-zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_label, bool allow_shutdown)
+zdb_zone_write_text_ex(zdb_zone *zone, output_stream *fos, bool force_label, bool allow_shutdown)
 {
     output_stream bos;
 
@@ -196,13 +277,14 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
     
     s32 current_ttl = DEFAULT_TTL;
 #if ZDB_HAS_NSEC3_SUPPORT
-    u32 soa_nttl = zone->min_ttl;
+    s32 soa_nttl = zone->min_ttl;
 #endif
     u32 label_len;
     u32 origin_len;
 #if ZDB_HAS_NSEC3_SUPPORT
     u32 dot_origin_len;
 #endif
+    u32 stored_serial = 0;
     
     yassert(zdb_zone_islocked_weak(zone));
         
@@ -210,10 +292,12 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
     {
         return ret;
     }
+
+    s64 wire_size = 0;
     
-#ifdef DEBUG
-    format_writer status_flags_fw = {zdb_zone_rr_label_flags_format, NULL};
-    osprintln(&bos, "; A=apex 1=NSEC 3=NSEC3 O=NSEC3-OPTOUT F=frozen/loading *=wildcard present D=at-delegation d=under-delegation C=has-CNAME c=no-CNAME-allowed I=invalid-zone S=NSEC3-covered s=NSEC3-optout-covered");
+#if DEBUG
+    format_writer status_flags_fw = {zdb_zone_write_text_rr_label_flags_format, NULL};
+    osprintln(&bos, "; A=apex 1=NSEC 3=NSEC3 O=NSEC3-OPTOUT *=wildcard present D=at-delegation d=under-delegation C=has-CNAME c=no-CNAME-allowed S=NSEC3-covered s=NSEC3-optout-covered");
 #endif
 
     char label_cstr[2 + MAX_DOMAIN_LENGTH + 1];
@@ -225,6 +309,11 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
         if(soa_ttlrdata != NULL)
         {
             current_ttl = soa_ttlrdata->ttl;
+            rr_soa_get_serial(ZDB_PACKEDRECORD_PTR_RDATAPTR(soa_ttlrdata), ZDB_PACKEDRECORD_PTR_RDATASIZE(soa_ttlrdata), &stored_serial);
+        }
+        else
+        {
+            log_err("%{dnsname}: no SOA record found at apex.");
         }
     }
     
@@ -235,7 +324,10 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
     dot_origin_len = dnsname_to_cstr(&dot_origin[1], zone->origin) + 1;
 #endif
     
-    osformat(&bos, "$ORIGIN %{dnsname}\n$TTL %u\n", zone->origin, current_ttl);
+    osformat(&bos, "$ORIGIN %{dnsname}\n", zone->origin);
+#if ZDB_ZONE_WRITE_TEXT_USE_TTL_VAR
+    osformat(&bos, "$TTL %u\n", current_ttl);
+#endif
 
     zdb_zone_label_iterator iter;
     btree_iterator records_iter;
@@ -250,7 +342,7 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
     {       
         u32 len = zdb_zone_label_iterator_nextname_to_cstr(&iter, label_cstr);
         
-        if(len != origin_len)
+        if(len != dot_origin_len)
         {
             u32 n = len - origin_len;
             label_cstr[n] = '\0';
@@ -268,6 +360,56 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
         }
 
         zdb_rr_label* label = zdb_zone_label_iterator_next(&iter);
+
+#if DEBUG
+        if(zdb_rr_label_flag_isset(label, (ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT)))
+        {
+            nsec3_label_extension *n3e = label->nsec.nsec3;
+            while(n3e != NULL)
+            {
+                osformat(&bos, ";; NSEC3:");
+                
+                if(n3e->_self != NULL)
+                {
+                    osformat(&bos, " SELF: %{digest32h}", n3e->_self->digest);
+                }
+                else
+                {
+                    osformat(&bos, " SELF: ERROR");
+                }
+
+                if(n3e->_star != NULL)
+                {
+                    osformat(&bos, " STAR: %{digest32h}", n3e->_star->digest);
+                }
+                else
+                {
+                    osformat(&bos, " STAR: ERROR");
+                }
+
+                osprintln(&bos, "");
+                
+                n3e = n3e->_next;
+            }
+        }
+        else if(zdb_rr_label_flag_isset(label, ZDB_RR_LABEL_NSEC))
+        {
+            osformat(&bos, ";; NSEC:");
+
+            nsec_node *nsec = label->nsec.nsec.node;
+
+            if(nsec != NULL)
+            {
+                osformat(&bos, " SELF: %{dnsname}", nsec->inverse_relative_name);
+            }
+            else
+            {
+                osformat(&bos, " SELF: ERROR");
+            }
+
+            osprintln(&bos, "");
+        }
+#endif // DEBUG
         
         bool print_label = TRUE;
 
@@ -275,9 +417,11 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
 
         if(soa_ttlrdata != NULL)
         {
+            wire_size += origin_len + label_len + 10 + ZDB_PACKEDRECORD_PTR_RDATASIZE(soa_ttlrdata);
+
             if(print_label)
             {
-                osprint_tab_padded(&bos, label_cstr, label_len, INDENT_TABS);
+                zdb_zone_write_text_fqdn_print(&bos, label_cstr, label_len, INDENT_TABS);
 
                 u16 zclass = zdb_zone_getclass(zone);
 
@@ -285,23 +429,25 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
             }
             else
             {
-                osprint_tab_padded(&bos, NULL, 0, INDENT_TABS);
+                zdb_zone_write_text_fqdn_print(&bos, NULL, 0, INDENT_TABS);
             }
-            
-            ret = osprint_rdata(&bos, TYPE_SOA, ZDB_PACKEDRECORD_PTR_RDATAPTR(soa_ttlrdata), ZDB_PACKEDRECORD_PTR_RDATASIZE(soa_ttlrdata));
 
-#ifdef DEBUG
-            status_flags_fw.value = &label->flags;
-            osformatln(&bos, " ; flags=%w", &status_flags_fw);
+#if !ZDB_ZONE_WRITE_TEXT_FILE_ESCAPE_RDATA
+            ret = osprint_rdata(&bos, TYPE_SOA, ZDB_PACKEDRECORD_PTR_RDATAPTR(soa_ttlrdata), ZDB_PACKEDRECORD_PTR_RDATASIZE(soa_ttlrdata));
+#else
+            ret = osprint_rdata_escaped(&bos, TYPE_SOA, ZDB_PACKEDRECORD_PTR_RDATAPTR(soa_ttlrdata), ZDB_PACKEDRECORD_PTR_RDATASIZE(soa_ttlrdata));
+#endif
+
+#if DEBUG
+            status_flags_fw.value = &label->_flags;
+            osformatln(&bos, " ; flags=%w (label@%p)", &status_flags_fw, label);
 #else
             output_stream_write(&bos, (const u8*)__LF__, 1);
 #endif
-
             if(FAIL(ret))
             {
                 osprintln(&bos, ";; ABOVE RECORD IS CORRUPTED");
             }
-            
 
             print_label = force_label;
         }
@@ -327,25 +473,36 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
 
             zdb_packed_ttlrdata* ttlrdata_sll = (zdb_packed_ttlrdata*)node->data;
             
-            current_ttl = DEFAULT_TTL;
-            
-            s32 rrset_ttl = ttlrdata_sll->ttl;
+            s32 rrset_ttl;
 
             while(ttlrdata_sll != NULL)
             {
+                wire_size += origin_len + label_len + 10 + ZDB_PACKEDRECORD_PTR_RDATASIZE(ttlrdata_sll);
+
                 if(print_label)
                 {
-                    osprint_tab_padded(&bos, label_cstr, label_len, INDENT_TABS);
+                    zdb_zone_write_text_fqdn_print(&bos, label_cstr, label_len, INDENT_TABS);
                 }
                 else
                 {
-                    osprint_tab_padded(&bos, NULL, 0, INDENT_TABS);
+                    zdb_zone_write_text_fqdn_print(&bos, NULL, 0, INDENT_TABS);
+                }
+
+                if(type != TYPE_RRSIG)
+                {
+                    rrset_ttl = ttlrdata_sll->ttl;
+                }
+                else
+                {
+                    rrset_ttl = rrsig_get_original_ttl_from_rdata(ZDB_PACKEDRECORD_PTR_RDATAPTR(ttlrdata_sll), ZDB_PACKEDRECORD_PTR_RDATASIZE(ttlrdata_sll));
                 }
                 
                 if(current_ttl != rrset_ttl)
                 {
+#if !ZDB_ZONE_WRITE_TEXT_FILE_ESCAPE_RDATA
                     current_ttl = rrset_ttl;
-                    osformat(&bos, "\t%-" TOSTRING(TTL_SIZE) "u\t", current_ttl);
+#endif
+                    osformat(&bos, "\t%-" TOSTRING(TTL_SIZE) "u\t", rrset_ttl);
                 }
                 else
                 {
@@ -354,11 +511,21 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
 
                 osformat(&bos, "%{dnstype}%t", &type, (TTL_SIZE/TAB_SIZE));
 
+#if !ZDB_ZONE_WRITE_TEXT_FILE_ESCAPE_RDATA
                 ret = osprint_rdata(&bos, type, ZDB_PACKEDRECORD_PTR_RDATAPTR(ttlrdata_sll), ZDB_PACKEDRECORD_PTR_RDATASIZE(ttlrdata_sll));
+#else
+                ret = osprint_rdata_escaped(&bos, type, ZDB_PACKEDRECORD_PTR_RDATAPTR(ttlrdata_sll), ZDB_PACKEDRECORD_PTR_RDATASIZE(ttlrdata_sll));
+#endif
+
+                if(type == TYPE_DNSKEY)
+                {
+                    u16 tag = dnskey_get_tag_from_rdata(ZDB_PACKEDRECORD_PTR_RDATAPTR(ttlrdata_sll), ZDB_PACKEDRECORD_PTR_RDATASIZE(ttlrdata_sll));
+                    osformat(&bos, " ; tag = %05u", tag);
+                }
                 
-#ifdef DEBUG
-                status_flags_fw.value = &label->flags;
-                osformatln(&bos, " ; flags=%w", &status_flags_fw);
+#if DEBUG
+                status_flags_fw.value = &label->_flags;
+                osformatln(&bos, " ; flags=%w (label@%p)", &status_flags_fw, label);
 #else
                 output_stream_write(&bos, (const u8*)__LF__, 1);
 #endif
@@ -373,21 +540,21 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
             }
         }
         
-#ifdef DEBUG
+#if DEBUG
         if(btree_isempty(label->resource_record_set))
         {
             osprint(&bos, ";; ");
             output_stream_write(&bos, label_cstr, label_len);
             
-            status_flags_fw.value = &label->flags;
+            status_flags_fw.value = &label->_flags;
             
             if(label->sub.count == 0)
             {
-                osformatln(&bos, " is empty terminal ; flags=%w", &status_flags_fw);
+                osformatln(&bos, " is empty terminal ; flags=%w (label@%p)", &status_flags_fw, label);
             }
             else
             {
-                osformatln(&bos, " is empty non-terminal ; flags=%w", &status_flags_fw);
+                osformatln(&bos, " is empty non-terminal ; flags=%w (label@%p)", &status_flags_fw, label);
             }
         }
 #endif
@@ -409,12 +576,12 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
 
         MEMCOPY(rdata, &n3->rdata[0], NSEC3_ZONE_RDATA_SIZE(n3));
 
-        nsec3_avl_iterator nsec3_items_iter;
-        nsec3_avl_iterator_init(&n3->items, &nsec3_items_iter);
+        nsec3_iterator nsec3_items_iter;
+        nsec3_iterator_init(&n3->items, &nsec3_items_iter);
 
-        if(nsec3_avl_iterator_hasnext(&nsec3_items_iter))
+        if(nsec3_iterator_hasnext(&nsec3_items_iter))
         {
-            nsec3_zone_item* first = nsec3_avl_iterator_next_node(&nsec3_items_iter);
+            nsec3_zone_item* first = nsec3_iterator_next_node(&nsec3_items_iter);
             nsec3_zone_item* item = first;
             nsec3_zone_item* next_item;
 
@@ -429,9 +596,9 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
                     return STOPPED_BY_APPLICATION_SHUTDOWN;
                 }
 
-                if(nsec3_avl_iterator_hasnext(&nsec3_items_iter))
+                if(nsec3_iterator_hasnext(&nsec3_items_iter))
                 {
-                    next_item = nsec3_avl_iterator_next_node(&nsec3_items_iter);
+                    next_item = nsec3_iterator_next_node(&nsec3_items_iter);
                 }
                 else
                 {
@@ -439,25 +606,18 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
                 }
 
                 rdata[1] = item->flags;
-#ifdef DEBUG
-                if(item->rc == 1)
+#if DEBUG
+                if(nsec3_owner_count(item) == 1)
                 {
-                    if(item->rc != 0)
+                    if(nsec3_owner_count(item) != 0)
                     {
-                        if(item->label.owner != NSEC3_ZONE_FAKE_OWNER)
+                        if(item->label.owner->name[0] != 0)
                         {
-                            if(item->label.owner->name[0] != 0)
-                            {
-                                osformatln(&bos, ";; Owner: %{dnslabel}", item->label.owner->name);
-                            }
-                            else
-                            {
-                                osformatln(&bos, ";; Owner: %{dnslabel} (the apex)", zone->origin);
-                            }
+                            osformatln(&bos, ";; Owner: %{dnslabel}", item->label.owner->name);
                         }
                         else
                         {
-                            osprintln(&bos, ";; Owner: FAKE (Owned by the parents of the zone)");
+                            osformatln(&bos, ";; Owner: %{dnslabel} (the apex)", zone->origin);
                         }
                     }
                     else
@@ -467,25 +627,18 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
                 }
                 else
                 {
-                    if(item->rc > 0)
+                    if(nsec3_owner_count(item) > 0)
                     {
-                        s32 i = item->rc - 1;
+                        s32 i = nsec3_owner_count(item) - 1;
                         do
                         {
-                            if(item->label.owners[i] != NSEC3_ZONE_FAKE_OWNER)
+                            if(item->label.owners[i]->name[0] != 0)
                             {
-                                if(item->label.owners[i]->name[0] != 0)
-                                {
-                                    osformatln(&bos, ";; Owner: %{dnslabel}", item->label.owners[i]->name);
-                                }
-                                else
-                                {
-                                    osformatln(&bos, ";; Owner: %{dnslabel} (the apex)", zone->origin);
-                                }
+                                osformatln(&bos, ";; Owner: %{dnslabel}", item->label.owners[i]->name);
                             }
                             else
                             {
-                                osprintln(&bos, ";; Owner: FAKE (Owned by the parents of the zone)");
+                                osformatln(&bos, ";; Owner: %{dnslabel} (the apex)", zone->origin);
                             }
                         }
                         while(i-- > 0);
@@ -542,6 +695,8 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
                     return hex32_len;
                 }
 
+                wire_size += origin_len + hex32_len + 10 + rdata_size;
+
                 output_stream_write(&bos, (const u8*)dot_origin, dot_origin_len);
                 output_stream_write_u8(&bos, (u8)'\t');
 
@@ -553,12 +708,38 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
 
                 while(rrsig != NULL)
                 {
-                    u32 tabs = ((hex32_len+ dot_origin_len) / TAB_SIZE) + 1 + (TTL_SIZE/TAB_SIZE) + 1;
+                    u32 tabs = ((hex32_len+ dot_origin_len) / TAB_SIZE) + 1;
+                    s32 rrsig_ttl = rrsig_get_original_ttl_from_rdata(ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig), ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig));
 
-                    osformat(&bos, "%tRRSIG\t", tabs); /* ${} requires a pointer to the data */
+                    wire_size += origin_len + hex32_len + 10 + ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig);
 
+#if ZDB_ZONE_WRITE_TEXT_FILE_ESCAPE_RDATA
+                    if(rrsig_ttl != current_ttl)
+                    {
+                        osformat(&bos, "%t%-" TOSTRING(TTL_SIZE) "u\tRRSIG\t", tabs, rrsig_ttl);
+                    }
+                    else
+                    {
+                        tabs += (TTL_SIZE/TAB_SIZE) + 1;
+                        osformat(&bos, "%tRRSIG\t", tabs); /* ${} requires a pointer to the data */
+                    }
+#else
+                    if(rrsig_ttl != soa_nttl)
+                    {
+                        osformat(&bos, "%t%-" TOSTRING(TTL_SIZE) "u\tRRSIG\t", tabs, rrsig_ttl);
+                    }
+                    else
+                    {
+                        tabs += (TTL_SIZE/TAB_SIZE) + 1;
+                        osformat(&bos, "%tRRSIG\t", tabs); /* ${} requires a pointer to the data */
+                    }
+#endif
+
+#if !ZDB_ZONE_WRITE_TEXT_FILE_ESCAPE_RDATA
                     osprint_rdata(&bos, TYPE_RRSIG, ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig), ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig));
-
+#else
+                    osprint_rdata_escaped(&bos, TYPE_RRSIG, ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig), ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig));
+#endif
                     osprintln(&bos, "");
 
                     rrsig = rrsig->next;
@@ -579,6 +760,9 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
     /* The filter closes the filtered */
 
     output_stream_close(&bos);
+    
+    zone->text_serial = stored_serial;
+    zone->wire_size = wire_size;
 
     return SUCCESS;
 }
@@ -606,8 +790,19 @@ zdb_zone_write_text_ex(const zdb_zone *zone, output_stream *fos, bool force_labe
  * @return 
  */
 
+/**
+ * 
+ * Zone MUST be locked 
+ * Note that the one caller locks the zone.
+ * 
+ * @param zone
+ * @param output_file
+ * @param force_label
+ * @return 
+ */
+
 ya_result
-zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, u8 flags)
+zdb_zone_write_text_file(zdb_zone* zone, const char* output_file, u8 flags)
 {
     output_stream fos;
     ya_result ret;
@@ -634,7 +829,10 @@ zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, u8 flags
         do
         {
             u32 rndval = random_next(rnd);
-            ret = snformat(tmp, sizeof(tmp), "%s%08x", output_file, rndval);
+            if(FAIL(ret = snformat(tmp, sizeof(tmp), "%s%08x", output_file, rndval)))
+            {
+                return ret;
+            }
         }
         while(file_exists(tmp) && !dnscore_shuttingdown());
     }
@@ -643,7 +841,13 @@ zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, u8 flags
         do
         {
             u32 rndval = random_next(rnd);
-            ret = snformat(tmp, sizeof(tmp), "%s%04x", output_file, rndval & 0xffffU);
+#if DEBUG
+            ret = 
+#endif
+            snformat(tmp, sizeof(tmp), "%s%04x", output_file, rndval & 0xffffU);
+#if DEBUG
+            yassert(ISOK(ret));
+#endif
         }
         while(file_exists(tmp) && !dnscore_shuttingdown());
     }
@@ -668,6 +872,8 @@ zdb_zone_write_text_file(const zdb_zone* zone, const char* output_file, u8 flags
             if(rename(tmp, output_file) >= 0)
             {
                 log_info("%{dnsname}: saved as '%s'", zone->origin, output_file);
+                
+                zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_MODIFIED);
                 
                 return SUCCESS;
             }

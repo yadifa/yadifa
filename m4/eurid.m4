@@ -1,52 +1,300 @@
 dnl ############################################################################
-dnl 
+dnl
 dnl Copyright (c) 2011-2020, EURid vzw. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
-dnl  
-dnl Redistribution and use in source and binary forms, with or without 
+dnl
+dnl Redistribution and use in source and binary forms, with or without
 dnl modification, are permitted provided that the following conditions
 dnl are met:
-dnl 
-dnl        * Redistributions of source code must retain the above copyright 
+dnl
+dnl        * Redistributions of source code must retain the above copyright
 dnl          notice, this list of conditions and the following disclaimer.
 dnl        * Redistributions in binary form must reproduce the above copyright
 dnl          notice, this list of conditions and the following disclaimer in
-dnl          the documentation and/or other materials provided with the 
+dnl          the documentation and/or other materials provided with the
 dnl          distribution.
 dnl        * Neither the name of EURid nor the names of its contributors may be
-dnl          used to endorse or promote products derived from this software 
+dnl          used to endorse or promote products derived from this software
 dnl          without specific prior written permission.
-dnl 
+dnl
 dnl THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-dnl AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+dnl AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 dnl IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
 dnl ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-dnl LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-dnl CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+dnl LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+dnl CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
 dnl SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-dnl INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+dnl INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
 dnl CONTRACT, STRICT LIABILITY,OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
-dnl 
-dnl ############################################################################
 dnl
-dnl       SVN Program:
-dnl               $URL: http://trac.s.of.be.eurid.eu:80/svn/sysdevel/projects/yadifa/trunk/bin/yadifa/configure.ac $
-dnl
-dnl       Last Update:
-dnl               $Date: 2012-03-27 16:56:49 +0200 (Tue, 27 Mar 2012) $
-dnl               $Revision: 1868 $
-dnl
-dnl       Purpose:
-dnl              common generic m4 macros
-dnl
-dnl ############################################################################
-
+dnl ############################################################################        
+        
 dnl Assume it is true
 
 cpu_intel_compatible=1
 icc_enabled=0
+
+dnl ####################################################
+dnl
+dnl AC_HAS_ENABLE(low-case --enable-*, up-case HAS_*, text, config.h text,ifyes,ifno)
+dnl
+dnl This macro creates a parameter with
+dnl _ a shell-variable-name that will be used for --enable-VARIABLENAME
+dnl     '_' of the variable name will be replaced by a '-' in the command
+dnl
+dnl _ SOMETHINGSOMETHING that will be transformed into a HAS_SOMETHINGSOMETHING define (both C & Makefile)
+dnl
+dnl _ A text to be put next to the --enable-this line in the --help
+dnl
+dnl _ An optional text to be put in the config.h output file.  If not set or empty, the --help text is used
+dnl
+dnl _ A block to execute if the option is enabled (--enable-this)
+dnl
+dnl _ A block to execute if the option is disabled (--disable-this or not set)
+dnl
+dnl ####################################################
+
+AC_DEFUN([AC_HAS_ENABLE], [
+#
+# AC_HAS_ENABLE $1
+#
+# CHECKING
+AC_MSG_CHECKING(if [$2] has been enabled)
+# ARG ENABLE
+AC_ARG_ENABLE([$1], AS_HELP_STRING([--enable-[translit($1,[_],[-])]], [Enable $3]))
+dnl # MSG RESULT
+dnl AC_MSG_RESULT($enable_[$1])
+dnl echo "enabled: '$enable_[$1]'"
+# CASE
+case "y$enable_[$1]" in
+        yyes)
+# DEFINE Y
+                AC_DEFINE_UNQUOTED([HAS_$2], [1], ifelse($4,,[$3 enabled.],$4))
+# CONDITIONAL Y
+        	enable_[$1]="yes"
+	        AC_MSG_RESULT([yes])
+# IF YES
+        	$5
+# ENDIF
+                ;;
+        yno|y|*)
+# DEFINE N
+                AC_DEFINE_UNQUOTED([HAS_$2], [0], ifelse($4,,[$3 disabled.],$4))
+# CONDITIONAL N
+        	enable_[$1]="no"
+	        AC_MSG_RESULT([no])
+# IF NO
+        	$6
+# ENDIF
+        ;;
+esac
+# CONDITIONAL
+AM_CONDITIONAL([HAS_$2], [test y$enable_[$1] = yyes])
+# SUBST
+AC_SUBST(HAS_$2)
+# AC_HAS_ENABLE $1 DONE
+])
+
+dnl ####################################################
+dnl
+dnl AC_FORCE_ENABLE(var)
+dnl
+dnl Forces --enable-var
+dnl
+dnl ####################################################
+
+AC_DEFUN([AC_FORCE_ENABLE], [
+#
+# AC_FORCE_ENABLE $1
+#
+enable_[$1]=yes
+AC_DEFINE_UNQUOTED([HAS_$2], [1], [$1 = $2 enabled])
+AM_CONDITIONAL([HAS_$2], [test y$enable_[$1] = yyes])
+AC_SUBST(HAS_$2)
+# AC_FORCE_ENABLE $1 DONE
+])
+
+dnl ####################################################
+dnl
+dnl AC_HAS_DISABLE(low-case --disable-*, up-case HAS_*, text, config.h text,ifyes,ifno)
+dnl
+dnl This macro creates a parameter with
+dnl _ a shell-variable-name that will be used for --disable-VARIABLENAME
+dnl     '_' of the variable name will be replaced by a '-' in the command
+dnl
+dnl _ SOMETHINGSOMETHING that will be transformed into a HAS_SOMETHINGSOMETHING define (both C & Makefile)
+dnl
+dnl _ A text to be put next to the --disable-this line in the --help
+dnl
+dnl _ An optional text to be put in the config.h output file.  If not set or empty, the --help text is used
+dnl
+dnl _ A block to execute if the option is enabled (--enable-this or not set)
+dnl
+dnl _ A block to execute if the option is disabled (--disable-this)
+dnl
+dnl ####################################################
+
+AC_DEFUN([AC_HAS_DISABLE], [
+#
+# AC_HAS_DISABLE $1
+#
+# CHECKING
+AC_MSG_CHECKING(if [$2] has been disabled)
+# ARG ENABLE
+AC_ARG_ENABLE([$1], AS_HELP_STRING([--disable-[translit($1,[_],[-])]],[Disable $3]))
+# MSG RESULT
+dnl echo "enabled: '$enable_[$1]'"
+# CASE
+case "y$enable_[$1]" in
+        yyes|y)
+# DEFINE Y
+                AC_DEFINE_UNQUOTED([HAS_$2], [1], ifelse($4,,[$3 enabled.],$4))
+# CONDITIONAL Y
+                enable_[$1]=yes
+                AC_MSG_RESULT([no])
+# IF YES
+                $5
+# ENDIF
+                ;;
+        yno|*)
+# DEFINE N
+                AC_DEFINE_UNQUOTED([HAS_$2], [0], ifelse($4,,[$3 disabled.],$4))
+# CONDITIONAL N
+                enable_[$1]=no
+                AC_MSG_RESULT([yes])
+# IF NO
+                $6
+# ENDIF
+        ;;
+esac
+# CONDITIONAL
+AM_CONDITIONAL([HAS_$2], [test y$enable_[$1] != yno])
+# SUBST
+AC_SUBST(HAS_$2)
+# AC_HAS_DISABLE $1 DONE
+])
+
+dnl ####################################################
+dnl
+dnl AC_HAS_WITH(low-case --with-*, up-case HAS_*, text, config.h text,ifyes,ifno)
+dnl
+dnl This macro creates a parameter with
+dnl _ a shell-variable-name that will be used for --with-VARIABLENAME
+dnl     '_' of the variable name will be replaced by a '-' in the command
+dnl
+dnl _ SOMETHINGSOMETHING that will be transformed into a HAS_SOMETHINGSOMETHING define (both C & Makefile)
+dnl
+dnl _ A text to be put next to the --with-this line in the --help
+dnl
+dnl _ An optional text to be put in the config.h output file.  If not set or empty, the --help text is used
+dnl
+dnl _ A block to execute if the option is withd (--with-this)
+dnl
+dnl _ A block to execute if the option is withoutd (--without-this or not set)
+dnl
+dnl ####################################################
+
+AC_DEFUN([AC_HAS_WITH], [
+#
+# AC_HAS_WITH $1
+#
+# CHECKING
+AC_MSG_CHECKING(if [translit($1,[_A-Z],[ a-z])] has been given)
+# ARG WITH
+AC_ARG_WITH([$1], AS_HELP_STRING([--with-[translit($1,[_],[-])]], [With $3]),
+[
+# DEFINE Y
+        AC_DEFINE_UNQUOTED([HAS_$2], [1], ifelse($4,,[With $3.],$4))
+# CONDITIONAL Y
+        AC_DEFINE_UNQUOTED([HAS_WITH_$2], "$with_[$1]" // $withval, ifelse($4,,[build $3.],$4))
+        with_[$1]="yes"
+        AC_MSG_RESULT([yes])
+# IF YES
+        $5
+# ENDIF
+]
+,
+[
+# DEFINE N
+        AC_DEFINE_UNQUOTED([HAS_$2], [0], ifelse($4,,[Without $3.],$4))
+# CONDITIONAL N
+        with_[$1]="no"
+        AC_MSG_RESULT([no])
+# IF NO
+        $6
+# ENDIF
+])
+# CONDITIONAL
+AM_CONDITIONAL([HAS_$2], [test "y$with_[$1]" == "yyes"])
+# SUBST
+AC_SUBST([HAS_$2])
+# AC_HAS_WITH $1 DONE
+])
+
+dnl ####################################################
+dnl
+dnl AC_HAS_WITHOUT(low-case --without-*, up-case HAS_*, text, config.h text,ifyes,ifno)
+dnl
+dnl This macro creates a parameter with
+dnl _ a shell-variable-name that will be used for --without-VARIABLENAME
+dnl     '_' of the variable name will be replaced by a '-' in the command
+dnl
+dnl _ SOMETHINGSOMETHING that will be transformed into a HAS_SOMETHINGSOMETHING define (both C & Makefile)
+dnl
+dnl _ A text to be put next to the --without-this line in the --help
+dnl
+dnl _ An optional text to be put in the config.h output file.  If not set or empty, the --help text is used
+dnl
+dnl _ A block to execute if the option is withd (--with-this or not set)
+dnl
+dnl _ A block to execute if the option is withoutd (--without-this)
+dnl
+dnl ####################################################
+
+AC_DEFUN([AC_HAS_WITHOUT], [
+#
+# AC_HAS_WITHOUT $1
+#
+# CHECKING
+AC_MSG_CHECKING(if [$1] has to be build)
+# ARG WITH
+AC_ARG_WITH([$1], AS_HELP_STRING([--without-[translit($1,[_],[-])]],[Without $3]))
+
+# MSG RESULT
+case "y$with_[$1]" in
+    yyes|y)
+# DEFINE Y
+                AC_DEFINE_UNQUOTED([HAS_$2], [1], ifelse($4,,[With $3.],$4))
+# CONDITIONAL Y
+                with_[$1]=yes
+                AC_MSG_RESULT([yes])
+# IF YES
+                $5
+# ENDIF
+        ;;
+
+    yno|*)
+# DEFINE N
+                AC_DEFINE_UNQUOTED([HAS_$2], [0], ifelse($4,,[Without $3.],$4))
+# CONDITIONAL N
+                with_[$1]=no
+                AC_MSG_RESULT([no])
+# IF NO
+                $6
+# ENDIF
+        ;;
+esac
+
+dnl # CONDITIONAL
+AM_CONDITIONAL([HAS_$2], [test "y$with_[$1]" != "yno"])
+# Used to check the test was correct (it is)
+#AM_CONDITIONAL([TEST_HAS_$2], [echo test "y$with_[$1]" != "yno" > /tmp/test_has_$2.txt])
+# SUBST
+AC_SUBST([HAS_$2])
+# AC_HAS_WITHOUT $1 DONE
+])
 
 dnl handles Darwin libtoolize -> glibtoolize
 
@@ -104,6 +352,7 @@ case "$(uname -s)" in
         is_bsd_family=1
         osx_version_major=$(uname -r|sed 's/\..*//')
         AC_MSG_RESULT([OSX $osx_version_major])
+        CFLAGS="$CFLAGS -D__APPLE_USE_RFC_3542=1"
         ;;
     FreeBSD)
         is_bsd_family=1
@@ -135,52 +384,57 @@ fi
 if [[ $is_darwin_os -ne 0 ]]
 then
     AC_DEFINE_UNQUOTED(IS_DARWIN_OS, [1], [OSX])
-    AM_CONDITIONAL([IS_DARWIN_OS], [true])
+    is_darwin_os_txt="yes"
     if [[ $osx_version_major -ge 14 ]]
     then
-        AM_CONDITIONAL([IS_DARWIN_GE14], [true])
+        osx_version_major_ge14="yes"
     else
-        AM_CONDITIONAL([IS_DARWIN_GE14], [false])
+        osx_version_major_ge14="no"
     fi
 else
     AC_DEFINE_UNQUOTED(IS_DARWIN_OS, [0], [OSX])
-    AM_CONDITIONAL([IS_DARWIN_OS], [false])
-    AM_CONDITIONAL([IS_DARWIN_GE14], [false])
+    is_darwin_os_txt="no"
+    osx_version_major_ge14="no"
 fi
 
+AM_CONDITIONAL([IS_DARWIN_OS], [test "y$isdarwin_os_txt" == "yyes"])
+AM_CONDITIONAL([IS_DARWIN_GE14], [test "y$osx_version_major_ge14" == "yyes"])
 AC_SUBST(IS_DARWIN_OS)
 AC_SUBST(IS_DARWIN_GE14)
 
 if [[ $is_bsd_family -ne 0 ]]
 then
+    is_bsd_family_txt="yes"
     AC_DEFINE_UNQUOTED(IS_BSD_FAMILY, [1], [BSD])
-    AM_CONDITIONAL([IS_BSD_FAMILY], [true])
 else
+    is_bsd_family_txt="no"
     AC_DEFINE_UNQUOTED(IS_BSD_FAMILY, [0], [BSD])
-    AM_CONDITIONAL([IS_BSD_FAMILY], [false])
 fi
+AM_CONDITIONAL([IS_BSD_FAMILY], [test "y$is_bsd_family_txt" == "yyes"])
 
 AC_SUBST(IS_BSD_FAMILY)
 
 if [[ $is_linux_family -ne 0 ]]
 then
+    is_linux_family_txt="yes"
     AC_DEFINE_UNQUOTED(IS_LINUX_FAMILY, [1], [LINUX])
-    AM_CONDITIONAL([IS_LINUX_FAMILY], [true])
 else
+    is_linux_family_txt="no"
     AC_DEFINE_UNQUOTED(IS_LINUX_FAMILY, [0], [LINUX])
-    AM_CONDITIONAL([IS_LINUX_FAMILY], [false])
 fi
+AM_CONDITIONAL([IS_LINUX_FAMILY], [test "y$is_linux_family_txt" == "yyes"])
 
 AC_SUBST(IS_LINUX_FAMILY)
 
 if [[ $is_solaris_family -ne 0 ]]
 then
+    is_solaris_family_txt="yes"
     AC_DEFINE_UNQUOTED(IS_SOLARIS_FAMILY, [1], [SOLARIS])
-    AM_CONDITIONAL([IS_SOLARIS_FAMILY], [true])
 else
+    is_solaris_family_txt="no"
     AC_DEFINE_UNQUOTED(IS_SOLARIS_FAMILY, [0], [SOLARIS])
-    AM_CONDITIONAL([IS_SOLARIS_FAMILY], [false])
 fi
+AM_CONDITIONAL([IS_SOLARIS_FAMILY], [test "y$is_solaris_family_txt" == "yyes"])
 
 AC_SUBST(IS_SOLARIS_FAMILY)
 
@@ -223,12 +477,19 @@ _ACEOF
 $CC $1 test-gcc-$2.c -o test-gcc-$2 > /dev/null 2>&1
 if [[ $? -ne 0 ]]
 then
+    has_cc_[$2]="no"
     AM_CONDITIONAL(HAS_CC_$2, [false])
+    AC_DEFINE_UNQUOTED([HAS_CC_$2], [0], [Compiler supports feature])
     AC_MSG_RESULT([no])
 else
+    has_cc_[$2]="yes"
     AM_CONDITIONAL(HAS_CC_$2, [true])
+    AC_DEFINE_UNQUOTED([HAS_CC_$2], [1], [Compiler supports feature])
     AC_MSG_RESULT([yes])
 fi
+# CONDITIONAL
+AM_CONDITIONAL(HAS_CC_$2, [test "y$has_cc_[$2]" == "yyes"])
+# SUBST
 AC_SUBST(HAS_CC_$2)
 rm -rf test-gcc-$2*
 ])
@@ -248,12 +509,59 @@ AC_CHECK_LIB(c,setgroups,
 )
 ])
 
+dnl __sync builtins
+
+AC_DEFUN([AC_SYNC_BUILTINS], [
+
+AC_MSG_CHECKING([checking if the compiler supports __sync builtins])
+cat > sync_builtin_test.c <<_ACEOF
+typedef int atomic_flag;
+
+static int atomic_flag_test_and_set(atomic_flag* v)
+{
+    atomic_flag old = __sync_fetch_and_or(v, (atomic_flag)1);
+    return old;
+}
+
+static void atomic_flag_clear(atomic_flag* v)
+{
+    __sync_fetch_and_and(v, (atomic_flag)0);
+}
+
+int main()
+{
+        atomic_flag f;
+        atomic_flag old = atomic_flag_test_and_set(&f);
+        atomic_flag_clear(&f);
+        return 0;
+}
+
+_ACEOF
+${CC} ${CFLAGS} sync_builtin_test.c -o sync_builtin_test > /dev/null 2>&1
+./sync_builtin_test > /dev/null 2>&1
+if [[ $? -eq 0 ]]; then
+        has_sync_builtins=1
+        AC_MSG_RESULT([yes])
+else
+        has_sync_builtins=0
+	AC_MSG_RESULT([no])
+fi
+rm -f sync_builtin_test sync_builtin_test.c
+# CONDITIONAL
+AM_CONDITIONAL([HAS_SYNC_BUILTINS], [test $has_sync_builtins -eq 1])
+# SUBST
+AC_SUBST(HAS_SYNC_BUILTINS)
+AC_DEFINE_UNQUOTED([HAS_SYNC_BUILTINS], [$has_sync_builtins], [An alternative to be used if stdatomics is not available])
+
+])
+
+dnl ####################################################
+
 dnl Memory aligment issues (T1000)
 
 AC_DEFUN([AC_MEMALIGN_CHECK], [
 
 AC_MSG_CHECKING([checking if memory accesses must be size-aligned])
-AM_CONDITIONAL([HAS_MEMALIGN_ISSUES], [false])
 cat > memalign_issues_test.c <<_ACEOF
 #include "confdefs.h"
 #if HAVE_STDLIB_H
@@ -262,25 +570,26 @@ cat > memalign_issues_test.c <<_ACEOF
 
 int main(int argc, char** argv)
 {
-	char* p = (char*)malloc(8);
-	p++;
-	int* intp= (int*)p;
-	*intp=1;
-	return 0;
+        char* p = (char*)malloc(8);
+        p++;
+        int* intp= (int*)p;
+        *intp=1;
+        return 0;
 }
 _ACEOF
 ${CC} ${CFLAGS} memalign_issues_test.c -o memalign_issues_test > /dev/null 2>&1
 ./memalign_issues_test > /dev/null 2>&1
 if [[ $? -ne 0 ]]; then
 	has_memalign_issues=1
-    AM_CONDITIONAL([HAS_MEMALIGN_ISSUES], [true])
-	AC_MSG_RESULT([yes])
+    	AC_MSG_RESULT([yes])
 else
-    has_memalign_issues=0
-    AM_CONDITIONAL([HAS_MEMALIGN_ISSUES], [false])
-	AC_MSG_RESULT([no])
+	has_memalign_issues=0
+        AC_MSG_RESULT([no])
 fi
 rm -f memalign_issues_test memalign_issues_test.c
+# CONDITIONAL
+AM_CONDITIONAL([HAS_MEMALIGN_ISSUES], [test $has_memalign_issues -eq 1])
+# SUBST
 AC_SUBST(HAS_MEMALIGN_ISSUES)
 AC_DEFINE_UNQUOTED([HAS_MEMALIGN_ISSUES], [$has_memalign_issues], [Define this to enable slow but safe unaligned memory accesses])
 
@@ -296,24 +605,24 @@ AC_DEFINE_UNQUOTED([DEFAULT_ASSUMED_CPU_COUNT], [2], [number of hardware core if
 
 cpu_intel_compatible=1
 
-AM_CONDITIONAL([HAS_CPU_NIAGARA], [false])
-AM_CONDITIONAL([HAS_CPU_AMDINTEL], [false])
 
 AC_MSG_CHECKING([checking for the CPU options])
-CPU_UNKNOWN=1
+cpu_unknown=1
+has_cpu_niagara=0
+has_cpu_amdintel=0
 
 CFLAGS3264=
 case "$(uname -i 2>/dev/null)" in
-	SUNW,SPARC-Enterprise-T1000)
-		AC_DEFINE_UNQUOTED([HAS_CPU_NIAGARA], [1], [T1000 has a Niagara cpu])
-		AM_CONDITIONAL([HAS_CPU_NIAGARA], [true])
-		AC_MSG_RESULT([UtrasparcT1])
-		CFLAGS3264=-m64
-		CPU_UNKNOWN=0
-		cpu_intel_compatible=0
-		;;
-	*)
-		;;
+        SUNW,SPARC-Enterprise-T1000)
+                AC_DEFINE_UNQUOTED([HAS_CPU_NIAGARA], [1], [T1000 has a Niagara cpu])
+                has_cpu_niagara=1
+                AC_MSG_RESULT([UtrasparcT1])
+                CFLAGS3264=-m64
+                cpu_unknown=0
+                cpu_intel_compatible=0
+                ;;
+        *)
+                ;;
 esac
 
 AC_REQUIRE([AC_CANONICAL_HOST])
@@ -326,13 +635,16 @@ AS_IF([test "x$host_cpu" = xx86_64],[
 		cpu_intel_compatible=1
 ])
 
-case "${CPU_UNKNOWN}" in
-	1)
-		AC_MSG_RESULT([generic])
-		;;
-	0)
-		;;
+case "${cpu_unknown}" in
+        1)
+                AC_MSG_RESULT([generic])
+                ;;
+        0)
+                ;;
 esac
+
+AM_CONDITIONAL([HAS_CPU_NIAGARA], [test $has_cpu_niagara -eq 1])
+AM_CONDITIONAL([HAS_CPU_AMDINTEL], [test $has_cpu_amdintel -eq 1])
 
 if [[ "$is_solaris_family" = "" ]]
 then
@@ -365,26 +677,24 @@ echo "Force ..."
 
 dnl Forced 32/64 bits architecture
 AC_MSG_CHECKING([if force 32 bits is enabled])
-AM_CONDITIONAL([FORCE32BITS], [false])
 AC_ARG_ENABLE(force32bits, AS_HELP_STRING([--enable-force32bits], [Forces a 32 bits binary compilation]), [enable_force32bits=yes], [enable_force32bits=no])
 AC_MSG_RESULT($enable_force32bits)
 case "$enable_force32bits" in
     yes)
         CFLAGS3264=-m32
-        AM_CONDITIONAL([FORCE32BITS], [test $enable_force32bits = yes])
         ;;
     *)
         ;;
 esac
 
+AM_CONDITIONAL([FORCE32BITS], [test "y$enable_force32bits" == "yyes"])
+
 AC_MSG_CHECKING([if force 64 bits is enabled])
-AM_CONDITIONAL([FORCE64BITS], [false])
 AC_ARG_ENABLE(force64bits, AS_HELP_STRING([--enable-force64bits], [Forces a 64 bits binary compilation]), [enable_force64bits=yes], [enable_force64bits=no])
 AC_MSG_RESULT($enable_force64bits)
 case "$enable_force64bits" in
     yes)
         CFLAGS3264=-m64
-        AM_CONDITIONAL([FORCE64BITS], [test $enable_force64bits = yes])
 
         if [[ "$enable_force32" = "yes" ]]
         then
@@ -396,13 +706,14 @@ case "$enable_force64bits" in
     *)
         ;;
 esac
+AM_CONDITIONAL([FORCE64BITS], [test "y$enable_force64bits" = "yyes"])
 
 ])
 
+dnl ####################################################
+
 dnl Endianness
 
-
-#
 AC_DEFUN([AC_ENDIANNESS], [
 #
 # AC_ENDIANNESS
@@ -531,18 +842,22 @@ fi
 ./test-gcc-endian
 if [[ $? -eq 1 ]]
 then
-    AM_CONDITIONAL(HAS_LITTLE_ENDIAN, [true])
-    AM_CONDITIONAL(HAS_BIG_ENDIAN, [false])
+    cpu_endian="little"
     AC_MSG_RESULT([little])
 else
-    AM_CONDITIONAL(HAS_LITTLE_ENDIAN, [false])
-    AM_CONDITIONAL(HAS_BIG_ENDIAN, [true])
+    cpu_endian="big"
     AC_MSG_RESULT([big])
 fi
+# CONDITIONAL
+AM_CONDITIONAL(HAS_LITTLE_ENDIAN, [test "$cpu_endian" == "little"])
+AM_CONDITIONAL(HAS_BIG_ENDIAN, [test "$cpu_endian" == "big"])
+# SUBST
 AC_SUBST(HAS_LITTLE_ENDIAN)
 AC_SUBST(HAS_BIG_ENDIAN)
 rm -f test-gcc-endian.c* test-gcc-endian
 ])
+
+dnl ####################################################
 
 dnl Compiler
 
@@ -560,7 +875,7 @@ else
     is_redhat_family=0
 fi
 
-CFLAGS=
+EURID_CFLAGS=
 
 VERSION_OPT=--version
 $CC --version > /dev/null 2>&1
@@ -589,14 +904,14 @@ CCVER=$($CC $VERSION_OPT 2>&1|head -1|sed 's/[[^0-9.]]*\([[0-9.]]*\).*/\1/')
 dnl echo $CC $VERSION_OPT "2>&1" |head -1|sed 's/[[^0-9.]]*\([[0-9.]]*\).*/\1/'
 if [[ "$CCVER" = "" ]]
 then
-	CCVER='0.0'
+        CCVER='0.0'
 fi
 
 CCNAME=$($CC $VERSION_OPT 2>&1|head -1|sed -e 's/.*clang.*/clang/' -e 's/.*gcc.*/gcc/' -e 's/.*icc.*/icc/' -e 's/.*Sun C.*/Sun C/'|tr A-Z a-z)
 dnl echo $CC $VERSION_OPT "2>&1"|head -1|sed -e 's/.*clang.*/clang/' -e 's/.*gcc.*/gcc/' -e 's/.*icc.*/icc/' -e 's/.*Sun C.*/Sun C/'|tr A-Z a-z
 if [[ "$CCNAME" = "" ]]
 then
-	CCNAME='unknown'
+        CCNAME='unknown'
 fi
 
 else
@@ -613,99 +928,91 @@ dnl echo "$CC $VERSION_OPT : CCNAME='$CCNAME' CCVER='$CCVER' CCMAJOR='$CCMAJOR' 
 
 if [[ "$CCMAJOR" = "" ]]
 then
-	CCMAJOR=0
+        CCMAJOR=0
 fi
 
 if [[ "$CCMINOR" = "" ]]
 then
-	CCMINOR=0
+        CCMINOR=0
 fi
+
+uses_icc=0
+uses_gcc=0
+uses_clang=0        
+uses_sunc=0
+uses_unknown=0
 
 if [[ "$CCNAME" = "gcc" ]]
 then
-	CCOPTIMISATIONFLAGS=-O3
+        CCOPTIMISATIONFLAGS=-O3
 
-	if [[ $CCMAJOR -lt 4 ]]
-	then
-		CCOPTIMISATIONFLAGS=-O0
+        if [[ $CCMAJOR -lt 4 ]]
+        then
+                CCOPTIMISATIONFLAGS=-O0
 
-		echo "WARNING: GCC < 4.0 has optimisations issues with YADIFA."
-		sleep 1
+                echo "WARNING: GCC < 4.0 has optimisations issues with YADIFA."
+                sleep 1
 
-	elif [[ $CCMAJOR -eq 4 ]]
-	then
-		if [[ $CCMINOR -lt 6 ]]
-		then
-			CCOPTIMISATIONFLAGS=-O0
+        elif [[ $CCMAJOR -eq 4 ]]
+        then
+                if [[ $CCMINOR -lt 6 ]]
+                then
+                        CCOPTIMISATIONFLAGS=-O0
 
-			echo "WARNING: GCC before 4.6 have optimisation issues with YADIFA."
-			sleep 1
+                        echo "WARNING: GCC before 4.6 have optimisation issues with YADIFA."
+                        sleep 1
 
-		elif [[ $CCMINOR -eq 6 ]]
-		then
-			CCOPTIMISATIONFLAGS=-O2
-		else
-			# hopefully after 4.6 the issue is fixed ...
-			CCOPTIMISATIONFLAGS=-O3
-		fi
-	fi
+                elif [[ $CCMINOR -eq 6 ]]
+                then
+                        CCOPTIMISATIONFLAGS=-O2
+                else
+                        # hopefully after 4.6 the issue is fixed ...
+                        CCOPTIMISATIONFLAGS=-O3
+                fi
+        fi
 
-    AM_CONDITIONAL([USES_ICC], [false])
-    AM_CONDITIONAL([USES_GCC], [true])
-    AM_CONDITIONAL([USES_CLANG], [false])
-    AM_CONDITIONAL([USES_SUNC], [false])
-    AM_CONDITIONAL([USES_UNKNOWN], [false])
+        uses_gcc=1
 
 elif [[ "$CCNAME" = "icc" ]]
 then
-	echo "ICC"
+        echo "ICC"
 
-	CCOPTIMISATIONFLAGS=-O3
+        CCOPTIMISATIONFLAGS=-O3
 
-    AM_CONDITIONAL([USES_ICC], [true])
-    AM_CONDITIONAL([USES_GCC], [false])
-    AM_CONDITIONAL([USES_CLANG], [false])
-    AM_CONDITIONAL([USES_SUNC], [false])
-    AM_CONDITIONAL([USES_UNKNOWN], [false])
+        uses_icc=1
 
-	AR=xiar
+        AR=xiar
 
 elif [[ "$CCNAME" = "clang" ]]
 then
-	echo "CLANG"
+        echo "CLANG"
 
-	CCOPTIMISATIONFLAGS=-O3
-	
-    AM_CONDITIONAL([USES_ICC], [false])
-    AM_CONDITIONAL([USES_GCC], [false])
-    AM_CONDITIONAL([USES_CLANG], [true])
-    AM_CONDITIONAL([USES_SUNC], [false])
-    AM_CONDITIONAL([USES_UNKNOWN], [false])
+        CCOPTIMISATIONFLAGS=-O3
+        
+	uses_clang=1
+
 elif [[ "$CCNAME" = "Sun C" ]]
 then
     echo "Sun C"
 
     CCOPTIMISATIONFLAGS=-xO5
 
-	AM_CONDITIONAL([USES_ICC], [false])
-    AM_CONDITIONAL([USES_GCC], [false])
-    AM_CONDITIONAL([USES_CLANG], [false])	
-    AM_CONDITIONAL([USES_SUNC], [true])
-    AM_CONDITIONAL([USES_UNKNOWN], [false])
-
+        uses_sunc=1
 else
-	echo "unsupported compiler"
+        echo "unsupported compiler"
 
-	CCNAME=$CC
+        CCNAME=$CC
 
-	CCOPTIMISATIONFLAGS=-O2
-	
-	AM_CONDITIONAL([USES_ICC], [false])
-    AM_CONDITIONAL([USES_GCC], [false])
-    AM_CONDITIONAL([USES_CLANG], [false])	
-    AM_CONDITIONAL([USES_SUNC], [false])
-    AM_CONDITIONAL([USES_UNKNOWN], [true])
+        CCOPTIMISATIONFLAGS=-O2
+        
+        uses_unknown=1
 fi
+
+AM_CONDITIONAL([USES_ICC], [test $uses_icc -eq 1])
+AM_CONDITIONAL([USES_GCC], [test $uses_gcc -eq 1])
+AM_CONDITIONAL([USES_CLANG], [test $uses_clang -eq 1])
+AM_CONDITIONAL([USES_SUNC], [test $uses_sunc -eq 1])
+AM_CONDITIONAL([USES_UNKNOWN], [test $uses_unknown -eq 1])
 
 #
 # We've been told RedHat does not like -O3 at all, so ...
@@ -725,11 +1032,11 @@ AC_SUBST(CCOPTIMISATIONFLAGS, $CCOPTIMISATIONFLAGS)
 
 if [[ $cpu_intel_compatible -eq 0 ]]
 then
-	if [[ $icc_enabled -ne 0 ]]
-	then
-		echo "ERROR: cannot enable ICC with CPU other than x86 or amd64"
-		exit 1
-	fi
+        if [[ $icc_enabled -ne 0 ]]
+        then
+                echo "ERROR: cannot enable ICC with CPU other than x86 or amd64"
+                exit 1
+        fi
 fi
 
 AC_COMPILER_SUPPORTS([-mtune=native],TUNE_NATIVE)
@@ -737,6 +1044,8 @@ AC_COMPILER_SUPPORTS([-fno-ident],NO_IDENT)
 AC_COMPILER_SUPPORTS([-ansi],ANSI)
 AC_COMPILER_SUPPORTS([-ansi-alias],ANSI_ALIAS)
 AC_COMPILER_SUPPORTS([-pedantic],PEDANTIC)
+AC_COMPILER_SUPPORTS([-std=gnu11],STD_GNU11)
+AC_COMPILER_SUPPORTS([-std=c11],STD_C11)
 AC_COMPILER_SUPPORTS([-std=gnu99],STD_GNU99)
 AC_COMPILER_SUPPORTS([-std=c99],STD_C99)
 AC_COMPILER_SUPPORTS([-xc99],XC99)
@@ -757,35 +1066,78 @@ AC_COMPILER_SUPPORTS([-faddress-sanitizer],ADDRESS_SANITIZER_CHECK)
 AC_COMPILER_SUPPORTS([-fcatch_undefined_behavior],CATCH_UNDEFINED_BEHAVIOR)
 AC_COMPILER_SUPPORTS([-rdynamic],RDYNAMIC)
 
-AC_MEMALIGN_CHECK
-
-AC_SETGROUPS_CHECK
-
-AC_ENDIANNESS
-AC_CHECK_HEADERS([stdlib.h])
-AC_CHECK_HEADERS([stdio.h])
-AC_CHECK_HEADERS([unistd.h])
-AC_CHECK_HEADERS([string.h])
-AC_CHECK_HEADERS([endian.h])
-AC_CHECK_HEADERS([syslog.h])
-AC_CHECK_HEADERS([fcntl.h])
-AC_CHECK_HEADERS([pthread.h])
-AC_CHECK_HEADERS([linux/limits.h])
-AC_CHECK_HEADERS([sys/syslimits.h])
-AC_CHECK_HEADERS([i386/limits.h])
-AC_CHECK_HEADERS([ppc/limits.h])
+AC_CHECK_HEADERS([arpa/inet.h])
+AC_CHECK_HEADERS([asm/unistd.h])
+AC_CHECK_HEADERS([assert.h])
+AC_CHECK_HEADERS([bfd.h])
 AC_CHECK_HEADERS([byteswap.h])
+AC_CHECK_HEADERS([cpuid.h])
+AC_CHECK_HEADERS([ctype.h])
+AC_CHECK_HEADERS([dirent.h])
+AC_CHECK_HEADERS([dlfcn.h])
+AC_CHECK_HEADERS([endian.h])
+AC_CHECK_HEADERS([errno.h])
+AC_CHECK_HEADERS([execinfo.h])
+AC_CHECK_HEADERS([fcntl.h])
+AC_CHECK_HEADERS([getopt.h])
+AC_CHECK_HEADERS([grp.h])
+AC_CHECK_HEADERS([limits.h])
+AC_CHECK_HEADERS([linux/limits.h])
+AC_CHECK_HEADERS([mach/clock.h])
 AC_CHECK_HEADERS([machine/endian.h])
-AC_CHECK_HEADERS([sys/time.h])
-AC_CHECK_HEADERS([sys/stat.h])
-AC_CHECK_HEADERS([sys/endian.h])
-AC_CHECK_HEADERS([sys/byteorder.h])
-AC_CHECK_HEADERS([sys/socket.h])
+AC_CHECK_HEADERS([mach/mach.h])
+AC_CHECK_HEADERS([malloc.h])
+AC_CHECK_HEADERS([netdb.h])
+AC_CHECK_HEADERS([net/ethernet.h])
 AC_CHECK_HEADERS([netinet/in.h])
 AC_CHECK_HEADERS([netinet6/in6.h])
-AC_CHECK_HEADERS([cpuid.h])
-AC_CHECK_HEADERS([grp.h])
+AC_CHECK_HEADERS([netinet/tcp.h])
+AC_CHECK_HEADERS([pcap/pcap.h])
+AC_CHECK_HEADERS([poll.h])
+AC_CHECK_HEADERS([pthread.h])
+AC_CHECK_HEADERS([pwd.h])
+AC_CHECK_HEADERS([sched.h])
+AC_CHECK_HEADERS([signal.h])
+AC_CHECK_HEADERS([stdarg.h])
+AC_CHECK_HEADERS([stdatomic.h])
+AC_CHECK_HEADERS([stdbool.h])
+AC_CHECK_HEADERS([stddef.h])
+AC_CHECK_HEADERS([stdint.h])
+AC_CHECK_HEADERS([stdio.h])
+AC_CHECK_HEADERS([stdlib.h])
+AC_CHECK_HEADERS([string.h])
+AC_CHECK_HEADERS([strings.h])
+AC_CHECK_HEADERS([sys/byteorder.h])
+AC_CHECK_HEADERS([sys/cpuset.h])
+AC_CHECK_HEADERS([sys/endian.h])
+AC_CHECK_HEADERS([sys/file.h])
+AC_CHECK_HEADERS([sys/ipc.h])
+AC_CHECK_HEADERS([syslog.h])
+AC_CHECK_HEADERS([sys/mman.h])
+AC_CHECK_HEADERS([sys/msg.h])
+AC_CHECK_HEADERS([sys/param.h])
+AC_CHECK_HEADERS([sys/prctl.h])
+AC_CHECK_HEADERS([sys/resource.h])
+AC_CHECK_HEADERS([sys/socket.h])
+AC_CHECK_HEADERS([sys/stat.h])
+AC_CHECK_HEADERS([sys/syslimits.h])
+AC_CHECK_HEADERS([sys/time.h])
+AC_CHECK_HEADERS([sys/types.h])
+AC_CHECK_HEADERS([sys/un.h])
+AC_CHECK_HEADERS([sys/wait.h])
+AC_CHECK_HEADERS([tcl.h])
+AC_CHECK_HEADERS([time.h])
+AC_CHECK_HEADERS([ucontext.h])
+AC_CHECK_HEADERS([unistd.h])
+AC_CHECK_HEADERS([stdnoreturn.h])
+
+AC_MEMALIGN_CHECK
+AC_SYNC_BUILTINS
+AC_SETGROUPS_CHECK
+AC_ENDIANNESS
 ])
+
+dnl ####################################################
 
 dnl timegm support
 
@@ -797,6 +1149,21 @@ AC_TRY_LINK([#include<time.h>],[struct tm t; timegm(&t);],[AC_DEFINE_UNQUOTED([H
 
 ])
 
+dnl ####################################################
+
+dnl mremap support
+
+AC_DEFUN([AC_MREMAP_CHECK], [
+
+AC_MSG_CHECKING([checking for mremap])
+
+AC_TRY_LINK([#define _GNU_SOURCE
+             #include<sys/mman.h>],[mremap(0,0,0,0);],[AC_DEFINE_UNQUOTED([HAS_MREMAP], [1], [The system supports mremap]) echo yes],[echo no]);
+
+])
+
+dnl ####################################################
+
 dnl pthread spinlock support
 
 AC_DEFUN([AC_PTHREAD_SPINLOCK_CHECK], [
@@ -805,6 +1172,8 @@ AC_MSG_CHECKING([checking for pthread_spin_init])
 AC_CHECK_LIB(pthread,pthread_spin_init,[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SPINLOCK], [1], [The system supports spinlocks]) echo yes],[echo no])
 
 ])
+
+dnl ####################################################
 
 dnl pthread_setname_np support
 
@@ -815,6 +1184,8 @@ AC_CHECK_LIB(pthread,pthread_setname_np,[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SETNAME
 
 ])
 
+dnl ####################################################
+
 dnl pthread_setaffinity_np support
 
 AC_DEFUN([AC_PTHREAD_SETAFFINITY_NP_CHECK], [
@@ -823,6 +1194,8 @@ AC_MSG_CHECKING([checking for pthread_setaffinity_np])
 AC_CHECK_LIB(pthread,pthread_setaffinity_np,[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SETAFFINITY_NP], [1], [The system supports thread affinity]) echo yes],[echo no])
 
 ])
+
+dnl ####################################################
 
 dnl gethostbyname inet_pton inet_ntop ... (Solaris requires a lib)
 
@@ -850,6 +1223,8 @@ AC_TRY_LINK([#include<netdb.h>],[struct hostent *host = gethostbyname("www.yadif
     ])
 ])
 
+dnl ####################################################
+
 dnl LTO
 
 AC_DEFUN([AC_CHECK_LTO], [
@@ -860,35 +1235,37 @@ AC_MSG_RESULT($enable_lto)
 case "$enable_lto" in
     yes)
 
-	type -p gold
+        type -p gold
 
-	if [[ $? -ne 0 ]]
-	then
-		AC_MSG_RESULT([WARNING: 'gold' not found])
-		sleep 1
-	fi
+        if [[ $? -ne 0 ]]
+        then
+                AC_MSG_RESULT([WARNING: 'gold' not found])
+                sleep 1
+        fi
 
-	if [[ ! "$LD" = "" ]]
-	then
-		$LD -v |grep -i gold > /dev/null 2>&1
+        if [[ ! "$LD" = "" ]]
+        then
+                $LD -v |grep -i gold > /dev/null 2>&1
 
-		if [[ $? -ne 0 ]]
-		then
-			AC_MSG_RESULT([WARNING: LTO enabled but LD ($LD) is not gold])
-			sleep 1
-		fi
-	else
-		AC_MSG_RESULT([LD not defined])
-	fi
-	
-	AM_CONDITIONAL(HAS_LTO_SUPPORT, [true])
+                if [[ $? -ne 0 ]]
+                then
+                        AC_MSG_RESULT([WARNING: LTO enabled but LD ($LD) is not gold])
+                        sleep 1
+                fi
+        else
+                AC_MSG_RESULT([LD not defined])
+        fi
+        
         ;;
     no|*)
-	AM_CONDITIONAL(HAS_LTO_SUPPORT, [false])
         ;;
 esac
 
+AM_CONDITIONAL(HAS_LTO_SUPPORT, [test "x$enable_lto" == "yyes"])
+
 ])
+
+dnl ####################################################
 
 AC_DEFUN([AC_SOCKADDR_SA_LEN_CHECK],
 [
@@ -930,6 +1307,8 @@ AM_CONDITIONAL([HAS_SOCKADDR_SA_LEN], [test $has_sockaddr_sa_len = yes])
 AC_DEFINE_UNQUOTED([HAS_SOCKADDR_SA_LEN], [$has_sockaddr_sa_len], [The sockaddr struct has an sa_len field])
 ])
 
+dnl ####################################################
+
 AC_DEFUN([AC_SOCKADDR_IN_SIN_LEN_CHECK],
 [
 dnl Check for sin_len field
@@ -969,6 +1348,8 @@ rm -f sockaddr_in_sin_len.c sockaddr_in_sin_len
 AM_CONDITIONAL([HAS_SOCKADDR_IN_SIN_LEN], [test $has_sockaddr_in_sin_len = yes])
 AC_DEFINE_UNQUOTED([HAS_SOCKADDR_IN_SIN_LEN], [$has_sockaddr_in_sin_len], [The sockaddr_in struct has an sin_len field])
 ])
+
+dnl ####################################################
 
 AC_DEFUN([AC_SOCKADDR_IN6_SIN6_LEN_CHECK],
 [
@@ -1010,28 +1391,30 @@ AM_CONDITIONAL([HAS_SOCKADDR_IN6_SIN6_LEN], [test $has_sockaddr_in6_sin6_len = y
 AC_DEFINE_UNQUOTED([HAS_SOCKADDR_IN6_SIN6_LEN], [$has_sockaddr_in6_sin6_len], [The sockaddr_in6 struct has an sin6_len field])
 ])
 
+dnl ####################################################
+
 AC_DEFUN([AC_EURID_SUMMARY], [
 
 cat <<EOF
-	CC		:	$CC
-	CPP		:	$CPP
-	LD		:	$LD
-	AR		:	$AR
+        CC               :        $CC
+        CPP              :        $CPP
+        LD               :        $LD
+        AR               :        $AR
 
-	CFLAGS		:	$CFLAGS
-	CPPFLAGS	:	$CPPFLAGS
-	LDFLAGS		:	$LDFLAGS
+        CFLAGS           :        $CFLAGS
+        CPPFLAGS         :        $CPPFLAGS
+        LDFLAGS          :        $LDFLAGS
 
-	MEMALIGN ISSUES	:	$has_memalign_issues
-	32/64		:	$CFLAGS3264
-	LTO		:	$enable_lto
-    log :   $logdir
+        MEMALIGN ISSUES  :        $has_memalign_issues
+        32/64            :        $CFLAGS3264
+        LTO              :        $enable_lto
+        LOG              :        $logdir
 EOF
 ])
+
+dnl ####################################################
 
 AC_DEFUN([AC_MAKE_BUILDINFO], [
 make buildinfo.h
 ])
-
-
 
