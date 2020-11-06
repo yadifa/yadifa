@@ -999,8 +999,7 @@ database_service_zone_resignature_deactivate_dnskey_alarm(void *args_, bool canc
 void
 database_service_zone_dnskey_set_alarms_for_key(zdb_zone *zone, dnssec_key *key)
 {
-
-    log_info("dnskey: %{dnsname}: +%03d+%05d/%d: setting alarms", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag(key), ntohs(dnskey_get_flags(key)));
+    log_debug("dnskey: %{dnsname}: +%03d+%05d/%d: setting alarms", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag(key), ntohs(dnskey_get_flags(key)));
 
     time_t now = time(NULL);
 
@@ -1085,7 +1084,7 @@ database_service_zone_dnskey_set_alarms_for_key(zdb_zone *zone, dnssec_key *key)
             }
             else
             {
-                log_info("dnskey: %{dnsname}: +%03d+%05d/%d: already marked to be published", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag(key), ntohs(dnskey_get_flags(key)));
+                log_debug("dnskey: %{dnsname}: +%03d+%05d/%d: already marked to be published", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag(key), ntohs(dnskey_get_flags(key)));
             }
         }
 
@@ -1123,7 +1122,7 @@ database_service_zone_dnskey_set_alarms_for_key(zdb_zone *zone, dnssec_key *key)
             }
             else
             {
-                log_info("dnskey: %{dnsname}: +%03d+%05d/%d: already marked to be activated", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag(key), ntohs(dnskey_get_flags(key)));
+                log_debug("dnskey: %{dnsname}: +%03d+%05d/%d: already marked to be activated", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag(key), ntohs(dnskey_get_flags(key)));
             }
         }
     } // if now < delete epoch
@@ -1160,7 +1159,7 @@ database_service_zone_dnskey_set_alarms_for_key(zdb_zone *zone, dnssec_key *key)
             }
             else
             {
-                log_info("dnskey: %{dnsname}: +%03d+%05d/%d: already marked to be deactivated", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag(key), ntohs(dnskey_get_flags(key)));
+                log_debug("dnskey: %{dnsname}: +%03d+%05d/%d: already marked to be deactivated", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag(key), ntohs(dnskey_get_flags(key)));
             }
         }
 
@@ -1184,11 +1183,11 @@ database_service_zone_dnskey_set_alarms_for_key(zdb_zone *zone, dnssec_key *key)
         }
         else
         {
-            log_info("dnskey: %{dnsname}: +%03d+%05d/%d: already marked to be unpublished", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag(key), ntohs(dnskey_get_flags(key)));
+            log_debug("dnskey: %{dnsname}: +%03d+%05d/%d: already marked to be unpublished", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag(key), ntohs(dnskey_get_flags(key)));
         }
     } // in zone
 
-    log_info("dnskey: %{dnsname}: +%03d+%05d/%d: alarms have been set", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag(key), ntohs(dnskey_get_flags(key)));
+    log_debug("dnskey: %{dnsname}: +%03d+%05d/%d: alarms have been set", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag(key), ntohs(dnskey_get_flags(key)));
 }
 
 /**
@@ -1252,7 +1251,7 @@ database_service_zone_dnskey_set_alarms(zdb_zone *zone)
         dnskey_release(key);
     }
 
-    log_info("database-service: %{dnsname}: DNSKEY alarms have been set", zone->origin);
+    log_debug("database-service: %{dnsname}: DNSKEY alarms have been set", zone->origin);
 }
 
 static ya_result
@@ -1504,7 +1503,7 @@ database_service_zone_dnssec_maintenance_lock_for(zone_desc_s *zone_desc, u8 zon
     if(!zone_maintains_dnssec(zone_desc))
     {
         log_debug1("database_service_zone_dnssec_maintenance: %{dnsname} has signature maintenance disabled", origin);
-        return ERROR;
+        return FEATURE_NOT_SUPPORTED;
     }
     
     log_debug1("zone sign: %{dnsname}: locking zone for signature update", origin);

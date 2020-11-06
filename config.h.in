@@ -383,11 +383,17 @@
 /* Define to 1 if you have the <pwd.h> header file. */
 #undef HAVE_PWD_H
 
+/* Has recvmmsg system call */
+#undef HAVE_RECVMMSG
+
 /* Define to 1 if you have the <sched.h> header file. */
 #undef HAVE_SCHED_H
 
 /* Define to 1 if you have the `select' function. */
 #undef HAVE_SELECT
+
+/* Has sendmmsg system call */
+#undef HAVE_SENDMMSG
 
 /* Define to 1 if you have the <signal.h> header file. */
 #undef HAVE_SIGNAL_H

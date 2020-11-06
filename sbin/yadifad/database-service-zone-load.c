@@ -446,7 +446,14 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, struct zdb_zone_load_
     u16 zone_load_flags = ZDB_ZONE_REPLAY_JOURNAL;
     
 #if ZDB_HAS_DNSSEC_SUPPORT
-    zone_load_flags |= zone_desc_dnssec_mode;
+    if(zone_maintains_dnssec(zone_desc))
+    {
+        zone_load_flags |= zone_desc_dnssec_mode;
+    }
+    else
+    {
+        zone_load_flags |= ZDB_ZONE_NO_MAINTENANCE;
+    }
 #endif
 
     zdb_zone_load_parms_init(zone_load_parms, &zr, zone_desc_origin, zone_load_flags);
@@ -556,33 +563,37 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, struct zdb_zone_load_
             static const u8 dnssec_flag_to_maintain_mode[4] = {0, ZDB_ZONE_MAINTAIN_NSEC, ZDB_ZONE_MAINTAIN_NSEC3, ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT};
             
             u8 maintain_mode = 0;
-            if(zone_desc->dnssec_mode != ZONE_DNSSEC_FL_NOSEC)
-            {
-                maintain_mode = dnssec_flag_to_maintain_mode[zone_desc->dnssec_mode];
-            }
-            else
-            {
-                if(zdb_zone_has_nsec_chain(zone_pointer_out))
-                {
-                    maintain_mode = ZDB_ZONE_MAINTAIN_NSEC;
-                }
-                else if(zdb_zone_has_nsec3_optout_chain(zone_pointer_out))
-                {
-                    maintain_mode = ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT;
-                }
-                else if(zdb_zone_has_nsec3_chain(zone_pointer_out))
-                {
-                    maintain_mode = ZDB_ZONE_MAINTAIN_NSEC3;
-                }
-            }
-            zone_set_maintain_mode(zone_pointer_out, maintain_mode);
-            zdb_zone_set_maintained(zone_pointer_out, TRUE);
 
-            if(maintain_mode != 0)
+            if(zone_maintains_dnssec(zone_desc))
             {
-                if(zone_pointer_out->progressive_signature_update.earliest_signature_expiration < MAX_S32)
+                if(zone_desc->dnssec_mode != ZONE_DNSSEC_FL_NOSEC)
                 {
-                    database_zone_update_signatures(zone_pointer_out->origin, zone_desc, zone_pointer_out);
+                    maintain_mode = dnssec_flag_to_maintain_mode[zone_desc->dnssec_mode];
+                }
+                else
+                {
+                    if(zdb_zone_has_nsec_chain(zone_pointer_out))
+                    {
+                        maintain_mode = ZDB_ZONE_MAINTAIN_NSEC;
+                    }
+                    else if(zdb_zone_has_nsec3_optout_chain(zone_pointer_out))
+                    {
+                        maintain_mode = ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT;
+                    }
+                    else if(zdb_zone_has_nsec3_chain(zone_pointer_out))
+                    {
+                        maintain_mode = ZDB_ZONE_MAINTAIN_NSEC3;
+                    }
+                }
+                zone_set_maintain_mode(zone_pointer_out, maintain_mode);
+                zdb_zone_set_maintained(zone_pointer_out, TRUE);
+
+                if(maintain_mode != 0)
+                {
+                    if(zone_pointer_out->progressive_signature_update.earliest_signature_expiration < MAX_S32)
+                    {
+                        database_zone_update_signatures(zone_pointer_out->origin, zone_desc, zone_pointer_out);
+                    }
                 }
             }
             

@@ -384,11 +384,17 @@
 /* Define to 1 if you have the <pwd.h> header file. */
 #define HAVE_PWD_H 1
 
+/* Has recvmmsg system call */
+#define HAVE_RECVMMSG 1
+
 /* Define to 1 if you have the <sched.h> header file. */
 #define HAVE_SCHED_H 1
 
 /* Define to 1 if you have the `select' function. */
 #define HAVE_SELECT 1
+
+/* Has sendmmsg system call */
+#define HAVE_SENDMMSG 1
 
 /* Define to 1 if you have the <signal.h> header file. */
 #define HAVE_SIGNAL_H 1
@@ -547,7 +553,7 @@
 #define PACKAGE_NAME "yadifa"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "yadifa 2.4.0-9809"
+#define PACKAGE_STRING "yadifa 2.4.1-9852"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "yadifa"
@@ -556,7 +562,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.4.0-9809"
+#define PACKAGE_VERSION "2.4.1-9852"
 
 /* Define as the return type of signal handlers (`int' or `void'). */
 #define RETSIGTYPE void
@@ -577,7 +583,7 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* Version number of package */
-#define VERSION "2.4.0-9809"
+#define VERSION "2.4.1-9852"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */

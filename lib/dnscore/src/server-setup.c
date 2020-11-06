@@ -380,10 +380,17 @@ server_setup_daemon_go()
     server_setup_daemon_go_ex(TRUE, TRUE);
 }
 
+/// @NOTE 20201105 edf -- pid_file_pathp must be a char** because of managed paths, it cannot be a const char** either
+
 ya_result
-server_setup_env(pid_t *pid, char *pid_file_pathp, uid_t uid, gid_t gid, u32 setup_flags)
+server_setup_env(pid_t *pid, char ** pid_file_pathp, uid_t uid, gid_t gid, u32 setup_flags)
 {
     ya_result                                    return_code;
+
+    if((pid == NULL) || (pid_file_pathp == NULL) || (*pid_file_pathp == NULL))
+    {
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
+    }
 
 #ifndef WIN32
     if(setup_flags & SETUP_CORE_LIMITS)
@@ -429,7 +436,7 @@ server_setup_env(pid_t *pid, char *pid_file_pathp, uid_t uid, gid_t gid, u32 set
     if(setup_flags & SETUP_CREATE_PID_FILE)
     {
         /* Setup environment */
-        if(FAIL(return_code = pid_file_create(pid, pid_file_pathp, uid, gid)))
+        if(FAIL(return_code = pid_file_create(pid, *pid_file_pathp, uid, gid)))
         {
             ttylog_err("unable to create pid file '%s': %r", pid_file_pathp, return_code);
 

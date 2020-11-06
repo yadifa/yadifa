@@ -110,8 +110,10 @@
 #define DNSLG_HAVE_POLL_H 1
 #define DNSLG_HAVE_PTHREAD_H 1
 #define DNSLG_HAVE_PWD_H 1
+#define DNSLG_HAVE_RECVMMSG 1
 #define DNSLG_HAVE_SCHED_H 1
 #define DNSLG_HAVE_SELECT 1
+#define DNSLG_HAVE_SENDMMSG 1
 #define DNSLG_HAVE_SIGNAL_H 1
 #define DNSLG_HAVE_SOCKET 1
 #define DNSLG_HAVE_STDARG_H 1
@@ -156,17 +158,17 @@
 #define DNSLG_PACKAGE "yadifa"
 #define DNSLG_PACKAGE_BUGREPORT "info@yadifa.eu"
 #define DNSLG_PACKAGE_NAME "yadifa"
-#define DNSLG_PACKAGE_STRING "yadifa 2.4.0-9809"
+#define DNSLG_PACKAGE_STRING "yadifa 2.4.1-9852"
 #define DNSLG_PACKAGE_TARNAME "yadifa"
 #define DNSLG_PACKAGE_URL ""
-#define DNSLG_PACKAGE_VERSION "2.4.0-9809"
+#define DNSLG_PACKAGE_VERSION "2.4.1-9852"
 #define DNSLG_RETSIGTYPE void
 #define DNSLG_SELECT_TYPE_ARG1 int
 #define DNSLG_SELECT_TYPE_ARG234 (fd_set *)
 #define DNSLG_SELECT_TYPE_ARG5 (struct timeval *)
 #define DNSLG_STDC_HEADERS 1
-#define DNSLG_VERSION "2.4.0-9809"
+#define DNSLG_VERSION "2.4.1-9852"
 #undef DNSLG_VERSION
-// version 2.4.0.0-9809
-#define DNSLG_VERSION 0x020400002651LL// include/dnslg/dnslg-config-features.h
+// version 2.4.1.0-9852
+#define DNSLG_VERSION 0x02040100267cLL// include/dnslg/dnslg-config-features.h
 

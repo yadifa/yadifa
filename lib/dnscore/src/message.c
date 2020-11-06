@@ -2598,17 +2598,23 @@ message_query_tcp_with_timeout_ex(message_data *mesg, const host_address *server
                 tcp_set_sendtimeout(sockfd, to_sec, 0);
                 tcp_set_recvtimeout(sockfd, to_sec, 0);
 
-                if(message_send_tcp(mesg, sockfd) == (ssize_t)message_get_size(mesg) + 2)
+                ssize_t n = message_send_tcp(mesg, sockfd);
+
+                if(n == (ssize_t)message_get_size(mesg) + 2)
                 {
                     u16 tcp_len;
 
                     shutdown(sockfd, SHUT_WR);
 
-                    if(readfully(sockfd, &tcp_len, 2) == 2)
+                    n = readfully(sockfd, &tcp_len, 2);
+
+                    if(n == 2)
                     {
                         tcp_len = ntohs(tcp_len);
 
-                        if(readfully(sockfd, message_get_buffer(answer), tcp_len) == tcp_len)
+                        n = readfully(sockfd, message_get_buffer(answer), tcp_len);
+
+                        if(n == tcp_len)
                         {
                             /*
                              * test the answser
@@ -2635,6 +2641,10 @@ message_query_tcp_with_timeout_ex(message_data *mesg, const host_address *server
                     {
                         return_value = UNEXPECTED_EOF;
                     }
+                }
+                else
+                {
+                    return_value = UNABLE_TO_COMPLETE_FULL_WRITE;
                 }
             }
             else

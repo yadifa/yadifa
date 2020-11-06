@@ -110,8 +110,10 @@
 #define DNSCORE_HAVE_POLL_H 1
 #define DNSCORE_HAVE_PTHREAD_H 1
 #define DNSCORE_HAVE_PWD_H 1
+#define DNSCORE_HAVE_RECVMMSG 1
 #define DNSCORE_HAVE_SCHED_H 1
 #define DNSCORE_HAVE_SELECT 1
+#define DNSCORE_HAVE_SENDMMSG 1
 #define DNSCORE_HAVE_SIGNAL_H 1
 #define DNSCORE_HAVE_SOCKET 1
 #define DNSCORE_HAVE_STDARG_H 1
@@ -156,17 +158,17 @@
 #define DNSCORE_PACKAGE "yadifa"
 #define DNSCORE_PACKAGE_BUGREPORT "info@yadifa.eu"
 #define DNSCORE_PACKAGE_NAME "yadifa"
-#define DNSCORE_PACKAGE_STRING "yadifa 2.4.0-9809"
+#define DNSCORE_PACKAGE_STRING "yadifa 2.4.1-9852"
 #define DNSCORE_PACKAGE_TARNAME "yadifa"
 #define DNSCORE_PACKAGE_URL ""
-#define DNSCORE_PACKAGE_VERSION "2.4.0-9809"
+#define DNSCORE_PACKAGE_VERSION "2.4.1-9852"
 #define DNSCORE_RETSIGTYPE void
 #define DNSCORE_SELECT_TYPE_ARG1 int
 #define DNSCORE_SELECT_TYPE_ARG234 (fd_set *)
 #define DNSCORE_SELECT_TYPE_ARG5 (struct timeval *)
 #define DNSCORE_STDC_HEADERS 1
-#define DNSCORE_VERSION "2.4.0-9809"
+#define DNSCORE_VERSION "2.4.1-9852"
 #undef DNSCORE_VERSION
-// version 2.4.0.0-9809
-#define DNSCORE_VERSION 0x020400002651LL// include/dnscore/dnscore-config-features.h
+// version 2.4.1.0-9852
+#define DNSCORE_VERSION 0x02040100267cLL// include/dnscore/dnscore-config-features.h
 

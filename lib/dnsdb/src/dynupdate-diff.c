@@ -6458,7 +6458,7 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
 
 #if DEBUG
     {
-        zdb_packed_ttlrdata* soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);
+        zdb_packed_ttlrdata *soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);
         if(soa != NULL)
         {
             u32 soa_serial = 0;

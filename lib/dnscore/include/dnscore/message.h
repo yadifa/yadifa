@@ -1501,7 +1501,10 @@ static inline ssize_t message_send_tcp(const message_data *mesg, int sockfd)
     u16 tcp_len = htons(message_get_size_u16(mesg));
     if(ISOK(ret = writefully(sockfd, &tcp_len, 2)))
     {
-        ret = writefully(sockfd, message_get_buffer_const(mesg), message_get_size(mesg));
+        if(ISOK(ret = writefully(sockfd, message_get_buffer_const(mesg), message_get_size(mesg))))
+        {
+            ret += 2;
+        }
     }
     return ret;
 }

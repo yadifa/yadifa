@@ -55,6 +55,7 @@
 #define KEYROLL_EXPECTED_DNSKEY_OR_RRSIG KEYROLL_ERROR_CODE(3)
 #define KEYROLL_UPDATE_SUBCOMMAND_ERROR KEYROLL_ERROR_CODE(4)
 #define KEYROLL_HOLE_IN_TIMELINE KEYROLL_ERROR_CODE(5)
+#define KEYROLL_MUST_REINITIALIZE KEYROLL_ERROR_CODE(6)
 
 enum KeyrollAction
 {
@@ -119,8 +120,10 @@ typedef struct keyroll_s
     u32 update_apply_verify_retries;        // if an update wasn't applied successfully, retry CHECKING this amount of times
     u32 update_apply_verify_retries_delay;  // time between the above retries
 
-    u32 match_verify_retries;        // if there is not match, retry checking this amount of times
-    u32 match_verify_retries_delay;  // time between the above retries
+    u32 match_verify_retries;               // if there is not match, retry checking this amount of times
+    u32 match_verify_retries_delay;         // time between the above retries
+
+    bool generation_mode;
 
     // current key records
 } keyroll_t;
@@ -136,7 +139,7 @@ s64 keyroll_set_timing_steps(keyroll_t *keyroll, dnssec_key *key, bool dirty);
  * @param server the server address
  */
 
-ya_result keyroll_init(keyroll_t* keyroll, const u8 *domain, const char *plan_path, const char *keys_path, const host_address *server);
+ya_result keyroll_init(keyroll_t* keyroll, const u8 *domain, const char *plan_path, const char *keys_path, const host_address *server, bool generation_mode);
 
 /**
  * Connects to the server, fetches the public keys and add them to the keyring.
@@ -293,7 +296,7 @@ ya_result keyroll_plan(keyroll_t *keyroll, s64 generate_until);
 void keyroll_step_print(keyroll_step_t *step);
 
 /**
- * Prints a plan to the stdout and to the logger.
+ * Prints a plan.
  */
 
 ya_result keyroll_print(keyroll_t *keyroll, output_stream *os);
