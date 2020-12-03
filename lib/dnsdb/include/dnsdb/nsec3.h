@@ -106,12 +106,6 @@ extern "C"
 #define TYPE_NSEC3PARAMDEL   NU16(0xff01)
 #define TYPE_NSEC3CHAINSTATE NU16(0xff02)
 
-/* Adds an NSEC3PARAM in a zone (no dups), adds the struct too  */
-ya_result nsec3_add_nsec3param(zdb_zone* zone, u8 default_hash_alg, u8 default_flags, u16 default_iterations, u8 default_salt_len, u8* default_salt);
-
-/* Removes an NSEC3PARAM from a zone, along with the struct.  nsec3_remove_nsec3param_by_record does almost the same. (ixfr) */
-ya_result nsec3_remove_nsec3param(zdb_zone* zone, u8 hash_alg, u8 flags, u16 iterations, u8 salt_len, const u8* salt);
-
 /**
  * 
  * Links a label to already existing nsec3 items
@@ -274,7 +268,14 @@ int nsec3_zone_get_chain_count(zdb_zone *zone);
 
 int nsec3_zone_get_chains(zdb_zone *zone, nsec3_zone **n3p, int max_count);
 
+struct resource_record_view;
 
+void nsec3_item_resource_record_view_init(struct resource_record_view *rrv);
+void nsec3_item_resource_record_view_origin_set(struct resource_record_view *rrv, const u8 *origin);
+void nsec3_item_resource_record_view_nsec3_zone_set(struct resource_record_view *rrv, nsec3_zone *n3);
+void nsec3_item_resource_record_view_ttl_set(struct resource_record_view *rrv, s32 ttl);
+void nsec3_item_resource_record_view_item_set(struct resource_record_view *rrv, nsec3_node *item);
+void nsec3_item_resource_record_finalize(struct resource_record_view *rrv);
     
 #ifdef	__cplusplus
 }

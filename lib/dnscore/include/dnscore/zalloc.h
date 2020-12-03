@@ -132,6 +132,7 @@ static inline void free_erases(void *ptr, size_t size)
     }
 
 #define ZFREE_OBJECT(label__) free((label__))
+#define ZFREE_OBJECT_OF_TYPE(label__,type__) free(label__)
 
 #else
 
@@ -286,6 +287,7 @@ void* zalloc_line(u32 page_index);
 #define ZALLOC_OBJECT_OR_DIE(label__,object__,tag__) if((label__=(object__*)ZALLOC_OBJECT(object__))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label__) != NULL)
 #define ZALLOC_OBJECT_ARRAY_OR_DIE(label__,object__,count__,tag__) if((label__=(object__*)ZALLOC_BYTES(sizeof(object__)*(count__)))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label__) != NULL)
 #define ZFREE_OBJECT(label__) zfree((label__), sizeof(*(label__)))
+#define ZFREE_OBJECT_OF_TYPE(label__,type__) zfree((label__), sizeof(type__))
 /**
  * (Z)Allocates a new array of count type elements so it can hold
  * newcount type elements. (It takes granularity into account to avoid

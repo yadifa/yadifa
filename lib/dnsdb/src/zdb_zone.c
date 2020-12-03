@@ -51,7 +51,6 @@
 #include "dnsdb/dnsdb-config.h"
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <stdatomic.h>
 #include <stdint.h>
 
 #if DEBUG

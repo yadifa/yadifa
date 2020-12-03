@@ -150,6 +150,9 @@ union dnssec_key_data
 #if HAS_ECDSA_SUPPORT
     EC_KEY* ec;
 #endif
+#if HAS_EDDSA_SUPPORT
+    EVP_PKEY* ed;
+#endif
 };
 
 #else

@@ -1115,6 +1115,23 @@ value_name_table_get_value_from_casename(const value_name_table *table, const ch
     return UNKNOWN_NAME;
 }
 
+ya_result
+value_name_table_get_name_from_value(const value_name_table *table, u32 value, const char** out_name)
+{
+    while(table->data != NULL)
+    {
+        if(table->id == value)
+        {
+            *out_name = table->data;
+            return SUCCESS;
+        }
+
+        table++;
+    }
+
+    return INVALID_ARGUMENT_ERROR;
+}
+
 /*
  * SOA
  */
@@ -1184,6 +1201,39 @@ rr_soa_increase_serial(u8* rdata, u16 rdata_size, u32 increment)
     soa_start += len;
 
     SET_U32_AT(*soa_start, htonl(ntohl(GET_U32_AT(*soa_start)) + increment));
+
+    return SUCCESS;
+}
+
+ya_result
+rr_soa_set_serial(u8* rdata, u16 rdata_size, u32 serial)
+{
+    s32 soa_size = rdata_size;
+
+    u8* soa_start = rdata;
+
+    u32 len = dnsname_len(soa_start);
+
+    soa_size -= len;
+
+    if(soa_size <= 0)
+    {
+        return INCORRECT_RDATA;
+    }
+
+    soa_start += len;
+
+    len = dnsname_len(soa_start);
+    soa_size -= len;
+
+    if(soa_size != 5 * 4) /* Only the 5 32 bits (should) remain */
+    {
+        return INCORRECT_RDATA;
+    }
+
+    soa_start += len;
+
+    SET_U32_AT(*soa_start, htonl(serial));
 
     return SUCCESS;
 }

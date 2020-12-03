@@ -39,6 +39,7 @@
 #define ZDB_HAS_EVENT_DYNAMIC_MODULE 0
 #define ZDB_HAS_FILEPOOL_CACHE 0
 #define ZDB_HAS_FULL_ASCII7 0
+#define ZDB_HAS_KEYGEN 0
 #define ZDB_HAS_LIBC_MALLOC_DEBUG_SUPPORT 0
 #define ZDB_HAS_LOCK_DEBUG_SUPPORT 0
 #define ZDB_HAS_LOGDIR 1
@@ -76,6 +77,7 @@
 #define ZDB_HAS_ZALLOC_DEBUG_SUPPORT 0
 #define ZDB_HAS_ZALLOC_STATISTICS_SUPPORT 0
 #define ZDB_HAS_ZALLOC_SUPPORT 1
+#define ZDB_HAS_ZONESIGN 0
 #define ZDB_HAVE_ARPA_INET_H 1
 #define ZDB_HAVE_ASM_UNISTD_H 1
 #define ZDB_HAVE_ASSERT_H 1
@@ -158,17 +160,17 @@
 #define ZDB_PACKAGE "yadifa"
 #define ZDB_PACKAGE_BUGREPORT "info@yadifa.eu"
 #define ZDB_PACKAGE_NAME "yadifa"
-#define ZDB_PACKAGE_STRING "yadifa 2.4.1-9852"
+#define ZDB_PACKAGE_STRING "yadifa 2.4.1-9881"
 #define ZDB_PACKAGE_TARNAME "yadifa"
 #define ZDB_PACKAGE_URL ""
-#define ZDB_PACKAGE_VERSION "2.4.1-9852"
+#define ZDB_PACKAGE_VERSION "2.4.1-9881"
 #define ZDB_RETSIGTYPE void
 #define ZDB_SELECT_TYPE_ARG1 int
 #define ZDB_SELECT_TYPE_ARG234 (fd_set *)
 #define ZDB_SELECT_TYPE_ARG5 (struct timeval *)
 #define ZDB_STDC_HEADERS 1
-#define ZDB_VERSION "2.4.1-9852"
+#define ZDB_VERSION "2.4.1-9881"
 #undef ZDB_VERSION
-// version 2.4.1.0-9852
-#define ZDB_VERSION 0x02040100267cLL// include/dnsdb/zdb-config-features.h
+// version 2.4.1.0-9881
+#define ZDB_VERSION 0x020401002699LL// include/dnsdb/zdb-config-features.h
 

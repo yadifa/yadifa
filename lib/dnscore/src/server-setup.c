@@ -436,6 +436,7 @@ server_setup_env(pid_t *pid, char ** pid_file_pathp, uid_t uid, gid_t gid, u32 s
     if(setup_flags & SETUP_CREATE_PID_FILE)
     {
         /* Setup environment */
+
         if(FAIL(return_code = pid_file_create(pid, *pid_file_pathp, uid, gid)))
         {
             ttylog_err("unable to create pid file '%s': %r", pid_file_pathp, return_code);

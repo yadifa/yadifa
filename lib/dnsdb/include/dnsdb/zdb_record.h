@@ -368,6 +368,11 @@ void zdb_ttlrdata_delete(zdb_ttlrdata* record);
 void zdb_record_print_indented(zdb_rr_collection collection, output_stream *os, int indent);
 void zdb_record_print(zdb_rr_collection collection, output_stream *os);
 
+/**
+ * Initialises and sets-up a type_bit_maps_context from a zdb_rr_collection.
+ * Returns the size of the bitmap.
+ */
+
 u16 zdb_record_bitmap_type_init(const zdb_rr_collection collection, type_bit_maps_context *bitmap);
 
 #ifdef	__cplusplus

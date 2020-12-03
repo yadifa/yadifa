@@ -55,6 +55,7 @@
 
 #define TTL 86400
 #define RRSIG_ANTEDATING 86400  // sign from the day before
+#define DNSKEY_DEACTIVATION_MARGIN 59 // 654
 
 #define UPDATE_SUBCOMMAND_ADD    0
 #define UPDATE_SUBCOMMAND_DELETE 1
@@ -63,11 +64,13 @@
 
 #define MODULE_MSG_HANDLE g_keyroll_logger
 
-#define NEXT_SIGNATURE_EPOCH_MARGIN 60
+#define NEXT_SIGNATURE_EPOCH_MARGIN 57 // one minute should be enough, and adding a non-minute multiple makes is easier to notice
 
 logger_handle *g_keyroll_logger = LOGGER_HANDLE_SINK;
 
 static bool keyroll_dryrun_mode = FALSE;
+
+ya_result keyroll_step_delete(keyroll_step_t *step);
 
 //static const char *token_delmiter = " \t\r\n";
 
@@ -79,6 +82,18 @@ static int keyroll_dns_resource_record_ptr_vector_qsort_callback(const void *a, 
     int ret = dns_resource_record_compare(ra, rb);
 
     return ret;
+}
+
+void
+keyroll_errors_register()
+{
+    error_register(KEYROLL_ERROR_BASE, "KEYROLL_ERROR_BASE");
+    error_register(KEYROLL_EXPECTED_IDENTICAL_RECORDS, "KEYROLL_EXPECTED_IDENTICAL_RECORDS");
+    error_register(KEYROLL_EXPECTED_IDENTICAL_SIZE_RRSETS, "KEYROLL_EXPECTED_IDENTICAL_SIZE_RRSETS");
+    error_register(KEYROLL_EXPECTED_DNSKEY_OR_RRSIG, "KEYROLL_EXPECTED_DNSKEY_OR_RRSIG");
+    error_register(KEYROLL_UPDATE_SUBCOMMAND_ERROR, "KEYROLL_UPDATE_SUBCOMMAND_ERROR");
+    error_register(KEYROLL_HOLE_IN_TIMELINE, "KEYROLL_HOLE_IN_TIMELINE");
+    error_register(KEYROLL_MUST_REINITIALIZE, "KEYROLL_MUST_REINITIALIZE");
 }
 
 ya_result
@@ -146,15 +161,14 @@ keyroll_init(keyroll_t* keyroll, const u8 *domain, const char *plan_path, const 
     keyroll->server = host_address_copy(server);
     keyroll->keyring = dnskey_keyring_new();
 
-    error_register(KEYROLL_ERROR_BASE, "KEYROLL_ERROR_BASE");
-    error_register(KEYROLL_EXPECTED_IDENTICAL_RECORDS, "KEYROLL_EXPECTED_IDENTICAL_RECORDS");
-    error_register(KEYROLL_EXPECTED_IDENTICAL_SIZE_RRSETS, "KEYROLL_EXPECTED_IDENTICAL_SIZE_RRSETS");
-    error_register(KEYROLL_EXPECTED_DNSKEY_OR_RRSIG, "KEYROLL_EXPECTED_DNSKEY_OR_RRSIG");
-    error_register(KEYROLL_UPDATE_SUBCOMMAND_ERROR, "KEYROLL_UPDATE_SUBCOMMAND_ERROR");
-    error_register(KEYROLL_HOLE_IN_TIMELINE, "KEYROLL_HOLE_IN_TIMELINE");
-    error_register(KEYROLL_MUST_REINITIALIZE, "KEYROLL_MUST_REINITIALIZE");
-
     return ret;
+}
+
+static void
+keyroll_finalize_steps_delete_callback(u64_node *node)
+{
+    keyroll_step_t *step = (keyroll_step_t*)node->value;
+    keyroll_step_delete(step);
 }
 
 void
@@ -177,7 +191,7 @@ keyroll_finalize(keyroll_t *keyroll)
 
         if(keyroll->server != NULL)
         {
-            ZFREE_OBJECT(keyroll->server);
+            host_address_delete(keyroll->server);
             keyroll->server = NULL;
         }
 
@@ -187,7 +201,7 @@ keyroll_finalize(keyroll_t *keyroll)
             keyroll->keyring = NULL;
         }
 
-#pragma message ("TODO 20201102 EDF: fully delete the structure")
+        u64_set_callback_and_destroy(&keyroll->steps, keyroll_finalize_steps_delete_callback);
 
         memset(keyroll, 0, sizeof(keyroll_t));
     }
@@ -1364,6 +1378,58 @@ keyroll_step_t* keyroll_step_new_instance()
     return step;
 }
 
+static void
+keyroll_step_delete_dnskey_callback(void *key_)
+{
+    dnssec_key *key = (dnssec_key*)key_;
+    dnskey_release(key);
+}
+
+static void
+keyroll_step_delete_dns_resource_record_callback(void *rr_)
+{
+    dns_resource_record *rr = (dns_resource_record*)rr_;
+    dns_resource_record_free(rr);
+}
+
+static void
+keyroll_step_delete_file_add_callback(ptr_node *node)
+{
+    free(node->key);
+    input_stream *is = (input_stream*)node->value;
+    input_stream_close(is);
+    ZFREE_OBJECT(is);
+}
+
+static void
+keyroll_step_delete_file_del_callback(void *str_)
+{
+    free(str_);
+}
+
+ya_result
+keyroll_step_delete(keyroll_step_t *step)
+{
+    if(step != NULL)
+    {
+        ptr_vector_callback_and_destroy(&step->dnskey_del, keyroll_step_delete_dnskey_callback);
+        ptr_vector_callback_and_destroy(&step->dnskey_add, keyroll_step_delete_dnskey_callback);
+        ptr_vector_callback_and_destroy(&step->rrsig_add, keyroll_step_delete_dns_resource_record_callback);
+        ptr_vector_callback_and_destroy(&step->expect, keyroll_step_delete_dns_resource_record_callback);
+        ptr_vector_callback_and_destroy(&step->endresult, keyroll_step_delete_dns_resource_record_callback);
+        ptr_set_callback_and_destroy(&step->file_add, keyroll_step_delete_file_add_callback);
+        ptr_vector_callback_and_destroy(&step->file_del, keyroll_step_delete_file_del_callback);
+
+        step->keyroll = NULL;
+        step->epochus = 0;
+
+        ZFREE_OBJECT(step);
+    }
+
+    return SUCCESS;
+}
+
+
 /**
  * Returns the step at the given epoch, or create an empty one
  */
@@ -1964,7 +2030,7 @@ keyroll_step_play(const keyroll_step_t *step, bool delete_all_dnskey)
                     break;
                 }
 
-                if(!((ret == MAKE_ERRNO_ERROR(ETIMEDOUT)) || (ret == MAKE_ERRNO_ERROR(EAGAIN))))
+                if(!((ret == MAKE_ERRNO_ERROR(ETIMEDOUT)) || (ret == MAKE_ERRNO_ERROR(EAGAIN) || (ret == UNEXPECTED_EOF))))
                 {
                     log_notice("%{dnsname}: sending message to %{hostaddr} failed: %r", step->keyroll->domain, step->keyroll->server, ret);
                     break;
@@ -2241,7 +2307,8 @@ keyroll_generate_dnskey(keyroll_t *keyroll, s64 publication_epochus, bool ksk)
         keyroll_step_t *deactivation_step = keyroll_get_step(keyroll, deactivate_epochus);
         deactivation_step->keyroll_action |= /*KeyrollAction::*/Deactivate;
         deactivation_step->dirty = TRUE;
-        dnskey_set_inactive_epoch(key, deactivate_epochus / ONE_SECOND_US);
+        time_t deactivate_epoch = (deactivate_epochus/ ONE_SECOND_US) + DNSKEY_DEACTIVATION_MARGIN;
+        dnskey_set_inactive_epoch(key, deactivate_epoch);
 
         if(*next_deactivationp < deactivation_step->epochus)
         {
@@ -2254,7 +2321,8 @@ keyroll_generate_dnskey(keyroll_t *keyroll, s64 publication_epochus, bool ksk)
         dnskey_acquire(key);
         unpublication_step->keyroll_action |= /*KeyrollAction::*/Unpublish;
         unpublication_step->dirty = TRUE;
-        dnskey_set_delete_epoch(key, unpublish_epochus / ONE_SECOND_US);
+        time_t unpublish_epoch = MAX(unpublish_epochus / ONE_SECOND_US, deactivate_epoch);
+        dnskey_set_delete_epoch(key, unpublish_epoch);
 /*
         formatln("created key: tag=%i, algorithm=%i, flags=%i, create=%U publish=%U activate=%U deactivate=%U unpublish=%U",
                  dnskey_get_tag(key),
@@ -2299,7 +2367,8 @@ keyroll_set_timing_steps(keyroll_t *keyroll, dnssec_key *key, bool dirty)
     keyroll_step_t *deactivation_step = keyroll_get_step(keyroll, deactivate_epochus);
     deactivation_step->keyroll_action |= /*KeyrollAction::*/Deactivate;
     deactivation_step->dirty = dirty;
-    dnskey_set_inactive_epoch(key, deactivate_epochus / ONE_SECOND_US);
+    time_t deactivation_epoch = (deactivate_epochus / ONE_SECOND_US) + DNSKEY_DEACTIVATION_MARGIN;
+    dnskey_set_inactive_epoch(key, deactivation_epoch);
 
     s64 unpublish_epochus = ONE_SECOND_US * dnskey_get_delete_epoch(key);
     keyroll_step_t *unpublication_step = keyroll_get_step(keyroll, unpublish_epochus);
@@ -2307,7 +2376,8 @@ keyroll_set_timing_steps(keyroll_t *keyroll, dnssec_key *key, bool dirty)
     dnskey_acquire(key);
     unpublication_step->keyroll_action |= /*KeyrollAction::*/Unpublish;
     unpublication_step->dirty = dirty;
-    dnskey_set_delete_epoch(key, unpublish_epochus / ONE_SECOND_US);
+    time_t unpublish_epoch = MAX(unpublish_epochus / ONE_SECOND_US, deactivation_epoch);
+    dnskey_set_delete_epoch(key, unpublish_epoch);
 
     return deactivate_epochus;
 }
@@ -2389,7 +2459,8 @@ keyroll_generate_dnskey_ex(keyroll_t *keyroll, u32 size, u8 algorithm,
             keyroll_step_t *deactivation_step = keyroll_get_step(keyroll, deactivate_epochus);
             deactivation_step->keyroll_action |= /*KeyrollAction::*/Deactivate;
             deactivation_step->dirty = TRUE;
-            dnskey_set_inactive_epoch(key, deactivate_epochus / ONE_SECOND_US);
+            time_t deactivate_epoch = (deactivate_epochus / ONE_SECOND_US) + DNSKEY_DEACTIVATION_MARGIN;
+            dnskey_set_inactive_epoch(key, deactivate_epoch);
 
             if(*next_deactivationp < deactivation_step->epochus)
             {
@@ -2401,7 +2472,8 @@ keyroll_generate_dnskey_ex(keyroll_t *keyroll, u32 size, u8 algorithm,
             dnskey_acquire(key);
             unpublication_step->keyroll_action |= /*KeyrollAction::*/Unpublish;
             unpublication_step->dirty = TRUE;
-            dnskey_set_delete_epoch(key, unpublish_epochus / ONE_SECOND_US);
+            time_t unpublish_epoch = MAX(unpublish_epochus / ONE_SECOND_US, deactivate_epoch);
+            dnskey_set_delete_epoch(key, unpublish_epoch);
             dnssec_keystore_add_key(key);
 #if 0
             formatln("created key: tag=%i, algorithm=%i, flags=%i, create=%U publish=%U activate=%U deactivate=%U unpublish=%U",
@@ -2459,8 +2531,10 @@ keyroll_plan_with_policy(keyroll_t *keyroll, s64 generate_from, s64 generate_unt
 static u32
 keyroll_key_hash(dnssec_key *key)
 {
-    u32 key_hash = dnskey_get_algorithm(key);
-    key_hash <<= 8;
+    u32 key_hash = dnskey_get_flags(key);
+    key_hash <<= 5;
+    key_hash |= dnskey_get_algorithm(key);
+    key_hash <<= 16;
     key_hash |= dnskey_get_tag(key);
     return key_hash;
 }
@@ -3189,7 +3263,18 @@ keyroll_store(keyroll_t *keyroll)
                         dnskey_signature_init(&ds);
                         s32 from = (step->epochus / ONE_SECOND_US) - RRSIG_ANTEDATING;     // sign from the day before
 
-                        s32 to = MIN(dnskey_get_inactive_epoch(key), next_signature_update_epoch);
+                        log_debug("%{dnsname}: %llT signing DNSKEY RRSET with key %hu, inactive at %T (%T)",
+                                  keyroll->domain, step->epochus, dnskey_get_tag(key),
+                                  dnskey_get_inactive_epoch(key), next_signature_update_epoch);
+
+                        if(dnskey_get_inactive_epoch(key) > next_signature_update_epoch)
+                        {
+                            log_debug("%{dnsname}: %llT key %hu is inactive at %T which is after the planned expiration time %T",
+                                      keyroll->domain, step->epochus, dnskey_get_tag(key),
+                                      dnskey_get_inactive_epoch(key), next_signature_update_epoch);
+                        }
+
+                        s32 to = MAX(dnskey_get_inactive_epoch(key), next_signature_update_epoch);
 
                         log_info("signing from %U to %U", from, to);
 

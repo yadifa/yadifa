@@ -1504,7 +1504,7 @@ int dns_type_from_case_name_length(const char *src, int src_len, u16 *dst);
  * @return SUCCESS iff the name was matched
  */
 ya_result value_name_table_get_value_from_casename(const value_name_table *table, const char *name, u32 *out_value);
-
+ya_result value_name_table_get_name_from_value(const value_name_table *table, u32 value, const char** out_name);
 
 const char* dns_encryption_algorithm_get_name(u16 d);
 int dns_encryption_algorithm_from_name(const char *src, u8 *dst);
@@ -1551,6 +1551,7 @@ ya_result server_port_to_name(int port, char *name, size_t name_len);
 
 ya_result rr_soa_get_serial(const u8* rdata, u16 rdata_size, u32* out_serial);
 ya_result rr_soa_increase_serial(u8* rdata, u16 rdata_size, u32 increment);
+ya_result rr_soa_set_serial(u8* rdata, u16 rdata_size, u32 increment);
 
 ya_result rr_soa_get_minimumttl(const u8* rdata, u16 rdata_size, s32* out_minimum_ttl);
 

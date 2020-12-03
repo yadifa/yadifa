@@ -103,7 +103,7 @@
 /* T1000 has a Niagara cpu */
 #undef HAS_CPU_NIAGARA
 
-/* remote control disabled. */
+/* yadifa ctrl remote control tool disabled. */
 #undef HAS_CTRL
 
 /* MUST be enabled if either NSEC3 or NSEC are enabled */
@@ -128,6 +128,9 @@
 
 /* acceptance of ASCII7 characters in DNS names (not recommended) disabled. */
 #undef HAS_FULL_ASCII7
+
+/* yadifa keygen tool disabled. */
+#undef HAS_KEYGEN
 
 /* libc malloc debug support monitors program-wide allocations disabled. */
 #undef HAS_LIBC_MALLOC_DEBUG_SUPPORT
@@ -244,6 +247,9 @@
 
 /* zalloc memory system disabled. */
 #undef HAS_ZALLOC_SUPPORT
+
+/* yadifa zonesign tool disabled. */
+#undef HAS_ZONESIGN
 
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #undef HAVE_ARPA_INET_H

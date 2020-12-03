@@ -716,6 +716,8 @@ program_mode_generate(const u8 *domain)
             {
                 log_err("%{dnsname}: plan loading failed: %r", keyroll.domain, ret);
                 formatln("%{dnsname}: plan loading failed: %r", keyroll.domain, ret);
+
+                keyroll_finalize(&keyroll);
                 return ret;
             }
 
@@ -730,6 +732,7 @@ program_mode_generate(const u8 *domain)
     {
         log_err("%{dnsname}: cannot parse '%s'", domain, g_config.generate_from);
         formatln("%{dnsname}: cannot parse '%s'", domain, g_config.generate_from);
+        keyroll_finalize(&keyroll);
         return ret;
     }
 
@@ -783,6 +786,8 @@ program_mode_generate(const u8 *domain)
             formatln("%{dnsname}: failed to store the plan: %r", domain, ret);
         }
     }
+
+    keyroll_finalize(&keyroll);
 
     return ret;
 }
@@ -1350,6 +1355,7 @@ main(int argc, char *argv[])
 {
     /* initializes the core library */
     dnscore_init();
+    keyroll_errors_register();
 
     ya_result ret = main_config(argc, argv);
 

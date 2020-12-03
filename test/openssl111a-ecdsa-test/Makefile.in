@@ -230,6 +230,7 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 @USES_CLANG_TRUE@am__append_30 = -DUSES_LLVM -Wno-gnu
 #-Wno-extended-offsetof
 @USES_CLANG_TRUE@am__append_31 = -DMODE_DEBUG_CLANG -fsanitize=address -fsanitize=bounds
+@IS_LINUX_FAMILY_TRUE@@USES_CLANG_TRUE@am__append_32 = -Wl,-z,stack-size=8388608
 
 # Note: add a _d suffix for debug builds ?
 
@@ -239,18 +240,19 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 ###############################################################################
 
 #GCC
-@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_32 = -mcpu=niagara
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_33 = -DLTO -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
-@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_34 = -flto \
+@HAS_CPU_NIAGARA_TRUE@@USES_GCC_TRUE@am__append_33 = -mcpu=niagara
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_34 = -DLTO -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
+@HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_35 = -flto \
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-fwhole-program \
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-fno-fat-lto-objects \
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-fuse-linker-plugin \
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-Wl,-Map=module.map \
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-Wl,--cref
-@USES_GCC_TRUE@am__append_35 = -DUSES_GCC
-@USES_GCC_TRUE@am__append_36 = -DMODE_DEBUG_GCC -fstack-check -fstack-protector-strong
-@USES_SUNC_TRUE@am__append_37 = -DUSES_SUNC
-@USES_SUNC_TRUE@am__append_38 = -DMODE_DEBUG_SUNC
+@USES_GCC_TRUE@am__append_36 = -DUSES_GCC
+@USES_GCC_TRUE@am__append_37 = -DMODE_DEBUG_GCC -fstack-check -fstack-protector-strong
+@IS_LINUX_FAMILY_TRUE@@USES_GCC_TRUE@am__append_38 = -Wl,-z,stack-size=8388608
+@USES_SUNC_TRUE@am__append_39 = -DUSES_SUNC
+@USES_SUNC_TRUE@am__append_40 = -DMODE_DEBUG_SUNC
 
 # Note: add a _d suffix for debug builds ?
 
@@ -260,14 +262,14 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 ###############################################################################
 
 # if an unknown compiler is used, it should have its own section
-@USES_UNKNOWN_TRUE@am__append_39 = -DUSES_UNKNOWN_COMPILER
-@USES_UNKNOWN_TRUE@am__append_40 = -DMODE_DEBUG_UNKNOWN
+@USES_UNKNOWN_TRUE@am__append_41 = -DUSES_UNKNOWN_COMPILER
+@USES_UNKNOWN_TRUE@am__append_42 = -DMODE_DEBUG_UNKNOWN
 
 #
 # Some BSD-based OSes need this
 #
-@IS_BSD_FAMILY_TRUE@am__append_41 = -I./include
-@IS_SOLARIS_FAMILY_TRUE@am__append_42 = -D_POSIX_PTHREAD_SEMANTICS
+@IS_BSD_FAMILY_TRUE@am__append_43 = -I./include
+@IS_SOLARIS_FAMILY_TRUE@am__append_44 = -D_POSIX_PTHREAD_SEMANTICS
 noinst_PROGRAMS = openssl111a-ecdsa-test$(EXEEXT)
 subdir = test/openssl111a-ecdsa-test
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -420,6 +422,7 @@ HAS_ECDSA_SUPPORT = @HAS_ECDSA_SUPPORT@
 HAS_EVENT_DYNAMIC_MODULE = @HAS_EVENT_DYNAMIC_MODULE@
 HAS_FILEPOOL_CACHE = @HAS_FILEPOOL_CACHE@
 HAS_FULL_ASCII7 = @HAS_FULL_ASCII7@
+HAS_KEYGEN = @HAS_KEYGEN@
 HAS_LIBC_MALLOC_DEBUG_SUPPORT = @HAS_LIBC_MALLOC_DEBUG_SUPPORT@
 HAS_LITTLE_ENDIAN = @HAS_LITTLE_ENDIAN@
 HAS_LOCK_DEBUG_SUPPORT = @HAS_LOCK_DEBUG_SUPPORT@
@@ -447,6 +450,7 @@ HAS_YADIFA = @HAS_YADIFA@
 HAS_ZALLOC_DEBUG_SUPPORT = @HAS_ZALLOC_DEBUG_SUPPORT@
 HAS_ZALLOC_STATISTICS_SUPPORT = @HAS_ZALLOC_STATISTICS_SUPPORT@
 HAS_ZALLOC_SUPPORT = @HAS_ZALLOC_SUPPORT@
+HAS_ZONESIGN = @HAS_ZONESIGN@
 HAVE_RECVMMSG = @HAVE_RECVMMSG@
 HAVE_SENDMMSG = @HAVE_SENDMMSG@
 INSTALL = @INSTALL@
@@ -558,17 +562,18 @@ AM_CFLAGS = -D_THREAD_SAFE -D_REENTRANT -D_FILE_OFFSET_BITS=64 \
 	$(am__append_11) $(am__append_12) $(am__append_13) \
 	$(am__append_14) $(am__append_15) $(am__append_17) \
 	$(am__append_23) $(am__append_25) $(am__append_26) \
-	$(am__append_28) $(am__append_30) $(am__append_32) \
-	$(am__append_33) $(am__append_35) $(am__append_37) \
-	$(am__append_39) $(am__append_41) $(am__append_42) \
+	$(am__append_28) $(am__append_30) $(am__append_33) \
+	$(am__append_34) $(am__append_36) $(am__append_39) \
+	$(am__append_41) $(am__append_43) $(am__append_44) \
 	$(LOCALFLAGS) -I$(top_srcdir)/lib/dnscore/include \
 	-I$(top_builddir)/lib/dnscore/include
 AM_LDFLAGS = $(am__append_16) $(am__append_18) $(am__append_24) \
-	$(am__append_29) $(am__append_34)
+	$(am__append_29) $(am__append_32) $(am__append_35) \
+	$(am__append_38)
 DEBUGFLAGS = $(am__append_1) $(am__append_2) $(am__append_19) \
 	$(am__append_20) $(am__append_21) $(am__append_22) \
-	$(am__append_27) $(am__append_31) $(am__append_36) \
-	$(am__append_38) $(am__append_40)
+	$(am__append_27) $(am__append_31) $(am__append_37) \
+	$(am__append_40) $(am__append_42)
 LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"' -DTCLDIR='"$(tcldir)"'
 @HAS_LTO_SUPPORT_FALSE@@USES_CLANG_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_FALSE@@USES_GCC_TRUE@AM_AR = ar

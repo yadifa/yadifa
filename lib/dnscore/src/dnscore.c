@@ -154,6 +154,8 @@ static smp_int g_shutdown = SMP_INT_INITIALIZER;
  * Will kill the program if an inconsistency is detected.
  */
 
+typedef void (*function_pointer_t)(const u8 *fqdn);
+
 static void
 dnscore_arch_checkup()
 {
@@ -170,6 +172,7 @@ dnscore_arch_checkup()
     ARCH_CHECK_SIZE(sizeof(u64), 8);
     ARCH_CHECK_SIZE(sizeof(s64), 8);
     ARCH_CHECK_SIZE(sizeof(intptr), sizeof(void*));
+    ARCH_CHECK_SIZE(sizeof(function_pointer_t), sizeof(void*)); // to safely ignore the function pointer/data pointer conversion
     ARCH_CHECK_SIGNED(s8);
     ARCH_CHECK_SIGNED(s16);
     ARCH_CHECK_SIGNED(s32);
@@ -589,7 +592,9 @@ dnscore_timer_thread(void * unused0)
     // unreachable
     // return NULL;
 
+#ifndef _STDNORETURN_H
     return NULL; // just so the compiler shuts-up
+#endif
 }
 
 void

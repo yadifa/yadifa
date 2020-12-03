@@ -639,6 +639,20 @@ ya_result config_source_set_by_target(config_section_descriptor_s *section_descr
 
 ya_result config_value_set_to_default(const char *section_name, const char *name, config_error_s *cfgerr);
 
+/**
+ *
+ * Returns the source of a value from the given section/container
+ *
+ * Look at CONFIG_SOURCE_* defines above for the predefined sources.
+ *
+ * @param section_name name of the section
+ * @param name key of the value
+ *
+ * @return the source index or an error code
+ */
+
+ya_result config_value_get_source(const char *section_name, const char *name);
+
 typedef bool config_section_struct_type_handler(output_stream *os, const char *name, void *ptr);
 
 bool config_section_struct_register_type_handler(config_set_field_function* setter, config_section_struct_type_handler *handler);

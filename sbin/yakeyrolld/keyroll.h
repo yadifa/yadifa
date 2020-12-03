@@ -40,7 +40,7 @@
 #include <dnscore/u64_set.h>
 
 #define YKEYROLL_NAME "yakeyrolld"
-#define YKEYROLL_VERSION "2.4.0"
+#define YKEYROLL_VERSION "2.4.1"
 
 #define YKEYROLL_KSK_SUFFIX "_SECRET_KEYSIGNINGKEY"
 
@@ -100,8 +100,6 @@ typedef struct keyroll_s
 {
     u8 *domain;
 
-    ptr_set dnssec_policy_processed_key_suites;
-
     host_address *server;
     dnskey_keyring *keyring;
     char *plan_path;
@@ -127,6 +125,8 @@ typedef struct keyroll_s
 
     // current key records
 } keyroll_t;
+
+void keyroll_errors_register();
 
 s64 keyroll_set_timing_steps(keyroll_t *keyroll, dnssec_key *key, bool dirty);
 

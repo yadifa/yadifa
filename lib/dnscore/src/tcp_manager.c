@@ -34,11 +34,16 @@
 
 #define __TCP_MANAGER_C__ 1
 
+#include "dnscore/dnscore-config.h"
 #include "dnscore/mutex.h"
 #include "dnscore/network.h"
 #include "dnscore/ptr_set.h"
 #include "dnscore/u32_set.h"
+#if HAVE_STDATOMIC_H
 #include <stdatomic.h>
+#else
+#include "dnscore/thirdparty/stdatomic.h"
+#endif
 #include <dnscore/tcp_io_stream.h>
 #include <dnscore/fdtools.h>
 #include <dnscore/zalloc.h>

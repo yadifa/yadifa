@@ -268,13 +268,13 @@ dnssec_tool_finalize()
 static int
 dnssec_tool_register(int priority)
 {
+    (void)priority;
     ya_result ret;
-
 
     /*    ------------------------------------------------------------    */
 
     // to handle version & help
-// to handle version & help
+    // to handle version & help
 
     config_set_source(CONFIG_SOURCE_CMDLINE);
 
@@ -282,7 +282,7 @@ dnssec_tool_register(int priority)
         return ret;
     }
 
-// init and register main settings container
+    // init and register main settings container
     ZEROMEMORY(&g_dnssec_tool_settings, sizeof(g_dnssec_tool_settings));
     if (FAIL(
         ret = config_register_struct("main", dnssec_tool_desc, &g_dnssec_tool_settings, 5))) {

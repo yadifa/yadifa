@@ -104,7 +104,7 @@
 /* T1000 has a Niagara cpu */
 /* #undef HAS_CPU_NIAGARA */
 
-/* remote control disabled. */
+/* yadifa ctrl remote control tool disabled. */
 #define HAS_CTRL 1
 
 /* MUST be enabled if either NSEC3 or NSEC are enabled */
@@ -129,6 +129,9 @@
 
 /* acceptance of ASCII7 characters in DNS names (not recommended) disabled. */
 #define HAS_FULL_ASCII7 0
+
+/* yadifa keygen tool disabled. */
+#define HAS_KEYGEN 0
 
 /* libc malloc debug support monitors program-wide allocations disabled. */
 #define HAS_LIBC_MALLOC_DEBUG_SUPPORT 0
@@ -245,6 +248,9 @@
 
 /* zalloc memory system disabled. */
 #define HAS_ZALLOC_SUPPORT 1
+
+/* yadifa zonesign tool disabled. */
+#define HAS_ZONESIGN 0
 
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #define HAVE_ARPA_INET_H 1
@@ -553,7 +559,7 @@
 #define PACKAGE_NAME "yadifa"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "yadifa 2.4.1-9852"
+#define PACKAGE_STRING "yadifa 2.4.1-9881"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "yadifa"
@@ -562,7 +568,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.4.1-9852"
+#define PACKAGE_VERSION "2.4.1-9881"
 
 /* Define as the return type of signal handlers (`int' or `void'). */
 #define RETSIGTYPE void
@@ -583,7 +589,7 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* Version number of package */
-#define VERSION "2.4.1-9852"
+#define VERSION "2.4.1-9881"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */

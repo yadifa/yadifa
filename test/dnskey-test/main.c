@@ -82,6 +82,7 @@ static struct dnskey_inputs_s dnskey_inputs[] =
         "example.eu. IN DNSKEY 256 3 5 AwEAAdxni9K5IoxZPJDbPs7xhWTpWp4Of03JudJPVzmBa3SIURryWLuK ecWs4kL/WZb1bFoqaZJSlAUEQHDTmnnyEJ41gVDUOZ90cRc4t7NwiO4Z 0HqQhUazDUWLFho2i+JnGztbsE9IjyVvjQHWE1Xa2MMG+0qaJDPWcpL6 daYHzi/2W+WrUscVjkvXIJkSUVrS1Clk65d8VdrG+rAkUxoIeYlXyKW6 tskL8eEDVUoBHkWzDHPZh1bA6VcYux2pNw0sLFnDvv8A9xJu0Nxv6o57 pzd21ngwzsnBxSdxqn+M8BbNFEKFh9SQTJ2k6Z9vHwStMLQntonYNgez ni/R/9iO0lvW5o7tmzHj14sb9oMQ8f5m/OGlZ9UjZg8h+Il59IEm7EEn rwkp8L/Tfw81O1jWaDX5GWaLAdwk6VgiCLQ1xp1DC13JxhaC4RGEhsWN TojEE4bla1Awos906mC9x1OY2XSGq4zmQqH+6xk/Pl6TKpE9PSJO3lCq 8JKfDVdaK3BITROhSQZjde9I9IMF30HAuAnc/SubkkvVWrSaFVtCevzb oyxVsL2tTItY1Em+NRJH77aVGRj6Iav4MDJlgkYoFlDPG1GLtLH/GaxW fgeDvpsNdkxckWLnS6sPGLPC9SyCC0VWXnmSqro5mN+g1XzlUHgC3X5c LcOmJI7f2GO2i83r",
         DNSKEY_ALGORITHM_RSASHA1, 4096, "example.eu."
     },
+#if DNSCORE_HAS_ECDSA_SUPPORT
     {
         // dnssec-keygen -a ECDSAP256SHA256 example.eu
         "example.eu. IN DNSKEY 256 3 13 UFLtfeMQq9CSFQwMC/ids65uwuY9g7w8Obx+0ySea7SX30nZTCqAAOvZ JgdIs2gJU7+a3TBiiFgYehxsQufo3Q==",
@@ -92,7 +93,19 @@ static struct dnskey_inputs_s dnskey_inputs[] =
         "example.eu. IN DNSKEY 256 3 14 aRBbx/S6IIDwnloCO7qkcs2MdyigDs46g6J0gM8wL+hfgvmO0Sifk/vW cFigqHXenJsmFZTqButEN6IZmYRtwp/icQw/ThAlEDsD0qMupmdqFQis Ky26e0Gooe6+gFYC",
         DNSKEY_ALGORITHM_ECDSAP256SHA256, 384, "example.eu."
     },
-
+#endif
+#if DNSCORE_HAS_EDDSA_SUPPORT
+    {
+        // dnssec-keygen -a ED25519 example.eu
+        "example.eu. IN DNSKEY 256 3 15 E/6YXvfRv7PSaojnzqw2eNAtls7zFZ3np+8FoM8hxis=",
+        DNSKEY_ALGORITHM_ED25519, 256, "example.eu."
+    },
+    {
+        // dnssec-keygen -a ED448 example.eu
+        "example.eu. IN DNSKEY 256 3 16 lQj12QgLCcMM+85873xuz73W7y6nJRwmUtYkDQq40TVaBNRMJUfPR1rx WzoMDvMCjiqn5lA9O/wA",
+        DNSKEY_ALGORITHM_ED448, 448, "example.eu." // except its 57 bytes, WTF
+    },
+#endif
     {NULL, 0, 0, NULL}
 };
 
@@ -143,6 +156,8 @@ static void parse_public_key_records()
     for(struct dnskey_inputs_s *p = &dnskey_inputs[0]; p->record_text != NULL; ++p)
     {
         parse_public_key_record(p);
+        flushout();
+        flusherr();
     }
 }
 

@@ -2263,6 +2263,44 @@ config_value_set_to_default(const char *section_name, const char *name, config_e
     return err;
 }
 
+ya_result
+config_value_get_source(const char *section_name, const char *name)
+{
+    config_section_descriptor_s *section_descriptor = NULL;
+    ya_result ret = CONFIG_SECTION_ERROR;
+
+    u32_set_iterator iter;
+    u32_set_iterator_init(&section_descriptor_set, &iter);
+    while(u32_set_iterator_hasnext(&iter))
+    {
+        u32_node *node = u32_set_iterator_next_node(&iter);
+        config_section_descriptor_s *section_desc = (config_section_descriptor_s*)node->value;
+
+        if(strcmp(section_desc->vtbl->name, section_name) == 0)
+        {
+            section_descriptor = section_desc;
+            break;
+        }
+    }
+
+    if(section_descriptor != NULL)
+    {
+        if(section_descriptor->vtbl->table != NULL)
+        {
+            section_descriptor->vtbl->init(section_descriptor);
+
+            if(ISOK(ret = config_item_index_get(section_descriptor->vtbl->table, name)))
+            {
+                const config_table_descriptor_item_s *item = &section_descriptor->vtbl->table[ret];
+
+                ret = item->source;
+            }
+        }
+    }
+
+    return ret;
+}
+
 static inline void
 config_item_name_canonize(const char *name, char *filtered_name)
 {

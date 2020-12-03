@@ -34,45 +34,54 @@
 
 #pragma once
 
+
+
 /** @defgroup yadifa
  *  @ingroup ###
  *  @brief yadifa
  */
 
+
 #include "module.h"
 
-#include <dnscore/host_address.h>
 
-struct tsig_item;
-
-typedef struct yadifa_ctrl_settings_s yadifa_ctrl_settings_s;
-struct yadifa_ctrl_settings_s
+typedef struct yadifa_keygen_settings_s yadifa_keygen_settings_s;
+struct yadifa_keygen_settings_s
 {
-    host_address                                                    *server;
-    u8                                                               *qname;
-    u8                                                       *tsig_key_name;
-//  u8                                                                *file;
-    char                                                       *config_file;
-    struct tsig_item                                          *tsig_key_item; // for the -y option
+    u8 *origin;
+    //char                                                       *config_file;
+    char                                                     *keys_path;
+    char                                                *random_device_file;
 
-    u8                                                            log_level;
+    char                                                          *key_flag;
+    char                                                         *algorithm;
 
-    /*    ------------------------------------------------------------    */
+    char                                                  *publication_date_text;
+    char                                                   *activation_date_text;
+    char                                                   *revocation_date_text;
+    char                                                 *inactivation_date_text;
+    char                                                     *deletion_date_text;
 
-    u16                                                              qclass;
-    u16                                                               qtype;
-    u16                                                                port;
+    int                                                                 ttl;
+    int                                                            key_size;
+    int                                                              digest;
+    int                                                            interval;
+    int                                                     verbosity_level;
 
-    bool                                                              clean;
+    u8                                                                 test; /// @TODO 20160511 gve -- needs to be removed afterward
 
-    /** @todo 20150219 gve -- #if HAS_TCL must be set, before release */
-//#if HAS_TCL
-    bool                                                        interactive;
-//#endif // HAS_TCL
-    bool                                                            verbose;
-    bool                                                             enable;
+    bool                                                  generate_key_only;
+    bool                                            backward_compatible_key;
+    bool                                                      successor_key;
+    bool                                                      nsec3_capable;
+
+
 };
 
-#ifndef CTRL_C_
-extern const module_s ctrl_program;
+
+#ifndef KEYGEN_C_
+
+extern const module_s keygen_program;
+
 #endif
+

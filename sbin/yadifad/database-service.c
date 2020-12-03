@@ -766,6 +766,8 @@ database_service_process_command(zone_desc_s *zone_desc, zone_command_s* command
             log_err("unexpected command %d", command->id);
         }
     }
+
+    return ret;
 }
 
 static void database_service_message_clear_free_fqdn_node(ptr_node *node)

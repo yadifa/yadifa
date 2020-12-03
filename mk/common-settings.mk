@@ -182,6 +182,10 @@ AM_CFLAGS += -DUSES_LLVM -Wno-gnu
 
 DEBUGFLAGS += -DMODE_DEBUG_CLANG -fsanitize=address -fsanitize=bounds
 
+if IS_LINUX_FAMILY
+AM_LDFLAGS += -Wl,-z,stack-size=8388608
+endif
+
 # Note: add a _d suffix for debug builds ?
 
 endif # CLANG
@@ -212,6 +216,10 @@ endif
 
 AM_CFLAGS += -DUSES_GCC
 DEBUGFLAGS += -DMODE_DEBUG_GCC -fstack-check -fstack-protector-strong
+
+if IS_LINUX_FAMILY
+AM_LDFLAGS += -Wl,-z,stack-size=8388608
+endif
 
 endif # USES_GCC
 

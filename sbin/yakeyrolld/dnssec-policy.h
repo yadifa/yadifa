@@ -448,10 +448,6 @@ void  dnssec_policy_initialise();
 // remove all previously defined policies
 void dnssec_policy_finalize();
 
-bool dnssec_policy_key_suite_is_marked_processed(keyroll_t *keyroll, const struct dnssec_policy_key_suite *kr);
-bool dnssec_policy_key_suite_mark_processed(keyroll_t *keyroll, const struct dnssec_policy_key_suite *kr);
-void dnssec_policy_key_suite_unmark_processed(keyroll_t *keyroll, const struct dnssec_policy_key_suite *kr);
-
 /**
  * @}
  */

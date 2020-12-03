@@ -56,7 +56,7 @@
 #include "dnscore/dnscore-config.h"
 #include "dnscore/timems.h"
 
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__GLIBC__) || defined(__APPLE__)
     #include <execinfo.h>
     #if HAS_BFD_DEBUG_SUPPORT
         #include <bfd.h>
@@ -84,7 +84,7 @@
 #undef debug_stat
 #undef debug_mallocated
 
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__GLIBC__) || defined(__APPLE__)
 #define DNSCORE_DEBUG_STACKTRACE 1
 #else /* __FreeBSD__ or unknown */
 #define DNSCORE_DEBUG_STACKTRACE 0
@@ -570,7 +570,7 @@ typedef u64_set_debug stacktrace_set;
 static stacktrace_set stacktraces_list_set = U64_SET_EMPTY;
 static pthread_mutex_t stacktraces_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-#ifdef __linux__
+#ifdef __GLIBC__
 static ya_result 
 debug_stacktraces_list_set_search(void* data, void* parm)
 {
@@ -603,7 +603,7 @@ debug_stacktraces_list_set_search(void* data, void* parm)
 stacktrace
 debug_stacktrace_get()
 {
-#ifdef __linux__
+#ifdef __GLIBC__
     void* buffer_[1024];
 
     int n = backtrace(buffer_, sizeof(buffer_) / sizeof(void*));
@@ -705,7 +705,7 @@ debug_stacktrace_clear()
 void
 debug_stacktrace_log(logger_handle* handle, u32 level, stacktrace trace)
 {
-#ifdef __linux__
+#ifdef __GLIBC__
     int n = 0;
 
     if(trace != NULL)
@@ -765,7 +765,7 @@ debug_stacktrace_log(logger_handle* handle, u32 level, stacktrace trace)
 void
 debug_stacktrace_log_with_prefix(logger_handle* handle, u32 level, stacktrace trace, const char *prefix)
 {
-#ifdef __linux__
+#ifdef __GLIBC__
     int n = 0;
 
     if(trace != NULL)
@@ -825,7 +825,7 @@ debug_stacktrace_log_with_prefix(logger_handle* handle, u32 level, stacktrace tr
 void
 debug_stacktrace_try_log(logger_handle* handle, u32 level, stacktrace trace)
 {
-#ifdef __linux__
+#ifdef __GLIBC__
     int n = 0;
 
     if(trace != NULL)
@@ -891,7 +891,7 @@ debug_stacktrace_print(output_stream *os, stacktrace trace)
         return;
     }
 
-#ifdef __linux__
+#ifdef __GLIBC__
     int n = 0;
 
     while(trace[n] != 0)
@@ -983,7 +983,7 @@ debug_dump_ex(void* data_pointer_, size_t size_, size_t line_size, bool hex, boo
 
 /****************************************************************************/
 
-#if defined(__linux__)
+#if defined(__GLIBC__)
 
 bool
 debug_log_stacktrace(logger_handle *handle, u32 level, const char *prefix)
@@ -993,7 +993,7 @@ debug_log_stacktrace(logger_handle *handle, u32 level, const char *prefix)
     char binary[PATH_MAX];
 #endif
 
-#if defined(__linux__)
+#if defined(__GLIBC__)
     
     int n = backtrace(addresses, sizeof(addresses) / sizeof(void*));
     

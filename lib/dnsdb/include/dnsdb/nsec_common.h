@@ -63,6 +63,3 @@ u32 nsec_type_bit_maps_initialise_from_label(type_bit_maps_context *context, zdb
 
 #endif	/* _NSEC_COMMON_H */
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

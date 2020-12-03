@@ -520,15 +520,13 @@ nsec3_load_fix_chain_search_cb(const void *key, const void *item)
     return ret;
 }
 
-typedef bool (nsec3_load_is_label_covered_function)(zdb_rr_label*);
-
-static bool
+bool
 nsec3_load_is_label_covered(zdb_rr_label *label)
 {
     return !ZDB_LABEL_UNDERDELEGATION(label);
 }
 
-static bool
+bool
 nsec3_load_is_label_covered_optout(zdb_rr_label *label)
 {
     if(!ZDB_LABEL_ATORUNDERDELEGATION(label)) // includes APEX
@@ -622,7 +620,6 @@ nsec3_load_find_extranous_records_in_chain(nsec3_load_context *context, nsec3_lo
             type_bit_maps_context bitmap;
 
             u16 bitmap_size = zdb_rr_label_bitmap_type_init(label, &bitmap);
-
             u16 rdata_size_pre_bitmap = nsec3param_rdata_size + 1 + digest_len;
             u16 rdata_size = rdata_size_pre_bitmap + bitmap_size;
             nsec3_context_record* expected_nsec3_record = nsec3_load_context_record_new_binary(digest, min_ttl, rdata_size);

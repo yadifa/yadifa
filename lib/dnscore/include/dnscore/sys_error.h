@@ -184,6 +184,7 @@ bool dnscore_monitored_fail(ya_result ret);
 #define DATA_FORMAT_ERROR                       CORE_ERROR_CODE(33)
 #define LOCK_FAILED                             CORE_ERROR_CODE(34)
 #define UNSUPPORTED_CLASS                       CORE_ERROR_CODE(35)
+#define CANNOT_OPEN_FILE                        CORE_ERROR_CODE(36)
 
 #define PARSEB16_ERROR                          CORE_ERROR_CODE(0x1001)
 #define PARSEB32_ERROR                          CORE_ERROR_CODE(0x1002)

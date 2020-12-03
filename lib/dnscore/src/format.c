@@ -2623,8 +2623,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
     return INCORRECT_RDATA;
 }
 
-
-
+#if 0
 static int
 osprint_rdata_count_escapes(const u8* name, size_t name_len)
 {
@@ -2644,6 +2643,7 @@ osprint_rdata_count_escapes(const u8* name, size_t name_len)
 
     return ret;
 }
+#endif
 
 ya_result
 osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_size)

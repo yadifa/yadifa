@@ -592,8 +592,13 @@ simple_rest_server_init(simple_rest_server *srs, struct addrinfo *addr)
     static const int on = 1;
     
     socket_server_opensocket_s socket;
+    ya_result ret;
     
-    socket_server_opensocket_init(&socket, addr, SOCK_STREAM);
+    if(FAIL(ret = socket_server_opensocket_init(&socket, addr, SOCK_STREAM)))
+    {
+        return ret;
+    }
+
     socket_server_opensocket_setopt(&socket, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 #if defined(SO_REUSEPORT)
     socket_server_opensocket_setopt(&socket, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));

@@ -510,7 +510,7 @@ dnskey_digest_init(digest_s *ctx, u8 algorithm)
         case DNSKEY_ALGORITHM_RSASHA512_NSEC3:
             digest_sha512_init(ctx);
             break;
-#if DNSCORE_HAVE_EDDSA_SUPORT
+#if HAS_EDDSA_SUPORT
         case DNSKEY_ALGORITHM_ED25519:
         case DNSKEY_ALGORITHM_ED448:
             digest_rawdata_init(ctx);
@@ -825,6 +825,10 @@ dnskey_new_from_rdata(const u8 *rdata, u16 rdata_size, const u8 *fqdn, dnssec_ke
             break;
 #endif
 #if HAS_EDDSA_SUPPORT
+        case DNSKEY_ALGORITHM_ED25519:
+        case DNSKEY_ALGORITHM_ED448:
+            return_value = dnskey_eddsa_loadpublic(rdata, rdata_size, origin, out_key); // RC
+            break;
 #endif
 #ifdef DNSKEY_ALGORITHM_DUMMY
         case DNSKEY_ALGORITHM_DUMMY:

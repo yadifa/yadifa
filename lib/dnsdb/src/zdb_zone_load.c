@@ -86,6 +86,7 @@ extern logger_handle *g_database_logger;
 void
 zdb_zone_load_parms_init(struct zdb_zone_load_parms *parms, zone_reader *zr, const u8 *expected_origin, u16 flags)
 {
+    ZEROMEMORY(parms, sizeof(struct zdb_zone_load_parms));
     parms->zr = zr;
     parms->expected_origin = expected_origin;
     parms->dnskey_state = U32_SET_EMPTY;
@@ -1053,6 +1054,7 @@ zdb_zone_load_ex(struct zdb_zone_load_parms *parms)
             if(ISOK(return_code = nsec_update_zone(zone, (flags & ZDB_ZONE_IS_SLAVE) != 0)))
             {//DNSSEC_ERROR_NSEC_INVALIDZONESTATE
                 zdb_rr_label_flag_or(zone->apex, ZDB_RR_LABEL_NSEC);
+                zdb_rr_label_flag_and(zone->apex, ~(ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT));
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
                 zdb_zone_set_maintained(zone, (flags & ZDB_ZONE_IS_SLAVE) == 0);
 #endif

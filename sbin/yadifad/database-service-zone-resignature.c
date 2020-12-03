@@ -1406,6 +1406,9 @@ database_service_zone_dnssec_maintenance_thread(void *parms_)
 
             if(FAIL(return_code = zdb_zone_maintenance(zone)))
             {
+#if DEBUG
+                log_info("zone sign: %{dnsname}: failed with %r and earliest signature expiration happens at %T", zone_origin(zone_desc), return_code, zone->progressive_signature_update.earliest_signature_expiration);
+#endif
                 switch(return_code)
                 {
                     case ZDB_ERROR_ZONE_IS_NOT_DNSSEC:
@@ -1523,11 +1526,9 @@ database_service_zone_dnssec_maintenance_lock_for(zone_desc_s *zone_desc, u8 zon
     if(zone_get_status(zone_desc) & (ZONE_STATUS_SIGNATURES_UPDATE|ZONE_STATUS_SIGNATURES_UPDATING))
     {
         // already loading
-
 #if DEBUG
         zone_desc_log(MODULE_MSG_HANDLE, MSG_DEBUG1, zone_desc, "database_service_zone_resignature");
 #endif
-        
         log_debug("zone sign: %{dnsname}: already having its signatures updated", origin);
         
         if(zone_desc->loaded_zone != NULL)

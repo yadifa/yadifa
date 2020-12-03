@@ -807,7 +807,8 @@ socket_server_server()
  * @param sock_type e.g.: SOCK_STREAM, SOCK_DGRAM, ...
  */
 
-void socket_server_opensocket_init(socket_server_opensocket_s *ctx, struct addrinfo *addr, int sock_type)
+ya_result
+socket_server_opensocket_init(socket_server_opensocket_s *ctx, struct addrinfo *addr, int sock_type)
 {
     switch(addr->ai_family)
     {
@@ -816,7 +817,7 @@ void socket_server_opensocket_init(socket_server_opensocket_s *ctx, struct addri
             struct sockaddr_in* sa4 = (struct sockaddr_in*)addr->ai_addr;
             if(sa4->sin_port == 0)
             {
-                abort();
+                return INVALID_ARGUMENT_ERROR;
             }
             break;
         }
@@ -825,13 +826,13 @@ void socket_server_opensocket_init(socket_server_opensocket_s *ctx, struct addri
             struct sockaddr_in6* sa6 = (struct sockaddr_in6*)addr->ai_addr;
             if(sa6->sin6_port == 0)
             {
-                abort();
+                return INVALID_ARGUMENT_ERROR;;
             }
             break;
         }
         default:
         {
-            abort();
+            return INVALID_ARGUMENT_ERROR;;
         }
     }
 
@@ -880,6 +881,8 @@ void socket_server_opensocket_init(socket_server_opensocket_s *ctx, struct addri
         memcpy(&alt->ss, addr->ai_addr, addr->ai_addrlen);
         alt->addr.ai_addr = &alt->ss.sa;
     }
+
+    return SUCCESS;
 }
 
 void socket_server_opensocket_setopt(socket_server_opensocket_s *ctx, int level, int optname, const void* opt, socklen_t optlen)

@@ -32,49 +32,52 @@
  *
  */
 
-/** @defgroup test
- *  @ingroup test
- *  @brief skeleton file
- * 
- * skeleton test program, will not be installed with a "make install"
- * 
- * To create a new test based on the skeleton:
- * 
- * _ copy the folder
- * _ replace "skeleton" by the name of the test
- * _ add the test to the top level Makefile.am and configure.ac
- * _ add the test to the CMakeLists.txt from the tests directory
- *
+#pragma once
+
+
+
+/** @defgroup yadifa
+ *  @ingroup ###
+ *  @brief yadifa
  */
 
-#include <dnscore/dnscore.h>
-#include <dnscore/network.h>
-#include <dnscore/format.h>
+#include "module.h"
 
-static ya_result
-network_callback(const char* itf_name, const socketaddress* ss, void* data)
+#include <dnscore/host_address.h>
+
+struct tsig_item;
+
+typedef struct yadifa_zonesign_settings_s yadifa_zonesign_settings_s;
+struct yadifa_zonesign_settings_s
 {
-    (void)data;
-    formatln("CB: %s: %{sockaddr}", itf_name, ss);
-    flushout();
-    return SUCCESS;
-}
+    char *keys_path;
+    char *output_file;
+    char *input_file;
+    char *journal_file;
+    char *from_time_text;
+    char *to_time_text;
+    char *nsec3_salt_text;
+    char *now_text;
+    s64 now;
+    u8 *origin;
+    u32 new_serial;
+    u32 from_time;
+    u32 to_time;
+    u32 interval;
+    u32 jitter;
+    s32 dnskey_ttl;
+    u32 dnssec_mode;
+    s32 nsec3_salt_size;
+    u16 nsec3_iterations;
+    u8 verbose;
+    bool read_journal;
+    bool nsec3_optout;
+    bool smart_signing;
+    u8 nsec3_salt[256];
+};
 
-int
-main(int argc, char *argv[])
-{
-    (void)argc;
-    (void)argv;
-    /* initializes the core library */
-    dnscore_init();
+#ifndef ZONSIGN_C_
 
-    network_interfaces_forall(network_callback, NULL);
+extern const module_s zonesign_program;
 
-    flushout();
-    flusherr();
-    fflush(NULL);
-
-    dnscore_finalize();
-
-    return EXIT_SUCCESS;
-}
+#endif

@@ -89,6 +89,8 @@ typedef struct zdb_zone_maintenance_ctx zdb_zone_maintenance_ctx;
  
 ya_result zdb_zone_maintenance(zdb_zone* zone);
 
+ya_result zdb_zone_sign(zdb_zone* zone);
+
 /**
  * Called by zdb_zone_maintenance
  * 

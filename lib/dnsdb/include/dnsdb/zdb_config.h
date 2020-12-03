@@ -136,7 +136,7 @@ extern "C"
  * Setting this to 1 also enables some code optimizations.
  *
  * Please note that the caller is responsible for checking that (qclass>0)&&(qclass<=ZDB_RECORDS_MAX_CLASS)
- * zdb_query_ex does the check but really should not.
+ * zdb_query_* does the check but really should not.
  * It's faster to check that a qclass is in that range or is not "CHaos" or "HeSiod" on the caller's side.
  * (ie: if ==IN -> query, else if ==CH answer chaos, else answer no match.)
  *

@@ -118,6 +118,8 @@ void nsec3_zone_item_to_new_zdb_packed_ttlrdata(
                             zdb_packed_ttlrdata** out_nsec3,
                             const zdb_packed_ttlrdata** out_nsec3_rrsig);
 
+u32 nsec3_zone_item_rdata_size(const nsec3_zone* n3, const nsec3_zone_item *item);
+
 u16 nsec3_zone_item_to_rdata(const nsec3_zone* n3, const nsec3_zone_item *item, u8 *out_rdata, u16 out_rdata_size);
 
 u32 nsec3_zone_item_get_label(

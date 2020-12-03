@@ -46,16 +46,17 @@
 #include "ya-conf.h"
 #include "main.h"
 
-
-
 #if HAS_CTRL
 #pragma message("ctrl (yadifa) compiles")
 #include "module/ctrl.h"
 #endif
 
+#if HAS_KEYGEN
+#include "module/keygen.h"
+#endif
 
-#if HAS_YAO
-#include "module/yao.h"
+#if HAS_ZONESIGN
+#include "module/zonesign.h"
 #endif
 
 #include <dnscore/logger_handle.h>
@@ -82,10 +83,13 @@ static const module_s *module_list[] =
     &ctrl_program,
 #endif
 
-#if HAS_YAO
-    &yao_program,
+#if HAS_KEYGEN
+    &keygen_program,
 #endif
 
+#if HAS_ZONESIGN
+    &zonesign_program,
+#endif
 
     NULL
 };
@@ -156,6 +160,8 @@ module_get_from_args(int *argcp, char **argv, int *is_executable_ptr)
             return module_list[i];
         }
     }
+#else
+    (void)executable_name;
 #endif
 
     // no <commandname> found, check for <parametername>
@@ -411,8 +417,6 @@ module_default_setup()
 {
     return SUCCESS; // returns anything else than 0 => program will exit
 }
-
-
 
 // ********************************************************************************
 // ***** module run

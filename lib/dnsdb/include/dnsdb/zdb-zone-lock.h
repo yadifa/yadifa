@@ -162,6 +162,20 @@ void zdb_zone_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner);
 bool zdb_zone_try_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner);
 
 /**
+ * Tries to reserve the secondary owner and to lock for the owner.
+ * Gets the current owner if the lock fails.
+ * If the lock succeeds the current_ownerp and current_reserved_ownerp poited values's content is undefined.
+ *
+ * @param zone
+ * @param owner
+ * @param secondary_owner
+ * @param current_ownerp
+ * @param current_reserved_ownerp
+ */
+
+bool zdb_zone_try_double_lock_ex(zdb_zone *zone, u8 owner, u8 secondary_owner, u8 *current_ownerp, u8 *current_reserved_ownerp);
+
+/**
  * 
  * Unlocks one owner and sets the secondary owner to nobody
  * 

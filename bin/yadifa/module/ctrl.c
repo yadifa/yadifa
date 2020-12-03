@@ -37,7 +37,7 @@
  *  @brief
  */
 
-#define CTRL_C_
+#define CTRL_C_ 1
 
 /** @note: here we define the variable that is holding the default logger handle for the current source file
  *         Such a handle should NEVER been set in an include file.
@@ -57,10 +57,6 @@
 #include "query-result.h"
 #include "message-viewer-dig.h"
 
-
-
-
-
 #include <dnscore/cmdline.h>
 #include <dnscore/config-cmdline.h>
 #include <dnscore/config_settings.h>
@@ -77,7 +73,6 @@
 /*----------------------------------------------------------------------------*/
 #pragma mark DEFINES
 
-
 #define DEF_VAL_CLASS                                              "CTRL"
 #define DEF_VAL_TYPE                                              "TYPE0"
 #define DEF_YADIFA_CONF                         SYSCONFDIR "/yadifa.conf"
@@ -86,7 +81,6 @@
 
 /*----------------------------------------------------------------------------*/
 #pragma mark GLOBAL VARIABLES
-
 
 extern logger_handle *g_yadifa_logger;
 #define MODULE_MSG_HANDLE g_yadifa_logger
@@ -111,13 +105,9 @@ CONFIG_STRING(       config_file,   DEF_YADIFA_CONF                             
 CONFIG_TSIG_ITEM(    tsig_key_item, NULL)
 CONFIG_ALIAS(key, tsig_key_name)
 
-
 CONFIG_BOOL(         verbose,       "off"                                                          )
-
     /** @todo 20150219 gve -- must be removed before release */
 CONFIG_U8(           log_level,     "6"                                                            ) // 6 is MSG_INFO
-
-
 
 CONFIG_END(yadifa_ctrl_settings_desc)
 
@@ -349,8 +339,8 @@ CMDLINE_FILTER(ctrl_cmdline_filter_callback, NULL) // NULL is passed to the call
 // main hooks
 CMDLINE_INDENT(4)
 CMDLINE_IMSG("options:", "")
-CMDLINE_SECTION(MAIN_SECTION_NAME)
 CMDLINE_INDENT(4)
+CMDLINE_SECTION(MAIN_SECTION_NAME)
 CMDLINE_OPT("config",'c', "config_file"               )
 CMDLINE_HELP("<config-file>", "use <config_file> as configuration (default: " DEF_YADIFA_CONF ")")
 CMDLINE_SECTION(CTRL_SECTION_NAME)
@@ -371,12 +361,9 @@ CMDLINE_HELP("[hmac:]name:key", "TSIG key to use for authentication (default hma
 CMDLINE_VERSION_HELP(yadifa_cmdline)
 CMDLINE_SECTION(CTRL_SECTION_NAME)  // CMDLINE_VERSION_HELP changes the section
 
-
 CMDLINE_BOOL("enable",            0, "enable")
 CMDLINE_BOOL_NOT("disable",           0, "enable")
 CMDLINE_BOOL("verbose",         'v', "verbose")
-
-
 
 CMDLINE_INDENT(-4)
 CMDLINE_BLANK()

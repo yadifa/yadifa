@@ -547,7 +547,7 @@ dnskey_sign_rrset_with_maxinterval(const dnssec_key *key, ptr_vector *rrset, boo
         dnskey_signature ds;
         dnskey_signature_init(&ds);
 
-        s32 from_epoch = time(NULL);
+        s32 from_epoch = MAX(time(NULL) - 86400, 0);
         s32 to_epoch = dnskey_get_inactive_epoch(key);
 
         // if the key will be inactive well after the maxinterval, use maxinterval to the life-time of the signature

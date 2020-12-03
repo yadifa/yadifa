@@ -419,6 +419,19 @@ nsec3_zone_item_to_new_zdb_packed_ttlrdata(
     *out_nsec3_rrsig = item->rrsig;
 }
 
+u32
+nsec3_zone_item_rdata_size(const nsec3_zone* n3,
+                           const nsec3_zone_item *item)
+{
+    u32 param_rdata_size = NSEC3_ZONE_RDATA_SIZE(n3);
+    u8 hash_len = NSEC3_NODE_DIGEST_SIZE(item);
+    u32 type_bit_maps_size = item->type_bit_maps_size;
+
+    /* Whatever the editor says: rdata_size is used. */
+    u32 rdata_size = param_rdata_size + 1 + hash_len + type_bit_maps_size;
+    return rdata_size;
+}
+
 u16
 nsec3_zone_item_to_rdata(
     const nsec3_zone* n3,

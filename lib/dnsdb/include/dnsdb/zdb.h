@@ -188,25 +188,6 @@ static inline void zdb_query_ex_answer_create(zdb_query_ex_answer *ans_auth_add)
 }
 
 /**
- *  @brief Build a dns answer from a query.
- *
- *  Build a dns answer from a query.
- *
- *  Records are stored in the zdb_query_ex_answer structure (four lists)
- *
- *  After the answer has been processed, it must be destroyed using zdb_query_ex_answer_destroy
- *
- * @param db
- * @param mesg
- * @param ans_auth_add
- * @param pool_buffer
- *
- * @return
- */
-
-finger_print zdb_query_ex(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_add, u8 *restrict pool_buffer);
-
-/**
  * @brief Queries the database given a message
  * 
  * @param db the database
@@ -230,7 +211,7 @@ void zdb_query_and_update(zdb *db, message_data *mesg, u8 * restrict pool_buffer
 ya_result zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_buffer, rrl_process_callback *rrl_process);
 
 /**
- * Destroys a zdb_query_ex_answer structure created with zdb_query_ex
+ * Destroys a zdb_query_ex_answer structure created with zdb_query_*
  * Kept for compatibility.
  * 
  * @param ans_auth_add

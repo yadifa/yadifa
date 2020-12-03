@@ -286,10 +286,20 @@ AC_HAS_DISABLE(master,MASTER_SUPPORT,[DNS master],,
     enable_dynupdate='no'
     enable_rrsig_management='no')
 
-dnl CTRL class
+dnl CTRL module
 dnl ==========================================================================
 
-AC_HAS_DISABLE(ctrl,CTRL,[remote control])
+AC_HAS_DISABLE(ctrl,CTRL,[yadifa ctrl remote control tool])
+
+dnl ZONESIGN
+dnl ==========================================================================
+
+AC_HAS_ENABLE(zonesign,ZONESIGN,[yadifa zonesign tool])
+
+dnl KEYGEN
+dnl ==========================================================================
+
+AC_HAS_ENABLE(keygen,KEYGEN,[yadifa keygen tool])
 
 dnl NSID
 dnl ==========================================================================
