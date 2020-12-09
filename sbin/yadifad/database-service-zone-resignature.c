@@ -1530,14 +1530,18 @@ database_service_zone_dnssec_maintenance_lock_for(zone_desc_s *zone_desc, u8 zon
         zone_desc_log(MODULE_MSG_HANDLE, MSG_DEBUG1, zone_desc, "database_service_zone_resignature");
 #endif
         log_debug("zone sign: %{dnsname}: already having its signatures updated", origin);
-        
+
+        ya_result ret;
+
         if(zone_desc->loaded_zone != NULL)
         {
             database_zone_update_signatures_at(zone_desc->loaded_zone, time(NULL) + 5);
+            ret = SERVICE_ALREADY_RUNNING;
         }
         else
         {
             log_err("zone sign: %{dnsname}: zone not bound", origin);
+            ret = ZDB_READER_ZONENOTLOADED;
         }
 
         if(zone_desc_owner != 0)
@@ -1545,7 +1549,7 @@ database_service_zone_dnssec_maintenance_lock_for(zone_desc_s *zone_desc, u8 zon
             zone_unlock(zone_desc, ZONE_LOCK_SIGNATURE); // locked in this call
         }
                                 
-        return ERROR;
+        return ret;
     }
     
     log_debug("zone sign: %{dnsname}: zone signatures update begin", origin);

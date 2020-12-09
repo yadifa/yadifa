@@ -496,9 +496,10 @@ static void logger_handle_trigger_emergency_shutdown()
 static inline logger_message*
 logger_message_alloc()
 {
-#if DEBUG
+#ifdef NDEBUG
     size_t sizeof_logger_message = sizeof(logger_message);
     assert(sizeof_logger_message <= 64);
+    (void)sizeof_logger_message;
 #endif
     logger_message* message;
 #if HAS_SHARED_QUEUE_SUPPORT
@@ -579,6 +580,7 @@ logger_is_self()
     return logger_thread_id == thread_self();
 }
 
+#if 0
 static int
 logger_handle_compare(const void* a, const void* b)
 {
@@ -592,6 +594,7 @@ logger_handle_compare(const void* a, const void* b)
 
     return strcmp(ha->name, hb->name);
 }
+#endif
 
 static int
 logger_handle_compare_match(const void* key, const void* value)
@@ -936,9 +939,9 @@ logger_service_channel_unregister_all()
     for(int i = 0; i <= ptr_vector_last_index(&logger_name_list); ++i)
     {
         char *channel_name = (char*)ptr_vector_get(&logger_name_list, i);
-        logger_channel *channel = (logger_channel*)ptr_vector_get(&logger_channel_list, i);
 
 #if DEBUG_LOG_HANDLER
+        logger_channel *channel = (logger_channel*)ptr_vector_get(&logger_channel_list, i);
         debug_osformatln(termout, "logger_service_channel_unregister_all() : channel %s@%p", channel_name, channel);
         flushout();
 #endif
@@ -958,8 +961,10 @@ logger_service_channel_unregister_all()
             
             logger_service_handle_remove_channel(handle, channel_name);
         }
-        
-        assert(channel->linked_handles == 0);
+
+#if DEBUG_LOG_HANDLER
+            assert(channel->linked_handles == 0);
+#endif
     }
 
     for(int i = 0; i <= ptr_vector_last_index(&logger_name_list); ++i)
@@ -1116,10 +1121,12 @@ logger_service_handle_close(const char *name)
     // else the handle never existed
 }
 
+#if 0
 static void
 logger_service_handle_close_all()
 {
 }
+#endif
 
 static inline logger_handle*
 logger_service_handle_get(const char *name)
@@ -2975,6 +2982,7 @@ logger_handle_count_channels(const char *logger_name)
 void
 logger_handle_set_thread_tag_with_pid_and_tid(pid_t pid, thread_t tid, const char tag[THREAD_TAG_SIZE])
 {
+    (void)pid;
 #if DEBUG_LOG_HANDLER
     debug_osformatln(termout, "logger_handle_set_thread_tag_with_pid_and_tid(%i,%p) ", pid, tid,
             tag[0],tag[1],tag[2],tag[3],
@@ -3028,6 +3036,7 @@ logger_handle_set_thread_tag_with_pid_and_tid(pid_t pid, thread_t tid, const cha
 void
 logger_handle_clear_thread_tag_with_pid_and_tid(pid_t pid, thread_t tid)
 {
+    (void)pid;
 #if DEBUG_LOG_HANDLER
     debug_osformatln(termout, "logger_handle_clear_thread_tag_with_pid_and_tid(%i,%p) ", pid, tid);
     flushout();
@@ -4111,10 +4120,15 @@ logger_handle_msg_nocull(logger_handle* handle, u32 level, const char* fmt, ...)
         abort();
     }
 
+#ifdef NDEBUG
     size_t sizeof_logger_message = sizeof(logger_message);
     size_t sizeof_logger_message_text_s = sizeof(struct logger_message_text_s);
     assert(sizeof_logger_message_text_s <= 64);
     assert(sizeof_logger_message <= 64);
+    (void)sizeof_logger_message;
+    (void)sizeof_logger_message_text_s;
+#endif
+
 #endif
 
     output_stream baos;

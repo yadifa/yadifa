@@ -96,7 +96,7 @@ extern logger_handle *g_keyroll_logger;
 
 #define PROGRAM_NAME "yakeyrolld"
 #define KEYROLL_CONFIG_SECTION "yakeyrolld"
-#define RELEASEDATE "2020-10-12"
+#define RELEASEDATE "2020-12-09"
 
 static random_ctx rnd;
 

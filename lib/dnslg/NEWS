@@ -1,0 +1,39 @@
+20201209:
+    YADIFA 2.4.1
+
+20201012:
+    YADIFA 2.4.0
+
+20120921:
+    YADIFA 1.0.2
+
+20120713:
+    YADIFA 1.0.1
+
+20120625:
+	YADIFA 1.0.0
+
+20110601:
+	YADIFA 0.4.0
+		Second release of yadifa.
+
+		It still uses one domain name (it.eurid.eu) with 1 slave name server
+		Zone file is transferred with AXFR and TSIG.
+
+		First RR are updated with DNS UPDATE (RFC 2136)
+		
+20110524:
+        YADIFA 0.3.0
+                First release internally of yadifad 20110524115500 GMT+1. It uses it.eurid.eu and has 1 slave name server.
+
+		It uses 2 interfaces:
+			-	localhost
+			-	eth1
+
+	It runs on Linux Centos 5.5, FreeBSD 8.1 and MacOS X 10.6.
+
+release 0.2.0
+	AXFR server
+	ACL
+release 0.1.0
+	Authoritative name server queries only

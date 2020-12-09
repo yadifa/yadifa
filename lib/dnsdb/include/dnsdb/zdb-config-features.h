@@ -160,17 +160,17 @@
 #define ZDB_PACKAGE "yadifa"
 #define ZDB_PACKAGE_BUGREPORT "info@yadifa.eu"
 #define ZDB_PACKAGE_NAME "yadifa"
-#define ZDB_PACKAGE_STRING "yadifa 2.4.1-9881"
+#define ZDB_PACKAGE_STRING "yadifa 2.4.1-9916"
 #define ZDB_PACKAGE_TARNAME "yadifa"
 #define ZDB_PACKAGE_URL ""
-#define ZDB_PACKAGE_VERSION "2.4.1-9881"
+#define ZDB_PACKAGE_VERSION "2.4.1-9916"
 #define ZDB_RETSIGTYPE void
 #define ZDB_SELECT_TYPE_ARG1 int
 #define ZDB_SELECT_TYPE_ARG234 (fd_set *)
 #define ZDB_SELECT_TYPE_ARG5 (struct timeval *)
 #define ZDB_STDC_HEADERS 1
-#define ZDB_VERSION "2.4.1-9881"
+#define ZDB_VERSION "2.4.1-9916"
 #undef ZDB_VERSION
-// version 2.4.1.0-9881
-#define ZDB_VERSION 0x020401002699LL// include/dnsdb/zdb-config-features.h
+// version 2.4.1.0-9916
+#define ZDB_VERSION 0x0204010026bcLL// include/dnsdb/zdb-config-features.h
 

@@ -74,7 +74,7 @@
 
     # Our yadifamaster01 uses this for it's ZSK for now (it should become monthly)
 
-    key-roll                "weekly-calendar"
+    key-roll                "monthly-calendar"
 </key-suite>
 
 <key-suite>

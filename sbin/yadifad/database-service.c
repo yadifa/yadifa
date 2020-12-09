@@ -1,7 +1,7 @@
 /*------------------------------------------------------------------------------
  *
  * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * The YADIFA TM software product is provided undecannr the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -1668,7 +1668,7 @@ database_service(struct service_worker_s *worker)
                     }
                     else
                     {
-                        if(ret != FEATURE_NOT_SUPPORTED)
+                        if((ret != FEATURE_NOT_SUPPORTED) && (ret != SERVICE_ALREADY_RUNNING))
                         {
                             log_err("database: %{dnsname}: cannot execute command: %08x: %r", message->origin, command->id, ret);
                         }
