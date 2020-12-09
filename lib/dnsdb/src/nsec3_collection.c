@@ -350,7 +350,7 @@ AVL_PREFIXED(find_interval_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_REFERE
 }
 
 AVL_NODE_TYPE*
-AVL_PREFIXED(avl_find_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_REFERENCE_TYPE obj_hash)
+AVL_PREFIXED(find_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_REFERENCE_TYPE obj_hash)
 {
     AVL_NODE_TYPE* node = *root;
     AVL_NODE_TYPE* lower_bound = NULL;

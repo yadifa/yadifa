@@ -39,6 +39,6 @@
 
 #define     PROGRAM_NAME                "yadifa"
 #define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASE_DATE                "2020-10-12"
+#define     RELEASE_DATE                "2020-12-09"
 
 void yadifa_show_version(u8 level);

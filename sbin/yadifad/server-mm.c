@@ -508,7 +508,7 @@ server_mm_udp_worker_thread(void *parms)
                             //  ignore
 #if DEBUG
                             log_info("server_mm_udp_worker_thread: good-dropped %d bytes from %{sockaddr}", n, message_get_sender_sa(mesg));
-                            message_log(MODULE_MSG_HANDLE, LOG_INFO, mesg);
+                            // DO NOT: message_log(MODULE_MSG_HANDLE, LOG_INFO, mesg);
 #endif
                         }
                         else if(ret == STOPPED_BY_APPLICATION_SHUTDOWN)

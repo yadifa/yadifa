@@ -4350,8 +4350,6 @@ zone_diff_sign(zone_diff *diff, zdb_zone *zone, ptr_vector* rrset_to_sign_vector
         return SUCCESS;
     }
 
-
-
     // eliminate potential duplicates (rare case)
 
     {
@@ -5847,7 +5845,6 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
                     log_err("update: %{dnsname}: %{dnsname} cannot remove all NSEC3PARAM of an NSEC3 zone", zone->origin, rname);
 
                     zone_diff_finalize(&diff);
-
 #if DEBUG
                     log_err("dynupdate_diff(%{dnsname}@%p, %p, %i, %x, %i) failed with %r",
                         zone->origin, zone, reader, count, secondary_lock, dryrun, RCODE_ERROR_CODE(RCODE_REFUSED));
@@ -6458,7 +6455,7 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
 
 #if DEBUG
     {
-        zdb_packed_ttlrdata* soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);
+        zdb_packed_ttlrdata *soa = zdb_record_find(&zone->apex->resource_record_set, TYPE_SOA);
         if(soa != NULL)
         {
             u32 soa_serial = 0;

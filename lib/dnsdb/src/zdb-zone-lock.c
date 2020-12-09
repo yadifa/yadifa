@@ -725,6 +725,93 @@ zdb_zone_try_double_lock(zdb_zone *zone, u8 owner, u8 secondary_owner)
     return FALSE;
 }
 
+bool
+zdb_zone_try_double_lock_ex(zdb_zone *zone, u8 owner, u8 secondary_owner, u8 *current_ownerp, u8 *current_reserved_ownerp)
+{
+#if MUTEX_CONTENTION_MONITOR
+    struct mutex_contention_monitor_s *mcm = mutex_contention_lock_begin(thread_self(), zone, debug_stacktrace_get(), "zdb_zone");
+#endif
+
+#if ZONE_MUTEX_LOG
+    log_debug7("trying to acquire lock for zone %{dnsname}@%p for %x", zone->origin, zone, owner);
+#endif
+    mutex_lock(&zone->lock_mutex);
+
+#if ZDB_HAS_LOCK_DEBUG_SUPPORT
+    struct zdb_zone_lock_monitor *holder = zdb_zone_lock_monitor_new(zone, owner, secondary_owner);
+#endif
+
+    *current_ownerp = zone->lock_owner;
+    *current_reserved_ownerp = zone->lock_reserved_owner;
+
+    u8 so = zone->lock_reserved_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
+
+    if(so == ZDB_ZONE_MUTEX_NOBODY || so == secondary_owner)
+    {
+        u8 co = zone->lock_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
+
+        if(co == ZDB_ZONE_MUTEX_NOBODY || co == owner)
+        {
+            yassert(!SIGNED_VAR_VALUE_IS_MAX(zone->lock_count));
+
+            zone->lock_owner = owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
+            zone->lock_count++;
+            zone->lock_reserved_owner = secondary_owner & ZDB_ZONE_MUTEX_LOCKMASK_FLAG;
+
+#if ZDB_ZONE_LOCK_HAS_OWNER_ID
+            thread_t tid = thread_self();
+            zone->lock_last_owner_id = tid;
+            zone->lock_last_reserved_owner_id = tid;
+#endif
+
+#if ZONE_MUTEX_LOG
+            log_debug7("acquired lock for zone %{dnsname}@%p for %x (#%i)", zone->origin, zone, owner, zone->lock_count);
+#endif
+
+#if ZDB_HAS_LOCK_DEBUG_SUPPORT
+            zdb_zone_lock_monitor_locks(holder);
+#endif
+
+            mutex_unlock(&zone->lock_mutex);
+
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
+            zone->lock_trace = debug_stacktrace_get();
+            zone->lock_id = thread_self();
+            zone->lock_timestamp = timeus();
+
+            zdb_zone_lock_set_add(zone);
+#endif
+#if MUTEX_CONTENTION_MONITOR
+            mutex_contention_lock_end(mcm);
+#endif
+
+            return TRUE;
+        }
+    }
+    /*
+    else
+    {
+        // already double-owned
+    }
+    */
+
+#if ZDB_HAS_LOCK_DEBUG_SUPPORT
+    zdb_zone_lock_monitor_cancels(holder);
+#endif
+
+    mutex_unlock(&zone->lock_mutex);
+
+#if ZONE_MUTEX_LOG
+    log_debug7("failed to acquire lock for zone %{dnsname}@%p for %x", zone->origin, zone, owner);
+#endif
+
+#if MUTEX_CONTENTION_MONITOR
+    mutex_contention_lock_fail(mcm);
+#endif
+
+    return FALSE;
+}
+
 void
 zdb_zone_double_unlock(zdb_zone *zone, u8 owner, u8 secondary_owner)
 {

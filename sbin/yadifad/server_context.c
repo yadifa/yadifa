@@ -106,6 +106,7 @@ server_context_addresses_allocate()
     memset(g_server_context.tcp_socket, 0xff, sizeof(int) * g_server_context.tcp_socket_count);
 }
 
+#if 0
 static void
 server_context_addresses_udp_remove_at(u32 index)
 {
@@ -318,6 +319,7 @@ server_context_addresses_tcp_append(u32 count)
     free(old_tcp_socket);
     free(old_tcp_interface);
 }
+#endif
 
 static void
 server_context_socket_name_free_cb(void *p)
@@ -619,8 +621,13 @@ server_context_new_socket(struct addrinfo *addr, int sock_type, bool reuse_port)
     }
 #endif
 
+    ya_result ret;
     socket_server_opensocket_s ctx;
-    socket_server_opensocket_init(&ctx, addr, sock_type);
+    if(FAIL(ret = socket_server_opensocket_init(&ctx, addr, sock_type)))
+    {
+        return ret;
+    }
+
     const int on = 1;
 
     //socket_server_opensocket_setopt(socket_server_opensocket_s *ctx, int level, int optname, void* opt, socklen_t optlen)

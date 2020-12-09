@@ -154,9 +154,7 @@ zdb_zone_store_axfr(zdb_zone* zone, output_stream* os)
         fqdn_len = zdb_zone_label_iterator_nextname(&iter, fqdn);
 
         label = zdb_zone_label_iterator_next(&iter);
-        
         btree_iterator_init(label->resource_record_set, &type_iter);
-
         while(btree_iterator_hasnext(&type_iter))
         {
             btree_node* type_node = btree_iterator_next_node(&type_iter);

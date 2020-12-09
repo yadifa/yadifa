@@ -34,7 +34,7 @@ dnl ############################################################################
 configure_base_path="$0/"
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 9734 $])
+AC_REVISION([$Revision: 9839 $])
 AC_INIT([yadifa],m4_esyscmd(
     [
         svn info 2> /dev/null |
@@ -123,9 +123,6 @@ AC_CHECK_TYPES(long long)
 AC_CHECK_TYPES(u_char)
 
 AC_CHECK_FUNCS([bzero memset select socket])
-AC_CHECK_FUNC(sendmmsg, [have_sendmmsg=true], [have_sendmmsg=false])
-AC_CHECK_FUNC(recvmmsg, [have_recvmmsg=true], [have_recvmmsg=false])
-
 
 AC_FUNC_SELECT_ARGTYPES
 AC_TYPE_SIGNAL
@@ -144,6 +141,22 @@ echo "mmsg results:"
 echo "have_sendmmsg='$have_sendmmsg'"
 echo "have_recvmmsg='$have_recvmmsg'"
 echo "-------"
+
+AC_CHECK_FUNC(sendmmsg, [
+    have_sendmmsg=true
+    AC_DEFINE_UNQUOTED([HAVE_SENDMMSG], [1], [Has sendmmsg system call])
+    ], [
+    have_sendmmsg=false
+    AC_DEFINE_UNQUOTED([HAVE_SENDMMSG], [0], [Has sendmmsg system call])
+    ])
+AC_CHECK_FUNC(recvmmsg, [
+    have_recvmmsg=true
+    AC_DEFINE_UNQUOTED([HAVE_RECVMMSG], [1], [Has recvmmsg system call])
+    ], [
+    have_recvmmsg=false
+    AC_DEFINE_UNQUOTED([HAVE_RECVMMSG], [0], [Has recvmmsg system call])
+    ])
+
 
 AM_CONDITIONAL(HAVE_SENDMMSG, [test x$have_sendmmsg = xtrue])
 AM_CONDITIONAL(HAVE_RECVMMSG, [test x$have_recvmmsg = xtrue])

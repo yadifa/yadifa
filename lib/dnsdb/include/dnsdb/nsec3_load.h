@@ -81,6 +81,11 @@ struct nsec3_load_context
 
 typedef struct nsec3_load_context nsec3_load_context;
 
+typedef bool (nsec3_load_is_label_covered_function)(zdb_rr_label*);
+
+bool nsec3_load_is_label_covered(zdb_rr_label *label);
+bool nsec3_load_is_label_covered_optout(zdb_rr_label *label);
+
 ya_result nsec3_load_init(nsec3_load_context *context, zdb_zone* zone);
 
 static inline void nsec3_load_allowed_to_fix(nsec3_load_context *context, bool can_fix)

@@ -296,14 +296,28 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
         return ZDB_ERROR_ZONE_NOT_MAINTAINED;
     }
 
-    if(!zdb_zone_try_double_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_RRSIG_UPDATER))
-    {
-        log_debug("maintenance: %{dnsname}: cannot double-lock the zone for maintenance", zone->origin);
+    u8 current_owner;
+    u8 current_reserved_owner;
 
-        return ZDB_ERROR_ZONE_IS_ALREADY_BEING_SIGNED;
+    while(!zdb_zone_try_double_lock_ex(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_RRSIG_UPDATER, &current_owner, &current_reserved_owner))
+    {
+        log_debug("maintenance: %{dnsname}: cannot double-lock the zone for maintenance (%02x, %04x, %02x, %02x)", zone->origin, zone->_flags, zone->_status, current_owner, current_reserved_owner);
+
+        if((current_owner == ZDB_ZONE_MUTEX_RRSIG_UPDATER) || (current_reserved_owner == ZDB_ZONE_MUTEX_RRSIG_UPDATER))
+        {
+            // the zone is already being signed
+            return ZDB_ERROR_ZONE_IS_ALREADY_BEING_SIGNED;
+        }
+        else
+        {
+            // wait for the condition
+            mutex_lock(&zone->lock_mutex);
+            cond_timedwait(&zone->lock_cond, &zone->lock_mutex, 1000);
+            mutex_unlock(&zone->lock_mutex);
+        }
     }
 
-    if(from_fqdn[0] != 0)
+    if((from_fqdn != NULL) && (from_fqdn[0] != 0))
     {
         log_debug("maintenance: %{dnsname}: starting from %{dnsname}", zone->origin, from_fqdn);
     }
@@ -457,7 +471,7 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
 
     if(zone->progressive_signature_update.chain_index < 0)
     {
-        if(*from_fqdn == 0)
+        if((from_fqdn == NULL) || (*from_fqdn == 0))
         {
             zdb_zone_label_iterator_init(&iter, zone);
             // also reset the earliest resignature
@@ -552,7 +566,6 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
 #endif
                 }
 
-
                 ++loop_iterations;
 #if DEBUG
                 log_debug2("maintenance: %{dnsname}: at %{dnsnamestack}", zone->origin, &mctx.fqdn_stack);
@@ -602,11 +615,17 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
                     }
                     else
                     {
+#if DEBUG
+                        log_debug("maintenance: %{dnsname}: no chain to process after the last label", zone->origin);
+#endif
                         last_label_of_zone_reached = TRUE;
                     }
                 }
                 else
                 {
+#if DEBUG
+                    log_debug("maintenance: %{dnsname}: no chain in the zone to be processed after the last label", zone->origin);
+#endif
                     last_label_of_zone_reached = TRUE;
                 }
 
@@ -757,9 +776,22 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
                     nsec3_key_mask = mctx.zsk_mask;
                 }
 #if DEBUG
-                log_debug2("maintenance: %{dnsname}: at %{digest32h}.%{dnsname} NSEC3: mask=%p/%p (%i)",
+                log_debug2("maintenance: %{dnsname}: at %{digest32h}.%{dnsname} NSEC3: mask=%p/%p (has signature: %i)",
                         zone->origin, item->digest, zone->origin,
-                        nsec3_key_mask, mctx.zsk_mask, rrsig != 0);
+                        nsec3_key_mask, mctx.zsk_mask, rrsig != NULL);
+                if(rrsig != NULL)
+                {
+                    for(zdb_packed_ttlrdata *rr = rrsig; rr != NULL; rr = rr->next)
+                    {
+                        const void *rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(rr);
+                        u16 rdata_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
+                        log_debug2("maintenance: %{dnsname}: at %{digest32h}.%{dnsname} RRSIG: %5i %T -> %T",
+                                   zone->origin, item->digest, zone->origin,
+                                   rrsig_get_key_tag_from_rdata(rdata, rdata_size),
+                                   rrsig_get_valid_from_from_rdata(rdata, rdata_size),
+                                   rrsig_get_valid_until_from_rdata(rdata, rdata_size));
+                    }
+                }
 #endif
                 if((nsec3_key_mask != 0) || delete_nsec3_rrsig)
                 {
@@ -808,10 +840,11 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
                     else
                     {
                         log_err("maintenance: %{dnsname}: NSEC3 chain smaller than expected", zone->origin);
-
+#if DEBUG
+                        log_debug("maintenance: %{dnsname}: no more chain after last label", zone->origin);
+#endif
                         zone->progressive_signature_update.chain_index = -1;
                         last_label_of_zone_reached = TRUE;
-
                         mctx.fqdn[0] = 0;
 
                         /************************************
@@ -824,8 +857,10 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
                 else
                 {
                     zone->progressive_signature_update.chain_index = -1;
+#if DEBUG
+                    log_debug("maintenance: %{dnsname}: nothing to do after last label (NSEC3 rrsig to do: %i)", zone->origin, maintenance_generate_nsec3_rrsig_count);
+#endif
                     last_label_of_zone_reached = TRUE;
-
                     mctx.fqdn[0] = 0;
 
                     /************************************
@@ -840,8 +875,17 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
 
 zdb_zone_maintenance_from_chain_iteration_loop_break:
 
+#if ZDB_ZONE_MAINTENANCE_DETAILED_LOG
+    log_debug("maintenance: %{dnsname}: last_label_of_zone_reached: %i, rrset_to_sign contains %i items",
+              zone->origin, last_label_of_zone_reached, ptr_vector_size(&rrset_to_sign));
+#endif
 
     diff_has_changes |= zone_diff_has_changes(&diff, &rrset_to_sign);
+
+#if ZDB_ZONE_MAINTENANCE_DETAILED_LOG
+    log_debug("maintenance: %{dnsname}: diff_has_changes: %i, last_label_of_zone_reached: %i, rrset_to_sign contains %i items",
+              zone->origin, diff_has_changes, last_label_of_zone_reached, ptr_vector_size(&rrset_to_sign));
+#endif
 
     if(diff_has_changes && !last_label_of_zone_reached)
     {
@@ -1258,6 +1302,13 @@ zdb_zone_maintenance(zdb_zone* zone)
         log_info("maintenance: %{dnsname}: zone maintenance finished", zone->origin);
     }
     
+    return ret;
+}
+
+ya_result
+zdb_zone_sign(zdb_zone* zone)
+{
+    ya_result ret = zdb_zone_maintenance_from(zone, NULL, 0, ZDB_MAINTENANCE_BATCH_TIME_US_MAX, ZDB_ZONE_MAINTENANCE_RRSIG_COUNT_THRESHOLD);
     return ret;
 }
 

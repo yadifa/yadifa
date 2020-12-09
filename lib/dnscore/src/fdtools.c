@@ -1184,8 +1184,7 @@ filesize(const char *name)
 
 /**
  * Checks for existence of a file/dir/link
- * 
- * 
+ *
  * @param name the file name
  * 
  * @return 1 if the file exists, 0 if the file does not exists, an error otherwise
@@ -1217,6 +1216,17 @@ file_exists(const char *name)
     return MAKE_ERRNO_ERROR(err);
 }
 
+/**
+ *
+ * Checks if a file exists and is a link
+ *
+ * @param name the file name
+ *
+ * @return  0 : not a link
+ *          1 : a link
+ *        < 0 : error
+ */
+
 ya_result
 file_is_link(const char *name)
 {
@@ -1224,9 +1234,36 @@ file_is_link(const char *name)
     struct stat s;
     if(lstat(name, &s) >= 0)    // MUST be lstat
     {
-        return S_ISLNK(s.st_mode);
+        return S_ISLNK(s.st_mode)?SUCCESS:ERROR;
     }
     
+    return ERRNO_ERROR;
+#else
+    return 0;
+#endif
+}
+
+/**
+ *
+ * Checks if a file exists and is a directory
+ *
+ * @param name the file name
+ *
+ * @return  0 : not a link
+ *          1 : a link
+ *        < 0 : error
+ */
+
+ya_result
+file_is_directory(const char *name)
+{
+#ifndef WIN32
+    struct stat s;
+    if(lstat(name, &s) >= 0)    // MUST be lstat
+    {
+        return S_ISDIR(s.st_mode)?SUCCESS:ERROR;
+    }
+
     return ERRNO_ERROR;
 #else
     return 0;
@@ -1628,7 +1665,7 @@ file_mtime_set_get_for_file(const char *filename)
 {
     file_mtime_set_t *ret;
     mutex_lock(&file_mtime_sets_mtx);
-    ptr_node *sets_node = ptr_set_insert(&file_mtime_sets, filename);
+    ptr_node *sets_node = ptr_set_insert(&file_mtime_sets, (char*)filename);
     if(sets_node->value != NULL)
     {
         ret = (file_mtime_set_t*)sets_node->value;
@@ -1658,7 +1695,7 @@ file_mtime_set_add_file(file_mtime_set_t *ctx, const char *filename)
         mtime = MIN_S64;
     }
 
-    ptr_node *node = ptr_set_insert(&ctx->files_mtime, filename);
+    ptr_node *node = ptr_set_insert(&ctx->files_mtime, (char*)filename);
     if(node->value == NULL)
     {
         node->key = strdup(filename);

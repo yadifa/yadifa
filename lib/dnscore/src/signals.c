@@ -57,7 +57,7 @@
 
 #if defined(__linux__) || defined(__gnu_hurd__)
 #define _GNU_SOURCE 1
-#include <execinfo.h>
+//#include <execinfo.h>
 #include <sys/mman.h>
 #include <ucontext.h>
 #elif defined(__sun)
@@ -694,7 +694,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                         log_err(filepath);
                     }
 
-#if defined(__linux__) || defined(__gnu_hurd__)
+#if defined(__GLIBC__) || defined(__gnu_hurd__)
                     void* buffer[MAXTRACE];
                     char** strings;
                     int n = backtrace(buffer, MAXTRACE);

@@ -1116,7 +1116,6 @@ database_update(zdb *database, message_data *mesg)
                                 log_debug("database: update: %{dnsname}: looking for key(s) from the zone", zone->origin);
 
                                 database_add_key_parameters_from_zone(zone, &required_key_parameters);
-
 #if DEBUG
                                 for(int i = 0; i <= ptr_vector_last_index(&required_key_parameters); ++i)
                                 {
@@ -1206,7 +1205,6 @@ database_update(zdb *database, message_data *mesg)
 
                                     // SMART SIGNING
                                     zdb_zone_update_keystore_keys_from_zone(zone, ZDB_ZONE_MUTEX_DYNUPDATE);
-
                                     database_service_zone_dnskey_set_alarms(zone); // we are in a ZT_MASTER case
                                 }
                                 else

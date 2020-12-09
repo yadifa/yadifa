@@ -408,6 +408,10 @@ config_file_reader_read(config_file_reader *cfr, config_error_s *cfgerr) /// con
                                 }
                                 else
                                 {
+                                    if((err == MAKE_ERRNO_ERROR(ENOENT)) || (err == MAKE_ERRNO_ERROR(EACCES)))
+                                    {
+                                        err = CANNOT_OPEN_FILE;
+                                    }
                                     return err;
                                 }
                             }

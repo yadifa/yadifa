@@ -1,7 +1,7 @@
 /*------------------------------------------------------------------------------
  *
  * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
- * The YADIFA TM software product is provided under the BSD 3-clause license:
+ * The YADIFA TM software product is provided undecannr the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -687,9 +687,11 @@ database_service_do_drop_after_reload()
     log_debug1("database_service_do_drop_after_reload() done");
 }
 
-static void
+static ya_result
 database_service_process_command(zone_desc_s *zone_desc, zone_command_s* command)
 {
+    ya_result ret = SUCCESS;
+
     switch(command->id)
     {
         case DATABASE_SERVICE_ZONE_DESC_UNLOAD:
@@ -721,7 +723,7 @@ database_service_process_command(zone_desc_s *zone_desc, zone_command_s* command
 #if ZDB_HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
         case DATABASE_SERVICE_UPDATE_ZONE_SIGNATURES:
         {
-            database_service_zone_dnssec_maintenance(zone_desc);
+            ret = database_service_zone_dnssec_maintenance(zone_desc);
             break;
         }
 #endif
@@ -737,7 +739,7 @@ database_service_process_command(zone_desc_s *zone_desc, zone_command_s* command
         }
         case DATABASE_SERVICE_ZONE_SAVE_TEXT:
         {
-            if(ISOK(zone_lock(zone_desc, ZONE_LOCK_SAVE)))
+            if(ISOK(ret = zone_lock(zone_desc, ZONE_LOCK_SAVE)))
             {
                 if(command->parm.ptr != NULL)
                 {
@@ -760,9 +762,12 @@ database_service_process_command(zone_desc_s *zone_desc, zone_command_s* command
         }
         default:
         {
+            ret = INVALID_STATE_ERROR;
             log_err("unexpected command %d", command->id);
         }
     }
+
+    return ret;
 }
 
 static void database_service_message_clear_free_fqdn_node(ptr_node *node)
@@ -1627,9 +1632,11 @@ database_service(struct service_worker_s *worker)
         
         if(zone_desc != NULL)
         {
-            if(FAIL(zone_lock(zone_desc, ZONE_LOCK_SERVICE)))
+            ya_result ret;
+
+            if(FAIL(ret = zone_lock(zone_desc, ZONE_LOCK_SERVICE)))
             {
-                log_err("database: %{dnsname}: unable to lock zone", message->origin);
+                log_err("database: %{dnsname}: unable to lock zone: %r", message->origin, ret);
             }
 
 #if DEBUG
@@ -1651,12 +1658,31 @@ database_service(struct service_worker_s *worker)
                     log_debug("database: %{dnsname}: processing zone @%p (%s)", message->origin, zone_desc, database_service_operation_get_name(zone_desc->last_processor));
                        
                     zone_unlock(zone_desc, ZONE_LOCK_SERVICE);
-                    
-                    database_service_process_command(zone_desc, command);
-                    
-                    if(FAIL(zone_lock(zone_desc, ZONE_LOCK_SERVICE)))
+
+                    if(ISOK(ret = database_service_process_command(zone_desc, command)))
                     {
-                        log_err("database: %{dnsname}: zone cannot be locked", message->origin);
+                        if(FAIL(zone_lock(zone_desc, ZONE_LOCK_SERVICE)))
+                        {
+                            log_err("database: %{dnsname}: zone cannot be locked", message->origin);
+                        }
+                    }
+                    else
+                    {
+                        if((ret != FEATURE_NOT_SUPPORTED) && (ret != SERVICE_ALREADY_RUNNING))
+                        {
+                            log_err("database: %{dnsname}: cannot execute command: %08x: %r", message->origin, command->id, ret);
+                        }
+                        else
+                        {
+                            log_debug("database: %{dnsname}: cannot execute command: %08x: %r", message->origin, command->id, ret);
+                        }
+
+                        if(FAIL(ret = zone_lock(zone_desc, ZONE_LOCK_SERVICE)))
+                        {
+                            log_err("database: %{dnsname}: unable to re-lock zone following an internal error: %r", message->origin, ret);
+                        }
+
+                        zone_clear_status(zone_desc, ZONE_STATUS_PROCESSING);
                     }
 
                     zone_command_free(command);

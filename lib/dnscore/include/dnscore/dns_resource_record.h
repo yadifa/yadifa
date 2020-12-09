@@ -63,8 +63,6 @@ struct dns_resource_record
     u8 name[MAX_DOMAIN_LENGTH];
 };
 
-
-
 void dns_resource_record_init(dns_resource_record *rr);
 
 ya_result dns_resource_record_init_record(dns_resource_record *rr, const u8* fqdn, u16 rtype, u16 rclass, s32 ttl, u16 rdata_size, const u8 *rdata);

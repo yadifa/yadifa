@@ -267,8 +267,13 @@ main(int argc, char *argv[])
 
     static int on = 1;
     socket_server_opensocket_s socket;
+    ya_result ret;
 
-    socket_server_opensocket_init(&socket, addr, SOCK_STREAM);
+    if(FAIL(ret = socket_server_opensocket_init(&socket, addr, SOCK_STREAM)))
+    {
+        logger_handle_msg(g_parent_logger, MSG_INFO, "socekt init failed with: %r", ret);
+        return EXIT_FAILURE;
+    }
     socket_server_opensocket_setopt(&socket, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 #ifndef WIN32
     socket_server_opensocket_setopt(&socket, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));

@@ -177,6 +177,7 @@ typedef unsigned int mode_t;
 #define VERSION_2_2_0 0x020200000000LL
 #define VERSION_2_3_0 0x020300000000LL
 #define VERSION_2_4_0 0x020400000000LL
+#define VERSION_2_4_1 0x020400100000LL
 
 #include <dnscore/dnscore-config-features.h>
 #include <dnscore/sys_error.h>

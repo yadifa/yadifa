@@ -745,7 +745,7 @@ main(int argc, char *argv[])
     }
 #endif
 
-    if(FAIL(ret = server_setup_env(&g_config->pid, g_config->pid_file, g_config->uid, g_config->gid, setup_flags)))
+    if(FAIL(ret = server_setup_env(&g_config->pid, &g_config->pid_file, g_config->uid, g_config->gid, setup_flags)))
     {
         log_err("server setup failed: %r", ret);
         return EXIT_FAILURE;

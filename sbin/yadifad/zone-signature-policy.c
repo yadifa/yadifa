@@ -2924,8 +2924,6 @@ zone_policy_process(zone_desc_s *zone_desc)
         dnskey_release(key);
     }
 
-
-
     /*
      * For all key suites ...
      *

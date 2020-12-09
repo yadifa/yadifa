@@ -293,6 +293,9 @@ dnscore_register_errors()
     error_register(UNEXPECTED_EOF, "UNEXPECTED_EOF");
     error_register(UNSUPPORTED_TYPE, "UNSUPPORTED_TYPE");
     error_register(UNSUPPORTED_CLASS, "UNSUPPORTED_CLASS");
+
+    error_register(CANNOT_OPEN_FILE, "CANNOT_OPEN_FILE");
+
     error_register(UNKNOWN_NAME, "UNKNOWN_NAME");
     error_register(BIGGER_THAN_PATH_MAX, "BIGGER_THAN_PATH_MAX");
     error_register(UNABLE_TO_COMPLETE_FULL_WRITE, "UNABLE_TO_COMPLETE_FULL_WRITE");

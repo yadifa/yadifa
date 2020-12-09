@@ -1057,7 +1057,7 @@ server_network_init()
     if(g_config->network_model != 0)
     {
         g_config->network_model = 0;
-        log_warn("switching to network model 0 (%s)", server_type[g_config->network_model]);
+        log_warn("switching to network model %i (%s)", g_config->network_model, server_type[g_config->network_model].name);
         ret = server_network_init();
         return ret;
     }

@@ -114,11 +114,11 @@ static group_mutex_t dnssec_policy_set_mtx = GROUP_MUTEX_INITIALIZER;
 static group_mutex_t dnssec_policy_mtx = GROUP_MUTEX_INITIALIZER;
 
 //
-
+#if 0
 static ptr_set dnssec_denial_set = PTR_SET_ASCIIZ_EMPTY;
 static group_mutex_t dnssec_denial_set_mtx = GROUP_MUTEX_INITIALIZER;
 static group_mutex_t dnssec_denial_mtx = GROUP_MUTEX_INITIALIZER;
-
+#endif
 //
 
 static ptr_set dnssec_policy_key_set = PTR_SET_ASCIIZ_EMPTY;
@@ -2397,8 +2397,8 @@ dnssec_policy_process(keyroll_t *keyroll, const dnssec_policy *policy, s64 from,
 #if DEBUG
             log_debug("------------------------------------------------------------------------------");
 #endif
-            log_info("keyroll processing: %s from %llU / %llU", policy->name, t, until);
-            formatln("keyroll processing: %s from %llU / %llU", policy->name, t, until);
+            log_info("keyroll: %{dnsname} processing: %s from %llU to %llU", keyroll->domain, policy->name, t, until);
+            formatln("keyroll: %{dnsname} processing: %s from %llU to %llU", keyroll->domain, policy->name, t, until);
 #if DEBUG
             logger_flush(); // 2019-08-13 23:45:00.000000
             flushout();
@@ -2408,7 +2408,7 @@ dnssec_policy_process(keyroll_t *keyroll, const dnssec_policy *policy, s64 from,
             {
                 t = MIN(keyroll->ksk_next_deactivation, keyroll->zsk_next_deactivation);
 
-                log_debug("keyroll covers: %llU , %llU", keyroll->ksk_next_deactivation, keyroll->zsk_next_deactivation);
+                log_debug("keyroll: %{dnsname}: processed: %s covers: %llU , %llU", keyroll->domain, policy->name, keyroll->ksk_next_deactivation, keyroll->zsk_next_deactivation);
 #if DEBUG
                 logger_flush(); // 2019-08-13 23:45:00.000000
 #endif
@@ -2432,33 +2432,6 @@ dnssec_policy_process(keyroll_t *keyroll, const dnssec_policy *policy, s64 from,
     {
         return INVALID_STATE_ERROR;
     }
-}
-
-bool
-dnssec_policy_key_suite_is_marked_processed(keyroll_t *keyroll, const struct dnssec_policy_key_suite *kr)
-{
-    ptr_node *node = ptr_set_find(&keyroll->dnssec_policy_processed_key_suites, kr->name);
-    return node != NULL;
-}
-
-bool
-dnssec_policy_key_suite_mark_processed(keyroll_t *keyroll, const struct dnssec_policy_key_suite *kr)
-{
-    bool ret = FALSE;
-    ptr_node *node = ptr_set_insert(&keyroll->dnssec_policy_processed_key_suites, kr->name);
-
-    if(node->value != NULL)
-    {
-        node->value = (struct dnssec_policy_key_suite*)kr;
-        ret = TRUE;
-    }
-    return ret;
-}
-
-void
-dnssec_policy_key_suite_unmark_processed(keyroll_t *keyroll, const struct dnssec_policy_key_suite *kr)
-{
-    ptr_set_delete(&keyroll->dnssec_policy_processed_key_suites, kr->name);
 }
 
 /**

@@ -90,13 +90,13 @@ extern logger_handle *g_keyroll_logger;
 #define FIRST_JANUARY_2021_00_00_00 1609459200
 
 #define SERVER_FAILURE_RETRY_DELAY 30
+#define CONSECUTIVE_ERRORS_BEFORE_RESTART 60
 
 #define WAIT_MARGIN (ONE_SECOND_US * 10)
 
-
 #define PROGRAM_NAME "yakeyrolld"
 #define KEYROLL_CONFIG_SECTION "yakeyrolld"
-#define RELEASEDATE "2020-10-12"
+#define RELEASEDATE "2020-12-09"
 
 static random_ctx rnd;
 
@@ -157,6 +157,9 @@ struct main_args
     bool daemonise;
     bool print_plan;
     bool user_confirmation;
+#if DEBUG
+    bool with_secret_keys;
+#endif
 };
 
 typedef struct main_args main_args;
@@ -278,6 +281,9 @@ CONFIG_BEGIN(main_args_desc)
         CONFIG_BOOL(daemonise, "0")
         CONFIG_BOOL(print_plan, "0")
         CONFIG_BOOL(user_confirmation, "1")
+#if DEBUG
+        CONFIG_BOOL(with_secret_keys, "0")
+#endif
         CONFIG_ENUM(program_mode, "none", program_mode_enum_table)
         CONFIG_ALIAS(policy, policy_name)
         CONFIG_ALIAS(domain, domains)
@@ -343,6 +349,9 @@ CMDLINE_BEGIN(keyroll_cmdline)
         CMDLINE_HELP("", "do not ask for confirmation before destroying steps and .key and .private files")
         CMDLINE_BOOL("print-plan", 0, "print_plan")
         CMDLINE_HELP("", "prints the complete plan after generation or after loading")
+#if DEBUG
+        CMDLINE_BOOL("with-secret-keys", 0, "with_secret_keys")
+#endif
 #if DEBUG
         CMDLINE_SECTION("testing")
         CMDLINE_OPT("timeus-offset", 0, "timeus_offset")
@@ -658,7 +667,7 @@ program_mode_generate(const u8 *domain)
 
     keyroll_t keyroll;
 
-    if(FAIL(ret = keyroll_init(&keyroll, domain, g_config.plan_path, g_config.keys_path, g_config.server)))
+    if(FAIL(ret = keyroll_init(&keyroll, domain, g_config.plan_path, g_config.keys_path, g_config.server, TRUE)))
     {
         return ret;
     }
@@ -707,6 +716,8 @@ program_mode_generate(const u8 *domain)
             {
                 log_err("%{dnsname}: plan loading failed: %r", keyroll.domain, ret);
                 formatln("%{dnsname}: plan loading failed: %r", keyroll.domain, ret);
+
+                keyroll_finalize(&keyroll);
                 return ret;
             }
 
@@ -721,6 +732,7 @@ program_mode_generate(const u8 *domain)
     {
         log_err("%{dnsname}: cannot parse '%s'", domain, g_config.generate_from);
         formatln("%{dnsname}: cannot parse '%s'", domain, g_config.generate_from);
+        keyroll_finalize(&keyroll);
         return ret;
     }
 
@@ -775,6 +787,8 @@ program_mode_generate(const u8 *domain)
         }
     }
 
+    keyroll_finalize(&keyroll);
+
     return ret;
 }
 
@@ -783,8 +797,10 @@ program_mode_generate_all()
 {
     pid_t pid;
     ya_result ret;
-    char pid_file_path[PATH_MAX];
-    snformat(pid_file_path, sizeof(pid_file_path), "%s/%s", g_config.pid_path, g_config.pid_file);
+    char pid_file_path_buffer[PATH_MAX];
+    char *pid_file_path = &pid_file_path_buffer[0];
+
+    snformat(pid_file_path_buffer, sizeof(pid_file_path_buffer), "%s/%s", g_config.pid_path, g_config.pid_file);
 
     if(FAIL(ret = pid_check_running_program(pid_file_path, &pid)))
     {
@@ -797,7 +813,7 @@ program_mode_generate_all()
         return ret;
     }
 
-    if(ISOK(ret = server_setup_env(&pid, pid_file_path, g_config.uid, g_config.gid, SETUP_CREATE_PID_FILE|SETUP_ID_CHANGE|SETUP_CORE_LIMITS)))
+    if(ISOK(ret = server_setup_env(&pid, &pid_file_path, g_config.uid, g_config.gid, SETUP_CREATE_PID_FILE|SETUP_ID_CHANGE|SETUP_CORE_LIMITS)))
     {
         if(g_config.reset && g_config.user_confirmation)
         {
@@ -854,9 +870,10 @@ signal_hup(u8 signum)
 }
 
 static ya_result
-program_mode_play(const u8 *domain, bool loops)
+program_mode_play(const u8 *domain, bool does_loop)
 {
     ya_result ret;
+    int consecutive_errors = 0;
 
     rnd = random_init(0);
 
@@ -869,7 +886,7 @@ program_mode_play(const u8 *domain, bool loops)
     keyroll_t keyroll;
 
     // start from an empty state
-    if(FAIL(ret = keyroll_init(&keyroll, domain, g_config.plan_path, g_config.keys_path, g_config.server)))
+    if(FAIL(ret = keyroll_init(&keyroll, domain, g_config.plan_path, g_config.keys_path, g_config.server, FALSE)))
     {
         return ret;
     }
@@ -889,34 +906,56 @@ program_mode_play(const u8 *domain, bool loops)
             log_info("play: %{dnsname}: there are no plans on storage (%s)", domain, g_config.plan_path);
         }
 
+        keyroll_finalize(&keyroll);
+
         return ret;
     }
 
-    s64 now = timeus_with_offset();
-
-    log_info("play: %{dnsname}: now is %llU (%lli)", domain, now, now);
-
-    keyroll_step_t *current_step = keyroll_get_current_step_at(&keyroll, now);
-
-    if(current_step == NULL)
-    {
-        log_info("play: %{dnsname}: there are no steps registered for this time", domain);
-        return INVALID_STATE_ERROR;
-    }
-
-    log_info("play: %{dnsname}: the current step happened at %llU (%lli)", domain, current_step->epochus, current_step->epochus);
-
-    // check the expected set with the server
-    // do a query for all DNSKEY + RRSIG and compare with the step
-
-    ptr_vector current_dnskey_rrsig_rr;
-    ptr_vector_init_ex(&current_dnskey_rrsig_rr, 32);
-
-    const keyroll_step_t *matched_step = NULL;
+    s64 step_time;
 
     do
     {
-        ret = keyroll_get_state_find_match_and_play(&keyroll, now, current_step, &matched_step);
+        step_time = timeus_with_offset();
+
+        log_info("play: %{dnsname}: now is %llU (%lli)", domain, step_time, step_time);
+
+        keyroll_step_t *current_step = keyroll_get_current_step_at(&keyroll, step_time);
+
+        if(current_step == NULL)
+        {
+            log_info("play: %{dnsname}: there are no steps registered for this time", domain);
+
+            keyroll_finalize(&keyroll);
+
+            return INVALID_STATE_ERROR;
+        }
+
+        log_info("play: %{dnsname}: the current step happened at %llU (%lli)", domain, current_step->epochus, current_step->epochus);
+
+        keyroll_step_t *next_step = keyroll_get_next_step_from(&keyroll, step_time + 1);
+
+        s64 next_step_time;
+
+        if(next_step != NULL)
+        {
+            next_step_time = next_step->epochus;
+            log_info("play: %{dnsname}: the step that will follow will happen at %llU (%lli)", domain, next_step_time, next_step_time);
+        }
+        else
+        {
+            next_step_time = ONE_SECOND_US * MAX_U32;
+        }
+
+        /*
+        // check the expected set with the server
+        // do a query for all DNSKEY + RRSIG and compare with the step
+
+        ptr_vector current_dnskey_rrsig_rr;
+        ptr_vector_init_ex(&current_dnskey_rrsig_rr, 32);
+        */
+        const keyroll_step_t *matched_step = NULL;
+
+        ret = keyroll_get_state_find_match_and_play(&keyroll, step_time, current_step, &matched_step);
 
         if(ISOK(ret))
         {
@@ -924,11 +963,28 @@ program_mode_play(const u8 *domain, bool loops)
             break;
         }
 
-        log_info("play: %{dnsname}: keyroll_get_state_find_match returned %r (retrying in " TOSTRING(SERVER_FAILURE_RETRY_DELAY) " seconds)", domain, ret);
-
-        for(int i = 0; (i < SERVER_FAILURE_RETRY_DELAY) && !dnscore_shuttingdown(); ++i)
+        if(ret != STOPPED_BY_APPLICATION_SHUTDOWN)
         {
-            sleep(1);
+            log_info("play: %{dnsname}: keyroll_get_state_find_match returned %r (retrying in " TOSTRING(SERVER_FAILURE_RETRY_DELAY) " seconds)", domain, ret);
+
+            s64 now = timeus();
+
+            if(now + ONE_SECOND_US * SERVER_FAILURE_RETRY_DELAY < next_step_time)
+            {
+                for(int i = 0; (i < SERVER_FAILURE_RETRY_DELAY) && !dnscore_shuttingdown(); ++i)
+                {
+                    sleep(1);
+                }
+            }
+            else
+            {
+                // we have gone through a step, current computations are invalid : restart the roll for this domain
+                ret = KEYROLL_MUST_REINITIALIZE;
+
+                keyroll_finalize(&keyroll);
+
+                return ret;
+            }
         }
     }
     while(g_config.wait_for_yadifad && !dnscore_shuttingdown());
@@ -936,10 +992,13 @@ program_mode_play(const u8 *domain, bool loops)
     if(FAIL(ret))
     {
         log_notice("play: %{dnsname}: keyroll_get_state_find_match returned %r", domain, ret);
+
+        keyroll_finalize(&keyroll);
+
         return ret;
     }
 
-    keyroll_step_t *next_step = keyroll_get_next_step_from(&keyroll, now);
+    keyroll_step_t *next_step = keyroll_get_next_step_from(&keyroll, step_time);
 
     if(next_step != NULL)
     {
@@ -976,9 +1035,9 @@ program_mode_play(const u8 *domain, bool loops)
                 break;
             }
 
-            now = timeus_with_offset();
+            step_time = timeus_with_offset();
 
-            current_step = keyroll_get_current_step_at(&keyroll, now);
+            keyroll_step_t *current_step = keyroll_get_current_step_at(&keyroll, step_time);
 
             if(current_step == NULL)
             {
@@ -986,7 +1045,15 @@ program_mode_play(const u8 *domain, bool loops)
                 break;
             }
 
-            if(FAIL(ret = keyroll_get_state_find_match_and_play(&keyroll, now, current_step, NULL)))
+            ret = keyroll_get_state_find_match_and_play(&keyroll, step_time, current_step, NULL);
+
+            log_warn("play: %{dnsname}: match and play returned: %r (%x)", domain, ret, ret);
+
+            if(ISOK(ret))
+            {
+                consecutive_errors = 0;
+            }
+            else
             {
                 // test for error conditions warranting a retry
 
@@ -996,27 +1063,41 @@ program_mode_play(const u8 *domain, bool loops)
                     case MAKE_ERRNO_ERROR(EADDRNOTAVAIL):
                     case MAKE_ERRNO_ERROR(EAGAIN):
                     case DNS_ERROR_CODE(RCODE_SERVFAIL):
+                    case DNS_ERROR_CODE(RCODE_REFUSED):
                     case UNABLE_TO_COMPLETE_FULL_READ:
-                        now = timeus_with_offset();
-                        if(now - last_warning_us >= ONE_SECOND_US * 60)
+                    {
+                        ++consecutive_errors;
+
+                        if(consecutive_errors < CONSECUTIVE_ERRORS_BEFORE_RESTART)
                         {
-                            log_warn("play: %{dnsname}: step play failure: %r: trying again (this message will only be printed every minute)", domain, ret);
-                            last_warning_us = now;
+                            step_time = timeus_with_offset();
+                            if(step_time - last_warning_us >= ONE_SECOND_US * 60)
+                            {
+                                log_warn("play: %{dnsname}: step play failure: %r: trying again (this message will only be printed every minute)", domain, ret);
+                                last_warning_us = step_time;
+                            }
+
+                            sleep(1);
+                            continue;
                         }
-
-                        sleep(1);
-                        continue;
+                        else
+                        {
+                            log_warn("play: %{dnsname}: step play failure: %r: restarting", domain, ret);
+                            ret = KEYROLL_MUST_REINITIALIZE;
+                            break;
+                        }
+                    }
                     default:
+                    {
+                        // unrecoverable error
+                        log_err("play: %{dnsname}: step play failure: %r (%x): shutting down.  Please restart after fixing the issue.", domain, ret, ret);
                         break;
+                    }
                 }
-
-                // unrecoverable error
-
-                log_err("play: %{dnsname}: step play failure: %r: shutting down.  Please restart after fixing the issue.", domain, ret);
                 break;
             }
 
-            if(!loops)
+            if(!does_loop)
             {
                 break;
             }
@@ -1026,8 +1107,10 @@ program_mode_play(const u8 *domain, bool loops)
     }
     else
     {
-        log_info("play: %{dnsname}: there is no next step recorded after %llU", domain, now);
+        log_info("play: %{dnsname}: there is no next step recorded after %llU", domain, step_time);
     }
+
+    keyroll_finalize(&keyroll);
 
     return ret;
 }
@@ -1035,7 +1118,7 @@ program_mode_play(const u8 *domain, bool loops)
 struct program_mode_play_thread_args
 {
     const u8 *fqdn;
-    bool loops;
+    bool does_loop;
 };
 
 typedef struct program_mode_play_thread_args program_mode_play_thread_args;
@@ -1044,23 +1127,41 @@ static void*
 program_mode_play_thread(void *args_)
 {
     program_mode_play_thread_args *args = (program_mode_play_thread_args*)args_;
-    ya_result  ret = program_mode_play(args->fqdn, args->loops);
-    if(FAIL(ret))
+    while(!dnscore_shuttingdown())
     {
-        log_err("shutting down");
-        dnscore_shutdown();
+        ya_result  ret = program_mode_play(args->fqdn, args->does_loop);
+
+        if(ISOK(ret))
+        {
+            log_warn("%{dnsname}: key roll stopped", args->fqdn);
+            break;
+        }
+        else
+        {
+            if(ret == KEYROLL_MUST_REINITIALIZE)
+            {
+                log_warn("%{dnsname}: trying again from the start", args->fqdn);
+            }
+            else
+            {
+                log_err("%{dnsname}: shutting down (%r)", args->fqdn, ret);
+                dnscore_shutdown();
+                break;
+            }
+        }
     }
     return NULL;
 }
 
 static ya_result
-program_mode_play_all(bool loops, bool daemonise)
+program_mode_play_all(bool does_loop, bool daemonise)
 {
     ya_result ret;
 
     pid_t pid;
-    char pid_file_path[PATH_MAX];
-    snformat(pid_file_path, sizeof(pid_file_path), "%s/%s", g_config.pid_path, g_config.pid_file);
+    char pid_file_path_buffer[PATH_MAX];
+    char *pid_file_path = &pid_file_path_buffer[0];
+    snformat(pid_file_path_buffer, sizeof(pid_file_path_buffer), "%s/%s", g_config.pid_path, g_config.pid_file);
 
     if(FAIL(ret = pid_check_running_program(pid_file_path, &pid)))
     {
@@ -1073,14 +1174,14 @@ program_mode_play_all(bool loops, bool daemonise)
         return ret;
     }
 
-    if(ISOK(ret = server_setup_env(&pid, pid_file_path, g_config.uid, g_config.gid, SETUP_CREATE_PID_FILE|SETUP_ID_CHANGE|SETUP_CORE_LIMITS)))
+    if(ISOK(ret = server_setup_env(&pid, &pid_file_path, g_config.uid, g_config.gid, SETUP_CREATE_PID_FILE|SETUP_ID_CHANGE|SETUP_CORE_LIMITS)))
     {
         if(daemonise)
         {
-            if(!loops)
+            if(!does_loop)
             {
                 log_warn("daemonise requires to enable loops");
-                loops = true;
+                does_loop = true;
             }
 
             signal_handler_finalize();
@@ -1089,7 +1190,7 @@ program_mode_play_all(bool loops, bool daemonise)
 
             u32 setup_flags = SETUP_CORE_LIMITS | SETUP_ID_CHANGE | SETUP_CREATE_PID_FILE;
 
-            if(FAIL(ret = server_setup_env(NULL, pid_file_path, g_config.uid, g_config.gid, setup_flags)))
+            if(FAIL(ret = server_setup_env(NULL, &pid_file_path, g_config.uid, g_config.gid, setup_flags)))
             {
                 log_err("server setup failed: %r", ret);
                 return EXIT_FAILURE;
@@ -1131,7 +1232,7 @@ program_mode_play_all(bool loops, bool daemonise)
             log_info("zone play: %{dnsname}", fqdn);
 
             args[i].fqdn = fqdn; // VS false positive (nonsense)
-            args[i].loops = loops;
+            args[i].does_loop = does_loop;
 
             thread_pool_enqueue_call(tp, program_mode_play_thread, &args[i], NULL, domain);
         }
@@ -1170,7 +1271,7 @@ program_mode_print(const u8 *domain)
     keyroll_t keyroll;
 
     // start from an empty state
-    if(FAIL(ret = keyroll_init(&keyroll, domain, g_config.plan_path, g_config.keys_path, g_config.server)))
+    if(FAIL(ret = keyroll_init(&keyroll, domain, g_config.plan_path, g_config.keys_path, g_config.server, FALSE)))
     {
         return ret;
     }
@@ -1213,7 +1314,7 @@ program_mode_print_json(const u8 *domain)
     keyroll_t keyroll;
 
     // start from an empty state
-    if(FAIL(ret = keyroll_init(&keyroll, domain, g_config.plan_path, g_config.keys_path, g_config.server)))
+    if(FAIL(ret = keyroll_init(&keyroll, domain, g_config.plan_path, g_config.keys_path, g_config.server, FALSE)))
     {
         return ret;
     }
@@ -1246,8 +1347,6 @@ program_mode_print_json(const u8 *domain)
 static ya_result
 program_mode_test()
 {
-
-
     return SUCCESS;
 }
 
@@ -1256,6 +1355,7 @@ main(int argc, char *argv[])
 {
     /* initializes the core library */
     dnscore_init();
+    keyroll_errors_register();
 
     ya_result ret = main_config(argc, argv);
 

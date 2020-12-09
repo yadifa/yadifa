@@ -66,9 +66,10 @@ extern "C"
  *
  */
 
-#define ZDB_ZONE_REPLAY_JOURNAL     0x02   /* replay the journal after the load            */
-#define ZDB_ZONE_DESTROY_JOURNAL    0x04   /* destroys the journal after a successful load */
-#define ZDB_ZONE_IS_SLAVE           0x08   /* any NSEC3 inconsistencies must trigger an AXFR reload */
+#define ZDB_ZONE_NO_MAINTENANCE     0x01   // do not maintain the zone DNSSEC state
+#define ZDB_ZONE_REPLAY_JOURNAL     0x02   // replay the journal after the load
+#define ZDB_ZONE_DESTROY_JOURNAL    0x04   // destroys the journal after a successful load
+#define ZDB_ZONE_IS_SLAVE           0x08   // any NSEC3 inconsistencies must trigger an AXFR reload
 
 #define ZDB_ZONE_DNSSEC_SHIFT           4
 #define ZDB_ZONE_DNSSEC_MASK       0x0070

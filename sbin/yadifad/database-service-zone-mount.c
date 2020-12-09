@@ -202,9 +202,12 @@ database_service_zone_mount(zone_desc_s *zone_desc)
 #if HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
     if(zone_desc->type == ZT_MASTER)
     {
-        if(zdb_zone_is_maintained(zone))
+        if(zone_maintains_dnssec(zone_desc))
         {
-            database_service_zone_dnskey_set_alarms(zone);
+            if(zdb_zone_is_maintained(zone))
+            {
+                database_service_zone_dnskey_set_alarms(zone);
+            }
         }
     }
 #endif

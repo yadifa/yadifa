@@ -501,7 +501,9 @@ cmdline_print_help(const cmdline_desc_s *table, int arg_column_prefix, int arg_w
             }
             else
             {
+#if DEBUG
 #pragma message("TODO: (COSMETIC) cut the t->value text word by word and wrap to the next line when needed")
+#endif
                 osprint(os, t->value);
             }
 

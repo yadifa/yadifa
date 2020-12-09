@@ -43,7 +43,7 @@ AM_CFLAGS += -DHAS_YADIFA=1
 endif
 
 AM_CFLAGS += -I$(top_srcdir)/lib/dnscore/include -I$(top_builddir)/lib/dnscore/include
-#AM_CFLAGS += -I$(top_srcdir)/lib/dnsdb/include -I$(top_builddir)/lib/dnsdb/include
+AM_CFLAGS += -I$(top_srcdir)/lib/dnsdb/include -I$(top_builddir)/lib/dnsdb/include
 AM_CFLAGS += -I$(top_srcdir)/lib/dnslg/include -I$(top_builddir)/lib/dnslg/include 
 AM_CFLAGS += -I$(top_srcdir)/lib/dnstcl/include -I$(top_builddir)/lib/dnstcl/include
 
@@ -52,6 +52,7 @@ bin_PROGRAMS = yadifa
 yadifa_LDADD=
 #yadifa_LDADD+=$(abs_top_builddir)/lib/dnstcl/libdnstcl.la
 yadifa_LDADD+=$(abs_top_builddir)/lib/dnslg/libdnslg.la
+yadifa_LDADD+=$(abs_top_builddir)/lib/dnsdb/libdnsdb.la
 yadifa_LDADD+=$(abs_top_builddir)/lib/dnscore/libdnscore.la
 
 yadifa_SOURCES  = \
@@ -82,6 +83,16 @@ noinst_HEADERS  = \
 
 yadifa_SOURCES += module/ctrl.c
 noinst_HEADERS += module/ctrl.h
+
+if HAS_ZONESIGN
+yadifa_SOURCES += module/zonesign.c
+noinst_HEADERS += module/zonesign.h
+endif
+
+if HAS_KEYGEN
+    yadifa_SOURCES += module/keygen.c
+    noinst_HEADERS += module/keygen.h
+endif
 
 if HAS_DNSSEC_TOOLS
     yadifa_SOURCES += module/dnssec-tool.c

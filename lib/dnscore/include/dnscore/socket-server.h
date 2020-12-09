@@ -106,7 +106,7 @@ typedef struct socket_server_opensocket_s socket_server_opensocket_s;
  * @param sock_type e.g.: SOCK_STREAM, SOCK_DGRAM, ...
  */
 
-void socket_server_opensocket_init(socket_server_opensocket_s *ctx, struct addrinfo *addr, int sock_type);
+ya_result socket_server_opensocket_init(socket_server_opensocket_s *ctx, struct addrinfo *addr, int sock_type);
 void socket_server_opensocket_setopt(socket_server_opensocket_s *ctx, int level, int optname, const void* opt, socklen_t optlen);
 void socket_server_opensocket_setopt_ignore_result(socket_server_opensocket_s *ctx, int level, int optname, const void* opt, socklen_t optlen);
 void socket_server_opensocket_setopt_ignore_error(socket_server_opensocket_s *ctx, int level, int optname, const void* opt, socklen_t optlen);

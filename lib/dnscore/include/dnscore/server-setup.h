@@ -50,7 +50,7 @@
 #define SETUP_CREATE_PID_FILE 8
 
 void server_setup_daemon_go();
-ya_result server_setup_env(pid_t *pid, char *pid_file_pathp, uid_t uid, gid_t gid, u32 setup_flags);
+ya_result server_setup_env(pid_t *pid, char** pid_file_pathp, uid_t uid, gid_t gid, u32 setup_flags);
 
 /** @} */
 

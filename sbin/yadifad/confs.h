@@ -84,7 +84,7 @@ extern "C" {
 
 #define     PROGRAM_NAME                "yadifad"
 #define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASEDATE                 "2020-10-12"
+#define     RELEASEDATE                 "2020-12-09"
 
     /* List of default values for the different configuration parameters */
 #define     S_CONFIGDIR                 SYSCONFDIR "/"

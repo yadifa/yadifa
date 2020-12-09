@@ -43,9 +43,14 @@
 #ifndef _ZDB_TYPES_H
 #define	_ZDB_TYPES_H
 
+#include <dnscore/dnscore-config-features.h>
 #include <dnsdb/zdb-config-features.h>
 
+#if DNSCORE_HAVE_STDATOMIC_H
 #include <stdatomic.h>
+#else
+#include <dnscore/thirdparty/stdatomic.h>
+#endif
 
 #include <dnscore/dnsname.h>
 #include <dnscore/zalloc.h>
@@ -475,6 +480,9 @@ union nsec_label_union
  */
 
 #define ZDB_RR_LABEL_NSEC3_OPTOUT   0x0400  // structure
+
+#define ZDB_RR_LABEL_DNSSEC_MASK    0x0700
+#define ZDB_RR_LABEL_DNSSEC_SHIFT   8
 
 /*
  * Marks a label so it cannot be deleted.

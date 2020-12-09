@@ -73,6 +73,7 @@
 #include <dnscore/rfc.h>
 #include <dnscore/ptr_vector.h>
 #include <dnscore/logger.h>
+#include <dnscore/dnskey-signature.h>
 
 #include "dnsdb/zdb_zone.h"
 #include "dnsdb/zdb_zone_label_iterator.h"
@@ -147,7 +148,6 @@ void
 nsec3_destroy_zone(zdb_zone *zone)
 {
      // Note that from the 'transaction' update, the dnssec zone collections have to be read without checking for the NSEC3 flag
-
 
     while(zone->nsec.nsec3 != NULL)
     {
@@ -1014,7 +1014,7 @@ nsec3_zone_label_update_chain_links(nsec3_zone *n3, zdb_rr_label* label, int cou
     // coverage_mask tells what coverage is expected in the zone. It has only one bit set.
 
     bool should_be_covered  = zdb_rr_label_flag_isset(label, coverage_mask);
-    //bool is_covered = zdb_rr_label_flag_isset(label, (ZDB_RR_LABEL_NSEC3_OPTOUT|ZDB_RR_LABEL_NSEC3));
+    u8 expected_optout_flag_value = (coverage_mask & ZDB_RR_LABEL_N3OCOVERED)?1:0;
 
     if(should_be_covered) // should be covered
     {
@@ -1044,7 +1044,7 @@ nsec3_zone_label_update_chain_links(nsec3_zone *n3, zdb_rr_label* label, int cou
         {
             // are links missing ?
 
-            if(nsec3_label_extension_self(n3le) == NULL || nsec3_label_extension_star(n3le) == NULL)
+            if((nsec3_label_extension_self(n3le) == NULL) || (nsec3_label_extension_star(n3le) == NULL))
             {
                 // compute the digest(s) and link
 
@@ -1055,6 +1055,11 @@ nsec3_zone_label_update_chain_links(nsec3_zone *n3, zdb_rr_label* label, int cou
                     nsec3_zone_item *self = nsec3_label_link_seeknode(n3, fqdn, fqdn_len, digest);
                     if(self != NULL)
                     {
+                        if(self->flags != expected_optout_flag_value)
+                        {
+                            log_warn("%{dnsname} NSEC3 coverage flag doesn't match expected value", fqdn);
+                        }
+
                         nsec3_item_add_owner(self, label);
                         nsec3_label_extension_set_self(n3le, self);
 #if NSEC3_ZONE_LABEL_UPDATE_CHAIN_LINKS_DEBUG
@@ -1499,6 +1504,149 @@ nsec3_zone_get_chains(zdb_zone *zone, nsec3_zone **n3p, int max_count)
         n3 = n3->next;
     }
     return ret;
+}
+
+struct nsec3_item_rrv_data_s
+{
+    nsec3_zone *n3;
+    nsec3_node *item;
+    const u8 *origin;
+    u8 *rdata;
+    u16 rdata_size;
+    u16 rdata_buffer_size;
+    s32 ttl;
+    u8 fqdn[256];
+};
+
+typedef struct nsec3_item_rrv_data_s nsec3_item_rrv_data_t;
+
+static void
+nsec3_item_resource_record_view_data_item_set(nsec3_item_rrv_data_t *rrv_data, nsec3_node *item)
+{
+    u32 required_size = nsec3_zone_item_rdata_size(rrv_data->n3, item);
+    if(rrv_data->rdata_buffer_size < required_size)
+    {
+        free(rrv_data->rdata);
+        rrv_data->rdata_buffer_size = (required_size + 128) & ~127;
+        MALLOC_OBJECT_ARRAY_OR_DIE(rrv_data->rdata, u8, rrv_data->rdata_buffer_size, GENERIC_TAG);
+    }
+
+    rrv_data->rdata_size = nsec3_zone_item_to_rdata(rrv_data->n3, item, rrv_data->rdata, rrv_data->rdata_buffer_size);
+    u32 b32_len = base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), NSEC3_NODE_DIGEST_SIZE(item), (char*)&rrv_data->fqdn[1]);
+    rrv_data->fqdn[0] = b32_len;
+    dnsname_copy(&rrv_data->fqdn[b32_len + 1], rrv_data->origin);
+    rrv_data->item = item;
+}
+
+static const u8 *
+nsec3_item_rrv_get_fqdn(void *data, const void* p)
+{
+    nsec3_item_rrv_data_t *rrv_data = (nsec3_item_rrv_data_t*)data;
+    if(rrv_data->item != (nsec3_node*)p) nsec3_item_resource_record_view_data_item_set(rrv_data, (nsec3_node*)p);
+    return rrv_data->fqdn;
+}
+
+static u16
+nsec3_item_rrv_get_type(void *data, const void* p)
+{
+    (void)data;
+    (void)p;
+    return TYPE_NSEC3;
+}
+
+static u16
+nsec3_item_rrv_get_class(void *data, const void* p)
+{
+    (void)data;
+    (void)p;
+    return CLASS_IN;
+}
+
+static s32
+nsec3_item_rrv_get_ttl(void *data, const void* p)
+{
+    (void)p;
+    nsec3_item_rrv_data_t *rrv_data = (nsec3_item_rrv_data_t*)data;
+    return rrv_data->ttl;
+}
+
+static u16
+nsec3_item_rrv_get_rdata_size(void *data, const void* p)
+{
+    nsec3_item_rrv_data_t *rrv_data = (nsec3_item_rrv_data_t*)data;
+    if(rrv_data->item != (nsec3_node*)p) nsec3_item_resource_record_view_data_item_set(rrv_data, (nsec3_node*)p);
+    return rrv_data->rdata_size;
+}
+
+static const u8 *
+nsec3_item_rrv_get_rdata(void *data, const void* p)
+{
+    nsec3_item_rrv_data_t *rrv_data = (nsec3_item_rrv_data_t*)data;
+    if(rrv_data->item != (nsec3_node*)p) nsec3_item_resource_record_view_data_item_set(rrv_data, (nsec3_node*)p);
+    return rrv_data->rdata;
+}
+
+static void *
+nsec3_item_rrv_new_instance(void *data, const u8 *fqdn, u16 rtype, u16 rclass, s32 ttl, u16 rdata_size, const u8 *rdata)
+{
+    (void)data;
+    (void)fqdn;
+    (void)rclass;
+    yassert(rtype == TYPE_RRSIG);
+    struct zdb_packed_ttlrdata *ttlrdata;
+    ZDB_RECORD_ZALLOC(ttlrdata, ttl, rdata_size, rdata);
+    return ttlrdata;
+}
+
+static const struct resource_record_view_vtbl nsec3_item_rrv_vtbl =
+{
+    nsec3_item_rrv_get_fqdn,
+    nsec3_item_rrv_get_type,
+    nsec3_item_rrv_get_class,
+    nsec3_item_rrv_get_ttl,
+    nsec3_item_rrv_get_rdata_size,
+    nsec3_item_rrv_get_rdata,
+    nsec3_item_rrv_new_instance
+};
+
+void
+nsec3_item_resource_record_view_init(resource_record_view *rrv)
+{
+    ZALLOC_OBJECT_OR_DIE(rrv->data, nsec3_item_rrv_data_t, GENERIC_TAG);
+    ZEROMEMORY(rrv->data, sizeof(nsec3_item_rrv_data_t));
+    rrv->vtbl = &nsec3_item_rrv_vtbl;
+}
+
+void
+nsec3_item_resource_record_view_origin_set(struct resource_record_view *rrv, const u8 *origin)
+{
+    yassert(rrv->vtbl == &nsec3_item_rrv_vtbl);
+    nsec3_item_rrv_data_t *rrv_data = (nsec3_item_rrv_data_t*)rrv->data;
+    rrv_data->origin = origin;
+}
+
+void
+nsec3_item_resource_record_view_nsec3_zone_set(struct resource_record_view *rrv, nsec3_zone *n3)
+{
+    yassert(rrv->vtbl == &nsec3_item_rrv_vtbl);
+    nsec3_item_rrv_data_t *rrv_data = (nsec3_item_rrv_data_t*)rrv->data;
+    rrv_data->n3 = n3;
+}
+
+void
+nsec3_item_resource_record_view_ttl_set(resource_record_view *rrv, s32 ttl)
+{
+    yassert(rrv->vtbl == &nsec3_item_rrv_vtbl);
+    nsec3_item_rrv_data_t *rrv_data = (nsec3_item_rrv_data_t*)rrv->data;
+    rrv_data->ttl = ttl;
+}
+
+void
+nsec3_item_resource_record_finalize(resource_record_view *rrv)
+{
+    yassert(rrv->vtbl == &nsec3_item_rrv_vtbl);
+    ZFREE_OBJECT_OF_TYPE(rrv->data, nsec3_item_rrv_data_t);
+    rrv->vtbl = NULL;
 }
 
 void

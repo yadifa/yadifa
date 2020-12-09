@@ -86,6 +86,7 @@ extern logger_handle *g_database_logger;
 void
 zdb_zone_load_parms_init(struct zdb_zone_load_parms *parms, zone_reader *zr, const u8 *expected_origin, u16 flags)
 {
+    ZEROMEMORY(parms, sizeof(struct zdb_zone_load_parms));
     parms->zr = zr;
     parms->expected_origin = expected_origin;
     parms->dnskey_state = U32_SET_EMPTY;
@@ -444,17 +445,20 @@ zdb_zone_load_ex(struct zdb_zone_load_parms *parms)
     zone->text_serial = soa_serial;
     zone->axfr_serial = soa_serial - 1; /* ensure that the axfr on disk is not automatically taken in account later */
 
-    switch(parms->flags & ZDB_ZONE_DNSSEC_MASK)
+    if((parms->flags & ZDB_ZONE_NO_MAINTENANCE) == 0)
     {
-        case ZDB_ZONE_NSEC:
-            zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC);
-            break;
-        case ZDB_ZONE_NSEC3:
-            zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3);
-            break;
-        case ZDB_ZONE_NSEC3_OPTOUT:
-            zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT);
-            break;
+        switch(parms->flags & ZDB_ZONE_DNSSEC_MASK)
+        {
+            case ZDB_ZONE_NSEC:
+                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC);
+                break;
+            case ZDB_ZONE_NSEC3:
+                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3);
+                break;
+            case ZDB_ZONE_NSEC3_OPTOUT:
+                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT);
+                break;
+        }
     }
 
     dnsname_to_dnsname_vector(zone->origin, &name);
@@ -835,24 +839,45 @@ zdb_zone_load_ex(struct zdb_zone_load_parms *parms)
     {
         if(has_nsec && has_nsec3)
         {
-            log_err("zone load: zone %{dnsname} has both NSEC and NSEC3 records !", zone->origin);
+            log_err("zone load: zone %{dnsname} has both NSEC and NSEC3 records!", zone->origin);
 
             // return_code = ZDB_READER_MIXED_DNSSEC_VERSIONS;
             has_nsec = FALSE;
         }
         if((flags & ZDB_ZONE_IS_SLAVE) == 0)
         {
-            if(has_nsec3 && !nsec3_keys)
+            if(nsec_keys && nsec3_keys) // after algorithm 7, keys can be used both for NSEC and NSEC3
             {
-                log_warn("zone load: zone %{dnsname} is NSEC3 but there are no NSEC3 keys available", zone->origin);
+                if(!(has_nsec3|has_nsec))
+                {
+                    log_warn("zone load: zone %{dnsname} has DNSKEY but there is no NSEC nor NSEC3 coverage", zone->origin);
+                }
             }
-            if(has_nsec && !nsec_keys)
+            else if(nsec3_keys)
             {
-                log_warn("zone load: zone %{dnsname} is NSEC but there are no NSEC keys available", zone->origin);
+                if(!has_nsec3)
+                {
+                    log_warn("zone load: zone %{dnsname} has NSEC3 DNSKEY but there is no NSEC3 coverage", zone->origin);
+                }
             }
-            if(nsec3_keys && !has_nsec3)
+            else if(nsec_keys)
             {
-                log_warn("zone load: zone %{dnsname} has NSEC3 DNSKEY but there is no NSEC3PARAM record available", zone->origin);
+                if(!has_nsec)
+                {
+                    log_warn("zone load: zone %{dnsname} has NSEC DNSKEY but there is no NSEC coverage", zone->origin);
+                }
+            }
+            else
+            {
+                if(has_nsec3)
+                {
+                    log_warn("zone load: zone %{dnsname} is NSEC3 but there are no NSEC3 keys available", zone->origin);
+                }
+
+                if(has_nsec)
+                {
+                    log_warn("zone load: zone %{dnsname} is NSEC but there are no NSEC keys available", zone->origin);
+                }
             }
         }
     }
@@ -891,15 +916,18 @@ zdb_zone_load_ex(struct zdb_zone_load_parms *parms)
 
         if(has_nsec3)
         {
-            zone->_flags |= ZDB_ZONE_MAINTAIN_NSEC3;
+            if((parms->flags & ZDB_ZONE_NO_MAINTENANCE) == 0)
+            {
+                zone->_flags |= ZDB_ZONE_MAINTAIN_NSEC3;
 
-            if(has_optout > 0)
-            {
-                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT);
-            }
-            else
-            {
-                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3);
+                if(has_optout > 0)
+                {
+                    zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT);
+                }
+                else
+                {
+                    zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3);
+                }
             }
 
             zdb_rr_label_flag_or(zone->apex, ZDB_RR_LABEL_N3OCOVERED|ZDB_RR_LABEL_N3COVERED);
@@ -1026,6 +1054,7 @@ zdb_zone_load_ex(struct zdb_zone_load_parms *parms)
             if(ISOK(return_code = nsec_update_zone(zone, (flags & ZDB_ZONE_IS_SLAVE) != 0)))
             {//DNSSEC_ERROR_NSEC_INVALIDZONESTATE
                 zdb_rr_label_flag_or(zone->apex, ZDB_RR_LABEL_NSEC);
+                zdb_rr_label_flag_and(zone->apex, ~(ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT));
 #if HAS_RRSIG_MANAGEMENT_SUPPORT
                 zdb_zone_set_maintained(zone, (flags & ZDB_ZONE_IS_SLAVE) == 0);
 #endif
@@ -1053,8 +1082,6 @@ zdb_zone_load_ex(struct zdb_zone_load_parms *parms)
         log_debug("zone load: zone %{dnsname} earliest signature expiration at %T in %d seconds", zone->origin, earliest_signature_expiration, (s32)(earliest_signature_expiration - time(NULL)));
 
         parms->out_zone = zone;
-
-
 
 #if defined(ZDB_ZONE_MOUNT_ON_LOAD)
         if((flags & ZDB_ZONE_MOUNT_ON_LOAD) != 0)

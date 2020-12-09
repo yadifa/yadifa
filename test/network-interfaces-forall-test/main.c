@@ -52,7 +52,7 @@
 #include <dnscore/format.h>
 
 static ya_result
-network_callback(const char* itf_name, socketaddress* ss, void* data)
+network_callback(const char* itf_name, const socketaddress* ss, void* data)
 {
     (void)data;
     formatln("CB: %s: %{sockaddr}", itf_name, ss);

@@ -263,7 +263,7 @@ ya_result file_exists(const char *name);
 
 /**
  * 
- * Checks if a file is a link
+ * Checks if a file exists and is a link
  * 
  * @param name the file name
  * 
@@ -273,6 +273,18 @@ ya_result file_exists(const char *name);
  */
 
 ya_result file_is_link(const char *name);
+
+/**
+ *
+ * Checks if a file exists and is a directory
+ *
+ * @param name the file name
+ *
+ * @return  0 : not a link
+ *          1 : a link
+ *        < 0 : error
+ */
+ya_result file_is_directory(const char *name);
 
 /**
  * 

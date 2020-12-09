@@ -34,8 +34,6 @@
 
 #pragma once
 
-
-
 /** @defgroup yadifa
  *  @ingroup ###
  *  @brief yadifa
@@ -76,7 +74,5 @@ struct yadifa_ctrl_settings_s
 };
 
 #ifndef CTRL_C_
-
 extern const module_s ctrl_program;
-
 #endif

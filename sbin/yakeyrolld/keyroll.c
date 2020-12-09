@@ -55,6 +55,7 @@
 
 #define TTL 86400
 #define RRSIG_ANTEDATING 86400  // sign from the day before
+#define DNSKEY_DEACTIVATION_MARGIN 59 // 654
 
 #define UPDATE_SUBCOMMAND_ADD    0
 #define UPDATE_SUBCOMMAND_DELETE 1
@@ -63,11 +64,13 @@
 
 #define MODULE_MSG_HANDLE g_keyroll_logger
 
-#define NEXT_SIGNATURE_EPOCH_MARGIN 60
+#define NEXT_SIGNATURE_EPOCH_MARGIN 57 // one minute should be enough, and adding a non-minute multiple makes is easier to notice
 
 logger_handle *g_keyroll_logger = LOGGER_HANDLE_SINK;
 
 static bool keyroll_dryrun_mode = FALSE;
+
+ya_result keyroll_step_delete(keyroll_step_t *step);
 
 //static const char *token_delmiter = " \t\r\n";
 
@@ -81,8 +84,20 @@ static int keyroll_dns_resource_record_ptr_vector_qsort_callback(const void *a, 
     return ret;
 }
 
+void
+keyroll_errors_register()
+{
+    error_register(KEYROLL_ERROR_BASE, "KEYROLL_ERROR_BASE");
+    error_register(KEYROLL_EXPECTED_IDENTICAL_RECORDS, "KEYROLL_EXPECTED_IDENTICAL_RECORDS");
+    error_register(KEYROLL_EXPECTED_IDENTICAL_SIZE_RRSETS, "KEYROLL_EXPECTED_IDENTICAL_SIZE_RRSETS");
+    error_register(KEYROLL_EXPECTED_DNSKEY_OR_RRSIG, "KEYROLL_EXPECTED_DNSKEY_OR_RRSIG");
+    error_register(KEYROLL_UPDATE_SUBCOMMAND_ERROR, "KEYROLL_UPDATE_SUBCOMMAND_ERROR");
+    error_register(KEYROLL_HOLE_IN_TIMELINE, "KEYROLL_HOLE_IN_TIMELINE");
+    error_register(KEYROLL_MUST_REINITIALIZE, "KEYROLL_MUST_REINITIALIZE");
+}
+
 ya_result
-keyroll_init(keyroll_t* keyroll, const u8 *domain, const char *plan_path, const char *keys_path, const host_address *server)
+keyroll_init(keyroll_t* keyroll, const u8 *domain, const char *plan_path, const char *keys_path, const host_address *server, bool generation_mode)
 {
     ya_result ret = SUCCESS;
     memset(keyroll, 0, sizeof(keyroll_t));
@@ -104,44 +119,70 @@ keyroll_init(keyroll_t* keyroll, const u8 *domain, const char *plan_path, const 
     keyroll->match_verify_retries = 60;        // if there is not match, retry checking this amount of times
     keyroll->match_verify_retries_delay = 1;  // time between the above retries
 
+    keyroll->generation_mode = generation_mode;
+
     asformat(&keyroll->plan_path, "%s/%{dnsname}", plan_path, domain);
-    asformat(&keyroll->private_keys_path, "%s/%{dnsname}" YKEYROLL_KSK_SUFFIX, plan_path, domain);
 
-    error_register(KEYROLL_ERROR_BASE, "KEYROLL_ERROR_BASE");
-    error_register(KEYROLL_EXPECTED_IDENTICAL_RECORDS, "KEYROLL_EXPECTED_IDENTICAL_RECORDS");
-    error_register(KEYROLL_EXPECTED_IDENTICAL_SIZE_RRSETS, "KEYROLL_EXPECTED_IDENTICAL_SIZE_RRSETS");
-    error_register(KEYROLL_EXPECTED_DNSKEY_OR_RRSIG, "KEYROLL_EXPECTED_DNSKEY_OR_RRSIG");
-    error_register(KEYROLL_UPDATE_SUBCOMMAND_ERROR, "KEYROLL_UPDATE_SUBCOMMAND_ERROR");
-    error_register(KEYROLL_HOLE_IN_TIMELINE, "KEYROLL_HOLE_IN_TIMELINE");
-
-    if(!keyroll_dryrun_mode)
+    if(generation_mode)
     {
-        if(ISOK(ret = mkdir_ex(keyroll->plan_path, 0700, 0)) && ISOK(ret = mkdir_ex(keyroll->private_keys_path, 0700, 0)))
+        if(FAIL(ret = mkdir_ex(keyroll->plan_path, 0700, 0)))
         {
-            log_debug("plan directories created: '%s' and '%s'", keyroll->plan_path, keyroll->private_keys_path);
-        }
-        else
-        {
+            log_err("keyroll: %{dnsname}: could not create directory: '%s'", domain, keyroll->plan_path);
             free(keyroll->plan_path);
-            free(keyroll->keys_path);
+            keyroll->plan_path = NULL;
             return ret;
+        }
+
+        asformat(&keyroll->private_keys_path, "%s/%{dnsname}" YKEYROLL_KSK_SUFFIX, plan_path, domain);
+
+        if(FAIL(ret = mkdir_ex(keyroll->private_keys_path, 0700, 0)))
+        {
+            log_err("keyroll: %{dnsname}: could not create directory: '%s'", domain, keyroll->private_keys_path);
+            free(keyroll->plan_path);
+            keyroll->plan_path = NULL;
+            free(keyroll->private_keys_path);
+            keyroll->private_keys_path = NULL;
+            return ret;
+        }
+
+        dnssec_keystore_add_domain(domain, keyroll->private_keys_path);
+    }
+    else
+    {
+        if(FAIL(ret = file_is_directory(keyroll->plan_path)))
+        {
+            log_err("keyroll: %{dnsname}: could not find directory: '%s'", domain, keyroll->plan_path);
         }
     }
 
+    keyroll->keys_path = strdup(keys_path);
+    keyroll->domain = dnsname_zdup(domain);
     keyroll->domain = dnsname_zdup(domain);
     keyroll->server = host_address_copy(server);
     keyroll->keyring = dnskey_keyring_new();
-    keyroll->keys_path = strdup(keys_path);
-
-    dnssec_keystore_add_domain(domain, keyroll->private_keys_path);
 
     return ret;
 }
 
-void keyroll_finalize(keyroll_t *keyroll)
+static void
+keyroll_finalize_steps_delete_callback(u64_node *node)
+{
+    keyroll_step_t *step = (keyroll_step_t*)node->value;
+    keyroll_step_delete(step);
+}
+
+void
+keyroll_finalize(keyroll_t *keyroll)
 {
     if(keyroll != NULL)
     {
+        free(keyroll->private_keys_path);
+        keyroll->private_keys_path = NULL;
+        free(keyroll->plan_path);
+        keyroll->plan_path = NULL;
+        free(keyroll->keys_path);
+        keyroll->keys_path = NULL;
+
         if(keyroll->domain != NULL)
         {
             dnsname_zfree(keyroll->domain);
@@ -150,7 +191,7 @@ void keyroll_finalize(keyroll_t *keyroll)
 
         if(keyroll->server != NULL)
         {
-            ZFREE_OBJECT(keyroll->server);
+            host_address_delete(keyroll->server);
             keyroll->server = NULL;
         }
 
@@ -159,6 +200,8 @@ void keyroll_finalize(keyroll_t *keyroll)
             dnskey_keyring_free(keyroll->keyring);
             keyroll->keyring = NULL;
         }
+
+        u64_set_callback_and_destroy(&keyroll->steps, keyroll_finalize_steps_delete_callback);
 
         memset(keyroll, 0, sizeof(keyroll_t));
     }
@@ -262,7 +305,7 @@ keyroll_init_from_server(keyroll_t* keyroll, const u8 *domain, const char *plan_
 {
     ya_result ret;
 
-    if(FAIL(ret = keyroll_init(keyroll, domain, plan_path, keys_path, server)))
+    if(FAIL(ret = keyroll_init(keyroll, domain, plan_path, keys_path, server, TRUE)))
     {
         return ret;
     }
@@ -739,6 +782,7 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                             {
                                 break;
                             }
+
                             if(is_public)
                             {
                                 dnssec_key *key;
@@ -890,17 +934,7 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                                         dnssec_key *key = dnssec_keystore_acquire_key_from_fqdn_with_tag(keyroll->domain, tag);
                                         if(key != NULL)
                                         {
-                                            if((dnskey_get_flags(key) & DNSKEY_FLAGS_KSK) == DNSKEY_FLAGS_KSK)
-                                            {
-                                                if(dnskey_is_private(key))
-                                                {
-                                                    ptr_vector_append(&step->rrsig_add, rr);
-                                                }
-                                            }
-                                            else
-                                            {
-                                                ptr_vector_append(&step->rrsig_add, rr);
-                                            }
+                                            ptr_vector_append(&step->rrsig_add, rr);
                                             dnskey_release(key);
                                         }
                                         else
@@ -915,7 +949,7 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
 
                                         dnssec_key *key = NULL;
 
-                                        if(DNSKEY_FLAGS_FROM_RDATA(rr->rdata) == DNSKEY_FLAGS_KSK)
+                                        if(keyroll->generation_mode && (DNSKEY_FLAGS_FROM_RDATA(rr->rdata) == DNSKEY_FLAGS_KSK))
                                         {
                                             ret = dnssec_keystore_load_private_key_from_rdata(rr->rdata, rr->rdata_size, rr->name, &key);
                                             if(ISOK(ret))
@@ -989,7 +1023,7 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
 
                                         dnssec_key *key = NULL;
 
-                                        if(DNSKEY_FLAGS_FROM_RDATA(rr->rdata) == DNSKEY_FLAGS_KSK)
+                                        if(keyroll->generation_mode && (DNSKEY_FLAGS_FROM_RDATA(rr->rdata) == DNSKEY_FLAGS_KSK))
                                         {
                                             ret = dnssec_keystore_load_private_key_from_rdata(rr->rdata, rr->rdata_size, rr->name, &key);
 
@@ -1343,6 +1377,58 @@ keyroll_step_t* keyroll_step_new_instance()
     step->from_merge = FALSE;
     return step;
 }
+
+static void
+keyroll_step_delete_dnskey_callback(void *key_)
+{
+    dnssec_key *key = (dnssec_key*)key_;
+    dnskey_release(key);
+}
+
+static void
+keyroll_step_delete_dns_resource_record_callback(void *rr_)
+{
+    dns_resource_record *rr = (dns_resource_record*)rr_;
+    dns_resource_record_free(rr);
+}
+
+static void
+keyroll_step_delete_file_add_callback(ptr_node *node)
+{
+    free(node->key);
+    input_stream *is = (input_stream*)node->value;
+    input_stream_close(is);
+    ZFREE_OBJECT(is);
+}
+
+static void
+keyroll_step_delete_file_del_callback(void *str_)
+{
+    free(str_);
+}
+
+ya_result
+keyroll_step_delete(keyroll_step_t *step)
+{
+    if(step != NULL)
+    {
+        ptr_vector_callback_and_destroy(&step->dnskey_del, keyroll_step_delete_dnskey_callback);
+        ptr_vector_callback_and_destroy(&step->dnskey_add, keyroll_step_delete_dnskey_callback);
+        ptr_vector_callback_and_destroy(&step->rrsig_add, keyroll_step_delete_dns_resource_record_callback);
+        ptr_vector_callback_and_destroy(&step->expect, keyroll_step_delete_dns_resource_record_callback);
+        ptr_vector_callback_and_destroy(&step->endresult, keyroll_step_delete_dns_resource_record_callback);
+        ptr_set_callback_and_destroy(&step->file_add, keyroll_step_delete_file_add_callback);
+        ptr_vector_callback_and_destroy(&step->file_del, keyroll_step_delete_file_del_callback);
+
+        step->keyroll = NULL;
+        step->epochus = 0;
+
+        ZFREE_OBJECT(step);
+    }
+
+    return SUCCESS;
+}
+
 
 /**
  * Returns the step at the given epoch, or create an empty one
@@ -1856,6 +1942,16 @@ keyroll_step_play(const keyroll_step_t *step, bool delete_all_dnskey)
 
         message_log(g_keyroll_logger, LOG_INFO, mesg);
 
+        bool dnskey_rrsig_needed = (ptr_vector_last_index(&step->dnskey_del) >= 0) || (ptr_vector_last_index(&step->dnskey_add) >= 0);
+        bool dnskey_rrsig_added = (ptr_vector_last_index(&step->rrsig_add) >= 0);
+
+        if(dnskey_rrsig_needed && !dnskey_rrsig_added)
+        {
+            log_err("%s%{dnsname}: internal state error: no DNSKEY RRSIG added while the DNSKEY rrset is being modified", "<INTERVENTION> ", step->keyroll->domain);
+            dnscore_shutdown();
+            return INVALID_STATE_ERROR;
+        }
+
         if(!keyroll_dryrun_mode)
         {
             ret = STOPPED_BY_APPLICATION_SHUTDOWN;
@@ -1918,7 +2014,7 @@ keyroll_step_play(const keyroll_step_t *step, bool delete_all_dnskey)
                                 else
                                 {
                                     log_err("%{dnsname}: update was not applied successfully, no retry left.", step->keyroll->domain);
-                                    ret = INVALID_STATE_ERROR;
+                                    ret = KEYROLL_MUST_REINITIALIZE;
                                 }
                             }
                         }
@@ -1934,22 +2030,23 @@ keyroll_step_play(const keyroll_step_t *step, bool delete_all_dnskey)
                     break;
                 }
 
-                if(!((ret == MAKE_ERRNO_ERROR(ETIMEDOUT)) || (ret == MAKE_ERRNO_ERROR(EAGAIN))))
+                if(!((ret == MAKE_ERRNO_ERROR(ETIMEDOUT)) || (ret == MAKE_ERRNO_ERROR(EAGAIN) || (ret == UNEXPECTED_EOF))))
                 {
                     log_notice("%{dnsname}: sending message to %{hostaddr} failed: %r", step->keyroll->domain, step->keyroll->server, ret);
                     break;
                 }
 
-                // timed-out : try again
-
-                log_warn("%{dnsname}: sending message to %{hostaddr} failed: %r (retrying in one second)", step->keyroll->domain, step->keyroll->server, ret);
-                sleep(1);
-
-                if(++loops == 1) // show the message exactly once
+                if(!dnscore_shuttingdown())
                 {
-                    if(ret != UNABLE_TO_COMPLETE_FULL_READ)
+                    log_warn("%{dnsname}: sending message to %{hostaddr} failed: %r (retrying in one second)", step->keyroll->domain, step->keyroll->server, ret);
+                    sleep(1);
+
+                    if(++loops == 1) // show the message exactly once
                     {
-                        message_log(MODULE_MSG_HANDLE, MSG_INFO, mesg);
+                        if(ret != UNABLE_TO_COMPLETE_FULL_READ)
+                        {
+                            message_log(MODULE_MSG_HANDLE, MSG_INFO, mesg);
+                        }
                     }
                 }
 
@@ -2032,7 +2129,7 @@ keyroll_step_play_range_ex(const keyroll_t *keyroll, s64 seek_from , s64 now, bo
             break;
         }
 
-        log_info("%{dnsname}: then with step:", next_step->epochus);
+        log_info("%{dnsname}: then with step:", keyroll->domain);
         log_info("%{dnsname}: -------------------------------------------", keyroll->domain);
         keyroll_step_print(next_step);
         // logger_flush();
@@ -2210,7 +2307,8 @@ keyroll_generate_dnskey(keyroll_t *keyroll, s64 publication_epochus, bool ksk)
         keyroll_step_t *deactivation_step = keyroll_get_step(keyroll, deactivate_epochus);
         deactivation_step->keyroll_action |= /*KeyrollAction::*/Deactivate;
         deactivation_step->dirty = TRUE;
-        dnskey_set_inactive_epoch(key, deactivate_epochus / ONE_SECOND_US);
+        time_t deactivate_epoch = (deactivate_epochus/ ONE_SECOND_US) + DNSKEY_DEACTIVATION_MARGIN;
+        dnskey_set_inactive_epoch(key, deactivate_epoch);
 
         if(*next_deactivationp < deactivation_step->epochus)
         {
@@ -2223,7 +2321,8 @@ keyroll_generate_dnskey(keyroll_t *keyroll, s64 publication_epochus, bool ksk)
         dnskey_acquire(key);
         unpublication_step->keyroll_action |= /*KeyrollAction::*/Unpublish;
         unpublication_step->dirty = TRUE;
-        dnskey_set_delete_epoch(key, unpublish_epochus / ONE_SECOND_US);
+        time_t unpublish_epoch = MAX(unpublish_epochus / ONE_SECOND_US, deactivate_epoch);
+        dnskey_set_delete_epoch(key, unpublish_epoch);
 /*
         formatln("created key: tag=%i, algorithm=%i, flags=%i, create=%U publish=%U activate=%U deactivate=%U unpublish=%U",
                  dnskey_get_tag(key),
@@ -2268,7 +2367,8 @@ keyroll_set_timing_steps(keyroll_t *keyroll, dnssec_key *key, bool dirty)
     keyroll_step_t *deactivation_step = keyroll_get_step(keyroll, deactivate_epochus);
     deactivation_step->keyroll_action |= /*KeyrollAction::*/Deactivate;
     deactivation_step->dirty = dirty;
-    dnskey_set_inactive_epoch(key, deactivate_epochus / ONE_SECOND_US);
+    time_t deactivation_epoch = (deactivate_epochus / ONE_SECOND_US) + DNSKEY_DEACTIVATION_MARGIN;
+    dnskey_set_inactive_epoch(key, deactivation_epoch);
 
     s64 unpublish_epochus = ONE_SECOND_US * dnskey_get_delete_epoch(key);
     keyroll_step_t *unpublication_step = keyroll_get_step(keyroll, unpublish_epochus);
@@ -2276,7 +2376,8 @@ keyroll_set_timing_steps(keyroll_t *keyroll, dnssec_key *key, bool dirty)
     dnskey_acquire(key);
     unpublication_step->keyroll_action |= /*KeyrollAction::*/Unpublish;
     unpublication_step->dirty = dirty;
-    dnskey_set_delete_epoch(key, unpublish_epochus / ONE_SECOND_US);
+    time_t unpublish_epoch = MAX(unpublish_epochus / ONE_SECOND_US, deactivation_epoch);
+    dnskey_set_delete_epoch(key, unpublish_epoch);
 
     return deactivate_epochus;
 }
@@ -2358,7 +2459,8 @@ keyroll_generate_dnskey_ex(keyroll_t *keyroll, u32 size, u8 algorithm,
             keyroll_step_t *deactivation_step = keyroll_get_step(keyroll, deactivate_epochus);
             deactivation_step->keyroll_action |= /*KeyrollAction::*/Deactivate;
             deactivation_step->dirty = TRUE;
-            dnskey_set_inactive_epoch(key, deactivate_epochus / ONE_SECOND_US);
+            time_t deactivate_epoch = (deactivate_epochus / ONE_SECOND_US) + DNSKEY_DEACTIVATION_MARGIN;
+            dnskey_set_inactive_epoch(key, deactivate_epoch);
 
             if(*next_deactivationp < deactivation_step->epochus)
             {
@@ -2370,7 +2472,8 @@ keyroll_generate_dnskey_ex(keyroll_t *keyroll, u32 size, u8 algorithm,
             dnskey_acquire(key);
             unpublication_step->keyroll_action |= /*KeyrollAction::*/Unpublish;
             unpublication_step->dirty = TRUE;
-            dnskey_set_delete_epoch(key, unpublish_epochus / ONE_SECOND_US);
+            time_t unpublish_epoch = MAX(unpublish_epochus / ONE_SECOND_US, deactivate_epoch);
+            dnskey_set_delete_epoch(key, unpublish_epoch);
             dnssec_keystore_add_key(key);
 #if 0
             formatln("created key: tag=%i, algorithm=%i, flags=%i, create=%U publish=%U activate=%U deactivate=%U unpublish=%U",
@@ -2428,8 +2531,10 @@ keyroll_plan_with_policy(keyroll_t *keyroll, s64 generate_from, s64 generate_unt
 static u32
 keyroll_key_hash(dnssec_key *key)
 {
-    u32 key_hash = dnskey_get_algorithm(key);
-    key_hash <<= 8;
+    u32 key_hash = dnskey_get_flags(key);
+    key_hash <<= 5;
+    key_hash |= dnskey_get_algorithm(key);
+    key_hash <<= 16;
     key_hash |= dnskey_get_tag(key);
     return key_hash;
 }
@@ -3158,7 +3263,18 @@ keyroll_store(keyroll_t *keyroll)
                         dnskey_signature_init(&ds);
                         s32 from = (step->epochus / ONE_SECOND_US) - RRSIG_ANTEDATING;     // sign from the day before
 
-                        s32 to = MIN(dnskey_get_inactive_epoch(key), next_signature_update_epoch);
+                        log_debug("%{dnsname}: %llT signing DNSKEY RRSET with key %hu, inactive at %T (%T)",
+                                  keyroll->domain, step->epochus, dnskey_get_tag(key),
+                                  dnskey_get_inactive_epoch(key), next_signature_update_epoch);
+
+                        if(dnskey_get_inactive_epoch(key) > next_signature_update_epoch)
+                        {
+                            log_debug("%{dnsname}: %llT key %hu is inactive at %T which is after the planned expiration time %T",
+                                      keyroll->domain, step->epochus, dnskey_get_tag(key),
+                                      dnskey_get_inactive_epoch(key), next_signature_update_epoch);
+                        }
+
+                        s32 to = MAX(dnskey_get_inactive_epoch(key), next_signature_update_epoch);
 
                         log_info("signing from %U to %U", from, to);
 
@@ -3246,13 +3362,13 @@ keyroll_get_state_find_match_and_play(const keyroll_t *keyrollp, s64 now, const 
     // check the expected set with the server
     // do a query for all DNSKEY + RRSIG and compare with the step
 
-    ya_result ret;
+    ya_result ret = STOPPED_BY_APPLICATION_SHUTDOWN;
 
     u32 match_verify_try_count = 0;
 
     ptr_vector current_dnskey_rrsig_rr;
     ptr_vector_init_ex(&current_dnskey_rrsig_rr, 32);
-    while(ISOK(ret = keyroll_dnskey_state_query(keyrollp, &current_dnskey_rrsig_rr)))
+    while(!dnscore_shuttingdown() && ISOK(ret = keyroll_dnskey_state_query(keyrollp, &current_dnskey_rrsig_rr)))
     {
         // current_dnskey_rrsig_rr contains the records currently on the server
 
@@ -3337,20 +3453,30 @@ keyroll_get_state_find_match_and_play(const keyroll_t *keyrollp, s64 now, const 
                         }
                         else
                         {
-                            log_err("zone %{dnsname}: failed to find step: %r", current_step->keyroll->domain, ret);
+                            log_err("zone %{dnsname}: failed to play step: %r", current_step->keyroll->domain, ret);
                         }
 
                         ++match_verify_try_count;
 
-                        log_err("%{dnsname}: cound not find a match (try %i/%i)", step->keyroll->domain, match_verify_try_count, step->keyroll->match_verify_retries+ 1);
+                        if(ret == MAKE_DNSMSG_ERROR(RCODE_SERVFAIL))
+                        {
+                            log_err("%{dnsname}: server cannot apply the update at the moment (try %i/%i)", current_step->keyroll->domain, match_verify_try_count, current_step->keyroll->match_verify_retries);
+                        }
+                        else
+                        {
+                            log_err("%{dnsname}: could not find a match (try %i/%i)", current_step->keyroll->domain, match_verify_try_count, current_step->keyroll->match_verify_retries);
+                        }
 
                         // 1 vs 1 => must do
-                        if(match_verify_try_count <= step->keyroll->match_verify_retries)
+                        if(match_verify_try_count <= current_step->keyroll->match_verify_retries)
                         {
-                            // ret = EAGAIN; // unused
-                            usleep_ex(ONE_SECOND_US * step->keyroll->match_verify_retries_delay);
+                            if(!dnscore_shuttingdown())
+                            {
+                                usleep_ex(ONE_SECOND_US * current_step->keyroll->match_verify_retries_delay);
+                            }
 
                             ptr_vector_init_ex(&current_dnskey_rrsig_rr, 32); // because the array was destroyed
+                            ret = STOPPED_BY_APPLICATION_SHUTDOWN;
                             continue;
                         }
                         else

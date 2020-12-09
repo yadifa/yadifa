@@ -29,6 +29,33 @@
 # 
 ################################################################################
 
+20201209:
+    YADIFA 2.4.1-public
+
+    Fixes an issue in dnscore where a DNS TCP query would not return the real DNS error code.
+    Fixes an issue that could happen when a network model isn't supported.
+    Fixes the propagation of sendmmsg/recvmmsg function availability detection.
+    Fixes an issue where yadifad would issue a warning when a key with algorithm > 7 is used with an NSEC zone.
+    Fixes an issue that will occur on a chrooted environment where a managed-path would be used incorrectly.
+    Fixes CNAME answers not following the aliases chain.
+    Fixes CNAME recursion not returning the same answer as named in NXDOMAIN cases (reported by https://github.com/SivaKesava1, see https://github.com/yadifa/yadifa/issues/11)
+
+    Adds patch for musl support (from https://github.com/kolbma, see https://github.com/yadifa/yadifa/issues/9#issuecomment-723047226)
+    Adds stack size fix for musl support (the default size is way too small)
+
+    Now imports a custom version of stdatomic.h for systems where it is missing, located in dnscore/thirdpary/stdatomic.h
+	Made for CentOS 7 and any other release where that file is missing.
+        The import is only active if strictly needed and will only be visible during the build.
+	At the moment, it is not being installed with the other headers.
+	The original source of the file was taken from https://gist.github.com/nhatminhle/5181506
+
+    YAKEYROLLD 2.4.1
+
+    Fixes the handling of incomplete TCP queries.
+    Fixes a possible race-condition when initialising the keyroll context error codes.
+
+    The keyroll now has another automatic recovery layer where it completely restarts the handling of a domain, generating a one-step update to put the zone in the expected state.
+
 20201012:
     YADIFA 2.4.0-public
 

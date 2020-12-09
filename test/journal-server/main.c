@@ -754,8 +754,6 @@ udp_client_thread(void* parm_)
 
     ya_result ret;
 
-    //u8 buffer[1024];
-
     log_info("udp: waiting for query");
 
     while(!dnscore_shuttingdown())
@@ -775,7 +773,8 @@ udp_client_thread(void* parm_)
                         if(message_get_query_type(mesg) != TYPE_SOA)
                         {
                             zdb_query_ex_answer_create(&qea);
-
+#pragma message ("use the other function")
+#if 0
                             finger_print fp = zdb_query_ex(&db, mesg, &qea, message_get_pool_buffer(mesg));
 
                             message_set_status(mesg, fp);
@@ -784,7 +783,7 @@ udp_client_thread(void* parm_)
                             {
                                 zdb_query_message_update(mesg, &qea);
                             }
-
+#endif
                             zdb_query_ex_answer_destroy(&qea);
                         }
                         else
@@ -995,9 +994,17 @@ network_prepare()
     host_address2addrinfo(server_ip, &ai);
 
     socket_server_opensocket_s tcp_ctx;
-    socket_server_opensocket_init(&tcp_ctx, ai, SOCK_STREAM);
     socket_server_opensocket_s udp_ctx;
-    socket_server_opensocket_init(&udp_ctx, ai, SOCK_DGRAM);
+
+    if(FAIL(ret = socket_server_opensocket_init(&tcp_ctx, ai, SOCK_STREAM)))
+    {
+        return ret;
+    }
+
+    if(FAIL(ret = socket_server_opensocket_init(&udp_ctx, ai, SOCK_DGRAM)))
+    {
+        return ret;
+    }
 
     const int on = 1;
 

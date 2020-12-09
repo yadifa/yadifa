@@ -414,7 +414,7 @@ static void *dns_resource_record_view_new_instance(void *data, const u8 *fqdn, u
 {
     (void)data;
     dns_resource_record* rr;
-    MALLOC_OBJECT_OR_DIE(rr, dns_resource_record, DNSRREC_TAG);
+    ZALLOC_OBJECT_OR_DIE(rr, dns_resource_record, DNSRREC_TAG);
     dns_resource_record_init_record(rr, fqdn, rtype, rclass, ttl, rdata_size, rdata);
     return rr;
 }

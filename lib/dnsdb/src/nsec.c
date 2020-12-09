@@ -349,6 +349,7 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
                                 /* All good */
                                 
                                 zdb_rr_label_flag_or(label, ZDB_RR_LABEL_NSEC);
+                                zdb_rr_label_flag_and(label, ~(ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT));
 
                                 node = next_node;
                                 continue;
@@ -453,6 +454,7 @@ nsec_update_zone(zdb_zone *zone, bool read_only) // read_only a.k.a slave
             }
 
             zdb_rr_label_flag_or(label, ZDB_RR_LABEL_NSEC);
+            zdb_rr_label_flag_and(label, ~(ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT));
 
             node = next_node;
         }
@@ -623,6 +625,7 @@ nsec_update_label_record(zdb_zone *zone, zdb_rr_label *label, nsec_node *item, n
     }
 
     zdb_rr_label_flag_or(label, ZDB_RR_LABEL_NSEC);
+    zdb_rr_label_flag_and(label, ~(ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT));
 
     return TRUE;
 }
@@ -648,6 +651,7 @@ nsec_update_label_node(zdb_zone* zone, zdb_rr_label* label, dnslabel_vector_refe
     node->label = label;
     label->nsec.nsec.node = node;
     zdb_rr_label_flag_or(label, ZDB_RR_LABEL_NSEC);
+    zdb_rr_label_flag_and(label, ~(ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT));
 
 #if DEBUG
     memset(inverse_name, 0xff, sizeof(inverse_name));
