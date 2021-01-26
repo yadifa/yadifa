@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -203,7 +203,7 @@ resolv_conf_parse_stream(resolv_s *resolver, input_stream *is)
     {
         parser_push_stream(&parser, is);
 
-        u64 started_at         = timeus();
+        u64 started_at = timeus();
 
         u8 search_domain_count = 0;
         u8 name_server_count = 0;

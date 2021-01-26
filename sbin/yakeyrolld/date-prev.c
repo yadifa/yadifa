@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -113,7 +113,7 @@ dnssec_policy_date_prev_month(dnssec_policy_date *date, const dnssec_policy_rule
                     logger_flush();
                 }
 
-                date->absolute.month = 0;
+                date->absolute.month = 11;
                 --date->absolute.year;
                 continue;
             }

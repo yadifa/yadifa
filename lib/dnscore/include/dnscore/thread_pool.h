@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -104,6 +104,8 @@ void thread_pool_counter_destroy(thread_pool_task_counter *counter);
 s32 thread_pool_counter_get_value(thread_pool_task_counter *counter);
 s32 thread_pool_counter_add_value(thread_pool_task_counter *counter, s32 value);
 s32 thread_pool_counter_wait_below_or_equal(thread_pool_task_counter *counter, s32 value);
+s32 thread_pool_counter_wait_equal(thread_pool_task_counter *counter, s32 value);
+ya_result thread_pool_counter_wait_equal_with_timeout(thread_pool_task_counter *counter, s32 value, u64 usec);
 
 struct thread_pool_s;
 

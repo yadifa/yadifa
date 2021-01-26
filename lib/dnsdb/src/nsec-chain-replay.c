@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -159,7 +159,6 @@ nsec_chain_replay_record_add(chain_replay *cr, const u8 *fqdn, u16 rtype, const 
     {
         case TYPE_NSEC:
         {
-
             ptr_vector_append(&crd->add_nsec_records, nsec_chain_replay_record_new(fqdn, ttlrdata->ttl, ZDB_RECORD_PTR_RDATAPTR(ttlrdata), ZDB_RECORD_PTR_RDATASIZE(ttlrdata)));
             return 0;
         }

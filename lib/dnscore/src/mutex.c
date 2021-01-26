@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -59,15 +59,12 @@
 #error "OpenBSD doesn't handle PTHREAD_PROCESS_SHARED"
 #endif
 
-//#include "dnscore/logger.h"
+#include "dnscore/logger.h"
 
 #include "dnscore/mutex.h"
 
 // export TSAN_OPTIONS=detect_deadlocks=1:second_deadlock_stack=1
 // -sanitize=thread
-
-#if 0 /* fix */
-#else
 
 static void
 mutex_debug_logger_handle_msg(const void* handle, u32 level, const char* fmt, ...)
@@ -113,7 +110,6 @@ mutex_debug_log_stacktrace(void* handle, u32 level, const char *prefix)
     stacktrace trace = debug_stacktrace_get();
     mutex_debug_stacktrace_log(handle, level, trace);
 }
-#endif
 
 #define logger_handle_msg mutex_debug_logger_handle_msg
 #define debug_stacktrace_log mutex_debug_stacktrace_log

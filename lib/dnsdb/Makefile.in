@@ -16,7 +16,7 @@
 
 ################################################################################
 #
-#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  Copyright (c) 2011-2021, EURid vzw. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 #  Redistribution and use in source and binary forms, with or without
@@ -47,7 +47,7 @@
 
 ################################################################################
 #
-#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  Copyright (c) 2011-2021, EURid vzw. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 #  Redistribution and use in source and binary forms, with or without
@@ -82,7 +82,7 @@
 
 ################################################################################
 #
-#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  Copyright (c) 2011-2021, EURid vzw. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 #  Redistribution and use in source and binary forms, with or without
@@ -534,6 +534,10 @@ CCOPTIMISATIONFLAGS = @CCOPTIMISATIONFLAGS@
 CFLAGS = @CFLAGS@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
+CXX = @CXX@
+CXXCPP = @CXXCPP@
+CXXDEPMODE = @CXXDEPMODE@
+CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
@@ -668,6 +672,7 @@ abs_top_builddir = @abs_top_builddir@
 abs_top_srcdir = @abs_top_srcdir@
 ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
+ac_ct_CXX = @ac_ct_CXX@
 ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
 am__include = @am__include@
 am__leading_dot = @am__leading_dot@

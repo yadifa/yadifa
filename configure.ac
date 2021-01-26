@@ -1,6 +1,6 @@
 dnl ############################################################################
 dnl
-dnl Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+dnl Copyright (c) 2011-2021, EURid vzw. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl
 dnl Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,7 @@ dnl ############################################################################
 configure_base_path="$0/"
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 9839 $])
+AC_REVISION([$Revision: 9929 $])
 AC_INIT([yadifa],m4_esyscmd(
     [
         svn info 2> /dev/null |
@@ -62,7 +62,7 @@ m4_include([m4/yadifa.m4])
 AC_CONFIG_AUX_DIR([.])
 AM_INIT_AUTOMAKE([subdir-objects -Wall -Werror tar-pax])
 
-AC_CONFIG_HEADER([config.h])
+AC_CONFIG_HEADERS([config.h])
 
 AC_CONFIG_MACRO_DIR([m4])
 
@@ -74,7 +74,7 @@ AM_PROG_CC_C_O
 LT_INIT([disable-shared])
 
 AC_DARWIN_LIBTOOL
-AC_PROG_LIBTOOL
+dnl obsolete: AC_PROG_LIBTOOL
 
 AC_DEFUN([SYSCONF], [/$prefix/PACKAGE/PACKAGE.conf])
 
@@ -88,7 +88,7 @@ AC_SEARCH_LIBS([clock_gettime],[rt],,[exit 1])
 
 dnl Checks for header files.
 
-AC_HEADER_STDC
+dnl obsolete: AC_HEADER_STDC
 
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdlib.h string.h sys/time.h syslog.h unistd.h stdatomic.h])
 
@@ -122,10 +122,46 @@ AC_CHECK_TYPES(int64_t)
 AC_CHECK_TYPES(long long)
 AC_CHECK_TYPES(u_char)
 
-AC_CHECK_FUNCS([bzero memset select socket])
+AC_CHECK_TYPES(uint8_t)
+AC_CHECK_TYPES(int8_t)
+AC_CHECK_TYPES(uint16_t)
+AC_CHECK_TYPES(int16_t)
+AC_CHECK_TYPES(uint32_t)
+AC_CHECK_TYPES(int32_t)
+AC_CHECK_TYPES(uint64_t)
+AC_CHECK_TYPES(int64_t)
+AC_CHECK_TYPES(long long)
+AC_CHECK_TYPES(u_char)
+
+AC_CHECK_FUNCS([bzero memset select socket atexit clock_gettime dup2 fdatasync ftruncate getcwd gethostname getpagesize gettimeofday inet_ntoa localtime_r memchr memmove memset mkdir mkfifo munmap select socket strcasecmp strchr strdup strerror strncasecmp strrchr strtol timegm])
+AC_CHECK_HEADERS([sys/ioctl.h])
+AC_CHECK_HEADER_STDBOOL
+AC_CHECK_TYPES([ptrdiff_t])
+AC_C_INLINE
+AC_C_RESTRICT
+AC_FUNC_CHOWN
+AC_FUNC_ERROR_AT_LINE
+AC_FUNC_FORK
+AC_FUNC_MALLOC
+AC_FUNC_MKTIME
+AC_FUNC_MMAP
+AC_FUNC_REALLOC
+AC_PROG_CXX
+AC_STRUCT_TIMEZONE
+AC_TYPE_INT16_T
+AC_TYPE_INT32_T
+AC_TYPE_INT64_T
+AC_TYPE_INT8_T
+AC_TYPE_OFF_T
+AC_TYPE_SSIZE_T
+AC_TYPE_UID_T
+AC_TYPE_UINT16_T
+AC_TYPE_UINT32_T
+AC_TYPE_UINT64_T
+AC_TYPE_UINT8_T
 
 AC_FUNC_SELECT_ARGTYPES
-AC_TYPE_SIGNAL
+dnl obsolete: AC_TYPE_SIGNAL
 AC_FUNC_STAT
 
 AC_SYS_LARGEFILE

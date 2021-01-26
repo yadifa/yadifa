@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YAKEYROLLD\-CONF" "5" "2020\-12\-09" "YAKEYROLLD " "YADIFA "
+.TH "YAKEYROLLD\-CONF" "5" "2021\-01\-26" "YAKEYROLLD " "YADIFA "
 .SH NAME
 
 .PP
@@ -722,7 +722,7 @@ from the sources.
 .SH VERSION
 
 .PP
-Version: 2.4.1 of 2020\-12\-09. 
+Version: 2.4.2 of 2021\-01\-26. 
 .PP
 .SH MAILING LISTS
 
@@ -754,7 +754,7 @@ via:
 .PP
 .TP
 Copyright 
-(C)2011\-2020, EURid
+(C)2011\-2021, EURid
 .br
 B\-1831 Diegem, Belgium
 .br

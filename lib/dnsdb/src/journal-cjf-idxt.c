@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -165,8 +165,6 @@ journal_cjf_idxt_create(journal_cjf *jnl, s16 entries)
     jnl->idxt.entries[0].file_offset = jnl->last_page.file_offset;
     jnl->first_page_offset = jnl->last_page.file_offset;
 }
-
-
 
 /**
  * Verifies the page table chain

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -88,10 +88,11 @@ zone_policy_date_prev_mask(int from, u64 mask, int limit)
     return -1; // no match
 }
 
-static bool
+static ya_result
 zone_policy_date_prev_month(zone_policy_date *date, const zone_policy_rule_definition_s *def)
 {
-    bool ret = TRUE;
+    ya_result ret = 1;
+
     for(;;)
     {
         int month = zone_policy_date_prev_mask(date->absolute.month, def->month, 12);
@@ -100,7 +101,7 @@ zone_policy_date_prev_month(zone_policy_date *date, const zone_policy_rule_defin
 
         if(month != date->absolute.month)
         {
-            ret = FALSE;
+            ret = 0;
 
             date->absolute.day = time_days_in_month(date->absolute.year + ZONE_POLICY_DATE_YEAR_BASE, month) - 1;
             date->absolute.hour = 23;
@@ -112,16 +113,17 @@ zone_policy_date_prev_month(zone_policy_date *date, const zone_policy_rule_defin
                 {
                     log_err("previous month outside of supported time range");
                     logger_flush();
+                    return ERROR;
                 }
 
-                date->absolute.month = 0;
+                date->absolute.month = 11;
                 --date->absolute.year;
                 continue;
             }
             else
             {
                 date->absolute.month = month;
-                return FALSE;
+                return 0;
             }
 
             // the caller is supposed to proceed on day (then hour, then minute) correction
@@ -424,7 +426,12 @@ zone_policy_date_init_at_prev_rule(zone_policy_date *date, const zone_policy_dat
 
         zone_policy_date_init_from_epoch(date, epoch);
 
-        zone_policy_date_prev_month(date, def);
+        ya_result ret;
+
+        if(FAIL(ret = zone_policy_date_prev_month(date, def)))
+        {
+            return ret;
+        }
         zone_policy_date_prev_day(date, def);
         zone_policy_date_prev_hour(date, def);
         zone_policy_date_prev_minute(date, def);

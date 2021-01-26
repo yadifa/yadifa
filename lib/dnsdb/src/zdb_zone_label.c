@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -357,7 +357,6 @@ zdb_zone_label_add_nolock(zdb * db, const dnsname_vector* origin) // mutex check
     {
         const u8* label = sections[index];
         hashcode hash = hash_dnslabel(label);
-
         zone_label = (zdb_zone_label*)dictionary_add(&zone_label->sub, hash, label, zdb_zone_label_zlabel_match, zdb_zone_label_create);
 
         index--;

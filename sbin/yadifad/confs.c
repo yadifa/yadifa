@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -167,6 +167,8 @@ CMDLINE_OPT("gid", 'g', "gid")
 CMDLINE_HELP("", "overrides the gid setting")
 CMDLINE_OPT("port", 'P', "server_port")
 CMDLINE_HELP("", "overrides the server-port setting")
+CMDLINE_BOOL("check-policies", 0, "check_policies")
+CMDLINE_HELP("", "checks the policies times are valid for the next few years")
 CMDLINE_BLANK()
 CMDLINE_VERSION_HELP(yadifad_cmdline)
 CMDLINE_BLANK()

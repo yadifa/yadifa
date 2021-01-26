@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1974,7 +1974,7 @@ notify_service(struct service_worker_s *worker)
         s64 loop_count = 0;
         bool long_accumulation = FALSE;
         bool no_message_in_queue = FALSE;
-        bool is_shutting_down = FALSE;
+        bool is_shutting_down = !service_should_run(worker);
 
         // the loop will always enter at least once once
 

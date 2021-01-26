@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -76,6 +76,7 @@
 extern logger_handle *g_dnssec_logger;
 
 #include "server_error.h"
+#include "zone.h"
 
 #define DNSECPOL_TAG 0x4c4f504345534e44
 #define DPOLKYST_TAG 0x5453594b4c4f5044
@@ -145,7 +146,6 @@ static group_mutex_t dnssec_policy_key_suite_mtx = GROUP_MUTEX_INITIALIZER;
 
 static volatile int dnssec_policy_queue_serial = 0;
 
-#if DEBUG
 static void
 zone_policy_date_format_handler_method(const void *restrict val, output_stream *os, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
 {
@@ -180,7 +180,6 @@ zone_policy_date_format_handler_method(const void *restrict val, output_stream *
         }
     }
 }
-#endif
 
 dnssec_policy_queue*
 dnssec_policy_queue_new(const u8 *fqdn)
@@ -710,6 +709,289 @@ dnssec_policy_queue_add_generate_key_active_at(zone_desc_s *zone_desc, struct dn
     ret = dnssec_policy_queue_add_generate_key_create_at(zone_desc, kr, creation_epoch);
 
     return ret;
+}
+
+ya_result
+dnssec_policy_roll_test_at(struct dnssec_policy_roll *kr, time_t active_at, time_t *will_be_inactive_at, bool print_text, bool log_text)
+{
+    zone_policy_date creation_date;
+    zone_policy_date publish_date;
+    zone_policy_date activate_date;
+    zone_policy_date inactive_date;
+    zone_policy_date unpublish_date;
+    zone_policy_date now_date;
+
+    ya_result ret;
+
+    if(FAIL(ret = zone_policy_date_init_from_epoch(&now_date, active_at)))
+    {
+        return ret;
+    }
+
+    if(FAIL(ret = zone_policy_date_init_at_prev_rule(&activate_date, &now_date, &kr->time_table.activate)))
+    {
+        return ret;
+    }
+
+    if(FAIL(ret = zone_policy_date_init_at_prev_rule(&publish_date, &activate_date, &kr->time_table.publish)))
+    {
+        return ret;
+    }
+
+    if(FAIL(ret = zone_policy_date_init_at_prev_rule(&creation_date, &publish_date, &kr->time_table.created)))
+    {
+        return ret;
+    }
+
+    time_t creation_epoch = 60;
+    time_t activate_epoch = 60;
+
+    if(FAIL(ret = zone_policy_date_get_epoch(&creation_date, &creation_epoch)))
+    {
+        return ret;
+    }
+
+    if(FAIL(ret = zone_policy_date_get_epoch(&activate_date, &activate_epoch)))
+    {
+        return ret;
+    }
+
+#if DEBUG
+    format_writer c_fw = {zone_policy_date_format_handler_method, &creation_date};
+
+    {
+        format_writer a_fw0 = {zone_policy_date_format_handler_method, &activate_date};
+        format_writer p_fw0 = {zone_policy_date_format_handler_method, &publish_date};
+
+        log_debug1("key-roll: %s: base %w <= %w <= %w : %T", kr->name, &c_fw, &p_fw0, &a_fw0, creation_epoch);
+    }
+#endif
+
+    if(FAIL(ret = zone_policy_date_init_at_next_rule(&publish_date, &creation_date, &kr->time_table.publish)))
+    {
+        return ret;
+    }
+
+    if(FAIL(ret = zone_policy_date_init_at_next_rule(&activate_date, &publish_date, &kr->time_table.activate)))
+    {
+        return ret;
+    }
+
+#if DEBUG
+    format_writer p_fw = {zone_policy_date_format_handler_method, &publish_date};
+    format_writer a_fw = {zone_policy_date_format_handler_method, &activate_date};
+    {
+        log_debug1("key-roll: %s: base %w => %w => %w : %T (after forward correction)", kr->name, &c_fw, &p_fw, &a_fw, creation_epoch);
+    }
+#endif
+
+    // compute the future key timings to ensure there will be no period without a signature
+
+    zone_policy_date next_creation_date;
+    zone_policy_date next_publish_date;
+    zone_policy_date next_activate_date;
+
+    if(FAIL(ret = zone_policy_date_init_at_next_rule(&next_creation_date, &activate_date, &kr->time_table.created)))
+    {
+        return ret;
+    }
+
+    if(FAIL(ret = zone_policy_date_init_at_next_rule(&next_publish_date, &next_creation_date, &kr->time_table.publish)))
+    {
+        return ret;
+    }
+
+    if(FAIL(ret = zone_policy_date_init_at_next_rule(&next_activate_date, &next_publish_date, &kr->time_table.activate)))
+    {
+        return ret;
+    }
+
+#if DEBUG
+    {
+        format_writer na_fw = {zone_policy_date_format_handler_method, &next_activate_date};
+        format_writer np_fw = {zone_policy_date_format_handler_method, &next_publish_date};
+        format_writer nc_fw = {zone_policy_date_format_handler_method, &next_creation_date};
+
+        log_debug1("key-roll: %s: next %w => %w => %w", kr->name, &nc_fw, &np_fw, &na_fw);
+    }
+#endif
+
+    // and use this next_activate as a base for the current deactivate
+
+    if(FAIL(ret = zone_policy_date_init_at_next_rule(&inactive_date, &next_activate_date, &kr->time_table.inactive)))
+    {
+        return ret;
+    }
+
+    if(FAIL(ret = zone_policy_date_init_at_next_rule(&unpublish_date, &inactive_date, &kr->time_table.delete)))
+    {
+        return ret;
+    }
+
+    time_t inactive_epoch = 0;
+
+    if(FAIL(ret = zone_policy_date_get_epoch(&inactive_date, &inactive_epoch)))
+    {
+        return ret;
+    }
+
+    if(inactive_epoch - activate_epoch < DNSSEC_POLICY_MINIMUM_ACTIVATED_TIME_SUGGESTION_SECONDS)
+    {
+        double d = inactive_epoch - activate_epoch;
+        d /= 86400.0;
+        double c = DNSSEC_POLICY_MINIMUM_ACTIVATED_TIME_SUGGESTION_SECONDS;
+        c /= 86400.0;
+        if(log_text)
+        {
+            log_warn("key-roll: %s: the key will only be activated for %.3f days, consider increasing this value to at least %.3f days", kr->name, d, c);
+        }
+        if(print_text)
+        {
+            formatln("key-roll: %s: the key will only be activated for %.3f days, consider increasing this value to at least %.3f days", kr->name, d, c);
+        }
+    }
+
+    if(inactive_epoch < active_at)
+    {
+        if(log_text)
+        {
+            log_err("key-roll: %s: computing timings to be in the current activated time window produces an already expired key", kr->name);
+        }
+        if(print_text)
+        {
+            formatln("key-roll: %s: computing timings to be in the current activated time window produces an already expired key", kr->name);
+        }
+
+        return INVALID_STATE_ERROR;
+    }
+
+    if(will_be_inactive_at != NULL)
+    {
+        *will_be_inactive_at = inactive_epoch;
+    }
+
+#if DEBUG
+    format_writer d_fw = {zone_policy_date_format_handler_method, &inactive_date};
+    zone_policy_date remove_date;
+    ret = zone_policy_date_init_at_next_rule(&remove_date, &inactive_date, &kr->time_table.delete);
+    (void)ret;
+    format_writer r_fw = {zone_policy_date_format_handler_method, &unpublish_date};
+
+    log_debug("key-roll: %s: rule key: create=%w, publish=%w, activate=%w, deactivate=%w, remove=%w",
+              kr->name,
+              &c_fw, &p_fw, &a_fw, &d_fw, &r_fw);
+#endif
+
+    log_debug("key-roll: %s: will generate a key at %T (rule new) to be active at %T", kr->name, creation_epoch, active_at);
+
+    if(log_text || print_text)
+    {
+        format_writer c_fw0 = {zone_policy_date_format_handler_method, &creation_date};
+        format_writer p_fw0 = {zone_policy_date_format_handler_method, &publish_date};
+        format_writer a_fw0 = {zone_policy_date_format_handler_method, &activate_date};
+        format_writer i_fw0 = {zone_policy_date_format_handler_method, &inactive_date};
+        format_writer u_fw0 = {zone_policy_date_format_handler_method, &unpublish_date};
+        u32 delta_seconds = inactive_epoch - activate_epoch;
+        float delta_value;
+        const char *delta_units;
+
+        if(delta_seconds > 2592000)
+        {
+            delta_value = 1.0f * delta_seconds / 2592000.f;
+            delta_units = "months";
+        }
+        else if(delta_seconds > 604800)
+        {
+            delta_value = 1.f * delta_seconds / 604800.f;
+            delta_units = "weeks";
+        }
+        else if(delta_seconds > 86400)
+        {
+            delta_value = 1.f * delta_seconds / 86400.f;
+            delta_units = "days";
+        }
+        else if(delta_seconds > 3600)
+        {
+            delta_value = 1.f * delta_seconds / 3600.f;
+            delta_units = "hours";
+        }
+        else if(delta_seconds > 60)
+        {
+            delta_value = 1.f * delta_seconds / 60.f;
+            delta_units = "minutes";
+        }
+        else
+        {
+            delta_value = 1.f * delta_seconds;
+            delta_units = "seconds";
+        }
+
+        if(log_text)
+        {
+            log_info("key-roll: %s: creation at %w, publication at %w, activation at %w, deactivation at %w, removal at %w, %6.1f %s",
+                     kr->name, &c_fw0, &p_fw0, &a_fw0, &i_fw0, &u_fw0, delta_value, delta_units);
+        }
+
+        if(print_text)
+        {
+            formatln("key-roll: %s: creation at %w, publication at %w, activation at %w, deactivation at %w, removal at %w, %6.1f %s",
+                     kr->name, &c_fw0, &p_fw0, &a_fw0, &i_fw0, &u_fw0, delta_value, delta_units);
+        }
+    }
+
+#if DEBUG
+    logger_flush();
+#endif
+
+    return ret;
+}
+
+ya_result
+dnssec_policy_roll_test(struct dnssec_policy_roll *kr, time_t active_at, u32 duration_seconds, bool print_text, bool log_text)
+{
+    ya_result ret;
+    time_t end_at =  active_at + duration_seconds;
+    time_t inactive_at = 0;
+
+    if(print_text)
+    {
+        formatln("key-roll: %s: testing policy sets of dates from %T to %T", kr->name, active_at, end_at);
+    }
+
+    if(log_text)
+    {
+        formatln("key-roll: %s: testing policy sets of dates from %T to %T", kr->name, active_at, end_at);
+    }
+
+    while(active_at < end_at)
+    {
+        if(FAIL(ret = dnssec_policy_roll_test_at(kr, active_at, &inactive_at, print_text, log_text)))
+        {
+            if(log_text)
+            {
+                log_info("key-roll: %s: could not find a matching set of dates from %T", kr->name, active_at);
+            }
+            if(print_text)
+            {
+                formatln("key-roll: %s: could not find a matching set of dates from %T", kr->name, active_at);
+            }
+            return ret;
+        }
+
+        active_at = inactive_at;
+    }
+
+    if(print_text)
+    {
+        formatln("key-roll: %s: policy sets of dates from %T to %T computed", kr->name, active_at, end_at);
+    }
+
+    if(log_text)
+    {
+        formatln("key-roll: %s: policy sets of dates from %T to %T computed", kr->name, active_at, end_at);
+    }
+
+    return SUCCESS;
 }
 
 /**
@@ -2209,6 +2491,33 @@ dnssec_policy_roll_acquire_from_name(const char *id)
     group_mutex_read_unlock(&dnssec_policy_roll_set_mtx);
 
     return dpr;
+}
+
+ya_result
+dnssec_policy_roll_test_all(time_t active_at, u32 duration_seconds, bool print_text, bool log_text)
+{
+    ya_result ret = SUCCESS;
+
+    group_mutex_read_lock(&dnssec_policy_roll_set_mtx);
+
+    ptr_set_iterator iter;
+    ptr_set_iterator_init(&dnssec_policy_roll_set, &iter);
+    while(ptr_set_iterator_hasnext(&iter))
+    {
+        ptr_node *node = ptr_set_iterator_next_node(&iter);
+        if(node->value != NULL)
+        {
+            dnssec_policy_roll *dpr = (dnssec_policy_roll*)node->value;
+            if(FAIL(ret = dnssec_policy_roll_test(dpr, active_at, duration_seconds, print_text, log_text)))
+            {
+                break;
+            }
+        }
+    }
+
+    group_mutex_read_unlock(&dnssec_policy_roll_set_mtx);
+
+    return ret;
 }
 
 dnssec_policy_roll *

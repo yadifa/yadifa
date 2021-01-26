@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -72,11 +72,9 @@ void  threaded_dll_cw_init(threaded_dll_cw *queue, int max_size);
 void  threaded_dll_cw_finalize(threaded_dll_cw *queue);
 void  threaded_dll_cw_enqueue(threaded_dll_cw *queue,void* constant_pointer);
 bool  threaded_dll_cw_try_enqueue(threaded_dll_cw *queue,void* constant_pointer);
-
 void* threaded_dll_cw_dequeue(threaded_dll_cw *queue);
 void* threaded_dll_cw_try_dequeue(threaded_dll_cw *queue);
 void* threaded_dll_cw_dequeue_with_timeout(threaded_dll_cw *queue, s64 timeout_us);
-
 void  threaded_dll_cw_wait_empty(threaded_dll_cw *queue);
 int   threaded_dll_cw_size(threaded_dll_cw *queue);
 int   threaded_dll_cw_room(threaded_dll_cw *queue);

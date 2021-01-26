@@ -13,3 +13,20 @@
         fi
     endscript
 }
+
+#/var/log/yadifa/*log.gz {
+#    daily
+#    rotate 10
+#    nocompress
+#    missingok
+#    notifempty
+#    sharedscripts
+#    postrotate
+#        if [ -f "/usr/sbin/service" ]; then
+#            /usr/sbin/service yadifad reload > /dev/null 2>/dev/null || true
+#        else
+#            /sbin/service yadifad reload > /dev/null 2>/dev/null || true
+#        fi
+#    endscript
+#}
+

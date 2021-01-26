@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -585,7 +585,7 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
 
         case (15<<OPCODE_SHIFT):
         {
-            if(service_should_reconfigure_or_stop(ctx->worker))
+            if(service_should_reconfigure_or_stop(ctx->worker) || (ctx->must_stop))
             {
                 return STOPPED_BY_APPLICATION_SHUTDOWN;
             }
@@ -597,7 +597,7 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
             /*ret = */ message_process_query(mesg);
             message_set_status(mesg, FP_RCODE_NOTIMP);
 
-            if(ctx->sockfd < 0)
+            if(ctx->must_stop)
             {
                 return STOPPED_BY_APPLICATION_SHUTDOWN; // shutdown
             }

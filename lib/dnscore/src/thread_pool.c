@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -209,6 +209,46 @@ thread_pool_counter_wait_below_or_equal(thread_pool_task_counter *counter, s32 v
             break;
         }
         cond_wait(&counter->cond, &counter->mutex);
+    }
+    mutex_unlock(&counter->mutex);
+    return ret;
+}
+
+ya_result
+thread_pool_counter_wait_equal(thread_pool_task_counter *counter, s32 value)
+{
+    mutex_lock(&counter->mutex);
+    for(;;)
+    {
+        if(counter->value == value)
+        {
+            break;
+        }
+        cond_wait(&counter->cond, &counter->mutex);
+    }
+    mutex_unlock(&counter->mutex);
+    return SUCCESS;
+}
+
+ya_result
+thread_pool_counter_wait_equal_with_timeout(thread_pool_task_counter *counter, s32 value, u64 usec)
+{
+    s32 ret;
+    s64 until = timeus() + usec;
+    mutex_lock(&counter->mutex);
+    for(;;)
+    {
+        if(counter->value == value)
+        {
+            ret = SUCCESS;
+            break;
+        }
+        cond_timedwait(&counter->cond, &counter->mutex, usec);
+        if(timeus() >= until)
+        {
+            ret = MAKE_ERRNO_ERROR(ETIMEDOUT);
+            break;
+        }
     }
     mutex_unlock(&counter->mutex);
     return ret;
@@ -1087,7 +1127,7 @@ thread_pool_destroy(struct thread_pool_s* tp)
     tp->thread_pool_size = 0;
 
     /*
-     * Sending a node with data == NULL will kill one thread
+     * Sending a node with data == NULL will kill one thread-pool thread
      *
      * I have to launch one for each thread.
      */

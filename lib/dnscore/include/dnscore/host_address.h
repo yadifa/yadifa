@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -87,11 +87,11 @@ union addressv4
  * Flag values for the host_address_to_str(...) function
  */
 
-#define HOST_ADDRESS_TO_STR_PORT     1  // "1.2.3.4:1234"
-#define HOST_ADDRESS_TO_STR_FULLPORT 2  // "1.2.3.4 port 1234"
-#define HOST_ADDRESS_TO_STR_TSIG     4  // "1.2.3.4*mykey."
-#define HOST_ADDRESS_TO_STR_FULLTSIG 8  // "1.2.3.4 key mykey."
-#define HOST_ADDRESS_TO_STR_SHOW_PORT_ZERO 16  // else hides it
+#define HOST_ADDRESS_TO_STR_PORT            1U  // "1.2.3.4:1234"
+#define HOST_ADDRESS_TO_STR_FULLPORT        2U  // "1.2.3.4 port 1234"
+#define HOST_ADDRESS_TO_STR_TSIG            4U  // "1.2.3.4*mykey."
+#define HOST_ADDRESS_TO_STR_FULLTSIG        8U  // "1.2.3.4 key mykey."
+#define HOST_ADDRESS_TO_STR_SHOW_PORT_ZERO 16U  // else hides it
 
 typedef union addressv6 addressv6;
 

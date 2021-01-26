@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,8 +39,6 @@
 #include <dnscore/parsing.h>
 #include <dnscore/typebitmap.h>
 #include <dnscore/input_stream.h>
-
-
 
 #ifdef	__cplusplus
 extern "C" {
@@ -697,10 +695,6 @@ parser_copy_next_u64(parser_s *p, u64 *out_value)
 
     return return_code;
 }
-
-
-
-
 
 ya_result parser_get_network_protocol_from_next_word(parser_s *p, int *out_value);
 

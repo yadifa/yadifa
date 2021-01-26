@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -694,7 +694,6 @@ nsec3_item_add_star(nsec3_zone_item *item, const zdb_rr_label *owner)
 #if NSEC3_OWNER_DEBUG
     log_debug("nsec3_add_star: %{digest32h} @ %p, %p '%{dnslabel}' SC=%hu", ITEM_DIGEST(item), item, owner, owner->name, item->sc);
     s32 sc = item->sc;
-
 #endif
 
     nsec3_item_label_owner_add(&item->star_label, &item->sc, owner);
@@ -820,9 +819,6 @@ nsec3_item_remove_all_star(nsec3_zone_item *item)
     }
 }
 
-
-
-
 /**
  * Moves all stars from one NSEC3 item to another.
  *
@@ -857,7 +853,7 @@ nsec3_item_move_all_star_to_nsec3_item(nsec3_zone_item* src, nsec3_zone_item* ds
         return;
     }
 
-    /* If there were no star in the dest : just move the star collection and update the referrenced labels */
+    // If there were no star in the dest : just move the star collection and update the referrenced labels
 
     if(dst->sc == 0)
     {

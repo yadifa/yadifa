@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1229,7 +1229,6 @@ message_process(message_data *mesg)
                     message_set_size(mesg, s - buffer);
                 }
             }
-
 
             /* At this point the TSIG has been computed and removed */
             /* Clear zome bits */

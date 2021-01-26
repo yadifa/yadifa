@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -208,6 +208,8 @@ CONFIG_U32(      axfr_retry_jitter           , S_AXFR_RETRY_JITTER        ) // d
 CONFIG_U32_RANGE(axfr_retry_failure_delay_multiplier, S_AXFR_RETRY_FAILURE_DELAY_MULTIPLIER, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MIN, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX) // doc
 CONFIG_U32_RANGE(axfr_retry_failure_delay_max, S_AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX_MIN, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX_MAX) // doc
 CONFIG_U32_RANGE(worker_backlog_queue_size   , S_SERVER_RW_BACKLOG_QUEUE_SIZE, SERVER_RW_BACKLOG_QUEUE_SIZE_MIN, SERVER_RW_BACKLOG_QUEUE_SIZE_MAX ) // doc
+
+CONFIG_BOOL(check_policies, "0")
 
 #if HAS_EVENT_DYNAMIC_MODULE
 CONFIG_STRING_ARRAY(dynamic_modules, NULL,128)
@@ -531,7 +533,7 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
     else if((g_config->thread_count_by_address > (s32)sys_get_cpu_count()))
     {
         g_config->thread_count_by_address = MAX(sys_get_cpu_count() / cpu_per_core, 1);
-        ttylog_err("config: bounding down thread-count-by-address to the number of physical CPUs (%d)", g_config->thread_count_by_address);
+        ttylog_warn("config: bounding down thread-count-by-address to the number of physical CPUs (%d)", g_config->thread_count_by_address);
     }
     
     g_config->tcp_query_min_rate_us = 0.000001 * g_config->tcp_query_min_rate;

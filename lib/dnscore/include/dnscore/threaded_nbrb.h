@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,8 +45,6 @@
 #include <dnscore/thread.h>
 
 #include <dnscore/sys_types.h>
-
-
 
 #endif	/* _THREADED_QUEUE_H */
 /** @} */

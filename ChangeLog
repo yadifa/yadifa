@@ -1,6 +1,6 @@
 ################################################################################
 # 
-#  Copyright (c) 2011-2020, EURid. All rights reserved.
+#  Copyright (c) 2011-2021, EURid. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 #  Redistribution and use in source and binary forms, with or without 
@@ -28,6 +28,15 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 ################################################################################
+
+20210126:
+    YADIFA 2.4.2-public
+
+    Fixes an issue where records below delegation are not ignored (https://github.com/yadifa/yadifa/issues/12)
+    Fixes an issue in the _mm model where shutting down while still initializing may not stop properly
+    Changes default user/group to 'yadifa' user in example configuration
+    Fixes an issue with autoconf 2.70 obsolete functions
+    Adds a feature to yadifad to ensure that the dates in the key-roll section can be successfully applied for the next 10 years (--check-policies)
 
 20201209:
     YADIFA 2.4.1-public

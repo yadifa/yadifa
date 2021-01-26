@@ -31,7 +31,7 @@
         serverid                     "yadifad-01"
 
         # The version returned by a query to version.yadifa. CH TXT
-        version                      "2.4.1"
+        version                      "2.4.2"
 
         # Set the maximum UDP packet size.  Cannot be less than 512.  Cannot be more than 65535.  Typical choice is 4096.
         edns0-max-size              4096
@@ -157,12 +157,11 @@
 
         syslog      syslog          USER,CRON,PID
 
-        # New since 2.4.1, the output can be piped to any program
+        # New since 2.4.2: the output can be piped to any program.
+        # It is to be noted that the command will be run even if no logger is bound to it.
+        # gzip-log    "|/usr/bin/gzip - >> /var/log/yadifa/yadifa.log.gz"
 
-        gzip-log    "|/usr/bin/gzip - >> /var/log/yadifa/yadifa.log.gz"
-
-        # although possible, these two do not do make much sense if daemon is enabled
-
+        # although possible, these two will end up writing to /dev/null if daemon is enabled
         stderr      STDERR
         stdout      STDOUT
 </channels>
@@ -187,10 +186,6 @@
         zone            prod                                zone,all
         queries         prod                                queries
 </loggers>
-
-
-
-
 
 #
 # TSIG Key configuration
@@ -269,9 +264,8 @@ include "keys.conf"
         file                    masters/somedomain.eu.
 
 
-        dnssec-policy           "normal-policy"
+        dnssec-policy           "typical-policy"
 </zone>
-
 
 ################################################################################
 ################################################################################
@@ -282,9 +276,8 @@ include "keys.conf"
 ################################################################################
 
 <dnssec-policy>
-
     # name of the 'dnssec-policy'
-    id                      "normal-policy"
+    id                      "typical-policy"
 
     description             "Example of a policy with ZSK and KSK"
 
@@ -299,35 +292,6 @@ include "keys.conf"
     key-suite               "ksk-2048"
 
 </dnssec-policy>
-
-
-
-<dnssec-policy>
-    # name of the 'dnssec-policy'
-    id                      "fast-roll-policy"
-    description             "Fast rolling policy"
-    denial                  "nsec"
-    key-suite               "zsk-1024-fast-roll"
-    key-suite               "ksk-2048-fast-roll"
-</dnssec-policy>
-
-
-
-<key-suite>
-    # name of the key-suite
-    id                      "zsk-1024-fast-roll"
-    key-template            "zsk-rsa-sha256-1024"
-    # optional, without it, the keys found in the storage are used
-    key-roll                "daily-diary"
-</key-suite>
-
-<key-suite>
-    # name of the key-suite
-    id                      "ksk-2048-fast-roll"
-    key-template            "ksk-rsa-sha256-2048"
-    # optional, without it, the keys found in the storage are used
-    key-roll                "weekly-diary"
-</key-suite>
 
 <key-suite>
     # name of the key-suite
@@ -399,7 +363,6 @@ include "keys.conf"
     size                2048
 </key-template>
 
-
 ######################################################
 
 <denial>
@@ -422,19 +385,19 @@ include "keys.conf"
 
 ######################################################
 
-
-    #               minutes     hours       days               months         weekdays         weeks
-
+# The order of fields goes:
+#
+#                    minutes     hours       days               months         weekdays         weeks
 <key-roll>
+
     id                 "yearly-diary"
 
     generate            5          0           15                  6            *                 * # this year   (2018) 15/06 at 00:05
-    publish             10         0           15                  6            *                 * #                             00:10
-    activate            15         0           16                  6            *                 * #                    16/06 at 00:15
-    inactive            15         0           17                  6            *                 * #             (2019) 17/06 at 00:15
-    remove              15        11           18                  6            *                 * #             (2019) 18/06 at 11:15
+    publish             10         0           15                  *            *                 * #                             00:10
+    activate            15         0           16                  *            *                 * #                    16/06 at 00:15
+    inactive            15         0           17                  *            *                 * #             (2019) 17/06 at 00:15
+    remove              15        11           18                  *            *                 * #             (2019) 18/06 at 11:15
 </key-roll>
-
 
 <key-roll>
     id                 "monthly-diary"
@@ -450,82 +413,8 @@ include "keys.conf"
     id                 "weekly-diary"
 
     generate            25         0           *                   *            sun               * # every sunday of the month at 00:25
-    publish             30         0           *                   *            sun               * #                           at 00:30
-    activate            35         0           *                   *            sun               * #                           at 00:35
-    inactive            35         0           *                   *            sun               * #                           at 00:35
-    remove              35        11           *                   *            sun               * #                           at 11:35
+    publish             30         0           *                   *            *                 * #                           at 00:30
+    activate            35         0           *                   *            *                 * #                           at 00:35
+    inactive            35         0           *                   *            *                 * #                           at 00:35
+    remove              35        11           *                   *            *                 * #                           at 11:35
 </key-roll>
-
-<key-roll>
-    id                 "daily-diary"
-
-    generate            5          0           *                   *            *               *   # at 00:05
-    publish             10         0           *                   *            *               *   # at 00:10
-    activate            15         0           *                   *            *               *   # at 00:15
-    inactive            15         0           *                   *            *               *   # at 00:15
-    remove              15        11           *                   *            *               *   # at 11:15
-</key-roll>
-
-<key-roll>
-    id                 "hourly-diary"
-
-    generate            1          *           *                   *            *                 *
-    publish             5          *           *                   *            *                 *
-    activate            10         *           *                   *            *                 *
-    inactive            15         *           *                   *            *                 *
-    remove              20         *           *                   *            *                 *
-</key-roll>
-
-<key-roll>
-    id                 "half-hourly-diary"
-
-    generate            0,30       *           *                   *            *                 *
-    publish             1,31       *           *                   *            *                 *
-    activate            2,32       *           *                   *            *                 *
-    inactive            34,04      *           *                   *            *                 *
-    remove              38,08      *           *                   *            *                 *
-</key-roll>
-
-<key-roll>
-    id                  "insane-diary"
-
-    generate   * * * * * *
-    publish    * * * * * *
-    activate   * * * * * *
-    inactive   * * * * * *
-    remove     * * * * * *
-</key-roll>
-
-<key-roll>
-    id                  "monthly-relative"
-
-    generate            +31d
-    publish             +60
-    activate            +120          
-    inactive            +33d # must be bigger than generate, to avoid a gap
-    remove              +1d
-</key-roll>
-
-<key-roll>
-    id                  "insane-relative"
-
-    generate            +60
-    publish             +0
-    activate            +0
-    inactive            +60
-    remove              +0
-</key-roll>
-
-<key-roll>
-    id                  "less-insane-relative"
-
-    generate            +120
-    publish             +0
-    activate            +0
-    inactive            +160
-    remove              +0
-</key-roll>
-
-
-
-######################################################

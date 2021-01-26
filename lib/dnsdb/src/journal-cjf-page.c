@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -99,7 +99,6 @@ journal_cjf_page_get_stream_offset_from_serial(journal_cjf *jnl, int idx, u32 se
         }
     
         //this is the wrong idx
-
 
     }
     else

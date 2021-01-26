@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1456,7 +1456,6 @@ logger_client_dispatcher_thread(void* context)
                 break;
             }
         }
-        
     }
 
     output_stream_close(&los);
@@ -2453,7 +2452,7 @@ logger_dispatcher_thread(void* context)
             case LOGGER_MESSAGE_TYPE_THREAD_SET_TAG:
             {
                 async_wait_s *awp = message->thread_set_tag.aw;
-#if 0
+#if DEBUG
                 printf("logger: registering: pid=%i thread=%p tag=%c%c%c%c%c%c%c%c (printf)\n",
                               message->pid, (void*)(intptr_t)message->thread_set_tag.tid,
                               message->thread_set_tag.tag[0],message->thread_set_tag.tag[1],message->thread_set_tag.tag[2],message->thread_set_tag.tag[3],
@@ -2462,7 +2461,8 @@ logger_dispatcher_thread(void* context)
                        message->pid, (void*)(intptr_t)message->thread_set_tag.tid,
                        message->thread_set_tag.tag[0],message->thread_set_tag.tag[1],message->thread_set_tag.tag[2],message->thread_set_tag.tag[3],
                        message->thread_set_tag.tag[4],message->thread_set_tag.tag[5],message->thread_set_tag.tag[6],message->thread_set_tag.tag[7]);
-
+#endif
+#if DEBUG
                 log_try_debug("logger: registering: pid=%i thread=%p tag=%c%c%c%c%c%c%c%c (log_try_debug)",
                               message->pid, message->thread_set_tag.tid,
                               message->thread_set_tag.tag[0],message->thread_set_tag.tag[1],message->thread_set_tag.tag[2],message->thread_set_tag.tag[3],

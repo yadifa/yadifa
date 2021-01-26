@@ -1,6 +1,6 @@
 dnl ############################################################################
 dnl
-dnl Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+dnl Copyright (c) 2011-2021, EURid vzw. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl
 dnl Redistribution and use in source and binary forms, with or without
@@ -328,6 +328,10 @@ case "$(uname -s)" in
         ;;
 esac
 
+])
+
+AC_DEFUN([YA_TRY_LINK], [
+AC_LINK_IFELSE([AC_LANG_PROGRAM([$1],[$2],[$3],[$4])])
 ])
 
 ac_os_workaround_done=0
@@ -1145,7 +1149,7 @@ AC_DEFUN([AC_TIMEGM_CHECK], [
 
 AC_MSG_CHECKING([checking for timegm])
 
-AC_TRY_LINK([#include<time.h>],[struct tm t; timegm(&t);],[AC_DEFINE_UNQUOTED([HAS_TIMEGM], [1], [The system supports timegm]) echo yes],[echo no]);
+YA_TRY_LINK([#include<time.h>],[struct tm t; timegm(&t);],[AC_DEFINE_UNQUOTED([HAS_TIMEGM], [1], [The system supports timegm]) echo yes],[echo no])
 
 ])
 
@@ -1157,8 +1161,8 @@ AC_DEFUN([AC_MREMAP_CHECK], [
 
 AC_MSG_CHECKING([checking for mremap])
 
-AC_TRY_LINK([#define _GNU_SOURCE
-             #include<sys/mman.h>],[mremap(0,0,0,0);],[AC_DEFINE_UNQUOTED([HAS_MREMAP], [1], [The system supports mremap]) echo yes],[echo no]);
+YA_TRY_LINK([#define _GNU_SOURCE
+             #include<sys/mman.h>],[mremap(0,0,0,0);],[AC_DEFINE_UNQUOTED([HAS_MREMAP], [1], [The system supports mremap]) echo yes],[echo no])
 
 ])
 
@@ -1203,7 +1207,7 @@ AC_DEFUN([AC_GETHOSTBYNAME_CHECK], [
 
 AC_MSG_CHECKING([checking for gethostbyname inet_pton inet_ntop])
 AC_MSG_CHECKING([if gethostbyname requires some lib])
-AC_TRY_LINK([#include<netdb.h>],[struct hostent *host = gethostbyname("www.yadifa.eu.");],
+YA_TRY_LINK([#include<netdb.h>],[struct hostent *host = gethostbyname("www.yadifa.eu.");],
     [
         AC_MSG_RESULT([no])
     ],
@@ -1211,7 +1215,7 @@ AC_TRY_LINK([#include<netdb.h>],[struct hostent *host = gethostbyname("www.yadif
         AC_MSG_CHECKING([if gethostbyname requires nsl])
         OLD_LDFLAGS="$LDFLAGS"
         LDFLAGS="-lnsl $LDFLAGS"
-        AC_TRY_LINK([#include<netdb.h>],[struct hostent *host = gethostbyname("www.yadifa.eu.");],
+        YA_TRY_LINK([#include<netdb.h>],[struct hostent *host = gethostbyname("www.yadifa.eu.");],
             [
                 AC_MSG_RESULT([yes])
             ],

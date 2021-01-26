@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -68,8 +68,6 @@ extern "C"
 #endif
 
 #define ZDB_ZONETAG 0x454e4f5a52445a /* "ZDBZONE" */
-
-
 
 /**
  * @brief Get the zone with the given name

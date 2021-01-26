@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -97,8 +97,6 @@
  */
 #define AVL_INIT_NODE(node,reference) node->key = reference;node->value=NULL
 
-#if 0 /* fix */
-#else
 /*
  * A macro to allocate a new node
  */
@@ -107,7 +105,7 @@
  * A macro to free a node allocated by ALLOC_NODE
  */
 #define AVL_FREE_NODE(node) ZFREE(node,AVL_NODE_TYPE)
-#endif
+
 /*
  * A macro to print the node
  */

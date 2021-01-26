@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -156,6 +156,7 @@ struct network_thread_context_base_s
     thread_t idr;
     int sockfd;
     u16 idx;
+    volatile bool must_stop;
 };
 
 typedef struct network_thread_context_base_s network_thread_context_base_t;

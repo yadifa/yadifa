@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -699,8 +699,6 @@ ya_result list_dl_indexof(list_dl_s *list, void *data);
 void *list_dl_get(list_dl_s *list, int index);
 
 ya_result list_dl_foreach(list_dl_s *list, result_callback_function *callback, void *caller_data);
-
-
 
 bool list_dl_remove_matching_ptr(list_dl_s *list, void *ptr);
 

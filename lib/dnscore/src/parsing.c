@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -53,7 +53,7 @@
 
 #include "dnscore/parsing.h"
 
-#if !HAS_TIMEGM
+#if !HAVE_TIMEGM && !HAS_TIMEGM
 static inline time_t timegm(struct tm *tv)
 {
     return timegm_internal(tv);

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1300,13 +1300,21 @@ zdb_query_ex_append_nsec3_nodata(const zdb_zone *zone, const zdb_rr_label *rr_la
 #if DEBUG
         log_debug("zdb-query: nsec3_nodata_error: nsec3_owner: %{dnsname}", nsec3_owner);
 #endif
-        zdb_query_ex_answer_append_ttl(nsec3, nsec3_owner,
-                                       PASS_ZCLASS_PARAMETER
-                                       TYPE_NSEC3, min_ttl, headp, pool);
 
-        zdb_query_ex_answer_appendlist_ttl(nsec3_rrsig, nsec3_owner,
+        /// @note part of the fix for https://github.com/yadifa/yadifa/issues/12
+
+        bool delegation = zdb_rr_label_flag_isset(rr_label, ZDB_RR_LABEL_UNDERDELEGATION);
+        bool allowed_under_delegation = (rtype == TYPE_ANY) || (rtype == TYPE_A) || (rtype == TYPE_AAAA);
+        if(NSEC3_RDATA_IS_OPTOUT(ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec3)) || (!delegation || (delegation && allowed_under_delegation)))
+        {
+            zdb_query_ex_answer_append_ttl(nsec3, nsec3_owner,
                                            PASS_ZCLASS_PARAMETER
-                                           TYPE_RRSIG, min_ttl, headp, pool);
+                                           TYPE_NSEC3, min_ttl, headp, pool);
+
+            zdb_query_ex_answer_appendlist_ttl(nsec3_rrsig, nsec3_owner,
+                                               PASS_ZCLASS_PARAMETER
+                                               TYPE_RRSIG, min_ttl, headp, pool);
+        }
     }
 
     if((closest_nsec3 != NULL) && (closest_nsec3_rrsig != NULL))
@@ -2259,7 +2267,9 @@ zdb_query_from_cname(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_
                  * CNAME alias handling
                  */
 
-                if(zdb_rr_label_flag_isset(rr_label, ZDB_RR_LABEL_HASCNAME) && (type != TYPE_CNAME) && (type != TYPE_ANY))
+                // if(zdb_rr_label_flag_isset(rr_label, ZDB_RR_LABEL_HASCNAME) && (type != TYPE_CNAME) && (type != TYPE_ANY))
+                if(((zdb_rr_label_flag_get(rr_label) & (ZDB_RR_LABEL_HASCNAME|ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_UNDERDELEGATION)) == ZDB_RR_LABEL_HASCNAME) &&
+                   (type != TYPE_CNAME) && (type != TYPE_ANY) && (type != TYPE_RRSIG))
                 {
                     /*
                     * The label is an alias:
@@ -4919,7 +4929,9 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                  * CNAME alias handling
                  */
 
-                if((zdb_rr_label_flag_isset(rr_label, ZDB_RR_LABEL_HASCNAME)) && (type != TYPE_CNAME) && (type != TYPE_ANY) && (type != TYPE_RRSIG))
+                //if((zdb_rr_label_flag_isset(rr_label, ZDB_RR_LABEL_HASCNAME)) && (type != TYPE_CNAME) && (type != TYPE_ANY) && (type != TYPE_RRSIG))
+                if(((zdb_rr_label_flag_get(rr_label) & (ZDB_RR_LABEL_HASCNAME|ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_UNDERDELEGATION)) == ZDB_RR_LABEL_HASCNAME) &&
+                   (type != TYPE_CNAME) && (type != TYPE_ANY) && (type != TYPE_RRSIG))
                 {
                     /*
                     * The label is an alias:

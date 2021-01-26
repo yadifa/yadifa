@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -398,8 +398,6 @@ nsec3_chain_replay_execute(chain_replay *cr)
     
     nsec3_chain_replay_data *crd = (nsec3_chain_replay_data*)cr->data;
 
-
-        
     ptr_set del_nsec3_set = PTR_SET_DNSNAME_EMPTY;
     ptr_set_iterator iter;
 
@@ -921,7 +919,6 @@ nsec3_chain_replay_execute_exit:
                         if((maintain_mode == ZDB_ZONE_MAINTAIN_NSEC3) || (maintain_mode == ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT))
                         {
                             nsec3_zone_label_update_chain_links(crd->zone->nsec.nsec3, label, n3_count, coverage_mask, sub_fqdn[i]);
-
                         }
 
 #if DEBUG
@@ -957,8 +954,6 @@ nsec3_chain_replay_execute_exit:
     ptr_vector_callback_and_clear(&crd->del_nsec3param_records, nsec3_chain_replay_record_delete_cb);
     ptr_vector_callback_and_clear(&crd->add_nsec3param_records, nsec3_chain_replay_record_delete_cb);
     ptr_set_callback_and_destroy(&crd->fqdns, nsec3_chain_replay_fqdn_key_delete);
-    
-
     
     return ret;
 }
