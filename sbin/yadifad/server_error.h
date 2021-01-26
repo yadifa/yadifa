@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -125,6 +125,31 @@ ttylog_err(const char *format, ...)
     {
         flushout();
         osprint(termerr, "error: ");
+        va_start(args, format);
+        vosformat(termerr, format, args);
+        va_end(args);
+        osprintln(termerr, "");
+        flusherr();
+    }
+}
+
+static inline void
+ttylog_warn(const char *format, ...)
+{
+    va_list args;
+
+
+    if(logger_is_running())
+    {
+        va_start(args, format);
+        logger_handle_vmsg(MODULE_MSG_HANDLE, MSG_WARNING, format, args);
+        va_end(args);
+        logger_flush();
+    }
+    // else
+    {
+        flushout();
+        osprint(termerr, "warning: ");
         va_start(args, format);
         vosformat(termerr, format, args);
         va_end(args);

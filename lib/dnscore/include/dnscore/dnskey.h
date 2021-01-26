@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -91,8 +91,6 @@ extern "C"
 #endif
     
 #define DNSKEY_RDATA_TAG 0x445259454b534e44 /* DNSKEYRD */
-
-
 
 #define DNSKEY_FEATURE_NSEC_CAPABLE     1
 #define DNSKEY_FEATURE_NSEC3_CAPABLE    2
@@ -203,7 +201,6 @@ struct dnssec_key
     time_t epoch_created;
     time_t epoch_publish;   // if not published yet, at that time, it needs to be added in the zone
     time_t epoch_activate;  // if not activated yet, at that time, it needs to be used for signatures
-
     time_t epoch_inactive;  // if active, at that time, it needs to stop being used for signatures
     time_t epoch_delete;    // if still in the zone, at that time, it needs to be removed from the zone
     
@@ -856,8 +853,6 @@ const dnskey_features* dnskey_supported_algorithm_by_index(u8 index);
 const dnskey_features* dnskey_supported_algorithm(u8 algorithm);
 
 void dnskey_init_dns_resource_record(dnssec_key *key, s32 ttl, dns_resource_record *rr);
-
-
 
 #ifdef	__cplusplus
 }

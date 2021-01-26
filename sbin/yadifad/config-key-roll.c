@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -52,7 +52,6 @@
 #define KEYROLCF_TAG 0x46434c4f5259454b
 
 static ptr_set key_roll_desc_set = PTR_SET_ASCIIZ_EMPTY;
-
 
 /*----------------------------------------------------------------------------*/
 #pragma mark CONFIG
@@ -513,5 +512,3 @@ config_register_key_roll(const char *null_or_key_name, s32 priority)
 
     return return_code; // scan-build false positive: either it is freed, either it is stored in a global collection
 }
-
-

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -58,9 +58,7 @@ extern "C" {
 #include <dnscore/ptr_set.h>
     
 #include <dnsdb/zdb_types.h>
-    
-#include "zone.h"
-#include "database.h"
+
 #include <dnscore/acl.h>
 
     /*    ------------------------------------------------------------    */
@@ -478,6 +476,8 @@ struct config_data
     bool                                                       reloadable;
 
     bool                                                    hidden_master;
+
+    bool                                                   check_policies;
 };
 
 /**
@@ -488,6 +488,9 @@ struct config_data
  * 
  */
 
+struct zone_desc_s;
+typedef struct zone_desc_s zone_desc_s;
+
 typedef ya_result config_section_zone_filter_callback(zone_desc_s *, void *);
 
 #ifndef CONFS_MAIN_C_
@@ -496,7 +499,6 @@ extern config_data                         *g_config;
 
 #endif
 
-#include    "zone.h"
 
 /**
  * @brief Tool function printing all the known names in a table.

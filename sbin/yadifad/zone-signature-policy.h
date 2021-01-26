@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -412,6 +412,7 @@ ya_result zone_policy_roll_create_from_relatives(const char *id,
 
 dnssec_policy_roll *dnssec_policy_roll_acquire_from_name(const char *id);
 void dnssec_policy_roll_release(dnssec_policy_roll *dpr);
+ya_result dnssec_policy_roll_test_all(time_t active_at, u32 duration_seconds, bool print_text, bool log_text);
 
 dnssec_denial *dnssec_policy_denial_create(const char *id, u8 algorithm, u16 iterations, const u8 *salt, u8 salt_length, u32 resalting, bool optout);
 dnssec_denial *dnssec_policy_denial_acquire(const char *id);
@@ -420,6 +421,9 @@ void dnssec_policy_denial_release(dnssec_denial *dd);
 dnssec_policy_key *dnssec_policy_key_create(const char *id, u8 algorithm, u16 size, bool ksk, char* engine);
 dnssec_policy_key *dnssec_policy_key_acquire_from_name(const char *id);
 void dnssec_policy_key_release(dnssec_policy_key *dpk);
+
+ya_result dnssec_policy_roll_test_at(struct dnssec_policy_roll *kr, time_t active_at, time_t *will_be_inactive_at, bool print_text, bool log_text);
+ya_result dnssec_policy_roll_test(struct dnssec_policy_roll *kr, time_t active_at, u32 duration_seconds, bool print_text, bool log_text);
 
 dnssec_policy_key_suite *dnssec_policy_key_suite_create(const char *id, dnssec_policy_key *dpk, dnssec_policy_roll *dpr);
 dnssec_policy_key_suite *dnssec_policy_key_suite_acquire_from_name(const char *id);

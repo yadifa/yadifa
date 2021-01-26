@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -221,8 +221,7 @@ parser_clear_escape_codes(char **startp, int *lenp, char escape_char, char *new_
             }
 
             memcpy(op, start, n);
-#if 0 /* fix */
-#else
+
             char c = escape_char_ptr[1];
 
             if((c >= '0') && (c <= '2'))
@@ -273,7 +272,6 @@ parser_clear_escape_codes(char **startp, int *lenp, char escape_char, char *new_
                 len -= n + 2;
             }
 
-#endif
             yassert(len >= 0);
             
             if(len == 0)

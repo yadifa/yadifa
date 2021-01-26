@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -116,7 +116,6 @@ config_section_key_template_set_wild(struct config_section_descriptor_s *csd, co
     (void)value;
     return CONFIG_UNKNOWN_SETTING;
 }
-
 
 static ya_result
 config_section_key_template_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)

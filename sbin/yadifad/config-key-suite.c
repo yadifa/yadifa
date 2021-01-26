@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,6 +45,7 @@
 #include "zone-signature-policy.h"
 #include "server_error.h"
 
+#include "confs.h"
 
 /*----------------------------------------------------------------------------*/
 #pragma mark GLOBAL VARIABLES
@@ -82,7 +83,6 @@ config_section_key_suite_set_wild(struct config_section_descriptor_s *csd, const
     return CONFIG_UNKNOWN_SETTING;
 }
 
-
 static ya_result
 config_section_key_suite_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
 {
@@ -96,7 +96,6 @@ config_section_key_suite_print_wild(const struct config_section_descriptor_s *cs
 
     return SUCCESS;
 }
-
 
 /**
  * @fn static ya_result config_section_key_suite_init(struct config_section_descriptor_s *csd)
@@ -163,8 +162,6 @@ config_section_key_suite_start(struct config_section_descriptor_s *csd)
     return SUCCESS;
 }
 
-
-
 /**
  * @fn static ya_result config_section_key_suite_stop(struct config_section_descriptor_s *csd)
  *
@@ -212,7 +209,6 @@ config_section_key_suite_stop(struct config_section_descriptor_s *csd)
     }
 }
 
-
 /**
  * @fn static ya_result config_section_key_suite_postprocess(struct config_section_descriptor_s *csd)
  *
@@ -227,10 +223,23 @@ config_section_key_suite_stop(struct config_section_descriptor_s *csd)
  *
  * return ya_result
  */
+
 static ya_result
 config_section_key_suite_postprocess(struct config_section_descriptor_s *csd)
 {
     (void)csd;
+    ya_result ret = SUCCESS;
+
+    if(g_config->check_policies)
+    {
+        time_t now =  time(NULL);
+        ret = dnssec_policy_roll_test_all(now, 315576000 /* 10 years */, TRUE, FALSE);
+        flushout();
+        if(FAIL(ret))
+        {
+            return ret;
+        }
+    }
 
     ptr_set_iterator iter;
     ptr_set_iterator_init(&key_suite_desc_set, &iter);
@@ -248,6 +257,7 @@ config_section_key_suite_postprocess(struct config_section_descriptor_s *csd)
                 /*dnssec_policy_key_suite *dpks =*/ dnssec_policy_key_suite_create(key_suite_desc->id,
                                                                                dpk,
                                                                                dpr);
+
                 dnssec_policy_roll_release(dpr);
             }            
             else
@@ -262,8 +272,7 @@ config_section_key_suite_postprocess(struct config_section_descriptor_s *csd)
         }
     }
 
-
-    return SUCCESS;
+    return ret;
 }
 
 

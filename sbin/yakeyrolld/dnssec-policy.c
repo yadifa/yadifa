@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1664,6 +1664,36 @@ dnssec_policy_roll_acquire_from_name(const char *id)
 
     return dpr;
 }
+
+#if 0
+ya_result
+dnssec_policy_roll_test_all(time_t active_at, u32 duration_seconds, bool print_text, bool log_text)
+{
+    group_mutex_read_lock(&dnssec_policy_roll_set_mtx);
+
+    ptr_set_iterator iter;
+    ptr_set_iterator_init(&dnssec_policy_roll_set, &iter);
+    while(ptr_set_iterator_hasnext(&iter))
+    {
+        ptr_node *node = ptr_set_iterator_next_node(&iter);
+        if(index == 0)
+        {
+            if(node->value != NULL)
+            {
+                dnssec_policy_roll *dpr = (dnssec_policy_roll*)node->value;
+                group_mutex_write_lock(&dnssec_policy_roll_mtx);
+                ret = dnssec_policy_key_roll_test( dpr, active_at, duration_seconds, print_text, log_text);
+                group_mutex_write_unlock(&dnssec_policy_roll_mtx);
+            }
+            break;
+        }
+
+        --index;
+    }
+
+    group_mutex_read_unlock(&dnssec_policy_roll_set_mtx);
+}
+#endif
 
 dnssec_policy_roll *
 dnssec_policy_roll_acquire_from_index(int index)

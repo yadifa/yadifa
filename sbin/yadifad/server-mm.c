@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -191,6 +191,7 @@ network_thread_context_new_instance(size_t backlog_queue_slots, struct service_w
     ctx->base.worker = worker;
     ctx->base.idx = sockfd_idx;
     ctx->base.sockfd = g_server_context.udp_socket[sockfd_idx];
+    //ctx->base.must_stop = FALSE; // implicit with the memset
     ctx->base.statisticsp = &ctx->statistics;
 
     mutex_init(&ctx->mtx);
@@ -228,7 +229,9 @@ network_thread_context_array_finalize(network_thread_context_array *ctxa)
     {
         for(u32 r = 0; r < ctxa->reader_by_fd; r++)
         {
-            network_thread_context_delete(ctxa->contextes[sockfd_idx]);
+            network_thread_context_s *ctx = ctxa->contextes[sockfd_idx];
+            log_debug("network_thread_context_array_finalize: %u/%u sockfd %i and thread %p/worker %u", (u32)listen_idx, (u32)ctxa->listen_count, sockfd_idx, ctx->base.worker->tid, ctx->base.worker->worker_index);
+            network_thread_context_delete(ctx);
             ++sockfd_idx;
         }
     }
@@ -237,7 +240,7 @@ network_thread_context_array_finalize(network_thread_context_array *ctxa)
 }
 
 static ya_result
-network_thread_context_init(network_thread_context_array *ctxa, size_t listen_count, size_t reader_by_fd,
+network_thread_context_array_init(network_thread_context_array *ctxa, size_t listen_count, size_t reader_by_fd,
         size_t backlog_queue_slots, struct service_worker_s *worker)
 {
     network_thread_context_s **contextes;
@@ -271,6 +274,8 @@ network_thread_context_init(network_thread_context_array *ctxa, size_t listen_co
                 return MAKE_ERRNO_ERROR(ENOMEM);
             }
 
+            log_debug("network_thread_context_array_init: %u/%u sockfd %i and thread %p/worker %u", (u32)listen_idx, (u32)listen_count, sockfd_idx, worker->tid, worker->worker_index);
+
             contextes[sockfd_idx] = ctx;
 
             /*
@@ -288,6 +293,10 @@ static void server_mm_set_cpu_affinity(int index)
 {
 #if HAS_PTHREAD_SETAFFINITY_NP
     int cpu_count = sys_get_cpu_count();
+    if(cpu_count < 0)
+    {
+        cpu_count = 1;
+    }
 
     int affinity_with = g_config->thread_affinity_base + (index * g_config->thread_affinity_multiplier);
     affinity_with += affinity_with / cpu_count;
@@ -426,6 +435,11 @@ server_mm_udp_worker_thread(void *parms)
             continue;
         }
 #endif
+
+        /// @note 20210107 edf -- recvmmsg timeout doesnt work as intended (cfr: man recvmmsg)
+        ///                       a convoluted mechanism has been put in place to force getting out of the call when needed
+        ///                       (search for "static const u8 dummy" in this file)
+
         int recvmmsg_ret = recvmmsg(fd,  udp_packets, udp_packets_count, MSG_WAITFORONE, NULL /*&read_timeout*/);
 #if DEBUG
 	     log_debug("server_mm_udp_worker_thread(%i, %i): recvmmsg: %i", ctx->base.idx, fd, recvmmsg_ret);
@@ -690,7 +704,7 @@ server_mm_query_loop(struct service_worker_s *worker)
     
     bool log_statistics_enabled = (g_statistics_logger != NULL) && (g_config->server_flags & SERVER_FL_STATISTICS) != 0;
     
-    log_debug("statistics are %s", (log_statistics_enabled)?"enabled":"disabled");
+    log_debug("server-mm: statistics are %s", (log_statistics_enabled)?"enabled":"disabled");
     
     if(log_statistics_enabled)
     {
@@ -737,7 +751,7 @@ server_mm_query_loop(struct service_worker_s *worker)
     size_t backlog_queue_slots = g_server_context.worker_backlog_queue_size;
     
     network_thread_context_array ctxa;
-    if(FAIL(ret = network_thread_context_init(&ctxa, g_server_context.udp_interface_count, g_server_context.udp_unit_per_interface,
+    if(FAIL(ret = network_thread_context_array_init(&ctxa, g_server_context.udp_interface_count, g_server_context.udp_unit_per_interface,
             backlog_queue_slots, worker)))
     {
         log_err("server-mm: unable to allocate context: %r", ret);
@@ -754,6 +768,7 @@ server_mm_query_loop(struct service_worker_s *worker)
         for(u32 unit_index = 0; unit_index < g_server_context.udp_unit_per_interface; unit_index++)
         {
             network_thread_context_s *ctx = ctxa.contextes[initialised_context_indexes];
+            ctx->base.must_stop = FALSE;
 
             yassert(ctx != NULL);
 
@@ -785,6 +800,18 @@ server_mm_query_loop(struct service_worker_s *worker)
 
     if(ISOK(ret))
     {
+        log_info("server-mm: waiting for UDP threads");
+        ret = thread_pool_counter_wait_equal_with_timeout(&running_threads_counter, initialised_context_indexes, ONE_SECOND_US * 5);
+        if(FAIL(ret))
+        {
+            s32 threads_running_count = thread_pool_counter_get_value(&running_threads_counter);
+
+            log_err("server-mm: UDP threads spawn timed-out: expected %u thread but only %i spawned", initialised_context_indexes, threads_running_count);
+        }
+    }
+
+    if(ISOK(ret))
+    {
         log_info("server-mm: UDP threads up");
 
         for(u32 i = 0; i < g_server_context.tcp_socket_count; ++i)
@@ -804,11 +831,9 @@ server_mm_query_loop(struct service_worker_s *worker)
 
         ++maxfd; /* pselect actually requires maxfd + 1 */
 
-        /* compute maxfd plus one once and for all : done */
+        // compute maxfd plus one once and for all : done
 
-
-    
-        log_info("ready to work");
+        log_info("server-mm: running");
 
         while(!service_should_reconfigure_or_stop(worker))
         {
@@ -989,13 +1014,10 @@ server_mm_query_loop(struct service_worker_s *worker)
         log_err("server-mm: initialisation failed");
     }
 
-
-#if DEBUG
     {
-        s32 threads_still_running_count = thread_pool_counter_get_value(&running_threads_counter);
-        log_info("threads_still_running_count = %i", threads_still_running_count);
+        s32 threads_currently_running_count = thread_pool_counter_get_value(&running_threads_counter);
+        log_debug("server-mm: threads_currently_running_count = %i", threads_currently_running_count);
     }
-#endif
 
     log_info("server-mm: stopping the threads");
 
@@ -1016,7 +1038,27 @@ server_mm_query_loop(struct service_worker_s *worker)
 
                 if(ctx != NULL)
                 {
-                    log_info("thread #%i (%p) of UDP interface: %{sockaddr} using socket %i will be stopped",
+                    ctx->base.must_stop = TRUE;
+                }
+
+                ++context_index;
+            }
+        }
+
+        for(u32 udp_interface_index = 0, context_index = 0; udp_interface_index < g_server_context.udp_interface_count; ++udp_interface_index)
+        {
+            for(u32 unit_index = 0; unit_index < g_server_context.udp_unit_per_interface; unit_index++)
+            {
+                if(context_index >= initialised_context_indexes) // only happens in case of a critical error
+                {
+                    break;
+                }
+
+                network_thread_context_s *ctx = ctxa.contextes[context_index];
+
+                if(ctx != NULL)
+                {
+                    log_info("server-mm: thread #%i (%p) of UDP interface: %{sockaddr} using socket %i will be stopped",
                             unit_index,
                             ctx->base.worker->tid,
                             g_server_context.udp_interface[udp_interface_index]->ai_addr, ctx->base.sockfd);
@@ -1029,7 +1071,8 @@ server_mm_query_loop(struct service_worker_s *worker)
                     static const u8 dummy[12] =
                     {
                         0xff, 0xff, 0xff, 0xff,
-                        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                        0x00, 0x00, 0x00, 0x00,
+                        0x00, 0x00, 0x00, 0x00,
                     };
 
                     int sockfd;
@@ -1039,7 +1082,7 @@ server_mm_query_loop(struct service_worker_s *worker)
                         {
                             for(;;)
                             {
-                                log_debug("thread #%i (%p) of UDPv4 interface: %{sockaddr} will be woken up by a message",
+                                log_debug("server-mm: thread #%i (%p) of UDPv4 interface: %{sockaddr} will be woken up by a message",
                                          unit_index,
                                          ctx->base.worker->tid,
                                          g_server_context.udp_interface[udp_interface_index]->ai_addr);
@@ -1064,7 +1107,7 @@ server_mm_query_loop(struct service_worker_s *worker)
                         {
                             for(;;)
                             {
-                                log_debug("thread #%i (%p) of UDPv6 interface: %{sockaddr} will be woken up by a message",
+                                log_debug("server-mm: thread #%i (%p) of UDPv6 interface: %{sockaddr} will be woken up by a message",
                                          unit_index,
                                          ctx->base.worker->tid,
                                          g_server_context.udp_interface[udp_interface_index]->ai_addr);
@@ -1096,9 +1139,7 @@ server_mm_query_loop(struct service_worker_s *worker)
 
         s32 threads_still_running_count = thread_pool_counter_get_value(&running_threads_counter);
 
-#if DEBUG
-        log_info("threads_still_running_count = %i", threads_still_running_count);
-#endif
+        log_debug("server-mm: threads_still_running_count = %i", threads_still_running_count);
 
         can_stop = (threads_still_running_count == 0);
     }
@@ -1111,7 +1152,7 @@ server_mm_query_loop(struct service_worker_s *worker)
      * Close database alarm handle
      */
 
-    log_info("server-mm: cleaning up: stopping threads");
+    log_info("server-mm: cleaning up: stopping thread pool");
 
     thread_pool_destroy(server_udp_thread_pool);
 

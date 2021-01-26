@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -72,10 +72,8 @@ void  threaded_qsl_cw_init(threaded_qsl_cw *queue, int max_size);
 void  threaded_qsl_cw_finalize(threaded_qsl_cw *queue);
 void  threaded_qsl_cw_enqueue(threaded_qsl_cw *queue,void* constant_pointer);
 bool  threaded_qsl_cw_try_enqueue(threaded_qsl_cw *queue,void* constant_pointer);
-
 void* threaded_qsl_cw_dequeue(threaded_qsl_cw *queue);
 void* threaded_qsl_cw_try_dequeue(threaded_qsl_cw *queue);
-
 void  threaded_qsl_cw_wait_empty(threaded_qsl_cw *queue);
 int   threaded_qsl_cw_size(threaded_qsl_cw *queue);
 int   threaded_qsl_cw_room(threaded_qsl_cw *queue);

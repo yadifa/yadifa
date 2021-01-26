@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -110,8 +110,6 @@ extern logger_handle* g_database_logger;
 smp_int g_zone_instanciated_count = SMP_INT_INITIALIZER;
 ptr_set g_zone_instanciated_set = PTR_SET_PTR_EMPTY;
 #endif
-
-
 
 static void zdb_zone_record_or_and_flags_to_subdomains(zdb_rr_label *rr_label, u16 orflags, u16 andflags)
 {
@@ -1294,8 +1292,5 @@ zdb_zone_error_status_clear(zdb_zone *zone, u8 error_status)
 {
     zone->_error_status &= ~error_status;
 }
-
-
-
 
 /** @} */

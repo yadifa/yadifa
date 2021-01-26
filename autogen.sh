@@ -1,7 +1,7 @@
 #!/bin/sh
 ################################################################################
 #
-#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  Copyright (c) 2011-2021, EURid vzw. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 #  Redistribution and use in source and binary forms, with or without
@@ -30,13 +30,25 @@
 #
 ################################################################################        
 
+doe()
+{
+    err=$?
+    if [ $err -ne 0 ]
+    then
+      echo $*
+      exit $err
+    fi
+}
+
 OS=$(uname -s)
 SED=sed
 if [ ! "$OS" = "Darwin" ]
 then
     libtoolize
+    doe "libtoolize failed"
 else
     glibtoolize
+    doe "glibtoolize failed"
     SED=gsed
 fi
 
@@ -71,7 +83,11 @@ then
 fi
 
 aclocal
-autoheader
-automake --add-missing
-autoconf
-
+doe "aclocal failed"
+autoheader -Wall
+doe "autoheader failed"
+automake --add-missing -Wall
+doe "automake failed"
+autoconf -i -Wall
+doe "autoconf failed"
+#echo "autogen done"

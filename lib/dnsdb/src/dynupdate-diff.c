@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -2178,8 +2178,6 @@ zone_diff_add_fqdn_parents_up_to_below_apex(zone_diff *diff, const u8 *fqdn, zdb
         fqdn += fqdn[0] + 1;
     }
 }
-
-
 
 /**
  * Enables the or_state flags in every record of the set.
@@ -6264,7 +6262,6 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
         }
         // else there was no NSEC3PARAM to begin with
     }
-
 
     if(ISOK(ret) && !dryrun)
     {

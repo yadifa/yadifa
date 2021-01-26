@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -138,9 +138,18 @@ logger_channel_pipe_vmsg(logger_channel* chan, int level, char* text, va_list ar
     
     if(ret == MAKE_ERRNO_ERROR(EPIPE))
     {
+        // the child is probably dead as the connection has been closed
+
+        // close our side
+
         output_stream_flush(&sd->os);
         output_stream_close(&sd->os);
+
+        // sink it for now
+
         output_stream_set_sink(&sd->os);
+
+        // try to pipe again
 
         if(ISOK(ret = logger_channel_pipe_append(sd->command, sd)))
         {
@@ -158,6 +167,8 @@ logger_channel_pipe_vmsg(logger_channel* chan, int level, char* text, va_list ar
         }
         else
         {
+            // sink
+
             output_stream_set_sink(&sd->os);
         }
     }

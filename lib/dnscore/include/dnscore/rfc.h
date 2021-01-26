@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1073,8 +1073,6 @@
  */
 #define     TYPE_EUI64                      NU16(109)   /* EUI-64 address                   rfc 7043 */
 
-
-
 /*
                                    1  1  1  1  1  1
      0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
@@ -1206,7 +1204,6 @@
 #define     CLASS_WHOIS                     NU16(0x2B)    /* @note WHOIS class */
 #endif  // HAS_WHOIS
 
-
 #define     CLASS_NONE                      NU16(254)     /* rfc 2136                          rfc 2136 */
 #define     CLASS_ANY                       NU16(255)     /* rfc 1035  QCLASS ONLY             rfc 1025 */
 
@@ -1331,7 +1328,6 @@ struct message_header
 #define     CLASS_WHOIS_NAME                "WHOIS"
 #endif // HAS_WHOIS
 
-
 #define     CLASS_NONE_NAME                 "NONE"
 #define     CLASS_ANY_NAME                  "ANY"
 
@@ -1408,8 +1404,6 @@ extern const class_table qclass[];
 #define     TYPE_LP_NAME                    "LP"
 #define     TYPE_EUI48_NAME                 "EUI48"
 #define     TYPE_EUI64_NAME                 "EUI64"
-
-
 
 #define     TYPE_TKEY_NAME                  "TKEY"
 #define     TYPE_TSIG_NAME                  "TSIG"
@@ -1638,3 +1632,4 @@ static inline const u8* rrsig_get_signer_name_from_rdata(const void *rdata, u16 
 #endif /* RFC_H_ */
 
 /** @} */
+

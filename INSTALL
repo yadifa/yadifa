@@ -5,7 +5,6 @@ By default gcc is used but you can specify your compiler adding CC=x in ./config
 openssl has to be build with shared
 Note that gcc < 4.6 will be build with -O0 and > 4.6 with -O3
 
-
 ./configure
 make
 sudo make install
@@ -149,6 +148,10 @@ this:
      ./configure CC="gcc -arch i386 -arch x86_64 -arch ppc -arch ppc64" \
                  CXX="g++ -arch i386 -arch x86_64 -arch ppc -arch ppc64" \
                  CPP="gcc -E" CXXCPP="g++ -E"
+
+With "Homebrew" installed for openssl support:
+
+./configure -with-openssl=/usr/local/opt/openssl@1.1 CFLAGS="-O2 -g -DDEBUG=0 -DNDEBUG=1"
 
    This is not guaranteed to produce working output in all cases, you
 may have to build one architecture at a time and combine the results

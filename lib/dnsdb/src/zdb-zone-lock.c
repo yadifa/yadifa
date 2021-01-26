@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -828,8 +828,6 @@ zdb_zone_double_unlock(zdb_zone *zone, u8 owner, u8 secondary_owner)
     struct zdb_zone_lock_monitor *holder = zdb_zone_lock_monitor_get(zone);
 #endif
     
-
-
 #if ZDB_ZONE_LOCK_HAS_OWNER_ID
     thread_t tid = thread_self();
     if(zone->lock_last_owner_id == tid)

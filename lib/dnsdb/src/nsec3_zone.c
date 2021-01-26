@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -266,7 +266,6 @@ nsec3_zone_destroy(zdb_zone *zone, nsec3_zone *n3)
             zdb_rr_label* label = zdb_zone_label_iterator_next(&label_iterator);
             
             if(label->nsec.nsec3 != NULL)
-
             {
                 struct nsec3_label_extension *n3_ext = label->nsec.nsec3;
                 if(n3_ext != NULL)
@@ -314,7 +313,6 @@ nsec3_zone_destroy(zdb_zone *zone, nsec3_zone *n3)
                 yassert(nsec3_label_extension_self(n3_ext) == NULL && nsec3_label_extension_star(n3_ext) == NULL); // both are expected to be cleared
                 nsec3_label_extension_free(n3_ext);
             }
-
         }
     }
 }

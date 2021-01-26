@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -178,6 +178,7 @@ typedef unsigned int mode_t;
 #define VERSION_2_3_0 0x020300000000LL
 #define VERSION_2_4_0 0x020400000000LL
 #define VERSION_2_4_1 0x020400100000LL
+#define VERSION_2_4_2 0x020400200000LL
 
 #include <dnscore/dnscore-config-features.h>
 #include <dnscore/sys_error.h>

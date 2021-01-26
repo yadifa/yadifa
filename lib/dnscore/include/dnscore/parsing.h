@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -89,8 +89,6 @@ ya_result parse_s32_check_range_len_base10(const char *src, u32 src_len, s32 *ds
  *  @retval PARSEINT_ERROR, if no digits found, or number not in the range
  */
 ya_result parse_u64_check_range_len_base10(const char *src, u32 src_len, u64 *dst, u64 min, u64 max);
-
-
 
 /** \brief Converts a chain of pascal strings to a string
  *

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -307,7 +307,7 @@ network_thread_context_array_finalize(network_thread_context_array *ctxa)
 }
 
 static ya_result
-network_thread_context_init(network_thread_context_array *ctxa, size_t listen_count, size_t reader_by_fd,
+network_thread_context_array_init(network_thread_context_array *ctxa, size_t listen_count, size_t reader_by_fd,
         size_t backlog_queue_slots, struct service_worker_s *worker)
 {
     network_thread_context_s **contextes;
@@ -1016,7 +1016,7 @@ server_rw_query_loop(struct service_worker_s *worker)
 
     timeout.tv_sec = 1;
     timeout.tv_nsec = 0;
-    
+
     /**
      * For each interface ...
      */
@@ -1052,7 +1052,7 @@ server_rw_query_loop(struct service_worker_s *worker)
     size_t backlog_queue_slots = g_server_context.worker_backlog_queue_size; /* SERVER_RW_BACKLOG_QUEUE_SIZE*/;
     
     network_thread_context_array ctxa;
-    if(FAIL(ret = network_thread_context_init(&ctxa, g_server_context.udp_interface_count, g_server_context.udp_unit_per_interface,
+    if(FAIL(ret = network_thread_context_array_init(&ctxa, g_server_context.udp_interface_count, g_server_context.udp_unit_per_interface,
             backlog_queue_slots, worker)))
     {
         log_err("server-rw: unable to allocate context: %r", ret);
@@ -1110,6 +1110,8 @@ server_rw_query_loop(struct service_worker_s *worker)
 
     if(ISOK(ret))
     {
+        log_info("server-rw: UDP threads up");
+
         for(u32 i = 0; i < g_server_context.tcp_socket_count; ++i)
         {
             int sockfd = g_server_context.tcp_socket[i];
@@ -1183,7 +1185,7 @@ server_rw_query_loop(struct service_worker_s *worker)
                     }
                 }
             }
-            else /* return_code <= 0 */
+            else /* ret <= 0 */
             {
                 if(ret == -1)
                 {
@@ -1206,7 +1208,7 @@ server_rw_query_loop(struct service_worker_s *worker)
                     break;
                 }*/
 
-                /* return_code == 0 => no fd set at all and no error => timeout */
+                /* ret == 0 => no fd set at all and no error => timeout */
 
                 server_run_loop_timeout_countdown--;
                 server_statistics.input_timeout_count++;

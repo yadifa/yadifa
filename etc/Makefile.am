@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+#  Copyright (c) 2011-2021, EURid vzw. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 #  Redistribution and use in source and binary forms, with or without
@@ -69,7 +69,7 @@ $(MC): $(MCE)
 	cp $(MCE) $(MC)
 
 $(KC): $(KCE)
-	cat $(KCE) | sed "s@ChangeThisKey@`head -c 16 /dev/urandom | openssl enc -base64 2>/dev/null`@" > $(KC)
+	cat $(KCE) | sed "s@PleaseChangeThisKey=@`head -c 16 /dev/urandom | openssl enc -base64 2>/dev/null`@" > $(KC)
 
 $(YI): $(YIE)
 	cat $(YIE) | sed "s@^PREFIX=.*@PREFIX=\"$(prefix)\"@" > $(YI)

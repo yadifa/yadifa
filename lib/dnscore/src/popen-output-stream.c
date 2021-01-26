@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -58,6 +58,10 @@
 #include "dnscore/fdtools.h"
 #include "dnscore/zalloc.h"
 #include "dnscore/identity.h"
+
+#if DEBUG
+#include "dnscore/format.h"
+#endif
 
 #define POPENOSD_TAG 0x44534f4e45504f50
 
@@ -129,9 +133,17 @@ static void
 popen_output_stream_close(output_stream* stream)
 {
     struct popen_output_stream_data *data = (struct popen_output_stream_data*)stream->data;
+#if DEBUG
+    int fd = data->fd;
+#endif
     close_ex(data->fd);
     data->fd = -1;
     int status;
+
+#if DEBUG
+    formatln("popen_output_stream_close(%i, %i) (wait)", data->child, fd);
+#endif
+
     while(waitpid(data->child, &status, 0) < 0)
     {
         int err = errno;
@@ -141,6 +153,11 @@ popen_output_stream_close(output_stream* stream)
             break;
         }
     }
+
+#if DEBUG
+    formatln("popen_output_stream_close(%i, %i) (done)", data->child, fd);
+#endif
+
     data->child = -1;
     ZFREE_OBJECT(data);
 }
@@ -158,17 +175,35 @@ popen_output_stream_ex(output_stream* os, const char* command, popen_output_stre
 {
 #ifndef WIN32
     int write_pipe[2];
+    ya_result ret;
+
+    /// @note 20210104 edf -- The null file is opened at this moment so we can return with an error right now if it fails.
+    ///                       It is way better than forking and failing.
+
+#if DEBUG
+    formatln("popen_output_stream_ex(%s) (open null)", command);
+#endif
+
     int fdnull = open_ex("/dev/null", O_WRONLY);
     if(fdnull < 0)
     {
         return ERRNO_ERROR;
     }
+
+#if DEBUG
+    formatln("popen_output_stream_ex(%s) (pipe)", command);
+#endif
     
     if(pipe(write_pipe) < 0)
     {
+        ret = ERRNO_ERROR;
         close_ex(fdnull);
-        return ERRNO_ERROR;
+        return ret;
     }
+
+#if DEBUG
+    formatln("popen_output_stream_ex(%s) (fork)", command);
+#endif
     
     pid_t child;
     if((child = fork()) > 0)
@@ -186,7 +221,11 @@ popen_output_stream_ex(output_stream* os, const char* command, popen_output_stre
         data->child = child;
         os->data = data;
         os->vtbl = &popen_output_stream_vtbl;
-        
+
+#if DEBUG
+        formatln("popen_output_stream_ex(%s) = (%i, %i)", command, data->child, data->fd);
+#endif
+
         return SUCCESS;
     }
     else if(child == 0)
@@ -203,25 +242,27 @@ popen_output_stream_ex(output_stream* os, const char* command, popen_output_stre
 
         identity_change(parms->uid, parms->gid);   
 #endif
-        dup2_ex(write_pipe[0], 0);
-        dup2_ex(fdnull, 1);
-        dup2_ex(fdnull, 2);
+        dup2_ex(write_pipe[0], 0);  // write to its standard input
+        dup2_ex(fdnull, 1);                // ignore its standard output
+        dup2_ex(fdnull, 2);                // ignore its standard error
         close_ex(write_pipe[0]);
         close_ex(fdnull);
         
-        execl("/bin/sh", "sh", "-c", command, NULL);
+        execl("/bin/sh", "sh", "-c", command, NULL); /// @note 20210104 edf -- this would obviously fail if /bin/sh isn't present.
         
         // never reached
         
         abort();
     }
-    else
+    else // fork failed
     {
+        ret = ERRNO_ERROR;
+
         close_ex(write_pipe[0]);
         close_ex(write_pipe[1]);
         close_ex(fdnull);
-        
-        return ERRNO_ERROR;
+
+        return ret;
     }
 #else
     return -1;

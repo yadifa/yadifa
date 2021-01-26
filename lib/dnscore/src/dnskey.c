@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2020, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1247,17 +1247,14 @@ dnskey_get_tag(dnssec_key *key)
 {
     if((dnskey_state_get(key) & DNSKEY_KEY_TAG_SET) == 0)
     {
-
         u8 rdata[2048];
 
         u32 rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata);
         
-
         yassert(rdata_size <= 2048);
         
         u16 tag = dnskey_get_tag_from_rdata(rdata, rdata_size);
         
-
         group_mutex_lock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
         key->tag = tag;
         key->status |= DNSKEY_KEY_TAG_SET;
