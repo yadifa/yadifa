@@ -80,7 +80,9 @@ static void* stack_alloc(size_t size)
 #define __has_c_attribute(x) 0  // Compatibility with non-clang compilers.
 #endif
 #if __has_c_attribute(fallthrough)
-#define FALLTHROUGH [[fallthrough]]
+// __attribute__ ((fallthrough));   // C and C++03
+// [[fallthrough]];                 // C++17 and above
+#define FALLTHROUGH __attribute__ ((fallthrough));
 #else
 #define FALLTHROUGH
 #endif
