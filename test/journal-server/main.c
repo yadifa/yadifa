@@ -773,7 +773,7 @@ udp_client_thread(void* parm_)
                         if(message_get_query_type(mesg) != TYPE_SOA)
                         {
                             zdb_query_ex_answer_create(&qea);
-#pragma message ("use the other function")
+                            /// @note 20210218 edf -- use the other function
 #if 0
                             finger_print fp = zdb_query_ex(&db, mesg, &qea, message_get_pool_buffer(mesg));
 

@@ -57,7 +57,7 @@
 
 #if defined(__linux__) || defined(__gnu_hurd__)
 #define _GNU_SOURCE 1
-//#include <execinfo.h>
+#include <execinfo.h>
 #include <sys/mman.h>
 #include <ucontext.h>
 #elif defined(__sun)
@@ -150,7 +150,6 @@ static inline long int signal_gettid()
 {
     return (long int)syscall(__NR_gettid);
 }
-
 #else
 static inline long int signal_gettid()
 {

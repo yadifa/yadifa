@@ -47,7 +47,6 @@
 #include "main.h"
 
 #if HAS_CTRL
-#pragma message("ctrl (yadifa) compiles")
 #include "module/ctrl.h"
 #endif
 

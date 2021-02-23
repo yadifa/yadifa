@@ -66,7 +66,6 @@ list_sl_remove(list_sl_s *list, void *data)
     list_sl_node_s **nodep = &list->first;
     list_sl_node_s *node = list->first;
 
-    //while(node->next != NULL)
     while(node != (list_sl_node_s*)&list->sentinel)
     {
         if(data == node->data)
@@ -96,7 +95,6 @@ list_sl_clear(list_sl_s *list)
 {
     list_sl_node_s *node = list->first;
 
-    //while(node->next != NULL)
     while(node != (list_sl_node_s*)&list->sentinel)
     {
         list_sl_node_s *tmp = node;
@@ -129,7 +127,6 @@ void *list_sl_search(list_sl_s *list, result_callback_function *comparator, void
 {
     list_sl_node_s *node = list->first;
 
-    //while(node->next != NULL)
     while(node != (list_sl_node_s*)&list->sentinel)
     {
         ya_result ret = comparator(node->data, parm);
@@ -174,7 +171,6 @@ list_sl_remove_match(list_sl_s *list, result_callback_function *comparator, void
     list_sl_node_s *node = list->first;
     bool matched = FALSE;
     
-    //while(node->next != NULL)
     while(node != (list_sl_node_s*)&list->sentinel)
     {
         ya_result ret = comparator(node->data, parm);

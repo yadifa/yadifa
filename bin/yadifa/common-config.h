@@ -34,12 +34,12 @@
 
 #pragma once
 
-
+#include <dnscore/dnscore-release-date.h>
 
 // general defines
 #define     PROGRAM_NAME                            PACKAGE
 #define     PROGRAM_VERSION                         PACKAGE_VERSION
-#define     RELEASEDATE                             "2020-12-09"
+#define     RELEASEDATE                             YADIFA_DNSCORE_RELEASE_DATE
 
 #define     ROUND_ROBIN                             0x00
 

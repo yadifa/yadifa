@@ -76,8 +76,10 @@ static value_name_table zone_type_enum_table[]=
 
 #if HAS_MASTER_SUPPORT
     {ZT_MASTER,     ZT_STRING_MASTER},
+    {ZT_MASTER,     ZT_STRING_PRIMARY},
 #endif
     {ZT_SLAVE,      ZT_STRING_SLAVE},
+    {ZT_SLAVE,      ZT_STRING_SECONDARY},
 
     {0, NULL}
 };
@@ -183,6 +185,13 @@ CONFIG_ALIAS(journal_size,journal_size_kb)
 CONFIG_ALIAS(master,masters)
 CONFIG_ALIAS(notify,notifies)
 CONFIG_ALIAS(auto_notify,notify_auto)
+
+CONFIG_ALIAS(primary,masters)
+CONFIG_ALIAS(primaries,masters)
+CONFIG_ALIAS(true_multiprimary, true_multimaster)
+CONFIG_ALIAS(multiprimary_retries, multimaster_retires)
+CONFIG_ALIAS(no_primary_updates, no_master_updates)
+
 CONFIG_END(config_section_zone_desc)
 
 #undef CONFIG_TYPE

@@ -56,10 +56,9 @@ extern "C" {
 
 #include <dnscore/rfc.h>
 #include <dnscore/ptr_set.h>
-    
-#include <dnsdb/zdb_types.h>
-
 #include <dnscore/acl.h>
+#include <dnscore/dnscore-release-date.h>
+#include <dnsdb/zdb_types.h>
 
     /*    ------------------------------------------------------------    */
 
@@ -82,7 +81,7 @@ extern "C" {
 
 #define     PROGRAM_NAME                "yadifad"
 #define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASEDATE                 "2020-12-09"
+#define     RELEASEDATE                 YADIFA_DNSCORE_RELEASE_DATE
 
     /* List of default values for the different configuration parameters */
 #define     S_CONFIGDIR                 SYSCONFDIR "/"

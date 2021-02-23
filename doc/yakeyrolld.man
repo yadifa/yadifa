@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YAKEYROLLD" "8" "2021\-01\-26" "YAKEYROLLD " "YADIFA "
+.TH "YAKEYROLLD" "8" "2021\-02\-23" "YAKEYROLLD " "YADIFA "
 .SH NAME
 
 .PP
@@ -68,7 +68,7 @@ For all these steps, it computes the following:
 .PP
 .TP
 .B *
-The expected \fIDNSSEC\fP and \fIRRSIG\fP \fIDNSSEC\fP records on the master before the step is started
+The expected \fIDNSSEC\fP and \fIRRSIG\fP \fIDNSSEC\fP records on the primary before the step is started
 .TP
 .B *
 The \fIZSK\fP files to add
@@ -83,7 +83,7 @@ The \fIDNSSEC\fP and \fIRRSIG\fP \fIDNSKEY\fP records to add
 The \fIDNSKEY\fP and \fIRRSIG\fP \fIDNSKEY\fP records to remove
 .TP
 .B *
-The expected \fIDNSKEY\fP and \fIRRSIG\fP \fIDNSKEY\fP records on the dns master after the step has been completed.
+The expected \fIDNSKEY\fP and \fIRRSIG\fP \fIDNSKEY\fP records on the dns primary after the step has been completed.
 .PP
 
 Each step is stored as a file. The file contains fields like: 
@@ -266,7 +266,7 @@ file from the sources code.
 .SH VERSION
 
 .PP
-Version: 2.4.2 of 2021\-01\-26. 
+Version: 2.4.2 of 2021\-02\-23. 
 .PP
 .SH MAILINGLIST
 

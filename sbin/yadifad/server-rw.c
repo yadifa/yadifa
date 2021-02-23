@@ -298,7 +298,17 @@ network_thread_context_array_finalize(network_thread_context_array *ctxa)
     {
         for(u32 r = 0; r < ctxa->reader_by_fd; r++)
         {
-            network_thread_context_delete(ctxa->contextes[sockfd_idx]);
+            network_thread_context_s *ctx = ctxa->contextes[sockfd_idx];
+
+            if(ctx != NULL)
+            {
+                log_debug("network_thread_context_array_finalize: %u/%u sockfd %i and thread %p/worker %u", (u32)listen_idx, (u32)ctxa->listen_count, sockfd_idx, ctx->base.worker->tid, ctx->base.worker->worker_index);
+                network_thread_context_delete(ctx);
+            }
+            else
+            {
+                log_debug("network_thread_context_array_finalize: %u/%u sockfd %i had no context", (u32)listen_idx, (u32)ctxa->listen_count, sockfd_idx);
+            }
             ++sockfd_idx;
         }
     }

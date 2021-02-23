@@ -78,7 +78,7 @@
         # transfer of a zone (AXFR or IXFR)
         allow-transfer              none
 
-        # notify of a change in the master
+        # notify of a change in the primary
         allow-notify                none
 
         # If YADIFA has the controller enabled, allow control only for these clients (none by default)
@@ -194,9 +194,9 @@
 include "keys.conf"
 
 <key>
-        name        master-slave
+        name        primary-secondary
         algorithm   hmac-md5
-        secret      MasterAndSlavesTSIGKey==
+        secret      PrimaryAndSecondaryKey==
 </key>
 
 #
@@ -207,61 +207,61 @@ include "keys.conf"
 #
 
 <acl>
-        transferer  key master-slave
+        transferer  key primary-secondary
         admins      192.0.2.0/24, 2001:db8::74
-        master      192.0.2.53
+        primary     192.0.2.53
         controller  key abroad-admin-key
 </acl>
 
 #
-# Master domain zone config
+# Primary domain zone config
 #
 
 <zone>
-        type                    master
+        type                    primary
         domain                  localhost
-        file                    masters/localhost.
+        file                    primaries/localhost.
         allow-transfer          none
         allow-update            none
         allow-update-forwarding none
 </zone>
 
 <zone>
-        type                    master
+        type                    primary
         domain                  localhost6
-        file                    masters/localhost6.
+        file                    primaries/localhost6.
         allow-transfer          none
         allow-update            none
         allow-update-forwarding none
 </zone>
 
 <zone>
-        type                    master
+        type                    primary
         domain                  0.0.127.in-addr.arpa
-        file                    masters/0.0.127.in-addr.arpa.
+        file                    primaries/0.0.127.in-addr.arpa.
         allow-transfer          none
         allow-update            none
         allow-update-forwarding none
 </zone>
 
 <zone>
-        type                    master
+        type                    primary
         domain                  0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa
-        file                    masters/0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa.
+        file                    primaries/0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa.
         allow-transfer          none
         allow-update            none
         allow-update-forwarding none
 </zone>
 
 <zone>
-        # This server is master for that zone (mandatory)
-        type                    master
+        # This server is primary for that zone (mandatory)
+        type                    primary
 
         # The domain name (mandatory)
         domain                  somedomain.eu.
 
-        # The zone file, relative to 'datapath'.  (mandatory for a master)
-        file                    masters/somedomain.eu.
+        # The zone file, relative to 'datapath'.  (mandatory for a primary)
+        file                    primaries/somedomain.eu.
 
 
         dnssec-policy           "typical-policy"

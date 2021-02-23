@@ -49,7 +49,6 @@
 #include <string.h>
 #include <ctype.h>
 
-
 #include "dnscore/timeformat.h"
 
 #include "dnscore/ctrl-rfc.h"
@@ -106,7 +105,9 @@ static const u8* STRESCAPE = (const u8*)"\\";
 static const u8* STRQUOTE = (const u8*)"\"";
 static const u8 STRSEPARATOR[] = {' ', '|', ' '};
 
+#if 0
 static const char ESCAPE_CHARS[] = {'@', '$', '\\', ';', ' ', '\t'};
+#endif
 
 #define TXT_ESCAPE_TYPE_NONE 0
 #define TXT_ESCAPE_TYPE_CHAR 1
@@ -1746,9 +1747,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         case TYPE_MF:
         case TYPE_MG:
         case TYPE_MR:
-
-
-
         {
             /* ONE NAME record */
             if(rdata_size > 0)
@@ -1758,9 +1756,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             }
             return INCORRECT_RDATA;
         }
-
-
-
         case TYPE_PX:
         {
             if(rdata_size >= 4)
@@ -1976,13 +1971,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
             return INCORRECT_RDATA;
         }
-
-
-
-
-
         case TYPE_OPENPGPKEY:
-
         {
             if(rdata_size > 0)
             {
@@ -1991,9 +1980,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
             return INCORRECT_RDATA;
         }
-
-
-
         case TYPE_HINFO:
         case TYPE_MINFO:
         {
@@ -2138,8 +2124,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         }
         case TYPE_DNSKEY:
         case TYPE_KEY:
-
-
         case TYPE_CDNSKEY:
         {
             osformat(os, "%u %u %u ",
@@ -2156,8 +2140,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         }
         case TYPE_DS:
         case TYPE_CDS:
-
-
         {
             osformat(os, "%u %u %u ",
                      ntohs(GET_U16_AT(rdata_pointer[0])),
@@ -2175,7 +2157,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             return SUCCESS;
         }
         case TYPE_NSEC:
-
         {
             output_stream_write_dnsname_text(os, rdata_pointer);
             u32 len = dnsname_len(rdata_pointer);
@@ -2255,9 +2236,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
             return osprint_base16(os, &rdata_pointer[2], rdata_size - 2);
         }
-
-
-
         case TYPE_NID:
         case TYPE_L64:
         {
@@ -2334,8 +2312,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
             return INCORRECT_RDATA;
         }
-
-
 
         case TYPE_SRV:
         {
@@ -2438,30 +2414,8 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             return total;
         }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         case TYPE_TXT:
         case TYPE_SPF:
-
-
         {
             u8 c;
 
@@ -2651,8 +2605,6 @@ osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 
    switch(type)
     {
         case TYPE_MX:
-
-
         case TYPE_KX:
         case TYPE_LP:
         case TYPE_AFSDB:
@@ -2669,9 +2621,6 @@ osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 
         case TYPE_MF:
         case TYPE_MG:
         case TYPE_MR:
-
-
-
         {
             /* ONE NAME record */
             if(rdata_size > 0)
@@ -2815,7 +2764,6 @@ osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 
         }
 
         case TYPE_NSEC:
-
         {
             output_stream_write_dnsname_text_escaped(os, rdata_pointer);
             u32 len = dnsname_len(rdata_pointer);
@@ -2850,8 +2798,6 @@ osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 
 
         case TYPE_TXT:
         case TYPE_SPF:
-
-
         {
             u8 pascal_string_size;
             int space_len = 0;

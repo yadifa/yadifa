@@ -70,6 +70,8 @@
 #include <dnscore/logger.h>
 #include <dnscore/file_output_stream.h>
 #include <dnscore/pid.h>
+#include <dnscore/dnscore-release-date.h>
+
 #include <sys/stat.h>
 
 #include "keyroll.h"
@@ -96,7 +98,7 @@ extern logger_handle *g_keyroll_logger;
 
 #define PROGRAM_NAME "yakeyrolld"
 #define KEYROLL_CONFIG_SECTION "yakeyrolld"
-#define RELEASEDATE "2020-12-09"
+#define RELEASEDATE YADIFA_DNSCORE_RELEASE_DATE
 
 static random_ctx rnd;
 

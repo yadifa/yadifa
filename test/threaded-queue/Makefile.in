@@ -178,8 +178,7 @@ build_triplet = @build@
 host_triplet = @host@
 DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 	$(srcdir)/../../mk/common-labels.mk $(srcdir)/Makefile.in \
-	$(srcdir)/Makefile.am $(top_srcdir)/depcomp $(noinst_HEADERS) \
-	AUTHORS ChangeLog INSTALL NEWS README
+	$(srcdir)/Makefile.am $(top_srcdir)/depcomp $(noinst_HEADERS)
 @USES_SUNC_TRUE@am__append_1 = 
 @USES_SUNC_FALSE@am__append_2 = -O0
 @IS_DARWIN_OS_TRUE@am__append_3 = -Wno-deprecated

@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFAD\-CONF" "5" "2021\-01\-26" "YADIFA " "YADIFA "
+.TH "YADIFAD\-CONF" "5" "2021\-02\-23" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -231,7 +231,7 @@ packet. Older name servers can only handle 1. Set to 0 to disable the limit. (MI
 \fBaxfr\-retry\-delay \fP\fISECONDS \fP
  default: 600 
 
-Number of seconds between each retry for the first transfer from the master name server. (MIN: 60; MAX: 86400) 
+Number of seconds between each retry for the first transfer from the primary name server. (MIN: 60; MAX: 86400) 
 .TP
 \fBaxfr\-retry\-jitter \fP\fISECONDS \fP
  default: 180 
@@ -294,10 +294,10 @@ packets size. (MIN: 512; MAX: 65535)
 
 The group ID that the server will use. 
 .TP
-\fBhidden\-master \fP\fIFLAG \fP
+\fBhidden\-primary; hidden\-master \fP\fIFLAG \fP
  default: no 
 
-As a hidden master  more CPU will be used for various maintenance tasks. 
+As a hidden primary  more CPU will be used for various maintenance tasks. 
 .TP
 \fBhostname\-chaos; hostname \fP\fISTR \fP
  default: the host name 
@@ -574,7 +574,7 @@ For example:
 .RE
 .TP
 .B *
-who\-can\-ask\-for\-an\-ixfr master;slaves;127.0.0.1 
+who\-can\-ask\-for\-an\-ixfr primary;secondaries;127.0.0.1 
 .RE
 .RS
 .PP
@@ -704,7 +704,7 @@ Update forwarding control list. Only the matching sources are allowed.
  default: off 
 
 Type of \fIdnssec\fP
-used for the zone. As master name sever; \fIyadifa\fP
+used for the zone. As primary name sever; \fIyadifa\fP
 will try to maintain that state. 
 .TP
 \fBdnssec\-policy \fP\fISTR \fP
@@ -725,7 +725,7 @@ Enabling this flag will make the server drop the zone before loading the updated
 \fBfile\-name; file \fP\fIFILE \fP
  default: \- 
 
-Sets the zone file name. Only mandatory for a master zone. 
+Sets the zone file name. Only mandatory for a primary zone. 
 .TP
 \fBjournal\-size\-kb \fP\fIINT \fP
  default: 0 
@@ -744,25 +744,25 @@ keys.
 Enabling this flag will cause the server to try and maintain \fIrrsig\fP
 records 
 .TP
-\fBmasters; master \fP\fIHOSTS \fP
+\fBprimaries; primary; masters; master \fP\fIHOSTS \fP
  default: \- 
 
-Mandatory for a slave. Sets the master server(s). Multiple masters are supported. 
+Mandatory for a slave. Sets the primary server(s). Multiple primaries are supported. 
 .TP
-\fBmultimaster\-retries \fP\fIINT \fP
+\fBmultiprimary\-retries; multimaster\-retries \fP\fIINT \fP
  default: 0 
 
-The number of times the master is unreachable before switching to a different master. (MIN: 0; MAX: 255) 
+The number of times the primary is unreachable before switching to a different primary (MIN: 0; MAX: 255) 
 .TP
-\fBno\-master\-updates \fP\fIFLAG \fP
+\fBno\-primary\-updates; no\-master\-updates \fP\fIFLAG \fP
  default: false 
 
-Enabling this flag will prevent the server from probing or downloading changes from the master. 
+Enabling this flag will prevent the server from probing or downloading changes from the primary 
 .TP
 \fBnotifies; also\-notify; notify \fP\fIHOSTS \fP
  default: \- 
 
-The list of servers to notify in the event of a change. Currently only used by masters when a dynamic update occurs. 
+The list of servers to notify in the event of a change. Currently only used by primaries when a dynamic update occurs. 
 .TP
 \fBnotify\-auto \fP\fIFLAG \fP
  default: true 
@@ -810,17 +810,17 @@ The signatures expiring in less than the indicated amount of hours will be recom
 
 The signature expiration validity jitter in seconds. (MIN: 0 sec; MAX: 86400 sec) 
 .TP
-\fBtrue\-multimaster \fP\fIFLAG \fP
+\fBtrue\-multiprimary; true\-multimaster \fP\fIFLAG \fP
  default: off 
 
 Enabling this flag will make the server use \fIaxfr\fP
-when switching to a new master. 
+when switching to a new primary 
 .TP
 \fBtype \fP\fIENUM \fP
  default: \- 
 
-Mandatory. Sets the type of zone : either \fImaster\fP
-or \fIslave\fP\&.
+Mandatory. Sets the type of zone : either \fIprimary\fP/\fImaster\fP
+or \fIsecondary\fP/\fIslave\fP\&.
 .RE
 .RS
 .PP
@@ -1308,7 +1308,7 @@ Main section example
     # allow\-update none
     allow\-update            admins
 
-    # dynamic update of a slave (forwarded to the master)
+    # dynamic update of a slave (forwarded to the primary)
     #
     # allow\-update\-forwarding   none
     allow\-update\-forwarding admins,key abroad\-admin\-key
@@ -1318,10 +1318,10 @@ Main section example
     # allow\-transfer any
     allow\-transfer          transferer
 
-    # notify of a change in the master
+    # notify of a change in the primary
     #
     # allow\-notify any
-    allow\-notify            master,admins
+    allow\-notify            primary,admins
 
     # If YADIFA has the controller enabled, allow control only for these
     # clients (none by default)
@@ -1364,14 +1364,14 @@ Admin\-key key definition (the name is arbitrary)
 .RE
 .TP
 2.
-Master\-slave key definition (the name is arbitrary) 
+primary\-secondary key definition (the name is arbitrary) 
 .RS
 .PP
 .Vb
 <key>
-    name        master\-slave
+    name        primary\-secondary
     algorithm   hmac\-md5
-    secret      MasterAndSlavesTSIGKey==
+    secret      PrimaryAndSecondaryKey==
 </key>
 .Ve
 .RE
@@ -1389,14 +1389,14 @@ Access Control List definitions
 .RS
 .TP
 1.
-Master\-slave key use 
+primary\-secondary key use 
 .RS
 .PP
 .Vb
 <acl>
-    transferer  key master\-slave
+    transferer  key primary\-secondary
     admins      192.0.2.0/24, 2001:db8::74
-    master      192.0.2.53
+    primary     192.0.2.53
     localhost   127.0.0.0/8, ::1
     controller  key controller # the ACL for the controller MUST use a key
 </acl>
@@ -1497,19 +1497,19 @@ Zone
 .RS
 .TP
 1.
-Master domain zone config 
+Primary domain zone config 
 .RS
 .PP
 .Vb
 <zone>
-    # This server is master for the zone (mandatory)
-    type            master
+    # This server is primary for the zone (mandatory)
+    type            primary
 
     # The domain name (mandatory)
     domain          mydomain.eu
 
-    # The zone file, relative to 'datapath'  (mandatory for a master) (alias: file\-name)
-    file            master/mydomain.eu
+    # The zone file, relative to 'datapath'  (mandatory for a primary) (alias: file\-name)
+    file            primaries/mydomain.eu
 
     # List of servers also notified of a change (beside the ones in the zone file) (alias: notifies, notify)
     also\-notify     192.0.2.84, 192.0.2.149
@@ -1542,14 +1542,14 @@ Slave domain zone config
     # The domain name (mandatory)
     domain          myotherdomain.eu
 
-    # The address of the master (mandatory for a slave, forbidden for a master) (alias: master)
-    masters         191.0.2.53 port 4053 key master\-slave
+    # The address of the primary (mandatory for a slave, forbidden for a primary) (alias: primary)
+    primaries       191.0.2.53 port 4053 key primary\-secondary
 
     # The zone file, relative to 'datapath'.
     file            slaves/myotherdomain.eu
 
     # Accept notifes from these ACL entries
-    allow\-notify    master
+    allow\-notify    primary
 </zone>
 .Ve
 .PP
@@ -1831,7 +1831,7 @@ from the sources.
 .SH VERSION
 
 .PP
-Version: 2.4.2 of 2021\-01\-26. 
+Version: 2.4.2 of 2021\-02\-23. 
 .PP
 .SH MAILING LISTS
 

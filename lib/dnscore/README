@@ -29,12 +29,17 @@
 # 
 ################################################################################
 
-20210126:
+20210223:
     YADIFA 2.4.2-public
 
-    Fixes an issue where records below delegation are not ignored (https://github.com/yadifa/yadifa/issues/12)
-    Fixes an issue in the _mm model where shutting down while still initializing may not stop properly
-    Changes default user/group to 'yadifa' user in example configuration
-    Fixes an issue with autoconf 2.70 obsolete functions
-    Adds a feature to yadifad to ensure that the dates in the key-roll section can be successfully applied for the next 10 years (--check-policies)
+    Fixes an issue where records below delegation are not ignored (https://github.com/yadifa/yadifa/issues/12).
+    Fixes an issue in the _mm model where shutting down while still initializing may not stop properly.
+    Changes default user/group to 'yadifa' user in example configuration.
+    Fixes an issue with autoconf 2.70 obsolete functions.
+    Fixes an issue where an unknown key configured in a zone acl may lead to a crash.
+    Fixes an issue where an query without EDNS involving ACLs using optional keys would incorrectly be rejected.
+    Fixes an issue where a network thread with a failed context would incorrectly have its context deleted.
+    Adds a feature to yadifad to ensure that the dates in the key-roll section can be successfully applied for the next 10 years (--check-policies).
+    Added support for primary and secondary variant options.
+    Fixes builds for gcc 11.
 

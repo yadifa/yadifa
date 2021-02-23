@@ -288,6 +288,7 @@ zdb_zone_maintenance_ctx_finalize(zdb_zone_maintenance_ctx *mctx)
 static ya_result
 zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, s64 maxus, s32 rrsigcountmax)
 {
+    yassert(((from_fqdn != NULL) && (from_fqdn_size > 0)) || ((from_fqdn == NULL) && (from_fqdn_size == 0)));
     //bool from_fqdn_is_binary_digest = FALSE;
 
     if(!zdb_zone_is_maintained(zone))
@@ -1183,10 +1184,10 @@ zdb_zone_maintenance_from_chain_iteration_loop_break:
     {
         size_t fqdn_len = dnsname_len(mctx.fqdn);
 
-        if(fqdn_len <= from_fqdn_size)
+        if((fqdn_len <= from_fqdn_size) && (from_fqdn != NULL))
         {
             log_debug("maintenance: %{dnsname}: saving the next node (%{dnsname})", zone->origin, mctx.fqdn);
-            memcpy(from_fqdn, mctx.fqdn, fqdn_len);
+            memcpy(from_fqdn, mctx.fqdn, fqdn_len); // if from_fqdn == 0, fqdl_len == 0
             //from_fqdn_is_binary_digest = FALSE;
         }
         else

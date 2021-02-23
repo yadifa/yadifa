@@ -39,8 +39,12 @@
 #include <dnscore/ptr_set.h>
 #include <dnscore/u64_set.h>
 
+#ifndef PACKAGE_VERSION
+#include "keyroll-config.h"
+#endif
+
 #define YKEYROLL_NAME "yakeyrolld"
-#define YKEYROLL_VERSION "2.4.1"
+#define YKEYROLL_VERSION PACKAGE_VERSION
 
 #define YKEYROLL_KSK_SUFFIX "_SECRET_KEYSIGNINGKEY"
 
