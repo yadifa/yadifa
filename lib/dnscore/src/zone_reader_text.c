@@ -298,8 +298,6 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             case TYPE_MG:   /** NOTE: obsolete */
             case TYPE_MR:   /** NOTE: obsolete */
 #endif
-
-
             {
                 return_code = zone_reader_text_cstr_to_locase_dnsname_with_check_len_with_origin(rdata, text, text_len, origin, p);
 
@@ -371,7 +369,6 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             }
 #endif
             case TYPE_MX:
-
             case TYPE_KX:
             case TYPE_LP:
             case TYPE_AFSDB:
@@ -504,7 +501,6 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             }
             
             case TYPE_DNSKEY:
-
             case TYPE_CDNSKEY:
             {
                 // flags
@@ -739,7 +735,6 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             }
             
             case TYPE_NSEC:
-
             {
                 u8 *rdata_start = rdata;
 
@@ -770,7 +765,6 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             
             case TYPE_DS:
             case TYPE_CDS:
-
             case TYPE_DLV:
             {
                 // keytag
@@ -822,7 +816,6 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             
             case TYPE_TXT:
             case TYPE_SPF:  // discontinued
-
             {
                 u8 *rdata_start = rdata;
 
@@ -1322,9 +1315,6 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 return_code = 8;
                 break;
             }
-
-
-
             case TYPE_TSIG:
                 for(;;)
                 {
@@ -1342,7 +1332,6 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 return_code = ZONEFILE_INVALID_TYPE;
                 break;
             }
-
             default:
             {
                 return_code = UNSUPPORTED_RECORD;
@@ -1476,8 +1465,6 @@ zone_reader_text_escaped_string_format(const void *value, output_stream *os, s32
     }
 #endif
 }
-
-
 
 static ya_result
 zone_reader_text_read_record(zone_reader *zr, resource_record *entry)

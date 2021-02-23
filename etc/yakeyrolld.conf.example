@@ -18,7 +18,7 @@
 	generate-from "now"
 	generate-until "+1y"
 	server 127.0.0.1
-	policy "master-policy"
+	policy "primary-policy"
 </yakeyrolld>
 
 #
@@ -26,9 +26,9 @@
 #
 
 <key>
-    name        master-slave
+    name        primary-secondary
     algorithm   hmac-md5
-    secret      MasterAndSlavesTSIGKey==
+    secret      PrimaryAndSecondaryKey==
 </key>
 
 <channels>
@@ -56,8 +56,8 @@
 
     # name of the 'dnssec-policy'
 
-    id                      "master-policy"
-    description             "master zone policy"
+    id                      "primary-policy"
+    description             "primary zone policy"
 
     # at least one: key-descriptor "name"
     # they define KSK & ZSK keys
@@ -71,9 +71,6 @@
 
     id                      "zsk-2048"
     key-template            "zsk-rsa-sha512-2048"
-
-    # Our yadifamaster01 uses this for it's ZSK for now (it should become monthly)
-
     key-roll                "monthly-calendar"
 </key-suite>
 

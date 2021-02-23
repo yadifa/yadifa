@@ -76,6 +76,8 @@ extern "C" {
 #define     ZT_STRING_HINT      "hint"
 #define     ZT_STRING_MASTER    "master"
 #define     ZT_STRING_SLAVE     "slave"
+#define     ZT_STRING_PRIMARY   "primary"
+#define     ZT_STRING_SECONDARY "secondary"
 #define     ZT_STRING_STUB      "stub"
 #define     ZT_STRING_UNKNOWN   "unknown"
     

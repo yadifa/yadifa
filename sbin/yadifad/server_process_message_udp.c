@@ -589,7 +589,7 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
             {
                 return STOPPED_BY_APPLICATION_SHUTDOWN;
             }
-            // fallthrough
+            FALLTHROUGH
         }
         default:
         {

@@ -499,7 +499,7 @@ dnskey_signature_verify(dnskey_signature *ds, const dnssec_key *key, void *in_rr
         log_debug("dnskey_signature_verify: digest already computed");
         log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, digest_get_digest_ptr(ctx_ptr), ds->digest_size, 32);
 #endif
-#pragma message("TODO: add optional signature verification")
+        /// @TODO 20210218 edf -- add optional signature verification")
         // owner_fqdn = dnskey_get_domain(key); // never read
         // owner_fqdn_len = dnsname_len(owner_fqdn); // never read
         //signature = &hdr.header.fqdn_signature[owner_fqdn_len];

@@ -106,8 +106,6 @@
  */
 #define AVL_INIT_NODE(node,reference) node->key = reference
 
-#if 0 /* fix */
-#else
 
 /*
  * A macro to allocate a new node
@@ -119,8 +117,6 @@
  */
 
 #define AVL_FREE_NODE(node) debug_free_unmonitored(node)
-
-#endif
 
 /*
  * A macro to print the node

@@ -50,13 +50,13 @@ YKRE=$(srcdir)/$(YKR).example
 BC=/etc/bash_completion.d/
 
 doc_DATA = $(OC) $(MC) $(KC) $(YI) $(YS) $(YKR) $(YDE) $(YCE) $(YKRE) \
-				yadifad-master.conf.example yadifad-slave.conf.example \
+				yadifad-primary.conf.example yadifad-secondary.conf.example \
 				yadifad.init.debian	yadifad.init.rhel \
 				yadifad.logrotate \
 				yadifad.service.arch yadifad.service.debian yadifad.service.rhel
 
 noinst_HEADERS = $(OCE) $(MCE) $(KCE) $(YIE) $(YSE) $(YDE) $(YCE) \
-				yadifad-master.conf.example yadifad-slave.conf.example \
+				yadifad-primary.conf.example yadifad-secondary.conf.example \
 				yadifad.init.debian yadifad.init.rhel \
 				yadifad.logrotate \
 				yadifad.service.arch yadifad.service.debian yadifad.service.rhel \

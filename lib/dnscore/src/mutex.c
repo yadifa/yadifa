@@ -66,6 +66,7 @@
 // export TSAN_OPTIONS=detect_deadlocks=1:second_deadlock_stack=1
 // -sanitize=thread
 
+#if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
 static void
 mutex_debug_logger_handle_msg(const void* handle, u32 level, const char* fmt, ...)
 {
@@ -92,6 +93,7 @@ mutex_debug_logger_handle_msg(const void* handle, u32 level, const char* fmt, ..
     output_stream_write(termout, bytezarray_output_stream_buffer(&baos), bytezarray_output_stream_buffer_offset(&baos));
     output_stream_write_u8(termout, (u8)'\n');
 }
+#endif
 
 void
 mutex_debug_stacktrace_log(void* handle, u32 level, stacktrace trace)

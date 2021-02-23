@@ -618,6 +618,7 @@ message_process_answer_additionals(message_data *mesg, u16 ar_count /* network o
     return SUCCESS;
 }
 
+#if 0
 /**
  * Handles the OPT and TSIG records of an answer.
  *
@@ -872,6 +873,7 @@ message_process_answer_additionals_and_keep(message_data *mesg, u16 ar_count /* 
 
     return SUCCESS;
 }
+#endif
 
 /** \brief Processing DNS packet
  *
@@ -880,8 +882,6 @@ message_process_answer_additionals_and_keep(message_data *mesg, u16 ar_count /* 
  *  @retval OK
  *  @return status of message is written in message_get_status(mesg)
  */
-
-
 
 /* Defines a mask and the expected result for the 4 first 16 bits of the header */
 #ifdef WORDS_BIGENDIAN

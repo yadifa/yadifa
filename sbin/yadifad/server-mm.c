@@ -91,6 +91,9 @@ typedef cpuset_t cpu_set_t;
 
 #define ZDB_JOURNAL_CODE 1
 
+//#define THREAD_POOL_START_TIMEOUT (ONE_SECOND_US * 5)
+#define THREAD_POOL_START_TIMEOUT (ONE_SECOND_US * 30)
+
 #include <dnsdb/journal.h>
 
 #if ZDB_HAS_LOCK_DEBUG_SUPPORT
@@ -230,8 +233,15 @@ network_thread_context_array_finalize(network_thread_context_array *ctxa)
         for(u32 r = 0; r < ctxa->reader_by_fd; r++)
         {
             network_thread_context_s *ctx = ctxa->contextes[sockfd_idx];
-            log_debug("network_thread_context_array_finalize: %u/%u sockfd %i and thread %p/worker %u", (u32)listen_idx, (u32)ctxa->listen_count, sockfd_idx, ctx->base.worker->tid, ctx->base.worker->worker_index);
-            network_thread_context_delete(ctx);
+            if(ctx != NULL)
+            {
+                log_debug("network_thread_context_array_finalize: %u/%u sockfd %i and thread %p/worker %u", (u32)listen_idx, (u32)ctxa->listen_count, sockfd_idx, ctx->base.worker->tid, ctx->base.worker->worker_index);
+                network_thread_context_delete(ctx);
+            }
+            else
+            {
+                log_debug("network_thread_context_array_finalize: %u/%u sockfd %i had no context", (u32)listen_idx, (u32)ctxa->listen_count, sockfd_idx);
+            }
             ++sockfd_idx;
         }
     }
@@ -768,9 +778,10 @@ server_mm_query_loop(struct service_worker_s *worker)
         for(u32 unit_index = 0; unit_index < g_server_context.udp_unit_per_interface; unit_index++)
         {
             network_thread_context_s *ctx = ctxa.contextes[initialised_context_indexes];
-            ctx->base.must_stop = FALSE;
 
             yassert(ctx != NULL);
+
+            ctx->base.must_stop = FALSE;
 
             log_info("server-mm: thread #%i of UDP interface: %{sockaddr} using socket %i", unit_index, g_server_context.udp_interface[udp_interface_index]->ai_addr, ctx->base.sockfd);
 
@@ -801,7 +812,7 @@ server_mm_query_loop(struct service_worker_s *worker)
     if(ISOK(ret))
     {
         log_info("server-mm: waiting for UDP threads");
-        ret = thread_pool_counter_wait_equal_with_timeout(&running_threads_counter, initialised_context_indexes, ONE_SECOND_US * 5);
+        ret = thread_pool_counter_wait_equal_with_timeout(&running_threads_counter, initialised_context_indexes, THREAD_POOL_START_TIMEOUT);
         if(FAIL(ret))
         {
             s32 threads_running_count = thread_pool_counter_get_value(&running_threads_counter);

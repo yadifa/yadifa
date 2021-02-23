@@ -983,6 +983,8 @@ acl_address_match_list_init_from_text(address_match_list *aml, const char *descr
 
             if(key == NULL)
             {
+                log_err("acl: unknown key %{dnsname}", dnsname);
+
                 acl_address_match_item_release(ami);
                 acl_address_match_item_vector_destroy(&list);
                 return ACL_UNKNOWN_TSIG_KEY;
@@ -1000,6 +1002,8 @@ acl_address_match_list_init_from_text(address_match_list *aml, const char *descr
             
             ami = acl_address_match_item_collection_get(ami);
 #else
+            log_err("acl: unknown key %{dnsname} (not supported)", dnsname);
+
             return ACL_UNKNOWN_TSIG_KEY;    // not supported
 #endif
         }
@@ -1486,7 +1490,10 @@ acl_access_control_clear(access_control *ac)
     logger_flush();
 #endif
     
-    assert(ac->_rc <= 0);
+    if(ac->_rc == 0)
+    {
+        return;
+    }
     
     acl_address_match_set_clear(&ac->allow_notify);
     acl_address_match_set_clear(&ac->allow_query);
@@ -2218,7 +2225,7 @@ acl_check_access_filter(const message_data *mesg, const address_match_set *ams)
         }
         else
         {
-            return_code = AMIM_REJECT;
+            --return_code;
         }
     }
     

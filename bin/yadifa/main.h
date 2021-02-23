@@ -33,12 +33,11 @@
  */
 
 #pragma once
-
-
-# include "client-config.h"
+#include <dnscore/dnscore-release-date.h>
+#include "client-config.h"
 
 #define     PROGRAM_NAME                "yadifa"
 #define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASE_DATE                "2020-12-09"
+#define     RELEASE_DATE                YADIFA_DNSCORE_RELEASE_DATE
 
 void yadifa_show_version(u8 level);

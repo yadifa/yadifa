@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YAKEYROLLD\-CONF" "5" "2021\-01\-26" "YAKEYROLLD " "YADIFA "
+.TH "YAKEYROLLD\-CONF" "5" "2021\-02\-23" "YAKEYROLLD " "YADIFA "
 .SH NAME
 
 .PP
@@ -112,7 +112,7 @@ The address of the name server for queries and dynamic updates.
 \fBtimeout \fP\fI INT \fP
  default: 3 
 
-The number of seconds spent trying to communicate with the master until it\&'s considered a time\-out. 
+The number of seconds spent trying to communicate with the primary until it\&'s considered a time\-out. 
 .TP
 \fBttl \fP\fI INT \fP
  default: 600 
@@ -520,14 +520,14 @@ Admin\-key key definition (the name is arbitrary)
 .RE
 .TP
 2.
-Master\-slave key definition 
+primary\-secondary key definition 
 .RS
 .PP
 .Vb
 <key>
-    name        master\-slave
+    name        primary\-secondary
     algorithm   hmac\-md5
-    secret      MasterAndSlavesTSIGKey==
+    secret      PrimaryAndSecondaryKey==
 </key>
 .Ve
 .RE
@@ -722,7 +722,7 @@ from the sources.
 .SH VERSION
 
 .PP
-Version: 2.4.2 of 2021\-01\-26. 
+Version: 2.4.2 of 2021\-02\-23. 
 .PP
 .SH MAILING LISTS
 

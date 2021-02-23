@@ -169,8 +169,8 @@ static ya_result filepool_test()
             return (ya_result)p;
         }
 
-        int l = snformat(tmp, sizeof(tmp), DIR_PREFIX "myfile-%06i.txt\n", i);
-        int r = read_line(file_array[i], tmp2, sizeof(tmp2));
+        snformat(tmp, sizeof(tmp), DIR_PREFIX "myfile-%06i.txt\n", i);
+        read_line(file_array[i], tmp2, sizeof(tmp2));
         if(strcmp(tmp, tmp2) != 0)
         {
             formatln("failed to read-back the lines:\n%s!=%s", tmp, tmp2);
@@ -184,8 +184,8 @@ static ya_result filepool_test()
     {
         for(int i = 0; i < n; ++i)
         {
-            int l = snformat(tmp, sizeof(tmp), "File %i Line %i\n", i, j * 2);
-            int r = read_line(file_array[i], tmp2, sizeof(tmp2));
+            snformat(tmp, sizeof(tmp), "File %i Line %i\n", i, j * 2);
+            read_line(file_array[i], tmp2, sizeof(tmp2));
             if(strcmp(tmp, tmp2) != 0)
             {
                 formatln("failed to read-back the lines:\n%s!=%s", tmp, tmp2);
@@ -195,8 +195,8 @@ static ya_result filepool_test()
 
         for(int i = n - 1; i >= 0; --i)
         {
-            int l = snformat(tmp, sizeof(tmp), "File %i Line %i\n", i, j * 2 + 1);
-            int r = read_line(file_array[i], tmp2, sizeof(tmp2));
+            snformat(tmp, sizeof(tmp), "File %i Line %i\n", i, j * 2 + 1);
+            read_line(file_array[i], tmp2, sizeof(tmp2));
             if(strcmp(tmp, tmp2) != 0)
             {
                 formatln("failed to read-back the lines:\n%s!=%s", tmp, tmp2);
@@ -211,9 +211,9 @@ static ya_result filepool_test()
     {
         for(int j = L * 2 - 1; j >= 0; --j)
         {
-            int l = snformat(tmp, sizeof(tmp), "File %i Line %i\n", i, j);
+            snformat(tmp, sizeof(tmp), "File %i Line %i\n", i, j);
             file_pool_seek(file_array[i], lines_positions[i * (L * 2) + j], SEEK_SET);
-            int r = read_line(file_array[i], tmp2, sizeof(tmp2));
+            read_line(file_array[i], tmp2, sizeof(tmp2));
             if(strcmp(tmp, tmp2) != 0)
             {
                 formatln("failed to read-backwards-back the lines:\n%s!=%s", tmp, tmp2);

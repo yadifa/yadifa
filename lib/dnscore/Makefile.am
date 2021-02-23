@@ -236,6 +236,7 @@ pkginclude_HEADERS = \
 	$(I)/dns-udp.h \
 	$(I)/dns_resource_record.h \
 	$(I)/dnscore.h \
+	$(I)/dnscore-release-date.h \
 	$(I)/dnsformat.h \
 	$(I)/dnskey.h \
 	$(I)/dnskey-keyring.h \
@@ -401,4 +402,3 @@ VP=DNSCORE
 	fi
 	echo "// $(FEATURES)" >> $(FEATURES)
 	echo >> $(FEATURES)
-

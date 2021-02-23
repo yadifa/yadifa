@@ -1,0 +1,3 @@
+#pragma once
+#define YADIFA_DNSCORE_RELEASE_DATE "2021-02-23"
+

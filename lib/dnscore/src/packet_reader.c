@@ -815,6 +815,12 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
                 return INVALID_RECORD;
             }
 
+            len -= ret;
+            if(len < 20)
+            {
+                return BUFFER_WOULD_OVERFLOW;
+            }
+
             buffer += ret;
             //len -= err;
 

@@ -68,10 +68,13 @@
 #include "dnscore/process.h"
 #include "dnscore/mutex.h"
 
-/* 0 = nothing, 1 = warns and worse, 2 = info and worse, 3 = debug and worse */
+// 0 = nothing, 1 = warns and worse, 2 = info and worse, 3 = debug and worse
 #define VERBOSE_THREAD_LOG      3
 
-/* Disable when in release mode */
+// Enabling this will slow down the starting and stopping parts of the threads, testing only
+#define THREADPOOL_DEBUG_SLOW_ARCH 0
+
+// Disable when in release mode
 
 #if !DEBUG
 #undef VERBOSE_THREAD_LOG
@@ -101,12 +104,13 @@ typedef struct thread_descriptor_s thread_descriptor_s;
 
 struct thread_descriptor_s
 {
-    struct thread_pool_s *pool;
-    thread_t id;
-    u32 index;
-    volatile u8 status;
-    u8 reserved;
-    char info[46];
+    struct thread_pool_s *pool; //  8
+    thread_t id;                //  8
+    u32 index;                  //  4
+    volatile u8 status;         //  1
+    u8 reserved1;               //  1
+    u16 reserved2;              //  2
+    char info[16];              // 16
 };
 
 /* The array of thread descriptors*/
@@ -132,7 +136,11 @@ struct thread_pool_s
     threaded_queue queue;
     u32 thread_pool_size;
     u8 flags;
-
+#if DEBUG
+    volatile u8 created;
+    volatile u8 destroying;
+    volatile u8 destroyed;
+#endif
     char *pool_name;
 
     u32 id;
@@ -141,6 +149,23 @@ struct thread_pool_s
 typedef struct thread_pool_s thread_pool_s;
 
 u32 g_max_thread_per_pool_limit = THREAD_POOL_SIZE_LIMIT_DEFAULT;
+
+#if THREADPOOL_DEBUG_SLOW_ARCH
+
+static void thread_pool_debug_slow_arch_wait()
+{
+    s64 now = timeus();
+    s64 stop = now + 1000000 + (rand() & 0xfffff); // between about 1 to 2 seconds.
+    do
+    {
+        s64 delta = stop - now;
+        usleep(delta);
+        now = timeus();
+    }
+    while(now < stop);
+}
+
+#endif
 
 u32
 thread_pool_get_max_thread_per_pool_limit()
@@ -308,6 +333,10 @@ thread_pool_thread(void *args)
     thread_t id = desc->id;
 #endif
 
+#if THREADPOOL_DEBUG_SLOW_ARCH
+    thread_pool_debug_slow_arch_wait();
+#endif
+
     ya_result ret;
 
 #if DNSCORE_HAS_LOG_THREAD_TAG
@@ -419,10 +448,16 @@ thread_pool_thread(void *args)
     log_debug("thread: %x stopped", id);
 #endif
 
-
+#if THREADPOOL_DEBUG_SLOW_ARCH
+    thread_pool_debug_slow_arch_wait();
+#endif
     
 #if DNSCORE_HAS_LOG_THREAD_TAG
     logger_handle_clear_thread_tag();
+#endif
+
+#if THREADPOOL_DEBUG_SLOW_ARCH
+    thread_pool_debug_slow_arch_wait();
 #endif
     
     thread_exit(NULL); // end of the thread from the pool
@@ -599,6 +634,12 @@ thread_pool_init_ex(u32 thread_count, u32 queue_size, const char *pool_name)
         }
     }
 
+#if DEBUG
+    tp->created = (u8)rand() | 0x40;
+    tp->destroying = 0;
+    tp->destroyed = 0;
+#endif
+
     log_debug("thread-pool: '%s' ready", pool_name);    
 
     return tp;
@@ -651,6 +692,22 @@ thread_pool_debug_dump(struct thread_pool_s* tp)
 ya_result
 thread_pool_enqueue_call(struct thread_pool_s* tp, thread_pool_function func, void* parm, thread_pool_task_counter *counter, const char* categoryname)
 {
+    if(tp == NULL)
+    {
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
+    }
+
+#if DEBUG
+    if(tp->destroying == tp->created)
+    {
+        abort();
+    }
+    if(tp->destroyed == tp->created)
+    {
+        abort();
+    }
+#endif
+
 #if DEBUG
     int running = smp_int_get(&thread_pool_running);
     int waiting = smp_int_get(&thread_pool_waiting);
@@ -703,6 +760,22 @@ thread_pool_enqueue_call(struct thread_pool_s* tp, thread_pool_function func, vo
 ya_result
 thread_pool_try_enqueue_call(struct thread_pool_s* tp, thread_pool_function func, void* parm, thread_pool_task_counter *counter, const char* categoryname)
 {
+    if(tp == NULL)
+    {
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
+    }
+
+#if DEBUG
+    if(tp->destroying == tp->created)
+    {
+        abort();
+    }
+    if(tp->destroyed == tp->created)
+    {
+        abort();
+    }
+#endif
+
     threaded_queue_task* task;
     ZALLOC_OBJECT_OR_DIE(task, threaded_queue_task, THREADPOOL_TAG);
 
@@ -737,6 +810,17 @@ thread_pool_stop(struct thread_pool_s* tp)
     {
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
+
+#if DEBUG
+    if(tp->destroying == tp->created)
+    {
+        abort();
+    }
+    if(tp->destroyed == tp->created)
+    {
+        abort();
+    }
+#endif
     
     thread_descriptor_s** td;
     u32 tps = tp->thread_pool_size;
@@ -855,6 +939,17 @@ thread_pool_start(struct thread_pool_s* tp)
     {
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
+
+#if DEBUG
+    if(tp->destroying == tp->created)
+    {
+        abort();
+    }
+    if(tp->destroyed == tp->created)
+    {
+        abort();
+    }
+#endif
     
     if((tp->flags & THREADPOOL_FLAG_PAUSED) == 0)
     {
@@ -926,6 +1021,17 @@ thread_pool_resize(struct thread_pool_s* tp, u32 new_size)
     {
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
+
+#if DEBUG
+    if(tp->destroying == tp->created)
+    {
+        abort();
+    }
+    if(tp->destroyed == tp->created)
+    {
+        abort();
+    }
+#endif
 
     if((new_size > g_max_thread_per_pool_limit) || (new_size < THREAD_POOL_SIZE_LIMIT_MIN))
     {
@@ -1102,7 +1208,20 @@ thread_pool_destroy(struct thread_pool_s* tp)
     {
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
-    
+
+#if DEBUG
+    if(tp->destroying == tp->created)
+    {
+        abort();
+    }
+    if(tp->destroyed == tp->created)
+    {
+        abort();
+    }
+
+    tp->destroying = tp->created;
+#endif
+
     thread_descriptor_s** td;
     u32 tps = tp->thread_pool_size;
     u32 i;
@@ -1224,6 +1343,10 @@ thread_pool_destroy(struct thread_pool_s* tp)
     {
         free(tp->pool_name);
     }
+
+#if DEBUG
+    tp->destroyed = tp->created;
+#endif
 
     free(tp);
 

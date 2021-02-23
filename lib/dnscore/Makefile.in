@@ -493,10 +493,11 @@ am__pkginclude_HEADERS_DIST = $(I)/$(FEATURESFILE) $(I)/alarm.h \
 	$(I)/config_file_reader.h $(I)/config_settings.h \
 	$(I)/counter_output_stream.h $(I)/ctrl-rfc.h $(I)/debug.h \
 	$(I)/debug_config.h $(I)/digest.h $(I)/dns-udp.h \
-	$(I)/dns_resource_record.h $(I)/dnscore.h $(I)/dnsformat.h \
-	$(I)/dnskey.h $(I)/dnskey-keyring.h $(I)/dnskey_dsa.h \
-	$(I)/dnskey_ecdsa.h $(I)/dnskey_rsa.h $(I)/dnskey-signature.h \
-	$(I)/dnsname.h $(I)/dnsname_set.h $(I)/dnssec_errors.h \
+	$(I)/dns_resource_record.h $(I)/dnscore.h \
+	$(I)/dnscore-release-date.h $(I)/dnsformat.h $(I)/dnskey.h \
+	$(I)/dnskey-keyring.h $(I)/dnskey_dsa.h $(I)/dnskey_ecdsa.h \
+	$(I)/dnskey_rsa.h $(I)/dnskey-signature.h $(I)/dnsname.h \
+	$(I)/dnsname_set.h $(I)/dnssec_errors.h \
 	$(I)/empty-input-stream.h $(I)/fdtools.h $(I)/file.h \
 	$(I)/file_input_stream.h $(I)/file_output_stream.h \
 	$(I)/file-pool.h $(I)/filesystem-file.h $(I)/fingerprint.h \
@@ -886,10 +887,11 @@ pkginclude_HEADERS = $(FEATURES) $(I)/alarm.h $(I)/acl.h \
 	$(I)/config_file_reader.h $(I)/config_settings.h \
 	$(I)/counter_output_stream.h $(I)/ctrl-rfc.h $(I)/debug.h \
 	$(I)/debug_config.h $(I)/digest.h $(I)/dns-udp.h \
-	$(I)/dns_resource_record.h $(I)/dnscore.h $(I)/dnsformat.h \
-	$(I)/dnskey.h $(I)/dnskey-keyring.h $(I)/dnskey_dsa.h \
-	$(I)/dnskey_ecdsa.h $(I)/dnskey_rsa.h $(I)/dnskey-signature.h \
-	$(I)/dnsname.h $(I)/dnsname_set.h $(I)/dnssec_errors.h \
+	$(I)/dns_resource_record.h $(I)/dnscore.h \
+	$(I)/dnscore-release-date.h $(I)/dnsformat.h $(I)/dnskey.h \
+	$(I)/dnskey-keyring.h $(I)/dnskey_dsa.h $(I)/dnskey_ecdsa.h \
+	$(I)/dnskey_rsa.h $(I)/dnskey-signature.h $(I)/dnsname.h \
+	$(I)/dnsname_set.h $(I)/dnssec_errors.h \
 	$(I)/empty-input-stream.h $(I)/fdtools.h $(I)/file.h \
 	$(I)/file_input_stream.h $(I)/file_output_stream.h \
 	$(I)/file-pool.h $(I)/filesystem-file.h $(I)/fingerprint.h \

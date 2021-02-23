@@ -29,14 +29,19 @@
 # 
 ################################################################################
 
-20210126:
+20210223:
     YADIFA 2.4.2-public
 
-    Fixes an issue where records below delegation are not ignored (https://github.com/yadifa/yadifa/issues/12)
-    Fixes an issue in the _mm model where shutting down while still initializing may not stop properly
-    Changes default user/group to 'yadifa' user in example configuration
-    Fixes an issue with autoconf 2.70 obsolete functions
-    Adds a feature to yadifad to ensure that the dates in the key-roll section can be successfully applied for the next 10 years (--check-policies)
+    Fixes an issue where records below delegation are not ignored (https://github.com/yadifa/yadifa/issues/12).
+    Fixes an issue in the _mm model where shutting down while still initializing may not stop properly.
+    Changes default user/group to 'yadifa' user in example configuration.
+    Fixes an issue with autoconf 2.70 obsolete functions.
+    Fixes an issue where an unknown key configured in a zone acl may lead to a crash.
+    Fixes an issue where an query without EDNS involving ACLs using optional keys would incorrectly be rejected.
+    Fixes an issue where a network thread with a failed context would incorrectly have its context deleted.
+    Adds a feature to yadifad to ensure that the dates in the key-roll section can be successfully applied for the next 10 years (--check-policies).
+    Added support for primary and secondary variant options.
+    Fixes builds for gcc 11.
 
 20201209:
     YADIFA 2.4.1-public
@@ -135,13 +140,13 @@
 
 20200608:
     YADIFA 2.4.0-52
-    	This is version is going to production as master and for public release.
+    	This is version is going to production as primary and for public release.
 
 	Fixes limit case issues giving NSEC3 answers for some zone structures (mostly *, * + CNAME)
 	Fixes an issue where the packet reader may not allocate enough room for SOA records (found in yakeyrolld) 
 	
     YKEYROLL-1.0.5-4
-    	This is version is going to production as master and for public release.
+    	This is version is going to production as primary and for public release.
 
 	Fixes the handling of more limit cases (broken setup).
 
@@ -164,7 +169,7 @@
 	Fixes an issue where trying to print a corrupted fqdn (e.g.: random bytes) could have an undefined behaviour.
 	Fixes an issue using the drop-before-load feature where the memory of the previous zone would not be completely freed yet before the new version of the zone started to load.
 	Fixes a race condition that could occur while detaching stdout/stderr from console.
-	Fixes missing AA flag in  master notification.
+	Fixes missing AA flag in  primary notification.
 	Fixes a rare issue where a signal could block the logger.
 	Fixes TSIG-covered answers of an unsupported opcode.
 
@@ -257,13 +262,13 @@
 	Downgrades several "error" into "notice".
 	More generally, an effort has been made to reduce the log size.
 	Setting a policy field with an incorrect value will now log an error instead of stopping yadifad.
-	Slave zones don't run sanitization anymore, as the master is "right".  This avoids thight rules being counter-productive in production environments.
+	Slave zones don't run sanitization anymore, as the primary is "right".  This avoids thight rules being counter-productive in production environments.
 
 	Fixes an issue that would occur if an update happens at tahe same time as the removal of a DNSKEY when a maintenance has started.
 	Fixes an issue where the authoritative bit coudl be flipped off in some operations.
 	Fixes an issue where removing and adding the same record in a single update would incorrectly drop its signature.
-	Fixes an issue where a slave receiving an inccorrect IXFR stream (specifically: finishing on an incomplete page) would not reject the broken page.
-	Fixes an issue where a master would cut an IXFR page in half if a shutdown was triggered while the page was being read from the journal.
+	Fixes an issue where a secondary receiving an inccorrect IXFR stream (specifically: finishing on an incomplete page) would not reject the broken page.
+	Fixes an issue where a primary would cut an IXFR page in half if a shutdown was triggered while the page was being read from the journal.
 	Fixes an issue in the policy date computation that could lead to a time period without signature coverage.
 	
 20191010:
@@ -334,8 +339,8 @@
 
 20190627:
     YADIFA 2.4.0-25
-	Fixes an issue where a corrupted journal would prevent a slave from working.
-	Fixes an issue replaying NSEC3 chain changes as a slave that could occur when a discrepancy was found.
+	Fixes an issue where a corrupted journal would prevent a secondary from working.
+	Fixes an issue replaying NSEC3 chain changes as a secondary that could occur when a discrepancy was found.
 	If a corrupted journal is found, yadifad now renames it adding ".bad" to its name.
 
 20190613:
@@ -392,7 +397,7 @@
 	Fixes an issue that would occur if the signature max-interval was set high enough to end up in an integer overflow.
 	Fixes an issue where newly added keys would not always be taken into account in the computations.
 	Fixes an issue where the nttl cache could overflow.
-	Fixes an issue in the path provider of yadifad where an empty slave zone file setting could lead to a NULL pointer reference.
+	Fixes an issue in the path provider of yadifad where an empty secondary zone file setting could lead to a NULL pointer reference.
 	Fixes an issue where the KSK public key would not be stored, losing the flags of the key as seen by libdnscore.
 	Fixes an issue in dns-udp that would occur when TCP fails with a DNS error.
 	Fixes an issue in dns-udp where the thread_pool destruction order could trigger some issues.
@@ -440,7 +445,7 @@
 
 	Fixes an issue handling BigNum from OpenSSL being sometimes smaller than expected.
 	Fixes a double-free issue (crashed yadifad the 20190311).
-	Fixes an issue that would occur on a slave when the journal is too small to work optimally.
+	Fixes an issue that would occur on a secondary when the journal is too small to work optimally.
 	
 	Added a "dsfromkey" in the test section, to be added in the command line later
 
@@ -508,7 +513,7 @@
 20180725:
     YADIFA 2.4.0 alpha
 
-        Fixes an issue where a slave having downloaded a invalid zone from an master will proceed re-download it and failing until the zone is fixed on the master.
+        Fixes an issue where a secondary having downloaded a invalid zone from an primary will proceed re-download it and failing until the zone is fixed on the primary.
             Now it will wait until the axfr-retry + random(axfr-retry-jitter) elapsed.
 
         It is now possible to change the network configuration at runtime.
@@ -568,17 +573,17 @@
 
 20171207:
      YADIFA 2.3.0 - 2.3.7
-         From now on, both master and slaves are updating the zone in the same manner (journal transactions)
+         From now on, both primary and secondaries are updating the zone in the same manner (journal transactions)
          Messages are now default (--enable-messages). Disable them using --disable-messages.
          Adds more (dynamic) update validation.
          Adds a build option to remove compile date and time from various help messages (--disable-build-timestamp)
-         A master can now be configured to allow updating RRSIG records externally (e.g.: update add domain. RRSIG ...)
+         A primary can now be configured to allow updating RRSIG records externally (e.g.: update add domain. RRSIG ...)
  
          Fixes an issue where closing an (a)XFR stream could lead to a race over the file descriptors.
          Fixes an issue where an AXFR query would return a version of the zone too old to be upgradable by following incremntal updates.
          Fixes an issue where zones with big-enough NSEC3 coverage (several millions NSEC3 record) could potentially reach an internal limit of the database.
          Fixes an issue where shutting down YADIFA while a zone is being downloaded (AXFR) may make it wait forever.
-         Fixes an issue where the slave would complain about a missing private key.
+         Fixes an issue where the secondary would complain about a missing private key.
          Fixes an issue where a specifically truncated IXFR query may make YADIFA replying with an AXFR.
          Fixes an issue where an IXFR query returning "not implemented" instead of an AXFR would be retried later as an IXFR.
          Fixes an issue where hammering reopening the logs on an overloaded server would not work properly.
@@ -633,7 +638,7 @@
         - fixed an issue where a zone loaded with a journal would not be marked "dirty" and thus would not be fully dumped on disk upon kill -USR1
         - fixed an issue with network aliases not configured on all setups of --enable-messages
         - fixed an issue with the logger not releasing the log files before reconfiguration
-        - fixed an issue with the journal where heavy load would prevent notification to slaves
+        - fixed an issue with the journal where heavy load would prevent notification to secondaries
 
 20161108:
     YADIFA 2.2.2
@@ -642,25 +647,25 @@
 20160719:
     YADIFA 2.2.1
 
-        Multi-master support:
-            Added axfr-retry-failure-delay-multiplier and axfr-retry-failure-delay-max <main> parameters to increase the time between two AXFR/IXFR retries on a master.
+        Multi-primary support:
+            Added axfr-retry-failure-delay-multiplier and axfr-retry-failure-delay-max <main> parameters to increase the time between two AXFR/IXFR retries on a primary.
 
         Fixes:
-        - fixed an issue that would crash a YADIFA slave when restarting with a journal present
+        - fixed an issue that would crash a YADIFA secondary when restarting with a journal present
         - fixed an issue in AXFR/IXFR retry timing management
 
 20160715:
     YADIFA 2.2.0
-        Multi-master support:
+        Multi-primary support:
 
-            In <zone>, the masters field is now a list.
-            When the master fails to answer, it is moved to the end of the list and (new) first one is used instead.
+            In <zone>, the primaries field is now a list.
+            When the primary fails to answer, it is moved to the end of the list and (new) first one is used instead.
 
-            There is a true-multimaster setting, defaulted to 'no'.  In true multimaster mode, changing the master implies dropping local zone data and ignore serial values.
-            This is to be used for a setup with truly independent masters.
+            There is a true-multiprimary setting, defaulted to 'no'.  In true multiprimary mode, changing the primary implies dropping local zone data and ignore serial values.
+            This is to be used for a setup with truly independent primaries.
 
-            By default, the master change occurs at first failure. This can be changed to a higher value with multimaster-retries (maximum: 255)
-            This mostly makes sense on true-multimaster mode as you want to be sure before reloading a zone completely.
+            By default, the primary change occurs at first failure. This can be changed to a higher value with multiprimary-retries (maximum: 255)
+            This mostly makes sense on true-multiprimary mode as you want to be sure before reloading a zone completely.
 
         Smart signing:
 
@@ -798,9 +803,9 @@
         This release is a public release.
 
         Fixes:
-        - fixed an issue with huge IXFR transfers as a master
-        - fixed an issue with notifications on slave-slave-master setup
-        - fixed an issue with a potential infinite loop loading an AXFR from a master
+        - fixed an issue with huge IXFR transfers as a primary
+        - fixed an issue with notifications on secondary-secondary-primary setup
+        - fixed an issue with a potential infinite loop loading an AXFR from a primary
         - fixed missing hmac-sha* from <key> configuration
         - fixed an issue with TLSA records parsing
         - fixed an issue with base 16 encoding
@@ -904,12 +909,12 @@
 
         This release is a public release
 
-        - --disable-master feature at configure now builds a slave-only server
+        - --disable-master feature at configure now builds a secondary-only server
 
         Fixes:
         - fixed an issue with TSIG signed queries
         - fixed an issue with thread pool live resizing
-        - fixed an issue where reading an undeleted obsolete journal ending at the start of a newly transferred zone from the master would incorrectly trigger an error
+        - fixed an issue where reading an undeleted obsolete journal ending at the start of a newly transferred zone from the primary would incorrectly trigger an error
 
         Known issue:
         - removing the last key of a signed zone is permitted by YADIFA but triggers some chicken-egg issue with signatures.
@@ -923,7 +928,7 @@
         - basepath disabled
         - pidpath removed, only pidfile remains
         - log reopen notification is now timestamped
-        - slave zones no longer complain about missing NSEC/NSEC3 private keys
+        - secondary zones no longer complain about missing NSEC/NSEC3 private keys
         - the error code ZRE_FILE_NOT_FOUND has been replaced by the more accurate code ZRE_NO_VALID_FILE_FOUND
         - default logging settings no longer output debug
 
@@ -1049,7 +1054,7 @@
     Fixes:
         _ fixed an issue where the journal file was sometimes not properly closed at the end of a task
         _ fixed an issue where the TCP usage slots would sometimes wrongly return that they were all being used
-        _ fixed an issue on IXFR processing (slave side) where the type of answer from the master would not be properly detected
+        _ fixed an issue on IXFR processing (secondary side) where the type of answer from the primary would not be properly detected
         _ fixed an issue with TSIG on secrets not exactly 16 bytes long (binary form)
         _ fixed an issue on 32 bits architectures where the sig-validity-* fields would not be properly handled if not set
           on each zone section.
@@ -1110,7 +1115,7 @@
     	  report them with a warning
     	_ syslog messages are now put in the name of "yadifad" instead of  the name used for the "syslog" channel
     	_ syslog messages do not print the time from YADIFA anymore
-    	_ improved the steps involved in loading a locally cached slave zone
+    	_ improved the steps involved in loading a locally cached secondary zone
     	_ zones are now loaded in background 
     	_ man page yadifad-conf.man5 renamed into yadifad.conf.man5
 
@@ -1180,9 +1185,9 @@
 
     	NSEC3:	_ cannot work with multiple NSEC3PARAM chains with mixed OPT-IN/OUT settings
 
-    		_ adding a new NSEC3 chain expects that the master sends the NSEC3PARAM first (it does not seems to be always the case)
-    			  We have a case where a master starts with 2 thousands NSEC3 opt-out records then adds 6 millions NSEC3 opt-in records but does not give the NSEC3PARAM record
-    			  first. The slave server rejects them all because it's unable to link them to a chain.  (This one has high priority)
+    		_ adding a new NSEC3 chain expects that the primary sends the NSEC3PARAM first (it does not seems to be always the case)
+    			  We have a case where a primary starts with 2 thousands NSEC3 opt-out records then adds 6 millions NSEC3 opt-in records but does not give the NSEC3PARAM record
+    			  first. The secondary server rejects them all because it's unable to link them to a chain.  (This one has high priority)
 
     	DNSSEC:	_ it is not allowed to change the zone security mode (unsecure, NSEC, or NSEC3).  Once the zone is loaded it keeps its security mode.
 
@@ -1202,13 +1207,13 @@
     YADIFA 0.5.5
     	-	many fixes 
 
-    KNOWN ISSUE: NSEC3 slave zone replay fails.
+    KNOWN ISSUE: NSEC3 secondary zone replay fails.
 
 20110706:
     YADIFA 0.5.0
-    	-	slave mode, AXFR/IXFR (no TSIG yet for the slave-side transfer)
-    	-	answers to a notify from the master
-    	-	polls the (first) master on the masters list
+    	-	secondary mode, AXFR/IXFR (no TSIG yet for the secondary-side transfer)
+    	-	answers to a notify from the primary
+    	-	polls the (first) primary on the primaries list
     	-	maintains the .axfr & .ix files (deletes the obsoletes ones)
     	-	TSIG queries are checked
     	-	Replays the zone journal on startup after the zone load (journaling)
@@ -1218,7 +1223,7 @@
     YADIFA 0.4.0
     	Operational:
     	-	It works as a no dnssec name server
-    	-	No notifies to slave name servers
+    	-	No notifies to secondary name servers
     	-	daemon
     	-	Answers AXFR queries with TSIG
     	- 	nsupdate functionality (journaling)
@@ -1232,7 +1237,7 @@
 
 		Operational:
 		-	It works as a no dnssec name server
-		-	No notifies to slave name servers
+		-	No notifies to secondary name servers
 		-	daemon
 		-	Answers AXFR queries
 		- 	The zone has SOA, NS A resource records.

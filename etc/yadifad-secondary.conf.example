@@ -1,0 +1,7 @@
+<zone>
+	domain		somedomain.eu
+	file		secondary/somedomain.eu.
+	type		secondary
+	primary		192.0.2.1
+</zone>
+
