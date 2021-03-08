@@ -1,0 +1,23 @@
+From: dextercd
+Source: https://github.com/yadifa/yadifa/issues/15
+---
+
+--- a/sbin/yadifad/database.c
++++ b/sbin/yadifad/database.c
+@@ -1375,7 +1375,14 @@ database_update(zdb *database, message_data *mesg)
+ 
+                                     log_warn("database: update: %{dnsname}: prerequisites not met", message_get_canonised_fqdn(mesg));
+ 
+-                                    message_set_status(mesg, FP_RCODE_SERVFAIL);
++                                    if((ret & 0xffff0000) == RCODE_ERROR_BASE)
++                                    {
++                                        message_set_status(mesg, RCODE_ERROR_GETCODE(ret));
++                                    }
++                                    else
++                                    {
++                                        message_set_status(mesg, FP_RCODE_SERVFAIL);
++                                    }
+                                 }
+ 
+                                 zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
+
