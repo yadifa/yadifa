@@ -48,7 +48,9 @@
 
 #include <dnscore/thread_pool.h>
 #include <dnscore/message.h>
+#if DNSCORE_HAS_TCP_MANAGER
 #include <dnscore/tcp_manager.h>
+#endif
 
 #include <dnsdb/zdb_types.h>
 

@@ -127,7 +127,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
         return SUCCESS;
     }
     
-    dnsname_vector origin_path;
+    dnsname_vector *origin_path;
     dnsname_vector name_path;
 
     ptr_vector rrsets;
@@ -140,10 +140,9 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
     u16 rdata_size;
     u8 wire[MAX_DOMAIN_LENGTH + 10 + 65536];
 
-    ptr_vector_init(&rrsets);
+    origin_path = &zone->origin_vector;
 
-#pragma message("TODO: THIS IS USELESS, zdb_zone ALREADY CONTAINS A dnsname_vector origin_vector field to avoid this (used in queries)")
-    dnsname_to_dnsname_vector(zone->origin, &origin_path);
+    ptr_vector_init(&rrsets);
 
     while(count-- > 0)
     {
@@ -166,9 +165,9 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
 
         s32 idx;
 
-        for(idx = 0; idx < origin_path.size; idx++)
+        for(idx = 0; idx < origin_path->size; idx++)
         {
-            if(!dnslabel_equals(origin_path.labels[origin_path.size - idx], name_path.labels[name_path.size - idx]))
+            if(!dnslabel_equals(origin_path->labels[origin_path->size - idx], name_path.labels[name_path.size - idx]))
             {
                 free_rrsets(&rrsets);
                 return RCODE_ERROR_CODE(RCODE_NOTZONE);
@@ -183,7 +182,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
                 return RCODE_ERROR_CODE(RCODE_FORMERR);
             }
 
-            zdb_rr_label* label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path.size) - 1);
+            zdb_rr_label* label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path->size) - 1);
 
             if(rtype == TYPE_ANY)
             {
@@ -216,7 +215,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
                 return RCODE_ERROR_CODE(RCODE_FORMERR);
             }
 
-            zdb_rr_label* label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path.size) - 1);
+            zdb_rr_label* label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path->size) - 1);
 
             if(rtype == TYPE_ANY)
             {
@@ -301,7 +300,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
 
                 dnsname_to_dnsname_vector(item->rname, &name_path);
 
-                label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path.size) - 1);
+                label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path->size) - 1);
 
                 if(label == NULL)
                 {

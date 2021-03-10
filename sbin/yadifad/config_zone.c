@@ -73,7 +73,6 @@ extern zone_data_set database_zone_desc;
 
 static value_name_table zone_type_enum_table[]=
 {
-
 #if HAS_MASTER_SUPPORT
     {ZT_MASTER,     ZT_STRING_MASTER},
     {ZT_MASTER,     ZT_STRING_PRIMARY},

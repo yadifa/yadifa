@@ -1356,15 +1356,8 @@ database_update(zdb *database, message_data *mesg)
                                             
                                             zdb_zone_info_background_store_zone(zone->origin);
                                         }
-                                        
-                                        if((ret & 0xffff0000) == RCODE_ERROR_BASE)
-                                        {
-                                            message_set_status(mesg, RCODE_ERROR_GETCODE(ret));
-                                        }
-                                        else
-                                        {
-                                            message_set_status(mesg, FP_RCODE_SERVFAIL);
-                                        }
+
+                                        message_set_error_status_from_result(mesg, ret);
                                     }
                                 }
                                 else
@@ -1375,14 +1368,7 @@ database_update(zdb *database, message_data *mesg)
 
                                     log_warn("database: update: %{dnsname}: prerequisites not met", message_get_canonised_fqdn(mesg));
 
-                                    if((ret & 0xffff0000) == RCODE_ERROR_BASE)
-                                    {
-                                        message_set_status(mesg, RCODE_ERROR_GETCODE(ret));
-                                    }
-                                    else
-                                    {
-                                        message_set_status(mesg, FP_RCODE_SERVFAIL);
-                                    }
+                                    message_set_error_status_from_result(mesg, ret);
                                 }
 
                                 zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);

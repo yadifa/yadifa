@@ -137,4 +137,82 @@ network_interfaces_forall(network_interfaces_forall_callback cb, void *data)
 
 }
 
+int sockaddr_compare_addr_port(const struct sockaddr *a, const struct sockaddr *b)
+{
+    int ret;
+    ret = a->sa_family;
+    ret -= b->sa_family;
+
+    if(ret ==  0)
+    {
+        switch(a->sa_family)
+        {
+            case AF_INET:
+            {
+                const struct sockaddr_in *sa4 = (const struct sockaddr_in *)a;
+                const struct sockaddr_in *sb4 = (const struct sockaddr_in *)b;
+
+                ret = sa4->sin_port;
+                ret -= sb4->sin_port;
+
+                if(ret == 0)
+                {
+                    ret = memcmp(&sa4->sin_addr.s_addr, &sb4->sin_addr.s_addr, 4);
+                }
+                break;
+            }
+            case  AF_INET6:
+            {
+
+                const struct sockaddr_in6 *sa6 = (const struct sockaddr_in6 *)a;
+                const struct sockaddr_in6 *sb6 = (const struct sockaddr_in6 *)b;
+
+                ret = sa6->sin6_port;
+                ret -= sb6->sin6_port;
+
+                if(ret == 0)
+                {
+                    ret = memcmp(&sa6->sin6_addr, &sb6->sin6_addr, 16);
+                }
+                break;
+            }
+        }
+    }
+
+    return ret;
+}
+
+int socketaddress_compare_ip(const void *a, const void *b)
+{
+    const socketaddress *sa = (const socketaddress*)a;
+    const socketaddress *sb = (const socketaddress*)b;
+
+    if(sa != sb)
+    {
+        int ret = (int)sa->sa.sa_family - (int)sb->sa.sa_family;
+
+        if(ret == 0)
+        {
+            switch(sa->sa.sa_family)
+            {
+                case AF_INET:
+                    ret = memcmp(&sa->sa4.sin_addr, &sb->sa4.sin_addr, sizeof(sa->sa4.sin_addr));
+                    break;
+                case AF_INET6:
+                    ret = memcmp(&sa->sa6.sin6_addr, &sb->sa6.sin6_addr, sizeof(sa->sa6.sin6_addr));
+                    break;
+                default:
+                    ret = (int)(intptr)(sa - sb);
+                    break;
+            }
+        }
+
+        return ret;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
 /** @} */

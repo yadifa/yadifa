@@ -642,13 +642,37 @@ server_context_new_socket(struct addrinfo *addr, int sock_type, bool reuse_port)
         
         if(sock_type == SOCK_DGRAM)
         {
+            /*
+             * @note https://stackoverflow.com/questions/46353380/invalid-argument-error-for-sendmsg-on-some-freebsd-systems
+             * It turns out FreeBSD is very picky when it allows the use of IP_SENDSRCADDR on a UDP socket.
+             * If the socket is bound to INADDR_ANY my code works fine. If the socket is bound to a single IP,
+             * then sendmsg() returns EINVAL (invalid argument).
+             *
+             * ...
+             *
+             * Note that it's not the issue that has been reported 202102xx on GitHub.
+             */
 
-            socket_server_opensocket_setopt_ignore_error(&ctx, IPPROTO_IP, DSTADDR_SOCKOPT, &on, sizeof(on));
 #if __FreeBSD__
-            socket_server_opensocket_setopt_ignore_error(&ctx, IPPROTO_IPV6, DSTADDR_SOCKOPT, &on, sizeof(on));
+            if(host_address_is_any(addr))
+            {
+#endif
+                socket_server_opensocket_setopt_ignore_error(&ctx, IPPROTO_IP, DSTADDR_SOCKOPT, &on, sizeof(on));
+#if __FreeBSD__
+            }
+#endif
+
+            //
+#if __FreeBSD__
+            if(host_address_is_any(addr))
+            {
+                socket_server_opensocket_setopt_ignore_error(&ctx, IPPROTO_IPV6, DSTADDR_SOCKOPT, &on, sizeof(on));
+            }
 #else
             socket_server_opensocket_setopt(&ctx, IPPROTO_IPV6, DSTADDR_SOCKOPT, &on, sizeof(on));
 #endif
+            //
+
             socket_server_opensocket_setopt_ignore_result(&ctx, IPPROTO_IPV6, DSTADDR6_SOCKOPT, &on, sizeof(on));
 #if WIN32
 #else
@@ -1143,7 +1167,7 @@ server_context_create()
         {
             struct addrinfo *tcp_addr = g_server_context.tcp_interface[intf_idx];
 
-            log_debug("UDP listener socket for %{sockaddr} will be opened", tcp_addr->ai_addr);
+            log_debug("TCP listener socket for %{sockaddr} will be opened", tcp_addr->ai_addr);
 
             for(u32 n = 0; n < g_server_context.tcp_unit_per_interface; ++n)
             {
@@ -1154,13 +1178,13 @@ server_context_create()
                     fd_setcloseonexec(sockfd);
 
                     server_context_set_socket_name(sockfd, (struct sockaddr*)tcp_addr->ai_addr);
-
+/*
                     if(FAIL(ret = fd_setnonblocking(sockfd)))
                     {
                         server_context_destroy();
                         return ret;
                     }
-
+*/
                     /* For TCP only, listen to it... */
                     if(FAIL(listen(sockfd, g_config->tcp_queue_size)))
                     {

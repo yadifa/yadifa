@@ -78,6 +78,7 @@
 #include "server_error.h"
 
 #define NOTIFY_DETAILED_LOG 0
+#define NOTIFY_CLEANUP_DUMP 0
 
 #ifndef NOTIFY_DETAILED_LOG
 #if DEBUG
@@ -1159,7 +1160,9 @@ notify_service_context_manage_pending_notifications(struct notify_service_contex
     {
         /* create a list of expired message_query_summary */
 
+#if NOTIFY_CLEANUP_DUMP
         log_debug("notify: cleaning up expired notifications");
+#endif
 
         message_query_summary head;
         head.next = NULL;
@@ -1287,18 +1290,22 @@ notify_service_context_manage_pending_notifications(struct notify_service_contex
                 }
                 while(current_queries_to_clear != NULL);
             }
+#if DEBUG
             else
             {
-#if DEBUG
+#if NOTIFY_CLEANUP_DUMP
                 log_debug("notify: no queries to clear");
 #endif
             }
+#endif
 
         } // if !ptr_set_isempty(&current_queries)
 #if DEBUG
         else
         {
+#if NOTIFY_CLEANUP_DUMP
             log_debug("notify: no unanswered queries");
+#endif
         }
 #endif
     }
@@ -1307,16 +1314,21 @@ notify_service_context_manage_pending_notifications(struct notify_service_contex
     {
         if(ptr_set_isempty(&ctx->notify_queries_not_answered_yet))
         {
+#if NOTIFY_CLEANUP_DUMP
             log_debug("notify: no notification queries needs to be answered");
+#endif
         }
 
         if(tus < ctx->last_current_queries_cleanup_epoch_us)
         {
+#if NOTIFY_CLEANUP_DUMP
             float dt = (ctx->last_current_queries_cleanup_epoch_us - tus) / 1000LL;
             dt /= 1000.0f;
             log_debug("notify: still %.3fus before cleaning up times out", dt);
+#endif
         }
 
+#if NOTIFY_CLEANUP_DUMP
         if(ctx->last_current_queries_cleanup_epoch_us > 0)
         {
             log_debug("notify: no timeout to handle (expect next at %llT)", ctx->last_current_queries_cleanup_epoch_us);
@@ -1325,6 +1337,7 @@ notify_service_context_manage_pending_notifications(struct notify_service_contex
         {
             log_debug("notify: no timeout to handle");
         }
+#endif
     }
 #endif
     if((ctx->last_current_queries_cleanup_epoch_us < tus) && (ctx->last_current_queries_cleanup_epoch_us > 0))
@@ -1973,7 +1986,9 @@ notify_service(struct service_worker_s *worker)
         s64 loop_now = loop_start;
         s64 loop_count = 0;
         bool long_accumulation = FALSE;
+#if NOTIFY_CLEANUP_DUMP
         bool no_message_in_queue = FALSE;
+#endif
         bool is_shutting_down = !service_should_run(worker);
 
         // the loop will always enter at least once once
@@ -1986,7 +2001,9 @@ notify_service(struct service_worker_s *worker)
 
             if(async == NULL)   /*if no message is in the queue, proceed to next step */
             {
+#if NOTIFY_CLEANUP_DUMP
                 no_message_in_queue = TRUE;
+#endif
                 break;
             }
             
@@ -1995,7 +2012,9 @@ notify_service(struct service_worker_s *worker)
             if(notifymsg == NULL) /*if no message is in the queue, proceed to next step (probably irrelevant) */
             {
                 async_message_release(async);
+#if NOTIFY_CLEANUP_DUMP
                 no_message_in_queue = TRUE;
+#endif
                 break;
             }
 
@@ -2030,10 +2049,12 @@ notify_service(struct service_worker_s *worker)
             log_debug("notify: notification service accumulated queries for %fms (%lli queries)", ((1.0 * (loop_now - loop_start)) / 1000.0), loop_count);
         }
 
+#if NOTIFY_CLEANUP_DUMP
         if(no_message_in_queue)
         {
             log_debug1("notify: notification service has no more messages queued");
         }
+#endif
 
         if(is_shutting_down)
         {

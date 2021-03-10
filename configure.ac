@@ -34,7 +34,7 @@ dnl ############################################################################
 configure_base_path="$0/"
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 9929 $])
+AC_REVISION([$Revision: 10038 $])
 AC_INIT([yadifa],m4_esyscmd(
     [
         svn info 2> /dev/null |
@@ -240,7 +240,6 @@ test/freebsd12-test/Makefile
 test/ipc-test/Makefile
 test/journal-fusion/Makefile
 test/journal-from-ixfr/Makefile
-test/journal-server/Makefile
 test/journal-speed-test/Makefile
 test/keygen-test/Makefile
 test/limiter-test/Makefile

@@ -1560,6 +1560,7 @@ zdb_query_ex_record_not_found(const zdb_zone *zone,
     zdb_rr_label *rr_label = rr_label_info->answer;
 
     // NXRRSET
+
 #if ZDB_HAS_NSEC3_SUPPORT
     if(dnssec && ZONE_NSEC3_AVAILABLE(zone))
     {
@@ -1572,8 +1573,8 @@ zdb_query_ex_record_not_found(const zdb_zone *zone,
             ((type != TYPE_DS) && (zdb_rr_label_flag_isset(rr_label, ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_UNDERDELEGATION))) )
         {
             /*
-                * Add all the NS and their signature
-                */
+             * Add all the NS and their signature
+             */
             zdb_rr_label *authority = rr_label_info->authority;
             zdb_packed_ttlrdata* rr_label_ns = zdb_record_find(&authority->resource_record_set, TYPE_NS);
 
@@ -4814,7 +4815,7 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                 {
                     // got it.
                     sp = parent_sp;
-                    message_set_authoritative(mesg);
+                    message_set_authoritative_answer(mesg);
                     break;
                 }
             }
@@ -4929,7 +4930,6 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                  * CNAME alias handling
                  */
 
-                //if((zdb_rr_label_flag_isset(rr_label, ZDB_RR_LABEL_HASCNAME)) && (type != TYPE_CNAME) && (type != TYPE_ANY) && (type != TYPE_RRSIG))
                 if(((zdb_rr_label_flag_get(rr_label) & (ZDB_RR_LABEL_HASCNAME|ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_UNDERDELEGATION)) == ZDB_RR_LABEL_HASCNAME) &&
                    (type != TYPE_CNAME) && (type != TYPE_ANY) && (type != TYPE_RRSIG))
                 {
@@ -4942,8 +4942,6 @@ zdb_query_and_update_with_rrl(zdb *db, message_data *mesg, u8 * restrict pool_bu
                     if(ans_auth_add.depth >= ZDB_CNAME_LOOP_MAX)
                     {
                         log_warn("CNAME depth at %{dnsname} is bigger than allowed %d>=%d", qname, ans_auth_add.depth, ZDB_CNAME_LOOP_MAX);
-
-
 
                         message_set_authoritative(mesg);
 

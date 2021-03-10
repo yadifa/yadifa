@@ -58,6 +58,12 @@
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
+union zdb_zone_garbage_run_destroyed_cb_ptr
+{
+    zdb_zone_garbage_run_destroyed_cb *cb;
+    void *ptr;
+};
+
 static threaded_dll_cw zone_garbage_queue;
 
 static ptr_vector zdb_zone_garbage_run_destroyed_callbacks = PTR_VECTOR_EMPTY;
@@ -208,8 +214,9 @@ zdb_zone_garbage_run()
                     mutex_lock(&zdb_zone_garbage_run_destroyed_callbacks_mtx);
                     for(int i = 0; i <= ptr_vector_last_index(&zdb_zone_garbage_run_destroyed_callbacks); ++i)
                     {
-                        zdb_zone_garbage_run_destroyed_cb *cb = (zdb_zone_garbage_run_destroyed_cb*)ptr_vector_get(&zdb_zone_garbage_run_destroyed_callbacks, i);
-                        cb(fqdn);
+                        union zdb_zone_garbage_run_destroyed_cb_ptr cb_ptr;
+                        cb_ptr.ptr = ptr_vector_get(&zdb_zone_garbage_run_destroyed_callbacks, i);
+                        cb_ptr.cb(fqdn);
                     }
                     mutex_unlock(&zdb_zone_garbage_run_destroyed_callbacks_mtx);
                 }
@@ -264,8 +271,9 @@ zdb_zone_garbage_run_ex(zdb_zone_garbage_run_cb *destroyer)
                     mutex_lock(&zdb_zone_garbage_run_destroyed_callbacks_mtx);
                     for(int i = 0; i <= ptr_vector_last_index(&zdb_zone_garbage_run_destroyed_callbacks); ++i)
                     {
-                        zdb_zone_garbage_run_destroyed_cb *cb = (zdb_zone_garbage_run_destroyed_cb*)ptr_vector_get(&zdb_zone_garbage_run_destroyed_callbacks, i);
-                        cb(fqdn);
+                        union zdb_zone_garbage_run_destroyed_cb_ptr cb_ptr;
+                        cb_ptr.ptr = ptr_vector_get(&zdb_zone_garbage_run_destroyed_callbacks, i);
+                        cb_ptr.cb(fqdn);
                     }
                     mutex_unlock(&zdb_zone_garbage_run_destroyed_callbacks_mtx);
                 }
@@ -286,23 +294,26 @@ void
 zdb_zone_garbage_run_callback_add(zdb_zone_garbage_run_destroyed_cb *cb)
 {
     mutex_lock(&zdb_zone_garbage_run_destroyed_callbacks_mtx);
-    ptr_vector_append(&zdb_zone_garbage_run_destroyed_callbacks, (void*)cb);
+    union zdb_zone_garbage_run_destroyed_cb_ptr cb_ptr;
+    cb_ptr.cb = cb;
+    ptr_vector_append(&zdb_zone_garbage_run_destroyed_callbacks, cb_ptr.ptr);
     mutex_unlock(&zdb_zone_garbage_run_destroyed_callbacks_mtx);
 }
 
 void
 zdb_zone_garbage_run_callback_remove(zdb_zone_garbage_run_destroyed_cb *cb)
 {
+    union zdb_zone_garbage_run_destroyed_cb_ptr cb_ptr;
+    cb_ptr.cb = cb;
     mutex_lock(&zdb_zone_garbage_run_destroyed_callbacks_mtx);
     for(int i = 0; i <= ptr_vector_last_index(&zdb_zone_garbage_run_destroyed_callbacks); ++i)
     {
-        if(cb == (zdb_zone_garbage_run_destroyed_cb*)ptr_vector_get(&zdb_zone_garbage_run_destroyed_callbacks, i))
+        if(cb_ptr.ptr == ptr_vector_get(&zdb_zone_garbage_run_destroyed_callbacks, i))
         {
             ptr_vector_remove_at(&zdb_zone_garbage_run_destroyed_callbacks, i);
             break;
         }
     }
-    ptr_vector_append(&zdb_zone_garbage_run_destroyed_callbacks, (void*)cb);
     mutex_unlock(&zdb_zone_garbage_run_destroyed_callbacks_mtx);
 }
 

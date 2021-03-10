@@ -1614,7 +1614,7 @@ message_process_lenient(message_data *mesg)
     {
         return UNPROCESSABLE_MESSAGE;
     }
-/*
+    /*
     if(message_istruncated(mesg))
     {
         return MESSAGE_TRUNCATED;
@@ -4187,6 +4187,89 @@ ssize_t message_send_udp_debug(const message_data *mesg, int sockfd)
 {
     log_info("message_send_udp(%p, %i) through %{sockaddr}", mesg, sockfd, mesg->_msghdr.msg_name);
     return sendmsg(sockfd, &mesg->_msghdr, 0);
+}
+
+ssize_t message_send_tcp(const message_data *mesg, int sockfd)
+{
+    ssize_t ret;
+    struct msghdr tcp_msghdr;
+    struct iovec tcp_data[2];
+    u16 tcp_len = message_get_size_u16(mesg);
+    u16 tcp_native_len = htons(tcp_len);
+
+    tcp_data[0].iov_base = &tcp_native_len;
+    tcp_data[0].iov_len = 2;
+    tcp_data[1].iov_base = mesg->_buffer;
+    tcp_data[1].iov_len = tcp_len;
+    tcp_msghdr.msg_name = mesg->_msghdr.msg_name;
+    tcp_msghdr.msg_namelen = mesg->_msghdr.msg_namelen;
+    tcp_msghdr.msg_iov = &tcp_data[0];
+    tcp_msghdr.msg_iovlen = 2;
+    tcp_msghdr.msg_control = mesg->_msghdr.msg_control;
+    tcp_msghdr.msg_controllen = mesg->_msghdr.msg_controllen;
+    tcp_msghdr.msg_flags = 0;
+
+    s32 remain = tcp_len + 2;
+    s32 again = 0;
+
+    for(;;)
+    {
+        ret = sendmsg(sockfd, &tcp_msghdr, 0);
+
+        if(ret < 0)
+        {
+            int err = ERRNO_ERROR;
+            if(err == MAKE_ERRNO_ERROR(EINTR))
+            {
+                continue;
+            }
+
+            if(err == MAKE_ERRNO_ERROR(EAGAIN))
+            {
+                ++again;
+                usleep(100);
+                continue;
+            }
+
+            ret = err;
+
+            break;
+        }
+
+        if(ret < remain)
+        {
+            // adjust the buffers
+
+            while(tcp_msghdr.msg_iovlen > 0)
+            {
+                if((size_t)ret >= tcp_msghdr.msg_iov[0].iov_len)
+                {
+                    ret -= (size_t)tcp_msghdr.msg_iov[0].iov_len;
+                    ++tcp_msghdr.msg_iov;
+                    --tcp_msghdr.msg_iovlen;
+                }
+                else
+                {
+                    u8* p = (u8*)tcp_msghdr.msg_iov[0].iov_base;
+                    p += ret;
+                    tcp_msghdr.msg_iov[0].iov_base = p;
+                    tcp_msghdr.msg_iov[0].iov_len -= (size_t)ret;
+                    break;
+                }
+            }
+
+            remain -= ret;
+
+            continue;
+        }
+    }
+
+    if(again > 0)
+    {
+        log_debug("message_send_tcp: again=%i", again);
+    }
+
+    return ret;
 }
 
 /** @} */

@@ -753,7 +753,8 @@ dist_noinst_DATA = VERSION \
 	contributions/20190112-txt-record-parsing-improvements.patch \
 	contributions/20190323-yadifa-2.3.9-pmtudisc_omit.patch \
 	contributions/20190911-sighup-crash-fix.patch \
-	contributions/20201106-musl-support.patch
+	contributions/20201106-musl-support.patch \
+	contributions/20210301-dynupdate-error-code.patch
 yadifad_LDADD = $(abs_top_builddir)/lib/dnsdb/libdnsdb.la \
 	$(abs_top_builddir)/lib/dnscore/libdnscore.la
 yadifad_SOURCES = main.c axfr.c config_main.c config_zone.c confs.c \

@@ -658,6 +658,7 @@ int main(int argc, char *argv[])
             }
 */
             thread_pool_destroy(tp);
+            tp = NULL;
         }
         else
         {
@@ -835,6 +836,7 @@ int main(int argc, char *argv[])
     }
 
     thread_pool_destroy(tp);
+    tp = NULL;
     threaded_ringbuffer_cw_finalize(&ringbuffer_cw_queue);
     threaded_dll_cw_finalize(&dll_cw_queue);
     threaded_qsl_cw_finalize(&qsl_cw_queue);

@@ -51,36 +51,30 @@
 #include <dnscore/list-sl.h>
 #include <dnscore/list-dl.h>
 
+typedef struct tcp_manager_socket_context_s tcp_manager_socket_context_t;
+
+#include "dnscore/tcp_manager.h"
+
 #define MODULE_MSG_HANDLE g_system_logger
 
-struct tcp_manager_address_context_s
-{
-    socketaddress addr;
-    socklen_t addr_len;
-    spinlock_t spinlock;
-    volatile s32 connection_count;
-    s32 connection_count_max;
-    s32 connection_per_adress_max;
-};
+// Host
 
-typedef struct tcp_manager_address_context_s tcp_manager_address_context_t;
-
-struct tcp_manager_client_context_s
+struct tcp_manager_host_context_s
 {
     mutex_t connection_list_mtx;
-    list_dl_s connection_list;
-    s32 connection_count_max;
-    atomic_int rc;
-    socketaddress addr;
+    list_dl_s connection_list;          // should be a set, I just don't know the key yet.
+    atomic_int rc;                      // so it's not destroyed mid-use
+    socketaddress addr;                 // the host
     socklen_t addr_len;
+    u16 connection_count_max;
+    bool persistent;
 };
 
-typedef struct tcp_manager_client_context_s tcp_manager_client_context_t;
+typedef struct tcp_manager_host_context_s tcp_manager_host_context_t;
 
 struct tcp_manager_socket_context_s
 {
-    tcp_manager_address_context_t *address_context;
-    tcp_manager_client_context_t *client_context;
+    tcp_manager_host_context_t *host;
     int sockfd;
     atomic_int rc;
     spinlock_t spinlock;
@@ -90,89 +84,541 @@ struct tcp_manager_socket_context_s
     s64 write_time;
     s64 accept_time;
     s64 close_time;
-    socklen_t addr_len;
-    socketaddress addr;
 };
 
 typedef struct tcp_manager_socket_context_s tcp_manager_socket_context_t;
 
-#include "dnscore/tcp_manager.h"
+static ptr_set tcp_manager_host_context_set;
+static mutex_t tcp_manager_host_context_set_mtx;
 
-static ptr_set tcp_manager_wl_ipv4 = PTR_SET_EMPTY;
-static ptr_set tcp_manager_wl_ipv6 = PTR_SET_EMPTY;
-static tcp_manager_address_context_t tcp_manager_global;
+static u32_set tcp_manager_socket_context_set = U32_SET_EMPTY;
+static mutex_t tcp_manager_socket_context_set_mtx = MUTEX_INITIALIZER;
 
-static u32_set tcp_manager_sockfd_set = U32_SET_EMPTY;
-static mutex_t tcp_manager_sockfd_set_mtx = MUTEX_INITIALIZER;
+static void
+tcp_manager_host_context_release(tcp_manager_host_context_t *ctx);
 
-static ptr_set client_address_set = PTR_SET_EMPTY;
-static mutex_t client_address_set_mtx = MUTEX_INITIALIZER;
-
-// sockaddr->value collection
-// sockfd->value collection
-
-static bool tcp_manager_initialised = FALSE;
-
-
-static int socketaddress_compare_ip(const void *a, const void *b)
+static int
+tcp_manager_host_context_init_ptr_set_forall_callback(ptr_node *node, void *args_)
 {
-    const socketaddress *sa = (const socketaddress*)a;
-    const socketaddress *sb = (const socketaddress*)b;
+    (void)args_;
+    tcp_manager_host_context_t *ctx = (tcp_manager_host_context_t*)node->value;
+    tcp_manager_host_context_release(ctx);
+    return SUCCESS;
+}
 
-    if(sa != sb)
+static void
+tcp_manager_host_context_init(tcp_manager_host_context_t *ctx, socketaddress *addr, socklen_t addr_len, u16 connection_count_max, bool persistent);
+
+static void
+tcp_manager_host_context_class_init()
+{
+    ptr_set_init(&tcp_manager_host_context_set);
+    tcp_manager_host_context_set.compare = socketaddress_compare_ip;
+    mutex_init(&tcp_manager_host_context_set_mtx);
+}
+
+static void
+tcp_manager_host_context_class_finalize()
+{
+    mutex_lock(&tcp_manager_host_context_set_mtx);
+    ptr_set_forall(&tcp_manager_host_context_set, tcp_manager_host_context_init_ptr_set_forall_callback, NULL);
+    mutex_unlock(&tcp_manager_host_context_set_mtx);
+    ptr_set_init(&tcp_manager_host_context_set);
+    tcp_manager_host_context_set.compare = socketaddress_compare_ip;
+    mutex_destroy(&tcp_manager_host_context_set_mtx);
+}
+
+static void
+tcp_manager_host_context_init(tcp_manager_host_context_t *ctx, socketaddress *addr, socklen_t addr_len, u16 allowed_connections_max, bool persistent)
+{
+    if(allowed_connections_max <= 0)
     {
-        int ret = (int)sa->sa.sa_family - (int)sb->sa.sa_family;
+        allowed_connections_max = TCP_MANAGER_HOST_CONTEXT_CONNECTION_COUNT_MAX;
+    }
 
-        if(ret == 0)
-        {
-            switch(sa->sa.sa_family)
-            {
-                case AF_INET:
-                    ret = memcmp(&sa->sa4.sin_addr, &sb->sa4.sin_addr, sizeof(sa->sa4.sin_addr));
-                    break;
-                case AF_INET6:
-                    ret = memcmp(&sa->sa6.sin6_addr, &sb->sa6.sin6_addr, sizeof(sa->sa6.sin6_addr));
-                    break;
-                default:
-                    ret = (int)(intptr)(sa - sb);
-                    break;
-            }
-        }
+    mutex_init(&ctx->connection_list_mtx);
+    list_dl_init(&ctx->connection_list);
+    ctx->rc = 1;
+    memcpy(&ctx->addr, addr, addr_len);
+    ctx->addr_len = addr_len;
+    ctx->connection_count_max = allowed_connections_max;
+    ctx->persistent = persistent;
 
-        return ret;
+    if(persistent)
+    {
+        // ++ctx->rc;  /// @todo 20210303 edf -- when persistence is fully implemented, persistent nodes can only be destroyed with the system
+    }
+}
+
+static tcp_manager_host_context_t*
+tcp_manager_host_context_new_instance_nolock(socketaddress *addr, socklen_t addr_len, u16 connection_count_max, bool persistent)
+{
+    tcp_manager_host_context_t *ctx;
+    ptr_node *node = ptr_set_insert(&tcp_manager_host_context_set, addr);
+
+    if(node->value == NULL)
+    {
+        ZALLOC_OBJECT_OR_DIE(ctx, tcp_manager_host_context_t, GENERIC_TAG);
+        tcp_manager_host_context_init(ctx, addr, addr_len, connection_count_max, persistent);
+
+        node->key = &ctx->addr;  /// @note it NEEDS to be the one from the node
+        node->value = ctx;
     }
     else
     {
-        return 0;
+        ctx = (tcp_manager_host_context_t*)node->value;
+    }
+    return ctx;
+}
+
+static tcp_manager_host_context_t*
+tcp_manager_host_context_new_instance(socketaddress *addr, socklen_t addr_len, u16 connection_count_max, bool persistent)
+{
+    tcp_manager_host_context_t *ctx;
+    mutex_lock(&tcp_manager_host_context_set_mtx);
+
+    ctx = tcp_manager_host_context_new_instance_nolock(addr, addr_len, connection_count_max, persistent);
+
+    mutex_unlock(&tcp_manager_host_context_set_mtx);
+    return ctx;
+}
+
+static void
+tcp_manager_host_context_acquire(tcp_manager_host_context_t *ctx)
+{
+    ++ctx->rc;
+}
+
+static tcp_manager_host_context_t*
+tcp_manager_host_context_acquire_or_create(socketaddress *addr, socklen_t addr_len, u16 connection_count_max, bool persistent)
+{
+    tcp_manager_host_context_t *ctx;
+    mutex_lock(&tcp_manager_host_context_set_mtx);
+    ptr_node *node = ptr_set_find(&tcp_manager_host_context_set, addr);
+    if(node == NULL)
+    {
+        ctx = tcp_manager_host_context_new_instance_nolock(addr, addr_len, connection_count_max, persistent);
+    }
+    else
+    {
+        ctx = (tcp_manager_host_context_t*)node->value;
+        ++ctx->rc;
+    }
+    mutex_unlock(&tcp_manager_host_context_set_mtx);
+    return ctx;
+}
+
+static void
+tcp_manager_host_context_delete(tcp_manager_host_context_t *ctx)
+{
+    assert(ctx->rc == 0);
+#ifndef NDEBUG
+    mutex_lock(&ctx->connection_list_mtx);
+    assert(list_dl_size(&ctx->connection_list) == 0);
+    mutex_unlock(&ctx->connection_list_mtx);
+#endif
+    mutex_lock(&tcp_manager_host_context_set_mtx);
+    ptr_set_delete(&tcp_manager_host_context_set, &ctx->addr);
+    mutex_unlock(&tcp_manager_host_context_set_mtx);
+    mutex_destroy(&ctx->connection_list_mtx);
+    ZFREE_OBJECT(ctx);
+}
+
+static void
+tcp_manager_host_context_release(tcp_manager_host_context_t *ctx)
+{
+    if(--ctx->rc == 0)
+    {
+        tcp_manager_host_context_delete(ctx);
     }
 }
 
 static void
-tcp_manager_address_context_init(tcp_manager_address_context_t *ctx)
+tcp_manager_socket_context_class_init()
 {
-    memset(&ctx->addr, 0, sizeof(ctx->addr));
-    ctx->addr.sa.sa_family = AF_INET;
-    ctx->addr_len = sizeof(ctx->addr.sa4);
-    spinlock_init(&ctx->spinlock);
-    ctx->connection_count_max = 32768;
+    u32_set_init(&tcp_manager_socket_context_set);
+    mutex_init(&tcp_manager_socket_context_set_mtx);
 }
 
 static void
-tcp_manager_client_context_release(tcp_manager_client_context_t *mcctx)
+tcp_manager_socket_context_class_finalize()
 {
-    mutex_lock(&client_address_set_mtx);
-    int prev = atomic_fetch_sub(&mcctx->rc, 1);
+    mutex_lock(&tcp_manager_socket_context_set_mtx);
+    // u32_set_callback_and_destroy(&tcp_manager_socket_context_set, ...)
+    mutex_unlock(&tcp_manager_socket_context_set_mtx);
+    u32_set_destroy(&tcp_manager_socket_context_set);
+    mutex_destroy(&tcp_manager_socket_context_set_mtx);
+}
 
-    if(prev == 1)
+static tcp_manager_socket_context_t*
+tcp_manager_socket_context_new_instance_nolock(tcp_manager_host_context_t *ctx, int sockfd)
+{
+    u32_node *node = u32_set_insert(&tcp_manager_socket_context_set, sockfd);
+    yassert(node->value == NULL);
+
+    tcp_manager_socket_context_t *sctx;
+    ZALLOC_OBJECT_OR_DIE(sctx, tcp_manager_socket_context_t, GENERIC_TAG);
+    tcp_manager_host_context_acquire(ctx);
+    sctx->host = ctx;
+    sctx->sockfd = sockfd;
+    sctx->rc = 1;
+    spinlock_init(&sctx->spinlock);
+    sctx->bytes_read = 0;
+    sctx->bytes_written = 0;
+    sctx->read_time = 0;
+    sctx->write_time = 0;
+    sctx->accept_time = 0;
+    sctx->close_time = 0;
+
+    node->value = sctx;
+
+    return sctx;
+}
+
+static tcp_manager_socket_context_t*
+tcp_manager_socket_context_new_instance(tcp_manager_host_context_t *ctx, int sockfd)
+{
+    tcp_manager_socket_context_t *sctx;
+    mutex_lock(&tcp_manager_socket_context_set_mtx);
+    sctx = tcp_manager_socket_context_new_instance_nolock(ctx, sockfd);
+    mutex_unlock(&tcp_manager_socket_context_set_mtx);
+    return sctx;
+}
+
+static void
+tcp_manager_socket_context_mru_remove(tcp_manager_socket_context_t *sctx);
+
+static void
+tcp_manager_socket_context_delete(tcp_manager_socket_context_t *sctx)
+{
+    tcp_manager_socket_context_mru_remove(sctx);
+
+    mutex_lock(&tcp_manager_socket_context_set_mtx);
+    if(sctx->sockfd >= 0)
     {
-        bool in_use = list_dl_size(&mcctx->connection_list) > 0;
+        u32_set_delete(&tcp_manager_socket_context_set, sctx->sockfd);
+        close_ex(sctx->sockfd);
+        sctx->sockfd = -1;
+    }
+    spinlock_destroy(&sctx->spinlock);
+    mutex_unlock(&tcp_manager_socket_context_set_mtx);
+    ZFREE_OBJECT(sctx);
+}
 
-        if(!in_use)
+static void
+tcp_manager_socket_context_acquire(tcp_manager_socket_context_t *sctx)
+{
+    ++sctx->rc;
+}
+
+static void
+tcp_manager_socket_context_release(tcp_manager_socket_context_t *sctx)
+{
+    if(--sctx->rc == 0)
+    {
+        if(sctx->close_time > 0) // really closed
         {
-            ptr_set_delete(&client_address_set, &mcctx->addr);
+            tcp_manager_socket_context_delete(sctx);
         }
     }
-    mutex_unlock(&client_address_set_mtx);
+}
+
+static void
+tcp_manager_socket_context_mru_to_head(tcp_manager_socket_context_t *sctx)
+{
+    mutex_lock(&sctx->host->connection_list_mtx);
+    list_dl_move_to_first_position(&sctx->host->connection_list, sctx);
+    mutex_unlock(&sctx->host->connection_list_mtx);
+}
+
+static void
+tcp_manager_socket_context_mru_remove(tcp_manager_socket_context_t *sctx)
+{
+    if(sctx->host != NULL)
+    {
+        tcp_manager_host_context_t *host = sctx->host;
+        sctx->host = NULL;
+        mutex_lock(&host->connection_list_mtx);
+        list_dl_remove(&host->connection_list, sctx);
+        mutex_unlock(&host->connection_list_mtx);
+        tcp_manager_host_context_release(host);
+    }
+}
+
+static bool
+tcp_manager_socket_context_in_use(tcp_manager_socket_context_t *sctx)
+{
+    s64 now = timeus();
+    if((sctx->close_time != 0) &&
+        (
+        ((sctx->read_time + sctx->write_time == 0)  && ((now - sctx->accept_time) < ONE_SECOND_US)) ||
+        ((sctx->read_time > 0)  && ((now - sctx->read_time) < ONE_SECOND_US)) ||
+        ((sctx->write_time > 0)  && ((now - sctx->write_time) < ONE_SECOND_US))
+        )
+        )
+    {
+        return TRUE;
+    }
+    else
+    {
+        return FALSE;
+    }
+}
+
+static ya_result
+tcp_manager_host_context_add(tcp_manager_host_context_t *ctx, int sockfd, tcp_manager_socket_context_t **out_sctxp)
+{
+    tcp_manager_socket_context_t *oldest_sctx = NULL;
+
+    mutex_lock(&ctx->connection_list_mtx);
+    s32 mru_size = (s32)list_dl_size(&ctx->connection_list);
+    if(mru_size >= ctx->connection_count_max)
+    {
+        list_dl_node_s* node = list_dl_last_node(&ctx->connection_list);
+
+        // node->data
+        oldest_sctx = (tcp_manager_socket_context_t*)node->data;
+
+        if(tcp_manager_socket_context_in_use(oldest_sctx))
+        {
+            mutex_unlock(&ctx->connection_list_mtx);
+            return ERROR;
+        }
+
+        // acquire it so it will still be valid
+        tcp_manager_socket_context_acquire(oldest_sctx);
+    }
+
+    tcp_manager_socket_context_t *sctx = tcp_manager_socket_context_new_instance(ctx, sockfd);
+
+    // insert
+
+    //tcp_manager_socket_context_acquire(sctx);
+    list_dl_insert(&ctx->connection_list, sctx);
+
+    if(out_sctxp != NULL)
+    {
+        tcp_manager_socket_context_acquire(sctx);
+        *out_sctxp = sctx;
+    }
+
+    tcp_manager_socket_context_release(sctx);
+
+    mutex_unlock(&ctx->connection_list_mtx);
+
+    if(oldest_sctx != NULL)
+    {
+        int fd = oldest_sctx->sockfd;
+        if(fd >= 0)
+        {
+            oldest_sctx->close_time = timeus();
+            oldest_sctx->sockfd = -1;
+            u32_set_delete(&tcp_manager_socket_context_set, fd);
+            close_ex(fd);
+        }
+
+        tcp_manager_socket_context_release(oldest_sctx);
+    }
+
+    return SUCCESS;
+}
+
+static bool tcp_manager_initialised = FALSE;
+
+/**
+ * Acquires a TCP connection, ensuring exclusive access to the stream.
+ */
+tcp_manager_socket_context_t*
+tcp_manager_context_acquire(int sockfd)
+{
+    tcp_manager_socket_context_t* sctx = NULL;
+
+    mutex_lock(&tcp_manager_socket_context_set_mtx);
+    u32_node *node = u32_set_find(&tcp_manager_socket_context_set, sockfd);
+    if(node != NULL)
+    {
+        sctx = (tcp_manager_socket_context_t*)node->value;
+        tcp_manager_socket_context_acquire(sctx);
+    }
+    mutex_unlock(&tcp_manager_socket_context_set_mtx);
+
+    return sctx;
+}
+
+/**
+ * Releases a TCP connection.
+ */
+void
+tcp_manager_context_release(tcp_manager_socket_context_t *sctx)
+{
+    tcp_manager_socket_context_release(sctx);
+}
+
+void
+tcp_manager_context_close_and_release(tcp_manager_socket_context_t *sctx)
+{
+    sctx->close_time = timeus();
+    tcp_manager_socket_context_release(sctx);
+}
+
+ya_result
+tcp_manager_write(tcp_manager_socket_context_t *sctx, const u8 *buffer, size_t buffer_size)
+{
+    int n = write(sctx->sockfd, buffer, buffer_size);
+    if(n > 0)
+    {
+        tcp_manager_socket_context_mru_to_head(sctx);
+
+        spinlock_lock(&sctx->spinlock);
+        sctx->bytes_written += n;
+        sctx->write_time = timeus();
+        spinlock_unlock(&sctx->spinlock);
+    }
+
+    return n;
+}
+
+ya_result
+tcp_manager_read(tcp_manager_socket_context_t *sctx, u8 *buffer, size_t buffer_size)
+{
+    int n = read(sctx->sockfd, buffer, buffer_size);
+    if(n > 0)
+    {
+        tcp_manager_socket_context_mru_to_head(sctx);
+
+        spinlock_lock(&sctx->spinlock);
+        sctx->bytes_read += n;
+        sctx->read_time = timeus();
+        spinlock_unlock(&sctx->spinlock);
+    }
+
+    return n;
+}
+
+ya_result
+tcp_manager_read_fully(tcp_manager_socket_context_t *sctx, u8 *buffer, size_t buffer_size)
+{
+    const u8 *buffer_limit = &buffer[buffer_size];
+    const u8 *buffer_base = buffer;
+
+    while(buffer < buffer_limit)
+    {
+        int n = read(sctx->sockfd, buffer, buffer_size);
+
+        if(n > 0)
+        {
+            tcp_manager_socket_context_mru_to_head(sctx);
+
+            spinlock_lock(&sctx->spinlock);
+            sctx->bytes_read += n;
+            sctx->read_time = timeus();
+            spinlock_unlock(&sctx->spinlock);
+            buffer += n;
+        }
+        else
+        {
+            if(n < 0)
+            {
+                int err = errno;
+                if(err == EINTR)
+                {
+                    continue;
+                }
+
+                if(dnscore_shuttingdown())
+                {
+                    return STOPPED_BY_APPLICATION_SHUTDOWN;
+                }
+#if __FreeBSD__
+                if(err == EAGAIN)
+                {
+                    continue;
+                }
+#endif
+                if(err == ETIMEDOUT)
+                {
+                    if(buffer - buffer_base > 0)
+                    {
+                        // partial read and a timeout ...
+                        continue;
+                    }
+                }
+
+                return MAKE_ERRNO_ERROR(err);
+            }
+            else
+            {
+                // EOF
+                return buffer - buffer_base;
+            }
+        }
+    }
+
+    return buffer - buffer_base;
+}
+
+void
+tcp_manager_write_update(tcp_manager_socket_context_t *sctx, size_t n)
+{
+    tcp_manager_socket_context_mru_to_head(sctx);
+
+    spinlock_lock(&sctx->spinlock);
+    sctx->bytes_written += n;
+    sctx->write_time = timeus();
+    spinlock_unlock(&sctx->spinlock);
+}
+
+void
+tcp_manager_read_update(tcp_manager_socket_context_t *sctx, size_t n)
+{
+    tcp_manager_socket_context_mru_to_head(sctx);
+
+    spinlock_lock(&sctx->spinlock);
+    sctx->bytes_read += n;
+    sctx->read_time = timeus();
+    spinlock_unlock(&sctx->spinlock);
+}
+
+ya_result
+tcp_manager_close(tcp_manager_socket_context_t *sctx)
+{
+    ya_result ret;
+
+    if(sctx->close_time == 0)
+    {
+        sctx->close_time = timeus();
+        ret = SUCCESS;
+    }
+    else
+    {
+        ret = ERROR; // already closed
+    }
+
+    return ret;
+}
+
+socketaddress*
+tcp_manager_socketaddress(tcp_manager_socket_context_t *sctx)
+{
+    return &sctx->host->addr;
+}
+
+socklen_t
+tcp_manager_socklen(tcp_manager_socket_context_t *sctx)
+{
+    return sctx->host->addr_len;
+}
+
+int
+tcp_manager_socket(tcp_manager_socket_context_t *sctx)
+{
+    return sctx->sockfd;
+}
+
+bool
+tcp_manager_is_valid(tcp_manager_socket_context_t *sctx)
+{
+    return (sctx != NULL) && (sctx->sockfd >= 0) && (sctx->close_time == 0);
 }
 
 void
@@ -181,26 +627,38 @@ tcp_manager_init()
     if(!tcp_manager_initialised)
     {
         tcp_manager_initialised = TRUE;
-        tcp_manager_address_context_init(&tcp_manager_global);
-        tcp_manager_global.connection_count_max = 10;
-        tcp_manager_global.connection_per_adress_max = 3;
-        tcp_manager_wl_ipv4.compare = socketaddress_compare_ip;
-        tcp_manager_wl_ipv6.compare = socketaddress_compare_ip;
-        client_address_set.compare = socketaddress_compare_ip;
+
+        tcp_manager_host_context_class_init();
+        tcp_manager_socket_context_class_init();
     }
 }
 
-void
-tcp_manager_finalize()
+ya_result
+tcp_manager_host_register(socketaddress *sa, socklen_t sa_len, s32 allowed_connections_max)
 {
+    tcp_manager_host_context_t *ctx = tcp_manager_host_context_new_instance(sa, sa_len, allowed_connections_max, TRUE);
+    (void)ctx;
+    return SUCCESS;
+}
+
+ya_result
+tcp_manager_connection_max(s32 allowed_connections_max)
+{
+    if(allowed_connections_max <= 0)
+    {
+        allowed_connections_max = TCP_MANAGER_HOST_CONTEXT_CONNECTION_COUNT_MAX;
+    }
+
+    // unregistered_tcp_manager_host_context.connection_count_max = allowed_connections_max;
+    return SUCCESS;
 }
 
 ya_result
 tcp_manager_accept(int servfd)
 {
+    ya_result ret;
     socketaddress addr;
     socklen_t addr_len = sizeof(socketaddress);
-    tcp_manager_address_context_t *context;
 
     int sockfd;
 
@@ -216,7 +674,7 @@ tcp_manager_accept(int servfd)
 
     if(sockfd >= 0)
     {
-        // check if the client is whilelisted
+        // check if the host is registered
 
         s64 now = timeus();
 
@@ -227,154 +685,21 @@ tcp_manager_accept(int servfd)
             return BUFFER_WOULD_OVERFLOW;
         }
 
-        switch(addr.sa.sa_family)
+        tcp_manager_socket_context_t *sctx;
+        tcp_manager_host_context_t *ctx = tcp_manager_host_context_acquire_or_create(&addr, addr_len, 1, FALSE);
+        if(FAIL(ret = tcp_manager_host_context_add(ctx, sockfd, &sctx)))
         {
-            case AF_INET:
-            {
-                //addr.sa4.sin_addr
-                ptr_node *node = ptr_set_find(&tcp_manager_wl_ipv4, &addr.sa4);
-                if(node == NULL)
-                {
-                    // global case
-                    context = &tcp_manager_global;
-                }
-                else
-                {
-                    context = (tcp_manager_address_context_t*)node->value;
-                }
-                break;
-            }
-            case AF_INET6:
-            {
-                ptr_node *node = ptr_set_find(&tcp_manager_wl_ipv6, &addr.sa6);
-                if(node == NULL)
-                {
-                    // global case
-                    context = &tcp_manager_global;
-                }
-                else
-                {
-                    context = (tcp_manager_address_context_t*)node->value;
-                }
-                break;
-            }
-            default:
-            {
-                tcp_set_abortive_close(sockfd);
-                close_ex(sockfd);
-                return INVALID_PROTOCOL;
-            }
-        }
-
-        mutex_lock(&client_address_set_mtx);
-        tcp_manager_client_context_t *mcctx;
-        ptr_node *client_address_node = ptr_set_insert(&client_address_set, &addr);
-        if(client_address_node->value == NULL)
-        {
-            // create the node
-
-            ZALLOC_OBJECT_OR_DIE(mcctx, tcp_manager_client_context_t, GENERIC_TAG);
-            mutex_init(&mcctx->connection_list_mtx);
-            list_dl_init(&mcctx->connection_list);
-            mcctx->connection_count_max = context->connection_per_adress_max;
-            atomic_init(&mcctx->rc, 1);
-            memcpy(&mcctx->addr, &addr, addr_len);
-            mcctx->addr_len = addr_len;
-
-            client_address_node->key = &mcctx->addr;
-            client_address_node->value = mcctx;
-        }
-        else
-        {
-            mcctx = (tcp_manager_client_context_t*)client_address_node->value;
-        }
-        mutex_unlock(&client_address_set_mtx);
-
-        spinlock_lock(&context->spinlock);
-        bool has_room = (context->connection_count < context->connection_count_max);
-
-        if(has_room)
-        {
-            s32 count = ++context->connection_count;
-
-            log_debug("tcp: %{sockaddr} connection count: %i/%i (accept)", &context->addr, count, context->connection_count_max);
-        }
-
-        spinlock_unlock(&context->spinlock);
-
-        if(has_room)
-        {
-            tcp_manager_socket_context_t *sockfd_context;
-            ZALLOC_OBJECT_OR_DIE(sockfd_context, tcp_manager_socket_context_t, GENERIC_TAG);
-            sockfd_context->address_context = context;
-            sockfd_context->client_context = mcctx;
-            sockfd_context->sockfd = sockfd;
-            atomic_init(&sockfd_context->rc, 0);
-            spinlock_init(&sockfd_context->spinlock);
-            sockfd_context->bytes_read = 0;
-            sockfd_context->bytes_written = 0;
-            sockfd_context->read_time = 0;
-            sockfd_context->write_time = 0;
-            sockfd_context->accept_time = now;
-            sockfd_context->close_time = 0;
-            sockfd_context->addr_len = addr_len;
-            memcpy(&sockfd_context->addr, &addr, addr_len);
-
-            mutex_lock(&tcp_manager_sockfd_set_mtx);
-            u32_node *sockfd_node = u32_set_insert(&tcp_manager_sockfd_set, sockfd);
-
-            if(sockfd_node->value == NULL)
-            {
-                sockfd_node->value = sockfd_context;
-
-                mutex_lock(&mcctx->connection_list_mtx);
-                list_dl_append(&mcctx->connection_list, sockfd_context);
-
-                if(list_dl_size(&mcctx->connection_list) <= (u32)mcctx->connection_count_max)
-                {
-                    log_debug("tcp: %{sockaddr} client connection count: %i/%i", &mcctx->addr, list_dl_size(&mcctx->connection_list), mcctx->connection_count_max);
-
-                    mutex_unlock(&mcctx->connection_list_mtx);
-                }
-                else
-                {
-                    log_debug("tcp: %{sockaddr} client connection count: %i/%i: aborting the oldest one", &mcctx->addr, list_dl_size(&mcctx->connection_list), mcctx->connection_count_max);
-
-                    tcp_manager_socket_context_t *oldest_sockfd_context = (tcp_manager_socket_context_t*)list_dl_remove_first(&mcctx->connection_list);
-                    mutex_unlock(&mcctx->connection_list_mtx);
-                    shutdown(oldest_sockfd_context->sockfd, SHUT_RDWR);
-                    tcp_set_abortive_close(oldest_sockfd_context->sockfd);
-                }
-
-                tcp_manager_client_context_release(mcctx);
-
-                mutex_unlock(&tcp_manager_sockfd_set_mtx);
-
-                return sockfd;
-            }
-            else
-            {
-                mutex_unlock(&tcp_manager_sockfd_set_mtx);
-
-                spinlock_lock(&context->spinlock);
-                --context->connection_count;
-                spinlock_unlock(&context->spinlock);
-
-                atomic_fetch_sub(&mcctx->rc, 1);
-
-                tcp_set_abortive_close(sockfd);
-                close_ex(sockfd);   // socket not unregistered!
-
-                return INVALID_STATE_ERROR;
-            }
-        }
-        else
-        {
+            tcp_manager_host_context_release(ctx);
             tcp_set_abortive_close(sockfd);
-            close_ex(sockfd);   // quota exceeded
-
-            return MAKE_DNSMSG_ERROR(EMFILE);
+            close_ex(sockfd);
+            return ERROR; // limit reached
         }
+
+        sctx->accept_time = now;
+        tcp_manager_socket_context_release(sctx);
+        tcp_manager_host_context_release(ctx);
+
+        return sockfd;
     }
     else
     {
@@ -382,151 +707,27 @@ tcp_manager_accept(int servfd)
     }
 }
 
-tcp_manager_socket_context_t*
-tcp_manager_context_acquire(int sockfd)
+void tcp_manager_set_recvtimeout(tcp_manager_socket_context_t *sctx, int seconds, int useconds)
 {
-    mutex_lock(&tcp_manager_sockfd_set_mtx);
-    u32_node *sockfd_node = u32_set_find(&tcp_manager_sockfd_set, sockfd);
-    if(sockfd_node->value != NULL)
-    {
-        tcp_manager_socket_context_t *sctx = (tcp_manager_socket_context_t*)sockfd_node->value; // the cast is just a reminded for the programmer
-        atomic_fetch_add(&sctx->rc, 1);
-        mutex_unlock(&tcp_manager_sockfd_set_mtx);
-
-        return sctx;
-    }
-    else
-    {
-        mutex_unlock(&tcp_manager_sockfd_set_mtx);
-        return NULL;
-    }
+    tcp_set_recvtimeout(sctx->sockfd, seconds, useconds);
 }
 
-bool
-tcp_manager_context_release(tcp_manager_socket_context_t* sctx)
+void tcp_manager_set_sendtimeout(tcp_manager_socket_context_t *sctx, int seconds, int useconds)
 {
-    int old_rc_value = atomic_fetch_sub(&sctx->rc, 1);
-
-    bool zero = (old_rc_value == 1); // 1 - 1 == 0
-
-    if(zero)
-    {
-        // remove
-
-        mutex_lock(&tcp_manager_sockfd_set_mtx);
-        u32_set_delete(&tcp_manager_sockfd_set, sctx->sockfd);
-        // do NOT: sctx->address_context = NULL;
-        mutex_unlock(&tcp_manager_sockfd_set_mtx);
-
-        log_debug("tcp: released %{sockaddr} r: %lli, w: %lli, accepted: %llT, last-read: %llT, last-write: %llT, closed: %llT, active: %llims, total: %llims",
-                &sctx->addr, sctx->bytes_read, sctx->bytes_written, sctx->accept_time, sctx->read_time, sctx->write_time, sctx->close_time,
-                (MAX(sctx->read_time, sctx->write_time) - sctx->accept_time) / 1000,
-                (sctx->close_time - sctx->accept_time) / 1000);
-
-        s32 count;
-
-        tcp_manager_client_context_release(sctx->client_context);
-
-        log_debug("tcp: %{sockaddr} client connection count: %i/%i", &sctx->client_context->addr, list_dl_size(&sctx->client_context->connection_list), sctx->client_context->connection_count_max);
-
-        spinlock_lock(&sctx->address_context->spinlock);
-        count = --sctx->address_context->connection_count;
-        spinlock_unlock(&sctx->address_context->spinlock);
-
-        log_debug("tcp: %{sockaddr} connection count: %i/%i (close)", &sctx->address_context->addr, count, sctx->address_context->connection_count_max);
-
-        spinlock_destroy(&sctx->spinlock);
-
-        ZFREE_OBJECT(sctx);
-    }
-    return zero;
+    tcp_set_sendtimeout(sctx->sockfd, seconds, useconds);
 }
 
-ya_result
-tcp_manager_write(tcp_manager_socket_context_t *sctx, const u8 *buffer, size_t buffer_size)
+void tcp_manager_set_nodelay(tcp_manager_socket_context_t *sctx, bool enable)
 {
-    int n = write(sctx->sockfd, buffer, buffer_size);
-    if(n >= 0)
-    {
-        spinlock_lock(&sctx->spinlock);
-        sctx->bytes_written += n;
-        sctx->write_time = timeus();
-        spinlock_unlock(&sctx->spinlock);
-    }
-
-    return n;
+    tcp_set_nodelay(sctx->sockfd, enable);
 }
 
-ya_result
-tcp_manager_read(tcp_manager_socket_context_t *sctx, u8 *buffer, size_t buffer_size)
+void tcp_manager_set_cork(tcp_manager_socket_context_t *sctx, bool enable)
 {
-    int n = read(sctx->sockfd, buffer, buffer_size);
-    if(n >= 0)
-    {
-        spinlock_lock(&sctx->spinlock);
-        sctx->bytes_read += n;
-        sctx->read_time = timeus();
-        spinlock_unlock(&sctx->spinlock);
-    }
-
-    return n;
+    tcp_set_cork(sctx->sockfd, enable);
 }
 
 void
-tcp_manager_write_update(tcp_manager_socket_context_t *sctx, size_t n)
+tcp_manager_finalize()
 {
-    spinlock_lock(&sctx->spinlock);
-    sctx->bytes_written += n;
-    sctx->write_time = timeus();
-    spinlock_unlock(&sctx->spinlock);
-}
-
-void
-tcp_manager_read_update(tcp_manager_socket_context_t *sctx, size_t n)
-{
-    spinlock_lock(&sctx->spinlock);
-    sctx->bytes_read += n;
-    sctx->read_time = timeus();
-    spinlock_unlock(&sctx->spinlock);
-}
-
-ya_result
-tcp_manager_close(tcp_manager_socket_context_t *sctx)
-{
-    ya_result ret;
-
-    if(ISOK(ret = close_ex(sctx->sockfd)))
-    {
-        spinlock_lock(&sctx->spinlock);
-        sctx->close_time = timeus();
-        spinlock_unlock(&sctx->spinlock);
-    }
-
-    tcp_manager_context_release(sctx);
-
-    return ret;
-}
-
-socketaddress*
-tcp_manager_socketaddress(tcp_manager_socket_context_t *sctx)
-{
-    return &sctx->addr;
-}
-
-socklen_t
-tcp_manager_socklen(tcp_manager_socket_context_t *sctx)
-{
-    return sctx->addr_len;
-}
-
-int
-tcp_manager_socket(tcp_manager_socket_context_t *sctx)
-{
-    return sctx->sockfd;
-}
-
-bool
-tcp_manager_is_valid(tcp_manager_socket_context_t *sctx)
-{
-    return (sctx != NULL) && (sctx->sockfd >= 0) && (sctx->close_time == 0);
 }

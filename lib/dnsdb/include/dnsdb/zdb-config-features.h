@@ -196,18 +196,18 @@
 #define ZDB_PACKAGE "yadifa"
 #define ZDB_PACKAGE_BUGREPORT "info@yadifa.eu"
 #define ZDB_PACKAGE_NAME "yadifa"
-#define ZDB_PACKAGE_STRING "yadifa 2.4.2-9997"
+#define ZDB_PACKAGE_STRING "yadifa 2.4.3-10039"
 #define ZDB_PACKAGE_TARNAME "yadifa"
 #define ZDB_PACKAGE_URL ""
-#define ZDB_PACKAGE_VERSION "2.4.2-9997"
+#define ZDB_PACKAGE_VERSION "2.4.3-10039"
 #define ZDB_SELECT_TYPE_ARG1 int
 #define ZDB_SELECT_TYPE_ARG234 (fd_set *)
 #define ZDB_SELECT_TYPE_ARG5 (struct timeval *)
 #define ZDB_STDC_HEADERS 1
 #define ZDB_TIME_WITH_SYS_TIME 1
-#define ZDB_VERSION "2.4.2-9997"
+#define ZDB_VERSION "2.4.3-10039"
 #define ZDB_restrict __restrict
 #undef ZDB_VERSION
-// version 2.4.2.0-9997
-#define ZDB_VERSION 0x02040200270dLL// include/dnsdb/zdb-config-features.h
+// version 2.4.3.0-10039
+#define ZDB_VERSION 0x020403002737LL// include/dnsdb/zdb-config-features.h
 

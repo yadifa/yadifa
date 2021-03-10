@@ -56,7 +56,9 @@
 #include <dnscore/fdtools.h>
 #include <dnscore/thread_pool.h>
 #include <dnscore/packet_writer.h>
+#if DNSCORE_HAS_TCP_MANAGER
 #include <dnscore/tcp_manager.h>
+#endif
 
 #include <dnsdb/zdb-zone-journal.h>
 #include <dnsdb/zdb-zone-answer-ixfr.h>

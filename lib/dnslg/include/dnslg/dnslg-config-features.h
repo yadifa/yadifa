@@ -196,18 +196,18 @@
 #define DNSLG_PACKAGE "yadifa"
 #define DNSLG_PACKAGE_BUGREPORT "info@yadifa.eu"
 #define DNSLG_PACKAGE_NAME "yadifa"
-#define DNSLG_PACKAGE_STRING "yadifa 2.4.2-9997"
+#define DNSLG_PACKAGE_STRING "yadifa 2.4.3-10039"
 #define DNSLG_PACKAGE_TARNAME "yadifa"
 #define DNSLG_PACKAGE_URL ""
-#define DNSLG_PACKAGE_VERSION "2.4.2-9997"
+#define DNSLG_PACKAGE_VERSION "2.4.3-10039"
 #define DNSLG_SELECT_TYPE_ARG1 int
 #define DNSLG_SELECT_TYPE_ARG234 (fd_set *)
 #define DNSLG_SELECT_TYPE_ARG5 (struct timeval *)
 #define DNSLG_STDC_HEADERS 1
 #define DNSLG_TIME_WITH_SYS_TIME 1
-#define DNSLG_VERSION "2.4.2-9997"
+#define DNSLG_VERSION "2.4.3-10039"
 #define DNSLG_restrict __restrict
 #undef DNSLG_VERSION
-// version 2.4.2.0-9997
-#define DNSLG_VERSION 0x02040200270dLL// include/dnslg/dnslg-config-features.h
+// version 2.4.3.0-10039
+#define DNSLG_VERSION 0x020403002737LL// include/dnslg/dnslg-config-features.h
 

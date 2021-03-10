@@ -58,7 +58,6 @@ SUBDIRS += test/freebsd12-test
 SUBDIRS += test/ipc-test
 SUBDIRS += test/journal-fusion
 SUBDIRS += test/journal-from-ixfr
-SUBDIRS += test/journal-server
 SUBDIRS += test/journal-speed-test
 SUBDIRS += test/keygen-test
 SUBDIRS += test/limiter-test

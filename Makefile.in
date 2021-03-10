@@ -116,10 +116,10 @@ host_triplet = @host@
 @HAS_TESTS_TRUE@	test/dsfromkey-test test/filepool-test \
 @HAS_TESTS_TRUE@	test/file-test test/freebsd12-test \
 @HAS_TESTS_TRUE@	test/ipc-test test/journal-fusion \
-@HAS_TESTS_TRUE@	test/journal-from-ixfr test/journal-server \
-@HAS_TESTS_TRUE@	test/journal-speed-test test/keygen-test \
-@HAS_TESTS_TRUE@	test/limiter-test test/logger-test \
-@HAS_TESTS_TRUE@	test/message-test test/mutex-test \
+@HAS_TESTS_TRUE@	test/journal-from-ixfr test/journal-speed-test \
+@HAS_TESTS_TRUE@	test/keygen-test test/limiter-test \
+@HAS_TESTS_TRUE@	test/logger-test test/message-test \
+@HAS_TESTS_TRUE@	test/mutex-test \
 @HAS_TESTS_TRUE@	test/network-interfaces-forall-test \
 @HAS_TESTS_TRUE@	test/notify-test test/nsec3-answer \
 @HAS_TESTS_TRUE@	test/nsec3-hash test/openssl111a-ecdsa-test \
@@ -214,7 +214,7 @@ DIST_SUBDIRS = lib/dnscore lib/dnsdb etc doc var sbin/yadifad \
 	test/daemonised-logger-test test/dnskey-test test/dnsname-test \
 	test/dnssec-test test/dsfromkey-test test/filepool-test \
 	test/file-test test/freebsd12-test test/ipc-test \
-	test/journal-fusion test/journal-from-ixfr test/journal-server \
+	test/journal-fusion test/journal-from-ixfr \
 	test/journal-speed-test test/keygen-test test/limiter-test \
 	test/logger-test test/message-test test/mutex-test \
 	test/network-interfaces-forall-test test/notify-test \

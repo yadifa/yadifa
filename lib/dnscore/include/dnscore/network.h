@@ -107,50 +107,9 @@ static inline bool sockaddr_equals(const struct sockaddr *a, const struct sockad
     return FALSE;
 }
 
-static inline int sockaddr_compare_addr_port(const struct sockaddr *a, const struct sockaddr *b)
-{
-    int ret;
-    ret = a->sa_family;
-    ret -= b->sa_family;
+int sockaddr_compare_addr_port(const struct sockaddr *a, const struct sockaddr *b);
 
-    if(ret ==  0)
-    {
-        switch(a->sa_family)
-        {
-            case AF_INET:
-            {
-                const struct sockaddr_in *sa4 = (const struct sockaddr_in *)a;
-                const struct sockaddr_in *sb4 = (const struct sockaddr_in *)b;
-
-                ret = sa4->sin_port;
-                ret -= sb4->sin_port;
-
-                if(ret == 0)
-                {
-                    ret = memcmp(&sa4->sin_addr.s_addr, &sb4->sin_addr.s_addr, 4);
-                }
-                break;
-            }
-            case  AF_INET6:
-            {
-
-                const struct sockaddr_in6 *sa6 = (const struct sockaddr_in6 *)a;
-                const struct sockaddr_in6 *sb6 = (const struct sockaddr_in6 *)b;
-
-                ret = sa6->sin6_port;
-                ret -= sb6->sin6_port;
-
-                if(ret == 0)
-                {
-                    ret = memcmp(&sa6->sin6_addr, &sb6->sin6_addr, 16);
-                }
-                break;
-            }
-        }
-    }
-
-    return ret;
-}
+int socketaddress_compare_ip(const void *a, const void *b);
 
 static inline u16 sockaddr_port_ne(socketaddress *sa)
 {

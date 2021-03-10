@@ -1251,6 +1251,7 @@ program_mode_play_all(bool does_loop, bool daemonise)
         }
 
         thread_pool_destroy(tp);
+        tp = NULL;
 
         free(args);
     }

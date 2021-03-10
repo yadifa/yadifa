@@ -293,6 +293,7 @@ main(int argc, char *argv[])
             }
             thread_pool_stop_all(); // including tp
             thread_pool_destroy(tp);
+            tp = NULL;
         }
     }
 

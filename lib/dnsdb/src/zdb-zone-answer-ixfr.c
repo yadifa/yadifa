@@ -60,7 +60,9 @@
 #include <dnscore/packet_reader.h>
 #include <dnscore/rfc.h>
 #include <dnscore/serial.h>
+#if DNSCORE_HAS_TCP_MANAGER
 #include <dnscore/tcp_manager.h>
+#endif
 
 #if DEBUG
 #include <dnscore/logger-output-stream.h>

@@ -48,6 +48,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <ctype.h>
+#include <pthread.h>
 
 #include "dnscore/timeformat.h"
 
@@ -1261,7 +1262,7 @@ debug_osformatln(output_stream* stream, const char* fmt, ...)
     output_stream_write(stream, STRSEPARATOR, sizeof(STRSEPARATOR));
     format_dec_u64(getpid(), stream, 0, 0, FALSE);
     output_stream_write(stream, STRSEPARATOR, sizeof(STRSEPARATOR));
-    format_hex_u64_lo(pthread_self(), stream, 0, 0, FALSE);
+    format_hex_u64_lo((u64)(intptr)pthread_self(), stream, 0, 0, FALSE);
     output_stream_write(stream, STRSEPARATOR, sizeof(STRSEPARATOR));
     va_list args;
     va_start(args, fmt);

@@ -41,21 +41,103 @@
 #endif
 
 #ifndef __TCP_MANAGER_C__
+#if !DNSCORE_HAS_TCP_MANAGER
+#error "dnscore/tcp_manager.h should not be included if the TCP manager is disabled"
+#endif
 typedef void* tcp_manager_socket_context_t;
 #endif
 
-ya_result tcp_manager_accept(int servfd);
-tcp_manager_socket_context_t* tcp_manager_context_acquire(int sockfd);
-bool tcp_manager_context_release(tcp_manager_socket_context_t *sctx);
-ya_result tcp_manager_write(tcp_manager_socket_context_t *sctx, const u8 *buffer, size_t buffer_size);
-ya_result tcp_manager_read(tcp_manager_socket_context_t *sctx, u8 *buffer, size_t buffer_size);
-ya_result tcp_manager_close(tcp_manager_socket_context_t *sctx);
+#define TCP_MANAGER_HOST_CONTEXT_CONNECTION_COUNT_MAX 16
 
+void tcp_manager_init();
+
+/**
+ * Registers a hosts with its separate allowed connections.
+ */
+ya_result tcp_manager_register_client(socketaddress *sa, socklen_t sa_len, s32 allowed_connections_max);
+
+/**
+ * Sets the allowed connections total for all unregistered connections.
+ */
+ya_result tcp_manager_connection_max(s32 allowed_connections_max);
+
+/**
+ * Accepts a TCP connection and manages it.
+ */
+ya_result tcp_manager_accept(int servfd);
+
+/**
+ * Acquires a TCP connection, ensuring exclusive access to the stream.
+ */
+tcp_manager_socket_context_t* tcp_manager_context_acquire(int sockfd);
+
+/**
+ * Releases a TCP connection.
+ */
+void tcp_manager_context_release(tcp_manager_socket_context_t *sctx);
+
+/**
+ * Closes then releases a TCP connection. (When the last read returned 0 bytes)
+ */
+void tcp_manager_context_close_and_release(tcp_manager_socket_context_t *sctx);
+
+/**
+ * Updates the amount of bytes sent over an acquired connection.
+ */
 void tcp_manager_write_update(tcp_manager_socket_context_t *sctx, size_t buffer_size);
+
+/**
+ * Updates the amount of bytes received from an acquired connection.
+ */
 void tcp_manager_read_update(tcp_manager_socket_context_t *sctx, size_t buffer_size);
 
+/**
+ * Reports an error that occurred using the connection.
+ */
+void tcp_manager_error_report(tcp_manager_socket_context_t *sctx, size_t buffer_size);
+
+/**
+ * Sends over an acquired connection, calls tcp_manager_write_update.
+ */
+ya_result tcp_manager_write(tcp_manager_socket_context_t *sctx, const u8 *buffer, size_t buffer_size);
+
+/**
+ * Receives from an acquired connection, calls tcp_manager_write_update.
+ */
+ya_result tcp_manager_read(tcp_manager_socket_context_t *sctx, u8 *buffer, size_t buffer_size);
+
+/**
+ * Receives from an acquired connection, calls tcp_manager_write_update.
+ */
+ya_result tcp_manager_read_fully(tcp_manager_socket_context_t *sctx, u8 *buffer, size_t buffer_size);
+
+/**
+ * Marks the TCP stream as being closed.
+ * When the last reference to the TCP stream is lost, then it will be closed and removed from the states collections.
+ */
+ya_result tcp_manager_close(tcp_manager_socket_context_t *sctx);
+
+/**
+ * Retrieves the address of an acquired connection.
+ */
 socketaddress *tcp_manager_socketaddress(tcp_manager_socket_context_t *sctx);
+
+/**
+ * Retrieves the address length of an acquired connection.
+ */
 socklen_t tcp_manager_socklen(tcp_manager_socket_context_t *sctx);
+
+/**
+ * Gets the socket file descriptor of an acquired connection.
+ */
 int tcp_manager_socket(tcp_manager_socket_context_t *sctx);
 
+void tcp_manager_set_recvtimeout(tcp_manager_socket_context_t *sctx, int seconds, int useconds);
+void tcp_manager_set_sendtimeout(tcp_manager_socket_context_t *sctx, int seconds, int useconds);
+void tcp_manager_set_nodelay(tcp_manager_socket_context_t *sctx, bool enable);
+void tcp_manager_set_cork(tcp_manager_socket_context_t *sctx, bool enable);
+
+/**
+ * Not sure it make sense anymore.
+ */
 bool tcp_manager_is_valid(tcp_manager_socket_context_t *sctx);

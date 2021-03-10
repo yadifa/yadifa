@@ -36,9 +36,10 @@
 
 #include <dnscore/logger.h>
 #include <dnscore/sys_error.h>
-
-#include "poll-util.h"
 #include "server.h"
+
+#if !DNSCORE_HAS_TCP_MANAGER
+#include "poll-util.h"
 
 #define MODULE_MSG_HANDLE g_server_logger
 
@@ -170,3 +171,8 @@ poll_update()
         return tcp_fds_idx;
     }
 }
+#else
+
+// not used
+
+#endif

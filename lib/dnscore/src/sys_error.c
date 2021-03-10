@@ -87,7 +87,7 @@ error_register(ya_result code, const char* text)
         text = "NULL";
     }
 
-    if((code & 0xffff0000) == ERRNO_ERROR_BASE)
+    if(YA_ERROR_BASE(code) == ERRNO_ERROR_BASE)
     {
         fprintf(stderr, "error_register(%08x,%s) : the errno space is reserved (0x8000xxxx), ignoring code", code, text);
         fflush(stderr);
@@ -135,9 +135,9 @@ error_gettext(ya_result code)
         return error_gettext_tmp;
     }
 
-    if((code & 0xffff0000) == ERRNO_ERROR_BASE)
+    if(YA_ERROR_BASE(code) == ERRNO_ERROR_BASE)
     {
-        return strerror(code & 0xffff);
+        return strerror(YA_ERROR_CODE(code));
     }
 
     /**/
@@ -150,7 +150,7 @@ error_gettext(ya_result code)
         return (const char*)error_node->value;
     }
     
-    u32 error_base = code & 0xffff0000;
+    u32 error_base = YA_ERROR_BASE(code);
 
     error_node = u32_set_find(&error_set, error_base);
     if(error_node != NULL)
@@ -182,7 +182,7 @@ error_writetext(output_stream *os, ya_result code)
         return;
     }
 
-    if((code & 0xffff0000) == ERRNO_ERROR_BASE)
+    if(YA_ERROR_BASE(code) == ERRNO_ERROR_BASE)
     {
         code &= 0xffff;
 #if DEBUG
@@ -206,7 +206,7 @@ error_writetext(output_stream *os, ya_result code)
         return;
     }
     
-    u32 error_base = code & 0xffff0000;
+    u32 error_base = YA_ERROR_BASE(code);
 
     error_node = u32_set_find(&error_set, error_base);
     if(error_node != NULL)

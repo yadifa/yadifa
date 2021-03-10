@@ -44,7 +44,9 @@
 
 #include <dnscore/message.h>
 #include <dnscore/host_address.h>
+#if DNSCORE_HAS_TCP_MANAGER
 #include <dnscore/tcp_manager.h>
+#endif
 
 #include "database.h"
 

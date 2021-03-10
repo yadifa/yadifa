@@ -64,7 +64,9 @@
 #include <dnscore/serial.h>
 #include <dnscore/fdtools.h>
 #include <dnscore/tcp_io_stream.h>
+#if DNSCORE_HAS_TCP_MANAGER
 #include <dnscore/tcp_manager.h>
+#endif
 
 #include "dnsdb/zdb_types.h"
 #include "dnsdb/zdb-zone-arc.h"

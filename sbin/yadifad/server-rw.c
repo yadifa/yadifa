@@ -1358,7 +1358,7 @@ server_rw_query_loop(struct service_worker_s *worker)
     log_info("server-rw: cleaning up");
 
     thread_pool_destroy(server_udp_thread_pool);
-    //server_udp_thread_pool = NULL;
+    server_udp_thread_pool = NULL;
     
     network_thread_context_array_finalize(&ctxa);
 

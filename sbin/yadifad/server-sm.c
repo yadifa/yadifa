@@ -411,7 +411,15 @@ server_sm_udp_worker_thread(void *parms)
             {
                 // that message will be replied to
                 ret = message_send_udp(mesg, fd);
-                ctx->statistics.udp_output_size_total += ret;
+
+                if(ISOK(ret))
+                {
+                    ctx->statistics.udp_output_size_total += ret;
+                }
+                else
+                {
+                    log_err("server-sm: could not reply though UDP (socket %i): %r", fd, ret);
+                }
             }
             else
             {
@@ -873,6 +881,7 @@ server_sm_query_loop(struct service_worker_s *worker)
     log_info("server-sm: cleaning up: stopping thread pool");
 
     thread_pool_destroy(server_udp_thread_pool);
+    server_udp_thread_pool = NULL;
 
     log_info("server-sm: cleaning up: releasing context");
     

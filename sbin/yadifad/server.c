@@ -58,7 +58,9 @@
 #include <dnscore/service.h>
 #include <dnscore/process.h>
 #include <dnscore/socket-server.h>
+#if DNSCORE_HAS_TCP_MANAGER
 #include <dnscore/tcp_manager.h>
+#endif
 
 logger_handle *g_server_logger = LOGGER_HANDLE_SINK;
 #define MODULE_MSG_HANDLE g_server_logger
@@ -177,15 +179,31 @@ server_tcp_reply(message_data *mesg, tcp_manager_socket_context_t *sctx)
 {
     ssize_t ret;
 
-    if(ISOK(ret = message_update_length_send_tcp_with_default_minimum_throughput(mesg, tcp_manager_socket(sctx))))
+#if DEBUG
+    log_debug("tcp: %{sockaddr}: replying %i bytes", message_get_sender_sa(mesg), message_get_size(mesg));
+#endif
+/*
+    tcp_manager_set_nodelay(sctx, TRUE);
+    tcp_manager_set_cork(sctx, FALSE);
+*/
+    //ret = message_update_length_send_tcp_with_default_minimum_throughput(mesg, tcp_manager_socket(sctx));
+    ret = message_send_tcp(mesg, tcp_manager_socket(sctx));
+
+    if(ISOK(ret))
     {
         tcp_manager_write_update(sctx, ret);
+#if DEBUG
+        log_debug("tcp: %{sockaddr}: replied %i bytes", message_get_sender_sa(mesg), message_get_size(mesg));
+#endif
     }
     else
     {
-        log_err("tcp: could not answer: %r", (ya_result)ret);
+        log_err("tcp: %{sockaddr}: could not reply answer (%i bytes): %r", message_get_sender_sa(mesg), message_get_size(mesg), (ya_result)ret);
     }
-
+/*
+    tcp_manager_set_nodelay(sctx, FALSE);
+    tcp_manager_set_cork(sctx, TRUE);
+*/
     return (ya_result)ret;
 }
 
@@ -200,14 +218,40 @@ static inline ya_result
 server_tcp_reply_error(message_data *mesg, tcp_manager_socket_context_t *sctx, u16 error_code)
 {
     ssize_t ret;
+
+    log_debug("tcp: %{sockaddr}: replying %i bytes (error code %i)", message_get_sender_sa(mesg), message_get_size(mesg), error_code);
+
+#if DNSCORE_HAS_TCP_MANAGER
+    /*
+    tcp_manager_set_nodelay(sctx, TRUE);
+    tcp_manager_set_cork(sctx, FALSE);
+     */
+#else
+    tcp_set_nodelay(sockfd, TRUE);
+    tcp_set_cork(sockfd, FALSE);
+#endif
+
     if(ISOK(ret = message_make_error_and_reply_tcp_with_default_minimum_throughput(mesg, error_code, tcp_manager_socket(sctx))))
     {
         tcp_manager_write_update(sctx, ret);
+#if DEBUG
+        log_debug("tcp: %{sockaddr}: replied %i bytes (error code %i)", message_get_sender_sa(mesg), message_get_size(mesg), error_code);
+#endif
     }
     else
     {
-        log_err("tcp: could not answer: %r", (ya_result)ret);
+        log_err("tcp: %{sockaddr}: could not reply error code %u (%i bytes): %r", message_get_sender_sa(mesg), message_get_size(mesg), error_code, (ya_result)ret);
     }
+
+#if DNSCORE_HAS_TCP_MANAGER
+    /*
+    tcp_manager_set_nodelay(sctx, FALSE);
+    tcp_manager_set_cork(sctx, TRUE);
+     */
+#else
+    tcp_set_nodelay(sockfd, TRUE);
+    tcp_set_cork(sockfd, FALSE);
+#endif
 
     return (ya_result)ret;
 }
@@ -291,44 +335,93 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
 
     u16                                                 dns_query_len;
     ssize_t                                              received = 0;
-    ssize_t                                         next_message_size;
-
+    ssize_t
+    next_message_size;
+#if DEBUG
+    int log_only_sockfd;
 #if DNSCORE_HAS_TCP_MANAGER
-    int sockfd = tcp_manager_socket(sctx);
+    log_only_sockfd = tcp_manager_socket(sctx);
 #else
+    log_only_sockfd = sockfd;
+#endif
 #endif
 
 #if DEBUG
-    log_debug("tcp: processing socket %i (%{sockaddr})", sockfd, message_get_sender_sa(mesg));
+    log_debug("tcp: processing %{sockaddr} (socket %i )", message_get_sender_sa(mesg), log_only_sockfd);
 #endif
     
     int loop_count = 0;
-    
-    tcp_set_recvtimeout(sockfd, 3, 0);
-    tcp_set_sendtimeout(sockfd, 3, 0);
-    tcp_set_nodelay(sockfd, TRUE);
-    tcp_set_cork(sockfd, FALSE);
-    
-    s64 tstart = timeus();
+
+#if DNSCORE_HAS_TCP_MANAGER
+    tcp_manager_set_recvtimeout(sctx, 1, 0);
+    tcp_manager_set_sendtimeout(sctx, 1, 0);
+    /*
+    tcp_manager_set_nodelay(sctx, FALSE);
+    tcp_manager_set_cork(sctx, TRUE);
+     */
+#else
+    tcp_set_recvtimeout(sockfd, 1, 0);
+    tcp_set_sendtimeout(sockfd, 1, 0);
+    tcp_set_nodelay(sockfd, FALSE);
+    tcp_set_cork(sockfd, TRUE);
+#endif
     
     /** @note do a full read, not one that can be interrupted or deliver only a part of what we need (readfully) */
-    while((next_message_size = readfully_limited_ex(sockfd, &dns_query_len, 2, 3000000, g_config->tcp_query_min_rate_us)) == 2)
+
+    s64 time_start;
+
+    for(;;)
     {
-#if DNSCORE_HAS_TCP_MANAGER
-        tcp_manager_read_update(sctx, next_message_size);
+        time_start = timeus();
+#if DEBUG
+        log_debug("tcp: waiting for length prefix, loop %i", loop_count);
 #endif
+
+#if DNSCORE_HAS_TCP_MANAGER
+        // tcp_manager_cancellable(sctx); // tells that it's about to wait for something new
+        next_message_size = tcp_manager_read_fully(sctx, (u8*)&dns_query_len, 2);
+#else
+        next_message_size = readfully_limited_ex(sockfd, &dns_query_len, 2, 3000000, g_config->tcp_query_min_rate_us);
+#endif
+        if(next_message_size != 2)
+        {
+            s64 time_stop = timeus();
+            s64 d = MAX(time_stop - time_start, 0);
+            double s = d / ONE_SECOND_US_F;
+
+            if(next_message_size < 0)
+            {
+                ret = (ya_result)next_message_size;
+                if(ret != MAKE_ERRNO_ERROR(EBADF))
+                {
+                    log_err("tcp: %{sockaddr}: loop %i: length prefix not received after %5.3fs: %r", message_get_sender_sa(mesg), loop_count, s, ret);
+                }
+                else
+                {
+                    log_info("tcp: %{sockaddr}: loop %i: length prefix not received after %5.3fs: connection closed", message_get_sender_sa(mesg), loop_count, s);
+                }
+            }
+            else
+            {
+                ret = MAKE_ERRNO_ERROR(ETIMEDOUT);
+#if DEBUG
+                log_debug("tcp: %{sockaddr}: loop %i: length prefix not received after %5.3fs (%x)", message_get_sender_sa(mesg), loop_count, s, next_message_size);
+#endif
+            }
+
+            break;
+        }
 
         ++loop_count;
         
 #if DEBUG
-        log_debug("tcp: loop count = %d", loop_count);
+        log_debug("tcp: %{sockaddr}: loop %i", message_get_sender_sa(mesg), loop_count);
 #endif
-        
         u16 native_dns_query_len = ntohs(dns_query_len);
 
         if(native_dns_query_len == 0)
         {
-            log_notice("tcp: message size is 0");
+            log_notice("tcp: %{sockaddr}: message size is 0", message_get_sender_sa(mesg));
 
             ret = UNPROCESSABLE_MESSAGE;
 
@@ -346,26 +439,34 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
          *  read with an expected rate
          */
 
-        if((received = readfully_limited_ex(sockfd, message_get_buffer(mesg), native_dns_query_len, 3000000, g_config->tcp_query_min_rate_us)) == native_dns_query_len)
-        {
-#if DNSCORE_HAS_TCP_MANAGER
-            tcp_manager_read_update(sctx, received);
+#if DEBUG
+        log_debug("tcp: %{sockaddr}: waiting for %i bytes", message_get_sender_sa(mesg), native_dns_query_len);
 #endif
-        }
-        else
+
+#if DNSCORE_HAS_TCP_MANAGER
+        received = tcp_manager_read_fully(sctx, message_get_buffer(mesg), native_dns_query_len);
+#else
+        received = readfully_limited_ex(sockfd, message_get_buffer(mesg), native_dns_query_len, 3000000, g_config->tcp_query_min_rate_us);
+#endif
+
+        if(received != native_dns_query_len)
         {
             if(ISOK(received))
             {
-                log_notice("tcp: message read: received %d bytes but %hd were expected", received, native_dns_query_len);
+                log_notice("tcp: %{sockaddr}: message read: received %d bytes but %hd were expected", message_get_sender_sa(mesg), received, native_dns_query_len);
             }
             else
             {
-                log_notice("tcp: message read: %r", ERRNO_ERROR);
+                log_notice("tcp: %{sockaddr}: message read: %r", message_get_sender_sa(mesg), ERRNO_ERROR);
             }
             
             message_set_size(mesg, 0);
 
+#if DNSCORE_HAS_TCP_MANAGER
+            //
+#else
             tcp_set_abortive_close(sockfd);
+#endif
 
             ret = UNPROCESSABLE_MESSAGE;
 
@@ -373,6 +474,10 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
         }
 
         message_set_size(mesg, received);
+
+#if DEBUG
+        log_debug("tcp: %{sockaddr}: received %i bytes", message_get_sender_sa(mesg), native_dns_query_len);
+#endif
         
 #if DEBUG
 #if DUMP_TCP_RECEIVED_WIRE
@@ -415,9 +520,8 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
 #endif
 
 #if DEBUG
-                                log_debug("server_process_tcp scheduled : %r", ret);
+                                log_debug("tcp: %{sockaddr}: axfr_process done : %r", message_get_sender_sa(mesg), ret);
 #endif
-
                                 return ret; /* AXFR PROCESSING: process then closes: all in background */
                             }
 
@@ -438,14 +542,13 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
 #endif
 
 #if DEBUG
-                                log_debug("server_process_tcp scheduled : %r", ret);
+                                log_debug("tcp: %{sockaddr}: ixfr_process done : %r", message_get_sender_sa(mesg), ret);
 #endif
-
                                 return ret; /* IXFR PROCESSING: process then closes: all in background */
                             }
 
 #if DEBUG
-                            log_debug("server_process_tcp query");
+                            log_debug("tcp: %{sockaddr}: querying database", message_get_sender_sa(mesg));
 #endif
 
                             TCPSTATS(tcp_queries_count++);
@@ -456,16 +559,11 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
 
                             database_query(g_config->database, mesg);
 
-#if DEBUG
-                            log_debug("server_process_tcp write");
-#endif
-
 #if DNSCORE_HAS_TCP_MANAGER
-                            server_tcp_reply(mesg, sctx);
+                            ret = server_tcp_reply(mesg, sctx);
 #else
-                            server_tcp_reply(mesg, sockfd);
+                            ret = server_tcp_reply(mesg, sockfd);
 #endif
-                            
                             TCPSTATS(tcp_referrals_count += message_get_referral(mesg));
                             TCPSTATS(tcp_fp[message_get_status(mesg)]++);
                             TCPSTATS(tcp_output_size_total += message_get_size(mesg));
@@ -479,9 +577,9 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                             TCPSTATS(tcp_fp[message_get_status(mesg)]++);
 
 #if DNSCORE_HAS_TCP_MANAGER
-                            server_tcp_reply(mesg, sctx);
+                            ret = server_tcp_reply(mesg, sctx);
 #else
-                            server_tcp_reply(mesg, sockfd);
+                            ret = server_tcp_reply(mesg, sockfd);
 #endif
 
                             break;
@@ -519,15 +617,18 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                         }
 
 #if DNSCORE_HAS_TCP_MANAGER
-                        server_tcp_reply(mesg, sctx);
+                        ret = server_tcp_reply(mesg, sctx);
 #else
-                        server_tcp_reply(mesg, sockfd);
+                        ret = server_tcp_reply(mesg, sockfd);
 #endif
                     }
                     else
                     {
                         TCPSTATS(tcp_dropped_count++);
+
+#if !DNSCORE_HAS_TCP_MANAGER
                         tcp_set_agressive_close(sockfd, 1);
+#endif
                     }
                 }
 
@@ -549,9 +650,9 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                             notify_process(mesg);
 
 #if DNSCORE_HAS_TCP_MANAGER
-                            server_tcp_reply(mesg, sctx);
+                            ret = server_tcp_reply(mesg, sctx);
 #else
-                            server_tcp_reply(mesg, sockfd);
+                            ret = server_tcp_reply(mesg, sockfd);
 #endif
 
                             TCPSTATS(tcp_notify_input_count++);
@@ -560,9 +661,9 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                         default:
                         {
 #if DNSCORE_HAS_TCP_MANAGER
-                            server_tcp_reply_error(mesg, sctx, FP_NOT_SUPP_CLASS);
+                            ret = server_tcp_reply_error(mesg, sctx, FP_NOT_SUPP_CLASS);
 #else
-                            server_tcp_reply_error(mesg, sockfd, FP_NOT_SUPP_CLASS);
+                            ret = server_tcp_reply_error(mesg, sockfd, FP_NOT_SUPP_CLASS);
 #endif
                             TCPSTATS(tcp_fp[FP_NOT_SUPP_CLASS]++);
                             break;
@@ -585,15 +686,18 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                         }
 
 #if DNSCORE_HAS_TCP_MANAGER
-                        server_tcp_reply(mesg, sctx);
+                        ret = server_tcp_reply(mesg, sctx);
 #else
-                        server_tcp_reply(mesg, sockfd);
+                        ret = server_tcp_reply(mesg, sockfd);
 #endif
                     }
                     else
                     {
                         TCPSTATS(tcp_dropped_count++);
+
+#if !DNSCORE_HAS_TCP_MANAGER
                         tcp_set_agressive_close(sockfd, 1);
+#endif
                     }
                 }
                 break;
@@ -647,9 +751,9 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                             }
 
 #if DNSCORE_HAS_TCP_MANAGER
-                            server_tcp_reply(mesg, sctx);
+                            ret = server_tcp_reply(mesg, sctx);
 #else
-                            server_tcp_reply(mesg, sockfd);
+                            ret = server_tcp_reply(mesg, sockfd);
 #endif
                             TCPSTATS(tcp_fp[message_get_status(mesg)]++);
 #else
@@ -690,15 +794,18 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                         }
 
 #if DNSCORE_HAS_TCP_MANAGER
-                        server_tcp_reply(mesg, sctx);
+                        ret = server_tcp_reply(mesg, sctx);
 #else
-                        server_tcp_reply(mesg, sockfd);
+                        ret = server_tcp_reply(mesg, sockfd);
 #endif
                     }
                     else
                     {
                         TCPSTATS(tcp_dropped_count++);
+
+#if !DNSCORE_HAS_TCP_MANAGER
                         tcp_set_agressive_close(sockfd, 1);
+#endif
                     }
                 }
                 break;
@@ -706,6 +813,9 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
 #if HAS_CTRL
             case OPCODE_CTRL:
             {
+#if DNSCORE_HAS_TCP_MANAGER
+                int sockfd = tcp_manager_socket(sctx);
+#endif
                 if(ctrl_query_is_listened(sockfd))
                 {
                     // note: ctrl_message_process contains reply code
@@ -717,7 +827,9 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                     // this IP/port is not configured to listen CTRL queries
 
                     TCPSTATS(tcp_dropped_count++);
+#if !DNSCORE_HAS_TCP_MANAGER
                     tcp_set_agressive_close(sockfd, 1);
+#endif
                 }
 
                 break;
@@ -729,28 +841,42 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                 
                 if( (ret != INVALID_MESSAGE) && (((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0) || (message_get_status(mesg) != RCODE_FORMERR)) && message_isquery(mesg) )
                 {
-                    ret = message_process_lenient(mesg);
-                    message_set_status(mesg, FP_RCODE_NOTIMP);
-                    message_transform_to_error(mesg);
-
-                    if(message_has_tsig(mesg))
+                    if(ISOK(ret = message_process_lenient(mesg)))
                     {
-                        tsig_sign_answer(mesg);
-                    }
+                        message_set_status(mesg, FP_RCODE_NOTIMP);
+                        message_transform_to_error(mesg);
+
+                        if(message_has_tsig(mesg))
+                        {
+                            tsig_sign_answer(mesg);
+                        }
 
 #if DNSCORE_HAS_TCP_MANAGER
-                    server_tcp_reply(mesg, sctx);
+                        ret = server_tcp_reply(mesg, sctx);
 #else
-                    server_tcp_reply(mesg, sockfd);
+                        ret = server_tcp_reply(mesg, sockfd);
 #endif
+                    }
                 }
                 else
                 {
                     TCPSTATS(tcp_dropped_count++);
+
+#if !DNSCORE_HAS_TCP_MANAGER
                     tcp_set_agressive_close(sockfd, 1);
+#endif
                 }
             }
         } // switch operation code
+
+        if(FAIL(ret))
+        {
+#if DEBUG
+            log_debug("tcp: %{sockaddr}: failed with : %r", message_get_sender_sa(mesg), ret);
+#endif
+            break;
+        }
+
     } // while received bytes
 
     if(loop_count > 0)
@@ -763,12 +889,16 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
 
             if(ISOK(received))
             {
+#if !DNSCORE_HAS_TCP_MANAGER
                 tcp_set_agressive_close(sockfd, 1);
+#endif
             }
             else
             {
                 log_notice("tcp: %{sockaddr} message #%i processing failed: %r", message_get_sender_sa(mesg), loop_count, received);
+#if !DNSCORE_HAS_TCP_MANAGER
                 tcp_set_abortive_close(sockfd);
+#endif
             }
         }
         else
@@ -777,37 +907,61 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
             // non-existent, or truncated, or too slow :
             //
             // We give it a second and we close.
-            
+
+#if !DNSCORE_HAS_TCP_MANAGER
             tcp_set_agressive_close(sockfd, 1);
+#endif
         }
+
+        s64 time_stop = timeus();
+        s64 d = MAX(time_stop - time_start, 0);
+        double s = d / ONE_SECOND_US_F;
+
+        log_debug("tcp: %{sockaddr}: loop %i took %5.3fs", message_get_sender_sa(mesg), loop_count, s);
     }
     else
     {
-        s64 d = MAX(timeus() - tstart, 0);
+        s64 time_stop = timeus();
+        s64 d = MAX(time_stop - time_start, 0);
         double s = d / ONE_SECOND_US_F;
         
         if(next_message_size < 0)
         {
-            log_notice("tcp: %{sockaddr} connection didn't sent the message size after %5.3fs: %r", message_get_sender_sa(mesg), s, next_message_size);
+            log_notice("tcp: %{sockaddr}: connection didn't sent the message size after %5.3fs: %r", message_get_sender_sa(mesg), s, next_message_size);
         }
         else if(next_message_size > 0) // a.k.a : 1 
         {
-            log_notice("tcp: %{sockaddr} connection didn't sent the message size after %5.3fs", message_get_sender_sa(mesg), s);
+            log_notice("tcp: %{sockaddr}: connection didn't sent the message size after %5.3fs", message_get_sender_sa(mesg), s);
         }
         else
         {
-            log_notice("tcp: %{sockaddr} connection closed after %5.3fs", message_get_sender_sa(mesg), s);
+            log_notice("tcp: %{sockaddr}: connection closed after %5.3fs", message_get_sender_sa(mesg), s);
         }
-        
+
+#if !DNSCORE_HAS_TCP_MANAGER
         tcp_set_abortive_close(sockfd);
+#endif
     }
 
 #if DEBUG
-	log_debug("tcp: closing socket %i, loop count = %d", sockfd, loop_count);
+#if DNSCORE_HAS_TCP_MANAGER
+    log_debug("tcp: %{sockaddr} closing socket %i, loop %i", message_get_sender_sa(mesg), tcp_manager_socket(sctx), loop_count);
+#else
+	log_debug("tcp: %{sockaddr} closing socket %i, loop %i", message_get_sender_sa(mesg), sockfd, loop_count);
+#endif
 #endif
 
 #if DNSCORE_HAS_TCP_MANAGER
-    tcp_manager_close(sctx);
+
+	if(FAIL(ret))
+    {
+	    // should close
+	    tcp_manager_context_close_and_release(sctx);
+    }
+    else
+    {
+        tcp_manager_context_release(sctx); /// @note don't : tcp_manager_close(sctx);
+    }
 #else
     shutdown(sockfd, SHUT_RDWR);
     close_ex(sockfd);
@@ -876,7 +1030,7 @@ server_process_tcp_thread(void* parm)
 }
 
 void
-server_process_tcp(int sockfd)
+server_process_tcp(int servfd)
 {
     server_process_tcp_thread_parm* parm;
 
@@ -897,11 +1051,13 @@ server_process_tcp(int sockfd)
 
     ya_result ret;
 
-    if((ret = tcp_manager_accept(sockfd)) >= 0)
+    if((ret = tcp_manager_accept(servfd)) >= 0)
     {
+        int sockfd = ret;
+
         TCPSTATS(tcp_input_count++);
 
-        tcp_manager_socket_context_t* sctx = tcp_manager_context_acquire(ret);
+        tcp_manager_socket_context_t* sctx = tcp_manager_context_acquire(sockfd);
 
         assert(sctx != NULL);
 
@@ -909,7 +1065,7 @@ server_process_tcp(int sockfd)
 
         MALLOC_OBJECT_OR_DIE(parm, server_process_tcp_thread_parm, TPROCPRM_TAG);
         parm->sctx = sctx;
-        parm->svr_sockfd = sockfd;
+        parm->svr_sockfd = servfd;
 
         thread_pool_enqueue_call(server_tcp_thread_pool, server_process_tcp_thread, parm, NULL, "server_process_tcp_thread_start");
     }
@@ -938,7 +1094,7 @@ server_process_tcp(int sockfd)
     {
         log_info("tcp: rejecting: already %d/%d handled", current_tcp, g_config->max_tcp_queries);
 
-        int rejected_fd = accept(sockfd, &addr.sa, &addr_len);
+        int rejected_fd = accept(servfd, &addr.sa, &addr_len);
 
         tcp_set_abortive_close(rejected_fd);
         close_ex(rejected_fd);
@@ -953,7 +1109,7 @@ server_process_tcp(int sockfd)
     MALLOC_OBJECT_OR_DIE(parm, server_process_tcp_thread_parm, TPROCPRM_TAG);
 
     /* don't test -1, test < 0 instead (test + js instead of add + stall + jz */
-    while((parm->sockfd = accept(sockfd, &addr.sa, &addr_len)) < 0)
+    while((parm->sockfd = accept(servfd, &addr.sa, &addr_len)) < 0)
     {
         int err = errno;
 
@@ -978,7 +1134,7 @@ server_process_tcp(int sockfd)
 
     memcpy(&parm->sa, &addr, addr_len);
     parm->addr_len = addr_len;
-    parm->svr_sockfd = sockfd;
+    parm->svr_sockfd = servfd;
     
     if(poll_add(parm->sockfd))
     {
@@ -1344,7 +1500,7 @@ server_service_main(struct service_worker_s *worker)
 
                 service_clear_reconfigure(worker);
 
-                /// instead of a sleep, wait for a reconfigured/shutdown event
+                /// @todo 20210304 edf -- instead of a sleep, wait for a reconfigured/shutdown event
                 sleep(1);
 
                 continue;
@@ -1392,6 +1548,10 @@ ya_result
 server_service_init()
 {
     ya_result ret = SERVICE_ALREADY_INITIALISED;
+
+#if DNSCORE_HAS_TCP_MANAGER
+    tcp_manager_init();
+#endif
     
     if(!server_handler_initialised && ISOK(ret = service_init_ex(&server_service_handler, server_service_main, "yadifad", 1)))
     {

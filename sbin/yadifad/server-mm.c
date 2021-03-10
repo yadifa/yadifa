@@ -502,6 +502,18 @@ server_mm_udp_worker_thread(void *parms)
                 mesg->_msghdr.msg_namelen = udp_packets[i].msg_hdr.msg_namelen;
                 mesg->_msghdr.msg_controllen = udp_packets[i].msg_hdr.msg_controllen;
                 mesg->_msghdr.msg_iov->iov_len = udp_packets[i].msg_len;
+#if __FreeBSD__
+                #pragma message("Needs to be tested when FreeBSD supports this feature")
+
+                if(mesg->_msghdr.msg_controllen == 0)
+                {
+                    mesg->_msghdr.msg_control = NULL;
+                }
+                else
+                {
+                    mesg->_msghdr.msg_control = mesg->_msghdr_control_buffer;
+                }
+#endif
 
 #if DEBUG
                 mesg->recv_us = timeus();
@@ -1166,6 +1178,7 @@ server_mm_query_loop(struct service_worker_s *worker)
     log_info("server-mm: cleaning up: stopping thread pool");
 
     thread_pool_destroy(server_udp_thread_pool);
+    server_udp_thread_pool = NULL;
 
     log_info("server-mm: cleaning up: releasing context");
     

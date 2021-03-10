@@ -263,6 +263,7 @@ main(int argc, char *argv[])
     }
 
     thread_pool_destroy(tp);
+    tp = NULL;
     
     flushout();
     flusherr();

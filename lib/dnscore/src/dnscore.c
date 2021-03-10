@@ -76,8 +76,9 @@
 #include "dnscore/hash.h"
 #include "dnscore/socket-server.h"
 #include "dnscore/shared-heap.h"
+#if DNSCORE_HAS_TCP_MANAGER
 #include "dnscore/tcp_manager.h"
-
+#endif
 #include <sys/time.h>
 
 #if DNSCORE_HAS_TSIG_SUPPORT

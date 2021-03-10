@@ -3075,6 +3075,7 @@ dns_udp_handler_init()
 
 #if HAS_TC_FALLBACK_TO_TCP_SUPPORT
                             thread_pool_destroy(tcp_query_thread_pool);
+                            tcp_query_thread_pool = NULL;
                         }
 
                         service_finalize(&dns_udp_timeout_handler);

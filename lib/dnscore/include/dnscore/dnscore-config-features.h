@@ -196,18 +196,18 @@
 #define DNSCORE_PACKAGE "yadifa"
 #define DNSCORE_PACKAGE_BUGREPORT "info@yadifa.eu"
 #define DNSCORE_PACKAGE_NAME "yadifa"
-#define DNSCORE_PACKAGE_STRING "yadifa 2.4.2-9997"
+#define DNSCORE_PACKAGE_STRING "yadifa 2.4.3-10039"
 #define DNSCORE_PACKAGE_TARNAME "yadifa"
 #define DNSCORE_PACKAGE_URL ""
-#define DNSCORE_PACKAGE_VERSION "2.4.2-9997"
+#define DNSCORE_PACKAGE_VERSION "2.4.3-10039"
 #define DNSCORE_SELECT_TYPE_ARG1 int
 #define DNSCORE_SELECT_TYPE_ARG234 (fd_set *)
 #define DNSCORE_SELECT_TYPE_ARG5 (struct timeval *)
 #define DNSCORE_STDC_HEADERS 1
 #define DNSCORE_TIME_WITH_SYS_TIME 1
-#define DNSCORE_VERSION "2.4.2-9997"
+#define DNSCORE_VERSION "2.4.3-10039"
 #define DNSCORE_restrict __restrict
 #undef DNSCORE_VERSION
-// version 2.4.2.0-9997
-#define DNSCORE_VERSION 0x02040200270dLL// include/dnscore/dnscore-config-features.h
+// version 2.4.3.0-10039
+#define DNSCORE_VERSION 0x020403002737LL// include/dnscore/dnscore-config-features.h
 

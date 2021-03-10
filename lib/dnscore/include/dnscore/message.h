@@ -67,6 +67,8 @@ extern "C"
 #include <dnscore/ptr_vector.h>
 #include <dnscore/format.h>
 
+#include <dnscore/logger.h>
+
 // Processing flags
 
 #define PROCESS_FL_ADDITIONAL_AUTH      0x01
@@ -1289,7 +1291,12 @@ ssize_t message_send_udp_debug(const message_data *mesg, int sockfd);
 
 static inline ssize_t message_send_udp(const message_data *mesg, int sockfd)
 {
-    return message_send_udp_debug(mesg, sockfd);
+    ssize_t ret = message_send_udp_debug(mesg, sockfd);
+    if(ret < 0)
+    {
+        ret = ERRNO_ERROR;
+    }
+    return ret;
 }
 #endif
 
@@ -1305,6 +1312,12 @@ static inline ssize_t message_recv_udp(message_data *mesg, int sockfd)
     if(ret >= 0)
     {
         message_set_size(mesg, ret);
+#if __FreeBSD__
+        if(mesg->_msghdr.msg_controllen == 0)
+        {
+            mesg->_msghdr.msg_control = NULL;
+        }
+#endif
     }
     return ret;
 }
@@ -1407,6 +1420,42 @@ static inline void message_set_status(message_data *mesg, finger_print fp)
     mesg->_status = fp;
 }
 
+static inline void message_set_error_status_from_result(message_data *mesg, ya_result error_code)
+{
+    finger_print fp;
+
+    if(YA_ERROR_BASE(error_code) == RCODE_ERROR_BASE)
+    {
+        fp = RCODE_ERROR_GETCODE(error_code);
+    }
+    else
+    {
+        fp = FP_RCODE_SERVFAIL;
+    }
+
+    message_set_status(mesg, fp);
+}
+
+static inline void message_set_status_from_result(message_data *mesg, ya_result error_code)
+{
+    finger_print fp;
+
+    if(ISOK(error_code))
+    {
+        fp = RCODE_NOERROR;
+    }
+    else if(YA_ERROR_BASE(error_code) == RCODE_ERROR_BASE)
+    {
+        fp = RCODE_ERROR_GETCODE(error_code);
+    }
+    else
+    {
+        fp = FP_RCODE_SERVFAIL;
+    }
+
+    message_set_status(mesg, fp);
+}
+
 static inline void message_update_answer_status(message_data *mesg)
 {
     MESSAGE_FLAGS_OR(mesg->_buffer, QR_BITS, mesg->_status);
@@ -1495,9 +1544,11 @@ static inline ssize_t message_read_tcp(message_data *mesg, input_stream *is)
     }
 }
 
+#if 0
 static inline ssize_t message_send_tcp(const message_data *mesg, int sockfd)
 {
     ssize_t ret;
+
     u16 tcp_len = htons(message_get_size_u16(mesg));
     if(ISOK(ret = writefully(sockfd, &tcp_len, 2)))
     {
@@ -1506,8 +1557,12 @@ static inline ssize_t message_send_tcp(const message_data *mesg, int sockfd)
             ret += 2;
         }
     }
+
     return ret;
 }
+#else
+ssize_t message_send_tcp(const message_data *mesg, int sockfd);
+#endif
 
 static inline ssize_t message_send_tcp_with_minimum_throughput(const message_data *mesg, int sockfd, double minimum_rate)
 {

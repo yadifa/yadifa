@@ -147,7 +147,9 @@ main(int argc, char *argv[])
     log_info("end");
 
     thread_pool_destroy(tp1);
+    tp1 = NULL;
     thread_pool_destroy(tp0);
+    tp0 = NULL;
 
     log_info("flush");
 

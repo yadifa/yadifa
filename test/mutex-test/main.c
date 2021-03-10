@@ -250,6 +250,7 @@ exclusion_test(int workers, s64 loops)
     formatln("exclusion_test: expected %lli, got %lli", expected, parms.current);
 
     thread_pool_destroy(tp);
+    tp = NULL;
 
     return expected == parms.current;
 }
@@ -325,6 +326,7 @@ exclusion_group_test(int workers, s64 loops)
     formatln("exclusion_group_test: expected %lli, got %lli", expected, parms.current);
 
     thread_pool_destroy(tp);
+    tp = NULL;
 
     return expected == parms.current;
 }
