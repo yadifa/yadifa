@@ -158,6 +158,7 @@ extern "C" {
     
 #define     S_TOTALINTERFACES           1
 #define     S_MAX_TCP_QUERIES           "128"   /* max 255 */
+#define     S_MAX_SECONDARY_TCP_QUERIES "16"
 #define     S_TCP_QUERY_MIN_RATE        "512"   /* bytes per second minimum rate */
     
 #define     S_TCP_QUEUE_SIZE            "1024"
@@ -381,6 +382,8 @@ struct config_data
     host_address                                                *listen;
     // Which are the interfaces to not listen to
     host_address                                         *do_not_listen;
+    // List of hosts registered by the TCP manager
+    host_address                                           *known_hosts;
 
     /* General variables */
     char                                                     *data_path; /* zones */
@@ -422,6 +425,7 @@ struct config_data
     int                                        zone_unload_thread_count;
     int                                      zone_download_thread_count;
     int                                                 max_tcp_queries;
+    int                                       max_secondary_tcp_queries;
     int                                              tcp_query_min_rate;
     int                                                  tcp_queue_size;
     int                                       axfr_max_record_by_packet;

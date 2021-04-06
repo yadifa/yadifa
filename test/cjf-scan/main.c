@@ -53,6 +53,7 @@
 #include <dnsdb/journal-cjf-page-cache.h>
 #include <dnsdb/journal-jnl.h>
 #include <dnsdb/rrsig.h>
+#include <dnscore/logger_channel_stream.h>
 
 #define MODE_JNL 0
 #define MODE_CJF 1
@@ -62,6 +63,51 @@ static bool g_dump = FALSE;
 static bool g_generate_update_files = FALSE;
 static bool g_clean_mode = FALSE;
 static int g_mode = MODE_JNL;
+
+static const char *default_channel = "stdout default";
+
+struct logger_name_handle_s
+{
+    const char *name;
+    logger_handle **handlep;
+};
+
+static const struct logger_name_handle_s logger_name_handles[] =
+    {
+        {"system", &g_system_logger},
+        {"database", &g_database_logger},
+//{"zone", &g_zone_logger},
+//        {"server", &g_server_logger},
+        {NULL, NULL}
+    };
+
+static void
+config_logger_setdefault()
+{
+    logger_start();
+
+    output_stream stdout_os;
+    logger_channel *stdout_channel;
+
+    fd_output_stream_attach(&stdout_os, dup_ex(1));
+    stdout_channel = logger_channel_alloc();
+    logger_channel_stream_open(&stdout_os, FALSE, stdout_channel);
+    logger_channel_register(default_channel, stdout_channel);
+
+    for(const struct logger_name_handle_s *name_handle = logger_name_handles; name_handle->name != NULL; name_handle++)
+    {
+        logger_handle_create(name_handle->name, name_handle->handlep);
+#if !DEBUG
+        logger_handle_add_channel(name_handle->name, MSG_PROD_MASK, default_channel);
+#else
+        logger_handle_add_channel(name_handle->name, MSG_ALL_MASK, default_channel);
+#endif
+    }
+
+#if DEBUG
+    log_debug("logging to stdout");
+#endif
+}
 
 static int cjf_read_page_hdr(int fd, off_t ofs, journal_cjf_page_tbl_header *page)
 {
@@ -996,6 +1042,8 @@ int main(int argc, char** argv)
 {
     dnscore_init();
     zdb_init();
+
+    config_logger_setdefault();
 
     for(int i = 1; i < argc; ++i)
     {

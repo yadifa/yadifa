@@ -4210,7 +4210,10 @@ ssize_t message_send_tcp(const message_data *mesg, int sockfd)
     tcp_msghdr.msg_flags = 0;
 
     s32 remain = tcp_len + 2;
+
+#if DEBUG
     s32 again = 0;
+#endif
 
     for(;;)
     {
@@ -4226,7 +4229,9 @@ ssize_t message_send_tcp(const message_data *mesg, int sockfd)
 
             if(err == MAKE_ERRNO_ERROR(EAGAIN))
             {
+#if DEBUG
                 ++again;
+#endif
                 usleep(100);
                 continue;
             }
@@ -4236,38 +4241,44 @@ ssize_t message_send_tcp(const message_data *mesg, int sockfd)
             break;
         }
 
-        if(ret < remain)
-        {
-            // adjust the buffers
+        remain -= ret;
 
-            while(tcp_msghdr.msg_iovlen > 0)
+        if(remain == 0)
+        {
+            break;
+        }
+
+        while(tcp_msghdr.msg_iovlen > 0)
+        {
+            if((size_t)ret < tcp_msghdr.msg_iov[0].iov_len)
             {
-                if((size_t)ret >= tcp_msghdr.msg_iov[0].iov_len)
+                u8* p = (u8*)tcp_msghdr.msg_iov[0].iov_base;
+                p += ret;
+                tcp_msghdr.msg_iov[0].iov_base = p;
+                tcp_msghdr.msg_iov[0].iov_len -= (size_t)ret;
+                break;
+            }
+            else
+            {
+                ret -= (size_t)tcp_msghdr.msg_iov[0].iov_len;
+
+                ++tcp_msghdr.msg_iov;
+                --tcp_msghdr.msg_iovlen;
+
+                if(ret == 0)
                 {
-                    ret -= (size_t)tcp_msghdr.msg_iov[0].iov_len;
-                    ++tcp_msghdr.msg_iov;
-                    --tcp_msghdr.msg_iovlen;
-                }
-                else
-                {
-                    u8* p = (u8*)tcp_msghdr.msg_iov[0].iov_base;
-                    p += ret;
-                    tcp_msghdr.msg_iov[0].iov_base = p;
-                    tcp_msghdr.msg_iov[0].iov_len -= (size_t)ret;
                     break;
                 }
             }
-
-            remain -= ret;
-
-            continue;
         }
     }
 
+#if DEBUG
     if(again > 0)
     {
         log_debug("message_send_tcp: again=%i", again);
     }
+#endif
 
     return ret;
 }

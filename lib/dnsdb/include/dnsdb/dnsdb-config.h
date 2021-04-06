@@ -215,6 +215,9 @@
    is empty by default) disabled. */
 #define HAS_SYSTEMD_RESOLVED_AVOIDANCE 0
 
+/* Enables the TCP manager disabled. */
+#define HAS_TCP_MANAGER 0
+
 /* Without various internal test programs. */
 #define HAS_TESTS 1
 
@@ -327,6 +330,9 @@
 
 /* Define to 1 if you have the `getpagesize' function. */
 #define HAVE_GETPAGESIZE 1
+
+/* The system supports gettid */
+/* #undef HAVE_GETTID */
 
 /* Define to 1 if you have the `gettimeofday' function. */
 #define HAVE_GETTIMEOFDAY 1
@@ -681,7 +687,7 @@
 #define PACKAGE_NAME "yadifa"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "yadifa 2.4.3-10039"
+#define PACKAGE_STRING "yadifa 2.4.3-10087"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "yadifa"
@@ -690,7 +696,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.4.3-10039"
+#define PACKAGE_VERSION "2.4.3-10087"
 
 /* Define to the type of arg 1 for `select'. */
 #define SELECT_TYPE_ARG1 int
@@ -711,7 +717,7 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* Version number of package */
-#define VERSION "2.4.3-10039"
+#define VERSION "2.4.3-10087"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */

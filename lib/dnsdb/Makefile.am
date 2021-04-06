@@ -55,7 +55,6 @@ FEATURESSRC=$(top_builddir)/$(FEATURESDIR)/dnsdb-config.h
 
 pkgincludedir = $(includedir)/dnsdb
 pkginclude_HEADERS = \
-	$(FEATURES) \
 	$(I)/avl.h \
 	$(I)/btree.h \
 	$(I)/dictionary.h \
@@ -127,6 +126,7 @@ pkginclude_HEADERS = \
 	$(I)/zdb_zone_write.h \
 	$(I)/nsec3-forall-label.h
 
+nodist_include_HEADERS = $(FEATURES)
 #
 
 libdnsdb_la_SOURCES = \
@@ -271,4 +271,3 @@ VP=ZDB
 	fi
 	echo "// $(FEATURES)" >> $(FEATURES)
 	echo >> $(FEATURES)
-

@@ -187,23 +187,34 @@ server_tcp_reply(message_data *mesg, tcp_manager_socket_context_t *sctx)
     tcp_manager_set_cork(sctx, FALSE);
 */
     //ret = message_update_length_send_tcp_with_default_minimum_throughput(mesg, tcp_manager_socket(sctx));
-    ret = message_send_tcp(mesg, tcp_manager_socket(sctx));
 
-    if(ISOK(ret))
+    tcp_manager_write_update(sctx, 0);
+
+    int fd = tcp_manager_socket(sctx);
+
+    if(fd >= 0)
     {
-        tcp_manager_write_update(sctx, ret);
+        ret = message_send_tcp(mesg, fd);
+
+        if(ISOK(ret))
+        {
+            tcp_manager_write_update(sctx, ret);
 #if DEBUG
-        log_debug("tcp: %{sockaddr}: replied %i bytes", message_get_sender_sa(mesg), message_get_size(mesg));
+            log_debug("tcp: %{sockaddr}: replied %i bytes", message_get_sender_sa(mesg), message_get_size(mesg));
 #endif
+        }
+        else
+        {
+            log_err("tcp: %{sockaddr}: could not reply (%i bytes): %r", message_get_sender_sa(mesg), message_get_size(mesg), (ya_result)ret);
+        }
     }
     else
     {
-        log_err("tcp: %{sockaddr}: could not reply answer (%i bytes): %r", message_get_sender_sa(mesg), message_get_size(mesg), (ya_result)ret);
+#if DEBUG
+        log_debug("tcp: %{sockaddr}: could not reply (%i bytes): connection closed", message_get_sender_sa(mesg), message_get_size(mesg));
+#endif
     }
-/*
-    tcp_manager_set_nodelay(sctx, FALSE);
-    tcp_manager_set_cork(sctx, TRUE);
-*/
+
     return (ya_result)ret;
 }
 
@@ -353,8 +364,8 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
     int loop_count = 0;
 
 #if DNSCORE_HAS_TCP_MANAGER
-    tcp_manager_set_recvtimeout(sctx, 1, 0);
-    tcp_manager_set_sendtimeout(sctx, 1, 0);
+    tcp_manager_set_recvtimeout(sctx, 3, 0);
+    tcp_manager_set_sendtimeout(sctx, 3, 0);
     /*
     tcp_manager_set_nodelay(sctx, FALSE);
     tcp_manager_set_cork(sctx, TRUE);
@@ -392,6 +403,7 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
             if(next_message_size < 0)
             {
                 ret = (ya_result)next_message_size;
+
                 if(ret != MAKE_ERRNO_ERROR(EBADF))
                 {
                     log_err("tcp: %{sockaddr}: loop %i: length prefix not received after %5.3fs: %r", message_get_sender_sa(mesg), loop_count, s, ret);
@@ -1050,14 +1062,11 @@ server_process_tcp(int servfd)
 #if DNSCORE_HAS_TCP_MANAGER
 
     ya_result ret;
+    tcp_manager_socket_context_t* sctx = (tcp_manager_socket_context_t*)(intptr)0x5a5a5a5a;
 
-    if((ret = tcp_manager_accept(servfd)) >= 0)
+    if((ret = tcp_manager_accept(servfd, &sctx)) >= 0)
     {
-        int sockfd = ret;
-
         TCPSTATS(tcp_input_count++);
-
-        tcp_manager_socket_context_t* sctx = tcp_manager_context_acquire(sockfd);
 
         assert(sctx != NULL);
 

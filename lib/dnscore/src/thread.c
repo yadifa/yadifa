@@ -128,4 +128,64 @@ void thread_set_name(const char *name, int index, int count)
 }
 #endif
 
+#if DEBUG
+
+struct pthead_create_wrapper_s
+{
+    void *(*function_thread)(void*);
+    void *function_args;
+};
+
+static void* pthead_create_wrapper(void* args_)
+{
+    char name_buffer[32];
+    strcpy(name_buffer, "unnamed");
+
+#if __linux__
+    pthread_getname_np(thread_self(), name_buffer, sizeof(name_buffer));
+#endif
+
+    struct pthead_create_wrapper_s *args = (struct pthead_create_wrapper_s*)args_;
+    log_debug1("thread: %p (%i) started (%s)", (void*)pthread_self(), gettid(), name_buffer);
+    void *thread_ret = args->function_thread(args->function_args);
+    free(args);
+    log_debug1("thread: %p (%i) stopped (%s) with %p", (void*)pthread_self(), gettid(), name_buffer, thread_ret);
+    return thread_ret;
+}
+
+#endif
+
+ya_result thread_create(thread_t *t, void* (*function_thread)(void*), void *function_args)
+{
+    int ret;
+#if !DEBUG
+    ret = pthread_create(t, NULL, function_thread, function_args);
+#else
+    struct pthead_create_wrapper_s *pthead_create_wrapper_args;
+    MALLOC_OBJECT_OR_DIE(pthead_create_wrapper_args, struct pthead_create_wrapper_s, GENERIC_TAG);
+    pthead_create_wrapper_args->function_thread = function_thread;
+    pthead_create_wrapper_args->function_args = function_args;
+    ret = pthread_create(t, NULL, pthead_create_wrapper, pthead_create_wrapper_args);
+#endif
+    if(ret != 0)
+    {
+        ret = MAKE_ERRNO_ERROR(ret);
+    }
+    return ret;
+}
+
+ya_result thread_kill(thread_t t, int signo)
+{
+#ifndef WIN32
+    int ret = pthread_kill(t, signo);
+    if(ret != 0)
+    {
+        ret = MAKE_ERRNO_ERROR(ret);
+    }
+    return ret;
+#else
+    return ERROR;
+#endif
+}
+
 /** @} */

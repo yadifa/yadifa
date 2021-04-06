@@ -76,6 +76,10 @@
 #include "dynamic-module-handler.h"
 #endif
 
+#if DNSCORE_HAS_TCP_MANAGER
+#include <dnscore/tcp_manager.h>
+#endif
+
 /*
  *
  */
@@ -151,6 +155,7 @@ CONFIG_ACL_PTR(  allow_control               , S_ALLOW_CONTROL            ) // d
 /* Listening to interfaces                     */
 CONFIG_HOST_LIST(listen                      , S_LISTEN                   ) // doc
 CONFIG_HOST_LIST(do_not_listen               , S_DO_NOT_LISTEN            ) // doc
+CONFIG_HOST_LIST(known_hosts                 , S_LISTEN                   )
 /* size of an EDNS0 packet */
 CONFIG_U32_RANGE(edns0_max_size              , S_EDNS0_MAX_SIZE          ,EDNS0_MIN_LENGTH, EDNS0_MAX_LENGTH ) // doc
 // overrides the cpu detection
@@ -175,6 +180,7 @@ CONFIG_U32_RANGE(zone_unload_thread_count    , S_ZONE_UNLOAD_THREAD_COUNT, ZONE_
 CONFIG_ENUM(     network_model               ,S_NETWORK_MODEL, network_model_enum) // doc
 /* Max number of TCP queries  */
 CONFIG_U32_RANGE(max_tcp_queries             , S_MAX_TCP_QUERIES          ,TCP_QUERIES_MIN, TCP_QUERIES_MAX) // doc
+CONFIG_U32_RANGE(max_secondary_tcp_queries   , S_MAX_SECONDARY_TCP_QUERIES,TCP_QUERIES_MIN, TCP_QUERIES_MAX) // doc
 CONFIG_U32(      tcp_query_min_rate          , S_TCP_QUERY_MIN_RATE       ) // doc
 CONFIG_U32_RANGE(tcp_queue_size              , S_TCP_QUEUE_SIZE           , S_TCP_QUEUE_SIZE_MIN, S_TCP_QUEUE_SIZE_MAX)
 /* Ignores messages that would be answered by a FORMERR */ 
@@ -415,6 +421,27 @@ config_main_verify_and_update_file(const char *base_path, char **dirp)
 }
 
 static ya_result
+config_main_section_postprocess_tcp_manager_register_callback(const char* itf_name, const socketaddress* sa, void* data)
+{
+
+    (void)itf_name;
+    (void)data;
+    socklen_t sa_len;
+    if(sa->sa.sa_family == AF_INET)
+    {
+        sa_len = sizeof(sa->sa4);
+        tcp_manager_host_register(sa, sa_len, g_config->max_secondary_tcp_queries);
+    }
+    else if(sa->sa.sa_family == AF_INET6)
+    {
+        sa_len = sizeof(sa->sa6);
+        tcp_manager_host_register(sa, sa_len, g_config->max_secondary_tcp_queries);
+    }
+    return SUCCESS;
+}
+
+
+static ya_result
 config_main_section_postprocess(struct config_section_descriptor_s *csd)
 {
     (void)csd;
@@ -426,7 +453,21 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
     char tmp[PATH_MAX];
 #endif
 
+#if DNSCORE_HAS_TCP_MANAGER
+/**
+ * Sets the allowed connections total for all unregistered connections.
+ */
 
+    tcp_manager_connection_max(g_config->max_tcp_queries);
+
+    for(host_address *ha = g_config->known_hosts; ha != NULL; ha = ha->next)
+    {
+        if((ha->version == HOST_ADDRESS_IPV4) || (ha->version == HOST_ADDRESS_IPV6))
+        {
+            network_interfaces_forall(config_main_section_postprocess_tcp_manager_register_callback, NULL);
+        }
+    }
+#endif
 
     g_server_context.worker_backlog_queue_size = g_config->worker_backlog_queue_size;
 

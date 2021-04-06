@@ -344,7 +344,7 @@ static inline void cond_wait_auto_time_out(cond_t *cond, mutex_t *mtx)
 #ifndef WIN32
     if(ret != 0)
     {
-        fprintf(stderr, "cond_wait_auto_time_out: %s", strerror(ret));
+        fprintf(stderr, "cond_wait_auto_time_out: %s\n", strerror(ret));
         fflush(stderr);
         time_t now = time(NULL);
         __alarm__approximate_time_10s.tv_sec =  now + 10;

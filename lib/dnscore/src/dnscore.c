@@ -981,11 +981,16 @@ dnscore_finalize()
     
 #if DEBUG
     log_debug("exit: bye (pid=%hd)", getpid());
-    
     logger_flush();
 #endif
-    
+
+#if DNSCORE_HAS_TCP_MANAGER
+#if DEBUG
+    log_debug("exit: destroying the TCP manager");
     logger_flush();
+#endif
+    tcp_manager_finalise();
+#endif
     
     dnscore_stop_timer();               // timer uses logger
     dnscore_wait_timer_stopped();

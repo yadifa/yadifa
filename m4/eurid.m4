@@ -501,7 +501,7 @@ rm -rf test-gcc-$2*
 dnl setgroups support
 
 AC_DEFUN([AC_SETGROUPS_CHECK], [
-AC_MSG_CHECKING([checking for setgroups])
+AC_MSG_CHECKING([for setgroups])
 AC_CHECK_LIB(c,setgroups,
     [
         AC_DEFINE_UNQUOTED([HAS_SETGROUPS], [1], [The system supports setgroups])
@@ -517,7 +517,7 @@ dnl __sync builtins
 
 AC_DEFUN([AC_SYNC_BUILTINS], [
 
-AC_MSG_CHECKING([checking if the compiler supports __sync builtins])
+AC_MSG_CHECKING([if the compiler supports __sync builtins])
 cat > sync_builtin_test.c <<_ACEOF
 typedef int atomic_flag;
 
@@ -565,7 +565,7 @@ dnl Memory aligment issues (T1000)
 
 AC_DEFUN([AC_MEMALIGN_CHECK], [
 
-AC_MSG_CHECKING([checking if memory accesses must be size-aligned])
+AC_MSG_CHECKING([if memory accesses must be size-aligned])
 cat > memalign_issues_test.c <<_ACEOF
 #include "confdefs.h"
 #if HAVE_STDLIB_H
@@ -610,7 +610,7 @@ AC_DEFINE_UNQUOTED([DEFAULT_ASSUMED_CPU_COUNT], [2], [number of hardware core if
 cpu_intel_compatible=1
 
 
-AC_MSG_CHECKING([checking for the CPU options])
+AC_MSG_CHECKING([for the CPU options])
 cpu_unknown=1
 has_cpu_niagara=0
 has_cpu_amdintel=0
@@ -1147,7 +1147,7 @@ dnl timegm support
 
 AC_DEFUN([AC_TIMEGM_CHECK], [
 
-AC_MSG_CHECKING([checking for timegm])
+AC_MSG_CHECKING([for timegm])
 
 YA_TRY_LINK([#include<time.h>],[struct tm t; timegm(&t);],[AC_DEFINE_UNQUOTED([HAS_TIMEGM], [1], [The system supports timegm]) echo yes],[echo no])
 
@@ -1159,7 +1159,7 @@ dnl mremap support
 
 AC_DEFUN([AC_MREMAP_CHECK], [
 
-AC_MSG_CHECKING([checking for mremap])
+AC_MSG_CHECKING([for mremap])
 
 YA_TRY_LINK([#define _GNU_SOURCE
              #include<sys/mman.h>],[mremap(0,0,0,0);],[AC_DEFINE_UNQUOTED([HAS_MREMAP], [1], [The system supports mremap]) echo yes],[echo no])
@@ -1172,9 +1172,8 @@ dnl pthread spinlock support
 
 AC_DEFUN([AC_PTHREAD_SPINLOCK_CHECK], [
 
-AC_MSG_CHECKING([checking for pthread_spin_init])
-AC_CHECK_LIB(pthread,pthread_spin_init,[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SPINLOCK], [1], [The system supports spinlocks]) echo yes],[echo no])
-
+AC_MSG_CHECKING([for pthread_spin_init])
+AC_SEARCH_LIBS(pthread_spin_init,pthread,[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SPINLOCK], [1], [The system supports spinlocks]) echo yes],[echo no])
 ])
 
 dnl ####################################################
@@ -1183,9 +1182,8 @@ dnl pthread_setname_np support
 
 AC_DEFUN([AC_PTHREAD_SETNAME_NP_CHECK], [
 
-AC_MSG_CHECKING([checking for pthread_setname_np])
-AC_CHECK_LIB(pthread,pthread_setname_np,[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SETNAME_NP], [1], [The system supports thread names]) echo yes],[echo no])
-
+AC_MSG_CHECKING([for pthread_setname_np])
+AC_SEARCH_LIBS(pthread_setname_np, pthread,[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SETNAME_NP], [1], [The system supports thread names]) echo yes],[echo no])
 ])
 
 dnl ####################################################
@@ -1194,9 +1192,18 @@ dnl pthread_setaffinity_np support
 
 AC_DEFUN([AC_PTHREAD_SETAFFINITY_NP_CHECK], [
 
-AC_MSG_CHECKING([checking for pthread_setaffinity_np])
-AC_CHECK_LIB(pthread,pthread_setaffinity_np,[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SETAFFINITY_NP], [1], [The system supports thread affinity]) echo yes],[echo no])
+AC_MSG_CHECKING([for pthread_setaffinity_np])
+AC_SEARCH_LIBS(pthread_setaffinity_np,pthread,[AC_DEFINE_UNQUOTED([HAS_PTHREAD_SETAFFINITY_NP], [1], [The system supports thread affinity]) echo yes],[echo no])
+])
 
+dnl ####################################################
+
+dnl gettid support
+
+AC_DEFUN([AC_GETTID_CHECK], [
+
+    AC_MSG_CHECKING([for gettid])
+AC_SEARCH_LIBS(gettid,,[AC_DEFINE_UNQUOTED([HAVE_GETTID], [1], [The system supports gettid]) echo yes],[echo no])
 ])
 
 dnl ####################################################
@@ -1205,7 +1212,7 @@ dnl gethostbyname inet_pton inet_ntop ... (Solaris requires a lib)
 
 AC_DEFUN([AC_GETHOSTBYNAME_CHECK], [
 
-AC_MSG_CHECKING([checking for gethostbyname inet_pton inet_ntop])
+AC_MSG_CHECKING([for gethostbyname inet_pton inet_ntop])
 AC_MSG_CHECKING([if gethostbyname requires some lib])
 YA_TRY_LINK([#include<netdb.h>],[struct hostent *host = gethostbyname("www.yadifa.eu.");],
     [

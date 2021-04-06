@@ -445,6 +445,11 @@ dnl ==========================================================================
 
 AC_HAS_ENABLE(non_aa_axfr_support,NON_AA_AXFR_SUPPORT,[defaults axfr-strict-authority to no. Lenient acceptance of AXFR answer from master that do not have AA bit by default (Microsoft DNS)])
 
+dnl TCP MANAGER
+dnl ==========================================================================
+
+AC_HAS_ENABLE(tcp_manager,TCP_MANAGER,[Enables the TCP manager])
+
 dnl STRDUP
 dnl ==========================================================================
 

@@ -897,6 +897,12 @@ program_mode_play(const u8 *domain, bool does_loop)
     // _ we know the present state on the server
     // _ we know the plan folder for this domain exists
 
+    if(does_loop)
+    {
+        log_info("play: %{dnsname}: loading plan", domain);
+        logger_flush();
+    }
+
     if(FAIL(ret = keyroll_plan_load(&keyroll)))
     {
         if(ret != MAKE_ERRNO_ERROR(ENOENT))
@@ -907,6 +913,8 @@ program_mode_play(const u8 *domain, bool does_loop)
         {
             log_info("play: %{dnsname}: there are no plans on storage (%s)", domain, g_config.plan_path);
         }
+
+        logger_flush();
 
         keyroll_finalize(&keyroll);
 
@@ -1135,7 +1143,7 @@ program_mode_play_thread(void *args_)
 
         if(ISOK(ret))
         {
-            log_warn("%{dnsname}: key roll stopped", args->fqdn);
+            log_info("%{dnsname}: key roll stopped", args->fqdn);
             break;
         }
         else
@@ -1143,6 +1151,11 @@ program_mode_play_thread(void *args_)
             if(ret == KEYROLL_MUST_REINITIALIZE)
             {
                 log_warn("%{dnsname}: trying again from the start", args->fqdn);
+            }
+            else if(ret == STOPPED_BY_APPLICATION_SHUTDOWN)
+            {
+                log_warn("%{dnsname}: keyroll is shutting down", args->fqdn);
+                break;
             }
             else
             {
@@ -1245,15 +1258,38 @@ program_mode_play_all(bool does_loop, bool daemonise)
 
         // wait for the shutdown or for workers to stop
 
-        while(!dnscore_shuttingdown() && (thread_pool_counter_get_value(&counter) > 0))
+        s64 wait_stop_begin = timeus();
+        bool wait_stop_error_message = FALSE;
+        for(u32 wait_count = 0; thread_pool_counter_get_value(&counter) > 0; ++wait_count)
         {
             sleep(1);
+            s64 wait_stop_now = timeus();
+            s64 wait_stop_duration = wait_stop_now - wait_stop_begin;
+            if(dnscore_shuttingdown() && (wait_stop_duration > (ONE_SECOND_US * 30)) )
+            {
+                if(!wait_stop_error_message)
+                {
+                    log_err("keyroll workers aren't stopping");
+                    logger_flush();
+                    wait_stop_error_message = TRUE;
+                }
+                if(wait_stop_duration > (ONE_SECOND_US * 60))
+                {
+                    log_err("not waiting anymore");
+                    logger_flush();
+                }
+            }
         }
 
         thread_pool_destroy(tp);
         tp = NULL;
 
         free(args);
+    }
+
+    if(does_loop)
+    {
+        log_info("keyroll stopped");
     }
 
     unlink(pid_file_path);

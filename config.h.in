@@ -214,6 +214,9 @@
    is empty by default) disabled. */
 #undef HAS_SYSTEMD_RESOLVED_AVOIDANCE
 
+/* Enables the TCP manager disabled. */
+#undef HAS_TCP_MANAGER
+
 /* Without various internal test programs. */
 #undef HAS_TESTS
 
@@ -326,6 +329,9 @@
 
 /* Define to 1 if you have the `getpagesize' function. */
 #undef HAVE_GETPAGESIZE
+
+/* The system supports gettid */
+#undef HAVE_GETTID
 
 /* Define to 1 if you have the `gettimeofday' function. */
 #undef HAVE_GETTIMEOFDAY

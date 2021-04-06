@@ -99,20 +99,24 @@ axfr_process(message_data *mesg, int sockfd)
     zdb_zone *zone;
 
     const u8 *fqdn = message_get_canonised_fqdn(mesg);
+    u32 fqdn_len = dnsname_len(fqdn);
 
-    dnsname_vector fqdn_vector;
+    if(fqdn_len > MAX_DOMAIN_LENGTH)
+    {
+#if DNSCORE_HAS_TCP_MANAGER
+        tcp_manager_context_release(sctx);
+        tcp_manager_close(sctx);
+#endif
+        return DOMAIN_TOO_LONG;
+    }
 
-    dnsname_to_dnsname_vector(fqdn, &fqdn_vector);
-
-
-    
     u16 rcode;
 
-    if( ((zone = zdb_acquire_zone_read(g_config->database, &fqdn_vector)) != NULL) )
+    if((zone = zdb_acquire_zone_read_from_fqdn(g_config->database, fqdn)) != NULL)
     {
         if(zdb_zone_valid(zone))
         {
-#if HAS_ACL_SUPPORT
+#if ZDB_HAS_ACL_SUPPORT
             access_control *ac = zone->acl;
 
             if(!ACL_REJECTED(acl_check_access_filter(mesg, &ac->allow_transfer)))
@@ -128,13 +132,9 @@ axfr_process(message_data *mesg, int sockfd)
                  *   else simply send back
                  */
 
-                // zone is obviously needed
-                // mesg is needed to match query, TSIG, ...
-                // zdb_zone_answer_axfr(zone, mesg, thread_pool, g_config->axfr_max_packet_size, g_config->axfr_max_record_by_packet, g_config->axfr_compress_packets);
-                // this is mostly background, so 
-
 #if DNSCORE_HAS_TCP_MANAGER
                 zdb_zone_answer_axfr(zone, mesg, sctx, NULL, server_disk_thread_pool, g_config->axfr_max_packet_size, g_config->axfr_max_record_by_packet, g_config->axfr_compress_packets);
+                tcp_manager_context_release(sctx); // sctx has been acquired by the xfr call
 #else
                 zdb_zone_answer_axfr(zone, mesg, sockfd, NULL, server_disk_thread_pool, g_config->axfr_max_packet_size, g_config->axfr_max_record_by_packet, g_config->axfr_compress_packets);
 #endif
@@ -194,7 +194,14 @@ axfr_process(message_data *mesg, int sockfd)
 #endif
 
     ya_result send_ret;
-    if(ISOK(send_ret = message_update_length_send_tcp_with_default_minimum_throughput(mesg, sockfd)))
+
+#if DNSCORE_HAS_TCP_MANAGER
+    send_ret = message_send_tcp(mesg, sockfd);
+#else
+    send_ret = message_update_length_send_tcp_with_default_minimum_throughput(mesg, sockfd);
+#endif
+
+    if(ISOK(send_ret))
     {
 #if DNSCORE_HAS_TCP_MANAGER
         tcp_manager_write_update(sctx, send_ret);
@@ -208,7 +215,7 @@ axfr_process(message_data *mesg, int sockfd)
     yassert((sockfd < 0)||(sockfd >2));
 
 #if DNSCORE_HAS_TCP_MANAGER
-    tcp_manager_close(sctx);
+    tcp_manager_context_release(sctx);
 #else
     shutdown(sockfd, SHUT_RDWR);
     close_ex(sockfd);

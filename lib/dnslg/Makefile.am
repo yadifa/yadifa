@@ -61,12 +61,13 @@ pkgincludedir = $(includedir)/dnslg
 
 # NOTE: the first one on this list must always be the one used to trigger $(FEATURES)
 pkginclude_HEADERS = \
-		     $(FEATURES) \
 		     include/dnslg/config-load.h \
 		     include/dnslg/config-resolver.h \
 		     include/dnslg/dns.h \
 		     include/dnslg/resolv-conf.h \
 		     include/dnslg/resolv.h
+
+nodist_include_HEADERS = $(FEATURES)
 
 libdnslg_la_SOURCES = \
 		      src/config-load.c \
@@ -115,4 +116,3 @@ VP=DNSLG
 	fi
 	echo "// $(FEATURES)" >> $(FEATURES)
 	echo >> $(FEATURES)
-

@@ -349,7 +349,7 @@ thread_pool_thread(void *args)
 #endif
     
 #if VERBOSE_THREAD_LOG >= 2
-    log_debug("thread: %x started (pool '%s')", desc->id, STRNULL(desc->pool->pool_name));
+    log_debug("thread: %p (%i) %x started (pool '%s')", (void*)thread_self(), gettid(), desc->id, STRNULL(desc->pool->pool_name));
 #endif
 
     if(thread_key_get(thread_pool_random_key) == NULL)
@@ -445,7 +445,7 @@ thread_pool_thread(void *args)
     }
 
 #if VERBOSE_THREAD_LOG >= 1
-    log_debug("thread: %x stopped", id);
+    log_debug("thread: %p (%i) %x stopped", (void*)thread_self(), gettid(), id);
 #endif
 
 #if THREADPOOL_DEBUG_SLOW_ARCH
@@ -547,7 +547,7 @@ thread_pool_create_thread(thread_pool_s *tp, int index)
     int ret;
     if((ret = thread_create(&td->id, thread_pool_thread, td)) != 0)
     {
-        OSDEBUG(termerr, "thread_pool_set_pool_size: pthread_create : oops: (%r) %s\n", ret, strerror(ret&0xffff));
+        OSDEBUG(termerr, "thread_pool_set_pool_size: thread_create : oops: (%r) %s\n", ret, strerror(ret&0xffff));
 
         free(td);
 

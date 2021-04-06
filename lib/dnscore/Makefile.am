@@ -201,7 +201,6 @@ libdnscore_la_SOURCES = \
 # src/name.c
 
 pkginclude_HEADERS = \
-	$(FEATURES) \
 	$(I)/alarm.h \
 	$(I)/acl.h \
 	$(I)/acl-config.h \
@@ -346,6 +345,8 @@ pkginclude_HEADERS = \
 	$(I)/zone_reader_axfr.h \
 	$(I)/zone_reader_text.h \
 	$(I)/zonefile_reader.h
+
+nodist_include_HEADERS = $(FEATURES)
 
 # $(I)/ipc.h
 # $(I)/name.h

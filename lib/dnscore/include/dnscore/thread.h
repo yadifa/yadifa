@@ -52,10 +52,21 @@
 #endif
 #include <dnscore/sys_types.h>
 
+#if !DNSCORE_HAVE_GETTID
+#include <sys/types.h>
+#include <unistd.h>
+
+static inline pid_t gettid()
+{
+    return getpid();
+}
+#endif
+
 #ifdef	__cplusplus
 extern "C"
 {
 #endif
+
 
 typedef pthread_t thread_t;
 typedef pthread_key_t thread_key_t;
@@ -88,29 +99,9 @@ static inline thread_t thread_self()
     return pthread_self();
 }
 
-static inline ya_result thread_create(thread_t *t, void* (*function_thread)(void*), void *function_args)
-{
-    int ret = pthread_create(t, NULL, function_thread, function_args);
-    if(ret != 0)
-    {
-        ret = MAKE_ERRNO_ERROR(ret);
-    }
-    return ret;
-}
+ya_result thread_create(thread_t *t, void* (*function_thread)(void*), void *function_args);
 
-static inline ya_result thread_kill(thread_t t, int signo)
-{
-#ifndef WIN32
-    int ret = pthread_kill(t, signo);
-    if(ret != 0)
-    {
-        ret = MAKE_ERRNO_ERROR(ret);
-    }
-    return ret;
-#else
-    return ERROR;
-#endif
-}
+ya_result thread_kill(thread_t t, int signo);
 
 static inline ya_result thread_join(thread_t t, void **thread_returnp)
 {

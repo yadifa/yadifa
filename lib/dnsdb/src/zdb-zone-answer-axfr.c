@@ -712,6 +712,9 @@ zdb_zone_answer_axfr_thread(void* data_)
             
             zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
             data_zone = NULL;
+#if DNSCORE_HAS_TCP_MANAGER
+            sctx = tcp_manager_context_acquire(sctx); // because it will be release zdb_zone_answer_axfr_thread_exit
+#endif
             zdb_zone_answer_axfr_thread_exit(data);
             data = NULL; // This ensures a crash if data is used
             break;
@@ -744,7 +747,10 @@ zdb_zone_answer_axfr_thread(void* data_)
                     data->return_code = SUCCESS;
 
                     log_info("zone write axfr: %{dnsname}: releasing implicit write lock, serial is %d", data_zone_origin, serial);
-                    zdb_zone_acquire(data_zone);            
+                    zdb_zone_acquire(data_zone);
+#if DNSCORE_HAS_TCP_MANAGER
+                    sctx = tcp_manager_context_acquire(sctx); // because it will be release zdb_zone_answer_axfr_thread_exit
+#endif
                     zdb_zone_answer_axfr_thread_exit(data); // WARNING: From this point forward, 'data' cannot be used anymore 
                     data = NULL;                            //          This ensures a crash if data is used
                     zdb_zone_release_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
@@ -780,7 +786,10 @@ zdb_zone_answer_axfr_thread(void* data_)
                 data->return_code = SUCCESS;
 
                 log_info("zone write axfr: %{dnsname}: releasing implicit write lock, serial is %d", data_zone_origin, serial);
-                zdb_zone_acquire(data_zone);            
+                zdb_zone_acquire(data_zone);
+#if DNSCORE_HAS_TCP_MANAGER
+                sctx = tcp_manager_context_acquire(sctx); // because it will be release zdb_zone_answer_axfr_thread_exit
+#endif
                 zdb_zone_answer_axfr_thread_exit(data); // WARNING: From this point forward, 'data' cannot be used anymore 
                 data = NULL;                            //          This ensures a crash if data is used
                 zdb_zone_release_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
@@ -1381,13 +1390,19 @@ zdb_zone_answer_axfr_thread(void* data_)
 
 scheduler_queue_zone_write_axfr_thread_exit:
 
+#if DNSCORE_HAS_TCP_MANAGER
+    if(sctx != NULL)
+    {
+        tcp_manager_context_release(sctx);
+    }
+#endif
+
     log_info("zone write axfr: %{dnsname}: closing file, %llu bytes sent to %{sockaddr}", data_zone_origin, total_bytes_sent, message_get_sender_sa(mesg));
 
 #if DNSCORE_HAS_TCP_MANAGER
 #if DEBUG
     log_debug("zone write axfr: %{dnsname}: closing socket %i", data_zone_origin, tcp_manager_socket(sctx));
 #endif
-    tcp_manager_close(sctx);
 #else
 #if DEBUG
     log_debug("zone write axfr: %{dnsname}: closing socket %i", data_zone_origin, tcpfd);
@@ -1399,7 +1414,10 @@ scheduler_queue_zone_write_axfr_thread_exit:
     close_ex(tcpfd);
 #endif
 #endif
-    input_stream_close(&fis);
+    if(input_stream_valid(&fis))
+    {
+        input_stream_close(&fis);
+    }
 
     message_free(mesg);
 

@@ -409,6 +409,3 @@ void file_output_steam_advise_sequential(output_stream* stream_)
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

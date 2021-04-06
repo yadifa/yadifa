@@ -34,7 +34,7 @@ dnl ############################################################################
 configure_base_path="$0/"
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 10038 $])
+AC_REVISION([$Revision: 10078 $])
 AC_INIT([yadifa],m4_esyscmd(
     [
         svn info 2> /dev/null |
@@ -170,6 +170,7 @@ AC_COMPILER_CHECK
 AC_PTHREAD_SPINLOCK_CHECK
 AC_PTHREAD_SETNAME_NP_CHECK
 AC_PTHREAD_SETAFFINITY_NP_CHECK
+AC_GETTID_CHECK
 AC_TIMEGM_CHECK
 AC_MREMAP_CHECK
 

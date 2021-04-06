@@ -109,6 +109,7 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
+#SUBDIRS += test/journal-server
 @HAS_TESTS_TRUE@am__append_1 = test/circular-file-test test/cjf-scan \
 @HAS_TESTS_TRUE@	test/cmdline-test test/collection-test \
 @HAS_TESTS_TRUE@	test/daemonised-logger-test test/dnskey-test \
@@ -359,6 +360,7 @@ HAS_RRL_SUPPORT = @HAS_RRL_SUPPORT@
 HAS_RRSIG_MANAGEMENT_SUPPORT = @HAS_RRSIG_MANAGEMENT_SUPPORT@
 HAS_SYNC_BUILTINS = @HAS_SYNC_BUILTINS@
 HAS_SYSTEMD_RESOLVED_AVOIDANCE = @HAS_SYSTEMD_RESOLVED_AVOIDANCE@
+HAS_TCP_MANAGER = @HAS_TCP_MANAGER@
 HAS_TESTS = @HAS_TESTS@
 HAS_TOOLS = @HAS_TOOLS@
 HAS_TRACK_ZONES_DEBUG_SUPPORT = @HAS_TRACK_ZONES_DEBUG_SUPPORT@

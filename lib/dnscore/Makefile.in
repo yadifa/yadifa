@@ -319,7 +319,8 @@ am__uninstall_files_from_dir = { \
     || { echo " ( cd '$$dir' && rm -f" $$files ")"; \
          $(am__cd) "$$dir" && rm -f $$files; }; \
   }
-am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(pkgincludedir)"
+am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(includedir)" \
+	"$(DESTDIR)$(pkgincludedir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
 libdnscore_la_LIBADD =
 am__libdnscore_la_SOURCES_DIST = src/alarm.c src/acl.c \
@@ -480,10 +481,10 @@ am__can_run_installinfo = \
     *) (install-info --version) >/dev/null 2>&1;; \
   esac
 DATA = $(dist_noinst_DATA)
-am__pkginclude_HEADERS_DIST = $(I)/$(FEATURESFILE) $(I)/alarm.h \
-	$(I)/acl.h $(I)/acl-config.h $(I)/allocator.h $(I)/async.h \
-	$(I)/avl.c.inc $(I)/avl.h.inc $(I)/base16.h $(I)/base32.h \
-	$(I)/base32hex.h $(I)/base64.h $(I)/basic-priority-queue.h \
+am__pkginclude_HEADERS_DIST = $(I)/alarm.h $(I)/acl.h \
+	$(I)/acl-config.h $(I)/allocator.h $(I)/async.h $(I)/avl.c.inc \
+	$(I)/avl.h.inc $(I)/base16.h $(I)/base32.h $(I)/base32hex.h \
+	$(I)/base64.h $(I)/basic-priority-queue.h \
 	$(I)/buffer_input_stream.h $(I)/buffer_output_stream.h \
 	$(I)/buffered-file.h $(I)/bytearray_input_stream.h \
 	$(I)/bytearray_output_stream.h $(I)/bytezarray_output_stream.h \
@@ -536,7 +537,7 @@ am__pkginclude_HEADERS_DIST = $(I)/$(FEATURESFILE) $(I)/alarm.h \
 	$(I)/zone_reader.h $(I)/zone_reader_axfr.h \
 	$(I)/zone_reader_text.h $(I)/zonefile_reader.h \
 	$(I)/osx_clock_gettime.h $(I)/tsig.h $(I)/nsid.h
-HEADERS = $(pkginclude_HEADERS)
+HEADERS = $(nodist_include_HEADERS) $(pkginclude_HEADERS)
 am__tagged_files = $(HEADERS) $(SOURCES) $(TAGS_FILES) $(LISP)
 # Read a list of newline-separated strings from the standard input,
 # and print each of them once, without duplicates.  Input order is
@@ -654,6 +655,7 @@ HAS_RRL_SUPPORT = @HAS_RRL_SUPPORT@
 HAS_RRSIG_MANAGEMENT_SUPPORT = @HAS_RRSIG_MANAGEMENT_SUPPORT@
 HAS_SYNC_BUILTINS = @HAS_SYNC_BUILTINS@
 HAS_SYSTEMD_RESOLVED_AVOIDANCE = @HAS_SYSTEMD_RESOLVED_AVOIDANCE@
+HAS_TCP_MANAGER = @HAS_TCP_MANAGER@
 HAS_TESTS = @HAS_TESTS@
 HAS_TOOLS = @HAS_TOOLS@
 HAS_TRACK_ZONES_DEBUG_SUPPORT = @HAS_TRACK_ZONES_DEBUG_SUPPORT@
@@ -874,20 +876,19 @@ libdnscore_la_SOURCES = src/alarm.c src/acl.c src/acl-config.c \
 
 # src/ipc.c
 # src/name.c
-pkginclude_HEADERS = $(FEATURES) $(I)/alarm.h $(I)/acl.h \
-	$(I)/acl-config.h $(I)/allocator.h $(I)/async.h $(I)/avl.c.inc \
-	$(I)/avl.h.inc $(I)/base16.h $(I)/base32.h $(I)/base32hex.h \
-	$(I)/base64.h $(I)/basic-priority-queue.h \
-	$(I)/buffer_input_stream.h $(I)/buffer_output_stream.h \
-	$(I)/buffered-file.h $(I)/bytearray_input_stream.h \
-	$(I)/bytearray_output_stream.h $(I)/bytezarray_output_stream.h \
-	$(I)/chroot.h $(I)/circular-file.h \
-	$(I)/clone_input_output_stream.h $(I)/cmdline.h \
-	$(I)/concat_input_stream.h $(I)/config-cmdline.h \
-	$(I)/config_file_reader.h $(I)/config_settings.h \
-	$(I)/counter_output_stream.h $(I)/ctrl-rfc.h $(I)/debug.h \
-	$(I)/debug_config.h $(I)/digest.h $(I)/dns-udp.h \
-	$(I)/dns_resource_record.h $(I)/dnscore.h \
+pkginclude_HEADERS = $(I)/alarm.h $(I)/acl.h $(I)/acl-config.h \
+	$(I)/allocator.h $(I)/async.h $(I)/avl.c.inc $(I)/avl.h.inc \
+	$(I)/base16.h $(I)/base32.h $(I)/base32hex.h $(I)/base64.h \
+	$(I)/basic-priority-queue.h $(I)/buffer_input_stream.h \
+	$(I)/buffer_output_stream.h $(I)/buffered-file.h \
+	$(I)/bytearray_input_stream.h $(I)/bytearray_output_stream.h \
+	$(I)/bytezarray_output_stream.h $(I)/chroot.h \
+	$(I)/circular-file.h $(I)/clone_input_output_stream.h \
+	$(I)/cmdline.h $(I)/concat_input_stream.h \
+	$(I)/config-cmdline.h $(I)/config_file_reader.h \
+	$(I)/config_settings.h $(I)/counter_output_stream.h \
+	$(I)/ctrl-rfc.h $(I)/debug.h $(I)/debug_config.h $(I)/digest.h \
+	$(I)/dns-udp.h $(I)/dns_resource_record.h $(I)/dnscore.h \
 	$(I)/dnscore-release-date.h $(I)/dnsformat.h $(I)/dnskey.h \
 	$(I)/dnskey-keyring.h $(I)/dnskey_dsa.h $(I)/dnskey_ecdsa.h \
 	$(I)/dnskey_rsa.h $(I)/dnskey-signature.h $(I)/dnsname.h \
@@ -930,6 +931,7 @@ pkginclude_HEADERS = $(FEATURES) $(I)/alarm.h $(I)/acl.h \
 	$(I)/zone_reader.h $(I)/zone_reader_axfr.h \
 	$(I)/zone_reader_text.h $(I)/zonefile_reader.h \
 	$(am__append_45) $(I)/tsig.h $(am__append_47)
+nodist_include_HEADERS = $(FEATURES)
 CLEANFILES = buildinfo.h $(FEATURESSRC)
 VP = DNSCORE
 all: all-am
@@ -1398,6 +1400,27 @@ mostlyclean-libtool:
 clean-libtool:
 	-rm -rf .libs _libs
 	-rm -rf src/.libs src/_libs
+install-nodist_includeHEADERS: $(nodist_include_HEADERS)
+	@$(NORMAL_INSTALL)
+	@list='$(nodist_include_HEADERS)'; test -n "$(includedir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(includedir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(includedir)" || exit 1; \
+	fi; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  echo "$$d$$p"; \
+	done | $(am__base_list) | \
+	while read files; do \
+	  echo " $(INSTALL_HEADER) $$files '$(DESTDIR)$(includedir)'"; \
+	  $(INSTALL_HEADER) $$files "$(DESTDIR)$(includedir)" || exit $$?; \
+	done
+
+uninstall-nodist_includeHEADERS:
+	@$(NORMAL_UNINSTALL)
+	@list='$(nodist_include_HEADERS)'; test -n "$(includedir)" || list=; \
+	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(includedir)'; $(am__uninstall_files_from_dir)
 install-pkgincludeHEADERS: $(pkginclude_HEADERS)
 	@$(NORMAL_INSTALL)
 	@list='$(pkginclude_HEADERS)'; test -n "$(pkgincludedir)" || list=; \
@@ -1506,7 +1529,7 @@ check-am: all-am
 check: check-am
 all-am: Makefile $(LTLIBRARIES) $(DATA) $(HEADERS)
 installdirs:
-	for dir in "$(DESTDIR)$(libdir)" "$(DESTDIR)$(pkgincludedir)"; do \
+	for dir in "$(DESTDIR)$(libdir)" "$(DESTDIR)$(includedir)" "$(DESTDIR)$(pkgincludedir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: install-am
@@ -1565,7 +1588,8 @@ info: info-am
 
 info-am:
 
-install-data-am: install-pkgincludeHEADERS
+install-data-am: install-nodist_includeHEADERS \
+	install-pkgincludeHEADERS
 
 install-dvi: install-dvi-am
 
@@ -1611,7 +1635,8 @@ ps: ps-am
 
 ps-am:
 
-uninstall-am: uninstall-libLTLIBRARIES uninstall-pkgincludeHEADERS
+uninstall-am: uninstall-libLTLIBRARIES uninstall-nodist_includeHEADERS \
+	uninstall-pkgincludeHEADERS
 
 .MAKE: install-am install-strip
 
@@ -1622,13 +1647,14 @@ uninstall-am: uninstall-libLTLIBRARIES uninstall-pkgincludeHEADERS
 	html-am info info-am install install-am install-data \
 	install-data-am install-dvi install-dvi-am install-exec \
 	install-exec-am install-html install-html-am install-info \
-	install-info-am install-libLTLIBRARIES install-man install-pdf \
-	install-pdf-am install-pkgincludeHEADERS install-ps \
-	install-ps-am install-strip installcheck installcheck-am \
-	installdirs maintainer-clean maintainer-clean-generic \
-	mostlyclean mostlyclean-compile mostlyclean-generic \
-	mostlyclean-libtool pdf pdf-am ps ps-am tags tags-am uninstall \
-	uninstall-am uninstall-libLTLIBRARIES \
+	install-info-am install-libLTLIBRARIES install-man \
+	install-nodist_includeHEADERS install-pdf install-pdf-am \
+	install-pkgincludeHEADERS install-ps install-ps-am \
+	install-strip installcheck installcheck-am installdirs \
+	maintainer-clean maintainer-clean-generic mostlyclean \
+	mostlyclean-compile mostlyclean-generic mostlyclean-libtool \
+	pdf pdf-am ps ps-am tags tags-am uninstall uninstall-am \
+	uninstall-libLTLIBRARIES uninstall-nodist_includeHEADERS \
 	uninstall-pkgincludeHEADERS
 
 

@@ -373,13 +373,13 @@ server_sm_udp_worker_thread(void *parms)
 	    message_reset_control_size(mesg);
 	    ya_result ret = message_recv_udp(mesg, fd);
 #if DEBUG
-	     log_debug("server_sm_udp_worker_thread(%i, %i): recvmmsg: %i", ctx->base.idx, fd, ret);
+	     log_debug("server_sm_udp_worker_thread(%i, %i): recvmsg: %i", ctx->base.idx, fd, ret);
 #endif
         if(FAIL(ret))
         {
 #if DEBUG
             int err = ERRNO_ERROR;
-            log_info("message_recv_udp %i returned %i : %r", fd, ret, err);
+            log_debug("message_recv_udp %i returned %i : %r", fd, ret, err);
 #endif
             if(service_should_reconfigure_or_stop(ctx->base.worker))
             {
@@ -390,7 +390,7 @@ server_sm_udp_worker_thread(void *parms)
             continue;
         }
 #if DEBUG
-        log_info("server_sm_udp_worker_thread: received %u packets (DEBUG)", ret);
+        log_debug("server_sm_udp_worker_thread: received %u packets (DEBUG)", ret);
 #endif
         local_statistics_udp_input_count++;
 
@@ -427,19 +427,19 @@ server_sm_udp_worker_thread(void *parms)
                 {
                     //  ignore
 #if DEBUG
-                    log_info("server_sm_udp_worker_thread: good-dropped %d bytes from %{sockaddr}", message_get_size(mesg), message_get_sender_sa(mesg));
+                    log_debug("server_sm_udp_worker_thread: good-dropped %d bytes from %{sockaddr}", message_get_size(mesg), message_get_sender_sa(mesg));
                     message_log(MODULE_MSG_HANDLE, LOG_INFO, mesg);
 #endif
                 }
                 else if(ret == STOPPED_BY_APPLICATION_SHUTDOWN)
                 {
 #if DEBUG
-                    log_info("server_sm_udp_worker_thread: STOPPED_BY_APPLICATION_SHUTDOWN ?");
+                    log_debug("server_sm_udp_worker_thread: STOPPED_BY_APPLICATION_SHUTDOWN ?");
 #endif
                     if(service_should_reconfigure_or_stop(ctx->base.worker))
                     {
 #if DEBUG
-                        log_info("server_sm_udp_worker_thread: STOPPED_BY_APPLICATION_SHUTDOWN !");
+                        log_debug("server_sm_udp_worker_thread: STOPPED_BY_APPLICATION_SHUTDOWN !");
 #endif
                         /*
                          * GOTO!
@@ -454,7 +454,7 @@ server_sm_udp_worker_thread(void *parms)
                 {
                     // something happened
 #if DEBUG
-                    log_info("server_sm_udp_worker_thread: bad-dropped %d bytes from %{sockaddr}", message_get_size(mesg), message_get_sender_sa(mesg));
+                    log_debug("server_sm_udp_worker_thread: bad-dropped %d bytes from %{sockaddr}", message_get_size(mesg), message_get_sender_sa(mesg));
                     message_log(MODULE_MSG_HANDLE, LOG_INFO, mesg);
 #endif
                 }

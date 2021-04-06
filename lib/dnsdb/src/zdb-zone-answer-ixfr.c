@@ -136,6 +136,14 @@ zdb_zone_answer_ixfr_thread_exit(zdb_zone_answer_ixfr_args* data)
     log_debug("zone write ixfr: ended with: %r", data->return_code);
 
     zdb_zone_release(data->zone);
+
+#if DNSCORE_HAS_TCP_MANAGER
+    if(data->sctx != NULL)
+    {
+        tcp_manager_context_release(data->sctx);
+        data->sctx = NULL;
+    }
+#endif
     
     if(data->mesg != NULL)
     {
@@ -507,7 +515,6 @@ zdb_zone_answer_ixfr_thread(void* data_)
 
 #if DNSCORE_HAS_TCP_MANAGER
         zdb_zone_answer_axfr(data->zone, mesg, data->sctx, NULL, data->disk_tp, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
-        data->sctx = NULL;
 #else
         zdb_zone_answer_axfr(data->zone, mesg, data->sockfd, NULL, data->disk_tp, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
         data->sockfd = -1;
@@ -581,8 +588,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
     message_reset_buffer_size(mesg);
 
 #if DNSCORE_HAS_TCP_MANAGER
-    tcp_manager_socket_context_t *sctx = data->sctx;
-    data->sctx = NULL;
+    tcp_manager_socket_context_t *sctx = tcp_manager_context_acquire(data->sctx);
 #else
     int tcpfd = data->sockfd;
     data->sockfd = -1;
@@ -651,6 +657,10 @@ zdb_zone_answer_ixfr_thread(void* data_)
             break;
         }
 
+#if DNSCORE_HAS_TCP_MANAGER
+        tcp_manager_read_update(sctx, return_value);
+#endif
+
         // at this point, record_length >= 0
         // if record_length > 0 then tctrl has been set
         
@@ -685,9 +695,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
                 }
             }
         }
-        
 
-        
         if(record_length == 0)
         {
 #if DEBUG
@@ -746,6 +754,9 @@ zdb_zone_answer_ixfr_thread(void* data_)
             if(ISOK(return_value = zdb_zone_answer_ixfr_send_message(&tcpos, &pw, mesg)))
 #endif
             {
+#if DNSCORE_HAS_TCP_MANAGER
+                tcp_manager_write_update(sctx, return_value);
+#endif
                 ++pages_sent;
                 stream_serial = current_to_serial;
             }
@@ -808,8 +819,13 @@ zdb_zone_answer_ixfr_thread(void* data_)
         }
     }
 
-    output_stream_close(&tcpos);
 
+#if DNSCORE_HAS_TCP_MANAGER
+    output_stream_flush(&tcpos);
+    output_stream *tcpos_filtered = buffer_output_stream_get_filtered(&tcpos);
+    fd_output_stream_detach(tcpos_filtered);
+#endif
+    output_stream_close(&tcpos);
     if(input_stream_valid(&fis))
     {
         input_stream_close(&fis);

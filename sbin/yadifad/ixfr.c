@@ -104,6 +104,10 @@ ixfr_process(message_data *mesg, int sockfd)
     
     if(fqdn_len > MAX_DOMAIN_LENGTH)
     {
+#if DNSCORE_HAS_TCP_MANAGER
+        tcp_manager_context_release(sctx);
+        tcp_manager_close(sctx);
+#endif
         return DOMAIN_TOO_LONG;
     }
     
@@ -141,6 +145,7 @@ ixfr_process(message_data *mesg, int sockfd)
 
 #if DNSCORE_HAS_TCP_MANAGER
                             zdb_zone_answer_ixfr(zone, mesg, sctx, NULL, NULL, g_config->axfr_max_packet_size, g_config->axfr_max_record_by_packet, g_config->axfr_compress_packets);
+                            tcp_manager_context_release(sctx); // sctx has been acquired by the xfr call
 #else
                             zdb_zone_answer_ixfr(zone, mesg, sockfd, NULL, NULL, g_config->axfr_max_packet_size, g_config->axfr_max_record_by_packet, g_config->axfr_compress_packets);
 #endif
@@ -242,7 +247,14 @@ ixfr_process(message_data *mesg, int sockfd)
 #endif
     
     ya_result send_ret;
-    if(ISOK(send_ret = message_update_length_send_tcp_with_default_minimum_throughput(mesg, sockfd)))
+
+#if DNSCORE_HAS_TCP_MANAGER
+    send_ret = message_send_tcp(mesg, sockfd);
+#else
+    send_ret = message_update_length_send_tcp_with_default_minimum_throughput(mesg, sockfd);
+#endif
+
+    if(ISOK(send_ret))
     {
 #if DNSCORE_HAS_TCP_MANAGER
         tcp_manager_write_update(sctx, send_ret);
@@ -250,13 +262,13 @@ ixfr_process(message_data *mesg, int sockfd)
     }
     else
     {
-        log_err("ixfr: %{dnsname}: could not send message: %r", message_get_canonised_fqdn(mesg), send_ret);
+        log_err("ixfr: %{dnsname}: could not send error message: %r (%{sockaddr})", send_ret, message_get_sender(mesg));
     }
     
     yassert((sockfd < 0)||(sockfd >2));
 
 #if DNSCORE_HAS_TCP_MANAGER
-    tcp_manager_close(sctx);
+    tcp_manager_context_release(sctx);
 #else
     shutdown(sockfd, SHUT_RDWR);
     close_ex(sockfd);
@@ -287,10 +299,8 @@ ixfr_start_query(const host_address *servers, const u8 *origin, u32 ttl, const u
      * Create the IXFR query packet
      */
 
-    random_ctx rndctx = thread_pool_get_random_ctx();
     ya_result return_value;
     u32 serial;
-    u16 id = (u16)random_next(rndctx);
     
     if(FAIL(return_value = rr_soa_get_serial(soa_rdata, soa_rdata_size, &serial)))
     {
@@ -298,6 +308,8 @@ ixfr_start_query(const host_address *servers, const u8 *origin, u32 ttl, const u
         return return_value;
     }
     
+    random_ctx rndctx = thread_pool_get_random_ctx();
+    u16 id = (u16)random_next(rndctx);
     log_info("ixfr: %{dnsname}: %{hostaddr}: sending query from serial %i", origin, servers, serial);
              
     message_make_ixfr_query(ixfr_queryp, id, origin, ttl, soa_rdata_size, soa_rdata);

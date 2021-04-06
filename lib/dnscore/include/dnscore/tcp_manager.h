@@ -48,13 +48,16 @@ typedef void* tcp_manager_socket_context_t;
 #endif
 
 #define TCP_MANAGER_HOST_CONTEXT_CONNECTION_COUNT_MAX 16
+#define TCP_MANAGER_REGISTERED_HOST_CONTEXT_CONNECTION_COUNT_MAX 16
 
 void tcp_manager_init();
+
+void tcp_manager_finalise();
 
 /**
  * Registers a hosts with its separate allowed connections.
  */
-ya_result tcp_manager_register_client(socketaddress *sa, socklen_t sa_len, s32 allowed_connections_max);
+ya_result tcp_manager_host_register(const socketaddress *sa, socklen_t sa_len, s32 allowed_connections_max);
 
 /**
  * Sets the allowed connections total for all unregistered connections.
@@ -64,12 +67,14 @@ ya_result tcp_manager_connection_max(s32 allowed_connections_max);
 /**
  * Accepts a TCP connection and manages it.
  */
-ya_result tcp_manager_accept(int servfd);
+ya_result tcp_manager_accept(int servfd, tcp_manager_socket_context_t **sctxp);
 
 /**
  * Acquires a TCP connection, ensuring exclusive access to the stream.
  */
-tcp_manager_socket_context_t* tcp_manager_context_acquire(int sockfd);
+tcp_manager_socket_context_t* tcp_manager_context_acquire_from_socket(int sockfd);
+
+tcp_manager_socket_context_t* tcp_manager_context_acquire(tcp_manager_socket_context_t *sctx);
 
 /**
  * Releases a TCP connection.

@@ -1178,13 +1178,7 @@ server_context_create()
                     fd_setcloseonexec(sockfd);
 
                     server_context_set_socket_name(sockfd, (struct sockaddr*)tcp_addr->ai_addr);
-/*
-                    if(FAIL(ret = fd_setnonblocking(sockfd)))
-                    {
-                        server_context_destroy();
-                        return ret;
-                    }
-*/
+
                     /* For TCP only, listen to it... */
                     if(FAIL(listen(sockfd, g_config->tcp_queue_size)))
                     {

@@ -399,7 +399,8 @@ shared_heap_alloc_from_ctx(struct shared_heap_ctx *ctx, size_t size)
     
     while(bloc != &ctx->free)
     {
-        yassert(bloc->allocated == 0);
+        assert(bloc->allocated == 0);
+        // will be wrong: assert(bloc->real_size >= bloc->size);
         
         if((size_t)bloc->real_size >= real_size)
         {
@@ -489,7 +490,8 @@ shared_heap_try_alloc_from_ctx(struct shared_heap_ctx *ctx, size_t size)
 
         while(bloc != &ctx->free)
         {
-            yassert(bloc->allocated == 0);
+            assert(bloc->allocated == 0);
+            // will be wrong: assert(bloc->real_size >= bloc->size);
 
             if((size_t)bloc->real_size >= real_size)
             {
@@ -582,7 +584,8 @@ shared_heap_wait_alloc_from_ctx(struct shared_heap_ctx *ctx, size_t size)
         
         while(bloc != &ctx->free)
         {
-            yassert(bloc->allocated == 0);
+            assert(bloc->allocated == 0);
+            // will be wrong: assert(bloc->real_size >= bloc->size);
 #if DEBUG
             shared_heap_check_bloc(bloc->heap_index, bloc, 0);
 #endif
