@@ -261,6 +261,8 @@ void debug_free_unmonitored(void* ptr);
 void debug_malloc_hook_tracked_dump();
 void debug_malloc_hook_caller_dump();
 
+void debug_nop_hook(); // meant
+
 #ifdef	__cplusplus
 }
 #endif

@@ -474,6 +474,7 @@ static inline bool log_is_set(logger_handle* handle, int level)
 #define log_info(...)   LOGGER_EARLY_CULL_PREFIX(MSG_INFO) logger_handle_msg_nocull(MODULE_MSG_HANDLE,MSG_INFO,LOG_TEXT_PREFIX __VA_ARGS__)
 #define log_warn(...)   LOGGER_EARLY_CULL_PREFIX(MSG_WARNING) logger_handle_msg_nocull(MODULE_MSG_HANDLE,MSG_WARNING,LOG_TEXT_PREFIX __VA_ARGS__)
 #define log_err(...)    LOGGER_EARLY_CULL_PREFIX(MSG_ERR) logger_handle_msg_nocull(MODULE_MSG_HANDLE,MSG_ERR,LOG_TEXT_PREFIX __VA_ARGS__)
+#define log_to_level(level_,...)    LOGGER_EARLY_CULL_PREFIX((level_)) logger_handle_msg_nocull(MODULE_MSG_HANDLE,(level_),LOG_TEXT_PREFIX __VA_ARGS__)
 
 #define log_try_debug7(...) logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_DEBUG7,LOG_TEXT_PREFIX __VA_ARGS__)
 #define log_try_debug6(...) logger_handle_try_msg(MODULE_MSG_HANDLE,MSG_DEBUG6,LOG_TEXT_PREFIX __VA_ARGS__)

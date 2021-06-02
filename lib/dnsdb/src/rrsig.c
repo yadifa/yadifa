@@ -392,8 +392,6 @@ rrsig_should_remove_signature_from_rdata(const void *rdata, u16 rdata_size, cons
             {
                 // key will not be deactivated at expiration of this signature (else there is no point regenerating it)
 
-                //
-
                 // if the key is not private, regeneration is impossible
 
                 if(dnskey_is_private(key))
@@ -407,7 +405,7 @@ rrsig_should_remove_signature_from_rdata(const void *rdata, u16 rdata_size, cons
 #if DEBUG_SIGNATURE_REMOVAL_TEST
                                 log_info("rrsig_should_remove_signature_from_rdata: tag=%hd: expiration < inactive_epoch(key) times %T < %T (DEBUG_SIGNATURE_REMOVAL_TEST) %{rdatadesc}", key_tag, now, expiration, &rrsig_rr_rd);
 #endif
-                                return TRUE;
+                                return TRUE; // remove it for replacement
                             }
                             else
                             {
@@ -419,7 +417,7 @@ rrsig_should_remove_signature_from_rdata(const void *rdata, u16 rdata_size, cons
 #if DEBUG_SIGNATURE_REMOVAL_TEST
                             log_info("rrsig_should_remove_signature_from_rdata: tag=%hd: now >= expiration %T >= %T (DEBUG_SIGNATURE_REMOVAL_TEST) %{rdatadesc}", key_tag, now, expiration, &rrsig_rr_rd);
 #endif
-                            return TRUE; // remove it
+                            return TRUE; // remove it for replacement
                         }
                     }
                     else

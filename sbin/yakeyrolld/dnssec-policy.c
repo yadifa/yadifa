@@ -1231,8 +1231,6 @@ dnssec_policy_table_init_from_created_epoch(dnssec_policy_table_s *tbl, dnssec_p
     return ret;
 }
 
-
-
 static bool
 dnssec_policy_key_roll_matches(const struct dnssec_policy_key_suite *kr, const dnssec_key *key)
 {
@@ -1277,18 +1275,20 @@ dnssec_policy_key_roll_matches(const struct dnssec_policy_key_suite *kr, const d
                         dnssec_policy_date_get_epoch(&key_tbl.inactive, &key_inactive);
                         dnssec_policy_date_get_epoch(&key_tbl.delete, &key_delete);
 
-                        s64 pait = key_inactive - key_activate;
+                        u32 margin = keyroll_deactivation_margin(key_activate, key_inactive, key_delete);
+
+                        s64 pait = (key_inactive + margin) - key_activate;
                         s64 kait = key->epoch_inactive - key->epoch_activate;
                         s64 dait = labs(pait - kait);
 
-                        s64 pidt = key_delete - key_inactive;
+                        s64 pidt = key_delete - (key_inactive + margin);
                         s64 kidt = key->epoch_delete - key->epoch_inactive;
                         s64 didt = labs(pidt - kidt);
 
                         s64 dc = labs(key_created - key->epoch_created);
                         s64 dp = labs(key_publish - key->epoch_publish);
                         s64 da = labs(key_activate - key->epoch_activate);
-                        s64 di = labs(key_inactive - key->epoch_inactive);
+                        s64 di = labs((key_inactive + margin) - key->epoch_inactive);
                         s64 dd = labs(key_delete - key->epoch_delete);
 
                         //bool match = (/*dc < KEY_POLICY_EPOCH_MATCH_MARGIN &&*/ dp < KEY_POLICY_EPOCH_MATCH_MARGIN && da < KEY_POLICY_EPOCH_MATCH_MARGIN && di < KEY_POLICY_EPOCH_MATCH_MARGIN && dd < KEY_POLICY_EPOCH_MATCH_MARGIN);
@@ -1421,8 +1421,8 @@ static int dnssec_policy_dnssec_key_ptr_vector_qsort_by_activation_time_callback
                 {
                     u8 a_bytes[1024];
                     u8 b_bytes[1024];
-                    u32 a_size = a->vtbl->dnssec_key_writerdata(a, a_bytes);
-                    u32 b_size = b->vtbl->dnssec_key_writerdata(b, b_bytes);
+                    u32 a_size = a->vtbl->dnssec_key_writerdata(a, a_bytes, sizeof(a_bytes));
+                    u32 b_size = b->vtbl->dnssec_key_writerdata(b, b_bytes, sizeof(b_bytes));
 
                     r = a_size - b_size;
 

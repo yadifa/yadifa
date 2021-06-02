@@ -55,8 +55,7 @@
 #include <dnscore/dnscore.h>
 #include <dnscore/logger.h>
 #include <dnscore/threaded_queue.h>
-#include <dnscore/thread.h>
-#include <dnscore/thread_pool.h>
+#include <dnscore/service.h>
 #include <dnscore/message.h>
 #include <dnsdb/zdb_types.h>
 
@@ -90,8 +89,7 @@
  */
 
 static threaded_queue dynupdate_query_service_queue = THREADED_QUEUE_EMPTY;
-static volatile thread_t dynupdate_query_service_thread_id = 0;
-static volatile bool dynupdate_query_service_thread_run = FALSE;
+static u32 g_dynupdate_query_service_queue_size = 4096;
 
 typedef struct dynupdate_query_service_args dynupdate_query_service_args;
 
@@ -101,35 +99,52 @@ struct dynupdate_query_service_args
 {
     zdb            *db;
     message_data   *mesg;
-    u32             timestamp;
+    s64             timestamp;
     int             sockfd;
 };
 
-static const u32 dynupdate_query_timeout_seconds = 2;
+static const s64 dynupdate_query_timeout_us = ONE_SECOND_US * 3;
 
-static noreturn void*
-dynupdate_query_service_thread(void *args)
+static void
+dynupdate_query_service_queue_clear()
 {
-    (void)args;
-    thread_pool_setup_random_ctx();
-    
-    log_debug("dynupdate_query_service_thread: service started");
+    dynupdate_query_service_args* parms;
+    while((parms = (dynupdate_query_service_args*)threaded_queue_try_dequeue(&dynupdate_query_service_queue)) != NULL)
+    {
+        message_free(parms->mesg);
+        free(parms);
+    }
+}
 
-    thread_set_name("dynupdate-query", 0, 0);
-    
-#if DNSCORE_HAS_LOG_THREAD_TAG
-    logger_handle_set_thread_tag("dynupdte");
-#endif
-    
+static void dynupdate_query_service_wakeup(struct service_s *desc)
+{
+    (void)desc;
+    threaded_queue_try_enqueue(&dynupdate_query_service_queue, NULL);
+}
+
+static int dynupdate_query_service_thread(struct service_worker_s *worker)
+{
+    log_info("dynupdate: service started");
+
+    service_set_servicing(worker);
+
     for(;;)
     {
-dynupdate_query_service_thread_main_loop:
-
-        if(dnscore_shuttingdown())
+        if(service_should_reconfigure_or_stop(worker))
         {
-            break;
+            if(!service_should_run(worker))
+            {
+                break;
+            }
+
+            // reconfiguring ...
+
+            dynupdate_query_service_queue_clear();
+
+            service_clear_reconfigure(worker);
+            continue;
         }
-                
+
         /**
          * 
          * Needs all the parameters for UDP answer.
@@ -137,25 +152,21 @@ dynupdate_query_service_thread_main_loop:
          * 
          */
         
-        dynupdate_query_service_args* parms = (dynupdate_query_service_args*)threaded_queue_dequeue(&dynupdate_query_service_queue);
+        dynupdate_query_service_args* parms = (dynupdate_query_service_args*)threaded_ringbuffer_cw_dequeue(&dynupdate_query_service_queue);
         
         if(parms == NULL)
         {
-            log_debug("dynupdate_query_service_thread: stopping (M)");
-            break;
+#if DEBUG
+            log_debug("dynupdate_query_service_thread: woken up by an empty message");
+#endif
+            continue;
         }
-        
-        if(!dynupdate_query_service_thread_run)
-        {
-            log_debug("dynupdate_query_service_thread: stopping (S)");
-            break;
-        }
-        
+
         message_data *mesg = parms->mesg;
         
-        u32 now = time(NULL);
+        s64 now = timeus();
         
-        if((now - parms->timestamp) <= dynupdate_query_timeout_seconds)
+        if((now - parms->timestamp) <= dynupdate_query_timeout_us)
         {
             /* process */
 
@@ -216,7 +227,7 @@ dynupdate_query_service_thread_main_loop:
 
 #if !HAS_DROPALL_SUPPORT
 
-            ssize_t sent;
+            s32 sent;
 
 #if DEBUG
             log_debug("dynupdate_query_service_thread: sendto(%d, %p, %d, %d, %{sockaddr}, %d)",
@@ -225,42 +236,26 @@ dynupdate_query_service_thread_main_loop:
             log_memdump_ex(g_server_logger, MSG_DEBUG5, message_get_buffer_const(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_HEXTEXT);
 #endif
             
-            while( (sent = message_send_udp(mesg, parms->sockfd)) < 0)
+            if(FAIL(sent = message_send_udp(mesg, parms->sockfd)))
             {
-                int error_code = errno;
+                ya_result err = sent;
 
-                if(error_code != EINTR)
-                {
-                    /** @warning server_st_process_udp needs to be modified */
-                    
-                    log_err("update (%04hx) %{dnsname} %{dnstype} send failed: %r",
+                /** @warning server_st_process_udp needs to be modified */
+
+                log_err("update (%04hx) %{dnsname} %{dnstype} send failed: %r",
                         ntohs(message_get_id(mesg)),
                         message_get_canonised_fqdn(mesg),
                         message_get_query_type_ptr(mesg),
-                        MAKE_ERRNO_ERROR(error_code));
+                        err);
 
-                    free(parms);
-                    message_free(mesg);
-
-                    /**********************************************************
-                     * GOTO !
-                     * 
-                     * This one is meant to break both loops to avoid the test
-                     * following this while {}
-                     * 
-                     *********************************************************/
-                    
-                    goto dynupdate_query_service_thread_main_loop; 
-                    
-                    /**********************************************************
-                     * GOTO !
-                     *********************************************************/
-                }
+                message_free(mesg);
+                free(parms);
+                continue;
             }
             
             //local_statistics->udp_output_size_total += sent;
 
-            if((size_t)sent != message_get_size(mesg))
+            if(sent != (s32)message_get_size(mesg))
             {
                 /** @warning server_st_process_udp needs to be modified */
                 log_err("short byte count sent (%lli instead of %i)", sent, message_get_size(mesg));
@@ -268,111 +263,101 @@ dynupdate_query_service_thread_main_loop:
 #else
             log_debug("dynupdate_query_service_thread: drop all");
 #endif
-
         }
 
-        free(parms);
         message_free(mesg);
+        free(parms);
     }
     
-    log_debug("dynupdate_query_service_thread: service stopped");
-    
-    thread_pool_destroy_random_ctx();
-    
-#if DNSCORE_HAS_LOG_THREAD_TAG
-    logger_handle_clear_thread_tag();
-#endif
-    
-    thread_exit(NULL); /* not from the pool, so it's the way */
+    log_info("dynupdate: service stopped");
 
-    // unreachable
-    // return NULL;
+    return SUCCESS;
+}
+
+static struct service_s dynupdate_query_service_handler = UNINITIALIZED_SERVICE;
+
+ya_result
+dynupdate_query_service_init()
+{
+    ya_result ret;
+    if(ISOK(ret = service_init_ex2(&dynupdate_query_service_handler, dynupdate_query_service_thread, dynupdate_query_service_wakeup, "svrudpdu", 1)))
+    {
+        threaded_queue_init(&dynupdate_query_service_queue, g_dynupdate_query_service_queue_size);
+
+        log_info("dynupdate: service initialised");
+    }
+    else
+    {
+        log_err("dynupdate: failed to initialise service: %r", ret);
+    }
+    return ret;
 }
 
 ya_result
 dynupdate_query_service_start()
 {
+    ya_result ret;
     log_debug("dynupdate_query_service_start: starting service");
-    
-    if(dynupdate_query_service_thread_id != 0)
-    {
-        log_debug("dynupdate_query_service_start: already running");
-        
-        return SERVICE_ALREADY_RUNNING;
-    }
-    
-    dynupdate_query_service_thread_run = TRUE;
-    
-    threaded_queue_init(&dynupdate_query_service_queue, 256);
-    
-    thread_t id;
-    if(thread_create(&id, dynupdate_query_service_thread, NULL) != 0)
-    {
-        log_crit("failed to start dynamic query service thread");
-        
-        dynupdate_query_service_thread_run = FALSE;
-        
-        return THREAD_CREATION_ERROR;
-    }
-    
-    dynupdate_query_service_thread_id = id;
-    
-    return SUCCESS;
+    ret = service_start(&dynupdate_query_service_handler);
+    return ret;
 }
 
 ya_result
 dynupdate_query_service_stop()
 {
-    log_debug("dynupdate_query_service_stop: stopping dynamic update service");
-    
-    if(dynupdate_query_service_thread_id == 0)
+    ya_result ret = SUCCESS;
+
+    if(service_initialised(&dynupdate_query_service_handler) && service_started(&dynupdate_query_service_handler))
     {
-        return SUCCESS;
+        log_debug("dynupdate_query_service_stop: stopping dynamic update service");
+
+        threaded_queue_try_enqueue(&dynupdate_query_service_queue, NULL); // to wake up the service
+
+        ret = service_stop(&dynupdate_query_service_handler);
+
+        log_debug("dynupdate_query_service_stop: emptying dynamic update queue");
+
+        dynupdate_query_service_queue_clear();
+
+        log_debug("dynamic update service stopped");
     }
-    
-    dynupdate_query_service_thread_run = FALSE;
-    
-    threaded_queue_enqueue(&dynupdate_query_service_queue, NULL);
-    
-    thread_join(dynupdate_query_service_thread_id, NULL);
-    
-    log_debug("emptying dynamic update queue");
-    
-    while(threaded_queue_size(&dynupdate_query_service_queue) > 0)
+
+    return ret;
+}
+
+void
+dynupdate_query_service_finalise()
+{
+    if(service_initialised(&dynupdate_query_service_handler))
     {
-        dynupdate_query_service_args* parms = (dynupdate_query_service_args*)threaded_queue_try_dequeue(&dynupdate_query_service_queue);
-        
-        if(parms != NULL)
-        {
-            free(parms->mesg);
-            free(parms);
-        }
+        dynupdate_query_service_stop();
+        service_finalize(&dynupdate_query_service_handler);
+        dynupdate_query_service_queue_clear();
+        threaded_queue_finalize(&dynupdate_query_service_queue);
     }
-    
-    threaded_queue_finalize(&dynupdate_query_service_queue);
-    
-    dynupdate_query_service_thread_id = 0;
-    
-    log_debug("dynamic update service stopped");
-    
-    return SUCCESS;
 }
 
 ya_result
 dynupdate_query_service_enqueue(zdb *db, message_data *mesg, int sockfd)
 {
-    if(dynupdate_query_service_thread_id == 0)
+    if(!service_started(&dynupdate_query_service_handler))
     {
         return SERVICE_NOT_RUNNING;
     }
+
+    if(threaded_queue_size(&dynupdate_query_service_queue) == g_dynupdate_query_service_queue_size)
+    {
+        return MAKE_DNSMSG_ERROR(RCODE_SERVFAIL); // it will not be used as is, but that's what needs to be said
+    }
+
     // ensure the original message cannot be used anymore
     struct dynupdate_query_service_args *parms;
     MALLOC_OBJECT_OR_DIE(parms, dynupdate_query_service_args, DYNUPQSA_TAG);
     parms->db = db;
     parms->mesg = message_dup(mesg);
-    parms->timestamp = time(NULL);
+    parms->timestamp = timeus();
     parms->sockfd = sockfd;
-    
+
     threaded_queue_enqueue(&dynupdate_query_service_queue, parms);
 
 #if DNSCORE_HAS_TSIG_SUPPORT
@@ -381,6 +366,16 @@ dynupdate_query_service_enqueue(zdb *db, message_data *mesg, int sockfd)
     message_set_size(mesg, 0);  // resets the message size
 
     return SUCCESS;
+}
+
+void
+dynupdate_query_service_reset()
+{
+    if(service_initialised(&dynupdate_query_service_handler) && service_started(&dynupdate_query_service_handler))
+    {
+        service_reconfigure(&dynupdate_query_service_handler);
+        threaded_queue_enqueue(&dynupdate_query_service_queue, NULL); // to wake up the service
+    }
 }
 
 /** @} */

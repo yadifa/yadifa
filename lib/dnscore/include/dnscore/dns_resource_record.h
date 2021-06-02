@@ -149,6 +149,8 @@ static inline void dns_resource_record_free(dns_resource_record *rr)
 
 struct resource_record_view;
 
-void dns_resource_record_init_resource_record_view(struct resource_record_view *rrv);
+void dns_resource_record_resource_record_view_init(struct resource_record_view *rrv);
+
+void dns_resource_record_resource_record_view_finalise(struct resource_record_view *rrv);
 
 /** @} */

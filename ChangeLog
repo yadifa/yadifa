@@ -29,6 +29,31 @@
 # 
 ################################################################################
 
+20210602:
+    YADIFA 2.5.0-public
+
+    Adds a new, friendlier, TCP manager. When enabled, TCP connections aren't closed harshly after some time has elapased without any activity.
+
+      In a nutshell:
+
+        It is enabled using --enable-tcp-manager.
+        It works using a quota of allowed parallel connections per host. There is one value for the registeres hosts and one for unknown hosts.
+        All defined primaries are automatically added to the TCP manager as registered hosts.
+        The server's local addresses are automatically added to the registered hosts.
+        The default timeout is set to 3 seconds but doesn't imply a connection will be closed : only that it is a candidate for being closed.
+
+    EDDSA support has been enable.
+
+    Sending a TCP message now uses a single system call (message_send_tcp)
+
+    Fixes an issue in some FreeBSD setups where UDP messages couldn't be sent by YADIFA.
+    Fixes an issue in FreeBSD where TCP connections would sometimes be closed too quickly.
+    Fixes an issue where failed dynamic updates prerequisites would return SERVFAIL instead of the more accurate error code.
+    Fixes atomic usage for older C compilers.
+    Fixes an issue where some RRSIG records may not be updated in time if they happened to have their update bundled with NSEC3 records updates while the incremental change could not be immediately written in the journal.
+    Fixes the yadifa keygen module to understand "help" as a command and not as a domain.
+
+
 20210223:
     YADIFA 2.4.2-public
 

@@ -45,6 +45,9 @@
 extern "C" {
 #endif
 
+#define YADIFA_ERROR_BASE               0x82000000
+#define YADIFA_ERROR_CODE(code_)        ((s32)(YADIFA_ERROR_BASE+(code_)))
+#define YADIFA_MODULE_HELP_REQUESTED    YADIFA_ERROR_CODE(1)
 
 typedef int symbol_t;
 

@@ -341,19 +341,26 @@ dnskey_signature_sign(dnskey_signature *ds, const dnssec_key *key, void **out_rr
     void *digest_ptr;
     digest_get_digest(ctx_ptr, &digest_ptr);
     s32 signature_size = key->vtbl->dnssec_key_sign_digest(key, digest_ptr, ds->digest_size, signature);
-    
+
+    if(ISOK(signature_size))
+    {
 #if DEBUG_CRYPTO_INTERNALS
-    log_debug("dnskey_signature_sign: signature value");
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, signature, signature_size, 32);
+        log_debug("dnskey_signature_sign: signature value");
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, signature, signature_size, 32);
 #endif
     
-    u16 rrsig_rdata_size = RRSIG_RDATA_HEADER_LEN + owner_fqdn_len + signature_size;
-    
-    void *rrsig_rr = view_vtbl->new_instance(data, fqdn, TYPE_RRSIG, tctr.rclass, view_vtbl->get_ttl(data, rr0), rrsig_rdata_size, hdr.rdata);
-    
-    *out_rrsig_rr = rrsig_rr;
-    
-    return rrsig_rdata_size;
+        u16 rrsig_rdata_size = RRSIG_RDATA_HEADER_LEN + owner_fqdn_len + signature_size;
+
+        void *rrsig_rr = view_vtbl->new_instance(data, fqdn, TYPE_RRSIG, tctr.rclass, view_vtbl->get_ttl(data, rr0), rrsig_rdata_size, hdr.rdata);
+
+        *out_rrsig_rr = rrsig_rr;
+
+        return rrsig_rdata_size;
+    }
+    else
+    {
+        return signature_size;
+    }
 }
 
 

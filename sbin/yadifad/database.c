@@ -204,7 +204,8 @@ database_zone_path_provider(const u8* domain_fqdn, char *path_buffer, u32 path_b
         if((zone_desc->file_name == NULL) || (g_config->data_path == NULL))
         {
             zone_release(zone_desc);
-            return ZRE_NO_VALID_FILE_FOUND;
+            log_err("database: path provider: zone file name or data path not set");
+            return INVALID_STATE_ERROR;
         }
 
         const char *base_data_path = (zone_desc->file_name[0] != '/')?g_config->data_path:"";
@@ -275,7 +276,8 @@ database_zone_path_provider(const u8* domain_fqdn, char *path_buffer, u32 path_b
                 }
                 else
                 {
-                    ret = ZRE_NO_VALID_FILE_FOUND;
+                    log_err("database: path provider: transfer base path not set");
+                    ret = INVALID_STATE_ERROR;
                 }
                 
                 break;
@@ -371,7 +373,6 @@ database_info_provider(const u8 *origin, zdb_zone_info_provider_data *data, u32 
             {
                 yassert(zone_desc->journal_size_kb <= 8388608);
                 u64 max_size = zone_desc->journal_size_kb;
-
 
                 if(max_size > 0)
                 {

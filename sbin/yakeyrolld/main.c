@@ -100,6 +100,8 @@ extern logger_handle *g_keyroll_logger;
 #define KEYROLL_CONFIG_SECTION "yakeyrolld"
 #define RELEASEDATE YADIFA_DNSCORE_RELEASE_DATE
 
+// mount -t tmpfs -o size=16384 tmpfs /registry/yadifa/var/log/yakeyrolld
+
 static random_ctx rnd;
 
 enum PROGRAM_MODE
@@ -1042,6 +1044,7 @@ program_mode_play(const u8 *domain, bool does_loop)
             if(dnscore_shuttingdown())
             {
                 log_info("play: %{dnsname}: shutting down", domain);
+                logger_flush();
                 break;
             }
 
@@ -1160,6 +1163,7 @@ program_mode_play_thread(void *args_)
             else
             {
                 log_err("%{dnsname}: shutting down (%r)", args->fqdn, ret);
+                logger_flush();
                 dnscore_shutdown();
                 break;
             }
@@ -1249,7 +1253,7 @@ program_mode_play_all(bool does_loop, bool daemonise)
             args[i].fqdn = fqdn; // VS false positive (nonsense)
             args[i].does_loop = does_loop;
 
-            thread_pool_enqueue_call(tp, program_mode_play_thread, &args[i], NULL, domain);
+            thread_pool_enqueue_call(tp, program_mode_play_thread, &args[i], &counter, domain);
         }
 
         // ensure the counter was incremented
@@ -1257,6 +1261,18 @@ program_mode_play_all(bool does_loop, bool daemonise)
         thread_pool_wait_queue_empty(tp);
 
         // wait for the shutdown or for workers to stop
+
+        for(;;)
+        {
+            ret = thread_pool_counter_wait_equal_with_timeout(&counter, 0, ONE_SECOND_US * 30);
+
+            log_debug("keyroll: waiting for the threads to stop");
+
+            if(dnscore_shuttingdown())
+            {
+                break;
+            }
+        }
 
         s64 wait_stop_begin = timeus();
         bool wait_stop_error_message = FALSE;

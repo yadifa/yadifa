@@ -254,11 +254,9 @@ host_address2sockaddr(const host_address *address, socketaddress *sap)
 
             sa_in->sin_port = address->port;
             sa_in->sin_family = AF_INET;
-            
 #if HAS_SOCKADDR_IN_SIN_LEN
             sa_in->sin_len = sizeof(struct sockaddr_in);
 #endif
-
             return sizeof(struct sockaddr_in);
         }
         case HOST_ADDRESS_IPV6:
@@ -269,11 +267,9 @@ host_address2sockaddr(const host_address *address, socketaddress *sap)
             memcpy(&sa_in6->sin6_addr, address->ip.v6.bytes, 16);
             sa_in6->sin6_port = address->port;
             sa_in6->sin6_family = AF_INET6;
-            
 #if HAS_SOCKADDR_IN6_SIN6_LEN
             sa_in6->sin6_len = sizeof(struct sockaddr_in6);
 #endif
-
             return sizeof(struct sockaddr_in6);
         }
         default:

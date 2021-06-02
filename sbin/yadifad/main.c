@@ -135,9 +135,6 @@ server_register_errors()
     /* Config error codes */
 
     error_register(CONFIG_ZONE_ERR,"Error in config file");
-    
-    error_register(CONFIG_KEY_INCOMPLETE_KEY,"CONFIG_KEY_INCOMPLETE_KEY");
-    error_register(CONFIG_KEY_UNSUPPORTED_ALGORITHM,"CONFIG_KEY_UNSUPPORTED_ALGORITHM");
 
     /*
     error_register(YDF_ERROR_BASE,"YDF_ERROR_BASE");
@@ -150,6 +147,7 @@ server_register_errors()
     error_register(ZONE_LOAD_MASTER_TYPE_EXPECTED,"ZONE_LOAD_MASTER_TYPE_EXPECTED");
     error_register(ZONE_LOAD_MASTER_ZONE_FILE_UNDEFINED,"ZONE_LOAD_MASTER_ZONE_FILE_UNDEFINED");
     error_register(ZONE_LOAD_SLAVE_TYPE_EXPECTED,"ZONE_LOAD_SLAVE_TYPE_EXPECTED");
+    error_register(ZRE_NO_VALID_FILE_FOUND,"ZRE_NO_VALID_FILE_FOUND");
     
     error_register(ANSWER_NOT_ACCEPTABLE,"ANSWER_NOT_ACCEPTABLE");
     error_register(ANSWER_UNEXPECTED_EOF,"ANSWER_UNEXPECTED_EOF");
@@ -622,7 +620,7 @@ main_early_argv_check(int argc, char *argv[])
 static void
 main_ignore_signals_while_starting_up()
 {
-    int ignore_these[] = {SIGHUP, SIGUSR1, SIGINT, SIGTERM, SIGPIPE, 0};
+    static const int ignore_these[] = {SIGHUP, SIGUSR1, SIGINT, SIGTERM, SIGPIPE, 0};
 
     for(int i = 0; ignore_these[i] != 0; ++i)
     {
@@ -652,6 +650,11 @@ main(int argc, char *argv[])
     
 #if DEBUG
     puts("YADIFA debug build");
+#if HAS_RRL_SUPPORT
+    puts("RRL support: yes");
+#else
+    puts("RRL support: no");
+#endif
 #endif
     
     main_check_build_settings();
@@ -805,6 +808,7 @@ main(int argc, char *argv[])
             // called by the dns server
             // uses the database
 
+            dynupdate_query_service_init();
             dynupdate_query_service_start();
 #endif
 /*
@@ -828,6 +832,7 @@ main(int argc, char *argv[])
             log_info("stopping dynupdate service");
 
             dynupdate_query_service_stop();
+            dynupdate_query_service_finalise();
 
             log_info("dynupdate service stopped");
 #endif

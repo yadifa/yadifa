@@ -114,9 +114,18 @@ struct dnskey_features
 
 typedef struct dnskey_features dnskey_features;
 
+struct dnskey_raw_field_s
+{
+    u8 *buffer;
+    u32 size;
+};
+
+typedef struct dnskey_raw_field_s dnskey_raw_field_t;
+
 #define STRUCTDESCRIPTOR_NONE   0
 #define STRUCTDESCRIPTOR_BN     1
 #define STRUCTDESCRIPTOR_U16    2
+#define STRUCTDESCRIPTOR_RAW    3
 
 struct dnskey_field_access
 {
@@ -225,7 +234,7 @@ struct dnssec_key_sll
 
 typedef void dnssec_key_free_method(dnssec_key *key);
 typedef u32 dnssec_key_rdatasize_method(const dnssec_key *key);
-typedef u32 dnssec_key_writerdata_method(const dnssec_key *key, u8 *output);
+typedef u32 dnssec_key_writerdata_method(const dnssec_key *key, u8 *output, size_t output_size);
 typedef ya_result dnssec_key_sign_digest_method(const dnssec_key *key, const u8 *digest, u32 digest_len, u8 *output);
 typedef bool dnssec_key_verify_digest_method(const dnssec_key *key, const u8 *digest, u32 digest_len, const u8 *signature, u32 signature_len);
 typedef bool dnssec_key_equals_method(const dnssec_key *key_a, const dnssec_key *key_b);

@@ -55,7 +55,7 @@
 #include <dnscore/sys_types.h>
 #include <dnscore/bytearray_output_stream.h>
 
-#define DIGEST_BUFFER_SIZE 64
+#define DIGEST_BUFFER_SIZE 128
 
 struct digest_s;
 

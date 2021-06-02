@@ -1312,11 +1312,10 @@ thread_pool_destroy(struct thread_pool_s* tp)
             log_debug("thread: #%i [%x]: waiting termination", i, td[i]->id);
 #endif
 
-        if((err = thread_join(td[i]->id, NULL)) != 0)
+            if((err = thread_join(td[i]->id, NULL)) != 0)
             {
-#if VERBOSE_THREAD_LOG >= 3
-                log_debug("thread: error joining #%i [%x] %r %x", i, td[i]->id, err, err);
-#endif
+                log_err("thread: error joining #%i [%x] %r %x", i, td[i]->id, err, err);
+                logger_flush();
             }
         }
 

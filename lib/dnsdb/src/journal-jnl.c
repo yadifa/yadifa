@@ -84,6 +84,7 @@
 #include <dnscore/bytearray_input_stream.h>
 #include <dnscore/zalloc.h>
 #include <dnscore/circular-file.h>
+#include <dnscore/packet_reader.h>
 
 #include "dnsdb/zdb_error.h"
 #include "dnsdb/zdb_utils.h"
@@ -557,78 +558,6 @@ journal_jnl_lock_range_remove_nolock(journal_jnl* jnl, journal_range_lock *lock)
 #endif
 }
 
-#if UNUSED
-static bool
-journal_jnl_lock_get_serial_from(journal_jnl* jnl, u32 *serial_fromp)
-{
-    journal_jnl_readlock(jnl);
-    
-    if(list_dl_size(&jnl->range_lock) > 0)
-    {
-        u32 serial_from = jnl->hdr.serial_begin;
-        
-        list_dl_iterator_s iter;
-        list_dl_iterator_init(&iter, &jnl->range_lock);
-
-        while(list_dl_iterator_has_next(&iter))
-        {
-            journal_range_lock *lock = (journal_range_lock*)list_dl_iterator_next(&iter);
-            if(serial_lt(lock->serial_from, serial_from))
-            {
-                serial_from = lock->serial_from;
-            }
-        }
-        
-        *serial_fromp = serial_from;
-        
-        journal_jnl_readunlock(jnl);
-        
-        return TRUE;
-    }
-    else
-    {
-        journal_jnl_readunlock(jnl);
-        
-        return FALSE;
-    }
-}
-
-static bool
-journal_jnl_lock_get_serial_to(journal_jnl* jnl, u32 *serial_top)
-{
-    journal_jnl_readlock(jnl);
-    
-    if(list_dl_size(&jnl->range_lock) > 0)
-    {
-        u32 serial_to = jnl->hdr.serial_end;
-        
-        list_dl_iterator_s iter;
-        list_dl_iterator_init(&iter, &jnl->range_lock);
-
-        while(list_dl_iterator_has_next(&iter))
-        {
-            journal_range_lock *lock = (journal_range_lock*)list_dl_iterator_next(&iter);
-            if(serial_lt(lock->serial_to, serial_to))
-            {
-                serial_to = lock->serial_to;
-            }
-        }
-        
-        *serial_top = serial_to;
-        
-        journal_jnl_readunlock(jnl);
-        
-        return TRUE;
-    }
-    else
-    {
-        journal_jnl_readunlock(jnl);
-        
-        return FALSE;
-    }
-}
-#endif
-
 static bool
 journal_jnl_lock_get_serial_range_nolock(journal_jnl* jnl, u32 *serial_fromp, u32 *serial_top)
 {
@@ -739,6 +668,10 @@ journal_jnl_create_file(journal_jnl **jnlp, const u8 *origin, const char *filena
 static int
 journal_jnl_scan(journal_jnl* jnl)
 {
+#if EXPERIMENTAL
+    union journal_jnl_entry last_good_entry = { 0 };
+    u64 last_good_position = 0;
+#endif
     union journal_jnl_entry entry;
     ya_result ret = SUCCESS;
 
@@ -749,7 +682,8 @@ journal_jnl_scan(journal_jnl* jnl)
     while(circular_file_get_read_available(jnl->file) > 0)
     {
         u64 position = circular_file_tell(jnl->file);
-        
+        entry.magic = 0;
+
         if(ISOK(ret = circular_file_read(jnl->file, &entry.magic, sizeof(u32))))
         {
             switch(entry.magic)
@@ -798,7 +732,10 @@ journal_jnl_scan(journal_jnl* jnl)
                             // add to the current virtual chapter (create it if needed)
                             // if the current virtual chapter is "big enough", store it and clear it as "current"
                             // read the next entry
-                            
+#if EXPERIMENTAL
+                            last_good_entry = entry;
+                            last_good_position = position;
+#endif
                             journal_jnl_page_cache_add_nolock(jnl, &entry.page, position);
 
                             if(current_chapter == NULL)
@@ -865,6 +802,71 @@ journal_jnl_scan(journal_jnl* jnl)
             else
             {
                 log_err("jnl: %s,%p: failed to scan next magic: %r", circular_file_name(jnl->file), jnl->file, ret);
+#if EXPERIMENTAL
+                if(ret == CIRCULAR_FILE_SHORT)
+                {
+                    // the journal has been corrupted, the current page is lost
+                    if(last_good_entry.magic == PAGE_MAGIC)
+                    {
+                        // rollback
+
+                        jnl->hdr.serial_end = last_good_entry.page.serial_to;
+
+                        ssize_t records_position = circular_file_seek(jnl->file, last_good_position + 16);
+                        if(ISOK(records_position))
+                        {
+                            // read records until the 2nd SOA is found
+
+                            u8 *update_message_records = (u8*)malloc(last_good_entry.page.size);
+                            if(update_message_records != NULL)
+                            {
+                                ya_result update_message_size = circular_file_read(jnl->file, update_message_records, last_good_entry.page.size);
+                                if(update_message_size == last_good_entry.page.size)
+                                {
+                                    packet_unpack_reader_data pr;
+                                    dns_resource_record *rr = dns_resource_record_new_instance();
+                                    packet_reader_init(&pr, update_message_records, update_message_size);
+
+                                    int soa_count = 0;
+                                    for(;;)
+                                    {
+                                        u32 rr_position = pr.offset;
+                                        if(packet_reader_read_dns_resource_record(&pr, rr) <= 0)
+                                        {
+                                            break;
+                                        }
+                                        if(rr->tctr.qtype == TYPE_SOA)
+                                        {
+                                            if(soa_count++ > 0)
+                                            {
+                                                jnl->hdr.last_soa_offset = records_position + rr_position;
+                                                circular_file_set_size(jnl->file, circular_file_tell(jnl->file));
+                                                break;
+                                            }
+                                        }
+                                    }
+
+                                    dns_resource_record_free(rr);
+                                    free(update_message_records);
+                                }
+                                else
+                                {
+                                    free(update_message_records);
+
+                                    if(ISOK(update_message_size))
+                                    {
+                                        // short read?
+                                    }
+                                    else
+                                    {
+                                        return ZDB_JOURNAL_SHORT_READ;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+#endif // EXPERIMENTAL
             }
             
             break;
@@ -2392,15 +2394,16 @@ journal_jnl_truncate_to_size(journal *jh, u32 size_) // vtbl
         }
 
         journal_jnl_writeunlock(jnl);
+
+        return SUCCESS;
     }
-#if DEBUG
     else
     {
+#if DEBUG
         log_info("jnl: %s,%p: truncating to %u not supported (only 0 is)", circular_file_name(jnl->file), jnl->file, size_);
-    }
 #endif
-    
-    return ZDB_JOURNAL_FEATURE_NOT_SUPPORTED;
+        return ZDB_JOURNAL_FEATURE_NOT_SUPPORTED;
+    }
 }
 
 static ya_result

@@ -76,8 +76,6 @@ static const struct logger_name_handle_s logger_name_handles[] =
     {
         {"system", &g_system_logger},
         {"database", &g_database_logger},
-//{"zone", &g_zone_logger},
-//        {"server", &g_server_logger},
         {NULL, NULL}
     };
 
@@ -443,13 +441,8 @@ typedef struct journal_cjf_page_tbl_entry journal_cjf_page_tbl_entry;
 static int cjf_scan(const char *name)
 {
     int fd;
-    //int idxt_item_count;
     cjf_header hdr;
 
-    //journal_cjf_idxt_tbl_header idxt_hdr;
-    //journal_cjf_page_tbl_entry pages_sequence[PAGES_MAX];
-    //journal_cjf_idxt_tbl_item idxt_item[PAGES_MAX];
-    
     fd = open_ex(name, O_RDONLY);
     
     if(fd < 0)
@@ -556,253 +549,6 @@ static int cjf_scan(const char *name)
     return 0;
 }
 
-#if 0
-static int cjf_read(const char *name)
-{
-    int fd;
-    int idxt_item_count;
-    cjf_header hdr;
-    journal_cjf_page_tbl_header page;
-    journal_cjf_idxt_tbl_header idxt_hdr;
-    //journal_cjf_page_tbl_entry pages_sequence[PAGES_MAX];
-    journal_cjf_idxt_tbl_item idxt_item[PAGES_MAX];
-    
-    fd = open_ex(name, O_RDONLY);
-    
-    if(fd < 0)
-    {
-        return -1;
-    }
-    
-    formatln("; '%s' opened (cjf)", name);
-    
-    // follow the chain
-    s64 size = filesize(name);
-    if(size <= (s64)CJF_HEADER_REAL_SIZE)
-    {
-        close_ex(fd);
-        return -2;
-    }
-    
-    ssize_t n = readfully(fd, &hdr, CJF_HEADER_REAL_SIZE);
-    
-    if(n != CJF_HEADER_REAL_SIZE)
-    {
-        close_ex(fd);
-        return -3;
-    }
-    
-    if(hdr.magic_plus_version != CJF_CJF0_MAGIC)
-    {
-        close_ex(fd);
-        return -4;
-    }
-    
-    formatln("; serial from %u to %u", hdr.serial_begin, hdr.serial_end);
-    formatln("; first page starts at %u", hdr.first_index_offset);
-    formatln("; page index starts at %u", hdr.table_index_offset);
-    formatln("; last SOA starts at %u", hdr.last_soa_offset);
-    formatln("; the last page ends before %u", hdr.last_page_offset_next);
-    
-    if(hdr.flags & JOURNAL_CFJ_FLAGS_OTHER_ENDIAN)
-    {
-        println("; other-endian: 1");
-        close_ex(fd);
-        return -5;
-    }
-    if(hdr.flags & JOURNAL_CFJ_FLAGS_MY_ENDIAN)
-    {
-        println("; my-endian: 1");
-    }
-    if(hdr.flags & JOURNAL_CFJ_FLAGS_NOT_EMPTY)
-    {
-        println("; empty: 1");
-    }
-    if(hdr.flags & JOURNAL_CFJ_FLAGS_DIRTY)
-    {
-        println("; dirty: 1");
-    }
-    if(hdr.flags & JOURNAL_CFJ_FLAGS_UNINITIALISED)
-    {
-        println("; not-initialised: 1");
-    }
-    
-    u32 from = hdr.first_index_offset;
-    
-    if(from < CJF_HEADER_REAL_SIZE)
-    {
-        close_ex(fd);
-        return -6;
-    }
-    
-    bool from_start = (from == CJF_HEADER_REAL_SIZE);
-    bool looped = FALSE;
-    bool joined = FALSE;
-    int corruption = 0;
-        
-    int page_index = 0;
-    
-    while(from != 0)
-    {
-        if(cjf_read_page_hdr(fd, from, &page) > 0)
-        {
-            if(page.magic == CJF_PAGE_MAGIC)
-            {
-                formatln("; page @%u=%x", from, from);
-                formatln(";   next: @%u=%x,", page.next_page_offset, page.next_page_offset);
-                formatln(";   end : @%u=%x", page.stream_end_offset, page.stream_end_offset);
-                formatln(";   item: %u/%u", page.count, page.size);
-                
-                //pages_sequence[page_index].hdr = page;
-                //pages_sequence[page_index].group = 0;
-                ++page_index;
-                
-                from = page.next_page_offset;
-                
-                looped |= (from == CJF_HEADER_REAL_SIZE);
-                
-                if(looped && from_start)
-                {
-                    break;
-                }
-            }
-            else
-            {
-                // oops
-                formatln("; page @%u: wrong magic", from);
-                ++corruption;
-                break;
-            }
-        }
-        else
-        {
-            // oops
-            formatln("; page @%u: cannot read", from);
-            ++corruption;
-            break;
-        }
-    }
-    
-    if(from == 0)
-    {
-        println("; page list terminated");
-    }
-    
-    if(from_start)
-    {
-        if(!looped)
-        {
-            formatln("; pages are aligned from the start");
-        }
-        else
-        {
-            formatln("; pages are aligned from the start, but are still looping, which is wrong");
-        }
-    }
-    else
-    {
-        if(looped)
-        {
-            formatln("; pages started from a middle position, and then looped");
-        }
-        else
-        {
-            formatln("; pages started from a middle position and never looped, which seems wrong");
-            
-            from = CJF_HEADER_REAL_SIZE;
-            
-            while(from != 0)
-            {
-                if(cjf_read_page_hdr(fd, from, &page) > 0)
-                {
-                    if(page.magic == CJF_PAGE_MAGIC)
-                    {
-                        formatln("; page @%u=%x", from, from);
-                        formatln(";   next: @%u=%x,", page.next_page_offset, page.next_page_offset);
-                        formatln(";   end : @%u=%x", page.stream_end_offset, page.stream_end_offset);
-                        formatln(";   item: %u/%u", page.count, page.size);
-                        
-                        //pages_sequence[page_index].hdr = page;
-                        //pages_sequence[page_index].group = 1;
-                        ++page_index;
-
-                        from = page.next_page_offset;
-
-                        if(joined == (from == hdr.first_index_offset))
-                        {
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        // oops
-                        formatln("; page @%u: wrong magic", from);
-                        ++corruption;
-                        break;
-                    }
-                }
-                else
-                {
-                    // oops
-                    formatln("; page @%u: cannot read", from);
-                    ++corruption;
-                    break;
-                }
-            }
-            
-            if(from == 0)
-            {
-                println("; secondary page list terminated");
-            }
-        }
-    }
-    
-    if(hdr.table_index_offset == lseek(fd, hdr.table_index_offset, SEEK_SET))
-    {
-        if(readfully(fd, &idxt_hdr, 6) == 6)
-        {            
-            for(idxt_item_count = 0; idxt_item_count < idxt_hdr.size; ++idxt_item_count)
-            {
-                if(readfully(fd, &idxt_item[idxt_item_count], 8) != 8)
-                {
-                    println("; unable to read the index table entry");
-                    break;
-                }
-            }
-            
-            println("from the idxt ...");
-            
-            for(int i = 0; i < idxt_item_count; ++i)
-            {
-                if(cjf_read_page_hdr(fd, idxt_item[i].file_offset, &page) > 0)
-                {
-                    formatln(";page @%u=%x, last-serial: %u", idxt_item[i].file_offset, idxt_item[i].file_offset, idxt_item[i].last_serial);
-                    formatln(";  next: @%u=%x,", page.next_page_offset, page.next_page_offset);
-                    formatln(";  end : @%u=%x", page.stream_end_offset, page.stream_end_offset);
-                    formatln(";  item: %u/%u", page.count, page.size);
-                }
-                else
-                {
-                    formatln(": page @%u, last-serial: %u, cannot be read", idxt_item[i].file_offset, idxt_item[i].last_serial);
-                }
-            }
-        }
-        else
-        {
-            println(": unable to read the index table header");
-        }
-    }
-    else
-    {
-        println( ": unable to seek the index table");
-    }
-    
-    close_ex(fd);
-    
-    return 0;
-}
-#endif
-
 static void
 axfr_scan(const char *filename)
 {
@@ -876,19 +622,12 @@ jnl_scan(const char *filepath)
         formatln("; jnl: '%s' name is too small to parse", filepath);
         return;
     }
-/*
-    if(memcmp(&filename[filename_len - 4], ".jnl", 4) != 0)
-    {
-        formatln("jnl: '%s' does not end with .jnl", filepath);
-        return;
-    }
-*/
+
     if(FAIL(ret = cstr_to_dnsname_with_check_len(origin, filename, filename_len - 4)))
     {
         formatln("; jnl: '%s' cannot be parsed for origin: %r", filepath, ret);
         return;
     }
-
 
     if(FAIL(ret = journal_jnl_open_file(&jnl, filepath, origin, FALSE)))
     {

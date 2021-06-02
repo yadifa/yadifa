@@ -71,6 +71,7 @@ extern "C"
 #define     ZONE_LOAD_MASTER_ZONE_FILE_UNDEFINED    ZONE_LOAD_ERROR_CODE(1)
 #define     ZONE_LOAD_SLAVE_TYPE_EXPECTED           ZONE_LOAD_ERROR_CODE(2)
 #define     ZONE_NOT_DEFINED                        ZONE_LOAD_ERROR_CODE(3)
+#define     ZRE_NO_VALID_FILE_FOUND                 ZONE_LOAD_ERROR_CODE(4)
 
 #define     ANSWER_ERROR_BASE (ZONE_LOAD_ERROR_BASE + 0x10)
 #define	    ANSWER_ERROR_CODE(code_)		    ((s32)(ANSWER_ERROR_BASE+(code_)))

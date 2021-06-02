@@ -367,7 +367,7 @@ zdb_zone_create(const u8* origin)
 #if ZDB_HAS_DNSSEC_SUPPORT
     zone->progressive_signature_update.current_fqdn = NULL;
     zone->progressive_signature_update.earliest_signature_expiration = MAX_S32;
-    zone->progressive_signature_update.labels_at_once = MAX_U16;
+    zone->progressive_signature_update.labels_at_once = ZDB_ZONE_MAINTENANCE_LABELS_AT_ONCE_DEFAULT;
 #endif
     mutex_init(&zone->lock_mutex);
     cond_init(&zone->lock_cond);
@@ -911,7 +911,7 @@ zdb_zone_add_dnskey_from_key(zdb_zone *zone, const dnssec_key *key)
     zdb_packed_ttlrdata *dnskey_record;
     u32 rdata_size = key->vtbl->dnssec_key_rdatasize(key);
     ZDB_RECORD_ZALLOC_EMPTY(dnskey_record, 86400, rdata_size);
-    key->vtbl->dnssec_key_writerdata(key, ZDB_PACKEDRECORD_PTR_RDATAPTR(dnskey_record));
+    key->vtbl->dnssec_key_writerdata(key, ZDB_PACKEDRECORD_PTR_RDATAPTR(dnskey_record), rdata_size);
 
     // store the record
 
@@ -943,7 +943,7 @@ zdb_zone_remove_dnskey_from_key(zdb_zone *zone, const dnssec_key *key)
     zdb_packed_ttlrdata *dnskey_record;
     u32 rdata_size = key->vtbl->dnssec_key_rdatasize(key);
     ZDB_RECORD_ZALLOC_EMPTY(dnskey_record, 86400, rdata_size);
-    key->vtbl->dnssec_key_writerdata(key, ZDB_PACKEDRECORD_PTR_RDATAPTR(dnskey_record));
+    key->vtbl->dnssec_key_writerdata(key, ZDB_PACKEDRECORD_PTR_RDATAPTR(dnskey_record), rdata_size);
 
     zdb_ttlrdata unpacked_dnskey_record;
     unpacked_dnskey_record.rdata_pointer = ZDB_PACKEDRECORD_PTR_RDATAPTR(dnskey_record);

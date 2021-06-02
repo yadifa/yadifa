@@ -903,7 +903,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
         if(dnscore_shuttingdown())
         {
-            log_err("zone write axfr: %{dnsname}: stopping transfer to %{sockaddr} because of application shutdown", data_zone_origin, message_get_sender_sa(mesg));
+            log_info("zone write axfr: %{dnsname}: stopping transfer to %{sockaddr} because of application shutdown", data_zone_origin, message_get_sender_sa(mesg));
             break;
         }
 

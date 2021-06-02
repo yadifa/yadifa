@@ -143,7 +143,6 @@ static struct server_desc_s server_type[] =
         server_sm_query_loop,
         "single message per syscall resolve"
     },
-
     {
         server_rw_context_init,
         server_rw_query_loop,
@@ -182,11 +181,6 @@ server_tcp_reply(message_data *mesg, tcp_manager_socket_context_t *sctx)
 #if DEBUG
     log_debug("tcp: %{sockaddr}: replying %i bytes", message_get_sender_sa(mesg), message_get_size(mesg));
 #endif
-/*
-    tcp_manager_set_nodelay(sctx, TRUE);
-    tcp_manager_set_cork(sctx, FALSE);
-*/
-    //ret = message_update_length_send_tcp_with_default_minimum_throughput(mesg, tcp_manager_socket(sctx));
 
     tcp_manager_write_update(sctx, 0);
 
@@ -1305,10 +1299,6 @@ server_service_apply_configuration()
         poll_alloc(g_config->max_tcp_queries);
 #endif
 
-
-
-        /* Go to work */
-
         log_debug("thread count by address: %i", g_config->thread_count_by_address);
     }
     
@@ -1635,6 +1625,9 @@ server_service_stop_nowait()
     if(server_handler_initialised)
     {
         err = SERVICE_NOT_RUNNING;
+
+        dynupdate_query_service_reset();
+
         if(!service_stopped(&server_service_handler))
         {
             err = service_stop(&server_service_handler);
@@ -1653,6 +1646,8 @@ server_service_stop()
     if(server_handler_initialised)
     {
         err = SERVICE_NOT_RUNNING;
+
+        dynupdate_query_service_reset();
 
         if(!service_stopped(&server_service_handler))
         {
@@ -1675,6 +1670,7 @@ server_service_reconfigure()
 
         if(!service_stopped(&server_service_handler))
         {
+            dynupdate_query_service_reset();
             err = service_reconfigure(&server_service_handler);
         }
     }

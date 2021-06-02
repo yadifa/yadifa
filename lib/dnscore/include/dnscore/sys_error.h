@@ -298,7 +298,7 @@ bool dnscore_monitored_fail(ya_result ret);
 #define RRSIG_UNSUPPORTED_COVERED_TYPE          DNS_ERROR_CODE(52)
 #define RRSIG_VERIFICATION_FAILED               DNS_ERROR_CODE(53)
 
-#define UNKNOWN_DNSSEC_ALGO                     DNS_ERROR_CODE(100)
+#define DNSSEC_ALGORITHM_UNKOWN                     DNS_ERROR_CODE(100)
 
 /// @note EAI error codes are used for getaddrinfo
 ///
@@ -349,7 +349,7 @@ void dief(ya_result error_code, const char *format, ...);
 
 void error_unregister_all();
 
-void error_register(ya_result code, const char *text);
+void error_register(ya_result code, const char * const text);
 
 /**
  * @brief Returns the string associated to an error code
@@ -371,12 +371,12 @@ void error_writetext(struct output_stream *os, ya_result code);
 
 void dnscore_register_errors();
 
+ya_result ya_ssl_error();
+
 #define DIE(code) dief((code), "%s:%i\n", __FILE__, __LINE__);abort()
 #define DIE_MSG(msg) dief(ERROR, "%s:%i %s\n", __FILE__, __LINE__, (msg));abort()
 
 #endif /* ERROR_H_ */
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
 

@@ -5542,12 +5542,10 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
 
     zone_diff diff;
     zone_diff_init(&diff, zone, zdb_zone_get_rrsig_push_allowed(zone));
-    
-    dnsname_vector origin_path;
+
     dnsname_vector name_path;
 
 #if DEBUG
-    memset(&origin_path, 0xff, sizeof(origin_path));
     memset(&name_path, 0xff, sizeof(name_path));
 #endif
 
@@ -5588,9 +5586,6 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
     }
 #endif
 
-#pragma message("TODO: THIS IS USELESS, zdb_zone ALREADY CONTAINS A dnsname_vector origin_vector field to avoid this (used in queries)")
-    dnsname_to_dnsname_vector(zone->origin, &origin_path);
-    
     log_debug1("update: %{dnsname}: reading message", zone->origin);
 
     // marks the SOA as being automatically removed (as the serial will increase)
@@ -5751,9 +5746,9 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
 
         s32 idx;
 
-        for(idx = 0; idx < origin_path.size; idx++)
+        for(idx = 0; idx < zone->origin_vector.size; idx++)
         {
-            if(!dnslabel_equals(origin_path.labels[origin_path.size - idx], name_path.labels[name_path.size - idx]))
+            if(!dnslabel_equals(zone->origin_vector.labels[zone->origin_vector.size - idx], name_path.labels[name_path.size - idx]))
             {
                 log_err("update: %{dnsname}: %{dnsname} manual add/del of %{dnstype} records refused", zone->origin, rname, &rtype);
 
@@ -5892,7 +5887,7 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
                 return RCODE_ERROR_CODE(RCODE_FORMERR);
             }
             
-            if(name_path.size <= origin_path.size)
+            if(name_path.size <= zone->origin_vector.size)
             {
                 if((rtype == TYPE_SOA) || (rtype == TYPE_ANY))
                 {
@@ -5932,7 +5927,7 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
 #if DEBUG
             log_debug("update: %{dnsname}: delete %{dnsname} %{dnstype} any", zone->origin, rname, &rtype);
 #endif
-            zdb_rr_label* rr_label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path.size) - 1);
+            zdb_rr_label* rr_label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - zone->origin_vector.size) - 1);
             if(rr_label != NULL)
             {
 #if DEBUG
@@ -6013,7 +6008,7 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
                 return RCODE_ERROR_CODE(RCODE_FORMERR);
             }
             
-            if(name_path.size <= origin_path.size)
+            if(name_path.size <= zone->origin_vector.size)
             {
                 if((rtype == TYPE_SOA) || (rtype == TYPE_ANY))
                 {
@@ -6088,7 +6083,7 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
 #if DEBUG
                 log_debug2("update: %{dnsname}: delete %{dnsname} %{dnstype} ...", zone->origin, rname, &rtype);
 #endif
-                zdb_rr_label *rr_label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path.size) - 1);
+                zdb_rr_label *rr_label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - zone->origin_vector.size) - 1);
                 if(rr_label != NULL)
                 {
 #if DEBUG
@@ -6126,7 +6121,7 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
 #if DEBUG
                 log_debug2("update: %{dnsname}: delete %{dnsname} %{dnstype} ...", zone->origin, rname, &rtype);
 #endif
-                zdb_rr_label* rr_label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path.size) - 1);
+                zdb_rr_label* rr_label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - zone->origin_vector.size) - 1);
                 if(rr_label != NULL)
                 {
 #if DEBUG
@@ -6181,13 +6176,13 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
             // (rdata == NULL) && (rdata_size == 0) can only occur if (rclass == CLASS_ANY)
             // the condition is tested and exited for a FORMERR around line 5557
 
-            zdb_rr_label* rr_label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path.size) - 1);
+            zdb_rr_label* rr_label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - zone->origin_vector.size) - 1);
             zone_diff_record_add(&diff, rr_label, rname, rtype, rttl, rdata_size, rdata);
 
             const u8 *above_fqdn = rname;
             for(int index = 1; index < name_path.size; ++index)
             {
-                zdb_rr_label* above_rr_label = zdb_rr_label_find_exact(zone->apex, name_path.labels + index, (name_path.size - index - origin_path.size) - 1);
+                zdb_rr_label* above_rr_label = zdb_rr_label_find_exact(zone->apex, name_path.labels + index, (name_path.size - index - zone->origin_vector.size) - 1);
                 above_fqdn += above_fqdn[0] + 1;
                 zone_diff_fqdn_add(&diff, above_fqdn, above_rr_label);
             }

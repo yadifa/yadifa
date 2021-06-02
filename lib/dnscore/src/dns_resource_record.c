@@ -179,23 +179,23 @@ dns_resource_set_from_record(dns_resource_record *rr, const dns_resource_record 
 ya_result
 dns_resource_record_read(dns_resource_record *rr, input_stream *is)
 {
-    ya_result return_value;
+    ya_result ret;
     
-    if(FAIL(return_value = input_stream_read_dnsname(is, &rr->name[0])))
+    if(FAIL(ret = input_stream_read_dnsname(is, &rr->name[0])))
     {
-        return return_value;
+        return ret;
     }
     
-    if(return_value == 0)
+    if(ret == 0)
     {
         return 0;
     }
     
-    rr->name_len = return_value;
+    rr->name_len = ret;
     
-    if(FAIL(return_value = input_stream_read_fully(is, &rr->tctr, 10))) /* cannot use sizeof(tctr) */
+    if(FAIL(ret = input_stream_read_fully(is, &rr->tctr, 10))) /* cannot use sizeof(tctr) */
     {
-        return return_value;
+        return ret;
     }
     
     rr->rdata_size = htons(rr->tctr.rdlen);
@@ -221,9 +221,9 @@ dns_resource_record_read(dns_resource_record *rr, input_stream *is)
         rr->rdata = tmp;
     }
     
-    if(FAIL(return_value = input_stream_read_fully(is, rr->rdata, rr->rdata_size)))
+    if(FAIL(ret = input_stream_read_fully(is, rr->rdata, rr->rdata_size)))
     {
-        return return_value;
+        return ret;
     }
     
 #if DEBUG
@@ -431,10 +431,16 @@ static resource_record_view_vtbl dns_resource_record_view_vtbl =
 };
 
 void
-dns_resource_record_init_resource_record_view(struct resource_record_view *rrv)
+dns_resource_record_resource_record_view_init(struct resource_record_view *rrv)
 {
     rrv->data = NULL;
     rrv->vtbl = &dns_resource_record_view_vtbl;
+}
+
+void
+dns_resource_record_resource_record_view_finalise(struct resource_record_view *rrv)
+{
+    rrv->vtbl = NULL;
 }
 
 /** @} */

@@ -420,6 +420,7 @@ config_main_verify_and_update_file(const char *base_path, char **dirp)
     return SUCCESS;
 }
 
+#if DNSCORE_HAS_TCP_MANAGER
 static ya_result
 config_main_section_postprocess_tcp_manager_register_callback(const char* itf_name, const socketaddress* sa, void* data)
 {
@@ -439,7 +440,7 @@ config_main_section_postprocess_tcp_manager_register_callback(const char* itf_na
     }
     return SUCCESS;
 }
-
+#endif
 
 static ya_result
 config_main_section_postprocess(struct config_section_descriptor_s *csd)

@@ -234,6 +234,11 @@ service_on_main_thread(void *args)
     return NULL;
 }
 
+static void service_wakeup_no_operation(struct service_s *desc)
+{
+    (void)desc;
+}
+
 /**
  * Initialises service with an entry point, a name, and a number of workers
  * Each worker will know its index (from 0 to count-1).
@@ -241,13 +246,14 @@ service_on_main_thread(void *args)
  * 
  * @param desc the service
  * @param entry_point the function of the service, it must be of the type service_main
+ * @param wakeup_function a function that will wakup-up all the workers of the service (e.g. so they can notice a reconfiguration or shutdown)
  * @param name the name of the service
  * @param count the number of workers for the service
  * @return an error code
  */
 
 int
-service_init_ex(struct service_s *desc, service_main *entry_point, const char* name, u32 count)
+service_init_ex2(struct service_s *desc, service_main *entry_point, service_wakeup *wakeup_function, const char* name, u32 count)
 {
     if(count == 0)
     {
@@ -278,6 +284,7 @@ service_init_ex(struct service_s *desc, service_main *entry_point, const char* n
         log_debug("service: %s init %i workers", name, count);
 
         desc->entry_point = entry_point;
+        desc->wakeup_all_workers = wakeup_function;
         desc->name = strdup(name);
         MALLOC_OR_DIE(struct service_worker_s*, desc->worker, sizeof(struct service_worker_s) * count, SRVCWRKR_TAG); // DON'T POOL
         desc->worker_count = count;
@@ -309,6 +316,26 @@ service_init_ex(struct service_s *desc, service_main *entry_point, const char* n
 }
 
 /**
+ * Initialises service with an entry point, a name, and a number of workers
+ * Each worker will know its index (from 0 to count-1).
+ * No threads are started yet after this call.
+ *
+ * @param desc the service
+ * @param entry_point the function of the service, it must be of the type service_main
+ * @param wakeup_function a function that will wakup-up all the workers of the service (e.g. so they can notice a reconfiguration or shutdown)
+ * @param name the name of the service
+ * @param count the number of workers for the service
+ * @return an error code
+ */
+
+int
+service_init_ex(struct service_s *desc, service_main *entry_point, const char* name, u32 count)
+{
+    int ret = service_init_ex2(desc, entry_point, service_wakeup_no_operation, name, count);
+    return ret;
+}
+
+/**
  * Initialises service with an entry point, a name, and one worker
  * No threads are started yet after this call.
  * 
@@ -325,6 +352,12 @@ service_init(struct service_s *desc, service_main *entry_point, const char* name
 {
     int ret = service_init_ex(desc, entry_point, name, 1);
     return ret;
+}
+
+bool
+service_initialised(struct service_s *desc)
+{
+    return !desc->_not_initialised;
 }
 
 /**
@@ -606,6 +639,8 @@ service_stop(struct service_s *desc)
         }
 #endif
     }
+
+    desc->wakeup_all_workers(desc);
     
     return err;
 }
@@ -652,6 +687,8 @@ service_reconfigure(struct service_s *desc)
         }
 #endif
     }
+
+    desc->wakeup_all_workers(desc);
     
     return err;
 }

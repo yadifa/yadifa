@@ -70,7 +70,9 @@ u64 circular_file_get_maximum_size(circular_file_t cf);
 u64 circular_file_get_pending_size(circular_file_t cf);
 
 u64 circular_file_get_size(circular_file_t cf);
-u64 circular_file_get_read_available(circular_file_t cf);
+void circular_file_set_size(circular_file_t cf, u64 size);
+s64 circular_file_get_read_available(circular_file_t cf);
+s64 circular_file_get_write_available(circular_file_t cf);
 
 ya_result circular_file_grow(circular_file_t cf, s64 new_maximum_size);
 ya_result circular_file_get_reserved_header_size(circular_file_t cf, s32 *reserved_size);

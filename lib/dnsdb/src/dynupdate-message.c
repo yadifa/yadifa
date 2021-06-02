@@ -178,7 +178,7 @@ dynupdate_message_add_dnskey(dynupdate_message *dmsg, s32 ttl, const dnssec_key 
             packet_writer_add_u16(&dmsg->pw, dmsg->rclass);
             packet_writer_add_u32(&dmsg->pw, htonl(ttl));
             packet_writer_add_u16(&dmsg->pw, htons(rdata_size));
-            key->vtbl->dnssec_key_writerdata(key, packet_writer_get_next_u8_ptr(&dmsg->pw));
+            key->vtbl->dnssec_key_writerdata(key, packet_writer_get_next_u8_ptr(&dmsg->pw), rdata_size);
             packet_writer_forward(&dmsg->pw, rdata_size);
             message_header *hdr = (message_header*)dmsg->packet;
             hdr->nscount = htons(ntohs(hdr->nscount) + 1);
@@ -213,7 +213,7 @@ dynupdate_message_del_dnskey(dynupdate_message *dmsg, const dnssec_key *key)
             packet_writer_add_u16(&dmsg->pw, CLASS_NONE);
             packet_writer_add_u32(&dmsg->pw, 0);
             packet_writer_add_u16(&dmsg->pw, htons(rdata_size));
-            key->vtbl->dnssec_key_writerdata(key, packet_writer_get_next_u8_ptr(&dmsg->pw));
+            key->vtbl->dnssec_key_writerdata(key, packet_writer_get_next_u8_ptr(&dmsg->pw), rdata_size);
             packet_writer_forward(&dmsg->pw, rdata_size);
             message_header *hdr = (message_header*)dmsg->packet;
             hdr->nscount = htons(ntohs(hdr->nscount) + 1);

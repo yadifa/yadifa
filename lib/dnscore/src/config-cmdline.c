@@ -64,7 +64,6 @@ CONFIG_END(cmdline_settings_desc)
 // declare and init global variable
 static cmdline_general_settings_s cmdline_general_settings = {0, FALSE};
 
-
 ya_result
 config_register_cmdline(u8 priority)
 {
@@ -76,9 +75,13 @@ config_register_cmdline(u8 priority)
         return return_code;
     }
 
-
-    return OK;
+    return SUCCESS;
 }
+
+/**
+ * Returns if the CMDLINE_VERSION_HELP(main_cmdline) command line help hook detected a --help
+ * Needs to have config_register_cmdline(priority++) called in the configuration registration code.
+ */
 
 bool
 cmdline_help_get()
@@ -86,6 +89,10 @@ cmdline_help_get()
     return cmdline_general_settings.help;
 }
 
+/**
+ * Returns if the CMDLINE_VERSION_HELP(main_cmdline) command line help hook detected a --version
+ * Needs to have config_register_cmdline(priority++) called in the configuration registration code.
+ */
 
 u8
 cmdline_version_get()

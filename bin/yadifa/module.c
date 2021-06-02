@@ -137,32 +137,6 @@ module_get_from_args(int *argcp, char **argv, int *is_executable_ptr)
 
     *is_executable_ptr = -1;
 
-    // @TODO 20180618 gve -- must be removed before release of yadifa 2.4.0
-    //                       with the manner we have modules some stuff won't work e.g. yadifa --help
-    //                       so this must be removed and tested again before release 2.4.0
-// #pragma message("TODO: before release of yadifa 2.4.0 this must be removed")
-#if 0
-
-    // there are 2 ways to execute a command:
-    //      - <program name> <parametername> <command>
-    //      - <commandname> <command>
-    // to find the module to use, we check if its <commandname> and if not check if we have <parametername>
-
-    // compares the executable name with each module "commandname"
-    // check if it's the commandname that is used
-
-    for(int i = 0; module_list[i] != NULL; ++i) // VS false positive: the last item of the array is guaranteed to be NULL
-    {
-        if(strcmp(executable_name, module_list[i]->commandname) == 0)
-        {
-            *is_executable_ptr = 1;
-            return module_list[i];
-        }
-    }
-#else
-    (void)executable_name;
-#endif
-
     // no <commandname> found, check for <parametername>
 
     int argc = *argcp;
@@ -338,9 +312,19 @@ module_run_from_args(int *argcp, char *argv[])
                         // THERE IS NO GUARANTEE TO REACH THIS LINE (TCL)
                     }
 
-                    if((ret == CONFIG_PARSE_UNKNOWN_KEYWORD) || (ret == COMMAND_ARGUMENT_EXPECTED))
+                    if(FAIL(ret))
                     {
-                        module_print_help(module, argv[0], is_executable);
+                        if((ret == CONFIG_PARSE_UNKNOWN_KEYWORD) || (ret == COMMAND_ARGUMENT_EXPECTED) || (ret == YADIFA_MODULE_HELP_REQUESTED))
+                        {
+                            module_print_help(module, argv[0], is_executable);
+                        }
+                        else
+                        {
+                            /// @todo 20220511 edf -- print the error if it's not YADIFA_MODULE_HELP_REQUESTED ?
+                            flushout();
+                            flusherr();
+                            osformatln(termerr, "error: %r", ret);
+                        }
                     }
                 }
             }

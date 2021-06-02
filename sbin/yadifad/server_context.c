@@ -1217,6 +1217,12 @@ server_context_destroy()
 bool
 server_context_matches_config()
 {
+    /**
+     * If the number of addresses is the same and
+     * if all the addresses defined in the configuration are matching one address in the context
+     * then the configuration are matched.
+     */
+
     host_address *real_listen = host_address_copy_list(g_config->listen);
 
     u32 interfaces_count = host_address_count(real_listen);
@@ -1225,18 +1231,18 @@ server_context_matches_config()
         host_address_delete_list(real_listen);
         return FALSE;
     }
-    
+
     for(u32 i = 0; i < g_server_context.listen_count; ++i)
     {
         bool match = FALSE;
         host_address *ha = real_listen;
         while(ha != NULL)
         {
-            if(host_address_list_equals(g_server_context.listen[i], ha))
+            if(host_address_equals(g_server_context.listen[i], ha))
             {
                 match = TRUE;
+                break;
             }
-            
             ha = ha->next;
         }
         

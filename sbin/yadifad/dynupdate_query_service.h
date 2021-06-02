@@ -48,15 +48,21 @@
 #include "database.h"
 
 /**
- * 
- * Move this into YADIFAD
- * 
  * The dynupdate service loads the next update from the queue and runs it.
  */
 
+ya_result dynupdate_query_service_init();
 ya_result dynupdate_query_service_start();
 ya_result dynupdate_query_service_stop();
-ya_result dynupdate_query_service_enqueue(zdb *db, message_data *msg, int sockfd);
+void dynupdate_query_service_finalise();
 
+/**
+ * This is only used by the UDP side.
+ *
+ * direct socket reference may have some bad side effects if the network is restarted or stopped
+ */
+
+ya_result dynupdate_query_service_enqueue(zdb *db, message_data *msg, int sockfd);
+void dynupdate_query_service_reset();
 
 /** @} */

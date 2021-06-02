@@ -405,8 +405,9 @@ ecdsa_public_store(const EC_KEY* ecdsa, u8* output_buffer)
 }
 
 static u32
-dnskey_ecdsa_dnskey_public_store(const dnssec_key* key, u8* rdata)
+dnskey_ecdsa_dnskey_public_store(const dnssec_key* key, u8* rdata, size_t rdata_size)
 {
+    (void)rdata_size;
     u32 len;
 
     SET_U16_AT(rdata[0], key->flags);

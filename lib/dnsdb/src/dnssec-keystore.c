@@ -1167,9 +1167,16 @@ dnssec_keystore_reload_readdir_callback_nolock(const char *basedir, const char *
 
                     if(ISOK(ret = dnskey_new_private_key_from_file(file, &key)))
                     {
-                        if((key->epoch_publish == 0) || (key->epoch_activate == 0) || (key->epoch_inactive == 0) || (key->epoch_delete == 0))
+                        bool is_missing_any_smart_field = !dnskey_has_explicit_publish_and_delete(key) || !dnskey_has_explicit_activate(key) || !dnskey_has_explicit_deactivate(key);
+                        bool has_no_smart_field = dnskey_has_explicit_publish_or_delete(key) && dnskey_has_explicit_activate(key) && dnskey_has_explicit_deactivate(key);
+
+                        if(has_no_smart_field)
                         {
-                            log_warn("key from '%s' is missing smart fields", file);
+                            log_info("key from '%s' has no smart fields", file);
+                        }
+                        else if(is_missing_any_smart_field)
+                        {
+                            log_info("key from '%s' is missing some smart fields", file);
                         }
 #if DEBUG
                         log_debug1("dnssec_keystore_reload_readdir_callback: private key generated from file '%s'", file);
@@ -1222,14 +1229,12 @@ dnssec_keystore_reload_readdir_callback_nolock(const char *basedir, const char *
 #if DEBUG
                             log_debug1("dnssec_keystore_reload_readdir_callback: file '%s' generated a new key", file);
 #endif
-
                             dnssec_keystore_add_key_nolock(ks, key); // RC // caller nolock
 
                             // also : the key should be put in the zone and signature should be scheduled
                         }
                         
                         dnskey_release(key);
-
                         ++args->private_update; // one key was modified (it's timings at the very least)
 #if DEBUG
                         log_debug1("dnssec_keystore_reload_readdir_callback: file '%s' successfully read", file);
@@ -1580,6 +1585,16 @@ dnssec_keystore_new_key(u8 algorithm, u32 size, u16 flags, const char *origin, d
             }
 #endif
 #if HAS_EDDSA_SUPPORT
+            case DNSKEY_ALGORITHM_ED25519:
+            case DNSKEY_ALGORITHM_ED448:
+            {
+                if(FAIL(return_value = dnskey_eddsa_newinstance(size, algorithm, flags, clean_origin, &key)))
+                {
+                    return return_value;
+                }
+
+                break;
+            }
 #endif
 #ifdef DNSKEY_ALGORITHM_DUMMY
             case DNSKEY_ALGORITHM_DUMMY:
@@ -1921,7 +1936,7 @@ dnssec_keystore_store_public_key(dnssec_key* key)
 
     /* store the RDATA */
 
-    key->vtbl->dnssec_key_writerdata(key, rdata);
+    key->vtbl->dnssec_key_writerdata(key, rdata, rdata_size);
 
     char b64[BASE64_ENCODED_SIZE(4096)];
     

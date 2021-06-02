@@ -55,7 +55,7 @@
 
 #define TTL 86400
 #define RRSIG_ANTEDATING 86400  // sign from the day before
-#define DNSKEY_DEACTIVATION_MARGIN 59 // 654
+#define DNSKEY_DEACTIVATION_MARGIN 86400
 
 #define UPDATE_SUBCOMMAND_ADD    0
 #define UPDATE_SUBCOMMAND_DELETE 1
@@ -69,6 +69,55 @@
 logger_handle *g_keyroll_logger = LOGGER_HANDLE_SINK;
 
 static bool keyroll_dryrun_mode = FALSE;
+
+u32 keyroll_deactivation_margin(u32 activate_epoch, u32 deactivate_epoch, u32 delete_epoch)
+{
+    u32 margin;
+#if 1
+    s64 total_activated_time = deactivate_epoch;
+    total_activated_time -= activate_epoch;
+    if(total_activated_time >= 0)
+    {
+        s64 total_lingering_time = delete_epoch;
+        total_lingering_time -= deactivate_epoch;
+
+        if(total_lingering_time < 0)
+        {
+            log_err("keyroll: inverted activated and deactivated epoch");
+
+            margin = DNSKEY_DEACTIVATION_MARGIN;
+        }
+        else if(total_lingering_time / 2 > DNSKEY_DEACTIVATION_MARGIN)
+        {
+            margin = DNSKEY_DEACTIVATION_MARGIN;
+        }
+        else
+        {
+            margin = total_lingering_time / 2;
+        }
+    }
+    else
+    {
+        log_err("keyroll: inverted activated and deactivated epoch");
+
+        margin = DNSKEY_DEACTIVATION_MARGIN;
+    }
+#else
+    margin = 57;
+#endif
+
+    u32 remainder = margin % 60;
+    margin -= remainder;
+    margin += 57;
+    if(margin < 60)
+    {
+        margin += 60;
+    }
+
+    log_debug("keyroll_deactivation_margin: %u", DNSKEY_DEACTIVATION_MARGIN);
+
+    return margin;
+}
 
 ya_result keyroll_step_delete(keyroll_step_t *step);
 
@@ -830,9 +879,21 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                                          ONE_SECOND_US * dnskey_get_activate_epoch(key),
                                          ONE_SECOND_US * dnskey_get_inactive_epoch(key),
                                          ONE_SECOND_US * dnskey_get_delete_epoch(key));
+#if 0
+                                if(dnskey_get_publish_epoch(key) == 0)
+                                {
+                                    keyroll_set_timing_steps(keyroll, key, FALSE);
 
-                                keyroll_set_timing_steps(keyroll, key, FALSE);
-
+                                    log_debug("------ key to keystore: %i, %i, create=%llU publish=%llU activate=%llU deactivate=%llU unpublish=%llU",
+                                              dnskey_get_algorithm(key),
+                                              ntohs(dnskey_get_flags(key)),
+                                              ONE_SECOND_US * dnskey_get_created_epoch(key),
+                                              ONE_SECOND_US * dnskey_get_publish_epoch(key),
+                                              ONE_SECOND_US * dnskey_get_activate_epoch(key),
+                                              ONE_SECOND_US * dnskey_get_inactive_epoch(key),
+                                              ONE_SECOND_US * dnskey_get_delete_epoch(key));
+                                }
+#endif
                                 dnssec_keystore_add_key(key);
         /*
                                 if(command[0] == 'd')
@@ -934,6 +995,19 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                                         dnssec_key *key = dnssec_keystore_acquire_key_from_fqdn_with_tag(keyroll->domain, tag);
                                         if(key != NULL)
                                         {
+                                            if(dnskey_get_flags(key) == DNSKEY_FLAGS_KSK)
+                                            {
+                                                u32 valid_from = rrsig_get_valid_from_from_rdata(rr->rdata, rr->rdata_size);
+                                                u32 valid_until = rrsig_get_valid_until_from_rdata(rr->rdata, rr->rdata_size);
+                                                if(!dnskey_has_explicit_activate(key))
+                                                {
+                                                    dnskey_set_activate_epoch(key, valid_from + RRSIG_ANTEDATING * 2);
+                                                }
+                                                if(!dnskey_has_explicit_deactivate(key))
+                                                {
+                                                    dnskey_set_inactive_epoch(key, valid_until);
+                                                }
+                                            }
                                             ptr_vector_append(&step->rrsig_add, rr);
                                             dnskey_release(key);
                                         }
@@ -997,6 +1071,11 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
 
                                         if(key != NULL)
                                         {
+                                            if(dnskey_get_publish_epoch(key) == 0)
+                                            {
+                                                dnskey_set_publish_epoch(key, step->epochus / ONE_SECOND_US);
+                                            }
+
                                             ptr_vector_append(&step->dnskey_add, key);
                                         }
 
@@ -1012,7 +1091,7 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                                     }
                                 }
                             }
-                            else
+                            else // UPDATE_SUBCOMMAND_DELETE
                             {
                                 switch(rr->tctr.qtype) // scan-build false positive (ISOK => rr not NULL)
                                 {
@@ -1067,6 +1146,11 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
 
                                         if(key != NULL)
                                         {
+                                            if(!dnskey_has_explicit_delete(key))
+                                            {
+                                                dnskey_set_delete_epoch(key, step->epochus / ONE_SECOND_US);
+                                            }
+
                                             ptr_vector_append(&step->dnskey_del, key);
                                         }
 
@@ -2307,7 +2391,12 @@ keyroll_generate_dnskey(keyroll_t *keyroll, s64 publication_epochus, bool ksk)
         keyroll_step_t *deactivation_step = keyroll_get_step(keyroll, deactivate_epochus);
         deactivation_step->keyroll_action |= /*KeyrollAction::*/Deactivate;
         deactivation_step->dirty = TRUE;
-        time_t deactivate_epoch = (deactivate_epochus/ ONE_SECOND_US) + DNSKEY_DEACTIVATION_MARGIN;
+
+        s64 unpublish_epochus = publication_epochus + ONE_SECOND_US * kp->delete_after;
+
+        time_t deactivate_epoch_margin = keyroll_deactivation_margin(dnskey_get_activate_epoch(key), deactivate_epochus / ONE_SECOND_US, unpublish_epochus / ONE_SECOND_US);
+        time_t deactivate_epoch = (deactivate_epochus/ ONE_SECOND_US) + deactivate_epoch_margin;
+
         dnskey_set_inactive_epoch(key, deactivate_epoch);
 
         if(*next_deactivationp < deactivation_step->epochus)
@@ -2315,7 +2404,6 @@ keyroll_generate_dnskey(keyroll_t *keyroll, s64 publication_epochus, bool ksk)
             *next_deactivationp = deactivation_step->epochus;
         }
 
-        s64 unpublish_epochus = publication_epochus + ONE_SECOND_US * kp->delete_after;
         keyroll_step_t *unpublication_step = keyroll_get_step(keyroll, unpublish_epochus);
         ptr_vector_append(&unpublication_step->dnskey_del, key);
         dnskey_acquire(key);
@@ -2367,10 +2455,14 @@ keyroll_set_timing_steps(keyroll_t *keyroll, dnssec_key *key, bool dirty)
     keyroll_step_t *deactivation_step = keyroll_get_step(keyroll, deactivate_epochus);
     deactivation_step->keyroll_action |= /*KeyrollAction::*/Deactivate;
     deactivation_step->dirty = dirty;
-    time_t deactivation_epoch = (deactivate_epochus / ONE_SECOND_US) + DNSKEY_DEACTIVATION_MARGIN;
-    dnskey_set_inactive_epoch(key, deactivation_epoch);
 
     s64 unpublish_epochus = ONE_SECOND_US * dnskey_get_delete_epoch(key);
+
+    time_t deactivate_epoch_margin = keyroll_deactivation_margin(dnskey_get_activate_epoch(key), deactivate_epochus / ONE_SECOND_US, unpublish_epochus / ONE_SECOND_US);
+
+    time_t deactivation_epoch = (deactivate_epochus / ONE_SECOND_US) + deactivate_epoch_margin;
+    dnskey_set_inactive_epoch(key, deactivation_epoch);
+
     keyroll_step_t *unpublication_step = keyroll_get_step(keyroll, unpublish_epochus);
     ptr_vector_append(&unpublication_step->dnskey_del, key);
     dnskey_acquire(key);
@@ -2456,15 +2548,19 @@ keyroll_generate_dnskey_ex(keyroll_t *keyroll, u32 size, u8 algorithm,
             activation_step->dirty = TRUE;
             dnskey_set_activate_epoch(key, activate_epochus / ONE_SECOND_US);
 
-            keyroll_step_t *deactivation_step = keyroll_get_step(keyroll, deactivate_epochus);
+            time_t deactivate_epoch_margin = keyroll_deactivation_margin(dnskey_get_activate_epoch(key), deactivate_epochus / ONE_SECOND_US, unpublish_epochus / ONE_SECOND_US);
+
+            time_t deactivate_epoch = (deactivate_epochus / ONE_SECOND_US) + deactivate_epoch_margin;
+
+            keyroll_step_t *deactivation_step = keyroll_get_step(keyroll, deactivate_epoch * ONE_SECOND_US);
             deactivation_step->keyroll_action |= /*KeyrollAction::*/Deactivate;
             deactivation_step->dirty = TRUE;
-            time_t deactivate_epoch = (deactivate_epochus / ONE_SECOND_US) + DNSKEY_DEACTIVATION_MARGIN;
+
             dnskey_set_inactive_epoch(key, deactivate_epoch);
 
-            if(*next_deactivationp < deactivation_step->epochus)
+            if(*next_deactivationp < deactivate_epochus)
             {
-                *next_deactivationp = deactivation_step->epochus;
+                *next_deactivationp = deactivate_epochus;
             }
 
             keyroll_step_t *unpublication_step = keyroll_get_step(keyroll, unpublish_epochus);
@@ -2475,8 +2571,9 @@ keyroll_generate_dnskey_ex(keyroll_t *keyroll, u32 size, u8 algorithm,
             time_t unpublish_epoch = MAX(unpublish_epochus / ONE_SECOND_US, deactivate_epoch);
             dnskey_set_delete_epoch(key, unpublish_epoch);
             dnssec_keystore_add_key(key);
-#if 0
-            formatln("created key: tag=%i, algorithm=%i, flags=%i, create=%U publish=%U activate=%U deactivate=%U unpublish=%U",
+#if DEBUG
+            log_debug("created key: domain=%{dnsname}, tag=%i, algorithm=%i, flags=%i, create=%U publish=%U activate=%U deactivate=%U unpublish=%U",
+                     dnskey_get_domain(key),
                      dnskey_get_tag(key),
                      dnskey_get_algorithm(key),
                      ntohs(dnskey_get_flags(key)),
@@ -2485,11 +2582,12 @@ keyroll_generate_dnskey_ex(keyroll_t *keyroll, u32 size, u8 algorithm,
                      dnskey_get_activate_epoch(key),
                      dnskey_get_inactive_epoch(key),
                      dnskey_get_delete_epoch(key));
+            logger_flush();
 #endif
             dnskey_release(key); // the original reference
         }
         else
-        {
+        {   // note: %llU => prints UTC time
             log_err("%{dnsname}: failed to generate %cSK key to publish at %llU: %r", keyroll->domain, ksk?'K':'Z', publication_epochus, ret);
         }
 
@@ -3179,7 +3277,7 @@ keyroll_store(keyroll_t *keyroll)
             {
                 dnssec_key *key = (dnssec_key*)ptr_vector_get(&step->dnskey_del, i);
 
-                int rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata);
+                int rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata, PATH_MAX);
                 rdata_desc dnskeyrdata = {TYPE_DNSKEY, rdata_size, rdata};
 
                 osformatln(&fos, "update delete %{dnsname} %i %{typerdatadesc}", keyroll->domain, TTL, &dnskeyrdata);
@@ -3200,7 +3298,7 @@ keyroll_store(keyroll_t *keyroll)
             {
                 dnssec_key *key = (dnssec_key*)ptr_vector_get(&step->dnskey_add, i);
 
-                int rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata);
+                int rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata, PATH_MAX);
                 rdata_desc dnskeyrdata = {TYPE_DNSKEY, rdata_size, rdata};
 
                 osformatln(&fos, "update add %{dnsname} %i %{typerdatadesc}", keyroll->domain, TTL, &dnskeyrdata);
@@ -3238,7 +3336,7 @@ keyroll_store(keyroll_t *keyroll)
                     u32_node *node = u32_set_iterator_next_node(&iter);
                     dnssec_key *key = (dnssec_key*)node->value;
 
-                    int rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata);
+                    int rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata, PATH_MAX);
                     rdata_desc dnskeyrdata = {TYPE_DNSKEY, rdata_size, rdata};
                     osformatln(&fos, "endresult %{dnsname} %i %{typerdatadesc}", keyroll->domain, TTL, &dnskeyrdata);
                     osformatln(&previous_end_result_os, "expect %{dnsname} %i %{typerdatadesc}", keyroll->domain, TTL, &dnskeyrdata);
@@ -3259,7 +3357,7 @@ keyroll_store(keyroll_t *keyroll)
 
                     if(dnskey_get_flags(key) == DNSKEY_FLAGS_KSK)
                     {
-                        dns_resource_record_init_resource_record_view(&rrv);
+                        dns_resource_record_resource_record_view_init(&rrv);
                         dnskey_signature_init(&ds);
                         s32 from = (step->epochus / ONE_SECOND_US) - RRSIG_ANTEDATING;     // sign from the day before
 
@@ -3316,7 +3414,7 @@ keyroll_store(keyroll_t *keyroll)
                 u32_node *node = u32_set_iterator_next_node(&iter);
                 dnssec_key *key = (dnssec_key*)node->value;
 
-                int rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata);
+                int rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata, PATH_MAX);
                 rdata_desc dnskeyrdata = {TYPE_DNSKEY, rdata_size, rdata};
 
                 osformatln(&fos, "endresult %{dnsname} %i %{typerdatadesc}", keyroll->domain, TTL, &dnskeyrdata);

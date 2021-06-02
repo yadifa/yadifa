@@ -259,7 +259,7 @@ protocol_test_message_udp_with_timeout(message_data *mesg, const host_address *s
             }
             else
             {
-                ret = (n < 0)?ERRNO_ERROR:ERROR;
+                ret = (n < 0)?n:ERROR;
             }
             
             close_ex(sockfd);
@@ -381,7 +381,7 @@ hammer_message_udp_with_timeout(message_data *mesg, const host_address *server, 
             }
             else
             {
-                ret = (n < 0)?ERRNO_ERROR:ERROR;
+                ret = (n < 0)?n:ERROR;
             }
             
             close_ex(sockfd);

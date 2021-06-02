@@ -77,16 +77,17 @@ extern const char CMDLINE_CONTAINER[];
 ya_result config_register_cmdline(u8 priority);
 
 /**
- * 
- * Returns TRUE iff a help parameter was found in the command line
- * 
+ * Returns if the CMDLINE_VERSION_HELP(main_cmdline) command line help hook detected a --help
+ * Needs to have config_register_cmdline(priority++) called in the configuration registration code.
+ *
  * @return TRUE iff a help parameter was found in the command line
  */
 
 bool cmdline_help_get();
 
 /**
- * Returns the number of times a version parameter was found on the command line
+ * Returns if the CMDLINE_VERSION_HELP(main_cmdline) command line help hook detected a --version
+ * Needs to have config_register_cmdline(priority++) called in the configuration registration code.
  * 
  * @return the number of times a version parameter was found on the command line
  */

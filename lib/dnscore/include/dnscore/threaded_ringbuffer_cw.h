@@ -84,10 +84,11 @@ bool  threaded_ringbuffer_cw_try_enqueue(threaded_ringbuffer_cw *queue,void* con
 void* threaded_ringbuffer_cw_peek(threaded_ringbuffer_cw *queue);
 void* threaded_ringbuffer_cw_try_peek(threaded_ringbuffer_cw *queue);
 void* threaded_ringbuffer_cw_dequeue(threaded_ringbuffer_cw *queue);
+void* threaded_ringbuffer_cw_dequeue_with_timeout(threaded_ringbuffer_cw *queue, s64 timeout_us);
 void* threaded_ringbuffer_cw_try_dequeue(threaded_ringbuffer_cw *queue);
 u32   threaded_ringbuffer_cw_dequeue_set(threaded_ringbuffer_cw *queue, void** array, u32 array_size);
 void  threaded_ringbuffer_cw_wait_empty(threaded_ringbuffer_cw *queue);
-int   threaded_ringbuffer_cw_size(threaded_ringbuffer_cw *queue);
+u32   threaded_ringbuffer_cw_size(threaded_ringbuffer_cw *queue);
 int   threaded_ringbuffer_cw_room(threaded_ringbuffer_cw *queue);
 
 /*

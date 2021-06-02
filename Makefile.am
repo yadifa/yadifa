@@ -51,6 +51,7 @@ SUBDIRS += test/daemonised-logger-test
 SUBDIRS += test/dnskey-test
 SUBDIRS += test/dnsname-test
 SUBDIRS += test/dnssec-test
+SUBDIRS += test/dnsserver-test
 SUBDIRS += test/dsfromkey-test
 SUBDIRS += test/filepool-test
 SUBDIRS += test/file-test

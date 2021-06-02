@@ -449,8 +449,6 @@ circular_file_read(circular_file_t cf, void* buffer_, u32 n)
         return 0;
     }
 
-
-    
     u64 avail = cf->size - cf->position;    // both position and size are relative to begin
     
     if(avail < n)
@@ -506,8 +504,13 @@ circular_file_read(circular_file_t cf, void* buffer_, u32 n)
             // then if more has to be read, from 0 to whatever remains to be read
             
             u64 end_avail = MIN(cf->begin - abs_position, n);
-            
-            assert(end_avail >= n);
+
+            if(end_avail < n)
+            {
+                // it will be a short read
+
+                return CIRCULAR_FILE_SHORT;
+            }
             
             if(ISOK(ret = file_pool_seek(cf->f, abs_position + cf->reserved_size + sizeof(struct circular_file_header_s), SEEK_SET)))
             {
@@ -588,8 +591,6 @@ circular_file_write(circular_file_t cf, const void* buffer_, u32 n)
         return 0;
     }
 
-
-    
     if(!circular_file_wrapped(cf))
     {
         // the file does not wraps
@@ -838,13 +839,75 @@ circular_file_get_size(circular_file_t cf)
     return cf->size;
 }
 
-u64
+void
+circular_file_set_size(circular_file_t cf, u64 size)
+{
+#if CIRCULAR_FILE_DEBUG
+    log_debug5("circular_file_set_size(%p, %llu)", cf, size);
+#endif
+    cf->size = size;
+    if(cf->position > size)
+    {
+        cf->position = size;
+    }
+}
+
+s64
 circular_file_get_read_available(circular_file_t cf)
 {
 #if CIRCULAR_FILE_DEBUG
     log_debug5("circular_file_get_read_available(%p) = %llu", cf, cf->size - cf->position);
 #endif
     return cf->size - cf->position;
+}
+
+s64
+circular_file_get_write_available(circular_file_t cf)
+{
+#if CIRCULAR_FILE_DEBUG
+    log_debug5("circular_file_write(%p, %p, %i)", cf, buffer_, n);
+#endif
+    if(!circular_file_wrapped(cf))
+    {
+        // the file does not wraps
+
+        s64 abs_position = cf->begin + cf->position;
+
+        assert(abs_position <= cf->maximum_size);
+
+        s64 end_avail = cf->maximum_size - abs_position;
+
+        s64 begin_avail = cf->begin;
+
+        s64 avail = end_avail + begin_avail;
+
+        return avail;
+    }
+    else
+    {
+        s64 abs_position = (cf->begin + cf->position) % cf->modulo;
+
+        // abs_end is the position of the end of the data relatively to position 0
+
+        if((cf->position > 0) && (abs_position <= cf->begin))
+        {
+            // if the absolute position is before the end, we will have to read from position to end
+            // then if more has to be read, from 0 to whatever remains to be read
+
+            s64 end_avail = cf->begin - abs_position;
+
+            return end_avail;
+        }
+        else
+        {
+            // if the absolute position is after or equal to the end, we will have to write from position to begin
+            // then from 0 to end
+
+            s64 total_avail = cf->modulo - abs_position + cf->begin;
+
+            return total_avail;
+        }
+    }
 }
 
 /**
@@ -1046,8 +1109,8 @@ circular_file_shift(circular_file_t cf, s64 bytes)
     
     cf->begin += bytes;
     cf->size -= bytes;
-    cf->position -= bytes;
-    
+    cf->position -= bytes; // could result in a negative position, but may be used by a relative seek forward
+
     assert(cf->size <= cf->maximum_size);
     
     if(cf->begin >= cf->modulo)

@@ -1281,21 +1281,28 @@ static inline void message_send_udp_reset(message_data *mesg)
 }
 
 #if !DEBUG
-static inline ssize_t message_send_udp(const message_data *mesg, int sockfd)
+static inline s32 message_send_udp(const message_data *mesg, int sockfd)
 {
-    return sendmsg(sockfd, &mesg->_msghdr, 0);
+    s32 n;
+
+    while((n = sendmsg(sockfd, &mesg->_msghdr, 0)) < 0)
+    {
+        int err = errno;
+
+        if(err != EINTR)
+        {
+            return MAKE_ERRNO_ERROR(err);
+        }
+    }
+
+    return n;
 }
 #else
+s32 message_send_udp_debug(const message_data *mesg, int sockfd);
 
-ssize_t message_send_udp_debug(const message_data *mesg, int sockfd);
-
-static inline ssize_t message_send_udp(const message_data *mesg, int sockfd)
+static inline s32 message_send_udp(const message_data *mesg, int sockfd)
 {
-    ssize_t ret = message_send_udp_debug(mesg, sockfd);
-    if(ret < 0)
-    {
-        ret = ERRNO_ERROR;
-    }
+    s32 ret = message_send_udp_debug(mesg, sockfd);
     return ret;
 }
 #endif
@@ -1737,7 +1744,7 @@ static inline void message_tcp_serial_increment(message_data *mesg)
 ya_result message_query_tcp_with_timeout(message_data *mesg, const host_address *server, u8 to_sec);
 ya_result message_query_tcp_with_timeout_ex(message_data *mesg, const host_address *server, message_data *answer, u8 to_sec);
 ya_result message_query_tcp(message_data *mesg, const host_address *server);
-ya_result message_query_tcp_ex(message_data *mesg, const host_address *server, message_data *answer);
+ya_result message_query_tcp_ex(message_data *mesg, const host_address *bindto, const host_address *server, message_data *answer);
 ya_result message_query_udp(message_data *mesg, const host_address *server);
 ya_result message_query_udp_with_timeout(message_data *mesg, const host_address *server, int seconds, int useconds);
 

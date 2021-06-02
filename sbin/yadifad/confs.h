@@ -243,7 +243,7 @@ extern "C" {
 #define     S_ZONE_DNSSEC_DNSSEC        "off"
     
 #define     S_JOURNAL_SIZE_KB_DEFAULT   "0"             // 0 means "automatic"
-#define     S_JOURNAL_SIZE_KB_MIN       0               // less than 64KB is asking for trouble
+#define     S_JOURNAL_SIZE_KB_MIN       0               // less than 64KB is asking for trouble (0 means "automatic")
 #define     S_JOURNAL_SIZE_KB_MAX       3698688         // 3GB
 
     /*    ------------------------------------------------------------    */

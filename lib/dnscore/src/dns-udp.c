@@ -1606,7 +1606,7 @@ dns_udp_send_simple_message_process(async_message_s *domain_message, random_ctx 
 
                     //if((return_code = sendto(s, mesg->buffer, mesg->send_length, 0, &sa.sa, sa_len)) == mesg->send_length)
 
-                    if((return_code = message_send_udp(mesg, source_socket)) == (ssize_t)message_get_size(mesg))
+                    if((return_code = message_send_udp(mesg, source_socket)) == (s32)message_get_size(mesg))
                     {
                         dns_udp_simple_message_lock(simple_message);
                         simple_message->status |= DNS_SIMPLE_MESSAGE_STATUS_SENT;
@@ -1659,11 +1659,9 @@ dns_udp_send_simple_message_process(async_message_s *domain_message, random_ctx 
 
                     // an error occurred
 
-                    int err = errno;
-
-                    if((err != EINTR) && (err != EAGAIN))
+                    if((return_code != MAKE_ERRNO_ERROR(EAGAIN)) && (return_code != MAKE_ERRNO_ERROR(EWOULDBLOCK)))
                     {
-                        return_code = MAKE_ERRNO_ERROR(err);
+                        // return_code = MAKE_ERRNO_ERROR(err);
 
                         break;
                     }

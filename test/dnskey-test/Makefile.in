@@ -287,7 +287,8 @@ CONFIG_CLEAN_VPATH_FILES =
 PROGRAMS = $(noinst_PROGRAMS)
 am_dnskey_test_OBJECTS = main.$(OBJEXT)
 dnskey_test_OBJECTS = $(am_dnskey_test_OBJECTS)
-dnskey_test_DEPENDENCIES = $(top_builddir)/lib/dnscore/libdnscore.la
+dnskey_test_DEPENDENCIES = $(top_builddir)/lib/dnscore/libdnscore.la \
+	$(top_builddir)/lib/dnsdb/libdnsdb.la
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
@@ -572,7 +573,9 @@ AM_CFLAGS = -D_THREAD_SAFE -D_REENTRANT -D_FILE_OFFSET_BITS=64 \
 	$(am__append_34) $(am__append_36) $(am__append_39) \
 	$(am__append_41) $(am__append_43) $(am__append_44) \
 	$(LOCALFLAGS) -I$(top_srcdir)/lib/dnscore/include \
-	-I$(top_builddir)/lib/dnscore/include
+	-I$(top_builddir)/lib/dnscore/include \
+	-I$(top_srcdir)/lib/dnsdb/include \
+	-I$(top_builddir)/lib/dnsdb/include
 AM_LDFLAGS = $(am__append_16) $(am__append_18) $(am__append_24) \
 	$(am__append_29) $(am__append_32) $(am__append_35) \
 	$(am__append_38)
@@ -601,8 +604,8 @@ LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATED
 @USES_SUNC_TRUE@AM_LD = ld
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@AM_RANLIB = gcc-ranlib
 dnskey_test_SOURCES = main.c
-dnskey_test_LDADD = $(top_builddir)/lib/dnscore/libdnscore.la
-#dnskey_test_LDADD += $(top_builddir)/lib/dnsdb/libdnsdb.la
+dnskey_test_LDADD = $(top_builddir)/lib/dnscore/libdnscore.la \
+	$(top_builddir)/lib/dnsdb/libdnsdb.la
 #dnskey_test_LDADD += $(top_builddir)/lib/dnslg/libdnslg.la
 #dnskey_test_LDADD += $(top_builddir)/lib/dnstcl/libdnstcl.la
 noinst_HEADERS = 

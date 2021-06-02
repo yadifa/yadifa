@@ -284,7 +284,7 @@ message_make_dnsupdate_add_dnskey(message_data *mesg, packet_writer *pw, dnssec_
 {
     ya_result ret;
     u8 buffer[8192];
-    ret = key->vtbl->dnssec_key_writerdata(key, buffer);
+    ret = key->vtbl->dnssec_key_writerdata(key, buffer, sizeof(buffer));
     ret = message_make_dnsupdate_add_record(mesg, pw, dnskey_get_domain(key), TYPE_DNSKEY, CLASS_IN, ttl, ret, buffer);
     return ret;
 }
@@ -295,7 +295,7 @@ message_make_dnsupdate_delete_dnskey(message_data *mesg, packet_writer *pw, dnss
 {
     ya_result ret;
     u8 buffer[8192];
-    ret = key->vtbl->dnssec_key_writerdata(key, buffer);
+    ret = key->vtbl->dnssec_key_writerdata(key, buffer, sizeof(buffer));
     ret = message_make_dnsupdate_delete_record(mesg, pw, dnskey_get_domain(key), TYPE_DNSKEY, ret, buffer);
     return ret;
 }

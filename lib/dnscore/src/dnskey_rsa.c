@@ -407,41 +407,52 @@ dnskey_rsa_public_load(const u8* rdata, u16 rdata_size)
  }
 
 static u32
-dnskey_rsa_public_store(RSA* rsa, u8* output_buffer)
+dnskey_rsa_public_store(RSA* rsa, u8* output_buffer, u32 output_buffer_size)
 {
     unsigned char* outptr = output_buffer;
 
     u32 n;
+    u32 m;
 
     const BIGNUM* exponent;
     const BIGNUM* modulus;
     RSA_get0_key(rsa, &modulus, &exponent, NULL);
 
     n = BN_num_bytes(exponent);
+    m = BN_num_bytes(modulus);
 
     if(n > 1 && n < 256)
     {
+        if(1 + n + m > output_buffer_size)
+        {
+            return 0;
+        }
+
         *outptr++ = n;
     }
     else
     {
+        if(3 + n + m > output_buffer_size)
+        {
+            return 0;
+        }
+
         *outptr++ = 0;
         *outptr++ = n >> 8;
         *outptr++ = n;
     }
 
     n = BN_bn2bin(exponent, outptr);
-
     outptr += n;
-    n = BN_bn2bin(modulus, outptr);
 
+    n = BN_bn2bin(modulus, outptr);
     outptr += n;
 
     return outptr - output_buffer;
 }
 
 static u32
-dnskey_rsa_dnskey_public_store(const dnssec_key *key, u8 *rdata)
+dnskey_rsa_dnskey_public_store(const dnssec_key *key, u8 *rdata, size_t rdata_size)
 {
     u32 len;
     
@@ -449,7 +460,7 @@ dnskey_rsa_dnskey_public_store(const dnssec_key *key, u8 *rdata)
     rdata[2] = DNSKEY_PROTOCOL_FIELD;
     rdata[3] = key->algorithm;
     
-    len = dnskey_rsa_public_store(key->key.rsa, &rdata[4]) + 4;
+    len = dnskey_rsa_public_store(key->key.rsa, &rdata[4], rdata_size - 4) + 4;
     
     return len;
 }
@@ -592,7 +603,7 @@ dnskey_rsa_initinstance(RSA* rsa, u8 algorithm, u16 flags, const char* origin, d
     rdata[2] = DNSKEY_PROTOCOL_FIELD;
     rdata[3] = algorithm;
 
-    if(dnskey_rsa_public_store(rsa, &rdata[4]) != rdata_size)
+    if(dnskey_rsa_public_store(rsa, &rdata[4], sizeof(rdata) - 4) != rdata_size)
     {
         return DNSSEC_ERROR_UNEXPECTEDKEYSIZE; /* Computed size != real size */
     }
@@ -719,7 +730,7 @@ dnskey_rsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
         rdata[2] = DNSKEY_PROTOCOL_FIELD;
         rdata[3] = key->algorithm;
 
-        if(dnskey_rsa_public_store(rsa, &rdata[4]) != rdata_size)
+        if(dnskey_rsa_public_store(rsa, &rdata[4], sizeof(rdata) - 4) != rdata_size)
         {
             return DNSSEC_ERROR_UNEXPECTEDKEYSIZE; /* Computed size != real size */
         }

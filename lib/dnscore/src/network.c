@@ -75,8 +75,6 @@ addr_info_is_any(struct addrinfo* addr)
 ya_result
 network_interfaces_forall(network_interfaces_forall_callback cb, void *data)
 {
-#if 0 /* fix */
-#elif 1
     ya_result ret = SUCCESS;
     struct ifaddrs *ia = NULL;
     if(getifaddrs(&ia) == 0)
@@ -88,6 +86,12 @@ network_interfaces_forall(network_interfaces_forall_callback cb, void *data)
             if((a->ifa_flags & IFF_UP) == 0)
             {
                 // interface is down
+                continue;
+            }
+
+            if(a->ifa_addr == NULL)
+            {
+                // interface isn't usable
                 continue;
             }
 
@@ -133,8 +137,6 @@ network_interfaces_forall(network_interfaces_forall_callback cb, void *data)
     }
 
     return ret;
-#endif
-
 }
 
 int sockaddr_compare_addr_port(const struct sockaddr *a, const struct sockaddr *b)

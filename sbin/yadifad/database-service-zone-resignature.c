@@ -336,6 +336,7 @@ database_service_zone_update_published_keys(const u8 *fqdn)
     for(int i = 0; i <= ptr_vector_last_index(&publish_keys); ++i)
     {
         dnssec_key *key = (dnssec_key*)ptr_vector_get(&publish_keys, i);
+
         if(ISOK(ret = dynupdate_message_add_dnskey(&dmsg, 86400, key)))
         {
             log_info("dnskey: %{dnsname}: +%03d+%05d/%d key will be published %T => %T => %T => %T",
@@ -1090,7 +1091,7 @@ database_service_zone_dnskey_set_alarms_for_key(zdb_zone *zone, dnssec_key *key)
 
         // if the key needs to be activated ...
 
-        if((now >= active_epoch) && (now < inactive_epoch))
+        if(now < inactive_epoch)
         {
             if((state & DNSKEY_KEY_ACTIVATE_ARMED) == 0)
             {

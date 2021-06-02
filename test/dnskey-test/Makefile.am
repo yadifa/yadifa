@@ -34,7 +34,7 @@ ACLOCAL_AMFLAGS = -I ../../m4
 include ../../mk/common-settings.mk
 
 AM_CFLAGS += -I$(top_srcdir)/lib/dnscore/include -I$(top_builddir)/lib/dnscore/include
-#AM_CFLAGS += -I$(top_srcdir)/lib/dnsdb/include -I$(top_builddir)/lib/dnsdb/include
+AM_CFLAGS += -I$(top_srcdir)/lib/dnsdb/include -I$(top_builddir)/lib/dnsdb/include
 #AM_CFLAGS += -I$(top_srcdir)/lib/dnslg/include -I$(top_builddir)/lib/dnslg/include 
 #AM_CFLAGS += -I$(top_srcdir)/lib/dnstcl/include -I$(top_builddir)/lib/dnstcl/include
 
@@ -42,7 +42,7 @@ noinst_PROGRAMS = dnskey-test
 
 dnskey_test_SOURCES = main.c
 dnskey_test_LDADD = $(top_builddir)/lib/dnscore/libdnscore.la
-#dnskey_test_LDADD += $(top_builddir)/lib/dnsdb/libdnsdb.la
+dnskey_test_LDADD += $(top_builddir)/lib/dnsdb/libdnsdb.la
 #dnskey_test_LDADD += $(top_builddir)/lib/dnslg/libdnslg.la
 #dnskey_test_LDADD += $(top_builddir)/lib/dnstcl/libdnstcl.la
 

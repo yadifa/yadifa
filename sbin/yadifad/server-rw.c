@@ -663,19 +663,10 @@ server_rw_process_message_udp(struct network_thread_context_s *ctx, message_data
     ya_result ret;
     if(ISOK(ret = server_process_message_udp((network_thread_context_base_t*)ctx, mesg)))
     {
-        ssize_t sent;
-
-        while((sent = message_send_udp(mesg, ctx->base.sockfd)) < 0)
+        if(ISOK(ret = message_send_udp(mesg, ctx->base.sockfd)))
         {
-            int error_code = errno;
-
-            if(error_code != EINTR)
-            {
-                return MAKE_ERRNO_ERROR(error_code);
-            }
+            ctx->statistics.udp_output_size_total += ret;
         }
-
-        ctx->statistics.udp_output_size_total += sent;
     }
 
     return ret;
@@ -1038,7 +1029,7 @@ server_rw_query_loop(struct service_worker_s *worker)
      * the speed a bit.
      */
 
-    FD_ZERO(&read_set_init);    
+    FD_ZERO(&read_set_init);
     s32 reader_by_fd = g_server_context.udp_socket_count / g_server_context.udp_unit_per_interface;
     s32 cpu_count = sys_get_cpu_count();
     if(reader_by_fd > cpu_count)
@@ -1101,7 +1092,7 @@ server_rw_query_loop(struct service_worker_s *worker)
                 mutex_lock(&ctx->mtx);
                 cond_notify(&ctx->cond);
                 mutex_unlock(&ctx->mtx);
-                
+
                 break;
             }
          

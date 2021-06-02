@@ -2191,4 +2191,11 @@ debug_bench_unregister_all()
 
 #endif
 
+void
+debug_nop_hook()
+{
+    // this function does nothing but help putting a breakpoint
+    puts("HOOK");fflush(NULL);
+}
+
 /** @} */

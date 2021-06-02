@@ -60,6 +60,9 @@
 #include <dnscore/dnskey_dsa.h>
 #include <dnscore/dnskey_ecdsa.h>
 
+static smp_int workers_active;
+static smp_int smp_tries;
+
 struct main_args
 {
     u8* domain;
@@ -101,10 +104,7 @@ CMDLINE_HELP("thread-count", "when insanely looking for a tag, spawn that amount
 CMDLINE_VERSION_HELP(keygen_test_cmdline)
 CMDLINE_END(keygen_test_cmdline)
 
-static main_args g_config = {0};
-static smp_int workers_active;
-
-static smp_int smp_tries;
+static main_args g_config = {NULL, 0, 0, FALSE, 0, 0};
 
 static void
 help(const char *name)
@@ -122,7 +122,11 @@ main_config(int argc, char *argv[])
 
     config_init();
 
-    config_register_struct("main", main_args_desc, &g_config, 0);
+    int priority = 0;
+
+    config_register_struct("main", main_args_desc, &g_config, priority++);
+
+    config_register_cmdline(priority++); // without this line, the help will not work
 
     struct config_source_s sources[1];
 

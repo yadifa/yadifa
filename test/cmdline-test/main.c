@@ -120,6 +120,13 @@ CMDLINE_VERSION_HELP(main_settings_cmdline)
 CMDLINE_CALLBACK(main_cmdline_help_callback, NULL) // NULL is passed to the callback, use CMDLINE_CALLBACK_ARG_GET(desc) to get it
 CMDLINE_END(main_settings_cmdline)
 
+static void
+help(const char *name)
+{
+    formatln("%s [args]\n\n", name);
+
+    cmdline_print_help(main_settings_cmdline, 4, 0, " :  ", 0, termout);
+}
 
 static ya_result
 main_config(int argc, char *argv[])
@@ -148,6 +155,12 @@ main_config(int argc, char *argv[])
         formatln("settings: (%s:%i) %s: %r", cfg_error.file, cfg_error.line_number, cfg_error.line, ret);
         flushout();
         return ret;
+    }
+
+    if(cmdline_help_get())
+    {
+        help(argv[0]);
+        return SUCCESS;
     }
 
     return 1;

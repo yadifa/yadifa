@@ -51,7 +51,7 @@ extern "C"
 {
 #endif
 
-#define ZONEFILE_ERROR_BASE                       0x800A0000
+#define ZONEFILE_ERROR_BASE                       0x800a0000
 #define ZONEFILE_ERROR_CODE(code_)                ((s32)(ZONEFILE_ERROR_BASE+(code_)))
 
 #define ZONEFILE_FEATURE_NOT_SUPPORTED            ZONEFILE_ERROR_CODE(0x0001)
@@ -65,13 +65,7 @@ extern "C"
 #define ZONEFILE_RDATA_PARSE_ERROR                ZONEFILE_ERROR_CODE(0x0016)
 #define ZONEFILE_RDATA_BUFFER_TOO_SMALL           ZONEFILE_ERROR_CODE(0x0017)
 #define ZONEFILE_RDATA_SIZE_MISMATCH              ZONEFILE_ERROR_CODE(0x0018)
-    
-#define ZONEREAD_ERROR_BASE                       0x800a0000
-#define ZONEREAD_ERROR_CODE(code_)                ((s32)(ZONEREAD_ERROR_BASE+(code_)))
-#define ZRE_AXFR_FILE_NOT_FOUND                   ZONEREAD_ERROR_CODE( 1)
-#define ZRE_NO_VALID_FILE_FOUND                   ZONEREAD_ERROR_CODE( 2)
 
-    
 /**
  * Structure used to describe a resource record from a zone.
  * 

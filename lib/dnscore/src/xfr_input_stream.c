@@ -297,7 +297,7 @@ xfr_input_stream_read_packet(xfr_input_stream_data *data)
                 {
                     data->eos = TRUE;
 
-                    return_value = INVALID_STATE_ERROR; // OWNER OF SOA RECORD SHOULD BE ORIGIN (protocol error)
+                    return_value = MAKE_DNSMSG_ERROR(FP_XFR_QUERYERROR); // OWNER OF SOA RECORD SHOULD BE ORIGIN (protocol error)
 
                     return return_value;
                 }
@@ -577,7 +577,7 @@ xfr_input_stream_fill(input_stream *is, u32 len)
         
         while(n > 0)
         {
-            if(FAIL(ret = packet_reader_skip_fqdn(pr)))
+            if(FAIL(ret = packet_reader_skip_fqdn(pr))) // this is the domain already used for this query
             {
                 break;
             }

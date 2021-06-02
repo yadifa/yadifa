@@ -233,12 +233,12 @@ static char *opcode[16] =
     
     "OPCODE8",        // 8
     "CTRL", /* special for yadifa client for view the result in verbose mode */
-    "OPCODE9",
     "OPCODE10",
     "OPCODE11",
     "OPCODE12",
     "OPCODE13",
-    "OPCODE14"
+    "OPCODE14",
+    "OPCODE15"
 };
 
 static char *rcode[32] =
@@ -704,7 +704,7 @@ dns_encryption_algorithm_from_name(const char *src, u8 *dst)
         return c;
     }
 
-    return UNKNOWN_DNSSEC_ALGO;
+    return DNSSEC_ALGORITHM_UNKOWN;
 }
 
 
@@ -759,7 +759,7 @@ dns_encryption_algorithm_from_case_name(const char *src, u8 *dst)
     size_t n = strlen(src);
     if(n >= sizeof(txt))
     {
-        return UNKNOWN_DNSSEC_ALGO;
+        return DNSSEC_ALGORITHM_UNKOWN;
     }
 
     for(size_t i = 0; i < n; i++)

@@ -79,11 +79,12 @@ struct service_s;
 struct service_worker_s;
     
 typedef int service_main(struct service_worker_s *);
+typedef void service_wakeup(struct service_s *);
 
 #if SERVICE_HAS_LAST_SEEN_ALIVE_SUPPORT
-#define UNINITIALIZED_SERVICE {MUTEX_INITIALIZER, COND_INITIALIZER, NULL, NULL, NULL, 0, 0, NULL, TRUE}
+#define UNINITIALIZED_SERVICE {MUTEX_INITIALIZER, COND_INITIALIZER, NULL, NULL, NULL, NULL, 0, 0, NULL, TRUE}
 #else
-#define UNINITIALIZED_SERVICE {MUTEX_INITIALIZER, COND_INITIALIZER, NULL, NULL, NULL, 0, NULL, TRUE}
+#define UNINITIALIZED_SERVICE {MUTEX_INITIALIZER, COND_INITIALIZER, NULL, NULL, NULL, NULL, 0, NULL, TRUE}
 #endif
 
 #define SRVCWRKR_TAG 0x524b525743565253
@@ -106,6 +107,7 @@ struct service_s
     mutex_t wait_lock;
     cond_t wait_cond;
     service_main *entry_point;
+    service_wakeup *wakeup_all_workers; // so they may act
     char *name;
     struct service_worker_s *worker;
     u32 worker_count;
@@ -143,6 +145,21 @@ int service_init(struct service_s *desc, service_main *entry_point, const char* 
  */
 
 int service_init_ex(struct service_s *desc, service_main *entry_point, const char* name, u32 count);
+
+/**
+ * Initialises service with an entry point, a name, and a number of workers
+ * Each worker will know its index (from 0 to count-1).
+ * No threads are started yet after this call.
+ *
+ * @param desc the service
+ * @param entry_point the function of the service, it must be of the type service_main
+ * @param wakeup_function a function that will wakup-up all the workers of the service (e.g. so they can notice a reconfiguration or shutdown)
+ * @param name the name of the service
+ * @param count the number of workers for the service
+ * @return an error code
+ */
+
+int service_init_ex2(struct service_s *desc, service_main *entry_point, service_wakeup *wakeup_function, const char* name, u32 count);
 
 /**
  * Set service args.
@@ -296,6 +313,8 @@ bool service_stopped(struct service_s *desc);
  */
 
 ya_result service_wait_servicing(struct service_s *desc);
+
+bool service_initialised(struct service_s *desc);
 
 static inline bool
 service_started(struct service_s *desc)

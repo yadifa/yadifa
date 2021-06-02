@@ -2418,25 +2418,66 @@ message_query_tcp(message_data *mesg, const host_address *server)
 }
 
 ya_result
-message_query_tcp_ex(message_data *mesg, const host_address *server, message_data *answer)
+message_query_tcp_ex(message_data *mesg, const host_address *bindto, const host_address *server, message_data *answer)
 {
     /* connect the server */
     
-    ya_result return_value;
+    ya_result ret;
+    socklen_t sa_len;
+    socketaddress sa;
+
+    if((mesg == NULL) || (server == NULL) || (answer == NULL))
+    {
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
+    }
+
+    if(bindto != NULL)
+    {
+        ret = host_address2sockaddr(bindto, &sa);
+        if(FAIL(ret))
+        {
+            return ret;
+        }
+
+        sa_len = (socklen_t)ret;
+    }
     
-    if(ISOK(return_value = message_set_sender_from_host_address(mesg, server)))
+    if(ISOK(ret = message_set_sender_from_host_address(mesg, server)))
     {
         int sockfd;
         
         if((sockfd = socket(message_get_sender_sa(mesg)->sa_family, SOCK_STREAM, 0)) >=0)
         {
             fd_setcloseonexec(sockfd);
-            
-            socklen_t sa_len = return_value;
-            
-            if(connect(sockfd, message_get_sender_sa(mesg), sa_len) == 0)
+
+            if(bindto != NULL)
             {
-#if 1 // DEBUG
+                int on = 1;
+                if(FAIL(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on))))
+                {
+                    ret = ERRNO_ERROR;
+                    close(sockfd);
+                    return ret;
+                }
+
+                if(FAIL(setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, (void *) &on, sizeof(on))))
+                {
+                    ret = ERRNO_ERROR;
+                    close(sockfd);
+                    return ret;
+                }
+
+                if(bind(sockfd, &sa.sa, sa_len) < 0)
+                {
+                    ret = ERRNO_ERROR;
+                    close_ex(sockfd);
+                    return ret;
+                }
+            }
+
+            if(connect(sockfd, message_get_sender_sa(mesg), message_get_sender_size(mesg)) == 0)
+            {
+#if DEBUG
                 log_debug("sending %d bytes to %{sockaddr} (tcp)", message_get_size(mesg), message_get_sender(mesg));
                 log_memdump_ex(g_system_logger, MSG_DEBUG5, message_get_buffer_const(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_HEXTEXT);
 #endif
@@ -2466,7 +2507,7 @@ message_query_tcp_ex(message_data *mesg, const host_address *server, message_dat
                             log_debug("received %d bytes from %{sockaddr} (tcp)", message_get_size(answer), message_get_sender_sa(answer));
                             log_memdump_ex(g_system_logger, MSG_DEBUG5, message_get_buffer_const(answer), message_get_size(answer), 16, OSPRINT_DUMP_HEXTEXT);
 #endif
-                            return_value = message_process_lenient(answer);
+                            ret = message_process_lenient(answer);
                         }
                     }                    
                 }
@@ -2477,11 +2518,11 @@ message_query_tcp_ex(message_data *mesg, const host_address *server, message_dat
                 
                 if(errno != EINPROGRESS)
                 {
-                    return_value = ERRNO_ERROR;
+                    ret = ERRNO_ERROR;
                 }
                 else
                 {
-                    return_value = MAKE_ERRNO_ERROR(ETIMEDOUT);
+                    ret = MAKE_ERRNO_ERROR(ETIMEDOUT);
                 }
             }
 
@@ -2493,11 +2534,11 @@ message_query_tcp_ex(message_data *mesg, const host_address *server, message_dat
         }
         else
         {
-            return_value = ERRNO_ERROR;
+            ret = ERRNO_ERROR;
         }
     }
     
-    return return_value;
+    return ret;
 }
 
 ya_result
@@ -2778,16 +2819,16 @@ message_query_udp_with_timeout(message_data *mesg, const host_address *server, i
         {
             fd_setcloseonexec(sockfd);
             
-            int n;
-            
             tcp_set_recvtimeout(sockfd, seconds, useconds); /* half a second for UDP is a lot ... */
 
             int send_size = message_get_size(mesg);
 
+            ssize_t n;
+
             if((n = message_send_udp(mesg, sockfd)) == send_size)
             {
                 id = message_get_id(mesg);
-                
+
                 if(message_get_query_count_ne(mesg) != 0)
                 {
                     has_fqdn = TRUE;
@@ -2803,7 +2844,7 @@ message_query_udp_with_timeout(message_data *mesg, const host_address *server, i
                 time_limit *= ONE_SECOND_US;
                 time_limit += useconds;
                 time_limit += timeus();
-                
+
                 ret = SUCCESS;
 
                 while((n = message_recv_udp(recv_mesg, sockfd)) >= 0)
@@ -2812,11 +2853,11 @@ message_query_udp_with_timeout(message_data *mesg, const host_address *server, i
                     log_memdump_ex(g_system_logger, MSG_DEBUG5, message_get_buffer_const(recv_mesg), n, 16, OSPRINT_DUMP_HEXTEXT);
 #endif
                     // check the id is right
-                    
+
                     if(message_get_id(recv_mesg) == id)
                     {
                         // check that the sender is the one we spoke to
-                        
+
                         if(sockaddr_equals(message_get_sender_sa(mesg), message_get_sender_sa(recv_mesg)))
                         {
                             message_tsig_copy_from(recv_mesg, mesg);
@@ -2824,7 +2865,7 @@ message_query_udp_with_timeout(message_data *mesg, const host_address *server, i
                             if(ISOK(ret  = message_process_lenient(recv_mesg)))
                             {
                                 // check the domain is right
-                                
+
                                 if(!has_fqdn || dnsname_equals(fqdn, message_get_canonised_fqdn(recv_mesg)))
                                 {
                                     // everything checks up
@@ -2861,7 +2902,7 @@ message_query_udp_with_timeout(message_data *mesg, const host_address *server, i
                                     ret = MESSAGE_UNEXPECTED_ANSWER_DOMAIN;
                                 }
                             }
-                            
+
                             // ret is set to an error
                         }
                         else
@@ -2873,17 +2914,17 @@ message_query_udp_with_timeout(message_data *mesg, const host_address *server, i
                     {
                         ret = MESSAGE_HAS_WRONG_ID;
                     }
-                    
+
                     s64 time_now = timeus();
-                    
+
                     if(time_now >= time_limit)
                     {
                         ret = MAKE_ERRNO_ERROR(EAGAIN);
                         break;
                     }
-                    
+
                     s64 time_remaining = time_limit - time_now;
-                    
+
                     tcp_set_recvtimeout(sockfd, time_remaining / 1000000ULL, time_remaining % 1000000ULL); /* half a second for UDP is a lot ... */
                 }
 
@@ -2895,12 +2936,12 @@ message_query_udp_with_timeout(message_data *mesg, const host_address *server, i
                 {
                     ret = ERRNO_ERROR;
                 }
-                
+
                 /* timeout */
             }
             else
             {
-                ret = (n < 0)?ERRNO_ERROR:ERROR;
+                ret = (n < 0)?n:ERROR;
             }
             
             close_ex(sockfd);
@@ -3267,7 +3308,6 @@ message_dup(const message_data *mesg)
 #ifndef WIN32
     memcpy(clone->_msghdr_control_buffer, mesg->_msghdr_control_buffer, mesg->_msghdr.msg_controllen);
 #else
-    #pragma message("check this works")
     memcpy(clone->_msghdr_control_buffer, mesg->_msghdr_control_buffer, mesg->_msghdr.msg_control.len);
 #endif
     
@@ -4183,10 +4223,23 @@ message_map_print(const message_map *map, output_stream *os)
     }
 }
 
-ssize_t message_send_udp_debug(const message_data *mesg, int sockfd)
+s32 message_send_udp_debug(const message_data *mesg, int sockfd)
 {
     log_info("message_send_udp(%p, %i) through %{sockaddr}", mesg, sockfd, mesg->_msghdr.msg_name);
-    return sendmsg(sockfd, &mesg->_msghdr, 0);
+
+    s32 n;
+
+    while((n = sendmsg(sockfd, &mesg->_msghdr, 0)) < 0)
+    {
+        int err = errno;
+
+        if(err != EINTR)
+        {
+            return MAKE_ERRNO_ERROR(err);
+        }
+    }
+
+    return n;
 }
 
 ssize_t message_send_tcp(const message_data *mesg, int sockfd)

@@ -42,6 +42,8 @@
  *
  *----------------------------------------------------------------------------*/
 
+#include <openssl/err.h>
+#include <dnscore/logger_handle.h>
 #include "dnscore/dnscore-config.h"
 #include "dnscore/sys_types.h"
 #include "dnscore/sys_error.h"
@@ -56,7 +58,12 @@
 #include "dnscore/zone_reader.h"
 #include "dnscore/zone_reader_text.h"
 
+extern logger_handle *g_system_logger;
+#define MODULE_MSG_HANDLE g_system_logger
+
 #define ERRORTBL_TAG 0x4c4254524f525245
+
+#define ERROR_TEXT_COPIED 0
 
 /*----------------------------------------------------------------------------*/
 
@@ -80,38 +87,59 @@ dief(ya_result error_code, const char* format, ...)
 static u32_node *error_set = NULL;
 
 void
-error_register(ya_result code, const char* text)
+error_register(ya_result code, const char* const text)
 {
     if(text == NULL)
     {
-        text = "NULL";
+        fprintf(stderr, "error_register(%08x, NULL): text cannot be NULL", code);
+        fflush(stderr);
     }
 
     if(YA_ERROR_BASE(code) == ERRNO_ERROR_BASE)
     {
-        fprintf(stderr, "error_register(%08x,%s) : the errno space is reserved (0x8000xxxx), ignoring code", code, text);
+        fprintf(stderr, "error_register(%08x,%s): the errno space is reserved (0x8000xxxx), ignoring code", code, text);
         fflush(stderr);
         return;
     }
-    
-    u32_node *error_node = u32_set_insert(&error_set, code);
-    
-    if(error_node->value == 0)
+
+    u32_node *error_node;
+
+    if((error_node = u32_set_find(&error_set, code)) == NULL)
     {
-        error_node->value = strdup(text);
+        error_node = u32_set_insert(&error_set, code);
+
+        if(error_node->value == 0)
+        {
+#if ERROR_TEXT_COPIED
+            error_node->value = strdup(text);
+#else
+            error_node->value = (void*)text; /// @note 20210427 edf -- it used to be strdup(text), but the parameter is supposed to be a constant string.
+#endif
+        }
+    }
+    else
+    {
+        fprintf(stderr, "error_register(%08x,%s): duplicate key, previous value = '%s'", code, text, (const char*)error_node->value);
+        fflush(stderr);
     }
 }
 
+#if ERROR_TEXT_COPIED
 static void
 error_unregister_all_cb(u32_node *node)
 {
     free(node->value);
 }
+#endif
 
 void
 error_unregister_all()
 {
+#if ERROR_TEXT_COPIED
     u32_set_callback_and_destroy(&error_set, error_unregister_all_cb);
+#else
+    u32_set_destroy(&error_set);
+#endif
 }
 
 static char error_gettext_tmp[64];
@@ -192,6 +220,14 @@ error_writetext(output_stream *os, ya_result code)
         }
 #endif
         osprint(os, strerror(code));
+        return;
+    }
+    else if(YA_ERROR_BASE(code) == SSL_ERROR_BASE)
+    {
+        code &= 0xffff;
+        char buffer[256];
+        ERR_error_string_n(code, buffer, sizeof(buffer));
+        osformat(os, "SSL error %i '%s'", code, buffer);
         return;
     }
 
@@ -371,7 +407,7 @@ dnscore_register_errors()
     error_register(RRSIG_UNSUPPORTED_COVERED_TYPE, "RRSIG_UNSUPPORTED_COVERED_TYPE");
     error_register(RRSIG_VERIFICATION_FAILED, "RRSIG_VERIFICATION_FAILED");
 
-    error_register(UNKNOWN_DNSSEC_ALGO, "UNKNOWN_DNSSEC_ALGO");
+    error_register(DNSSEC_ALGORITHM_UNKOWN, "DNSSEC_ALGORITHM_UNKOWN");
     
     /* DNS */
 
@@ -388,7 +424,7 @@ dnscore_register_errors()
     error_register(RCODE_ERROR_CODE(RCODE_NOTZONE), "NOTZONE");
 
     error_register(RCODE_ERROR_CODE(RCODE_BADVERS), "BADVERS");
-    error_register(RCODE_ERROR_CODE(RCODE_BADSIG), "BADSIG");
+    //error_register(RCODE_ERROR_CODE(RCODE_BADSIG), "BADSIG");
     error_register(RCODE_ERROR_CODE(RCODE_BADKEY), "BADKEY");
     error_register(RCODE_ERROR_CODE(RCODE_BADTIME), "BADTIME");
     error_register(RCODE_ERROR_CODE(RCODE_BADMODE), "BADMODE");
@@ -447,16 +483,38 @@ dnscore_register_errors()
 
     error_register(ZALLOC_ERROR_MMAPFAILED, "ZALLOC_ERROR_MMAPFAILED");
     error_register(ZALLOC_ERROR_OUTOFMEMORY, "ZALLOC_ERROR_OUTOFMEMORY");
-    
-    error_register(ZONEREAD_ERROR_BASE,"ZONEREAD_ERROR_BASE");
-    error_register(ZRE_AXFR_FILE_NOT_FOUND,"ZRE_AXFR_FILE_NOT_FOUND");
-    error_register(ZRE_NO_VALID_FILE_FOUND,"ZRE_NO_VALID_FILE_FOUND");
-        
+
     zone_reader_text_init_error_codes();
     
     parser_init_error_codes();
     config_init_error_codes();
     cmdline_init_error_codes();
+}
+
+ya_result ya_ssl_error()
+{
+    unsigned long ssl_err = ERR_get_error();
+
+    if(ssl_err != 0)
+    {
+        LOGGER_EARLY_CULL_PREFIX(MSG_ERR)
+        {
+            char buffer[256];
+            ERR_error_string_n(ssl_err, buffer, sizeof(buffer));
+            log_err("ssl: %i, %s", ssl_err, buffer);
+
+            unsigned long next_ssl_err;
+            while((next_ssl_err = ERR_get_error()) != 0)
+            {
+                ERR_error_string_n(next_ssl_err, buffer, sizeof(buffer));
+                log_err("ssl: %i, %s", next_ssl_err, buffer);
+            }
+
+            ERR_clear_error();
+        }
+    }
+
+    return SSL_ERROR_CODE(ssl_err);
 }
 
 /** @} */

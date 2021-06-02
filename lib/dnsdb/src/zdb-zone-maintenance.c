@@ -72,6 +72,7 @@ extern logger_handle* g_database_logger;
 
 #define ZDB_ZONE_MAINTENANCE_DETAILED_LOG           0       /// @note 20180615 edf -- heavy, use with care
 #define ZDB_ZONE_MAINTENANCE_IGNORE_TIME_QUOTA      0
+#define DEBUG_SIGNATURE_REFRESH 0
 
 #if ZDB_ZONE_MAINTENANCE_DETAILED_LOG
 #pragma message("WARNING: ZDB_ZONE_MAINTENANCE_DETAILED_LOG is not set to 0")
@@ -83,7 +84,6 @@ extern logger_handle* g_database_logger;
 
 #define ZDB_ZONE_MAINTENANCE_SAME_PASS_CLOSE        1
 #define ZDB_ZONE_MAINTENANCE_RRSIG_COUNT_THRESHOLD  256     // after that many signatures, stop processing labels
-#define ZDB_ZONE_MAINTENANCE_LABELS_AT_ONCE_DEFAULT 1000    // the initial value for labels processed at once
 #define ZDB_MAINTENANCE_BATCH_TIME_US_MAX 20000             // 10ms
 
 #if ZDB_ZONE_MAINTENANCE_DETAILED_LOG
@@ -682,7 +682,7 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
                     double dt = now - start_time;
                     dt /= ONE_SECOND_US_F;
                     log_debug("maintenance: %{dnsname}: %{digest32h}.%{dnsname} has no owner (rc=%i, sc=%i)",
-                            zone->origin, dt, item->digest, zone->origin, item->rc, item->sc);
+                              zone->origin, item->digest, zone->origin, item->rc, item->sc);
                 }
 
                 --labels_to_process_count;
@@ -744,9 +744,15 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
 
                         // returns TRUE iff the signature needs to be removed, that covers "key not found"
 
-                        if(rrsig_should_remove_signature_from_rdata(
+                        bool rrsig_should_remove_signature_from_rdata_result = rrsig_should_remove_signature_from_rdata(
                             ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig), ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig),
-                            &mctx.zsks, mctx.now, zone->sig_validity_regeneration_seconds, &key_index))
+                            &mctx.zsks, mctx.now, zone->sig_validity_regeneration_seconds, &key_index);
+#if DEBUG_SIGNATURE_REFRESH
+                        rdata_desc nsec3_rrsig_desc = {TYPE_RRSIG, ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig), ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig)};
+                        log_debug("maintenance: %{dnsname}: should-remove: %{digest32h}.%{dnsname} %{typerdatadesc}: %s (%i)", zone->origin, item->digest, zone->origin, &nsec3_rrsig_desc,
+                                  (rrsig_should_remove_signature_from_rdata_result?"yes":"no"), key_index);
+#endif
+                        if(rrsig_should_remove_signature_from_rdata_result)
                         {
                             if(key_index >= 0)
                             {
@@ -776,17 +782,18 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
                 {
                     nsec3_key_mask = mctx.zsk_mask;
                 }
-#if DEBUG
-                log_debug2("maintenance: %{dnsname}: at %{digest32h}.%{dnsname} NSEC3: mask=%p/%p (has signature: %i)",
+#if DEBUG || DEBUG_SIGNATURE_REFRESH
+                log_debug("maintenance: %{dnsname}: at %{digest32h}.%{dnsname} NSEC3: mask=%p/%p (has signature: %i, key-not-found: %i)",
                         zone->origin, item->digest, zone->origin,
-                        nsec3_key_mask, mctx.zsk_mask, rrsig != NULL);
+                        nsec3_key_mask, mctx.zsk_mask, (rrsig != NULL), delete_nsec3_rrsig);
+
                 if(rrsig != NULL)
                 {
                     for(zdb_packed_ttlrdata *rr = rrsig; rr != NULL; rr = rr->next)
                     {
                         const void *rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(rr);
                         u16 rdata_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(rr);
-                        log_debug2("maintenance: %{dnsname}: at %{digest32h}.%{dnsname} RRSIG: %5i %T -> %T",
+                        log_debug("maintenance: %{dnsname}: at %{digest32h}.%{dnsname} RRSIG: %5i %T -> %T",
                                    zone->origin, item->digest, zone->origin,
                                    rrsig_get_key_tag_from_rdata(rdata, rdata_size),
                                    rrsig_get_valid_from_from_rdata(rdata, rdata_size),
@@ -1109,7 +1116,7 @@ zdb_zone_maintenance_from_chain_iteration_loop_break:
             }
             else
             {
-                mctx.zone->progressive_signature_update.labels_at_once = 65535;
+                mctx.zone->progressive_signature_update.labels_at_once = MAX_U16;
             }
             
             log_debug("maintenance: %{dnsname}: adjusting up batch size to %i", zone->origin, mctx.zone->progressive_signature_update.labels_at_once);
@@ -1232,6 +1239,7 @@ zdb_zone_maintenance(zdb_zone* zone)
 {
     ya_result ret;
     u8 *prev_fqdn;
+    s8 prev_chain_index;
     u8 in_out_fqdn[MAX_DOMAIN_LENGTH];
     
     if(zone->progressive_signature_update.current_fqdn != NULL)
@@ -1240,12 +1248,14 @@ zdb_zone_maintenance(zdb_zone* zone)
         
         dnsname_copy(in_out_fqdn, zone->progressive_signature_update.current_fqdn);
         prev_fqdn = zone->progressive_signature_update.current_fqdn;
+        prev_chain_index = zone->progressive_signature_update.chain_index;
         //dnsname_zfree(zone->progressive_signature_update.current_fqdn);
         zone->progressive_signature_update.current_fqdn = NULL;
     }
     else
     {
         prev_fqdn = NULL;
+        prev_chain_index = -1;
         log_info("maintenance: %{dnsname}: zone maintenance started", zone->origin);
         in_out_fqdn[0] = 0;
 #if DEBUG
@@ -1278,7 +1288,9 @@ zdb_zone_maintenance(zdb_zone* zone)
             if(prev_fqdn != NULL)
             {
                 zone->progressive_signature_update.current_fqdn = prev_fqdn;
+                zone->progressive_signature_update.chain_index = prev_chain_index;
                 prev_fqdn = NULL;
+                prev_chain_index = -1;
                 log_debug("maintenance: %{dnsname}: pausing at %{dnsname} (%r) (may try again)", zone->origin, zone->progressive_signature_update.current_fqdn, ret);
             }
             else

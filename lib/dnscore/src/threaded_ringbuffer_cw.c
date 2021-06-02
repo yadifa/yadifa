@@ -297,7 +297,6 @@ threaded_ringbuffer_cw_try_peek(threaded_ringbuffer_cw *queue)
     return data;
 }
 
-
 void*
 threaded_ringbuffer_cw_dequeue(threaded_ringbuffer_cw *queue)
 {
@@ -310,6 +309,56 @@ threaded_ringbuffer_cw_dequeue(threaded_ringbuffer_cw *queue)
     while( queue->size == 0 )
     {
         cond_wait(&queue->cond_read,&queue->mutex);
+    }
+
+    /*
+     * Get the data from the read position,
+     * and move the read position to the next slot
+     *
+     */
+
+    void* data = *queue->read_slot++;
+    if(queue->read_slot == queue->buffer_limit)
+    {
+        queue->read_slot = queue->buffer;
+    }
+
+    if(queue->size-- == queue->max_size) /* enqueue has just been locked  -> unlock */
+    {
+        /*
+         * The queue is full : the queuers are waiting.
+         * Since we will are removing something, we can free (one of) them.
+         * (They will however still be locked until the queue mutex is released)
+         */
+
+        cond_notify(&queue->cond_write);
+    }
+
+    /*
+     * We are done here.
+     */
+
+    mutex_unlock(&queue->mutex);
+
+    return data;
+}
+
+void*
+threaded_ringbuffer_cw_dequeue_with_timeout(threaded_ringbuffer_cw *queue, s64 timeout_us)
+{
+    /*
+     * Ensure I'm allowed to work on queue (only one working on it)
+     */
+
+    mutex_lock(&queue->mutex);
+
+    while( queue->size == 0 )
+    {
+        if(cond_timedwait(&queue->cond_read,&queue->mutex, timeout_us) != 0)
+        {
+            mutex_unlock(&queue->mutex);
+            return NULL;
+        }
     }
 
     /*
@@ -475,10 +524,10 @@ threaded_ringbuffer_cw_wait_empty(threaded_ringbuffer_cw *queue)
     }
 }
 
-int
+u32
 threaded_ringbuffer_cw_size(threaded_ringbuffer_cw *queue)
 {
-    int size;
+    u32 size;
 
     mutex_lock(&queue->mutex);
 

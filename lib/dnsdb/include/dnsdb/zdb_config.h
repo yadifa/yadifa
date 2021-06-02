@@ -185,6 +185,12 @@ extern "C"
     
 #define ZDB_JOURNAL_FD_DEFAULT  512
 
+/**
+ * How many signatures will be tried initially in the first batch.
+ */
+
+#define ZDB_ZONE_MAINTENANCE_LABELS_AT_ONCE_DEFAULT 50    // the initial value for labels processed at once
+
 #ifdef	__cplusplus
 }
 #endif

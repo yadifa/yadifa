@@ -42,6 +42,8 @@
 #define KEYGEN_C_
 
 #include "module/keygen.h"
+#include "common.h"
+
 #include <sys/time.h>
 
 #include <dnscore/config_settings.h>
@@ -90,8 +92,8 @@ CONFIG_STRING(       keys_path,           KEYS_PATH_DEFAULT                     
 CONFIG_STRING(       random_device_file,      ""                                                       )
 CONFIG_FQDN(         origin,                  NULL                                                       )
 
-CONFIG_STRING(       key_flag,                "0"                                                       )
-CONFIG_STRING(       algorithm,               "0"                                                       )
+CONFIG_STRING(       key_flag,                ""                                                       )
+CONFIG_STRING(       algorithm,               "0"                                                      )
 
 CONFIG_STRING(       publication_date_text,   ""                                                       )
 CONFIG_STRING(       activation_date_text,    ""                                                       )
@@ -241,7 +243,7 @@ keygen_cmdline_filter_callback(const struct cmdline_desc_s *desc, const char *ar
 
     ya_result ret = cmdline_get_opt_long(desc, "origin", arg_name);
 
-    return ret;
+    return CMDLINE_ARG_STOP_PROCESSING_FLAG_OPTIONS;
 }
 
 CMDLINE_BEGIN(keygen_cmdline)
@@ -259,10 +261,10 @@ CMDLINE_HELP("<directory>", "write keys into directory")
 CMDLINE_OPT(      "random_device_file",      'r', "random_device_file"         )
 CMDLINE_HELP("","")
 */
-/*
-CMDLINE_OPT(      "qname",                   'q', "qname"                      )
+
+CMDLINE_OPT("origin",                   'o', "origin"                      )
 CMDLINE_HELP("<domain>","the domain name") // why qname ?,
-*/
+
 CMDLINE_OPT(      "algorithm",               'a', "algorithm"                  )
 CMDLINE_HELP("<algorithm>","one of the supported key algorithms")
 CMDLINE_CALLBACK(keygen_print_algorithm_help, NULL)
@@ -383,7 +385,7 @@ keygen_config_register(int priority)
     // init and register main settings container
     ZEROMEMORY(&g_keygen_settings, sizeof(g_keygen_settings));
 
-    return_code = config_register_struct("keygen", keygen_settings_desc, &g_keygen_settings, ++priority);
+    return_code = config_register_struct(KEYGEN_SECTION_NAME, keygen_settings_desc, &g_keygen_settings, ++priority);
 
     return return_code;
 }
@@ -420,8 +422,9 @@ keygen_run(const module_s *m)
     (void)m;
 
     ya_result                                                    return_code;
-
+#if 0
     keygen_config_print();
+#endif
 
     /*    ------------------------------------------------------------    */
 
@@ -452,7 +455,26 @@ keygen_run(const module_s *m)
     {
         if(FAIL(return_code = dns_encryption_algorithm_from_case_name(g_keygen_settings.algorithm, &algorithm)))
         {
-            /// @todo 20160512 gve -- must add correct 'error'
+            // if the algorithm hasn't been set and the origin is "help", then print the help
+
+            u8 algorithm_value_source = config_value_get_source(KEYGEN_SECTION_NAME, "algorithm");
+
+            if(algorithm_value_source <= CONFIG_SOURCE_DEFAULT) // if the value of the algorithm hasn't been set
+            {
+                if(dnsname_equals(g_keygen_settings.origin, (const u8 *)"\004help")) // if the origin is "help"
+                {
+                    return_code = YADIFA_MODULE_HELP_REQUESTED; // help expected?
+                }
+                else
+                {
+                    return_code = COMMAND_ARGUMENT_EXPECTED;
+                }
+            }
+            else // the algorithm parameter is needed
+            {
+                // return the error code
+            }
+
             return return_code;
         }
 
@@ -512,6 +534,7 @@ keygen_run(const module_s *m)
     else
     {
         /// @todo 20160512 gve -- must add correct 'error'
+        osformatln(termerr, "unsupported flags '%s': expected values are 'KSK' or 'ZSK' (default)", g_keygen_settings.key_flag);
         return INVALID_ARGUMENT_ERROR;
     }
 
@@ -538,9 +561,15 @@ keygen_run(const module_s *m)
         if(algorithm_features->size_bits_min == algorithm_features->size_bits_max)
         {
             key_size = algorithm_features->size_bits_min; // if min == max then there is only one choice : silently ignore
+
+            if(config_value_get_source(KEYGEN_SECTION_NAME, "key_size") > CONFIG_SOURCE_DEFAULT)
+            {
+                osformatln(termerr, "unsupported key size %hhu: ignoring parameter for algorithm %s.", g_keygen_settings.key_size, g_keygen_settings.algorithm);
+            }
         }
         else
         {
+            osformatln(termerr, "unsupported size %hhu: expected a value in the [%hhu, %hhu] range", g_keygen_settings.key_size, algorithm_features->size_bits_min, algorithm_features->size_bits_max);
             return INVALID_ARGUMENT_ERROR;
         }
     }
@@ -549,14 +578,15 @@ keygen_run(const module_s *m)
 
     if((key_size % algorithm_features->size_multiple) != 0)
     {
+        osformatln(termerr, "unsupported size %hhu: value must be a multiple of %hhu", g_keygen_settings.key_size, algorithm_features->size_multiple);
         return INVALID_ARGUMENT_ERROR;
     }
 
     // 5. check 'qname'
 
-    if(! dnsname_locase_verify_charspace(g_keygen_settings.origin))
+    if(!dnsname_locase_verify_charspace(g_keygen_settings.origin))
     {
-        return -1;
+        return DOMAINNAME_INVALID;
     }
 
     // 6. generate the key
@@ -566,6 +596,12 @@ keygen_run(const module_s *m)
     dnsname_to_cstr(domain_text, g_keygen_settings.origin);
 
     return_code = dnskey_newinstance(key_size, algorithm, key_flag, domain_text, &generated_key);
+
+    if(FAIL(return_code))
+    {
+        osformatln(termerr, "failed to generate the key: %r", return_code);
+        return return_code;
+    }
 
     // 7. adjust the dates if needed
 
@@ -619,7 +655,7 @@ keygen_run(const module_s *m)
         }
     }
 
-    if(generated_key != NULL) // it is very well possible to reach this line with no key
+    if(generated_key != NULL)
     {
         // 9. print both key file names on stdout
         char filename[PATH_MAX];

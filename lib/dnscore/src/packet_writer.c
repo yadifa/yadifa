@@ -67,10 +67,6 @@ packet_writer_init(packet_writer* pc, u8* packet, u32 packet_offset, u32 size_li
     pc->pool_head = pc->pool;
     pc->head = NULL;
 
-#if DEBUG
-    memset(&packet[packet_offset], 0xff, size_limit - packet_offset);
-#endif
-
     packet_dictionary_node* child_node = NULL;
 
     u32 offset = DNS_HEADER_LENGTH;
@@ -96,7 +92,7 @@ packet_writer_init(packet_writer* pc, u8* packet, u32 packet_offset, u32 size_li
 #if DEBUG
     fqdn += 1 + 2 + 2;
     
-    if(packet_offset != fqdn - packet)
+    if(packet_offset < fqdn - packet)
     {
         log_err("packet_writer_init expected %u = %u", packet_offset, fqdn - packet);
     }

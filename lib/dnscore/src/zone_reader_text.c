@@ -1118,9 +1118,6 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 return_code = rdata - rdata_start + return_code;
                 break;
-
-
-                break;
             }
 
             case TYPE_HINFO: // should not be supported anymore

@@ -127,7 +127,7 @@ packet_writer_init_append_to_message(packet_writer* pw, message_data *mesg)
 static inline ya_result
 packet_writer_init_from_message(packet_writer* pw, message_data *mesg)
 { // do not use the logical max
-    return packet_writer_init(pw, message_get_buffer(mesg), DNS_HEADER_LENGTH, message_get_buffer_size_max(mesg));
+    return packet_writer_init(pw, message_get_buffer(mesg), message_get_size(mesg), message_get_buffer_size_max(mesg));
 }
 
 /**

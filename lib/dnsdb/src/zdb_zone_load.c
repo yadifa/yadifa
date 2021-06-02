@@ -655,7 +655,8 @@ zdb_zone_load_ex(struct zdb_zone_load_parms *parms)
                     }
                     else
                     {
-                        log_warn("zone load: unable to load the private key K%{dnsname}+%03d+%05hd: %r", zone->origin, algorithm, tag, return_code);
+                        int log_level =  zdb_zone_get_rrsig_push_allowed(zone)?MSG_INFO:MSG_WARNING;
+                        log_to_level(log_level, "zone load: unable to load the private key K%{dnsname}+%03d+%05hd: %r", zone->origin, algorithm, tag, return_code);
                     }
                 }
 

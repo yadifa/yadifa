@@ -224,6 +224,8 @@ circular_file_test(bool can_grow)
     static const char* check_file = "/tmp/data-file.bin";
     static const char* journal_file = "/tmp/circular-file.cf";
 
+    formatln("working for %i entries", g_page_count);
+
     file_pool_t fp = file_pool_init("circular-files", 4);
     circular_file_s *cf;
     ya_result ret;
@@ -252,11 +254,6 @@ circular_file_test(bool can_grow)
 
             for(int i = 0; i < g_page_count; ++i)
             {
-                if(i == 2723)
-                {
-                    println("");
-                }
-                
                 format("writing page [%5i; %5i]\nbefore: ", hdr.from, hdr.to);
                 circular_file_dump(cf);
 
@@ -484,6 +481,231 @@ circular_file_test(bool can_grow)
     return ret;
 }
 
+struct circular_file_resize_script_line_s
+{
+    char command;
+    s64 size;
+};
+
+typedef struct circular_file_resize_script_line_s circular_file_resize_script_line_t;
+
+static u8 *vf_buffer = NULL;
+static s64 vf_buffer_size = 0;
+
+/*
+ * C create with sizemax
+ * W write
+ * R read
+ * S shift
+ * P set position (seek)
+ * Z resize
+ * w available to write expected
+ * r available to read expected
+ */
+
+static ya_result
+circular_file_script_test(const circular_file_resize_script_line_t *lines, size_t lines_count)
+{
+    if(vf_buffer == NULL)
+    {
+        vf_buffer_size = 16 * 1024 * 1024;
+        vf_buffer_size &= ~3;
+        vf_buffer = (u8*)malloc(vf_buffer_size);
+        random_ctx rnd = random_init(0);
+        for(s64 i = 0; i < vf_buffer_size; i += 4)
+        {
+            SET_U32_AT(vf_buffer[i], random_next(rnd));
+        }
+        random_finalize(rnd);
+    }
+
+    static const char* journal_file = "/tmp/circular-file-2.cf";
+
+    file_pool_t fp = file_pool_init("circular-files", 4);
+    circular_file_s *cf = NULL;
+    ya_result ret;
+
+    struct reserved_header_s hdr = {0, 0, 0, 0};
+    static const u8 magic[4] = {'C','F',0,0};
+
+    unlink(journal_file);
+
+    s64 position = 0;
+    s64 shift = 0;
+
+    if(lines[0].command != 'C')
+    {
+        formatln("expected to start with a 'C', got a '%c'", lines[0].command);
+        return ERROR;
+    }
+
+    for(size_t line_num = 0; line_num < lines_count; ++line_num)
+    {
+        const circular_file_resize_script_line_t *line = &lines[line_num];
+
+        formatln("vf: %lli + %lli", shift, position);
+
+        if(cf != NULL)
+        {
+            formatln("size: %lli, position: %lli, available: read: %lli, write: %lli", circular_file_get_size(cf), circular_file_tell(cf), circular_file_get_read_available(cf), circular_file_get_write_available(cf));
+        }
+
+        formatln("[%2llu] command: '%c' %lli", line_num, line->command, line->size);
+        flushout();
+
+        switch(line->command)
+        {
+            case 'C':
+            {
+                if(ISOK(ret = circular_file_create(&cf, fp, magic, journal_file, line->size, sizeof(hdr))))
+                {
+                    if(ISOK(ret = circular_file_write_reserved_header(cf, &hdr, sizeof(hdr))))
+                    {
+                        break;
+                    }
+                }
+
+                goto circular_file_test_exit;
+            }
+            case 'W':
+            {
+                ret = circular_file_write(cf, &vf_buffer[shift + position], line->size);
+
+                if(FAIL(ret))
+                {
+
+                    formatln("write %lli bytes failed: %r", line->size, ret);
+                    flushout();
+                    goto circular_file_test_exit;
+                }
+
+                if(ret != line->size)
+                {
+                    formatln("write failed: %i bytes instead of %lli", ret, line->size);
+                    flushout();
+                    goto circular_file_test_exit;
+                }
+
+                position += ret;
+
+                break;
+            }
+            case 'R':
+            {
+                char tmp[line->size];
+
+                ret = circular_file_read(cf, tmp, line->size);
+
+                if(FAIL(ret))
+                {
+
+                    formatln("read %lli bytes failed: %r", line->size, ret);
+                    flushout();
+                    goto circular_file_test_exit;
+                }
+
+                if(ret != line->size)
+                {
+                    formatln("read failed: %i bytes instead of %lli", ret, line->size);
+                    flushout();
+                    goto circular_file_test_exit;
+                }
+
+                if(memcmp(tmp, &vf_buffer[shift + position], ret) != 0)
+                {
+                    s64 failed_offset = -1;
+                    for(int i = 0; i < ret; ++i)
+                    {
+                        if(tmp[i] != vf_buffer[shift + position + i])
+                        {
+                            failed_offset = i;
+                            break;
+                        }
+                    }
+
+                    formatln("read failed: content isn't matching at %lli + %lli + %lli", shift, position, failed_offset);
+                    flushout();
+                    goto circular_file_test_exit;
+                }
+
+                position += ret;
+
+                break;
+            }
+            case 'S':
+            {
+                circular_file_shift(cf, line->size);
+
+                shift += line->size;
+                position -= line->size;
+                break;
+            }
+            case 'P':
+            {
+                circular_file_seek(cf, line->size);
+
+                s64 n = circular_file_tell(cf);
+                if(n != line->size)
+                {
+                    formatln("seek failed: went to position %lli instead of %lli", n, line->size);
+                    flushout();
+                    ret = ERROR; goto circular_file_test_exit;
+                }
+
+                position = line->size;
+                break;
+            }
+            case 'Z':
+            {
+                circular_file_set_size(cf, line->size);
+                break;
+            }
+            case 'w':
+            {
+                s64 n = circular_file_get_write_available(cf);
+
+                if(n != line->size)
+                {
+                    formatln("write available: %lli bytes instead of %lli", n, line->size);
+                    flushout();
+                    ret = ERROR; goto circular_file_test_exit;
+                }
+                break;
+            }
+            case 'r':
+            {
+                s64 n = circular_file_get_read_available(cf);
+
+                if(n != line->size)
+                {
+                    formatln("read available: %lli bytes instead of %lli", n, line->size);
+                    flushout();
+                    ret = ERROR; goto circular_file_test_exit;
+                }
+                break;
+            }
+        }
+    }
+    
+circular_file_test_exit:
+    
+    if(cf != NULL)
+    {
+        if(ISOK(ret = circular_file_close(cf)))
+        {
+            formatln("circular_file_close: success", ret);
+        }
+        else
+        {
+            formatln("circular_file_create: failed: %r", ret);
+        }
+    }
+
+    file_pool_finalize(fp);
+
+    return SUCCESS;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -499,22 +721,58 @@ main(int argc, char *argv[])
     /* initializes the core library */
     
     dnscore_init();
-    
-    formatln("working for %i entries", g_page_count);
 
     ya_result ret;
     int exit_code = EXIT_SUCCESS;
-
+/*
     if(FAIL(ret = circular_file_test(TRUE)))
     {
-        formatln("can-grow failed");
+        formatln("can-grow failed: %r", ret);
         exit_code = EXIT_FAILURE;
         
     }
     else if(FAIL(ret = circular_file_test(FALSE)))
     {
-        formatln("no-grow failed");
+        formatln("no-grow failed: %r", ret);
         exit_code = EXIT_FAILURE;
+    }
+    else
+    */
+    {
+        static const circular_file_resize_script_line_t script[] =
+        {
+            {'C', 16384 + 48},
+            {'W', 16384},
+            {'w', 0},
+            {'S', 2048},
+            {'w', 2048},
+            {'W', 2048},
+            {'w', 0},
+            {'Z', 2048},
+            {'P', 0},
+            {'r', 2048},
+            {'R', 2048},
+            {'P', 0},
+            {'r', 2048},
+            {'R', 2048},
+            {'W', 4096},
+            {'P', 0},
+            {'r', 2048 + 4096},
+            {'R', 2048 + 4096},
+            //{'P', 0},
+            {'S', 4096},
+            {'P', 0},   // mandatory as the shift doesn't handle underflow
+            {'r', 2048},
+            {'R', 2048},
+        };
+
+        s64 script_lines = sizeof(script) / sizeof(script[0]);
+
+        if(FAIL(ret =  circular_file_script_test(&script[0], script_lines)))
+        {
+            formatln("script failed");
+            exit_code = EXIT_FAILURE;
+        }
     }
 
     flushout();

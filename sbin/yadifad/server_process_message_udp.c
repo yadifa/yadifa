@@ -461,9 +461,20 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
                          */
 
                         local_statistics->udp_updates_count++;
-                        dynupdate_query_service_enqueue(database, mesg, fd);
-
-                        return SUCCESS_DROPPED; // NOT break;
+                        if(ISOK(dynupdate_query_service_enqueue(database, mesg, fd)))
+                        {
+                            return SUCCESS_DROPPED; // NOT break;
+                        }
+                        else
+                        {
+                            log_warn("update [%04hx] %{dnsname} %{dnstype} %{dnsclass} (%{sockaddrip}) : cannot enqueue the update message",
+                                     ntohs(message_get_id(mesg)),
+                                     message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg),
+                                     message_get_sender_sa(mesg));
+                            message_make_error(mesg, FP_RCODE_SERVFAIL);
+                            local_statistics->udp_fp[FP_RCODE_SERVFAIL]++;
+                            return SUCCESS;         // needs to be >= 0: the server will send the SERVFAIL message
+                        }
 #else
                         message_make_error(mesg, FP_FEATURE_DISABLED);
                         local_statistics->udp_fp[FP_FEATURE_DISABLED]++;

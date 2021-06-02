@@ -34,7 +34,7 @@ dnl ############################################################################
 configure_base_path="$0/"
 
 AC_PREREQ(2.61)
-AC_REVISION([$Revision: 10078 $])
+AC_REVISION([$Revision: 10135 $])
 AC_INIT([yadifa],m4_esyscmd(
     [
         svn info 2> /dev/null |
@@ -234,6 +234,7 @@ test/daemonised-logger-test/Makefile
 test/dnskey-test/Makefile
 test/dnsname-test/Makefile
 test/dnssec-test/Makefile
+test/dnsserver-test/Makefile
 test/dsfromkey-test/Makefile
 test/filepool-test/Makefile
 test/file-test/Makefile

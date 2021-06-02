@@ -324,3 +324,5 @@ ya_result keyroll_get_state_find_match_and_play(const keyroll_t *keyrollp, s64 n
  */
 
 void keyroll_set_dryrun_mode(bool enabled);
+
+u32 keyroll_deactivation_margin(u32 activate_epoch, u32 deactivate_epoch, u32 delete_epoch);

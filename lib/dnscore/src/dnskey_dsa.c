@@ -470,7 +470,7 @@ dnskey_dsa_public_load(const u8* rdata, u16 rdata_size)
  }
 
 static u32
-dnskey_dsa_public_store(DSA* dsa, u8* output_buffer)
+dnskey_dsa_public_store(DSA* dsa, u8* output_buffer, u32 output_buffer_size)
 {
     unsigned char* outptr = output_buffer;
 
@@ -513,6 +513,11 @@ dnskey_dsa_public_store(DSA* dsa, u8* output_buffer)
     }
     
     t >>= 3;
+
+    if(t + q_n + p_n + g_n + y_n > output_buffer_size)
+    {
+        return 0; // BUFFER_WOULD_OVERFLOW;
+    }
     
     *outptr++ = t;
 
@@ -532,7 +537,7 @@ dnskey_dsa_public_store(DSA* dsa, u8* output_buffer)
 }
 
 static u32
-dnskey_dsa_dnskey_public_store(const dnssec_key* key, u8 *rdata)
+dnskey_dsa_dnskey_public_store(const dnssec_key* key, u8 *rdata, u32 rdata_size)
 {
     u32 len;
     
@@ -540,7 +545,7 @@ dnskey_dsa_dnskey_public_store(const dnssec_key* key, u8 *rdata)
     rdata[2] = DNSKEY_PROTOCOL_FIELD;
     rdata[3] = key->algorithm;
     
-    len = dnskey_dsa_public_store(key->key.dsa, &rdata[4]) + 4;
+    len = dnskey_dsa_public_store(key->key.dsa, &rdata[4], rdata_size - 4) + 4;
     
     return len;
 }
@@ -716,7 +721,7 @@ dnskey_dsa_initinstance(DSA* dsa, u8 algorithm, u16 flags, const char* origin, d
     rdata[2] = DNSKEY_PROTOCOL_FIELD;
     rdata[3] = algorithm;
 
-    u32 stored_rdata_size = dnskey_dsa_public_store(dsa, &rdata[4]);
+    u32 stored_rdata_size = dnskey_dsa_public_store(dsa, &rdata[4], sizeof(rdata) - 4);
     
     if(stored_rdata_size != rdata_size)
     {
@@ -826,7 +831,7 @@ dnskey_dsa_parse_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
         rdata[2] = DNSKEY_PROTOCOL_FIELD;
         rdata[3] = key->algorithm;
 
-        if(dnskey_dsa_public_store(dsa, &rdata[4]) != rdata_size)
+        if(dnskey_dsa_public_store(dsa, &rdata[4], sizeof(rdata) - 4) != rdata_size)
         {
             return DNSSEC_ERROR_UNEXPECTEDKEYSIZE; /* Computed size != real size */
         }

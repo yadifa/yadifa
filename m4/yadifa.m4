@@ -402,7 +402,7 @@ dnl ZONE MUTEX DEBUG
 dnl ================
 AC_HAS_ENABLE(lock_debug,LOCK_DEBUG_SUPPORT,[zone lock debug support])
 
-dnl ZONE MUTEX DEBUG
+dnl FILEPOOL CACHE
 dnl ================
 AC_HAS_ENABLE(filepool_cache,FILEPOOL_CACHE,[file pool uses cache (dev)])
 

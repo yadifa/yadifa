@@ -357,44 +357,86 @@ dnskey_field_access_parse(const struct dnskey_field_access *sd, void *base, pars
     bool parsed_it = FALSE;
     u8 tmp_out[DNSSEC_MAXIMUM_KEY_SIZE_BYTES];
     
-    for(; sd->type == STRUCTDESCRIPTOR_BN; sd++)
+    for(; sd->type != STRUCTDESCRIPTOR_NONE; sd++)
     {
-        if(memcmp(label, sd->name, label_len) == 0)
+        switch(sd->type)
         {
-            BIGNUM **bnp = (BIGNUM**)(((u8*)base) + sd->relative);
-
-            ret = parser_next_word(p);
-
-            if((*bnp != NULL) || FAIL(ret))
+            case STRUCTDESCRIPTOR_BN:
             {
-                return ret;
+                if(memcmp(label, sd->name, label_len) == 0)
+                {
+                    BIGNUM **bnp = (BIGNUM**)(((u8*)base) + sd->relative);
+
+                    ret = parser_next_word(p);
+
+                    if((*bnp != NULL) || FAIL(ret))
+                    {
+                        return ret;
+                    }
+
+                    u32 word_len = parser_text_length(p);
+                    const char *word = parser_text(p);
+
+                    ya_result n = base64_decode(word, word_len, tmp_out);
+
+                    if(FAIL(n))
+                    {
+                        log_err("dnskey: unable to decode field %s", sd->name);
+                        return n;
+                    }
+
+                    *bnp = BN_bin2bn(tmp_out, n, NULL);
+
+                    if(*bnp == NULL)
+                    {
+                        log_err("dnskey: unable to get big number from field %s", sd->name);
+                        return DNSSEC_ERROR_BNISNULL;
+                    }
+
+                    parsed_it = TRUE;
+
+                    goto dnskey_field_access_parse_loop_exit;
+                }
+
+                break;
             }
-
-            u32 word_len = parser_text_length(p);
-            const char *word = parser_text(p);
-
-            ya_result n = base64_decode(word, word_len, tmp_out);
-
-            if(FAIL(n))
+            case STRUCTDESCRIPTOR_RAW:
             {
-                log_err("dnskey: unable to decode field %s", sd->name);
-                return n;
+                if(memcmp(label, sd->name, label_len) == 0)
+                {
+                    dnskey_raw_field_t *raw = (dnskey_raw_field_t*)(((u8*)base) + sd->relative);
+
+                    ret = parser_next_word(p);
+
+                    if((raw->buffer != NULL) || FAIL(ret))
+                    {
+                        return ret;
+                    }
+
+                    u32 word_len = parser_text_length(p);
+                    const char *word = parser_text(p);
+
+                    ya_result n = base64_decode(word, word_len, tmp_out);
+
+                    if(FAIL(n))
+                    {
+                        log_err("dnskey: unable to decode field %s", sd->name);
+                        return n;
+                    }
+
+                    ZALLOC_OBJECT_ARRAY_OR_DIE(raw->buffer, u8, n, GENERIC_TAG);
+                    memcpy(raw->buffer, tmp_out, n);
+                    raw->size = n;
+
+                    parsed_it = TRUE;
+
+                    goto dnskey_field_access_parse_loop_exit;
+                }
+                break;
             }
-
-            *bnp = BN_bin2bn(tmp_out, n, NULL);
-
-            if(*bnp == NULL)
-            {
-                log_err("dnskey: unable to get big number from field %s", sd->name);
-                return DNSSEC_ERROR_BNISNULL;
-            }
-
-            parsed_it = TRUE;
-
-            break;
         }
     } /* for each possible field */
-    
+dnskey_field_access_parse_loop_exit:
     if(!parsed_it)
     {
         return SUCCESS; // unknown keyword (ignore)
@@ -408,16 +450,48 @@ dnskey_field_access_print(const struct dnskey_field_access *sd, const void *base
 {
     ya_result ret = SUCCESS;
     
-    for(; sd->type == STRUCTDESCRIPTOR_BN; sd++)
+    for(; sd->type != STRUCTDESCRIPTOR_NONE; sd++)
     {
-        const u8 *bn_ptr_ptr = (((const u8*)base) + sd->relative);
-        const BIGNUM **bn = (const BIGNUM**)bn_ptr_ptr;
-        
-        if(bn != NULL)
+        switch(sd->type)
         {
-            osformat(os, "%s: ", sd->name);
-            dnskey_write_bignum_as_base64_to_stream(*bn, os);
-            osprintln(os, "");
+            case STRUCTDESCRIPTOR_BN:
+            {
+                const u8 *bn_ptr_ptr = (((const u8*)base) + sd->relative);
+                const BIGNUM **bn = (const BIGNUM**)bn_ptr_ptr;
+
+                if(bn != NULL)
+                {
+                    osformat(os, "%s: ", sd->name);
+                    dnskey_write_bignum_as_base64_to_stream(*bn, os);
+                    osprintln(os, "");
+                }
+                break;
+            }
+            case STRUCTDESCRIPTOR_RAW:
+            {
+                const u8 *bn_ptr_ptr = (((const u8*)base) + sd->relative);
+                const dnskey_raw_field_t *raw = (const dnskey_raw_field_t *)bn_ptr_ptr;
+
+                osformat(os, "%s: ", sd->name);
+
+                char buffer[1024];
+                u32 encoded_size = BASE64_ENCODED_SIZE(raw->size);
+                if(encoded_size > sizeof(buffer))
+                {
+                    return BUFFER_WOULD_OVERFLOW;
+                }
+                u32 n = base64_encode(raw->buffer, raw->size, buffer);
+                output_stream_write(os, buffer, n);
+                osprintln(os, "");
+                break;
+            }
+            case STRUCTDESCRIPTOR_U16:
+            {
+                const u8 *bn_ptr_ptr = (((const u8*)base) + sd->relative);
+                const u16 *valuep = (const u16 *)bn_ptr_ptr;
+                osformat(os, "%s: %hu", sd->name, *valuep);
+                break;
+            }
         }
     }
     
@@ -510,7 +584,7 @@ dnskey_digest_init(digest_s *ctx, u8 algorithm)
         case DNSKEY_ALGORITHM_RSASHA512_NSEC3:
             digest_sha512_init(ctx);
             break;
-#if HAS_EDDSA_SUPORT
+#if HAS_EDDSA_SUPPORT
         case DNSKEY_ALGORITHM_ED25519:
         case DNSKEY_ALGORITHM_ED448:
             digest_rawdata_init(ctx);
@@ -1205,8 +1279,8 @@ dnskey_public_equals(const dnssec_key *a, const dnssec_key *b)
             u8 rdata_a[4096];
             u8 rdata_b[4096];
             
-            u32 rdata_a_size = a->vtbl->dnssec_key_writerdata(a, rdata_a);
-            u32 rdata_b_size = b->vtbl->dnssec_key_writerdata(b, rdata_b);
+            u32 rdata_a_size = a->vtbl->dnssec_key_writerdata(a, rdata_a, sizeof(rdata_a));
+            u32 rdata_b_size = b->vtbl->dnssec_key_writerdata(b, rdata_b, sizeof(rdata_b));
             
             if(rdata_a_size == rdata_b_size)
             {
@@ -1249,7 +1323,7 @@ dnskey_get_tag(dnssec_key *key)
     {
         u8 rdata[2048];
 
-        u32 rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata);
+        u32 rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata, sizeof(rdata));
         
         yassert(rdata_size <= 2048);
         
@@ -1277,7 +1351,7 @@ dnskey_get_tag_const(const dnssec_key *key)
     {
         u8 rdata[2048];
 
-        u32 rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata);
+        u32 rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata, sizeof(rdata));
         
         yassert(rdata_size <= 2048);
         
@@ -1771,6 +1845,12 @@ dnskey_add_private_key_from_stream(input_stream *is, dnssec_key *key, const char
                         }
 #endif
 #if HAS_EDDSA_SUPPORT
+                        case DNSKEY_ALGORITHM_ED25519:
+                        case DNSKEY_ALGORITHM_ED448:
+                        {
+                            dnskey_eddsa_parse_init(&dnskey_parser);
+                            break;
+                        }
 #endif
 #ifdef DNSKEY_ALGORITHM_DUMMY
                         case DNSKEY_ALGORITHM_DUMMY:
@@ -2077,7 +2157,7 @@ dnskey_store_public_key_to_stream(dnssec_key *key, output_stream *os)
 
     if(key->vtbl->dnssec_key_rdatasize(key) < sizeof(rdata))
     {
-        int rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata);
+        int rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata, sizeof(rdata));
         rdata_desc dnskeyrdata = {TYPE_DNSKEY, rdata_size, rdata};
 
         osformatln(os, "; This is a key, keyid %d, for domain %{dnsname}", dnskey_get_tag(key), key->owner_name);
@@ -2598,6 +2678,10 @@ ya_result dnskey_newinstance(u32 size, u8 algorithm, u16 flags, const char* orig
             break;
 #endif
 #if HAS_EDDSA_SUPPORT
+        case DNSKEY_ALGORITHM_ED25519:
+        case DNSKEY_ALGORITHM_ED448:
+            ret = dnskey_eddsa_newinstance(size, algorithm, flags, origin, out_key);
+            break;
 #endif
 #ifdef DNSKEY_ALGORITHM_DUMMY
         case DNSKEY_ALGORITHM_DUMMY:
@@ -2625,7 +2709,7 @@ void
 dnskey_init_dns_resource_record(dnssec_key *key, s32 ttl, dns_resource_record *rr)
 {
     u8 rdata[8191];
-    u32 rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata);
+    u32 rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata, sizeof(rdata));
     dns_resource_record_init_record(rr, dnskey_get_domain(key), TYPE_DNSKEY, CLASS_IN, ttl, rdata_size, rdata);
 }
 
